@@ -130,6 +130,10 @@ public class Program
         services.AddSingleton<IQueryHistoryService, QueryHistoryService>();
         services.AddSingleton<ISnippetService, SnippetService>();
 
+        // Add Sprint 9 services - Tab Management & Code Analysis
+        services.AddSingleton<ITabColoringService, TabColoringService>();
+        services.AddSingleton<ICodeAnalysisService, CodeAnalysisService>();
+
         // Add caching
         services.AddMemoryCache();
 
