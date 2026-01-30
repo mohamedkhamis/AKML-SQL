@@ -134,6 +134,9 @@ public class Program
         services.AddSingleton<ITabColoringService, TabColoringService>();
         services.AddSingleton<ICodeAnalysisService, CodeAnalysisService>();
 
+        // Add Sprint 10 services - AI Integration
+        services.AddSingleton<IAiService, AiService>();
+
         // Add caching
         services.AddMemoryCache();
 
