@@ -1,3 +1,4 @@
+using AKML.SQL.Core.DataStructures;
 using AKML.SQL.Core.Services;
 using AKML.SQL.Shared;
 using Microsoft.Extensions.DependencyInjection;
@@ -108,9 +109,13 @@ public class Program
 
         // Add Core services
         services.AddSingleton<ISqlParserService, SqlParserService>();
-        services.AddSingleton<ICompletionService, CompletionService>();
         services.AddSingleton<IMetadataService, MetadataService>();
         services.AddSingleton<IDocumentManager, DocumentManager>();
+
+        // Add Sprint 5 services
+        services.AddSingleton<SqlContextAnalyzer>();
+        services.AddSingleton<MetadataCache>();
+        services.AddSingleton<ICompletionService, CompletionService>();
 
         // Add caching
         services.AddMemoryCache();

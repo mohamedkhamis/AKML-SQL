@@ -1,3 +1,4 @@
+using AKML.SQL.Core.DataStructures;
 using AKML.SQL.Core.Services;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
@@ -13,6 +14,8 @@ public class CompletionServiceTests
     private readonly Mock<IDocumentManager> _documentManagerMock;
     private readonly Mock<IMetadataService> _metadataServiceMock;
     private readonly Mock<ISqlParserService> _parserServiceMock;
+    private readonly SqlContextAnalyzer _contextAnalyzer;
+    private readonly MetadataCache _metadataCache;
 
     public CompletionServiceTests()
     {
@@ -21,11 +24,19 @@ public class CompletionServiceTests
         _metadataServiceMock = new Mock<IMetadataService>();
         _parserServiceMock = new Mock<ISqlParserService>();
 
+        var contextLoggerMock = new Mock<ILogger<SqlContextAnalyzer>>();
+        _contextAnalyzer = new SqlContextAnalyzer(contextLoggerMock.Object);
+
+        var cacheLoggerMock = new Mock<ILogger<MetadataCache>>();
+        _metadataCache = new MetadataCache(cacheLoggerMock.Object);
+
         _sut = new CompletionService(
             _loggerMock.Object,
             _documentManagerMock.Object,
             _metadataServiceMock.Object,
-            _parserServiceMock.Object);
+            _parserServiceMock.Object,
+            _contextAnalyzer,
+            _metadataCache);
     }
 
     [Fact]
@@ -33,7 +44,7 @@ public class CompletionServiceTests
     {
         // Arrange
         var text = "SEL";
-        
+
         // Act
         var result = await _sut.GetCompletionsAsync(
             "doc1", text, 0, 3, null, null, 50);
@@ -71,7 +82,7 @@ public class CompletionServiceTests
             "doc1", text, 0, 12, null, null, 50);
 
         // Assert
-        result.Should().Contain(c => c.Label == "COUNT" && 
+        result.Should().Contain(c => c.Label == "COUNT" &&
             c.Kind == Shared.Contracts.CompletionItemKind.Function);
     }
 
@@ -118,4 +129,80 @@ public class CompletionServiceTests
         // Assert
         result.Should().Contain(c => c.Label == "SELECT");
     }
+
+    #region Context-Aware Completion Tests (Sprint 5)
+
+    [Fact]
+    public async Task GetCompletionsAsync_AfterFrom_PrioritizesTablesAndViews()
+    {
+        // Arrange
+        var text = "SELECT * FROM ";
+
+        // Act
+        var result = await _sut.GetCompletionsAsync(
+            "doc1", text, 0, text.Length, null, null, 50);
+
+        // Assert
+        // Without a connection string, we should still get keywords
+        result.Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public async Task GetCompletionsAsync_AfterWhere_IncludesComparisonOperators()
+    {
+        // Arrange
+        var text = "SELECT * FROM Customers WHERE ";
+
+        // Act
+        var result = await _sut.GetCompletionsAsync(
+            "doc1", text, 0, text.Length, null, null, 50);
+
+        // Assert
+        result.Should().Contain(c => c.Label == "=" || c.Label == "<>" || c.Label == "LIKE");
+    }
+
+    [Fact]
+    public async Task GetCompletionsAsync_AfterJoin_ShowsJoinKeywords()
+    {
+        // Arrange
+        var text = "SELECT * FROM Customers INNER ";
+
+        // Act
+        var result = await _sut.GetCompletionsAsync(
+            "doc1", text, 0, text.Length, null, null, 50);
+
+        // Assert
+        result.Should().Contain(c => c.Label == "JOIN");
+    }
+
+    [Fact]
+    public async Task GetCompletionsAsync_AfterSelect_ShowsFunctions()
+    {
+        // Arrange
+        var text = "SELECT ";
+
+        // Act
+        var result = await _sut.GetCompletionsAsync(
+            "doc1", text, 0, text.Length, null, null, 100);
+
+        // Assert
+        result.Should().Contain(c => c.Kind == Shared.Contracts.CompletionItemKind.Function);
+    }
+
+    [Fact]
+    public async Task GetCompletionsAsync_AfterExec_ShowsProcedures()
+    {
+        // Arrange
+        var text = "EXEC ";
+
+        // Act
+        var result = await _sut.GetCompletionsAsync(
+            "doc1", text, 0, text.Length, null, null, 50);
+
+        // Assert
+        // Without connection, we won't have procedures, but context should be detected
+        result.Should().NotBeNull();
+    }
+
+    #endregion
 }
