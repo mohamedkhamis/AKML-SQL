@@ -145,6 +145,13 @@ public class Program
         services.AddSingleton<ILicenseService, LicenseService>();
         services.AddSingleton<IUpdateService, UpdateService>();
 
+        // Add Sprint 13 services - Release Management
+        services.AddSingleton<IReleaseInfoService>(sp =>
+            new ReleaseInfoService(
+                sp.GetRequiredService<ILogger<ReleaseInfoService>>(),
+                sp.GetRequiredService<ILicenseService>(),
+                sp.GetRequiredService<ISqlVersionService>()));
+
         // Add caching
         services.AddMemoryCache();
 
