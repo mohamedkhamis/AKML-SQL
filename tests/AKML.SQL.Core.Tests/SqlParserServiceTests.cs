@@ -142,7 +142,7 @@ public class SqlParserServiceTests
     }
 
     [Theory]
-    [InlineData("SELECT", SqlStatementType.Select)]
+    [InlineData("SELECT 1", SqlStatementType.Select)]  // SELECT needs at least a column
     [InlineData("INSERT INTO t (c) VALUES (1)", SqlStatementType.Insert)]
     [InlineData("UPDATE t SET c = 1", SqlStatementType.Update)]
     [InlineData("DELETE FROM t", SqlStatementType.Delete)]

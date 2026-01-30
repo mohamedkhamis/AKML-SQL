@@ -8,9 +8,10 @@ public class StringExtensionsTests
 {
     [Theory]
     [InlineData("Hello World", 6, "World")]
-    [InlineData("SELECT * FROM Users", 7, "*")]
+    [InlineData("SELECT * FROM Users", 9, "FROM")]  // offset 9 is 'F' in FROM
     [InlineData("dbo.Users", 4, "Users")]
     [InlineData("@ParameterName", 5, "@ParameterName")]
+    [InlineData("SELECT * FROM Users", 7, "")]  // '*' is not a word char
     public void GetWordAt_ReturnsCorrectWord(string text, int offset, string expected)
     {
         // Act
@@ -21,9 +22,10 @@ public class StringExtensionsTests
     }
 
     [Theory]
-    [InlineData("SELECT ", 7, "SELECT")]
-    [InlineData("FROM Users", 5, "FROM")]
-    [InlineData("dbo.Users", 9, "Users")]
+    [InlineData("SELECT", 6, "SELECT")]  // cursor at end of word
+    [InlineData("FROM Users", 4, "FROM")]  // cursor right after FROM (at space)
+    [InlineData("dbo.Users", 9, "Users")]  // cursor at end of Users
+    [InlineData("SELECT ", 7, "")]  // cursor after space - no word immediately before
     public void GetWordBefore_ReturnsCorrectWord(string text, int offset, string expected)
     {
         // Act
@@ -103,9 +105,10 @@ public class StringExtensionsTests
     }
 
     [Theory]
-    [InlineData("Hello World", 5, "Hello")]
-    [InlineData("Hello World", 20, "Hello World")]
-    [InlineData("Hi", 10, "Hi")]
+    [InlineData("Hello World", 8, "Hello...")]  // 8 chars: 5 + "..."
+    [InlineData("Hello World", 20, "Hello World")]  // no truncation needed
+    [InlineData("Hi", 10, "Hi")]  // no truncation needed
+    [InlineData("Hello World", 5, "He...")]  // 5 chars: 2 + "..."
     public void Truncate_ReturnsCorrectLength(string text, int maxLength, string expected)
     {
         // Act

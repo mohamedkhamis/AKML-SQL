@@ -206,6 +206,8 @@ namespace AKML.SQL.SSMS
             {
                 _logger?.Information("Shutting down {ProductName}", AkmlConstants.ProductName);
 
+                // TextSynchronizer is MEF-managed and disposes itself
+                TextSynchronizer.Instance?.Dispose();
                 _grpcClient?.Dispose();
                 _processManager?.Dispose();
 

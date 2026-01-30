@@ -1,3 +1,6 @@
+using System;
+using System.IO;
+
 namespace AKML.SQL.Shared;
 
 /// <summary>
