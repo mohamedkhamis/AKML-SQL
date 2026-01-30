@@ -33,22 +33,27 @@ namespace AKML.SQL.SSMS.Services
         /// </summary>
         public async Task StartAsync(string executablePath, CancellationToken cancellationToken = default)
         {
+            _logger.Information("[CoreProcess] StartAsync called. Path: {Path}, CurrentlyRunning: {IsRunning}",
+                executablePath, IsRunning);
+
             if (IsRunning)
             {
-                _logger.Debug("Core process is already running");
+                _logger.Debug("[CoreProcess] Core process is already running (PID: {ProcessId})", _coreProcess?.Id);
                 return;
             }
 
             // Check if another instance is already running
+            _logger.Debug("[CoreProcess] Checking for existing Core process by name: {ProcessName}", AkmlConstants.CoreProcessName);
             var existingProcess = FindExistingCoreProcess();
             if (existingProcess != null)
             {
-                _logger.Information("Found existing Core process (PID: {ProcessId})", existingProcess.Id);
+                _logger.Information("[CoreProcess] Found existing Core process (PID: {ProcessId}, StartTime: {StartTime})",
+                    existingProcess.Id, existingProcess.StartTime);
                 _coreProcess = existingProcess;
                 return;
             }
 
-            _logger.Information("Starting Core process: {Path}", executablePath);
+            _logger.Information("[CoreProcess] No existing process found. Starting Core process: {Path}", executablePath);
 
             var startInfo = new ProcessStartInfo
             {
@@ -68,10 +73,14 @@ namespace AKML.SQL.SSMS.Services
 
             try
             {
+                _logger.Debug("[CoreProcess] Process.Start with: FileName={FileName}, WorkingDirectory={WorkingDir}, CreateNoWindow={CreateNoWindow}",
+                    startInfo.FileName, startInfo.WorkingDirectory, startInfo.CreateNoWindow);
+
                 _coreProcess = Process.Start(startInfo);
-                
+
                 if (_coreProcess == null)
                 {
+                    _logger.Error("[CoreProcess] Process.Start returned null - process failed to start");
                     throw new InvalidOperationException("Failed to start Core process");
                 }
 
@@ -79,18 +88,21 @@ namespace AKML.SQL.SSMS.Services
                 _coreProcess.Exited += OnCoreProcessExited;
                 _coreProcess.OutputDataReceived += OnCoreOutputReceived;
                 _coreProcess.ErrorDataReceived += OnCoreErrorReceived;
-                
+
                 _coreProcess.BeginOutputReadLine();
                 _coreProcess.BeginErrorReadLine();
 
-                _logger.Information("Core process started (PID: {ProcessId})", _coreProcess.Id);
+                _logger.Information("[CoreProcess] Core process started successfully. PID: {ProcessId}, ProcessName: {ProcessName}",
+                    _coreProcess.Id, _coreProcess.ProcessName);
 
                 // Wait for process to be ready (give it time to start listening)
+                _logger.Debug("[CoreProcess] Waiting for process to be ready (pipe: {PipeName})...", AkmlConstants.PipeName);
                 await WaitForProcessReadyAsync(cancellationToken);
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, "Failed to start Core process");
+                _logger.Error(ex, "[CoreProcess] Failed to start Core process. Path: {Path}, Error: {ErrorMessage}",
+                    executablePath, ex.Message);
                 throw;
             }
         }

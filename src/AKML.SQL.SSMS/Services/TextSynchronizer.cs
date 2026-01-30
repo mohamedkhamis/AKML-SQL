@@ -49,23 +49,29 @@ namespace AKML.SQL.SSMS.Services
         /// </summary>
         public void VsTextViewCreated(IVsTextView textViewAdapter)
         {
+            _logger.Debug("[TextSync] VsTextViewCreated called");
+
             if (EditorAdaptersFactory == null)
             {
-                _logger.Warning("EditorAdaptersFactory is not available");
+                _logger.Warning("[TextSync] EditorAdaptersFactory is not available - MEF import may have failed");
                 return;
             }
 
             var textView = EditorAdaptersFactory.GetWpfTextView(textViewAdapter);
             if (textView == null)
             {
-                _logger.Debug("Could not get WPF text view from adapter");
+                _logger.Debug("[TextSync] Could not get WPF text view from adapter - may not be a WPF editor");
                 return;
             }
 
             // Check if this is a SQL document
             var contentType = textView.TextBuffer.ContentType;
+            _logger.Debug("[TextSync] Content type detected: {ContentType}, BaseTypes: {BaseTypes}",
+                contentType.TypeName, string.Join(", ", contentType.BaseTypes.Select(t => t.TypeName)));
+
             if (!IsSqlContentType(contentType))
             {
+                _logger.Debug("[TextSync] Skipping non-SQL content type: {ContentType}", contentType.TypeName);
                 return;
             }
 
@@ -75,8 +81,13 @@ namespace AKML.SQL.SSMS.Services
 
             if (_documents.TryAdd(documentId, context))
             {
-                _logger.Information("Started tracking document: {DocumentId}", documentId);
+                _logger.Information("[TextSync] Started tracking SQL document: {DocumentId}, ContentType: {ContentType}, TotalTracked: {Count}",
+                    documentId, contentType.TypeName, _documents.Count);
                 context.StartTracking();
+            }
+            else
+            {
+                _logger.Debug("[TextSync] Document already being tracked: {DocumentId}", documentId);
             }
         }
 
@@ -165,9 +176,13 @@ namespace AKML.SQL.SSMS.Services
         /// </summary>
         public void StartTracking()
         {
+            _logger.Debug("[DocSync:{DocumentId}] Starting to track document. Registering event handlers.", _documentId);
+
             _textView.TextBuffer.Changed += OnTextBufferChanged;
             _textView.Caret.PositionChanged += OnCaretPositionChanged;
             _textView.Closed += OnTextViewClosed;
+
+            _logger.Debug("[DocSync:{DocumentId}] Event handlers registered. Scheduling initial sync.", _documentId);
 
             // Initial sync
             ScheduleSync();
@@ -177,7 +192,11 @@ namespace AKML.SQL.SSMS.Services
         {
             if (_disposed) return;
 
-            Interlocked.Increment(ref _version);
+            var newVersion = Interlocked.Increment(ref _version);
+            _logger.Verbose("[DocSync:{DocumentId}] Text buffer changed. Version: {Version}, ChangeCount: {ChangeCount}, BeforeLength: {BeforeLength}, AfterLength: {AfterLength}",
+                _documentId, newVersion, e.Changes.Count,
+                e.Before.Length, e.After.Length);
+
             ScheduleSync();
         }
 
@@ -189,12 +208,15 @@ namespace AKML.SQL.SSMS.Services
             var timeSinceLastSync = DateTime.UtcNow - _lastSyncTime;
             if (timeSinceLastSync.TotalMilliseconds > AkmlConstants.Timeouts.TextSyncDebounce)
             {
+                _logger.Verbose("[DocSync:{DocumentId}] Caret position changed. OldPosition: {OldPos}, NewPosition: {NewPos}, TimeSinceLastSync: {TimeSinceMs}ms",
+                    _documentId, e.OldPosition.BufferPosition.Position, e.NewPosition.BufferPosition.Position, timeSinceLastSync.TotalMilliseconds);
                 ScheduleSync();
             }
         }
 
         private void OnTextViewClosed(object sender, EventArgs e)
         {
+            _logger.Information("[DocSync:{DocumentId}] Text view closed. Stopping tracking.", _documentId);
             TextSynchronizer.Instance?.StopTracking(_documentId);
         }
 
