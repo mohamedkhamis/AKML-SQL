@@ -108,7 +108,6 @@ public class Program
         });
 
         // Add Core services
-        services.AddSingleton<ISqlParserService, SqlParserService>();
         services.AddSingleton<IMetadataService, MetadataService>();
         services.AddSingleton<IDocumentManager, DocumentManager>();
 
@@ -116,6 +115,13 @@ public class Program
         services.AddSingleton<SqlContextAnalyzer>();
         services.AddSingleton<MetadataCache>();
         services.AddSingleton<ICompletionService, CompletionService>();
+
+        // Add Sprint 6 services - Formatting & Styles
+        services.AddSingleton<IFormatStyleService, FormatStyleService>();
+        services.AddSingleton<ISqlParserService>(sp =>
+            new SqlParserService(
+                sp.GetRequiredService<ILogger<SqlParserService>>(),
+                sp.GetRequiredService<IFormatStyleService>()));
 
         // Add caching
         services.AddMemoryCache();

@@ -9,6 +9,8 @@ public interface ISqlParserService
 {
     Task<ParseResult> ParseAsync(string? sql, CancellationToken cancellationToken = default);
     Task<string> FormatAsync(string? sql, FormatOptions? options, CancellationToken cancellationToken = default);
+    Task<string> FormatWithStyleAsync(string? sql, string styleName, CancellationToken cancellationToken = default);
+    Task<string> FormatWithStyleAsync(string? sql, FormatStyle style, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

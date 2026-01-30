@@ -14,12 +14,19 @@ public class SqlParserService : ISqlParserService
 {
     private readonly ILogger<SqlParserService> _logger;
     private readonly TSql160Parser _parser;
+    private readonly IFormatStyleService? _formatStyleService;
 
     public SqlParserService(ILogger<SqlParserService> logger)
     {
         _logger = logger;
         // Use SQL Server 2022 (160) parser - supports all modern T-SQL features
         _parser = new TSql160Parser(initialQuotedIdentifiers: true);
+    }
+
+    public SqlParserService(ILogger<SqlParserService> logger, IFormatStyleService formatStyleService)
+        : this(logger)
+    {
+        _formatStyleService = formatStyleService;
     }
 
     /// <summary>
@@ -107,36 +114,8 @@ public class SqlParserService : ISqlParserService
                 return Task.FromResult(sql);
             }
 
-            // Configure generator options
-            var generatorOptions = new SqlScriptGeneratorOptions
-            {
-                AlignClauseBodies = true,
-                AlignColumnDefinitionFields = true,
-                AlignSetClauseItem = true,
-                AsKeywordOnOwnLine = false,
-                IncludeSemicolons = true,
-                IndentationSize = options?.IndentSize ?? 4,
-                IndentSetClause = true,
-                IndentViewBody = true,
-                KeywordCasing = ConvertKeywordCasing(options?.KeywordCasing),
-                MultilineInsertSourcesList = true,
-                MultilineInsertTargetsList = true,
-                MultilineSelectElementsList = true,
-                MultilineSetClauseItems = true,
-                MultilineViewColumnsList = true,
-                MultilineWherePredicatesList = true,
-                NewLineBeforeCloseParenthesisInMultilineList = true,
-                NewLineBeforeFromClause = true,
-                NewLineBeforeGroupByClause = true,
-                NewLineBeforeHavingClause = true,
-                NewLineBeforeJoinClause = true,
-                NewLineBeforeOffsetClause = true,
-                NewLineBeforeOpenParenthesisInMultilineList = false,
-                NewLineBeforeOrderByClause = true,
-                NewLineBeforeOutputClause = true,
-                NewLineBeforeWhereClause = true,
-                SqlVersion = SqlVersion.Sql160
-            };
+            // Get generator options from style service or build from options
+            var generatorOptions = BuildGeneratorOptions(options);
 
             // Generate formatted SQL
             var generator = new Sql160ScriptGenerator(generatorOptions);
@@ -149,6 +128,143 @@ public class SqlParserService : ISqlParserService
             _logger.LogError(ex, "Error formatting SQL");
             return Task.FromResult(sql);
         }
+    }
+
+    /// <summary>
+    /// Format SQL using a named format style.
+    /// </summary>
+    public Task<string> FormatWithStyleAsync(string? sql, string styleName, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(sql))
+        {
+            return Task.FromResult(string.Empty);
+        }
+
+        if (_formatStyleService == null)
+        {
+            _logger.LogWarning("FormatStyleService not available, using default formatting");
+            return FormatAsync(sql, null, cancellationToken);
+        }
+
+        try
+        {
+            using var reader = new StringReader(sql);
+            var fragment = _parser.Parse(reader, out var errors);
+
+            if (errors?.Count > 0)
+            {
+                _logger.LogWarning("Cannot format SQL with parse errors: {ErrorCount} errors", errors.Count);
+                return Task.FromResult(sql);
+            }
+
+            var style = _formatStyleService.GetStyle(styleName) ?? _formatStyleService.GetDefaultStyle();
+            var generatorOptions = _formatStyleService.ToGeneratorOptions(style);
+
+            var generator = new Sql160ScriptGenerator(generatorOptions);
+            generator.GenerateScript(fragment, out var formattedSql);
+
+            _logger.LogDebug("Formatted SQL using style: {StyleName}", style.Name);
+            return Task.FromResult(formattedSql);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error formatting SQL with style {StyleName}", styleName);
+            return Task.FromResult(sql);
+        }
+    }
+
+    /// <summary>
+    /// Format SQL using a FormatStyle object.
+    /// </summary>
+    public Task<string> FormatWithStyleAsync(string? sql, FormatStyle style, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(sql))
+        {
+            return Task.FromResult(string.Empty);
+        }
+
+        if (_formatStyleService == null)
+        {
+            _logger.LogWarning("FormatStyleService not available, using default formatting");
+            return FormatAsync(sql, null, cancellationToken);
+        }
+
+        try
+        {
+            using var reader = new StringReader(sql);
+            var fragment = _parser.Parse(reader, out var errors);
+
+            if (errors?.Count > 0)
+            {
+                _logger.LogWarning("Cannot format SQL with parse errors: {ErrorCount} errors", errors.Count);
+                return Task.FromResult(sql);
+            }
+
+            var generatorOptions = _formatStyleService.ToGeneratorOptions(style);
+
+            var generator = new Sql160ScriptGenerator(generatorOptions);
+            generator.GenerateScript(fragment, out var formattedSql);
+
+            _logger.LogDebug("Formatted SQL using custom style: {StyleName}", style.Name);
+            return Task.FromResult(formattedSql);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error formatting SQL with style {StyleName}", style.Name);
+            return Task.FromResult(sql);
+        }
+    }
+
+    private SqlScriptGeneratorOptions BuildGeneratorOptions(FormatOptions? options)
+    {
+        // If we have a format style service and options specify a style name, use it
+        if (_formatStyleService != null)
+        {
+            var defaultStyle = _formatStyleService.GetDefaultStyle();
+            var generatorOptions = _formatStyleService.ToGeneratorOptions(defaultStyle);
+
+            // Override with any options provided
+            if (options != null)
+            {
+                if (options.IndentSize > 0)
+                    generatorOptions.IndentationSize = options.IndentSize;
+
+                generatorOptions.KeywordCasing = ConvertKeywordCasing(options.KeywordCasing);
+            }
+
+            return generatorOptions;
+        }
+
+        // Fallback to building options directly
+        return new SqlScriptGeneratorOptions
+        {
+            AlignClauseBodies = true,
+            AlignColumnDefinitionFields = true,
+            AlignSetClauseItem = true,
+            AsKeywordOnOwnLine = false,
+            IncludeSemicolons = true,
+            IndentationSize = options?.IndentSize ?? 4,
+            IndentSetClause = true,
+            IndentViewBody = true,
+            KeywordCasing = ConvertKeywordCasing(options?.KeywordCasing),
+            MultilineInsertSourcesList = true,
+            MultilineInsertTargetsList = true,
+            MultilineSelectElementsList = true,
+            MultilineSetClauseItems = true,
+            MultilineViewColumnsList = true,
+            MultilineWherePredicatesList = true,
+            NewLineBeforeCloseParenthesisInMultilineList = true,
+            NewLineBeforeFromClause = true,
+            NewLineBeforeGroupByClause = true,
+            NewLineBeforeHavingClause = true,
+            NewLineBeforeJoinClause = true,
+            NewLineBeforeOffsetClause = true,
+            NewLineBeforeOpenParenthesisInMultilineList = false,
+            NewLineBeforeOrderByClause = true,
+            NewLineBeforeOutputClause = true,
+            NewLineBeforeWhereClause = true,
+            SqlVersion = SqlVersion.Sql160
+        };
     }
 
     private SqlStatement ExtractStatementInfo(TSqlStatement statement, string fullSql)
