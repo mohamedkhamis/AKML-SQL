@@ -137,6 +137,10 @@ public class Program
         // Add Sprint 10 services - AI Integration
         services.AddSingleton<IAiService, AiService>();
 
+        // Add Sprint 11 services - Performance & Multi-Version
+        services.AddSingleton<IPerformanceService, PerformanceService>();
+        services.AddSingleton<ISqlVersionService, SqlVersionService>();
+
         // Add caching
         services.AddMemoryCache();
 
