@@ -126,6 +126,10 @@ public class Program
         // Add Sprint 7 services - Refactoring Tools
         services.AddSingleton<IRefactoringService, RefactoringService>();
 
+        // Add Sprint 8 services - History & Snippets
+        services.AddSingleton<IQueryHistoryService, QueryHistoryService>();
+        services.AddSingleton<ISnippetService, SnippetService>();
+
         // Add caching
         services.AddMemoryCache();
 
