@@ -1,0 +1,123 @@
+# Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+[Ll]og/
+[Ll]ogs/
+
+# Visual Studio files
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.vsidx
+*.testlog
+*.VisualState.xml
+TestResult.xml
+*.vspscc
+*.vssscc
+.builds
+*.pidb
+*.svclog
+*.scc
+
+# Visual Studio cache/options
+*.sap
+.vs/
+[Ee]xpress/
+
+# VS Code
+.vscode/
+
+# Rider
+.idea/
+
+# NCrunch
+*.ncrunch*
+_NCrunch_*
+.*crunch*.local.xml
+nCrunchTemp_*
+
+# NuGet Packages
+*.nupkg
+*.snupkg
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+*.nuget.props
+*.nuget.targets
+
+# Windows image file caches
+Thumbs.db
+ehthumbs.db
+
+# Folder config file
+Desktop.ini
+
+# macOS
+.DS_Store
+
+# Build results
+[Bb]uild[Ll]og.*
+*.VisualState.xml
+
+# Test Results
+[Tt]est[Rr]esult*/
+[Tt]est[Rr]esults/
+*.trx
+
+# Code coverage
+*.coverage
+*.coveragexml
+coverage/
+.coverage
+coverage.json
+coverage.xml
+
+# Publish directories
+publish/
+*.publish.xml
+
+# User-specific files
+*.rsuser
+
+# Project-specific
+*.DotSettings.user
+.localhistory/
+
+# VSIX
+*.vsix
+
+# SQL Server files
+*.mdf
+*.ldf
+*.ndf
+
+# Node modules (if any)
+node_modules/
+
+# Application data
+AppData/
+
+# Logs
+*.log
+
+# JetBrains Rider
+.idea/
+*.sln.iml
+
+# Resharper
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+
+# Lock files
+project.lock.json
+packages.lock.json

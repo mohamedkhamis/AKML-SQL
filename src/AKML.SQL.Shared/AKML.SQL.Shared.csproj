@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <RootNamespace>AKML.SQL.Shared</RootNamespace>
+    <AssemblyName>AKML.SQL.Shared</AssemblyName>
+    <Description>Shared contracts, models, and utilities for AKML-SQL</Description>
+    <Nullable>annotations</Nullable>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- gRPC for .NET Standard 2.0 (works with both .NET Framework and .NET Core) -->
+    <PackageReference Include="Google.Protobuf" Version="3.33.5" />
+    <PackageReference Include="Grpc.Core.Api" Version="2.76.0" />
+    
+    <!-- Additional utilities -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.2" />
+    <PackageReference Include="System.Text.Json" Version="10.0.2" />
+  </ItemGroup>
+
+  <!-- Proto types are generated in Core and SSMS projects separately -->
+  <!-- Shared library contains only shared C# code (constants, extensions, models) -->
+
+</Project>

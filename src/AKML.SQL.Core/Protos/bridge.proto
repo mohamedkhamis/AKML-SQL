@@ -1,0 +1,351 @@
+syntax = "proto3";
+
+option csharp_namespace = "AKML.SQL.Shared.Contracts";
+
+package akmlsql;
+
+// ============================================================
+// AKML-SQL Bridge Service
+// Main gRPC service for communication between SSMS VSIX and Core
+// ============================================================
+
+service BridgeService {
+  // Health check / connectivity test
+  rpc Ping(PingRequest) returns (PingResponse);
+  
+  // Text synchronization - send editor content to Core
+  rpc SyncText(SyncTextRequest) returns (SyncTextResponse);
+  
+  // Get completions at cursor position
+  rpc GetCompletions(CompletionRequest) returns (CompletionResponse);
+  
+  // Parse SQL and return AST info
+  rpc ParseSql(ParseRequest) returns (ParseResponse);
+  
+  // Format SQL code
+  rpc FormatSql(FormatRequest) returns (FormatResponse);
+  
+  // Get connection metadata (tables, columns, etc.)
+  rpc GetMetadata(MetadataRequest) returns (MetadataResponse);
+  
+  // Streaming completions for real-time suggestions
+  rpc StreamCompletions(CompletionRequest) returns (stream CompletionItem);
+  
+  // Bidirectional streaming for continuous sync
+  rpc SyncSession(stream SyncTextRequest) returns (stream SyncTextResponse);
+}
+
+// ============================================================
+// Common Messages
+// ============================================================
+
+message PingRequest {
+  string client_version = 1;
+  string ssms_version = 2;
+}
+
+message PingResponse {
+  bool success = 1;
+  string server_version = 2;
+  string message = 3;
+  int64 server_timestamp = 4;
+}
+
+// ============================================================
+// Text Synchronization
+// ============================================================
+
+message SyncTextRequest {
+  string document_id = 1;        // Unique ID for the document
+  string full_text = 2;          // Complete text content
+  int32 cursor_line = 3;         // 0-based line number
+  int32 cursor_column = 4;       // 0-based column number
+  string connection_string = 5;  // Optional: current SQL connection
+  int64 timestamp = 6;           // Client timestamp for ordering
+}
+
+message SyncTextResponse {
+  bool success = 1;
+  string document_id = 2;
+  int64 processed_timestamp = 3;
+  repeated Diagnostic diagnostics = 4;  // Parse errors, warnings
+}
+
+message Diagnostic {
+  DiagnosticSeverity severity = 1;
+  string message = 2;
+  int32 start_line = 3;
+  int32 start_column = 4;
+  int32 end_line = 5;
+  int32 end_column = 6;
+  string code = 7;  // Error/warning code
+}
+
+enum DiagnosticSeverity {
+  DIAGNOSTIC_SEVERITY_UNSPECIFIED = 0;
+  DIAGNOSTIC_SEVERITY_ERROR = 1;
+  DIAGNOSTIC_SEVERITY_WARNING = 2;
+  DIAGNOSTIC_SEVERITY_INFO = 3;
+  DIAGNOSTIC_SEVERITY_HINT = 4;
+}
+
+// ============================================================
+// Completions
+// ============================================================
+
+message CompletionRequest {
+  string document_id = 1;
+  string text = 2;              // Current text (or use synced text)
+  int32 cursor_line = 3;
+  int32 cursor_column = 4;
+  string trigger_character = 5; // Character that triggered completion (e.g., '.')
+  string connection_string = 6;
+  CompletionTriggerKind trigger_kind = 7;
+  int32 max_items = 8;          // Limit results (default: 50)
+}
+
+enum CompletionTriggerKind {
+  COMPLETION_TRIGGER_KIND_UNSPECIFIED = 0;
+  COMPLETION_TRIGGER_KIND_INVOKED = 1;           // Manual (Ctrl+Space)
+  COMPLETION_TRIGGER_KIND_CHARACTER = 2;         // Trigger character typed
+  COMPLETION_TRIGGER_KIND_REFILTER = 3;          // Refilter existing list
+}
+
+message CompletionResponse {
+  bool success = 1;
+  repeated CompletionItem items = 2;
+  bool is_incomplete = 3;  // True if more items available
+  string filter_text = 4;  // Current word being typed
+}
+
+message CompletionItem {
+  string label = 1;                    // Display text
+  CompletionItemKind kind = 2;         // Icon type
+  string detail = 3;                   // Short description
+  string documentation = 4;            // Full documentation (markdown)
+  string insert_text = 5;              // Text to insert
+  string filter_text = 6;              // Text to match against
+  string sort_text = 7;                // Sorting key
+  int32 relevance_score = 8;           // Fuzzy match score (0-100)
+  bool preselect = 9;                  // Should be preselected
+  CompletionItemInsertTextFormat insert_text_format = 10;
+  repeated string tags = 11;           // Additional tags (e.g., "deprecated")
+  
+  // For snippets
+  repeated TextEdit additional_text_edits = 12;
+}
+
+enum CompletionItemKind {
+  COMPLETION_ITEM_KIND_UNSPECIFIED = 0;
+  COMPLETION_ITEM_KIND_KEYWORD = 1;
+  COMPLETION_ITEM_KIND_TABLE = 2;
+  COMPLETION_ITEM_KIND_VIEW = 3;
+  COMPLETION_ITEM_KIND_COLUMN = 4;
+  COMPLETION_ITEM_KIND_FUNCTION = 5;
+  COMPLETION_ITEM_KIND_PROCEDURE = 6;
+  COMPLETION_ITEM_KIND_SCHEMA = 7;
+  COMPLETION_ITEM_KIND_DATABASE = 8;
+  COMPLETION_ITEM_KIND_SNIPPET = 9;
+  COMPLETION_ITEM_KIND_ALIAS = 10;
+  COMPLETION_ITEM_KIND_PARAMETER = 11;
+  COMPLETION_ITEM_KIND_VARIABLE = 12;
+  COMPLETION_ITEM_KIND_INDEX = 13;
+  COMPLETION_ITEM_KIND_TRIGGER = 14;
+  COMPLETION_ITEM_KIND_USER = 15;
+  COMPLETION_ITEM_KIND_CONSTRAINT = 16;
+}
+
+enum CompletionItemInsertTextFormat {
+  COMPLETION_ITEM_INSERT_TEXT_FORMAT_UNSPECIFIED = 0;
+  COMPLETION_ITEM_INSERT_TEXT_FORMAT_PLAIN_TEXT = 1;
+  COMPLETION_ITEM_INSERT_TEXT_FORMAT_SNIPPET = 2;
+}
+
+message TextEdit {
+  int32 start_line = 1;
+  int32 start_column = 2;
+  int32 end_line = 3;
+  int32 end_column = 4;
+  string new_text = 5;
+}
+
+// ============================================================
+// SQL Parsing
+// ============================================================
+
+message ParseRequest {
+  string document_id = 1;
+  string text = 2;
+  bool include_ast = 3;     // Include full AST in response
+  bool include_tokens = 4;  // Include token list
+}
+
+message ParseResponse {
+  bool success = 1;
+  bool has_errors = 2;
+  repeated Diagnostic diagnostics = 3;
+  repeated SqlStatement statements = 4;
+  string ast_json = 5;      // Full AST as JSON (if requested)
+}
+
+message SqlStatement {
+  SqlStatementType type = 1;
+  int32 start_offset = 2;
+  int32 end_offset = 3;
+  int32 start_line = 4;
+  int32 end_line = 5;
+  repeated TableReference tables = 6;
+  repeated ColumnReference columns = 7;
+}
+
+enum SqlStatementType {
+  SQL_STATEMENT_TYPE_UNSPECIFIED = 0;
+  SQL_STATEMENT_TYPE_SELECT = 1;
+  SQL_STATEMENT_TYPE_INSERT = 2;
+  SQL_STATEMENT_TYPE_UPDATE = 3;
+  SQL_STATEMENT_TYPE_DELETE = 4;
+  SQL_STATEMENT_TYPE_CREATE = 5;
+  SQL_STATEMENT_TYPE_ALTER = 6;
+  SQL_STATEMENT_TYPE_DROP = 7;
+  SQL_STATEMENT_TYPE_EXEC = 8;
+  SQL_STATEMENT_TYPE_DECLARE = 9;
+  SQL_STATEMENT_TYPE_SET = 10;
+  SQL_STATEMENT_TYPE_IF = 11;
+  SQL_STATEMENT_TYPE_WHILE = 12;
+  SQL_STATEMENT_TYPE_BEGIN = 13;
+  SQL_STATEMENT_TYPE_CTE = 14;
+  SQL_STATEMENT_TYPE_MERGE = 15;
+  SQL_STATEMENT_TYPE_OTHER = 99;
+}
+
+message TableReference {
+  string schema_name = 1;
+  string table_name = 2;
+  string alias = 3;
+  int32 start_offset = 4;
+  int32 end_offset = 5;
+}
+
+message ColumnReference {
+  string table_alias = 1;    // Or table name if no alias
+  string column_name = 2;
+  int32 start_offset = 3;
+  int32 end_offset = 4;
+}
+
+// ============================================================
+// SQL Formatting
+// ============================================================
+
+message FormatRequest {
+  string text = 1;
+  FormatOptions options = 2;
+}
+
+message FormatOptions {
+  int32 indent_size = 1;           // Default: 4
+  bool use_tabs = 2;               // Default: false
+  KeywordCasing keyword_casing = 3;
+  bool align_aliases = 4;          // Align AS clauses
+  bool place_commas_before = 5;    // Leading commas style
+  int32 max_line_length = 6;       // Wrap long lines (0 = no wrap)
+  bool expand_in_lists = 7;        // One item per line in IN()
+  bool expand_case_statements = 8; // Format CASE on multiple lines
+}
+
+enum KeywordCasing {
+  KEYWORD_CASING_UNSPECIFIED = 0;
+  KEYWORD_CASING_UPPERCASE = 1;
+  KEYWORD_CASING_LOWERCASE = 2;
+  KEYWORD_CASING_PASCAL_CASE = 3;
+}
+
+message FormatResponse {
+  bool success = 1;
+  string formatted_text = 2;
+  string error_message = 3;
+}
+
+// ============================================================
+// Metadata (Schema Information)
+// ============================================================
+
+message MetadataRequest {
+  string connection_string = 1;
+  MetadataScope scope = 2;
+  string filter_schema = 3;   // Optional: filter by schema
+  string filter_name = 4;     // Optional: filter by name pattern
+  bool force_refresh = 5;     // Bypass cache
+}
+
+enum MetadataScope {
+  METADATA_SCOPE_UNSPECIFIED = 0;
+  METADATA_SCOPE_DATABASES = 1;
+  METADATA_SCOPE_SCHEMAS = 2;
+  METADATA_SCOPE_TABLES = 3;
+  METADATA_SCOPE_VIEWS = 4;
+  METADATA_SCOPE_COLUMNS = 5;
+  METADATA_SCOPE_PROCEDURES = 6;
+  METADATA_SCOPE_FUNCTIONS = 7;
+  METADATA_SCOPE_ALL = 99;
+}
+
+message MetadataResponse {
+  bool success = 1;
+  string error_message = 2;
+  repeated DatabaseInfo databases = 3;
+  repeated SchemaInfo schemas = 4;
+  repeated TableInfo tables = 5;
+  repeated ProcedureInfo procedures = 6;
+  int64 cache_timestamp = 7;  // When metadata was cached
+}
+
+message DatabaseInfo {
+  string name = 1;
+  int32 compatibility_level = 2;
+}
+
+message SchemaInfo {
+  string database_name = 1;
+  string schema_name = 2;
+}
+
+message TableInfo {
+  string database_name = 1;
+  string schema_name = 2;
+  string table_name = 3;
+  bool is_view = 4;
+  repeated ColumnInfo columns = 5;
+  int64 row_count = 6;  // Approximate
+}
+
+message ColumnInfo {
+  string column_name = 1;
+  string data_type = 2;
+  bool is_nullable = 3;
+  bool is_primary_key = 4;
+  bool is_foreign_key = 5;
+  bool is_identity = 6;
+  string default_value = 7;
+  int32 ordinal_position = 8;
+  int32 max_length = 9;
+  int32 precision = 10;
+  int32 scale = 11;
+}
+
+message ProcedureInfo {
+  string database_name = 1;
+  string schema_name = 2;
+  string procedure_name = 3;
+  bool is_function = 4;
+  repeated ParameterInfo parameters = 5;
+  string return_type = 6;  // For functions
+}
+
+message ParameterInfo {
+  string parameter_name = 1;
+  string data_type = 2;
+  bool is_output = 3;
+  string default_value = 4;
+  int32 ordinal_position = 5;
+}
