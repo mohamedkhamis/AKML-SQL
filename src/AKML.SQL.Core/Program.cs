@@ -123,6 +123,9 @@ public class Program
                 sp.GetRequiredService<ILogger<SqlParserService>>(),
                 sp.GetRequiredService<IFormatStyleService>()));
 
+        // Add Sprint 7 services - Refactoring Tools
+        services.AddSingleton<IRefactoringService, RefactoringService>();
+
         // Add caching
         services.AddMemoryCache();
 
