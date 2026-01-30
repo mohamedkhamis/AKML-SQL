@@ -141,6 +141,10 @@ public class Program
         services.AddSingleton<IPerformanceService, PerformanceService>();
         services.AddSingleton<ISqlVersionService, SqlVersionService>();
 
+        // Add Sprint 12 services - Licensing & Auto-Update
+        services.AddSingleton<ILicenseService, LicenseService>();
+        services.AddSingleton<IUpdateService, UpdateService>();
+
         // Add caching
         services.AddMemoryCache();
 
