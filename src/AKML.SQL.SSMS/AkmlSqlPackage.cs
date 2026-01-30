@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using AKML.SQL.Shared;
 using AKML.SQL.SSMS.Services;
+using AKML.SQL.SSMS.UI.Settings;
 using Microsoft.VisualStudio;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
@@ -21,7 +22,8 @@ namespace AKML.SQL.SSMS
     [Guid(PackageGuidString)]
     [ProvideAutoLoad(VSConstants.UICONTEXT.NoSolution_string, PackageAutoLoadFlags.BackgroundLoad)]
     [ProvideAutoLoad(VSConstants.UICONTEXT.SolutionExists_string, PackageAutoLoadFlags.BackgroundLoad)]
-    [ProvideOptionPage(typeof(OptionsPage), "AKML-SQL", "General", 0, 0, true)]
+    [ProvideOptionPage(typeof(AkmlOptionsPage), "AKML-SQL", "General", 0, 0, true)]
+    [ProvideOptionPage(typeof(AkmlAdvancedOptionsPage), "AKML-SQL", "Advanced", 0, 0, true)]
     [ProvideMenuResource("Menus.ctmenu", 1)]
     public sealed class AkmlSqlPackage : AsyncPackage
     {
@@ -29,6 +31,7 @@ namespace AKML.SQL.SSMS
 
         private CoreProcessManager? _processManager;
         private GrpcClientService? _grpcClient;
+        private SettingsService? _settingsService;
         private ILogger? _logger;
 
         /// <summary>
@@ -40,6 +43,11 @@ namespace AKML.SQL.SSMS
         /// Gets the gRPC client service.
         /// </summary>
         public GrpcClientService? GrpcClient => _grpcClient;
+
+        /// <summary>
+        /// Gets the settings service.
+        /// </summary>
+        public SettingsService? SettingsService => _settingsService;
 
         /// <summary>
         /// Initialization of the package; this method is called right after the package is sited.
@@ -58,6 +66,12 @@ namespace AKML.SQL.SSMS
 
             try
             {
+                // Initialize settings service
+                progress.Report(new ServiceProgressData("Loading settings..."));
+                _settingsService = SettingsService.Instance;
+                _logger?.Information("Settings loaded. IntelliSense enabled: {Enabled}",
+                    _settingsService.Settings.EnableIntelliSense);
+
                 // Start Core process
                 progress.Report(new ServiceProgressData("Starting AKML-SQL Core service..."));
                 await StartCoreServiceAsync(cancellationToken);
@@ -210,26 +224,12 @@ namespace AKML.SQL.SSMS
                 TextSynchronizer.Instance?.Dispose();
                 _grpcClient?.Dispose();
                 _processManager?.Dispose();
+                _settingsService?.Dispose();
 
                 Log.CloseAndFlush();
             }
 
             base.Dispose(disposing);
         }
-    }
-
-    /// <summary>
-    /// Options page for AKML-SQL settings.
-    /// </summary>
-    [ComVisible(true)]
-    public class OptionsPage : DialogPage
-    {
-        public bool EnableIntelliSense { get; set; } = true;
-        public bool EnableAutoComplete { get; set; } = true;
-        public int AutoCompleteDelay { get; set; } = 150;
-        public bool EnableFuzzyMatching { get; set; } = true;
-        public bool FormatOnSave { get; set; } = false;
-        public bool EnableTabColoring { get; set; } = true;
-        public bool EnableQueryHistory { get; set; } = true;
     }
 }

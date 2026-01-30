@@ -1,0 +1,177 @@
+<Window x:Class="AKML.SQL.SSMS.UI.Completion.CompletionPopup"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:AKML.SQL.SSMS.UI.Completion"
+        Title="AKML-SQL IntelliSense"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        Topmost="True"
+        ResizeMode="NoResize"
+        SizeToContent="Height"
+        Width="350"
+        MaxHeight="300"
+        Focusable="False"
+        IsHitTestVisible="True">
+
+    <Window.Resources>
+        <!-- Colors for light theme (default) -->
+        <SolidColorBrush x:Key="PopupBackgroundBrush" Color="#F5F5F5"/>
+        <SolidColorBrush x:Key="PopupBorderBrush" Color="#CCCCCC"/>
+        <SolidColorBrush x:Key="ItemHoverBrush" Color="#E8E8E8"/>
+        <SolidColorBrush x:Key="ItemSelectedBrush" Color="#0078D7"/>
+        <SolidColorBrush x:Key="ItemSelectedTextBrush" Color="White"/>
+        <SolidColorBrush x:Key="ItemTextBrush" Color="#1E1E1E"/>
+        <SolidColorBrush x:Key="ItemDetailBrush" Color="#6E6E6E"/>
+        <SolidColorBrush x:Key="MatchHighlightBrush" Color="#0078D7"/>
+        <SolidColorBrush x:Key="ProBadgeBrush" Color="#FFD700"/>
+
+        <!-- Item template for completion items -->
+        <DataTemplate x:Key="CompletionItemTemplate" DataType="{x:Type local:CompletionItemViewModel}">
+            <Grid Height="22" Margin="2,1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="22"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Icon -->
+                <Image Grid.Column="0"
+                       Source="{Binding Icon}"
+                       Width="16" Height="16"
+                       VerticalAlignment="Center"
+                       HorizontalAlignment="Center"
+                       RenderOptions.BitmapScalingMode="HighQuality"/>
+
+                <!-- Label with highlight support -->
+                <TextBlock Grid.Column="1"
+                           Text="{Binding Label}"
+                           VerticalAlignment="Center"
+                           Margin="4,0,0,0"
+                           TextTrimming="CharacterEllipsis"
+                           FontFamily="Consolas"
+                           FontSize="12"/>
+
+                <!-- Detail/Type -->
+                <TextBlock Grid.Column="2"
+                           Text="{Binding KindDisplayName}"
+                           VerticalAlignment="Center"
+                           Margin="8,0,4,0"
+                           Foreground="{StaticResource ItemDetailBrush}"
+                           FontSize="10"
+                           FontStyle="Italic"/>
+
+                <!-- Pro badge (if applicable) -->
+                <Border Grid.Column="2"
+                        Visibility="{Binding IsProFeature, Converter={StaticResource BoolToVisibilityConverter}}"
+                        Background="{StaticResource ProBadgeBrush}"
+                        CornerRadius="2"
+                        Padding="3,1"
+                        Margin="4,0"
+                        VerticalAlignment="Center"
+                        HorizontalAlignment="Right">
+                    <TextBlock Text="PRO" FontSize="8" FontWeight="Bold" Foreground="Black"/>
+                </Border>
+            </Grid>
+        </DataTemplate>
+
+        <!-- ListBox item container style -->
+        <Style x:Key="CompletionItemContainerStyle" TargetType="ListBoxItem">
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Border"
+                                Background="{TemplateBinding Background}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Border" Property="Background" Value="{StaticResource ItemHoverBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Border" Property="Background" Value="{StaticResource ItemSelectedBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Foreground" Value="{StaticResource ItemSelectedTextBrush}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Bool to Visibility converter -->
+        <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+    </Window.Resources>
+
+    <!-- Main popup border -->
+    <Border Background="{StaticResource PopupBackgroundBrush}"
+            BorderBrush="{StaticResource PopupBorderBrush}"
+            BorderThickness="1"
+            CornerRadius="3">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="8"
+                              ShadowDepth="2"
+                              Opacity="0.3"
+                              Color="Black"/>
+        </Border.Effect>
+
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Completion list with virtualization -->
+            <ListBox x:Name="CompletionListBox"
+                     Grid.Row="0"
+                     ItemsSource="{Binding Items}"
+                     SelectedItem="{Binding SelectedItem, Mode=TwoWay}"
+                     ItemTemplate="{StaticResource CompletionItemTemplate}"
+                     ItemContainerStyle="{StaticResource CompletionItemContainerStyle}"
+                     BorderThickness="0"
+                     Background="Transparent"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                     VirtualizingStackPanel.IsVirtualizing="True"
+                     VirtualizingStackPanel.VirtualizationMode="Recycling"
+                     Focusable="False"
+                     MaxHeight="260">
+            </ListBox>
+
+            <!-- Status bar -->
+            <Border Grid.Row="1"
+                    Background="#E8E8E8"
+                    Padding="4,2"
+                    Visibility="{Binding ShowStatusBar, Converter={StaticResource BoolToVisibilityConverter}}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Column="0"
+                               Text="{Binding StatusText}"
+                               FontSize="10"
+                               Foreground="{StaticResource ItemDetailBrush}"
+                               VerticalAlignment="Center"/>
+
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding ItemCountText}"
+                               FontSize="10"
+                               Foreground="{StaticResource ItemDetailBrush}"
+                               VerticalAlignment="Center"
+                               Margin="8,0,0,0"/>
+                </Grid>
+            </Border>
+        </Grid>
+    </Border>
+</Window>
