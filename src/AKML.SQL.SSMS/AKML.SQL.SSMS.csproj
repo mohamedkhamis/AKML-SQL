@@ -15,6 +15,10 @@
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <UseWPF>true</UseWPF>
+    <!-- VSIX Generation -->
+    <CreateVsixContainer>true</CreateVsixContainer>
+    <DeployExtension>false</DeployExtension>
+    <CopyVsixExtensionFiles>true</CopyVsixExtensionFiles>
   </PropertyGroup>
 
   <ItemGroup>

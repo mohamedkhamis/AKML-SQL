@@ -122,3 +122,7 @@ _ReSharper*/
 project.lock.json
 packages.lock.json
 /nul
+/artifacts
+/build.bat
+/build.ps1
+/quick-deploy.bat
