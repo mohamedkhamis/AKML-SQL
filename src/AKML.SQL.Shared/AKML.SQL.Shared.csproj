@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
@@ -15,8 +15,8 @@
     <PackageReference Include="Grpc.Core.Api" Version="2.76.0" />
 
     <!-- Additional utilities -->
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.4" />
-    <PackageReference Include="System.Text.Json" Version="9.0.4" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.2" />
+    <PackageReference Include="System.Text.Json" Version="10.0.2" />
   </ItemGroup>
 
   <!-- Proto types are generated in Core and SSMS projects separately -->
