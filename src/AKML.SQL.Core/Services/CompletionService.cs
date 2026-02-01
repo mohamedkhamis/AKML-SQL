@@ -140,6 +140,7 @@ public class CompletionService : ICompletionService
         new KeywordInfo("WITH", KeywordCategory.Window, "CTE or hint"),
         new KeywordInfo("OVER", KeywordCategory.Window, "Window function"),
         new KeywordInfo("PARTITION", KeywordCategory.Window, "Window partition"),
+        new KeywordInfo("WINDOW", KeywordCategory.Window, "Named window definition (SQL Server 2022) - WINDOW w AS (PARTITION BY col ORDER BY col)"),
         new KeywordInfo("ROW_NUMBER", KeywordCategory.Window, "Row number function"),
         new KeywordInfo("RANK", KeywordCategory.Window, "Rank function"),
         new KeywordInfo("DENSE_RANK", KeywordCategory.Window, "Dense rank function"),
