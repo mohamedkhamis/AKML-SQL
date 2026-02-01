@@ -205,4 +205,174 @@ public class CompletionServiceTests
     }
 
     #endregion
+
+    #region SQL Server 2022 Functions Tests
+
+    [Fact]
+    public async Task GetCompletionsAsync_SqlServer2022_IncludesGenerateSeries()
+    {
+        // Arrange - use SELECT context to get functions
+        var text = "SELECT GENERATE";
+
+        // Act
+        var result = await _sut.GetCompletionsAsync(
+            "doc1", text, 0, text.Length, null, null, 100);
+
+        // Assert
+        result.Should().Contain(c => c.Label == "GENERATE_SERIES" &&
+            c.Kind == Shared.Contracts.CompletionItemKind.Function);
+    }
+
+    [Fact]
+    public async Task GetCompletionsAsync_SqlServer2022_IncludesDateBucket()
+    {
+        // Arrange
+        var text = "SELECT DATE_B";
+
+        // Act
+        var result = await _sut.GetCompletionsAsync(
+            "doc1", text, 0, text.Length, null, null, 100);
+
+        // Assert
+        result.Should().Contain(c => c.Label == "DATE_BUCKET" &&
+            c.Kind == Shared.Contracts.CompletionItemKind.Function);
+    }
+
+    [Fact]
+    public async Task GetCompletionsAsync_SqlServer2022_IncludesDateTrunc()
+    {
+        // Arrange
+        var text = "SELECT DATETR";
+
+        // Act
+        var result = await _sut.GetCompletionsAsync(
+            "doc1", text, 0, text.Length, null, null, 100);
+
+        // Assert
+        result.Should().Contain(c => c.Label == "DATETRUNC" &&
+            c.Kind == Shared.Contracts.CompletionItemKind.Function);
+    }
+
+    [Fact]
+    public async Task GetCompletionsAsync_SqlServer2022_IncludesJsonObject()
+    {
+        // Arrange
+        var text = "SELECT JSON_O";
+
+        // Act
+        var result = await _sut.GetCompletionsAsync(
+            "doc1", text, 0, text.Length, null, null, 100);
+
+        // Assert
+        result.Should().Contain(c => c.Label == "JSON_OBJECT" &&
+            c.Kind == Shared.Contracts.CompletionItemKind.Function);
+    }
+
+    [Fact]
+    public async Task GetCompletionsAsync_SqlServer2022_IncludesJsonArray()
+    {
+        // Arrange
+        var text = "SELECT JSON_A";
+
+        // Act
+        var result = await _sut.GetCompletionsAsync(
+            "doc1", text, 0, text.Length, null, null, 100);
+
+        // Assert
+        result.Should().Contain(c => c.Label == "JSON_ARRAY" &&
+            c.Kind == Shared.Contracts.CompletionItemKind.Function);
+    }
+
+    [Fact]
+    public async Task GetCompletionsAsync_SqlServer2022_IncludesGreatest()
+    {
+        // Arrange
+        var text = "SELECT GREAT";
+
+        // Act
+        var result = await _sut.GetCompletionsAsync(
+            "doc1", text, 0, text.Length, null, null, 100);
+
+        // Assert
+        result.Should().Contain(c => c.Label == "GREATEST" &&
+            c.Kind == Shared.Contracts.CompletionItemKind.Function);
+    }
+
+    [Fact]
+    public async Task GetCompletionsAsync_SqlServer2022_IncludesLeast()
+    {
+        // Arrange
+        var text = "SELECT LEA";
+
+        // Act
+        var result = await _sut.GetCompletionsAsync(
+            "doc1", text, 0, text.Length, null, null, 100);
+
+        // Assert
+        result.Should().Contain(c => c.Label == "LEAST" &&
+            c.Kind == Shared.Contracts.CompletionItemKind.Function);
+    }
+
+    [Fact]
+    public async Task GetCompletionsAsync_SqlServer2022_IncludesBitwiseFunctions()
+    {
+        // Arrange
+        var text = "SELECT LEFT_SH";
+
+        // Act
+        var result = await _sut.GetCompletionsAsync(
+            "doc1", text, 0, text.Length, null, null, 100);
+
+        // Assert
+        result.Should().Contain(c => c.Label == "LEFT_SHIFT" &&
+            c.Kind == Shared.Contracts.CompletionItemKind.Function);
+    }
+
+    [Fact]
+    public async Task GetCompletionsAsync_SqlServer2022_IncludesApproxPercentile()
+    {
+        // Arrange
+        var text = "SELECT APPROX_P";
+
+        // Act
+        var result = await _sut.GetCompletionsAsync(
+            "doc1", text, 0, text.Length, null, null, 100);
+
+        // Assert
+        result.Should().Contain(c => c.Label == "APPROX_PERCENTILE_CONT" &&
+            c.Kind == Shared.Contracts.CompletionItemKind.Function);
+        result.Should().Contain(c => c.Label == "APPROX_PERCENTILE_DISC" &&
+            c.Kind == Shared.Contracts.CompletionItemKind.Function);
+    }
+
+    [Fact]
+    public async Task GetCompletionsAsync_SqlServer2022_IncludesIsDistinctFrom()
+    {
+        // Arrange
+        var text = "SELECT * FROM Customers WHERE Id IS DIST";
+
+        // Act
+        var result = await _sut.GetCompletionsAsync(
+            "doc1", text, 0, text.Length, null, null, 100);
+
+        // Assert
+        result.Should().Contain(c => c.Label == "IS DISTINCT FROM");
+        result.Should().Contain(c => c.Label == "IS NOT DISTINCT FROM");
+    }
+
+    [Fact]
+    public async Task GetCompletionsAsync_SqlServer2022_IncludesWindowKeyword()
+    {
+        // Arrange
+        var text = "SELECT * FROM Orders WINDO";
+
+        // Act
+        var result = await _sut.GetCompletionsAsync(
+            "doc1", text, 0, text.Length, null, null, 100);
+
+        // Assert
+        result.Should().Contain(c => c.Label == "WINDOW");
+    }
+
+    #endregion
 }
