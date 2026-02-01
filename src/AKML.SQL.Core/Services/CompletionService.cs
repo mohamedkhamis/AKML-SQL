@@ -240,7 +240,37 @@ public class CompletionService : ICompletionService
         new FunctionInfo("FLOOR", "Math", "FLOOR(number)", "Rounds down to nearest integer"),
         new FunctionInfo("ROUND", "Math", "ROUND(number, decimals)", "Rounds to specified decimals"),
         new FunctionInfo("POWER", "Math", "POWER(base, exponent)", "Returns power of a number"),
-        new FunctionInfo("SQRT", "Math", "SQRT(number)", "Returns square root")
+        new FunctionInfo("SQRT", "Math", "SQRT(number)", "Returns square root"),
+
+        // SQL Server 2022 Functions - DateTime
+        new FunctionInfo("DATE_BUCKET", "DateTime", "DATE_BUCKET(datepart, number, date, origin)", "Returns date-time value corresponding to start of bucket"),
+        new FunctionInfo("DATETRUNC", "DateTime", "DATETRUNC(datepart, date)", "Truncates date to specified precision"),
+
+        // SQL Server 2022 Functions - JSON
+        new FunctionInfo("JSON_OBJECT", "JSON", "JSON_OBJECT(key1:val1, key2:val2...)", "Constructs JSON object from key-value pairs"),
+        new FunctionInfo("JSON_ARRAY", "JSON", "JSON_ARRAY(val1, val2...)", "Constructs JSON array from values"),
+        new FunctionInfo("JSON_PATH_EXISTS", "JSON", "JSON_PATH_EXISTS(json, path)", "Tests if JSON path exists"),
+
+        // SQL Server 2022 Functions - Logical
+        new FunctionInfo("GREATEST", "Logical", "GREATEST(val1, val2, ...)", "Returns greatest value from list"),
+        new FunctionInfo("LEAST", "Logical", "LEAST(val1, val2, ...)", "Returns least value from list"),
+
+        // SQL Server 2022 Functions - Aggregate
+        new FunctionInfo("APPROX_PERCENTILE_CONT", "Aggregate", "APPROX_PERCENTILE_CONT(percentile) WITHIN GROUP (ORDER BY col)", "Approximate percentile (continuous)"),
+        new FunctionInfo("APPROX_PERCENTILE_DISC", "Aggregate", "APPROX_PERCENTILE_DISC(percentile) WITHIN GROUP (ORDER BY col)", "Approximate percentile (discrete)"),
+
+        // SQL Server 2022 Functions - Bitwise
+        new FunctionInfo("LEFT_SHIFT", "Bitwise", "LEFT_SHIFT(value, shift)", "Bitwise left shift"),
+        new FunctionInfo("RIGHT_SHIFT", "Bitwise", "RIGHT_SHIFT(value, shift)", "Bitwise right shift"),
+        new FunctionInfo("BIT_COUNT", "Bitwise", "BIT_COUNT(value)", "Counts number of set bits"),
+        new FunctionInfo("GET_BIT", "Bitwise", "GET_BIT(value, position)", "Gets bit at position"),
+        new FunctionInfo("SET_BIT", "Bitwise", "SET_BIT(value, position, bit)", "Sets bit at position"),
+
+        // SQL Server 2022 Functions - Table-Valued
+        new FunctionInfo("GENERATE_SERIES", "Table-Valued", "GENERATE_SERIES(start, stop, step)", "Generates a series of numbers"),
+
+        // SQL Server 2022 Functions - String (enhanced)
+        new FunctionInfo("STRING_SPLIT", "String", "STRING_SPLIT(string, separator, enable_ordinal)", "Splits string into rows with optional ordinal")
     };
 
     public CompletionService(
