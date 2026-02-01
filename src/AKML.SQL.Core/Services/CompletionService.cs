@@ -166,7 +166,30 @@ public class CompletionService : ICompletionService
         new KeywordInfo("SCHEMA", KeywordCategory.DDL, "Schema object"),
         new KeywordInfo("DATABASE", KeywordCategory.DDL, "Database object"),
         new KeywordInfo("USE", KeywordCategory.Control, "Changes database context"),
-        new KeywordInfo("GO", KeywordCategory.Control, "Batch separator")
+        new KeywordInfo("GO", KeywordCategory.Control, "Batch separator"),
+
+        // Query Hints (SQL Server 2022)
+        new KeywordInfo("OPTION", KeywordCategory.Clause, "Query hint clause"),
+        new KeywordInfo("USE HINT", KeywordCategory.Clause, "Query optimizer hint (SQL Server 2022)"),
+        new KeywordInfo("OPTIMIZE FOR", KeywordCategory.Clause, "Parameter optimization hint"),
+        new KeywordInfo("RECOMPILE", KeywordCategory.Clause, "Forces recompilation of query plan"),
+        new KeywordInfo("MAXDOP", KeywordCategory.Clause, "Maximum degree of parallelism hint"),
+        new KeywordInfo("FAST", KeywordCategory.Clause, "Fast n rows optimization"),
+        new KeywordInfo("FORCE ORDER", KeywordCategory.Clause, "Preserves join order in query"),
+        new KeywordInfo("LOOP JOIN", KeywordCategory.Clause, "Forces loop join"),
+        new KeywordInfo("MERGE JOIN", KeywordCategory.Clause, "Forces merge join"),
+        new KeywordInfo("HASH JOIN", KeywordCategory.Clause, "Forces hash join"),
+
+        // SQL Server 2022 Query Store Hints
+        new KeywordInfo("DOP_FEEDBACK", KeywordCategory.Clause, "Degree of parallelism feedback hint (SQL Server 2022)"),
+        new KeywordInfo("CE_FEEDBACK", KeywordCategory.Clause, "Cardinality estimation feedback hint (SQL Server 2022)"),
+        new KeywordInfo("QUERY_OPTIMIZER_HOTFIXES", KeywordCategory.Clause, "Enables query optimizer hotfixes"),
+        new KeywordInfo("PARAMETER_SENSITIVE_PLAN_OPTIMIZATION", KeywordCategory.Clause, "Parameter sensitive plan optimization (SQL Server 2022)"),
+        new KeywordInfo("DISABLE_BATCH_MODE_ADAPTIVE_JOINS", KeywordCategory.Clause, "Disables batch mode adaptive joins"),
+        new KeywordInfo("DISABLE_BATCH_MODE_MEMORY_GRANT_FEEDBACK", KeywordCategory.Clause, "Disables batch mode memory grant feedback"),
+        new KeywordInfo("DISABLE_INTERLEAVED_EXECUTION_TVF", KeywordCategory.Clause, "Disables interleaved execution for TVFs"),
+        new KeywordInfo("DISABLE_ROW_MODE_MEMORY_GRANT_FEEDBACK", KeywordCategory.Clause, "Disables row mode memory grant feedback"),
+        new KeywordInfo("DISABLE_TSQL_SCALAR_UDF_INLINING", KeywordCategory.Clause, "Disables T-SQL scalar UDF inlining")
     };
 
     // Common SQL functions

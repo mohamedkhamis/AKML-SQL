@@ -60,9 +60,9 @@ public class CompletionServiceTests
         // Arrange
         var text = "";
 
-        // Act
+        // Act - need 200 items to include all keywords after Query Hints were added
         var result = await _sut.GetCompletionsAsync(
-            "doc1", text, 0, 0, null, null, 100);
+            "doc1", text, 0, 0, null, null, 200);
 
         // Assert
         result.Should().NotBeEmpty();
@@ -181,9 +181,9 @@ public class CompletionServiceTests
         // Arrange
         var text = "SELECT ";
 
-        // Act
+        // Act - need 200 items to include functions after all keywords
         var result = await _sut.GetCompletionsAsync(
-            "doc1", text, 0, text.Length, null, null, 100);
+            "doc1", text, 0, text.Length, null, null, 200);
 
         // Assert
         result.Should().Contain(c => c.Kind == Shared.Contracts.CompletionItemKind.Function);
