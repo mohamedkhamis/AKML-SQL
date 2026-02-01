@@ -205,14 +205,24 @@ public class MetadataService : IMetadataService
     {
         var tables = new Dictionary<string, TableInfo>();
 
-        // Fetch tables/views
+        // Fetch tables/views with SQL Server 2022 Ledger table support
         const string tableSql = @"
-            SELECT 
+            SELECT
                 DB_NAME() AS DatabaseName,
                 s.name AS SchemaName,
                 t.name AS TableName,
                 CASE WHEN t.type = 'V' THEN 1 ELSE 0 END AS IsView,
-                ISNULL(p.rows, 0) AS RowCount
+                ISNULL(p.rows, 0) AS RowCount,
+                CASE WHEN t.type = 'U' AND EXISTS (
+                    SELECT 1 FROM sys.tables lt
+                    WHERE lt.object_id = t.object_id
+                    AND lt.ledger_type IS NOT NULL AND lt.ledger_type > 0
+                ) THEN 1 ELSE 0 END AS IsLedger,
+                ISNULL((
+                    SELECT lv.name FROM sys.tables lt
+                    INNER JOIN sys.objects lv ON lt.history_table_id = lv.object_id
+                    WHERE lt.object_id = t.object_id
+                ), '') AS LedgerViewName
             FROM sys.objects t
             INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
             LEFT JOIN sys.partitions p ON t.object_id = p.object_id AND p.index_id IN (0, 1)
@@ -231,7 +241,9 @@ public class MetadataService : IMetadataService
                     SchemaName = reader.GetString(1),
                     TableName = reader.GetString(2),
                     IsView = reader.GetInt32(3) == 1,
-                    RowCount = reader.GetInt64(4)
+                    RowCount = reader.GetInt64(4),
+                    IsLedger = reader.GetInt32(5) == 1,
+                    LedgerViewName = reader.GetString(6)
                 };
 
                 var key = $"{table.SchemaName}.{table.TableName}";

@@ -317,6 +317,8 @@ message TableInfo {
   bool is_view = 4;
   repeated ColumnInfo columns = 5;
   int64 row_count = 6;  // Approximate
+  bool is_ledger = 7;  // SQL Server 2022 Ledger table
+  string ledger_view_name = 8;  // Associated ledger history view
 }
 
 message ColumnInfo {
