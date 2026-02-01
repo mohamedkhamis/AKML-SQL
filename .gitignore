@@ -126,3 +126,4 @@ packages.lock.json
 /build.bat
 /build.ps1
 /quick-deploy.bat
+*.ps1

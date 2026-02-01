@@ -14,6 +14,8 @@
     <CopyOutputSymbolsToOutputDirectory>false</CopyOutputSymbolsToOutputDirectory>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
+    <!-- Allow package downgrades to match SSMS 20's VS 2017 assemblies -->
+    <NoWarn>$(NoWarn);NU1605</NoWarn>
     <UseWPF>true</UseWPF>
     <!-- VSIX Generation -->
     <CreateVsixContainer>true</CreateVsixContainer>
@@ -22,14 +24,14 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- VS SDK packages -->
-    <PackageReference Include="Microsoft.VisualStudio.SDK" Version="17.14.40265" ExcludeAssets="runtime" />
-    <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="17.14.2120" PrivateAssets="all" />
+    <!-- VS SDK packages - Using VS 2017 (15.x) versions for SSMS 20 compatibility -->
+    <PackageReference Include="Microsoft.VisualStudio.SDK" Version="15.9.3" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="15.9.3039" PrivateAssets="all" />
 
-    <!-- Editor integration -->
-    <PackageReference Include="Microsoft.VisualStudio.Editor" Version="17.14.249" />
-    <PackageReference Include="Microsoft.VisualStudio.Text.UI.Wpf" Version="17.14.249" />
-    <PackageReference Include="Microsoft.VisualStudio.Language.Intellisense" Version="17.14.249" />
+    <!-- Editor integration - VS 2017 compatible versions -->
+    <PackageReference Include="Microsoft.VisualStudio.Editor" Version="15.8.525" />
+    <PackageReference Include="Microsoft.VisualStudio.Text.UI.Wpf" Version="15.8.525" />
+    <PackageReference Include="Microsoft.VisualStudio.Language.Intellisense" Version="15.8.525" />
 
     <!-- gRPC Client for .NET Framework (IMPORTANT: Use Grpc.Core, not Grpc.Net.Client!) -->
     <PackageReference Include="Grpc.Core" Version="2.46.6" />
@@ -77,6 +79,8 @@
     <Reference Include="WindowsBase" />
     <Reference Include="System.ComponentModel.Composition" />
     <Reference Include="System.Xaml" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Design" />
   </ItemGroup>
 
 </Project>

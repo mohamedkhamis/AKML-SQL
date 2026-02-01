@@ -22,9 +22,11 @@ namespace AKML.SQL.SSMS
     [Guid(PackageGuidString)]
     [ProvideAutoLoad(VSConstants.UICONTEXT.NoSolution_string, PackageAutoLoadFlags.BackgroundLoad)]
     [ProvideAutoLoad(VSConstants.UICONTEXT.SolutionExists_string, PackageAutoLoadFlags.BackgroundLoad)]
-    [ProvideOptionPage(typeof(AkmlOptionsPage), "AKML-SQL", "General", 0, 0, true)]
-    [ProvideOptionPage(typeof(AkmlAdvancedOptionsPage), "AKML-SQL", "Advanced", 0, 0, true)]
-    [ProvideMenuResource("Menus.ctmenu", 1)]
+    // Note: Options pages disabled for SSMS compatibility
+    // [ProvideOptionPage(typeof(AkmlOptionsPage), "AKML-SQL", "General", 0, 0, true)]
+    // [ProvideOptionPage(typeof(AkmlAdvancedOptionsPage), "AKML-SQL", "Advanced", 0, 0, true)]
+    // Note: Menu resource disabled - no .vsct file
+    // [ProvideMenuResource("Menus.ctmenu", 1)]
     public sealed class AkmlSqlPackage : AsyncPackage
     {
         public const string PackageGuidString = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
@@ -80,10 +82,10 @@ namespace AKML.SQL.SSMS
                 progress.Report(new ServiceProgressData("Connecting to Core service..."));
                 await InitializeGrpcClientAsync(cancellationToken);
 
-                // Register commands
-                progress.Report(new ServiceProgressData("Registering commands..."));
-                await Commands.FormatSqlCommand.InitializeAsync(this);
-                await Commands.RefreshMetadataCommand.InitializeAsync(this);
+                // Register commands (disabled for now - requires .vsct)
+                // progress.Report(new ServiceProgressData("Registering commands..."));
+                // await Commands.FormatSqlCommand.InitializeAsync(this);
+                // await Commands.RefreshMetadataCommand.InitializeAsync(this);
 
                 _logger?.Information("{ProductName} initialized successfully", AkmlConstants.ProductName);
 
