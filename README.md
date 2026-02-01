@@ -14,7 +14,7 @@ AKML-SQL is a professional IntelliSense extension for SSMS (similar to Redgate S
 │  ┌─────────────────────────────────────────────────────────┐   │
 │  │              AKML.SQL.SSMS (VSIX)                        │   │
 │  │         .NET Framework 4.7.2 for SSMS 18/19             │   │
-│  │         .NET 8 for SSMS 20+                              │   │
+│  │         .NET 10 for SSMS 20+                             │   │
 │  └──────────────────────┬──────────────────────────────────┘   │
 └─────────────────────────┼───────────────────────────────────────┘
                           │ gRPC over Named Pipes
@@ -22,7 +22,7 @@ AKML-SQL is a professional IntelliSense extension for SSMS (similar to Redgate S
 ┌─────────────────────────────────────────────────────────────────┐
 │                    Core Service Process                          │
 │  ┌─────────────────────────────────────────────────────────┐   │
-│  │              AKML.SQL.Core (.NET 8)                      │   │
+│  │              AKML.SQL.Core (.NET 10)                     │   │
 │  │  • SQL Parsing (ScriptDom)                               │   │
 │  │  • IntelliSense Engine                                   │   │
 │  │  • Metadata Caching                                      │   │
@@ -40,7 +40,7 @@ Before you begin, ensure you have:
 | Requirement | Version | Download |
 |------------|---------|----------|
 | Visual Studio 2022 | 17.8+ | [Download](https://visualstudio.microsoft.com/downloads/) |
-| .NET SDK | 8.0+ | [Download](https://dotnet.microsoft.com/download/dotnet/8.0) |
+| .NET SDK | 10.0+ | [Download](https://dotnet.microsoft.com/download/dotnet/10.0) |
 | .NET Framework | 4.7.2 Developer Pack | [Download](https://dotnet.microsoft.com/download/dotnet-framework/net472) |
 | SSMS | 18, 19, or 20+ | [Download](https://docs.microsoft.com/sql/ssms/download-sql-server-management-studio-ssms) |
 
@@ -133,7 +133,7 @@ AKML-SQL/
 ├── README.md                       # This file
 │
 ├── src/
-│   ├── AKML.SQL.Core/              # .NET 8 Background Service
+│   ├── AKML.SQL.Core/              # .NET 10 Background Service
 │   │   ├── Program.cs              # Entry point with Kestrel config
 │   │   ├── Services/
 │   │   │   ├── BridgeServiceImpl.cs    # gRPC service implementation
