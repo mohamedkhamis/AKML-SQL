@@ -596,21 +596,20 @@ public class CompletionService : ICompletionService
         }
     }
 
-    private async Task AddTableCompletionsAsync(
+    private Task AddTableCompletionsAsync(
         List<CompletionItem> items,
         string filterText,
         string? connectionString,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(connectionString))
-            return;
+            return Task.CompletedTask;
 
         var dbCache = GetOrLoadCache(connectionString);
         if (dbCache == null)
         {
             // Fallback to metadata service
-            await AddSchemaCompletionsFallbackAsync(items, filterText, connectionString, cancellationToken);
-            return;
+            return AddSchemaCompletionsFallbackAsync(items, filterText, connectionString, cancellationToken);
         }
 
         foreach (var result in dbCache.SearchTablesAndViews(filterText, 50))
@@ -627,9 +626,11 @@ public class CompletionService : ICompletionService
                 RelevanceScore = result.Score + 10 // Boost tables in table context
             });
         }
+
+        return Task.CompletedTask;
     }
 
-    private async Task AddColumnCompletionsAsync(
+    private Task AddColumnCompletionsAsync(
         List<CompletionItem> items,
         string filterText,
         SqlContext context,
@@ -637,11 +638,11 @@ public class CompletionService : ICompletionService
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(connectionString))
-            return;
+            return Task.CompletedTask;
 
         var dbCache = GetOrLoadCache(connectionString);
         if (dbCache == null)
-            return;
+            return Task.CompletedTask;
 
         // Get columns from tables referenced in current statement
         var addedColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -706,9 +707,11 @@ public class CompletionService : ICompletionService
                 });
             }
         }
+
+        return Task.CompletedTask;
     }
 
-    private async Task AddAliasColumnsAsync(
+    private Task AddAliasColumnsAsync(
         List<CompletionItem> items,
         string? aliasOrTable,
         SqlContext context,
@@ -716,11 +719,11 @@ public class CompletionService : ICompletionService
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(connectionString) || string.IsNullOrEmpty(aliasOrTable))
-            return;
+            return Task.CompletedTask;
 
         var dbCache = GetOrLoadCache(connectionString);
         if (dbCache == null)
-            return;
+            return Task.CompletedTask;
 
         // Find the table for this alias
         var tableInfo = context.AvailableTables.FirstOrDefault(t =>
@@ -772,20 +775,22 @@ public class CompletionService : ICompletionService
             SortText = "0_000_*",
             RelevanceScore = 100
         });
+
+        return Task.CompletedTask;
     }
 
-    private async Task AddProcedureCompletionsAsync(
+    private Task AddProcedureCompletionsAsync(
         List<CompletionItem> items,
         string filterText,
         string? connectionString,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(connectionString))
-            return;
+            return Task.CompletedTask;
 
         var dbCache = GetOrLoadCache(connectionString);
         if (dbCache == null)
-            return;
+            return Task.CompletedTask;
 
         foreach (var result in dbCache.SearchProcedures(filterText, 50))
         {
@@ -816,6 +821,8 @@ public class CompletionService : ICompletionService
                 RelevanceScore = result.Score
             });
         }
+
+        return Task.CompletedTask;
     }
 
     private async Task AddSchemaCompletionsFallbackAsync(

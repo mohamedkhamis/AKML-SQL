@@ -13,7 +13,7 @@ Open PowerShell and verify your setup:
 ```powershell
 # Check .NET SDK
 dotnet --list-sdks
-# Should show 8.0.x or higher
+# Should show 10.0.x or higher
 
 # Check Visual Studio
 # Open Visual Studio Installer and verify these workloads:
@@ -109,7 +109,7 @@ Console.WriteLine($"Message: {response.Message}");
 
 | Project | Framework | Purpose |
 |---------|-----------|---------|
-| `AKML.SQL.Core` | .NET 8 | Background service, gRPC server |
+| `AKML.SQL.Core` | .NET 10 | Background service, gRPC server |
 | `AKML.SQL.SSMS` | .NET Framework 4.7.2 | VSIX extension for SSMS |
 | `AKML.SQL.Shared` | .NET Standard 2.0 | Shared contracts, models |
 
@@ -158,7 +158,7 @@ private static readonly string[] SqlKeywords = new[]
 ## Troubleshooting
 
 **Build fails with "SDK not found"**
-→ Install .NET 8 SDK from https://dot.net
+→ Install .NET 10 SDK from https://dot.net
 
 **gRPC connection refused**
 → Ensure Core service is running on port 50051

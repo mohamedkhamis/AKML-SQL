@@ -1,27 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
-  <Metadata>
-    <Identity Id="AKML.SQL.SSMS.a1b2c3d4-e5f6-7890-abcd-ef1234567890" Version="1.0.0" Language="en-US" Publisher="Azka Innovation" />
-    <DisplayName>AKML-SQL</DisplayName>
-    <Description xml:space="preserve">Advanced IntelliSense extension for SQL Server Management Studio. Features include smart code completion, SQL formatting, refactoring tools, query history, and AI-powered assistance.</Description>
-    <MoreInfo>https://github.com/mohamedkhamis/AKML-SQL</MoreInfo>
-    <GettingStartedGuide>https://github.com/mohamedkhamis/AKML-SQL/wiki</GettingStartedGuide>
-    <ReleaseNotes>AKML-SQL v1.0.0 - Full IntelliSense, Formatting, Refactoring, AI Integration</ReleaseNotes>
-    <Tags>sql, intellisense, ssms, code completion, formatting, sql server</Tags>
-  </Metadata>
-  <Installation>
-    <InstallationTarget Id="Microsoft.VisualStudio.Community" Version="[17.0,)" />
-    <InstallationTarget Id="Microsoft.VisualStudio.Pro" Version="[17.0,)" />
-    <InstallationTarget Id="Microsoft.VisualStudio.Enterprise" Version="[17.0,)" />
-  </Installation>
-  <Dependencies>
-    <Dependency Id="Microsoft.Framework.NDP" DisplayName="Microsoft .NET Framework" d:Source="Manual" Version="[4.7.2,)" />
-  </Dependencies>
-  <Prerequisites>
-    <Prerequisite Id="Microsoft.VisualStudio.Component.CoreEditor" Version="[17.0,)" DisplayName="Visual Studio core editor" />
-  </Prerequisites>
-  <Assets>
-    <Asset Type="Microsoft.VisualStudio.MefComponent" d:Source="Project" d:ProjectName="AKML.SQL.SSMS" Path="|AKML.SQL.SSMS|" />
-    <Asset Type="Microsoft.VisualStudio.VsPackage" d:Source="Project" d:ProjectName="AKML.SQL.SSMS" Path="|AKML.SQL.SSMS;PkgdefProjectOutputGroup|" />
-  </Assets>
+    <Metadata>
+        <Identity Id="AKML.SQL.SSMS.a1b2c3d4-e5f6-7890-abcd-ef1234567890" Version="1.0.0" Language="en-US" Publisher="Azka Innovation" />
+        <DisplayName>AKML-SQL</DisplayName>
+        <Description xml:space="preserve">Advanced IntelliSense extension for SQL Server Management Studio. Features include smart code completion, SQL formatting, refactoring tools, query history, and AI-powered assistance.</Description>
+        <MoreInfo>https://github.com/mohamedkhamis/AKML-SQL</MoreInfo>
+        <GettingStartedGuide>https://github.com/mohamedkhamis/AKML-SQL/wiki</GettingStartedGuide>
+        <ReleaseNotes>AKML-SQL v1.0.0 - Full IntelliSense, Formatting, Refactoring, AI Integration</ReleaseNotes>
+        <Tags>sql, intellisense, ssms, code completion, formatting, sql server</Tags>
+    </Metadata>
+    <Installation AllUsers="true" InstalledByMsi="true">
+        <InstallationTarget Id="Microsoft.VisualStudio.Community" Version="[17.0,)" />
+        <InstallationTarget Id="Microsoft.VisualStudio.Pro" Version="[17.0,)" />
+        <InstallationTarget Id="Microsoft.VisualStudio.Enterprise" Version="[17.0,)" />
+    </Installation>
+    <Dependencies>
+        <Dependency Id="Microsoft.Framework.NDP" DisplayName="Microsoft .NET Framework" d:Source="Manual" Version="[4.7.2,)" />
+    </Dependencies>
+    <Prerequisites>
+        <Prerequisite Id="Microsoft.VisualStudio.Component.CoreEditor" Version="[17.0,)" DisplayName="Visual Studio core editor" />
+    </Prerequisites>
+    <Assets>
+        <Asset Type="Microsoft.VisualStudio.MefComponent" d:Source="Project" d:ProjectName="AKML.SQL.SSMS" Path="|AKML.SQL.SSMS|" />
+        <Asset Type="Microsoft.VisualStudio.VsPackage" d:Source="Project" d:ProjectName="AKML.SQL.SSMS" Path="|AKML.SQL.SSMS;PkgdefProjectOutputGroup|" />
+    </Assets>
 </PackageManifest>
