@@ -1,0 +1,18 @@
+[$RootKey$\Packages\{A1B2C3D4-1111-2222-3333-444455556666}]
+@="AkmlSql.Ssms22.AkmlSqlPackage"
+"InprocServer32"="$WinDir$\SYSTEM32\MSCOREE.DLL"
+"Class"="AkmlSql.Ssms22.AkmlSqlPackage"
+"CodeBase"="$PackageFolder$\AkmlSql.Ssms22.dll"
+"AllowsBackgroundLoad"=dword:00000001
+
+[$RootKey$\InstalledProducts\AkmlSql]
+@="AKML SQL"
+"Package"="{A1B2C3D4-1111-2222-3333-444455556666}"
+"ProductDetails"="AI-powered SQL development assistance"
+"PID"="1.0.0"
+
+[$RootKey$\Menus]
+"{A1B2C3D4-1111-2222-3333-444455556666}"=", Menus.ctmenu, 1"
+
+[$RootKey$\AutoLoadPackages\{e8fbc700-a1bd-11d0-a67c-00a0c9110051}]
+"{A1B2C3D4-1111-2222-3333-444455556666}"=dword:00000002

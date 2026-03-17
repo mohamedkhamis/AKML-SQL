@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects Condition="'$(MSBuildVersion)' == '' Or '$(MSBuildVersion)' &lt; '16.0'">$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>{B1A2C3D4-E5F6-7890-ABCD-EF1234567890}</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>AkmlSql.Shell.Shared</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)PackageGuids.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\AboutCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\CheckUpdateCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\OptionsCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\SendFeedbackCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\ViewLogsCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Dialogs\AboutDialog.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)StatusBar\StatusBarManager.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Update\UpdateLauncher.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Update\UpdateNotifier.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Validation\LoadValidator.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)JsonOptions.cs" />
+  </ItemGroup>
+</Project>

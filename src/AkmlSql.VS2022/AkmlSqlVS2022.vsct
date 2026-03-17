@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CommandTable xmlns="http://schemas.microsoft.com/VisualStudio/2005-10-18/CommandTable"
+              xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+  <Extern href="stdidcmd.h"/>
+  <Extern href="vsshlids.h"/>
+
+  <Commands package="guidAkmlSqlPackage">
+    <Menus>
+      <Menu guid="guidAkmlSqlCmdSet" id="AkmlSqlMenu" priority="0x700" type="Menu">
+        <Parent guid="guidSHLMainMenu" id="IDG_VS_MM_TOOLSADDINS"/>
+        <Strings>
+          <ButtonText>AKML SQL</ButtonText>
+        </Strings>
+      </Menu>
+    </Menus>
+
+    <Groups>
+      <Group guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup" priority="0x0600">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenu"/>
+      </Group>
+    </Groups>
+
+    <Buttons>
+      <Button guid="guidAkmlSqlCmdSet" id="cmdAbout" priority="0x0100" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Strings>
+          <ButtonText>About AKML SQL</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="cmdCheckUpdate" priority="0x0200" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Strings>
+          <ButtonText>Check for Updates</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="cmdOptions" priority="0x0300" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Strings>
+          <ButtonText>Options</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="cmdSendFeedback" priority="0x0400" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Strings>
+          <ButtonText>Send Feedback</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="cmdViewLogs" priority="0x0500" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Strings>
+          <ButtonText>View Logs</ButtonText>
+        </Strings>
+      </Button>
+    </Buttons>
+  </Commands>
+
+  <Symbols>
+    <GuidSymbol name="guidAkmlSqlPackage" value="{A1B2C3D4-1111-2222-3333-444455556666}" />
+    <GuidSymbol name="guidAkmlSqlCmdSet" value="{A1B2C3D4-1111-2222-3333-444455557777}">
+      <IDSymbol name="AkmlSqlMenu" value="0x1000" />
+      <IDSymbol name="AkmlSqlMenuGroup" value="0x1020" />
+      <IDSymbol name="cmdAbout" value="0x0100" />
+      <IDSymbol name="cmdCheckUpdate" value="0x0101" />
+      <IDSymbol name="cmdOptions" value="0x0102" />
+      <IDSymbol name="cmdSendFeedback" value="0x0103" />
+      <IDSymbol name="cmdViewLogs" value="0x0104" />
+    </GuidSymbol>
+  </Symbols>
+
+</CommandTable>

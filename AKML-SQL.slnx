@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/AkmlSql.Core/AkmlSql.Core.csproj" />
+    <Project Path="src/AkmlSql.Updater/AkmlSql.Updater.csproj" />
+    <Project Path="src/AkmlSql.Ssms20/AkmlSql.Ssms20.csproj" />
+    <Project Path="src/AkmlSql.Ssms21/AkmlSql.Ssms21.csproj" />
+    <Project Path="src/AkmlSql.Ssms22/AkmlSql.Ssms22.csproj" />
+    <Project Path="src/AkmlSql.VS2019/AkmlSql.VS2019.csproj" />
+    <Project Path="src/AkmlSql.VS2022/AkmlSql.VS2022.csproj" />
+    <Project Path="src/AkmlSql.VS2026/AkmlSql.VS2026.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/AkmlSql.Core.Tests/AkmlSql.Core.Tests.csproj" />
+  </Folder>
+</Solution>
