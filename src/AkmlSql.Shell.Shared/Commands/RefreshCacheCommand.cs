@@ -1,6 +1,5 @@
 using System;
 using System.ComponentModel.Design;
-using System.Threading.Tasks;
 using Microsoft.VisualStudio.Shell;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
@@ -14,9 +13,11 @@ namespace AkmlSql.Shell.Shared.Commands
     /// </summary>
     internal sealed class RefreshCacheCommand
     {
+        public Package Package1 { get; }
+
         private RefreshCacheCommand(Package package, OleMenuCommandService commandService)
         {
-            if (package == null) throw new ArgumentNullException(nameof(package));
+            Package1 = package ?? throw new ArgumentNullException(nameof(package));
             var cmdId = new CommandID(PackageGuids.AkmlSqlCmdSet, CommandIds.CmdRefreshCache);
             var menuItem = new MenuCommand(Execute, cmdId);
             commandService.AddCommand(menuItem);
@@ -34,7 +35,10 @@ namespace AkmlSql.Shell.Shared.Commands
             ThreadHelper.ThrowIfNotOnUIThread();
 
             // Fire and forget — send refresh request to the engine
-            Task.Run(async () =>
+            using var _ =
+
+            // Fire and forget — send refresh request to the engine
+            System.Threading.Tasks.Task.Run(async () =>
             {
                 try
                 {

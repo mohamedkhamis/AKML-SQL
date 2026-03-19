@@ -12,6 +12,8 @@
     <IncludeDebugSymbolsInLocalVSIXDeployment>false</IncludeDebugSymbolsInLocalVSIXDeployment>
     <CopyBuildOutputToOutputDirectory>true</CopyBuildOutputToOutputDirectory>
     <LangVersion>latest</LangVersion>
+    <CreateVsixContainer>false</CreateVsixContainer>
+    <DeployExtension>false</DeployExtension>
   </PropertyGroup>
 
   <ItemGroup>

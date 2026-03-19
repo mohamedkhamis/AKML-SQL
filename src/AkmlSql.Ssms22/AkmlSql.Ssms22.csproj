@@ -12,6 +12,9 @@
     <IncludeDebugSymbolsInLocalVSIXDeployment>false</IncludeDebugSymbolsInLocalVSIXDeployment>
     <CopyBuildOutputToOutputDirectory>true</CopyBuildOutputToOutputDirectory>
     <LangVersion>latest</LangVersion>
+    <!-- Prevent VSIX container creation (we use Inno Setup installer) -->
+    <CreateVsixContainer>false</CreateVsixContainer>
+    <DeployExtension>false</DeployExtension>
   </PropertyGroup>
 
   <ItemGroup>

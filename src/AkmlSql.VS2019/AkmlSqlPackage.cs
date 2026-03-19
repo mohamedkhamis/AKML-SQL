@@ -4,7 +4,6 @@ using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.VisualStudio;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
@@ -26,7 +25,7 @@ namespace AkmlSql.VS2019
     [Guid(PackageGuids.AkmlSqlPackageString)]
     public sealed class AkmlSqlPackage : AsyncPackage
     {
-        protected override async Task InitializeAsync(
+        protected override async System.Threading.Tasks.Task InitializeAsync(
             CancellationToken cancellationToken,
             IProgress<ServiceProgressData> progress)
         {
@@ -36,10 +35,8 @@ namespace AkmlSql.VS2019
             await JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
 
             // Register menu commands BEFORE anything else (critical path)
-            var commandService = await GetServiceAsync(typeof(IMenuCommandService))
-                as OleMenuCommandService;
 
-            if (commandService != null)
+            if (await GetServiceAsync(typeof(IMenuCommandService)) is OleMenuCommandService commandService)
             {
                 AboutCommand.Initialize(this, commandService);
                 CheckUpdateCommand.Initialize(this, commandService);
