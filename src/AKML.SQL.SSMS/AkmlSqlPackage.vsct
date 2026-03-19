@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CommandTable xmlns="http://schemas.microsoft.com/VisualStudio/2005-10-18/CommandTable"
+              xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+  <Extern href="stdidcmd.h" />
+  <Extern href="vsshlids.h" />
+
+  <Commands package="guidAkmlSqlPackage">
+
+    <!-- Top-level menu on the main menu bar -->
+    <Menus>
+      <Menu guid="guidAkmlSqlCmdSet" id="AkmlTopLevelMenu" priority="0x0700" type="Menu">
+        <Parent guid="guidSHLMainMenu" id="IDG_VS_MM_TOOLSADDINS" />
+        <Strings>
+          <ButtonText>AKML SQL</ButtonText>
+        </Strings>
+      </Menu>
+    </Menus>
+
+    <!-- Group inside the top-level menu -->
+    <Groups>
+      <Group guid="guidAkmlSqlCmdSet" id="AkmlMenuGroup" priority="0x0600">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlTopLevelMenu" />
+      </Group>
+    </Groups>
+
+    <!-- Commands placed in the group -->
+    <Buttons>
+      <Button guid="guidAkmlSqlCmdSet" id="FormatSqlCommandId" priority="0x0100" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlMenuGroup" />
+        <Strings>
+          <ButtonText>Format SQL</ButtonText>
+        </Strings>
+      </Button>
+
+      <Button guid="guidAkmlSqlCmdSet" id="RefreshMetadataCommandId" priority="0x0200" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlMenuGroup" />
+        <Strings>
+          <ButtonText>Refresh Metadata</ButtonText>
+        </Strings>
+      </Button>
+    </Buttons>
+
+  </Commands>
+
+  <Symbols>
+    <GuidSymbol name="guidAkmlSqlPackage" value="{a1b2c3d4-e5f6-7890-abcd-ef1234567890}" />
+
+    <GuidSymbol name="guidAkmlSqlCmdSet" value="{a1b2c3d4-e5f6-7890-abcd-ef12345678ab}">
+      <IDSymbol name="AkmlTopLevelMenu" value="0x1000" />
+      <IDSymbol name="AkmlMenuGroup" value="0x1050" />
+      <IDSymbol name="FormatSqlCommandId" value="0x0100" />
+      <IDSymbol name="RefreshMetadataCommandId" value="0x0101" />
+    </GuidSymbol>
+  </Symbols>
+
+</CommandTable>

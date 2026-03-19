@@ -56,6 +56,13 @@
     <PackageReference Include="Grpc.Tools" Version="2.76.0" PrivateAssets="all" />
   </ItemGroup>
 
+  <!-- VSCT command table (compiles to Menus.ctmenu) -->
+  <ItemGroup>
+    <VSCTCompile Include="AkmlSqlPackage.vsct">
+      <ResourceName>Menus.ctmenu</ResourceName>
+    </VSCTCompile>
+  </ItemGroup>
+
   <!-- VSIX manifest -->
   <ItemGroup>
     <None Include="source.extension.vsixmanifest">
