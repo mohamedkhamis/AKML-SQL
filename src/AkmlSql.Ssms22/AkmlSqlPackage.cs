@@ -21,7 +21,7 @@ namespace AkmlSql.Ssms22
     [PackageRegistration(UseManagedResourcesOnly = true, AllowsBackgroundLoading = true)]
     [InstalledProductRegistration(AkmlSql.Core.Constants.ProductName, "AI-powered SQL development assistance", AkmlSql.Core.Constants.Version)]
     [ProvideMenuResource("Menus.ctmenu", 1)]
-    [ProvideAutoLoad(VSConstants.UICONTEXT.ShellInitialized_string, PackageAutoLoadFlags.BackgroundLoad)]
+    [ProvideAutoLoad("B7B07F42-6013-4C67-A504-C771CBC7625A", PackageAutoLoadFlags.BackgroundLoad)]
     [Guid(PackageGuids.AkmlSqlPackageString)]
     public sealed class AkmlSqlPackage : AsyncPackage
     {

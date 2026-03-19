@@ -4,7 +4,7 @@
     <Identity Id="AkmlSql.VS2019.A1B2C3D4-1111-2222-3333-444455556666"
               Version="1.0.0"
               Language="en-US"
-              Publisher="Abdulrahman Khamis" />
+              Publisher="mohamed Khamis" />
     <DisplayName>AKML SQL for Visual Studio 2019</DisplayName>
     <Description xml:space="preserve">AI-powered SQL development assistance for Visual Studio 2019 with SSDT.</Description>
     <Tags>SQL, VisualStudio, AKML, SSDT</Tags>

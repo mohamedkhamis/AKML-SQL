@@ -73,6 +73,32 @@ dotnet test tests/AkmlSql.Core.Tests/AkmlSql.Core.Tests.csproj
 - **Always clean obj/bin after SDK version changes** — stale NuGet cache causes wrong assembly version references
 - **SSMS 20 uses Schema 2010 vsixmanifest** (`<Vsix>` root) — all other targets use Schema 2011 v2.0 (`<PackageManifest>`)
 - **SSMS 20 = VS 2017 IsolatedShell** — Shell.15.0 assembly version must be 15.0.0.0, not 16.0.0.0
+- **VSPackage.resx required for CTO embedding** — SDK-style projects need `VSPackage.resx` with `MergeWithCTO=true`; use `Update=` not `Include=` to avoid duplicate resource errors
+- **SSMS 22 extension path is under `Release/`** — deploy to `<Root>/Release/Common7/IDE/Extensions/AkmlSql/`, not root-level
+
+## AutoLoad UI Contexts (Critical)
+
+Each SSMS/VS host uses different UI contexts for package autoloading:
+
+| Target   | AutoLoad Context GUID                          | Context Name        |
+|----------|-------------------------------------------------|---------------------|
+| SSMS 20  | `{e8fbc700-a1bd-11d0-a67c-00a0c9110051}`       | ShellInitialized    |
+| SSMS 21  | `{B7B07F42-6013-4C67-A504-C771CBC7625A}`       | UICONTEXT_SSMS      |
+| SSMS 22  | `{B7B07F42-6013-4C67-A504-C771CBC7625A}`       | UICONTEXT_SSMS      |
+| VS 2019  | `{e8fbc700-a1bd-11d0-a67c-00a0c9110051}`       | ShellInitialized    |
+| VS 2022  | `{e8fbc700-a1bd-11d0-a67c-00a0c9110051}`       | ShellInitialized    |
+| VS 2026  | `{e8fbc700-a1bd-11d0-a67c-00a0c9110051}`       | ShellInitialized    |
+
+## vsixmanifest InstallationTarget
+
+| Target   | InstallationTarget Id              | Schema  |
+|----------|------------------------------------|---------|
+| SSMS 20  | `<IsolatedShell>ssms</IsolatedShell>` | 2010 |
+| SSMS 21  | `Microsoft.VisualStudio.Ssms`      | 2011    |
+| SSMS 22  | `Microsoft.VisualStudio.Ssms`      | 2011    |
+| VS 2019  | `Microsoft.VisualStudio.Pro`       | 2011    |
+| VS 2022  | `Microsoft.VisualStudio.Pro`       | 2011    |
+| VS 2026  | `Microsoft.VisualStudio.Pro`       | 2011    |
 
 ## Architecture
 
@@ -89,8 +115,20 @@ dotnet test tests/AkmlSql.Core.Tests/AkmlSql.Core.Tests.csproj
 - Config: `%AppData%/AKML SQL/config.json`
 - Logs: `%AppData%/AKML SQL/logs/akmlsql-*.log`
 - Update result: `%AppData%/AKML SQL/cache/update-available.json`
-- SSMS 20 extension install: `<SSMS20Root>/Common7/IDE/Extensions/AkmlSql/`
-- SSMS 20 MEF cache: `%LocalAppData%/Microsoft/SQL Server Management Studio/20.0_IsoShell/ComponentModelCache/`
+
+### Extension Install Paths
+
+| Target  | Extension Directory |
+|---------|---------------------|
+| SSMS 20 | `<SSMS20Root>/Common7/IDE/Extensions/AkmlSql/` |
+| SSMS 22 | `C:\Program Files\Microsoft SQL Server Management Studio 22\Release\Common7\IDE\Extensions\AkmlSql\` |
+
+### Cache and Log Paths
+
+| Target  | MEF/Component Cache | Activity Log | Private Registry |
+|---------|---------------------|-------------|-----------------|
+| SSMS 20 | `%LocalAppData%/Microsoft/SQL Server Management Studio/20.0_IsoShell/ComponentModelCache/` | `%AppData%/Microsoft/SQL Server Management Studio/20.0_IsoShell/ActivityLog.xml` | N/A (IsolatedShell) |
+| SSMS 22 | `%LocalAppData%/Microsoft/SSMS/22.0_*/ComponentModelCache/` | `%AppData%/Microsoft/SSMS/22.0_*/ActivityLog.xml` | `%LocalAppData%/Microsoft/SSMS/22.0_*/privateregistry.bin` |
 
 ## Installer Details
 
@@ -98,6 +136,10 @@ dotnet test tests/AkmlSql.Core.Tests/AkmlSql.Core.Tests.csproj
 - **Detection**: Registry + vswhere.exe + filesystem fallback (see `environment-scanner.iss`)
 - **Post-install**: Clears MEF caches, writes config.json (only if absent)
 - **Silent mode**: `/VERYSILENT /ACCEPTEULA /TARGETS=20,22,2022 /NOUPDATE`
+
+## Progress and Troubleshooting
+
+See [doc/progress.md](doc/progress.md) for the full development progress log including all issues encountered, root causes, fixes applied, cache clearing procedures, and deployment instructions.
 
 <!-- MANUAL ADDITIONS START -->
 <!-- MANUAL ADDITIONS END -->
