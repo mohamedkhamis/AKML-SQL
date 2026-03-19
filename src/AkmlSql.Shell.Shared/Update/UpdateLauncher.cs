@@ -48,14 +48,14 @@ namespace AkmlSql.Shell.Shared.Update
             if (updaterPath == null) return;
 
             Log.Information("Launching update checker: {Path}", updaterPath);
-            Process.Start(new ProcessStartInfo
+            using (Process.Start(new ProcessStartInfo
             {
                 FileName = updaterPath,
                 Arguments = "--check",
                 UseShellExecute = false,
                 CreateNoWindow = true,
                 WindowStyle = ProcessWindowStyle.Hidden
-            });
+            })) { }
         }
 
         /// <summary>

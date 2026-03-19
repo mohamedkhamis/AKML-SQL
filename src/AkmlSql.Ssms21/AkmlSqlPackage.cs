@@ -21,7 +21,7 @@ namespace AkmlSql.Ssms21
     [PackageRegistration(UseManagedResourcesOnly = true, AllowsBackgroundLoading = true)]
     [InstalledProductRegistration(AkmlSql.Core.Constants.ProductName, "AI-powered SQL development assistance", AkmlSql.Core.Constants.Version)]
     [ProvideMenuResource("Menus.ctmenu", 1)]
-    [ProvideAutoLoad(VSConstants.UICONTEXT.ShellInitialized_string, PackageAutoLoadFlags.BackgroundLoad)]
+    [ProvideAutoLoad("B7B07F42-6013-4C67-A504-C771CBC7625A", PackageAutoLoadFlags.BackgroundLoad)]
     [Guid(PackageGuids.AkmlSqlPackageString)]
     public sealed class AkmlSqlPackage : AsyncPackage
     {
@@ -29,54 +29,48 @@ namespace AkmlSql.Ssms21
             CancellationToken cancellationToken,
             IProgress<ServiceProgressData> progress)
         {
-            IVsStatusbar statusBar = null;
+            await base.InitializeAsync(cancellationToken, progress);
 
+            // Switch to UI thread for menu registration — do this FIRST
+            await JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
+
+            // Register menu commands BEFORE anything else (critical path)
+            var commandService = await GetServiceAsync(typeof(IMenuCommandService))
+                as Microsoft.VisualStudio.Shell.OleMenuCommandService;
+
+            if (commandService != null)
+            {
+                AboutCommand.Initialize(this, commandService);
+                CheckUpdateCommand.Initialize(this, commandService);
+                OptionsCommand.Initialize(this, commandService);
+                SendFeedbackCommand.Initialize(this, commandService);
+                ViewLogsCommand.Initialize(this, commandService);
+            }
+
+            // Non-critical initialization — failures must not break the extension
             try
             {
-                await base.InitializeAsync(cancellationToken, progress);
-
-                // Initialize logging
                 LoggerFactory.Initialize();
                 Log.Information("AKML SQL package initializing for SSMS 21 (x64)");
 
-                // Switch to UI thread for menu registration
-                await JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
-
-                // Validate installation
                 var extensionDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
                 LoadValidator.Validate(extensionDir);
 
-                // Register menu commands
-                var commandService = await GetServiceAsync(typeof(IMenuCommandService))
-                    as Microsoft.VisualStudio.Shell.OleMenuCommandService;
-
-                if (commandService != null)
-                {
-                    AboutCommand.Initialize(this, commandService);
-                    CheckUpdateCommand.Initialize(this, commandService);
-                    OptionsCommand.Initialize(this, commandService);
-                    SendFeedbackCommand.Initialize(this, commandService);
-                    ViewLogsCommand.Initialize(this, commandService);
-                }
-
-                // Set status bar
-                statusBar = (IVsStatusbar)await GetServiceAsync(typeof(SVsStatusbar));
+                var statusBar = (IVsStatusbar)await GetServiceAsync(typeof(SVsStatusbar));
                 if (statusBar != null)
                     StatusBarManager.SetLoaded(statusBar);
 
-                // Launch background update check
                 UpdateLauncher.LaunchIfDue();
 
                 Log.Information("AKML SQL package initialized successfully for SSMS 21");
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "AKML SQL package initialization failed for SSMS 21");
+                try { Log.Error(ex, "AKML SQL non-critical init failed for SSMS 21"); } catch { }
 
                 try
                 {
-                    if (statusBar == null)
-                        statusBar = (IVsStatusbar)await GetServiceAsync(typeof(SVsStatusbar));
+                    var statusBar = (IVsStatusbar)await GetServiceAsync(typeof(SVsStatusbar));
                     if (statusBar != null)
                         StatusBarManager.SetFailed(statusBar);
                 }

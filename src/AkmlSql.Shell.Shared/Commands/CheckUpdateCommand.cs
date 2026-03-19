@@ -61,11 +61,11 @@ namespace AkmlSql.Shell.Shared.Commands
 
                         if (dialogResult == DialogResult.Yes)
                         {
-                            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                            using (System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                             {
                                 FileName = result.DownloadUrl,
                                 UseShellExecute = true
-                            });
+                            })) { }
                         }
                         return;
                     }

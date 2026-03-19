@@ -27,6 +27,12 @@ namespace AkmlSql.Shell.Shared.Commands
 
         private void Execute(object sender, EventArgs e)
         {
+            // TODO T102: Replace this placeholder with a WPF SettingsDialog that exposes
+            //   IntelliSenseSettings and CacheSettings from AppSettings for editing.
+            //   Dialog should bind to ConfigManager.Load() and Save() on OK.
+            // TODO T103: After settings are saved, propagate changes to the running engine
+            //   by sending a SettingsChanged notification via PipeRpcClient so the engine
+            //   can update MaxSuggestions, RefreshInterval, FuzzyMatch, etc. without restart.
             MessageBox.Show(
                 "Settings will be available in a future update.",
                 Constants.ProductName + " Options",

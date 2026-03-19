@@ -50,12 +50,16 @@ namespace AkmlSql.Core.Config
 
                 var json = JsonSerializer.Serialize(settings, SerializerOptions);
 
-                // Atomic write: write to temp file then rename to prevent corruption
+                // Atomic write: write to temp file then rename
                 var tempPath = path + ".tmp";
                 File.WriteAllText(tempPath, json);
+#if NETSTANDARD2_0
                 if (File.Exists(path))
                     File.Delete(path);
                 File.Move(tempPath, path);
+#else
+                File.Move(tempPath, path, overwrite: true);
+#endif
                 Log.Debug("Config saved to {Path}", path);
             }
             catch (Exception ex)

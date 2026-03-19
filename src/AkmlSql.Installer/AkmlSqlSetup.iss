@@ -3,6 +3,14 @@
 ; Wizard-based Windows EXE installer for SSMS 20/21/22 and VS 2019/2022/2026
 ; Built with Inno Setup 6
 ; ============================================================================
+;
+; TODO T096: On uninstall, restore native SSMS IntelliSense if AKML SQL disabled it.
+;   Read %AppData%/AKML SQL/config.json, check DisabledNativeIntelliSense flag,
+;   and if true, set EnableIntelliSense=1 in the SSMS registry keys:
+;     HKCU\Software\Microsoft\SQL Server Management Studio\20.0\Settings\IntelliSense
+;     HKCU\Software\Microsoft\SQL Server Management Studio\22.0\Settings\IntelliSense
+;     HKCU\Software\Microsoft\SSMS\22.0\Settings\IntelliSense
+;
 
 #define MyAppName "AKML SQL"
 #define MyAppVersion "1.0.0"
@@ -50,6 +58,7 @@ Source: "..\AkmlSql.Ssms22\bin\Release\net472\AkmlSql.Core.dll"; DestDir: "{app}
 Source: "..\AkmlSql.Ssms22\bin\Release\net472\Serilog.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\AkmlSql.Ssms22\bin\Release\net472\Serilog.Sinks.File.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\AkmlSql.Updater\bin\Release\net10.0\win-x64\publish\AkmlSql.Updater.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\AkmlSql.Engine.exe"; DestDir: "{app}\Engine"; Flags: ignoreversion
 Source: "LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 ; SSMS 20 (x86) extension files — all DLLs from build output plus pkgdef and manifest
@@ -108,6 +117,30 @@ var
   AutoUpdateEnabled: Boolean;
   TelemetryEnabled: Boolean;
 
+// --- Checkbox click handler: sync selections and update Next button ---
+
+procedure UpdateNextButtonState;
+var
+  I: Integer;
+  AnySelected: Boolean;
+begin
+  AnySelected := False;
+  for I := 0 to EnvCheckListBox.Items.Count - 1 do
+  begin
+    if EnvCheckListBox.Checked[I] then
+    begin
+      AnySelected := True;
+      Break;
+    end;
+  end;
+  WizardForm.NextButton.Enabled := AnySelected;
+end;
+
+procedure EnvCheckListBoxClickCheck(Sender: TObject);
+begin
+  UpdateNextButtonState;
+end;
+
 // --- Wizard Initialization ---
 
 procedure InitializeWizard;
@@ -130,6 +163,9 @@ begin
   EnvCheckListBox.ShowLines := True;
 
   PopulateEnvCheckList;
+  EnvCheckListBox.OnClickCheck := @EnvCheckListBoxClickCheck;
+  // Ensure Next button is enabled if checkboxes are pre-checked
+  UpdateNextButtonState;
 
   // Create Additional Options page (Screen 5)
   OptionsPage := CreateInputOptionPage(wpSelectDir,
@@ -171,9 +207,11 @@ begin
     ApplySilentTargets;
   end;
 
-  // Apply /NOTELEMETRY and /NOUPDATE
+  // Apply /NOTELEMETRY, /TELEMETRY, and /NOUPDATE
   AutoUpdateEnabled := ExpandConstant('{param:NOUPDATE|}') = '';
-  TelemetryEnabled := False; // Always off by default
+  TelemetryEnabled := ExpandConstant('{param:TELEMETRY|}') <> ''; // Off by default, enable with /TELEMETRY
+  if ExpandConstant('{param:NOTELEMETRY|}') <> '' then
+    TelemetryEnabled := False;
 end;
 
 // --- Sync checkbox state back to targets array ---
@@ -187,6 +225,8 @@ begin
     // Refresh scan
     RunFullScan;
     PopulateEnvCheckList;
+    // Ensure Next button state matches checkbox state on page entry
+    UpdateNextButtonState;
   end;
 
   // When leaving the environment page, sync selections

@@ -21,5 +21,20 @@
     <Compile Include="$(MSBuildThisFileDirectory)Update\UpdateNotifier.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Validation\LoadValidator.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)JsonOptions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ipc\PipeRpcClient.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ipc\EngineProcessManager.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ipc\EngineLifecycle.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\TextViewCreationListener.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\CompletionCommandHandler.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\CompletionSource.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\ContentTypeDetector.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\SignatureHelpSource.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\QuickInfoSource.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\RefreshCacheCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\ThemeManager.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\DpiHelper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\CompletionItemViewModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\CompletionPopup.xaml.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IntelliSense\NativeIntelliSenseManager.cs" />
   </ItemGroup>
 </Project>

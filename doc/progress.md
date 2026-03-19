@@ -63,7 +63,7 @@ This document tracks the development progress, issues encountered, root causes i
 
 ### Milestone 3: SSMS 22 Extension Loading
 
-**Status**: In Progress
+**Status**: Complete — verified working (menu under Tools, commands functional)
 
 #### Issue 5: Extension Visible in Extension Manager But No Menu
 
@@ -84,7 +84,7 @@ This document tracks the development progress, issues encountered, root causes i
 - **Root Cause**: AutoLoad registered for `{e8fbc700-a1bd-11d0-a67c-00a0c9110051}` (`UICONTEXT_ShellInitialized`) which is a standard VS context. SSMS 22 uses its own context: `{B7B07F42-6013-4C67-A504-C771CBC7625A}` (`UICONTEXT_SSMS`)
 - **Evidence**: Found in `SSMS.Application.pkgdef`: `[$RootKey$\AutoLoadPackages\{B7B07F42-6013-4C67-A504-C771CBC7625A}] @="UICONTEXT_SSMS"`
 - **Fix**: Changed `[ProvideAutoLoad]` attribute and pkgdef to use `{B7B07F42-6013-4C67-A504-C771CBC7625A}`
-- **Status**: Fix applied to source; awaiting redeployment and verification
+- **Status**: Verified working — applied to SSMS 21 and SSMS 22
 
 #### Issue 8: PkgDef Cache Not Refreshing
 
@@ -92,6 +92,24 @@ This document tracks the development progress, issues encountered, root causes i
 - **Root Cause**: The private registry hive (`privateregistry.bin`) caches pkgdef entries and the timestamp check doesn't detect new extension folders
 - **Fix**: Delete `%LocalAppData%/Microsoft/SSMS/22.0_05e71b86/privateregistry.bin` (and `.LOG1`, `.LOG2`), plus clear `ComponentModelCache/`, `MEFCacheBackup/`, and CTM files
 - **Alternative**: Run `SSMS.exe /updateconfiguration` from PowerShell (not Git Bash — path mangling converts `/updateconfiguration` to a file path)
+
+#### Issue 9: Menu Not Visible — SSMS 22 Custom Menu Bar
+
+- **Symptom**: Package loads successfully, menu commands visible in Customize dialog, but no "AKML SQL" menu in the top menu bar
+- **Root Cause**: SSMS 22 uses a custom menu bar via `SSMSMnu.dll` that does NOT include the standard VS `guidSHLMainMenu:IDG_VS_MM_TOOLSADDINS` group. This group is where VS extensions traditionally place their top-level menus, but it has no visible parent in SSMS 22's menu hierarchy
+- **Investigation**: Extracted native CTO from `SSMSMui.dll` (satellite of SSMS Menu Package `{B7B07F42-...}`). Confirmed `guidSHLMainMenu` GUID is absent from the SSMS CTM binary. The CFCT v5 format is compressed, preventing further analysis
+- **Fix**: Added `<CommandPlacement>` in VSCT to additionally place the menu in `guidSHLMainMenu:IDG_VS_TOOLS_EXT_TOOLS`, which maps to the Tools menu in SSMS 22
+- **Result**: "AKML SQL" appears as a submenu under the Tools menu
+- **Applied to**: SSMS 21 and SSMS 22 VSCT files
+- **Note**: Attempting to parent a group directly to `IDM_VS_MENU_BAR` (0x0001) caused the package to silently fail to load — the CTM merger appears to reject unknown parent references
+
+#### Issue 10: Menu Clicks Do Nothing — Init Order (Same as SSMS 20 Issue 3)
+
+- **Symptom**: Menu visible under Tools, but clicking any item (About, Options, etc.) produces no response
+- **Root Cause**: Same as SSMS 20 Issue 3 — `InitializeAsync()` performed `LoggerFactory.Initialize()` and `LoadValidator.Validate()` BEFORE registering menu command handlers. If either threw an exception, the outer catch swallowed it and commands were never registered
+- **Fix**: Reordered `InitializeAsync()` to register all menu commands FIRST (critical path), then perform non-critical initialization (logging, validation, status bar, update check) in a separate try-catch
+- **Applied to**: All 6 shell extension projects (SSMS 20/21/22, VS 2019/2022/2026)
+- **Status**: Verified working on SSMS 22
 
 ---
 
@@ -181,4 +199,4 @@ Get-Content "<path>\ActivityLog.xml" -Encoding Unicode | Select-String "akml"
 
 ---
 
-*Last updated: 2026-03-17*
+*Last updated: 2026-03-19*

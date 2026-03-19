@@ -55,6 +55,14 @@
     </Buttons>
   </Commands>
 
+  <!-- Place the AKML SQL menu in multiple locations to ensure visibility -->
+  <CommandPlacements>
+    <!-- Place in Tools menu (External Tools group) -->
+    <CommandPlacement guid="guidAkmlSqlCmdSet" id="AkmlSqlMenu" priority="0x0900">
+      <Parent guid="guidSHLMainMenu" id="IDG_VS_TOOLS_EXT_TOOLS"/>
+    </CommandPlacement>
+  </CommandPlacements>
+
   <Symbols>
     <GuidSymbol name="guidAkmlSqlPackage" value="{A1B2C3D4-1111-2222-3333-444455556666}" />
     <GuidSymbol name="guidAkmlSqlCmdSet" value="{A1B2C3D4-1111-2222-3333-444455557777}">

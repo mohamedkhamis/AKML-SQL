@@ -30,11 +30,11 @@ namespace AkmlSql.Shell.Shared.Commands
             var url = Constants.FeedbackUrl;
             if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps)
             {
-                Process.Start(new ProcessStartInfo
+                using (Process.Start(new ProcessStartInfo
                 {
                     FileName = url,
                     UseShellExecute = true
-                });
+                })) { }
             }
         }
     }

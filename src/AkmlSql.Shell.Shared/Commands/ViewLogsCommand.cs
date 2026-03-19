@@ -32,7 +32,7 @@ namespace AkmlSql.Shell.Shared.Commands
             if (!Directory.Exists(logsPath))
                 Directory.CreateDirectory(logsPath);
 
-            Process.Start("explorer.exe", logsPath);
+            using (Process.Start("explorer.exe", logsPath)) { }
         }
     }
 }

@@ -61,7 +61,7 @@ namespace AkmlSql.Ssms20
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, "AKML SQL non-critical initialization failed for SSMS 20");
+                    try { Log.Error(ex, "AKML SQL non-critical initialization failed for SSMS 20"); } catch { }
                 }
             }
             catch (Exception ex)

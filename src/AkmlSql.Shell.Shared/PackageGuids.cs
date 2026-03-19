@@ -20,5 +20,6 @@ namespace AkmlSql.Shell.Shared
         public const int CmdOptions = 0x0102;
         public const int CmdSendFeedback = 0x0103;
         public const int CmdViewLogs = 0x0104;
+        public const int CmdRefreshCache = 0x0105;
     }
 }

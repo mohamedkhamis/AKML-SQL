@@ -1,4 +1,4 @@
-# AKML-SQL Development Guidelines
+﻿# AKML-SQL Development Guidelines
 
 AI-powered SQL development assistance for SSMS 20/21/22 and Visual Studio 2019/2022/2026.
 Author: Abdulrahman Khamis | License: MIT | Version: 1.0.0
@@ -28,6 +28,7 @@ specs/                                 # Specify framework feature specs
 
 - **Shell Extensions**: C# / .NET Framework 4.7.2, LangVersion latest
 - **Core Library**: netstandard2.0 (for shell) + net10.0 (for updater), dual-target
+- **Engine**: .NET 10, self-contained single-file, win-x64, PublishTrimmed (out-of-process IntelliSense)
 - **Updater**: .NET 10, self-contained single-file, win-x64, PublishTrimmed
 - **Installer**: Inno Setup 7 Pascal Script
 - **Tests**: xunit 2.x, Microsoft.NET.Test.Sdk 17.x
@@ -56,6 +57,9 @@ MSBUILD="/c/Program Files/Microsoft Visual Studio/2022/Enterprise/MSBuild/Curren
 "$MSBUILD" "src/AkmlSql.Ssms20/AkmlSql.Ssms20.csproj" -t:Restore -p:Configuration=Release -v:quiet
 "$MSBUILD" "src/AkmlSql.Ssms20/AkmlSql.Ssms20.csproj" -t:Build -p:Configuration=Release -v:minimal
 
+# Engine (out-of-process IntelliSense, must publish before installer)
+dotnet publish src/AkmlSql.Engine/AkmlSql.Engine.csproj -c Release -r win-x64
+
 # Updater (uses dotnet)
 dotnet publish src/AkmlSql.Updater/AkmlSql.Updater.csproj -c Release
 
@@ -75,6 +79,8 @@ dotnet test tests/AkmlSql.Core.Tests/AkmlSql.Core.Tests.csproj
 - **SSMS 20 = VS 2017 IsolatedShell** — Shell.15.0 assembly version must be 15.0.0.0, not 16.0.0.0
 - **VSPackage.resx required for CTO embedding** — SDK-style projects need `VSPackage.resx` with `MergeWithCTO=true`; use `Update=` not `Include=` to avoid duplicate resource errors
 - **SSMS 22 extension path is under `Release/`** — deploy to `<Root>/Release/Common7/IDE/Extensions/AkmlSql/`, not root-level
+- **SSMS 21/22 custom menu bar** — `guidSHLMainMenu:IDG_VS_MM_TOOLSADDINS` is invisible in SSMS; use `CommandPlacement` with `IDG_VS_TOOLS_EXT_TOOLS` to place menus under Tools
+- **Register commands before non-critical init** — `LoggerFactory.Initialize()` or `LoadValidator.Validate()` failures will prevent command registration if done first
 
 ## AutoLoad UI Contexts (Critical)
 
