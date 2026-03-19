@@ -6,7 +6,7 @@ namespace AkmlSql.Core.Ipc.Messages
     public class EngineStatusInfo
     {
         [Key(0)]
-        public int MemoryUsageMB { get; set; }
+        public int MemoryUsageMb { get; set; }
 
         [Key(1)]
         public int CachedDatabases { get; set; }

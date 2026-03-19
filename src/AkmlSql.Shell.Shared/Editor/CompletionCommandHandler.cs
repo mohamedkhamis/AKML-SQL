@@ -10,14 +10,12 @@ namespace AkmlSql.Shell.Shared.Editor
     internal class CompletionCommandHandler : IOleCommandTarget
     {
         private readonly IWpfTextView _textView;
-        private readonly IVsTextView _vsView;
 
         public IOleCommandTarget NextTarget { get; set; }
 
         public CompletionCommandHandler(IWpfTextView textView, IVsTextView vsView)
         {
             _textView = textView;
-            _vsView = vsView;
         }
 
         public int QueryStatus(ref Guid pguidCmdGroup, uint cCmds, OLECMD[] prgCmds, IntPtr pCmdText)
@@ -26,17 +24,17 @@ namespace AkmlSql.Shell.Shared.Editor
                 ?? (int)Constants.OLECMDERR_E_NOTSUPPORTED;
         }
 
-        public int Exec(ref Guid pguidCmdGroup, uint nCmdID, uint nCmdexecopt, IntPtr pvaIn, IntPtr pvaOut)
+        public int Exec(ref Guid pguidCmdGroup, uint nCmdId, uint nCmdexecopt, IntPtr pvaIn, IntPtr pvaOut)
         {
             if (pguidCmdGroup == VSConstants.VSStd2K)
             {
-                switch ((VSConstants.VSStd2KCmdID)nCmdID)
+                switch ((VSConstants.VSStd2KCmdID)nCmdId)
                 {
                     case VSConstants.VSStd2KCmdID.TYPECHAR:
                         var typedChar = (char)(ushort)System.Runtime.InteropServices.Marshal.GetObjectForNativeVariant(pvaIn);
 
                         // Pass to next handler first
-                        var result = NextTarget.Exec(ref pguidCmdGroup, nCmdID, nCmdexecopt, pvaIn, pvaOut);
+                        var result = NextTarget.Exec(ref pguidCmdGroup, nCmdId, nCmdexecopt, pvaIn, pvaOut);
 
                         // T064: Trigger completion after dot
                         if (typedChar == '.')
@@ -67,7 +65,7 @@ namespace AkmlSql.Shell.Shared.Editor
                 }
             }
 
-            return NextTarget?.Exec(ref pguidCmdGroup, nCmdID, nCmdexecopt, pvaIn, pvaOut)
+            return NextTarget?.Exec(ref pguidCmdGroup, nCmdId, nCmdexecopt, pvaIn, pvaOut)
                 ?? VSConstants.S_OK;
         }
 

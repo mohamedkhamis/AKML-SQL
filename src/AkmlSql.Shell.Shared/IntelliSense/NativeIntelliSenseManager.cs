@@ -16,7 +16,7 @@ namespace AkmlSql.Shell.Shared.IntelliSense
     public sealed class NativeIntelliSenseManager
     {
         private static NativeIntelliSenseManager _instance;
-        private static readonly object _lock = new object();
+        private static readonly object s_lock = new object();
         private bool _initialized;
 
         private NativeIntelliSenseManager() { }
@@ -27,7 +27,7 @@ namespace AkmlSql.Shell.Shared.IntelliSense
             {
                 if (_instance == null)
                 {
-                    lock (_lock)
+                    lock (s_lock)
                     {
                         if (_instance == null)
                         {
@@ -51,7 +51,7 @@ namespace AkmlSql.Shell.Shared.IntelliSense
                 // HKCU\Software\Microsoft\SQL Server Management Studio\XX.0\Settings\IntelliSense
                 // Key: EnableIntelliSense (DWORD, 1 = enabled)
                 // We check common versions
-                string[] registryPaths = new string[]
+                string[] registryPaths = new[]
                 {
                     @"Software\Microsoft\SQL Server Management Studio\20.0\Settings\IntelliSense",
                     @"Software\Microsoft\SQL Server Management Studio\22.0\Settings\IntelliSense",
@@ -93,8 +93,6 @@ namespace AkmlSql.Shell.Shared.IntelliSense
             try
             {
                 var config = ConfigManager.Load();
-                if (config == null)
-                    return;
 
                 // Check if we've already prompted the user
                 // The NativeIntelliSensePrompted flag is stored in config
@@ -149,7 +147,7 @@ namespace AkmlSql.Shell.Shared.IntelliSense
         /// </summary>
         private void DisableNativeIntelliSense()
         {
-            string[] registryPaths = new string[]
+            string[] registryPaths = new[]
             {
                 @"Software\Microsoft\SQL Server Management Studio\20.0\Settings\IntelliSense",
                 @"Software\Microsoft\SQL Server Management Studio\22.0\Settings\IntelliSense",
@@ -184,10 +182,10 @@ namespace AkmlSql.Shell.Shared.IntelliSense
             try
             {
                 var config = ConfigManager.Load();
-                if (config == null || !config.DisabledNativeIntelliSense)
+                if (!config.DisabledNativeIntelliSense)
                     return;
 
-                string[] registryPaths = new string[]
+                string[] registryPaths = new[]
                 {
                     @"Software\Microsoft\SQL Server Management Studio\20.0\Settings\IntelliSense",
                     @"Software\Microsoft\SQL Server Management Studio\22.0\Settings\IntelliSense",

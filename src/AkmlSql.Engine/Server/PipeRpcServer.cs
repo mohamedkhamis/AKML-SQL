@@ -189,7 +189,7 @@ public class PipeRpcServer
                 case MessageTypes.Ping:
                     var status = new EngineStatusInfo
                     {
-                        MemoryUsageMB = (int)(GC.GetTotalMemory(false) / (1024 * 1024)),
+                        MemoryUsageMb = (int)(GC.GetTotalMemory(false) / (1024 * 1024)),
                         CachedDatabases = _schemaCacheManager.CacheCount,
                         ActiveSessions = _sessionManager.SessionCount,
                         UptimeSeconds = 0

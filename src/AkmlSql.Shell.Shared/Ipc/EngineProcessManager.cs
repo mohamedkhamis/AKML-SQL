@@ -81,11 +81,11 @@ namespace AkmlSql.Shell.Shared.Ipc
             _client?.Dispose();
 
             // Use Task.Run to avoid async void — all exceptions are caught inside
-            System.Threading.Tasks.Task.Run(async () =>
+            Task.Run(async () =>
             {
                 try
                 {
-                    await System.Threading.Tasks.Task.Delay(500);
+                    await Task.Delay(500);
                     await LaunchAsync();
                 }
                 catch (Exception ex)
@@ -103,7 +103,7 @@ namespace AkmlSql.Shell.Shared.Ipc
                 {
                     await _client.SendNotificationAsync(Core.Ipc.MessageTypes.Shutdown, new Core.Ipc.Messages.EngineStatusInfo());
                 }
-                catch { }
+                catch { /* Intentional: best-effort cleanup during shutdown/dispose */ }
             }
 
             _engineProcess?.Kill();
@@ -136,7 +136,7 @@ namespace AkmlSql.Shell.Shared.Ipc
                 _engineProcess.Exited -= OnEngineExited;
                 if (!_engineProcess.HasExited)
                 {
-                    try { _engineProcess.Kill(); } catch { }
+                    try { _engineProcess.Kill(); } catch { /* Intentional: best-effort cleanup during shutdown/dispose */ }
                 }
                 _engineProcess.Dispose();
             }

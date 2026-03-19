@@ -6,6 +6,8 @@ using Microsoft.VisualStudio.Text;
 using Microsoft.VisualStudio.Utilities;
 using Serilog;
 
+#pragma warning disable CS0618 // IQuickInfoSource/IQuickInfoSourceProvider are obsolete but have no async replacement in SSMS 20 SDK
+
 namespace AkmlSql.Shell.Shared.Editor
 {
     /// <summary>
@@ -89,3 +91,5 @@ namespace AkmlSql.Shell.Shared.Editor
         }
     }
 }
+
+#pragma warning restore CS0618

@@ -1,6 +1,4 @@
-using System;
 using System.Drawing;
-using System.Windows.Media;
 
 namespace AkmlSql.Shell.Shared.Ui
 {
@@ -19,7 +17,7 @@ namespace AkmlSql.Shell.Shared.Ui
     public sealed class ThemeManager
     {
         private static ThemeManager _instance;
-        private static readonly object _lock = new object();
+        private static readonly object s_lock = new object();
 
         private VsThemeKind _cachedTheme;
         private bool _themeCached;
@@ -32,7 +30,7 @@ namespace AkmlSql.Shell.Shared.Ui
             {
                 if (_instance == null)
                 {
-                    lock (_lock)
+                    lock (s_lock)
                     {
                         if (_instance == null)
                         {

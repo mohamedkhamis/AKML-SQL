@@ -38,12 +38,11 @@ namespace AkmlSql.Shell.Shared.Editor
             {
                 // Will be wired to PipeRpcClient for real completions
                 // For now, return empty set (silent when engine unavailable)
-                var completions = new List<Completion>();
                 var completionSet = new CompletionSet(
                     "AKML SQL",
                     "AKML SQL",
                     FindTokenSpanAtPosition(session),
-                    completions,
+                    Array.Empty<Completion>(),
                     null);
                 completionSets.Add(completionSet);
             }
@@ -70,8 +69,10 @@ namespace AkmlSql.Shell.Shared.Editor
             return snapshot.CreateTrackingSpan(start, position - start, SpanTrackingMode.EdgeInclusive);
         }
 
-        private static bool IsIdentifierChar(char c) =>
-            char.IsLetterOrDigit(c) || c == '_' || c == '#' || c == '@';
+        private static bool IsIdentifierChar(char c)
+        {
+            return char.IsLetterOrDigit(c) || c == '_' || c == '#' || c == '@';
+        }
 
         public void Dispose()
         {

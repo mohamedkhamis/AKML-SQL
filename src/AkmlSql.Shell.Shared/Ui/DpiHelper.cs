@@ -11,7 +11,7 @@ namespace AkmlSql.Shell.Shared.Ui
     {
         private static double _cachedScaleFactor;
         private static volatile bool _cached;
-        private static readonly object _cacheLock = new object();
+        private static readonly object s_cacheLock = new object();
 
         /// <summary>
         /// Gets the DPI scale factor for the current monitor.
@@ -22,7 +22,7 @@ namespace AkmlSql.Shell.Shared.Ui
             if (_cached)
                 return _cachedScaleFactor;
 
-            lock (_cacheLock)
+            lock (s_cacheLock)
             {
                 if (_cached)
                     return _cachedScaleFactor;
@@ -34,7 +34,7 @@ namespace AkmlSql.Shell.Shared.Ui
                     {
                         try
                         {
-                            int dpiX = GetDeviceCaps(hdc, LOGPIXELSX);
+                            int dpiX = GetDeviceCaps(hdc, LogPixelsX);
                             _cachedScaleFactor = dpiX / 96.0;
                         }
                         finally
@@ -81,13 +81,13 @@ namespace AkmlSql.Shell.Shared.Ui
             _cached = false;
         }
 
-        private const int LOGPIXELSX = 88;
+        private const int LogPixelsX = 88;
 
         [DllImport("user32.dll")]
         private static extern IntPtr GetDC(IntPtr hWnd);
 
         [DllImport("user32.dll")]
-        private static extern int ReleaseDC(IntPtr hWnd, IntPtr hDC);
+        private static extern int ReleaseDC(IntPtr hWnd, IntPtr hdc);
 
         [DllImport("gdi32.dll")]
         private static extern int GetDeviceCaps(IntPtr hdc, int nIndex);

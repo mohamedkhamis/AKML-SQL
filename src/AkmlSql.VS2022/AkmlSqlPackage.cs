@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Microsoft.VisualStudio;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
+using Constants = AkmlSql.Core.Constants;
 using AkmlSql.Core.Logging;
 using AkmlSql.Shell.Shared;
 using AkmlSql.Shell.Shared.Commands;
@@ -19,7 +20,7 @@ using Serilog;
 namespace AkmlSql.VS2022
 {
     [PackageRegistration(UseManagedResourcesOnly = true, AllowsBackgroundLoading = true)]
-    [InstalledProductRegistration(AkmlSql.Core.Constants.ProductName, "AI-powered SQL development assistance", AkmlSql.Core.Constants.Version)]
+    [InstalledProductRegistration(Constants.ProductName, "AI-powered SQL development assistance", Constants.Version)]
     [ProvideMenuResource("Menus.ctmenu", 1)]
     [ProvideAutoLoad(VSConstants.UICONTEXT.ShellInitialized_string, PackageAutoLoadFlags.BackgroundLoad)]
     [Guid(PackageGuids.AkmlSqlPackageString)]
@@ -36,7 +37,7 @@ namespace AkmlSql.VS2022
 
             // Register menu commands BEFORE anything else (critical path)
             var commandService = await GetServiceAsync(typeof(IMenuCommandService))
-                as Microsoft.VisualStudio.Shell.OleMenuCommandService;
+                as OleMenuCommandService;
 
             if (commandService != null)
             {
@@ -66,7 +67,7 @@ namespace AkmlSql.VS2022
             }
             catch (Exception ex)
             {
-                try { Log.Error(ex, "AKML SQL non-critical init failed for VS 2022"); } catch { }
+                try { Log.Error(ex, "AKML SQL non-critical init failed for VS 2022"); } catch { /* Intentional: logger may not be initialized */ }
 
                 try
                 {

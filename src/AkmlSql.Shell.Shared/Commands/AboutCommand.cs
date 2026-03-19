@@ -6,11 +6,9 @@ namespace AkmlSql.Shell.Shared.Commands
 {
     internal sealed class AboutCommand
     {
-        private readonly Package _package;
-
         private AboutCommand(Package package, OleMenuCommandService commandService)
         {
-            _package = package ?? throw new ArgumentNullException(nameof(package));
+            if (package == null) throw new ArgumentNullException(nameof(package));
             var cmdId = new CommandID(PackageGuids.AkmlSqlCmdSet, CommandIds.CmdAbout);
             var menuItem = new MenuCommand(Execute, cmdId);
             commandService.AddCommand(menuItem);

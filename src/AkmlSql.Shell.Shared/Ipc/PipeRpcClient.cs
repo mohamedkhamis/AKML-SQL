@@ -178,7 +178,7 @@ namespace AkmlSql.Shell.Shared.Ipc
             if (_heartbeatCts != null)
             {
                 _heartbeatCts.Cancel();
-                try { _heartbeatTask?.Wait(TimeSpan.FromSeconds(2)); } catch { }
+                try { _heartbeatTask?.Wait(TimeSpan.FromSeconds(2)); } catch { /* Intentional: best-effort task wait during cleanup */ }
                 _heartbeatCts.Dispose();
                 _heartbeatCts = null;
             }
@@ -217,7 +217,7 @@ namespace AkmlSql.Shell.Shared.Ipc
             _disposed = true;
             StopHeartbeat();
             _readerCts?.Cancel();
-            try { _readerTask?.Wait(TimeSpan.FromSeconds(2)); } catch { }
+            try { _readerTask?.Wait(TimeSpan.FromSeconds(2)); } catch { /* Intentional: best-effort task wait during cleanup */ }
             _pipe?.Dispose();
             _writeLock.Dispose();
             _readerCts?.Dispose();

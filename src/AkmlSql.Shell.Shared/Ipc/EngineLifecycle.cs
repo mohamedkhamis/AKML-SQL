@@ -13,7 +13,7 @@ namespace AkmlSql.Shell.Shared.Ipc
     {
         private static EngineProcessManager _manager;
         private static volatile bool _launching;
-        private static readonly object _lock = new object();
+        private static readonly object s_lock = new object();
 
         /// <summary>
         /// Gets the current EngineProcessManager instance, or null if not yet launched.
@@ -27,7 +27,7 @@ namespace AkmlSql.Shell.Shared.Ipc
         public static async Task LaunchAsync(CancellationToken ct = default)
         {
             EngineProcessManager manager;
-            lock (_lock)
+            lock (s_lock)
             {
                 if (_manager != null || _launching)
                     return;
@@ -58,7 +58,7 @@ namespace AkmlSql.Shell.Shared.Ipc
         public static async Task ShutdownAsync()
         {
             EngineProcessManager manager;
-            lock (_lock)
+            lock (s_lock)
             {
                 manager = _manager;
                 _manager = null;

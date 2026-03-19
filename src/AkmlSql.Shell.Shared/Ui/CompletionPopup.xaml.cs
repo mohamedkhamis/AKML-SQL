@@ -1,10 +1,7 @@
 using System;
 using System.Collections.ObjectModel;
-using System.Windows;
-using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
-using System.Windows.Media;
 
 namespace AkmlSql.Shell.Shared.Ui
 {
@@ -18,7 +15,7 @@ namespace AkmlSql.Shell.Shared.Ui
     /// - Theme-aware color application
     /// - DPI-scaled sizing
     /// </summary>
-    public partial class CompletionPopup : Popup
+    public class CompletionPopup : Popup
     {
         private readonly ObservableCollection<CompletionItemViewModel> _items;
         private int _selectedIndex = -1;

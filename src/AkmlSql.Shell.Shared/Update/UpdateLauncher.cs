@@ -1,7 +1,6 @@
 using System;
 using System.Diagnostics;
 using System.IO;
-using System.Reflection;
 using Constants = AkmlSql.Core.Constants;
 using AkmlSql.Core.Config;
 using Serilog;

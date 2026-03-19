@@ -54,7 +54,7 @@ namespace AkmlSql.Core.Config
     {
         public bool AutoRefresh { get; set; } = true;
         public int RefreshIntervalSeconds { get; set; } = 300;
-        public bool DetectDDL { get; set; } = true;
+        public bool DetectDdl { get; set; } = true;
         public int MaxDatabases { get; set; } = 10;
         public bool LazyLoadColumns { get; set; } = true;
         public bool PersistToDisk { get; set; } = true;
