@@ -249,12 +249,23 @@ A team migrating from Redgate SQL Prompt wants to bring their existing formattin
 - What happens when a SQL file contains only comments? The formatter preserves them with appropriate whitespace cleanup per the active profile.
 - What happens when a file contains only `GO` batch separators and empty lines? The formatter normalizes spacing per profile rules without removing content.
 - What happens when the formatter engine crashes during formatting? The original document text is preserved — no changes are applied.
+- What happens when a new format request arrives while one is in progress? The in-flight request is cancelled via CancellationToken, the new request runs on the latest document state.
 - What happens when two formatting options conflict (e.g., collapse threshold vs. one-item-per-line)? Options have a defined precedence: explicit layout rules override collapse thresholds.
 - What happens when format-on-paste receives non-SQL content? The pasted content must be detected as non-SQL (via keyword heuristic) and pasted without modification.
 - What happens when formatting SQL that uses SQLCMD mode syntax (`:setvar`, `$(variable)`)? SQLCMD directives are preserved as-is; surrounding SQL is formatted normally.
 - What happens when a noformat region spans a GO batch boundary? The noformat region continues across the batch boundary until the closing tag.
 - What happens when the user formats SQL with an active profile that was deleted? The formatter falls back to the Default built-in profile and notifies the user.
 - What happens when bulk formatting encounters a read-only file? The file is skipped and reported in the summary.
+
+## Clarifications
+
+### Session 2026-03-20
+
+- Q: What file format should formatting profiles use? → A: JSON (`.akmlformat.json`)
+- Q: Is the CLI formatter a separate executable or a subcommand of the existing Engine? → A: Engine subcommand (`AkmlSql.Engine.exe format`)
+- Q: How should the system handle profile schema changes across versions? → A: Auto-migrate on load (new options get defaults, removed options silently dropped, version bumped on next save)
+- Q: How should the system handle concurrent formatting requests on the same document? → A: Cancel-and-replace (new request cancels in-flight request, then runs)
+- Q: Which SQL Prompt versions should the profile importer support? → A: All versions (v1 through latest `.sqlpromptstyle` format variants)
 
 ## Requirements
 
@@ -279,8 +290,9 @@ A team migrating from Redgate SQL Prompt wants to bring their existing formattin
 - **FR-012**: System MUST ship with at least 5 predefined formatting profiles: Default, Compact, Expanded, Leading Commas, and Minimalist.
 - **FR-013**: System MUST allow users to create, edit, duplicate, delete, export, and import custom formatting profiles.
 - **FR-014**: System MUST prevent direct modification of built-in profiles while allowing them to be copied as a base for custom profiles.
-- **FR-015**: System MUST store profiles as portable files that can be shared between machines.
-- **FR-016**: System MUST support importing SQL Prompt `.sqlpromptstyle` files with best-effort option mapping.
+- **FR-015**: System MUST store profiles as portable JSON files (`.akmlformat.json`) that can be shared between machines.
+- **FR-015a**: System MUST auto-migrate profiles on load: new options receive defaults, removed options are silently dropped, and the profile schema version is bumped on next save.
+- **FR-016**: System MUST support importing SQL Prompt `.sqlpromptstyle` files (all versions, v1 through latest) with best-effort option mapping.
 - **FR-017**: System MUST support side-by-side comparison of two profiles showing all differing options.
 - **FR-018**: System MUST allow quick profile switching via a toolbar dropdown with status bar indication of the active profile.
 
@@ -322,7 +334,7 @@ A team migrating from Redgate SQL Prompt wants to bring their existing formattin
 - **FR-045**: System MUST skip read-only files during bulk formatting and report them.
 
 **Command-Line Formatter**
-- **FR-046**: System MUST provide a standalone CLI tool for formatting SQL files.
+- **FR-046**: System MUST provide CLI formatting as a subcommand of the existing Engine (`AkmlSql.Engine.exe format`), sharing the same formatting engine binary used by the IDE extension.
 - **FR-047**: The CLI MUST support format mode (modify files in-place), check mode (validate formatting, exit code 0/1), and diff mode (show proposed changes).
 - **FR-048**: The CLI MUST support pipe mode (read from stdin, write to stdout).
 - **FR-049**: The CLI MUST support profile selection by name or by file path.
@@ -350,7 +362,7 @@ A team migrating from Redgate SQL Prompt wants to bring their existing formattin
 
 ### Key Entities
 
-- **Formatting Profile**: A named collection of 250+ formatting option values that defines a complete formatting style. Has metadata (name, description, author, version, creation/modification dates, base profile) and option values organized by category. Can be built-in (read-only) or custom (user-editable). Stored as a portable file.
+- **Formatting Profile**: A named collection of 250+ formatting option values that defines a complete formatting style. Has metadata (name, description, author, version, creation/modification dates, base profile) and option values organized by category. Can be built-in (read-only) or custom (user-editable). Stored as portable JSON files (`.akmlformat.json`) using System.Text.Json serialization.
 - **Formatting Option**: A single configurable setting within a profile. Has a category, name, description, default value, allowed values, and current value. Organized into 8 categories.
 - **Noformat Region**: A section of SQL text delimited by comment-based tags that the formatter must preserve exactly as-is. Defined by an opening tag and optional closing tag.
 - **Format Action**: A discrete formatting transformation that can be applied independently or as part of the full format command. Each action has a type (layout, casing, semicolons, wildcards, qualification, brackets, AS keyword), a keyboard shortcut, and a toggle for inclusion in the full format.
@@ -383,7 +395,7 @@ A team migrating from Redgate SQL Prompt wants to bring their existing formattin
 - The T-SQL parser (ScriptDom) can produce an AST for all supported SQL Server syntax versions.
 - Built-in profiles are bundled with the installer and deployed alongside the extension.
 - Custom profiles are stored in the user's application data directory.
-- The CLI formatter is a separate executable that shares the formatting engine code but does not require the IDE to be running.
+- The CLI formatter is a subcommand of the existing Engine executable (`AkmlSql.Engine.exe format`) and does not require the IDE to be running.
 - Database identifier casing sync uses the Phase 2 schema cache (already loaded in memory), not live database queries during formatting.
 - Format-on-paste SQL detection uses a lightweight heuristic (keyword presence in first 200 characters), not a full parse attempt.
 - Keyboard shortcuts use the Ctrl+K chord prefix to align with Visual Studio conventions and minimize conflicts.
