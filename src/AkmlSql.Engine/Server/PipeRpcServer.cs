@@ -6,6 +6,7 @@ using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Engine.Completion;
 using AkmlSql.Engine.Completion.Providers;
 using AkmlSql.Engine.Formatter;
+using AkmlSql.Engine.Snippets;
 using System.Linq;
 using AkmlSql.Engine.Parser;
 using AkmlSql.Engine.Schema;
@@ -26,12 +27,19 @@ public class PipeRpcServer
     private readonly SignatureProvider _signatureProvider = new();
     private readonly QuickInfoProvider _quickInfoProvider = new();
     private readonly FormatRequestHandler _formatHandler;
+    private readonly SnippetRequestHandler _snippetHandler;
 
     public PipeRpcServer(string pipeName)
     {
         _pipeName = pipeName;
         _completionEngine = new CompletionEngine(_parserService);
         _formatHandler = new FormatRequestHandler(ProfileManager.CreateDefault());
+
+        var appDataFolder = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AKML SQL");
+        var personalSnippets = Path.Combine(appDataFolder, "snippets", "personal");
+        var builtInSnippets = Path.Combine(AppContext.BaseDirectory, "snippets");
+        _snippetHandler = new SnippetRequestHandler(personalSnippets, builtInSnippets);
     }
 
     public async Task RunAsync(CancellationToken ct)
@@ -315,6 +323,58 @@ public class PipeRpcServer
                     var bulkCancelReq = MessagePackSerializer.Deserialize<BulkFormatCancelRequest>(message.Payload);
                     _formatHandler.HandleBulkFormatCancel(bulkCancelReq);
                     return null; // notification, no response
+
+                case MessageTypes.SnippetExpand:
+                    if (message.Payload == null)
+                    {
+                        return CreateErrorResponse("Payload required", message.RequestId);
+                    }
+
+                    var snipExpandReq = MessagePackSerializer.Deserialize<SnippetExpandRequest>(message.Payload);
+                    var snipSession = _sessionManager.GetSession(snipExpandReq.SessionId);
+                    var snipExpandResp = _snippetHandler.HandleExpand(
+                        snipExpandReq, snipSession?.DatabaseName);
+                    return CreateResponse(MessageTypes.SnippetExpandResult, message.RequestId, snipExpandResp);
+
+                case MessageTypes.SnippetList:
+                    if (message.Payload == null)
+                    {
+                        return CreateErrorResponse("Payload required", message.RequestId);
+                    }
+
+                    var snipListReq = MessagePackSerializer.Deserialize<SnippetListRequest>(message.Payload);
+                    var snipListResp = _snippetHandler.HandleList(snipListReq);
+                    return CreateResponse(MessageTypes.SnippetListResult, message.RequestId, snipListResp);
+
+                case MessageTypes.SnippetSave:
+                    if (message.Payload == null)
+                    {
+                        return CreateErrorResponse("Payload required", message.RequestId);
+                    }
+
+                    var snipSaveReq = MessagePackSerializer.Deserialize<SnippetSaveRequest>(message.Payload);
+                    var snipSaveResp = _snippetHandler.HandleSave(snipSaveReq);
+                    return CreateResponse(MessageTypes.SnippetSaveResult, message.RequestId, snipSaveResp);
+
+                case MessageTypes.SnippetDelete:
+                    if (message.Payload == null)
+                    {
+                        return CreateErrorResponse("Payload required", message.RequestId);
+                    }
+
+                    var snipDelReq = MessagePackSerializer.Deserialize<SnippetDeleteRequest>(message.Payload);
+                    var snipDelResp = _snippetHandler.HandleDelete(snipDelReq);
+                    return CreateResponse(MessageTypes.SnippetDeleteResult, message.RequestId, snipDelResp);
+
+                case MessageTypes.SnippetImport:
+                    if (message.Payload == null)
+                    {
+                        return CreateErrorResponse("Payload required", message.RequestId);
+                    }
+
+                    var snipImpReq = MessagePackSerializer.Deserialize<SnippetImportRequest>(message.Payload);
+                    var snipImpResp = _snippetHandler.HandleImport(snipImpReq);
+                    return CreateResponse(MessageTypes.SnippetImportResult, message.RequestId, snipImpResp);
 
                 case MessageTypes.Shutdown:
                     Log.Information("Shutdown requested by client.");

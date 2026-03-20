@@ -117,29 +117,11 @@ var
   AutoUpdateEnabled: Boolean;
   TelemetryEnabled: Boolean;
 
-// --- Checkbox click handler: sync selections and update Next button ---
-
-procedure UpdateNextButtonState;
-var
-  I: Integer;
-  AnySelected: Boolean;
-begin
-  AnySelected := False;
-  for I := 0 to EnvCheckListBox.Items.Count - 1 do
-  begin
-    if EnvCheckListBox.Checked[I] then
-    begin
-      AnySelected := True;
-      Break;
-    end;
-  end;
-  WizardForm.NextButton.Enabled := AnySelected;
-end;
-
-procedure EnvCheckListBoxClickCheck(Sender: TObject);
-begin
-  UpdateNextButtonState;
-end;
+// --- Checkbox click handler: sync selections ---
+// Note: We do NOT manipulate WizardForm.NextButton.Enabled here because
+// Inno Setup's framework resets button state after CurPageChanged returns
+// on custom pages, causing the button to stay disabled even when checkboxes
+// are pre-checked. Instead, NextButtonClick validates the selection.
 
 // --- Wizard Initialization ---
 
@@ -163,9 +145,6 @@ begin
   EnvCheckListBox.ShowLines := True;
 
   PopulateEnvCheckList;
-  EnvCheckListBox.OnClickCheck := @EnvCheckListBoxClickCheck;
-  // Ensure Next button is enabled if checkboxes are pre-checked
-  UpdateNextButtonState;
 
   // Create Additional Options page (Screen 5)
   OptionsPage := CreateInputOptionPage(wpSelectDir,
@@ -222,11 +201,9 @@ var
 begin
   if CurPageID = EnvPage.ID then
   begin
-    // Refresh scan
+    // Refresh scan when entering the environment page
     RunFullScan;
     PopulateEnvCheckList;
-    // Ensure Next button state matches checkbox state on page entry
-    UpdateNextButtonState;
   end;
 
   // When leaving the environment page, sync selections

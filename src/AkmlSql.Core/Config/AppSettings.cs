@@ -18,6 +18,9 @@ namespace AkmlSql.Core.Config
         [JsonPropertyName("formatter")]
         public FormatterSettings Formatter { get; set; } = new FormatterSettings();
 
+        [JsonPropertyName("snippets")]
+        public SnippetSettings Snippets { get; set; } = new SnippetSettings();
+
         /// <summary>
         /// T093-T095: Whether the user has been prompted about native IntelliSense conflict.
         /// </summary>
@@ -111,5 +114,35 @@ namespace AkmlSql.Core.Config
 
         [JsonPropertyName("semanticValidation")]
         public bool SemanticValidation { get; set; } = true;
+    }
+
+    public class SnippetSettings
+    {
+        [JsonPropertyName("enabled")]
+        public bool Enabled { get; set; } = true;
+
+        [JsonPropertyName("showInCompletion")]
+        public bool ShowInCompletion { get; set; } = true;
+
+        [JsonPropertyName("triggerKey")]
+        public string TriggerKey { get; set; } = "Tab";
+
+        [JsonPropertyName("formatOnExpand")]
+        public bool FormatOnExpand { get; set; } = true;
+
+        [JsonPropertyName("personalFolder")]
+        public string PersonalFolder { get; set; } = string.Empty;
+
+        [JsonPropertyName("teamFolder")]
+        public string TeamFolder { get; set; } = string.Empty;
+
+        [JsonPropertyName("contextFilter")]
+        public bool ContextFilter { get; set; } = true;
+
+        [JsonPropertyName("surroundShortcut")]
+        public string SurroundShortcut { get; set; } = "Ctrl+K, Ctrl+S";
+
+        [JsonPropertyName("trackUsage")]
+        public bool TrackUsage { get; set; } = true;
     }
 }

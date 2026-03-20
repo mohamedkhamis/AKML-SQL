@@ -13,5 +13,8 @@ namespace AkmlSql.Core.Ipc.Messages
 
         [Key(2)]
         public int TriggerKind { get; set; } // 0=Auto, 1=Manual, 2=AfterDot
+
+        [Key(3)]
+        public bool HasSelection { get; set; }
     }
 }
