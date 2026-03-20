@@ -1,8 +1,10 @@
 using System;
 using System.ComponentModel.Design;
-using Microsoft.VisualStudio;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.TextManager.Interop;
+using AkmlSql.Core.Ipc;
+using AkmlSql.Core.Ipc.Messages;
+using AkmlSql.Shell.Shared.Ipc;
 using Serilog;
 
 namespace AkmlSql.Shell.Shared.Formatting
@@ -38,14 +40,40 @@ namespace AkmlSql.Shell.Shared.Formatting
                 buffer.GetLineText(0, 0, lastLine, lastCol, out var documentText);
                 if (string.IsNullOrEmpty(documentText)) return;
 
-                var action = new AkmlSql.Formatting.Actions.CasingOnlyAction();
-                var profile = new AkmlSql.Formatting.Profiles.FormattingProfile();
-                var result = action.Execute(documentText, profile);
+                var manager = EngineLifecycle.Manager;
+                var client = manager?.Client;
 
-                if (result.Success && result.WasModified)
+                if (client == null || !client.IsConnected)
                 {
-                    FormatActionHelper.ApplyFormattedText(buffer, result.FormattedText);
+                    Log.Warning("CasingOnly: engine not available");
+                    return;
                 }
+
+                var request = new FormatActionRequest
+                {
+                    SessionId = Guid.NewGuid().ToString("N"),
+                    Text = documentText,
+                    ActionType = 0  // FormatActionType.CasingOnly
+                };
+
+                System.Threading.Tasks.Task.Run(async () =>
+                {
+                    try
+                    {
+                        var response = await client.SendRequestAsync<FormatActionResponse, FormatActionRequest>(
+                            MessageTypes.FormatAction, request, timeoutMs: 10000);
+
+                        if (response.Success && response.WasModified)
+                        {
+                            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                            FormatActionHelper.ApplyFormattedText(buffer, response.FormattedText);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "CasingOnly via engine failed");
+                    }
+                });
             }
             catch (Exception ex)
             {
