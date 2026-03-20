@@ -27,6 +27,18 @@ namespace AkmlSql.Core.Ipc
         public const int Ping = 7;
         public const int Shutdown = 8;
 
+        // Shell → Engine (Formatter)
+        public const int FormatDocument = 10;
+        public const int FormatSelection = 11;
+        public const int FormatPreview = 12;
+        public const int FormatAction = 13;
+        public const int ProfileList = 14;
+        public const int ProfileSave = 15;
+        public const int ProfileDelete = 16;
+        public const int ProfileImport = 17;
+        public const int BulkFormat = 18;
+        public const int BulkFormatCancel = 19;
+
         // Engine → Shell
         public const int CompletionResult = 101;
         public const int SignatureHelpResult = 102;
@@ -34,5 +46,16 @@ namespace AkmlSql.Core.Ipc
         public const int SchemaRefreshComplete = 104;
         public const int Pong = 105;
         public const int Error = 106;
+
+        // Engine → Shell (Formatter)
+        public const int FormatDocumentResult = 110;
+        public const int FormatSelectionResult = 111;
+        public const int FormatPreviewResult = 112;
+        public const int FormatActionResult = 113;
+        public const int ProfileListResult = 114;
+        public const int ProfileSaveResult = 115;
+        public const int ProfileDeleteResult = 116;
+        public const int ProfileImportResult = 117;
+        public const int BulkFormatResult = 118;
     }
 }

@@ -5,9 +5,11 @@ using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Engine.Completion;
 using AkmlSql.Engine.Completion.Providers;
+using AkmlSql.Engine.Formatter;
 using System.Linq;
 using AkmlSql.Engine.Parser;
 using AkmlSql.Engine.Schema;
+using AkmlSql.Formatting.Profiles;
 using MessagePack;
 using Serilog;
 
@@ -23,11 +25,13 @@ public class PipeRpcServer
     private readonly SchemaMetadataService _schemaMetadataService = new();
     private readonly SignatureProvider _signatureProvider = new();
     private readonly QuickInfoProvider _quickInfoProvider = new();
+    private readonly FormatRequestHandler _formatHandler;
 
     public PipeRpcServer(string pipeName)
     {
         _pipeName = pipeName;
         _completionEngine = new CompletionEngine(_parserService);
+        _formatHandler = new FormatRequestHandler(ProfileManager.CreateDefault());
     }
 
     public async Task RunAsync(CancellationToken ct)
@@ -217,6 +221,100 @@ public class PipeRpcServer
                         UptimeSeconds = 0
                     };
                     return CreateResponse(MessageTypes.Pong, message.RequestId, status);
+
+                case MessageTypes.FormatDocument:
+                    if (message.Payload == null)
+                    {
+                        return CreateErrorResponse("Payload required", message.RequestId);
+                    }
+
+                    var fmtReq = MessagePackSerializer.Deserialize<FormatRequest>(message.Payload);
+                    var fmtResp = _formatHandler.HandleFormat(fmtReq);
+                    return CreateResponse(MessageTypes.FormatDocumentResult, message.RequestId, fmtResp);
+
+                case MessageTypes.FormatSelection:
+                    if (message.Payload == null)
+                    {
+                        return CreateErrorResponse("Payload required", message.RequestId);
+                    }
+
+                    var fmtSelReq = MessagePackSerializer.Deserialize<FormatSelectionRequest>(message.Payload);
+                    var fmtSelResp = _formatHandler.HandleFormatSelection(fmtSelReq);
+                    return CreateResponse(MessageTypes.FormatSelectionResult, message.RequestId, fmtSelResp);
+
+                case MessageTypes.FormatPreview:
+                    if (message.Payload == null)
+                    {
+                        return CreateErrorResponse("Payload required", message.RequestId);
+                    }
+
+                    var fmtPrevReq = MessagePackSerializer.Deserialize<FormatPreviewRequest>(message.Payload);
+                    var fmtPrevResp = _formatHandler.HandleFormatPreview(fmtPrevReq);
+                    return CreateResponse(MessageTypes.FormatPreviewResult, message.RequestId, fmtPrevResp);
+
+                case MessageTypes.FormatAction:
+                    if (message.Payload == null)
+                    {
+                        return CreateErrorResponse("Payload required", message.RequestId);
+                    }
+
+                    var fmtActReq = MessagePackSerializer.Deserialize<FormatActionRequest>(message.Payload);
+                    var fmtActResp = _formatHandler.HandleFormatAction(fmtActReq);
+                    return CreateResponse(MessageTypes.FormatActionResult, message.RequestId, fmtActResp);
+
+                case MessageTypes.ProfileList:
+                    var profListResp = _formatHandler.HandleProfileList();
+                    return CreateResponse(MessageTypes.ProfileListResult, message.RequestId, profListResp);
+
+                case MessageTypes.ProfileSave:
+                    if (message.Payload == null)
+                    {
+                        return CreateErrorResponse("Payload required", message.RequestId);
+                    }
+
+                    var profSaveReq = MessagePackSerializer.Deserialize<ProfileSaveRequest>(message.Payload);
+                    var profSaveResp = _formatHandler.HandleProfileSave(profSaveReq);
+                    return CreateResponse(MessageTypes.ProfileSaveResult, message.RequestId, profSaveResp);
+
+                case MessageTypes.ProfileDelete:
+                    if (message.Payload == null)
+                    {
+                        return CreateErrorResponse("Payload required", message.RequestId);
+                    }
+
+                    var profDelReq = MessagePackSerializer.Deserialize<ProfileDeleteRequest>(message.Payload);
+                    var profDelResp = _formatHandler.HandleProfileDelete(profDelReq);
+                    return CreateResponse(MessageTypes.ProfileDeleteResult, message.RequestId, profDelResp);
+
+                case MessageTypes.ProfileImport:
+                    if (message.Payload == null)
+                    {
+                        return CreateErrorResponse("Payload required", message.RequestId);
+                    }
+
+                    var profImpReq = MessagePackSerializer.Deserialize<ProfileImportRequest>(message.Payload);
+                    var profImpResp = _formatHandler.HandleProfileImport(profImpReq);
+                    return CreateResponse(MessageTypes.ProfileImportResult, message.RequestId, profImpResp);
+
+                case MessageTypes.BulkFormat:
+                    if (message.Payload == null)
+                    {
+                        return CreateErrorResponse("Payload required", message.RequestId);
+                    }
+
+                    var bulkReq = MessagePackSerializer.Deserialize<BulkFormatRequest>(message.Payload);
+                    var bulkResp = _formatHandler.HandleBulkFormatAsync(bulkReq).GetAwaiter().GetResult();
+                    return CreateResponse(MessageTypes.BulkFormatResult, message.RequestId, bulkResp);
+
+                case MessageTypes.BulkFormatCancel:
+                    if (message.Payload == null)
+                    {
+                        return CreateErrorResponse("Payload required", message.RequestId);
+                    }
+
+                    var bulkCancelReq = MessagePackSerializer.Deserialize<BulkFormatCancelRequest>(message.Payload);
+                    _formatHandler.HandleBulkFormatCancel(bulkCancelReq);
+                    return null; // notification, no response
 
                 case MessageTypes.Shutdown:
                     Log.Information("Shutdown requested by client.");

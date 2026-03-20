@@ -9,9 +9,12 @@
     <Project Path="src/AkmlSql.VS2022/AkmlSql.VS2022.csproj" />
     <Project Path="src/AkmlSql.VS2026/AkmlSql.VS2026.csproj" />
     <Project Path="src/AkmlSql.Engine/AkmlSql.Engine.csproj" />
+    <Project Path="src/AkmlSql.Formatting/AkmlSql.Formatting.csproj" />
+    <Project Path="src/AkmlSql.Formatter/AkmlSql.Formatter.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/AkmlSql.Core.Tests/AkmlSql.Core.Tests.csproj" />
     <Project Path="tests/AkmlSql.Engine.Tests/AkmlSql.Engine.Tests.csproj" />
+    <Project Path="tests/AkmlSql.Formatting.Tests/AkmlSql.Formatting.Tests.csproj" />
   </Folder>
 </Solution>
