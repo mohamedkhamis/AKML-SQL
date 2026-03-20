@@ -14,6 +14,9 @@
     <LangVersion>latest</LangVersion>
     <CreateVsixContainer>false</CreateVsixContainer>
     <DeployExtension>false</DeployExtension>
+    <!-- Prevent VSIX/CTO cross-contamination during parallel solution builds -->
+    <CopyVsixExtensionFiles>false</CopyVsixExtensionFiles>
+    <IsVsixProject>false</IsVsixProject>
   </PropertyGroup>
 
   <ItemGroup>
@@ -39,6 +42,19 @@
   <Import Project="..\AkmlSql.Shell.Shared\AkmlSql.Shell.Shared.projitems" Label="Shared" />
   <Import Project="$(VSToolsPath)\VSSDK\Microsoft.VsSDK.targets" />
 
+  <!-- Disable VSIX targets that cause cross-contamination in parallel solution builds.
+       We use Inno Setup for deployment, not VSIX containers. VSCT compilation and
+       PkgDef generation still work; only VSIX manifest/extension file tasks are skipped. -->
+  <Target Name="CreateVsixManifestResourceFile" />
+  <Target Name="CopyVsixExtensionFiles" />
+  <Target Name="GetVsixDeploymentPath" />
+  <Target Name="DeployVsixExtensionFiles" />
+  <!-- Override MergeCtoResource to prevent CTO cross-contamination in parallel builds.
+       With MergeWithCTO=false, the CTO merge into VSPackage.resources is not needed.
+       The VSCT compiler already registers the CTO as Menus.ctmenu embedded resource
+       via the VSCTCompile item's ResourceName property. -->
+  <Target Name="MergeCtoResource" />
+
   <ItemGroup>
     <VSCTCompile Include="AkmlSqlVS2026.vsct">
       <ResourceName>Menus.ctmenu</ResourceName>
@@ -47,7 +63,7 @@
 
   <ItemGroup>
     <EmbeddedResource Update="VSPackage.resx">
-      <MergeWithCTO>true</MergeWithCTO>
+      <MergeWithCTO>false</MergeWithCTO>
       <ManifestResourceName>VSPackage</ManifestResourceName>
     </EmbeddedResource>
   </ItemGroup>
