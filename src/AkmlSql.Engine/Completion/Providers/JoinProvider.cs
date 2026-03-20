@@ -2,7 +2,6 @@ using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Engine.Parser;
 using AkmlSql.Engine.Schema;
 using AkmlSql.Engine.Schema.Models;
-using Serilog;
 
 namespace AkmlSql.Engine.Completion.Providers;
 
@@ -20,10 +19,14 @@ public class JoinProvider : ICompletionProvider
         // Activate when in FROM clause (JOIN is mapped to From by CursorContextAnalyzer)
         // and there are already referenced tables (aliases) available
         if (context.ClauseType != ClauseType.From)
+        {
             return false;
+        }
 
         if (cache == null)
+        {
             return false;
+        }
 
         // Must have at least one table already referenced to suggest FK-based joins
         return context.AvailableAliases.Count > 0;
@@ -32,7 +35,9 @@ public class JoinProvider : ICompletionProvider
     public IEnumerable<CompletionItem> GetCompletions(CursorContext context, DatabaseCache? cache)
     {
         if (cache == null)
+        {
             yield break;
+        }
 
         // Collect all FK-related tables for each referenced table
         var seenJoins = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -74,11 +79,15 @@ public class JoinProvider : ICompletionProvider
                 // Skip if this table is already referenced or already suggested
                 if (context.AvailableAliases.Values.Any(v =>
                     v.Equals(otherFullName, StringComparison.OrdinalIgnoreCase)))
+                {
                     continue;
+                }
 
                 var joinKey = $"{otherFullName}|{fk.FkName}";
                 if (!seenJoins.Add(joinKey))
+                {
                     continue;
+                }
 
                 // T058: Generate alias for the join target
                 var joinAlias = GenerateAlias(otherTable, context.AvailableAliases);
@@ -137,9 +146,11 @@ public class JoinProvider : ICompletionProvider
         var alias = ExtractPascalCaseInitials(tableName);
 
         if (string.IsNullOrEmpty(alias))
+        {
             alias = tableName.Length >= 2
                 ? tableName[..2].ToLowerInvariant()
                 : tableName.ToLowerInvariant();
+        }
 
         // Ensure no conflict with existing aliases
         var candidate = alias;
@@ -159,7 +170,9 @@ public class JoinProvider : ICompletionProvider
     private static string ExtractPascalCaseInitials(string name)
     {
         if (string.IsNullOrEmpty(name))
+        {
             return string.Empty;
+        }
 
         var initials = new List<char>();
 
@@ -169,7 +182,9 @@ public class JoinProvider : ICompletionProvider
             {
                 char c = name[i] == '_' && i + 1 < name.Length ? name[i + 1] : name[i];
                 if (char.IsLetter(c))
+                {
                     initials.Add(char.ToLowerInvariant(c));
+                }
             }
         }
 

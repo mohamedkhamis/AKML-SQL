@@ -1,7 +1,5 @@
-using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
-using Serilog;
 
 namespace AkmlSql.Engine.Parser;
 
@@ -14,7 +12,9 @@ public partial class TsqlParserService
     public void SetServerVersion(int serverVersion)
     {
         if (_serverVersion == serverVersion && _parser != null)
+        {
             return;
+        }
 
         _serverVersion = serverVersion;
         _parser = CreateParser(serverVersion);
@@ -43,7 +43,9 @@ public partial class TsqlParserService
         // Try normal parse first
         var result = Parse(sql, out errors);
         if (result != null && result.Batches.Count > 0 && errors.Count == 0)
+        {
             return result;
+        }
 
         // Try with suffix completion helper
         var suffixed = SuffixCompletionHelper.AppendDummyTokens(sql);
@@ -53,7 +55,10 @@ public partial class TsqlParserService
     private TSqlParser GetParser()
     {
         if (_parser == null)
+        {
             _parser = CreateParser(_serverVersion);
+        }
+
         return _parser;
     }
 
@@ -67,7 +72,9 @@ public partial class TsqlParserService
     {
         var batches = new List<(int, int, string)>();
         if (string.IsNullOrEmpty(sql))
+        {
             return batches;
+        }
 
         var matches = GoPattern().Matches(sql);
 

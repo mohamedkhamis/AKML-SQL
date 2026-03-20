@@ -26,11 +26,15 @@ public class KeywordProvider : ICompletionProvider
     {
         // T055: Suppress in comments and strings
         if (context.InComment || context.InString)
+        {
             return false;
+        }
 
         // Don't offer keywords in dot-qualified context (schema.object)
         if (context.PrecedingDot)
+        {
             return false;
+        }
 
         return true;
     }
@@ -42,14 +46,18 @@ public class KeywordProvider : ICompletionProvider
         // If the clause-specific list is empty (e.g., Exec), fall back to nothing
         // The general keyword list is already handled by GetKeywordsForClause for Unknown
         if (keywords.Count == 0)
+        {
             yield break;
+        }
 
         // Deduplicate and yield
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var keyword in keywords)
         {
             if (!seen.Add(keyword))
+            {
                 continue;
+            }
 
             var displayText = ApplyCasing(keyword);
             yield return new CompletionItem
@@ -69,7 +77,9 @@ public class KeywordProvider : ICompletionProvider
             foreach (var keyword in KeywordDictionary.SqlServer2022Keywords)
             {
                 if (!seen.Add(keyword))
+                {
                     continue;
+                }
 
                 var displayText = ApplyCasing(keyword);
                 yield return new CompletionItem
@@ -89,7 +99,9 @@ public class KeywordProvider : ICompletionProvider
             foreach (var keyword in KeywordDictionary.SqlServer2025Keywords)
             {
                 if (!seen.Add(keyword))
+                {
                     continue;
+                }
 
                 var displayText = ApplyCasing(keyword);
                 yield return new CompletionItem
@@ -118,7 +130,9 @@ public class KeywordProvider : ICompletionProvider
     private static string ToPascalCase(string keyword)
     {
         if (string.IsNullOrEmpty(keyword))
+        {
             return keyword;
+        }
 
         var parts = keyword.Split(' ');
         for (var i = 0; i < parts.Length; i++)

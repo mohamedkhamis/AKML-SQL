@@ -88,7 +88,9 @@ public partial class ChangeDetector
     public static bool DetectDdlInQuery(string queryText)
     {
         if (string.IsNullOrWhiteSpace(queryText))
+        {
             return false;
+        }
 
         return DdlPattern().IsMatch(queryText);
     }

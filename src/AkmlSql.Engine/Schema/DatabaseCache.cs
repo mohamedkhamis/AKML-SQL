@@ -24,8 +24,11 @@ public class DatabaseCache
     public DatabaseObject? FindObject(string schemaName, string objectName)
     {
         if (Schemas.TryGetValue(schemaName, out var schema))
+        {
             return schema.Objects.FirstOrDefault(o =>
                 o.ObjectName.Equals(objectName, StringComparison.OrdinalIgnoreCase));
+        }
+
         return null;
     }
 
@@ -37,7 +40,10 @@ public class DatabaseCache
     public IEnumerable<DatabaseObject> GetObjectsInSchema(string schemaName)
     {
         if (Schemas.TryGetValue(schemaName, out var schema))
+        {
             return schema.Objects;
+        }
+
         return [];
     }
 

@@ -17,7 +17,9 @@ namespace AkmlSql.Shell.Shared.Update
             {
                 var resultPath = Constants.UpdateResultFilePath;
                 if (!File.Exists(resultPath))
+                {
                     return NoUpdate;
+                }
 
                 var json = File.ReadAllText(resultPath);
                 var result = JsonSerializer.Deserialize<UpdateResult>(json, JsonOptions.CamelCase);

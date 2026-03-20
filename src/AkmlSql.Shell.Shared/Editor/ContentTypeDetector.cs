@@ -17,7 +17,9 @@ namespace AkmlSql.Shell.Shared.Editor
         public static string GetContentType(ITextView textView)
         {
             if (Interlocked.CompareExchange(ref _detected, 0, 0) == 1)
+            {
                 return _detectedContentType ?? "T-SQL";
+            }
 
             var contentType = textView?.TextBuffer?.ContentType?.TypeName;
             if (!string.IsNullOrEmpty(contentType))

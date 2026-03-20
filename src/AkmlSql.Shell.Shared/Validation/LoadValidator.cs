@@ -47,9 +47,13 @@ namespace AkmlSql.Shell.Shared.Validation
             }
 
             if (allValid)
+            {
                 Log.Information("Load validation passed for extension at {Path}", extensionDirectory);
+            }
             else
+            {
                 Log.Error("Load validation FAILED for extension at {Path}", extensionDirectory);
+            }
 
             return allValid;
         }

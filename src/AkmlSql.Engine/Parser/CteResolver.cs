@@ -1,5 +1,4 @@
 using Microsoft.SqlServer.TransactSql.ScriptDom;
-using Serilog;
 
 namespace AkmlSql.Engine.Parser;
 
@@ -14,18 +13,22 @@ public class CteResolver
     /// Resolve all CTEs visible at the given cursor offset.
     /// Returns a dictionary of CTE name → column names.
     /// </summary>
-    public Dictionary<string, List<string>> ResolveCtes(TSqlScript script, int cursorOffset)
+    public Dictionary<string, List<string>> ResolveCtes(TSqlScript? script, int cursorOffset)
     {
         var result = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
 
         if (script == null)
+        {
             return result;
+        }
 
         foreach (var batch in script.Batches)
         {
             if (cursorOffset < batch.StartOffset ||
                 cursorOffset > batch.StartOffset + batch.FragmentLength)
+            {
                 continue;
+            }
 
             var visitor = new CteVisitor();
             batch.Accept(visitor);
@@ -91,7 +94,9 @@ public class CteResolver
                             // Direct column reference: SELECT col or SELECT t.col
                             var identifiers = colRef.MultiPartIdentifier?.Identifiers;
                             if (identifiers is { Count: > 0 })
+                            {
                                 columns.Add(identifiers[identifiers.Count - 1].Value);
+                            }
                         }
                         else
                         {

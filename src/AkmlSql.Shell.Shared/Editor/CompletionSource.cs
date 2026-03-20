@@ -32,7 +32,10 @@ namespace AkmlSql.Shell.Shared.Editor
 
         public void AugmentCompletionSession(ICompletionSession session, IList<CompletionSet> completionSets)
         {
-            if (_disposed) return;
+            if (_disposed)
+            {
+                return;
+            }
 
             try
             {
@@ -56,7 +59,9 @@ namespace AkmlSql.Shell.Shared.Editor
         {
             var point = session.GetTriggerPoint(_buffer.CurrentSnapshot);
             if (point == null)
+            {
                 return _buffer.CurrentSnapshot.CreateTrackingSpan(0, 0, SpanTrackingMode.EdgeInclusive);
+            }
 
             var position = point.Value.Position;
             var snapshot = _buffer.CurrentSnapshot;

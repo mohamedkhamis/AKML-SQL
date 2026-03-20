@@ -46,7 +46,9 @@ public class CursorContextAnalyzer
         var context = new CursorContext { CursorOffset = cursorOffset };
 
         if (tokens.Count == 0)
+        {
             return context;
+        }
 
         // Find token at/before cursor
         TSqlParserToken? tokenAtCursor = null;
@@ -60,7 +62,11 @@ public class CursorContextAnalyzer
             {
                 tokenAtCursor = t;
                 tokenIndex = i;
-                if (i > 0) prevToken = tokens[i - 1];
+                if (i > 0)
+                {
+                    prevToken = tokens[i - 1];
+                }
+
                 break;
             }
         }
@@ -69,7 +75,10 @@ public class CursorContextAnalyzer
         {
             tokenAtCursor = tokens[tokens.Count - 1];
             tokenIndex = tokens.Count - 1;
-            if (tokenIndex > 0) prevToken = tokens[tokenIndex - 1];
+            if (tokenIndex > 0)
+            {
+                prevToken = tokens[tokenIndex - 1];
+            }
         }
 
         // Check if in comment or string
@@ -82,7 +91,9 @@ public class CursorContextAnalyzer
         }
 
         if (context.InComment || context.InString)
+        {
             return context;
+        }
 
         // Check for dot prefix
         if (prevToken != null && prevToken.TokenType == TSqlTokenType.Dot)
@@ -129,7 +140,10 @@ public class CursorContextAnalyzer
         for (int i = fromIndex; i >= 0; i--)
         {
             var t = tokens[i];
-            if (IsWhitespaceOrComment(t)) continue;
+            if (IsWhitespaceOrComment(t))
+            {
+                continue;
+            }
 
             switch (t.TokenType)
             {
@@ -148,9 +162,21 @@ public class CursorContextAnalyzer
                 case TSqlTokenType.Execute: return ClauseType.Exec;
                 case TSqlTokenType.Identifier:
                     var upper = t.Text.ToUpperInvariant();
-                    if (upper == "GROUP") return ClauseType.GroupBy;
-                    if (upper == "ORDER") return ClauseType.OrderBy;
-                    if (upper == "EXEC") return ClauseType.Exec;
+                    if (upper == "GROUP")
+                    {
+                        return ClauseType.GroupBy;
+                    }
+
+                    if (upper == "ORDER")
+                    {
+                        return ClauseType.OrderBy;
+                    }
+
+                    if (upper == "EXEC")
+                    {
+                        return ClauseType.Exec;
+                    }
+
                     if (upper == "BY")
                     {
                         // "BY" alone doesn't tell us which clause; continue scanning

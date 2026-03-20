@@ -46,7 +46,9 @@ namespace AkmlSql.Core.Config
                 var path = Constants.ConfigFilePath;
                 var directory = Path.GetDirectoryName(path);
                 if (directory != null)
+                {
                     Directory.CreateDirectory(directory);
+                }
 
                 var json = JsonSerializer.Serialize(settings, SerializerOptions);
 
@@ -55,7 +57,10 @@ namespace AkmlSql.Core.Config
                 File.WriteAllText(tempPath, json);
 #if NETSTANDARD2_0
                 if (File.Exists(path))
+                {
                     File.Delete(path);
+                }
+
                 File.Move(tempPath, path);
 #else
                 File.Move(tempPath, path, overwrite: true);

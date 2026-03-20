@@ -36,22 +36,30 @@ namespace AkmlSql.Core.Ipc
             var header = new byte[8];
             int read = await ReadExactAsync(stream, header, 0, 8, ct).ConfigureAwait(false);
             if (read < 8)
+            {
                 return null; // stream closed
+            }
 
             int length = (header[0] << 24) | (header[1] << 16) | (header[2] << 8) | header[3];
             if (length <= 0 || length > MaxMessageSize)
+            {
                 throw new InvalidDataException($"Invalid frame length: {length}");
+            }
 
             uint expectedChecksum = (uint)((header[4] << 24) | (header[5] << 16) | (header[6] << 8) | header[7]);
 
             var buffer = new byte[length];
             read = await ReadExactAsync(stream, buffer, 0, length, ct).ConfigureAwait(false);
             if (read < length)
+            {
                 return null; // stream closed
+            }
 
             var actualChecksum = ComputeChecksum(buffer);
             if (actualChecksum != expectedChecksum)
+            {
                 throw new InvalidDataException($"Frame checksum mismatch: expected {expectedChecksum:X8}, got {actualChecksum:X8}");
+            }
 
             return MessagePackSerializer.Deserialize<RpcMessage>(buffer, cancellationToken: ct);
         }
@@ -77,7 +85,10 @@ namespace AkmlSql.Core.Ipc
             {
                 int read = await stream.ReadAsync(buffer, offset + totalRead, count - totalRead, ct).ConfigureAwait(false);
                 if (read == 0)
+                {
                     return totalRead;
+                }
+
                 totalRead += read;
             }
             return totalRead;

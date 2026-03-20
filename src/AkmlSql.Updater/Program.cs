@@ -67,7 +67,9 @@ namespace AkmlSql.Updater
 
                     var resultDir = Path.GetDirectoryName(Constants.UpdateResultFilePath);
                     if (resultDir != null)
+                    {
                         Directory.CreateDirectory(resultDir);
+                    }
 
                     // Atomic write: write to temp file then rename
                     var tempPath = Constants.UpdateResultFilePath + ".tmp";
@@ -82,7 +84,9 @@ namespace AkmlSql.Updater
 
                     // Remove stale update result if present
                     if (File.Exists(Constants.UpdateResultFilePath))
+                    {
                         File.Delete(Constants.UpdateResultFilePath);
+                    }
                 }
 
                 UpdateLastCheckTimestamp();

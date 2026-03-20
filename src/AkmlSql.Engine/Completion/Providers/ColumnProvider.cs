@@ -19,10 +19,14 @@ public class ColumnProvider : ICompletionProvider
     {
         // Only handle when there's a dot prefix that matches a known alias
         if (!context.PrecedingDot || string.IsNullOrEmpty(context.DotPrefix))
+        {
             return false;
+        }
 
         if (cache == null)
+        {
             return false;
+        }
 
         return context.AvailableAliases.ContainsKey(context.DotPrefix);
     }
@@ -30,10 +34,14 @@ public class ColumnProvider : ICompletionProvider
     public IEnumerable<CompletionItem> GetCompletions(CursorContext context, DatabaseCache? cache)
     {
         if (cache == null || string.IsNullOrEmpty(context.DotPrefix))
+        {
             yield break;
+        }
 
         if (!context.AvailableAliases.TryGetValue(context.DotPrefix, out var fullTableName))
+        {
             yield break;
+        }
 
         // Parse "schema.table" from the full name
         var parts = fullTableName.Split('.');
@@ -75,11 +83,17 @@ public class ColumnProvider : ICompletionProvider
         {
             int priority;
             if (column.IsPrimaryKey)
+            {
                 priority = 10;
+            }
             else if (fkColumnNames.Contains(column.ColumnName))
+            {
                 priority = 20;
+            }
             else
+            {
                 priority = 30;
+            }
 
             yield return new CompletionItem
             {
@@ -100,11 +114,19 @@ public class ColumnProvider : ICompletionProvider
         parts.Add(column.IsNullable ? "NULL" : "NOT NULL");
 
         if (column.IsPrimaryKey)
+        {
             parts.Add("PK");
+        }
+
         if (column.IsIdentity)
+        {
             parts.Add("IDENTITY");
+        }
+
         if (column.IsComputed)
+        {
             parts.Add("COMPUTED");
+        }
 
         return string.Join(", ", parts);
     }

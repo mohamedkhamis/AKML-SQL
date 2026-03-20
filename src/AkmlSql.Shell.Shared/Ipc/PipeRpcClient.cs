@@ -133,7 +133,10 @@ namespace AkmlSql.Shell.Shared.Ipc
                 while (!ct.IsCancellationRequested && _pipe.IsConnected)
                 {
                     var msg = await FrameProtocol.ReadFramedAsync(_pipe, ct);
-                    if (msg == null) break;
+                    if (msg == null)
+                    {
+                        break;
+                    }
 
                     if (msg.RequestId != 0 && _pending.TryGetValue(msg.RequestId, out var tcs))
                     {
@@ -192,7 +195,10 @@ namespace AkmlSql.Shell.Shared.Ipc
                 try
                 {
                     await Task.Delay(15000, ct);
-                    if (!IsConnected) break;
+                    if (!IsConnected)
+                    {
+                        break;
+                    }
 
                     // Send Ping, expect Pong within 5 seconds
                     var pingPayload = new EngineStatusInfo();
@@ -213,7 +219,11 @@ namespace AkmlSql.Shell.Shared.Ipc
 
         public void Dispose()
         {
-            if (_disposed) return;
+            if (_disposed)
+            {
+                return;
+            }
+
             _disposed = true;
             StopHeartbeat();
             _readerCts?.Cancel();

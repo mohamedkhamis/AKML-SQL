@@ -46,7 +46,9 @@ public class CompletionEngine
 
             // Suppress in comments/strings
             if (context.InComment || context.InString)
+            {
                 return new CompletionResponse { Items = [] };
+            }
 
             // Full tier: parse for alias resolution (if available)
             var script = _parserService.ParseWithSuffix(documentText, out _);
@@ -90,7 +92,9 @@ public class CompletionEngine
             // Truncate
             var isIncomplete = allItems.Count > _maxSuggestions;
             if (isIncomplete)
+            {
                 allItems = allItems.Take(_maxSuggestions).ToList();
+            }
 
             return new CompletionResponse
             {

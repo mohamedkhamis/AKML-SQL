@@ -74,11 +74,15 @@ public class PipeRpcServer
         {
             var message = await FrameProtocol.ReadFramedAsync(pipe, ct);
             if (message == null)
+            {
                 break;
+            }
 
             var response = await DispatchAsync(message, ct);
             if (response != null)
+            {
                 await FrameProtocol.WriteFramedAsync(pipe, response, ct);
+            }
         }
     }
 
@@ -90,7 +94,10 @@ public class PipeRpcServer
             {
                 case MessageTypes.ConnectionChanged:
                     if (message.Payload == null)
+                    {
                         return CreateErrorResponse("Payload required", message.RequestId);
+                    }
+
                     var connInfo = MessagePackSerializer.Deserialize<ConnectionInfo>(message.Payload);
                     _sessionManager.UpdateSession(connInfo);
                     _parserService.SetServerVersion(connInfo.ServerVersion);
@@ -120,14 +127,20 @@ public class PipeRpcServer
 
                 case MessageTypes.DocumentChanged:
                     if (message.Payload == null)
+                    {
                         return CreateErrorResponse("Payload required", message.RequestId);
+                    }
+
                     var docChange = MessagePackSerializer.Deserialize<DocumentChange>(message.Payload);
                     _sessionManager.UpdateDocument(docChange);
                     return null;
 
                 case MessageTypes.RequestCompletion:
                     if (message.Payload == null)
+                    {
                         return CreateErrorResponse("Payload required", message.RequestId);
+                    }
+
                     var compReq = MessagePackSerializer.Deserialize<CompletionRequest>(message.Payload);
                     var session = _sessionManager.GetSession(compReq.SessionId);
                     var documentText = session?.DocumentText ?? string.Empty;
@@ -139,7 +152,10 @@ public class PipeRpcServer
 
                 case MessageTypes.RequestSignatureHelp:
                     if (message.Payload == null)
+                    {
                         return CreateErrorResponse("Payload required", message.RequestId);
+                    }
+
                     var sigReq = MessagePackSerializer.Deserialize<SignatureRequest>(message.Payload);
                     var sigSession = _sessionManager.GetSession(sigReq.SessionId);
                     var sigText = sigSession?.DocumentText ?? string.Empty;
@@ -157,7 +173,10 @@ public class PipeRpcServer
 
                 case MessageTypes.RequestQuickInfo:
                     if (message.Payload == null)
+                    {
                         return CreateErrorResponse("Payload required", message.RequestId);
+                    }
+
                     var qiReq = MessagePackSerializer.Deserialize<QuickInfoRequest>(message.Payload);
                     var qiSession = _sessionManager.GetSession(qiReq.SessionId);
                     var qiText = qiSession?.DocumentText ?? string.Empty;
@@ -169,7 +188,10 @@ public class PipeRpcServer
 
                 case MessageTypes.SchemaRefreshRequest:
                     if (message.Payload == null)
+                    {
                         return CreateErrorResponse("Payload required", message.RequestId);
+                    }
+
                     var refreshReq = MessagePackSerializer.Deserialize<RefreshRequest>(message.Payload);
                     var refreshSession = !string.IsNullOrEmpty(refreshReq.SessionId)
                         ? _sessionManager.GetSession(refreshReq.SessionId) : null;
@@ -230,10 +252,15 @@ public class PipeRpcServer
         for (int i = tokens.Count - 1; i >= 0; i--)
         {
             var t = tokens[i];
-            if (t.Offset >= cursorOffset) continue;
+            if (t.Offset >= cursorOffset)
+            {
+                continue;
+            }
 
             if (t.TokenType == Microsoft.SqlServer.TransactSql.ScriptDom.TSqlTokenType.RightParenthesis)
+            {
                 depth++;
+            }
             else if (t.TokenType == Microsoft.SqlServer.TransactSql.ScriptDom.TSqlTokenType.LeftParenthesis)
             {
                 if (depth == 0)
@@ -246,14 +273,19 @@ public class PipeRpcServer
         }
 
         if (parenTokenIndex <= 0)
+        {
             return (string.Empty, -1);
+        }
 
         // Walk back from paren to find the identifier (function name)
         for (int i = parenTokenIndex - 1; i >= 0; i--)
         {
             var t = tokens[i];
             if (t.TokenType == Microsoft.SqlServer.TransactSql.ScriptDom.TSqlTokenType.WhiteSpace)
+            {
                 continue;
+            }
+
             if (t.TokenType == Microsoft.SqlServer.TransactSql.ScriptDom.TSqlTokenType.Identifier ||
                 t.TokenType == Microsoft.SqlServer.TransactSql.ScriptDom.TSqlTokenType.QuotedIdentifier)
             {

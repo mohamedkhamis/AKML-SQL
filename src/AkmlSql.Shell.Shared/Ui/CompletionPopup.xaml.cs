@@ -72,7 +72,10 @@ namespace AkmlSql.Shell.Shared.Ui
             get
             {
                 if (_selectedIndex >= 0 && _selectedIndex < _items.Count)
+                {
                     return _items[_selectedIndex];
+                }
+
                 return null;
             }
         }
@@ -117,18 +120,26 @@ namespace AkmlSql.Shell.Shared.Ui
         public bool HandleKeyDown(Key key)
         {
             if (!IsOpen)
+            {
                 return false;
+            }
 
             switch (key)
             {
                 case Key.Up:
                     if (_selectedIndex > 0)
+                    {
                         SelectedIndex = _selectedIndex - 1;
+                    }
+
                     return true;
 
                 case Key.Down:
                     if (_selectedIndex < _items.Count - 1)
+                    {
                         SelectedIndex = _selectedIndex + 1;
+                    }
+
                     return true;
 
                 case Key.PageUp:

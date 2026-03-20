@@ -24,7 +24,10 @@ namespace AkmlSql.Shell.Shared.Editor
                     textView.TextBuffer.ContentType.TypeName);
 
                 var vsView = AdapterService.GetViewAdapter(textView);
-                if (vsView == null) return;
+                if (vsView == null)
+                {
+                    return;
+                }
 
                 // Attach command handler for keystroke interception
                 var filter = new CompletionCommandHandler(textView, vsView);

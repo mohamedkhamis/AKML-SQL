@@ -194,10 +194,14 @@ public static class KeywordDictionary
         result.AddRange(ControlFlow);
 
         if (sqlServerVersion >= SqlServer2022)
+        {
             result.AddRange(SqlServer2022Keywords);
+        }
 
         if (sqlServerVersion >= SqlServer2025)
+        {
             result.AddRange(SqlServer2025Keywords);
+        }
 
         return result;
     }

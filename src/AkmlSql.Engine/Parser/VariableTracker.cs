@@ -1,5 +1,4 @@
 using Microsoft.SqlServer.TransactSql.ScriptDom;
-using Serilog;
 
 namespace AkmlSql.Engine.Parser;
 
@@ -13,18 +12,22 @@ public class VariableTracker
     /// Track all declared variables in the script visible at the cursor offset.
     /// Returns a dictionary of variable name (including @) → type name.
     /// </summary>
-    public Dictionary<string, string> TrackVariables(TSqlScript script, int cursorOffset)
+    public Dictionary<string, string> TrackVariables(TSqlScript? script, int cursorOffset)
     {
         var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         if (script == null)
+        {
             return result;
+        }
 
         foreach (var batch in script.Batches)
         {
             if (cursorOffset < batch.StartOffset ||
                 cursorOffset > batch.StartOffset + batch.FragmentLength)
+            {
                 continue;
+            }
 
             var visitor = new VariableVisitor(cursorOffset);
             batch.Accept(visitor);
@@ -53,15 +56,21 @@ public class VariableTracker
         {
             // Only include declarations that appear before the cursor
             if (node.StartOffset > _cursorOffset)
+            {
                 return;
+            }
 
             var varName = node.VariableName?.Value;
             if (string.IsNullOrEmpty(varName))
+            {
                 return;
+            }
 
             // Ensure @ prefix
             if (!varName.StartsWith("@"))
+            {
                 varName = "@" + varName;
+            }
 
             var typeName = FormatDataType(node.DataType);
             Variables.Add((varName, typeName));
@@ -73,7 +82,9 @@ public class VariableTracker
         private static string FormatDataType(DataTypeReference? dataType)
         {
             if (dataType == null)
+            {
                 return "unknown";
+            }
 
             return dataType switch
             {
@@ -89,7 +100,9 @@ public class VariableTracker
             var name = sqlType.SqlDataTypeOption.ToString().ToLowerInvariant();
 
             if (sqlType.Parameters == null || sqlType.Parameters.Count == 0)
+            {
                 return name;
+            }
 
             if (sqlType.Parameters.Count == 1)
             {

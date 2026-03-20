@@ -14,9 +14,13 @@ public class Program
         for (int i = 0; i < args.Length; i++)
         {
             if (args[i] == "--pipe" && i + 1 < args.Length)
+            {
                 pipeName = args[++i];
+            }
             else if (args[i] == "--parent-pid" && i + 1 < args.Length)
+            {
                 int.TryParse(args[++i], out parentPid);
+            }
         }
 
         if (string.IsNullOrEmpty(pipeName))
@@ -28,7 +32,8 @@ public class Program
         LoggerFactory.Initialize();
         Log.Information("AkmlSql.Engine starting. Pipe={Pipe}, ParentPid={ParentPid}", pipeName, parentPid);
 
-        using var cts = new CancellationTokenSource();
+        var cts = new CancellationTokenSource();
+        var token = cts.Token;
 
         // Orphan protection: monitor parent process
         if (parentPid > 0)
@@ -38,9 +43,9 @@ public class Program
                 try
                 {
                     using var parent = Process.GetProcessById(parentPid);
-                    while (!parent.HasExited && !cts.Token.IsCancellationRequested)
+                    while (!parent.HasExited && !token.IsCancellationRequested)
                     {
-                        await Task.Delay(2000, cts.Token);
+                        await Task.Delay(2000, token);
                     }
                 }
                 catch (ArgumentException)
@@ -57,20 +62,20 @@ public class Program
                 }
 
                 Log.Warning("Parent process {Pid} exited. Engine shutting down.", parentPid);
-                cts.Cancel();
+                try { cts.Cancel(); } catch (ObjectDisposedException) { }
             });
         }
 
         Console.CancelKeyPress += (_, e) =>
         {
             e.Cancel = true;
-            cts.Cancel();
+            try { cts.Cancel(); } catch (ObjectDisposedException) { }
         };
 
         try
         {
             var server = new Server.PipeRpcServer(pipeName);
-            await server.RunAsync(cts.Token);
+            await server.RunAsync(token);
         }
         catch (OperationCanceledException)
         {
@@ -83,6 +88,7 @@ public class Program
         }
         finally
         {
+            cts.Dispose();
             LoggerFactory.Shutdown();
         }
 

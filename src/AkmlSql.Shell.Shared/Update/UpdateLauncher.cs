@@ -44,7 +44,10 @@ namespace AkmlSql.Shell.Shared.Update
         public static void LaunchUpdater()
         {
             var updaterPath = FindUpdaterPath();
-            if (updaterPath == null) return;
+            if (updaterPath == null)
+            {
+                return;
+            }
 
             Log.Information("Launching update checker: {Path}", updaterPath);
             using (Process.Start(new ProcessStartInfo
@@ -63,7 +66,10 @@ namespace AkmlSql.Shell.Shared.Update
         public static Process LaunchUpdaterAndWait(TimeSpan timeout)
         {
             var updaterPath = FindUpdaterPath();
-            if (updaterPath == null) return null;
+            if (updaterPath == null)
+            {
+                return null;
+            }
 
             Log.Information("Launching update checker (synchronous): {Path}", updaterPath);
             var process = Process.Start(new ProcessStartInfo
@@ -97,7 +103,9 @@ namespace AkmlSql.Shell.Shared.Update
             foreach (var path in candidates)
             {
                 if (!string.IsNullOrEmpty(path) && File.Exists(path))
+                {
                     return path;
+                }
             }
 
             Log.Debug("Updater not found in any known location");

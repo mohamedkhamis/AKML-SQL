@@ -1,4 +1,3 @@
-using System.Data;
 using Microsoft.Data.SqlClient;
 using AkmlSql.Engine.Schema.Models;
 using Serilog;
@@ -31,8 +30,15 @@ public class SchemaMetadataService
             cmd.CommandText = "SELECT HAS_PERMS_BY_NAME(NULL, NULL, 'VIEW ANY DEFINITION')";
             var hasViewDef = (int)(await cmd.ExecuteScalarAsync(ct))! == 1;
 
-            if (hasViewDef && hasDbState) return PermissionLevel.Full;
-            if (hasViewDef) return PermissionLevel.NoDmv;
+            if (hasViewDef && hasDbState)
+            {
+                return PermissionLevel.Full;
+            }
+
+            if (hasViewDef)
+            {
+                return PermissionLevel.NoDmv;
+            }
 
             // Check if sys.objects is accessible
             cmd.CommandText = "SELECT TOP 0 1 FROM sys.objects";
@@ -166,7 +172,8 @@ public class SchemaMetadataService
             WHERE o.type IN ('U','V') AND o.is_ms_shipped = 0
             ORDER BY c.object_id, c.column_id";
 
-        await using var cmd = new SqlCommand(query, conn) { CommandTimeout = 30 };
+        await using var cmd = new SqlCommand(query, conn);
+        cmd.CommandTimeout = 30;
         await using var reader = await cmd.ExecuteReaderAsync(ct);
 
         var objectIndex = new Dictionary<int, DatabaseObject>();
@@ -177,7 +184,9 @@ public class SchemaMetadataService
         {
             var objectId = reader.GetInt32(0);
             if (!objectIndex.TryGetValue(objectId, out var dbObj))
+            {
                 continue;
+            }
 
             dbObj.Columns.Add(new Column
             {
@@ -215,7 +224,8 @@ public class SchemaMetadataService
             JOIN sys.columns rc ON fkc.referenced_object_id = rc.object_id AND fkc.referenced_column_id = rc.column_id
             ORDER BY fk.name, fkc.constraint_column_id";
 
-        await using var cmd = new SqlCommand(query, conn) { CommandTimeout = 30 };
+        await using var cmd = new SqlCommand(query, conn);
+        cmd.CommandTimeout = 30;
         await using var reader = await cmd.ExecuteReaderAsync(ct);
 
         var fks = new Dictionary<string, ForeignKey>();
@@ -255,7 +265,8 @@ public class SchemaMetadataService
             WHERE o.type IN ('P','FN','IF','TF') AND o.is_ms_shipped = 0 AND p.parameter_id > 0
             ORDER BY p.object_id, p.parameter_id";
 
-        await using var cmd = new SqlCommand(query, conn) { CommandTimeout = 30 };
+        await using var cmd = new SqlCommand(query, conn);
+        cmd.CommandTimeout = 30;
         await using var reader = await cmd.ExecuteReaderAsync(ct);
 
         var objectIndex = new Dictionary<int, DatabaseObject>();
@@ -266,7 +277,9 @@ public class SchemaMetadataService
         {
             var objectId = reader.GetInt32(0);
             if (!objectIndex.TryGetValue(objectId, out var dbObj))
+            {
                 continue;
+            }
 
             dbObj.Parameters.Add(new Parameter
             {
@@ -290,7 +303,8 @@ public class SchemaMetadataService
             FROM sys.extended_properties ep
             WHERE ep.class = 1 AND ep.name = 'MS_Description'";
 
-        await using var cmd = new SqlCommand(query, conn) { CommandTimeout = 15 };
+        await using var cmd = new SqlCommand(query, conn);
+        cmd.CommandTimeout = 15;
         await using var reader = await cmd.ExecuteReaderAsync(ct);
 
         var objectIndex = new Dictionary<int, DatabaseObject>();
@@ -302,10 +316,15 @@ public class SchemaMetadataService
             var majorId = reader.GetInt32(0);
             var minorId = reader.GetInt32(1);
             var value = reader.IsDBNull(2) ? null : reader.GetString(2);
-            if (value == null) continue;
+            if (value == null)
+            {
+                continue;
+            }
 
             if (!objectIndex.TryGetValue(majorId, out var dbObj))
+            {
                 continue;
+            }
 
             if (minorId == 0)
             {
@@ -315,7 +334,9 @@ public class SchemaMetadataService
             {
                 var col = dbObj.Columns.FirstOrDefault(c => c.ColumnId == minorId);
                 if (col != null)
+                {
                     col.Description = value;
+                }
             }
         }
     }
@@ -375,7 +396,8 @@ public class SchemaMetadataService
                 FROM INFORMATION_SCHEMA.TABLES
                 ORDER BY TABLE_SCHEMA, TABLE_NAME";
 
-            await using var tableCmd = new SqlCommand(tableQuery, conn) { CommandTimeout = 15 };
+            await using var tableCmd = new SqlCommand(tableQuery, conn);
+            tableCmd.CommandTimeout = 15;
             await using var tableReader = await tableCmd.ExecuteReaderAsync(ct);
 
             while (await tableReader.ReadAsync(ct))
@@ -401,7 +423,8 @@ public class SchemaMetadataService
                 FROM INFORMATION_SCHEMA.ROUTINES
                 ORDER BY ROUTINE_SCHEMA, ROUTINE_NAME";
 
-            await using var routineCmd = new SqlCommand(routineQuery, conn) { CommandTimeout = 15 };
+            await using var routineCmd = new SqlCommand(routineQuery, conn);
+            routineCmd.CommandTimeout = 15;
             await using var routineReader = await routineCmd.ExecuteReaderAsync(ct);
 
             while (await routineReader.ReadAsync(ct))
@@ -429,7 +452,8 @@ public class SchemaMetadataService
                 FROM INFORMATION_SCHEMA.COLUMNS
                 ORDER BY TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION";
 
-            await using var colCmd = new SqlCommand(colQuery, conn) { CommandTimeout = 30 };
+            await using var colCmd = new SqlCommand(colQuery, conn);
+            colCmd.CommandTimeout = 30;
             await using var colReader = await colCmd.ExecuteReaderAsync(ct);
 
             while (await colReader.ReadAsync(ct))
@@ -437,7 +461,10 @@ public class SchemaMetadataService
                 var schemaName = colReader.GetString(0);
                 var tableName = colReader.GetString(1);
                 var dbObj = cache.FindObject(schemaName, tableName);
-                if (dbObj == null) continue;
+                if (dbObj == null)
+                {
+                    continue;
+                }
 
                 dbObj.Columns.Add(new Column
                 {
@@ -445,7 +472,7 @@ public class SchemaMetadataService
                     ColumnName = colReader.GetString(2),
                     TypeName = colReader.GetString(3),
                     MaxLength = colReader.IsDBNull(4) ? (short)0 : (short)Math.Min(colReader.GetInt32(4), short.MaxValue),
-                    Precision = colReader.IsDBNull(5) ? (byte)0 : (byte)colReader.GetByte(5),
+                    Precision = colReader.IsDBNull(5) ? (byte)0 : colReader.GetByte(5),
                     Scale = colReader.IsDBNull(6) ? (byte)0 : (byte)colReader.GetInt32(6),
                     IsNullable = colReader.GetString(7) == "YES",
                     DefaultValue = colReader.IsDBNull(8) ? null : colReader.GetString(8)

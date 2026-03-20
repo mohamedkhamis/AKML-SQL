@@ -49,7 +49,9 @@ namespace AkmlSql.Shell.Shared.Ui
         public VsThemeKind DetectTheme()
         {
             if (_themeCached)
+            {
                 return _cachedTheme;
+            }
 
             try
             {
@@ -57,11 +59,17 @@ namespace AkmlSql.Shell.Shared.Ui
                 var luminance = (0.299 * bgColor.R + 0.587 * bgColor.G + 0.114 * bgColor.B) / 255.0;
 
                 if (luminance < 0.3)
+                {
                     _cachedTheme = VsThemeKind.Dark;
+                }
                 else if (luminance < 0.7)
+                {
                     _cachedTheme = VsThemeKind.Blue;
+                }
                 else
+                {
                     _cachedTheme = VsThemeKind.Light;
+                }
             }
             catch
             {

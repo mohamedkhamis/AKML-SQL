@@ -21,7 +21,9 @@ public class VariableProvider : ICompletionProvider
     public IEnumerable<CompletionItem> GetCompletions(CursorContext context, DatabaseCache? cache)
     {
         if (context.AvailableVariables.Count == 0)
+        {
             yield break;
+        }
 
         foreach (var (variableName, typeName) in context.AvailableVariables)
         {

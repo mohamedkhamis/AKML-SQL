@@ -11,17 +11,22 @@ public class AliasResolver
     ///   FROM Employees e1 JOIN Employees e2 ON e1.ManagerId = e2.EmployeeId
     /// yields: { "e1" → dbo.Employees, "e2" → dbo.Employees }.
     /// </summary>
-    public Dictionary<string, TableReference> ResolveAliases(TSqlScript script, int cursorOffset)
+    public Dictionary<string, TableReference> ResolveAliases(TSqlScript? script, int cursorOffset)
     {
         var aliases = new Dictionary<string, TableReference>(StringComparer.OrdinalIgnoreCase);
 
-        if (script == null) return aliases;
+        if (script == null)
+        {
+            return aliases;
+        }
 
         foreach (var batch in script.Batches)
         {
             if (cursorOffset < batch.StartOffset ||
                 cursorOffset > batch.StartOffset + batch.FragmentLength)
+            {
                 continue;
+            }
 
             var visitor = new AliasVisitor();
             batch.Accept(visitor);
@@ -51,10 +56,15 @@ public class AliasResolver
                     TableName = tableName
                 };
 
+                // ReSharper disable once ConvertIfStatementToConditionalTernaryExpression
                 if (!string.IsNullOrEmpty(alias))
+                {
                     Aliases.Add((alias, tableRef));
+                }
                 else
+                {
                     Aliases.Add((tableName, tableRef));
+                }
             }
         }
 
@@ -94,9 +104,13 @@ public class AliasResolver
                 };
 
                 if (!string.IsNullOrEmpty(alias))
+                {
                     Aliases.Add((alias, tableRef));
+                }
                 else
+                {
                     Aliases.Add((funcName, tableRef));
+                }
             }
         }
     }
