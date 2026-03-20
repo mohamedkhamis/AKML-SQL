@@ -206,13 +206,15 @@ begin
     end;
   end;
 
-  // File system fallback — SSMS 22 can have SSMS.exe in Release\Common7\IDE
+  // File system fallback — SSMS 22 can have SSMS.exe in Release\Common7\IDE or Common7\IDE
   InstallPath := ExpandConstant('{pf}') + '\Microsoft SQL Server Management Studio 22';
   if DirExists(InstallPath) then
   begin
-    if FileExists(InstallPath + '\Release\Common7\IDE\SSMS.exe') or
-       FileExists(InstallPath + '\Common7\IDE\SSMS.exe') or
-       FileExists(InstallPath + '\Common7\IDE\Ssms.exe') then
+    if FileExists(InstallPath + '\Release\Common7\IDE\SSMS.exe') then
+      AddTarget('SSMS 22', '22', 'x64', InstallPath,
+        InstallPath + '\Release\Common7\IDE\Extensions\AkmlSql', True, '')
+    else if FileExists(InstallPath + '\Common7\IDE\SSMS.exe') or
+            FileExists(InstallPath + '\Common7\IDE\Ssms.exe') then
       AddTarget('SSMS 22', '22', 'x64', InstallPath,
         InstallPath + '\Common7\IDE\Extensions\AkmlSql', True, '');
   end;

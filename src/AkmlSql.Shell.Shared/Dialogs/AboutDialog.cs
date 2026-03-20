@@ -1,4 +1,3 @@
-using System;
 using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
@@ -79,7 +78,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 Location = new Point(20, 220),
                 Size = new Size(130, 30)
             };
-            copyDiagButton.Click += (s, e) =>
+            copyDiagButton.Click += (_, _2) =>
             {
                 var diagnostics =
                     $"{Constants.ProductName} v{Constants.Version}\n" +

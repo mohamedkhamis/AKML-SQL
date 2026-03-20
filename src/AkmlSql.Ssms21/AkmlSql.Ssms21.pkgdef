@@ -14,5 +14,5 @@
 [$RootKey$\Menus]
 "{A1B2C3D4-1111-2222-3333-444455556666}"=", Menus.ctmenu, 1"
 
-[$RootKey$\AutoLoadPackages\{e8fbc700-a1bd-11d0-a67c-00a0c9110051}]
+[$RootKey$\AutoLoadPackages\{B7B07F42-6013-4C67-A504-C771CBC7625A}]
 "{A1B2C3D4-1111-2222-3333-444455556666}"=dword:00000002

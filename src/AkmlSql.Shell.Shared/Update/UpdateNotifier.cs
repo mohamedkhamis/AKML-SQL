@@ -9,13 +9,15 @@ namespace AkmlSql.Shell.Shared.Update
 {
     internal static class UpdateNotifier
     {
+        private static readonly UpdateResult NoUpdate = new UpdateResult { Available = false };
+
         public static UpdateResult CheckForPendingUpdate()
         {
             try
             {
                 var resultPath = Constants.UpdateResultFilePath;
                 if (!File.Exists(resultPath))
-                    return null;
+                    return NoUpdate;
 
                 var json = File.ReadAllText(resultPath);
                 var result = JsonSerializer.Deserialize<UpdateResult>(json, JsonOptions.CamelCase);
@@ -31,7 +33,7 @@ namespace AkmlSql.Shell.Shared.Update
                 Log.Warning(ex, "Failed to read update result");
             }
 
-            return null;
+            return NoUpdate;
         }
     }
 }

@@ -12,11 +12,9 @@ namespace AkmlSql.Shell.Shared.Commands
 {
     internal sealed class CheckUpdateCommand
     {
-        private readonly Package _package;
-
         private CheckUpdateCommand(Package package, OleMenuCommandService commandService)
         {
-            _package = package ?? throw new ArgumentNullException(nameof(package));
+            if (package == null) throw new ArgumentNullException(nameof(package));
             var cmdId = new CommandID(PackageGuids.AkmlSqlCmdSet, CommandIds.CmdCheckUpdate);
             var menuItem = new MenuCommand(Execute, cmdId);
             commandService.AddCommand(menuItem);
@@ -61,11 +59,11 @@ namespace AkmlSql.Shell.Shared.Commands
 
                         if (dialogResult == DialogResult.Yes)
                         {
-                            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                            using (System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                             {
                                 FileName = result.DownloadUrl,
                                 UseShellExecute = true
-                            });
+                            })) { }
                         }
                         return;
                     }

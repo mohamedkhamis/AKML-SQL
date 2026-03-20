@@ -8,11 +8,9 @@ namespace AkmlSql.Shell.Shared.Commands
 {
     internal sealed class SendFeedbackCommand
     {
-        private readonly Package _package;
-
         private SendFeedbackCommand(Package package, OleMenuCommandService commandService)
         {
-            _package = package ?? throw new ArgumentNullException(nameof(package));
+            if (package == null) throw new ArgumentNullException(nameof(package));
             var cmdId = new CommandID(PackageGuids.AkmlSqlCmdSet, CommandIds.CmdSendFeedback);
             var menuItem = new MenuCommand(Execute, cmdId);
             commandService.AddCommand(menuItem);
@@ -30,11 +28,11 @@ namespace AkmlSql.Shell.Shared.Commands
             var url = Constants.FeedbackUrl;
             if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps)
             {
-                Process.Start(new ProcessStartInfo
+                using (Process.Start(new ProcessStartInfo
                 {
                     FileName = url,
                     UseShellExecute = true
-                });
+                })) { }
             }
         }
     }

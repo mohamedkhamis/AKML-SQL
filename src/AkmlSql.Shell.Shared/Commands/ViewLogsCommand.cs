@@ -9,11 +9,9 @@ namespace AkmlSql.Shell.Shared.Commands
 {
     internal sealed class ViewLogsCommand
     {
-        private readonly Package _package;
-
         private ViewLogsCommand(Package package, OleMenuCommandService commandService)
         {
-            _package = package ?? throw new ArgumentNullException(nameof(package));
+            if (package == null) throw new ArgumentNullException(nameof(package));
             var cmdId = new CommandID(PackageGuids.AkmlSqlCmdSet, CommandIds.CmdViewLogs);
             var menuItem = new MenuCommand(Execute, cmdId);
             commandService.AddCommand(menuItem);
@@ -32,7 +30,7 @@ namespace AkmlSql.Shell.Shared.Commands
             if (!Directory.Exists(logsPath))
                 Directory.CreateDirectory(logsPath);
 
-            Process.Start("explorer.exe", logsPath);
+            using (Process.Start("explorer.exe", logsPath)) { }
         }
     }
 }
