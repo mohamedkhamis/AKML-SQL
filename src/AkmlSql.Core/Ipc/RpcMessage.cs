@@ -39,6 +39,13 @@ namespace AkmlSql.Core.Ipc
         public const int BulkFormat = 18;
         public const int BulkFormatCancel = 19;
 
+        // Shell → Engine (Snippets)
+        public const int SnippetExpand = 20;
+        public const int SnippetList = 21;
+        public const int SnippetSave = 22;
+        public const int SnippetDelete = 23;
+        public const int SnippetImport = 24;
+
         // Engine → Shell
         public const int CompletionResult = 101;
         public const int SignatureHelpResult = 102;
@@ -57,5 +64,12 @@ namespace AkmlSql.Core.Ipc
         public const int ProfileDeleteResult = 116;
         public const int ProfileImportResult = 117;
         public const int BulkFormatResult = 118;
+
+        // Engine → Shell (Snippets)
+        public const int SnippetExpandResult = 120;
+        public const int SnippetListResult = 121;
+        public const int SnippetSaveResult = 122;
+        public const int SnippetDeleteResult = 123;
+        public const int SnippetImportResult = 124;
     }
 }

@@ -17,10 +17,10 @@
 
 **Purpose**: Create directory structure and shared infrastructure for the snippet module
 
-- [ ] T001 Create directory structure for engine snippet module: src/AkmlSql.Engine/Snippets/, src/AkmlSql.Engine/Snippets/Import/
-- [ ] T002 Create directory structure for shell snippet integration: src/AkmlSql.Shell.Shared/Snippets/
-- [ ] T003 Create test directory: tests/AkmlSql.Engine.Tests/Snippets/
-- [ ] T004 [P] Create directory for built-in snippets: src/AkmlSql.Engine/Snippets/BuiltIn/ (or embedded resource folder)
+- [x] T001 Create directory structure for engine snippet module: src/AkmlSql.Engine/Snippets/, src/AkmlSql.Engine/Snippets/Import/
+- [x] T002 Create directory structure for shell snippet integration: src/AkmlSql.Shell.Shared/Snippets/
+- [x] T003 Create test directory: tests/AkmlSql.Engine.Tests/Snippets/
+- [x] T004 [P] Create directory for built-in snippets: src/AkmlSql.Engine/Snippets/BuiltIn/ (or embedded resource folder)
 
 ---
 
@@ -30,31 +30,31 @@
 
 ### IPC Message Types
 
-- [ ] T005 [P] Create SnippetExpandRequest and SnippetExpandResponse MessagePack message types in src/AkmlSql.Core/Ipc/Messages/SnippetExpandRequest.cs and SnippetExpandResponse.cs per snippet-protocol-extension.md
-- [ ] T006 [P] Create SnippetListRequest and SnippetListResponse with SnippetInfo in src/AkmlSql.Core/Ipc/Messages/SnippetListRequest.cs and SnippetListResponse.cs
-- [ ] T007 [P] Create SnippetSaveRequest, SnippetSaveResponse, SnippetDeleteRequest, SnippetDeleteResponse in src/AkmlSql.Core/Ipc/Messages/SnippetSaveRequest.cs (and siblings)
-- [ ] T008 [P] Create SnippetImportRequest and SnippetImportResponse in src/AkmlSql.Core/Ipc/Messages/SnippetImportRequest.cs and SnippetImportResponse.cs
-- [ ] T009 [P] Create PlaceholderInfo shared model with VariableName, Offset, Length, DefaultText, SchemaAwareType, GroupIndex in src/AkmlSql.Core/Ipc/Messages/PlaceholderInfo.cs
-- [ ] T010 Extend CompletionRequest in src/AkmlSql.Core/Ipc/Messages/CompletionRequest.cs to add HasSelection boolean field for surround-with filtering
+- [x] T005 [P] Create SnippetExpandRequest and SnippetExpandResponse MessagePack message types in src/AkmlSql.Core/Ipc/Messages/SnippetExpandRequest.cs and SnippetExpandResponse.cs per snippet-protocol-extension.md
+- [x] T006 [P] Create SnippetListRequest and SnippetListResponse with SnippetInfo in src/AkmlSql.Core/Ipc/Messages/SnippetListRequest.cs and SnippetListResponse.cs
+- [x] T007 [P] Create SnippetSaveRequest, SnippetSaveResponse, SnippetDeleteRequest, SnippetDeleteResponse in src/AkmlSql.Core/Ipc/Messages/SnippetSaveRequest.cs (and siblings)
+- [x] T008 [P] Create SnippetImportRequest and SnippetImportResponse in src/AkmlSql.Core/Ipc/Messages/SnippetImportRequest.cs and SnippetImportResponse.cs
+- [x] T009 [P] Create PlaceholderInfo shared model with VariableName, Offset, Length, DefaultText, SchemaAwareType, GroupIndex in src/AkmlSql.Core/Ipc/Messages/PlaceholderInfo.cs
+- [x] T010 Extend CompletionRequest in src/AkmlSql.Core/Ipc/Messages/CompletionRequest.cs to add HasSelection boolean field for surround-with filtering
 
 ### Snippet Data Model
 
-- [ ] T011 [P] Create Snippet model with Metadata, Variables array, and Body array in src/AkmlSql.Engine/Snippets/Models/Snippet.cs per snippet-file-format.md
-- [ ] T012 [P] Create SnippetMetadata model with Id, Shortcode, Name, Description, Author, Version, Created, Modified, Category, Tags, Context, SurroundsWith in src/AkmlSql.Engine/Snippets/Models/SnippetMetadata.cs
-- [ ] T013 [P] Create SnippetVariable model with Name, Default, Tooltip, SchemaAware in src/AkmlSql.Engine/Snippets/Models/SnippetVariable.cs
-- [ ] T014 [P] Create SnippetSource model with Type enum (Personal/Team/BuiltIn), Priority, Path, IsWriteable, IsAvailable in src/AkmlSql.Engine/Snippets/Models/SnippetSource.cs
+- [x] T011 [P] Create Snippet model with Metadata, Variables array, and Body array in src/AkmlSql.Engine/Snippets/Models/Snippet.cs per snippet-file-format.md
+- [x] T012 [P] Create SnippetMetadata model with Id, Shortcode, Name, Description, Author, Version, Created, Modified, Category, Tags, Context, SurroundsWith in src/AkmlSql.Engine/Snippets/Models/SnippetMetadata.cs
+- [x] T013 [P] Create SnippetVariable model with Name, Default, Tooltip, SchemaAware in src/AkmlSql.Engine/Snippets/Models/SnippetVariable.cs
+- [x] T014 [P] Create SnippetSource model with Type enum (Personal/Team/BuiltIn), Priority, Path, IsWriteable, IsAvailable in src/AkmlSql.Engine/Snippets/Models/SnippetSource.cs
 
 ### Core Engine Components
 
-- [ ] T015 Create SnippetLoader that loads .akmlsnippet JSON files from all configured source directories using System.Text.Json in src/AkmlSql.Engine/Snippets/SnippetLoader.cs
-- [ ] T016 Create SnippetIndex with in-memory Dictionary keyed by ID, ShortcodeMap (lowercase shortcode → priority-ordered snippets), CategoryMap, Search(query) full-text search, and GetByContext(clauseType, hasSelection) filtering in src/AkmlSql.Engine/Snippets/SnippetIndex.cs
-- [ ] T017 Create PlaceholderParser that scans snippet body lines for $VarName$ markers and returns ordered list of placeholder positions with variable references in src/AkmlSql.Engine/Snippets/PlaceholderParser.cs
-- [ ] T018 Create BuiltInVariableResolver that resolves 14 built-in variables ($DATE$, $USER$, $DATABASE$, $SERVER$, $SCHEMA$, $GUID$, etc.) to current values using session context in src/AkmlSql.Engine/Snippets/BuiltInVariableResolver.cs
+- [x] T015 Create SnippetLoader that loads .akmlsnippet JSON files from all configured source directories using System.Text.Json in src/AkmlSql.Engine/Snippets/SnippetLoader.cs
+- [x] T016 Create SnippetIndex with in-memory Dictionary keyed by ID, ShortcodeMap (lowercase shortcode → priority-ordered snippets), CategoryMap, Search(query) full-text search, and GetByContext(clauseType, hasSelection) filtering in src/AkmlSql.Engine/Snippets/SnippetIndex.cs
+- [x] T017 Create PlaceholderParser that scans snippet body lines for $VarName$ markers and returns ordered list of placeholder positions with variable references in src/AkmlSql.Engine/Snippets/PlaceholderParser.cs
+- [x] T018 Create BuiltInVariableResolver that resolves 14 built-in variables ($DATE$, $USER$, $DATABASE$, $SERVER$, $SCHEMA$, $GUID$, etc.) to current values using session context in src/AkmlSql.Engine/Snippets/BuiltInVariableResolver.cs
 
 ### Engine Integration
 
-- [ ] T019 Extend PipeRpcServer in src/AkmlSql.Engine/Server/PipeRpcServer.cs to route MessageTypes 20-24 to snippet handlers
-- [ ] T020 Extend AppSettings in src/AkmlSql.Core/Config/AppSettings.cs with SnippetSettings class containing Enabled, ShowInCompletion, TriggerKey, FormatOnExpand, PersonalFolder, TeamFolder, ContextFilter, SurroundShortcut, TrackUsage
+- [x] T019 Extend PipeRpcServer in src/AkmlSql.Engine/Server/PipeRpcServer.cs to route MessageTypes 20-24 to snippet handlers
+- [x] T020 Extend AppSettings in src/AkmlSql.Core/Config/AppSettings.cs with SnippetSettings class containing Enabled, ShowInCompletion, TriggerKey, FormatOnExpand, PersonalFolder, TeamFolder, ContextFilter, SurroundShortcut, TrackUsage
 
 **Checkpoint**: Foundation ready — snippet models, IPC messages, loader, index, and engine routing in place
 
