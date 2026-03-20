@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\AkmlSql.Core\AkmlSql.Core.csproj" />
+    <ProjectReference Include="..\AkmlSql.Formatting\AkmlSql.Formatting.csproj" />
   </ItemGroup>
 
 </Project>

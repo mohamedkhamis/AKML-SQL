@@ -11,7 +11,9 @@ namespace AkmlSql.Core.Logging
         public static void Initialize()
         {
             if (Interlocked.CompareExchange(ref _initialized, 1, 0) != 0)
+            {
                 return;
+            }
 
             var logPath = Path.Combine(Constants.LogsPath, "akmlsql-.log");
 

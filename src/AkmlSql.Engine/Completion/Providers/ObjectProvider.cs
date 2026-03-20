@@ -42,14 +42,18 @@ public class ObjectProvider : ICompletionProvider
     public bool CanHandle(CursorContext context, DatabaseCache? cache)
     {
         if (cache is null)
+        {
             return false;
+        }
 
         // Handle dot-qualified: schema.object or database.schema
         if (context.PrecedingDot && !string.IsNullOrEmpty(context.DotPrefix))
         {
             // Check if DotPrefix is a known schema name
             if (cache.Schemas.ContainsKey(context.DotPrefix))
+            {
                 return true;
+            }
 
             // Could be database.schema scenario — handle for future extensibility
             return true;
@@ -62,7 +66,9 @@ public class ObjectProvider : ICompletionProvider
     public IEnumerable<CompletionItem> GetCompletions(CursorContext context, DatabaseCache? cache)
     {
         if (cache is null)
+        {
             yield break;
+        }
 
         if (context.PrecedingDot && !string.IsNullOrEmpty(context.DotPrefix))
         {
@@ -85,7 +91,9 @@ public class ObjectProvider : ICompletionProvider
         foreach (var schema in cache.Schemas.Values)
         {
             if (schema.SchemaName.Equals("dbo", StringComparison.OrdinalIgnoreCase))
+            {
                 continue;
+            }
 
             foreach (var obj in GetFilteredObjects(cache, schema.SchemaName, allowedTypes))
             {
@@ -172,7 +180,9 @@ public class ObjectProvider : ICompletionProvider
         var objects = cache.GetObjectsInSchema(schemaName);
 
         if (allowedTypes is not null)
+        {
             objects = objects.Where(o => allowedTypes.Contains(o.ObjectType));
+        }
 
         // T050: Rank by ApproxRowCount descending (tables/views), then alphabetical
         return objects

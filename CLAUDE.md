@@ -147,5 +147,10 @@ Each SSMS/VS host uses different UI contexts for package autoloading:
 
 See [doc/progress.md](doc/progress.md) for the full development progress log including all issues encountered, root causes, fixes applied, cache clearing procedures, and deployment instructions.
 
-<!-- MANUAL ADDITIONS START -->
-<!-- MANUAL ADDITIONS END -->
+## Git Rules (MANDATORY)
+
+- **NEVER commit, push, or create PRs automatically** — only when the user explicitly says "commit", "push", or "create PR"
+- **NEVER run `git add`, `git commit`, `git push`, or `gh pr create`** unless directly instructed
+- **NEVER amend existing commits** unless the user explicitly asks
+- When asked to make code changes, ONLY make the code changes — do not stage, commit, or push them
+- If you think a commit is needed, tell the user and wait for their explicit instruction

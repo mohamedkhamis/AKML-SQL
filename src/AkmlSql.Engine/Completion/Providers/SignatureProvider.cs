@@ -65,11 +65,15 @@ public class SignatureProvider
 
             // Skip tokens before the opening paren
             if (token.Offset < openParenOffset)
+            {
                 continue;
+            }
 
             // Stop at or after cursor
             if (token.Offset >= cursorOffset)
+            {
                 break;
+            }
 
             switch (token.TokenType)
             {
@@ -80,12 +84,18 @@ public class SignatureProvider
                 case TSqlTokenType.RightParenthesis:
                     depth--;
                     if (depth <= 0)
+                    {
                         return commaCount; // Closed the function call
+                    }
+
                     break;
 
                 case TSqlTokenType.Comma:
                     if (depth == 1) // Only count commas at the immediate function level
+                    {
                         commaCount++;
+                    }
+
                     break;
             }
         }
@@ -104,7 +114,9 @@ public class SignatureProvider
         {
             var overload = overloads[i];
             if (parameterIndex < overload.Parameters.Length)
+            {
                 return i;
+            }
         }
 
         // If no overload fits, return the last one (most parameters)
@@ -122,14 +134,20 @@ public class SignatureProvider
             foreach (var obj in schema.Objects)
             {
                 if (!obj.ObjectName.Equals(functionName, StringComparison.OrdinalIgnoreCase))
+                {
                     continue;
+                }
 
                 if (obj.ObjectType is not (DbObjectType.Procedure or DbObjectType.ScalarFunction
                     or DbObjectType.TableFunction or DbObjectType.InlineFunction))
+                {
                     continue;
+                }
 
                 if (obj.Parameters.Count == 0)
+                {
                     continue;
+                }
 
                 var label = $"{obj.ObjectName}({string.Join(", ", obj.Parameters.Select(p => $"{p.ParameterName} {p.TypeName}"))})";
                 var parameters = obj.Parameters.Select(p => new ParameterInfo

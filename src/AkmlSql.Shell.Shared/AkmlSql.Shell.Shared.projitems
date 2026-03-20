@@ -36,5 +36,25 @@
     <Compile Include="$(MSBuildThisFileDirectory)Ui\CompletionItemViewModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\CompletionPopup.xaml.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IntelliSense\NativeIntelliSenseManager.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatDocumentCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatSelectionCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\ProfileSelectorDropdown.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatOnPasteHandler.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatOnSaveHandler.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatOnDelimiterHandler.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\BulkFormatWizard.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\BulkFormatProgressDialog.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\ProfileEditorDialog.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\ProfileEditorViewModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\OptionCategoryTreeBuilder.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\SqlPreviewRenderer.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\EditProfileCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatActionHelper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\CasingOnlyCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\InsertSemicolonsCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\ExpandWildcardsCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\QualifyNamesCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\ToggleBracketsCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\ToggleAsCommand.cs" />
   </ItemGroup>
 </Project>

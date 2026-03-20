@@ -5,9 +5,11 @@ using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Engine.Completion;
 using AkmlSql.Engine.Completion.Providers;
+using AkmlSql.Engine.Formatter;
 using System.Linq;
 using AkmlSql.Engine.Parser;
 using AkmlSql.Engine.Schema;
+using AkmlSql.Formatting.Profiles;
 using MessagePack;
 using Serilog;
 
@@ -23,11 +25,13 @@ public class PipeRpcServer
     private readonly SchemaMetadataService _schemaMetadataService = new();
     private readonly SignatureProvider _signatureProvider = new();
     private readonly QuickInfoProvider _quickInfoProvider = new();
+    private readonly FormatRequestHandler _formatHandler;
 
     public PipeRpcServer(string pipeName)
     {
         _pipeName = pipeName;
         _completionEngine = new CompletionEngine(_parserService);
+        _formatHandler = new FormatRequestHandler(ProfileManager.CreateDefault());
     }
 
     public async Task RunAsync(CancellationToken ct)
@@ -74,11 +78,15 @@ public class PipeRpcServer
         {
             var message = await FrameProtocol.ReadFramedAsync(pipe, ct);
             if (message == null)
+            {
                 break;
+            }
 
             var response = await DispatchAsync(message, ct);
             if (response != null)
+            {
                 await FrameProtocol.WriteFramedAsync(pipe, response, ct);
+            }
         }
     }
 
@@ -90,7 +98,10 @@ public class PipeRpcServer
             {
                 case MessageTypes.ConnectionChanged:
                     if (message.Payload == null)
+                    {
                         return CreateErrorResponse("Payload required", message.RequestId);
+                    }
+
                     var connInfo = MessagePackSerializer.Deserialize<ConnectionInfo>(message.Payload);
                     _sessionManager.UpdateSession(connInfo);
                     _parserService.SetServerVersion(connInfo.ServerVersion);
@@ -120,14 +131,20 @@ public class PipeRpcServer
 
                 case MessageTypes.DocumentChanged:
                     if (message.Payload == null)
+                    {
                         return CreateErrorResponse("Payload required", message.RequestId);
+                    }
+
                     var docChange = MessagePackSerializer.Deserialize<DocumentChange>(message.Payload);
                     _sessionManager.UpdateDocument(docChange);
                     return null;
 
                 case MessageTypes.RequestCompletion:
                     if (message.Payload == null)
+                    {
                         return CreateErrorResponse("Payload required", message.RequestId);
+                    }
+
                     var compReq = MessagePackSerializer.Deserialize<CompletionRequest>(message.Payload);
                     var session = _sessionManager.GetSession(compReq.SessionId);
                     var documentText = session?.DocumentText ?? string.Empty;
@@ -139,7 +156,10 @@ public class PipeRpcServer
 
                 case MessageTypes.RequestSignatureHelp:
                     if (message.Payload == null)
+                    {
                         return CreateErrorResponse("Payload required", message.RequestId);
+                    }
+
                     var sigReq = MessagePackSerializer.Deserialize<SignatureRequest>(message.Payload);
                     var sigSession = _sessionManager.GetSession(sigReq.SessionId);
                     var sigText = sigSession?.DocumentText ?? string.Empty;
@@ -157,7 +177,10 @@ public class PipeRpcServer
 
                 case MessageTypes.RequestQuickInfo:
                     if (message.Payload == null)
+                    {
                         return CreateErrorResponse("Payload required", message.RequestId);
+                    }
+
                     var qiReq = MessagePackSerializer.Deserialize<QuickInfoRequest>(message.Payload);
                     var qiSession = _sessionManager.GetSession(qiReq.SessionId);
                     var qiText = qiSession?.DocumentText ?? string.Empty;
@@ -169,7 +192,10 @@ public class PipeRpcServer
 
                 case MessageTypes.SchemaRefreshRequest:
                     if (message.Payload == null)
+                    {
                         return CreateErrorResponse("Payload required", message.RequestId);
+                    }
+
                     var refreshReq = MessagePackSerializer.Deserialize<RefreshRequest>(message.Payload);
                     var refreshSession = !string.IsNullOrEmpty(refreshReq.SessionId)
                         ? _sessionManager.GetSession(refreshReq.SessionId) : null;
@@ -195,6 +221,100 @@ public class PipeRpcServer
                         UptimeSeconds = 0
                     };
                     return CreateResponse(MessageTypes.Pong, message.RequestId, status);
+
+                case MessageTypes.FormatDocument:
+                    if (message.Payload == null)
+                    {
+                        return CreateErrorResponse("Payload required", message.RequestId);
+                    }
+
+                    var fmtReq = MessagePackSerializer.Deserialize<FormatRequest>(message.Payload);
+                    var fmtResp = _formatHandler.HandleFormat(fmtReq);
+                    return CreateResponse(MessageTypes.FormatDocumentResult, message.RequestId, fmtResp);
+
+                case MessageTypes.FormatSelection:
+                    if (message.Payload == null)
+                    {
+                        return CreateErrorResponse("Payload required", message.RequestId);
+                    }
+
+                    var fmtSelReq = MessagePackSerializer.Deserialize<FormatSelectionRequest>(message.Payload);
+                    var fmtSelResp = _formatHandler.HandleFormatSelection(fmtSelReq);
+                    return CreateResponse(MessageTypes.FormatSelectionResult, message.RequestId, fmtSelResp);
+
+                case MessageTypes.FormatPreview:
+                    if (message.Payload == null)
+                    {
+                        return CreateErrorResponse("Payload required", message.RequestId);
+                    }
+
+                    var fmtPrevReq = MessagePackSerializer.Deserialize<FormatPreviewRequest>(message.Payload);
+                    var fmtPrevResp = _formatHandler.HandleFormatPreview(fmtPrevReq);
+                    return CreateResponse(MessageTypes.FormatPreviewResult, message.RequestId, fmtPrevResp);
+
+                case MessageTypes.FormatAction:
+                    if (message.Payload == null)
+                    {
+                        return CreateErrorResponse("Payload required", message.RequestId);
+                    }
+
+                    var fmtActReq = MessagePackSerializer.Deserialize<FormatActionRequest>(message.Payload);
+                    var fmtActResp = _formatHandler.HandleFormatAction(fmtActReq);
+                    return CreateResponse(MessageTypes.FormatActionResult, message.RequestId, fmtActResp);
+
+                case MessageTypes.ProfileList:
+                    var profListResp = _formatHandler.HandleProfileList();
+                    return CreateResponse(MessageTypes.ProfileListResult, message.RequestId, profListResp);
+
+                case MessageTypes.ProfileSave:
+                    if (message.Payload == null)
+                    {
+                        return CreateErrorResponse("Payload required", message.RequestId);
+                    }
+
+                    var profSaveReq = MessagePackSerializer.Deserialize<ProfileSaveRequest>(message.Payload);
+                    var profSaveResp = _formatHandler.HandleProfileSave(profSaveReq);
+                    return CreateResponse(MessageTypes.ProfileSaveResult, message.RequestId, profSaveResp);
+
+                case MessageTypes.ProfileDelete:
+                    if (message.Payload == null)
+                    {
+                        return CreateErrorResponse("Payload required", message.RequestId);
+                    }
+
+                    var profDelReq = MessagePackSerializer.Deserialize<ProfileDeleteRequest>(message.Payload);
+                    var profDelResp = _formatHandler.HandleProfileDelete(profDelReq);
+                    return CreateResponse(MessageTypes.ProfileDeleteResult, message.RequestId, profDelResp);
+
+                case MessageTypes.ProfileImport:
+                    if (message.Payload == null)
+                    {
+                        return CreateErrorResponse("Payload required", message.RequestId);
+                    }
+
+                    var profImpReq = MessagePackSerializer.Deserialize<ProfileImportRequest>(message.Payload);
+                    var profImpResp = _formatHandler.HandleProfileImport(profImpReq);
+                    return CreateResponse(MessageTypes.ProfileImportResult, message.RequestId, profImpResp);
+
+                case MessageTypes.BulkFormat:
+                    if (message.Payload == null)
+                    {
+                        return CreateErrorResponse("Payload required", message.RequestId);
+                    }
+
+                    var bulkReq = MessagePackSerializer.Deserialize<BulkFormatRequest>(message.Payload);
+                    var bulkResp = _formatHandler.HandleBulkFormatAsync(bulkReq).GetAwaiter().GetResult();
+                    return CreateResponse(MessageTypes.BulkFormatResult, message.RequestId, bulkResp);
+
+                case MessageTypes.BulkFormatCancel:
+                    if (message.Payload == null)
+                    {
+                        return CreateErrorResponse("Payload required", message.RequestId);
+                    }
+
+                    var bulkCancelReq = MessagePackSerializer.Deserialize<BulkFormatCancelRequest>(message.Payload);
+                    _formatHandler.HandleBulkFormatCancel(bulkCancelReq);
+                    return null; // notification, no response
 
                 case MessageTypes.Shutdown:
                     Log.Information("Shutdown requested by client.");
@@ -230,10 +350,15 @@ public class PipeRpcServer
         for (int i = tokens.Count - 1; i >= 0; i--)
         {
             var t = tokens[i];
-            if (t.Offset >= cursorOffset) continue;
+            if (t.Offset >= cursorOffset)
+            {
+                continue;
+            }
 
             if (t.TokenType == Microsoft.SqlServer.TransactSql.ScriptDom.TSqlTokenType.RightParenthesis)
+            {
                 depth++;
+            }
             else if (t.TokenType == Microsoft.SqlServer.TransactSql.ScriptDom.TSqlTokenType.LeftParenthesis)
             {
                 if (depth == 0)
@@ -246,14 +371,19 @@ public class PipeRpcServer
         }
 
         if (parenTokenIndex <= 0)
+        {
             return (string.Empty, -1);
+        }
 
         // Walk back from paren to find the identifier (function name)
         for (int i = parenTokenIndex - 1; i >= 0; i--)
         {
             var t = tokens[i];
             if (t.TokenType == Microsoft.SqlServer.TransactSql.ScriptDom.TSqlTokenType.WhiteSpace)
+            {
                 continue;
+            }
+
             if (t.TokenType == Microsoft.SqlServer.TransactSql.ScriptDom.TSqlTokenType.Identifier ||
                 t.TokenType == Microsoft.SqlServer.TransactSql.ScriptDom.TSqlTokenType.QuotedIdentifier)
             {

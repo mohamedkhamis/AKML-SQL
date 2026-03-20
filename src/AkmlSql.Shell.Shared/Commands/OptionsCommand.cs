@@ -10,7 +10,11 @@ namespace AkmlSql.Shell.Shared.Commands
     {
         private OptionsCommand(Package package, OleMenuCommandService commandService)
         {
-            if (package == null) throw new ArgumentNullException(nameof(package));
+            if (package == null)
+            {
+                throw new ArgumentNullException(nameof(package));
+            }
+
             var cmdId = new CommandID(PackageGuids.AkmlSqlCmdSet, CommandIds.CmdOptions);
             var menuItem = new MenuCommand(Execute, cmdId);
             commandService.AddCommand(menuItem);

@@ -26,7 +26,10 @@ namespace AkmlSql.Shell.Shared.StatusBar
                 ThreadHelper.ThrowIfNotOnUIThread();
                 statusBar.IsFrozen(out int frozen);
                 if (frozen != 0)
+                {
                     statusBar.FreezeOutput(0);
+                }
+
                 statusBar.SetText(text);
             }
             catch (Exception ex)

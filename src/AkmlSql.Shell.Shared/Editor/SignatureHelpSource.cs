@@ -39,12 +39,18 @@ namespace AkmlSql.Shell.Shared.Editor
 
         public void AugmentSignatureHelpSession(ISignatureHelpSession session, IList<ISignature> signatures)
         {
-            if (_disposed) return;
+            if (_disposed)
+            {
+                return;
+            }
 
             try
             {
                 var point = session.GetTriggerPoint(_buffer.CurrentSnapshot);
-                if (point == null) return;
+                if (point == null)
+                {
+                    return;
+                }
 
                 var position = point.Value.Position;
 

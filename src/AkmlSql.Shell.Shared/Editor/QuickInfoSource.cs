@@ -43,12 +43,18 @@ namespace AkmlSql.Shell.Shared.Editor
         {
             applicableToSpan = null;
 
-            if (_disposed) return;
+            if (_disposed)
+            {
+                return;
+            }
 
             try
             {
                 var point = session.GetTriggerPoint(_buffer.CurrentSnapshot);
-                if (point == null) return;
+                if (point == null)
+                {
+                    return;
+                }
 
                 var position = point.Value.Position;
                 var snapshot = _buffer.CurrentSnapshot;
@@ -62,7 +68,10 @@ namespace AkmlSql.Shell.Shared.Editor
                 while (end < snapshot.Length && IsIdentifierChar(snapshot[end]))
                     end++;
 
-                if (start == end) return;
+                if (start == end)
+                {
+                    return;
+                }
 
                 applicableToSpan = snapshot.CreateTrackingSpan(
                     start, end - start, SpanTrackingMode.EdgeInclusive);

@@ -57,7 +57,9 @@ public class SchemaCacheManager : IDisposable
     public void EvictLru()
     {
         if (_caches.Count <= _maxDatabases)
+        {
             return;
+        }
 
         var oldest = _caches.Values
             .OrderBy(c => c.LastFullRefresh)
@@ -175,7 +177,9 @@ public class SchemaCacheManager : IDisposable
             {
                 var cache = kvp.Value;
                 if (!_connectionStrings.TryGetValue(cache.CacheKey, out var connectionString))
+                {
                     continue;
+                }
 
                 try
                 {
@@ -197,7 +201,11 @@ public class SchemaCacheManager : IDisposable
 
     public void Dispose()
     {
-        if (_disposed) return;
+        if (_disposed)
+        {
+            return;
+        }
+
         _disposed = true;
         _periodicRefreshTimer?.Dispose();
     }

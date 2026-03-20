@@ -30,7 +30,10 @@ namespace AkmlSql.Shell.Shared.Ipc
             lock (s_lock)
             {
                 if (_manager != null || _launching)
+                {
                     return;
+                }
+
                 _launching = true;
                 _manager = new EngineProcessManager();
                 manager = _manager;
@@ -65,7 +68,9 @@ namespace AkmlSql.Shell.Shared.Ipc
             }
 
             if (manager == null)
+            {
                 return;
+            }
 
             try
             {

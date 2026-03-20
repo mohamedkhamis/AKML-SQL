@@ -17,14 +17,20 @@ public class AliasProvider : ICompletionProvider
     {
         // Suggest alias when in FROM/JOIN after a table name (no dot, no partial text)
         if (context.PrecedingDot || context.InComment || context.InString)
+        {
             return false;
+        }
 
         if (context.ClauseType != ClauseType.From)
+        {
             return false;
+        }
 
         // Only suggest if the preceding token looks like it could be a table name
         if (context.PrecedingToken == null)
+        {
             return false;
+        }
 
         var tokenType = context.PrecedingToken.TokenType;
         return tokenType == Microsoft.SqlServer.TransactSql.ScriptDom.TSqlTokenType.Identifier
@@ -34,7 +40,9 @@ public class AliasProvider : ICompletionProvider
     public IEnumerable<CompletionItem> GetCompletions(CursorContext context, DatabaseCache? cache)
     {
         if (context.PrecedingToken == null)
+        {
             yield break;
+        }
 
         var tableName = context.PrecedingToken.Text.Trim('[', ']', '"');
         var candidates = GenerateAliasCandidates(tableName);
@@ -43,7 +51,9 @@ public class AliasProvider : ICompletionProvider
         foreach (var candidate in candidates)
         {
             if (existingAliases.Contains(candidate))
+            {
                 continue;
+            }
 
             yield return new CompletionItem
             {
@@ -68,7 +78,9 @@ public class AliasProvider : ICompletionProvider
         var candidates = new List<string>(3);
 
         if (string.IsNullOrEmpty(tableName))
+        {
             return candidates;
+        }
 
         // Strategy 1: PascalCase extraction (e.g., "OrderDetails" → "od", "SalesOrderHeader" → "soh")
         var pascalAlias = ExtractPascalCaseAlias(tableName);

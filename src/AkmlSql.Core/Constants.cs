@@ -16,6 +16,9 @@ namespace AkmlSql.Core
         public const string LogsFolderName = "logs";
         public const string CacheFolderName = "cache";
 
+        public const int FormatDocumentCommandId = 0x0200;
+        public const int FormatSelectionCommandId = 0x0201;
+
         public const int LogMaxFiles = 10;
         public const long LogMaxFileSize = 5 * 1024 * 1024; // 5 MB
         public const int UpdateCheckIntervalHours = 24;

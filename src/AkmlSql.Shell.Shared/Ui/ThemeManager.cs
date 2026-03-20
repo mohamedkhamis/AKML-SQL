@@ -49,7 +49,9 @@ namespace AkmlSql.Shell.Shared.Ui
         public VsThemeKind DetectTheme()
         {
             if (_themeCached)
+            {
                 return _cachedTheme;
+            }
 
             try
             {
@@ -57,11 +59,17 @@ namespace AkmlSql.Shell.Shared.Ui
                 var luminance = (0.299 * bgColor.R + 0.587 * bgColor.G + 0.114 * bgColor.B) / 255.0;
 
                 if (luminance < 0.3)
+                {
                     _cachedTheme = VsThemeKind.Dark;
+                }
                 else if (luminance < 0.7)
+                {
                     _cachedTheme = VsThemeKind.Blue;
+                }
                 else
+                {
                     _cachedTheme = VsThemeKind.Light;
+                }
             }
             catch
             {
@@ -154,6 +162,101 @@ namespace AkmlSql.Shell.Shared.Ui
                         return System.Windows.Media.Color.FromRgb(255, 255, 255);
                     default:
                         return System.Windows.Media.Color.FromRgb(0, 0, 0);
+                }
+            }
+        }
+
+        // T104: Profile Editor environment color resource keys
+
+        /// <summary>
+        /// Background color for the SQL preview pane in the profile editor.
+        /// </summary>
+        public System.Windows.Media.Color PreviewBackground
+        {
+            get
+            {
+                switch (DetectTheme())
+                {
+                    case VsThemeKind.Dark:
+                        return System.Windows.Media.Color.FromRgb(30, 30, 30);
+                    case VsThemeKind.Blue:
+                        return System.Windows.Media.Color.FromRgb(255, 255, 255);
+                    default:
+                        return System.Windows.Media.Color.FromRgb(255, 255, 255);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Background for the options panel area in the profile editor.
+        /// </summary>
+        public System.Windows.Media.Color EditorPanelBackground
+        {
+            get
+            {
+                switch (DetectTheme())
+                {
+                    case VsThemeKind.Dark:
+                        return System.Windows.Media.Color.FromRgb(37, 37, 38);
+                    case VsThemeKind.Blue:
+                        return System.Windows.Media.Color.FromRgb(238, 242, 250);
+                    default:
+                        return System.Windows.Media.Color.FromRgb(251, 251, 251);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Accent color used for category headers and selected tree items.
+        /// </summary>
+        public System.Windows.Media.Color AccentColor
+        {
+            get
+            {
+                switch (DetectTheme())
+                {
+                    case VsThemeKind.Dark:
+                        return System.Windows.Media.Color.FromRgb(0, 122, 204);
+                    case VsThemeKind.Blue:
+                        return System.Windows.Media.Color.FromRgb(0, 114, 198);
+                    default:
+                        return System.Windows.Media.Color.FromRgb(0, 122, 204);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Color for the splitter/divider in the profile editor.
+        /// </summary>
+        public System.Windows.Media.Color SplitterColor
+        {
+            get
+            {
+                switch (DetectTheme())
+                {
+                    case VsThemeKind.Dark:
+                        return System.Windows.Media.Color.FromRgb(63, 63, 70);
+                    case VsThemeKind.Blue:
+                        return System.Windows.Media.Color.FromRgb(155, 167, 183);
+                    default:
+                        return System.Windows.Media.Color.FromRgb(204, 206, 219);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Disabled / placeholder text color in the profile editor.
+        /// </summary>
+        public System.Windows.Media.Color PlaceholderText
+        {
+            get
+            {
+                switch (DetectTheme())
+                {
+                    case VsThemeKind.Dark:
+                        return System.Windows.Media.Color.FromRgb(110, 110, 110);
+                    default:
+                        return System.Windows.Media.Color.FromRgb(160, 160, 160);
                 }
             }
         }

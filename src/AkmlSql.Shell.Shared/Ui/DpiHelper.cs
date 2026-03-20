@@ -20,12 +20,16 @@ namespace AkmlSql.Shell.Shared.Ui
         public static double GetScaleFactor()
         {
             if (_cached)
+            {
                 return _cachedScaleFactor;
+            }
 
             lock (s_cacheLock)
             {
                 if (_cached)
+                {
                     return _cachedScaleFactor;
+                }
 
                 try
                 {

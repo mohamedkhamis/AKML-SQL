@@ -67,7 +67,10 @@ namespace AkmlSql.Shell.Shared.Ipc
 
         private void OnEngineExited(object sender, EventArgs e)
         {
-            if (_disposed) return;
+            if (_disposed)
+            {
+                return;
+            }
 
             Log.Warning("Engine process exited. Restart count: {Count}", _restartCount);
 
@@ -112,22 +115,35 @@ namespace AkmlSql.Shell.Shared.Ipc
         private static string FindEnginePath()
         {
             var extensionDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-            if (extensionDir == null) return null;
+            if (extensionDir == null)
+            {
+                return null;
+            }
 
             // Check Engine subfolder first
             var enginePath = Path.Combine(extensionDir, "Engine", "AkmlSql.Engine.exe");
-            if (File.Exists(enginePath)) return enginePath;
+            if (File.Exists(enginePath))
+            {
+                return enginePath;
+            }
 
             // Check same directory
             enginePath = Path.Combine(extensionDir, "AkmlSql.Engine.exe");
-            if (File.Exists(enginePath)) return enginePath;
+            if (File.Exists(enginePath))
+            {
+                return enginePath;
+            }
 
             return null;
         }
 
         public void Dispose()
         {
-            if (_disposed) return;
+            if (_disposed)
+            {
+                return;
+            }
+
             _disposed = true;
             _client?.Dispose();
 

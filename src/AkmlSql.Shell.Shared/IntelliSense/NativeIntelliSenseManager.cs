@@ -66,7 +66,9 @@ namespace AkmlSql.Shell.Shared.IntelliSense
                         {
                             var value = key.GetValue("EnableIntelliSense");
                             if (value is int intVal && intVal == 1)
+                            {
                                 return true;
+                            }
                         }
                     }
                 }
@@ -87,7 +89,10 @@ namespace AkmlSql.Shell.Shared.IntelliSense
         public void CheckAndPromptOnFirstLoad()
         {
             if (_initialized)
+            {
                 return;
+            }
+
             _initialized = true;
 
             try
@@ -183,7 +188,9 @@ namespace AkmlSql.Shell.Shared.IntelliSense
             {
                 var config = ConfigManager.Load();
                 if (!config.DisabledNativeIntelliSense)
+                {
                     return;
+                }
 
                 string[] registryPaths = new[]
                 {

@@ -59,7 +59,9 @@ namespace AkmlSql.VS2022
 
                 var statusBar = (IVsStatusbar)await GetServiceAsync(typeof(SVsStatusbar));
                 if (statusBar != null)
+                {
                     StatusBarManager.SetLoaded(statusBar);
+                }
 
                 UpdateLauncher.LaunchIfDue();
 
@@ -73,7 +75,9 @@ namespace AkmlSql.VS2022
                 {
                     var statusBar = (IVsStatusbar)await GetServiceAsync(typeof(SVsStatusbar));
                     if (statusBar != null)
+                    {
                         StatusBarManager.SetFailed(statusBar);
+                    }
                 }
                 catch
                 {
@@ -85,7 +89,10 @@ namespace AkmlSql.VS2022
         protected override void Dispose(bool disposing)
         {
             if (disposing)
+            {
                 LoggerFactory.Shutdown();
+            }
+
             base.Dispose(disposing);
         }
     }

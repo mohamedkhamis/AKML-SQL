@@ -1,5 +1,4 @@
 using Microsoft.SqlServer.TransactSql.ScriptDom;
-using Serilog;
 
 namespace AkmlSql.Engine.Parser;
 
@@ -13,18 +12,22 @@ public class TempTableTracker
     /// Track all temp tables declared in the script visible at the cursor offset.
     /// Returns a dictionary of temp table name → column names.
     /// </summary>
-    public Dictionary<string, List<string>> TrackTempTables(TSqlScript script, int cursorOffset)
+    public Dictionary<string, List<string>> TrackTempTables(TSqlScript? script, int cursorOffset)
     {
         var result = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
 
         if (script == null)
+        {
             return result;
+        }
 
         foreach (var batch in script.Batches)
         {
             if (cursorOffset < batch.StartOffset ||
                 cursorOffset > batch.StartOffset + batch.FragmentLength)
+            {
                 continue;
+            }
 
             var visitor = new TempTableVisitor(cursorOffset);
             batch.Accept(visitor);
@@ -56,11 +59,15 @@ public class TempTableTracker
         {
             // Only include definitions that appear before the cursor
             if (node.StartOffset > _cursorOffset)
+            {
                 return;
+            }
 
             var tableName = GetTableName(node.SchemaObjectName);
             if (tableName == null || !tableName.StartsWith("#"))
+            {
                 return;
+            }
 
             var columns = new List<string>();
             if (node.Definition?.ColumnDefinitions != null)
@@ -68,7 +75,9 @@ public class TempTableTracker
                 foreach (var colDef in node.Definition.ColumnDefinitions)
                 {
                     if (colDef.ColumnIdentifier?.Value != null)
+                    {
                         columns.Add(colDef.ColumnIdentifier.Value);
+                    }
                 }
             }
 
@@ -82,17 +91,25 @@ public class TempTableTracker
         {
             // Only include definitions that appear before the cursor
             if (node.StartOffset > _cursorOffset)
+            {
                 return;
+            }
 
             if (node.Into == null)
+            {
                 return;
+            }
 
             if (node.QueryExpression is not QuerySpecification querySpec)
+            {
                 return;
+            }
 
             var tableName = GetTableName(node.Into);
             if (tableName == null || !tableName.StartsWith("#"))
+            {
                 return;
+            }
 
             // Infer columns from the SELECT list
             var columns = new List<string>();
@@ -109,7 +126,9 @@ public class TempTableTracker
                         {
                             var identifiers = colRef.MultiPartIdentifier?.Identifiers;
                             if (identifiers is { Count: > 0 })
+                            {
                                 columns.Add(identifiers[identifiers.Count - 1].Value);
+                            }
                         }
                         else
                         {
@@ -129,7 +148,9 @@ public class TempTableTracker
         private static string? GetTableName(SchemaObjectName? schemaObjectName)
         {
             if (schemaObjectName == null)
+            {
                 return null;
+            }
 
             return schemaObjectName.BaseIdentifier?.Value;
         }

@@ -53,7 +53,9 @@ namespace AkmlSql.Ssms20
 
                     var statusBar = (IVsStatusbar)GetService(typeof(SVsStatusbar));
                     if (statusBar != null)
+                    {
                         StatusBarManager.SetLoaded(statusBar);
+                    }
 
                     UpdateLauncher.LaunchIfDue();
 
@@ -73,7 +75,10 @@ namespace AkmlSql.Ssms20
         protected override void Dispose(bool disposing)
         {
             if (disposing)
+            {
                 LoggerFactory.Shutdown();
+            }
+
             base.Dispose(disposing);
         }
     }

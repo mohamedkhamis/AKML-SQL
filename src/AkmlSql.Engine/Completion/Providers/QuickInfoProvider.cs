@@ -2,9 +2,7 @@ using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Engine.Completion.Dictionaries;
 using AkmlSql.Engine.Parser;
 using AkmlSql.Engine.Schema;
-using AkmlSql.Engine.Schema.Models;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
-using Serilog;
 
 namespace AkmlSql.Engine.Completion.Providers;
 
@@ -29,13 +27,17 @@ public class QuickInfoProvider
         // T066: Resolve the identifier at the cursor
         var (token, tokenIndex) = FindTokenAtOffset(tokens, cursorOffset);
         if (token == null)
+        {
             return EmptyResponse();
+        }
 
         // Skip whitespace, comments, strings
         if (token.TokenType is TSqlTokenType.WhiteSpace or TSqlTokenType.SingleLineComment
             or TSqlTokenType.MultilineComment or TSqlTokenType.AsciiStringLiteral
             or TSqlTokenType.UnicodeStringLiteral)
+        {
             return EmptyResponse();
+        }
 
         var identifierText = token.Text.Trim('[', ']', '"');
 
@@ -64,7 +66,9 @@ public class QuickInfoProvider
         {
             var columnInfo = TryResolveColumn(dotPrefix, identifierText, aliases, cache);
             if (columnInfo != null)
+            {
                 return columnInfo;
+            }
         }
 
         if (cache != null)
@@ -83,20 +87,28 @@ public class QuickInfoProvider
             // Check if it's a table name directly
             var directTable = TryResolveTableByName(identifierText, cache);
             if (directTable != null)
+            {
                 return directTable;
+            }
         }
 
         // Check if it's a variable
         if (identifierText.StartsWith("@"))
+        {
             return MakeVariableInfo(identifierText);
+        }
 
         // Check if it's a keyword
         if (IsKeyword(token))
+        {
             return MakeKeywordInfo(identifierText);
+        }
 
         // Check if it's a known function
         if (BuiltinFunctionDictionary.IsBuiltinFunction(identifierText))
+        {
             return MakeFunctionInfo(identifierText);
+        }
 
         return EmptyResponse();
     }
@@ -111,7 +123,9 @@ public class QuickInfoProvider
         {
             var t = tokens[i];
             if (cursorOffset >= t.Offset && cursorOffset <= t.Offset + t.Text.Length)
+            {
                 return (t, i);
+            }
         }
 
         return (null, -1);
@@ -125,7 +139,9 @@ public class QuickInfoProvider
         Dictionary<string, string> aliases, DatabaseCache cache)
     {
         if (!aliases.TryGetValue(prefix, out var fullTableName))
+        {
             return null;
+        }
 
         var parts = fullTableName.Split('.');
         var schemaName = parts.Length >= 2 ? parts[0] : "dbo";
@@ -133,12 +149,16 @@ public class QuickInfoProvider
 
         var dbObject = cache.FindObject(schemaName, tableName);
         if (dbObject == null || !dbObject.ColumnsLoaded)
+        {
             return null;
+        }
 
         var column = dbObject.Columns.FirstOrDefault(c =>
             c.ColumnName.Equals(columnName, StringComparison.OrdinalIgnoreCase));
         if (column == null)
+        {
             return null;
+        }
 
         var details = new List<QuickInfoDetail>
         {
@@ -147,13 +167,24 @@ public class QuickInfoProvider
         };
 
         if (column.IsPrimaryKey)
+        {
             details.Add(new QuickInfoDetail("Primary Key", "YES"));
+        }
+
         if (column.IsIdentity)
+        {
             details.Add(new QuickInfoDetail("Identity", "YES"));
+        }
+
         if (column.IsComputed)
+        {
             details.Add(new QuickInfoDetail("Computed", column.ComputedDefinition ?? "YES"));
+        }
+
         if (!string.IsNullOrEmpty(column.DefaultValue))
+        {
             details.Add(new QuickInfoDetail("Default", column.DefaultValue));
+        }
 
         // Check FK relationships
         var fks = cache.GetForeignKeysForTable(schemaName, tableName);
@@ -195,16 +226,24 @@ public class QuickInfoProvider
     {
         // Try dbo first
         var result = TryResolveTableDirect("dbo", tableName, cache);
-        if (result != null) return result;
+        if (result != null)
+        {
+            return result;
+        }
 
         // Search other schemas
         foreach (var schemaName in cache.GetSchemaNames())
         {
             if (schemaName.Equals("dbo", StringComparison.OrdinalIgnoreCase))
+            {
                 continue;
+            }
 
             result = TryResolveTableDirect(schemaName, tableName, cache);
-            if (result != null) return result;
+            if (result != null)
+            {
+                return result;
+            }
         }
 
         return null;
@@ -215,7 +254,9 @@ public class QuickInfoProvider
     {
         var dbObject = cache.FindObject(schemaName, tableName);
         if (dbObject == null)
+        {
             return null;
+        }
 
         var details = new List<QuickInfoDetail>
         {
@@ -224,10 +265,14 @@ public class QuickInfoProvider
         };
 
         if (dbObject.ColumnsLoaded)
+        {
             details.Add(new QuickInfoDetail("Columns", dbObject.Columns.Count.ToString()));
+        }
 
         if (dbObject.ApproxRowCount > 0)
+        {
             details.Add(new QuickInfoDetail("Row Count", $"~{dbObject.ApproxRowCount:N0}"));
+        }
 
         details.Add(new QuickInfoDetail("Modified", dbObject.ModifyDate.ToString("yyyy-MM-dd")));
 
