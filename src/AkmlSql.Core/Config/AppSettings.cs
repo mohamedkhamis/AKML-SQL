@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace AkmlSql.Core.Config
 {
@@ -13,6 +14,9 @@ namespace AkmlSql.Core.Config
         public List<InstalledTarget> InstalledTargets { get; set; } = new List<InstalledTarget>();
         public IntelliSenseSettings IntelliSense { get; set; } = new IntelliSenseSettings();
         public CacheSettings Cache { get; set; } = new CacheSettings();
+
+        [JsonPropertyName("formatter")]
+        public FormatterSettings Formatter { get; set; } = new FormatterSettings();
 
         /// <summary>
         /// T093-T095: Whether the user has been prompted about native IntelliSense conflict.
@@ -68,5 +72,44 @@ namespace AkmlSql.Core.Config
         public string Architecture { get; set; } = string.Empty;
         public string ExtensionsPath { get; set; } = string.Empty;
         public DateTimeOffset InstalledAt { get; set; }
+    }
+
+    public class FormatterSettings
+    {
+        [JsonPropertyName("enabled")]
+        public bool Enabled { get; set; } = true;
+
+        [JsonPropertyName("activeProfile")]
+        public string ActiveProfile { get; set; } = "Default";
+
+        [JsonPropertyName("formatOnPaste")]
+        public bool FormatOnPaste { get; set; }
+
+        [JsonPropertyName("formatOnSave")]
+        public bool FormatOnSave { get; set; }
+
+        [JsonPropertyName("formatOnDelimiter")]
+        public bool FormatOnDelimiter { get; set; }
+
+        [JsonPropertyName("shortcutKey")]
+        public string ShortcutKey { get; set; } = "Ctrl+K, Y";
+
+        [JsonPropertyName("showProfileInStatusBar")]
+        public bool ShowProfileInStatusBar { get; set; } = true;
+
+        [JsonPropertyName("confirmBulkFormat")]
+        public bool ConfirmBulkFormat { get; set; } = true;
+
+        [JsonPropertyName("createBackups")]
+        public bool CreateBackups { get; set; } = true;
+
+        [JsonPropertyName("respectNoformat")]
+        public bool RespectNoformat { get; set; } = true;
+
+        [JsonPropertyName("handleParseErrors")]
+        public bool HandleParseErrors { get; set; } = true;
+
+        [JsonPropertyName("semanticValidation")]
+        public bool SemanticValidation { get; set; } = true;
     }
 }

@@ -52,8 +52,28 @@
           <ButtonText>View Logs</ButtonText>
         </Strings>
       </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="cmdFormatDocument" priority="0x0600" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <Strings>
+          <ButtonText>Format Document</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="cmdFormatSelection" priority="0x0601" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <Strings>
+          <ButtonText>Format Selection</ButtonText>
+        </Strings>
+      </Button>
     </Buttons>
   </Commands>
+
+  <!-- Keyboard shortcut: Ctrl+K, Y for Format Document (chord key binding) -->
+  <KeyBindings>
+    <KeyBinding guid="guidAkmlSqlCmdSet" id="cmdFormatDocument"
+                editor="guidVSStd97" key1="K" mod1="Control" key2="Y" mod2="None" />
+  </KeyBindings>
 
   <Symbols>
     <GuidSymbol name="guidAkmlSqlPackage" value="{A1B2C3D4-1111-2222-3333-444455556666}" />
@@ -65,6 +85,8 @@
       <IDSymbol name="cmdOptions" value="0x0102" />
       <IDSymbol name="cmdSendFeedback" value="0x0103" />
       <IDSymbol name="cmdViewLogs" value="0x0104" />
+      <IDSymbol name="cmdFormatDocument" value="0x0200" />
+      <IDSymbol name="cmdFormatSelection" value="0x0201" />
     </GuidSymbol>
   </Symbols>
 
