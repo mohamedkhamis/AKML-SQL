@@ -49,6 +49,12 @@
     <Compile Include="$(MSBuildThisFileDirectory)Ui\OptionCategoryTreeBuilder.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\SqlPreviewRenderer.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\EditProfileCommand.cs" />
-    <!-- Formatting/ — SQL Formatter shell integration (additional files added in later phases) -->
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatActionHelper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\CasingOnlyCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\InsertSemicolonsCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\ExpandWildcardsCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\QualifyNamesCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\ToggleBracketsCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\ToggleAsCommand.cs" />
   </ItemGroup>
 </Project>
