@@ -42,8 +42,8 @@ public class FormattingProfileTests
         Assert.False(o.LineBreakBeforeComma);
         Assert.True(o.LineBreakAfterComma);
         Assert.Equal(1, o.EmptyLineBetweenStatements);
-        Assert.True(o.EmptyLineBeforeGO);
-        Assert.True(o.EmptyLineAfterGO);
+        Assert.True(o.EmptyLineBeforeGo);
+        Assert.True(o.EmptyLineAfterGo);
         Assert.True(o.PreserveEmptyLines);
         Assert.Equal(2, o.MaxConsecutiveEmptyLines);
         Assert.Equal("remove", o.TrailingWhitespace);
@@ -104,7 +104,7 @@ public class FormattingProfileTests
         Assert.True(o.CollapseShortLists);
         Assert.Equal(60, o.CollapseThreshold);
         Assert.True(o.IndentListItems);
-        Assert.True(o.AlignDataTypesInDDL);
+        Assert.True(o.AlignDataTypesInDdl);
         Assert.True(o.AlignValuesInInsert);
         Assert.True(o.SpaceAfterListComma);
     }
@@ -198,7 +198,7 @@ public class FormattingProfileTests
         Assert.True(o.AlignParameterDefaults);
         Assert.True(o.AsOnNewLine);
         Assert.True(o.BeginOnNewLine);
-        Assert.True(o.CollapseShortDDL);
+        Assert.True(o.CollapseShortDdl);
         Assert.Equal(60, o.CollapseThreshold);
     }
 

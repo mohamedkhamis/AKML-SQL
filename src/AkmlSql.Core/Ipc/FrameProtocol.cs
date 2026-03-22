@@ -9,7 +9,7 @@ namespace AkmlSql.Core.Ipc
     {
         private const int MaxMessageSize = 16 * 1024 * 1024; // 16 MB
 
-        public static async Task WriteFramedAsync(Stream stream, RpcMessage message, CancellationToken ct = default)
+        public static async Task WriteFramedAsync(Stream stream, RpcMessage? message, CancellationToken ct = default)
         {
             var payload = MessagePackSerializer.Serialize(message, cancellationToken: ct);
 

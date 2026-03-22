@@ -17,22 +17,22 @@ namespace AkmlSql.Shell.Shared.Ui
         /// </summary>
         private static readonly CategoryGroup[] Groups =
         [
-            new CategoryGroup("Layout",
+            new("Layout",
                 "Whitespace",
                 "Lists",
                 "Parentheses"),
-            new CategoryGroup("Casing",
+            new("Casing",
                 "Casing"),
-            new CategoryGroup("Statements",
+            new("Statements",
                 "DML (SELECT/INSERT/UPDATE/DELETE)",
                 "JOINs",
                 "DDL (CREATE/ALTER)"),
-            new CategoryGroup("Control Flow & Expressions",
+            new("Control Flow & Expressions",
                 "Control Flow (IF/WHILE/TRY)",
                 "CASE Expressions",
                 "CTEs (WITH)",
                 "Expressions"),
-            new CategoryGroup("Actions",
+            new("Actions",
                 "Format Actions")
         ];
 

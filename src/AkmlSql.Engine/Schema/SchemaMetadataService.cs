@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Data.SqlClient;
 using AkmlSql.Engine.Schema.Models;
 using Serilog;
@@ -12,6 +13,9 @@ public enum PermissionLevel
     PublicOnly          // Only accessible objects
 }
 
+[SuppressMessage("ReSharper", "NullableWarningSuppressionIsUsed")]
+[SuppressMessage("ReSharper", "InvalidXmlDocComment")]
+[SuppressMessage("ReSharper", "UnusedMember.Global")]
 public class SchemaMetadataService
 {
     public async Task<PermissionLevel> ProbePermissionsAsync(string connectionString, CancellationToken ct)
@@ -471,9 +475,9 @@ public class SchemaMetadataService
                     ColumnId = colReader.GetInt32(9),
                     ColumnName = colReader.GetString(2),
                     TypeName = colReader.GetString(3),
-                    MaxLength = colReader.IsDBNull(4) ? (short)0 : (short)Math.Min(colReader.GetInt32(4), short.MaxValue),
-                    Precision = colReader.IsDBNull(5) ? (byte)0 : colReader.GetByte(5),
-                    Scale = colReader.IsDBNull(6) ? (byte)0 : (byte)colReader.GetInt32(6),
+                    MaxLength = colReader.IsDBNull(4) ? 0 : (short)Math.Min(colReader.GetInt32(4), short.MaxValue),
+                    Precision = colReader.IsDBNull(5) ? 0 : colReader.GetByte(5),
+                    Scale = colReader.IsDBNull(6) ? 0 : (byte)colReader.GetInt32(6),
                     IsNullable = colReader.GetString(7) == "YES",
                     DefaultValue = colReader.IsDBNull(8) ? null : colReader.GetString(8)
                 });

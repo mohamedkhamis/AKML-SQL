@@ -81,7 +81,7 @@ public class LineBreakDeciderTests
         {
             Whitespace =
             {
-                EmptyLineBeforeGO = true
+                EmptyLineBeforeGo = true
             }
         };
         var d = Create(profile);
@@ -96,7 +96,7 @@ public class LineBreakDeciderTests
         {
             Whitespace =
             {
-                EmptyLineBeforeGO = false
+                EmptyLineBeforeGo = false
             }
         };
         var d = Create(profile);

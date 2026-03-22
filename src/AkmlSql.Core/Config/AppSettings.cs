@@ -12,14 +12,14 @@ namespace AkmlSql.Core.Config
         public DateTimeOffset? LastUpdateCheck { get; set; }
         public string InstallId { get; set; } = Guid.NewGuid().ToString();
         public List<InstalledTarget> InstalledTargets { get; set; } = [];
-        public IntelliSenseSettings IntelliSense { get; set; } = new IntelliSenseSettings();
-        public CacheSettings Cache { get; set; } = new CacheSettings();
+        public IntelliSenseSettings IntelliSense { get; set; } = new();
+        public CacheSettings Cache { get; set; } = new();
 
         [JsonPropertyName("formatter")]
-        public FormatterSettings Formatter { get; set; } = new FormatterSettings();
+        public FormatterSettings Formatter { get; set; } = new();
 
         [JsonPropertyName("snippets")]
-        public SnippetSettings Snippets { get; set; } = new SnippetSettings();
+        public SnippetSettings Snippets { get; set; } = new();
 
         /// <summary>
         /// T093-T095: Whether the user has been prompted about native IntelliSense conflict.

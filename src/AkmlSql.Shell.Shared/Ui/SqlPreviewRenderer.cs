@@ -14,7 +14,7 @@ namespace AkmlSql.Shell.Shared.Ui
     internal sealed class SqlPreviewRenderer
     {
         // SQL keyword sets for colorization
-        private static readonly HashSet<string> Keywords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        private static readonly HashSet<string> Keywords = new(StringComparer.OrdinalIgnoreCase)
         {
             "SELECT", "FROM", "WHERE", "AND", "OR", "NOT", "IN", "EXISTS", "BETWEEN",
             "INSERT", "INTO", "VALUES", "UPDATE", "SET", "DELETE", "MERGE",
@@ -32,7 +32,7 @@ namespace AkmlSql.Shell.Shared.Ui
             "ROW_NUMBER", "RANK", "DENSE_RANK", "NTILE", "COUNT", "SUM", "AVG", "MIN", "MAX",
         };
 
-        private static readonly HashSet<string> BuiltInFunctions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        private static readonly HashSet<string> BuiltInFunctions = new(StringComparer.OrdinalIgnoreCase)
         {
             "GETDATE", "GETUTCDATE", "DATEADD", "DATEDIFF", "DATENAME", "DATEPART",
             "CONVERT", "CAST", "ISNULL", "COALESCE", "NULLIF",

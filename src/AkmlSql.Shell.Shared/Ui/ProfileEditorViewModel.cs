@@ -42,12 +42,12 @@ namespace AkmlSql.Shell.Shared.Ui
         // -------------------------------------------------------------------
         // Profile state — stored as a flat dictionary of path → value
         // -------------------------------------------------------------------
-        private readonly Dictionary<string, object> _options = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<string, object> _defaults = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, object> _options = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, object> _defaults = new(StringComparer.OrdinalIgnoreCase);
 
         // Undo/redo
-        private readonly Stack<UndoEntry> _undoStack = new Stack<UndoEntry>();
-        private readonly Stack<UndoEntry> _redoStack = new Stack<UndoEntry>();
+        private readonly Stack<UndoEntry> _undoStack = new();
+        private readonly Stack<UndoEntry> _redoStack = new();
 
         private string _profileName = "Untitled";
         private string _profileDescription = "";

@@ -8,7 +8,7 @@ namespace AkmlSql.Engine.Completion.Dictionaries;
 /// </summary>
 public static class SystemProcDictionary
 {
-    private static readonly SystemProcEntry[] _entries =
+    private static readonly SystemProcEntry[] Entries =
     [
         // Core system procedures
         new("sp_help", "Displays object information (tables, views, etc.)"),
@@ -67,7 +67,7 @@ public static class SystemProcDictionary
     /// </summary>
     public static IEnumerable<CompletionItem> GetCompletionItems()
     {
-        foreach (var entry in _entries)
+        foreach (var entry in Entries)
         {
             yield return new CompletionItem
             {
@@ -84,7 +84,7 @@ public static class SystemProcDictionary
     /// <summary>
     /// Gets the count of registered system procedures.
     /// </summary>
-    public static int Count => _entries.Length;
+    public static int Count => Entries.Length;
 
     private sealed record SystemProcEntry(string Name, string Description);
 }

@@ -263,7 +263,7 @@ public class WhitespaceRulesTests
         {
             Whitespace =
             {
-                EmptyLineBeforeGO = true
+                EmptyLineBeforeGo = true
             }
         };
 
@@ -285,7 +285,7 @@ public class WhitespaceRulesTests
         {
             Whitespace =
             {
-                EmptyLineBeforeGO = false
+                EmptyLineBeforeGo = false
             }
         };
 

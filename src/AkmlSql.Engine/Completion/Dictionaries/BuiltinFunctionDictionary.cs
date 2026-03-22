@@ -8,7 +8,7 @@ namespace AkmlSql.Engine.Completion.Dictionaries;
 /// </summary>
 public static class BuiltinFunctionDictionary
 {
-    private static readonly Dictionary<string, SignatureOverload[]> _functions =
+    private static readonly Dictionary<string, SignatureOverload[]?> Functions =
         new(StringComparer.OrdinalIgnoreCase);
 
     static BuiltinFunctionDictionary()
@@ -206,9 +206,9 @@ public static class BuiltinFunctionDictionary
     /// <summary>
     /// Try to get the signature overloads for a built-in function.
     /// </summary>
-    public static bool TryGetSignature(string functionName, out SignatureOverload[] overloads)
+    public static bool TryGetSignature(string functionName, out SignatureOverload[]? overloads)
     {
-        return _functions.TryGetValue(functionName, out overloads!);
+        return Functions.TryGetValue(functionName, out overloads);
     }
 
     /// <summary>
@@ -216,7 +216,7 @@ public static class BuiltinFunctionDictionary
     /// </summary>
     public static bool IsBuiltinFunction(string functionName)
     {
-        return _functions.ContainsKey(functionName);
+        return Functions.ContainsKey(functionName);
     }
 
     /// <summary>
@@ -224,12 +224,12 @@ public static class BuiltinFunctionDictionary
     /// </summary>
     public static IEnumerable<string> GetAllFunctionNames()
     {
-        return _functions.Keys;
+        return Functions.Keys;
     }
 
     private static void Register(string name, SignatureOverload[] overloads)
     {
-        _functions[name] = overloads;
+        Functions[name] = overloads;
     }
 
     private static SignatureOverload Overload(string label, string doc, params ParameterInfo[] parameters)

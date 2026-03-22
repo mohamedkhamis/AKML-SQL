@@ -19,7 +19,7 @@ public class WhitespaceRules : IRuleSet
         var ws = profile.Whitespace;
 
         ApplyEmptyLineLimits(nodes, ws);
-        ApplyGOWhitespace(nodes, ws);
+        ApplyGoWhitespace(nodes, ws);
         ApplyCommaLineBreaks(nodes, ws);
         ApplyClauseLineBreaks(nodes, ws);
         ApplySpacingRules(nodes, ws);
@@ -76,11 +76,11 @@ public class WhitespaceRules : IRuleSet
         var node = nodes[index];
 
         // Empty line before GO
-        if (node.TokenType == TSqlTokenType.Go && ws.EmptyLineBeforeGO)
+        if (node.TokenType == TSqlTokenType.Go && ws.EmptyLineBeforeGo)
             return true;
 
         // Empty line after GO (previous token is GO)
-        if (index > 0 && nodes[index - 1].TokenType == TSqlTokenType.Go && ws.EmptyLineAfterGO)
+        if (index > 0 && nodes[index - 1].TokenType == TSqlTokenType.Go && ws.EmptyLineAfterGo)
             return true;
 
         // Empty line between statements (heuristic: node starts a new statement keyword)
@@ -93,7 +93,7 @@ public class WhitespaceRules : IRuleSet
     /// <summary>
     /// Applies emptyLineBeforeGO and emptyLineAfterGO settings.
     /// </summary>
-    private static void ApplyGOWhitespace(List<LayoutNode> nodes, WhitespaceOptions ws)
+    private static void ApplyGoWhitespace(List<LayoutNode> nodes, WhitespaceOptions ws)
     {
         for (int i = 0; i < nodes.Count; i++)
         {
@@ -104,11 +104,11 @@ public class WhitespaceRules : IRuleSet
             if (node.TokenType == TSqlTokenType.Go)
             {
                 // Empty line before GO
-                if (ws.EmptyLineBeforeGO && node.PrecedingBreak == BreakType.NewLine)
+                if (ws.EmptyLineBeforeGo && node.PrecedingBreak == BreakType.NewLine)
                 {
                     node.PrecedingBreak = BreakType.EmptyLine;
                 }
-                else if (!ws.EmptyLineBeforeGO && node.PrecedingBreak == BreakType.EmptyLine)
+                else if (!ws.EmptyLineBeforeGo && node.PrecedingBreak == BreakType.EmptyLine)
                 {
                     node.PrecedingBreak = BreakType.NewLine;
                 }
@@ -117,11 +117,11 @@ public class WhitespaceRules : IRuleSet
             // Empty line after GO
             if (i > 0 && nodes[i - 1].TokenType == TSqlTokenType.Go)
             {
-                if (ws.EmptyLineAfterGO && node.PrecedingBreak == BreakType.NewLine)
+                if (ws.EmptyLineAfterGo && node.PrecedingBreak == BreakType.NewLine)
                 {
                     node.PrecedingBreak = BreakType.EmptyLine;
                 }
-                else if (!ws.EmptyLineAfterGO && node.PrecedingBreak == BreakType.EmptyLine)
+                else if (!ws.EmptyLineAfterGo && node.PrecedingBreak == BreakType.EmptyLine)
                 {
                     node.PrecedingBreak = BreakType.NewLine;
                 }

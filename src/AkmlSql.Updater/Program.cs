@@ -14,7 +14,7 @@ namespace AkmlSql.Updater
 {
     internal static class Program
     {
-        private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
+        private static readonly JsonSerializerOptions JsonOptions = new()
         {
             WriteIndented = true,
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase

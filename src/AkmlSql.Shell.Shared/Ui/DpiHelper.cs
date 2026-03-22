@@ -11,7 +11,7 @@ namespace AkmlSql.Shell.Shared.Ui
     {
         private static double _cachedScaleFactor;
         private static volatile bool _cached;
-        private static readonly object s_cacheLock = new object();
+        private static readonly object SCacheLock = new();
 
         /// <summary>
         /// Gets the DPI scale factor for the current monitor.
@@ -24,7 +24,7 @@ namespace AkmlSql.Shell.Shared.Ui
                 return _cachedScaleFactor;
             }
 
-            lock (s_cacheLock)
+            lock (SCacheLock)
             {
                 if (_cached)
                 {

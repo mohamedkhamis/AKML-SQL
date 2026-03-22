@@ -43,7 +43,7 @@ public class LineBreakDecider
         if (tokenType == TSqlTokenType.Go)
         {
             return new BreakDecision(
-                ws.EmptyLineBeforeGO ? BreakType.EmptyLine : BreakType.NewLine, 0, 0);
+                ws.EmptyLineBeforeGo ? BreakType.EmptyLine : BreakType.NewLine, 0, 0);
         }
 
         // SELECT keyword at start of statement

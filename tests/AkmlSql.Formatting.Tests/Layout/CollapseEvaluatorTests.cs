@@ -353,7 +353,7 @@ public class CollapseEvaluatorTests
         {
             Ddl =
             {
-                CollapseShortDDL = false
+                CollapseShortDdl = false
             }
         };
         var evaluator = Create(profile);
@@ -368,7 +368,7 @@ public class CollapseEvaluatorTests
         {
             Ddl =
             {
-                CollapseShortDDL = true,
+                CollapseShortDdl = true,
                 CollapseThreshold = 100
             }
         };

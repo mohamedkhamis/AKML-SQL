@@ -1,9 +1,11 @@
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using AkmlSql.Core.Logging;
 using Serilog;
 
 namespace AkmlSql.Engine;
 
+[SuppressMessage("ReSharper", "AccessToDisposedClosure")]
 public class Program
 {
     public static async Task<int> Main(string[] args)
@@ -25,7 +27,7 @@ public class Program
 
         if (string.IsNullOrEmpty(pipeName))
         {
-            Console.Error.WriteLine("Usage: AkmlSql.Engine --pipe <name> --parent-pid <pid>");
+            await Console.Error.WriteLineAsync("Usage: AkmlSql.Engine --pipe <name> --parent-pid <pid>");
             return 1;
         }
 
@@ -62,8 +64,8 @@ public class Program
                 }
 
                 Log.Warning("Parent process {Pid} exited. Engine shutting down.", parentPid);
-                try { cts.Cancel(); } catch (ObjectDisposedException) { }
-            });
+                try { await cts.CancelAsync(); } catch (ObjectDisposedException) { }
+            }, token);
         }
 
         Console.CancelKeyPress += (_, e) =>

@@ -9,7 +9,7 @@ namespace AkmlSql.Shell.Shared.Update
 {
     internal static class UpdateNotifier
     {
-        private static readonly UpdateResult NoUpdate = new UpdateResult { Available = false };
+        private static readonly UpdateResult NoUpdate = new() { Available = false };
 
         public static UpdateResult CheckForPendingUpdate()
         {

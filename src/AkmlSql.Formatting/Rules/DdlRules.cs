@@ -11,6 +11,7 @@ namespace AkmlSql.Formatting.Rules;
 /// parameterAlignment, alignParameterDataTypes, alignParameterDefaults,
 /// asOnNewLine, beginOnNewLine, collapseShortDDL, collapseThreshold.
 /// </summary>
+// ReSharper disable once UnusedMember.Global
 public class DdlRules : IRuleSet
 {
     public void Apply(List<LayoutNode> nodes, FormattingProfile profile)
@@ -26,7 +27,7 @@ public class DdlRules : IRuleSet
         ApplyParameterFormatting(nodes, ddl);
         ApplyAsOnNewLine(nodes, ddl);
         ApplyBeginOnNewLine(nodes, ddl);
-        ApplyCollapseShortDDL(nodes, ddl);
+        ApplyCollapseShortDdl(nodes, ddl);
     }
 
     /// <summary>
@@ -315,6 +316,7 @@ public class DdlRules : IRuleSet
                 if (inParams && nodes[j].TokenType == TSqlTokenType.Variable && parenDepth <= 1)
                 {
                     // Find the data type that follows
+                    // ReSharper disable once ConditionIsAlwaysTrueOrFalse
                     int dtIdx = FindParameterDataType(nodes, j + 1, paramEnd >= 0 ? paramEnd : nodes.Count);
                     parameterNodes.Add((j, dtIdx));
                 }
@@ -429,9 +431,9 @@ public class DdlRules : IRuleSet
     /// collapseShortDDL: collapses short DDL statements onto a single line
     /// when they fit within collapseThreshold characters.
     /// </summary>
-    private static void ApplyCollapseShortDDL(List<LayoutNode> nodes, DdlOptions ddl)
+    private static void ApplyCollapseShortDdl(List<LayoutNode> nodes, DdlOptions ddl)
     {
-        if (!ddl.CollapseShortDDL)
+        if (!ddl.CollapseShortDdl)
             return;
 
         int i = 0;
@@ -548,6 +550,7 @@ public class DdlRules : IRuleSet
     private struct ColumnDef
     {
         public int StartIndex;
+        // ReSharper disable once NotAccessedField.Local
         public int EndIndex;
         public int DataTypeIndex;   // Index of the data type token, or -1
         public int ConstraintIndex; // Index of the first constraint token, or -1

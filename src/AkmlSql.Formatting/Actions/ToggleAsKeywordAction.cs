@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using AkmlSql.Formatting.Pipeline;
 using AkmlSql.Formatting.Profiles;
@@ -11,6 +12,8 @@ namespace AkmlSql.Formatting.Actions;
 /// When addAsKeyword is true, inserts AS before aliases that lack it.
 /// When false, removes AS from alias definitions.
 /// </summary>
+[SuppressMessage("ReSharper", "UnusedParameter.Local")]
+// ReSharper disable once UnusedMember.Global
 public class ToggleAsKeywordAction : IFormatAction
 {
     public FormatResult Execute(string sql, FormattingProfile profile)
@@ -28,6 +31,7 @@ public class ToggleAsKeywordAction : IFormatAction
             // Parse
             var parser = new TSql170Parser(initialQuotedIdentifiers: true);
             using var reader = new StringReader(sql);
+            // ReSharper disable once UnusedVariable
             var script = parser.Parse(reader, out var errors) as TSqlScript;
             var tokens = script?.ScriptTokenStream;
 
@@ -102,7 +106,6 @@ public class ToggleAsKeywordAction : IFormatAction
                     removeEnd = tokens[j].Offset + tokens[j].Text.Length;
                     break;
                 }
-                break;
             }
 
             removals.Add((removeStart, removeEnd));

@@ -8,7 +8,8 @@ namespace AkmlSql.Formatting.Layout;
 /// Supports alignment of aliases, data types, constraints, parameter defaults, and
 /// other column-aligned elements in column lists.
 /// </summary>
-public class AlignmentCalculator
+// ReSharper disable once UnusedMember.Global
+public class AlignmentCalculator(FormattingProfile profile)
 {
     /// <summary>
     /// Represents a column alignment region: a set of lines where elements should be vertically aligned.
@@ -35,19 +36,13 @@ public class AlignmentCalculator
         public int WidthBeforeTarget { get; set; }
     }
 
-    private readonly FormattingProfile _profile;
-
-    public AlignmentCalculator(FormattingProfile profile)
-    {
-        _profile = profile;
-    }
-
     /// <summary>
     /// Aligns AS aliases in a SELECT list so all AS keywords start at the same column.
     /// </summary>
+    // ReSharper disable once UnusedMember.Global
     public void AlignSelectAliases(List<LayoutNode> nodes)
     {
-        if (!_profile.List.AlignAliases)
+        if (!profile.List.AlignAliases)
             return;
 
         var regions = FindAliasRegions(nodes);
@@ -75,9 +70,10 @@ public class AlignmentCalculator
     /// <summary>
     /// Aligns data types in CREATE TABLE column definitions so all data types start at the same column.
     /// </summary>
+    // ReSharper disable once UnusedMember.Global
     public void AlignDataTypes(List<LayoutNode> nodes)
     {
-        if (!_profile.Ddl.AlignDataTypes)
+        if (!profile.Ddl.AlignDataTypes)
             return;
 
         var regions = FindDataTypeRegions(nodes);
@@ -109,9 +105,10 @@ public class AlignmentCalculator
     /// Aligns inline constraints (NULL, NOT NULL, DEFAULT, etc.) in CREATE TABLE columns
     /// so constraints start at the same column.
     /// </summary>
+    // ReSharper disable once UnusedMember.Global
     public void AlignConstraints(List<LayoutNode> nodes)
     {
-        if (!_profile.Ddl.AlignConstraints)
+        if (!profile.Ddl.AlignConstraints)
             return;
 
         var regions = FindConstraintRegions(nodes);
@@ -142,9 +139,10 @@ public class AlignmentCalculator
     /// <summary>
     /// Aligns parameter data types in procedure/function definitions.
     /// </summary>
+    // ReSharper disable once UnusedMember.Global
     public void AlignParameterDataTypes(List<LayoutNode> nodes)
     {
-        if (!_profile.Ddl.AlignParameterDataTypes)
+        if (!profile.Ddl.AlignParameterDataTypes)
             return;
 
         var regions = FindParameterDataTypeRegions(nodes);
@@ -175,9 +173,10 @@ public class AlignmentCalculator
     /// <summary>
     /// Aligns VALUES in INSERT statements across multiple value rows.
     /// </summary>
+    // ReSharper disable once UnusedMember.Global
     public void AlignInsertValues(List<LayoutNode> nodes)
     {
-        if (!_profile.List.AlignValuesInInsert)
+        if (!profile.List.AlignValuesInInsert)
             return;
 
         // Find INSERT...VALUES regions with multiple value rows
@@ -222,6 +221,7 @@ public class AlignmentCalculator
                 {
                     if (width < maxColWidth && nodes[nodeIndex].PrecedingBreak == BreakType.None)
                     {
+                        // ReSharper disable once UnusedVariable
                         int extraPadding = maxColWidth - width;
                         // We add padding after the value by adjusting the next token's spacing
                         // For simplicity, pad the token's preceding spaces
@@ -461,8 +461,7 @@ public class AlignmentCalculator
 
     private class ValueRow
     {
-        public int OpenParenIndex { get; set; }
-        public int CloseParenIndex { get; set; }
+        public int CloseParenIndex { get; init; }
         public List<int> ColumnIndices { get; } = [];
     }
 
@@ -480,7 +479,6 @@ public class AlignmentCalculator
 
                 var row = new ValueRow
                 {
-                    OpenParenIndex = i,
                     CloseParenIndex = closeParen,
                 };
 
@@ -499,7 +497,6 @@ public class AlignmentCalculator
             }
             else if (nodes[i].TokenType == TSqlTokenType.Comma)
             {
-                continue; // Comma between value rows
             }
             else if (nodes[i].TokenType == TSqlTokenType.Semicolon ||
                      nodes[i].TokenType == TSqlTokenType.Go)

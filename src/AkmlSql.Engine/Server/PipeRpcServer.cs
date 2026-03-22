@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.IO.Pipes;
 using System.Security.AccessControl;
 using System.Security.Principal;
@@ -12,9 +13,13 @@ using AkmlSql.Engine.Schema;
 using AkmlSql.Formatting.Profiles;
 using MessagePack;
 using Serilog;
+// ReSharper disable MethodSupportsCancellation
+#pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type.
+#pragma warning disable CA1416
 
 namespace AkmlSql.Engine.Server;
 
+[SuppressMessage("ReSharper", "UnusedParameter.Local")]
 public class PipeRpcServer
 {
     private readonly string _pipeName;
@@ -90,14 +95,11 @@ public class PipeRpcServer
             }
 
             var response = await DispatchAsync(message, ct);
-            if (response != null)
-            {
-                await FrameProtocol.WriteFramedAsync(pipe, response, ct);
-            }
+            await FrameProtocol.WriteFramedAsync(pipe, response, ct);
         }
     }
 
-    private async Task<RpcMessage?> DispatchAsync(RpcMessage message, CancellationToken ct)
+    private Task<RpcMessage?> DispatchAsync(RpcMessage message, CancellationToken ct)
     {
         try
         {
@@ -106,7 +108,7 @@ public class PipeRpcServer
                 case MessageTypes.ConnectionChanged:
                     if (message.Payload == null)
                     {
-                        return CreateErrorResponse("Payload required", message.RequestId);
+                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
                     }
 
                     var connInfo = MessagePackSerializer.Deserialize<ConnectionInfo>(message.Payload);
@@ -134,22 +136,22 @@ public class PipeRpcServer
                             Log.Error(ex, "Background Phase A population failed for {Db}", connInfo.DatabaseName);
                         }
                     });
-                    return null; // notification, no response
+                    return Task.FromResult<RpcMessage?>(null); // notification, no response
 
                 case MessageTypes.DocumentChanged:
                     if (message.Payload == null)
                     {
-                        return CreateErrorResponse("Payload required", message.RequestId);
+                        return Task.FromResult<RpcMessage?>(CreateErrorResponse("Payload required", message.RequestId));
                     }
 
                     var docChange = MessagePackSerializer.Deserialize<DocumentChange>(message.Payload);
                     _sessionManager.UpdateDocument(docChange);
-                    return null;
+                    return Task.FromResult<RpcMessage?>(null);
 
                 case MessageTypes.RequestCompletion:
                     if (message.Payload == null)
                     {
-                        return CreateErrorResponse("Payload required", message.RequestId);
+                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
                     }
 
                     var compReq = MessagePackSerializer.Deserialize<CompletionRequest>(message.Payload);
@@ -159,12 +161,12 @@ public class PipeRpcServer
                         ? _schemaCacheManager.GetCache(compReq.SessionId, session.DatabaseName)
                         : null;
                     var compResp = _completionEngine.GetCompletions(documentText, compReq.CursorOffset, dbCache);
-                    return CreateResponse(MessageTypes.CompletionResult, message.RequestId, compResp);
+                    return Task.FromResult(CreateResponse(MessageTypes.CompletionResult, message.RequestId, compResp));
 
                 case MessageTypes.RequestSignatureHelp:
                     if (message.Payload == null)
                     {
-                        return CreateErrorResponse("Payload required", message.RequestId);
+                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
                     }
 
                     var sigReq = MessagePackSerializer.Deserialize<SignatureRequest>(message.Payload);
@@ -180,12 +182,12 @@ public class PipeRpcServer
                         ? SignatureProvider.CountCommasBeforeCursor(sigTokens, sigReq.CursorOffset, parenOffset)
                         : 0;
                     var sigResp = _signatureProvider.GetSignature(funcName, paramIdx, sigCache);
-                    return CreateResponse(MessageTypes.SignatureHelpResult, message.RequestId, sigResp);
+                    return Task.FromResult(CreateResponse(MessageTypes.SignatureHelpResult, message.RequestId, sigResp));
 
                 case MessageTypes.RequestQuickInfo:
                     if (message.Payload == null)
                     {
-                        return CreateErrorResponse("Payload required", message.RequestId);
+                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
                     }
 
                     var qiReq = MessagePackSerializer.Deserialize<QuickInfoRequest>(message.Payload);
@@ -195,12 +197,12 @@ public class PipeRpcServer
                         ? _schemaCacheManager.GetCache(qiReq.SessionId, qiSession.DatabaseName)
                         : null;
                     var qiResp = _quickInfoProvider.GetQuickInfo(qiText, qiReq.CursorOffset, qiCache, _parserService);
-                    return CreateResponse(MessageTypes.QuickInfoResult, message.RequestId, qiResp);
+                    return Task.FromResult(CreateResponse(MessageTypes.QuickInfoResult, message.RequestId, qiResp));
 
                 case MessageTypes.SchemaRefreshRequest:
                     if (message.Payload == null)
                     {
-                        return CreateErrorResponse("Payload required", message.RequestId);
+                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
                     }
 
                     var refreshReq = MessagePackSerializer.Deserialize<RefreshRequest>(message.Payload);
@@ -217,7 +219,7 @@ public class PipeRpcServer
                         }
                     }
                     var refResp = new RefreshResponse { Success = true, ObjectCount = refreshedCount };
-                    return CreateResponse(MessageTypes.SchemaRefreshComplete, message.RequestId, refResp);
+                    return Task.FromResult(CreateResponse(MessageTypes.SchemaRefreshComplete, message.RequestId, refResp));
 
                 case MessageTypes.Ping:
                     var status = new EngineStatusInfo
@@ -227,153 +229,153 @@ public class PipeRpcServer
                         ActiveSessions = _sessionManager.SessionCount,
                         UptimeSeconds = 0
                     };
-                    return CreateResponse(MessageTypes.Pong, message.RequestId, status);
+                    return Task.FromResult(CreateResponse(MessageTypes.Pong, message.RequestId, status));
 
                 case MessageTypes.FormatDocument:
                     if (message.Payload == null)
                     {
-                        return CreateErrorResponse("Payload required", message.RequestId);
+                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
                     }
 
                     var fmtReq = MessagePackSerializer.Deserialize<FormatRequest>(message.Payload);
                     var fmtResp = _formatHandler.HandleFormat(fmtReq);
-                    return CreateResponse(MessageTypes.FormatDocumentResult, message.RequestId, fmtResp);
+                    return Task.FromResult(CreateResponse(MessageTypes.FormatDocumentResult, message.RequestId, fmtResp));
 
                 case MessageTypes.FormatSelection:
                     if (message.Payload == null)
                     {
-                        return CreateErrorResponse("Payload required", message.RequestId);
+                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
                     }
 
                     var fmtSelReq = MessagePackSerializer.Deserialize<FormatSelectionRequest>(message.Payload);
                     var fmtSelResp = _formatHandler.HandleFormatSelection(fmtSelReq);
-                    return CreateResponse(MessageTypes.FormatSelectionResult, message.RequestId, fmtSelResp);
+                    return Task.FromResult(CreateResponse(MessageTypes.FormatSelectionResult, message.RequestId, fmtSelResp));
 
                 case MessageTypes.FormatPreview:
                     if (message.Payload == null)
                     {
-                        return CreateErrorResponse("Payload required", message.RequestId);
+                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
                     }
 
                     var fmtPrevReq = MessagePackSerializer.Deserialize<FormatPreviewRequest>(message.Payload);
                     var fmtPrevResp = _formatHandler.HandleFormatPreview(fmtPrevReq);
-                    return CreateResponse(MessageTypes.FormatPreviewResult, message.RequestId, fmtPrevResp);
+                    return Task.FromResult(CreateResponse(MessageTypes.FormatPreviewResult, message.RequestId, fmtPrevResp));
 
                 case MessageTypes.FormatAction:
                     if (message.Payload == null)
                     {
-                        return CreateErrorResponse("Payload required", message.RequestId);
+                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
                     }
 
                     var fmtActReq = MessagePackSerializer.Deserialize<FormatActionRequest>(message.Payload);
                     var fmtActResp = _formatHandler.HandleFormatAction(fmtActReq);
-                    return CreateResponse(MessageTypes.FormatActionResult, message.RequestId, fmtActResp);
+                    return Task.FromResult(CreateResponse(MessageTypes.FormatActionResult, message.RequestId, fmtActResp));
 
                 case MessageTypes.ProfileList:
                     var profListResp = _formatHandler.HandleProfileList();
-                    return CreateResponse(MessageTypes.ProfileListResult, message.RequestId, profListResp);
+                    return Task.FromResult(CreateResponse(MessageTypes.ProfileListResult, message.RequestId, profListResp));
 
                 case MessageTypes.ProfileSave:
                     if (message.Payload == null)
                     {
-                        return CreateErrorResponse("Payload required", message.RequestId);
+                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
                     }
 
                     var profSaveReq = MessagePackSerializer.Deserialize<ProfileSaveRequest>(message.Payload);
                     var profSaveResp = _formatHandler.HandleProfileSave(profSaveReq);
-                    return CreateResponse(MessageTypes.ProfileSaveResult, message.RequestId, profSaveResp);
+                    return Task.FromResult(CreateResponse(MessageTypes.ProfileSaveResult, message.RequestId, profSaveResp));
 
                 case MessageTypes.ProfileDelete:
                     if (message.Payload == null)
                     {
-                        return CreateErrorResponse("Payload required", message.RequestId);
+                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
                     }
 
                     var profDelReq = MessagePackSerializer.Deserialize<ProfileDeleteRequest>(message.Payload);
                     var profDelResp = _formatHandler.HandleProfileDelete(profDelReq);
-                    return CreateResponse(MessageTypes.ProfileDeleteResult, message.RequestId, profDelResp);
+                    return Task.FromResult(CreateResponse(MessageTypes.ProfileDeleteResult, message.RequestId, profDelResp));
 
                 case MessageTypes.ProfileImport:
                     if (message.Payload == null)
                     {
-                        return CreateErrorResponse("Payload required", message.RequestId);
+                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
                     }
 
                     var profImpReq = MessagePackSerializer.Deserialize<ProfileImportRequest>(message.Payload);
                     var profImpResp = _formatHandler.HandleProfileImport(profImpReq);
-                    return CreateResponse(MessageTypes.ProfileImportResult, message.RequestId, profImpResp);
+                    return Task.FromResult(CreateResponse(MessageTypes.ProfileImportResult, message.RequestId, profImpResp));
 
                 case MessageTypes.BulkFormat:
                     if (message.Payload == null)
                     {
-                        return CreateErrorResponse("Payload required", message.RequestId);
+                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
                     }
 
                     var bulkReq = MessagePackSerializer.Deserialize<BulkFormatRequest>(message.Payload);
                     var bulkResp = _formatHandler.HandleBulkFormatAsync(bulkReq).GetAwaiter().GetResult();
-                    return CreateResponse(MessageTypes.BulkFormatResult, message.RequestId, bulkResp);
+                    return Task.FromResult(CreateResponse(MessageTypes.BulkFormatResult, message.RequestId, bulkResp));
 
                 case MessageTypes.BulkFormatCancel:
                     if (message.Payload == null)
                     {
-                        return CreateErrorResponse("Payload required", message.RequestId);
+                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
                     }
 
                     var bulkCancelReq = MessagePackSerializer.Deserialize<BulkFormatCancelRequest>(message.Payload);
                     _formatHandler.HandleBulkFormatCancel(bulkCancelReq);
-                    return null; // notification, no response
+                    return Task.FromResult<RpcMessage?>(null); // notification, no response
 
                 case MessageTypes.SnippetExpand:
                     if (message.Payload == null)
                     {
-                        return CreateErrorResponse("Payload required", message.RequestId);
+                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
                     }
 
                     var snipExpandReq = MessagePackSerializer.Deserialize<SnippetExpandRequest>(message.Payload);
                     var snipSession = _sessionManager.GetSession(snipExpandReq.SessionId);
                     var snipExpandResp = _snippetHandler.HandleExpand(
                         snipExpandReq, snipSession?.DatabaseName);
-                    return CreateResponse(MessageTypes.SnippetExpandResult, message.RequestId, snipExpandResp);
+                    return Task.FromResult(CreateResponse(MessageTypes.SnippetExpandResult, message.RequestId, snipExpandResp));
 
                 case MessageTypes.SnippetList:
                     if (message.Payload == null)
                     {
-                        return CreateErrorResponse("Payload required", message.RequestId);
+                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
                     }
 
                     var snipListReq = MessagePackSerializer.Deserialize<SnippetListRequest>(message.Payload);
                     var snipListResp = _snippetHandler.HandleList(snipListReq);
-                    return CreateResponse(MessageTypes.SnippetListResult, message.RequestId, snipListResp);
+                    return Task.FromResult(CreateResponse(MessageTypes.SnippetListResult, message.RequestId, snipListResp));
 
                 case MessageTypes.SnippetSave:
                     if (message.Payload == null)
                     {
-                        return CreateErrorResponse("Payload required", message.RequestId);
+                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
                     }
 
                     var snipSaveReq = MessagePackSerializer.Deserialize<SnippetSaveRequest>(message.Payload);
                     var snipSaveResp = _snippetHandler.HandleSave(snipSaveReq);
-                    return CreateResponse(MessageTypes.SnippetSaveResult, message.RequestId, snipSaveResp);
+                    return Task.FromResult(CreateResponse(MessageTypes.SnippetSaveResult, message.RequestId, snipSaveResp));
 
                 case MessageTypes.SnippetDelete:
                     if (message.Payload == null)
                     {
-                        return CreateErrorResponse("Payload required", message.RequestId);
+                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
                     }
 
                     var snipDelReq = MessagePackSerializer.Deserialize<SnippetDeleteRequest>(message.Payload);
                     var snipDelResp = _snippetHandler.HandleDelete(snipDelReq);
-                    return CreateResponse(MessageTypes.SnippetDeleteResult, message.RequestId, snipDelResp);
+                    return Task.FromResult(CreateResponse(MessageTypes.SnippetDeleteResult, message.RequestId, snipDelResp));
 
                 case MessageTypes.SnippetImport:
                     if (message.Payload == null)
                     {
-                        return CreateErrorResponse("Payload required", message.RequestId);
+                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
                     }
 
                     var snipImpReq = MessagePackSerializer.Deserialize<SnippetImportRequest>(message.Payload);
                     var snipImpResp = _snippetHandler.HandleImport(snipImpReq);
-                    return CreateResponse(MessageTypes.SnippetImportResult, message.RequestId, snipImpResp);
+                    return Task.FromResult(CreateResponse(MessageTypes.SnippetImportResult, message.RequestId, snipImpResp));
 
                 case MessageTypes.Shutdown:
                     Log.Information("Shutdown requested by client.");
@@ -381,7 +383,7 @@ public class PipeRpcServer
 
                 default:
                     Log.Warning("Unknown message type: {Type}", message.MessageType);
-                    return null;
+                    return Task.FromResult<RpcMessage?>(null);
             }
         }
         catch (OperationCanceledException)
@@ -392,7 +394,7 @@ public class PipeRpcServer
         {
             Log.Error(ex, "Error dispatching message type {Type}", message.MessageType);
             var errorInfo = new ErrorInfo { Code = -1, Message = ex.Message };
-            return CreateResponse(MessageTypes.Error, message.RequestId, errorInfo);
+            return Task.FromResult(CreateResponse(MessageTypes.Error, message.RequestId, errorInfo));
         }
     }
 
@@ -474,11 +476,12 @@ public class PipeRpcServer
     private static PipeSecurity CreatePipeSecurity()
     {
         var security = new PipeSecurity();
-        var currentUser = WindowsIdentity.GetCurrent().User!;
-        security.AddAccessRule(new PipeAccessRule(
-            currentUser,
-            PipeAccessRights.FullControl,
-            AccessControlType.Allow));
+        var currentUser = WindowsIdentity.GetCurrent().User;
+        if (currentUser != null)
+            security.AddAccessRule(new PipeAccessRule(
+                currentUser,
+                PipeAccessRights.FullControl,
+                AccessControlType.Allow));
         security.AddAccessRule(new PipeAccessRule(
             new SecurityIdentifier(WellKnownSidType.NetworkSid, null),
             PipeAccessRights.FullControl,

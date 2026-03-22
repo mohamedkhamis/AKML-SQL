@@ -1,9 +1,12 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace AkmlSql.Formatting.Profiles;
 
 /// <summary>
 /// Manages loading, saving, listing, and deleting formatting profiles (.akmlstyle files).
 /// Built-in profiles come from an install directory; custom profiles live in %AppData%.
 /// </summary>
+[SuppressMessage("ReSharper", "GrammarMistakeInComment")]
 public class ProfileManager
 {
     private const string ProfileExtension = ".akmlstyle";

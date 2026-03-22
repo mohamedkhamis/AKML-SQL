@@ -16,7 +16,7 @@ namespace AkmlSql.Shell.Shared.IntelliSense
     public sealed class NativeIntelliSenseManager
     {
         private static NativeIntelliSenseManager _instance;
-        private static readonly object s_lock = new object();
+        private static readonly object SLock = new();
         private bool _initialized;
 
         private NativeIntelliSenseManager() { }
@@ -27,7 +27,7 @@ namespace AkmlSql.Shell.Shared.IntelliSense
             {
                 if (_instance == null)
                 {
-                    lock (s_lock)
+                    lock (SLock)
                     {
                         if (_instance == null)
                         {
