@@ -57,5 +57,14 @@
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\QualifyNamesCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\ToggleBracketsCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\ToggleAsCommand.cs" />
+    <!-- Analysis: real-time squiggles, error list, lightbulb fix actions -->
+    <Compile Include="$(MSBuildThisFileDirectory)Analysis\AnalysisController.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Analysis\DiagnosticTagger.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Analysis\ErrorListReporter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Analysis\FixAction.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Analysis\LightbulbProvider.cs" />
+    <!-- Bulk analysis command and result dialog -->
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\BulkAnalysisCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Dialogs\BulkAnalysisResultDialog.cs" />
   </ItemGroup>
 </Project>

@@ -2,7 +2,9 @@ using System;
 using System.ComponentModel.Design;
 using System.Windows.Forms;
 using AkmlSql.Core.Config;
+using AkmlSql.Core.Ipc;
 using AkmlSql.Shell.Shared.Dialogs;
+using AkmlSql.Shell.Shared.Ipc;
 using Microsoft.VisualStudio.Shell;
 using Serilog;
 using Constants = AkmlSql.Core.Constants;
@@ -42,6 +44,15 @@ namespace AkmlSql.Shell.Shared.Commands
                         var updated = dialog.GetSettings();
                         ConfigManager.Save(updated);
                         Log.Information("Settings saved successfully.");
+
+                        // T066: Notify the engine to reload its settings cache (fire-and-forget)
+                        var client = EngineLifecycle.Manager?.Client;
+                        if (client != null && client.IsConnected)
+                        {
+                            _ = client.SendNotificationAsync(
+                                MessageTypes.AnalysisSettingsChanged,
+                                new { });
+                        }
                     }
                 }
             }

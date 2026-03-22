@@ -25,6 +25,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\AkmlSql.Engine\AkmlSql.Engine.csproj" />
+    <ProjectReference Include="..\..\src\AkmlSql.Analyzer\AkmlSql.Analyzer.csproj" />
   </ItemGroup>
 
 </Project>

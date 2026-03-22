@@ -1,7 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
+using System.IO;
+using System.Linq;
+using System.Text.Json;
 using System.Windows.Forms;
 using AkmlSql.Core.Config;
+using AkmlSql.Core.Models.Analysis;
 using Constants = AkmlSql.Core.Constants;
 
 namespace AkmlSql.Shell.Shared.Dialogs
@@ -56,6 +61,13 @@ namespace AkmlSql.Shell.Shared.Dialogs
         private TextBox _txtPersonalFolder;
         private TextBox _txtTeamFolder;
 
+        // Code Analysis
+        private CheckBox      _chkAnalysisEnabled;
+        private CheckBox      _chkAnalysisRunOnType;
+        private CheckBox      _chkAnalysisRunOnSave;
+        private CheckBox      _chkAnalysisShowInErrorList;
+        private DataGridView  _gridRules;
+
         public SettingsDialog(AppSettings settings)
         {
             _settings = settings;
@@ -90,6 +102,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             tabControl.TabPages.Add(CreateCacheTab());
             tabControl.TabPages.Add(CreateFormatterTab());
             tabControl.TabPages.Add(CreateSnippetsTab());
+            tabControl.TabPages.Add(CreateCodeAnalysisTab());
 
             var buttonPanel = new Panel
             {
@@ -240,6 +253,144 @@ namespace AkmlSql.Shell.Shared.Dialogs
             return tab;
         }
 
+        // ─── Static rule catalog (shell side — no Engine DLL required) ───────────────
+        private static readonly (string Id, string Category, string Description, string DefaultSeverity)[] KnownRules =
+        [
+            ("PE001", "Performance",  "Avoid SELECT * in stored procedures",                    "Warning"),
+            ("PE002", "Performance",  "Unqualified object name — add schema prefix",             "Warning"),
+            ("PE003", "Performance",  "DELETE/UPDATE without WHERE clause",                      "Error"),
+            ("PE004", "Performance",  "LIKE pattern with leading wildcard — forces table scan",  "Warning"),
+            ("PE009", "Performance",  "Stored procedure missing SET NOCOUNT ON",                 "Warning"),
+            ("PE010", "Performance",  "EXISTS (SELECT *) — replace with SELECT 1",              "Warning"),
+            ("BP001", "BestPractice", "Use SCOPE_IDENTITY() instead of @@IDENTITY",             "Warning"),
+            ("BP004", "BestPractice", "Use IS NULL / IS NOT NULL instead of = NULL",            "Error"),
+            ("SE001", "Security",     "Dynamic SQL string concatenation — SQL injection risk",   "Error"),
+            ("DEP001","Deprecated",   "Deprecated data type: text / ntext / image",              "Warning"),
+        ];
+
+        private TabPage CreateCodeAnalysisTab()
+        {
+            var tab = new TabPage("Code Analysis") { AutoScroll = true };
+            var y = 20;
+
+            AddSectionLabel(tab, "General", ref y);
+            _chkAnalysisEnabled         = AddCheckBox(tab, "Enable code analysis",         ref y);
+            _chkAnalysisRunOnType       = AddCheckBox(tab, "Analyze while typing",         ref y);
+            _chkAnalysisRunOnSave       = AddCheckBox(tab, "Analyze on save",              ref y);
+            _chkAnalysisShowInErrorList = AddCheckBox(tab, "Show issues in Error List",    ref y);
+
+            y += 10;
+            AddSectionLabel(tab, "Rules", ref y);
+
+            // DataGridView -------------------------------------------------------
+            var colEnabled  = new DataGridViewCheckBoxColumn { HeaderText = "Enabled",  Width = 65,  ReadOnly = false, Name = "Enabled" };
+            var colId       = new DataGridViewTextBoxColumn  { HeaderText = "Rule ID",  Width = 75,  ReadOnly = true,  Name = "RuleId" };
+            var colCategory = new DataGridViewTextBoxColumn  { HeaderText = "Category", Width = 100, ReadOnly = true,  Name = "Category" };
+            var colDesc     = new DataGridViewTextBoxColumn  { HeaderText = "Description", AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, ReadOnly = true, Name = "Description" };
+            var colSeverity = new DataGridViewComboBoxColumn
+            {
+                HeaderText = "Severity", Width = 100, Name = "Severity",
+                DataSource = new[] { "Error", "Warning", "Information", "Hint" }
+            };
+
+            _gridRules = new DataGridView
+            {
+                Location           = new Point(15, y),
+                Size               = new Size(tab.ClientSize.Width > 0 ? tab.ClientSize.Width - 30 : 530, 200),
+                Anchor             = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+                AllowUserToAddRows    = false,
+                AllowUserToDeleteRows = false,
+                RowHeadersVisible     = false,
+                AutoSizeRowsMode      = DataGridViewAutoSizeRowsMode.AllCells,
+                SelectionMode         = DataGridViewSelectionMode.FullRowSelect,
+            };
+            _gridRules.Columns.AddRange(colEnabled, colId, colCategory, colDesc, colSeverity);
+
+            foreach (var (id, cat, desc, sev) in KnownRules)
+                _gridRules.Rows.Add(true, id, cat, desc, sev);
+
+            tab.Controls.Add(_gridRules);
+            y += 210;
+
+            // Import / Export buttons --------------------------------------------
+            var btnImport = new Button { Text = "Import CAsettings...", Location = new Point(15, y), Size = new Size(160, 28) };
+            var btnExport = new Button { Text = "Export CAsettings...", Location = new Point(185, y), Size = new Size(160, 28) };
+            btnImport.Click += OnImportCaSettings;
+            btnExport.Click += OnExportCaSettings;
+            tab.Controls.Add(btnImport);
+            tab.Controls.Add(btnExport);
+
+            return tab;
+        }
+
+        private void OnImportCaSettings(object sender, EventArgs e)
+        {
+            using var dlg = new OpenFileDialog
+            {
+                Title  = "Import CAsettings",
+                Filter = "CAsettings files (*.casettings*;*.json)|*.casettings;*.casettings.json;*.json|All files (*.*)|*.*"
+            };
+            if (dlg.ShowDialog() != DialogResult.OK) return;
+            try
+            {
+                var json = File.ReadAllText(dlg.FileName);
+                var ca   = JsonSerializer.Deserialize<CaSettings>(json,
+                               new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                if (ca?.Rules == null) return;
+
+                foreach (DataGridViewRow row in _gridRules.Rows)
+                {
+                    var ruleId = row.Cells["RuleId"].Value as string;
+                    if (ruleId != null && ca.Rules.TryGetValue(ruleId, out var cfg))
+                    {
+                        row.Cells["Enabled"].Value  = cfg.Enabled;
+                        row.Cells["Severity"].Value = cfg.Severity ?? "Warning";
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Failed to import: " + ex.Message, Constants.ProductName,
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+
+        private void OnExportCaSettings(object sender, EventArgs e)
+        {
+            using var dlg = new SaveFileDialog
+            {
+                Title      = "Export CAsettings",
+                Filter     = "CAsettings JSON (*.casettings)|*.casettings|JSON file (*.json)|*.json",
+                FileName   = ".casettings",
+                DefaultExt = "casettings"
+            };
+            if (dlg.ShowDialog() != DialogResult.OK) return;
+            try
+            {
+                var rules = new Dictionary<string, RuleConfig>();
+                foreach (DataGridViewRow row in _gridRules.Rows)
+                {
+                    var ruleId = row.Cells["RuleId"].Value as string;
+                    if (string.IsNullOrEmpty(ruleId)) continue;
+                    rules[ruleId] = new RuleConfig
+                    {
+                        Enabled  = row.Cells["Enabled"].Value is true,
+                        Severity = row.Cells["Severity"].Value as string ?? "Warning"
+                    };
+                }
+                var ca  = new CaSettings { Rules = rules };
+                var opt = new JsonSerializerOptions { WriteIndented = true };
+                File.WriteAllText(dlg.FileName, JsonSerializer.Serialize(ca, opt));
+                MessageBox.Show("Settings exported to " + dlg.FileName, Constants.ProductName,
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Failed to export: " + ex.Message, Constants.ProductName,
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+
         private void LoadSettingsToControls()
         {
             // General
@@ -291,6 +442,40 @@ namespace AkmlSql.Shell.Shared.Dialogs
             _chkSnipTrackUsage.Checked = s.TrackUsage;
             _txtPersonalFolder.Text = s.PersonalFolder;
             _txtTeamFolder.Text = s.TeamFolder;
+
+            // Code Analysis
+            var ca = _settings.CodeAnalysis;
+            _chkAnalysisEnabled.Checked         = ca.Enabled;
+            _chkAnalysisRunOnType.Checked        = ca.RunOnType;
+            _chkAnalysisRunOnSave.Checked        = ca.RunOnSave;
+            _chkAnalysisShowInErrorList.Checked  = ca.ShowInErrorList;
+
+            // Populate rule grid from user-level .casettings file
+            try
+            {
+                var settingsPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "AKML SQL", ".casettings");
+                if (File.Exists(settingsPath))
+                {
+                    var saved = JsonSerializer.Deserialize<CaSettings>(
+                        File.ReadAllText(settingsPath),
+                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    if (saved?.Rules != null)
+                    {
+                        foreach (DataGridViewRow row in _gridRules.Rows)
+                        {
+                            var ruleId = row.Cells["RuleId"].Value as string;
+                            if (ruleId != null && saved.Rules.TryGetValue(ruleId, out var cfg))
+                            {
+                                row.Cells["Enabled"].Value  = cfg.Enabled;
+                                row.Cells["Severity"].Value = cfg.Severity ?? "Warning";
+                            }
+                        }
+                    }
+                }
+            }
+            catch { /* ignore; defaults are already populated */ }
         }
 
         private void SaveControlsToSettings()
@@ -340,6 +525,62 @@ namespace AkmlSql.Shell.Shared.Dialogs
             _settings.Snippets.TrackUsage = _chkSnipTrackUsage.Checked;
             _settings.Snippets.PersonalFolder = _txtPersonalFolder.Text.Trim();
             _settings.Snippets.TeamFolder = _txtTeamFolder.Text.Trim();
+
+            // Code Analysis
+            _settings.CodeAnalysis.Enabled         = _chkAnalysisEnabled.Checked;
+            _settings.CodeAnalysis.RunOnType        = _chkAnalysisRunOnType.Checked;
+            _settings.CodeAnalysis.RunOnSave        = _chkAnalysisRunOnSave.Checked;
+            _settings.CodeAnalysis.ShowInErrorList  = _chkAnalysisShowInErrorList.Checked;
+
+            // Persist rule enable/severity overrides to the user-level .casettings file
+            SaveRuleGridToCaSettings();
+        }
+
+        private void SaveRuleGridToCaSettings()
+        {
+            try
+            {
+                var userDir      = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AKML SQL");
+                Directory.CreateDirectory(userDir);
+                var settingsPath = Path.Combine(userDir, ".casettings");
+
+                // Load existing file to preserve any rules not shown in the grid
+                var existing = new Dictionary<string, RuleConfig>();
+                if (File.Exists(settingsPath))
+                {
+                    try
+                    {
+                        var ca = JsonSerializer.Deserialize<CaSettings>(
+                            File.ReadAllText(settingsPath),
+                            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                        if (ca?.Rules != null)
+                            foreach (var kvp in ca.Rules)
+                                existing[kvp.Key] = kvp.Value;
+                    }
+                    catch { /* ignore corrupt file */ }
+                }
+
+                // Merge grid state (grid rows take precedence)
+                foreach (DataGridViewRow row in _gridRules.Rows)
+                {
+                    var ruleId = row.Cells["RuleId"].Value as string;
+                    if (string.IsNullOrEmpty(ruleId)) continue;
+                    existing[ruleId] = new RuleConfig
+                    {
+                        Enabled  = row.Cells["Enabled"].Value is true,
+                        Severity = row.Cells["Severity"].Value as string ?? "Warning"
+                    };
+                }
+
+                var output = new CaSettings { Rules = existing };
+                File.WriteAllText(settingsPath, JsonSerializer.Serialize(output,
+                    new JsonSerializerOptions { WriteIndented = true }));
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Warning(ex, "SettingsDialog: failed to save rule grid to .casettings");
+            }
         }
 
         // --- Layout helpers ---

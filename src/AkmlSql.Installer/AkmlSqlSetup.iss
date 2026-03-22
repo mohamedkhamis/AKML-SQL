@@ -59,6 +59,7 @@ Source: "..\AkmlSql.Ssms22\bin\Release\net472\Serilog.dll"; DestDir: "{app}"; Fl
 Source: "..\AkmlSql.Ssms22\bin\Release\net472\Serilog.Sinks.File.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\AkmlSql.Updater\bin\Release\net10.0\win-x64\publish\AkmlSql.Updater.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\AkmlSql.Engine.exe"; DestDir: "{app}\Engine"; Flags: ignoreversion
+Source: "..\AkmlSql.Analyzer\bin\Release\net10.0\win-x64\publish\AkmlSql.Analyzer.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 ; SSMS 20 (x86) extension files — all DLLs from build output plus pkgdef and manifest

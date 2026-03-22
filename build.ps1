@@ -105,6 +105,10 @@ Invoke-Build "Formatter CLI (publish)" {
     dotnet publish "$Root\src\AkmlSql.Formatter\AkmlSql.Formatter.csproj" -c $Configuration -v quiet --nologo
 }
 
+Invoke-Build "Analyzer CLI (publish)" {
+    dotnet publish "$Root\src\AkmlSql.Analyzer\AkmlSql.Analyzer.csproj" -c $Configuration -r win-x64 -v quiet --nologo
+}
+
 # --- Shell extensions (MSBuild, one at a time) ---
 if (-not $SkipShell) {
     Build-Shell "src\AkmlSql.Ssms20\AkmlSql.Ssms20.csproj"

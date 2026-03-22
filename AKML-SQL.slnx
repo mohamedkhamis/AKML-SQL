@@ -11,6 +11,7 @@
     <Project Path="src/AkmlSql.Engine/AkmlSql.Engine.csproj" />
     <Project Path="src/AkmlSql.Formatting/AkmlSql.Formatting.csproj" />
     <Project Path="src/AkmlSql.Formatter/AkmlSql.Formatter.csproj" />
+    <Project Path="src/AkmlSql.Analyzer/AkmlSql.Analyzer.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/AkmlSql.Core.Tests/AkmlSql.Core.Tests.csproj" />

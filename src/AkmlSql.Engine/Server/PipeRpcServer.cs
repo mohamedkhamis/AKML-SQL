@@ -6,6 +6,7 @@ using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Engine.Completion;
 using AkmlSql.Engine.Completion.Providers;
+using AkmlSql.Engine.Analysis;
 using AkmlSql.Engine.Formatter;
 using AkmlSql.Engine.Snippets;
 using AkmlSql.Engine.Parser;
@@ -32,12 +33,15 @@ public class PipeRpcServer
     private readonly QuickInfoProvider _quickInfoProvider = new();
     private readonly FormatRequestHandler _formatHandler;
     private readonly SnippetRequestHandler _snippetHandler;
+    private readonly AnalysisEngine _analysisEngine;
+    private readonly CaSettingsLoader _caSettingsLoader = new();
 
     public PipeRpcServer(string pipeName)
     {
         _pipeName = pipeName;
         _completionEngine = new CompletionEngine(_parserService);
         _formatHandler = new FormatRequestHandler(ProfileManager.CreateDefault());
+        _analysisEngine = new AnalysisEngine(_parserService, new RuleRegistry(), _caSettingsLoader);
 
         var appDataFolder = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AKML SQL");
@@ -380,6 +384,19 @@ public class PipeRpcServer
                     var snipImpResp = _snippetHandler.HandleImport(snipImpReq);
                     return Task.FromResult(CreateResponse(MessageTypes.SnippetImportResult, message.RequestId, snipImpResp));
 
+                case MessageTypes.RequestAnalyze:
+                    if (message.Payload == null)
+                    {
+                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
+                    }
+
+                    var analyzeReq = MessagePackSerializer.Deserialize<CodeAnalysisRequest>(message.Payload);
+                    return AnalyzeAsync(analyzeReq, message.RequestId, ct);
+
+                case MessageTypes.AnalysisSettingsChanged:
+                    _caSettingsLoader.InvalidateCache();
+                    return Task.FromResult<RpcMessage?>(null);
+
                 case MessageTypes.Shutdown:
                     Log.Information("Shutdown requested by client.");
                     throw new OperationCanceledException("Shutdown requested");
@@ -457,6 +474,26 @@ public class PipeRpcServer
         }
 
         return (string.Empty, -1);
+    }
+
+    private async Task<RpcMessage?> AnalyzeAsync(CodeAnalysisRequest req, int requestId, CancellationToken ct)
+    {
+        try
+        {
+            var globalSettings = AkmlSql.Core.Config.ConfigManager.Load().CodeAnalysis;
+            var response = await _analysisEngine.AnalyzeAsync(
+                req, _sessionManager, _schemaCacheManager, globalSettings, ct);
+            return CreateResponse(MessageTypes.AnalysisResult, requestId, response);
+        }
+        catch (OperationCanceledException)
+        {
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Analysis failed for session {Session}", req.SessionId);
+            return CreateErrorResponse("Analysis failed: " + ex.Message, requestId);
+        }
     }
 
     private static RpcMessage CreateErrorResponse(string message, int requestId)

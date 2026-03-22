@@ -24,6 +24,9 @@ namespace AkmlSql.Core.Config
         [JsonPropertyName("snippets")]
         public SnippetSettings Snippets { get; set; } = new();
 
+        [JsonPropertyName("codeAnalysis")]
+        public CodeAnalysisSettings CodeAnalysis { get; set; } = new();
+
         /// <summary>
         /// T093-T095: Whether the user has been prompted about native IntelliSense conflict.
         /// </summary>
@@ -147,5 +150,26 @@ namespace AkmlSql.Core.Config
 
         [JsonPropertyName("trackUsage")]
         public bool TrackUsage { get; set; } = true;
+    }
+
+    public class CodeAnalysisSettings
+    {
+        [JsonPropertyName("enabled")]
+        public bool Enabled { get; set; } = true;
+
+        [JsonPropertyName("runOnType")]
+        public bool RunOnType { get; set; } = true;
+
+        [JsonPropertyName("runOnSave")]
+        public bool RunOnSave { get; set; } = true;
+
+        [JsonPropertyName("autoFixOnFormat")]
+        public bool AutoFixOnFormat { get; set; }
+
+        [JsonPropertyName("squiggleStyle")]
+        public string SquiggleStyle { get; set; } = "underline";
+
+        [JsonPropertyName("showInErrorList")]
+        public bool ShowInErrorList { get; set; } = true;
     }
 }
