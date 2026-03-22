@@ -24,7 +24,7 @@ namespace AkmlSql.Shell.Shared.Update
                 var json = File.ReadAllText(resultPath);
                 var result = JsonSerializer.Deserialize<UpdateResult>(json, JsonOptions.CamelCase);
 
-                if (result != null && result.Available)
+                if (result is { Available: true })
                 {
                     Log.Information("Update available: v{Version}", result.Version);
                     return result;

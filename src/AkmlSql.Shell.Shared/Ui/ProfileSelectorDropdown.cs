@@ -1,5 +1,3 @@
-using System;
-using System.ComponentModel.Design;
 using Microsoft.VisualStudio.Shell;
 
 namespace AkmlSql.Shell.Shared.Ui

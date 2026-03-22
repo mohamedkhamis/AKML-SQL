@@ -121,5 +121,8 @@ public class SnippetIndex
         }
     }
 
-    public IEnumerable<(Snippet Snippet, SnippetSourceType Source)> GetAll() => _byId.Values;
+    public IEnumerable<(Snippet Snippet, SnippetSourceType Source)> GetAll()
+    {
+        return _byId.Values;
+    }
 }

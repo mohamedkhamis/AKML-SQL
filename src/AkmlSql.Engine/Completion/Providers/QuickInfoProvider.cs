@@ -353,10 +353,13 @@ public class QuickInfoProvider
         };
     }
 
-    private static QuickInfoResponse EmptyResponse() => new()
+    private static QuickInfoResponse EmptyResponse()
     {
-        ObjectType = string.Empty,
-        Header = string.Empty,
-        Details = []
-    };
+        return new QuickInfoResponse
+        {
+            ObjectType = string.Empty,
+            Header = string.Empty,
+            Details = []
+        };
+    }
 }

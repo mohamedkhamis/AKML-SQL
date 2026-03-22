@@ -7,7 +7,6 @@ using AkmlSql.Engine.Completion;
 using AkmlSql.Engine.Completion.Providers;
 using AkmlSql.Engine.Formatter;
 using AkmlSql.Engine.Snippets;
-using System.Linq;
 using AkmlSql.Engine.Parser;
 using AkmlSql.Engine.Schema;
 using AkmlSql.Formatting.Profiles;

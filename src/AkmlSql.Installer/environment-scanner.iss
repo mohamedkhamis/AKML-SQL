@@ -367,6 +367,28 @@ begin
   end;
 end;
 
+// Update Next button based on current checkbox state
+procedure UpdateEnvNextButton;
+var
+  I: Integer;
+  AnyChecked: Boolean;
+begin
+  AnyChecked := False;
+  for I := 0 to EnvCheckListBox.Items.Count - 1 do
+    if EnvCheckListBox.Checked[I] then
+    begin
+      AnyChecked := True;
+      Break;
+    end;
+  WizardForm.NextButton.Enabled := AnyChecked;
+end;
+
+// OnClickCheck handler: keep Next button in sync with checkbox state
+procedure EnvCheckListBoxClickCheck(Sender: TObject);
+begin
+  UpdateEnvNextButton;
+end;
+
 function IsTargetSelected(Version: String): Boolean;
 var
   I: Integer;

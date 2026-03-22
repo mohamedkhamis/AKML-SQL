@@ -35,17 +35,14 @@ namespace AkmlSql.Shell.Shared.Ui
             // Note: InitializeComponent() would be called here in a full XAML build.
             // In shared project context, the popup is constructed programmatically
             // by the consuming shell project if XAML compilation is not available.
-            _items = new ObservableCollection<CompletionItemViewModel>();
+            _items = [];
         }
 
-        public ObservableCollection<CompletionItemViewModel> Items
-        {
-            get { return _items; }
-        }
+        public ObservableCollection<CompletionItemViewModel> Items => _items;
 
         public int SelectedIndex
         {
-            get { return _selectedIndex; }
+            get => _selectedIndex;
             set
             {
                 if (value >= -1 && value < _items.Count)

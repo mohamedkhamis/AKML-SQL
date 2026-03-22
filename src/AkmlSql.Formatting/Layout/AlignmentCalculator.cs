@@ -17,7 +17,7 @@ public class AlignmentCalculator
     {
         public int StartIndex { get; set; }
         public int EndIndex { get; set; }
-        public List<AlignmentEntry> Entries { get; } = new();
+        public List<AlignmentEntry> Entries { get; } = [];
     }
 
     /// <summary>
@@ -251,7 +251,7 @@ public class AlignmentCalculator
             }
             else if (inSelect && IsClauseEnd(nodes[i].TokenType))
             {
-                if (current != null && current.Entries.Count > 0)
+                if (current is { Entries.Count: > 0 })
                 {
                     current.EndIndex = i;
                     regions.Add(current);
@@ -271,7 +271,7 @@ public class AlignmentCalculator
             }
         }
 
-        if (current != null && current.Entries.Count > 0)
+        if (current is { Entries.Count: > 0 })
         {
             current.EndIndex = nodes.Count;
             regions.Add(current);
@@ -463,7 +463,7 @@ public class AlignmentCalculator
     {
         public int OpenParenIndex { get; set; }
         public int CloseParenIndex { get; set; }
-        public List<int> ColumnIndices { get; } = new();
+        public List<int> ColumnIndices { get; } = [];
     }
 
     private static List<ValueRow> FindValueRows(List<LayoutNode> nodes, int valuesIndex)

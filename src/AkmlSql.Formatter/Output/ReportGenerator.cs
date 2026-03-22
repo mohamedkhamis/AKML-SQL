@@ -8,7 +8,7 @@ namespace AkmlSql.Formatter.Output;
 /// </summary>
 public class ReportGenerator
 {
-    private readonly List<FileReport> _files = new();
+    private readonly List<FileReport> _files = [];
     private long _totalElapsedMs;
 
     public void AddFile(string path, bool modified, bool success, string[] diagnostics, long elapsedMs)
@@ -71,7 +71,7 @@ public class FormatReport
     public long TotalElapsedMs { get; set; }
 
     [JsonPropertyName("files")]
-    public List<FileReport> Files { get; set; } = new();
+    public List<FileReport> Files { get; set; } = [];
 }
 
 public class FileReport

@@ -45,7 +45,7 @@ namespace AkmlSql.Shell.Shared.Editor
                     "AKML SQL",
                     "AKML SQL",
                     FindTokenSpanAtPosition(session),
-                    Array.Empty<Completion>(),
+                    [],
                     null);
                 completionSets.Add(completionSet);
             }

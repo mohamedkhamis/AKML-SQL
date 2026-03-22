@@ -11,7 +11,7 @@ namespace AkmlSql.Core.Config
         public bool TelemetryEnabled { get; set; }
         public DateTimeOffset? LastUpdateCheck { get; set; }
         public string InstallId { get; set; } = Guid.NewGuid().ToString();
-        public List<InstalledTarget> InstalledTargets { get; set; } = new List<InstalledTarget>();
+        public List<InstalledTarget> InstalledTargets { get; set; } = [];
         public IntelliSenseSettings IntelliSense { get; set; } = new IntelliSenseSettings();
         public CacheSettings Cache { get; set; } = new CacheSettings();
 

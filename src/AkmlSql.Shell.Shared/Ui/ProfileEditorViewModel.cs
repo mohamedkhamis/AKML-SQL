@@ -23,8 +23,8 @@ namespace AkmlSql.Shell.Shared.Ui
         // -------------------------------------------------------------------
         // Option category definitions
         // -------------------------------------------------------------------
-        public static readonly string[] CategoryNames = new[]
-        {
+        public static readonly string[] CategoryNames =
+        [
             "Whitespace",
             "Casing",
             "Lists",
@@ -37,7 +37,7 @@ namespace AkmlSql.Shell.Shared.Ui
             "CTEs (WITH)",
             "Expressions",
             "Format Actions"
-        };
+        ];
 
         // -------------------------------------------------------------------
         // Profile state — stored as a flat dictionary of path → value
@@ -76,38 +76,38 @@ namespace AkmlSql.Shell.Shared.Ui
 
         public string ProfileName
         {
-            get { return _profileName; }
+            get => _profileName;
             set { SetField(ref _profileName, value); MarkDirty(); }
         }
 
         public string ProfileDescription
         {
-            get { return _profileDescription; }
+            get => _profileDescription;
             set { SetField(ref _profileDescription, value); MarkDirty(); }
         }
 
         public string ProfileAuthor
         {
-            get { return _profileAuthor; }
+            get => _profileAuthor;
             set { SetField(ref _profileAuthor, value); MarkDirty(); }
         }
 
         public string SelectedCategory
         {
-            get { return _selectedCategory; }
+            get => _selectedCategory;
             set { SetField(ref _selectedCategory, value); OnPropertyChanged(nameof(VisibleOptions)); }
         }
 
         public string SearchText
         {
-            get { return _searchText; }
+            get => _searchText;
             set { SetField(ref _searchText, value); OnPropertyChanged(nameof(VisibleOptions)); }
         }
 
         public bool IsDirty
         {
-            get { return _isDirty; }
-            private set { SetField(ref _isDirty, value); }
+            get => _isDirty;
+            private set => SetField(ref _isDirty, value);
         }
 
         public bool CanUndo => _undoStack.Count > 0;
@@ -115,8 +115,8 @@ namespace AkmlSql.Shell.Shared.Ui
 
         public string FormattedPreview
         {
-            get { return _formattedPreview; }
-            private set { SetField(ref _formattedPreview, value); }
+            get => _formattedPreview;
+            private set => SetField(ref _formattedPreview, value);
         }
 
         public string SampleSql =>
@@ -184,7 +184,7 @@ ORDER BY UnitPrice DESC;";
         public List<OptionDescriptor> SearchAllOptions(string filter)
         {
             if (string.IsNullOrWhiteSpace(filter))
-                return new List<OptionDescriptor>();
+                return [];
 
             var results = new List<OptionDescriptor>();
             foreach (var cat in CategoryNames)
@@ -335,7 +335,7 @@ ORDER BY UnitPrice DESC;";
             {
                 var manager = EngineLifecycle.Manager;
                 var client = manager?.Client;
-                if (client != null && client.IsConnected)
+                if (client is { IsConnected: true })
                 {
                     var json = BuildProfileJson();
                     var jsonBytes = Encoding.UTF8.GetBytes(json);
@@ -474,7 +474,7 @@ ORDER BY UnitPrice DESC;";
                 var manager = EngineLifecycle.Manager;
                 var client = manager?.Client;
 
-                if (client != null && client.IsConnected)
+                if (client is { IsConnected: true })
                 {
                     var json = BuildProfileJson();
                     var jsonBytes = Encoding.UTF8.GetBytes(json);
@@ -692,11 +692,11 @@ ORDER BY UnitPrice DESC;";
             switch (category)
             {
                 case "Whitespace":
-                    return new List<OptionDescriptor>
-                    {
-                        Combo("whitespace.tabStyle", "Tab Style", new[] { "spaces", "tabs" }),
+                    return
+                    [
+                        Combo("whitespace.tabStyle", "Tab Style", ["spaces", "tabs"]),
                         Numeric("whitespace.tabSize", "Tab Size", 1, 16),
-                        Combo("whitespace.indentStyle", "Indent Style", new[] { "block", "flat" }),
+                        Combo("whitespace.indentStyle", "Indent Style", ["block", "flat"]),
                         Numeric("whitespace.maxLineWidth", "Max Line Width", 40, 300),
                         Bool("whitespace.lineBreakBeforeClause", "Line Break Before Clause"),
                         Bool("whitespace.lineBreakAfterClause", "Line Break After Clause"),
@@ -707,33 +707,40 @@ ORDER BY UnitPrice DESC;";
                         Bool("whitespace.emptyLineAfterGO", "Empty Line After GO"),
                         Bool("whitespace.preserveEmptyLines", "Preserve Empty Lines"),
                         Numeric("whitespace.maxConsecutiveEmptyLines", "Max Consecutive Empty Lines", 0, 10),
-                        Combo("whitespace.trailingWhitespace", "Trailing Whitespace", new[] { "remove", "preserve" }),
-                        Combo("whitespace.finalNewline", "Final Newline", new[] { "ensure", "remove", "preserve" }),
+                        Combo("whitespace.trailingWhitespace", "Trailing Whitespace", ["remove", "preserve"]),
+                        Combo("whitespace.finalNewline", "Final Newline", ["ensure", "remove", "preserve"]),
                         Bool("whitespace.spaceAfterComma", "Space After Comma"),
                         Bool("whitespace.spaceAroundOperators", "Space Around Operators"),
                         Bool("whitespace.spaceAroundBooleanOperators", "Space Around Boolean Operators"),
                         Bool("whitespace.spaceInsideParentheses", "Space Inside Parentheses"),
                         Bool("whitespace.spaceBeforeParentheses", "Space Before Parentheses"),
-                        Bool("whitespace.lineBreakAfterSemicolon", "Line Break After Semicolon"),
-                    };
+                        Bool("whitespace.lineBreakAfterSemicolon", "Line Break After Semicolon")
+                    ];
                 case "Casing":
-                    return new List<OptionDescriptor>
-                    {
-                        Combo("casing.reservedKeywords", "Reserved Keywords", new[] { "UPPERCASE", "lowercase", "PascalCase", "AsIs" }),
-                        Combo("casing.builtInFunctions", "Built-in Functions", new[] { "UPPERCASE", "lowercase", "PascalCase", "AsIs" }),
-                        Combo("casing.builtInDataTypes", "Built-in Data Types", new[] { "UPPERCASE", "lowercase", "PascalCase", "AsIs" }),
-                        Combo("casing.systemObjects", "System Objects", new[] { "UPPERCASE", "lowercase", "PascalCase", "AsIs" }),
-                        Combo("casing.globalVariables", "Global Variables", new[] { "UPPERCASE", "lowercase", "PascalCase", "AsIs" }),
-                        Combo("casing.localVariables", "Local Variables", new[] { "UPPERCASE", "lowercase", "PascalCase", "AsIs" }),
-                        Combo("casing.identifiers", "Identifiers", new[] { "UPPERCASE", "lowercase", "PascalCase", "AsIs" }),
+                    return
+                    [
+                        Combo("casing.reservedKeywords", "Reserved Keywords",
+                            ["UPPERCASE", "lowercase", "PascalCase", "AsIs"]),
+                        Combo("casing.builtInFunctions", "Built-in Functions",
+                            ["UPPERCASE", "lowercase", "PascalCase", "AsIs"]),
+                        Combo("casing.builtInDataTypes", "Built-in Data Types",
+                            ["UPPERCASE", "lowercase", "PascalCase", "AsIs"]),
+                        Combo("casing.systemObjects", "System Objects",
+                            ["UPPERCASE", "lowercase", "PascalCase", "AsIs"]),
+                        Combo("casing.globalVariables", "Global Variables",
+                            ["UPPERCASE", "lowercase", "PascalCase", "AsIs"]),
+                        Combo("casing.localVariables", "Local Variables",
+                            ["UPPERCASE", "lowercase", "PascalCase", "AsIs"]),
+                        Combo("casing.identifiers", "Identifiers",
+                            ["UPPERCASE", "lowercase", "PascalCase", "AsIs"]),
                         Bool("casing.syncWithDatabase", "Sync With Database"),
                         Bool("casing.camelCaseDictionary", "CamelCase Dictionary"),
-                        Bool("casing.applyOnTyping", "Apply On Typing"),
-                    };
+                        Bool("casing.applyOnTyping", "Apply On Typing")
+                    ];
                 case "Lists":
-                    return new List<OptionDescriptor>
-                    {
-                        Combo("list.commaPosition", "Comma Position", new[] { "trailing", "leading" }),
+                    return
+                    [
+                        Combo("list.commaPosition", "Comma Position", ["trailing", "leading"]),
                         Bool("list.alignItemsAcrossClauses", "Align Items Across Clauses"),
                         Bool("list.alignAliases", "Align Aliases"),
                         Bool("list.oneItemPerLine", "One Item Per Line"),
@@ -742,31 +749,33 @@ ORDER BY UnitPrice DESC;";
                         Bool("list.indentListItems", "Indent List Items"),
                         Bool("list.alignDataTypesInDDL", "Align Data Types in DDL"),
                         Bool("list.alignValuesInInsert", "Align Values in INSERT"),
-                        Bool("list.spaceAfterListComma", "Space After List Comma"),
-                    };
+                        Bool("list.spaceAfterListComma", "Space After List Comma")
+                    ];
                 case "Parentheses":
-                    return new List<OptionDescriptor>
-                    {
+                    return
+                    [
                         Bool("parenthesis.openOnSameLine", "Open on Same Line"),
-                        Combo("parenthesis.closeOnNewLine", "Close on New Line", new[] { "true", "false", "auto" }),
+                        Combo("parenthesis.closeOnNewLine", "Close on New Line", ["true", "false", "auto"]),
                         Bool("parenthesis.collapseShort", "Collapse Short"),
                         Numeric("parenthesis.collapseThreshold", "Collapse Threshold", 10, 200),
                         Bool("parenthesis.indentContents", "Indent Contents"),
                         Bool("parenthesis.spaceInside", "Space Inside"),
                         Bool("parenthesis.removeRedundant", "Remove Redundant"),
-                        Combo("parenthesis.createTableColumns", "CREATE TABLE Columns", new[] { "newLine", "sameLine" }),
-                        Combo("parenthesis.procedureParameters", "Procedure Parameters", new[] { "newLine", "sameLine" }),
-                        Combo("parenthesis.subqueryStyle", "Subquery Style", new[] { "indent", "aligned" }),
-                    };
+                        Combo("parenthesis.createTableColumns", "CREATE TABLE Columns",
+                            ["newLine", "sameLine"]),
+                        Combo("parenthesis.procedureParameters", "Procedure Parameters",
+                            ["newLine", "sameLine"]),
+                        Combo("parenthesis.subqueryStyle", "Subquery Style", ["indent", "aligned"])
+                    ];
                 case "DML (SELECT/INSERT/UPDATE/DELETE)":
-                    return new List<OptionDescriptor>
-                    {
+                    return
+                    [
                         Bool("dml.selectItemsOnNewLine", "SELECT Items on New Line"),
                         Bool("dml.selectStarOnSameLine", "SELECT * on Same Line"),
                         Bool("dml.fromOnNewLine", "FROM on New Line"),
                         Bool("dml.whereOnNewLine", "WHERE on New Line"),
-                        Combo("dml.andOrNewLine", "AND/OR New Line", new[] { "before", "after", "none" }),
-                        Combo("dml.andOrIndent", "AND/OR Indent", new[] { "alignWithWhere", "indent", "noIndent" }),
+                        Combo("dml.andOrNewLine", "AND/OR New Line", ["before", "after", "none"]),
+                        Combo("dml.andOrIndent", "AND/OR Indent", ["alignWithWhere", "indent", "noIndent"]),
                         Bool("dml.groupByOnNewLine", "GROUP BY on New Line"),
                         Bool("dml.havingOnNewLine", "HAVING on New Line"),
                         Bool("dml.orderByOnNewLine", "ORDER BY on New Line"),
@@ -780,42 +789,44 @@ ORDER BY UnitPrice DESC;";
                         Bool("dml.collapseShortStatements", "Collapse Short Statements"),
                         Numeric("dml.collapseThreshold", "Collapse Threshold", 20, 200),
                         Bool("dml.collapseShortSubqueries", "Collapse Short Subqueries"),
-                        Numeric("dml.subqueryCollapseThreshold", "Subquery Collapse Threshold", 20, 200),
-                    };
+                        Numeric("dml.subqueryCollapseThreshold", "Subquery Collapse Threshold", 20, 200)
+                    ];
                 case "JOINs":
-                    return new List<OptionDescriptor>
-                    {
+                    return
+                    [
                         Bool("join.onNewLine", "JOIN on New Line"),
                         Bool("join.indentJoin", "Indent JOIN"),
                         Bool("join.onConditionNewLine", "ON Condition on New Line"),
-                        Combo("join.onConditionIndent", "ON Condition Indent", new[] { "indent", "aligned", "noIndent" }),
-                        Combo("join.multipleOnConditions", "Multiple ON Conditions", new[] { "newLine", "sameLine" }),
+                        Combo("join.onConditionIndent", "ON Condition Indent",
+                            ["indent", "aligned", "noIndent"]),
+                        Combo("join.multipleOnConditions", "Multiple ON Conditions", ["newLine", "sameLine"]),
                         Bool("join.emptyLineBeforeJoin", "Empty Line Before JOIN"),
-                        Combo("join.alignJoinKeyword", "Align JOIN Keyword", new[] { "right", "left", "none" }),
-                        Combo("join.joinTypeStyle", "JOIN Type Style", new[] { "explicit", "implicit" }),
-                        Bool("join.crossApplyNewLine", "CROSS APPLY on New Line"),
-                    };
+                        Combo("join.alignJoinKeyword", "Align JOIN Keyword", ["right", "left", "none"]),
+                        Combo("join.joinTypeStyle", "JOIN Type Style", ["explicit", "implicit"]),
+                        Bool("join.crossApplyNewLine", "CROSS APPLY on New Line")
+                    ];
                 case "DDL (CREATE/ALTER)":
-                    return new List<OptionDescriptor>
-                    {
+                    return
+                    [
                         Bool("ddl.createTableColumnsOnNewLine", "CREATE TABLE Columns on New Line"),
                         Bool("ddl.alignDataTypes", "Align Data Types"),
                         Bool("ddl.alignConstraints", "Align Constraints"),
                         Bool("ddl.constraintsOnNewLine", "Constraints on New Line"),
-                        Combo("ddl.inlineConstraintStyle", "Inline Constraint Style", new[] { "sameLine", "newLine" }),
+                        Combo("ddl.inlineConstraintStyle", "Inline Constraint Style", ["sameLine", "newLine"]),
                         Bool("ddl.tableConstraintsSeparate", "Table Constraints Separate"),
-                        Combo("ddl.firstParameterOnNewLine", "First Parameter on New Line", new[] { "auto", "always", "never" }),
-                        Combo("ddl.parameterAlignment", "Parameter Alignment", new[] { "aligned", "indented", "none" }),
+                        Combo("ddl.firstParameterOnNewLine", "First Parameter on New Line",
+                            ["auto", "always", "never"]),
+                        Combo("ddl.parameterAlignment", "Parameter Alignment", ["aligned", "indented", "none"]),
                         Bool("ddl.alignParameterDataTypes", "Align Parameter Data Types"),
                         Bool("ddl.alignParameterDefaults", "Align Parameter Defaults"),
                         Bool("ddl.asOnNewLine", "AS on New Line"),
                         Bool("ddl.beginOnNewLine", "BEGIN on New Line"),
                         Bool("ddl.collapseShortDDL", "Collapse Short DDL"),
-                        Numeric("ddl.collapseThreshold", "Collapse Threshold", 20, 200),
-                    };
+                        Numeric("ddl.collapseThreshold", "Collapse Threshold", 20, 200)
+                    ];
                 case "Control Flow (IF/WHILE/TRY)":
-                    return new List<OptionDescriptor>
-                    {
+                    return
+                    [
                         Bool("controlFlow.beginOnNewLine", "BEGIN on New Line"),
                         Bool("controlFlow.endOnNewLine", "END on New Line"),
                         Bool("controlFlow.indentBetweenBeginEnd", "Indent Between BEGIN/END"),
@@ -823,11 +834,11 @@ ORDER BY UnitPrice DESC;";
                         Numeric("controlFlow.collapseThreshold", "Collapse Threshold", 20, 200),
                         Bool("controlFlow.elseOnNewLine", "ELSE on New Line"),
                         Bool("controlFlow.elseAlignWithIf", "ELSE Align With IF"),
-                        Bool("controlFlow.tryCatchOnNewLine", "TRY/CATCH on New Line"),
-                    };
+                        Bool("controlFlow.tryCatchOnNewLine", "TRY/CATCH on New Line")
+                    ];
                 case "CASE Expressions":
-                    return new List<OptionDescriptor>
-                    {
+                    return
+                    [
                         Bool("case.whenOnNewLine", "WHEN on New Line"),
                         Bool("case.thenOnNewLine", "THEN on New Line"),
                         Bool("case.elseOnNewLine", "ELSE on New Line"),
@@ -835,28 +846,30 @@ ORDER BY UnitPrice DESC;";
                         Bool("case.indentWhen", "Indent WHEN"),
                         Bool("case.alignThen", "Align THEN"),
                         Bool("case.collapseShortCase", "Collapse Short CASE"),
-                        Numeric("case.collapseThreshold", "Collapse Threshold", 20, 200),
-                    };
+                        Numeric("case.collapseThreshold", "Collapse Threshold", 20, 200)
+                    ];
                 case "CTEs (WITH)":
-                    return new List<OptionDescriptor>
-                    {
+                    return
+                    [
                         Bool("cte.withOnNewLine", "WITH on New Line"),
                         Bool("cte.cteBodyIndent", "CTE Body Indent"),
                         Bool("cte.commaBeforeCte", "Comma Before CTE"),
-                        Bool("cte.emptyLineBetweenCtes", "Empty Line Between CTEs"),
-                    };
+                        Bool("cte.emptyLineBetweenCtes", "Empty Line Between CTEs")
+                    ];
                 case "Expressions":
-                    return new List<OptionDescriptor>
-                    {
-                        Combo("expression.booleanOperatorNewLine", "Boolean Operator New Line", new[] { "before", "after", "none" }),
+                    return
+                    [
+                        Combo("expression.booleanOperatorNewLine", "Boolean Operator New Line",
+                            ["before", "after", "none"]),
                         Bool("expression.betweenOnOneLine", "BETWEEN on One Line"),
-                        Combo("expression.inListStyle", "IN List Style", new[] { "multiLine", "singleLine", "auto" }),
+                        Combo("expression.inListStyle", "IN List Style", ["multiLine", "singleLine", "auto"]),
                         Numeric("expression.inListThreshold", "IN List Threshold", 20, 200),
-                        Combo("expression.existsSubqueryIndent", "EXISTS Subquery Indent", new[] { "indent", "aligned" }),
-                    };
+                        Combo("expression.existsSubqueryIndent", "EXISTS Subquery Indent",
+                            ["indent", "aligned"])
+                    ];
                 case "Format Actions":
-                    return new List<OptionDescriptor>
-                    {
+                    return
+                    [
                         Bool("formatActions.applyLayout", "Apply Layout"),
                         Bool("formatActions.applyCasing", "Apply Casing"),
                         Bool("formatActions.insertSemicolons", "Insert Semicolons"),
@@ -864,10 +877,10 @@ ORDER BY UnitPrice DESC;";
                         Bool("formatActions.expandWildcards", "Expand Wildcards"),
                         Bool("formatActions.qualifyObjectNames", "Qualify Object Names"),
                         Bool("formatActions.addAsKeyword", "Add AS Keyword"),
-                        Bool("formatActions.addSquareBrackets", "Add Square Brackets"),
-                    };
+                        Bool("formatActions.addSquareBrackets", "Add Square Brackets")
+                    ];
                 default:
-                    return new List<OptionDescriptor>();
+                    return [];
             }
         }
 
@@ -1034,7 +1047,7 @@ ORDER BY UnitPrice DESC;";
             Key = key;
             DisplayName = displayName;
             Kind = kind;
-            Choices = choices ?? Array.Empty<string>();
+            Choices = choices ?? [];
             Min = min;
             Max = max;
         }

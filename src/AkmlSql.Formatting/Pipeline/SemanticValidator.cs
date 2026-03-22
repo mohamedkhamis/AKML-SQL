@@ -1,4 +1,3 @@
-using AkmlSql.Formatting.Layout;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Formatting.Pipeline;

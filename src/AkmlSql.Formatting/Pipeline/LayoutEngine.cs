@@ -161,8 +161,8 @@ public class LayoutEngine
 
             // Token after operator gets a space
             if (prevSemanticTokenType.HasValue && IsOperator(prevSemanticTokenType.Value)
-                && profile.Whitespace.SpaceAroundOperators
-                && decision.Break == BreakType.None && decision.PrecedingSpaces == 0)
+                                               && profile.Whitespace.SpaceAroundOperators
+                                               && decision is { Break: BreakType.None, PrecedingSpaces: 0 })
             {
                 decision = decision with { PrecedingSpaces = 1 };
             }

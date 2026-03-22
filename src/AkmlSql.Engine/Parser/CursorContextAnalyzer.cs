@@ -96,7 +96,7 @@ public class CursorContextAnalyzer
         }
 
         // Check for dot prefix
-        if (prevToken != null && prevToken.TokenType == TSqlTokenType.Dot)
+        if (prevToken is { TokenType: TSqlTokenType.Dot })
         {
             context.PrecedingDot = true;
             // Find the identifier before the dot

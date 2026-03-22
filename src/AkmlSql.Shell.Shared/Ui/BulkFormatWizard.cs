@@ -30,7 +30,7 @@ namespace AkmlSql.Shell.Shared.Ui
         /// <summary>
         /// The selected file paths after the dialog is closed with OK.
         /// </summary>
-        public List<string> SelectedFiles { get; } = new List<string>();
+        public List<string> SelectedFiles { get; } = [];
 
         /// <summary>
         /// The selected profile name.
@@ -64,7 +64,7 @@ namespace AkmlSql.Shell.Shared.Ui
 
         public BulkFormatWizard(string[] availableProfiles)
         {
-            InitializeComponents(availableProfiles ?? new[] { "Default" });
+            InitializeComponents(availableProfiles ?? ["Default"]);
         }
 
         private void InitializeComponents(string[] availableProfiles)
@@ -204,14 +204,13 @@ namespace AkmlSql.Shell.Shared.Ui
             AcceptButton = _startButton;
             CancelButton = _cancelButton;
 
-            Controls.AddRange(new Control[]
-            {
+            Controls.AddRange([
                 filesLabel, _fileListBox, _addFilesButton, _addFolderButton, _removeButton,
                 profileLabel, _profileCombo,
                 _createBackupsCheck, _previewOnlyCheck, _skipParseErrorsCheck, _respectNoformatCheck,
                 parallelLabel, _parallelismNumeric,
                 _startButton, _cancelButton
-            });
+            ]);
         }
 
         private void OnAddFiles(object sender, EventArgs e)

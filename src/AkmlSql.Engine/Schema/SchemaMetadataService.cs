@@ -535,18 +535,21 @@ public class SchemaMetadataService
         return features;
     }
 
-    private static DbObjectType MapObjectType(string typeDesc) => typeDesc switch
+    private static DbObjectType MapObjectType(string typeDesc)
     {
-        "USER_TABLE" => DbObjectType.Table,
-        "VIEW" => DbObjectType.View,
-        "SQL_STORED_PROCEDURE" => DbObjectType.Procedure,
-        "SQL_SCALAR_FUNCTION" => DbObjectType.ScalarFunction,
-        "SQL_TABLE_VALUED_FUNCTION" => DbObjectType.TableFunction,
-        "SQL_INLINE_TABLE_VALUED_FUNCTION" => DbObjectType.InlineFunction,
-        "SYNONYM" => DbObjectType.Synonym,
-        "SEQUENCE_OBJECT" => DbObjectType.Sequence,
-        _ => DbObjectType.Table
-    };
+        return typeDesc switch
+        {
+            "USER_TABLE" => DbObjectType.Table,
+            "VIEW" => DbObjectType.View,
+            "SQL_STORED_PROCEDURE" => DbObjectType.Procedure,
+            "SQL_SCALAR_FUNCTION" => DbObjectType.ScalarFunction,
+            "SQL_TABLE_VALUED_FUNCTION" => DbObjectType.TableFunction,
+            "SQL_INLINE_TABLE_VALUED_FUNCTION" => DbObjectType.InlineFunction,
+            "SYNONYM" => DbObjectType.Synonym,
+            "SEQUENCE_OBJECT" => DbObjectType.Sequence,
+            _ => DbObjectType.Table
+        };
+    }
 }
 
 /// <summary>

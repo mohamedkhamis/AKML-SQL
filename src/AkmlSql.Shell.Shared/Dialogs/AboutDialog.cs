@@ -102,11 +102,10 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
             AcceptButton = okButton;
 
-            Controls.AddRange(new Control[]
-            {
+            Controls.AddRange([
                 titleLabel, versionLabel, buildLabel, runtimeLabel,
                 osLabel, archLabel, licenseLabel, copyDiagButton, okButton
-            });
+            ]);
         }
     }
 }

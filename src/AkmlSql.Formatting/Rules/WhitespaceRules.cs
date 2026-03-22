@@ -158,7 +158,7 @@ public class WhitespaceRules : IRuleSet
                 if (ws.LineBreakAfterComma && i + 1 < nodes.Count)
                 {
                     var next = nodes[i + 1];
-                    if (!next.IsInNoformatRegion && next.PrecedingBreak == BreakType.None)
+                    if (next is { IsInNoformatRegion: false, PrecedingBreak: BreakType.None })
                     {
                         next.PrecedingBreak = BreakType.NewLine;
                         next.PrecedingSpaces = 0;
@@ -187,21 +187,18 @@ public class WhitespaceRules : IRuleSet
                     node.PrecedingBreak = BreakType.NewLine;
                     node.PrecedingSpaces = 0;
                 }
-                else if (!ws.LineBreakBeforeClause && node.PrecedingBreak == BreakType.NewLine)
-                {
+                else if (!ws.LineBreakBeforeClause && node is { PrecedingBreak: BreakType.NewLine, IndentLevel: 0 })
                     // Only collapse if this isn't required by another rule (indent level 0 suggests clause-level)
-                    if (node.IndentLevel == 0)
-                    {
-                        node.PrecedingBreak = BreakType.None;
-                        node.PrecedingSpaces = 1;
-                    }
+                {
+                    node.PrecedingBreak = BreakType.None;
+                    node.PrecedingSpaces = 1;
                 }
 
                 // lineBreakAfterClause: the first token after the clause keyword
                 if (ws.LineBreakAfterClause && i + 1 < nodes.Count)
                 {
                     var next = nodes[i + 1];
-                    if (!next.IsInNoformatRegion && next.PrecedingBreak == BreakType.None)
+                    if (next is { IsInNoformatRegion: false, PrecedingBreak: BreakType.None })
                     {
                         // Don't break between two-word clauses (GROUP BY, ORDER BY)
                         if (!IsTwoWordClauseSecondPart(next.TokenType, node.TokenType))
@@ -295,7 +292,7 @@ public class WhitespaceRules : IRuleSet
                         next.PrecedingSpaces = Math.Max(next.PrecedingSpaces, 1);
                 }
 
-                if (node.TokenType == TSqlTokenType.RightParenthesis && node.PrecedingBreak == BreakType.None && i > 0)
+                if (node is { TokenType: TSqlTokenType.RightParenthesis, PrecedingBreak: BreakType.None } && i > 0)
                 {
                     if (nodes[i - 1].TokenType != TSqlTokenType.LeftParenthesis)
                         node.PrecedingSpaces = Math.Max(node.PrecedingSpaces, 1);
@@ -313,13 +310,13 @@ public class WhitespaceRules : IRuleSet
             }
 
             // No space before comma
-            if (node.TokenType == TSqlTokenType.Comma && node.PrecedingBreak == BreakType.None)
+            if (node is { TokenType: TSqlTokenType.Comma, PrecedingBreak: BreakType.None })
             {
                 node.PrecedingSpaces = 0;
             }
 
             // No space before semicolon
-            if (node.TokenType == TSqlTokenType.Semicolon && node.PrecedingBreak == BreakType.None)
+            if (node is { TokenType: TSqlTokenType.Semicolon, PrecedingBreak: BreakType.None })
             {
                 node.PrecedingSpaces = 0;
             }
@@ -357,7 +354,7 @@ public class WhitespaceRules : IRuleSet
             if (node.IsInNoformatRegion)
                 continue;
 
-            if (node.TokenType == TSqlTokenType.LeftParenthesis && node.PrecedingBreak == BreakType.None)
+            if (node is { TokenType: TSqlTokenType.LeftParenthesis, PrecedingBreak: BreakType.None })
             {
                 var prev = nodes[i - 1];
                 // Space before parenthesis when preceded by identifier or keyword (function call)

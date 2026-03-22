@@ -51,12 +51,12 @@ namespace AkmlSql.Shell.Shared.IntelliSense
                 // HKCU\Software\Microsoft\SQL Server Management Studio\XX.0\Settings\IntelliSense
                 // Key: EnableIntelliSense (DWORD, 1 = enabled)
                 // We check common versions
-                string[] registryPaths = new[]
-                {
+                string[] registryPaths =
+                [
                     @"Software\Microsoft\SQL Server Management Studio\20.0\Settings\IntelliSense",
                     @"Software\Microsoft\SQL Server Management Studio\22.0\Settings\IntelliSense",
                     @"Software\Microsoft\SSMS\22.0\Settings\IntelliSense"
-                };
+                ];
 
                 foreach (var path in registryPaths)
                 {
@@ -65,7 +65,7 @@ namespace AkmlSql.Shell.Shared.IntelliSense
                         if (key != null)
                         {
                             var value = key.GetValue("EnableIntelliSense");
-                            if (value is int intVal && intVal == 1)
+                            if (value is int and 1)
                             {
                                 return true;
                             }
@@ -152,12 +152,12 @@ namespace AkmlSql.Shell.Shared.IntelliSense
         /// </summary>
         private void DisableNativeIntelliSense()
         {
-            string[] registryPaths = new[]
-            {
+            string[] registryPaths =
+            [
                 @"Software\Microsoft\SQL Server Management Studio\20.0\Settings\IntelliSense",
                 @"Software\Microsoft\SQL Server Management Studio\22.0\Settings\IntelliSense",
                 @"Software\Microsoft\SSMS\22.0\Settings\IntelliSense"
-            };
+            ];
 
             foreach (var path in registryPaths)
             {
@@ -192,12 +192,12 @@ namespace AkmlSql.Shell.Shared.IntelliSense
                     return;
                 }
 
-                string[] registryPaths = new[]
-                {
+                string[] registryPaths =
+                [
                     @"Software\Microsoft\SQL Server Management Studio\20.0\Settings\IntelliSense",
                     @"Software\Microsoft\SQL Server Management Studio\22.0\Settings\IntelliSense",
                     @"Software\Microsoft\SSMS\22.0\Settings\IntelliSense"
-                };
+                ];
 
                 foreach (var path in registryPaths)
                 {

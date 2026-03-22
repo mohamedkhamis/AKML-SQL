@@ -18,7 +18,7 @@ namespace AkmlSql.Shell.Shared.Ui
 
         public string DisplayText
         {
-            get { return _displayText; }
+            get => _displayText;
             set
             {
                 if (_displayText != value)
@@ -31,7 +31,7 @@ namespace AkmlSql.Shell.Shared.Ui
 
         public string InsertText
         {
-            get { return _insertText; }
+            get => _insertText;
             set
             {
                 if (_insertText != value)
@@ -44,7 +44,7 @@ namespace AkmlSql.Shell.Shared.Ui
 
         public string SecondaryText
         {
-            get { return _secondaryText; }
+            get => _secondaryText;
             set
             {
                 if (_secondaryText != value)
@@ -60,7 +60,7 @@ namespace AkmlSql.Shell.Shared.Ui
         /// </summary>
         public string IconKind
         {
-            get { return _iconKind; }
+            get => _iconKind;
             set
             {
                 if (_iconKind != value)
@@ -73,7 +73,7 @@ namespace AkmlSql.Shell.Shared.Ui
 
         public int ObjectType
         {
-            get { return _objectType; }
+            get => _objectType;
             set
             {
                 if (_objectType != value)
@@ -87,7 +87,7 @@ namespace AkmlSql.Shell.Shared.Ui
 
         public bool IsSelected
         {
-            get { return _isSelected; }
+            get => _isSelected;
             set
             {
                 if (_isSelected != value)

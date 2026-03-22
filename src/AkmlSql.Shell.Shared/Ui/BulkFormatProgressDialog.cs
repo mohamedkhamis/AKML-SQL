@@ -86,10 +86,9 @@ namespace AkmlSql.Shell.Shared.Ui
                 _statusLabel.Text = "Cancelling...";
             };
 
-            Controls.AddRange(new Control[]
-            {
+            Controls.AddRange([
                 _statusLabel, _progressBar, _currentFileLabel, _countLabel, _cancelButton
-            });
+            ]);
         }
 
         /// <summary>

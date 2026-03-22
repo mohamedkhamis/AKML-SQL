@@ -18,7 +18,7 @@ namespace AkmlSql.Shell.Shared.Ipc
         private int _restartCount;
 
         public PipeRpcClient Client => _client;
-        public bool IsRunning => _engineProcess != null && !_engineProcess.HasExited;
+        public bool IsRunning => _engineProcess is { HasExited: false };
 
         public EngineProcessManager()
         {

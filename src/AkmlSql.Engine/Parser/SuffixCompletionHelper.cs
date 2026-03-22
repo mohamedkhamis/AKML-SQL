@@ -65,6 +65,8 @@ public static class SuffixCompletionHelper
         return trimmed + $" {DummyIdentifier}";
     }
 
-    public static bool IsDummyIdentifier(string name) =>
-        name.Equals(DummyIdentifier, StringComparison.OrdinalIgnoreCase);
+    public static bool IsDummyIdentifier(string name)
+    {
+        return name.Equals(DummyIdentifier, StringComparison.OrdinalIgnoreCase);
+    }
 }

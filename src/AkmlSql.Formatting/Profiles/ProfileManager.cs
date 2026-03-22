@@ -286,10 +286,14 @@ public class ProfileManager
     // -----------------------------------------------------------------------
 
     private string GetCustomFilePath(string name)
-        => Path.Combine(_customProfilesPath, SanitizeFileName(name) + ProfileExtension);
+    {
+        return Path.Combine(_customProfilesPath, SanitizeFileName(name) + ProfileExtension);
+    }
 
     private string GetBuiltInFilePath(string name)
-        => Path.Combine(_builtInProfilesPath, SanitizeFileName(name) + ProfileExtension);
+    {
+        return Path.Combine(_builtInProfilesPath, SanitizeFileName(name) + ProfileExtension);
+    }
 
     private static ProfileMetadata? TryLoadMetadata(string filePath, bool isBuiltIn)
     {

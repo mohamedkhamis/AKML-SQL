@@ -53,7 +53,7 @@ namespace AkmlSql.Shell.Shared.Commands
                     var json = File.ReadAllText(resultPath);
                     var result = JsonSerializer.Deserialize<UpdateResult>(json, JsonOptions.CamelCase);
 
-                    if (result != null && result.Available && IsValidHttpsUrl(result.DownloadUrl))
+                    if (result is { Available: true } && IsValidHttpsUrl(result.DownloadUrl))
                     {
                         var dialogResult = MessageBox.Show(
                             $"A new version ({result.Version}) is available.\n\nWould you like to download it?",

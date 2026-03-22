@@ -15,8 +15,8 @@ namespace AkmlSql.Shell.Shared.Ui
         /// <summary>
         /// Category grouping structure: top-level categories with optional sub-items.
         /// </summary>
-        private static readonly CategoryGroup[] Groups = new[]
-        {
+        private static readonly CategoryGroup[] Groups =
+        [
             new CategoryGroup("Layout",
                 "Whitespace",
                 "Lists",
@@ -33,8 +33,8 @@ namespace AkmlSql.Shell.Shared.Ui
                 "CTEs (WITH)",
                 "Expressions"),
             new CategoryGroup("Actions",
-                "Format Actions"),
-        };
+                "Format Actions")
+        ];
 
         /// <summary>
         /// Populates the <see cref="TreeView"/> with category items.
