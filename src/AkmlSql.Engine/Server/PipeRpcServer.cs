@@ -95,7 +95,10 @@ public class PipeRpcServer
             }
 
             var response = await DispatchAsync(message, ct);
-            await FrameProtocol.WriteFramedAsync(pipe, response, ct);
+            if (response != null)
+            {
+                await FrameProtocol.WriteFramedAsync(pipe, response, ct);
+            }
         }
     }
 

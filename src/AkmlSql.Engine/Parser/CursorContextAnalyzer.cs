@@ -183,6 +183,7 @@ public class CursorContextAnalyzer
                     if (upper is "CROSS" or "INNER" or "LEFT" or "RIGHT" or "FULL" or "OUTER")
                     {
                         // JOIN qualifiers — continue scanning to find JOIN/FROM
+                        continue;
                     }
                     break;
                 case TSqlTokenType.Insert:

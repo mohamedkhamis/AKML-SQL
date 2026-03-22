@@ -1,10 +1,8 @@
-using System.Diagnostics.CodeAnalysis;
 using Xunit;
 using AkmlSql.Engine.Completion.Dictionaries;
 
 namespace AkmlSql.Engine.Tests.Completion.Dictionaries;
 
-[SuppressMessage("ReSharper", "UnusedVariable")]
 public class BuiltinFunctionDictionaryTests
 {
     // ── TryGetSignature ────────────────────────────────────────────────────
@@ -36,23 +34,23 @@ public class BuiltinFunctionDictionaryTests
     [Fact]
     public void TryGetSignature_Convert_HasTwoOverloads()
     {
-        BuiltinFunctionDictionary.TryGetSignature("CONVERT", out var overloads);
-        Assert.Equal(2, overloads.Length);
+        Assert.True(BuiltinFunctionDictionary.TryGetSignature("CONVERT", out var overloads));
+        Assert.Equal(2, overloads!.Length);
     }
 
     [Fact]
     public void TryGetSignature_Cast_HasOneOverload()
     {
-        BuiltinFunctionDictionary.TryGetSignature("CAST", out var overloads);
-        Assert.Single(overloads);
+        Assert.True(BuiltinFunctionDictionary.TryGetSignature("CAST", out var overloads));
+        Assert.Single(overloads!);
     }
 
     [Fact]
     public void TryGetSignature_Overload_HasLabelAndDocumentation()
     {
-        BuiltinFunctionDictionary.TryGetSignature("GETDATE", out var overloads);
-        Assert.Single(overloads);
-        var overload = overloads[0];
+        Assert.True(BuiltinFunctionDictionary.TryGetSignature("GETDATE", out var overloads));
+        Assert.Single(overloads!);
+        var overload = overloads![0];
         Assert.NotEmpty(overload.Label);
         Assert.NotEmpty(overload.Documentation);
         Assert.Contains("GETDATE", overload.Label);
@@ -61,8 +59,8 @@ public class BuiltinFunctionDictionaryTests
     [Fact]
     public void TryGetSignature_Convert_FirstOverload_HasTwoRequiredParams()
     {
-        BuiltinFunctionDictionary.TryGetSignature("CONVERT", out var overloads);
-        var first = overloads[0];
+        Assert.True(BuiltinFunctionDictionary.TryGetSignature("CONVERT", out var overloads));
+        var first = overloads![0];
         Assert.Equal(2, first.Parameters.Length);
         Assert.False(first.Parameters[0].IsOptional);
         Assert.False(first.Parameters[1].IsOptional);
@@ -71,8 +69,8 @@ public class BuiltinFunctionDictionaryTests
     [Fact]
     public void TryGetSignature_Convert_SecondOverload_HasOptionalStyle()
     {
-        BuiltinFunctionDictionary.TryGetSignature("CONVERT", out var overloads);
-        var second = overloads[1];
+        Assert.True(BuiltinFunctionDictionary.TryGetSignature("CONVERT", out var overloads));
+        var second = overloads![1];
         Assert.Equal(3, second.Parameters.Length);
         Assert.True(second.Parameters[2].IsOptional);
         Assert.Equal("style", second.Parameters[2].Name);
@@ -81,36 +79,36 @@ public class BuiltinFunctionDictionaryTests
     [Fact]
     public void TryGetSignature_CharIndex_HasTwoOverloads()
     {
-        BuiltinFunctionDictionary.TryGetSignature("CHARINDEX", out var overloads);
-        Assert.Equal(2, overloads.Length);
+        Assert.True(BuiltinFunctionDictionary.TryGetSignature("CHARINDEX", out var overloads));
+        Assert.Equal(2, overloads!.Length);
     }
 
     [Fact]
     public void TryGetSignature_Round_HasTwoOverloads()
     {
-        BuiltinFunctionDictionary.TryGetSignature("ROUND", out var overloads);
-        Assert.Equal(2, overloads.Length);
+        Assert.True(BuiltinFunctionDictionary.TryGetSignature("ROUND", out var overloads));
+        Assert.Equal(2, overloads!.Length);
     }
 
     [Fact]
     public void TryGetSignature_Format_HasTwoOverloads()
     {
-        BuiltinFunctionDictionary.TryGetSignature("FORMAT", out var overloads);
-        Assert.Equal(2, overloads.Length);
+        Assert.True(BuiltinFunctionDictionary.TryGetSignature("FORMAT", out var overloads));
+        Assert.Equal(2, overloads!.Length);
     }
 
     [Fact]
     public void TryGetSignature_GetDate_HasEmptyParameters()
     {
-        BuiltinFunctionDictionary.TryGetSignature("GETDATE", out var overloads);
-        Assert.Empty(overloads[0].Parameters);
+        Assert.True(BuiltinFunctionDictionary.TryGetSignature("GETDATE", out var overloads));
+        Assert.Empty(overloads![0].Parameters);
     }
 
     [Fact]
     public void TryGetSignature_GetUtcDate_HasEmptyParameters()
     {
-        BuiltinFunctionDictionary.TryGetSignature("GETUTCDATE", out var overloads);
-        Assert.Empty(overloads[0].Parameters);
+        Assert.True(BuiltinFunctionDictionary.TryGetSignature("GETUTCDATE", out var overloads));
+        Assert.Empty(overloads![0].Parameters);
     }
 
     // ── IsBuiltinFunction ─────────────────────────────────────────────────

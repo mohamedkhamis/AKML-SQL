@@ -155,14 +155,14 @@ public class SessionManagerTests
     // ── Thread safety ─────────────────────────────────────────────────────
 
     [Fact]
-    public void UpdateSession_Concurrent_NoException()
+    public async Task UpdateSession_Concurrent_NoException()
     {
         const int count = 50;
         var tasks = Enumerable.Range(0, count)
             .Select(i => Task.Run(() => _mgr.UpdateSession(MakeConnection($"session-{i}"))))
             .ToArray();
 
-        Task.WaitAll(tasks);
+        await Task.WhenAll(tasks);
 
         Assert.Equal(count, _mgr.SessionCount);
     }
