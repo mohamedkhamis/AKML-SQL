@@ -743,12 +743,11 @@ public class DdlRules : IRuleSet
         for (int i = asIndex - 1; i >= 0; i--)
         {
             var tt = nodes[i].TokenType;
-            if (tt == TSqlTokenType.Procedure || tt == TSqlTokenType.Function ||
-                tt == TSqlTokenType.View || tt == TSqlTokenType.Trigger)
+            if (tt is TSqlTokenType.Procedure or TSqlTokenType.Function or TSqlTokenType.View or TSqlTokenType.Trigger)
                 return true;
-            if (tt == TSqlTokenType.Create || tt == TSqlTokenType.Alter)
+            if (tt is TSqlTokenType.Create or TSqlTokenType.Alter)
                 return true;
-            if (tt == TSqlTokenType.Semicolon || tt == TSqlTokenType.Go)
+            if (tt is TSqlTokenType.Semicolon or TSqlTokenType.Go)
                 return false;
         }
         return false;

@@ -7,6 +7,7 @@ namespace AkmlSql.Engine.Snippets;
 
 [UnconditionalSuppressMessage("Trimming", "IL2026",
     Justification = "Snippet models are simple POCOs preserved by DynamicDependency in Program.cs")]
+[SuppressMessage("ReSharper", "UnusedMember.Global")]
 public class SnippetLoader
 {
     private static readonly JsonSerializerOptions JsonOptions = new()

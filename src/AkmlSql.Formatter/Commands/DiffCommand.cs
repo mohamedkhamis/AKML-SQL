@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using AkmlSql.Formatter.Output;
 using AkmlSql.Formatting.Pipeline;
 
@@ -7,6 +8,7 @@ namespace AkmlSql.Formatter.Commands;
 /// <summary>
 /// Computes and displays unified diff between original and formatted SQL.
 /// </summary>
+[SuppressMessage("ReSharper", "NullableWarningSuppressionIsUsed")]
 public class DiffCommand
 {
     public int Execute(CliOptions options)
@@ -86,7 +88,7 @@ public class DiffCommand
         return violations > 0 ? ExitCodes.Violations : ExitCodes.Success;
     }
 
-    private static int DiffStdin(AkmlSql.Formatting.Profiles.FormattingProfile profile)
+    private static int DiffStdin(Formatting.Profiles.FormattingProfile profile)
     {
         try
         {

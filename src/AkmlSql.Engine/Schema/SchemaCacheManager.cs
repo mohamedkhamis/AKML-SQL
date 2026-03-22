@@ -1,16 +1,18 @@
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Serilog;
+#pragma warning disable IL2026
 
 namespace AkmlSql.Engine.Schema;
 
-public class SchemaCacheManager : IDisposable
+[SuppressMessage("ReSharper", "UnusedMember.Global")]
+public class SchemaCacheManager(int maxDatabases = 10) : IDisposable
 {
     private readonly ConcurrentDictionary<string, DatabaseCache> _caches = new(StringComparer.OrdinalIgnoreCase);
-    private readonly int _maxDatabases;
     private readonly ChangeDetector _changeDetector = new();
     private Timer? _periodicRefreshTimer;
     private readonly ConcurrentDictionary<string, string> _connectionStrings = new(StringComparer.OrdinalIgnoreCase);
@@ -26,11 +28,6 @@ public class SchemaCacheManager : IDisposable
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         Converters = { new JsonStringEnumConverter() }
     };
-
-    public SchemaCacheManager(int maxDatabases = 10)
-    {
-        _maxDatabases = maxDatabases;
-    }
 
     public DatabaseCache GetOrCreateCache(string serverName, string databaseName)
     {
@@ -56,14 +53,14 @@ public class SchemaCacheManager : IDisposable
 
     public void EvictLru()
     {
-        if (_caches.Count <= _maxDatabases)
+        if (_caches.Count <= maxDatabases)
         {
             return;
         }
 
         var oldest = _caches.Values
             .OrderBy(c => c.LastFullRefresh)
-            .Take(_caches.Count - _maxDatabases)
+            .Take(_caches.Count - maxDatabases)
             .ToList();
 
         foreach (var cache in oldest)

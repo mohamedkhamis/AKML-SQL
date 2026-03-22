@@ -187,7 +187,7 @@ namespace AkmlSql.Shell.Shared.Ui
                 }
 
                 // N-prefixed string literal: N'...'
-                if ((c == 'N' || c == 'n') && i + 1 < len && sql[i + 1] == '\'')
+                if (c is 'N' or 'n' && i + 1 < len && sql[i + 1] == '\'')
                 {
                     int start = i;
                     i += 2;
@@ -251,7 +251,7 @@ namespace AkmlSql.Shell.Shared.Ui
                 }
 
                 // Newline
-                if (c == '\r' || c == '\n')
+                if (c is '\r' or '\n')
                 {
                     if (c == '\r' && i + 1 < len && sql[i + 1] == '\n')
                         i++;

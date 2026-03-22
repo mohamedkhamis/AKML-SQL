@@ -9,18 +9,12 @@ namespace AkmlSql.Engine.Completion.Providers;
 /// Provides T-SQL keyword completions based on the current clause context.
 /// Supports keyword casing preferences (UPPER by default).
 /// </summary>
-public class KeywordProvider : ICompletionProvider
+public class KeywordProvider(
+    KeywordCasing casing = KeywordCasing.Upper,
+    int sqlServerVersion = KeywordDictionary.SqlServer2022)
+    : ICompletionProvider
 {
     public string Name => "Keyword";
-
-    private readonly KeywordCasing _casing;
-    private readonly int _sqlServerVersion;
-
-    public KeywordProvider(KeywordCasing casing = KeywordCasing.Upper, int sqlServerVersion = KeywordDictionary.SqlServer2022)
-    {
-        _casing = casing;
-        _sqlServerVersion = sqlServerVersion;
-    }
 
     public bool CanHandle(CursorContext context, DatabaseCache? cache)
     {
@@ -71,7 +65,7 @@ public class KeywordProvider : ICompletionProvider
         }
 
         // Also include version-specific keywords if applicable
-        if (_sqlServerVersion >= KeywordDictionary.SqlServer2022 &&
+        if (sqlServerVersion >= KeywordDictionary.SqlServer2022 &&
             context.ClauseType is ClauseType.Select or ClauseType.Where or ClauseType.Unknown)
         {
             foreach (var keyword in KeywordDictionary.SqlServer2022Keywords)
@@ -93,7 +87,7 @@ public class KeywordProvider : ICompletionProvider
             }
         }
 
-        if (_sqlServerVersion >= KeywordDictionary.SqlServer2025 &&
+        if (sqlServerVersion >= KeywordDictionary.SqlServer2025 &&
             context.ClauseType is ClauseType.Select or ClauseType.Where or ClauseType.Unknown)
         {
             foreach (var keyword in KeywordDictionary.SqlServer2025Keywords)
@@ -118,7 +112,7 @@ public class KeywordProvider : ICompletionProvider
 
     private string ApplyCasing(string keyword)
     {
-        return _casing switch
+        return casing switch
         {
             KeywordCasing.Upper => keyword.ToUpperInvariant(),
             KeywordCasing.Lower => keyword.ToLowerInvariant(),

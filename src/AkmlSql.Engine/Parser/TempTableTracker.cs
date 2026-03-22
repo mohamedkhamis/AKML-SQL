@@ -1,4 +1,6 @@
 using Microsoft.SqlServer.TransactSql.ScriptDom;
+// ReSharper disable UnusedMember.Global
+// ReSharper disable UseIndexFromEndExpression
 
 namespace AkmlSql.Engine.Parser;
 
@@ -42,15 +44,9 @@ public class TempTableTracker
         return result;
     }
 
-    private class TempTableVisitor : TSqlFragmentVisitor
+    private class TempTableVisitor(int cursorOffset) : TSqlFragmentVisitor
     {
-        private readonly int _cursorOffset;
         public List<(string Name, List<string> Columns)> TempTables { get; } = [];
-
-        public TempTableVisitor(int cursorOffset)
-        {
-            _cursorOffset = cursorOffset;
-        }
 
         /// <summary>
         /// Handle CREATE TABLE #tempName (col1 type1, col2 type2, ...)
@@ -58,7 +54,7 @@ public class TempTableTracker
         public override void Visit(CreateTableStatement node)
         {
             // Only include definitions that appear before the cursor
-            if (node.StartOffset > _cursorOffset)
+            if (node.StartOffset > cursorOffset)
             {
                 return;
             }
@@ -90,7 +86,7 @@ public class TempTableTracker
         public override void Visit(SelectStatement node)
         {
             // Only include definitions that appear before the cursor
-            if (node.StartOffset > _cursorOffset)
+            if (node.StartOffset > cursorOffset)
             {
                 return;
             }

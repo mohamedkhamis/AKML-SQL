@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using AkmlSql.Formatter.Output;
 using AkmlSql.Formatting.Pipeline;
 
@@ -7,6 +8,8 @@ namespace AkmlSql.Formatter.Commands;
 /// <summary>
 /// Formats SQL files in-place using <see cref="FormatterPipeline"/> and a formatting profile.
 /// </summary>
+[SuppressMessage("ReSharper", "NullableWarningSuppressionIsUsed")]
+[SuppressMessage("ReSharper", "UnusedParameter.Local")]
 public class FormatCommand
 {
     public int Execute(CliOptions options)
@@ -115,7 +118,7 @@ public class FormatCommand
         return errorCount > 0 ? ExitCodes.ParseError : ExitCodes.Success;
     }
 
-    private static int FormatStdin(AkmlSql.Formatting.Profiles.FormattingProfile profile, bool useStdout)
+    private static int FormatStdin(Formatting.Profiles.FormattingProfile profile, bool useStdout)
     {
         try
         {

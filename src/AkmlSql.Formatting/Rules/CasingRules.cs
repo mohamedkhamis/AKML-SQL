@@ -76,11 +76,7 @@ public class CasingRules : IRuleSet
                 continue;
 
             // Skip non-textual tokens
-            if (node.TokenType == TSqlTokenType.SingleLineComment ||
-                node.TokenType == TSqlTokenType.MultilineComment ||
-                node.TokenType == TSqlTokenType.AsciiStringLiteral ||
-                node.TokenType == TSqlTokenType.UnicodeStringLiteral ||
-                node.TokenType == TSqlTokenType.QuotedIdentifier)
+            if (node.TokenType is TSqlTokenType.SingleLineComment or TSqlTokenType.MultilineComment or TSqlTokenType.AsciiStringLiteral or TSqlTokenType.UnicodeStringLiteral or TSqlTokenType.QuotedIdentifier)
                 continue;
 
             // Global variables (@@xxx)

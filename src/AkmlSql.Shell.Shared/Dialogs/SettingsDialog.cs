@@ -349,7 +349,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             var label = new Label
             {
                 Text = text,
-                Font = new Font(Control.DefaultFont, FontStyle.Bold),
+                Font = new Font(DefaultFont, FontStyle.Bold),
                 Location = new Point(15, y),
                 AutoSize = true
             };

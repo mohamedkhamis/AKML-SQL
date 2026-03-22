@@ -41,7 +41,7 @@ namespace AkmlSql.Core.Ipc
             }
 
             int length = (header[0] << 24) | (header[1] << 16) | (header[2] << 8) | header[3];
-            if (length <= 0 || length > MaxMessageSize)
+            if (length is <= 0 or > MaxMessageSize)
             {
                 throw new InvalidDataException($"Invalid frame length: {length}");
             }

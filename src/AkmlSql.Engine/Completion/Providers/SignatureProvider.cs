@@ -59,10 +59,8 @@ public class SignatureProvider
         int commaCount = 0;
         int depth = 0;
 
-        for (int i = 0; i < tokens.Count; i++)
+        foreach (var token in tokens)
         {
-            var token = tokens[i];
-
             // Skip tokens before the opening paren
             if (token.Offset < openParenOffset)
             {
@@ -107,20 +105,21 @@ public class SignatureProvider
     /// Find the best-matching overload based on the current parameter index.
     /// Prefers overloads where the parameter index is within the non-optional range.
     /// </summary>
-    private static int FindBestOverload(SignatureOverload[] overloads, int parameterIndex)
+    private static int FindBestOverload(SignatureOverload[]? overloads, int parameterIndex)
     {
         // Find the first overload that has enough parameters
-        for (int i = 0; i < overloads.Length; i++)
-        {
-            var overload = overloads[i];
-            if (parameterIndex < overload.Parameters.Length)
+        if (overloads != null)
+            for (int i = 0; i < overloads.Length; i++)
             {
-                return i;
+                var overload = overloads[i];
+                if (parameterIndex < overload.Parameters.Length)
+                {
+                    return i;
+                }
             }
-        }
 
         // If no overload fits, return the last one (most parameters)
-        return overloads.Length > 0 ? overloads.Length - 1 : 0;
+        return overloads is { Length: > 0 } ? overloads.Length - 1 : 0;
     }
 
     /// <summary>

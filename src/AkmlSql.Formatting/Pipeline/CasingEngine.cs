@@ -73,22 +73,15 @@ public class CasingEngine
                 continue;
 
             // Skip comments
-            if (node.TokenType == TSqlTokenType.SingleLineComment ||
-                node.TokenType == TSqlTokenType.MultilineComment)
+            if (node.TokenType is TSqlTokenType.SingleLineComment or TSqlTokenType.MultilineComment)
                 continue;
 
             // Skip string literals and quoted identifiers
-            if (node.TokenType == TSqlTokenType.AsciiStringLiteral ||
-                node.TokenType == TSqlTokenType.UnicodeStringLiteral ||
-                node.TokenType == TSqlTokenType.QuotedIdentifier)
+            if (node.TokenType is TSqlTokenType.AsciiStringLiteral or TSqlTokenType.UnicodeStringLiteral or TSqlTokenType.QuotedIdentifier)
                 continue;
 
             // Skip numeric literals
-            if (node.TokenType == TSqlTokenType.Integer ||
-                node.TokenType == TSqlTokenType.Numeric ||
-                node.TokenType == TSqlTokenType.Real ||
-                node.TokenType == TSqlTokenType.Money ||
-                node.TokenType == TSqlTokenType.HexLiteral)
+            if (node.TokenType is TSqlTokenType.Integer or TSqlTokenType.Numeric or TSqlTokenType.Real or TSqlTokenType.Money or TSqlTokenType.HexLiteral)
                 continue;
 
             // For identifiers, try database cache lookup first
@@ -114,7 +107,7 @@ public class CasingEngine
             // For identifiers with PascalCase/camelCase, optionally use CamelCaseDictionary
             if (node.TokenType == TSqlTokenType.Identifier &&
                 UseCamelCaseDictionary &&
-                (casingMode == "PascalCase" || casingMode == "camelCase"))
+                casingMode is "PascalCase" or "camelCase")
             {
                 node.FormattedText = CamelCase.CamelCaseDictionary.Apply(node.FormattedText, casingMode);
             }

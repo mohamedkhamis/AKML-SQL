@@ -445,8 +445,7 @@ public class PipeRpcServer
                 continue;
             }
 
-            if (t.TokenType == Microsoft.SqlServer.TransactSql.ScriptDom.TSqlTokenType.Identifier ||
-                t.TokenType == Microsoft.SqlServer.TransactSql.ScriptDom.TSqlTokenType.QuotedIdentifier)
+            if (t.TokenType is Microsoft.SqlServer.TransactSql.ScriptDom.TSqlTokenType.Identifier or Microsoft.SqlServer.TransactSql.ScriptDom.TSqlTokenType.QuotedIdentifier)
             {
                 return (t.Text.Trim('[', ']', '"'), tokens[parenTokenIndex].Offset);
             }

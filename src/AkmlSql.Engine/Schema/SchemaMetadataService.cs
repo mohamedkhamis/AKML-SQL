@@ -380,7 +380,7 @@ public class SchemaMetadataService
     /// </summary>
     public static bool IsAzureSql(int engineEdition)
     {
-        return engineEdition == 5 || engineEdition == 8;
+        return engineEdition is 5 or 8;
     }
 
     /// <summary>

@@ -1,8 +1,11 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace AkmlSql.Formatter.Output;
 
 /// <summary>
 /// Renders colored console output for format/check/diff results.
 /// </summary>
+[SuppressMessage("ReSharper", "UnusedMember.Global")]
 public static class ConsoleRenderer
 {
     public static void WriteInfo(string message)
@@ -72,7 +75,7 @@ public static class ConsoleRenderer
     public static void WriteSummary(int total, int modified, int errors, long elapsedMs)
     {
         Console.Error.WriteLine();
-        Console.Error.Write($"Processed ");
+        Console.Error.Write("Processed ");
         Console.ForegroundColor = ConsoleColor.White;
         Console.Error.Write(total.ToString());
         Console.ResetColor();
@@ -100,7 +103,7 @@ public static class ConsoleRenderer
     public static void WriteCheckSummary(int total, int violations, long elapsedMs)
     {
         Console.Error.WriteLine();
-        Console.Error.Write($"Checked ");
+        Console.Error.Write("Checked ");
         Console.ForegroundColor = ConsoleColor.White;
         Console.Error.Write(total.ToString());
         Console.ResetColor();

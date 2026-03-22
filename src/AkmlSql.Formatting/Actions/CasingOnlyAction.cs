@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using AkmlSql.Formatting.Layout;
 using AkmlSql.Formatting.Pipeline;
 using AkmlSql.Formatting.Profiles;
@@ -11,6 +12,9 @@ namespace AkmlSql.Formatting.Actions;
 /// Parses the SQL, applies casing to each token, and reconstructs the text
 /// preserving original whitespace and line breaks.
 /// </summary>
+[SuppressMessage("ReSharper", "CollectionNeverUpdated.Local")]
+[SuppressMessage("ReSharper", "UnusedVariable")]
+[SuppressMessage("ReSharper", "UnusedMember.Global")]
 public class CasingOnlyAction : IFormatAction
 {
     public FormatResult Execute(string sql, FormattingProfile profile)
@@ -65,14 +69,7 @@ public class CasingOnlyAction : IFormatAction
             var sb = new System.Text.StringBuilder(sql.Length);
             foreach (var node in nodes)
             {
-                if (node.TokenType == TSqlTokenType.WhiteSpace)
-                {
-                    sb.Append(node.OriginalText);
-                }
-                else
-                {
-                    sb.Append(node.FormattedText);
-                }
+                sb.Append(node.TokenType == TSqlTokenType.WhiteSpace ? node.OriginalText : node.FormattedText);
             }
 
             var formatted = sb.ToString();

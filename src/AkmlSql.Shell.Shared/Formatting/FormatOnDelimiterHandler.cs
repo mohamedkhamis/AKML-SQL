@@ -37,7 +37,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                 return true;
 
             // Check if the line is a GO batch separator (case-insensitive, standalone)
-            if ((typedChar == 'o' || typedChar == 'O') && IsGoBatchSeparator(lineText))
+            if (typedChar is 'o' or 'O' && IsGoBatchSeparator(lineText))
                 return true;
 
             return false;

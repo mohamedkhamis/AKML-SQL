@@ -42,7 +42,7 @@ public class LayoutEngine
                 continue;
 
             // --- Handle comments ---
-            if (t.TokenType == TSqlTokenType.SingleLineComment || t.TokenType == TSqlTokenType.MultilineComment)
+            if (t.TokenType is TSqlTokenType.SingleLineComment or TSqlTokenType.MultilineComment)
             {
                 if (commentLookup.TryGetValue(i, out var attachment))
                 {
@@ -114,7 +114,7 @@ public class LayoutEngine
 
             // Compute final indent level
             int indentLevel;
-            if (decision.Break == BreakType.NewLine || decision.Break == BreakType.EmptyLine)
+            if (decision.Break is BreakType.NewLine or BreakType.EmptyLine)
             {
                 indentLevel = baseIndent + parenIndent + decision.IndentDelta;
             }
@@ -371,9 +371,7 @@ internal class ClauseTracker
                 // After a JOIN modifier (INNER, LEFT, etc.), stay in FROM context
                 // so the decider can see the JOIN keyword coming
                 if (_current == ClauseContext.From &&
-                    (tokenType == TSqlTokenType.Inner || tokenType == TSqlTokenType.Left ||
-                     tokenType == TSqlTokenType.Right || tokenType == TSqlTokenType.Full ||
-                     tokenType == TSqlTokenType.Cross))
+                    tokenType is TSqlTokenType.Inner or TSqlTokenType.Left or TSqlTokenType.Right or TSqlTokenType.Full or TSqlTokenType.Cross)
                 {
                     // Keep From context so JOIN will be recognized
                 }

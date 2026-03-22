@@ -13,6 +13,7 @@ namespace AkmlSql.Formatting.Rules;
 /// Note: Most JOIN formatting is handled during LayoutEngine.BuildLayout via LineBreakDecider.
 /// This rule set provides additional corrections and edge-case handling.
 /// </summary>
+// ReSharper disable once UnusedMember.Global
 public class JoinRules : IRuleSet
 {
     public void Apply(List<LayoutNode> nodes, FormattingProfile profile)
@@ -57,18 +58,15 @@ public class JoinRules : IRuleSet
             var node = nodes[i];
 
             // Indent JOIN keyword itself
-            if (join.IndentJoin && node.TokenType == TSqlTokenType.Join)
+            if (join.IndentJoin && node is { TokenType: TSqlTokenType.Join, PrecedingBreak: BreakType.NewLine or BreakType.EmptyLine })
             {
-                if (node.PrecedingBreak == BreakType.NewLine || node.PrecedingBreak == BreakType.EmptyLine)
-                {
-                    node.IndentLevel = Math.Max(node.IndentLevel, 1);
-                }
+                node.IndentLevel = Math.Max(node.IndentLevel, 1);
             }
 
             // Also indent JOIN modifiers (INNER, LEFT, etc.) if they start the JOIN line
             if (join.IndentJoin && IsJoinModifier(node.TokenType) && IsJoinStartToken(nodes, i))
             {
-                if (node.PrecedingBreak == BreakType.NewLine || node.PrecedingBreak == BreakType.EmptyLine)
+                if (node.PrecedingBreak is BreakType.NewLine or BreakType.EmptyLine)
                 {
                     node.IndentLevel = Math.Max(node.IndentLevel, 1);
                 }
@@ -308,8 +306,7 @@ public class JoinRules : IRuleSet
             }
             if (foundOn && tt == TSqlTokenType.Join)
                 return true;
-            if (tt == TSqlTokenType.Where || tt == TSqlTokenType.Select ||
-                tt == TSqlTokenType.Having || tt == TSqlTokenType.Semicolon)
+            if (tt is TSqlTokenType.Where or TSqlTokenType.Select or TSqlTokenType.Having or TSqlTokenType.Semicolon)
                 return false;
         }
 

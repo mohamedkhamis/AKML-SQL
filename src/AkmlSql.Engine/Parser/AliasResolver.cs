@@ -103,14 +103,7 @@ public class AliasResolver
                     TableName = funcName
                 };
 
-                if (!string.IsNullOrEmpty(alias))
-                {
-                    Aliases.Add((alias, tableRef));
-                }
-                else
-                {
-                    Aliases.Add((funcName, tableRef));
-                }
+                Aliases.Add(!string.IsNullOrEmpty(alias) ? (alias, tableRef) : (funcName, tableRef));
             }
         }
     }

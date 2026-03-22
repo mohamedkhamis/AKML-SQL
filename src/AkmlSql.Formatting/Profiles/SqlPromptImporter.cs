@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Xml.Linq;
 
 namespace AkmlSql.Formatting.Profiles;
@@ -14,6 +15,7 @@ public class SqlPromptImportResult
     public List<string> UnmappedOptions { get; set; } = [];
 }
 
+[SuppressMessage("ReSharper", "UnusedMember.Global")]
 public static class SqlPromptImporter
 {
     /// <summary>
@@ -132,7 +134,7 @@ public static class SqlPromptImporter
                 var name = opt.Attribute("Name")?.Value ?? opt.Attribute("name")?.Value;
                 var value = opt.Attribute("Value")?.Value ?? opt.Attribute("value")?.Value ?? opt.Value;
                 if (!string.IsNullOrEmpty(name))
-                    elements[name] = value ?? string.Empty;
+                    elements[name] = value;
             }
 
             // Pattern 2: Flat child elements <KeywordCasing>UPPERCASE</KeywordCasing>
