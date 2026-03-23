@@ -10,6 +10,7 @@ using AkmlSql.Engine.Analysis;
 using AkmlSql.Engine.Formatter;
 using AkmlSql.Engine.Snippets;
 using AkmlSql.Engine.Parser;
+using AkmlSql.Engine.Refactoring;
 using AkmlSql.Engine.Schema;
 using AkmlSql.Formatting.Profiles;
 using MessagePack;
@@ -35,6 +36,7 @@ public class PipeRpcServer
     private readonly SnippetRequestHandler _snippetHandler;
     private readonly AnalysisEngine _analysisEngine;
     private readonly CaSettingsLoader _caSettingsLoader = new();
+    private readonly RefactoringEngine _refactoringEngine;
 
     public PipeRpcServer(string pipeName)
     {
@@ -42,6 +44,7 @@ public class PipeRpcServer
         _completionEngine = new CompletionEngine(_parserService);
         _formatHandler = new FormatRequestHandler(ProfileManager.CreateDefault());
         _analysisEngine = new AnalysisEngine(_parserService, new RuleRegistry(), _caSettingsLoader);
+        _refactoringEngine = new RefactoringEngine(_parserService, _schemaCacheManager);
 
         var appDataFolder = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AKML SQL");
@@ -397,6 +400,18 @@ public class PipeRpcServer
                     _caSettingsLoader.InvalidateCache();
                     return Task.FromResult<RpcMessage?>(null);
 
+                case MessageTypes.RequestRefactorPreview:
+                    if (message.Payload == null)
+                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
+                    var rfPrevReq = MessagePackSerializer.Deserialize<RefactorPreviewRequest>(message.Payload);
+                    return RefactorPreviewAsync(rfPrevReq, message.RequestId, ct);
+
+                case MessageTypes.RequestRefactorApply:
+                    if (message.Payload == null)
+                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
+                    var rfApplyReq = MessagePackSerializer.Deserialize<RefactorApplyRequest>(message.Payload);
+                    return RefactorApplyAsync(rfApplyReq, message.RequestId, ct);
+
                 case MessageTypes.Shutdown:
                     Log.Information("Shutdown requested by client.");
                     throw new OperationCanceledException("Shutdown requested");
@@ -474,6 +489,34 @@ public class PipeRpcServer
         }
 
         return (string.Empty, -1);
+    }
+
+    private async Task<RpcMessage?> RefactorPreviewAsync(RefactorPreviewRequest req, int requestId, CancellationToken ct)
+    {
+        try
+        {
+            var response = await _refactoringEngine.PreviewAsync(req, _sessionManager, ct);
+            return CreateResponse(MessageTypes.RefactorPreviewResult, requestId, response);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "RefactorPreview failed");
+            return CreateErrorResponse("Refactor preview failed: " + ex.Message, requestId);
+        }
+    }
+
+    private async Task<RpcMessage?> RefactorApplyAsync(RefactorApplyRequest req, int requestId, CancellationToken ct)
+    {
+        try
+        {
+            var response = await _refactoringEngine.ApplyAsync(req, ct);
+            return CreateResponse(MessageTypes.RefactorApplyResult, requestId, response);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "RefactorApply failed");
+            return CreateErrorResponse("Refactor apply failed: " + ex.Message, requestId);
+        }
     }
 
     private async Task<RpcMessage?> AnalyzeAsync(CodeAnalysisRequest req, int requestId, CancellationToken ct)

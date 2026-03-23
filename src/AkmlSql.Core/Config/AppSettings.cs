@@ -27,6 +27,9 @@ namespace AkmlSql.Core.Config
         [JsonPropertyName("codeAnalysis")]
         public CodeAnalysisSettings CodeAnalysis { get; set; } = new();
 
+        [JsonPropertyName("refactoring")]
+        public RefactoringSettings Refactoring { get; set; } = new();
+
         /// <summary>
         /// T093-T095: Whether the user has been prompted about native IntelliSense conflict.
         /// </summary>
@@ -171,5 +174,29 @@ namespace AkmlSql.Core.Config
 
         [JsonPropertyName("showInErrorList")]
         public bool ShowInErrorList { get; set; } = true;
+    }
+
+    public class RefactoringSettings
+    {
+        [JsonPropertyName("previewBeforeApply")]
+        public bool PreviewBeforeApply { get; set; } = true;
+
+        [JsonPropertyName("createBackups")]
+        public bool CreateBackups { get; set; } = true;
+
+        [JsonPropertyName("formatAfterRefactor")]
+        public bool FormatAfterRefactor { get; set; } = true;
+
+        /// <summary>
+        /// Default scope for Safe Rename. Valid values: "currentScript", "projectDirectory".
+        /// </summary>
+        [JsonPropertyName("renameScope")]
+        public string RenameScope { get; set; } = "currentScript";
+
+        [JsonPropertyName("includeCommentsInRename")]
+        public bool IncludeCommentsInRename { get; set; } = true;
+
+        [JsonPropertyName("includeStringLiteralsInRename")]
+        public bool IncludeStringLiteralsInRename { get; set; }
     }
 }

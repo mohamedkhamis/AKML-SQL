@@ -68,6 +68,14 @@ namespace AkmlSql.Shell.Shared.Dialogs
         private CheckBox      _chkAnalysisShowInErrorList;
         private DataGridView  _gridRules;
 
+        // Refactoring
+        private CheckBox  _chkRefPreviewBeforeApply;
+        private CheckBox  _chkRefCreateBackups;
+        private CheckBox  _chkRefFormatAfterRefactor;
+        private CheckBox  _chkRefIncludeCommentsInRename;
+        private CheckBox  _chkRefIncludeStringLiteralsInRename;
+        private ComboBox  _cboRefRenameScope;
+
         public SettingsDialog(AppSettings settings)
         {
             _settings = settings;
@@ -103,6 +111,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             tabControl.TabPages.Add(CreateFormatterTab());
             tabControl.TabPages.Add(CreateSnippetsTab());
             tabControl.TabPages.Add(CreateCodeAnalysisTab());
+            tabControl.TabPages.Add(CreateRefactoringTab());
 
             var buttonPanel = new Panel
             {
@@ -323,6 +332,27 @@ namespace AkmlSql.Shell.Shared.Dialogs
             return tab;
         }
 
+        private TabPage CreateRefactoringTab()
+        {
+            var tab = new TabPage("Refactoring");
+            tab.AutoScroll = true;
+            var y = 20;
+
+            AddSectionLabel(tab, "Preview & Safety", ref y);
+            _chkRefPreviewBeforeApply  = AddCheckBox(tab, "Show preview dialog before applying changes", ref y);
+            _chkRefCreateBackups       = AddCheckBox(tab, "Create backups before applying refactoring", ref y);
+            _chkRefFormatAfterRefactor = AddCheckBox(tab, "Format SQL after refactoring", ref y);
+
+            y += 10;
+            AddSectionLabel(tab, "Rename Options", ref y);
+            _chkRefIncludeCommentsInRename      = AddCheckBox(tab, "Include comment text in rename scope", ref y);
+            _chkRefIncludeStringLiteralsInRename = AddCheckBox(tab, "Include string literals in rename scope", ref y);
+            _cboRefRenameScope = AddComboField(tab, "Rename scope:",
+                ["Current Script", "Project Directory"], ref y);
+
+            return tab;
+        }
+
         private void OnImportCaSettings(object sender, EventArgs e)
         {
             using var dlg = new OpenFileDialog
@@ -450,6 +480,15 @@ namespace AkmlSql.Shell.Shared.Dialogs
             _chkAnalysisRunOnSave.Checked        = ca.RunOnSave;
             _chkAnalysisShowInErrorList.Checked  = ca.ShowInErrorList;
 
+            // Refactoring
+            var rf = _settings.Refactoring;
+            _chkRefPreviewBeforeApply.Checked            = rf.PreviewBeforeApply;
+            _chkRefCreateBackups.Checked                 = rf.CreateBackups;
+            _chkRefFormatAfterRefactor.Checked           = rf.FormatAfterRefactor;
+            _chkRefIncludeCommentsInRename.Checked       = rf.IncludeCommentsInRename;
+            _chkRefIncludeStringLiteralsInRename.Checked = rf.IncludeStringLiteralsInRename;
+            _cboRefRenameScope.SelectedIndex = rf.RenameScope == "projectDirectory" ? 1 : 0;
+
             // Populate rule grid from user-level .casettings file
             try
             {
@@ -531,6 +570,16 @@ namespace AkmlSql.Shell.Shared.Dialogs
             _settings.CodeAnalysis.RunOnType        = _chkAnalysisRunOnType.Checked;
             _settings.CodeAnalysis.RunOnSave        = _chkAnalysisRunOnSave.Checked;
             _settings.CodeAnalysis.ShowInErrorList  = _chkAnalysisShowInErrorList.Checked;
+
+            // Refactoring
+            _settings.Refactoring.PreviewBeforeApply            = _chkRefPreviewBeforeApply.Checked;
+            _settings.Refactoring.CreateBackups                 = _chkRefCreateBackups.Checked;
+            _settings.Refactoring.FormatAfterRefactor           = _chkRefFormatAfterRefactor.Checked;
+            _settings.Refactoring.IncludeCommentsInRename       = _chkRefIncludeCommentsInRename.Checked;
+            _settings.Refactoring.IncludeStringLiteralsInRename = _chkRefIncludeStringLiteralsInRename.Checked;
+            _settings.Refactoring.RenameScope = _cboRefRenameScope.SelectedIndex == 1
+                ? "projectDirectory"
+                : "currentScript";
 
             // Persist rule enable/severity overrides to the user-level .casettings file
             SaveRuleGridToCaSettings();

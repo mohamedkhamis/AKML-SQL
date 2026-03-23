@@ -19,5 +19,11 @@ namespace AkmlSql.Core.Ipc.Messages
 
         [Key(4)]
         public string? ErrorMessage { get; set; }
+
+        /// <summary>
+        /// Non-blocking advisory messages (e.g., schema-cache miss, non-equi-join left unchanged).
+        /// </summary>
+        [Key(5)]
+        public string[]? Warnings { get; set; }
     }
 }

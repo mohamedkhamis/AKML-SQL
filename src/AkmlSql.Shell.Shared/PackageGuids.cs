@@ -32,5 +32,24 @@ namespace AkmlSql.Shell.Shared
         public const int CmdToggleAs = 0x0216;
         public const int CmdEditProfile = 0x0220;
         public const int CmdBulkAnalysis = 0x0300;
+
+        // Phase 6 — Lightweight refactoring operations (Format menu)
+        public const int CmdExpandInsertColumns    = 0x0217;
+        public const int CmdExpandExecParameters   = 0x0218;
+        public const int CmdExpandUpdateColumns    = 0x0219;
+        public const int CmdConvertOldStyleJoins   = 0x021A;
+        public const int CmdAddGroupByColumns      = 0x021B;
+        public const int CmdEncapsulateBeginEnd    = 0x021C;
+        public const int CmdReplaceDeprecatedSyntax = 0x021D;
+
+        // Phase 6 — Heavyweight refactoring operations
+        public const int CmdSafeRename             = 0x0400;
+        public const int CmdExtractToCte           = 0x0401;
+        public const int CmdExtractToProc          = 0x0402;
+        public const int CmdExtractToDerivedTable  = 0x0403;
+        public const int CmdEncapsulateAsView      = 0x0404;
+        public const int CmdConvertTempToTableVar  = 0x0405;
+        public const int CmdConvertTableVarToTemp  = 0x0406;
+        public const int CmdParameterizeValues     = 0x0407;
     }
 }

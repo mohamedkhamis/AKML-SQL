@@ -57,6 +57,14 @@
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\QualifyNamesCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\ToggleBracketsCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\ToggleAsCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\RemoveSemicolonsCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\ExpandInsertColumnsCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\ExpandExecParametersCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\ExpandUpdateColumnsCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\ConvertOldStyleJoinsCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\AddGroupByColumnsCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\EncapsulateBeginEndCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\ReplaceDeprecatedSyntaxCommand.cs" />
     <!-- Analysis: real-time squiggles, error list, lightbulb fix actions -->
     <Compile Include="$(MSBuildThisFileDirectory)Analysis\AnalysisController.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Analysis\DiagnosticTagger.cs" />
@@ -66,5 +74,15 @@
     <!-- Bulk analysis command and result dialog -->
     <Compile Include="$(MSBuildThisFileDirectory)Commands\BulkAnalysisCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\BulkAnalysisResultDialog.cs" />
+    <!-- Refactoring: preview dialog and safe rename command stubs (T039, T040) -->
+    <Compile Include="$(MSBuildThisFileDirectory)Refactoring\RefactoringPreviewDialog.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Refactoring\SafeRenameCommand.cs" />
+    <!-- Heavyweight refactoring commands -->
+    <Compile Include="$(MSBuildThisFileDirectory)Refactoring\ConvertTempTableCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Refactoring\ParameterizeValuesCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Refactoring\ExtractToCteCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Refactoring\ExtractToProcCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Refactoring\ExtractToDerivedTableCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Refactoring\EncapsulateAsViewCommand.cs" />
   </ItemGroup>
 </Project>

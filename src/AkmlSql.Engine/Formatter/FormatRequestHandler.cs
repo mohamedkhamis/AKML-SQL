@@ -1,6 +1,9 @@
 using System.Collections.Concurrent;
 using System.Text;
 using AkmlSql.Core.Ipc.Messages;
+using AkmlSql.Engine.Refactoring;
+using AkmlSql.Engine.Refactoring.Operations;
+using AkmlSql.Engine.Refactoring.Operations.Lightweight;
 using AkmlSql.Formatting.Pipeline;
 using AkmlSql.Formatting.Profiles;
 using AkmlSql.Formatting.Selection;
@@ -97,13 +100,69 @@ public class FormatRequestHandler(ProfileManager profileManager)
 
     public FormatActionResponse HandleFormatAction(FormatActionRequest request)
     {
-        // Standalone actions — will be implemented in Phase 9
-        return new FormatActionResponse
+        try
         {
-            Success = false,
-            FormattedText = request.Text,
-            ErrorMessage = "Format actions not yet implemented"
-        };
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var actionType = (FormatActionType)request.ActionType;
+
+            // Actions 0-8 are handled by the formatter pipeline (existing logic)
+            // Actions 9-15 are new lightweight refactoring operations
+            ILightweightOperation? op = actionType switch
+            {
+                FormatActionType.ExpandInsertColumns    => new ExpandInsertColumnsOperation(),
+                FormatActionType.ExpandExecParameters   => new ExpandExecParametersOperation(),
+                FormatActionType.ExpandUpdateColumns    => new ExpandUpdateColumnsOperation(),
+                FormatActionType.ConvertOldStyleJoins   => new ConvertOldStyleJoinsOperation(),
+                FormatActionType.AddGroupByColumns      => new AddGroupByColumnsOperation(),
+                FormatActionType.EncapsulateBeginEnd    => new EncapsulateBeginEndOperation(),
+                FormatActionType.ReplaceDeprecatedSyntax => new ReplaceDeprecatedSyntaxOperation(),
+                _ => null
+            };
+
+            if (op == null)
+            {
+                return new FormatActionResponse
+                {
+                    Success = false,
+                    FormattedText = request.Text,
+                    ErrorMessage = $"Format action type {request.ActionType} is not supported here."
+                };
+            }
+
+            // Build a minimal RefactoringContext (no schema cache, no session for lightweight ops)
+            var parser = new AkmlSql.Engine.Parser.TsqlParserService();
+            var ctx = new RefactoringContext
+            {
+                DocumentText    = request.Text,
+                Script          = parser.Parse(request.Text, out _) ?? new Microsoft.SqlServer.TransactSql.ScriptDom.TSqlScript(),
+                Tokens          = parser.GetTokenStream(request.Text),
+                SelectionStart  = request.SelectionStart,
+                SelectionLength = request.SelectionLength,
+                SessionId       = request.SessionId ?? string.Empty
+            };
+
+            var (modifiedText, warnings) = op.Apply(ctx);
+            sw.Stop();
+
+            return new FormatActionResponse
+            {
+                Success      = true,
+                FormattedText = modifiedText,
+                WasModified  = !string.Equals(modifiedText, request.Text, StringComparison.Ordinal),
+                ElapsedMs    = sw.ElapsedMilliseconds,
+                Warnings     = warnings.Length > 0 ? warnings : null
+            };
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "HandleFormatAction failed for ActionType={ActionType}", request.ActionType);
+            return new FormatActionResponse
+            {
+                Success       = false,
+                FormattedText = request.Text,
+                ErrorMessage  = ex.Message
+            };
+        }
     }
 
     public ProfileListResponse HandleProfileList()

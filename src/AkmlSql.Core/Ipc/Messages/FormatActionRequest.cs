@@ -12,7 +12,16 @@ namespace AkmlSql.Core.Ipc.Messages
         AddSquareBrackets = 5,
         RemoveSquareBrackets = 6,
         AddAsKeyword = 7,
-        RemoveAsKeyword = 8
+        RemoveAsKeyword = 8,
+
+        // Phase 6 — Refactoring lightweight operations
+        ExpandInsertColumns = 9,
+        ExpandExecParameters = 10,
+        ExpandUpdateColumns = 11,
+        ConvertOldStyleJoins = 12,
+        AddGroupByColumns = 13,
+        EncapsulateBeginEnd = 14,
+        ReplaceDeprecatedSyntax = 15
     }
 
     [MessagePackObject]
@@ -29,5 +38,17 @@ namespace AkmlSql.Core.Ipc.Messages
 
         [Key(3)]
         public string? ProfileName { get; set; }
+
+        /// <summary>
+        /// Character offset of selection start (0 = act on full document).
+        /// </summary>
+        [Key(4)]
+        public int SelectionStart { get; set; }
+
+        /// <summary>
+        /// Length of selection in characters (0 = act on full document).
+        /// </summary>
+        [Key(5)]
+        public int SelectionLength { get; set; }
     }
 }

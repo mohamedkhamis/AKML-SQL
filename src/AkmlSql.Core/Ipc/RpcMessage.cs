@@ -78,5 +78,13 @@ namespace AkmlSql.Core.Ipc
 
         // Engine → Shell (Code Analysis)
         public const int AnalysisResult = 125;
+
+        // Shell → Engine (Refactoring — heavyweight preview/apply)
+        public const int RequestRefactorPreview = 30;
+        public const int RequestRefactorApply = 31;
+
+        // Engine → Shell (Refactoring)
+        public const int RefactorPreviewResult = 130;
+        public const int RefactorApplyResult = 131;
     }
 }

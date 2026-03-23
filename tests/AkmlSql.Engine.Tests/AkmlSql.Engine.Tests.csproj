@@ -28,4 +28,12 @@
     <ProjectReference Include="..\..\src\AkmlSql.Analyzer\AkmlSql.Analyzer.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="Refactoring\Corpus\corpus01_simple_select.sql" />
+    <EmbeddedResource Include="Refactoring\Corpus\corpus02_insert_update_delete.sql" />
+    <EmbeddedResource Include="Refactoring\Corpus\corpus03_joins_and_aggregates.sql" />
+    <EmbeddedResource Include="Refactoring\Corpus\corpus04_cte_and_subquery.sql" />
+    <EmbeddedResource Include="Refactoring\Corpus\corpus05_stored_proc.sql" />
+  </ItemGroup>
+
 </Project>
