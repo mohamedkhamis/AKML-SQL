@@ -39,7 +39,7 @@ namespace AkmlSql.Shell.Shared.Analysis
 
             var prev = _debounce;
             _debounce = new CancellationTokenSource();
-            try { prev?.Cancel(); } catch { /* already disposed */ }
+            try { prev?.Cancel(); prev?.Dispose(); } catch (ObjectDisposedException) { }
 
             var ct = _debounce.Token;
             Task.Delay(300, ct).ContinueWith(
@@ -84,7 +84,7 @@ namespace AkmlSql.Shell.Shared.Analysis
             if (_disposed) return;
             _disposed = true;
             _buffer.Changed -= OnBufferChanged;
-            try { _debounce?.Cancel(); } catch { /* already disposed */ }
+            try { _debounce?.Cancel(); _debounce?.Dispose(); } catch (ObjectDisposedException) { }
         }
     }
 

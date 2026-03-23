@@ -91,20 +91,17 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
         private void InitializeComponents()
         {
-            Text = Constants.ProductName + " Options";
+            Text            = Constants.ProductName + " Options";
             FormBorderStyle = FormBorderStyle.Sizable;
-            MaximizeBox = false;
-            MinimizeBox = false;
-            StartPosition = FormStartPosition.CenterParent;
-            Size = new Size(580, 560);
-            MinimumSize = new Size(520, 480);
-            ShowInTaskbar = false;
+            MaximizeBox     = false;
+            MinimizeBox     = false;
+            StartPosition   = FormStartPosition.CenterParent;
+            Size            = new Size(620, 600);
+            MinimumSize     = new Size(540, 500);
+            ShowInTaskbar   = false;
+            BackColor       = Color.FromArgb(250, 250, 252);
 
-            var tabControl = new TabControl
-            {
-                Dock = DockStyle.Fill
-            };
-
+            var tabControl = new TabControl { Dock = DockStyle.Fill };
             tabControl.TabPages.Add(CreateGeneralTab());
             tabControl.TabPages.Add(CreateIntelliSenseTab());
             tabControl.TabPages.Add(CreateCacheTab());
@@ -113,42 +110,69 @@ namespace AkmlSql.Shell.Shared.Dialogs
             tabControl.TabPages.Add(CreateCodeAnalysisTab());
             tabControl.TabPages.Add(CreateRefactoringTab());
 
+            // ─── Button panel ─────────────────────────────────────────────────
             var buttonPanel = new Panel
             {
-                Dock = DockStyle.Bottom,
-                Height = 50
+                Dock      = DockStyle.Bottom,
+                Height    = 54,
+                BackColor = Color.FromArgb(242, 242, 245)
             };
 
+            var separator = new Panel
+            {
+                Dock      = DockStyle.Top,
+                Height    = 1,
+                BackColor = Color.FromArgb(210, 210, 215)
+            };
+
+            var applyButton = new Button
+            {
+                Text      = "Apply",
+                Size      = new Size(90, 30),
+                FlatStyle = FlatStyle.System
+            };
             var saveButton = new Button
             {
-                Text = "Save",
-                Size = new Size(90, 30),
-                Anchor = AnchorStyles.Bottom | AnchorStyles.Right,
-                DialogResult = DialogResult.OK
+                Text         = "Save All",
+                Size         = new Size(90, 30),
+                FlatStyle    = FlatStyle.System,
+                DialogResult = DialogResult.OK,
+                Font         = new Font(DefaultFont, FontStyle.Bold)
             };
-            saveButton.Location = new Point(buttonPanel.Width - 210, 10);
-            // Recompute on resize
-            buttonPanel.Resize += (_, _2) =>
-            {
-                saveButton.Location = new Point(buttonPanel.Width - 210, 10);
-            };
-
             var cancelButton = new Button
             {
-                Text = "Cancel",
-                Size = new Size(90, 30),
-                Anchor = AnchorStyles.Bottom | AnchorStyles.Right,
+                Text         = "Cancel",
+                Size         = new Size(90, 30),
+                FlatStyle    = FlatStyle.System,
                 DialogResult = DialogResult.Cancel
             };
-            cancelButton.Location = new Point(buttonPanel.Width - 105, 10);
-            buttonPanel.Resize += (_, _2) =>
+
+            // Apply saves settings without closing the dialog
+            applyButton.Click += (_, __) =>
             {
-                cancelButton.Location = new Point(buttonPanel.Width - 105, 10);
+                SaveControlsToSettings();
+                try   { ConfigManager.Save(_settings); }
+                catch (Exception ex)
+                {
+                    Serilog.Log.Warning(ex, "SettingsDialog: Apply failed");
+                    MessageBox.Show("Failed to apply settings: " + ex.Message,
+                        Constants.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+            };
+
+            // Position all buttons flush-right using a Layout event
+            buttonPanel.Layout += (_, __) =>
+            {
+                int top = (buttonPanel.Height - 30) / 2 + 1;
+                cancelButton.Location = new Point(buttonPanel.Width - 100, top);
+                saveButton.Location   = new Point(buttonPanel.Width - 198, top);
+                applyButton.Location  = new Point(buttonPanel.Width - 296, top);
             };
 
             AcceptButton = saveButton;
             CancelButton = cancelButton;
-
+            buttonPanel.Controls.Add(separator);
+            buttonPanel.Controls.Add(applyButton);
             buttonPanel.Controls.Add(saveButton);
             buttonPanel.Controls.Add(cancelButton);
 
@@ -380,6 +404,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             }
             catch (Exception ex)
             {
+                Serilog.Log.Warning(ex, "SettingsDialog: import CAsettings failed");
                 MessageBox.Show("Failed to import: " + ex.Message, Constants.ProductName,
                     MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
@@ -416,6 +441,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             }
             catch (Exception ex)
             {
+                Serilog.Log.Warning(ex, "SettingsDialog: export CAsettings failed");
                 MessageBox.Show("Failed to export: " + ex.Message, Constants.ProductName,
                     MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
@@ -636,15 +662,32 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
         private static void AddSectionLabel(TabPage tab, string text, ref int y)
         {
+            // Horizontal separator (skipped for the very first section on the tab)
+            if (y > 20)
+            {
+                y += 4;
+                var sep = new Panel
+                {
+                    Location  = new Point(12, y),
+                    Height    = 1,
+                    BackColor = Color.FromArgb(210, 215, 225)
+                };
+                sep.Width = tab.ClientSize.Width > 0 ? tab.ClientSize.Width - 24 : 520;
+                tab.Resize += (_, __) => sep.Width = tab.ClientSize.Width - 24;
+                tab.Controls.Add(sep);
+                y += 8;
+            }
+
             var label = new Label
             {
-                Text = text,
-                Font = new Font(DefaultFont, FontStyle.Bold),
-                Location = new Point(15, y),
-                AutoSize = true
+                Text      = text,
+                Font      = new Font(DefaultFont, FontStyle.Bold),
+                ForeColor = Color.FromArgb(0, 84, 166),
+                Location  = new Point(15, y),
+                AutoSize  = true
             };
             tab.Controls.Add(label);
-            y += 25;
+            y += 26;
         }
 
         private static CheckBox AddCheckBox(TabPage tab, string text, ref int y)

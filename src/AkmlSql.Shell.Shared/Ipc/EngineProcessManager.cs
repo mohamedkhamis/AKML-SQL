@@ -58,10 +58,13 @@ namespace AkmlSql.Shell.Shared.Ipc
 
                 _client = new PipeRpcClient(_pipeName);
                 await _client.ConnectAsync(ct: ct);
+                // Reset crash counter after a successful connection
+                Interlocked.Exchange(ref _restartCount, 0);
             }
             catch (Exception ex)
             {
                 Log.Error(ex, "Failed to launch engine");
+                throw;
             }
         }
 
@@ -72,15 +75,14 @@ namespace AkmlSql.Shell.Shared.Ipc
                 return;
             }
 
-            Log.Warning("Engine process exited. Restart count: {Count}", _restartCount);
+            var restartCount = Interlocked.Increment(ref _restartCount);
+            Log.Warning("Engine process exited. Restart attempt {Count}", restartCount);
 
-            if (_restartCount >= 5)
+            if (restartCount > 5)
             {
-                Log.Error("Engine crashed too many times. Giving up.");
+                Log.Error("Engine crashed too many times ({Count}). Giving up.", restartCount);
                 return;
             }
-
-            _restartCount++;
             _client?.Dispose();
 
             // Use Task.Run to avoid async void — all exceptions are caught inside

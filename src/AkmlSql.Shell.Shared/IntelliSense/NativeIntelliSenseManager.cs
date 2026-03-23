@@ -21,6 +21,15 @@ namespace AkmlSql.Shell.Shared.IntelliSense
 
         private NativeIntelliSenseManager() { }
 
+        /// <summary>Registry paths for SSMS 20, 21, and 22 IntelliSense settings.</summary>
+        private static readonly string[] IntelliSenseRegistryPaths =
+        [
+            @"Software\Microsoft\SQL Server Management Studio\20.0\Settings\IntelliSense",
+            @"Software\Microsoft\SQL Server Management Studio\21.0\Settings\IntelliSense",
+            @"Software\Microsoft\SQL Server Management Studio\22.0\Settings\IntelliSense",
+            @"Software\Microsoft\SSMS\22.0\Settings\IntelliSense"
+        ];
+
         public static NativeIntelliSenseManager Instance
         {
             get
@@ -51,14 +60,7 @@ namespace AkmlSql.Shell.Shared.IntelliSense
                 // HKCU\Software\Microsoft\SQL Server Management Studio\XX.0\Settings\IntelliSense
                 // Key: EnableIntelliSense (DWORD, 1 = enabled)
                 // We check common versions
-                string[] registryPaths =
-                [
-                    @"Software\Microsoft\SQL Server Management Studio\20.0\Settings\IntelliSense",
-                    @"Software\Microsoft\SQL Server Management Studio\22.0\Settings\IntelliSense",
-                    @"Software\Microsoft\SSMS\22.0\Settings\IntelliSense"
-                ];
-
-                foreach (var path in registryPaths)
+                foreach (var path in IntelliSenseRegistryPaths)
                 {
                     using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(path))
                     {
@@ -152,14 +154,7 @@ namespace AkmlSql.Shell.Shared.IntelliSense
         /// </summary>
         private void DisableNativeIntelliSense()
         {
-            string[] registryPaths =
-            [
-                @"Software\Microsoft\SQL Server Management Studio\20.0\Settings\IntelliSense",
-                @"Software\Microsoft\SQL Server Management Studio\22.0\Settings\IntelliSense",
-                @"Software\Microsoft\SSMS\22.0\Settings\IntelliSense"
-            ];
-
-            foreach (var path in registryPaths)
+            foreach (var path in IntelliSenseRegistryPaths)
             {
                 try
                 {
@@ -192,14 +187,7 @@ namespace AkmlSql.Shell.Shared.IntelliSense
                     return;
                 }
 
-                string[] registryPaths =
-                [
-                    @"Software\Microsoft\SQL Server Management Studio\20.0\Settings\IntelliSense",
-                    @"Software\Microsoft\SQL Server Management Studio\22.0\Settings\IntelliSense",
-                    @"Software\Microsoft\SSMS\22.0\Settings\IntelliSense"
-                ];
-
-                foreach (var path in registryPaths)
+                foreach (var path in IntelliSenseRegistryPaths)
                 {
                     using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(path, writable: true))
                     {

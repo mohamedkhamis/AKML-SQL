@@ -19,13 +19,16 @@ namespace AkmlSql.Shell.Shared.Formatting
             {
                 buffer.GetLastLineIndex(out var lastLine, out var lastCol);
 
-                var hr = buffer.ReplaceLines(0, 0, lastLine, lastCol,
-                    System.Runtime.InteropServices.Marshal.StringToHGlobalUni(formattedText),
-                    formattedText.Length, null);
-
-                if (hr != VSConstants.S_OK)
+                var ptr = System.Runtime.InteropServices.Marshal.StringToHGlobalUni(formattedText);
+                try
                 {
-                    Log.Warning("Failed to apply formatted text, HRESULT=0x{Hr:X8}", hr);
+                    var hr = buffer.ReplaceLines(0, 0, lastLine, lastCol, ptr, formattedText.Length, null);
+                    if (hr != VSConstants.S_OK)
+                        Log.Warning("Failed to apply formatted text, HRESULT=0x{Hr:X8}", hr);
+                }
+                finally
+                {
+                    System.Runtime.InteropServices.Marshal.FreeHGlobal(ptr);
                 }
             }
             catch (Exception ex)

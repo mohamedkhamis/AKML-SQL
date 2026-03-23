@@ -53,7 +53,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                 {
                     SessionId = Guid.NewGuid().ToString("N"),
                     Text = documentText,
-                    ActionType = 7  // FormatActionType.AddAsKeyword
+                    ActionType = (int)FormatActionType.AddAsKeyword
                 };
 
                 System.Threading.Tasks.Task.Run(async () =>

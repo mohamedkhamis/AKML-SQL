@@ -5,10 +5,19 @@ using MessagePack;
 
 namespace AkmlSql.Core.Ipc
 {
+    /// <summary>
+    /// Low-level framing layer for the AKML SQL named-pipe IPC channel.
+    /// Each frame is: <c>[4-byte big-endian length][4-byte XOR-rotate checksum][N-byte MessagePack payload]</c>.
+    /// Maximum frame size is 16 MB.
+    /// </summary>
     public static class FrameProtocol
     {
         private const int MaxMessageSize = 16 * 1024 * 1024; // 16 MB
 
+        /// <summary>
+        /// Serializes <paramref name="message"/> to MessagePack, prepends an 8-byte frame header,
+        /// and writes the complete frame to <paramref name="stream"/>.
+        /// </summary>
         public static async Task WriteFramedAsync(Stream stream, RpcMessage? message, CancellationToken ct = default)
         {
             var payload = MessagePackSerializer.Serialize(message, cancellationToken: ct);
@@ -31,6 +40,12 @@ namespace AkmlSql.Core.Ipc
             await stream.FlushAsync(ct).ConfigureAwait(false);
         }
 
+        /// <summary>
+        /// Reads a complete frame from <paramref name="stream"/>, verifies the checksum,
+        /// and deserializes the payload into an <see cref="RpcMessage"/>.
+        /// Returns <c>null</c> when the stream is closed gracefully.
+        /// Throws <see cref="InvalidDataException"/> on corrupt frames.
+        /// </summary>
         public static async Task<RpcMessage?> ReadFramedAsync(Stream stream, CancellationToken ct = default)
         {
             var header = new byte[8];

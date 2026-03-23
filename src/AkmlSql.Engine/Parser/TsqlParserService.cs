@@ -13,13 +13,13 @@ public partial class TsqlParserService
 
     public void SetServerVersion(int serverVersion)
     {
-        if (_serverVersion == serverVersion && _parser != null)
+        lock (_lock)
         {
-            return;
+            if (_serverVersion == serverVersion && _parser != null)
+                return;
+            _serverVersion = serverVersion;
+            _parser = CreateParser(serverVersion);
         }
-
-        _serverVersion = serverVersion;
-        _parser = CreateParser(serverVersion);
     }
 
     /// Fast tier: tokenize only (~50-70ms for 10K lines)
@@ -56,9 +56,10 @@ public partial class TsqlParserService
 
     private TSqlParser GetParser()
     {
-        _parser ??= CreateParser(_serverVersion);
-
-        return _parser;
+        lock (_lock)
+        {
+            return _parser ??= CreateParser(_serverVersion);
+        }
     }
 
     /// <summary>

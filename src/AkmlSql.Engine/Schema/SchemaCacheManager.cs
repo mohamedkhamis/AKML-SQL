@@ -9,6 +9,17 @@ using Serilog;
 
 namespace AkmlSql.Engine.Schema;
 
+/// <summary>
+/// Manages the collection of per-database <see cref="DatabaseCache"/> instances across all active connections.
+/// Responsibilities:
+/// <list type="bullet">
+///   <item>Create or retrieve caches keyed by <c>server:database</c></item>
+///   <item>LRU eviction when the count exceeds <paramref name="maxDatabases"/></item>
+///   <item>Periodic change detection via <see cref="ChangeDetector"/></item>
+///   <item>Optional disk persistence of cache snapshots across sessions</item>
+/// </list>
+/// Thread-safe: uses <see cref="ConcurrentDictionary"/> for lock-free reads.
+/// </summary>
 [SuppressMessage("ReSharper", "UnusedMember.Global")]
 public class SchemaCacheManager(int maxDatabases = 10) : IDisposable
 {
@@ -29,15 +40,24 @@ public class SchemaCacheManager(int maxDatabases = 10) : IDisposable
         Converters = { new JsonStringEnumConverter() }
     };
 
+    private static string BuildCacheKey(string serverName, string databaseName) =>
+        $"{serverName}:{databaseName}";
+
+    /// <summary>
+    /// Returns the existing cache for <paramref name="serverName"/>/<paramref name="databaseName"/>,
+    /// or creates a new empty one. Callers should follow up with <c>SchemaMetadataService.PopulatePhaseAAsync</c>
+    /// when <c>Phase == NotLoaded</c>.
+    /// </summary>
     public DatabaseCache GetOrCreateCache(string serverName, string databaseName)
     {
-        var key = $"{serverName}:{databaseName}";
+        var key = BuildCacheKey(serverName, databaseName);
         return _caches.GetOrAdd(key, k => new DatabaseCache { CacheKey = k });
     }
 
+    /// <summary>Returns the cache for the given server/database, or <c>null</c> if it has not been created yet.</summary>
     public DatabaseCache? GetCache(string serverName, string databaseName)
     {
-        var key = $"{serverName}:{databaseName}";
+        var key = BuildCacheKey(serverName, databaseName);
         _caches.TryGetValue(key, out var cache);
         return cache;
     }
@@ -47,10 +67,13 @@ public class SchemaCacheManager(int maxDatabases = 10) : IDisposable
     /// </summary>
     public void RegisterConnectionString(string serverName, string databaseName, string connectionString)
     {
-        var key = $"{serverName}:{databaseName}";
-        _connectionStrings[key] = connectionString;
+        _connectionStrings[BuildCacheKey(serverName, databaseName)] = connectionString;
     }
 
+    /// <summary>
+    /// Removes the least-recently-used caches until the count is at or below <c>maxDatabases</c>.
+    /// Called automatically by <see cref="GetOrCreateCache"/> after adding a new entry.
+    /// </summary>
     public void EvictLru()
     {
         if (_caches.Count <= maxDatabases)

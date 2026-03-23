@@ -6,16 +6,36 @@ using System.Text.Json.Serialization;
 
 namespace AkmlSql.Core.Config
 {
+    /// <summary>
+    /// Root configuration POCO for AKML SQL, persisted to <c>%AppData%\AKML SQL\config.json</c>.
+    /// Loaded and saved via <see cref="ConfigManager"/>. All settings have safe defaults so the
+    /// file can be missing or partially populated.
+    /// </summary>
     [SuppressMessage("ReSharper", "UnusedMember.Global")]
     public class AppSettings
     {
+        /// <summary>Schema version for future migrations. Currently <c>1</c>.</summary>
         public int ConfigVersion { get; set; } = 1;
+
+        /// <summary>When <c>true</c>, the shell checks for updates on startup.</summary>
         public bool AutoUpdateEnabled { get; set; } = true;
+
+        /// <summary>Reserved for future telemetry opt-in. Defaults to <c>false</c>.</summary>
         public bool TelemetryEnabled { get; set; }
+
+        /// <summary>ISO 8601 timestamp of the last successful update check. <c>null</c> if never checked.</summary>
         public DateTimeOffset? LastUpdateCheck { get; set; }
+
+        /// <summary>Anonymous installation GUID. Generated once on first run.</summary>
         public string InstallId { get; set; } = Guid.NewGuid().ToString();
+
+        /// <summary>Records which IDE targets AKML SQL has been installed to.</summary>
         public List<InstalledTarget> InstalledTargets { get; set; } = [];
+
+        /// <summary>IntelliSense feature configuration.</summary>
         public IntelliSenseSettings IntelliSense { get; set; } = new();
+
+        /// <summary>Schema cache configuration.</summary>
         public CacheSettings Cache { get; set; } = new();
 
         [JsonPropertyName("formatter")]
@@ -39,58 +59,102 @@ namespace AkmlSql.Core.Config
         /// T093-T095: Whether AKML SQL disabled native SSMS IntelliSense (for restore on uninstall).
         /// </summary>
         public bool DisabledNativeIntelliSense { get; set; }
+
+        /// <summary>
+        /// Minimum log level for the rolling file sink.
+        /// Valid values: Verbose, Debug, Information, Warning, Error, Fatal.
+        /// Defaults to Debug.
+        /// </summary>
+        [JsonPropertyName("logMinimumLevel")]
+        public string LogMinimumLevel { get; set; } = "Debug";
     }
 
+    /// <summary>Keyword casing mode for IntelliSense completions and the formatter.</summary>
     public enum KeywordCaseOption
     {
+        /// <summary>ALL CAPS (e.g. <c>SELECT</c>).</summary>
         Upper,
+        /// <summary>all lowercase (e.g. <c>select</c>).</summary>
         Lower,
+        /// <summary>First letter capitalised (e.g. <c>Select</c>).</summary>
         PascalCase,
+        /// <summary>Preserve the original casing from the source.</summary>
         AsIs
     }
 
+    /// <summary>Settings for the IntelliSense completion engine.</summary>
     public class IntelliSenseSettings
     {
+        /// <summary>Master switch — disabling this suppresses all IntelliSense features.</summary>
         public bool Enabled { get; set; } = true;
+        /// <summary>Show completion list automatically while typing (no Ctrl+Space required).</summary>
         public bool AutoTrigger { get; set; } = true;
+        /// <summary>Debounce delay in milliseconds before triggering auto-completion.</summary>
         public int TriggerDelayMs { get; set; } = 100;
+        /// <summary>Auto-trigger after typing <c>.</c> for table.column completion.</summary>
         public bool AfterDot { get; set; } = true;
+        /// <summary>Maximum number of items in the completion list.</summary>
         public int MaxSuggestions { get; set; } = 50;
+        /// <summary>Enable fuzzy/substring matching in addition to prefix matching.</summary>
         public bool FuzzyMatch { get; set; } = true;
+        /// <summary>Show column data types in completion details.</summary>
         public bool ShowDataTypes { get; set; } = true;
+        /// <summary>Show NOT NULL / NULL nullability in completion details.</summary>
         public bool ShowNullability { get; set; } = true;
+        /// <summary>Show PK/FK badge indicators in completion details.</summary>
         public bool ShowPkFk { get; set; } = true;
+        /// <summary>Suggest automatic table aliases when completing table names.</summary>
         public bool AutoAlias { get; set; } = true;
+        /// <summary>Suggest JOIN conditions based on foreign key relationships.</summary>
         public bool JoinAssist { get; set; } = true;
+        /// <summary>Keyword casing applied to completions inserted into the editor.</summary>
         public KeywordCaseOption KeywordCase { get; set; } = KeywordCaseOption.Upper;
+        /// <summary>Whether to disable native SSMS IntelliSense to avoid conflicts.</summary>
         public bool DisableNativeIntelliSense { get; set; } = true;
     }
 
+    /// <summary>Settings for the in-memory schema cache.</summary>
     public class CacheSettings
     {
+        /// <summary>Periodically check for schema changes.</summary>
         public bool AutoRefresh { get; set; } = true;
+        /// <summary>Interval in seconds between change-detection checks (shell-side timer; engine uses 60 s internally).</summary>
         public int RefreshIntervalSeconds { get; set; } = 300;
+        /// <summary>Trigger an immediate Phase A refresh when a DDL statement is executed.</summary>
         public bool DetectDdl { get; set; } = true;
+        /// <summary>Maximum number of server:database caches kept in memory; LRU eviction applies beyond this limit.</summary>
         public int MaxDatabases { get; set; } = 10;
+        /// <summary>Load columns and FKs in Phase B (background) rather than blocking Phase A.</summary>
         public bool LazyLoadColumns { get; set; } = true;
+        /// <summary>Persist schema cache to disk across sessions.</summary>
         public bool PersistToDisk { get; set; } = true;
+        /// <summary>Override the cache directory path. Empty string = <c>%LocalAppData%\AKML SQL\cache</c>.</summary>
         public string PersistPath { get; set; } = string.Empty;
     }
 
+    /// <summary>Records an IDE target that AKML SQL has been deployed to.</summary>
     public class InstalledTarget
     {
+        /// <summary>IDE type identifier (e.g. <c>"SSMS20"</c>, <c>"VS2022"</c>).</summary>
         public string IdeType { get; set; } = string.Empty;
+        /// <summary>IDE version string.</summary>
         public string Version { get; set; } = string.Empty;
+        /// <summary>Platform architecture (<c>"x86"</c> or <c>"x64"</c>).</summary>
         public string Architecture { get; set; } = string.Empty;
+        /// <summary>Absolute path to the extensions directory where files were deployed.</summary>
         public string ExtensionsPath { get; set; } = string.Empty;
+        /// <summary>Timestamp when this target was installed.</summary>
         public DateTimeOffset InstalledAt { get; set; }
     }
 
+    /// <summary>Settings for the SQL formatter feature.</summary>
     public class FormatterSettings
     {
+        /// <summary>Master switch — disabling this suppresses all formatting triggers.</summary>
         [JsonPropertyName("enabled")]
         public bool Enabled { get; set; } = true;
 
+        /// <summary>Name of the active formatting profile (<c>.akmlstyle</c> file).</summary>
         [JsonPropertyName("activeProfile")]
         public string ActiveProfile { get; set; } = "Default";
 
@@ -125,6 +189,7 @@ namespace AkmlSql.Core.Config
         public bool SemanticValidation { get; set; } = true;
     }
 
+    /// <summary>Settings for the SQL snippet feature.</summary>
     public class SnippetSettings
     {
         [JsonPropertyName("enabled")]
@@ -155,6 +220,7 @@ namespace AkmlSql.Core.Config
         public bool TrackUsage { get; set; } = true;
     }
 
+    /// <summary>Settings for the static code analysis engine.</summary>
     public class CodeAnalysisSettings
     {
         [JsonPropertyName("enabled")]
@@ -176,6 +242,7 @@ namespace AkmlSql.Core.Config
         public bool ShowInErrorList { get; set; } = true;
     }
 
+    /// <summary>Settings for the refactoring engine.</summary>
     public class RefactoringSettings
     {
         [JsonPropertyName("previewBeforeApply")]

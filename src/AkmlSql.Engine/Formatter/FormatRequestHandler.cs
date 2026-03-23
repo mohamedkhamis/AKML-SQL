@@ -230,8 +230,11 @@ public class FormatRequestHandler(ProfileManager profileManager)
                     throw new ArgumentException("Bulk format file paths must not be empty.");
                 if (!Path.IsPathFullyQualified(path))
                     throw new ArgumentException($"Bulk format file path must be absolute: '{path}'");
-                if (path.Contains(".."))
-                    throw new ArgumentException($"Bulk format file path must not contain path traversal: '{path}'");
+                // Resolve to canonical form to catch traversal sequences (e.g. foo\..\secret)
+                var normalized = path.Replace('/', Path.DirectorySeparatorChar);
+                var canonical = Path.GetFullPath(normalized);
+                if (!string.Equals(canonical, normalized, StringComparison.OrdinalIgnoreCase))
+                    throw new ArgumentException($"Bulk format file path is not canonical (possible path traversal): '{path}'");
             }
 
             var profile = LoadProfile(request.ProfileName);

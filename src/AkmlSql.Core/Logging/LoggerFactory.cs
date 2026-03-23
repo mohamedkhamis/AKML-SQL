@@ -1,6 +1,9 @@
+using System;
 using System.IO;
+using System.Text.Json;
 using System.Threading;
 using Serilog;
+using Serilog.Events;
 
 namespace AkmlSql.Core.Logging
 {
@@ -19,8 +22,22 @@ namespace AkmlSql.Core.Logging
 
             Directory.CreateDirectory(Constants.LogsPath);
 
+            // Read minimum log level from config JSON directly (avoids circular dependency with ConfigManager)
+            var minLevel = LogEventLevel.Debug;
+            try
+            {
+                var configPath = Constants.ConfigFilePath;
+                if (File.Exists(configPath))
+                {
+                    using var doc = JsonDocument.Parse(File.ReadAllText(configPath));
+                    if (doc.RootElement.TryGetProperty("logMinimumLevel", out var lvlProp))
+                        Enum.TryParse(lvlProp.GetString(), ignoreCase: true, out minLevel);
+                }
+            }
+            catch { /* use default */ }
+
             Log.Logger = new LoggerConfiguration()
-                .MinimumLevel.Debug()
+                .MinimumLevel.Is(minLevel)
                 .WriteTo.File(
                     path: logPath,
                     rollingInterval: RollingInterval.Day,

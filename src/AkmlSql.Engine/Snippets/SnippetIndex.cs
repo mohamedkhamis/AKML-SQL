@@ -40,8 +40,6 @@ public class SnippetIndex
                 _byShortcode[shortcode] = shortcodeList;
             }
             shortcodeList.Add((snippet, source));
-            // Sort by source priority (lower = higher priority)
-            shortcodeList.Sort((a, b) => ((int)a.Source).CompareTo((int)b.Source));
 
             var category = snippet.Metadata.Category;
             if (!_byCategory.TryGetValue(category, out var categoryList))
@@ -51,6 +49,10 @@ public class SnippetIndex
             }
             categoryList.Add(snippet);
         }
+
+        // Sort shortcode lists once after building all entries (by source priority, lower = higher)
+        foreach (var list in _byShortcode.Values)
+            list.Sort((a, b) => ((int)a.Source).CompareTo((int)b.Source));
     }
 
     public Snippet? GetByShortcode(string shortcode)

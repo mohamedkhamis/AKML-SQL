@@ -10,6 +10,7 @@ namespace AkmlSql.Engine.Snippets;
     Justification = "Snippet models are simple POCOs preserved by DynamicDependency in Program.cs")]
 public class SnippetRequestHandler
 {
+    private const int MaxSnippetJsonChars = 1024 * 1024; // 1 MB
     private readonly SnippetLoader _loader = new();
     private readonly SnippetIndex _index = new();
     private readonly BuiltInVariableResolver _variableResolver = new();
@@ -102,6 +103,9 @@ public class SnippetRequestHandler
     {
         try
         {
+            if (request.SnippetJson?.Length > MaxSnippetJsonChars)
+                return new SnippetSaveResponse { Success = false, ErrorMessage = "Snippet JSON exceeds maximum allowed size (1 MB)." };
+
             var snippet = JsonSerializer.Deserialize<Snippet>(request.SnippetJson);
             if (snippet == null)
                 return new SnippetSaveResponse { Success = false, ErrorMessage = "Invalid snippet JSON" };

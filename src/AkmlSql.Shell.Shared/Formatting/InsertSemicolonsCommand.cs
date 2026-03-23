@@ -53,7 +53,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                 {
                     SessionId = Guid.NewGuid().ToString("N"),
                     Text = documentText,
-                    ActionType = 1  // FormatActionType.InsertSemicolons
+                    ActionType = (int)FormatActionType.InsertSemicolons
                 };
 
                 System.Threading.Tasks.Task.Run(async () =>

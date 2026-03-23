@@ -60,6 +60,7 @@ namespace AkmlSql.Updater
                         Version = manifest.Version,
                         DownloadUrl = manifest.DownloadUrl,
                         ReleaseNotesUrl = manifest.ReleaseNotesUrl,
+                        Sha256Hash = manifest.Sha256Hash ?? string.Empty,
                         CheckedAt = DateTimeOffset.UtcNow
                     };
 

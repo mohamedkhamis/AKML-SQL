@@ -13,11 +13,12 @@ namespace AkmlSql.Engine.Analysis;
 /// Results are cached per directory path and invalidated on file change or explicit call to
 /// <see cref="InvalidateCache"/>.
 /// </summary>
-public class CaSettingsLoader
+public class CaSettingsLoader : IDisposable
 {
     private readonly Dictionary<string, ResolvedAnalysisSettings> _cache = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, FileSystemWatcher> _watchers = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _lock = new();
+    private bool _disposed;
 
     private static readonly string[] CaSettingsFileNames = [".casettings", "akml.casettings.json"];
 
@@ -130,6 +131,19 @@ public class CaSettingsLoader
         catch (Exception ex)
         {
             Log.Debug(ex, "Could not create file watcher for {Dir}", dir);
+        }
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        lock (_lock)
+        {
+            foreach (var w in _watchers.Values)
+                try { w.Dispose(); } catch { /* best-effort */ }
+            _watchers.Clear();
+            _cache.Clear();
         }
     }
 

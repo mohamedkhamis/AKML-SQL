@@ -6,6 +6,10 @@ using Serilog;
 
 namespace AkmlSql.Core.Config
 {
+    /// <summary>
+    /// Reads and writes the AKML SQL configuration file (<c>%AppData%\AKML SQL\config.json</c>).
+    /// Writes are performed atomically via a temp-file + rename pattern to prevent partial-write corruption.
+    /// </summary>
     public static class ConfigManager
     {
         private static readonly JsonSerializerOptions SerializerOptions = new()
@@ -15,6 +19,10 @@ namespace AkmlSql.Core.Config
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
         };
 
+        /// <summary>
+        /// Loads <see cref="AppSettings"/> from disk. Creates and saves a default configuration
+        /// file if none exists. Returns default settings on any read or parse failure.
+        /// </summary>
         public static AppSettings Load()
         {
             try
@@ -39,6 +47,11 @@ namespace AkmlSql.Core.Config
             }
         }
 
+        /// <summary>
+        /// Persists <paramref name="settings"/> to disk atomically.
+        /// On .NET Standard 2.0 uses <c>File.Replace</c>; on .NET 10+ uses <c>File.Move(overwrite:true)</c>.
+        /// Silently logs and swallows I/O exceptions so callers never receive a save-related exception.
+        /// </summary>
         public static void Save(AppSettings settings)
         {
             try
@@ -56,12 +69,15 @@ namespace AkmlSql.Core.Config
                 var tempPath = path + ".tmp";
                 File.WriteAllText(tempPath, json);
 #if NETSTANDARD2_0
+                // File.Replace is atomic on NTFS (avoids TOCTOU race between Delete + Move)
                 if (File.Exists(path))
                 {
-                    File.Delete(path);
+                    File.Replace(tempPath, path, null);
                 }
-
-                File.Move(tempPath, path);
+                else
+                {
+                    File.Move(tempPath, path);
+                }
 #else
                 File.Move(tempPath, path, overwrite: true);
 #endif

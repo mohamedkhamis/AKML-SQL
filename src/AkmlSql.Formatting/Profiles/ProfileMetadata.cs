@@ -36,4 +36,18 @@ public class ProfileMetadata
 
     [JsonPropertyName("isBuiltIn")]
     public bool IsBuiltIn { get; set; }
+
+    /// <summary>
+    /// When true, the formatter skips semantic validation after formatting.
+    /// Use in tests or internal pipelines where validation is handled externally.
+    /// </summary>
+    [JsonPropertyName("skipValidation")]
+    public bool SkipValidation { get; set; }
+
+    /// <summary>
+    /// When true (default), the formatter runs a second pass to verify idempotency.
+    /// Disable for bulk/background formatting where the extra parse is undesirable.
+    /// </summary>
+    [JsonPropertyName("enableIdempotencyCheck")]
+    public bool EnableIdempotencyCheck { get; set; } = true;
 }

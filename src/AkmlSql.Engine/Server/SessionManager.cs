@@ -1,10 +1,12 @@
 using System.Collections.Concurrent;
 using AkmlSql.Core.Ipc.Messages;
+using Serilog;
 
 namespace AkmlSql.Engine.Server;
 
 public class SessionManager
 {
+    private const int MaxDocumentSizeChars = 10 * 1024 * 1024; // 10 MB
     private readonly ConcurrentDictionary<string, SessionState> _sessions = new();
 
     public int SessionCount => _sessions.Count;
@@ -38,6 +40,12 @@ public class SessionManager
         {
             if (change is { ChangeType: 0, FullText: not null }) // Full
             {
+                if (change.FullText.Length > MaxDocumentSizeChars)
+                {
+                    Log.Warning("DocumentChange for session {SessionId} exceeds size limit ({Size:N0} chars), update ignored",
+                        change.SessionId, change.FullText.Length);
+                    return;
+                }
                 session.DocumentText = change.FullText;
             }
         }

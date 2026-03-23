@@ -23,8 +23,11 @@ public partial class ChangeDetector
 
             // Compute aggregate checksum of all user objects
             await using var cmd = conn.CreateCommand();
+            // BINARY_CHECKSUM handles datetime natively with full precision.
+            // CAST(modify_date AS INT) was wrong — it truncates to day granularity,
+            // making same-day schema changes invisible to the detector.
             cmd.CommandText = @"
-                SELECT CHECKSUM_AGG(BINARY_CHECKSUM(object_id, CAST(modify_date AS INT), CAST(type AS INT)))
+                SELECT CHECKSUM_AGG(BINARY_CHECKSUM(object_id, modify_date, create_date, type))
                 FROM sys.objects
                 WHERE is_ms_shipped = 0";
             cmd.CommandTimeout = 10;
@@ -42,10 +45,6 @@ public partial class ChangeDetector
             Log.Information("ChangeDetector: schema changes detected for {Key} (old={Old}, new={New})",
                 cache.CacheKey, cache.LastChangeChecksum, currentChecksum);
 
-            // Identify which objects changed
-            var changedObjects = await GetChangedObjectIdsAsync(conn, cache.LastFullRefresh, ct);
-            Log.Information("ChangeDetector: {Count} objects changed since last refresh", changedObjects.Count);
-
             cache.LastChangeChecksum = currentChecksum;
             cache.IsStale = true;
             return true;
@@ -55,30 +54,6 @@ public partial class ChangeDetector
             Log.Warning(ex, "ChangeDetector: failed to check for changes on {Key}", cache.CacheKey);
             return false;
         }
-    }
-
-    /// <summary>
-    /// Returns the object_ids that have been modified since the last refresh timestamp.
-    /// </summary>
-    private static async Task<List<int>> GetChangedObjectIdsAsync(SqlConnection conn, DateTime lastRefresh, CancellationToken ct)
-    {
-        var objectIds = new List<int>();
-
-        await using var cmd = conn.CreateCommand();
-        cmd.CommandText = @"
-            SELECT object_id
-            FROM sys.objects
-            WHERE modify_date > @LastRefresh AND is_ms_shipped = 0";
-        cmd.Parameters.AddWithValue("@LastRefresh", lastRefresh);
-        cmd.CommandTimeout = 10;
-
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        while (await reader.ReadAsync(ct))
-        {
-            objectIds.Add(reader.GetInt32(0));
-        }
-
-        return objectIds;
     }
 
     /// <summary>

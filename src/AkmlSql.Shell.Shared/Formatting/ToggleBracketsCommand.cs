@@ -53,7 +53,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                 {
                     SessionId = Guid.NewGuid().ToString("N"),
                     Text = documentText,
-                    ActionType = 5  // FormatActionType.AddSquareBrackets
+                    ActionType = (int)FormatActionType.AddSquareBrackets
                 };
 
                 System.Threading.Tasks.Task.Run(async () =>

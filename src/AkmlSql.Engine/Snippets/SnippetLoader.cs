@@ -65,6 +65,11 @@ public class SnippetLoader
     {
         try
         {
+            if (string.IsNullOrWhiteSpace(filePath) || !Path.IsPathRooted(filePath))
+            {
+                Log.Warning("LoadSingle rejected non-absolute path: {Path}", filePath);
+                return null;
+            }
             var json = File.ReadAllText(filePath);
             return JsonSerializer.Deserialize<Snippet>(json, JsonOptions);
         }
@@ -92,6 +97,11 @@ public class SnippetLoader
     {
         try
         {
+            if (string.IsNullOrWhiteSpace(filePath) || !Path.IsPathRooted(filePath))
+            {
+                Log.Warning("DeleteSnippet rejected non-absolute path: {Path}", filePath);
+                return false;
+            }
             if (File.Exists(filePath))
             {
                 File.Delete(filePath);

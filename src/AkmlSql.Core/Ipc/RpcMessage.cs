@@ -2,19 +2,33 @@ using MessagePack;
 
 namespace AkmlSql.Core.Ipc
 {
+    /// <summary>
+    /// The envelope sent over the named-pipe IPC channel between the shell extension and the engine.
+    /// Serialized with MessagePack. The frame wrapping this message is defined in <see cref="FrameProtocol"/>.
+    /// </summary>
     [MessagePackObject]
     public class RpcMessage
     {
+        /// <summary>Identifies the operation. See <see cref="MessageTypes"/> for all constants.</summary>
         [Key(0)]
         public int MessageType { get; set; }
 
+        /// <summary>
+        /// Correlates a request to its response. The engine echoes this value in the reply.
+        /// Use <c>0</c> for fire-and-forget notifications that require no response.
+        /// </summary>
         [Key(1)]
         public int RequestId { get; set; }
 
+        /// <summary>MessagePack-serialized request or response POCO. The concrete type depends on <see cref="MessageType"/>.</summary>
         [Key(2)]
         public byte[]? Payload { get; set; }
     }
 
+    /// <summary>
+    /// Integer constants for <see cref="RpcMessage.MessageType"/>.
+    /// Values 1–31 are sent Shell→Engine; values 101–131 are sent Engine→Shell.
+    /// </summary>
     public static class MessageTypes
     {
         // Shell → Engine

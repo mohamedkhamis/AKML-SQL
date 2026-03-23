@@ -26,23 +26,24 @@ public class SchemaMetadataService
             await conn.OpenAsync(ct);
             await using var cmd = conn.CreateCommand();
 
-            // Check VIEW DATABASE STATE
-            cmd.CommandText = "SELECT HAS_PERMS_BY_NAME(NULL, NULL, 'VIEW DATABASE STATE')";
-            var hasDbState = (int)(await cmd.ExecuteScalarAsync(ct))! == 1;
+            // Single round-trip for both HAS_PERMS_BY_NAME checks (was two ExecuteScalarAsync calls)
+            cmd.CommandText = @"
+                SELECT
+                    HAS_PERMS_BY_NAME(NULL, NULL, 'VIEW DATABASE STATE') AS HasDbState,
+                    HAS_PERMS_BY_NAME(NULL, NULL, 'VIEW ANY DEFINITION')  AS HasViewDef";
 
-            // Check VIEW DEFINITION
-            cmd.CommandText = "SELECT HAS_PERMS_BY_NAME(NULL, NULL, 'VIEW ANY DEFINITION')";
-            var hasViewDef = (int)(await cmd.ExecuteScalarAsync(ct))! == 1;
-
-            if (hasViewDef && hasDbState)
+            bool hasDbState = false, hasViewDef = false;
+            await using (var reader = await cmd.ExecuteReaderAsync(ct))
             {
-                return PermissionLevel.Full;
+                if (await reader.ReadAsync(ct))
+                {
+                    hasDbState = reader.GetInt32(0) == 1;
+                    hasViewDef = reader.GetInt32(1) == 1;
+                }
             }
 
-            if (hasViewDef)
-            {
-                return PermissionLevel.NoDmv;
-            }
+            if (hasViewDef && hasDbState) return PermissionLevel.Full;
+            if (hasViewDef) return PermissionLevel.NoDmv;
 
             // Check if sys.objects is accessible
             cmd.CommandText = "SELECT TOP 0 1 FROM sys.objects";
@@ -71,6 +72,7 @@ public class SchemaMetadataService
             await using var conn = new SqlConnection(connectionString);
             await conn.OpenAsync(ct);
 
+            // ORDER BY removed: results are loaded into a ConcurrentDictionary — sort is wasted work.
             var query = @"
                 SELECT s.name AS SchemaName, o.object_id, o.name AS ObjectName, o.type_desc, o.modify_date,
                        ISNULL(SUM(p.rows), 0) AS ApproxRowCount
@@ -79,8 +81,7 @@ public class SchemaMetadataService
                 LEFT JOIN sys.partitions p ON o.object_id = p.object_id AND p.index_id IN (0, 1)
                 WHERE o.type IN ('U','V','P','FN','IF','TF','SN','SO')
                   AND o.is_ms_shipped = 0
-                GROUP BY s.name, o.object_id, o.name, o.type_desc, o.modify_date
-                ORDER BY s.name, o.name";
+                GROUP BY s.name, o.object_id, o.name, o.type_desc, o.modify_date";
 
             await using var cmd = new SqlCommand(query, conn);
             cmd.CommandTimeout = 10;
@@ -134,17 +135,27 @@ public class SchemaMetadataService
             await using var conn = new SqlConnection(connectionString);
             await conn.OpenAsync(ct);
 
-            // Load columns
-            await LoadColumnsAsync(conn, cache, ct);
+            // Build a shared index once — used by columns, parameters, and descriptions loaders
+            var objectIndex = BuildObjectIndex(cache);
 
-            // Load foreign keys
+            // Load columns
+            await LoadColumnsAsync(conn, cache, objectIndex, ct);
+
+            // Load foreign keys, then build O(1) lookup index
             await LoadForeignKeysAsync(conn, cache, ct);
+            cache.RebuildFkIndex();
 
             // Load parameters for procs/functions
-            await LoadParametersAsync(conn, cache, ct);
+            await LoadParametersAsync(conn, cache, objectIndex, ct);
+
+            // Build column lookup (objectId, columnId) → Column for O(1) description assignment
+            var columnLookup = new Dictionary<(int, int), Column>();
+            foreach (var (objectId, dbObj) in objectIndex)
+                foreach (var col in dbObj.Columns)
+                    columnLookup[(objectId, col.ColumnId)] = col;
 
             // Load extended properties (descriptions)
-            await LoadDescriptionsAsync(conn, cache, ct);
+            await LoadDescriptionsAsync(conn, cache, objectIndex, columnLookup, ct);
 
             cache.Phase = PopulationPhase.PhaseB;
             Log.Information("Phase B complete for {Key}", cache.CacheKey);
@@ -155,7 +166,15 @@ public class SchemaMetadataService
         }
     }
 
-    private async Task LoadColumnsAsync(SqlConnection conn, DatabaseCache cache, CancellationToken ct)
+    private static Dictionary<int, DatabaseObject> BuildObjectIndex(DatabaseCache cache)
+    {
+        var index = new Dictionary<int, DatabaseObject>();
+        foreach (var obj in cache.GetAllObjects())
+            index[obj.ObjectId] = obj;
+        return index;
+    }
+
+    private async Task LoadColumnsAsync(SqlConnection conn, DatabaseCache cache, Dictionary<int, DatabaseObject> objectIndex, CancellationToken ct)
     {
         var query = @"
             SELECT c.object_id, c.column_id, c.name, t.name AS TypeName,
@@ -173,16 +192,11 @@ public class SchemaMetadataService
                 JOIN sys.indexes i ON ic.object_id = i.object_id AND ic.index_id = i.index_id
                 WHERE i.is_primary_key = 1
             ) ic ON c.object_id = ic.object_id AND c.column_id = ic.column_id
-            WHERE o.type IN ('U','V') AND o.is_ms_shipped = 0
-            ORDER BY c.object_id, c.column_id";
+            WHERE o.type IN ('U','V') AND o.is_ms_shipped = 0";
 
         await using var cmd = new SqlCommand(query, conn);
         cmd.CommandTimeout = 30;
         await using var reader = await cmd.ExecuteReaderAsync(ct);
-
-        var objectIndex = new Dictionary<int, DatabaseObject>();
-        foreach (var obj in cache.GetAllObjects())
-            objectIndex[obj.ObjectId] = obj;
 
         while (await reader.ReadAsync(ct))
         {
@@ -213,20 +227,25 @@ public class SchemaMetadataService
 
     private async Task LoadForeignKeysAsync(SqlConnection conn, DatabaseCache cache, CancellationToken ct)
     {
+        // Replaced OBJECT_NAME() / OBJECT_SCHEMA_ID() scalar-function calls with direct JOINs:
+        // scalar functions execute once per row and prevent the optimizer from choosing better
+        // join strategies. Direct JOINs give the optimizer full cardinality information.
+        // ORDER BY removed: results are immediately grouped into a Dictionary<string, ForeignKey>.
         var query = @"
             SELECT fk.name AS FkName,
-                   ps.name AS ParentSchema, OBJECT_NAME(fk.parent_object_id) AS ParentTable,
+                   ps.name AS ParentSchema, po.name AS ParentTable,
                    pc.name AS ParentColumn,
-                   rs.name AS RefSchema, OBJECT_NAME(fk.referenced_object_id) AS RefTable,
+                   rs.name AS RefSchema,   ro.name AS RefTable,
                    rc.name AS RefColumn,
                    fk.is_disabled, fk.delete_referential_action, fk.update_referential_action
             FROM sys.foreign_keys fk
-            JOIN sys.schemas ps ON OBJECT_SCHEMA_ID(fk.parent_object_id) = ps.schema_id
-            JOIN sys.schemas rs ON OBJECT_SCHEMA_ID(fk.referenced_object_id) = rs.schema_id
+            JOIN sys.objects  po  ON fk.parent_object_id     = po.object_id
+            JOIN sys.schemas  ps  ON po.schema_id             = ps.schema_id
+            JOIN sys.objects  ro  ON fk.referenced_object_id  = ro.object_id
+            JOIN sys.schemas  rs  ON ro.schema_id             = rs.schema_id
             JOIN sys.foreign_key_columns fkc ON fk.object_id = fkc.constraint_object_id
-            JOIN sys.columns pc ON fkc.parent_object_id = pc.object_id AND fkc.parent_column_id = pc.column_id
-            JOIN sys.columns rc ON fkc.referenced_object_id = rc.object_id AND fkc.referenced_column_id = rc.column_id
-            ORDER BY fk.name, fkc.constraint_column_id";
+            JOIN sys.columns pc ON fkc.parent_object_id     = pc.object_id AND fkc.parent_column_id     = pc.column_id
+            JOIN sys.columns rc ON fkc.referenced_object_id = rc.object_id AND fkc.referenced_column_id = rc.column_id";
 
         await using var cmd = new SqlCommand(query, conn);
         cmd.CommandTimeout = 30;
@@ -258,7 +277,7 @@ public class SchemaMetadataService
         cache.ForeignKeys = fks.Values.ToList();
     }
 
-    private async Task LoadParametersAsync(SqlConnection conn, DatabaseCache cache, CancellationToken ct)
+    private async Task LoadParametersAsync(SqlConnection conn, DatabaseCache cache, Dictionary<int, DatabaseObject> objectIndex, CancellationToken ct)
     {
         var query = @"
             SELECT p.object_id, p.parameter_id, p.name, t.name AS TypeName,
@@ -266,16 +285,11 @@ public class SchemaMetadataService
             FROM sys.parameters p
             JOIN sys.types t ON p.user_type_id = t.user_type_id
             JOIN sys.objects o ON p.object_id = o.object_id
-            WHERE o.type IN ('P','FN','IF','TF') AND o.is_ms_shipped = 0 AND p.parameter_id > 0
-            ORDER BY p.object_id, p.parameter_id";
+            WHERE o.type IN ('P','FN','IF','TF') AND o.is_ms_shipped = 0 AND p.parameter_id > 0";
 
         await using var cmd = new SqlCommand(query, conn);
         cmd.CommandTimeout = 30;
         await using var reader = await cmd.ExecuteReaderAsync(ct);
-
-        var objectIndex = new Dictionary<int, DatabaseObject>();
-        foreach (var obj in cache.GetAllObjects())
-            objectIndex[obj.ObjectId] = obj;
 
         while (await reader.ReadAsync(ct))
         {
@@ -300,20 +314,22 @@ public class SchemaMetadataService
         }
     }
 
-    private async Task LoadDescriptionsAsync(SqlConnection conn, DatabaseCache cache, CancellationToken ct)
+    private async Task LoadDescriptionsAsync(SqlConnection conn, DatabaseCache cache, Dictionary<int, DatabaseObject> objectIndex, Dictionary<(int, int), Column> columnLookup, CancellationToken ct)
     {
+        // Added INNER JOIN to sys.objects: restricts to user objects we actually loaded,
+        // avoids a full scan of sys.extended_properties that includes shipped-object descriptions.
         var query = @"
             SELECT ep.major_id, ep.minor_id, CAST(ep.value AS NVARCHAR(4000))
             FROM sys.extended_properties ep
-            WHERE ep.class = 1 AND ep.name = 'MS_Description'";
+            INNER JOIN sys.objects o ON ep.major_id = o.object_id
+            WHERE ep.class  = 1
+              AND ep.name   = 'MS_Description'
+              AND o.is_ms_shipped = 0
+              AND o.type IN ('U','V','P','FN','IF','TF','SN','SO')";
 
         await using var cmd = new SqlCommand(query, conn);
         cmd.CommandTimeout = 15;
         await using var reader = await cmd.ExecuteReaderAsync(ct);
-
-        var objectIndex = new Dictionary<int, DatabaseObject>();
-        foreach (var obj in cache.GetAllObjects())
-            objectIndex[obj.ObjectId] = obj;
 
         while (await reader.ReadAsync(ct))
         {
@@ -336,11 +352,8 @@ public class SchemaMetadataService
             }
             else
             {
-                var col = dbObj.Columns.FirstOrDefault(c => c.ColumnId == minorId);
-                if (col != null)
-                {
+                if (columnLookup.TryGetValue((majorId, minorId), out var col))
                     col.Description = value;
-                }
             }
         }
     }
@@ -448,13 +461,19 @@ public class SchemaMetadataService
             }
             await routineReader.CloseAsync();
 
-            // Load columns
+            // Build O(1) lookup keyed by "schema.table" before the column loop.
+            // cache.FindObject() was called per row with a FirstOrDefault scan — O(N) per column.
+            var tableIndex = new Dictionary<string, DatabaseObject>(StringComparer.OrdinalIgnoreCase);
+            foreach (var entry in cache.Schemas.Values)
+                foreach (var obj in entry.Objects)
+                    tableIndex[$"{obj.SchemaName}.{obj.ObjectName}"] = obj;
+
+            // Load columns — ORDER BY removed: results are appended to per-object lists via the index
             var colQuery = @"
                 SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, DATA_TYPE,
                        CHARACTER_MAXIMUM_LENGTH, NUMERIC_PRECISION, NUMERIC_SCALE,
                        IS_NULLABLE, COLUMN_DEFAULT, ORDINAL_POSITION
-                FROM INFORMATION_SCHEMA.COLUMNS
-                ORDER BY TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION";
+                FROM INFORMATION_SCHEMA.COLUMNS";
 
             await using var colCmd = new SqlCommand(colQuery, conn);
             colCmd.CommandTimeout = 30;
@@ -463,9 +482,8 @@ public class SchemaMetadataService
             while (await colReader.ReadAsync(ct))
             {
                 var schemaName = colReader.GetString(0);
-                var tableName = colReader.GetString(1);
-                var dbObj = cache.FindObject(schemaName, tableName);
-                if (dbObj == null)
+                var tableName  = colReader.GetString(1);
+                if (!tableIndex.TryGetValue($"{schemaName}.{tableName}", out var dbObj))
                 {
                     continue;
                 }
@@ -508,26 +526,33 @@ public class SchemaMetadataService
             await using var conn = new SqlConnection(connectionString);
             await conn.OpenAsync(ct);
             await using var cmd = conn.CreateCommand();
-            cmd.CommandText = "SELECT CAST(SERVERPROPERTY('ProductMajorVersion') AS INT)";
+
+            // Single query for both SERVERPROPERTY values — was two separate connections/queries.
+            cmd.CommandText = @"
+                SELECT
+                    CAST(SERVERPROPERTY('ProductMajorVersion') AS INT) AS MajorVersion,
+                    CAST(SERVERPROPERTY('EngineEdition')        AS INT) AS EngineEdition";
             cmd.CommandTimeout = 5;
 
-            var result = await cmd.ExecuteScalarAsync(ct);
-            features.MajorVersion = result is int v ? v : 0;
+            await using (var reader = await cmd.ExecuteReaderAsync(ct))
+            {
+                if (await reader.ReadAsync(ct))
+                {
+                    features.MajorVersion = reader.IsDBNull(0) ? 0 : reader.GetInt32(0);
+                    features.IsAzureSql = IsAzureSql(reader.IsDBNull(1) ? 0 : reader.GetInt32(1));
+                }
+            }
 
             // SQL Server version → major version mapping:
             // 13 = SQL 2016, 14 = SQL 2017, 15 = SQL 2019, 16 = SQL 2022, 17 = SQL 2025
             features.SupportsTemporalTables = features.MajorVersion >= 13;
-            features.SupportsGraphTables = features.MajorVersion >= 14;
-            features.SupportsJsonFunctions = features.MajorVersion >= 13;
-            features.SupportsStringAgg = features.MajorVersion >= 14;
-            features.SupportsUtf8 = features.MajorVersion >= 15;
-            features.SupportsLedgerTables = features.MajorVersion >= 16;
+            features.SupportsGraphTables    = features.MajorVersion >= 14;
+            features.SupportsJsonFunctions  = features.MajorVersion >= 13;
+            features.SupportsStringAgg      = features.MajorVersion >= 14;
+            features.SupportsUtf8           = features.MajorVersion >= 15;
+            features.SupportsLedgerTables   = features.MajorVersion >= 16;
             features.SupportsGenerateSeries = features.MajorVersion >= 16;
-            features.SupportsGreatestLeast = features.MajorVersion >= 16;
-
-            // Detect Azure SQL
-            var engineEdition = await DetectEngineEditionAsync(connectionString, ct);
-            features.IsAzureSql = IsAzureSql(engineEdition);
+            features.SupportsGreatestLeast  = features.MajorVersion >= 16;
 
             Log.Information("Detected SQL Server features: v{Major}, Azure={Azure}",
                 features.MajorVersion, features.IsAzureSql);

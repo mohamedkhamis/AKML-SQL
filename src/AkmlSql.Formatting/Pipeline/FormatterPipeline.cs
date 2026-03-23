@@ -4,6 +4,15 @@ using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Formatting.Pipeline;
 
+/// <summary>
+/// Orchestrates the 7-stage SQL formatting pipeline:
+/// NoformatScanner → SqlcmdPreprocessor → TSql170Parser → AstAnnotator →
+/// LayoutEngine → CasingEngine → TextEmitter → SemanticValidator → IdempotencyCheck.
+/// <para>
+/// Stage 6 (semantic validation) failure causes the original SQL to be returned unchanged.
+/// Stage 7 (idempotency) can be suppressed via <c>ProfileMetadata.EnableIdempotencyCheck = false</c>.
+/// </para>
+/// </summary>
 public class FormatterPipeline
 {
     /// <summary>
@@ -48,6 +57,11 @@ public class FormatterPipeline
         }
     }
 
+    /// <summary>
+    /// Formats <paramref name="sql"/> using the specified <paramref name="profile"/>.
+    /// Returns a <see cref="FormatResult"/> containing the formatted text, elapsed time, and any diagnostics.
+    /// If semantic validation fails, <see cref="FormatResult.FormattedSql"/> equals the original input.
+    /// </summary>
     public FormatResult Format(string sql, FormattingProfile profile)
     {
         var sw = Stopwatch.StartNew();
@@ -111,12 +125,12 @@ public class FormatterPipeline
             // Stage 5b: Restore SQLCMD directives
             formatted = sqlcmdPreprocessor.Restore(formatted);
 
-            // Stage 6: Validate
+            // Stage 6: Validate (pass the already-parsed script to avoid re-parsing the original)
             bool validationPassed = true;
-            if (profile.Metadata.Name != "__skip_validation__")
+            if (!profile.Metadata.SkipValidation)
             {
                 var validator = new SemanticValidator();
-                validationPassed = validator.Validate(sql, formatted, diagnostics);
+                validationPassed = validator.Validate(script, formatted, diagnostics);
                 if (!validationPassed)
                 {
                     formatted = sql; // Return original on validation failure
@@ -124,7 +138,7 @@ public class FormatterPipeline
             }
 
             // Stage 7: Idempotency check — format again and verify identical result
-            if (validationPassed && formatted != sql)
+            if (validationPassed && formatted != sql && profile.Metadata.EnableIdempotencyCheck)
             {
                 var secondPass = FormatInternal(formatted, profile, out var idempotencyError);
                 if (idempotencyError != null)

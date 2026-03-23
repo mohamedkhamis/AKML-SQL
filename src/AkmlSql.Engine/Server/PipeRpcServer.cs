@@ -25,6 +25,7 @@ namespace AkmlSql.Engine.Server;
 public class PipeRpcServer
 {
     private readonly string _pipeName;
+    private AkmlSql.Core.Config.AppSettings? _cachedSettings;
     private readonly SessionManager _sessionManager = new();
     private readonly TsqlParserService _parserService = new();
     private readonly CompletionEngine _completionEngine;
@@ -322,8 +323,7 @@ public class PipeRpcServer
                     }
 
                     var bulkReq = MessagePackSerializer.Deserialize<BulkFormatRequest>(message.Payload);
-                    var bulkResp = _formatHandler.HandleBulkFormatAsync(bulkReq).GetAwaiter().GetResult();
-                    return Task.FromResult(CreateResponse(MessageTypes.BulkFormatResult, message.RequestId, bulkResp));
+                    return BulkFormatDispatchAsync(bulkReq, message.RequestId);
 
                 case MessageTypes.BulkFormatCancel:
                     if (message.Payload == null)
@@ -398,6 +398,7 @@ public class PipeRpcServer
 
                 case MessageTypes.AnalysisSettingsChanged:
                     _caSettingsLoader.InvalidateCache();
+                    _cachedSettings = null; // Invalidate cached AppSettings
                     return Task.FromResult<RpcMessage?>(null);
 
                 case MessageTypes.RequestRefactorPreview:
@@ -491,6 +492,12 @@ public class PipeRpcServer
         return (string.Empty, -1);
     }
 
+    private async Task<RpcMessage?> BulkFormatDispatchAsync(BulkFormatRequest req, int requestId)
+    {
+        var bulkResp = await _formatHandler.HandleBulkFormatAsync(req);
+        return CreateResponse(MessageTypes.BulkFormatResult, requestId, bulkResp);
+    }
+
     private async Task<RpcMessage?> RefactorPreviewAsync(RefactorPreviewRequest req, int requestId, CancellationToken ct)
     {
         try
@@ -523,7 +530,8 @@ public class PipeRpcServer
     {
         try
         {
-            var globalSettings = AkmlSql.Core.Config.ConfigManager.Load().CodeAnalysis;
+            _cachedSettings ??= AkmlSql.Core.Config.ConfigManager.Load();
+            var globalSettings = _cachedSettings.CodeAnalysis;
             var response = await _analysisEngine.AnalyzeAsync(
                 req, _sessionManager, _schemaCacheManager, globalSettings, ct);
             return CreateResponse(MessageTypes.AnalysisResult, requestId, response);

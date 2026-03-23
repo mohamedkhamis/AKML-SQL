@@ -43,6 +43,11 @@ public class AnalysisEngine
         _settingsLoader = settingsLoader;
     }
 
+    /// <summary>
+    /// Analyzes the SQL document referenced by <paramref name="request"/> and returns all diagnostics.
+    /// Uses batch-level result caching (keyed by SHA-256 hash) to skip unchanged batches.
+    /// Rules run in parallel bounded by an internal semaphore (max 8 concurrent rules).
+    /// </summary>
     public async Task<CodeAnalysisResponse> AnalyzeAsync(
         CodeAnalysisRequest request,
         SessionManager sessionManager,
