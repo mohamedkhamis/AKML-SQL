@@ -8,6 +8,9 @@ using AkmlSql.Engine.Completion;
 using AkmlSql.Engine.Completion.Providers;
 using AkmlSql.Engine.Analysis;
 using AkmlSql.Engine.Formatter;
+using AkmlSql.Engine.History;
+using AkmlSql.Engine.Safety;
+using AkmlSql.Engine.Sessions;
 using AkmlSql.Engine.Snippets;
 using AkmlSql.Engine.Parser;
 using AkmlSql.Engine.Refactoring;
@@ -38,6 +41,10 @@ public class PipeRpcServer
     private readonly AnalysisEngine _analysisEngine;
     private readonly CaSettingsLoader _caSettingsLoader = new();
     private readonly RefactoringEngine _refactoringEngine;
+    private readonly HistoryRequestHandler _historyHandler;
+    private readonly HistoryRetentionService _historyRetentionService;
+    private readonly SessionRequestHandler _sessionRequestHandler = new();
+    private readonly SafetyCheckHandler _safetyCheckHandler;
 
     public PipeRpcServer(string pipeName)
     {
@@ -52,6 +59,29 @@ public class PipeRpcServer
         var personalSnippets = Path.Combine(appDataFolder, "snippets", "personal");
         var builtInSnippets = Path.Combine(AppContext.BaseDirectory, "snippets");
         _snippetHandler = new SnippetRequestHandler(personalSnippets, builtInSnippets);
+        _safetyCheckHandler = new SafetyCheckHandler(_parserService);
+
+        // History: initialize database and retention service
+        var historyDb = new HistoryDatabase();
+        _historyHandler = new HistoryRequestHandler(historyDb);
+        var settings = AkmlSql.Core.Config.ConfigManager.Load();
+        _historyRetentionService = new HistoryRetentionService(historyDb, settings.History);
+        if (settings.History.Enabled)
+        {
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await historyDb.InitializeAsync();
+                    await _historyRetentionService.StartAsync();
+                    Log.Information("History database and retention service started");
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "Failed to initialize history database");
+                }
+            });
+        }
     }
 
     public async Task RunAsync(CancellationToken ct)
@@ -412,6 +442,23 @@ public class PipeRpcServer
                         return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
                     var rfApplyReq = MessagePackSerializer.Deserialize<RefactorApplyRequest>(message.Payload);
                     return RefactorApplyAsync(rfApplyReq, message.RequestId, ct);
+
+                case MessageTypes.SessionSave:
+                case MessageTypes.SessionRestore:
+                case MessageTypes.SessionDelete:
+                    return _sessionRequestHandler.HandleAsync(message, message.MessageType);
+
+                case MessageTypes.SafetyCheck:
+                    return _safetyCheckHandler.HandleAsync(message);
+
+                case MessageTypes.HistoryRecord:
+                    return _historyHandler.HandleRecordAsync(message);
+
+                case MessageTypes.HistorySearch:
+                    return _historyHandler.HandleSearchAsync(message);
+
+                case MessageTypes.HistoryAction:
+                    return _historyHandler.HandleActionAsync(message);
 
                 case MessageTypes.Shutdown:
                     Log.Information("Shutdown requested by client.");

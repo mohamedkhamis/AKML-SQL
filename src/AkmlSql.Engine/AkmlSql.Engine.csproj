@@ -16,8 +16,10 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.SqlClient" Version="6.*" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.*" />
     <PackageReference Include="Microsoft.SqlServer.TransactSql.ScriptDom" Version="170.*" />
     <PackageReference Include="MessagePack" Version="2.*" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="9.*" />
   </ItemGroup>
 
   <ItemGroup>

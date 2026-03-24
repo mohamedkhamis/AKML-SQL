@@ -12,6 +12,9 @@ using AkmlSql.Core.Logging;
 using AkmlSql.Shell.Shared;
 using AkmlSql.Shell.Shared.Commands;
 using AkmlSql.Shell.Shared.StatusBar;
+using AkmlSql.Shell.Shared.History;
+using AkmlSql.Shell.Shared.Safety;
+using AkmlSql.Shell.Shared.Tabs;
 using AkmlSql.Shell.Shared.Update;
 using AkmlSql.Shell.Shared.Validation;
 using Serilog;
@@ -22,6 +25,7 @@ namespace AkmlSql.VS2019
     [InstalledProductRegistration(Constants.ProductName, "AI-powered SQL development assistance", Constants.Version)]
     [ProvideMenuResource("Menus.ctmenu", 1)]
     [ProvideAutoLoad(VSConstants.UICONTEXT.ShellInitialized_string, PackageAutoLoadFlags.BackgroundLoad)]
+    [ProvideToolWindow(typeof(HistoryToolWindow), Style = VsDockStyle.Tabbed, Window = "3ae79031-e1bc-11d0-8f78-00a0c9110057")]
     [Guid(PackageGuids.AkmlSqlPackageString)]
     public sealed class AkmlSqlPackage : AsyncPackage
     {
@@ -43,6 +47,15 @@ namespace AkmlSql.VS2019
                 OptionsCommand.Initialize(this, commandService);
                 SendFeedbackCommand.Initialize(this, commandService);
                 ViewLogsCommand.Initialize(this, commandService);
+
+                // Phase 7 — Tab management and safety commands
+                RestoreClosedTabCommand.Initialize(this, commandService);
+                CloseUnmodifiedCommand.Initialize(this, commandService);
+                DuplicateTabCommand.Initialize(this, commandService);
+                PinTabCommand.Initialize(this, commandService);
+
+                // Phase 7 US2 — SQL History panel
+                HistoryPanelCommand.Initialize(this, commandService);
             }
 
             // Non-critical initialization — failures must not break the extension
@@ -61,6 +74,10 @@ namespace AkmlSql.VS2019
                 }
 
                 UpdateLauncher.LaunchIfDue();
+                ExecutionCapture.Initialize(this);
+                ExecutionInterceptor.Initialize(this);
+                TabManagementInitializer.Initialize(this);
+                TransactionMonitor.Initialize(this);
 
                 Log.Information("AKML SQL package initialized successfully for VS 2019");
             }
@@ -87,6 +104,7 @@ namespace AkmlSql.VS2019
         {
             if (disposing)
             {
+                TransactionMonitor.Shutdown();
                 LoggerFactory.Shutdown();
             }
 

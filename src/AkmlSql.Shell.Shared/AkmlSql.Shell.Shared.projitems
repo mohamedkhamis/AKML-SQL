@@ -84,5 +84,31 @@
     <Compile Include="$(MSBuildThisFileDirectory)Refactoring\ExtractToProcCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Refactoring\ExtractToDerivedTableCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Refactoring\EncapsulateAsViewCommand.cs" />
+    <!-- Phase 7 — SQL History: execution capture, search, and tool window -->
+    <Compile Include="$(MSBuildThisFileDirectory)History\ExecutionCapture.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)History\HistoryViewModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)History\HistoryToolWindowControl.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)History\HistoryDiffWindow.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)History\HistoryToolWindow.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\HistoryPanelCommand.cs" />
+    <!-- Phase 7 — Tab management: environment detection, coloring, tooltips -->
+    <Compile Include="$(MSBuildThisFileDirectory)Tabs\EnvironmentDetector.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Tabs\TabColoringManager.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Tabs\TabTooltipProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Tabs\TabManagementInitializer.cs" />
+    <!-- Phase 7 US6 — Restore Recently Closed Tabs -->
+    <Compile Include="$(MSBuildThisFileDirectory)Tabs\ClosedTabStack.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Tabs\TabCloseMonitor.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\RestoreClosedTabCommand.cs" />
+    <!-- Phase 7 US7 — Execution Safety Warnings -->
+    <Compile Include="$(MSBuildThisFileDirectory)Safety\SafetyWarningDialog.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Safety\ExecutionInterceptor.cs" />
+    <!-- Phase 7 US8 — Transaction Reminder -->
+    <Compile Include="$(MSBuildThisFileDirectory)Safety\TransactionMonitor.cs" />
+    <!-- Phase 7 US10 — Custom Window Title and Tab Enhancements -->
+    <Compile Include="$(MSBuildThisFileDirectory)Tabs\WindowTitleManager.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\PinTabCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\DuplicateTabCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\CloseUnmodifiedCommand.cs" />
   </ItemGroup>
 </Project>

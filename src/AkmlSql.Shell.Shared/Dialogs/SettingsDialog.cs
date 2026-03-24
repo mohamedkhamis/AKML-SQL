@@ -76,6 +76,32 @@ namespace AkmlSql.Shell.Shared.Dialogs
         private CheckBox  _chkRefIncludeStringLiteralsInRename;
         private ComboBox  _cboRefRenameScope;
 
+        // History
+        private CheckBox _chkHistEnabled;
+        private NumericUpDown _nudHistRetentionDays;
+        private NumericUpDown _nudHistMaxEntries;
+        private CheckBox _chkHistEncryptAtRest;
+        private CheckBox _chkHistRecordFailures;
+        private CheckBox _chkHistDeduplication;
+
+        // Tabs
+        private CheckBox _chkTabColoringEnabled;
+        private DataGridView _gridColoringRules;
+        private CheckBox _chkTabSessionRecovery;
+        private NumericUpDown _nudTabAutoSaveInterval;
+        private ComboBox _cboTabRestoreOnStartup;
+        private NumericUpDown _nudTabMaxClosedTabs;
+        private TextBox _txtTabCustomWindowTitle;
+
+        // Safety
+        private CheckBox _chkSafetyProductionWarning;
+        private CheckBox _chkSafetyDeleteWithoutWhere;
+        private CheckBox _chkSafetyUpdateWithoutWhere;
+        private CheckBox _chkSafetyDropConfirmation;
+        private CheckBox _chkSafetyTruncateConfirmation;
+        private CheckBox _chkSafetyTransactionReminder;
+        private NumericUpDown _nudSafetyTransactionReminderInterval;
+
         public SettingsDialog(AppSettings settings)
         {
             _settings = settings;
@@ -109,6 +135,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
             tabControl.TabPages.Add(CreateSnippetsTab());
             tabControl.TabPages.Add(CreateCodeAnalysisTab());
             tabControl.TabPages.Add(CreateRefactoringTab());
+            tabControl.TabPages.Add(CreateHistoryTab());
+            tabControl.TabPages.Add(CreateTabsTab());
+            tabControl.TabPages.Add(CreateSafetyTab());
 
             // ─── Button panel ─────────────────────────────────────────────────
             var buttonPanel = new Panel
@@ -377,6 +406,88 @@ namespace AkmlSql.Shell.Shared.Dialogs
             return tab;
         }
 
+        private TabPage CreateHistoryTab()
+        {
+            var tab = new TabPage("History") { AutoScroll = true };
+            var y = 20;
+
+            AddSectionLabel(tab, "SQL History Recording", ref y);
+            _chkHistEnabled = AddCheckBox(tab, "Enable SQL history recording", ref y);
+            _nudHistRetentionDays = AddNumericField(tab, "Retention days:", 1, 3650, ref y);
+            _nudHistMaxEntries = AddNumericField(tab, "Max entries:", 1000, 10_000_000, ref y);
+            _chkHistEncryptAtRest = AddCheckBox(tab, "Encrypt history at rest (DPAPI + AES-256)", ref y);
+            _chkHistRecordFailures = AddCheckBox(tab, "Record failed executions", ref y);
+            _chkHistDeduplication = AddCheckBox(tab, "Enable deduplication in search", ref y);
+
+            return tab;
+        }
+
+        private TabPage CreateTabsTab()
+        {
+            var tab = new TabPage("Tabs") { AutoScroll = true };
+            var y = 20;
+
+            AddSectionLabel(tab, "Tab Coloring", ref y);
+            _chkTabColoringEnabled = AddCheckBox(tab, "Enable environment-based tab coloring", ref y);
+
+            // DataGridView for coloring rules
+            var colOrder   = new DataGridViewTextBoxColumn  { HeaderText = "Order",   Width = 55,  Name = "Order" };
+            var colPattern = new DataGridViewTextBoxColumn  { HeaderText = "Pattern", Width = 180, Name = "Pattern" };
+            var colColor   = new DataGridViewTextBoxColumn  { HeaderText = "Color",   Width = 80,  Name = "Color" };
+            var colLabel   = new DataGridViewTextBoxColumn  { HeaderText = "Label",   AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, Name = "Label" };
+
+            _gridColoringRules = new DataGridView
+            {
+                Location           = new Point(15, y),
+                Size               = new Size(tab.ClientSize.Width > 0 ? tab.ClientSize.Width - 30 : 530, 140),
+                Anchor             = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+                AllowUserToAddRows    = true,
+                AllowUserToDeleteRows = true,
+                RowHeadersVisible     = true,
+                AutoSizeRowsMode      = DataGridViewAutoSizeRowsMode.AllCells,
+                SelectionMode         = DataGridViewSelectionMode.FullRowSelect,
+            };
+            _gridColoringRules.Columns.AddRange(colOrder, colPattern, colColor, colLabel);
+
+            tab.Controls.Add(_gridColoringRules);
+            y += 150;
+
+            y += 10;
+            AddSectionLabel(tab, "Session Recovery", ref y);
+            _chkTabSessionRecovery = AddCheckBox(tab, "Enable session auto-save and crash recovery", ref y);
+            _nudTabAutoSaveInterval = AddNumericField(tab, "Auto-save interval (seconds):", 30, 300, ref y);
+            _cboTabRestoreOnStartup = AddComboField(tab, "Restore on startup:",
+                ["prompt", "always", "never"], ref y);
+            _nudTabMaxClosedTabs = AddNumericField(tab, "Max closed tabs to remember:", 1, 100, ref y);
+
+            y += 10;
+            AddSectionLabel(tab, "Window Title", ref y);
+            _txtTabCustomWindowTitle = AddTextField(tab, "Title template:", ref y);
+            AddHintLabel(tab, "Tokens: {server}, {database}, {user}, {file}", ref y);
+
+            return tab;
+        }
+
+        private TabPage CreateSafetyTab()
+        {
+            var tab = new TabPage("Safety") { AutoScroll = true };
+            var y = 20;
+
+            AddSectionLabel(tab, "Execution Safety Warnings", ref y);
+            _chkSafetyProductionWarning = AddCheckBox(tab, "Warn before executing DML/DDL on production servers", ref y);
+            _chkSafetyDeleteWithoutWhere = AddCheckBox(tab, "Warn on DELETE without WHERE clause", ref y);
+            _chkSafetyUpdateWithoutWhere = AddCheckBox(tab, "Warn on UPDATE without WHERE clause", ref y);
+            _chkSafetyDropConfirmation = AddCheckBox(tab, "Confirm DROP TABLE / DROP DATABASE", ref y);
+            _chkSafetyTruncateConfirmation = AddCheckBox(tab, "Confirm TRUNCATE TABLE", ref y);
+
+            y += 10;
+            AddSectionLabel(tab, "Transaction Monitoring", ref y);
+            _chkSafetyTransactionReminder = AddCheckBox(tab, "Remind about uncommitted transactions", ref y);
+            _nudSafetyTransactionReminderInterval = AddNumericField(tab, "Reminder interval (seconds):", 30, 3600, ref y);
+
+            return tab;
+        }
+
         private void OnImportCaSettings(object sender, EventArgs e)
         {
             using var dlg = new OpenFileDialog
@@ -515,6 +626,44 @@ namespace AkmlSql.Shell.Shared.Dialogs
             _chkRefIncludeStringLiteralsInRename.Checked = rf.IncludeStringLiteralsInRename;
             _cboRefRenameScope.SelectedIndex = rf.RenameScope == "projectDirectory" ? 1 : 0;
 
+            // History
+            var h = _settings.History;
+            _chkHistEnabled.Checked = h.Enabled;
+            _nudHistRetentionDays.Value = Math.Min(Math.Max(h.RetentionDays, 1), 3650);
+            _nudHistMaxEntries.Value = Math.Min(Math.Max(h.MaxEntries, 1000), 10_000_000);
+            _chkHistEncryptAtRest.Checked = h.EncryptAtRest;
+            _chkHistRecordFailures.Checked = h.RecordFailures;
+            _chkHistDeduplication.Checked = h.Deduplication;
+
+            // Tabs
+            var t = _settings.Tabs;
+            _chkTabColoringEnabled.Checked = t.ColoringEnabled;
+            _gridColoringRules.Rows.Clear();
+            foreach (var rule in t.ColoringRules)
+            {
+                _gridColoringRules.Rows.Add(rule.Order.ToString(), rule.Pattern, rule.Color, rule.Label);
+            }
+            _chkTabSessionRecovery.Checked = t.SessionRecovery;
+            _nudTabAutoSaveInterval.Value = Math.Min(Math.Max(t.AutoSaveInterval, 30), 300);
+            _cboTabRestoreOnStartup.SelectedIndex = t.RestoreOnStartup?.ToLowerInvariant() switch
+            {
+                "always" => 1,
+                "never"  => 2,
+                _        => 0 // "prompt"
+            };
+            _nudTabMaxClosedTabs.Value = Math.Min(Math.Max(t.MaxClosedTabs, 1), 100);
+            _txtTabCustomWindowTitle.Text = t.CustomWindowTitle ?? string.Empty;
+
+            // Safety
+            var sf = _settings.Safety;
+            _chkSafetyProductionWarning.Checked = sf.ProductionWarning;
+            _chkSafetyDeleteWithoutWhere.Checked = sf.DeleteWithoutWhere;
+            _chkSafetyUpdateWithoutWhere.Checked = sf.UpdateWithoutWhere;
+            _chkSafetyDropConfirmation.Checked = sf.DropConfirmation;
+            _chkSafetyTruncateConfirmation.Checked = sf.TruncateConfirmation;
+            _chkSafetyTransactionReminder.Checked = sf.TransactionReminder;
+            _nudSafetyTransactionReminderInterval.Value = Math.Min(Math.Max(sf.TransactionReminderInterval, 30), 3600);
+
             // Populate rule grid from user-level .casettings file
             try
             {
@@ -606,6 +755,51 @@ namespace AkmlSql.Shell.Shared.Dialogs
             _settings.Refactoring.RenameScope = _cboRefRenameScope.SelectedIndex == 1
                 ? "projectDirectory"
                 : "currentScript";
+
+            // History
+            _settings.History.Enabled = _chkHistEnabled.Checked;
+            _settings.History.RetentionDays = (int)_nudHistRetentionDays.Value;
+            _settings.History.MaxEntries = (int)_nudHistMaxEntries.Value;
+            _settings.History.EncryptAtRest = _chkHistEncryptAtRest.Checked;
+            _settings.History.RecordFailures = _chkHistRecordFailures.Checked;
+            _settings.History.Deduplication = _chkHistDeduplication.Checked;
+
+            // Tabs
+            _settings.Tabs.ColoringEnabled = _chkTabColoringEnabled.Checked;
+            _settings.Tabs.ColoringRules.Clear();
+            foreach (DataGridViewRow row in _gridColoringRules.Rows)
+            {
+                if (row.IsNewRow) continue;
+                var pattern = row.Cells["Pattern"].Value as string;
+                if (string.IsNullOrWhiteSpace(pattern)) continue;
+                int.TryParse(row.Cells["Order"].Value?.ToString(), out var order);
+                _settings.Tabs.ColoringRules.Add(new ColoringRule
+                {
+                    Order = order,
+                    Pattern = pattern,
+                    Color = row.Cells["Color"].Value as string ?? "#808080",
+                    Label = row.Cells["Label"].Value as string ?? string.Empty
+                });
+            }
+            _settings.Tabs.SessionRecovery = _chkTabSessionRecovery.Checked;
+            _settings.Tabs.AutoSaveInterval = (int)_nudTabAutoSaveInterval.Value;
+            _settings.Tabs.RestoreOnStartup = _cboTabRestoreOnStartup.SelectedIndex switch
+            {
+                1 => "always",
+                2 => "never",
+                _ => "prompt"
+            };
+            _settings.Tabs.MaxClosedTabs = (int)_nudTabMaxClosedTabs.Value;
+            _settings.Tabs.CustomWindowTitle = _txtTabCustomWindowTitle.Text.Trim();
+
+            // Safety
+            _settings.Safety.ProductionWarning = _chkSafetyProductionWarning.Checked;
+            _settings.Safety.DeleteWithoutWhere = _chkSafetyDeleteWithoutWhere.Checked;
+            _settings.Safety.UpdateWithoutWhere = _chkSafetyUpdateWithoutWhere.Checked;
+            _settings.Safety.DropConfirmation = _chkSafetyDropConfirmation.Checked;
+            _settings.Safety.TruncateConfirmation = _chkSafetyTruncateConfirmation.Checked;
+            _settings.Safety.TransactionReminder = _chkSafetyTransactionReminder.Checked;
+            _settings.Safety.TransactionReminderInterval = (int)_nudSafetyTransactionReminderInterval.Value;
 
             // Persist rule enable/severity overrides to the user-level .casettings file
             SaveRuleGridToCaSettings();
@@ -763,6 +957,20 @@ namespace AkmlSql.Shell.Shared.Dialogs
             tab.Controls.Add(txt);
             y += 30;
             return txt;
+        }
+
+        private static void AddHintLabel(TabPage tab, string text, ref int y)
+        {
+            var lbl = new Label
+            {
+                Text = text,
+                ForeColor = Color.FromArgb(120, 120, 130),
+                Location = new Point(45, y),
+                AutoSize = true,
+                Font = new Font(DefaultFont.FontFamily, DefaultFont.Size - 1f, FontStyle.Italic)
+            };
+            tab.Controls.Add(lbl);
+            y += 20;
         }
 
         private static void AddReadOnlyField(TabPage tab, string label, string value, ref int y)

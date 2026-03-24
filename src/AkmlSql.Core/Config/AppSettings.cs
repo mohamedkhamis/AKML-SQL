@@ -50,6 +50,18 @@ namespace AkmlSql.Core.Config
         [JsonPropertyName("refactoring")]
         public RefactoringSettings Refactoring { get; set; } = new();
 
+        /// <summary>SQL History recording and storage configuration (Phase 7).</summary>
+        [JsonPropertyName("history")]
+        public HistorySettings History { get; set; } = new();
+
+        /// <summary>Tab management, coloring, and session recovery configuration (Phase 7).</summary>
+        [JsonPropertyName("tabs")]
+        public TabSettings Tabs { get; set; } = new();
+
+        /// <summary>Execution safety warnings and transaction reminders (Phase 7).</summary>
+        [JsonPropertyName("safety")]
+        public SafetySettings Safety { get; set; } = new();
+
         /// <summary>
         /// T093-T095: Whether the user has been prompted about native IntelliSense conflict.
         /// </summary>
@@ -265,5 +277,105 @@ namespace AkmlSql.Core.Config
 
         [JsonPropertyName("includeStringLiteralsInRename")]
         public bool IncludeStringLiteralsInRename { get; set; }
+    }
+
+    /// <summary>Settings for the SQL History feature (Phase 7).</summary>
+    public class HistorySettings
+    {
+        [JsonPropertyName("enabled")]
+        public bool Enabled { get; set; } = true;
+
+        [JsonPropertyName("retentionDays")]
+        public int RetentionDays { get; set; } = 90;
+
+        [JsonPropertyName("maxEntries")]
+        public int MaxEntries { get; set; } = 100_000;
+
+        [JsonPropertyName("encryptAtRest")]
+        public bool EncryptAtRest { get; set; }
+
+        [JsonPropertyName("recordFailures")]
+        public bool RecordFailures { get; set; } = true;
+
+        [JsonPropertyName("deduplication")]
+        public bool Deduplication { get; set; } = true;
+
+        [JsonPropertyName("shortcut")]
+        public string Shortcut { get; set; } = "Ctrl+Alt+H";
+    }
+
+    /// <summary>Settings for tab management and session recovery (Phase 7).</summary>
+    public class TabSettings
+    {
+        [JsonPropertyName("coloringEnabled")]
+        public bool ColoringEnabled { get; set; } = true;
+
+        [JsonPropertyName("coloringRules")]
+        public List<ColoringRule> ColoringRules { get; set; } =
+        [
+            new() { Order = 0, Pattern = "*PROD*,*LIVE*", MatchTarget = "serverName", Color = "#FF4444", Label = "PRODUCTION" },
+            new() { Order = 1, Pattern = "*STG*,*UAT*,*STAGING*", MatchTarget = "serverName", Color = "#FFB800", Label = "STAGING" },
+            new() { Order = 2, Pattern = "*DEV*,*LOCAL*,localhost,(local)", MatchTarget = "serverName", Color = "#44BB44", Label = "DEV" },
+            new() { Order = 3, Pattern = "*.database.windows.net", MatchTarget = "serverName", Color = "#4488FF", Label = "AZURE" }
+        ];
+
+        [JsonPropertyName("sessionRecovery")]
+        public bool SessionRecovery { get; set; } = true;
+
+        [JsonPropertyName("autoSaveInterval")]
+        public int AutoSaveInterval { get; set; } = 60;
+
+        [JsonPropertyName("restoreOnStartup")]
+        public string RestoreOnStartup { get; set; } = "prompt";
+
+        [JsonPropertyName("maxClosedTabs")]
+        public int MaxClosedTabs { get; set; } = 20;
+
+        [JsonPropertyName("customWindowTitle")]
+        public string CustomWindowTitle { get; set; } = "{server} - {database} - SSMS";
+    }
+
+    /// <summary>Configuration for a single tab coloring environment rule.</summary>
+    public class ColoringRule
+    {
+        [JsonPropertyName("order")]
+        public int Order { get; set; }
+
+        [JsonPropertyName("pattern")]
+        public string Pattern { get; set; } = string.Empty;
+
+        [JsonPropertyName("matchTarget")]
+        public string MatchTarget { get; set; } = "serverName";
+
+        [JsonPropertyName("color")]
+        public string Color { get; set; } = string.Empty;
+
+        [JsonPropertyName("label")]
+        public string Label { get; set; } = string.Empty;
+    }
+
+    /// <summary>Settings for execution safety warnings (Phase 7).</summary>
+    public class SafetySettings
+    {
+        [JsonPropertyName("productionWarning")]
+        public bool ProductionWarning { get; set; } = true;
+
+        [JsonPropertyName("deleteWithoutWhere")]
+        public bool DeleteWithoutWhere { get; set; } = true;
+
+        [JsonPropertyName("updateWithoutWhere")]
+        public bool UpdateWithoutWhere { get; set; } = true;
+
+        [JsonPropertyName("dropConfirmation")]
+        public bool DropConfirmation { get; set; } = true;
+
+        [JsonPropertyName("truncateConfirmation")]
+        public bool TruncateConfirmation { get; set; } = true;
+
+        [JsonPropertyName("transactionReminder")]
+        public bool TransactionReminder { get; set; } = true;
+
+        [JsonPropertyName("transactionReminderInterval")]
+        public int TransactionReminderInterval { get; set; } = 300;
     }
 }

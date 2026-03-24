@@ -51,5 +51,12 @@ namespace AkmlSql.Shell.Shared
         public const int CmdConvertTempToTableVar  = 0x0405;
         public const int CmdConvertTableVarToTemp  = 0x0406;
         public const int CmdParameterizeValues     = 0x0407;
+
+        // Phase 7 — SQL History & Tab Management
+        public const int CmdHistoryPanel            = 0x0500;
+        public const int CmdRestoreClosedTab        = 0x0501;
+        public const int CmdCloseUnmodified         = 0x0502;
+        public const int CmdDuplicateTab            = 0x0503;
+        public const int CmdPinTab                  = 0x0504;
     }
 }

@@ -97,8 +97,34 @@ namespace AkmlSql.Core.Ipc
         public const int RequestRefactorPreview = 30;
         public const int RequestRefactorApply = 31;
 
+        // Shell → Engine (SQL History — Phase 7)
+        public const int HistoryRecord = 40;
+        public const int HistorySearch = 41;
+        public const int HistoryAction = 42;
+
+        // Shell → Engine (Session Recovery — Phase 7)
+        public const int SessionSave = 50;
+        public const int SessionRestore = 51;
+        public const int SessionDelete = 52;
+
+        // Shell → Engine (Execution Safety — Phase 7)
+        public const int SafetyCheck = 55;
+
         // Engine → Shell (Refactoring)
         public const int RefactorPreviewResult = 130;
         public const int RefactorApplyResult = 131;
+
+        // Engine → Shell (SQL History — Phase 7)
+        public const int HistoryRecordResult = 140;
+        public const int HistorySearchResult = 141;
+        public const int HistoryActionResult = 142;
+
+        // Engine → Shell (Session Recovery — Phase 7)
+        public const int SessionSaveResult = 150;
+        public const int SessionRestoreResult = 151;
+        public const int SessionDeleteResult = 152;
+
+        // Engine → Shell (Execution Safety — Phase 7)
+        public const int SafetyCheckResult = 155;
     }
 }

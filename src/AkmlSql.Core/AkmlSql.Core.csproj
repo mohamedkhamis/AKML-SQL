@@ -17,6 +17,7 @@
 
   <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
     <PackageReference Include="System.Text.Json" Version="8.*" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="9.*" />
     <PackageReference Include="Nullable" Version="1.*" PrivateAssets="all" />
   </ItemGroup>
 
