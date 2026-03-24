@@ -9,6 +9,10 @@ using AkmlSql.Engine.Analysis;
 
 namespace AkmlSql.Analyzer;
 
+[JsonSerializable(typeof(ReportWriter.ReportModel))]
+[JsonSourceGenerationOptions(WriteIndented = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+internal partial class ReportJsonContext : JsonSerializerContext;
+
 /// <summary>
 /// Writes analysis results to stdout (text/JSON) and optionally to a JSON report file.
 /// </summary>
@@ -151,12 +155,8 @@ internal sealed class ReportWriter
         catch { return path; }
     }
 
-    private static string Serialize(object obj) =>
-        JsonSerializer.Serialize(obj, new JsonSerializerOptions
-        {
-            WriteIndented        = true,
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-        });
+    private static string Serialize(ReportModel obj) =>
+        JsonSerializer.Serialize(obj, ReportJsonContext.Default.ReportModel);
 
     // ─── Report models ────────────────────────────────────────────────────────
 

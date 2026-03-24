@@ -22,4 +22,10 @@
     <ProjectReference Include="..\AkmlSql.Formatting\AkmlSql.Formatting.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="profiles\**\*">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

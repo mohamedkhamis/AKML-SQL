@@ -32,8 +32,8 @@ public class CheckCommand
         var files = FileDiscovery.GetFiles(options);
         if (files.Count == 0)
         {
-            ConsoleRenderer.WriteError("No .sql files found.");
-            return ExitCodes.FileNotFound;
+            ConsoleRenderer.WriteInfo("No .sql files found.");
+            return ExitCodes.Success;
         }
 
         var sw = Stopwatch.StartNew();
