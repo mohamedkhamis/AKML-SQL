@@ -18,8 +18,18 @@
     <PackageReference Include="Microsoft.Data.SqlClient" Version="6.*" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="9.*" />
     <PackageReference Include="Microsoft.SqlServer.TransactSql.ScriptDom" Version="170.*" />
+    <PackageReference Include="ClosedXML" Version="0.104.*" />
     <PackageReference Include="MessagePack" Version="2.*" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="9.*" />
+
+    <!-- Phase 9: AI Assistance -->
+    <PackageReference Include="Microsoft.Extensions.AI" Version="10.4.1" />
+    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.4.1" />
+    <PackageReference Include="Anthropic.SDK" Version="5.10.0" />
+    <PackageReference Include="OllamaSharp" Version="5.4.25" />
+    <PackageReference Include="Mscc.GenerativeAI" Version="3.1.0" />
+    <PackageReference Include="Microsoft.ML.Tokenizers" Version="2.0.0" />
+    <PackageReference Include="Microsoft.ML.Tokenizers.Data.Cl100kBase" Version="2.0.0" />
   </ItemGroup>
 
   <ItemGroup>

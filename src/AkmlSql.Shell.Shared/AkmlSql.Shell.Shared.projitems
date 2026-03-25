@@ -17,6 +17,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Commands\ViewLogsCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\AboutDialog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\SettingsDialog.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Dialogs\LogViewerDialog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)StatusBar\StatusBarManager.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Update\UpdateLauncher.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Update\UpdateNotifier.cs" />
@@ -110,5 +111,97 @@
     <Compile Include="$(MSBuildThisFileDirectory)Commands\PinTabCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\DuplicateTabCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\CloseUnmodifiedCommand.cs" />
+    <!-- Phase 8 US1 — Grid Search & Aggregates -->
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\Grid\GridAccessHelper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\Grid\GridFindBar.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\Grid\GridAggregatesProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\GridCommands.cs" />
+    <!-- Phase 8 US9 — Grid Advanced Features -->
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\Grid\ColumnStatisticsPopup.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\Grid\TransposeResultsView.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\Grid\NullHighlighter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\Grid\RowNumberProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\Grid\CellEditDialog.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\Grid\GridFeatureInitializer.cs" />
+    <!-- Phase 8 US4 — Execute Current Statement -->
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\ExecuteCurrentStatementCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\ExecuteToCursorCommand.cs" />
+    <!-- Phase 8 US5 — Document Outline -->
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\DocumentOutline\DocumentOutlineViewModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\DocumentOutline\DocumentOutlineControl.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\DocumentOutline\DocumentOutlineToolWindow.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\DocumentOutlineCommand.cs" />
+    <!-- Phase 8 US8 — Named Regions & Navigation -->
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\RegionTagger.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\RegionTaggerProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\NavigateStatementCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\NavigateMatchingPairCommand.cs" />
+    <!-- Phase 8 US2 — Copy & Export -->
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\Grid\GridCopyAsMenu.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\Grid\GridExportManager.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\Grid\GridScriptGenerator.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\Grid\GridContextMenuWiring.cs" />
+    <!-- Phase 8 US3 — Command Palette -->
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\CommandPalette\CommandRegistry.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\CommandPalette\FuzzyMatcher.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\CommandPalette\CommandPaletteViewModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\CommandPalette\CommandPaletteWindow.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\CommandPaletteCommand.cs" />
+    <!-- Phase 8 US6 — Highlight Occurrences & Bracket Matching -->
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\OccurrenceHighlightTagger.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\OccurrenceHighlightTaggerProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\BracketMatchingTagger.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\BracketMatchingTaggerProvider.cs" />
+    <!-- Phase 8 US7 — Go to Definition & Peek Definition -->
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\GoToDefinitionCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\PeekDefinitionCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\Navigation\PeekDefinitionControl.cs" />
+    <!-- Phase 8 US12 — Object Search & Find References -->
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\ObjectSearchCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\FindReferencesCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\Navigation\ObjectSearchWindow.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\Navigation\ReferencesPanel.cs" />
+    <!-- Phase 8 US10 — Multi-Database Execution -->
+    <Compile Include="$(MSBuildThisFileDirectory)Execution\MultiDatabaseSelector.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Execution\MultiDatabaseExecutor.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Execution\MultiDatabaseResultsView.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Execution\MultiDatabaseCommand.cs" />
+    <!-- Phase 8 US11 — Execution Timer & Notifications -->
+    <Compile Include="$(MSBuildThisFileDirectory)Execution\ExecutionTimerManager.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Execution\CompletionNotifier.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Execution\ExecutionProductivityInitializer.cs" />
+    <!-- Phase 8 US13 — Sticky Scroll & Minimap -->
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\Adornments\StickyScrollAdornment.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\Adornments\StickyScrollAdornmentProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\Adornments\MinimapAdornment.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\Adornments\MinimapAdornmentProvider.cs" />
+    <!-- Phase 8 US14 — CRUD Generation & Script As -->
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\CrudGenerationCommand.cs" />
+    <!-- Phase 8 US15 — Connection Aliases -->
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\ConnectionAliasManager.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\ConnectionAliasIntegration.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\ConnectionAliasEditor.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\ConnectionAliasInitializer.cs" />
+    <!-- Phase 9: AI Assistance -->
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\AiCommandVisibility.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ai\AiSettingsValidator.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ai\DiffPreviewPanel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ai\TextToSqlInputDialog.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\TextToSqlCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\AiOptimizeCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\AiIndexAnalysisCommand.cs" />
+    <!-- Phase 9 US2: AI Explain -->
+    <Compile Include="$(MSBuildThisFileDirectory)Ai\ExplanationPanel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\AiExplainCommand.cs" />
+    <!-- Phase 9 US3: AI Fix -->
+    <Compile Include="$(MSBuildThisFileDirectory)Ai\FixPreviewPanel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\AiFixCommand.cs" />
+    <!-- Phase 9 US6: AI Chat Panel -->
+    <Compile Include="$(MSBuildThisFileDirectory)Ai\AiChatToolWindow.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ai\AiChatPanel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\AiChatPanelCommand.cs" />
+    <!-- Phase 9 US7: Inline Ghost Text -->
+    <Compile Include="$(MSBuildThisFileDirectory)Ai\GhostTextAdornment.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ai\GhostTextAdornmentProvider.cs" />
   </ItemGroup>
 </Project>

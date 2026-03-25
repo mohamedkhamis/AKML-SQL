@@ -101,6 +101,150 @@
           <ButtonText>Pin Tab</ButtonText>
         </Strings>
       </Button>
+
+      <!-- Phase 8 — Productivity Toolkit -->
+      <Button guid="guidAkmlSqlCmdSet" id="CmdCommandPalette" priority="0x0800" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <Strings>
+          <ButtonText>Command Palette</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdExecuteCurrentStatement" priority="0x0801" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <Strings>
+          <ButtonText>Execute Current Statement</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdExecuteToCursor" priority="0x0802" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <Strings>
+          <ButtonText>Execute to Cursor</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdGoToDefinition" priority="0x0803" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <Strings>
+          <ButtonText>Go To Definition</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdPeekDefinition" priority="0x0803" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <Strings>
+          <ButtonText>Peek Definition</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdFindReferences" priority="0x0804" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <Strings>
+          <ButtonText>Find All References</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdObjectSearch" priority="0x0805" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <Strings>
+          <ButtonText>Object Search</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdNavigateNextStatement" priority="0x0806" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <Strings>
+          <ButtonText>Navigate Next Statement</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdNavigatePrevStatement" priority="0x0807" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <Strings>
+          <ButtonText>Navigate Previous Statement</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdNavigateMatchingPair" priority="0x0808" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <Strings>
+          <ButtonText>Navigate Matching Pair</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdGridFind" priority="0x0809" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <Strings>
+          <ButtonText>Find in Results Grid</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdGridExport" priority="0x080A" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <Strings>
+          <ButtonText>Export Results Grid</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdCrudGeneration" priority="0x080B" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <Strings>
+          <ButtonText>Generate CRUD Procedures</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdDocumentOutline" priority="0x080C" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <Strings>
+          <ButtonText>Document Outline</ButtonText>
+        </Strings>
+      </Button>
+
+      <!-- Phase 9: AI Assistance -->
+      <Button guid="guidAkmlSqlCmdSet" id="CmdTextToSql" priority="0x0900" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <Strings>
+          <ButtonText>AI: Text to SQL</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdAiExplain" priority="0x0901" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <Strings>
+          <ButtonText>AI: Explain SQL</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdAiFix" priority="0x0902" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <Strings>
+          <ButtonText>AI: Fix SQL</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdAiOptimize" priority="0x0903" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <Strings>
+          <ButtonText>AI: Optimize SQL</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdAiIndexAnalysis" priority="0x0904" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <Strings>
+          <ButtonText>AI: Index Analysis</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdAiChatPanel" priority="0x0905" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <Strings>
+          <ButtonText>AI: Chat Panel</ButtonText>
+        </Strings>
+      </Button>
     </Buttons>
   </Commands>
 
@@ -120,6 +264,36 @@
                 editor="guidVSStd97" key1="H" mod1="Control Alt" />
     <KeyBinding guid="guidAkmlSqlCmdSet" id="CmdRestoreClosedTab"
                 editor="guidVSStd97" key1="T" mod1="Control Shift" />
+    <!-- Phase 8 keyboard shortcuts -->
+    <KeyBinding guid="guidAkmlSqlCmdSet" id="CmdCommandPalette"
+                editor="guidVSStd97" key1="P" mod1="Control Shift" />
+    <KeyBinding guid="guidAkmlSqlCmdSet" id="CmdExecuteCurrentStatement"
+                editor="guidVSStd97" key1="VK_RETURN" mod1="Alt" />
+    <KeyBinding guid="guidAkmlSqlCmdSet" id="CmdGoToDefinition"
+                editor="guidVSStd97" key1="VK_F12" />
+    <KeyBinding guid="guidAkmlSqlCmdSet" id="CmdPeekDefinition"
+                editor="guidVSStd97" key1="VK_F12" mod1="Alt" />
+    <KeyBinding guid="guidAkmlSqlCmdSet" id="CmdFindReferences"
+                editor="guidVSStd97" key1="VK_F12" mod1="Shift" />
+    <KeyBinding guid="guidAkmlSqlCmdSet" id="CmdObjectSearch"
+                editor="guidVSStd97" key1="T" mod1="Control" />
+    <KeyBinding guid="guidAkmlSqlCmdSet" id="CmdNavigateNextStatement"
+                editor="guidVSStd97" key1="VK_NEXT" mod1="Control" />
+    <KeyBinding guid="guidAkmlSqlCmdSet" id="CmdNavigatePrevStatement"
+                editor="guidVSStd97" key1="VK_PRIOR" mod1="Control" />
+    <KeyBinding guid="guidAkmlSqlCmdSet" id="CmdNavigateMatchingPair"
+                editor="guidVSStd97" key1="VK_OEM_6" mod1="Control" />
+    <!-- Phase 9: AI Assistance -->
+    <KeyBinding guid="guidAkmlSqlCmdSet" id="CmdTextToSql"
+                editor="guidVSStd97" key1="G" mod1="Control Shift" />
+    <KeyBinding guid="guidAkmlSqlCmdSet" id="CmdAiExplain"
+                editor="guidVSStd97" key1="E" mod1="Control Shift" />
+    <KeyBinding guid="guidAkmlSqlCmdSet" id="CmdAiFix"
+                editor="guidVSStd97" key1="R" mod1="Shift Alt" />
+    <KeyBinding guid="guidAkmlSqlCmdSet" id="CmdAiOptimize"
+                editor="guidVSStd97" key1="O" mod1="Control Shift" />
+    <KeyBinding guid="guidAkmlSqlCmdSet" id="CmdAiChatPanel"
+                editor="guidVSStd97" key1="A" mod1="Control Shift" />
   </KeyBindings>
 
   <Symbols>
@@ -139,6 +313,28 @@
       <IDSymbol name="CmdCloseUnmodified" value="0x0502" />
       <IDSymbol name="CmdDuplicateTab" value="0x0503" />
       <IDSymbol name="CmdPinTab" value="0x0504" />
+      <!-- Phase 8 — Productivity Toolkit -->
+      <IDSymbol name="CmdCommandPalette" value="0x0600" />
+      <IDSymbol name="CmdExecuteCurrentStatement" value="0x0601" />
+      <IDSymbol name="CmdExecuteToCursor" value="0x0602" />
+      <IDSymbol name="CmdGoToDefinition" value="0x0603" />
+      <IDSymbol name="CmdPeekDefinition" value="0x0604" />
+      <IDSymbol name="CmdFindReferences" value="0x0605" />
+      <IDSymbol name="CmdObjectSearch" value="0x0606" />
+      <IDSymbol name="CmdNavigateNextStatement" value="0x0607" />
+      <IDSymbol name="CmdNavigatePrevStatement" value="0x0608" />
+      <IDSymbol name="CmdNavigateMatchingPair" value="0x0609" />
+      <IDSymbol name="CmdGridFind" value="0x060A" />
+      <IDSymbol name="CmdGridExport" value="0x060B" />
+      <IDSymbol name="CmdCrudGeneration" value="0x060C" />
+      <IDSymbol name="CmdDocumentOutline" value="0x060D" />
+      <!-- Phase 9: AI Assistance -->
+      <IDSymbol name="CmdTextToSql" value="0x0700" />
+      <IDSymbol name="CmdAiExplain" value="0x0701" />
+      <IDSymbol name="CmdAiFix" value="0x0702" />
+      <IDSymbol name="CmdAiOptimize" value="0x0703" />
+      <IDSymbol name="CmdAiIndexAnalysis" value="0x0704" />
+      <IDSymbol name="CmdAiChatPanel" value="0x0705" />
     </GuidSymbol>
   </Symbols>
 

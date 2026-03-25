@@ -13,9 +13,13 @@ using AkmlSql.Shell.Shared;
 using AkmlSql.Shell.Shared.Commands;
 using AkmlSql.Shell.Shared.StatusBar;
 using AkmlSql.Shell.Shared.History;
+using AkmlSql.Shell.Shared.Productivity.DocumentOutline;
+using AkmlSql.Shell.Shared.Productivity.Grid;
+using AkmlSql.Shell.Shared.Productivity.Navigation;
 using AkmlSql.Shell.Shared.Safety;
 using AkmlSql.Shell.Shared.Tabs;
 using AkmlSql.Shell.Shared.Update;
+using AkmlSql.Shell.Shared.Ai;
 using AkmlSql.Shell.Shared.Validation;
 using Serilog;
 
@@ -26,6 +30,9 @@ namespace AkmlSql.VS2019
     [ProvideMenuResource("Menus.ctmenu", 1)]
     [ProvideAutoLoad(VSConstants.UICONTEXT.ShellInitialized_string, PackageAutoLoadFlags.BackgroundLoad)]
     [ProvideToolWindow(typeof(HistoryToolWindow), Style = VsDockStyle.Tabbed, Window = "3ae79031-e1bc-11d0-8f78-00a0c9110057")]
+    [ProvideToolWindow(typeof(DocumentOutlineToolWindow), Style = VsDockStyle.Tabbed, Window = "3ae79031-e1bc-11d0-8f78-00a0c9110057")]
+    [ProvideToolWindow(typeof(ReferencesToolWindow), Style = VsDockStyle.Tabbed, Window = "3ae79031-e1bc-11d0-8f78-00a0c9110057")]
+    [ProvideToolWindow(typeof(AiChatToolWindow), Style = VsDockStyle.Tabbed, Window = "3ae79031-e1bc-11d0-8f78-00a0c9110057")]
     [Guid(PackageGuids.AkmlSqlPackageString)]
     public sealed class AkmlSqlPackage : AsyncPackage
     {
@@ -56,6 +63,40 @@ namespace AkmlSql.VS2019
 
                 // Phase 7 US2 — SQL History panel
                 HistoryPanelCommand.Initialize(this, commandService);
+
+                // Phase 8 US7 — Go to Definition & Peek Definition
+                GoToDefinitionCommand.Initialize(this, commandService);
+                PeekDefinitionCommand.Initialize(this, commandService);
+
+                // Phase 8 US12 — Object Search & Find References
+                ObjectSearchCommand.Initialize(this, commandService);
+                FindReferencesCommand.Initialize(this, commandService);
+
+                // Phase 8 US2 — Grid Copy/Export commands
+                GridContextMenuWiring.RegisterCommands(commandService);
+
+                // Phase 8 US3 — Command Palette
+                CommandPaletteCommand.Initialize(this, commandService);
+
+                // Phase 8 US4 — Execute Current Statement
+                ExecuteCurrentStatementCommand.Initialize(this, commandService);
+                ExecuteToCursorCommand.Initialize(this, commandService);
+
+                // Phase 8 US5 — Document Outline
+                DocumentOutlineCommand.Initialize(this, commandService);
+
+                // Phase 8 US8 — Navigation commands
+                NavigateStatementCommand.Initialize(this, commandService);
+                NavigateMatchingPairCommand.Initialize(this, commandService);
+
+                // Phase 9 US2 — AI Explain
+                AiExplainCommand.Initialize(this, commandService);
+
+                // Phase 9 US3 — AI Fix
+                AiFixCommand.Initialize(this, commandService);
+
+                // Phase 9 US6 — AI Chat Panel
+                AiChatPanelCommand.Initialize(this, commandService);
             }
 
             // Non-critical initialization — failures must not break the extension
@@ -78,6 +119,7 @@ namespace AkmlSql.VS2019
                 ExecutionInterceptor.Initialize(this);
                 TabManagementInitializer.Initialize(this);
                 TransactionMonitor.Initialize(this);
+                AiSettingsValidator.Initialize();
 
                 Log.Information("AKML SQL package initialized successfully for VS 2019");
             }

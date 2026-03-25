@@ -102,6 +102,60 @@ namespace AkmlSql.Shell.Shared.Dialogs
         private CheckBox _chkSafetyTransactionReminder;
         private NumericUpDown _nudSafetyTransactionReminderInterval;
 
+        // Phase 8 — Editor Productivity
+        private CheckBox _chkHighlightOccurrences;
+        private CheckBox _chkBracketMatching;
+        private CheckBox _chkNamedRegions;
+        private CheckBox _chkStickyScroll;
+        private CheckBox _chkMinimap;
+        private CheckBox _chkDocumentOutline;
+
+        // Phase 8 — Execution Productivity
+        private NumericUpDown _nudNotificationThreshold;
+        private CheckBox _chkShowExecutionTimer;
+        private CheckBox _chkMultiDatabase;
+
+        // Phase 8 — Navigation
+        private CheckBox _chkGoToDefinition;
+        private CheckBox _chkPeekDefinition;
+        private CheckBox _chkFindReferences;
+        private CheckBox _chkObjectSearch;
+        private DataGridView _gridConnectionAliases;
+
+        // Phase 8 — Grid
+        private CheckBox _chkGridAggregates;
+        private CheckBox _chkGridNullHighlight;
+        private CheckBox _chkGridRowNumbers;
+        private CheckBox _chkGridFreezeHeaders;
+
+        // Phase 9 — AI Assistant
+        private ComboBox  _cboAiProvider;
+        private TextBox   _txtAiModel;
+        private TextBox   _txtAiApiKey;
+        private TextBox   _txtAiEndpoint;
+        private RadioButton _rbPrivacyFull;
+        private RadioButton _rbPrivacySchemaOnly;
+        private RadioButton _rbPrivacyAnonymous;
+        private RadioButton _rbPrivacyOffline;
+        private RadioButton _rbPrivacyDisabled;
+        private CheckBox  _chkAiTextToSql;
+        private CheckBox  _chkAiExplain;
+        private CheckBox  _chkAiFix;
+        private CheckBox  _chkAiOptimize;
+        private CheckBox  _chkAiIndexSuggestions;
+        private CheckBox  _chkAiChatPanel;
+        private CheckBox  _chkAiInlineCompletion;
+        private CheckBox  _chkAiAutoFixOnError;
+        private NumericUpDown _nudAiMaxTokens;
+        private NumericUpDown _nudAiTemperature;
+        private NumericUpDown _nudAiTimeout;
+        private NumericUpDown _nudAiRetries;
+        private Button    _btnAiTestConnection;
+        private Label     _lblAiTestResult;
+        private ComboBox  _cboAiOfflineProvider;
+        private TextBox   _txtAiOfflineModel;
+        private TextBox   _txtAiOfflineEndpoint;
+
         public SettingsDialog(AppSettings settings)
         {
             _settings = settings;
@@ -138,6 +192,11 @@ namespace AkmlSql.Shell.Shared.Dialogs
             tabControl.TabPages.Add(CreateHistoryTab());
             tabControl.TabPages.Add(CreateTabsTab());
             tabControl.TabPages.Add(CreateSafetyTab());
+            tabControl.TabPages.Add(CreateEditorProductivityTab());
+            tabControl.TabPages.Add(CreateExecutionProductivityTab());
+            tabControl.TabPages.Add(CreateNavigationTab());
+            tabControl.TabPages.Add(CreateGridTab());
+            tabControl.TabPages.Add(CreateAiAssistantTab());
 
             // ─── Button panel ─────────────────────────────────────────────────
             var buttonPanel = new Panel
@@ -488,6 +547,239 @@ namespace AkmlSql.Shell.Shared.Dialogs
             return tab;
         }
 
+        private TabPage CreateEditorProductivityTab()
+        {
+            var tab = new TabPage("Editor") { AutoScroll = true };
+            var y = 20;
+
+            AddSectionLabel(tab, "Editor Productivity (Phase 8)", ref y);
+            _chkHighlightOccurrences = AddCheckBox(tab, "Highlight occurrences of selected identifier", ref y);
+            _chkBracketMatching      = AddCheckBox(tab, "Bracket / BEGIN-END matching", ref y);
+            _chkNamedRegions         = AddCheckBox(tab, "Support named regions (--region / --endregion)", ref y);
+            _chkStickyScroll         = AddCheckBox(tab, "Sticky scroll (pin scope context at top)", ref y);
+            _chkMinimap              = AddCheckBox(tab, "Show minimap overview in right margin", ref y);
+            _chkDocumentOutline      = AddCheckBox(tab, "Enable document outline panel", ref y);
+
+            return tab;
+        }
+
+        private TabPage CreateExecutionProductivityTab()
+        {
+            var tab = new TabPage("Execution") { AutoScroll = true };
+            var y = 20;
+
+            AddSectionLabel(tab, "Execution Productivity (Phase 8)", ref y);
+            _chkShowExecutionTimer  = AddCheckBox(tab, "Show execution timer in status bar", ref y);
+            _nudNotificationThreshold = AddNumericField(tab, "Notification threshold (seconds):", 0, 3600, ref y);
+            AddHintLabel(tab, "Toast notification when query runs longer than threshold. 0 = disabled.", ref y);
+            _chkMultiDatabase       = AddCheckBox(tab, "Enable multi-database execution", ref y);
+
+            return tab;
+        }
+
+        private TabPage CreateNavigationTab()
+        {
+            var tab = new TabPage("Navigation") { AutoScroll = true };
+            var y = 20;
+
+            AddSectionLabel(tab, "Navigation Features (Phase 8)", ref y);
+            _chkGoToDefinition  = AddCheckBox(tab, "Enable Go To Definition (F12)", ref y);
+            _chkPeekDefinition  = AddCheckBox(tab, "Enable Peek Definition (Alt+F12)", ref y);
+            _chkFindReferences  = AddCheckBox(tab, "Enable Find All References (Shift+F12)", ref y);
+            _chkObjectSearch    = AddCheckBox(tab, "Enable Object Search (Ctrl+T)", ref y);
+
+            y += 10;
+            _gridConnectionAliases = Productivity.ConnectionAliasEditor.CreateAliasGrid(tab, ref y);
+
+            return tab;
+        }
+
+        private TabPage CreateGridTab()
+        {
+            var tab = new TabPage("Grid") { AutoScroll = true };
+            var y = 20;
+
+            AddSectionLabel(tab, "Results Grid Enhancements (Phase 8)", ref y);
+            _chkGridAggregates    = AddCheckBox(tab, "Show aggregates (SUM, AVG, COUNT) in status bar for selected cells", ref y);
+            _chkGridNullHighlight = AddCheckBox(tab, "Highlight NULL values with distinct background", ref y);
+            _chkGridRowNumbers    = AddCheckBox(tab, "Show row numbers", ref y);
+            _chkGridFreezeHeaders = AddCheckBox(tab, "Freeze column headers on scroll", ref y);
+
+            return tab;
+        }
+
+        private TabPage CreateAiAssistantTab()
+        {
+            var tab = new TabPage("AI Assistant") { AutoScroll = true };
+            var y = 20;
+
+            // ─── Provider Configuration ──────────────────────────────────────
+            AddSectionLabel(tab, "Provider Configuration", ref y);
+            _cboAiProvider = AddComboField(tab, "Provider:",
+                ["(None)", "Anthropic Claude", "OpenAI GPT", "Azure OpenAI",
+                 "Google Gemini", "Ollama (Local)", "LM Studio (Local)", "Custom Endpoint"], ref y);
+            _txtAiModel = AddTextField(tab, "Model:", ref y);
+            AddHintLabel(tab, "e.g. claude-sonnet-4-20250514, gpt-4o, gemini-pro", ref y);
+
+            // API Key (password-masked)
+            var lblKey = new Label { Text = "API Key:", Location = new Point(30, y + 2), AutoSize = true };
+            _txtAiApiKey = new TextBox
+            {
+                Location = new Point(110, y),
+                Size = new Size(380, 22),
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+                UseSystemPasswordChar = true
+            };
+            tab.Controls.Add(lblKey);
+            tab.Controls.Add(_txtAiApiKey);
+            y += 30;
+
+            _txtAiEndpoint = AddTextField(tab, "Endpoint:", ref y);
+            AddHintLabel(tab, "Required for Azure OpenAI, Ollama, LM Studio, Custom Endpoint", ref y);
+
+            // ─── Privacy Mode ────────────────────────────────────────────────
+            y += 10;
+            AddSectionLabel(tab, "Privacy Mode", ref y);
+            _rbPrivacyFull       = AddRadioButton(tab, "Full — send query text and schema metadata", ref y);
+            _rbPrivacySchemaOnly = AddRadioButton(tab, "Schema Only — send metadata only, no query text (default)", ref y);
+            _rbPrivacyAnonymous  = AddRadioButton(tab, "Anonymous — strip identifiers before sending", ref y);
+            _rbPrivacyOffline    = AddRadioButton(tab, "Offline — use only local/offline provider", ref y);
+            _rbPrivacyDisabled   = AddRadioButton(tab, "Disabled — no data sent to any AI provider", ref y);
+
+            // ─── Feature Toggles ─────────────────────────────────────────────
+            y += 10;
+            AddSectionLabel(tab, "Feature Toggles", ref y);
+            _chkAiTextToSql        = AddCheckBox(tab, "Text-to-SQL (natural language query generation)", ref y);
+            _chkAiExplain          = AddCheckBox(tab, "Explain (AI-powered SQL explanation)", ref y);
+            _chkAiFix              = AddCheckBox(tab, "Fix (AI-powered error fix suggestions)", ref y);
+            _chkAiOptimize         = AddCheckBox(tab, "Optimize (AI-powered query optimization)", ref y);
+            _chkAiIndexSuggestions = AddCheckBox(tab, "Index Suggestions", ref y);
+            _chkAiChatPanel        = AddCheckBox(tab, "Chat Panel (AI side panel)", ref y);
+            _chkAiInlineCompletion = AddCheckBox(tab, "Inline Completion (ghost-text suggestions)", ref y);
+            _chkAiAutoFixOnError   = AddCheckBox(tab, "Auto-Fix on Error (suggest fixes when queries fail)", ref y);
+
+            // ─── Configuration ───────────────────────────────────────────────
+            y += 10;
+            AddSectionLabel(tab, "Configuration", ref y);
+            _nudAiMaxTokens   = AddNumericField(tab, "Max tokens:", 128, 128000, ref y);
+            _nudAiTemperature = AddNumericField(tab, "Temperature (x10):", 0, 20, ref y);
+            AddHintLabel(tab, "Value is divided by 10 (e.g. 2 = 0.2). Range: 0.0 - 2.0", ref y);
+            _nudAiTimeout     = AddNumericField(tab, "Timeout (seconds):", 5, 300, ref y);
+            _nudAiRetries     = AddNumericField(tab, "Retries:", 0, 10, ref y);
+
+            // ─── Test Connection ─────────────────────────────────────────────
+            y += 10;
+            AddSectionLabel(tab, "Connection Test", ref y);
+            _btnAiTestConnection = new Button
+            {
+                Text = "Test Connection",
+                Location = new Point(30, y),
+                Size = new Size(130, 28)
+            };
+            _lblAiTestResult = new Label
+            {
+                Text = string.Empty,
+                Location = new Point(170, y + 4),
+                AutoSize = true,
+                ForeColor = Color.Gray
+            };
+            _btnAiTestConnection.Click += OnAiTestConnection;
+            tab.Controls.Add(_btnAiTestConnection);
+            tab.Controls.Add(_lblAiTestResult);
+            y += 36;
+
+            // ─── Offline Fallback ────────────────────────────────────────────
+            y += 10;
+            AddSectionLabel(tab, "Offline Fallback Provider", ref y);
+            AddHintLabel(tab, "Used when the primary provider is unreachable or privacy mode is Offline.", ref y);
+            _cboAiOfflineProvider = AddComboField(tab, "Provider:",
+                ["(None)", "Ollama (Local)", "LM Studio (Local)", "Custom Endpoint"], ref y);
+            _txtAiOfflineModel    = AddTextField(tab, "Model:", ref y);
+            _txtAiOfflineEndpoint = AddTextField(tab, "Endpoint:", ref y);
+
+            return tab;
+        }
+
+        private static RadioButton AddRadioButton(TabPage tab, string text, ref int y)
+        {
+            var rb = new RadioButton
+            {
+                Text = text,
+                Location = new Point(30, y),
+                AutoSize = true
+            };
+            tab.Controls.Add(rb);
+            y += 24;
+            return rb;
+        }
+
+        private async void OnAiTestConnection(object sender, EventArgs e)
+        {
+            _lblAiTestResult.ForeColor = Color.Gray;
+            _lblAiTestResult.Text = "Testing...";
+            _btnAiTestConnection.Enabled = false;
+
+            try
+            {
+                var manager = Ipc.EngineLifecycle.Manager;
+                if (manager?.Client == null || !manager.Client.IsConnected)
+                {
+                    _lblAiTestResult.ForeColor = Color.Red;
+                    _lblAiTestResult.Text = "Engine not connected";
+                    return;
+                }
+
+                var providerMap = new Dictionary<int, string>
+                {
+                    { 1, "Anthropic" }, { 2, "OpenAI" }, { 3, "AzureOpenAI" },
+                    { 4, "Gemini" }, { 5, "Ollama" }, { 6, "LMStudio" }, { 7, "Custom" }
+                };
+
+                var providerIndex = _cboAiProvider.SelectedIndex;
+                if (providerIndex < 1 || !providerMap.TryGetValue(providerIndex, out var providerName))
+                {
+                    _lblAiTestResult.ForeColor = Color.Red;
+                    _lblAiTestResult.Text = "Select a provider first";
+                    return;
+                }
+
+                var request = new Core.Ipc.Messages.AiProviderTestRequest
+                {
+                    Provider = providerName,
+                    ApiKey   = _txtAiApiKey.Text.Trim(),
+                    Model    = _txtAiModel.Text.Trim(),
+                    Endpoint = _txtAiEndpoint.Text.Trim()
+                };
+
+                var response = await manager.Client
+                    .SendRequestAsync<Core.Ipc.Messages.AiProviderTestResponse, Core.Ipc.Messages.AiProviderTestRequest>(
+                        Core.Ipc.MessageTypes.AiProviderTest, request, timeoutMs: 30000);
+
+                if (response.Success)
+                {
+                    _lblAiTestResult.ForeColor = Color.Green;
+                    _lblAiTestResult.Text = $"Connected ({response.LatencyMs} ms)";
+                    if (!string.IsNullOrEmpty(response.ModelName))
+                        _lblAiTestResult.Text += $" — {response.ModelName}";
+                }
+                else
+                {
+                    _lblAiTestResult.ForeColor = Color.Red;
+                    _lblAiTestResult.Text = response.ErrorMessage ?? "Test failed";
+                }
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Warning(ex, "SettingsDialog: AI provider test failed");
+                _lblAiTestResult.ForeColor = Color.Red;
+                _lblAiTestResult.Text = "Error: " + ex.Message;
+            }
+            finally
+            {
+                _btnAiTestConnection.Enabled = true;
+            }
+        }
+
         private void OnImportCaSettings(object sender, EventArgs e)
         {
             using var dlg = new OpenFileDialog
@@ -664,6 +956,86 @@ namespace AkmlSql.Shell.Shared.Dialogs
             _chkSafetyTransactionReminder.Checked = sf.TransactionReminder;
             _nudSafetyTransactionReminderInterval.Value = Math.Min(Math.Max(sf.TransactionReminderInterval, 30), 3600);
 
+            // Phase 8 — Editor Productivity
+            var ep = _settings.EditorProductivity;
+            _chkHighlightOccurrences.Checked = ep.HighlightOccurrences;
+            _chkBracketMatching.Checked      = ep.BracketMatching;
+            _chkNamedRegions.Checked         = ep.NamedRegions;
+            _chkStickyScroll.Checked         = ep.StickyScroll;
+            _chkMinimap.Checked              = ep.Minimap;
+            _chkDocumentOutline.Checked      = ep.DocumentOutline;
+
+            // Phase 8 — Execution Productivity
+            var xp = _settings.ExecutionProductivity;
+            _chkShowExecutionTimer.Checked    = xp.ShowExecutionTimer;
+            _nudNotificationThreshold.Value   = Math.Min(Math.Max(xp.NotificationThreshold, 0), 3600);
+            _chkMultiDatabase.Checked         = xp.MultiDatabase;
+
+            // Phase 8 — Navigation
+            var nav = _settings.Navigation;
+            _chkGoToDefinition.Checked  = nav.GoToDefinition;
+            _chkPeekDefinition.Checked  = nav.PeekDefinition;
+            _chkFindReferences.Checked  = nav.FindReferences;
+            _chkObjectSearch.Checked    = nav.ObjectSearch;
+            Productivity.ConnectionAliasEditor.LoadAliases(_gridConnectionAliases, nav);
+
+            // Phase 8 — Grid
+            var gr = _settings.Grid;
+            _chkGridAggregates.Checked    = gr.Aggregates;
+            _chkGridNullHighlight.Checked = gr.NullHighlight;
+            _chkGridRowNumbers.Checked    = gr.RowNumbers;
+            _chkGridFreezeHeaders.Checked = gr.FreezeHeaders;
+
+            // Phase 9 — AI Assistant
+            var ai = _settings.Ai;
+            _cboAiProvider.SelectedIndex = (ai.Provider?.ToLowerInvariant()) switch
+            {
+                "anthropic"  => 1,
+                "openai"     => 2,
+                "azureopenai"=> 3,
+                "gemini"     => 4,
+                "ollama"     => 5,
+                "lmstudio"   => 6,
+                "custom"     => 7,
+                _            => 0  // "(None)"
+            };
+            _txtAiModel.Text    = ai.Model ?? string.Empty;
+            _txtAiApiKey.Text   = ai.ApiKey ?? string.Empty;
+            _txtAiEndpoint.Text = ai.Endpoint ?? string.Empty;
+
+            switch (ai.PrivacyMode?.ToLowerInvariant())
+            {
+                case "full":       _rbPrivacyFull.Checked = true; break;
+                case "anonymous":  _rbPrivacyAnonymous.Checked = true; break;
+                case "offline":    _rbPrivacyOffline.Checked = true; break;
+                case "disabled":   _rbPrivacyDisabled.Checked = true; break;
+                default:           _rbPrivacySchemaOnly.Checked = true; break;
+            }
+
+            _chkAiTextToSql.Checked        = ai.TextToSql;
+            _chkAiExplain.Checked          = ai.Explain;
+            _chkAiFix.Checked              = ai.Fix;
+            _chkAiOptimize.Checked         = ai.Optimize;
+            _chkAiIndexSuggestions.Checked = ai.IndexSuggestions;
+            _chkAiChatPanel.Checked        = ai.ChatPanel;
+            _chkAiInlineCompletion.Checked = ai.InlineCompletion;
+            _chkAiAutoFixOnError.Checked   = ai.AutoFixOnError;
+
+            _nudAiMaxTokens.Value   = Math.Min(Math.Max(ai.MaxTokens, 128), 128000);
+            _nudAiTemperature.Value = Math.Min(Math.Max((int)(ai.Temperature * 10), 0), 20);
+            _nudAiTimeout.Value     = Math.Min(Math.Max(ai.Timeout, 5), 300);
+            _nudAiRetries.Value     = Math.Min(Math.Max(ai.Retries, 0), 10);
+
+            _cboAiOfflineProvider.SelectedIndex = (ai.OfflineProvider?.ToLowerInvariant()) switch
+            {
+                "ollama"   => 1,
+                "lmstudio" => 2,
+                "custom"   => 3,
+                _          => 0
+            };
+            _txtAiOfflineModel.Text    = ai.OfflineModel ?? string.Empty;
+            _txtAiOfflineEndpoint.Text = ai.OfflineEndpoint ?? string.Empty;
+
             // Populate rule grid from user-level .casettings file
             try
             {
@@ -800,6 +1172,81 @@ namespace AkmlSql.Shell.Shared.Dialogs
             _settings.Safety.TruncateConfirmation = _chkSafetyTruncateConfirmation.Checked;
             _settings.Safety.TransactionReminder = _chkSafetyTransactionReminder.Checked;
             _settings.Safety.TransactionReminderInterval = (int)_nudSafetyTransactionReminderInterval.Value;
+
+            // Phase 8 — Editor Productivity
+            _settings.EditorProductivity.HighlightOccurrences = _chkHighlightOccurrences.Checked;
+            _settings.EditorProductivity.BracketMatching      = _chkBracketMatching.Checked;
+            _settings.EditorProductivity.NamedRegions         = _chkNamedRegions.Checked;
+            _settings.EditorProductivity.StickyScroll         = _chkStickyScroll.Checked;
+            _settings.EditorProductivity.Minimap              = _chkMinimap.Checked;
+            _settings.EditorProductivity.DocumentOutline      = _chkDocumentOutline.Checked;
+
+            // Phase 8 — Execution Productivity
+            _settings.ExecutionProductivity.ShowExecutionTimer    = _chkShowExecutionTimer.Checked;
+            _settings.ExecutionProductivity.NotificationThreshold = (int)_nudNotificationThreshold.Value;
+            _settings.ExecutionProductivity.MultiDatabase         = _chkMultiDatabase.Checked;
+
+            // Phase 8 — Navigation
+            _settings.Navigation.GoToDefinition = _chkGoToDefinition.Checked;
+            _settings.Navigation.PeekDefinition = _chkPeekDefinition.Checked;
+            _settings.Navigation.FindReferences = _chkFindReferences.Checked;
+            _settings.Navigation.ObjectSearch   = _chkObjectSearch.Checked;
+            Productivity.ConnectionAliasEditor.SaveAliases(_gridConnectionAliases, _settings.Navigation);
+
+            // Phase 8 — Grid
+            _settings.Grid.Aggregates    = _chkGridAggregates.Checked;
+            _settings.Grid.NullHighlight = _chkGridNullHighlight.Checked;
+            _settings.Grid.RowNumbers    = _chkGridRowNumbers.Checked;
+            _settings.Grid.FreezeHeaders = _chkGridFreezeHeaders.Checked;
+
+            // Phase 9 — AI Assistant
+            _settings.Ai.Provider = _cboAiProvider.SelectedIndex switch
+            {
+                1 => "Anthropic",
+                2 => "OpenAI",
+                3 => "AzureOpenAI",
+                4 => "Gemini",
+                5 => "Ollama",
+                6 => "LMStudio",
+                7 => "Custom",
+                _ => ""
+            };
+            _settings.Ai.Model    = _txtAiModel.Text.Trim();
+            _settings.Ai.ApiKey   = _txtAiApiKey.Text.Trim();
+            _settings.Ai.Endpoint = _txtAiEndpoint.Text.Trim();
+
+            _settings.Ai.PrivacyMode =
+                _rbPrivacyFull.Checked      ? "full" :
+                _rbPrivacyAnonymous.Checked ? "anonymous" :
+                _rbPrivacyOffline.Checked   ? "offline" :
+                _rbPrivacyDisabled.Checked  ? "disabled" :
+                                              "schemaOnly";
+
+            _settings.Ai.TextToSql        = _chkAiTextToSql.Checked;
+            _settings.Ai.Explain          = _chkAiExplain.Checked;
+            _settings.Ai.Fix              = _chkAiFix.Checked;
+            _settings.Ai.Optimize         = _chkAiOptimize.Checked;
+            _settings.Ai.IndexSuggestions = _chkAiIndexSuggestions.Checked;
+            _settings.Ai.ChatPanel        = _chkAiChatPanel.Checked;
+            _settings.Ai.InlineCompletion = _chkAiInlineCompletion.Checked;
+            _settings.Ai.AutoFixOnError   = _chkAiAutoFixOnError.Checked;
+
+            _settings.Ai.MaxTokens   = (int)_nudAiMaxTokens.Value;
+            _settings.Ai.Temperature = (double)_nudAiTemperature.Value / 10.0;
+            _settings.Ai.Timeout     = (int)_nudAiTimeout.Value;
+            _settings.Ai.Retries     = (int)_nudAiRetries.Value;
+
+            _settings.Ai.Enabled = _cboAiProvider.SelectedIndex > 0;
+
+            _settings.Ai.OfflineProvider = _cboAiOfflineProvider.SelectedIndex switch
+            {
+                1 => "Ollama",
+                2 => "LMStudio",
+                3 => "Custom",
+                _ => ""
+            };
+            _settings.Ai.OfflineModel    = _txtAiOfflineModel.Text.Trim();
+            _settings.Ai.OfflineEndpoint = _txtAiOfflineEndpoint.Text.Trim();
 
             // Persist rule enable/severity overrides to the user-level .casettings file
             SaveRuleGridToCaSettings();

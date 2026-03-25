@@ -110,6 +110,29 @@ namespace AkmlSql.Core.Ipc
         // Shell → Engine (Execution Safety — Phase 7)
         public const int SafetyCheck = 55;
 
+        // Shell → Engine (Navigation — Phase 8)
+        public const int GetObjectDefinition = 60;
+        public const int FindReferences = 61;
+        public const int ObjectSearch = 62;
+
+        // Shell → Engine (Editor/Productivity — Phase 8)
+        public const int DocumentOutline = 64;
+        public const int StatementBoundary = 65;
+        public const int CrudGeneration = 66;
+        public const int ScriptAs = 67;
+        public const int GridExport = 68;
+
+        // Shell → Engine (AI Assistance — Phase 9)
+        public const int AiTextToSql = 70;
+        public const int AiExplain = 71;
+        public const int AiFix = 72;
+        public const int AiOptimize = 73;
+        public const int AiIndexAnalysis = 74;
+        public const int AiChat = 75;
+        public const int AiGhostText = 76;
+        public const int AiProviderTest = 77;
+        public const int AiStreamCancel = 78;
+
         // Engine → Shell (Refactoring)
         public const int RefactorPreviewResult = 130;
         public const int RefactorApplyResult = 131;
@@ -126,5 +149,28 @@ namespace AkmlSql.Core.Ipc
 
         // Engine → Shell (Execution Safety — Phase 7)
         public const int SafetyCheckResult = 155;
+
+        // Engine → Shell (Navigation — Phase 8)
+        public const int GetObjectDefinitionResult = 160;
+        public const int FindReferencesResult = 161;
+        public const int ObjectSearchResult = 162;
+
+        // Engine → Shell (Editor/Productivity — Phase 8)
+        public const int DocumentOutlineResult = 164;
+        public const int StatementBoundaryResult = 165;
+        public const int CrudGenerationResult = 166;
+        public const int ScriptAsResult = 167;
+        public const int GridExportResult = 168;
+
+        // Engine → Shell (AI Assistance — Phase 9)
+        public const int AiTextToSqlResult = 170;
+        public const int AiExplainResult = 171;
+        public const int AiFixResult = 172;
+        public const int AiOptimizeResult = 173;
+        public const int AiIndexAnalysisResult = 174;
+        public const int AiChatResult = 175;
+        public const int AiGhostTextResult = 176;
+        public const int AiProviderTestResult = 177;
+        public const int AiStreamChunk = 178;
     }
 }

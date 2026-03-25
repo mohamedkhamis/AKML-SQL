@@ -9,6 +9,10 @@ using AkmlSql.Engine.Completion.Providers;
 using AkmlSql.Engine.Analysis;
 using AkmlSql.Engine.Formatter;
 using AkmlSql.Engine.History;
+using AkmlSql.Engine.Export;
+using AkmlSql.Engine.Ai;
+using AkmlSql.Engine.Navigation;
+using AkmlSql.Engine.Productivity;
 using AkmlSql.Engine.Safety;
 using AkmlSql.Engine.Sessions;
 using AkmlSql.Engine.Snippets;
@@ -45,6 +49,13 @@ public class PipeRpcServer
     private readonly HistoryRetentionService _historyRetentionService;
     private readonly SessionRequestHandler _sessionRequestHandler = new();
     private readonly SafetyCheckHandler _safetyCheckHandler;
+    private readonly ProductivityRequestHandler _productivityHandler;
+    private readonly NavigationRequestHandler _navigationHandler;
+    private readonly GridExportService _gridExportService = new();
+    private readonly CrudGenerationHandler _crudGenerationHandler;
+    private readonly ScriptAsHandler _scriptAsHandler;
+    private readonly AiRequestHandler _aiHandler;
+    private readonly AiProviderTestHandler _aiProviderTestHandler = new();
 
     public PipeRpcServer(string pipeName)
     {
@@ -60,6 +71,11 @@ public class PipeRpcServer
         var builtInSnippets = Path.Combine(AppContext.BaseDirectory, "snippets");
         _snippetHandler = new SnippetRequestHandler(personalSnippets, builtInSnippets);
         _safetyCheckHandler = new SafetyCheckHandler(_parserService);
+        _productivityHandler = new ProductivityRequestHandler(_parserService);
+        _navigationHandler = new NavigationRequestHandler(_schemaCacheManager);
+        _crudGenerationHandler = new CrudGenerationHandler(_schemaCacheManager);
+        _scriptAsHandler = new ScriptAsHandler(_schemaCacheManager);
+        _aiHandler = new AiRequestHandler(_schemaCacheManager, _parserService);
 
         // History: initialize database and retention service
         var historyDb = new HistoryDatabase();
@@ -429,6 +445,7 @@ public class PipeRpcServer
                 case MessageTypes.AnalysisSettingsChanged:
                     _caSettingsLoader.InvalidateCache();
                     _cachedSettings = null; // Invalidate cached AppSettings
+                    _aiHandler.RefreshSettings();
                     return Task.FromResult<RpcMessage?>(null);
 
                 case MessageTypes.RequestRefactorPreview:
@@ -459,6 +476,48 @@ public class PipeRpcServer
 
                 case MessageTypes.HistoryAction:
                     return _historyHandler.HandleActionAsync(message);
+
+                case MessageTypes.StatementBoundary:
+                    return _productivityHandler.HandleStatementBoundaryAsync(message);
+
+                case MessageTypes.DocumentOutline:
+                    return _productivityHandler.HandleDocumentOutlineAsync(message);
+
+                case MessageTypes.GetObjectDefinition:
+                    return _navigationHandler.HandleGetObjectDefinitionAsync(message, LookupSession, ct);
+
+                case MessageTypes.FindReferences:
+                    return _navigationHandler.HandleFindReferencesAsync(message, LookupSession, ct);
+
+                case MessageTypes.ObjectSearch:
+                    return _navigationHandler.HandleObjectSearchAsync(message, LookupSession, ct);
+
+                case MessageTypes.CrudGeneration:
+                    return _crudGenerationHandler.HandleAsync(message, LookupSession, ct);
+
+                case MessageTypes.ScriptAs:
+                    return _scriptAsHandler.HandleAsync(message, LookupSession, ct);
+
+                case MessageTypes.GridExport:
+                    return _gridExportService.HandleAsync(message);
+
+                // Phase 9: AI Assistance
+                case MessageTypes.AiTextToSql:
+                    return _aiHandler.HandleTextToSqlAsync(message, LookupSession, ct);
+                case MessageTypes.AiExplain:
+                    return _aiHandler.HandleExplainAsync(message, LookupSession, ct);
+                case MessageTypes.AiFix:
+                    return _aiHandler.HandleFixAsync(message, LookupSession, ct);
+                case MessageTypes.AiOptimize:
+                    return _aiHandler.HandleOptimizeAsync(message, LookupSession, ct);
+                case MessageTypes.AiIndexAnalysis:
+                    return _aiHandler.HandleIndexAnalysisAsync(message, LookupSession, ct);
+                case MessageTypes.AiChat:
+                    return _aiHandler.HandleChatAsync(message, LookupSession, ct);
+                case MessageTypes.AiGhostText:
+                    return _aiHandler.HandleGhostTextAsync(message, LookupSession, ct);
+                case MessageTypes.AiProviderTest:
+                    return _aiProviderTestHandler.HandleAsync(message, ct);
 
                 case MessageTypes.Shutdown:
                     Log.Information("Shutdown requested by client.");
@@ -592,6 +651,18 @@ public class PipeRpcServer
             Log.Error(ex, "Analysis failed for session {Session}", req.SessionId);
             return CreateErrorResponse("Analysis failed: " + ex.Message, requestId);
         }
+    }
+
+    /// <summary>
+    /// Session lookup delegate passed to NavigationRequestHandler.
+    /// Returns (ConnectionString, DatabaseName) for the given session ID.
+    /// </summary>
+    private (string? ConnectionString, string? DatabaseName) LookupSession(string sessionId)
+    {
+        var session = _sessionManager.GetSession(sessionId);
+        if (session == null || !session.IsConnected)
+            return (null, null);
+        return (session.ConnectionString, session.DatabaseName);
     }
 
     private static RpcMessage CreateErrorResponse(string message, int requestId)

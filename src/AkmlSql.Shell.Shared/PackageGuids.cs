@@ -58,5 +58,29 @@ namespace AkmlSql.Shell.Shared
         public const int CmdCloseUnmodified         = 0x0502;
         public const int CmdDuplicateTab            = 0x0503;
         public const int CmdPinTab                  = 0x0504;
+
+        // Phase 8 — Productivity Toolkit
+        public const int CmdCommandPalette          = 0x0600;
+        public const int CmdExecuteCurrentStatement = 0x0601;
+        public const int CmdExecuteToCursor         = 0x0602;
+        public const int CmdGoToDefinition          = 0x0603;
+        public const int CmdPeekDefinition          = 0x0604;
+        public const int CmdFindReferences          = 0x0605;
+        public const int CmdObjectSearch            = 0x0606;
+        public const int CmdNavigateNextStatement   = 0x0607;
+        public const int CmdNavigatePrevStatement   = 0x0608;
+        public const int CmdNavigateMatchingPair    = 0x0609;
+        public const int CmdGridFind                = 0x060A;
+        public const int CmdGridExport              = 0x060B;
+        public const int CmdCrudGeneration          = 0x060C;
+        public const int CmdDocumentOutline         = 0x060D;
+
+        // Phase 9 — AI Assistance
+        public const int CmdTextToSql               = 0x0700;
+        public const int CmdAiExplain               = 0x0701;
+        public const int CmdAiFix                   = 0x0702;
+        public const int CmdAiOptimize              = 0x0703;
+        public const int CmdAiIndexAnalysis         = 0x0704;
+        public const int CmdAiChatPanel             = 0x0705;
     }
 }

@@ -62,6 +62,30 @@ namespace AkmlSql.Core.Config
         [JsonPropertyName("safety")]
         public SafetySettings Safety { get; set; } = new();
 
+        /// <summary>Results grid productivity settings (Phase 8).</summary>
+        [JsonPropertyName("grid")]
+        public GridSettings Grid { get; set; } = new();
+
+        /// <summary>Editor productivity settings (Phase 8).</summary>
+        [JsonPropertyName("editorProductivity")]
+        public EditorProductivitySettings EditorProductivity { get; set; } = new();
+
+        /// <summary>Execution productivity settings (Phase 8).</summary>
+        [JsonPropertyName("executionProductivity")]
+        public ExecutionProductivitySettings ExecutionProductivity { get; set; } = new();
+
+        /// <summary>Navigation settings (Phase 8).</summary>
+        [JsonPropertyName("navigation")]
+        public NavigationSettings Navigation { get; set; } = new();
+
+        /// <summary>Command Palette usage tracking (Phase 8).</summary>
+        [JsonPropertyName("commandPalette")]
+        public CommandPaletteSettings CommandPalette { get; set; } = new();
+
+        /// <summary>AI assistance settings (Phase 9).</summary>
+        [JsonPropertyName("ai")]
+        public AiSettings Ai { get; set; } = new();
+
         /// <summary>
         /// T093-T095: Whether the user has been prompted about native IntelliSense conflict.
         /// </summary>
@@ -377,5 +401,188 @@ namespace AkmlSql.Core.Config
 
         [JsonPropertyName("transactionReminderInterval")]
         public int TransactionReminderInterval { get; set; } = 300;
+    }
+
+    /// <summary>Results grid productivity settings (Phase 8).</summary>
+    public class GridSettings
+    {
+        [JsonPropertyName("aggregates")]
+        public bool Aggregates { get; set; } = true;
+
+        [JsonPropertyName("nullHighlight")]
+        public bool NullHighlight { get; set; } = true;
+
+        [JsonPropertyName("rowNumbers")]
+        public bool RowNumbers { get; set; }
+
+        [JsonPropertyName("freezeHeaders")]
+        public bool FreezeHeaders { get; set; } = true;
+    }
+
+    /// <summary>Editor productivity settings (Phase 8).</summary>
+    public class EditorProductivitySettings
+    {
+        [JsonPropertyName("highlightOccurrences")]
+        public bool HighlightOccurrences { get; set; } = true;
+
+        [JsonPropertyName("bracketMatching")]
+        public bool BracketMatching { get; set; } = true;
+
+        [JsonPropertyName("namedRegions")]
+        public bool NamedRegions { get; set; } = true;
+
+        [JsonPropertyName("stickyScroll")]
+        public bool StickyScroll { get; set; } = true;
+
+        [JsonPropertyName("minimap")]
+        public bool Minimap { get; set; }
+
+        [JsonPropertyName("documentOutline")]
+        public bool DocumentOutline { get; set; } = true;
+    }
+
+    /// <summary>Execution productivity settings (Phase 8).</summary>
+    public class ExecutionProductivitySettings
+    {
+        [JsonPropertyName("notificationThreshold")]
+        public int NotificationThreshold { get; set; } = 30;
+
+        [JsonPropertyName("showExecutionTimer")]
+        public bool ShowExecutionTimer { get; set; } = true;
+
+        [JsonPropertyName("multiDatabase")]
+        public bool MultiDatabase { get; set; } = true;
+    }
+
+    /// <summary>Navigation settings (Phase 8).</summary>
+    public class NavigationSettings
+    {
+        [JsonPropertyName("goToDefinition")]
+        public bool GoToDefinition { get; set; } = true;
+
+        [JsonPropertyName("peekDefinition")]
+        public bool PeekDefinition { get; set; } = true;
+
+        [JsonPropertyName("findReferences")]
+        public bool FindReferences { get; set; } = true;
+
+        [JsonPropertyName("objectSearch")]
+        public bool ObjectSearch { get; set; } = true;
+
+        [JsonPropertyName("connectionAliases")]
+        public List<ConnectionAliasEntry> ConnectionAliases { get; set; } = [];
+    }
+
+    /// <summary>A server name to friendly alias mapping.</summary>
+    public class ConnectionAliasEntry
+    {
+        [JsonPropertyName("serverName")]
+        public string ServerName { get; set; } = string.Empty;
+
+        [JsonPropertyName("alias")]
+        public string Alias { get; set; } = string.Empty;
+    }
+
+    /// <summary>Command Palette usage tracking (Phase 8).</summary>
+    public class CommandPaletteSettings
+    {
+        [JsonPropertyName("usageCounts")]
+        public Dictionary<string, int> UsageCounts { get; set; } = new();
+    }
+
+    /// <summary>AI assistance settings (Phase 9).</summary>
+    public class AiSettings
+    {
+        /// <summary>Master switch for AI assistance features.</summary>
+        [JsonPropertyName("enabled")]
+        public bool Enabled { get; set; }
+
+        /// <summary>AI provider name (e.g. "openai", "anthropic", "gemini", "ollama").</summary>
+        [JsonPropertyName("provider")]
+        public string Provider { get; set; } = "";
+
+        /// <summary>Model identifier (e.g. "gpt-4o", "claude-sonnet-4-20250514").</summary>
+        [JsonPropertyName("model")]
+        public string Model { get; set; } = "";
+
+        /// <summary>API key for the configured provider.</summary>
+        [JsonPropertyName("apiKey")]
+        public string ApiKey { get; set; } = "";
+
+        /// <summary>Custom endpoint URL (for Azure OpenAI, local proxies, etc.).</summary>
+        [JsonPropertyName("endpoint")]
+        public string Endpoint { get; set; } = "";
+
+        /// <summary>Maximum tokens in the AI response.</summary>
+        [JsonPropertyName("maxTokens")]
+        public int MaxTokens { get; set; } = 4096;
+
+        /// <summary>Sampling temperature (0.0–2.0). Lower = more deterministic.</summary>
+        [JsonPropertyName("temperature")]
+        public double Temperature { get; set; } = 0.2;
+
+        /// <summary>Request timeout in seconds.</summary>
+        [JsonPropertyName("timeout")]
+        public int Timeout { get; set; } = 30;
+
+        /// <summary>Number of automatic retries on transient failures.</summary>
+        [JsonPropertyName("retries")]
+        public int Retries { get; set; } = 2;
+
+        /// <summary>Privacy mode: "schemaOnly" sends only metadata, "full" sends query text.</summary>
+        [JsonPropertyName("privacyMode")]
+        public string PrivacyMode { get; set; } = "schemaOnly";
+
+        /// <summary>Provider name for offline/local AI (e.g. "ollama").</summary>
+        [JsonPropertyName("offlineProvider")]
+        public string OfflineProvider { get; set; } = "";
+
+        /// <summary>Model name for offline/local AI.</summary>
+        [JsonPropertyName("offlineModel")]
+        public string OfflineModel { get; set; } = "";
+
+        /// <summary>Endpoint URL for offline/local AI.</summary>
+        [JsonPropertyName("offlineEndpoint")]
+        public string OfflineEndpoint { get; set; } = "";
+
+        /// <summary>Enable natural-language to SQL generation.</summary>
+        [JsonPropertyName("textToSql")]
+        public bool TextToSql { get; set; } = true;
+
+        /// <summary>Enable AI-powered SQL explanation.</summary>
+        [JsonPropertyName("explain")]
+        public bool Explain { get; set; } = true;
+
+        /// <summary>Enable AI-powered error fix suggestions.</summary>
+        [JsonPropertyName("fix")]
+        public bool Fix { get; set; } = true;
+
+        /// <summary>Automatically suggest fixes when a query execution fails.</summary>
+        [JsonPropertyName("autoFixOnError")]
+        public bool AutoFixOnError { get; set; }
+
+        /// <summary>Enable AI-powered query optimization suggestions.</summary>
+        [JsonPropertyName("optimize")]
+        public bool Optimize { get; set; } = true;
+
+        /// <summary>Enable AI-powered index suggestions.</summary>
+        [JsonPropertyName("indexSuggestions")]
+        public bool IndexSuggestions { get; set; } = true;
+
+        /// <summary>Enable inline ghost-text completions.</summary>
+        [JsonPropertyName("inlineCompletion")]
+        public bool InlineCompletion { get; set; }
+
+        /// <summary>Enable the AI chat side panel.</summary>
+        [JsonPropertyName("chatPanel")]
+        public bool ChatPanel { get; set; } = true;
+
+        /// <summary>
+        /// Whether privacy consent is still required before sending data to a cloud AI provider.
+        /// Defaults to <c>true</c> (consent not yet given). Set to <c>false</c> after user confirms.
+        /// Not required for local/offline providers (ollama, lmstudio).
+        /// </summary>
+        [JsonPropertyName("privacyConsentRequired")]
+        public bool PrivacyConsentRequired { get; set; } = true;
     }
 }
