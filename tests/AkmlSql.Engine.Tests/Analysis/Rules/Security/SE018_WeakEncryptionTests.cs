@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.Security;
 
-public sealed class SE018_WeakEncryptionTests
+public sealed class Se018WeakEncryptionTests
 {
     [Fact]
     public void Fires_OnEncryptByPassphrase()

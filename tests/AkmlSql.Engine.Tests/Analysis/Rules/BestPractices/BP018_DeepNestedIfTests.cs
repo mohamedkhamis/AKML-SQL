@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.BestPractices;
 
-public sealed class BP018_DeepNestedIfTests
+public sealed class Bp018DeepNestedIfTests
 {
     [Fact]
     public void Fires_AtDepthFour()

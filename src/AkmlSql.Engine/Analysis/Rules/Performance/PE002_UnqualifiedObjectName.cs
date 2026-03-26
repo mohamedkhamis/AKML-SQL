@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Performance;
 
 /// <summary>PE002 — Table or view reference lacks a schema prefix (e.g. Orders instead of dbo.Orders).</summary>
-public sealed class PE002_UnqualifiedObjectName : IAnalysisRule
+public sealed class Pe002UnqualifiedObjectName : IAnalysisRule
 {
     public string RuleId => "PE002";
     public string Category => "Performance";

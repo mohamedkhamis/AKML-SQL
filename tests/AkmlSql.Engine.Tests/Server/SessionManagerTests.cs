@@ -8,14 +8,17 @@ public class SessionManagerTests
 {
     private readonly SessionManager _mgr = new();
 
-    private static ConnectionInfo MakeConnection(string sessionId, string db = "TestDb") => new()
+    private static ConnectionInfo MakeConnection(string sessionId, string db = "TestDb")
     {
-        SessionId = sessionId,
-        ConnectionString = $"Server=.;Database={db};",
-        DatabaseName = db,
-        ServerVersion = 170,
-        EngineEdition = 3
-    };
+        return new ConnectionInfo
+        {
+            SessionId = sessionId,
+            ConnectionString = $"Server=.;Database={db};",
+            DatabaseName = db,
+            ServerVersion = 170,
+            EngineEdition = 3
+        };
+    }
 
     // ── UpdateSession ─────────────────────────────────────────────────────
 

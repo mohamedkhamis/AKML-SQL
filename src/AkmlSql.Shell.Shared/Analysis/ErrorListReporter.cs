@@ -1,8 +1,6 @@
 using System;
-using System.Collections.Generic;
 using AkmlSql.Core.Ipc.Messages;
 using Microsoft.VisualStudio.Shell;
-using Microsoft.VisualStudio.Shell.Interop;
 using Serilog;
 
 namespace AkmlSql.Shell.Shared.Analysis

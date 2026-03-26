@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Performance;
 
 /// <summary>PE022 — UNION without ALL performs duplicate elimination via sort.</summary>
-public sealed class PE022_UnionWithoutAll : IAnalysisRule
+public sealed class Pe022UnionWithoutAll : IAnalysisRule
 {
     public string RuleId => "PE022";
     public string Category => "Performance";

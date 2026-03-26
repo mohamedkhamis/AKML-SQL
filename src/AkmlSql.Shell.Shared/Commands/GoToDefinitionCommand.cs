@@ -1,7 +1,6 @@
 #nullable enable
 using System;
 using System.ComponentModel.Design;
-using System.Threading.Tasks;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Shell.Shared.Ipc;
@@ -281,7 +280,9 @@ namespace AkmlSql.Shell.Shared.Commands
             }
         }
 
-        private static bool IsIdentifierChar(char c) =>
-            char.IsLetterOrDigit(c) || c == '_' || c == '#' || c == '@';
+        private static bool IsIdentifierChar(char c)
+        {
+            return char.IsLetterOrDigit(c) || c == '_' || c == '#' || c == '@';
+        }
     }
 }

@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using AkmlSql.Core.Models.Analysis;
@@ -16,12 +12,8 @@ internal partial class ReportJsonContext : JsonSerializerContext;
 /// <summary>
 /// Writes analysis results to stdout (text/JSON) and optionally to a JSON report file.
 /// </summary>
-internal sealed class ReportWriter
+internal sealed class ReportWriter(AnalyzerOptions opts)
 {
-    private readonly AnalyzerOptions _opts;
-
-    public ReportWriter(AnalyzerOptions opts) => _opts = opts;
-
     /// <summary>
     /// Writes output for all analyzed files and returns whether any violations at min severity exist.
     /// </summary>
@@ -32,20 +24,20 @@ internal sealed class ReportWriter
         // Flatten issues at or above min severity
         var allIssues = results
             .SelectMany(r => r.Diagnostics.Select(d => (r.FilePath, d)))
-            .Where(x => x.d.Severity >= _opts.MinSeverity)
+            .Where(x => x.d.Severity >= opts.MinSeverity)
             .ToList();
 
         var summary = BuildSummary(results.Count, allIssues);
 
-        if (_opts.Format == "json")
+        if (opts.Format == "json")
             WriteJsonToStdout(summary, allIssues, results.Count, inputLabel);
         else
             WriteTextToStdout(allIssues, summary, inputLabel ?? string.Empty, results.Count);
 
-        if (!string.IsNullOrEmpty(_opts.ReportPath))
-            WriteJsonToFile(_opts.ReportPath, summary, allIssues, results.Count, inputLabel);
+        if (!string.IsNullOrEmpty(opts.ReportPath))
+            WriteJsonToFile(opts.ReportPath, summary, allIssues, results.Count, inputLabel);
 
-        return allIssues.Any(x => x.d.Severity >= _opts.MinSeverity);
+        return allIssues.Any(x => x.d.Severity >= opts.MinSeverity);
     }
 
     // ─── Text output ─────────────────────────────────────────────────────────
@@ -119,6 +111,7 @@ internal sealed class ReportWriter
     private static ReportModel BuildJsonReport(
         SummaryModel summary,
         List<(string FilePath, AnalysisDiagnostic d)> issues,
+        // ReSharper disable once UnusedParameter.Local
         int fileCount,
         string? inputLabel)
     {
@@ -155,8 +148,10 @@ internal sealed class ReportWriter
         catch { return path; }
     }
 
-    private static string Serialize(ReportModel obj) =>
-        JsonSerializer.Serialize(obj, ReportJsonContext.Default.ReportModel);
+    private static string Serialize(ReportModel obj)
+    {
+        return JsonSerializer.Serialize(obj, ReportJsonContext.Default.ReportModel);
+    }
 
     // ─── Report models ────────────────────────────────────────────────────────
 

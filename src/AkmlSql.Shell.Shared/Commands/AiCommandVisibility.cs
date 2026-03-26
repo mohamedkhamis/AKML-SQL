@@ -1,6 +1,5 @@
 #nullable enable
 using System;
-using System.ComponentModel.Design;
 using System.Threading;
 using AkmlSql.Core.Config;
 using Microsoft.VisualStudio.Shell;

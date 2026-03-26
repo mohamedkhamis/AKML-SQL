@@ -1,12 +1,10 @@
-using System;
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Naming;
 
 /// <summary>NM003 — Table or view name uses a Hungarian notation type prefix; use descriptive names without type prefixes.</summary>
-public sealed class NM003_HungarianNotation : IAnalysisRule
+public sealed class Nm003HungarianNotation : IAnalysisRule
 {
     public string RuleId => "NM003";
     public string Category => "Naming";

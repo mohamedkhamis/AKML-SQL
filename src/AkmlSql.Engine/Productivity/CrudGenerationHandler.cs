@@ -1,9 +1,3 @@
-#nullable enable
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Engine.Schema;
@@ -16,15 +10,10 @@ namespace AkmlSql.Engine.Productivity
     /// T102: IPC handler for CRUD generation requests. Looks up table metadata from the schema
     /// cache and delegates to <see cref="CrudGenerator"/>.
     /// </summary>
-    internal sealed class CrudGenerationHandler
+    internal sealed class CrudGenerationHandler(SchemaCacheManager schemaCacheManager)
     {
         private readonly CrudGenerator _generator = new();
-        private readonly SchemaCacheManager _schemaCacheManager;
-
-        public CrudGenerationHandler(SchemaCacheManager schemaCacheManager)
-        {
-            _schemaCacheManager = schemaCacheManager ?? throw new ArgumentNullException(nameof(schemaCacheManager));
-        }
+        private readonly SchemaCacheManager _schemaCacheManager = schemaCacheManager ?? throw new ArgumentNullException(nameof(schemaCacheManager));
 
         /// <summary>
         /// Handles a CrudGeneration request (MessageType 66).

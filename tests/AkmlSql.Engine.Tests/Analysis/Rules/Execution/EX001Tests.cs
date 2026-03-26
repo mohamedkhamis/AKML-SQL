@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.Execution;
 
-public sealed class EX001Tests
+public sealed class Ex001Tests
 {
     [Fact]
     public void DivisionByLiteralZero_Fires()

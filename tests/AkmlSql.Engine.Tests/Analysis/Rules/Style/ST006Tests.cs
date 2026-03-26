@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.Style;
 
-public sealed class ST006Tests
+public sealed class St006Tests
 {
     [Fact]
     public void UnnecessaryBracketsOnNormalIdentifiers_Fires()

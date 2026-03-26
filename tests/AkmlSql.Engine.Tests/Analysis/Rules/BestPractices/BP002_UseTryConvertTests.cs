@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.BestPractices;
 
-public sealed class BP002_UseTryConvertTests
+public sealed class Bp002UseTryConvertTests
 {
     [Fact]
     public void FiresOnIsNumericUsage()

@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.Performance;
 
-public sealed class PE021_RedundantDistinctTests
+public sealed class Pe021RedundantDistinctTests
 {
     [Fact]
     public void Fires_WhenDistinctWithGroupBy()

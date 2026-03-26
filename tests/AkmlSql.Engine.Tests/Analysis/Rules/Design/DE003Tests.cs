@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.Design;
 
-public sealed class DE003Tests
+public sealed class De003Tests
 {
     [Fact]
     public void ExplicitlyNullableColumnInPrimaryKey_Fires()

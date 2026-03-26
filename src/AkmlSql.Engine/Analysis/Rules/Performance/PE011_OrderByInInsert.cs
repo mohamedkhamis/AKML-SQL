@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Performance;
 
 /// <summary>PE011 — ORDER BY in INSERT INTO ... SELECT is meaningless without TOP/OFFSET.</summary>
-public sealed class PE011_OrderByInInsert : IAnalysisRule
+public sealed class Pe011OrderByInInsert : IAnalysisRule
 {
     public string RuleId => "PE011";
     public string Category => "Performance";

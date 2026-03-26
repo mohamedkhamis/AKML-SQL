@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.Design;
 
-public sealed class DE001Tests
+public sealed class De001Tests
 {
     [Fact]
     public void TableWithoutPrimaryKey_Fires()

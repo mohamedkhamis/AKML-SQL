@@ -373,7 +373,7 @@ namespace AkmlSql.Shell.Shared.History
             };
             loadMoreBtn.SetBinding(System.Windows.Controls.Primitives.ButtonBase.CommandProperty,
                 new Binding(nameof(HistoryViewModel.LoadMoreCommand)));
-            loadMoreBtn.SetBinding(UIElement.VisibilityProperty,
+            loadMoreBtn.SetBinding(VisibilityProperty,
                 new Binding(nameof(HistoryViewModel.HasMoreEntries))
                 {
                     Converter = new BoolToVisibilityConverter()
@@ -388,7 +388,7 @@ namespace AkmlSql.Shell.Shared.History
                 Foreground = fg,
                 FontStyle = FontStyles.Italic
             };
-            loadingLabel.SetBinding(UIElement.VisibilityProperty,
+            loadingLabel.SetBinding(VisibilityProperty,
                 new Binding(nameof(HistoryViewModel.IsLoading))
                 {
                     Converter = new BoolToVisibilityConverter()
@@ -398,7 +398,7 @@ namespace AkmlSql.Shell.Shared.History
 
             // Total count display
             var countLabel = new Label { Foreground = fg };
-            countLabel.SetBinding(ContentControl.ContentProperty,
+            countLabel.SetBinding(ContentProperty,
                 new Binding(nameof(HistoryViewModel.TotalCount))
                 {
                     StringFormat = "{0} entries found"
@@ -418,8 +418,8 @@ namespace AkmlSql.Shell.Shared.History
             };
 
             var buttonStyle = new Style(typeof(Button));
-            buttonStyle.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(8, 2, 8, 2)));
-            buttonStyle.Setters.Add(new Setter(FrameworkElement.MarginProperty, new Thickness(0, 0, 4, 0)));
+            buttonStyle.Setters.Add(new Setter(PaddingProperty, new Thickness(8, 2, 8, 2)));
+            buttonStyle.Setters.Add(new Setter(MarginProperty, new Thickness(0, 0, 4, 0)));
 
             // "Copy SQL" button — copies selected entry's full SQL to clipboard
             var copyBtn = new Button { Content = "Copy SQL", Style = buttonStyle, ToolTip = "Copy full SQL text to clipboard" };
@@ -493,7 +493,7 @@ namespace AkmlSql.Shell.Shared.History
                 });
             factory.SetValue(TextBlock.FontSizeProperty, 14.0);
             factory.SetValue(TextBlock.TextAlignmentProperty, TextAlignment.Center);
-            factory.SetValue(FrameworkElement.ToolTipProperty, new Binding(nameof(HistoryEntryDto.Status))
+            factory.SetValue(ToolTipProperty, new Binding(nameof(HistoryEntryDto.Status))
             {
                 Converter = new StatusTextConverter()
             });
@@ -538,7 +538,7 @@ namespace AkmlSql.Shell.Shared.History
             });
             execCount.SetValue(TextBlock.FontSizeProperty, 10.0);
             execCount.SetValue(TextBlock.ForegroundProperty, Brushes.Gray);
-            execCount.SetBinding(UIElement.VisibilityProperty,
+            execCount.SetBinding(VisibilityProperty,
                 new Binding(nameof(HistoryEntryDto.ExecutionCount))
                 {
                     Converter = new ExecCountVisibilityConverter()
@@ -589,11 +589,11 @@ namespace AkmlSql.Shell.Shared.History
                 });
             factory.SetValue(TextBlock.FontSizeProperty, 14.0);
             factory.SetValue(TextBlock.TextAlignmentProperty, TextAlignment.Center);
-            factory.SetValue(FrameworkElement.CursorProperty, Cursors.Hand);
-            factory.SetValue(FrameworkElement.ToolTipProperty, "Click to toggle favorite");
+            factory.SetValue(CursorProperty, Cursors.Hand);
+            factory.SetValue(ToolTipProperty, "Click to toggle favorite");
 
             // Handle click on the star to toggle favorite
-            factory.AddHandler(UIElement.MouseLeftButtonDownEvent,
+            factory.AddHandler(MouseLeftButtonDownEvent,
                 new MouseButtonEventHandler(OnFavoriteStarClick));
 
             template.VisualTree = factory;
@@ -757,7 +757,9 @@ namespace AkmlSql.Shell.Shared.History
             }
 
             public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-                => throw new NotSupportedException();
+            {
+                throw new NotSupportedException();
+            }
         }
 
         /// <summary>Converts ExecutionStatus int to a color brush.</summary>
@@ -779,7 +781,9 @@ namespace AkmlSql.Shell.Shared.History
             }
 
             public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-                => throw new NotSupportedException();
+            {
+                throw new NotSupportedException();
+            }
         }
 
         /// <summary>Converts ExecutionStatus int to a human-readable text.</summary>
@@ -801,7 +805,9 @@ namespace AkmlSql.Shell.Shared.History
             }
 
             public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-                => throw new NotSupportedException();
+            {
+                throw new NotSupportedException();
+            }
         }
 
         /// <summary>Formats ISO 8601 ExecutedAt string to a user-friendly format.</summary>
@@ -823,7 +829,9 @@ namespace AkmlSql.Shell.Shared.History
             }
 
             public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-                => throw new NotSupportedException();
+            {
+                throw new NotSupportedException();
+            }
         }
 
         /// <summary>Formats duration in milliseconds to a human-readable string.</summary>
@@ -841,7 +849,9 @@ namespace AkmlSql.Shell.Shared.History
             }
 
             public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-                => throw new NotSupportedException();
+            {
+                throw new NotSupportedException();
+            }
         }
 
         /// <summary>Trims SQL text to ~200 chars and collapses whitespace for preview.</summary>
@@ -861,7 +871,9 @@ namespace AkmlSql.Shell.Shared.History
             }
 
             public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-                => throw new NotSupportedException();
+            {
+                throw new NotSupportedException();
+            }
         }
 
         /// <summary>Formats Server > Database > Username connection info.</summary>
@@ -882,7 +894,9 @@ namespace AkmlSql.Shell.Shared.History
             }
 
             public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture)
-                => throw new NotSupportedException();
+            {
+                throw new NotSupportedException();
+            }
         }
 
         /// <summary>Converts IsFavorite bool to a star icon.</summary>
@@ -894,7 +908,9 @@ namespace AkmlSql.Shell.Shared.History
             }
 
             public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-                => throw new NotSupportedException();
+            {
+                throw new NotSupportedException();
+            }
         }
 
         /// <summary>Converts IsFavorite bool to a color (gold for favorites, gray for non-favorites).</summary>
@@ -906,7 +922,9 @@ namespace AkmlSql.Shell.Shared.History
             }
 
             public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-                => throw new NotSupportedException();
+            {
+                throw new NotSupportedException();
+            }
         }
 
         /// <summary>Formats execution count for deduplicated entries.</summary>
@@ -920,7 +938,9 @@ namespace AkmlSql.Shell.Shared.History
             }
 
             public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-                => throw new NotSupportedException();
+            {
+                throw new NotSupportedException();
+            }
         }
 
         /// <summary>Shows execution count only when greater than 1.</summary>
@@ -934,7 +954,9 @@ namespace AkmlSql.Shell.Shared.History
             }
 
             public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-                => throw new NotSupportedException();
+            {
+                throw new NotSupportedException();
+            }
         }
 
         /// <summary>Converts bool to Visibility.</summary>
@@ -946,7 +968,9 @@ namespace AkmlSql.Shell.Shared.History
             }
 
             public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-                => throw new NotSupportedException();
+            {
+                throw new NotSupportedException();
+            }
         }
 
         #endregion

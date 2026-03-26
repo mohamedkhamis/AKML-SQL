@@ -1,4 +1,3 @@
-#nullable enable
 using System.ClientModel;
 using AkmlSql.Core.Config;
 using AkmlSql.Engine.Ai.Security;

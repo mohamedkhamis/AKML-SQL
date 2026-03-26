@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using AkmlSql.Engine.Refactoring.Operations.Heavyweight;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
@@ -24,21 +22,11 @@ public class ReferenceMatch
 /// ColumnReferenceExpression, NamedTableReference, SchemaObjectName,
 /// VariableReference, ProcedureReference, and bare Identifier nodes.
 /// </summary>
-public class ReferenceCollector : TSqlFragmentVisitor
+public class ReferenceCollector(string targetName, string filePath, string documentText) : TSqlFragmentVisitor
 {
-    private readonly string _targetName;
-    private readonly string _filePath;
-    private readonly string _documentText;
     private readonly List<ReferenceMatch> _matches = new();
 
     public IReadOnlyList<ReferenceMatch> Matches => _matches;
-
-    public ReferenceCollector(string targetName, string filePath, string documentText)
-    {
-        _targetName   = targetName;
-        _filePath     = filePath;
-        _documentText = documentText;
-    }
 
     // ColumnReferenceExpression: e.g., SELECT col  or  table.col
     public override void Visit(ColumnReferenceExpression node)
@@ -75,7 +63,7 @@ public class ReferenceCollector : TSqlFragmentVisitor
     {
         // VariableReference.Name includes the @ prefix; strip it for comparison
         var name = node.Name?.TrimStart('@') ?? string.Empty;
-        if (string.Equals(name, _targetName.TrimStart('@'), StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(name, targetName.TrimStart('@'), StringComparison.OrdinalIgnoreCase))
         {
             _matches.Add(BuildMatch(node.StartOffset, node.FragmentLength, node.Name ?? string.Empty));
         }
@@ -101,7 +89,7 @@ public class ReferenceCollector : TSqlFragmentVisitor
     {
         if (id == null) return;
         var value = id.Value ?? string.Empty;
-        if (string.Equals(value, _targetName, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(value, targetName, StringComparison.OrdinalIgnoreCase))
         {
             _matches.Add(BuildMatch(id.StartOffset, id.FragmentLength, value));
         }
@@ -109,16 +97,16 @@ public class ReferenceCollector : TSqlFragmentVisitor
 
     private ReferenceMatch BuildMatch(int startOffset, int length, string matchedText)
     {
-        var (line, col) = HeavyweightOperationBase.OffsetToLineCol(_documentText, startOffset);
+        var (line, col) = HeavyweightOperationBase.OffsetToLineCol(documentText, startOffset);
         return new ReferenceMatch
         {
-            FilePath       = _filePath,
+            FilePath       = filePath,
             StartOffset    = startOffset,
             EndOffset      = startOffset + length,
             Line           = line,
             Column         = col,
             MatchedText    = matchedText,
-            ContextSnippet = HeavyweightOperationBase.ExtractContext(_documentText, startOffset)
+            ContextSnippet = HeavyweightOperationBase.ExtractContext(documentText, startOffset)
         };
     }
 }

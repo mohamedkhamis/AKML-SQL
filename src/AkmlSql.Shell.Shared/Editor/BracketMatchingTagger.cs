@@ -425,11 +425,15 @@ namespace AkmlSql.Shell.Shared.Editor
             return (text.Substring(start, end - start), start);
         }
 
-        private static bool IsIdentifierChar(char c) =>
-            char.IsLetterOrDigit(c) || c == '_' || c == '#' || c == '@';
+        private static bool IsIdentifierChar(char c)
+        {
+            return char.IsLetterOrDigit(c) || c == '_' || c == '#' || c == '@';
+        }
 
-        private static bool IsIdentifierStartChar(char c) =>
-            char.IsLetter(c) || c == '_' || c == '#' || c == '@';
+        private static bool IsIdentifierStartChar(char c)
+        {
+            return char.IsLetter(c) || c == '_' || c == '#' || c == '@';
+        }
 
         public IEnumerable<ITagSpan<ITextMarkerTag>> GetTags(NormalizedSnapshotSpanCollection spans)
         {

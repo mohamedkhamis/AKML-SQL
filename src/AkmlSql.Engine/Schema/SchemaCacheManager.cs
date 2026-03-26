@@ -40,8 +40,10 @@ public class SchemaCacheManager(int maxDatabases = 10) : IDisposable
         Converters = { new JsonStringEnumConverter() }
     };
 
-    private static string BuildCacheKey(string serverName, string databaseName) =>
-        $"{serverName}:{databaseName}";
+    private static string BuildCacheKey(string serverName, string databaseName)
+    {
+        return $"{serverName}:{databaseName}";
+    }
 
     /// <summary>
     /// Returns the existing cache for <paramref name="serverName"/>/<paramref name="databaseName"/>,

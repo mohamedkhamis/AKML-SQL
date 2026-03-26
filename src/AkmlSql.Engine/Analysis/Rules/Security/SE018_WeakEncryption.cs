@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Security;
 
 /// <summary>SE018 — ENCRYPTBYPASSPHRASE / DECRYPTBYPASSPHRASE uses DES which is considered weak.</summary>
-public sealed class SE018_WeakEncryption : IAnalysisRule
+public sealed class Se018WeakEncryption : IAnalysisRule
 {
     public string RuleId => "SE018";
     public string Category => "Security";
@@ -33,7 +32,7 @@ public sealed class SE018_WeakEncryption : IAnalysisRule
             bool isWeak = false;
             foreach (var fn in WeakFunctions)
             {
-                if (string.Equals(name, fn, System.StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(name, fn, StringComparison.OrdinalIgnoreCase))
                 {
                     isWeak = true;
                     break;

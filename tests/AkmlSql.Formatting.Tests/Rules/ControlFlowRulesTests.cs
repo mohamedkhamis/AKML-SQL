@@ -16,15 +16,18 @@ public class ControlFlowRulesTests
         BreakType breakType = BreakType.None,
         int spaces = 1,
         int indent = 0,
-        bool inNoformat = false) => new()
+        bool inNoformat = false)
     {
-        FormattedText = text,
-        TokenType = tokenType,
-        PrecedingBreak = breakType,
-        PrecedingSpaces = spaces,
-        IndentLevel = indent,
-        IsInNoformatRegion = inNoformat
-    };
+        return new LayoutNode
+        {
+            FormattedText = text,
+            TokenType = tokenType,
+            PrecedingBreak = breakType,
+            PrecedingSpaces = spaces,
+            IndentLevel = indent,
+            IsInNoformatRegion = inNoformat
+        };
+    }
 
     // ── ElseOnNewLine ─────────────────────────────────────────────────────
 

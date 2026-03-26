@@ -1,33 +1,33 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Text.Json;
 using AkmlSql.Core.Models.Analysis;
 using AkmlSql.Engine.Analysis;
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis;
 
 public sealed class ReportWriterTests
 {
-    private static AnalysisDiagnostic MakeDiag(string ruleId, DiagnosticSeverity sev, string categoryCode, int line = 1) =>
-        new()
+    private static AnalysisDiagnostic MakeDiag(string ruleId, DiagnosticSeverity sev, string categoryCode, int line = 1)
+    {
+        return new AnalysisDiagnostic
         {
-            RuleId       = ruleId,
+            RuleId = ruleId,
             CategoryCode = categoryCode,
-            Severity     = sev,
-            Message      = $"Test message for {ruleId}",
-            StartOffset  = 0,
-            EndOffset    = 10,
-            Line         = line,
-            Column       = 1,
-            FixActions   = []
+            Severity = sev,
+            Message = $"Test message for {ruleId}",
+            StartOffset = 0,
+            EndOffset = 10,
+            Line = line,
+            Column = 1,
+            FixActions = []
         };
+    }
 
-    private static AkmlSql.Analyzer.AnalyzerOptions MakeOpts(string format = "text") =>
-        AkmlSql.Analyzer.AnalyzerOptions.Parse(new[]
+    private static Analyzer.AnalyzerOptions MakeOpts(string format = "text")
+    {
+        return Analyzer.AnalyzerOptions.Parse(new[]
             { "--file", "dummy.sql", "--format", format });
+    }
 
     [Fact]
     public void TextOutput_ContainsFileLineAndRule()
@@ -37,7 +37,7 @@ public sealed class ReportWriterTests
             ("orders.sql", new[] { MakeDiag("PE001", DiagnosticSeverity.Warning, "PE", 15) })
         };
 
-        var writer = new AkmlSql.Analyzer.ReportWriter(MakeOpts("text"));
+        var writer = new Analyzer.ReportWriter(MakeOpts("text"));
 
         var stdout = CaptureStdout(() => writer.WriteReport(results, "orders.sql"));
 
@@ -58,7 +58,7 @@ public sealed class ReportWriterTests
             })
         };
 
-        var writer = new AkmlSql.Analyzer.ReportWriter(MakeOpts("text"));
+        var writer = new Analyzer.ReportWriter(MakeOpts("text"));
         var stdout = CaptureStdout(() => writer.WriteReport(results, "f.sql"));
 
         Assert.Contains("2 issue", stdout);
@@ -77,8 +77,8 @@ public sealed class ReportWriterTests
                 ("q.sql", new[] { MakeDiag("BP004", DiagnosticSeverity.Error, "BP", 7) })
             };
 
-            var opts   = AkmlSql.Analyzer.AnalyzerOptions.Parse(new[] { "--file", "q.sql", "--report", tmpFile });
-            var writer = new AkmlSql.Analyzer.ReportWriter(opts);
+            var opts   = Analyzer.AnalyzerOptions.Parse(new[] { "--file", "q.sql", "--report", tmpFile });
+            var writer = new Analyzer.ReportWriter(opts);
             CaptureStdout(() => writer.WriteReport(results, "q.sql"));
 
             Assert.True(File.Exists(tmpFile));
@@ -112,8 +112,8 @@ public sealed class ReportWriterTests
                 })
             };
 
-            var opts   = AkmlSql.Analyzer.AnalyzerOptions.Parse(new[] { "--file", "a.sql", "--report", tmpFile });
-            var writer = new AkmlSql.Analyzer.ReportWriter(opts);
+            var opts   = Analyzer.AnalyzerOptions.Parse(new[] { "--file", "a.sql", "--report", tmpFile });
+            var writer = new Analyzer.ReportWriter(opts);
             CaptureStdout(() => writer.WriteReport(results, "a.sql"));
 
             var json = File.ReadAllText(tmpFile);
@@ -137,7 +137,7 @@ public sealed class ReportWriterTests
             ("clean.sql", Array.Empty<AnalysisDiagnostic>())
         };
 
-        var writer = new AkmlSql.Analyzer.ReportWriter(MakeOpts("text"));
+        var writer = new Analyzer.ReportWriter(MakeOpts("text"));
         var stdout = CaptureStdout(() => writer.WriteReport(results, "clean.sql"));
 
         Assert.Contains("No issues", stdout);

@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
@@ -6,7 +5,7 @@ using Microsoft.SqlServer.TransactSql.ScriptDom;
 namespace AkmlSql.Engine.Analysis.Rules.BestPractices;
 
 /// <summary>BP012 — Hard-coded date literal; consider using a parameter or variable for maintainability.</summary>
-public sealed class BP012_HardCodedDate : IAnalysisRule
+public sealed class Bp012HardCodedDate : IAnalysisRule
 {
     public string RuleId => "BP012";
     public string Category => "BestPractices";

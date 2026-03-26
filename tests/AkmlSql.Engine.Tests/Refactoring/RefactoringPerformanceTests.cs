@@ -1,6 +1,4 @@
-using System;
 using System.Diagnostics;
-using System.Linq;
 using System.Text;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Engine.Refactoring.Operations.Lightweight;
@@ -105,7 +103,7 @@ public sealed class RefactoringPerformanceTests
     // ─── SC-002: Heavyweight preview &lt; 200ms on 1,000-line script ────────────
 
     [Fact]
-    public async System.Threading.Tasks.Task SC002_ConvertTempToTableVar_Preview_Under200ms_On1000LineScript()
+    public async Task SC002_ConvertTempToTableVar_Preview_Under200ms_On1000LineScript()
     {
         var sb = new StringBuilder();
         sb.AppendLine("CREATE TABLE #TempOrders (OrderId int, Amount decimal(10,2))");
@@ -144,7 +142,7 @@ public sealed class RefactoringPerformanceTests
     // ─── SC-004: Extract wizard preview &lt; 500ms ────────────────────────────
 
     [Fact]
-    public async System.Threading.Tasks.Task SC004_ExtractToCte_Preview_Under500ms()
+    public async Task SC004_ExtractToCte_Preview_Under500ms()
     {
         // Moderately large SELECT to wrap
         var sb = new StringBuilder();

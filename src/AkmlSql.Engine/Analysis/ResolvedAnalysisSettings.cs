@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 
 namespace AkmlSql.Engine.Analysis;

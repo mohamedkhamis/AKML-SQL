@@ -11,9 +11,8 @@ using Serilog;
 
 namespace AkmlSql.Shell.Shared.Ipc
 {
-    public class PipeRpcClient : IDisposable
+    public class PipeRpcClient(string pipeName) : IDisposable
     {
-        private readonly string _pipeName;
         private NamedPipeClientStream _pipe;
         private readonly ConcurrentDictionary<int, TaskCompletionSource<RpcMessage>> _pending = new();
         private readonly SemaphoreSlim _writeLock = new(1, 1);
@@ -31,20 +30,15 @@ namespace AkmlSql.Shell.Shared.Ipc
 
         public bool IsConnected => _pipe?.IsConnected == true;
 
-        public PipeRpcClient(string pipeName)
-        {
-            _pipeName = pipeName;
-        }
-
         public async Task ConnectAsync(int maxRetries = 15, int retryDelayMs = 300, int connectTimeoutMs = 2000, CancellationToken ct = default)
         {
             for (int attempt = 0; attempt < maxRetries; attempt++)
             {
                 try
                 {
-                    _pipe = new NamedPipeClientStream(".", _pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
+                    _pipe = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
                     await _pipe.ConnectAsync(connectTimeoutMs, ct);
-                    Log.Information("Connected to engine pipe {Pipe}", _pipeName);
+                    Log.Information("Connected to engine pipe {Pipe}", pipeName);
 
                     _readerCts = new CancellationTokenSource();
                     _readerTask = Task.Run(() => ReadLoopAsync(_readerCts.Token));

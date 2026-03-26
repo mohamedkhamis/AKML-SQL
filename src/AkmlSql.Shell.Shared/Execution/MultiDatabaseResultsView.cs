@@ -1,9 +1,7 @@
 #nullable enable
-using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
-using Serilog;
 
 namespace AkmlSql.Shell.Shared.Execution
 {

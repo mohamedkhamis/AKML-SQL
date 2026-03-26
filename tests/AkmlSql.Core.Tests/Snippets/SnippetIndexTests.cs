@@ -14,8 +14,9 @@ public class SnippetIndexTests
     private static Snippet MakeSnippet(string shortcode, string name = "",
         string description = "", string category = "Custom",
         string[] tags = null!, string[] context = null!,
-        bool surroundsWith = false, string id = "") =>
-        new()
+        bool surroundsWith = false, string id = "")
+    {
+        return new Snippet
         {
             Metadata = new SnippetMetadata
             {
@@ -30,10 +31,13 @@ public class SnippetIndexTests
             },
             Body = [$"-- snippet:{shortcode}"]
         };
+    }
 
     private static (Snippet Snippet, SnippetSourceType Source, string? FilePath) Entry(
-        Snippet snippet, SnippetSourceType source = SnippetSourceType.Personal, string? filePath = null) =>
-        (snippet, source, filePath);
+        Snippet snippet, SnippetSourceType source = SnippetSourceType.Personal, string? filePath = null)
+    {
+        return (snippet, source, filePath);
+    }
 
     // ── Rebuild + Count ───────────────────────────────────────────────────────
 

@@ -1,8 +1,6 @@
-#nullable enable
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Engine.Schema;
-using AkmlSql.Engine.Schema.Models;
 using MessagePack;
 using Serilog;
 
@@ -13,16 +11,11 @@ namespace AkmlSql.Engine.Navigation;
 /// Delegates to <see cref="ObjectDefinitionService"/> and <see cref="ReferenceCollector"/> for
 /// database queries, and uses <see cref="SchemaCacheManager"/> for object search.
 /// </summary>
-public class NavigationRequestHandler
+public class NavigationRequestHandler(SchemaCacheManager schemaCacheManager)
 {
     private readonly ObjectDefinitionService _definitionService = new();
     private readonly ReferenceCollector _referenceCollector = new();
-    private readonly SchemaCacheManager _schemaCacheManager;
-
-    public NavigationRequestHandler(SchemaCacheManager schemaCacheManager)
-    {
-        _schemaCacheManager = schemaCacheManager ?? throw new ArgumentNullException(nameof(schemaCacheManager));
-    }
+    private readonly SchemaCacheManager _schemaCacheManager = schemaCacheManager ?? throw new ArgumentNullException(nameof(schemaCacheManager));
 
     /// <summary>
     /// Handles GetObjectDefinition (MessageType 60).

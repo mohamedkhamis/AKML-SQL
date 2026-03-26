@@ -1,12 +1,10 @@
-using System.Collections.Generic;
-using System.Linq;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.BestPractices;
 
 /// <summary>BP006 — Stored procedure with multiple DML statements should wrap them in a transaction.</summary>
-public sealed class BP006_MissingTransaction : IAnalysisRule
+public sealed class Bp006MissingTransaction : IAnalysisRule
 {
     public string RuleId => "BP006";
     public string Category => "BestPractices";
@@ -24,8 +22,15 @@ public sealed class BP006_MissingTransaction : IAnalysisRule
     {
         public List<AnalysisDiagnostic> Diagnostics { get; } = [];
 
-        public override void Visit(CreateProcedureStatement node) => Check(node, node.StatementList);
-        public override void Visit(AlterProcedureStatement node)  => Check(node, node.StatementList);
+        public override void Visit(CreateProcedureStatement node)
+        {
+            Check(node, node.StatementList);
+        }
+
+        public override void Visit(AlterProcedureStatement node)
+        {
+            Check(node, node.StatementList);
+        }
 
         private void Check(TSqlStatement proc, StatementList? body)
         {

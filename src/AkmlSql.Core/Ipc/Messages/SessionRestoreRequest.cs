@@ -1,4 +1,3 @@
-#nullable enable
 using MessagePack;
 
 namespace AkmlSql.Core.Ipc.Messages
@@ -10,6 +9,7 @@ namespace AkmlSql.Core.Ipc.Messages
     /// cleanly shut down.
     /// </summary>
     [MessagePackObject]
+    // ReSharper disable once UnusedMember.Global
     public class SessionRestoreRequest
     {
     }

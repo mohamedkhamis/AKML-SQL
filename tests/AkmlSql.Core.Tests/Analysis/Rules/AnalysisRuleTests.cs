@@ -11,7 +11,6 @@ using AkmlSql.Engine.Analysis.Rules.Execution;
 using AkmlSql.Engine.Analysis.Rules.Naming;
 using AkmlSql.Engine.Analysis.Rules.Performance;
 using AkmlSql.Engine.Analysis.Rules.Security;
-using AkmlSql.Engine.Analysis.Rules.Style;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 using Xunit;
 
@@ -43,8 +42,10 @@ public class AnalysisRuleTests
         };
     }
 
-    private static List<AnalysisDiagnostic> Run(IAnalysisRule rule, string sql) =>
-        rule.Analyze(CreateContext(sql)).ToList();
+    private static List<AnalysisDiagnostic> Run(IAnalysisRule rule, string sql)
+    {
+        return rule.Analyze(CreateContext(sql)).ToList();
+    }
 
     // ═════════════════════════════════════════════════════════════════════════
     // PE003 — Missing WHERE on DELETE / UPDATE
@@ -53,7 +54,7 @@ public class AnalysisRuleTests
     [Fact]
     public void PE003_FiresOnDeleteWithoutWhere()
     {
-        var diags = Run(new PE003_MissingWhereOnDeleteUpdate(), "DELETE FROM dbo.Orders");
+        var diags = Run(new Pe003MissingWhereOnDeleteUpdate(), "DELETE FROM dbo.Orders");
         Assert.Single(diags);
         Assert.Equal("PE003", diags[0].RuleId);
         Assert.Equal(DiagnosticSeverity.Error, diags[0].Severity);
@@ -62,7 +63,7 @@ public class AnalysisRuleTests
     [Fact]
     public void PE003_FiresOnUpdateWithoutWhere()
     {
-        var diags = Run(new PE003_MissingWhereOnDeleteUpdate(),
+        var diags = Run(new Pe003MissingWhereOnDeleteUpdate(),
             "UPDATE dbo.Orders SET Status = 'Active'");
         Assert.Single(diags);
         Assert.Equal("PE003", diags[0].RuleId);
@@ -71,7 +72,7 @@ public class AnalysisRuleTests
     [Fact]
     public void PE003_DoesNotFire_WhenDeleteHasWhere()
     {
-        var diags = Run(new PE003_MissingWhereOnDeleteUpdate(),
+        var diags = Run(new Pe003MissingWhereOnDeleteUpdate(),
             "DELETE FROM dbo.Orders WHERE Id = 1");
         Assert.Empty(diags);
     }
@@ -79,7 +80,7 @@ public class AnalysisRuleTests
     [Fact]
     public void PE003_DoesNotFire_WhenUpdateHasWhere()
     {
-        var diags = Run(new PE003_MissingWhereOnDeleteUpdate(),
+        var diags = Run(new Pe003MissingWhereOnDeleteUpdate(),
             "UPDATE dbo.Orders SET Status = 'A' WHERE Id = 1");
         Assert.Empty(diags);
     }
@@ -88,7 +89,7 @@ public class AnalysisRuleTests
     public void PE003_FiresForBothDeleteAndUpdate_WhenBothMissingWhere()
     {
         var sql = "DELETE FROM dbo.A\nUPDATE dbo.B SET Col = 1";
-        var diags = Run(new PE003_MissingWhereOnDeleteUpdate(), sql);
+        var diags = Run(new Pe003MissingWhereOnDeleteUpdate(), sql);
         Assert.Equal(2, diags.Count);
     }
 
@@ -99,7 +100,7 @@ public class AnalysisRuleTests
     [Fact]
     public void BP004_FiresOnEqualsNull()
     {
-        var diags = Run(new BP004_NullComparison(),
+        var diags = Run(new Bp004NullComparison(),
             "SELECT 1 WHERE Col = NULL");
         Assert.Single(diags);
         Assert.Equal("BP004", diags[0].RuleId);
@@ -108,7 +109,7 @@ public class AnalysisRuleTests
     [Fact]
     public void BP004_FiresOnNotEqualsNull_BracketStyle()
     {
-        var diags = Run(new BP004_NullComparison(),
+        var diags = Run(new Bp004NullComparison(),
             "SELECT 1 WHERE Col <> NULL");
         Assert.Single(diags);
     }
@@ -116,7 +117,7 @@ public class AnalysisRuleTests
     [Fact]
     public void BP004_FiresOnNotEqualsNull_ExclamationStyle()
     {
-        var diags = Run(new BP004_NullComparison(),
+        var diags = Run(new Bp004NullComparison(),
             "SELECT 1 WHERE Col != NULL");
         Assert.Single(diags);
     }
@@ -124,14 +125,14 @@ public class AnalysisRuleTests
     [Fact]
     public void BP004_DoesNotFire_WhenIsNull()
     {
-        Assert.Empty(Run(new BP004_NullComparison(), "SELECT 1 WHERE Col IS NULL"));
-        Assert.Empty(Run(new BP004_NullComparison(), "SELECT 1 WHERE Col IS NOT NULL"));
+        Assert.Empty(Run(new Bp004NullComparison(), "SELECT 1 WHERE Col IS NULL"));
+        Assert.Empty(Run(new Bp004NullComparison(), "SELECT 1 WHERE Col IS NOT NULL"));
     }
 
     [Fact]
     public void BP004_ProvidesFixAction_WithReplacementText()
     {
-        var diags = Run(new BP004_NullComparison(), "SELECT 1 WHERE Col = NULL");
+        var diags = Run(new Bp004NullComparison(), "SELECT 1 WHERE Col = NULL");
         Assert.Single(diags[0].FixActions);
         Assert.Contains("IS NULL", diags[0].FixActions[0].ReplacementText);
     }
@@ -139,7 +140,7 @@ public class AnalysisRuleTests
     [Fact]
     public void BP004_FixAction_ForNotEquals_ContainsIsNotNull()
     {
-        var diags = Run(new BP004_NullComparison(), "SELECT 1 WHERE Col <> NULL");
+        var diags = Run(new Bp004NullComparison(), "SELECT 1 WHERE Col <> NULL");
         Assert.Contains("IS NOT NULL", diags[0].FixActions[0].ReplacementText);
     }
 
@@ -156,7 +157,7 @@ public class AnalysisRuleTests
                 SELECT * FROM dbo.Orders
             END
             """;
-        var diags = Run(new PE001_AvoidSelectStar(), sql);
+        var diags = Run(new Pe001AvoidSelectStar(), sql);
         Assert.Single(diags);
         Assert.Equal("PE001", diags[0].RuleId);
     }
@@ -165,7 +166,7 @@ public class AnalysisRuleTests
     public void PE001_DoesNotFire_OnSelectStarOutsideProcedure()
     {
         // Ad-hoc SELECT * is not flagged — rule targets procs/views only
-        var diags = Run(new PE001_AvoidSelectStar(), "SELECT * FROM dbo.Orders");
+        var diags = Run(new Pe001AvoidSelectStar(), "SELECT * FROM dbo.Orders");
         Assert.Empty(diags);
     }
 
@@ -176,7 +177,7 @@ public class AnalysisRuleTests
     [Fact]
     public void SE002_FiresOnDeclareWithHardcodedPassword()
     {
-        var diags = Run(new SE002_HardcodedPassword(),
+        var diags = Run(new Se002HardcodedPassword(),
             "DECLARE @password VARCHAR(50) = 'secret123'");
         Assert.Single(diags);
         Assert.Equal("SE002", diags[0].RuleId);
@@ -186,7 +187,7 @@ public class AnalysisRuleTests
     [Fact]
     public void SE002_FiresOnSetWithPwdVariable()
     {
-        var diags = Run(new SE002_HardcodedPassword(),
+        var diags = Run(new Se002HardcodedPassword(),
             "DECLARE @pwd VARCHAR(50); SET @pwd = 'abc'");
         Assert.Single(diags);
     }
@@ -194,7 +195,7 @@ public class AnalysisRuleTests
     [Fact]
     public void SE002_DoesNotFire_WhenPasswordIsParameterized()
     {
-        var diags = Run(new SE002_HardcodedPassword(),
+        var diags = Run(new Se002HardcodedPassword(),
             "DECLARE @password VARCHAR(50); SET @password = @pwd");
         Assert.Empty(diags);
     }
@@ -206,7 +207,7 @@ public class AnalysisRuleTests
     [Fact]
     public void NM002_FiresOnSpPrefix()
     {
-        var diags = Run(new NM002_SpPrefix(),
+        var diags = Run(new Nm002SpPrefix(),
             "CREATE PROCEDURE dbo.sp_GetOrders AS RETURN");
         Assert.Single(diags);
         Assert.Equal("NM002", diags[0].RuleId);
@@ -215,7 +216,7 @@ public class AnalysisRuleTests
     [Fact]
     public void NM002_DoesNotFire_OnUspPrefix()
     {
-        var diags = Run(new NM002_SpPrefix(),
+        var diags = Run(new Nm002SpPrefix(),
             "CREATE PROCEDURE dbo.usp_GetOrders AS RETURN");
         Assert.Empty(diags);
     }
@@ -223,7 +224,7 @@ public class AnalysisRuleTests
     [Fact]
     public void NM002_DoesNotFire_OnOtherPrefixes()
     {
-        Assert.Empty(Run(new NM002_SpPrefix(),
+        Assert.Empty(Run(new Nm002SpPrefix(),
             "CREATE PROCEDURE dbo.GetOrders AS RETURN"));
     }
 
@@ -234,7 +235,7 @@ public class AnalysisRuleTests
     [Fact]
     public void DEP001_FiresOnTextDataType()
     {
-        var diags = Run(new DEP001_DeprecatedDataType(),
+        var diags = Run(new Dep001DeprecatedDataType(),
             "CREATE TABLE dbo.T (Notes text)");
         Assert.Single(diags);
         Assert.Equal("DEP001", diags[0].RuleId);
@@ -243,7 +244,7 @@ public class AnalysisRuleTests
     [Fact]
     public void DEP001_FiresOnNtextDataType()
     {
-        var diags = Run(new DEP001_DeprecatedDataType(),
+        var diags = Run(new Dep001DeprecatedDataType(),
             "CREATE TABLE dbo.T (Content ntext)");
         Assert.Single(diags);
     }
@@ -251,7 +252,7 @@ public class AnalysisRuleTests
     [Fact]
     public void DEP001_FiresOnImageDataType()
     {
-        var diags = Run(new DEP001_DeprecatedDataType(),
+        var diags = Run(new Dep001DeprecatedDataType(),
             "CREATE TABLE dbo.T (Photo image)");
         Assert.Single(diags);
     }
@@ -259,14 +260,14 @@ public class AnalysisRuleTests
     [Fact]
     public void DEP001_DoesNotFire_OnVarcharMax()
     {
-        Assert.Empty(Run(new DEP001_DeprecatedDataType(),
+        Assert.Empty(Run(new Dep001DeprecatedDataType(),
             "CREATE TABLE dbo.T (Notes varchar(max))"));
     }
 
     [Fact]
     public void DEP001_ProvidesFixAction()
     {
-        var diags = Run(new DEP001_DeprecatedDataType(),
+        var diags = Run(new Dep001DeprecatedDataType(),
             "CREATE TABLE dbo.T (Notes text)");
         Assert.Single(diags[0].FixActions);
         Assert.Contains("varchar(max)", diags[0].FixActions[0].ReplacementText,
@@ -280,7 +281,7 @@ public class AnalysisRuleTests
     [Fact]
     public void DE001_FiresOnTableWithoutPrimaryKey()
     {
-        var diags = Run(new DE001_MissingPrimaryKey(),
+        var diags = Run(new De001MissingPrimaryKey(),
             "CREATE TABLE dbo.T (Id INT, Name VARCHAR(100))");
         Assert.Single(diags);
         Assert.Equal("DE001", diags[0].RuleId);
@@ -295,13 +296,13 @@ public class AnalysisRuleTests
                 CONSTRAINT PK_T PRIMARY KEY (Id)
             )
             """;
-        Assert.Empty(Run(new DE001_MissingPrimaryKey(), sql));
+        Assert.Empty(Run(new De001MissingPrimaryKey(), sql));
     }
 
     [Fact]
     public void DE001_DoesNotFire_WhenInlineColumnPkPresent()
     {
-        Assert.Empty(Run(new DE001_MissingPrimaryKey(),
+        Assert.Empty(Run(new De001MissingPrimaryKey(),
             "CREATE TABLE dbo.T (Id INT PRIMARY KEY, Name VARCHAR(100))"));
     }
 
@@ -312,7 +313,7 @@ public class AnalysisRuleTests
     [Fact]
     public void EX001_FiresOnLiteralDivisionByZero()
     {
-        var diags = Run(new EX001_DivisionByZero(), "SELECT 10 / 0");
+        var diags = Run(new Ex001DivisionByZero(), "SELECT 10 / 0");
         Assert.Single(diags);
         Assert.Equal("EX001", diags[0].RuleId);
     }
@@ -320,13 +321,13 @@ public class AnalysisRuleTests
     [Fact]
     public void EX001_DoesNotFire_OnDivisionByVariable()
     {
-        Assert.Empty(Run(new EX001_DivisionByZero(), "SELECT 10 / @divisor"));
+        Assert.Empty(Run(new Ex001DivisionByZero(), "SELECT 10 / @divisor"));
     }
 
     [Fact]
     public void EX001_DoesNotFire_OnNormalDivision()
     {
-        Assert.Empty(Run(new EX001_DivisionByZero(), "SELECT 10 / 5"));
+        Assert.Empty(Run(new Ex001DivisionByZero(), "SELECT 10 / 5"));
     }
 
     // ═════════════════════════════════════════════════════════════════════════
@@ -337,7 +338,7 @@ public class AnalysisRuleTests
     public void SE001_FiresOnExecWithStringConcatenation()
     {
         var sql = "EXEC('SELECT * FROM ' + @tableName)";
-        var diags = Run(new SE001_SqlInjectionRisk(), sql);
+        var diags = Run(new Se001SqlInjectionRisk(), sql);
         Assert.Single(diags);
         Assert.Equal("SE001", diags[0].RuleId);
         Assert.Equal(DiagnosticSeverity.Error, diags[0].Severity);
@@ -347,7 +348,7 @@ public class AnalysisRuleTests
     public void SE001_DoesNotFire_OnExecWithLiteralString()
     {
         // Pure literal — no injection risk
-        var diags = Run(new SE001_SqlInjectionRisk(), "EXEC('SELECT 1')");
+        var diags = Run(new Se001SqlInjectionRisk(), "EXEC('SELECT 1')");
         Assert.Empty(diags);
     }
 
@@ -380,7 +381,7 @@ public class AnalysisRuleTests
             Suppressions = SuppressionMap.Empty
         };
 
-        var diags = new PE003_MissingWhereOnDeleteUpdate().Analyze(ctx).ToList();
+        var diags = new Pe003MissingWhereOnDeleteUpdate().Analyze(ctx).ToList();
         Assert.Single(diags);
         Assert.Equal(DiagnosticSeverity.Warning, diags[0].Severity);
     }
@@ -392,7 +393,7 @@ public class AnalysisRuleTests
     [Fact]
     public void EX006_FiresOnAlwaysTrueCondition()
     {
-        var diags = Run(new EX006_AlwaysTrueCondition(), "SELECT 1 WHERE 1 = 1");
+        var diags = Run(new Ex006AlwaysTrueCondition(), "SELECT 1 WHERE 1 = 1");
         Assert.Single(diags);
         Assert.Equal("EX006", diags[0].RuleId);
     }
@@ -400,6 +401,6 @@ public class AnalysisRuleTests
     [Fact]
     public void EX006_DoesNotFire_OnRealPredicate()
     {
-        Assert.Empty(Run(new EX006_AlwaysTrueCondition(), "SELECT 1 WHERE Id = 1"));
+        Assert.Empty(Run(new Ex006AlwaysTrueCondition(), "SELECT 1 WHERE Id = 1"));
     }
 }

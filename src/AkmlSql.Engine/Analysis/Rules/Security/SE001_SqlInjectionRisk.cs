@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Security;
 
 /// <summary>SE001 — Dynamic SQL executed via EXEC() contains string concatenation with a variable or column — potential SQL injection.</summary>
-public sealed class SE001_SqlInjectionRisk : IAnalysisRule
+public sealed class Se001SqlInjectionRisk : IAnalysisRule
 {
     public string RuleId => "SE001";
     public string Category => "Security";
@@ -50,15 +49,17 @@ public sealed class SE001_SqlInjectionRisk : IAnalysisRule
             }
         }
 
-        private static bool ContainsVariableRef(ScalarExpression expr) =>
-            expr switch
+        private static bool ContainsVariableRef(ScalarExpression expr)
+        {
+            return expr switch
             {
-                VariableReference           => true,
-                ColumnReferenceExpression   => true,
-                BinaryExpression be         => ContainsVariableRef(be.FirstExpression)
-                                            || ContainsVariableRef(be.SecondExpression),
-                ParenthesisExpression pe    => ContainsVariableRef(pe.Expression),
-                _                           => false
+                VariableReference => true,
+                ColumnReferenceExpression => true,
+                BinaryExpression be => ContainsVariableRef(be.FirstExpression)
+                                       || ContainsVariableRef(be.SecondExpression),
+                ParenthesisExpression pe => ContainsVariableRef(pe.Expression),
+                _ => false
             };
+        }
     }
 }

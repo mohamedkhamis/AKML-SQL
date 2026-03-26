@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Security;
 
 /// <summary>SE008 — xp_cmdshell allows execution of OS commands from SQL Server — critical security risk.</summary>
-public sealed class SE008_XpCmdshell : IAnalysisRule
+public sealed class Se008XpCmdshell : IAnalysisRule
 {
     public string RuleId => "SE008";
     public string Category => "Security";
@@ -35,7 +34,7 @@ public sealed class SE008_XpCmdshell : IAnalysisRule
             if (name == null) return;
 
             var baseName = name.BaseIdentifier?.Value;
-            if (!string.Equals(baseName, "xp_cmdshell", System.StringComparison.OrdinalIgnoreCase)) return;
+            if (!string.Equals(baseName, "xp_cmdshell", StringComparison.OrdinalIgnoreCase)) return;
 
             Diagnostics.Add(new AnalysisDiagnostic
             {

@@ -29,15 +29,9 @@ namespace AkmlSql.Shell.Shared.Editor
     /// T067: Bridges quick info requests to PipeRpcClient for QuickInfoRequest/QuickInfoResponse.
     /// Currently a skeleton with TODO for actual IPC calls.
     /// </summary>
-    internal class QuickInfoSource : IQuickInfoSource
+    internal class QuickInfoSource(ITextBuffer buffer) : IQuickInfoSource
     {
-        private readonly ITextBuffer _buffer;
         private bool _disposed;
-
-        public QuickInfoSource(ITextBuffer buffer)
-        {
-            _buffer = buffer;
-        }
 
         public void AugmentQuickInfoSession(IQuickInfoSession session, IList<object> quickInfoContent, out ITrackingSpan applicableToSpan)
         {
@@ -50,14 +44,14 @@ namespace AkmlSql.Shell.Shared.Editor
 
             try
             {
-                var point = session.GetTriggerPoint(_buffer.CurrentSnapshot);
+                var point = session.GetTriggerPoint(buffer.CurrentSnapshot);
                 if (point == null)
                 {
                     return;
                 }
 
                 var position = point.Value.Position;
-                var snapshot = _buffer.CurrentSnapshot;
+                var snapshot = buffer.CurrentSnapshot;
 
                 // Find the word under the cursor
                 int start = position;

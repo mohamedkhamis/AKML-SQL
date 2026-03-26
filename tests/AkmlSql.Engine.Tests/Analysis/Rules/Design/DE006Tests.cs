@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.Design;
 
-public sealed class DE006Tests
+public sealed class De006Tests
 {
     [Fact]
     public void SqlVariantColumn_Fires()

@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.Naming;
 
-public sealed class NM001Tests
+public sealed class Nm001Tests
 {
     [Fact]
     public void ReservedWordAsColumnName_Fires()

@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Security;
 
 /// <summary>SE010 — Connection string literal that does not include Encrypt=True transmits data in cleartext.</summary>
-public sealed class SE010_UnencryptedConnectionString : IAnalysisRule
+public sealed class Se010UnencryptedConnectionString : IAnalysisRule
 {
     public string RuleId => "SE010";
     public string Category => "Security";
@@ -29,15 +28,15 @@ public sealed class SE010_UnencryptedConnectionString : IAnalysisRule
             if (string.IsNullOrEmpty(value)) return;
 
             // Check if the literal looks like a connection string
-            var hasServerKey  = value.IndexOf("Server=",      System.StringComparison.OrdinalIgnoreCase) >= 0;
-            var hasDataSource = value.IndexOf("Data Source=", System.StringComparison.OrdinalIgnoreCase) >= 0;
-            var hasProvider   = value.IndexOf("Provider=",    System.StringComparison.OrdinalIgnoreCase) >= 0;
+            var hasServerKey  = value.IndexOf("Server=",      StringComparison.OrdinalIgnoreCase) >= 0;
+            var hasDataSource = value.IndexOf("Data Source=", StringComparison.OrdinalIgnoreCase) >= 0;
+            var hasProvider   = value.IndexOf("Provider=",    StringComparison.OrdinalIgnoreCase) >= 0;
 
             if (!hasServerKey && !hasDataSource && !hasProvider) return;
 
             // Check whether encryption is already enabled
-            var hasEncryptTrue = value.IndexOf("Encrypt=True", System.StringComparison.OrdinalIgnoreCase) >= 0;
-            var hasEncryptYes  = value.IndexOf("Encrypt=yes",  System.StringComparison.OrdinalIgnoreCase) >= 0;
+            var hasEncryptTrue = value.IndexOf("Encrypt=True", StringComparison.OrdinalIgnoreCase) >= 0;
+            var hasEncryptYes  = value.IndexOf("Encrypt=yes",  StringComparison.OrdinalIgnoreCase) >= 0;
 
             if (hasEncryptTrue || hasEncryptYes) return;
 

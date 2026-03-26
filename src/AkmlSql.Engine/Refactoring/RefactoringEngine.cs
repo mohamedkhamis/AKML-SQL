@@ -1,7 +1,3 @@
-using System;
-using System.Threading;
-using System.Threading.Tasks;
-using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Engine.Parser;
 using AkmlSql.Engine.Refactoring.Operations.Heavyweight;
@@ -16,17 +12,8 @@ namespace AkmlSql.Engine.Refactoring;
 /// Dispatches preview and apply requests to the appropriate operation handler
 /// based on <see cref="RefactorOperationType"/>.
 /// </summary>
-public class RefactoringEngine
+public class RefactoringEngine(TsqlParserService parser, SchemaCacheManager schemaCacheManager)
 {
-    private readonly TsqlParserService _parser;
-    private readonly SchemaCacheManager _schemaCacheManager;
-
-    public RefactoringEngine(TsqlParserService parser, SchemaCacheManager schemaCacheManager)
-    {
-        _parser = parser;
-        _schemaCacheManager = schemaCacheManager;
-    }
-
     public async Task<RefactorPreviewResponse> PreviewAsync(
         RefactorPreviewRequest request,
         SessionManager sessionManager,
@@ -107,12 +94,12 @@ public class RefactoringEngine
     {
         var session = sessionManager.GetSession(request.SessionId);
         var cache = session != null
-            ? _schemaCacheManager.GetCache(request.SessionId, session.DatabaseName)
+            ? schemaCacheManager.GetCache(request.SessionId, session.DatabaseName)
             : null;
 
-        var script = _parser.Parse(request.DocumentText, out _) ?? new Microsoft.SqlServer.TransactSql.ScriptDom.TSqlScript();
-        var tokens = _parser.GetTokenStream(request.DocumentText);
-        var settings = AkmlSql.Core.Config.ConfigManager.Load().Refactoring;
+        var script = parser.Parse(request.DocumentText, out _) ?? new Microsoft.SqlServer.TransactSql.ScriptDom.TSqlScript();
+        var tokens = parser.GetTokenStream(request.DocumentText);
+        var settings = Core.Config.ConfigManager.Load().Refactoring;
 
         return new RefactoringContext
         {

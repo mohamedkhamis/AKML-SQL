@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.BestPractices;
 
 /// <summary>BP013 — Dynamic SQL built by string concatenation can enable SQL injection; use sp_executesql with parameters.</summary>
-public sealed class BP013_NonParameterizedDynamicSql : IAnalysisRule
+public sealed class Bp013NonParameterizedDynamicSql : IAnalysisRule
 {
     public string RuleId => "BP013";
     public string Category => "BestPractices";
@@ -50,26 +49,30 @@ public sealed class BP013_NonParameterizedDynamicSql : IAnalysisRule
             }
         }
 
-        private static bool ContainsBinaryWithVariable(ScalarExpression expr) =>
-            expr switch
+        private static bool ContainsBinaryWithVariable(ScalarExpression expr)
+        {
+            return expr switch
             {
                 BinaryExpression be => ContainsVariableRef(be.FirstExpression)
-                                    || ContainsVariableRef(be.SecondExpression)
-                                    || ContainsBinaryWithVariable(be.FirstExpression)
-                                    || ContainsBinaryWithVariable(be.SecondExpression),
+                                       || ContainsVariableRef(be.SecondExpression)
+                                       || ContainsBinaryWithVariable(be.FirstExpression)
+                                       || ContainsBinaryWithVariable(be.SecondExpression),
                 ParenthesisExpression pe => ContainsBinaryWithVariable(pe.Expression),
-                _                        => false
+                _ => false
             };
+        }
 
-        private static bool ContainsVariableRef(ScalarExpression expr) =>
-            expr switch
+        private static bool ContainsVariableRef(ScalarExpression expr)
+        {
+            return expr switch
             {
-                VariableReference           => true,
-                ColumnReferenceExpression   => true,
-                BinaryExpression be         => ContainsVariableRef(be.FirstExpression)
-                                            || ContainsVariableRef(be.SecondExpression),
-                ParenthesisExpression pe    => ContainsVariableRef(pe.Expression),
-                _                           => false
+                VariableReference => true,
+                ColumnReferenceExpression => true,
+                BinaryExpression be => ContainsVariableRef(be.FirstExpression)
+                                       || ContainsVariableRef(be.SecondExpression),
+                ParenthesisExpression pe => ContainsVariableRef(pe.Expression),
+                _ => false
             };
+        }
     }
 }

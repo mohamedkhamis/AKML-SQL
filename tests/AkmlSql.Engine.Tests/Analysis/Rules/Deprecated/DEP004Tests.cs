@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.Deprecated;
 
-public sealed class DEP004Tests
+public sealed class Dep004Tests
 {
     /// <summary>
     /// DEP004 scans the raw token stream for "*=" or "=*" tokens. However, TSql160 parser

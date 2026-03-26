@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.Deprecated;
 
-public sealed class DEP007Tests
+public sealed class Dep007Tests
 {
     /// <summary>
     /// DEP007 scans the raw token stream for "GROUP BY ALL" regardless of whether

@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.BestPractices;
 
 /// <summary>BP004 — Using = NULL or &lt;&gt; NULL always returns UNKNOWN; use IS NULL / IS NOT NULL instead.</summary>
-public sealed class BP004_NullComparison : IAnalysisRule
+public sealed class Bp004NullComparison : IAnalysisRule
 {
     public string RuleId => "BP004";
     public string Category => "BestPractices";

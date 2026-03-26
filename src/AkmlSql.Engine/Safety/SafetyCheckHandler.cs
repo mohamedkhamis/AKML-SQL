@@ -1,4 +1,3 @@
-#nullable enable
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Core.Models.Safety;
@@ -16,14 +15,9 @@ namespace AkmlSql.Engine.Safety;
 /// When the target server is flagged as production, additional production-level
 /// warnings are emitted for any DML/DDL statements.
 /// </summary>
-public class SafetyCheckHandler
+public class SafetyCheckHandler(TsqlParserService parserService)
 {
-    private readonly TsqlParserService _parserService;
-
-    public SafetyCheckHandler(TsqlParserService parserService)
-    {
-        _parserService = parserService ?? throw new ArgumentNullException(nameof(parserService));
-    }
+    private readonly TsqlParserService _parserService = parserService ?? throw new ArgumentNullException(nameof(parserService));
 
     /// <summary>
     /// Analyzes SQL text for execution safety concerns and returns warnings.

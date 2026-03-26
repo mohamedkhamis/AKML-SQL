@@ -998,18 +998,11 @@ ORDER BY UnitPrice DESC;";
         // Nested types
         // -------------------------------------------------------------------
 
-        private sealed class UndoEntry
+        private sealed class UndoEntry(string key, object oldValue, object newValue)
         {
-            public string Key { get; }
-            public object OldValue { get; }
-            public object NewValue { get; }
-
-            public UndoEntry(string key, object oldValue, object newValue)
-            {
-                Key = key;
-                OldValue = oldValue;
-                NewValue = newValue;
-            }
+            public string Key { get; } = key;
+            public object OldValue { get; } = oldValue;
+            public object NewValue { get; } = newValue;
         }
     }
 
@@ -1024,14 +1017,20 @@ ORDER BY UnitPrice DESC;";
         Numeric
     }
 
-    internal sealed class OptionDescriptor
+    internal sealed class OptionDescriptor(
+        string key,
+        string displayName,
+        OptionKind kind,
+        string[] choices,
+        int min,
+        int max)
     {
-        public string Key { get; }
-        public string DisplayName { get; }
-        public OptionKind Kind { get; }
-        public string[] Choices { get; }
-        public int Min { get; }
-        public int Max { get; }
+        public string Key { get; } = key;
+        public string DisplayName { get; } = displayName;
+        public OptionKind Kind { get; } = kind;
+        public string[] Choices { get; } = choices ?? [];
+        public int Min { get; } = min;
+        public int Max { get; } = max;
 
         public string Category
         {
@@ -1040,16 +1039,6 @@ ORDER BY UnitPrice DESC;";
                 var dot = Key.IndexOf('.');
                 return dot >= 0 ? Key.Substring(0, dot) : "";
             }
-        }
-
-        public OptionDescriptor(string key, string displayName, OptionKind kind, string[] choices, int min, int max)
-        {
-            Key = key;
-            DisplayName = displayName;
-            Kind = kind;
-            Choices = choices ?? [];
-            Min = min;
-            Max = max;
         }
     }
 }

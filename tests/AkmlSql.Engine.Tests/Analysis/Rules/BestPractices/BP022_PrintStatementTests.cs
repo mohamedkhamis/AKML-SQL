@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.BestPractices;
 
-public sealed class BP022_PrintStatementTests
+public sealed class Bp022PrintStatementTests
 {
     [Fact]
     public void Fires_OnPrint()

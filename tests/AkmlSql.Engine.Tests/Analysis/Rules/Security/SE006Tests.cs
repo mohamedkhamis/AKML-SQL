@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.Security;
 
-public sealed class SE006Tests
+public sealed class Se006Tests
 {
     [Fact]
     public void HashbytesWithMd5_Fires()

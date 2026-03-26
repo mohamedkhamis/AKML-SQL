@@ -8,8 +8,9 @@ public class SessionManagerTests
 {
     private static ConnectionInfo MakeConnection(string sessionId = "s1",
                                                   string db = "TestDb",
-                                                  string connStr = "Server=.;Database=TestDb;") =>
-        new()
+                                                  string connStr = "Server=.;Database=TestDb;")
+    {
+        return new ConnectionInfo
         {
             SessionId = sessionId,
             ConnectionString = connStr,
@@ -17,6 +18,7 @@ public class SessionManagerTests
             ServerVersion = 16,
             EngineEdition = 3
         };
+    }
 
     // ── UpdateSession / GetSession ────────────────────────────────────────────
 

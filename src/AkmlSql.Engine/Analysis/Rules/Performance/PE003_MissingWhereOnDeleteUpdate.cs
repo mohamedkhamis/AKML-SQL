@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Performance;
 
 /// <summary>PE003 — DELETE or UPDATE without a WHERE clause affects all rows.</summary>
-public sealed class PE003_MissingWhereOnDeleteUpdate : IAnalysisRule
+public sealed class Pe003MissingWhereOnDeleteUpdate : IAnalysisRule
 {
     public string RuleId => "PE003";
     public string Category => "Performance";
@@ -37,18 +36,20 @@ public sealed class PE003_MissingWhereOnDeleteUpdate : IAnalysisRule
                 Emit(node, "UPDATE statement has no WHERE clause — all rows will be updated");
         }
 
-        private void Emit(TSqlStatement node, string msg) =>
+        private void Emit(TSqlStatement node, string msg)
+        {
             Diagnostics.Add(new AnalysisDiagnostic
             {
-                RuleId       = "PE003",
+                RuleId = "PE003",
                 CategoryCode = "PE",
-                Severity     = ctx.Settings.GetSeverity("PE003", DiagnosticSeverity.Error),
-                Message      = msg,
-                StartOffset  = node.StartOffset,
-                EndOffset    = node.StartOffset + node.FragmentLength,
-                Line         = node.StartLine,
-                Column       = node.StartColumn,
-                FixActions   = []
+                Severity = ctx.Settings.GetSeverity("PE003", DiagnosticSeverity.Error),
+                Message = msg,
+                StartOffset = node.StartOffset,
+                EndOffset = node.StartOffset + node.FragmentLength,
+                Line = node.StartLine,
+                Column = node.StartColumn,
+                FixActions = []
             });
+        }
     }
 }

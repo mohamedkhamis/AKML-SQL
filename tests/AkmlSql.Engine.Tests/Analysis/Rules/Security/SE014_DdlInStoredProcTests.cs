@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.Security;
 
-public sealed class SE014_DdlInStoredProcTests
+public sealed class Se014DdlInStoredProcTests
 {
     [Fact]
     public void Fires_OnCreateTableInsideProc()

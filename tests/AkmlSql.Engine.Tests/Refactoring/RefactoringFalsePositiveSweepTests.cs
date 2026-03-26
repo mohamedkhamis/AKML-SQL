@@ -1,11 +1,7 @@
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Reflection;
 using AkmlSql.Engine.Parser;
 using AkmlSql.Engine.Refactoring.Operations.Lightweight;
 using AkmlSql.Engine.Tests.Refactoring.Operations.Lightweight;
-using Microsoft.SqlServer.TransactSql.ScriptDom;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Refactoring;

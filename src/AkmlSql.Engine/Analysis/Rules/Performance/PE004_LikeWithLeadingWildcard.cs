@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Performance;
 
 /// <summary>PE004 — LIKE pattern with a leading wildcard prevents index seeks.</summary>
-public sealed class PE004_LikeWithLeadingWildcard : IAnalysisRule
+public sealed class Pe004LikeWithLeadingWildcard : IAnalysisRule
 {
     public string RuleId => "PE004";
     public string Category => "Performance";

@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.Design;
 
-public sealed class DE007Tests
+public sealed class De007Tests
 {
     [Fact]
     public void IdentityOnDecimal_Fires()

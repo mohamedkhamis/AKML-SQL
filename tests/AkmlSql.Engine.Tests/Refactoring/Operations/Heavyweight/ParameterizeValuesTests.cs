@@ -1,4 +1,3 @@
-using System.Linq;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Engine.Refactoring.Operations.Heavyweight;
 using AkmlSql.Engine.Tests.Refactoring.Operations.Lightweight;
@@ -14,12 +13,14 @@ public sealed class ParameterizeValuesTests
     private static ParameterizeValuesOperation Op => new();
 
     private static RefactorPreviewRequest MakeRequest()
-        => new() { OperationType = (int)RefactorOperationType.ParameterizeValues };
+    {
+        return new RefactorPreviewRequest { OperationType = (int)RefactorOperationType.ParameterizeValues };
+    }
 
     // ─── Integer literal ────────────────────────────────────────────────────
 
     [Fact]
-    public async System.Threading.Tasks.Task ParameterizeValues_IntegerLiteral_GeneratesDeclaration()
+    public async Task ParameterizeValues_IntegerLiteral_GeneratesDeclaration()
     {
         const string sql = "SELECT * FROM dbo.Orders WHERE CustomerId = 42";
 
@@ -39,7 +40,7 @@ public sealed class ParameterizeValuesTests
     // ─── String literal → nvarchar ──────────────────────────────────────────
 
     [Fact]
-    public async System.Threading.Tasks.Task ParameterizeValues_StringLiteral_GeneratesNvarchar()
+    public async Task ParameterizeValues_StringLiteral_GeneratesNvarchar()
     {
         const string sql = "SELECT * FROM dbo.Customers WHERE Name = 'Alice'";
 
@@ -59,7 +60,7 @@ public sealed class ParameterizeValuesTests
     // ─── No literals → empty changes ────────────────────────────────────────
 
     [Fact]
-    public async System.Threading.Tasks.Task ParameterizeValues_NoLiterals_EmptyChanges()
+    public async Task ParameterizeValues_NoLiterals_EmptyChanges()
     {
         // No WHERE / ON / HAVING clause literals
         const string sql = "SELECT OrderId, CustomerId FROM dbo.Orders";
@@ -74,7 +75,7 @@ public sealed class ParameterizeValuesTests
     // ─── Date string literal → date ─────────────────────────────────────────
 
     [Fact]
-    public async System.Threading.Tasks.Task ParameterizeValues_DateStringLiteral_GeneratesDateType()
+    public async Task ParameterizeValues_DateStringLiteral_GeneratesDateType()
     {
         const string sql = "SELECT * FROM dbo.Orders WHERE OrderDate = '2024-01-15'";
 
@@ -92,7 +93,7 @@ public sealed class ParameterizeValuesTests
     // ─── Replacement change replaces literal with variable ──────────────────
 
     [Fact]
-    public async System.Threading.Tasks.Task ParameterizeValues_LiteralChange_ReplacesWithVariableName()
+    public async Task ParameterizeValues_LiteralChange_ReplacesWithVariableName()
     {
         const string sql = "SELECT * FROM dbo.Orders WHERE CustomerId = 42";
 

@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Performance;
 
 /// <summary>PE013 — Function call on a column reference in WHERE clause prevents index seek.</summary>
-public sealed class PE013_ScalarFunctionInWhere : IAnalysisRule
+public sealed class Pe013ScalarFunctionInWhere : IAnalysisRule
 {
     public string RuleId => "PE013";
     public string Category => "Performance";
@@ -20,8 +19,8 @@ public sealed class PE013_ScalarFunctionInWhere : IAnalysisRule
     }
 
     // Date part keywords that ScriptDom represents as ColumnReferenceExpression
-    private static readonly System.Collections.Generic.HashSet<string> DatePartKeywords =
-        new(System.StringComparer.OrdinalIgnoreCase)
+    private static readonly HashSet<string> DatePartKeywords =
+        new(StringComparer.OrdinalIgnoreCase)
         {
             "YEAR", "QUARTER", "MONTH", "WEEK", "WEEKDAY", "DAY", "DAYOFYEAR",
             "HOUR", "MINUTE", "SECOND", "MILLISECOND", "MICROSECOND", "NANOSECOND",

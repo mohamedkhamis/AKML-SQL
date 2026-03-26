@@ -1,16 +1,13 @@
 #nullable enable
 using System;
 using System.ComponentModel.Design;
-using System.Threading.Tasks;
 using EnvDTE;
-using Microsoft.VisualStudio;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.TextManager.Interop;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Shell.Shared.Ipc;
 using Serilog;
-using Constants = AkmlSql.Core.Constants;
 
 namespace AkmlSql.Shell.Shared.Commands
 {

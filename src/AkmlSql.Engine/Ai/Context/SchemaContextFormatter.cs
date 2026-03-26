@@ -244,35 +244,44 @@ public static class SchemaContextFormatter
     /// <summary>
     /// Formats a row count into a compact human-readable string (e.g. 1.2K, 3.5M, 1.1B).
     /// </summary>
-    private static string FormatRowCount(long count) => count switch
+    private static string FormatRowCount(long count)
     {
-        >= 1_000_000_000 => $"{count / 1_000_000_000.0:0.#}B",
-        >= 1_000_000 => $"{count / 1_000_000.0:0.#}M",
-        >= 1_000 => $"{count / 1_000.0:0.#}K",
-        _ => count.ToString()
-    };
+        return count switch
+        {
+            >= 1_000_000_000 => $"{count / 1_000_000_000.0:0.#}B",
+            >= 1_000_000 => $"{count / 1_000_000.0:0.#}M",
+            >= 1_000 => $"{count / 1_000.0:0.#}K",
+            _ => count.ToString()
+        };
+    }
 
     /// <summary>Returns a sort order for object types to group Tables first, then Views, etc.</summary>
-    private static int TypeSortOrder(string type) => type switch
+    private static int TypeSortOrder(string type)
     {
-        "Table" => 0,
-        "View" => 1,
-        "Procedure" => 2,
-        "Function" => 3,
-        "Synonym" => 4,
-        "Sequence" => 5,
-        _ => 9
-    };
+        return type switch
+        {
+            "Table" => 0,
+            "View" => 1,
+            "Procedure" => 2,
+            "Function" => 3,
+            "Synonym" => 4,
+            "Sequence" => 5,
+            _ => 9
+        };
+    }
 
     /// <summary>Returns the plural form of an object type string.</summary>
-    private static string PluralizeType(string type) => type switch
+    private static string PluralizeType(string type)
     {
-        "Table" => "Tables",
-        "View" => "Views",
-        "Procedure" => "Procedures",
-        "Function" => "Functions",
-        "Synonym" => "Synonyms",
-        "Sequence" => "Sequences",
-        _ => type + "s"
-    };
+        return type switch
+        {
+            "Table" => "Tables",
+            "View" => "Views",
+            "Procedure" => "Procedures",
+            "Function" => "Functions",
+            "Synonym" => "Synonyms",
+            "Sequence" => "Sequences",
+            _ => type + "s"
+        };
+    }
 }

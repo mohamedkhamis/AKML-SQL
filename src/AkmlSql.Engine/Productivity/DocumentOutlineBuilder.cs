@@ -1,4 +1,3 @@
-#nullable enable
 using System.Text.RegularExpressions;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Engine.Parser;
@@ -11,14 +10,9 @@ namespace AkmlSql.Engine.Productivity;
 /// Builds a hierarchical document outline tree from SQL text by combining AST analysis
 /// with comment-based region markers (--region / --endregion).
 /// </summary>
-public partial class DocumentOutlineBuilder
+public partial class DocumentOutlineBuilder(TsqlParserService parserService)
 {
-    private readonly TsqlParserService _parserService;
-
-    public DocumentOutlineBuilder(TsqlParserService parserService)
-    {
-        _parserService = parserService ?? throw new ArgumentNullException(nameof(parserService));
-    }
+    private readonly TsqlParserService _parserService = parserService ?? throw new ArgumentNullException(nameof(parserService));
 
     /// <summary>
     /// Builds the document outline from the given SQL text.

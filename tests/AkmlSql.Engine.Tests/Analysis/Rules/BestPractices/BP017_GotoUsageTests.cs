@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.BestPractices;
 
-public sealed class BP017_GotoUsageTests
+public sealed class Bp017GotoUsageTests
 {
     [Fact]
     public void Fires_OnGoto()

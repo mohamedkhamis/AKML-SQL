@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Security;
 
 /// <summary>SE009 — OPENROWSET allows ad-hoc distributed queries which may bypass security controls.</summary>
-public sealed class SE009_OpenRowset : IAnalysisRule
+public sealed class Se009OpenRowset : IAnalysisRule
 {
     public string RuleId => "SE009";
     public string Category => "Security";

@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.BestPractices;
 
 /// <summary>BP005 — EXEC(string) can enable SQL injection; use sp_executesql with parameterized queries instead.</summary>
-public sealed class BP005_ExecString : IAnalysisRule
+public sealed class Bp005ExecString : IAnalysisRule
 {
     public string RuleId => "BP005";
     public string Category => "BestPractices";

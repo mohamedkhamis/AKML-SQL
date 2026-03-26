@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Design;
 
 /// <summary>DE006 — SQL_VARIANT usage reduces type safety and complicates queries; use a specific data type instead.</summary>
-public sealed class DE006_SqlVariantUsage : IAnalysisRule
+public sealed class De006SqlVariantUsage : IAnalysisRule
 {
     public string RuleId => "DE006";
     public string Category => "Design";
@@ -23,9 +22,20 @@ public sealed class DE006_SqlVariantUsage : IAnalysisRule
     {
         public List<AnalysisDiagnostic> Diagnostics { get; } = [];
 
-        public override void Visit(ColumnDefinition node)      => CheckDataType(node.DataType, node);
-        public override void Visit(DeclareVariableElement node) => CheckDataType(node.DataType, node);
-        public override void Visit(ProcedureParameter node)    => CheckDataType(node.DataType, node);
+        public override void Visit(ColumnDefinition node)
+        {
+            CheckDataType(node.DataType, node);
+        }
+
+        public override void Visit(DeclareVariableElement node)
+        {
+            CheckDataType(node.DataType, node);
+        }
+
+        public override void Visit(ProcedureParameter node)
+        {
+            CheckDataType(node.DataType, node);
+        }
 
         private void CheckDataType(DataTypeReference? dataType, TSqlFragment node)
         {

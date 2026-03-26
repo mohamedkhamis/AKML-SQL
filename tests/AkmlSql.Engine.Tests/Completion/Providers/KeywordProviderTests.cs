@@ -14,14 +14,17 @@ public class KeywordProviderTests
         bool inComment = false,
         bool inString = false,
         bool precedingDot = false,
-        ClauseType clause = ClauseType.Unknown) => new()
+        ClauseType clause = ClauseType.Unknown)
     {
-        PartialText = partialText,
-        InComment = inComment,
-        InString = inString,
-        PrecedingDot = precedingDot,
-        ClauseType = clause
-    };
+        return new CursorContext
+        {
+            PartialText = partialText,
+            InComment = inComment,
+            InString = inString,
+            PrecedingDot = precedingDot,
+            ClauseType = clause
+        };
+    }
 
     // ── CanHandle ─────────────────────────────────────────────────────────
 

@@ -1,14 +1,7 @@
-using System;
-using System.IO;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Engine.Parser;
-using AkmlSql.Engine.Refactoring;
 using AkmlSql.Engine.Refactoring.Operations.Heavyweight;
 using AkmlSql.Engine.Tests.Refactoring.Operations.Lightweight;
-using Microsoft.SqlServer.TransactSql.ScriptDom;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Refactoring.Operations.Heavyweight;

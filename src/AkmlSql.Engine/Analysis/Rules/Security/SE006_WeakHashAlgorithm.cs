@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Security;
 
 /// <summary>SE006 — HASHBYTES called with a cryptographically weak algorithm (MD5, SHA, SHA1).</summary>
-public sealed class SE006_WeakHashAlgorithm : IAnalysisRule
+public sealed class Se006WeakHashAlgorithm : IAnalysisRule
 {
     public string RuleId => "SE006";
     public string Category => "Security";
@@ -27,7 +26,7 @@ public sealed class SE006_WeakHashAlgorithm : IAnalysisRule
 
         public override void Visit(FunctionCall node)
         {
-            if (!string.Equals(node.FunctionName?.Value, "HASHBYTES", System.StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(node.FunctionName?.Value, "HASHBYTES", StringComparison.OrdinalIgnoreCase))
                 return;
 
             if (node.Parameters == null || node.Parameters.Count == 0) return;
@@ -39,7 +38,7 @@ public sealed class SE006_WeakHashAlgorithm : IAnalysisRule
             bool isWeak = false;
             foreach (var weak in WeakAlgorithms)
             {
-                if (string.Equals(algo, weak, System.StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(algo, weak, StringComparison.OrdinalIgnoreCase))
                 {
                     isWeak = true;
                     break;

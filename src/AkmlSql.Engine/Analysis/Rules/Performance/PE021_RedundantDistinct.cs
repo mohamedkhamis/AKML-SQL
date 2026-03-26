@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Performance;
 
 /// <summary>PE021 — DISTINCT is redundant when GROUP BY is present.</summary>
-public sealed class PE021_RedundantDistinct : IAnalysisRule
+public sealed class Pe021RedundantDistinct : IAnalysisRule
 {
     public string RuleId => "PE021";
     public string Category => "Performance";

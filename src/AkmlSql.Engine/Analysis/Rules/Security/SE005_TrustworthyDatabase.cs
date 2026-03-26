@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Security;
 
 /// <summary>SE005 — ALTER DATABASE ... SET TRUSTWORTHY ON enables a security risk.</summary>
-public sealed class SE005_TrustworthyDatabase : IAnalysisRule
+public sealed class Se005TrustworthyDatabase : IAnalysisRule
 {
     public string RuleId => "SE005";
     public string Category => "Security";
@@ -34,14 +33,14 @@ public sealed class SE005_TrustworthyDatabase : IAnalysisRule
 
             var stmtText = ctx.DocumentText.Substring(startOffset, length);
 
-            if (stmtText.IndexOf("TRUSTWORTHY", System.StringComparison.OrdinalIgnoreCase) < 0) return;
-            if (stmtText.IndexOf("ON", System.StringComparison.OrdinalIgnoreCase) < 0) return;
+            if (stmtText.IndexOf("TRUSTWORTHY", StringComparison.OrdinalIgnoreCase) < 0) return;
+            if (stmtText.IndexOf("ON", StringComparison.OrdinalIgnoreCase) < 0) return;
 
             // Make sure we see TRUSTWORTHY followed by ON (not TRUSTWORTHY OFF)
             // Simple heuristic: find TRUSTWORTHY position then check what follows
-            var tIdx = stmtText.IndexOf("TRUSTWORTHY", System.StringComparison.OrdinalIgnoreCase);
+            var tIdx = stmtText.IndexOf("TRUSTWORTHY", StringComparison.OrdinalIgnoreCase);
             var remainder = stmtText.Substring(tIdx + "TRUSTWORTHY".Length).TrimStart();
-            if (!remainder.StartsWith("ON", System.StringComparison.OrdinalIgnoreCase)) return;
+            if (!remainder.StartsWith("ON", StringComparison.OrdinalIgnoreCase)) return;
 
             Diagnostics.Add(new AnalysisDiagnostic
             {

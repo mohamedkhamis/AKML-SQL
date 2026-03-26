@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Performance;
 
 /// <summary>PE015 — IN list with more than 100 values can degrade query performance.</summary>
-public sealed class PE015_LargeInList : IAnalysisRule
+public sealed class Pe015LargeInList : IAnalysisRule
 {
     public string RuleId => "PE015";
     public string Category => "Performance";

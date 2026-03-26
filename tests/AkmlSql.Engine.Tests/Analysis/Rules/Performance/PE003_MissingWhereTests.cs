@@ -1,10 +1,9 @@
 using AkmlSql.Core.Models.Analysis;
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.Performance;
 
-public sealed class PE003_MissingWhereTests
+public sealed class Pe003MissingWhereTests
 {
     [Fact]
     public void FiresOnDeleteWithoutWhere()

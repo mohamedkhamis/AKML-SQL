@@ -27,15 +27,9 @@ namespace AkmlSql.Shell.Shared.Editor
     /// T063: Bridges signature help requests to PipeRpcClient for SignatureRequest/SignatureResponse.
     /// Currently a skeleton with TODOs for actual IPC calls.
     /// </summary>
-    internal class SignatureHelpSource : ISignatureHelpSource
+    internal class SignatureHelpSource(ITextBuffer buffer) : ISignatureHelpSource
     {
-        private readonly ITextBuffer _buffer;
         private bool _disposed;
-
-        public SignatureHelpSource(ITextBuffer buffer)
-        {
-            _buffer = buffer;
-        }
 
         public void AugmentSignatureHelpSession(ISignatureHelpSession session, IList<ISignature> signatures)
         {
@@ -46,7 +40,7 @@ namespace AkmlSql.Shell.Shared.Editor
 
             try
             {
-                var point = session.GetTriggerPoint(_buffer.CurrentSnapshot);
+                var point = session.GetTriggerPoint(buffer.CurrentSnapshot);
                 if (point == null)
                 {
                     return;

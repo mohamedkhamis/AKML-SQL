@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.Security;
 
-public sealed class SE002Tests
+public sealed class Se002Tests
 {
     [Fact]
     public void HardcodedPassword_Fires()

@@ -1,5 +1,3 @@
-using AkmlSql.Engine.Refactoring;
-
 namespace AkmlSql.Engine.Refactoring.Operations;
 
 /// <summary>

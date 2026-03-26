@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Execution;
 
 /// <summary>EX006 — Always-true or always-false conditions with two literal operands (e.g., 1=1 or 'a'='b').</summary>
-public sealed class EX006_AlwaysTrueCondition : IAnalysisRule
+public sealed class Ex006AlwaysTrueCondition : IAnalysisRule
 {
     public string RuleId => "EX006";
     public string Category => "Execution";
@@ -33,7 +32,7 @@ public sealed class EX006_AlwaysTrueCondition : IAnalysisRule
             if (leftValue == null || rightValue == null) return;
 
             // Only flag always-true (equal literals) — 1=1, 'a'='a'
-            if (!leftValue.Equals(rightValue, System.StringComparison.OrdinalIgnoreCase)) return;
+            if (!leftValue.Equals(rightValue, StringComparison.OrdinalIgnoreCase)) return;
 
             var conditionText = $"{leftValue}={rightValue}";
 
@@ -51,12 +50,14 @@ public sealed class EX006_AlwaysTrueCondition : IAnalysisRule
             });
         }
 
-        private static string? GetLiteralValue(ScalarExpression expr) =>
-            expr switch
+        private static string? GetLiteralValue(ScalarExpression expr)
+        {
+            return expr switch
             {
                 IntegerLiteral il => il.Value,
-                StringLiteral  sl => sl.Value,
-                _                 => null
+                StringLiteral sl => sl.Value,
+                _ => null
             };
+        }
     }
 }

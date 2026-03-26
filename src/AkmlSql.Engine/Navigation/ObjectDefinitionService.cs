@@ -1,4 +1,3 @@
-#nullable enable
 using System.Text;
 using AkmlSql.Engine.Schema;
 using AkmlSql.Engine.Schema.Models;

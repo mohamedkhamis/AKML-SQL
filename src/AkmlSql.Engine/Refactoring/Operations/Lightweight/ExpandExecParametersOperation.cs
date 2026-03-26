@@ -1,8 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Text;
-using AkmlSql.Engine.Refactoring.Operations;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Refactoring.Operations.Lightweight;
@@ -136,6 +132,9 @@ public class ExpandExecParametersOperation : ILightweightOperation
     private sealed class ExecuteStatementCollector : TSqlFragmentVisitor
     {
         public List<ExecuteStatement> Statements { get; } = [];
-        public override void Visit(ExecuteStatement node) => Statements.Add(node);
+        public override void Visit(ExecuteStatement node)
+        {
+            Statements.Add(node);
+        }
     }
 }

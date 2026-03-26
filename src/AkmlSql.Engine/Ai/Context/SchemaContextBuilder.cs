@@ -16,14 +16,9 @@ namespace AkmlSql.Engine.Ai.Context;
 ///   <item>Level 4: Add Description from extended properties</item>
 /// </list>
 /// </summary>
-public class SchemaContextBuilder
+public class SchemaContextBuilder(SchemaCacheManager schemaCacheManager)
 {
-    private readonly SchemaCacheManager _schemaCacheManager;
-
-    public SchemaContextBuilder(SchemaCacheManager schemaCacheManager)
-    {
-        _schemaCacheManager = schemaCacheManager ?? throw new ArgumentNullException(nameof(schemaCacheManager));
-    }
+    private readonly SchemaCacheManager _schemaCacheManager = schemaCacheManager ?? throw new ArgumentNullException(nameof(schemaCacheManager));
 
     /// <summary>
     /// Builds a <see cref="SchemaContext"/> for the given session, optionally filtering objects by prompt relevance.
@@ -386,18 +381,21 @@ public class SchemaContextBuilder
     /// <summary>
     /// Maps <see cref="DbObjectType"/> to a human-readable string for AI context.
     /// </summary>
-    private static string MapObjectType(DbObjectType type) => type switch
+    private static string MapObjectType(DbObjectType type)
     {
-        DbObjectType.Table => "Table",
-        DbObjectType.View => "View",
-        DbObjectType.Procedure => "Procedure",
-        DbObjectType.ScalarFunction => "Function",
-        DbObjectType.TableFunction => "Function",
-        DbObjectType.InlineFunction => "Function",
-        DbObjectType.Synonym => "Synonym",
-        DbObjectType.Sequence => "Sequence",
-        _ => "Unknown"
-    };
+        return type switch
+        {
+            DbObjectType.Table => "Table",
+            DbObjectType.View => "View",
+            DbObjectType.Procedure => "Procedure",
+            DbObjectType.ScalarFunction => "Function",
+            DbObjectType.TableFunction => "Function",
+            DbObjectType.InlineFunction => "Function",
+            DbObjectType.Synonym => "Synonym",
+            DbObjectType.Sequence => "Sequence",
+            _ => "Unknown"
+        };
+    }
 
     /// <summary>
     /// Builds the list of <see cref="FkSummary"/> for FK relationships between included objects.

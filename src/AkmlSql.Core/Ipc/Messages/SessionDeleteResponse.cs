@@ -1,4 +1,3 @@
-#nullable enable
 using MessagePack;
 
 namespace AkmlSql.Core.Ipc.Messages

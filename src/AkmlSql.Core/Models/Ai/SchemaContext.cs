@@ -1,4 +1,3 @@
-#nullable enable
 using System.Collections.Generic;
 
 namespace AkmlSql.Core.Models.Ai
@@ -23,9 +22,11 @@ namespace AkmlSql.Core.Models.Ai
         public List<SchemaObjectSummary> Objects { get; set; } = new();
 
         /// <summary>Foreign key relationships between tables.</summary>
+        // ReSharper disable once UnusedMember.Global
         public List<FkSummary> ForeignKeys { get; set; } = new();
 
         /// <summary>Estimated token count of this context when serialized for an AI prompt.</summary>
+        // ReSharper disable once UnusedMember.Global
         public int EstimatedTokens { get; set; }
     }
 
@@ -44,6 +45,7 @@ namespace AkmlSql.Core.Models.Ai
         public string ReferencedTable { get; set; } = string.Empty;
 
         /// <summary>Column in the referenced table.</summary>
+        // ReSharper disable once UnusedMember.Global
         public string ReferencedColumn { get; set; } = string.Empty;
     }
 }

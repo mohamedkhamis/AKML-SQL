@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Performance;
 
 /// <summary>PE033 — NOLOCK/READUNCOMMITTED hints can cause dirty reads and phantom reads.</summary>
-public sealed class PE033_LockHintUsage : IAnalysisRule
+public sealed class Pe033LockHintUsage : IAnalysisRule
 {
     public string RuleId => "PE033";
     public string Category => "Performance";

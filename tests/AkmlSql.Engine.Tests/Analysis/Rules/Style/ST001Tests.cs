@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.Style;
 
-public sealed class ST001Tests
+public sealed class St001Tests
 {
     [Fact]
     public void LowercaseKeywords_Fires()

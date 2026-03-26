@@ -1,10 +1,9 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 
 namespace AkmlSql.Engine.Analysis.Rules.Security;
 
 /// <summary>SE012 — Blank password assignment — requires data flow analysis.</summary>
-public sealed class SE012_BlankPassword : IAnalysisRule
+public sealed class Se012BlankPassword : IAnalysisRule
 {
     public string RuleId => "SE012";
     public string Category => "Security";
@@ -16,5 +15,8 @@ public sealed class SE012_BlankPassword : IAnalysisRule
     // This cannot be done reliably at the AST level without data-flow or symbol-table analysis
     // (a bare empty string is a legitimate value in countless non-password contexts).
     // SE002_HardcodedPassword already covers non-empty literal passwords. Deferred.
-    public IEnumerable<AnalysisDiagnostic> Analyze(AnalysisContext ctx) => [];
+    public IEnumerable<AnalysisDiagnostic> Analyze(AnalysisContext ctx)
+    {
+        return [];
+    }
 }

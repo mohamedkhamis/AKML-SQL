@@ -1,7 +1,6 @@
 using Xunit;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Engine.Completion;
-using AkmlSql.Engine.Completion.Providers;
 using AkmlSql.Engine.Parser;
 using AkmlSql.Engine.Schema;
 
@@ -11,7 +10,10 @@ public class CompletionEngineTests
 {
     private readonly TsqlParserService _parserService = new();
 
-    private CompletionEngine CreateEngine() => new(_parserService);
+    private CompletionEngine CreateEngine()
+    {
+        return new CompletionEngine(_parserService);
+    }
 
     // ── GetCompletions — basic ────────────────────────────────────────────
 
@@ -151,7 +153,10 @@ public class CompletionEngineTests
     {
         public string Name => "Test";
 
-        public bool CanHandle(CursorContext context, DatabaseCache? cache) => true;
+        public bool CanHandle(CursorContext context, DatabaseCache? cache)
+        {
+            return true;
+        }
 
         public IEnumerable<CompletionItem> GetCompletions(CursorContext context, DatabaseCache? cache)
         {

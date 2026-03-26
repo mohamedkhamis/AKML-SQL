@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.Style;
 
-public sealed class ST019_OrderByColumnNumberTests
+public sealed class St019OrderByColumnNumberTests
 {
     [Fact]
     public void Fires_OnOrderByColumnNumber()

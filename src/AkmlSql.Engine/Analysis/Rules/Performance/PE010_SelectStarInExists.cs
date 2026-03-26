@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Performance;
 
 /// <summary>PE010 — Replace EXISTS (SELECT * ...) with EXISTS (SELECT 1 ...).</summary>
-public sealed class PE010_SelectStarInExists : IAnalysisRule
+public sealed class Pe010SelectStarInExists : IAnalysisRule
 {
     public string RuleId => "PE010";
     public string Category => "Performance";

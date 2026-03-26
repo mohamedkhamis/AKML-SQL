@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Performance;
 
 /// <summary>PE018 — Table variables lack statistics and may perform poorly with large datasets.</summary>
-public sealed class PE018_TableVariableLargeDataset : IAnalysisRule
+public sealed class Pe018TableVariableLargeDataset : IAnalysisRule
 {
     public string RuleId => "PE018";
     public string Category => "Performance";

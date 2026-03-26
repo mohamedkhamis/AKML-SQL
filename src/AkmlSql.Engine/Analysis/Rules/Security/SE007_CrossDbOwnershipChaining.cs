@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Security;
 
 /// <summary>SE007 — Cross-database object reference (three-part or four-part name) detected.</summary>
-public sealed class SE007_CrossDbOwnershipChaining : IAnalysisRule
+public sealed class Se007CrossDbOwnershipChaining : IAnalysisRule
 {
     public string RuleId => "SE007";
     public string Category => "Security";

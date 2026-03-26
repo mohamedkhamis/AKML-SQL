@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.BestPractices;
 
 /// <summary>BP014 — INSERT without explicit column list is fragile when table schema changes.</summary>
-public sealed class BP014_InsertWithoutColumnList : IAnalysisRule
+public sealed class Bp014InsertWithoutColumnList : IAnalysisRule
 {
     public string RuleId => "BP014";
     public string Category => "BestPractices";

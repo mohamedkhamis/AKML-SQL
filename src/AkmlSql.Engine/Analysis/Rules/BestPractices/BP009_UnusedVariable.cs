@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.BestPractices;
 
 /// <summary>BP009 — Variable is declared but never used; remove the declaration.</summary>
-public sealed class BP009_UnusedVariable : IAnalysisRule
+public sealed class Bp009UnusedVariable : IAnalysisRule
 {
     public string RuleId => "BP009";
     public string Category => "BestPractices";
@@ -68,7 +67,7 @@ public sealed class BP009_UnusedVariable : IAnalysisRule
             var pos = afterOffset;
             while (pos < text.Length)
             {
-                var idx = text.IndexOf(varName, pos, System.StringComparison.OrdinalIgnoreCase);
+                var idx = text.IndexOf(varName, pos, StringComparison.OrdinalIgnoreCase);
                 if (idx < 0) return false;
 
                 // Ensure this is not part of a longer identifier: the character after the variable name
@@ -83,7 +82,9 @@ public sealed class BP009_UnusedVariable : IAnalysisRule
             return false;
         }
 
-        private static bool IsIdentifierChar(char c) =>
-            char.IsLetterOrDigit(c) || c == '_';
+        private static bool IsIdentifierChar(char c)
+        {
+            return char.IsLetterOrDigit(c) || c == '_';
+        }
     }
 }

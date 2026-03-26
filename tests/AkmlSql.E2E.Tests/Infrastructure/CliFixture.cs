@@ -39,7 +39,10 @@ public sealed class CliFixture : IAsyncLifetime
             repoRoot:    root);
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public Task DisposeAsync()
+    {
+        return Task.CompletedTask;
+    }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 

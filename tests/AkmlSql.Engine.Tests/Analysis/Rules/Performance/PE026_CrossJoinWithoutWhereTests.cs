@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.Performance;
 
-public sealed class PE026_CrossJoinWithoutWhereTests
+public sealed class Pe026CrossJoinWithoutWhereTests
 {
     [Fact]
     public void Fires_OnCrossJoin()

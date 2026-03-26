@@ -1,12 +1,10 @@
-using System;
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Naming;
 
 /// <summary>NM001 — A T-SQL reserved word is used as an identifier without bracket escaping.</summary>
-public sealed class NM001_ReservedWordAsIdentifier : IAnalysisRule
+public sealed class Nm001ReservedWordAsIdentifier : IAnalysisRule
 {
     public string RuleId => "NM001";
     public string Category => "Naming";

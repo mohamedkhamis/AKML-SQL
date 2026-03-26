@@ -210,13 +210,16 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 NavigateToIssue?.Invoke(this, new NavigateEventArgs(file, issue.Line, issue.Column));
         }
 
-        private static string SeverityName(int sev) => sev switch
+        private static string SeverityName(int sev)
         {
-            >= 3 => "Error",
-            2    => "Warning",
-            1    => "Information",
-            _    => "Hint"
-        };
+            return sev switch
+            {
+                >= 3 => "Error",
+                2 => "Warning",
+                1 => "Information",
+                _ => "Hint"
+            };
+        }
 
         private static Label MakeChip(string text, Color back, Color fore)
         {
@@ -240,17 +243,10 @@ namespace AkmlSql.Shell.Shared.Dialogs
         internal static T Let<T>(this T value, Action<T> action) { action(value); return value; }
     }
 
-    internal sealed class NavigateEventArgs : EventArgs
+    internal sealed class NavigateEventArgs(string filePath, int line, int column) : EventArgs
     {
-        public string FilePath { get; }
-        public int    Line     { get; }
-        public int    Column   { get; }
-
-        public NavigateEventArgs(string filePath, int line, int column)
-        {
-            FilePath = filePath;
-            Line     = line;
-            Column   = column;
-        }
+        public string FilePath { get; } = filePath;
+        public int    Line     { get; } = line;
+        public int    Column   { get; } = column;
     }
 }

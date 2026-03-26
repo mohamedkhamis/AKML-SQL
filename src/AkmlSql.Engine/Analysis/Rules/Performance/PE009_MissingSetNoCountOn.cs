@@ -1,12 +1,10 @@
-using System.Collections.Generic;
-using System.Linq;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Performance;
 
 /// <summary>PE009 — Stored procedures should begin with SET NOCOUNT ON.</summary>
-public sealed class PE009_MissingSetNoCountOn : IAnalysisRule
+public sealed class Pe009MissingSetNoCountOn : IAnalysisRule
 {
     public string RuleId => "PE009";
     public string Category => "Performance";
@@ -24,8 +22,15 @@ public sealed class PE009_MissingSetNoCountOn : IAnalysisRule
     {
         public List<AnalysisDiagnostic> Diagnostics { get; } = [];
 
-        public override void Visit(CreateProcedureStatement node) => Check(node, node.StatementList);
-        public override void Visit(AlterProcedureStatement node)  => Check(node, node.StatementList);
+        public override void Visit(CreateProcedureStatement node)
+        {
+            Check(node, node.StatementList);
+        }
+
+        public override void Visit(AlterProcedureStatement node)
+        {
+            Check(node, node.StatementList);
+        }
 
         private void Check(TSqlStatement proc, StatementList? body)
         {

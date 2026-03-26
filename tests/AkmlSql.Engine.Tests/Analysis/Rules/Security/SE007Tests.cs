@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.Security;
 
-public sealed class SE007Tests
+public sealed class Se007Tests
 {
     [Fact]
     public void CrossDatabaseReference_Fires()

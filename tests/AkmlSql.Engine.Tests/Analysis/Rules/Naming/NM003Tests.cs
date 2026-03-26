@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.Naming;
 
-public sealed class NM003Tests
+public sealed class Nm003Tests
 {
     [Fact]
     public void TblPrefixedTable_Fires()

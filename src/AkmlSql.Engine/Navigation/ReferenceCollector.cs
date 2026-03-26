@@ -1,4 +1,3 @@
-#nullable enable
 using AkmlSql.Core.Ipc.Messages;
 using Microsoft.Data.SqlClient;
 using Serilog;

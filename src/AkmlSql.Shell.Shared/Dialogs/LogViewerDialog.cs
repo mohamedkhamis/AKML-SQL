@@ -194,7 +194,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 {
                     Clipboard.SetText(_rtDetail.Text);
                     _btnCopy.Text = "✓  Copied";
-                    var t = new System.Windows.Forms.Timer { Interval = 1500 };
+                    var t = new Timer { Interval = 1500 };
                     t.Tick += (__, ___) => { _btnCopy.Text = "⎘  Copy"; t.Stop(); t.Dispose(); };
                     t.Start();
                 }
@@ -415,8 +415,10 @@ namespace AkmlSql.Shell.Shared.Dialogs
             _btnNext.Enabled = _page < total - 1;
         }
 
-        private int TotalPages() =>
-            Math.Max(1, (int)Math.Ceiling((double)_filtered.Count / PageSize));
+        private int TotalPages()
+        {
+            return Math.Max(1, (int)Math.Ceiling((double)_filtered.Count / PageSize));
+        }
 
         // ─── Selection ────────────────────────────────────────────────────────
 
@@ -447,8 +449,10 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
         // ─── Helpers ─────────────────────────────────────────────────────────
 
-        private static Label MakeLabel(string text, int left, int top) =>
-            new Label { Text = text, AutoSize = true, Left = left, Top = top };
+        private static Label MakeLabel(string text, int left, int top)
+        {
+            return new Label { Text = text, AutoSize = true, Left = left, Top = top };
+        }
     }
 
     // ─── Tiny fluent helper ───────────────────────────────────────────────────

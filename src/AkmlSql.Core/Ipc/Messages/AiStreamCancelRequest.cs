@@ -1,4 +1,3 @@
-#nullable enable
 using MessagePack;
 
 namespace AkmlSql.Core.Ipc.Messages
@@ -8,6 +7,7 @@ namespace AkmlSql.Core.Ipc.Messages
     /// Sent Shell -> Engine.
     /// </summary>
     [MessagePackObject]
+    // ReSharper disable once UnusedMember.Global
     public class AiStreamCancelRequest
     {
         /// <summary>The request ID of the streaming operation to cancel.</summary>

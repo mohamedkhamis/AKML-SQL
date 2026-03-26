@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Security;
 
 /// <summary>SE004 — EXECUTE AS OWNER on a stored procedure elevates the execution context.</summary>
-public sealed class SE004_ExecuteAsOwner : IAnalysisRule
+public sealed class Se004ExecuteAsOwner : IAnalysisRule
 {
     public string RuleId => "SE004";
     public string Category => "Security";
@@ -23,10 +22,17 @@ public sealed class SE004_ExecuteAsOwner : IAnalysisRule
     {
         public List<AnalysisDiagnostic> Diagnostics { get; } = [];
 
-        public override void Visit(CreateProcedureStatement node) => Check(node, node.Options);
-        public override void Visit(AlterProcedureStatement node)  => Check(node, node.Options);
+        public override void Visit(CreateProcedureStatement node)
+        {
+            Check(node, node.Options);
+        }
 
-        private void Check(TSqlStatement node, System.Collections.Generic.IList<ProcedureOption>? options)
+        public override void Visit(AlterProcedureStatement node)
+        {
+            Check(node, node.Options);
+        }
+
+        private void Check(TSqlStatement node, IList<ProcedureOption>? options)
         {
             if (options == null) return;
 

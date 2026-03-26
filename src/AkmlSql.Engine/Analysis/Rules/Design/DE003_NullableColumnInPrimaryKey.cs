@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Design;
 
 /// <summary>DE003 — Columns that are part of a primary key cannot be nullable.</summary>
-public sealed class DE003_NullableColumnInPrimaryKey : IAnalysisRule
+public sealed class De003NullableColumnInPrimaryKey : IAnalysisRule
 {
     public string RuleId => "DE003";
     public string Category => "Design";
@@ -28,7 +27,7 @@ public sealed class DE003_NullableColumnInPrimaryKey : IAnalysisRule
             if (node.Definition == null) return;
 
             // Collect column names in inline primary key constraints
-            var inlinePkColumns = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+            var inlinePkColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var column in node.Definition.ColumnDefinitions)
             {
                 foreach (var constraint in column.Constraints)
@@ -39,7 +38,7 @@ public sealed class DE003_NullableColumnInPrimaryKey : IAnalysisRule
             }
 
             // Collect column names in table-level primary key constraints
-            var tablePkColumns = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+            var tablePkColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var constraint in node.Definition.TableConstraints)
             {
                 if (constraint is not UniqueConstraintDefinition { IsPrimaryKey: true } pkConstraint) continue;

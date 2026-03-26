@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Style;
 
 /// <summary>ST003 — Old-style comma-separated JOIN syntax in FROM clause — use explicit ANSI JOIN syntax.</summary>
-public sealed class ST003_OldStyleJoin : IAnalysisRule
+public sealed class St003OldStyleJoin : IAnalysisRule
 {
     public string RuleId => "ST003";
     public string Category => "Style";

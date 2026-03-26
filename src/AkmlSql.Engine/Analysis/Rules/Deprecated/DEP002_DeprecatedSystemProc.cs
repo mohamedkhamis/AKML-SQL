@@ -1,12 +1,10 @@
-using System;
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Deprecated;
 
 /// <summary>DEP002 — Use of deprecated system stored procedures that have been superseded by modern T-SQL DDL statements.</summary>
-public sealed class DEP002_DeprecatedSystemProc : IAnalysisRule
+public sealed class Dep002DeprecatedSystemProc : IAnalysisRule
 {
     public string RuleId => "DEP002";
     public string Category => "Deprecated";

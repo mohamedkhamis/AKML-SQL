@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.BestPractices;
 
 /// <summary>BP027 — UPDATE with JOIN pattern detected; ensure join conditions correctly identify unique rows.</summary>
-public sealed class BP027_UpdateWithJoin : IAnalysisRule
+public sealed class Bp027UpdateWithJoin : IAnalysisRule
 {
     public string RuleId => "BP027";
     public string Category => "BestPractices";

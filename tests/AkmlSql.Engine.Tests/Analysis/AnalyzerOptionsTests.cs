@@ -1,6 +1,4 @@
-using System;
 using AkmlSql.Core.Models.Analysis;
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis;
@@ -121,6 +119,8 @@ public sealed class AnalyzerOptionsTests
     }
 
     // helper
-    private static AkmlSql.Analyzer.AnalyzerOptions ParseOptions(params string[] args) =>
-        AkmlSql.Analyzer.AnalyzerOptions.Parse(args);
+    private static Analyzer.AnalyzerOptions ParseOptions(params string[] args)
+    {
+        return Analyzer.AnalyzerOptions.Parse(args);
+    }
 }

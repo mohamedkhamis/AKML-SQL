@@ -2,7 +2,6 @@
 using System;
 using System.ComponentModel.Design;
 using System.Text;
-using System.Threading.Tasks;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Shell.Shared.Ipc;

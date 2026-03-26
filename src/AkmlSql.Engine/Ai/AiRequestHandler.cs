@@ -1,6 +1,4 @@
-#nullable enable
 using System.Diagnostics;
-using System.Net.Http;
 using System.Text.RegularExpressions;
 using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc;
@@ -262,10 +260,7 @@ public sealed class AiRequestHandler : IDisposable
     /// <summary>
     /// Exception thrown when privacy consent is required but has not been given.
     /// </summary>
-    private sealed class PrivacyConsentRequiredException : Exception
-    {
-        public PrivacyConsentRequiredException(string message) : base(message) { }
-    }
+    private sealed class PrivacyConsentRequiredException(string message) : Exception(message);
 
     // ───────────────────── Handler Methods ─────────────────────
 

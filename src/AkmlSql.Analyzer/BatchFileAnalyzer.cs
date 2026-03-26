@@ -1,11 +1,9 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Threading;
 using AkmlSql.Engine.Analysis;
 using AkmlSql.Engine.Parser;
 using AkmlSql.Core.Config;
 using AkmlSql.Core.Models.Analysis;
+// ReSharper disable NullableWarningSuppressionIsUsed
+#pragma warning disable IL2026
 
 namespace AkmlSql.Analyzer;
 
@@ -100,7 +98,7 @@ internal sealed class BatchFileAnalyzer
             .AsReadOnly();
     }
 
-    private static List<IAnalysisRule> FilterRules(System.Collections.Generic.IReadOnlyList<IAnalysisRule> all, AnalyzerOptions opts)
+    private static List<IAnalysisRule> FilterRules(IReadOnlyList<IAnalysisRule> all, AnalyzerOptions opts)
     {
         var result = new List<IAnalysisRule>();
         foreach (var rule in all)
@@ -127,7 +125,7 @@ internal sealed class BatchFileAnalyzer
                     settings.EffectiveRules[id] = new ResolvedRuleConfig
                     {
                         Enabled  = cfg.Enabled,
-                        Severity = cfg.Severity?.ToLowerInvariant() switch
+                        Severity = cfg.Severity.ToLowerInvariant() switch
                         {
                             "error"       => DiagnosticSeverity.Error,
                             "warning"     => DiagnosticSeverity.Warning,

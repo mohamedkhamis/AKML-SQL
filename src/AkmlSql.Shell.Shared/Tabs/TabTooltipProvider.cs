@@ -55,7 +55,7 @@ namespace AkmlSql.Shell.Shared.Tabs
         /// <summary>
         /// Fired when a VS/SSMS window receives focus. Updates the tooltip for document windows.
         /// </summary>
-        private static void OnWindowActivated(EnvDTE.Window gotFocus, EnvDTE.Window lostFocus)
+        private static void OnWindowActivated(Window gotFocus, Window lostFocus)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
 
@@ -79,7 +79,7 @@ namespace AkmlSql.Shell.Shared.Tabs
         /// <summary>
         /// Retrieves connection metadata for the active document window.
         /// </summary>
-        private static ConnectionTooltipInfo? GetConnectionInfo(EnvDTE.Window window)
+        private static ConnectionTooltipInfo? GetConnectionInfo(Window window)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
 
@@ -147,7 +147,7 @@ namespace AkmlSql.Shell.Shared.Tabs
         /// <summary>
         /// Applies a rich tooltip to the document tab header via WPF visual tree walking.
         /// </summary>
-        private static void ApplyTooltip(EnvDTE.Window window, ConnectionTooltipInfo info)
+        private static void ApplyTooltip(Window window, ConnectionTooltipInfo info)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
 

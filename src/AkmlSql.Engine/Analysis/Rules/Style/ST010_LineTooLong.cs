@@ -1,10 +1,9 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 
 namespace AkmlSql.Engine.Analysis.Rules.Style;
 
 /// <summary>ST010 — Line exceeds 120 characters — consider breaking into multiple lines for readability.</summary>
-public sealed class ST010_LineTooLong : IAnalysisRule
+public sealed class St010LineTooLong : IAnalysisRule
 {
     public string RuleId => "ST010";
     public string Category => "Style";

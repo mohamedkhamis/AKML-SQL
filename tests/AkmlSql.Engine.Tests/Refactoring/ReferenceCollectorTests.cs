@@ -52,7 +52,7 @@ public class ReferenceCollectorTests
         var matches = Collect("DECLARE @x INT = 1; SELECT @x", "@x");
         // Should find at least one reference (the SELECT @x)
         Assert.True(matches.Count >= 1);
-        Assert.All(matches, m => Assert.Contains("x", m.MatchedText, System.StringComparison.OrdinalIgnoreCase));
+        Assert.All(matches, m => Assert.Contains("x", m.MatchedText, StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

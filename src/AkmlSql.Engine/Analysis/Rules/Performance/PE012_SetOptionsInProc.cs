@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Performance;
 
 /// <summary>PE012 — SET ANSI_NULLS / QUOTED_IDENTIFIER etc. inside a stored procedure causes recompilation.</summary>
-public sealed class PE012_SetOptionsInProc : IAnalysisRule
+public sealed class Pe012SetOptionsInProc : IAnalysisRule
 {
     public string RuleId => "PE012";
     public string Category => "Performance";
@@ -30,8 +29,15 @@ public sealed class PE012_SetOptionsInProc : IAnalysisRule
     {
         public List<AnalysisDiagnostic> Diagnostics { get; } = [];
 
-        public override void Visit(CreateProcedureStatement node) => CheckBody(node.StatementList);
-        public override void Visit(AlterProcedureStatement node)  => CheckBody(node.StatementList);
+        public override void Visit(CreateProcedureStatement node)
+        {
+            CheckBody(node.StatementList);
+        }
+
+        public override void Visit(AlterProcedureStatement node)
+        {
+            CheckBody(node.StatementList);
+        }
 
         private void CheckBody(StatementList? body)
         {

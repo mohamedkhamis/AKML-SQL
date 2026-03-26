@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
-using Microsoft.VisualStudio.Shell;
 using Serilog;
 
 namespace AkmlSql.Shell.Shared.Productivity.Grid

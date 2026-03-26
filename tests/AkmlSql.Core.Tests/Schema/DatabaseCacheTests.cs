@@ -32,8 +32,9 @@ public class DatabaseCacheTests
 
     private static ForeignKey MakeFk(string parentSchema, string parentTable,
                                       string refSchema, string refTable,
-                                      string fkName = "FK_Test") =>
-        new()
+                                      string fkName = "FK_Test")
+    {
+        return new ForeignKey
         {
             FkName = fkName,
             ParentSchema = parentSchema,
@@ -43,6 +44,7 @@ public class DatabaseCacheTests
             ReferencedTable = refTable,
             ReferencedColumns = ["Id"]
         };
+    }
 
     // ── FindObject ────────────────────────────────────────────────────────────
 

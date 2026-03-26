@@ -9,7 +9,6 @@ using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Shell.Shared.Ipc;
-using Microsoft.VisualStudio.Shell;
 using Serilog;
 using Task = System.Threading.Tasks.Task;
 

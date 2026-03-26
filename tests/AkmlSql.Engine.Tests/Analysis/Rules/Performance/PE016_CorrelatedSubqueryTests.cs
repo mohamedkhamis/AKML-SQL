@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.Performance;
 
-public sealed class PE016_CorrelatedSubqueryTests
+public sealed class Pe016CorrelatedSubqueryTests
 {
     [Fact]
     public void FiresOnScalarSubqueryInWhere()

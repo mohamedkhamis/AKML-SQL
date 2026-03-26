@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Deprecated;
 
 /// <summary>DEP003 — SET FMTONLY ON is deprecated; use sys.dm_exec_describe_first_result_set or sp_describe_first_result_set instead.</summary>
-public sealed class DEP003_SetFmtonly : IAnalysisRule
+public sealed class Dep003SetFmtonly : IAnalysisRule
 {
     public string RuleId => "DEP003";
     public string Category => "Deprecated";

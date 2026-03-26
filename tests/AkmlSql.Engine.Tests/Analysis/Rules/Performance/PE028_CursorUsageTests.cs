@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.Performance;
 
-public sealed class PE028_CursorUsageTests
+public sealed class Pe028CursorUsageTests
 {
     [Fact]
     public void Fires_OnDeclareCursor()

@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.Security;
 
-public sealed class SE008Tests
+public sealed class Se008Tests
 {
     [Fact]
     public void XpCmdshell_Fires()

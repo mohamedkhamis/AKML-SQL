@@ -130,7 +130,7 @@ public class FormatRequestHandler(ProfileManager profileManager)
             }
 
             // Build a minimal RefactoringContext (no schema cache, no session for lightweight ops)
-            var parser = new AkmlSql.Engine.Parser.TsqlParserService();
+            var parser = new Parser.TsqlParserService();
             var ctx = new RefactoringContext
             {
                 DocumentText    = request.Text,

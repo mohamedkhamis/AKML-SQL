@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.Naming;
 
-public sealed class NM006Tests
+public sealed class Nm006Tests
 {
     [Fact]
     public void SingleLetterTableAlias_Fires()

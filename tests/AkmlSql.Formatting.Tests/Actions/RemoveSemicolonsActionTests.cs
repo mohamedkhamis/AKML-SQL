@@ -7,7 +7,10 @@ namespace AkmlSql.Formatting.Tests.Actions;
 public class RemoveSemicolonsActionTests
 {
     private readonly RemoveSemicolonsAction _action = new();
-    private static FormattingProfile DefaultProfile() => new();
+    private static FormattingProfile DefaultProfile()
+    {
+        return new FormattingProfile();
+    }
 
     // ── Basic removal ────────────────────────────────────────────────────
 

@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using AkmlSql.Core.Models.Analysis;
 
 namespace AkmlSql.Analyzer;
@@ -138,7 +134,9 @@ internal sealed class AnalyzerOptions
         return args[++i];
     }
 
-    private static HashSet<string> SplitRuleList(string s) =>
-        new(s.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+    private static HashSet<string> SplitRuleList(string s)
+    {
+        return new HashSet<string>(s.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
             StringComparer.OrdinalIgnoreCase);
+    }
 }

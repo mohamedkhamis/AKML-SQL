@@ -1,10 +1,9 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 
 namespace AkmlSql.Engine.Analysis.Rules.Security;
 
 /// <summary>SE016 — Sensitive data exposure detection — requires schema and column metadata.</summary>
-public sealed class SE016_SensitiveDataExposure : IAnalysisRule
+public sealed class Se016SensitiveDataExposure : IAnalysisRule
 {
     public string RuleId => "SE016";
     public string Category => "Security";
@@ -17,5 +16,8 @@ public sealed class SE016_SensitiveDataExposure : IAnalysisRule
     // the heuristic of matching table/column name substrings produces an unacceptable false-positive
     // rate (any table named "passwords_audit" would fire on every SELECT). Deferred until the schema
     // provider exposes column-level metadata.
-    public IEnumerable<AnalysisDiagnostic> Analyze(AnalysisContext ctx) => [];
+    public IEnumerable<AnalysisDiagnostic> Analyze(AnalysisContext ctx)
+    {
+        return [];
+    }
 }

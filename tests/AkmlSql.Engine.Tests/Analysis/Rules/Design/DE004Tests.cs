@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.Design;
 
-public sealed class DE004Tests
+public sealed class De004Tests
 {
     [Fact]
     public void VarcharOne_Fires()

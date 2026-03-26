@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Deprecated;
 
 /// <summary>DEP005 — Old-style RAISERROR syntax without explicit severity and state arguments is deprecated; use RAISERROR('message', severity, state) or THROW instead.</summary>
-public sealed class DEP005_RaiserrorOldSyntax : IAnalysisRule
+public sealed class Dep005RaiserrorOldSyntax : IAnalysisRule
 {
     public string RuleId => "DEP005";
     public string Category => "Deprecated";

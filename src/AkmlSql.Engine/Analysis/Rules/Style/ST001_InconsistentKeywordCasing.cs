@@ -1,18 +1,17 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Style;
 
 /// <summary>ST001 — SQL keyword is not fully uppercase — use consistent ALL_CAPS keywords.</summary>
-public sealed class ST001_InconsistentKeywordCasing : IAnalysisRule
+public sealed class St001InconsistentKeywordCasing : IAnalysisRule
 {
     public string RuleId => "ST001";
     public string Category => "Style";
     public DiagnosticSeverity DefaultSeverity => DiagnosticSeverity.Hint;
     public bool RequiresSchema => false;
 
-    private static readonly HashSet<string> SqlKeywords = new(System.StringComparer.OrdinalIgnoreCase)
+    private static readonly HashSet<string> SqlKeywords = new(StringComparer.OrdinalIgnoreCase)
     {
         "select", "from", "where", "join", "inner", "outer", "left", "right", "on",
         "and", "or", "not", "null", "insert", "update", "delete", "create", "alter",

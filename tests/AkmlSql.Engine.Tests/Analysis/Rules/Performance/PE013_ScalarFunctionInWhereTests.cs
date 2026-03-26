@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.Performance;
 
-public sealed class PE013_ScalarFunctionInWhereTests
+public sealed class Pe013ScalarFunctionInWhereTests
 {
     [Fact]
     public void FiresOnFunctionCallWrappingColumnInWhere()

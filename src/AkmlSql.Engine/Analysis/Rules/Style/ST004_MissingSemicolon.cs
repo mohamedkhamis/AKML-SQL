@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Style;
 
 /// <summary>ST004 — Statement is not terminated with a semicolon.</summary>
-public sealed class ST004_MissingSemicolon : IAnalysisRule
+public sealed class St004MissingSemicolon : IAnalysisRule
 {
     public string RuleId => "ST004";
     public string Category => "Style";
@@ -23,10 +22,25 @@ public sealed class ST004_MissingSemicolon : IAnalysisRule
     {
         public List<AnalysisDiagnostic> Diagnostics { get; } = [];
 
-        public override void Visit(SelectStatement node)  => Check(node);
-        public override void Visit(InsertStatement node)  => Check(node);
-        public override void Visit(UpdateStatement node)  => Check(node);
-        public override void Visit(DeleteStatement node)  => Check(node);
+        public override void Visit(SelectStatement node)
+        {
+            Check(node);
+        }
+
+        public override void Visit(InsertStatement node)
+        {
+            Check(node);
+        }
+
+        public override void Visit(UpdateStatement node)
+        {
+            Check(node);
+        }
+
+        public override void Visit(DeleteStatement node)
+        {
+            Check(node);
+        }
 
         private void Check(TSqlStatement node)
         {

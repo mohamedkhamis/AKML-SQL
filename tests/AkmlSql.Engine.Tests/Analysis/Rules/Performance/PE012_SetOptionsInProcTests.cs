@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.Performance;
 
-public sealed class PE012_SetOptionsInProcTests
+public sealed class Pe012SetOptionsInProcTests
 {
     [Fact]
     public void FiresOnSetAnsiNullsInsideProc()

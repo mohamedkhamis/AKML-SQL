@@ -13,18 +13,11 @@ namespace AkmlSql.Shell.Shared.Analysis
     /// <summary>
     /// Applies a transform/insert/remove fix from a <see cref="FixActionInfo"/> to an <see cref="ITextBuffer"/>.
     /// </summary>
-    internal sealed class FixAction : ISuggestedAction
+    internal sealed class FixAction(ITextBuffer buffer, FixActionInfo fix, string ruleId) : ISuggestedAction
     {
-        private readonly ITextBuffer   _buffer;
-        private readonly FixActionInfo _fix;
-        private readonly string        _ruleId;
-
-        public FixAction(ITextBuffer buffer, FixActionInfo fix, string ruleId)
-        {
-            _buffer = buffer ?? throw new ArgumentNullException(nameof(buffer));
-            _fix    = fix    ?? throw new ArgumentNullException(nameof(fix));
-            _ruleId = ruleId ?? string.Empty;
-        }
+        private readonly ITextBuffer   _buffer = buffer ?? throw new ArgumentNullException(nameof(buffer));
+        private readonly FixActionInfo _fix = fix    ?? throw new ArgumentNullException(nameof(fix));
+        private readonly string        _ruleId = ruleId ?? string.Empty;
 
         public string  DisplayText      => _fix.Label;
         public bool    HasActionSets    => false;
@@ -36,10 +29,14 @@ namespace AkmlSql.Shell.Shared.Analysis
         public void Dispose() { }
 
         public Task<IEnumerable<SuggestedActionSet>> GetActionSetsAsync(CancellationToken cancellationToken)
-            => Task.FromResult<IEnumerable<SuggestedActionSet>>(null);
+        {
+            return Task.FromResult<IEnumerable<SuggestedActionSet>>(null);
+        }
 
         public Task<object> GetPreviewAsync(CancellationToken cancellationToken)
-            => Task.FromResult<object>(null);
+        {
+            return Task.FromResult<object>(null);
+        }
 
         public void Invoke(CancellationToken cancellationToken)
         {
@@ -64,20 +61,11 @@ namespace AkmlSql.Shell.Shared.Analysis
     /// <summary>
     /// Inserts <c>-- noqa: RULEID</c> at the end of the violation line.
     /// </summary>
-    internal sealed class SuppressLineFixAction : ISuggestedAction
+    internal sealed class SuppressLineFixAction(ITextBuffer buffer, int line, string ruleId) : ISuggestedAction
     {
-        private readonly ITextBuffer _buffer;
-        private readonly int         _line;    // 1-based
-        private readonly string      _ruleId;
+        // 1-based
 
-        public SuppressLineFixAction(ITextBuffer buffer, int line, string ruleId)
-        {
-            _buffer = buffer;
-            _line   = line;
-            _ruleId = ruleId;
-        }
-
-        public string DisplayText         => $"Suppress {_ruleId} for this line";
+        public string DisplayText         => $"Suppress {ruleId} for this line";
         public bool   HasActionSets       => false;
         public bool   HasPreview          => false;
         public string IconAutomationText  => null;
@@ -87,24 +75,28 @@ namespace AkmlSql.Shell.Shared.Analysis
         public void Dispose() { }
 
         public Task<IEnumerable<SuggestedActionSet>> GetActionSetsAsync(CancellationToken cancellationToken)
-            => Task.FromResult<IEnumerable<SuggestedActionSet>>(null);
+        {
+            return Task.FromResult<IEnumerable<SuggestedActionSet>>(null);
+        }
 
         public Task<object> GetPreviewAsync(CancellationToken cancellationToken)
-            => Task.FromResult<object>(null);
+        {
+            return Task.FromResult<object>(null);
+        }
 
         public void Invoke(CancellationToken cancellationToken)
         {
-            var snapshot = _buffer.CurrentSnapshot;
+            var snapshot = buffer.CurrentSnapshot;
             // ScriptDom lines are 1-based; ITextSnapshot lines are 0-based
-            int lineIndex = _line - 1;
+            int lineIndex = line - 1;
             if (lineIndex < 0 || lineIndex >= snapshot.LineCount) return;
 
             var snapshotLine = snapshot.GetLineFromLineNumber(lineIndex);
             var lineEnd      = snapshotLine.End.Position;
 
-            using (var edit = _buffer.CreateEdit())
+            using (var edit = buffer.CreateEdit())
             {
-                edit.Insert(lineEnd, $" -- noqa: {_ruleId}");
+                edit.Insert(lineEnd, $" -- noqa: {ruleId}");
                 edit.Apply();
             }
         }
@@ -116,16 +108,9 @@ namespace AkmlSql.Shell.Shared.Analysis
     /// Disables a rule globally by writing <c>enabled: false</c> to the user's global settings
     /// and notifying the engine to invalidate its settings cache.
     /// </summary>
-    internal sealed class DisableRuleGloballyFixAction : ISuggestedAction
+    internal sealed class DisableRuleGloballyFixAction(string ruleId) : ISuggestedAction
     {
-        private readonly string _ruleId;
-
-        public DisableRuleGloballyFixAction(string ruleId)
-        {
-            _ruleId = ruleId;
-        }
-
-        public string DisplayText         => $"Disable rule {_ruleId} globally";
+        public string DisplayText         => $"Disable rule {ruleId} globally";
         public bool   HasActionSets       => false;
         public bool   HasPreview          => false;
         public string IconAutomationText  => null;
@@ -135,10 +120,14 @@ namespace AkmlSql.Shell.Shared.Analysis
         public void Dispose() { }
 
         public Task<IEnumerable<SuggestedActionSet>> GetActionSetsAsync(CancellationToken cancellationToken)
-            => Task.FromResult<IEnumerable<SuggestedActionSet>>(null);
+        {
+            return Task.FromResult<IEnumerable<SuggestedActionSet>>(null);
+        }
 
         public Task<object> GetPreviewAsync(CancellationToken cancellationToken)
-            => Task.FromResult<object>(null);
+        {
+            return Task.FromResult<object>(null);
+        }
 
         public void Invoke(CancellationToken cancellationToken)
         {
@@ -147,7 +136,7 @@ namespace AkmlSql.Shell.Shared.Analysis
             try
             {
                 var userDir  = System.IO.Path.Combine(
-                    System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData),
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                     "AKML SQL");
                 System.IO.Directory.CreateDirectory(userDir);
                 var settingsPath = System.IO.Path.Combine(userDir, ".casettings");
@@ -158,7 +147,7 @@ namespace AkmlSql.Shell.Shared.Analysis
                     : "{}";
                 var jobj = System.Text.Json.JsonDocument.Parse(json).RootElement;
                 // Minimal write: merge disabled rule into rules section
-                var merged = new System.Collections.Generic.Dictionary<string, object>();
+                var merged = new Dictionary<string, object>();
                 if (jobj.TryGetProperty("rules", out var rulesEl))
                 {
                     foreach (var prop in rulesEl.EnumerateObject())
@@ -168,13 +157,13 @@ namespace AkmlSql.Shell.Shared.Analysis
                 // Preserve any existing severity override; only flip enabled to false
                 string existingSeverity = null;
                 if (rulesEl.ValueKind == System.Text.Json.JsonValueKind.Object &&
-                    rulesEl.TryGetProperty(_ruleId, out var existing) &&
+                    rulesEl.TryGetProperty(ruleId, out var existing) &&
                     existing.TryGetProperty("severity", out var sev))
                 {
                     existingSeverity = sev.GetString();
                 }
 
-                merged[_ruleId] = existingSeverity != null
+                merged[ruleId] = existingSeverity != null
                     ? (object)new { enabled = false, severity = existingSeverity }
                     : new { enabled = false };
 
@@ -185,7 +174,7 @@ namespace AkmlSql.Shell.Shared.Analysis
             }
             catch (Exception ex)
             {
-                Serilog.Log.Warning(ex, "DisableRuleGloballyFixAction: failed to persist {Rule}", _ruleId);
+                Serilog.Log.Warning(ex, "DisableRuleGloballyFixAction: failed to persist {Rule}", ruleId);
             }
 
             // Notify engine to invalidate settings cache
@@ -193,7 +182,7 @@ namespace AkmlSql.Shell.Shared.Analysis
             if (client != null && client.IsConnected)
             {
                 _ = client.SendNotificationAsync(
-                    AkmlSql.Core.Ipc.MessageTypes.AnalysisSettingsChanged,
+                    Core.Ipc.MessageTypes.AnalysisSettingsChanged,
                     new { },
                     cancellationToken);
             }

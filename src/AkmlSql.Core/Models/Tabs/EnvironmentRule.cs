@@ -1,5 +1,3 @@
-#nullable enable
-
 namespace AkmlSql.Core.Models.Tabs
 {
     /// <summary>
@@ -38,7 +36,7 @@ namespace AkmlSql.Core.Models.Tabs
         public string Label { get; }
 
         /// <summary>Creates an immutable <see cref="EnvironmentRule"/> instance.</summary>
-        public EnvironmentRule(int order, string pattern, string matchTarget, string color, string label)
+        public EnvironmentRule(int order, string? pattern, string? matchTarget, string? color, string? label)
         {
             Order       = order;
             Pattern     = pattern ?? string.Empty;

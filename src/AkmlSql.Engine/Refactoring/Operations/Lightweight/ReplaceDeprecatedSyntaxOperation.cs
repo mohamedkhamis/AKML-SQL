@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using AkmlSql.Engine.Refactoring.Operations;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Refactoring.Operations.Lightweight;
@@ -102,9 +99,20 @@ public class ReplaceDeprecatedSyntaxOperation : ILightweightOperation
     {
         public List<(int offset, int length, string newText)> Replacements { get; } = [];
 
-        public override void Visit(ColumnDefinition node)       => CheckDataType(node.DataType);
-        public override void Visit(ProcedureParameter node)     => CheckDataType(node.DataType);
-        public override void Visit(DeclareVariableElement node) => CheckDataType(node.DataType);
+        public override void Visit(ColumnDefinition node)
+        {
+            CheckDataType(node.DataType);
+        }
+
+        public override void Visit(ProcedureParameter node)
+        {
+            CheckDataType(node.DataType);
+        }
+
+        public override void Visit(DeclareVariableElement node)
+        {
+            CheckDataType(node.DataType);
+        }
 
         private void CheckDataType(DataTypeReference? dataType)
         {

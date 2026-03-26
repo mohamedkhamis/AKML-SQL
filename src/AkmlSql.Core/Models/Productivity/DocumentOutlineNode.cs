@@ -1,4 +1,3 @@
-#nullable enable
 using System.Collections.Generic;
 
 namespace AkmlSql.Core.Models.Productivity
@@ -8,7 +7,7 @@ namespace AkmlSql.Core.Models.Productivity
     {
         Procedure,
         Function,
-        CTE,
+        Cte,
         TempTable,
         Statement,
         Region,

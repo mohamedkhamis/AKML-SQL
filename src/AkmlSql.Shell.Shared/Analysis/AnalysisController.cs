@@ -88,15 +88,9 @@ namespace AkmlSql.Shell.Shared.Analysis
         }
     }
 
-    internal sealed class DiagnosticsUpdatedEventArgs : EventArgs
+    internal sealed class DiagnosticsUpdatedEventArgs(ITextSnapshot snapshot, CodeIssueInfo[] issues) : EventArgs
     {
-        public ITextSnapshot Snapshot { get; }
-        public CodeIssueInfo[] Issues  { get; }
-
-        public DiagnosticsUpdatedEventArgs(ITextSnapshot snapshot, CodeIssueInfo[] issues)
-        {
-            Snapshot = snapshot;
-            Issues   = issues ?? Array.Empty<CodeIssueInfo>();
-        }
+        public ITextSnapshot Snapshot { get; } = snapshot;
+        public CodeIssueInfo[] Issues  { get; } = issues ?? Array.Empty<CodeIssueInfo>();
     }
 }

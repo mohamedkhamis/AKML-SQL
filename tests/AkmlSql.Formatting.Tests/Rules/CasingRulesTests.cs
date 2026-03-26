@@ -13,14 +13,17 @@ public class CasingRulesTests
     private static LayoutNode Node(
         string text,
         TSqlTokenType tokenType = TSqlTokenType.Identifier,
-        bool inNoformat = false) => new()
+        bool inNoformat = false)
     {
-        FormattedText = text,
-        TokenType = tokenType,
-        PrecedingBreak = BreakType.None,
-        PrecedingSpaces = 1,
-        IsInNoformatRegion = inNoformat
-    };
+        return new LayoutNode
+        {
+            FormattedText = text,
+            TokenType = tokenType,
+            PrecedingBreak = BreakType.None,
+            PrecedingSpaces = 1,
+            IsInNoformatRegion = inNoformat
+        };
+    }
 
     // ── Keywords ──────────────────────────────────────────────────────────
 

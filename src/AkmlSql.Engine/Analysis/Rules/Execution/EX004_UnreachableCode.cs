@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Execution;
 
 /// <summary>EX004 — Statements following an unconditional RETURN or THROW are unreachable.</summary>
-public sealed class EX004_UnreachableCode : IAnalysisRule
+public sealed class Ex004UnreachableCode : IAnalysisRule
 {
     public string RuleId => "EX004";
     public string Category => "Execution";
@@ -23,11 +22,15 @@ public sealed class EX004_UnreachableCode : IAnalysisRule
     {
         public List<AnalysisDiagnostic> Diagnostics { get; } = [];
 
-        public override void Visit(CreateProcedureStatement node) =>
+        public override void Visit(CreateProcedureStatement node)
+        {
             CheckStatementList(node.StatementList);
+        }
 
-        public override void Visit(AlterProcedureStatement node) =>
+        public override void Visit(AlterProcedureStatement node)
+        {
             CheckStatementList(node.StatementList);
+        }
 
         private void CheckStatementList(StatementList? statementList)
         {

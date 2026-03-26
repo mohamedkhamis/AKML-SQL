@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.BestPractices;
 
 /// <summary>BP002 — ISNUMERIC() has surprising behavior; use TRY_CONVERT(numeric_type, expression) IS NOT NULL instead.</summary>
-public sealed class BP002_UseTryConvert : IAnalysisRule
+public sealed class Bp002UseTryConvert : IAnalysisRule
 {
     public string RuleId => "BP002";
     public string Category => "BestPractices";
@@ -25,7 +24,7 @@ public sealed class BP002_UseTryConvert : IAnalysisRule
 
         public override void Visit(FunctionCall node)
         {
-            if (!node.FunctionName.Value.Equals("ISNUMERIC", System.StringComparison.OrdinalIgnoreCase))
+            if (!node.FunctionName.Value.Equals("ISNUMERIC", StringComparison.OrdinalIgnoreCase))
                 return;
 
             if (node.Parameters.Count == 0) return;

@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Design;
 
 /// <summary>DE001 — Every table should have a primary key defined.</summary>
-public sealed class DE001_MissingPrimaryKey : IAnalysisRule
+public sealed class De001MissingPrimaryKey : IAnalysisRule
 {
     public string RuleId => "DE001";
     public string Category => "Design";

@@ -2,7 +2,6 @@
 using System;
 using System.Collections.ObjectModel;
 using System.Threading;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -10,7 +9,6 @@ using System.Windows.Media;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Shell.Shared.Ipc;
-using Microsoft.VisualStudio.Shell;
 using Serilog;
 using Task = System.Threading.Tasks.Task;
 
@@ -111,11 +109,11 @@ namespace AkmlSql.Shell.Shared.Productivity.Navigation
             // Item template
             var factory = new FrameworkElementFactory(typeof(StackPanel));
             factory.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
-            factory.SetValue(StackPanel.MarginProperty, new Thickness(4, 2, 4, 2));
+            factory.SetValue(MarginProperty, new Thickness(4, 2, 4, 2));
 
             var iconFactory = new FrameworkElementFactory(typeof(TextBlock));
             iconFactory.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding("TypeIcon"));
-            iconFactory.SetValue(TextBlock.WidthProperty, 24.0);
+            iconFactory.SetValue(WidthProperty, 24.0);
             iconFactory.SetValue(TextBlock.FontSizeProperty, 12.0);
             iconFactory.SetValue(TextBlock.ForegroundProperty, new SolidColorBrush(Color.FromRgb(0x56, 0x9C, 0xD6)));
             factory.AppendChild(iconFactory);
@@ -127,7 +125,7 @@ namespace AkmlSql.Shell.Shared.Productivity.Navigation
 
             var typeFactory = new FrameworkElementFactory(typeof(TextBlock));
             typeFactory.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding("TypeLabel"));
-            typeFactory.SetValue(TextBlock.MarginProperty, new Thickness(8, 0, 0, 0));
+            typeFactory.SetValue(MarginProperty, new Thickness(8, 0, 0, 0));
             typeFactory.SetValue(TextBlock.ForegroundProperty, new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80)));
             typeFactory.SetValue(TextBlock.FontSizeProperty, 11.0);
             factory.AppendChild(typeFactory);
@@ -300,11 +298,11 @@ namespace AkmlSql.Shell.Shared.Productivity.Navigation
     /// <summary>
     /// View model for a single object search result in the <see cref="ObjectSearchWindow"/>.
     /// </summary>
-    internal sealed class ObjectSearchResultViewModel
+    internal sealed class ObjectSearchResultViewModel(ObjectSearchResultDto dto)
     {
-        public string SchemaName { get; }
-        public string ObjectName { get; }
-        public string ObjectType { get; }
+        public string SchemaName { get; } = dto.SchemaName;
+        public string ObjectName { get; } = dto.ObjectName;
+        public string ObjectType { get; } = dto.ObjectType;
         public string DisplayName => $"{SchemaName}.{ObjectName}";
         public string TypeLabel => $"({ObjectType})";
 
@@ -318,29 +316,15 @@ namespace AkmlSql.Shell.Shared.Productivity.Navigation
             "Sequence" => "#",
             _ => "?"
         };
-
-        public ObjectSearchResultViewModel(ObjectSearchResultDto dto)
-        {
-            SchemaName = dto.SchemaName;
-            ObjectName = dto.ObjectName;
-            ObjectType = dto.ObjectType;
-        }
     }
 
     /// <summary>
     /// Event args for when a user selects an object from the search window.
     /// </summary>
-    internal sealed class ObjectSelectedEventArgs : EventArgs
+    internal sealed class ObjectSelectedEventArgs(string schemaName, string objectName, string objectType) : EventArgs
     {
-        public string SchemaName { get; }
-        public string ObjectName { get; }
-        public string ObjectType { get; }
-
-        public ObjectSelectedEventArgs(string schemaName, string objectName, string objectType)
-        {
-            SchemaName = schemaName;
-            ObjectName = objectName;
-            ObjectType = objectType;
-        }
+        public string SchemaName { get; } = schemaName;
+        public string ObjectName { get; } = objectName;
+        public string ObjectType { get; } = objectType;
     }
 }

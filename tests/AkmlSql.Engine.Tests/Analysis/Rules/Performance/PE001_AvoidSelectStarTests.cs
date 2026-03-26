@@ -1,10 +1,8 @@
-using System.Linq;
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.Performance;
 
-public sealed class PE001_AvoidSelectStarTests
+public sealed class Pe001AvoidSelectStarTests
 {
     [Fact]
     public void FiresOnSelectStarInsideProcedure()

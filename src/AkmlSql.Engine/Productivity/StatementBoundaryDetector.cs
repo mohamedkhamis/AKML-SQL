@@ -1,4 +1,3 @@
-#nullable enable
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Engine.Parser;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
@@ -10,14 +9,9 @@ namespace AkmlSql.Engine.Productivity;
 /// Parses SQL text and detects statement boundaries using the ScriptDom AST.
 /// Provides both single-statement lookup (by cursor offset) and full-document enumeration.
 /// </summary>
-public class StatementBoundaryDetector
+public class StatementBoundaryDetector(TsqlParserService parserService)
 {
-    private readonly TsqlParserService _parserService;
-
-    public StatementBoundaryDetector(TsqlParserService parserService)
-    {
-        _parserService = parserService ?? throw new ArgumentNullException(nameof(parserService));
-    }
+    private readonly TsqlParserService _parserService = parserService ?? throw new ArgumentNullException(nameof(parserService));
 
     /// <summary>
     /// Returns the statement range containing the given cursor offset, or <c>null</c>

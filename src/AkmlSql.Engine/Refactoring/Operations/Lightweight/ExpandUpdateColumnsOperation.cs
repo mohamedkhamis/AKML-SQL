@@ -1,8 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Text;
-using AkmlSql.Engine.Refactoring.Operations;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Refactoring.Operations.Lightweight;
@@ -122,6 +118,9 @@ public class ExpandUpdateColumnsOperation : ILightweightOperation
     private sealed class UpdateStatementCollector : TSqlFragmentVisitor
     {
         public List<UpdateStatement> Statements { get; } = [];
-        public override void Visit(UpdateStatement node) => Statements.Add(node);
+        public override void Visit(UpdateStatement node)
+        {
+            Statements.Add(node);
+        }
     }
 }

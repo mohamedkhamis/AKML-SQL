@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.BestPractices;
 
 /// <summary>BP001 — @@IDENTITY can return identity values from triggers; use SCOPE_IDENTITY() instead.</summary>
-public sealed class BP001_UseScopeIdentity : IAnalysisRule
+public sealed class Bp001UseScopeIdentity : IAnalysisRule
 {
     public string RuleId => "BP001";
     public string Category => "BestPractices";
@@ -25,7 +24,7 @@ public sealed class BP001_UseScopeIdentity : IAnalysisRule
 
         public override void Visit(GlobalVariableExpression node)
         {
-            if (!node.Name.Equals("@@IDENTITY", System.StringComparison.OrdinalIgnoreCase)) return;
+            if (!node.Name.Equals("@@IDENTITY", StringComparison.OrdinalIgnoreCase)) return;
 
             Diagnostics.Add(new AnalysisDiagnostic
             {

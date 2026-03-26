@@ -1,6 +1,4 @@
-using System.Linq;
 using AkmlSql.Core.Ipc.Messages;
-using AkmlSql.Engine.Refactoring;
 using AkmlSql.Engine.Refactoring.Operations.Heavyweight;
 using AkmlSql.Engine.Tests.Refactoring.Operations.Lightweight;
 using Xunit;
@@ -15,14 +13,16 @@ public sealed class ConvertTempTableTests
     // ─── Helpers ────────────────────────────────────────────────────────────────
 
     private static RefactorPreviewRequest MakeRequest(RefactorOperationType direction)
-        => new() { OperationType = (int)direction };
+    {
+        return new RefactorPreviewRequest { OperationType = (int)direction };
+    }
 
     private static ConvertTempTableOperation Op => new();
 
     // ─── ConvertTempToTableVar ───────────────────────────────────────────────
 
     [Fact]
-    public async System.Threading.Tasks.Task ConvertTempToTableVar_Basic_ReplacesCreateTable()
+    public async Task ConvertTempToTableVar_Basic_ReplacesCreateTable()
     {
         const string sql = "CREATE TABLE #TempOrders (OrderId int, Amount decimal(10,2))";
 
@@ -38,7 +38,7 @@ public sealed class ConvertTempTableTests
     }
 
     [Fact]
-    public async System.Threading.Tasks.Task ConvertTempToTableVar_AllReferences_Updated()
+    public async Task ConvertTempToTableVar_AllReferences_Updated()
     {
         const string sql =
             "CREATE TABLE #TempOrders (OrderId int)\n" +
@@ -65,7 +65,7 @@ public sealed class ConvertTempTableTests
     }
 
     [Fact]
-    public async System.Threading.Tasks.Task ConvertTempToTableVar_StatisticsWarning_Present()
+    public async Task ConvertTempToTableVar_StatisticsWarning_Present()
     {
         const string sql = "CREATE TABLE #TempOrders (OrderId int)";
 
@@ -79,7 +79,7 @@ public sealed class ConvertTempTableTests
     }
 
     [Fact]
-    public async System.Threading.Tasks.Task ConvertTempToTableVar_NameCollision_CanApplyFalse()
+    public async Task ConvertTempToTableVar_NameCollision_CanApplyFalse()
     {
         const string sql =
             "DECLARE @TempOrders TABLE (OrderId int)\n" +
@@ -96,7 +96,7 @@ public sealed class ConvertTempTableTests
     // ─── ConvertTableVarToTemp ───────────────────────────────────────────────
 
     [Fact]
-    public async System.Threading.Tasks.Task ConvertTableVarToTemp_Basic_ReplacesDeclaration()
+    public async Task ConvertTableVarToTemp_Basic_ReplacesDeclaration()
     {
         const string sql =
             "DECLARE @TempOrders TABLE (OrderId int, Amount decimal(10,2))\n" +
@@ -124,7 +124,7 @@ public sealed class ConvertTempTableTests
     }
 
     [Fact]
-    public async System.Threading.Tasks.Task ConvertTableVarToTemp_NoDeclaration_CanApplyFalse()
+    public async Task ConvertTableVarToTemp_NoDeclaration_CanApplyFalse()
     {
         const string sql = "SELECT * FROM dbo.Orders";
 

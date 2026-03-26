@@ -1,12 +1,10 @@
-using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using AkmlSql.Core.Models.Analysis;
-using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Style;
 
 /// <summary>ST006 — Identifier wrapped in square brackets that don't need escaping.</summary>
-public sealed class ST006_UnnecessaryBrackets : IAnalysisRule
+public sealed class St006UnnecessaryBrackets : IAnalysisRule
 {
     public string RuleId => "ST006";
     public string Category => "Style";
@@ -17,7 +15,7 @@ public sealed class ST006_UnnecessaryBrackets : IAnalysisRule
     private static readonly Regex SimpleIdentifier = new(@"^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.Compiled);
 
     // Common SQL Server reserved words that require quoting
-    private static readonly HashSet<string> ReservedWords = new(System.StringComparer.OrdinalIgnoreCase)
+    private static readonly HashSet<string> ReservedWords = new(StringComparer.OrdinalIgnoreCase)
     {
         "add","all","alter","and","any","as","asc","authorization","backup","begin","between",
         "break","browse","bulk","by","cascade","case","check","checkpoint","close","clustered",

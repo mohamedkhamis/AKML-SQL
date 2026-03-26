@@ -1,4 +1,3 @@
-#nullable enable
 using System;
 
 namespace AkmlSql.Core.Models.Tabs

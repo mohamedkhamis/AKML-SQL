@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Design;
 
 /// <summary>DE004 — VARCHAR(1) or VARCHAR(2) is very short; consider CHAR for fixed-length data or a larger VARCHAR size.</summary>
-public sealed class DE004_ShortVarchar : IAnalysisRule
+public sealed class De004ShortVarchar : IAnalysisRule
 {
     public string RuleId => "DE004";
     public string Category => "Design";
@@ -23,9 +22,20 @@ public sealed class DE004_ShortVarchar : IAnalysisRule
     {
         public List<AnalysisDiagnostic> Diagnostics { get; } = [];
 
-        public override void Visit(ColumnDefinition node)      => CheckDataType(node.DataType, node);
-        public override void Visit(DeclareVariableElement node) => CheckDataType(node.DataType, node);
-        public override void Visit(ProcedureParameter node)    => CheckDataType(node.DataType, node);
+        public override void Visit(ColumnDefinition node)
+        {
+            CheckDataType(node.DataType, node);
+        }
+
+        public override void Visit(DeclareVariableElement node)
+        {
+            CheckDataType(node.DataType, node);
+        }
+
+        public override void Visit(ProcedureParameter node)
+        {
+            CheckDataType(node.DataType, node);
+        }
 
         private void CheckDataType(DataTypeReference? dataType, TSqlFragment node)
         {

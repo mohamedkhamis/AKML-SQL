@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.Deprecated;
 
-public sealed class DEP003Tests
+public sealed class Dep003Tests
 {
     [Fact]
     public void SetFmtonlyOn_Fires()

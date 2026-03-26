@@ -1,12 +1,10 @@
-using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using AkmlSql.Core.Models.Analysis;
-using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Naming;
 
 /// <summary>NM005 — Quoted identifier contains spaces or special characters; use standard alphanumeric names.</summary>
-public sealed class NM005_SpecialCharsInNames : IAnalysisRule
+public sealed class Nm005SpecialCharsInNames : IAnalysisRule
 {
     public string RuleId => "NM005";
     public string Category => "Naming";

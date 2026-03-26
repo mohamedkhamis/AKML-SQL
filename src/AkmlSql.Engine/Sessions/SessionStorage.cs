@@ -1,4 +1,3 @@
-#nullable enable
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using AkmlSql.Core.Models.Tabs;
@@ -20,14 +19,9 @@ public class SessionStorage
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    private readonly string _sessionsDir;
-
-    public SessionStorage()
-    {
-        _sessionsDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "AKML SQL", "sessions");
-    }
+    private readonly string _sessionsDir = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        "AKML SQL", "sessions");
 
     /// <summary>
     /// Atomically saves a session snapshot to disk.

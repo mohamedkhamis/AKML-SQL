@@ -110,8 +110,8 @@ namespace AkmlSql.Shell.Shared.Productivity.DocumentOutline
 
             var factory = new FrameworkElementFactory(typeof(StackPanel));
             factory.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
-            factory.SetValue(FrameworkElement.MarginProperty, new Thickness(2, 1, 2, 1));
-            factory.SetValue(FrameworkElement.CursorProperty, Cursors.Hand);
+            factory.SetValue(MarginProperty, new Thickness(2, 1, 2, 1));
+            factory.SetValue(CursorProperty, Cursors.Hand);
 
             // Icon (TextBlock with emoji-like glyph based on NodeType)
             var iconFactory = new FrameworkElementFactory(typeof(TextBlock));
@@ -120,14 +120,14 @@ namespace AkmlSql.Shell.Shared.Productivity.DocumentOutline
                 Converter = new NodeTypeToIconConverter()
             });
             iconFactory.SetValue(TextBlock.FontSizeProperty, 13.0);
-            iconFactory.SetValue(FrameworkElement.MarginProperty, new Thickness(0, 0, 6, 0));
-            iconFactory.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            iconFactory.SetValue(MarginProperty, new Thickness(0, 0, 6, 0));
+            iconFactory.SetValue(VerticalAlignmentProperty, VerticalAlignment.Center);
             factory.AppendChild(iconFactory);
 
             // Name
             var nameFactory = new FrameworkElementFactory(typeof(TextBlock));
             nameFactory.SetBinding(TextBlock.TextProperty, new Binding("Name"));
-            nameFactory.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            nameFactory.SetValue(VerticalAlignmentProperty, VerticalAlignment.Center);
             factory.AppendChild(nameFactory);
 
             template.VisualTree = factory;

@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.Security;
 
-public sealed class SE003Tests
+public sealed class Se003Tests
 {
     [Fact]
     public void GrantToPublic_Fires()

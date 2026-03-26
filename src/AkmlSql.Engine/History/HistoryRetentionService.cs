@@ -1,4 +1,3 @@
-#nullable enable
 using AkmlSql.Core.Config;
 using Serilog;
 
@@ -8,20 +7,14 @@ namespace AkmlSql.Engine.History;
 /// Periodically purges expired and excess history entries based on retention settings.
 /// Runs on startup and then every 24 hours.
 /// </summary>
-public sealed class HistoryRetentionService : IDisposable
+public sealed class HistoryRetentionService(HistoryDatabase database, HistorySettings settings) : IDisposable
 {
     private static readonly TimeSpan PurgeInterval = TimeSpan.FromHours(24);
 
-    private readonly HistoryDatabase _database;
-    private readonly HistorySettings _settings;
+    private readonly HistoryDatabase _database = database ?? throw new ArgumentNullException(nameof(database));
+    private readonly HistorySettings _settings = settings ?? throw new ArgumentNullException(nameof(settings));
     private Timer? _timer;
     private bool _disposed;
-
-    public HistoryRetentionService(HistoryDatabase database, HistorySettings settings)
-    {
-        _database = database ?? throw new ArgumentNullException(nameof(database));
-        _settings = settings ?? throw new ArgumentNullException(nameof(settings));
-    }
 
     /// <summary>
     /// Starts the retention service: runs an immediate purge, then schedules periodic purges.

@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.Style;
 
-public sealed class ST004Tests
+public sealed class St004Tests
 {
     [Fact]
     public void SelectWithoutSemicolon_Fires()

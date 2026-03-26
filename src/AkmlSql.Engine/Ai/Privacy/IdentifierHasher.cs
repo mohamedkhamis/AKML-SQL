@@ -230,26 +230,32 @@ public sealed class IdentifierHasher : IDisposable
     /// <summary>
     /// Maps an object type string to the hashing category.
     /// </summary>
-    private static string GetObjectCategory(string objectType) => objectType.ToLowerInvariant() switch
+    private static string GetObjectCategory(string objectType)
     {
-        "procedure" or "function" => "procedure",
-        "view" => "table", // views are referenced like tables in SQL
-        _ => "table"
-    };
+        return objectType.ToLowerInvariant() switch
+        {
+            "procedure" or "function" => "procedure",
+            "view" => "table", // views are referenced like tables in SQL
+            _ => "table"
+        };
+    }
 
     /// <summary>
     /// Maps a category name to the short prefix used in hashed identifiers.
     /// </summary>
-    private static string CategoryToPrefix(string category) => category.ToLowerInvariant() switch
+    private static string CategoryToPrefix(string category)
     {
-        "table" => "t_",
-        "column" => "c_",
-        "schema" => "s_",
-        "procedure" => "p_",
-        "index" => "i_",
-        "database" => "d_",
-        _ => "x_"
-    };
+        return category.ToLowerInvariant() switch
+        {
+            "table" => "t_",
+            "column" => "c_",
+            "schema" => "s_",
+            "procedure" => "p_",
+            "index" => "i_",
+            "database" => "d_",
+            _ => "x_"
+        };
+    }
 
     /// <summary>
     /// Case-insensitive word-boundary replacement of an identifier in SQL text.

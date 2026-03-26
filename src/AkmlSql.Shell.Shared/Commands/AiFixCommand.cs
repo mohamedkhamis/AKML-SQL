@@ -2,7 +2,6 @@
 using System;
 using System.ComponentModel.Design;
 using System.Threading;
-using System.Threading.Tasks;
 using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;

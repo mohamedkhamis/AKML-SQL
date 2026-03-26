@@ -1,4 +1,3 @@
-#nullable enable
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.AI;
 using Mscc.GenerativeAI;

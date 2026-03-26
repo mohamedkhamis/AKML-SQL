@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.Style;
 
-public sealed class ST008Tests
+public sealed class St008Tests
 {
     [Fact]
     public void MixedTabAndSpaceIndentation_Fires()

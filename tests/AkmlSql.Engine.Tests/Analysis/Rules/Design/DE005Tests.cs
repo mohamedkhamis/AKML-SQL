@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.Design;
 
-public sealed class DE005Tests
+public sealed class De005Tests
 {
     [Fact]
     public void FloatColumnWithFinancialName_Fires()

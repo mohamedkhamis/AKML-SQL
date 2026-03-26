@@ -11,11 +11,14 @@ public class VariableProviderTests
 
     private static CursorContext MakeContext(
         string partialText = "",
-        Dictionary<string, string>? variables = null) => new()
+        Dictionary<string, string>? variables = null)
     {
-        PartialText = partialText,
-        AvailableVariables = variables ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-    };
+        return new CursorContext
+        {
+            PartialText = partialText,
+            AvailableVariables = variables ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        };
+    }
 
     // ── CanHandle ─────────────────────────────────────────────────────────
 

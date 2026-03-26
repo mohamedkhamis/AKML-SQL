@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Deprecated;
 
 /// <summary>DEP006 — Numbered procedures (PROC;1) are deprecated and not supported in all editions.</summary>
-public sealed class DEP006_NumberedProcedures : IAnalysisRule
+public sealed class Dep006NumberedProcedures : IAnalysisRule
 {
     public string RuleId => "DEP006";
     public string Category => "Deprecated";

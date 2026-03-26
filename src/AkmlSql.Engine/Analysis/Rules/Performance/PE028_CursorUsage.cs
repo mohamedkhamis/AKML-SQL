@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Performance;
 
 /// <summary>PE028 — Cursor-based row-by-row processing is slow.</summary>
-public sealed class PE028_CursorUsage : IAnalysisRule
+public sealed class Pe028CursorUsage : IAnalysisRule
 {
     public string RuleId => "PE028";
     public string Category => "Performance";

@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.Performance;
 
-public sealed class PE022_UnionWithoutAllTests
+public sealed class Pe022UnionWithoutAllTests
 {
     [Fact]
     public void Fires_OnUnionWithoutAll()

@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Linq;
 using AkmlSql.Core.Config;
 using AkmlSql.Core.Models.Productivity;
-using Microsoft.VisualStudio.Shell;
 using Serilog;
 
 namespace AkmlSql.Shell.Shared.Productivity.CommandPalette

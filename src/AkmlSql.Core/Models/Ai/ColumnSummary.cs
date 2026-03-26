@@ -1,5 +1,3 @@
-#nullable enable
-
 namespace AkmlSql.Core.Models.Ai
 {
     /// <summary>

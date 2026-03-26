@@ -1,10 +1,9 @@
 using AkmlSql.Core.Models.Analysis;
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.BestPractices;
 
-public sealed class BP004_NullComparisonTests
+public sealed class Bp004NullComparisonTests
 {
     [Fact]
     public void FiresOnEqualsNull()

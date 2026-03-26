@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.Execution;
 
-public sealed class EX006Tests
+public sealed class Ex006Tests
 {
     [Fact]
     public void AlwaysTrueIntegerLiterals_Fires()

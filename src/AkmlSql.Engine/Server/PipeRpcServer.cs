@@ -32,7 +32,7 @@ namespace AkmlSql.Engine.Server;
 public class PipeRpcServer
 {
     private readonly string _pipeName;
-    private AkmlSql.Core.Config.AppSettings? _cachedSettings;
+    private Core.Config.AppSettings? _cachedSettings;
     private readonly SessionManager _sessionManager = new();
     private readonly TsqlParserService _parserService = new();
     private readonly CompletionEngine _completionEngine;
@@ -80,7 +80,7 @@ public class PipeRpcServer
         // History: initialize database and retention service
         var historyDb = new HistoryDatabase();
         _historyHandler = new HistoryRequestHandler(historyDb);
-        var settings = AkmlSql.Core.Config.ConfigManager.Load();
+        var settings = Core.Config.ConfigManager.Load();
         _historyRetentionService = new HistoryRetentionService(historyDb, settings.History);
         if (settings.History.Enabled)
         {
@@ -636,7 +636,7 @@ public class PipeRpcServer
     {
         try
         {
-            _cachedSettings ??= AkmlSql.Core.Config.ConfigManager.Load();
+            _cachedSettings ??= Core.Config.ConfigManager.Load();
             var globalSettings = _cachedSettings.CodeAnalysis;
             var response = await _analysisEngine.AnalyzeAsync(
                 req, _sessionManager, _schemaCacheManager, globalSettings, ct);

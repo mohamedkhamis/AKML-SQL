@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.BestPractices;
 
-public sealed class BP027_UpdateWithJoinTests
+public sealed class Bp027UpdateWithJoinTests
 {
     [Fact]
     public void Fires_OnUpdateWithFromAndJoin()

@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.BestPractices;
 
 /// <summary>BP015 — Single-statement IF body should use BEGIN/END for clarity and safety.</summary>
-public sealed class BP015_IfWithoutBeginEnd : IAnalysisRule
+public sealed class Bp015IfWithoutBeginEnd : IAnalysisRule
 {
     public string RuleId => "BP015";
     public string Category => "BestPractices";

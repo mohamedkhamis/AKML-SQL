@@ -177,8 +177,10 @@ namespace AkmlSql.Shell.Shared.Editor
         /// <summary>
         /// Returns true if the character can be part of a SQL identifier.
         /// </summary>
-        private static bool IsIdentifierChar(char c) =>
-            char.IsLetterOrDigit(c) || c == '_' || c == '#' || c == '@';
+        private static bool IsIdentifierChar(char c)
+        {
+            return char.IsLetterOrDigit(c) || c == '_' || c == '#' || c == '@';
+        }
 
         public IEnumerable<ITagSpan<ITextMarkerTag>> GetTags(NormalizedSnapshotSpanCollection spans)
         {

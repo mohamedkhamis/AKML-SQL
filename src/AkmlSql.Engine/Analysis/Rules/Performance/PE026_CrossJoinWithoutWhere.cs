@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Performance;
 
 /// <summary>PE026 — CROSS JOIN produces a cartesian product.</summary>
-public sealed class PE026_CrossJoinWithoutWhere : IAnalysisRule
+public sealed class Pe026CrossJoinWithoutWhere : IAnalysisRule
 {
     public string RuleId => "PE026";
     public string Category => "Performance";

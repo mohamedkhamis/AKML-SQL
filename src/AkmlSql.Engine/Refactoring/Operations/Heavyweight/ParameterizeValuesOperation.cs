@@ -1,12 +1,5 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading;
-using System.Threading.Tasks;
 using AkmlSql.Core.Ipc.Messages;
-using AkmlSql.Engine.Refactoring;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Refactoring.Operations.Heavyweight;
@@ -234,17 +227,11 @@ public class ParameterizeValuesOperation : HeavyweightOperationBase
         }
     }
 
-    internal sealed class LiteralWithContext
+    internal sealed class LiteralWithContext(Literal literal, string? contextColumnName)
     {
-        public Literal Literal        { get; }
-        public string? ContextColumnName { get; }
+        public Literal Literal        { get; } = literal;
+        public string? ContextColumnName { get; } = contextColumnName;
         public int StartOffset        => Literal.StartOffset;
         public int FragmentLength     => Literal.FragmentLength;
-
-        public LiteralWithContext(Literal literal, string? contextColumnName)
-        {
-            Literal           = literal;
-            ContextColumnName = contextColumnName;
-        }
     }
 }

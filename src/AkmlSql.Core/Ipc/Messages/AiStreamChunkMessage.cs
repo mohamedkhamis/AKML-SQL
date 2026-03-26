@@ -1,4 +1,3 @@
-#nullable enable
 using MessagePack;
 
 namespace AkmlSql.Core.Ipc.Messages
@@ -8,6 +7,7 @@ namespace AkmlSql.Core.Ipc.Messages
     /// Sent Engine -> Shell as a notification (RequestId 0).
     /// </summary>
     [MessagePackObject]
+    // ReSharper disable  UnusedMember.Global
     public class AiStreamChunkMessage
     {
         /// <summary>The request ID of the originating AI request this chunk belongs to.</summary>

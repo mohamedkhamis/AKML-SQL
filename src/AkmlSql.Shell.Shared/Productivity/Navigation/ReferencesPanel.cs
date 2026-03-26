@@ -211,38 +211,23 @@ namespace AkmlSql.Shell.Shared.Productivity.Navigation
     /// <summary>
     /// View model for a single reference in the <see cref="ReferencesPanel"/>.
     /// </summary>
-    internal sealed class ReferenceViewModel
+    internal sealed class ReferenceViewModel(ObjectReferenceDto dto)
     {
-        public string SchemaName { get; }
-        public string ObjectName { get; }
-        public string ObjectType { get; }
-        public int? ReferenceLine { get; }
+        public string SchemaName { get; } = dto.SchemaName;
+        public string ObjectName { get; } = dto.ObjectName;
+        public string ObjectType { get; } = dto.ObjectType;
+        public int? ReferenceLine { get; } = dto.ReferenceLine;
         public string FullName => $"{SchemaName}.{ObjectName}";
         public string LineDisplay => ReferenceLine.HasValue ? ReferenceLine.Value.ToString() : "-";
-
-        public ReferenceViewModel(ObjectReferenceDto dto)
-        {
-            SchemaName = dto.SchemaName;
-            ObjectName = dto.ObjectName;
-            ObjectType = dto.ObjectType;
-            ReferenceLine = dto.ReferenceLine;
-        }
     }
 
     /// <summary>
     /// Event args for navigating to a referenced object.
     /// </summary>
-    internal sealed class ReferenceNavigateEventArgs : EventArgs
+    internal sealed class ReferenceNavigateEventArgs(string schemaName, string objectName, int? line) : EventArgs
     {
-        public string SchemaName { get; }
-        public string ObjectName { get; }
-        public int? Line { get; }
-
-        public ReferenceNavigateEventArgs(string schemaName, string objectName, int? line)
-        {
-            SchemaName = schemaName;
-            ObjectName = objectName;
-            Line = line;
-        }
+        public string SchemaName { get; } = schemaName;
+        public string ObjectName { get; } = objectName;
+        public int? Line { get; } = line;
     }
 }

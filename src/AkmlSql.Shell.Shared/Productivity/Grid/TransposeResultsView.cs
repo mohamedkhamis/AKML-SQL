@@ -195,7 +195,7 @@ namespace AkmlSql.Shell.Shared.Productivity.Grid
                 var cellValue = row.Cells[col].Value;
 
                 string displayValue;
-                if (cellValue == null || cellValue is System.DBNull)
+                if (cellValue == null || cellValue is DBNull)
                 {
                     displayValue = "NULL";
                 }
@@ -207,7 +207,7 @@ namespace AkmlSql.Shell.Shared.Productivity.Grid
                 int rowIdx = _transposeGrid.Rows.Add(columnName, displayValue);
 
                 // Style NULL values
-                if (cellValue == null || cellValue is System.DBNull)
+                if (cellValue == null || cellValue is DBNull)
                 {
                     _transposeGrid.Rows[rowIdx].Cells[1].Style.ForeColor = Color.Gray;
                     _transposeGrid.Rows[rowIdx].Cells[1].Style.Font =

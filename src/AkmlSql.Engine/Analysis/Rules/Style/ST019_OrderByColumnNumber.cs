@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Style;
 
 /// <summary>ST019 — ORDER BY column number is fragile — use column name or alias instead.</summary>
-public sealed class ST019_OrderByColumnNumber : IAnalysisRule
+public sealed class St019OrderByColumnNumber : IAnalysisRule
 {
     public string RuleId => "ST019";
     public string Category => "Style";

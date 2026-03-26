@@ -69,7 +69,7 @@ namespace AkmlSql.Shell.Shared.Tabs
         /// Fired whenever a VS/SSMS window receives focus. If the window is a document
         /// window, we detect the connected server and apply tab colouring.
         /// </summary>
-        private static void OnWindowActivated(EnvDTE.Window gotFocus, EnvDTE.Window lostFocus)
+        private static void OnWindowActivated(Window gotFocus, Window lostFocus)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
 
@@ -121,7 +121,7 @@ namespace AkmlSql.Shell.Shared.Tabs
         /// <c>IVsWindowFrame</c> properties or via SSMS-specific service interfaces.
         /// This is a best-effort extraction that works across VS and SSMS hosts.
         /// </remarks>
-        private static string? GetActiveServerName(EnvDTE.Window window)
+        private static string? GetActiveServerName(Window window)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
 
@@ -205,7 +205,7 @@ namespace AkmlSql.Shell.Shared.Tabs
         /// <summary>
         /// Applies the environment rule's colour to the document tab header via WPF visual tree walking.
         /// </summary>
-        private static void ApplyTabColor(EnvDTE.Window window, EnvironmentRule rule)
+        private static void ApplyTabColor(Window window, EnvironmentRule rule)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
 
@@ -245,7 +245,7 @@ namespace AkmlSql.Shell.Shared.Tabs
         /// <summary>
         /// Removes any previously applied environment colour from a document tab.
         /// </summary>
-        private static void ClearTabColor(EnvDTE.Window window)
+        private static void ClearTabColor(Window window)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
 

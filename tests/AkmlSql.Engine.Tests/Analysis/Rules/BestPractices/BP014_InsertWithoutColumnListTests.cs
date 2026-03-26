@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.BestPractices;
 
-public sealed class BP014_InsertWithoutColumnListTests
+public sealed class Bp014InsertWithoutColumnListTests
 {
     [Fact]
     public void FiresOnInsertValuesWithoutColumnList()

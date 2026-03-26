@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Execution;
 
 /// <summary>EX001 — Division by a literal zero will always throw a runtime error.</summary>
-public sealed class EX001_DivisionByZero : IAnalysisRule
+public sealed class Ex001DivisionByZero : IAnalysisRule
 {
     public string RuleId => "EX001";
     public string Category => "Execution";

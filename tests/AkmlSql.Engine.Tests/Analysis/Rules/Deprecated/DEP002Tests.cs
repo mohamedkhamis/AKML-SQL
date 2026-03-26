@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.Deprecated;
 
-public sealed class DEP002Tests
+public sealed class Dep002Tests
 {
     [Fact]
     public void SpAddlogin_Fires()

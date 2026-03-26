@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.BestPractices;
 
-public sealed class BP008_MissingReturnTests
+public sealed class Bp008MissingReturnTests
 {
     // The BP008 rule checks whether the last statement in StatementList.Statements is a
     // ReturnStatement. When the proc body uses BEGIN/END, the last top-level statement is

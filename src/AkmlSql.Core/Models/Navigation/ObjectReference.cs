@@ -1,5 +1,3 @@
-#nullable enable
-
 namespace AkmlSql.Core.Models.Navigation
 {
     /// <summary>A location where a database object is referenced by another object.</summary>

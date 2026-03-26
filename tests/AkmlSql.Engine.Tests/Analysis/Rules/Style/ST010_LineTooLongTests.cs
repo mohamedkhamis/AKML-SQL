@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.Style;
 
-public sealed class ST010_LineTooLongTests
+public sealed class St010LineTooLongTests
 {
     [Fact]
     public void Fires_OnLineLongerThan120Chars()

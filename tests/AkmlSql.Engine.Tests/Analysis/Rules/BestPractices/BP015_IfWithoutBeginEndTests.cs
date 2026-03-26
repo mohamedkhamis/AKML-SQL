@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.BestPractices;
 
-public sealed class BP015_IfWithoutBeginEndTests
+public sealed class Bp015IfWithoutBeginEndTests
 {
     [Fact]
     public void FiresOnIfWithoutBeginEnd()

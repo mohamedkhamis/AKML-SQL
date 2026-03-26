@@ -1,10 +1,5 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Engine.Parser;
@@ -26,22 +21,11 @@ namespace AkmlSql.Engine.Analysis;
 ///   Token-scan rules (ST001, ST006, ST008, DEP004, DEP007) are scoped to their batch offset range
 ///   to avoid O(batches × total_tokens) behaviour.
 /// </summary>
-public class AnalysisEngine
+public class AnalysisEngine(TsqlParserService parser, RuleRegistry registry, CaSettingsLoader settingsLoader)
 {
-    private readonly TsqlParserService _parser;
-    private readonly RuleRegistry _registry;
-    private readonly CaSettingsLoader _settingsLoader;
-
     // Batch-level result cache: (sessionId + batchHash) → diagnostics
     private readonly Dictionary<string, List<AnalysisDiagnostic>> _batchCache = new();
     private readonly SemaphoreSlim _ruleSemaphore = new(8, 8);
-
-    public AnalysisEngine(TsqlParserService parser, RuleRegistry registry, CaSettingsLoader settingsLoader)
-    {
-        _parser         = parser;
-        _registry       = registry;
-        _settingsLoader = settingsLoader;
-    }
 
     /// <summary>
     /// Analyzes the SQL document referenced by <paramref name="request"/> and returns all diagnostics.
@@ -55,7 +39,7 @@ public class AnalysisEngine
         CodeAnalysisSettings globalSettings,
         CancellationToken ct)
     {
-        var settings = _settingsLoader.Load(null, globalSettings);
+        var settings = settingsLoader.Load(null, globalSettings);
 
         if (!settings.Enabled)
         {
@@ -74,10 +58,10 @@ public class AnalysisEngine
 
         // Ensure parser is using the correct server version for this session
         if (session != null)
-            _parser.SetServerVersion(session.ServerVersion);
+            parser.SetServerVersion(session.ServerVersion);
 
         // Parse full document once
-        var script = _parser.Parse(request.DocumentText, out var errors);
+        var script = parser.Parse(request.DocumentText, out var errors);
 
         if (script == null)
         {
@@ -89,13 +73,13 @@ public class AnalysisEngine
             };
         }
 
-        var tokens = _parser.GetTokenStream(request.DocumentText);
+        var tokens = parser.GetTokenStream(request.DocumentText);
 
         // Parse suppressions once for the whole document
         var suppressions = SuppressionParser.Parse(tokens, out var metaDiagnostics);
 
         var allDiagnostics = new List<AnalysisDiagnostic>(metaDiagnostics);
-        var enabledRules   = _registry.GetEnabledRules(settings);
+        var enabledRules   = registry.GetEnabledRules(settings);
 
         foreach (var batch in script.Batches)
         {
@@ -212,24 +196,27 @@ public class AnalysisEngine
         return Convert.ToHexString(bytes);
     }
 
-    private static CodeIssueInfo ToIssueInfo(AnalysisDiagnostic d) => new()
+    private static CodeIssueInfo ToIssueInfo(AnalysisDiagnostic d)
     {
-        RuleId      = d.RuleId,
-        Severity    = (int)d.Severity,
-        Message     = d.Message,
-        StartOffset = d.StartOffset,
-        EndOffset   = d.EndOffset,
-        Line        = d.Line,
-        Column      = d.Column,
-        FixActions  = d.FixActions.Select(f => new FixActionInfo
+        return new CodeIssueInfo
         {
-            Label            = f.Label,
-            FixType          = (int)f.FixType,
-            ReplacementStart = f.ReplacementStart,
-            ReplacementEnd   = f.ReplacementEnd,
-            ReplacementText  = f.ReplacementText,
-            SuppressRuleId   = f.SuppressRuleId,
-            SuppressScopeCode = f.SuppressScope.HasValue ? (int?)f.SuppressScope : null
-        }).ToArray()
-    };
+            RuleId = d.RuleId,
+            Severity = (int)d.Severity,
+            Message = d.Message,
+            StartOffset = d.StartOffset,
+            EndOffset = d.EndOffset,
+            Line = d.Line,
+            Column = d.Column,
+            FixActions = d.FixActions.Select(f => new FixActionInfo
+            {
+                Label = f.Label,
+                FixType = (int)f.FixType,
+                ReplacementStart = f.ReplacementStart,
+                ReplacementEnd = f.ReplacementEnd,
+                ReplacementText = f.ReplacementText,
+                SuppressRuleId = f.SuppressRuleId,
+                SuppressScopeCode = f.SuppressScope.HasValue ? (int?)f.SuppressScope : null
+            }).ToArray()
+        };
+    }
 }

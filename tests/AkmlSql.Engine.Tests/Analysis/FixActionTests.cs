@@ -1,6 +1,4 @@
-using System.Linq;
 using AkmlSql.Core.Models.Analysis;
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis;

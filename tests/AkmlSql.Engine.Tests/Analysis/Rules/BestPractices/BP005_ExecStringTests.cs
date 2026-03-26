@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.BestPractices;
 
-public sealed class BP005_ExecStringTests
+public sealed class Bp005ExecStringTests
 {
     [Fact]
     public void FiresOnExecWithStringLiteral()

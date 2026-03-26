@@ -1,5 +1,3 @@
-using System;
-using System.IO;
 using System.Text.Json;
 using AkmlSql.Core.Config;
 using AkmlSql.Core.Models.Analysis;
@@ -25,7 +23,10 @@ public sealed class CaSettingsLoaderTests : IDisposable
         try { Directory.Delete(_tempDir, recursive: true); } catch { /* cleanup best-effort */ }
     }
 
-    private static CodeAnalysisSettings DefaultGlobal() => new() { Enabled = true };
+    private static CodeAnalysisSettings DefaultGlobal()
+    {
+        return new CodeAnalysisSettings { Enabled = true };
+    }
 
     [Fact]
     public void ReturnsDefaultSettingsWhenNoFileExists()

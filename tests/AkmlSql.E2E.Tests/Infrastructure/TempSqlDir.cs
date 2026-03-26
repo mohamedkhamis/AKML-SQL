@@ -33,8 +33,10 @@ public sealed class TempSqlDir : IDisposable
     }
 
     /// <summary>Returns the full path of a file that may or may not exist.</summary>
-    public string FilePath(string relativeName) =>
-        System.IO.Path.Combine(Path, relativeName);
+    public string FilePath(string relativeName)
+    {
+        return System.IO.Path.Combine(Path, relativeName);
+    }
 
     public void Dispose()
     {

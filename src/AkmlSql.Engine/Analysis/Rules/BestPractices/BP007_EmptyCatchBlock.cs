@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.BestPractices;
 
 /// <summary>BP007 — CATCH block is empty; at minimum, use THROW to re-raise the original error.</summary>
-public sealed class BP007_EmptyCatchBlock : IAnalysisRule
+public sealed class Bp007EmptyCatchBlock : IAnalysisRule
 {
     public string RuleId => "BP007";
     public string Category => "BestPractices";

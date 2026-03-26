@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Deprecated;
 
 /// <summary>DEP001 — The text, ntext, and image data types are deprecated; use varchar(max), nvarchar(max), and varbinary(max).</summary>
-public sealed class DEP001_DeprecatedDataType : IAnalysisRule
+public sealed class Dep001DeprecatedDataType : IAnalysisRule
 {
     public string RuleId => "DEP001";
     public string Category => "Deprecated";
@@ -23,9 +22,20 @@ public sealed class DEP001_DeprecatedDataType : IAnalysisRule
     {
         public List<AnalysisDiagnostic> Diagnostics { get; } = [];
 
-        public override void Visit(ColumnDefinition node)      => CheckDataType(node.DataType);
-        public override void Visit(ProcedureParameter node)    => CheckDataType(node.DataType);
-        public override void Visit(DeclareVariableElement node) => CheckDataType(node.DataType);
+        public override void Visit(ColumnDefinition node)
+        {
+            CheckDataType(node.DataType);
+        }
+
+        public override void Visit(ProcedureParameter node)
+        {
+            CheckDataType(node.DataType);
+        }
+
+        public override void Visit(DeclareVariableElement node)
+        {
+            CheckDataType(node.DataType);
+        }
 
         private void CheckDataType(DataTypeReference? dataType)
         {

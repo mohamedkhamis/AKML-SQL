@@ -12,14 +12,17 @@ public class AlignmentCalculatorTests
         TSqlTokenType tokenType = TSqlTokenType.Identifier,
         BreakType breakType = BreakType.None,
         int spaces = 1,
-        int indent = 0) => new()
+        int indent = 0)
     {
-        FormattedText = text,
-        TokenType = tokenType,
-        PrecedingBreak = breakType,
-        PrecedingSpaces = spaces,
-        IndentLevel = indent
-    };
+        return new LayoutNode
+        {
+            FormattedText = text,
+            TokenType = tokenType,
+            PrecedingBreak = breakType,
+            PrecedingSpaces = spaces,
+            IndentLevel = indent
+        };
+    }
 
     // ── MeasureLineWidth ──────────────────────────────────────────────────
 

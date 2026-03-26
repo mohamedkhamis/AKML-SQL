@@ -1,10 +1,8 @@
-using System.Linq;
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.Performance;
 
-public sealed class PE015_LargeInListTests
+public sealed class Pe015LargeInListTests
 {
     [Fact]
     public void FiresOnInListWithMoreThan100Items()

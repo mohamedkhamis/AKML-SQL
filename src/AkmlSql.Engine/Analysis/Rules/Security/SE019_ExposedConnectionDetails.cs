@@ -1,10 +1,9 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 
 namespace AkmlSql.Engine.Analysis.Rules.Security;
 
 /// <summary>SE019 — Connection string exposure detection — similar coverage to SE010.</summary>
-public sealed class SE019_ExposedConnectionDetails : IAnalysisRule
+public sealed class Se019ExposedConnectionDetails : IAnalysisRule
 {
     public string RuleId => "SE019";
     public string Category => "Security";
@@ -17,5 +16,8 @@ public sealed class SE019_ExposedConnectionDetails : IAnalysisRule
     // broader context (e.g. the literal being stored in a table, passed to xp_cmdshell, or
     // written to a file) would produce duplicate diagnostics. Deferred pending a distinct
     // detection scenario that SE010 does not already cover.
-    public IEnumerable<AnalysisDiagnostic> Analyze(AnalysisContext ctx) => [];
+    public IEnumerable<AnalysisDiagnostic> Analyze(AnalysisContext ctx)
+    {
+        return [];
+    }
 }

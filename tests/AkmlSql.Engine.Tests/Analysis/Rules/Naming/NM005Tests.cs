@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.Naming;
 
-public sealed class NM005Tests
+public sealed class Nm005Tests
 {
     [Fact]
     public void HyphenInBracketedIdentifier_Fires()

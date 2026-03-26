@@ -20,15 +20,9 @@ namespace AkmlSql.Shell.Shared.Editor
         }
     }
 
-    internal class CompletionSource : ICompletionSource
+    internal class CompletionSource(ITextBuffer buffer) : ICompletionSource
     {
-        private readonly ITextBuffer _buffer;
         private bool _disposed;
-
-        public CompletionSource(ITextBuffer buffer)
-        {
-            _buffer = buffer;
-        }
 
         public void AugmentCompletionSession(ICompletionSession session, IList<CompletionSet> completionSets)
         {
@@ -57,14 +51,14 @@ namespace AkmlSql.Shell.Shared.Editor
 
         private ITrackingSpan FindTokenSpanAtPosition(ICompletionSession session)
         {
-            var point = session.GetTriggerPoint(_buffer.CurrentSnapshot);
+            var point = session.GetTriggerPoint(buffer.CurrentSnapshot);
             if (point == null)
             {
-                return _buffer.CurrentSnapshot.CreateTrackingSpan(0, 0, SpanTrackingMode.EdgeInclusive);
+                return buffer.CurrentSnapshot.CreateTrackingSpan(0, 0, SpanTrackingMode.EdgeInclusive);
             }
 
             var position = point.Value.Position;
-            var snapshot = _buffer.CurrentSnapshot;
+            var snapshot = buffer.CurrentSnapshot;
 
             // Walk backwards to find start of current word
             int start = position;

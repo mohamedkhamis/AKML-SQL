@@ -2,7 +2,6 @@
 using System;
 using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
-using System.Threading;
 using System.Windows.Forms;
 using AkmlSql.Core.Config;
 using AkmlSql.Core.Models.Safety;
@@ -57,7 +56,7 @@ namespace AkmlSql.Shell.Shared.Safety
         /// <summary>
         /// Active transaction states keyed by document moniker (full path or tab identifier).
         /// </summary>
-        private static readonly ConcurrentDictionary<string, TransactionState> _activeTransactions
+        private static readonly ConcurrentDictionary<string, TransactionState> ActiveTransactions
             = new ConcurrentDictionary<string, TransactionState>(StringComparer.OrdinalIgnoreCase);
 
         private static Package? _package;
@@ -128,7 +127,7 @@ namespace AkmlSql.Shell.Shared.Safety
             _statusBarTimer?.Dispose();
             _statusBarTimer = null;
 
-            _activeTransactions.Clear();
+            ActiveTransactions.Clear();
             _initialized = false;
             _dte = null;
             _package = null;
@@ -160,7 +159,7 @@ namespace AkmlSql.Shell.Shared.Safety
                 // Handle ROLLBACK first — it clears the entire transaction regardless of nesting
                 if (rollbackCount > 0)
                 {
-                    if (_activeTransactions.TryRemove(tabId, out _))
+                    if (ActiveTransactions.TryRemove(tabId, out _))
                     {
                         Log.Information("TransactionMonitor: ROLLBACK detected on '{TabId}', transaction cleared", tabId);
                         UpdateStatusBarForActiveTab();
@@ -171,12 +170,12 @@ namespace AkmlSql.Shell.Shared.Safety
                 // Handle COMMIT — decrements the nesting count
                 if (commitCount > 0)
                 {
-                    if (_activeTransactions.TryGetValue(tabId, out var existing))
+                    if (ActiveTransactions.TryGetValue(tabId, out var existing))
                     {
                         existing.TranCount -= commitCount;
                         if (existing.TranCount <= 0)
                         {
-                            _activeTransactions.TryRemove(tabId, out _);
+                            ActiveTransactions.TryRemove(tabId, out _);
                             Log.Information("TransactionMonitor: all transactions committed on '{TabId}'", tabId);
                             UpdateStatusBarForActiveTab();
                         }
@@ -191,7 +190,7 @@ namespace AkmlSql.Shell.Shared.Safety
                 // Handle BEGIN TRAN — creates or increments
                 if (beginCount > 0)
                 {
-                    _activeTransactions.AddOrUpdate(
+                    ActiveTransactions.AddOrUpdate(
                         tabId,
                         _ =>
                         {
@@ -231,12 +230,12 @@ namespace AkmlSql.Shell.Shared.Safety
             if (string.IsNullOrEmpty(tabId))
                 return true;
 
-            if (!_activeTransactions.TryGetValue(tabId, out var state))
+            if (!ActiveTransactions.TryGetValue(tabId, out var state))
                 return true;
 
             if (state.TranCount <= 0)
             {
-                _activeTransactions.TryRemove(tabId, out _);
+                ActiveTransactions.TryRemove(tabId, out _);
                 return true;
             }
 
@@ -259,12 +258,12 @@ namespace AkmlSql.Shell.Shared.Safety
             {
                 case DialogResult.Yes:
                     Log.Information("TransactionMonitor: user chose COMMIT for '{TabId}'", tabId);
-                    _activeTransactions.TryRemove(tabId, out _);
+                    ActiveTransactions.TryRemove(tabId, out _);
                     return true; // Let the tab close (commit should be handled by the caller)
 
                 case DialogResult.No:
                     Log.Information("TransactionMonitor: user chose ROLLBACK for '{TabId}'", tabId);
-                    _activeTransactions.TryRemove(tabId, out _);
+                    ActiveTransactions.TryRemove(tabId, out _);
                     return true; // Let the tab close
 
                 case DialogResult.Cancel:
@@ -281,20 +280,20 @@ namespace AkmlSql.Shell.Shared.Safety
         public static TransactionState? GetState(string tabId)
         {
             if (string.IsNullOrEmpty(tabId)) return null;
-            return _activeTransactions.TryGetValue(tabId, out var state) ? state : null;
+            return ActiveTransactions.TryGetValue(tabId, out var state) ? state : null;
         }
 
         /// <summary>
         /// Returns <c>true</c> if there are any active transactions across all tabs.
         /// </summary>
-        public static bool HasActiveTransactions => !_activeTransactions.IsEmpty;
+        public static bool HasActiveTransactions => !ActiveTransactions.IsEmpty;
 
         /// <summary>
         /// Clears all tracked transaction state. Used during shutdown.
         /// </summary>
         public static void ClearAll()
         {
-            _activeTransactions.Clear();
+            ActiveTransactions.Clear();
         }
 
         // ----- Timer callbacks -----
@@ -305,12 +304,12 @@ namespace AkmlSql.Shell.Shared.Safety
         /// </summary>
         private static void OnReminderTimerTick(object? state)
         {
-            if (!_reminderEnabled || _activeTransactions.IsEmpty)
+            if (!_reminderEnabled || ActiveTransactions.IsEmpty)
                 return;
 
             var now = DateTime.UtcNow;
 
-            foreach (var kvp in _activeTransactions)
+            foreach (var kvp in ActiveTransactions)
             {
                 var txState = kvp.Value;
                 if (txState.TranCount <= 0) continue;
@@ -357,7 +356,7 @@ namespace AkmlSql.Shell.Shared.Safety
         /// </summary>
         private static void OnStatusBarTimerTick(object? state)
         {
-            if (_activeTransactions.IsEmpty)
+            if (ActiveTransactions.IsEmpty)
                 return;
 
             try
@@ -403,7 +402,7 @@ namespace AkmlSql.Shell.Shared.Safety
                 }
 
                 if (!string.IsNullOrEmpty(activeTabId) &&
-                    _activeTransactions.TryGetValue(activeTabId!, out var txState) &&
+                    ActiveTransactions.TryGetValue(activeTabId!, out var txState) &&
                     txState.TranCount > 0)
                 {
                     var elapsed = DateTime.UtcNow - txState.StartedAt;

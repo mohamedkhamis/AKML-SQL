@@ -1,12 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
-using AkmlSql.Engine.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Performance;
 
 /// <summary>PE001 — Avoid SELECT * in stored procedures.</summary>
-public sealed class PE001_AvoidSelectStar : IAnalysisRule
+public sealed class Pe001AvoidSelectStar : IAnalysisRule
 {
     public string RuleId => "PE001";
     public string Category => "Performance";

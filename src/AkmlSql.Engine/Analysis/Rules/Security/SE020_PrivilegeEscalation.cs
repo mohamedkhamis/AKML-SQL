@@ -1,10 +1,9 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 
 namespace AkmlSql.Engine.Analysis.Rules.Security;
 
 /// <summary>SE020 — Privilege escalation via EXECUTE AS — similar coverage to SE004.</summary>
-public sealed class SE020_PrivilegeEscalation : IAnalysisRule
+public sealed class Se020PrivilegeEscalation : IAnalysisRule
 {
     public string RuleId => "SE020";
     public string Category => "Security";
@@ -17,5 +16,8 @@ public sealed class SE020_PrivilegeEscalation : IAnalysisRule
     // form) would require distinguishing legitimate context-switch scenarios from actual escalation
     // attempts, which is not possible without runtime permission metadata. Deferred pending a
     // clearly distinct detection scenario beyond SE004's scope.
-    public IEnumerable<AnalysisDiagnostic> Analyze(AnalysisContext ctx) => [];
+    public IEnumerable<AnalysisDiagnostic> Analyze(AnalysisContext ctx)
+    {
+        return [];
+    }
 }

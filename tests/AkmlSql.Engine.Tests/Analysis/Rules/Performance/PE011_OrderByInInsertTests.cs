@@ -1,10 +1,8 @@
-using System.Linq;
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.Performance;
 
-public sealed class PE011_OrderByInInsertTests
+public sealed class Pe011OrderByInInsertTests
 {
     [Fact]
     public void FiresOnInsertSelectWithOrderByAndNoTop()

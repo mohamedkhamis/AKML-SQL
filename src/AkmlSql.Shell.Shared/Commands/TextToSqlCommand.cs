@@ -1,7 +1,6 @@
 #nullable enable
 using System;
 using System.ComponentModel.Design;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc;

@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Security;
 
 /// <summary>SE003 — GRANT permission to PUBLIC role exposes access to all users.</summary>
-public sealed class SE003_GrantToPublic : IAnalysisRule
+public sealed class Se003GrantToPublic : IAnalysisRule
 {
     public string RuleId => "SE003";
     public string Category => "Security";
@@ -30,7 +29,7 @@ public sealed class SE003_GrantToPublic : IAnalysisRule
             foreach (var principal in node.Principals)
             {
                 var isPublic = principal.PrincipalType == PrincipalType.Public
-                    || string.Equals(principal.Identifier?.Value, "public", System.StringComparison.OrdinalIgnoreCase);
+                    || string.Equals(principal.Identifier?.Value, "public", StringComparison.OrdinalIgnoreCase);
 
                 if (!isPublic) continue;
 

@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.BestPractices;
 
 /// <summary>BP017 — GOTO makes control flow difficult to follow; use structured flow control instead.</summary>
-public sealed class BP017_GotoUsage : IAnalysisRule
+public sealed class Bp017GotoUsage : IAnalysisRule
 {
     public string RuleId => "BP017";
     public string Category => "BestPractices";

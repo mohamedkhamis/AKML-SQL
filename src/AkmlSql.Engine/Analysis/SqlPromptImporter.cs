@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Text.Json;
 using System.Xml;
 using AkmlSql.Core.Models.Analysis;
@@ -87,13 +84,15 @@ public static class SqlPromptImporter
         return rules.Count;
     }
 
-    private static RuleConfig MapValue(string? value) =>
-        (value ?? string.Empty).ToLowerInvariant() switch
+    private static RuleConfig MapValue(string? value)
+    {
+        return (value ?? string.Empty).ToLowerInvariant() switch
         {
             "disabled" or "ignore" or "off" => new RuleConfig { Enabled = false, Severity = "ignore" },
-            "error"                          => new RuleConfig { Enabled = true,  Severity = "error"   },
-            "warning" or "warn"              => new RuleConfig { Enabled = true,  Severity = "warning" },
-            "information" or "info"          => new RuleConfig { Enabled = true,  Severity = "information" },
-            _                               => new RuleConfig { Enabled = true,  Severity = "warning" }
+            "error" => new RuleConfig { Enabled = true, Severity = "error" },
+            "warning" or "warn" => new RuleConfig { Enabled = true, Severity = "warning" },
+            "information" or "info" => new RuleConfig { Enabled = true, Severity = "information" },
+            _ => new RuleConfig { Enabled = true, Severity = "warning" }
         };
+    }
 }

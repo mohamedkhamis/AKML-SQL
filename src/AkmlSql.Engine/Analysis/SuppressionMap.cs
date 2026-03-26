@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-
 namespace AkmlSql.Engine.Analysis;
 
 public class SuppressionMap

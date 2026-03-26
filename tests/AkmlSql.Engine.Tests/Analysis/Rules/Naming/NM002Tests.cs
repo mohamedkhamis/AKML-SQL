@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.Naming;
 
-public sealed class NM002Tests
+public sealed class Nm002Tests
 {
     [Fact]
     public void SpPrefixedProcedure_Fires()

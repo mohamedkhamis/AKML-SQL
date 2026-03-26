@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using AkmlSql.Engine.Refactoring.Operations;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Refactoring.Operations.Lightweight;
@@ -107,6 +103,9 @@ public class AddGroupByColumnsOperation : ILightweightOperation
     private sealed class QuerySpecCollector : TSqlFragmentVisitor
     {
         public List<QuerySpecification> Specs { get; } = [];
-        public override void Visit(QuerySpecification node) => Specs.Add(node);
+        public override void Visit(QuerySpecification node)
+        {
+            Specs.Add(node);
+        }
     }
 }

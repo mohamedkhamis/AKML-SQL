@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Text.Json;
 using AkmlSql.Core.Config;
 using AkmlSql.Core.Models.Analysis;
@@ -147,12 +144,15 @@ public class CaSettingsLoader : IDisposable
         }
     }
 
-    private static DiagnosticSeverity ParseSeverity(string? s) => s?.ToLowerInvariant() switch
+    private static DiagnosticSeverity ParseSeverity(string? s)
     {
-        "error"       => DiagnosticSeverity.Error,
-        "warning"     => DiagnosticSeverity.Warning,
-        "information" => DiagnosticSeverity.Information,
-        "hint"        => DiagnosticSeverity.Hint,
-        _             => DiagnosticSeverity.Warning
-    };
+        return s?.ToLowerInvariant() switch
+        {
+            "error" => DiagnosticSeverity.Error,
+            "warning" => DiagnosticSeverity.Warning,
+            "information" => DiagnosticSeverity.Information,
+            "hint" => DiagnosticSeverity.Hint,
+            _ => DiagnosticSeverity.Warning
+        };
+    }
 }

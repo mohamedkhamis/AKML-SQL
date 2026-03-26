@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.Security;
 
-public sealed class SE009Tests
+public sealed class Se009Tests
 {
     [Fact]
     public void Openrowset_Fires()

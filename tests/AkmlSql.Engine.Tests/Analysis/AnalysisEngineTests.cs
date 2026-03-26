@@ -1,7 +1,4 @@
-using System.Linq;
-using System.Threading;
 using AkmlSql.Core.Models.Analysis;
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis;
@@ -37,7 +34,7 @@ public sealed class AnalysisEngineTests
     }
 
     [Fact]
-    public void ProcedureBodyTriggersPE001AndPE009()
+    public void ProcedureBodyTriggersPe001AndPe009()
     {
         const string sql = """
             CREATE PROCEDURE dbo.GetAll AS
@@ -53,7 +50,7 @@ public sealed class AnalysisEngineTests
     }
 
     [Fact]
-    public void BP004FiredAlongsidePE002()
+    public void Bp004FiredAlongsidePe002()
     {
         const string sql = "SELECT * FROM Orders WHERE Col = NULL";
 
@@ -102,9 +99,9 @@ public sealed class AnalysisEngineTests
         const string sql = "DELETE FROM Orders WHERE Id = NULL";
 
         var all      = AnalysisEngineTestHelper.Analyze(sql);
-        var onlyBP04 = AnalysisEngineTestHelper.Analyze(sql, "BP004");
+        var onlyBp04 = AnalysisEngineTestHelper.Analyze(sql, "BP004");
 
-        Assert.True(all.Count >= onlyBP04.Count);
-        Assert.All(onlyBP04, d => Assert.Equal("BP004", d.RuleId));
+        Assert.True(all.Count >= onlyBp04.Count);
+        Assert.All(onlyBp04, d => Assert.Equal("BP004", d.RuleId));
     }
 }

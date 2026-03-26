@@ -1,12 +1,10 @@
-using System.Collections.Generic;
-using System.Linq;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.BestPractices;
 
 /// <summary>BP011 — Procedure uses transactions but is missing SET XACT_ABORT ON.</summary>
-public sealed class BP011_MissingXactAbort : IAnalysisRule
+public sealed class Bp011MissingXactAbort : IAnalysisRule
 {
     public string RuleId => "BP011";
     public string Category => "BestPractices";
@@ -24,8 +22,15 @@ public sealed class BP011_MissingXactAbort : IAnalysisRule
     {
         public List<AnalysisDiagnostic> Diagnostics { get; } = [];
 
-        public override void Visit(CreateProcedureStatement node) => Check(node, node.StatementList);
-        public override void Visit(AlterProcedureStatement node)  => Check(node, node.StatementList);
+        public override void Visit(CreateProcedureStatement node)
+        {
+            Check(node, node.StatementList);
+        }
+
+        public override void Visit(AlterProcedureStatement node)
+        {
+            Check(node, node.StatementList);
+        }
 
         private void Check(TSqlStatement proc, StatementList? body)
         {

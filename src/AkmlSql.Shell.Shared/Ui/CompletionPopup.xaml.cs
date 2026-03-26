@@ -17,7 +17,7 @@ namespace AkmlSql.Shell.Shared.Ui
     /// </summary>
     public class CompletionPopup : Popup
     {
-        private readonly ObservableCollection<CompletionItemViewModel> _items;
+        private readonly ObservableCollection<CompletionItemViewModel> _items = [];
         private int _selectedIndex = -1;
 
         /// <summary>
@@ -30,13 +30,9 @@ namespace AkmlSql.Shell.Shared.Ui
         /// </summary>
         public event EventHandler Dismissed;
 
-        public CompletionPopup()
-        {
-            // Note: InitializeComponent() would be called here in a full XAML build.
-            // In shared project context, the popup is constructed programmatically
-            // by the consuming shell project if XAML compilation is not available.
-            _items = [];
-        }
+        // Note: InitializeComponent() would be called here in a full XAML build.
+        // In shared project context, the popup is constructed programmatically
+        // by the consuming shell project if XAML compilation is not available.
 
         public ObservableCollection<CompletionItemViewModel> Items => _items;
 
@@ -184,13 +180,8 @@ namespace AkmlSql.Shell.Shared.Ui
         }
     }
 
-    public class CompletionCommitEventArgs : EventArgs
+    public class CompletionCommitEventArgs(CompletionItemViewModel item) : EventArgs
     {
-        public CompletionItemViewModel Item { get; }
-
-        public CompletionCommitEventArgs(CompletionItemViewModel item)
-        {
-            Item = item;
-        }
+        public CompletionItemViewModel Item { get; } = item;
     }
 }

@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Naming;
 
 /// <summary>NM002 — Stored procedure uses reserved 'sp_' prefix which can cause performance issues and conflicts with system procedures.</summary>
-public sealed class NM002_SpPrefix : IAnalysisRule
+public sealed class Nm002SpPrefix : IAnalysisRule
 {
     public string RuleId => "NM002";
     public string Category => "Naming";
@@ -29,7 +28,7 @@ public sealed class NM002_SpPrefix : IAnalysisRule
             if (baseName == null) return;
 
             var procName = baseName.Value;
-            if (procName == null || !procName.StartsWith("sp_", System.StringComparison.OrdinalIgnoreCase)) return;
+            if (procName == null || !procName.StartsWith("sp_", StringComparison.OrdinalIgnoreCase)) return;
 
             var suggestedName = "usp_" + procName.Substring(3);
 

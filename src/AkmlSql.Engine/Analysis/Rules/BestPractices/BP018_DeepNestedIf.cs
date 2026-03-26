@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.BestPractices;
 
 /// <summary>BP018 — IF statement nested more than 3 levels deep indicates excessive complexity.</summary>
-public sealed class BP018_DeepNestedIf : IAnalysisRule
+public sealed class Bp018DeepNestedIf : IAnalysisRule
 {
     public string RuleId => "BP018";
     public string Category => "BestPractices";

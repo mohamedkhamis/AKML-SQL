@@ -1,12 +1,10 @@
-using System;
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Performance;
 
 /// <summary>PE017 — Known non-SARGable function applied to a column in WHERE clause prevents index seek.</summary>
-public sealed class PE017_NonSargableExpression : IAnalysisRule
+public sealed class Pe017NonSargableExpression : IAnalysisRule
 {
     public string RuleId => "PE017";
     public string Category => "Performance";

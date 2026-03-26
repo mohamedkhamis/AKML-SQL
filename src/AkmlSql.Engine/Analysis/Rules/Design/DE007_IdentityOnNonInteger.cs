@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Design;
 
 /// <summary>DE007 — IDENTITY column should use an integer type (INT, BIGINT, SMALLINT, TINYINT).</summary>
-public sealed class DE007_IdentityOnNonInteger : IAnalysisRule
+public sealed class De007IdentityOnNonInteger : IAnalysisRule
 {
     public string RuleId => "DE007";
     public string Category => "Design";

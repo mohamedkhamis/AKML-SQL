@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Performance;
 
 /// <summary>PE016 — Correlated subquery in WHERE clause executes once per row.</summary>
-public sealed class PE016_CorrelatedSubquery : IAnalysisRule
+public sealed class Pe016CorrelatedSubquery : IAnalysisRule
 {
     public string RuleId => "PE016";
     public string Category => "Performance";

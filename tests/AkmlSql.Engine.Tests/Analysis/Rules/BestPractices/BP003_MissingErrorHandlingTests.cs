@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.BestPractices;
 
-public sealed class BP003_MissingErrorHandlingTests
+public sealed class Bp003MissingErrorHandlingTests
 {
     // The BP003 rule inspects StatementList.Statements directly (not recursively).
     // Proc bodies wrapped in BEGIN/END present a single BeginEndBlockStatement at

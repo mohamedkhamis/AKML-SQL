@@ -1,8 +1,5 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Threading;
 using AkmlSql.Core;
+// ReSharper disable NullableWarningSuppressionIsUsed
 
 namespace AkmlSql.Analyzer;
 
@@ -65,7 +62,7 @@ internal static class Program
         var analyzer = new BatchFileAnalyzer(opts.SettingsPath);
         var ct       = CancellationToken.None;
 
-        var results = new List<(string FilePath, System.Collections.Generic.IReadOnlyList<AkmlSql.Engine.Analysis.AnalysisDiagnostic> Diagnostics)>();
+        var results = new List<(string FilePath, IReadOnlyList<Engine.Analysis.AnalysisDiagnostic> Diagnostics)>();
 
         if (!string.IsNullOrEmpty(opts.File))
         {

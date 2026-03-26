@@ -1,4 +1,3 @@
-#nullable enable
 using System;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
@@ -9,6 +8,7 @@ namespace AkmlSql.Core.Models.Tabs
     /// Represents a point-in-time snapshot of all open tabs in an SSMS/VS session.
     /// Persisted as JSON in <c>%AppData%\AKML SQL\sessions\</c> for crash recovery.
     /// </summary>
+    // ReSharper disable once UnusedMember.Global
     public class SessionSnapshot
     {
         /// <summary>Unique identifier for this session (GUID string).</summary>
@@ -21,6 +21,7 @@ namespace AkmlSql.Core.Models.Tabs
 
         /// <summary>Process ID of the SSMS/VS instance that created this snapshot.</summary>
         [JsonPropertyName("ssmsProcessId")]
+        // ReSharper disable once UnusedMember.Global
         public int SsmsProcessId { get; set; }
 
         /// <summary>
@@ -28,6 +29,7 @@ namespace AkmlSql.Core.Models.Tabs
         /// Crash recovery only considers sessions where this is <c>false</c>.
         /// </summary>
         [JsonPropertyName("isNormalShutdown")]
+        // ReSharper disable once UnusedMember.Global
         public bool IsNormalShutdown { get; set; }
 
         /// <summary>The tabs that were open at the time of capture.</summary>
@@ -68,6 +70,7 @@ namespace AkmlSql.Core.Models.Tabs
 
         /// <summary>Authentication type (e.g. "Windows", "SqlAuth", "AzureAD"). No passwords.</summary>
         [JsonPropertyName("authType")]
+        // ReSharper disable  UnusedMember.Global
         public string? AuthType { get; set; }
 
         /// <summary>Zero-based cursor line position.</summary>

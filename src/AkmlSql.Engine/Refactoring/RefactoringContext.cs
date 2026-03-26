@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Config;
 using AkmlSql.Engine.Schema;
 using Microsoft.SqlServer.TransactSql.ScriptDom;

@@ -76,14 +76,16 @@ namespace AkmlSql.Shell.Shared.Analysis
             }
         }
 
-        private static string SeverityToErrorType(int severity) =>
-            severity switch
+        private static string SeverityToErrorType(int severity)
+        {
+            return severity switch
             {
-                3 => Microsoft.VisualStudio.Text.Adornments.PredefinedErrorTypeNames.SyntaxError,   // Error
-                2 => Microsoft.VisualStudio.Text.Adornments.PredefinedErrorTypeNames.Warning,       // Warning
-                1 => Microsoft.VisualStudio.Text.Adornments.PredefinedErrorTypeNames.OtherError,    // Information
+                3 => Microsoft.VisualStudio.Text.Adornments.PredefinedErrorTypeNames.SyntaxError, // Error
+                2 => Microsoft.VisualStudio.Text.Adornments.PredefinedErrorTypeNames.Warning, // Warning
+                1 => Microsoft.VisualStudio.Text.Adornments.PredefinedErrorTypeNames.OtherError, // Information
                 _ => Microsoft.VisualStudio.Text.Adornments.PredefinedErrorTypeNames.HintedSuggestion // Hint
             };
+        }
 
         public void Dispose()
         {

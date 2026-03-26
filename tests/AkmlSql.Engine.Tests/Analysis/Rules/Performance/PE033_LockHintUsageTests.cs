@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.Performance;
 
-public sealed class PE033_LockHintUsageTests
+public sealed class Pe033LockHintUsageTests
 {
     [Fact]
     public void Fires_OnNoLock()

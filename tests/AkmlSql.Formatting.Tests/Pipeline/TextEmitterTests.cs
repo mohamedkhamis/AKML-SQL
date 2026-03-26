@@ -12,16 +12,19 @@ public class TextEmitterTests
     private readonly TextEmitter _emitter = new();
 
     // Helper profile that disables FinalNewline and TrailingWhitespace so tests can assert exact strings
-    private static FormattingProfile FlatProfile(string? tabStyle = null, int tabSize = 4) => new()
+    private static FormattingProfile FlatProfile(string? tabStyle = null, int tabSize = 4)
     {
-        Whitespace =
+        return new FormattingProfile
         {
-            FinalNewline = "none",
-            TrailingWhitespace = "keep",
-            TabStyle = tabStyle ?? "spaces",
-            TabSize = tabSize
-        }
-    };
+            Whitespace =
+            {
+                FinalNewline = "none",
+                TrailingWhitespace = "keep",
+                TabStyle = tabStyle ?? "spaces",
+                TabSize = tabSize
+            }
+        };
+    }
 
     private static LayoutNode Node(
         string text,
@@ -30,16 +33,19 @@ public class TextEmitterTests
         int spaces = 0,
         int indent = 0,
         string? trailingComment = null,
-        string? originalText = null) => new()
+        string? originalText = null)
     {
-        FormattedText = text,
-        OriginalText = originalText ?? text,
-        TokenType = tokenType,
-        PrecedingBreak = breakType,
-        PrecedingSpaces = spaces,
-        IndentLevel = indent,
-        TrailingComment = trailingComment == null ? null : new CommentAttachment { Text = trailingComment }
-    };
+        return new LayoutNode
+        {
+            FormattedText = text,
+            OriginalText = originalText ?? text,
+            TokenType = tokenType,
+            PrecedingBreak = breakType,
+            PrecedingSpaces = spaces,
+            IndentLevel = indent,
+            TrailingComment = trailingComment == null ? null : new CommentAttachment { Text = trailingComment }
+        };
+    }
 
     // ── Single node ───────────────────────────────────────────────────────
 

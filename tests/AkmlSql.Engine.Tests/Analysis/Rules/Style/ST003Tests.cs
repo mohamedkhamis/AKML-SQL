@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.Style;
 
-public sealed class ST003Tests
+public sealed class St003Tests
 {
     [Fact]
     public void CommaJoin_Fires()

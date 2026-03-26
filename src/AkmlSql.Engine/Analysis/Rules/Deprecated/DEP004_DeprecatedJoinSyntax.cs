@@ -1,11 +1,9 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
-using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Deprecated;
 
 /// <summary>DEP004 — Old-style outer join operators '*=' and '=*' are deprecated; use ANSI LEFT/RIGHT OUTER JOIN syntax.</summary>
-public sealed class DEP004_DeprecatedJoinSyntax : IAnalysisRule
+public sealed class Dep004DeprecatedJoinSyntax : IAnalysisRule
 {
     public string RuleId => "DEP004";
     public string Category => "Deprecated";

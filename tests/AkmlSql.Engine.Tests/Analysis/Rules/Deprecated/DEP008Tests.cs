@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.Deprecated;
 
-public sealed class DEP008Tests
+public sealed class Dep008Tests
 {
     /// <summary>
     /// DEP008 is a stub rule that always returns an empty diagnostic list.

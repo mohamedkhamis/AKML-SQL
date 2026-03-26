@@ -1,4 +1,3 @@
-#nullable enable
 using System.Globalization;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
@@ -12,14 +11,9 @@ namespace AkmlSql.Engine.History;
 /// Handles MessageType 40 (HistoryRecord) and MessageType 41 (HistorySearch) requests from the shell.
 /// Deserializes requests, delegates to the SQLite history database, and returns responses.
 /// </summary>
-public class HistoryRequestHandler
+public class HistoryRequestHandler(HistoryDatabase database)
 {
-    private readonly HistoryDatabase _database;
-
-    public HistoryRequestHandler(HistoryDatabase database)
-    {
-        _database = database ?? throw new ArgumentNullException(nameof(database));
-    }
+    private readonly HistoryDatabase _database = database ?? throw new ArgumentNullException(nameof(database));
 
     /// <summary>
     /// Handles a HistoryRecord RPC request. Inserts the execution record into the
@@ -300,7 +294,7 @@ public class HistoryRequestHandler
                     // Build filter from the optional Filter field, or use an empty filter
                     var filter = BuildFilterFromRequest(actionRequest);
 
-                    var exportFormat = (AkmlSql.Core.Models.History.ExportFormat)actionRequest.ExportFormat.Value;
+                    var exportFormat = (ExportFormat)actionRequest.ExportFormat.Value;
                     await _database.ExportAsync(filter, exportFormat, canonicalPath);
 
                     return CreateActionResponse(request.RequestId, new HistoryActionResponse
@@ -332,7 +326,10 @@ public class HistoryRequestHandler
     /// <summary>
     /// Legacy HandleAsync method — delegates to HandleRecordAsync for backward compatibility.
     /// </summary>
-    public Task<RpcMessage?> HandleAsync(RpcMessage request) => HandleRecordAsync(request);
+    public Task<RpcMessage?> HandleAsync(RpcMessage request)
+    {
+        return HandleRecordAsync(request);
+    }
 
     private static RpcMessage CreateRecordResponse(int requestId, HistoryRecordResponse response)
     {

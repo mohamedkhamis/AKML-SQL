@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Security;
 
 /// <summary>SE014 — DDL statement (CREATE/ALTER/DROP TABLE) inside a stored procedure body can cause implicit transaction issues.</summary>
-public sealed class SE014_DdlInStoredProc : IAnalysisRule
+public sealed class Se014DdlInStoredProc : IAnalysisRule
 {
     public string RuleId => "SE014";
     public string Category => "Security";

@@ -1,11 +1,5 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 using AkmlSql.Core.Ipc.Messages;
-using AkmlSql.Engine.Refactoring;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Refactoring.Operations.Heavyweight;
@@ -143,39 +137,22 @@ public class ExtractToProcOperation : HeavyweightOperationBase
 
     // ─── Nested Visitors ────────────────────────────────────────────────────────
 
-    private sealed class VariableRefVisitor : TSqlFragmentVisitor
+    private sealed class VariableRefVisitor(int start, int end) : TSqlFragmentVisitor
     {
-        private readonly int _start;
-        private readonly int _end;
         public HashSet<string> Variables { get; } = new(StringComparer.OrdinalIgnoreCase);
-
-        public VariableRefVisitor(int start, int end)
-        {
-            _start = start;
-            _end   = end;
-        }
 
         public override void Visit(VariableReference node)
         {
-            if (node.StartOffset >= _start && node.StartOffset + node.FragmentLength <= _end)
+            if (node.StartOffset >= start && node.StartOffset + node.FragmentLength <= end)
                 Variables.Add(node.Name);
         }
     }
 
-    private sealed class DeclareVisitor : TSqlFragmentVisitor
+    private sealed class DeclareVisitor(int selStart, int selEnd) : TSqlFragmentVisitor
     {
-        private readonly int _selStart;
-        private readonly int _selEnd;
-
         /// <summary>Maps variable name → SQL type string, for declarations OUTSIDE the selection.</summary>
         public Dictionary<string, string> Declarations { get; } =
             new(StringComparer.OrdinalIgnoreCase);
-
-        public DeclareVisitor(int selStart, int selEnd)
-        {
-            _selStart = selStart;
-            _selEnd   = selEnd;
-        }
 
         public override void Visit(DeclareVariableStatement node)
         {
@@ -183,7 +160,7 @@ public class ExtractToProcOperation : HeavyweightOperationBase
             var nodeStart = node.StartOffset;
             var nodeEnd   = node.StartOffset + node.FragmentLength;
 
-            if (nodeStart >= _selStart && nodeEnd <= _selEnd)
+            if (nodeStart >= selStart && nodeEnd <= selEnd)
                 return; // inside selection — local variable, not a parameter
 
             foreach (var decl in node.Declarations)

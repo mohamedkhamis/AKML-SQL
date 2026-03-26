@@ -1,9 +1,6 @@
 #nullable enable
 using System;
-using System.ComponentModel.Design;
-using System.Threading.Tasks;
 using AkmlSql.Core.Config;
-using EnvDTE;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
 using Serilog;

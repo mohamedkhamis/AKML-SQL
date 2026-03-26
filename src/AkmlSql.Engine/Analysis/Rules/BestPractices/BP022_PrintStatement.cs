@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.BestPractices;
 
 /// <summary>BP022 — PRINT statement should be removed from production code; use application logging instead.</summary>
-public sealed class BP022_PrintStatement : IAnalysisRule
+public sealed class Bp022PrintStatement : IAnalysisRule
 {
     public string RuleId => "BP022";
     public string Category => "BestPractices";

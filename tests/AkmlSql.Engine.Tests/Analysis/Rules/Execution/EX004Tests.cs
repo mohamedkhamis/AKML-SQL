@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.Execution;
 
-public sealed class EX004Tests
+public sealed class Ex004Tests
 {
     // The rule inspects CreateProcedureStatement.StatementList directly.
     // When a procedure body is written without BEGIN...END the statement list

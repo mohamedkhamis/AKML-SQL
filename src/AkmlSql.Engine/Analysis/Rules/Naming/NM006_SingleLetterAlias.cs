@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Naming;
 
 /// <summary>NM006 — Single-letter table or column alias is not descriptive; use a meaningful alias.</summary>
-public sealed class NM006_SingleLetterAlias : IAnalysisRule
+public sealed class Nm006SingleLetterAlias : IAnalysisRule
 {
     public string RuleId => "NM006";
     public string Category => "Naming";
@@ -41,18 +40,20 @@ public sealed class NM006_SingleLetterAlias : IAnalysisRule
             }
         }
 
-        private AnalysisDiagnostic CreateDiagnostic(string alias, TSqlFragment node) =>
-            new()
+        private AnalysisDiagnostic CreateDiagnostic(string alias, TSqlFragment node)
+        {
+            return new AnalysisDiagnostic
             {
-                RuleId       = "NM006",
+                RuleId = "NM006",
                 CategoryCode = "NM",
-                Severity     = ctx.Settings.GetSeverity("NM006", DiagnosticSeverity.Information),
-                Message      = $"Single-letter alias '{alias}' is not descriptive — use a meaningful alias",
-                StartOffset  = node.StartOffset,
-                EndOffset    = node.StartOffset + node.FragmentLength,
-                Line         = node.StartLine,
-                Column       = node.StartColumn,
-                FixActions   = []
+                Severity = ctx.Settings.GetSeverity("NM006", DiagnosticSeverity.Information),
+                Message = $"Single-letter alias '{alias}' is not descriptive — use a meaningful alias",
+                StartOffset = node.StartOffset,
+                EndOffset = node.StartOffset + node.FragmentLength,
+                Line = node.StartLine,
+                Column = node.StartColumn,
+                FixActions = []
             };
+        }
     }
 }

@@ -1,9 +1,8 @@
-using AkmlSql.Engine.Tests.Analysis;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Analysis.Rules.BestPractices;
 
-public sealed class BP007_EmptyCatchBlockTests
+public sealed class Bp007EmptyCatchBlockTests
 {
     [Fact]
     public void FiresOnEmptyCatchBlock()

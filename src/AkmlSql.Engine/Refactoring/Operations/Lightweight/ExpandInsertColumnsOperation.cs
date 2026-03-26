@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using AkmlSql.Engine.Refactoring.Operations;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Refactoring.Operations.Lightweight;
@@ -103,6 +99,9 @@ public class ExpandInsertColumnsOperation : ILightweightOperation
     private sealed class InsertStatementCollector : TSqlFragmentVisitor
     {
         public List<InsertStatement> Statements { get; } = [];
-        public override void Visit(InsertStatement node) => Statements.Add(node);
+        public override void Visit(InsertStatement node)
+        {
+            Statements.Add(node);
+        }
     }
 }

@@ -261,16 +261,10 @@ namespace AkmlSql.Shell.Shared.Ui
         // Nested types
         // -------------------------------------------------------------------
 
-        private sealed class CategoryGroup
+        private sealed class CategoryGroup(string name, params string[] categories)
         {
-            public string Name { get; }
-            public string[] Categories { get; }
-
-            public CategoryGroup(string name, params string[] categories)
-            {
-                Name = name;
-                Categories = categories;
-            }
+            public string Name { get; } = name;
+            public string[] Categories { get; } = categories;
         }
     }
 }

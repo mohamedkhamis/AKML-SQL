@@ -1,12 +1,10 @@
-using System;
-using System.Collections.Generic;
 using AkmlSql.Core.Models.Analysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Analysis.Rules.Design;
 
 /// <summary>DE005 — FLOAT or REAL used for a column with a financial-sounding name; use DECIMAL or NUMERIC to avoid rounding errors.</summary>
-public sealed class DE005_FloatForFinancialData : IAnalysisRule
+public sealed class De005FloatForFinancialData : IAnalysisRule
 {
     public string RuleId => "DE005";
     public string Category => "Design";
