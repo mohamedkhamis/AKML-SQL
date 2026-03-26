@@ -168,7 +168,7 @@ public class NavigationRequestHandler
             }
 
             var req = MessagePackSerializer.Deserialize<ObjectSearchRequest>(request.Payload);
-            var (_, databaseName) = sessionLookup(req.SessionId);
+            var (connectionString, databaseName) = sessionLookup(req.SessionId);
 
             if (string.IsNullOrEmpty(databaseName))
             {
@@ -179,7 +179,6 @@ public class NavigationRequestHandler
                 }));
             }
 
-            var (connectionString, _) = sessionLookup(req.SessionId);
             var dbCache = !string.IsNullOrEmpty(connectionString)
                 ? _schemaCacheManager.GetCache(connectionString, databaseName)
                 : null;

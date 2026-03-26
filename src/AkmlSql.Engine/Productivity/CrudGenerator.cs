@@ -273,6 +273,11 @@ namespace AkmlSql.Engine.Productivity
                 sb.AppendLine(string.Join(" AND ",
                     pkColumns.Select(pk => $"[{pk}] = @{pk}")));
             }
+            else
+            {
+                sb.AppendLine("    -- WARNING: No primary key defined. Add a WHERE clause before executing.");
+                sb.AppendLine("    WHERE 1 = 0 -- Safety: prevents full-table delete");
+            }
 
             sb.AppendLine("END");
             sb.AppendLine("GO");

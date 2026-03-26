@@ -1327,7 +1327,9 @@ public sealed class AiRequestHandler : IDisposable
                         ? ChatRole.Assistant
                         : ChatRole.User;
                     var content = turn.Content;
-                    if (role == ChatRole.User && transformation.IdentifierMap.Count > 0)
+                    var needsTransform = role == ChatRole.User &&
+                        (transformation.IdentifierMap.Count > 0 || transformation.LiteralMap.Count > 0);
+                    if (needsTransform)
                     {
                         // Re-apply the same privacy transformation to prior user messages
                         var (transformedTurn, _, _) =
