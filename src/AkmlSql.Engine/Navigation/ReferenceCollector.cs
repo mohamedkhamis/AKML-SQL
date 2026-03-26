@@ -162,11 +162,13 @@ public class ReferenceCollector
             await using var cmd = conn.CreateCommand();
 
             // Build parameterized WHERE clause: (s.name = @s0 AND o.name = @o0) OR ...
+            // Use LastIndexOf to handle schema names containing dots (quoted identifiers)
             var whereClauses = new List<string>();
             for (int i = 0; i < batchKeys.Count; i++)
             {
                 var key = batchKeys[i];
-                var dotIndex = key.IndexOf('.');
+                var dotIndex = key.LastIndexOf('.');
+                if (dotIndex <= 0) continue; // skip malformed keys
                 var schema = key.Substring(0, dotIndex);
                 var objName = key.Substring(dotIndex + 1);
 

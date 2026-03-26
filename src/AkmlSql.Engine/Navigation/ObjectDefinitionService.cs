@@ -158,6 +158,7 @@ public class ObjectDefinitionService
 
         // Columns
         var columns = tableObj.Columns;
+        var hasConstraints = HasConstraints(tableObj, dbCache);
         for (int i = 0; i < columns.Count; i++)
         {
             var col = columns[i];
@@ -177,7 +178,7 @@ public class ObjectDefinitionService
             if (col.DefaultValue != null)
                 sb.Append($" DEFAULT {col.DefaultValue}");
 
-            if (i < columns.Count - 1 || HasConstraints(tableObj, dbCache))
+            if (i < columns.Count - 1 || hasConstraints)
                 sb.Append(',');
 
             sb.AppendLine();

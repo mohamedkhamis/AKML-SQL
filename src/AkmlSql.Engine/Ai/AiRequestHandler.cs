@@ -1317,6 +1317,8 @@ public sealed class AiRequestHandler : IDisposable
             };
 
             // Map conversation history (ChatTurnDto -> ChatMessage)
+            // Apply the same privacy transformation to history turns to prevent leaking
+            // unredacted literals/identifiers from prior turns in schemaOnly/anonymous modes.
             if (request.History.Count > 0)
             {
                 foreach (var turn in request.History)
@@ -1324,7 +1326,15 @@ public sealed class AiRequestHandler : IDisposable
                     var role = turn.Role.Equals("assistant", StringComparison.OrdinalIgnoreCase)
                         ? ChatRole.Assistant
                         : ChatRole.User;
-                    chatMessages.Add(new ChatMessage(role, turn.Content));
+                    var content = turn.Content;
+                    if (role == ChatRole.User && transformation.IdentifierMap.Count > 0)
+                    {
+                        // Re-apply the same privacy transformation to prior user messages
+                        var (transformedTurn, _, _) =
+                            _privacyTransformer.Transform(content, schemaContext, settings.PrivacyMode);
+                        content = transformedTurn;
+                    }
+                    chatMessages.Add(new ChatMessage(role, content));
                 }
             }
 

@@ -75,7 +75,7 @@ namespace AkmlSql.Shell.Shared.Commands
 
         private void OnObjectSelected(object? sender, ObjectSelectedEventArgs e)
         {
-            _ = Task.Run(async () =>
+            _ = ThreadHelper.JoinableTaskFactory.RunAsync(async () =>
             {
                 try
                 {

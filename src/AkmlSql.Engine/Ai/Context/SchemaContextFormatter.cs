@@ -199,10 +199,14 @@ public static class SchemaContextFormatter
             }
         }
 
-        // Description
+        // Description — sanitize to prevent prompt injection via extended properties
         if (includeDescription && !string.IsNullOrEmpty(obj.Description))
         {
-            sb.AppendLine($"  Desc: {obj.Description}");
+            var sanitized = obj.Description
+                .Replace("\r", " ").Replace("\n", " ");
+            if (sanitized.Length > 200)
+                sanitized = sanitized[..200] + "...";
+            sb.AppendLine($"  Desc: {sanitized}");
         }
     }
 

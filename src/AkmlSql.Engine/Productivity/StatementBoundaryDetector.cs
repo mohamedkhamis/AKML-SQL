@@ -35,20 +35,36 @@ public class StatementBoundaryDetector
                 return stmt;
         }
 
-        // If cursor is between statements, find the nearest one before the cursor
-        StatementRangeDto? nearest = null;
-        int minDistance = int.MaxValue;
+        // If cursor is between statements, find the nearest one before (or ending at) the cursor.
+        // Only fall back to a statement after the cursor if none exist before it.
+        StatementRangeDto? nearestBefore = null;
+        int minDistBefore = int.MaxValue;
+        StatementRangeDto? nearestAfter = null;
+        int minDistAfter = int.MaxValue;
+
         foreach (var stmt in allStatements)
         {
-            int distance = Math.Abs(cursorOffset - stmt.StartOffset);
-            if (distance < minDistance)
+            if (stmt.EndOffset <= cursorOffset)
             {
-                minDistance = distance;
-                nearest = stmt;
+                int dist = cursorOffset - stmt.EndOffset;
+                if (dist < minDistBefore)
+                {
+                    minDistBefore = dist;
+                    nearestBefore = stmt;
+                }
+            }
+            else
+            {
+                int dist = stmt.StartOffset - cursorOffset;
+                if (dist < minDistAfter)
+                {
+                    minDistAfter = dist;
+                    nearestAfter = stmt;
+                }
             }
         }
 
-        return nearest;
+        return nearestBefore ?? nearestAfter;
     }
 
     /// <summary>

@@ -107,7 +107,7 @@ public sealed class LiteralRedactor
         int numCounter = 0;
 
         // Replace string literals: 'anything' (handles escaped quotes via non-greedy)
-        var result = StringLiteralPattern().Replace(sql, match =>
+        var result = StringLiteralRegex.Replace(sql, match =>
         {
             var placeholder = $"__STR_{strCounter}__";
             literalMap[placeholder] = match.Value.Trim('\'');
@@ -116,7 +116,7 @@ public sealed class LiteralRedactor
         });
 
         // Replace standalone numeric literals (not part of identifiers)
-        result = NumericLiteralPattern().Replace(result, match =>
+        result = NumericLiteralRegex.Replace(result, match =>
         {
             // Skip if preceded by an underscore or letter (part of identifier)
             var placeholder = $"__NUM_{numCounter}__";
@@ -129,10 +129,10 @@ public sealed class LiteralRedactor
     }
 
     /// <summary>Matches SQL string literals including escaped single quotes.</summary>
-    private static Regex StringLiteralPattern() => new(@"'(?:[^']|'')*'", RegexOptions.Compiled);
+    private static readonly Regex StringLiteralRegex = new(@"'(?:[^']|'')*'", RegexOptions.Compiled);
 
     /// <summary>Matches standalone numeric literals not part of identifiers.</summary>
-    private static Regex NumericLiteralPattern() => new(@"(?<![_a-zA-Z])\b\d+(\.\d+)?\b(?![_a-zA-Z])", RegexOptions.Compiled);
+    private static readonly Regex NumericLiteralRegex = new(@"(?<![_a-zA-Z])\b\d+(\.\d+)?\b(?![_a-zA-Z])", RegexOptions.Compiled);
 
     /// <summary>Type of literal found during AST walking.</summary>
     private enum LiteralType

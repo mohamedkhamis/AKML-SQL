@@ -57,7 +57,7 @@ public class NavigationRequestHandler
             }
 
             var dbCache = databaseName != null
-                ? _schemaCacheManager.GetCache(req.SessionId, databaseName)
+                ? _schemaCacheManager.GetCache(connectionString, databaseName)
                 : null;
 
             var (definition, objectType, fullName) = await _definitionService.GetDefinitionAsync(
@@ -179,7 +179,10 @@ public class NavigationRequestHandler
                 }));
             }
 
-            var dbCache = _schemaCacheManager.GetCache(req.SessionId, databaseName);
+            var (connectionString, _) = sessionLookup(req.SessionId);
+            var dbCache = !string.IsNullOrEmpty(connectionString)
+                ? _schemaCacheManager.GetCache(connectionString, databaseName)
+                : null;
             if (dbCache == null)
             {
                 return Task.FromResult<RpcMessage?>(CreateSearchResponse(request.RequestId, new ObjectSearchResponse

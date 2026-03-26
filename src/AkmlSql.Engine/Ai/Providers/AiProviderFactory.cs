@@ -215,15 +215,7 @@ public static class AiProviderFactory
         if (string.IsNullOrEmpty(encryptedKey))
             return string.Empty;
 
-        try
-        {
-            return CredentialManager.Decrypt(encryptedKey);
-        }
-        catch (Exception ex)
-        {
-            Log.Warning(ex, "AiProviderFactory: failed to decrypt API key, using raw value");
-            return encryptedKey;
-        }
+        return CredentialManager.Decrypt(encryptedKey);
     }
 
     /// <summary>

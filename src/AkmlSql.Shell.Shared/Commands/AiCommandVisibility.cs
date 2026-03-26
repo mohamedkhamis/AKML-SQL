@@ -48,7 +48,7 @@ namespace AkmlSql.Shell.Shared.Commands
             // Check if cache is still valid (within CacheDurationMs)
             if (cached != 0 && Math.Abs(now - cached) < CacheDurationMs)
             {
-                return _cachedVisible;
+                return Volatile.Read(ref _cachedVisible);
             }
 
             // Refresh the cache
@@ -65,7 +65,7 @@ namespace AkmlSql.Shell.Shared.Commands
                 visible = false;
             }
 
-            _cachedVisible = visible;
+            Volatile.Write(ref _cachedVisible, visible);
             Interlocked.Exchange(ref _cacheTimestamp, now);
             return visible;
         }

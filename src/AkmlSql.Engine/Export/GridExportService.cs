@@ -92,9 +92,9 @@ public class GridExportService
 
             var response = await Task.Run(() => GenerateXlsx(
                 canonicalPath,
-                exportRequest.ColumnHeaders,
-                exportRequest.Rows,
-                exportRequest.ColumnTypes));
+                exportRequest.ColumnHeaders ?? [],
+                exportRequest.Rows ?? [],
+                exportRequest.ColumnTypes ?? []));
 
             return CreateResponse(request.RequestId, response);
         }

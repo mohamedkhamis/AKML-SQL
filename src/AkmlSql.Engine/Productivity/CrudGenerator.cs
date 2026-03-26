@@ -222,6 +222,11 @@ namespace AkmlSql.Engine.Productivity
                 sb.AppendLine(string.Join(" AND ",
                     pkColumns.Select(pk => $"[{pk}] = @{pk}")));
             }
+            else
+            {
+                sb.AppendLine("    -- WARNING: No primary key defined. Add a WHERE clause before executing.");
+                sb.AppendLine("    WHERE 1 = 0 -- Safety: prevents full-table update");
+            }
 
             sb.AppendLine("END");
             sb.AppendLine("GO");
@@ -302,11 +307,18 @@ namespace AkmlSql.Engine.Productivity
 
         private static void RemoveTrailingComma(StringBuilder sb)
         {
-            var str = sb.ToString();
-            var lastComma = str.LastIndexOf(',');
-            if (lastComma >= 0)
+            // Scan backwards from end to find the last comma, skipping whitespace/newlines
+            for (int i = sb.Length - 1; i >= 0; i--)
             {
-                sb.Remove(lastComma, 1);
+                var c = sb[i];
+                if (c == ',')
+                {
+                    sb.Remove(i, 1);
+                    return;
+                }
+                // Only skip whitespace characters when searching for the trailing comma
+                if (c != ' ' && c != '\t' && c != '\r' && c != '\n')
+                    return; // Hit a non-whitespace, non-comma char — no trailing comma
             }
         }
     }

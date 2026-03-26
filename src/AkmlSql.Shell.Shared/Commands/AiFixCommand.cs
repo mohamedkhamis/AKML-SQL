@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.ComponentModel.Design;
+using System.Threading;
 using System.Threading.Tasks;
 using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc;
@@ -26,10 +27,12 @@ namespace AkmlSql.Shell.Shared.Commands
         private readonly AsyncPackage? _asyncPackage;
         private readonly Package? _syncPackage;
 
-        /// <summary>Last captured execution error, populated by execution hooks.</summary>
-        private static string? _lastErrorMessage;
-        private static int _lastErrorNumber;
-        private static string? _lastFailingSql;
+        /// <summary>
+        /// Immutable snapshot of the last captured execution error.
+        /// Updated atomically via <see cref="Interlocked.CompareExchange{T}"/>.
+        /// </summary>
+        private sealed record ErrorSnapshot(string FailingSql, string ErrorMessage, int ErrorNumber);
+        private static ErrorSnapshot? _lastError;
 
         private AiFixCommand(AsyncPackage package, OleMenuCommandService commandService)
         {
@@ -73,9 +76,7 @@ namespace AkmlSql.Shell.Shared.Commands
         /// <param name="errorNumber">The SQL Server error number.</param>
         public static void OfferFixForError(string sql, string errorMessage, int errorNumber)
         {
-            _lastFailingSql = sql;
-            _lastErrorMessage = errorMessage;
-            _lastErrorNumber = errorNumber;
+            Interlocked.Exchange(ref _lastError, new ErrorSnapshot(sql, errorMessage, errorNumber));
 
             Log.Debug("AiFixCommand: captured error #{ErrorNumber}: {ErrorMessage}",
                 errorNumber, errorMessage);
@@ -113,9 +114,7 @@ namespace AkmlSql.Shell.Shared.Commands
         /// </summary>
         public static void ClearErrorContext()
         {
-            _lastFailingSql = null;
-            _lastErrorMessage = null;
-            _lastErrorNumber = 0;
+            Interlocked.Exchange(ref _lastError, null);
         }
 
         private void Execute(object sender, EventArgs e)
@@ -150,12 +149,13 @@ namespace AkmlSql.Shell.Shared.Commands
             string errorMessage;
             int errorNumber;
 
-            if (!string.IsNullOrEmpty(_lastFailingSql) && !string.IsNullOrEmpty(_lastErrorMessage))
+            var snapshot = Interlocked.CompareExchange(ref _lastError, null, null);
+            if (snapshot != null)
             {
                 // Use the captured error context
-                failingSql = _lastFailingSql;
-                errorMessage = _lastErrorMessage;
-                errorNumber = _lastErrorNumber;
+                failingSql = snapshot.FailingSql;
+                errorMessage = snapshot.ErrorMessage;
+                errorNumber = snapshot.ErrorNumber;
             }
             else
             {

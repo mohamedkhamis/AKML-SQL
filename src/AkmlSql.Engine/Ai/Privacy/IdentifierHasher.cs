@@ -21,8 +21,8 @@ public sealed class IdentifierHasher : IDisposable
 {
     private readonly byte[] _sessionKey;
     private readonly HMACSHA256 _hmac;
-    private readonly Dictionary<string, string> _forwardMap = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<string, string> _reverseMap = new(StringComparer.Ordinal);
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _forwardMap = new(StringComparer.OrdinalIgnoreCase);
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _reverseMap = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Initializes a new <see cref="IdentifierHasher"/> with a cryptographically random session key.
