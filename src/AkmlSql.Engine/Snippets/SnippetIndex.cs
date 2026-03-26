@@ -16,7 +16,7 @@ public class SnippetIndex
     /// </summary>
     public string? GetFilePath(string snippetId)
     {
-        return _filePathById.TryGetValue(snippetId, out var path) ? path : null;
+        return _filePathById.GetValueOrDefault(snippetId);
     }
 
     public void Rebuild(List<(Snippet Snippet, SnippetSourceType Source, string? FilePath)> allSnippets)
@@ -121,5 +121,8 @@ public class SnippetIndex
         }
     }
 
-    public IEnumerable<(Snippet Snippet, SnippetSourceType Source)> GetAll() => _byId.Values;
+    public IEnumerable<(Snippet Snippet, SnippetSourceType Source)> GetAll()
+    {
+        return _byId.Values;
+    }
 }

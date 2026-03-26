@@ -66,14 +66,14 @@ public class DmlRules : IRuleSet
         else if (dml.AndOrNewLine == "none")
         {
             // Keep AND/OR inline with no forced line breaks
-            for (int i = 0; i < nodes.Count; i++)
+            foreach (var t in nodes)
             {
-                if (nodes[i].TokenType == TSqlTokenType.And || nodes[i].TokenType == TSqlTokenType.Or)
+                if (t.TokenType is TSqlTokenType.And or TSqlTokenType.Or)
                 {
-                    if (nodes[i].PrecedingBreak == BreakType.NewLine)
+                    if (t.PrecedingBreak == BreakType.NewLine)
                     {
-                        nodes[i].PrecedingBreak = BreakType.None;
-                        nodes[i].PrecedingSpaces = 1;
+                        t.PrecedingBreak = BreakType.None;
+                        t.PrecedingSpaces = 1;
                     }
                 }
             }
@@ -94,7 +94,7 @@ public class DmlRules : IRuleSet
             if (node.IsInNoformatRegion)
                 continue;
 
-            if ((node.TokenType == TSqlTokenType.And || node.TokenType == TSqlTokenType.Or) &&
+            if (node.TokenType is TSqlTokenType.And or TSqlTokenType.Or &&
                 node.PrecedingBreak == BreakType.NewLine)
             {
                 switch (dml.AndOrIndent)
@@ -184,20 +184,18 @@ public class DmlRules : IRuleSet
             return;
 
         bool inUpdate = false;
-        for (int i = 0; i < nodes.Count; i++)
+        foreach (var t in nodes)
         {
-            if (nodes[i].TokenType == TSqlTokenType.Update)
+            if (t.TokenType == TSqlTokenType.Update)
                 inUpdate = true;
-            else if (nodes[i].TokenType == TSqlTokenType.Semicolon ||
-                     nodes[i].TokenType == TSqlTokenType.Select ||
-                     nodes[i].TokenType == TSqlTokenType.Go)
+            else if (t.TokenType is TSqlTokenType.Semicolon or TSqlTokenType.Select or TSqlTokenType.Go)
                 inUpdate = false;
 
-            if (inUpdate && nodes[i].TokenType == TSqlTokenType.Set)
+            if (inUpdate && t.TokenType == TSqlTokenType.Set)
             {
-                nodes[i].PrecedingBreak = BreakType.NewLine;
-                nodes[i].IndentLevel = 0;
-                nodes[i].PrecedingSpaces = 0;
+                t.PrecedingBreak = BreakType.NewLine;
+                t.IndentLevel = 0;
+                t.PrecedingSpaces = 0;
             }
         }
     }
@@ -211,23 +209,18 @@ public class DmlRules : IRuleSet
             return;
 
         bool inInsert = false;
-        for (int i = 0; i < nodes.Count; i++)
+        foreach (var t in nodes)
         {
-            if (nodes[i].TokenType == TSqlTokenType.Insert)
+            if (t.TokenType == TSqlTokenType.Insert)
                 inInsert = true;
-            else if (nodes[i].TokenType == TSqlTokenType.Semicolon ||
-                     nodes[i].TokenType == TSqlTokenType.Go)
+            else if (t.TokenType is TSqlTokenType.Semicolon or TSqlTokenType.Go)
                 inInsert = false;
 
-            if (inInsert && nodes[i].TokenType == TSqlTokenType.Values)
-            {
-                if (nodes[i].PrecedingBreak == BreakType.None)
-                {
-                    nodes[i].PrecedingBreak = BreakType.NewLine;
-                    nodes[i].IndentLevel = 0;
-                    nodes[i].PrecedingSpaces = 0;
-                }
-            }
+            if (!inInsert || t.TokenType != TSqlTokenType.Values) continue;
+            if (t.PrecedingBreak != BreakType.None) continue;
+            t.PrecedingBreak = BreakType.NewLine;
+            t.IndentLevel = 0;
+            t.PrecedingSpaces = 0;
         }
     }
 
@@ -304,22 +297,20 @@ public class DmlRules : IRuleSet
             return;
 
         bool inMerge = false;
-        for (int i = 0; i < nodes.Count; i++)
+        foreach (var t in nodes)
         {
-            if (nodes[i].TokenType == TSqlTokenType.Merge)
-                inMerge = true;
-            else if (nodes[i].TokenType == TSqlTokenType.Semicolon || nodes[i].TokenType == TSqlTokenType.Go)
-                inMerge = false;
-
-            if (inMerge && nodes[i].TokenType == TSqlTokenType.When)
+            inMerge = t.TokenType switch
             {
-                if (nodes[i].PrecedingBreak == BreakType.None)
-                {
-                    nodes[i].PrecedingBreak = BreakType.NewLine;
-                    nodes[i].IndentLevel = 0;
-                    nodes[i].PrecedingSpaces = 0;
-                }
-            }
+                TSqlTokenType.Merge => true,
+                TSqlTokenType.Semicolon or TSqlTokenType.Go => false,
+                _ => inMerge
+            };
+
+            if (!inMerge || t.TokenType != TSqlTokenType.When) continue;
+            if (t.PrecedingBreak != BreakType.None) continue;
+            t.PrecedingBreak = BreakType.NewLine;
+            t.IndentLevel = 0;
+            t.PrecedingSpaces = 0;
         }
     }
 
@@ -429,7 +420,7 @@ public class DmlRules : IRuleSet
         for (int i = starIndex - 1; i >= 0; i--)
         {
             var tt = nodes[i].TokenType;
-            if (tt == TSqlTokenType.Select || tt == TSqlTokenType.Distinct || tt == TSqlTokenType.Top)
+            if (tt is TSqlTokenType.Select or TSqlTokenType.Distinct or TSqlTokenType.Top)
                 return true;
             if (tt == TSqlTokenType.Integer) // TOP N
                 continue;

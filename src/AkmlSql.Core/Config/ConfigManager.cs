@@ -8,7 +8,7 @@ namespace AkmlSql.Core.Config
 {
     public static class ConfigManager
     {
-        private static readonly JsonSerializerOptions SerializerOptions = new JsonSerializerOptions
+        private static readonly JsonSerializerOptions SerializerOptions = new()
         {
             WriteIndented = true,
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,

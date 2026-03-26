@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using AkmlSql.Formatting.Pipeline;
 using AkmlSql.Formatting.Profiles;
@@ -10,6 +11,9 @@ namespace AkmlSql.Formatting.Actions;
 /// Walks AST statement nodes and adds semicolons after each statement that doesn't already end with one.
 /// Does not change layout or casing.
 /// </summary>
+[SuppressMessage("ReSharper", "CollectionNeverUpdated.Local")]
+[SuppressMessage("ReSharper", "UnusedVariable")]
+[SuppressMessage("ReSharper", "UnusedMember.Global")]
 public class InsertSemicolonsAction : IFormatAction
 {
     public FormatResult Execute(string sql, FormattingProfile profile)

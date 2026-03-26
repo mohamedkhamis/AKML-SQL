@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using AkmlSql.Formatting.Profiles;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
@@ -10,15 +11,9 @@ namespace AkmlSql.Formatting.Layout;
 /// Used by rule sets to decide whether multi-line formatting should be collapsed
 /// for readability when the content is short enough to fit on one line.
 /// </summary>
-public class CollapseEvaluator
+[SuppressMessage("ReSharper", "GrammarMistakeInComment")]
+public class CollapseEvaluator(FormattingProfile profile)
 {
-    private readonly FormattingProfile _profile;
-
-    public CollapseEvaluator(FormattingProfile profile)
-    {
-        _profile = profile;
-    }
-
     /// <summary>
     /// Determines if the nodes in the range [start, end) should be collapsed to a single line.
     /// Returns true if the total formatted length is at or below the threshold.
@@ -37,10 +32,10 @@ public class CollapseEvaluator
     /// </summary>
     public bool ShouldCollapseSelectList(List<LayoutNode> nodes, int start, int end)
     {
-        if (!_profile.List.CollapseShortLists)
+        if (!profile.List.CollapseShortLists)
             return false;
 
-        return ShouldCollapse(nodes, start, end, _profile.List.CollapseThreshold);
+        return ShouldCollapse(nodes, start, end, profile.List.CollapseThreshold);
     }
 
     /// <summary>
@@ -48,7 +43,7 @@ public class CollapseEvaluator
     /// </summary>
     public bool ShouldCollapseParenthesized(List<LayoutNode> nodes, int start, int end)
     {
-        if (!_profile.Parenthesis.CollapseShort)
+        if (!profile.Parenthesis.CollapseShort)
             return false;
 
         // Don't collapse if contains subqueries
@@ -58,7 +53,7 @@ public class CollapseEvaluator
                 return false;
         }
 
-        return ShouldCollapse(nodes, start, end, _profile.Parenthesis.CollapseThreshold);
+        return ShouldCollapse(nodes, start, end, profile.Parenthesis.CollapseThreshold);
     }
 
     /// <summary>
@@ -66,7 +61,7 @@ public class CollapseEvaluator
     /// </summary>
     public bool ShouldCollapseDmlStatement(List<LayoutNode> nodes, int start, int end)
     {
-        if (!_profile.Dml.CollapseShortStatements)
+        if (!profile.Dml.CollapseShortStatements)
             return false;
 
         // Don't collapse if contains subqueries
@@ -80,7 +75,7 @@ public class CollapseEvaluator
                 return false;
         }
 
-        return ShouldCollapse(nodes, start, end, _profile.Dml.CollapseThreshold);
+        return ShouldCollapse(nodes, start, end, profile.Dml.CollapseThreshold);
     }
 
     /// <summary>
@@ -88,10 +83,10 @@ public class CollapseEvaluator
     /// </summary>
     public bool ShouldCollapseSubquery(List<LayoutNode> nodes, int start, int end)
     {
-        if (!_profile.Dml.CollapseShortSubqueries)
+        if (!profile.Dml.CollapseShortSubqueries)
             return false;
 
-        return ShouldCollapse(nodes, start, end, _profile.Dml.SubqueryCollapseThreshold);
+        return ShouldCollapse(nodes, start, end, profile.Dml.SubqueryCollapseThreshold);
     }
 
     /// <summary>
@@ -99,10 +94,10 @@ public class CollapseEvaluator
     /// </summary>
     public bool ShouldCollapseCase(List<LayoutNode> nodes, int start, int end)
     {
-        if (!_profile.Case.CollapseShortCase)
+        if (!profile.Case.CollapseShortCase)
             return false;
 
-        return ShouldCollapse(nodes, start, end, _profile.Case.CollapseThreshold);
+        return ShouldCollapse(nodes, start, end, profile.Case.CollapseThreshold);
     }
 
     /// <summary>
@@ -110,7 +105,7 @@ public class CollapseEvaluator
     /// </summary>
     public bool ShouldCollapseIfElse(List<LayoutNode> nodes, int start, int end)
     {
-        if (!_profile.ControlFlow.CollapseShortIfElse)
+        if (!profile.ControlFlow.CollapseShortIfElse)
             return false;
 
         // Don't collapse if contains BEGIN/END
@@ -120,7 +115,7 @@ public class CollapseEvaluator
                 return false;
         }
 
-        return ShouldCollapse(nodes, start, end, _profile.ControlFlow.CollapseThreshold);
+        return ShouldCollapse(nodes, start, end, profile.ControlFlow.CollapseThreshold);
     }
 
     /// <summary>
@@ -128,10 +123,10 @@ public class CollapseEvaluator
     /// </summary>
     public bool ShouldCollapseDdl(List<LayoutNode> nodes, int start, int end)
     {
-        if (!_profile.Ddl.CollapseShortDDL)
+        if (!profile.Ddl.CollapseShortDdl)
             return false;
 
-        return ShouldCollapse(nodes, start, end, _profile.Ddl.CollapseThreshold);
+        return ShouldCollapse(nodes, start, end, profile.Ddl.CollapseThreshold);
     }
 
     /// <summary>

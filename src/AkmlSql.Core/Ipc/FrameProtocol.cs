@@ -9,7 +9,7 @@ namespace AkmlSql.Core.Ipc
     {
         private const int MaxMessageSize = 16 * 1024 * 1024; // 16 MB
 
-        public static async Task WriteFramedAsync(Stream stream, RpcMessage message, CancellationToken ct = default)
+        public static async Task WriteFramedAsync(Stream stream, RpcMessage? message, CancellationToken ct = default)
         {
             var payload = MessagePackSerializer.Serialize(message, cancellationToken: ct);
 
@@ -41,7 +41,7 @@ namespace AkmlSql.Core.Ipc
             }
 
             int length = (header[0] << 24) | (header[1] << 16) | (header[2] << 8) | header[3];
-            if (length <= 0 || length > MaxMessageSize)
+            if (length is <= 0 or > MaxMessageSize)
             {
                 throw new InvalidDataException($"Invalid frame length: {length}");
             }

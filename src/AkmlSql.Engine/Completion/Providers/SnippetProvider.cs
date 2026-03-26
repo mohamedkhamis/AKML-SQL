@@ -37,10 +37,7 @@ public class SnippetProvider : ICompletionProvider
     {
         // Snippets are available at the start of statements or in Unknown clause context
         // (i.e., when the user hasn't started a clause yet)
-        return context.ClauseType == ClauseType.Unknown
-            && !context.PrecedingDot
-            && !context.InComment
-            && !context.InString;
+        return context is { ClauseType: ClauseType.Unknown, PrecedingDot: false, InComment: false, InString: false };
     }
 
     public IEnumerable<CompletionItem> GetCompletions(CursorContext context, DatabaseCache? cache)

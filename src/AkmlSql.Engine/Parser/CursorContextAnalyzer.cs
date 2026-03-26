@@ -1,4 +1,5 @@
 using Microsoft.SqlServer.TransactSql.ScriptDom;
+// ReSharper disable UnusedMember.Global
 
 namespace AkmlSql.Engine.Parser;
 
@@ -73,6 +74,7 @@ public class CursorContextAnalyzer
 
         if (tokenAtCursor == null && tokens.Count > 0)
         {
+            // ReSharper disable once UseIndexFromEndExpression
             tokenAtCursor = tokens[tokens.Count - 1];
             tokenIndex = tokens.Count - 1;
             if (tokenIndex > 0)
@@ -84,10 +86,8 @@ public class CursorContextAnalyzer
         // Check if in comment or string
         if (tokenAtCursor != null)
         {
-            context.InComment = tokenAtCursor.TokenType == TSqlTokenType.SingleLineComment ||
-                                tokenAtCursor.TokenType == TSqlTokenType.MultilineComment;
-            context.InString = tokenAtCursor.TokenType == TSqlTokenType.AsciiStringLiteral ||
-                               tokenAtCursor.TokenType == TSqlTokenType.UnicodeStringLiteral;
+            context.InComment = tokenAtCursor.TokenType is TSqlTokenType.SingleLineComment or TSqlTokenType.MultilineComment;
+            context.InString = tokenAtCursor.TokenType is TSqlTokenType.AsciiStringLiteral or TSqlTokenType.UnicodeStringLiteral;
         }
 
         if (context.InComment || context.InString)
@@ -96,15 +96,14 @@ public class CursorContextAnalyzer
         }
 
         // Check for dot prefix
-        if (prevToken != null && prevToken.TokenType == TSqlTokenType.Dot)
+        if (prevToken is { TokenType: TSqlTokenType.Dot })
         {
             context.PrecedingDot = true;
             // Find the identifier before the dot
             if (tokenIndex >= 2)
             {
                 var beforeDot = tokens[tokenIndex - 2];
-                if (beforeDot.TokenType == TSqlTokenType.Identifier ||
-                    beforeDot.TokenType == TSqlTokenType.QuotedIdentifier)
+                if (beforeDot.TokenType is TSqlTokenType.Identifier or TSqlTokenType.QuotedIdentifier)
                 {
                     context.DotPrefix = beforeDot.Text.Trim('[', ']', '"');
                 }
@@ -114,9 +113,7 @@ public class CursorContextAnalyzer
         context.PrecedingToken = prevToken;
 
         // Extract partial text being typed
-        if (tokenAtCursor != null &&
-            (tokenAtCursor.TokenType == TSqlTokenType.Identifier ||
-             tokenAtCursor.TokenType == TSqlTokenType.QuotedIdentifier) &&
+        if (tokenAtCursor is { TokenType: TSqlTokenType.Identifier or TSqlTokenType.QuotedIdentifier } &&
             cursorOffset > tokenAtCursor.Offset)
         {
             var len = Math.Min(cursorOffset - tokenAtCursor.Offset, tokenAtCursor.Text.Length);
@@ -183,8 +180,7 @@ public class CursorContextAnalyzer
                         // to find the preceding GROUP or ORDER keyword.
                         continue;
                     }
-                    if (upper == "CROSS" || upper == "INNER" || upper == "LEFT" ||
-                        upper == "RIGHT" || upper == "FULL" || upper == "OUTER")
+                    if (upper is "CROSS" or "INNER" or "LEFT" or "RIGHT" or "FULL" or "OUTER")
                     {
                         // JOIN qualifiers — continue scanning to find JOIN/FROM
                         continue;
@@ -204,9 +200,6 @@ public class CursorContextAnalyzer
 
     private static bool IsWhitespaceOrComment(TSqlParserToken t)
     {
-        return t.TokenType == TSqlTokenType.WhiteSpace ||
-               t.TokenType == TSqlTokenType.SingleLineComment ||
-               t.TokenType == TSqlTokenType.MultilineComment ||
-               t.TokenType == TSqlTokenType.EndOfFile;
+        return t.TokenType is TSqlTokenType.WhiteSpace or TSqlTokenType.SingleLineComment or TSqlTokenType.MultilineComment or TSqlTokenType.EndOfFile;
     }
 }

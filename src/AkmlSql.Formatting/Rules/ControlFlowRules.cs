@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using AkmlSql.Formatting.Layout;
 using AkmlSql.Formatting.Profiles;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
@@ -15,6 +16,8 @@ namespace AkmlSql.Formatting.Rules;
 /// CTE: withOnNewLine, cteBodyIndent, commaBeforeCte, emptyLineBetweenCtes
 /// Expressions: booleanOperatorNewLine, betweenOnOneLine, inListStyle, existsSubqueryIndent
 /// </summary>
+[SuppressMessage("ReSharper", "NotAccessedVariable")]
+// ReSharper disable once UnusedMember.Global
 public class ControlFlowRules : IRuleSet
 {
     public void Apply(List<LayoutNode> nodes, FormattingProfile profile)
@@ -913,11 +916,9 @@ public class ControlFlowRules : IRuleSet
         for (int i = index - 1; i >= 0; i--)
         {
             var tt = nodes[i].TokenType;
-            if (tt == TSqlTokenType.Where || tt == TSqlTokenType.On)
+            if (tt is TSqlTokenType.Where or TSqlTokenType.On)
                 return true;
-            if (tt == TSqlTokenType.Select || tt == TSqlTokenType.From ||
-                tt == TSqlTokenType.Semicolon || tt == TSqlTokenType.Go ||
-                tt == TSqlTokenType.Case || tt == TSqlTokenType.When)
+            if (tt is TSqlTokenType.Select or TSqlTokenType.From or TSqlTokenType.Semicolon or TSqlTokenType.Go or TSqlTokenType.Case or TSqlTokenType.When)
                 return false;
         }
         return false;
@@ -953,11 +954,7 @@ public class ControlFlowRules : IRuleSet
         for (int i = andIndex + 1; i < nodes.Count; i++)
         {
             var tt = nodes[i].TokenType;
-            if (tt == TSqlTokenType.And || tt == TSqlTokenType.Or ||
-                tt == TSqlTokenType.Comma || tt == TSqlTokenType.Semicolon ||
-                tt == TSqlTokenType.RightParenthesis ||
-                tt == TSqlTokenType.Then || tt == TSqlTokenType.When ||
-                tt == TSqlTokenType.Else)
+            if (tt is TSqlTokenType.And or TSqlTokenType.Or or TSqlTokenType.Comma or TSqlTokenType.Semicolon or TSqlTokenType.RightParenthesis or TSqlTokenType.Then or TSqlTokenType.When or TSqlTokenType.Else)
                 return i;
         }
         return nodes.Count;

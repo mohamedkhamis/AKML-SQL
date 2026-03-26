@@ -12,6 +12,7 @@
     <IncludeDebugSymbolsInLocalVSIXDeployment>false</IncludeDebugSymbolsInLocalVSIXDeployment>
     <CopyBuildOutputToOutputDirectory>true</CopyBuildOutputToOutputDirectory>
     <LangVersion>latest</LangVersion>
+    <DefineConstants>$(DefineConstants);VS_SDK_17</DefineConstants>
     <CreateVsixContainer>false</CreateVsixContainer>
     <DeployExtension>false</DeployExtension>
     <!-- Prevent VSIX/CTO cross-contamination during parallel solution builds -->

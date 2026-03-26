@@ -86,10 +86,10 @@ public class WhitespaceOptions
     public int EmptyLineBetweenStatements { get; set; } = 1;
 
     [JsonPropertyName("emptyLineBeforeGO")]
-    public bool EmptyLineBeforeGO { get; set; } = true;
+    public bool EmptyLineBeforeGo { get; set; } = true;
 
     [JsonPropertyName("emptyLineAfterGO")]
-    public bool EmptyLineAfterGO { get; set; } = true;
+    public bool EmptyLineAfterGo { get; set; } = true;
 
     [JsonPropertyName("preserveEmptyLines")]
     public bool PreserveEmptyLines { get; set; } = true;
@@ -179,7 +179,7 @@ public class ListOptions
     public bool IndentListItems { get; set; } = true;
 
     [JsonPropertyName("alignDataTypesInDDL")]
-    public bool AlignDataTypesInDDL { get; set; } = true;
+    public bool AlignDataTypesInDdl { get; set; } = true;
 
     [JsonPropertyName("alignValuesInInsert")]
     public bool AlignValuesInInsert { get; set; } = true;
@@ -353,7 +353,7 @@ public class DdlOptions
     public bool BeginOnNewLine { get; set; } = true;
 
     [JsonPropertyName("collapseShortDDL")]
-    public bool CollapseShortDDL { get; set; } = true;
+    public bool CollapseShortDdl { get; set; } = true;
 
     [JsonPropertyName("collapseThreshold")]
     public int CollapseThreshold { get; set; } = 60;

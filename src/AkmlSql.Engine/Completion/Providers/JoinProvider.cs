@@ -1,7 +1,6 @@
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Engine.Parser;
 using AkmlSql.Engine.Schema;
-using AkmlSql.Engine.Schema.Models;
 
 namespace AkmlSql.Engine.Completion.Providers;
 

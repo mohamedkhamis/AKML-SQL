@@ -7,8 +7,8 @@ namespace AkmlSql.Shell.Shared
         public const string AkmlSqlPackageString = "A1B2C3D4-1111-2222-3333-444455556666";
         public const string AkmlSqlCmdSetString = "A1B2C3D4-1111-2222-3333-444455557777";
 
-        public static readonly Guid AkmlSqlPackage = new Guid(AkmlSqlPackageString);
-        public static readonly Guid AkmlSqlCmdSet = new Guid(AkmlSqlCmdSetString);
+        public static readonly Guid AkmlSqlPackage = new(AkmlSqlPackageString);
+        public static readonly Guid AkmlSqlCmdSet = new(AkmlSqlCmdSetString);
     }
 
     public static class CommandIds
@@ -31,5 +31,6 @@ namespace AkmlSql.Shell.Shared
         public const int CmdToggleBrackets = 0x0215;
         public const int CmdToggleAs = 0x0216;
         public const int CmdEditProfile = 0x0220;
+        public const int CmdBulkAnalysis = 0x0300;
     }
 }

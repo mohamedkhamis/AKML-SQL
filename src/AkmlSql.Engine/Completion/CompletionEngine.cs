@@ -34,7 +34,10 @@ public class CompletionEngine
         Log.Debug("Registered completion provider: {Name}", provider.Name);
     }
 
-    public void SetMaxSuggestions(int max) => _maxSuggestions = max;
+    public void SetMaxSuggestions(int max)
+    {
+        _maxSuggestions = max;
+    }
 
     public CompletionResponse GetCompletions(string documentText, int cursorOffset, DatabaseCache? cache)
     {

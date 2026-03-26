@@ -17,7 +17,7 @@ namespace AkmlSql.Shell.Shared.Ui
     public sealed class ThemeManager
     {
         private static ThemeManager _instance;
-        private static readonly object s_lock = new object();
+        private static readonly object SLock = new();
 
         private VsThemeKind _cachedTheme;
         private bool _themeCached;
@@ -30,7 +30,7 @@ namespace AkmlSql.Shell.Shared.Ui
             {
                 if (_instance == null)
                 {
-                    lock (s_lock)
+                    lock (SLock)
                     {
                         if (_instance == null)
                         {

@@ -8,17 +8,10 @@ using Serilog;
 
 namespace AkmlSql.Engine.Formatter;
 
-public class FormatRequestHandler
+public class FormatRequestHandler(ProfileManager profileManager)
 {
-    private readonly ProfileManager _profileManager;
-    private readonly FormatterPipeline _pipeline;
+    private readonly FormatterPipeline _pipeline = new();
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _bulkSessions = new();
-
-    public FormatRequestHandler(ProfileManager profileManager)
-    {
-        _profileManager = profileManager;
-        _pipeline = new FormatterPipeline();
-    }
 
     public FormatResponse HandleFormat(FormatRequest request)
     {
@@ -117,7 +110,7 @@ public class FormatRequestHandler
     {
         try
         {
-            var profiles = _profileManager.List();
+            var profiles = profileManager.List();
             return new ProfileListResponse
             {
                 Profiles = profiles.Select(m => new ProfileInfo
@@ -143,7 +136,7 @@ public class FormatRequestHandler
         try
         {
             var profile = ProfileSerializer.Deserialize(request.ProfileJson);
-            _profileManager.Save(profile);
+            profileManager.Save(profile);
             return new ProfileSaveResponse { Success = true };
         }
         catch (Exception ex)
@@ -157,7 +150,7 @@ public class FormatRequestHandler
     {
         try
         {
-            _profileManager.Delete(request.Name);
+            profileManager.Delete(request.Name);
             return new ProfileDeleteResponse { Success = true };
         }
         catch (Exception ex)
@@ -265,7 +258,7 @@ public class FormatRequestHandler
     {
         try
         {
-            var sourceFormat = request.SourceFormat?.ToLowerInvariant() ?? string.Empty;
+            var sourceFormat = request.SourceFormat.ToLowerInvariant();
             var content = Encoding.UTF8.GetString(request.FileContent);
 
             if (sourceFormat is "sqlprompt" or "sqlpromptstylev2")
@@ -273,7 +266,7 @@ public class FormatRequestHandler
                 var importResult = SqlPromptImporter.Import(content, request.TargetProfileName);
 
                 // Save the imported profile
-                _profileManager.Save(importResult.Profile);
+                profileManager.Save(importResult.Profile);
 
                 return new ProfileImportResponse
                 {
@@ -295,7 +288,7 @@ public class FormatRequestHandler
                 }
                 profile.Metadata.Id = Guid.NewGuid().ToString();
                 profile.Metadata.IsBuiltIn = false;
-                _profileManager.Save(profile);
+                profileManager.Save(profile);
 
                 return new ProfileImportResponse
                 {
@@ -329,7 +322,7 @@ public class FormatRequestHandler
 
         try
         {
-            return _profileManager.Load(profileName);
+            return profileManager.Load(profileName);
         }
         catch
         {

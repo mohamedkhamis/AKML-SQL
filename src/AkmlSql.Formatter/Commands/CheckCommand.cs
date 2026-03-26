@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using AkmlSql.Formatter.Output;
 using AkmlSql.Formatting.Pipeline;
 
@@ -8,6 +9,7 @@ namespace AkmlSql.Formatter.Commands;
 /// Validates formatting without modifying files.
 /// Returns exit code 0 (all formatted) or 1 (violations found).
 /// </summary>
+[SuppressMessage("ReSharper", "NullableWarningSuppressionIsUsed")]
 public class CheckCommand
 {
     public int Execute(CliOptions options)
@@ -37,9 +39,6 @@ public class CheckCommand
         var sw = Stopwatch.StartNew();
         var pipeline = new FormatterPipeline();
         var report = options.ReportPath != null ? new ReportGenerator() : null;
-
-        int violations = 0;
-        int errors = 0;
 
         var parallelOptions = new ParallelOptions { MaxDegreeOfParallelism = options.Parallel };
         int violationCount = 0;
@@ -92,8 +91,8 @@ public class CheckCommand
             }
         });
 
-        violations = violationCount;
-        errors = errorCount;
+        var violations = violationCount;
+        var errors = errorCount;
 
         sw.Stop();
 
@@ -110,7 +109,7 @@ public class CheckCommand
         return violations > 0 ? ExitCodes.Violations : ExitCodes.Success;
     }
 
-    private static int CheckStdin(AkmlSql.Formatting.Profiles.FormattingProfile profile)
+    private static int CheckStdin(Formatting.Profiles.FormattingProfile profile)
     {
         try
         {

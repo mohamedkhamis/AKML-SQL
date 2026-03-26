@@ -18,10 +18,8 @@ public class TextEmitter
         bool useTabs = ws.TabStyle == "tabs";
         int tabSize = ws.TabSize;
 
-        for (int i = 0; i < nodes.Count; i++)
+        foreach (var node in nodes)
         {
-            var node = nodes[i];
-
             if (node.IsInNoformatRegion)
             {
                 sb.Append(node.OriginalText);

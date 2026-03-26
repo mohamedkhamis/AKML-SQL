@@ -9,7 +9,7 @@ namespace AkmlSql.Shell.Shared.Update
 {
     internal static class UpdateNotifier
     {
-        private static readonly UpdateResult NoUpdate = new UpdateResult { Available = false };
+        private static readonly UpdateResult NoUpdate = new() { Available = false };
 
         public static UpdateResult CheckForPendingUpdate()
         {
@@ -24,7 +24,7 @@ namespace AkmlSql.Shell.Shared.Update
                 var json = File.ReadAllText(resultPath);
                 var result = JsonSerializer.Deserialize<UpdateResult>(json, JsonOptions.CamelCase);
 
-                if (result != null && result.Available)
+                if (result is { Available: true })
                 {
                     Log.Information("Update available: v{Version}", result.Version);
                     return result;

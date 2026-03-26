@@ -109,9 +109,11 @@ public class ColumnProvider : ICompletionProvider
 
     private static string FormatSecondaryText(Column column)
     {
-        var parts = new List<string>(3);
-        parts.Add(column.TypeDisplay);
-        parts.Add(column.IsNullable ? "NULL" : "NOT NULL");
+        var parts = new List<string>(3)
+        {
+            column.TypeDisplay,
+            column.IsNullable ? "NULL" : "NOT NULL"
+        };
 
         if (column.IsPrimaryKey)
         {

@@ -132,7 +132,7 @@ public class QuickInfoProvider
     }
 
     /// <summary>
-    /// Try to resolve alias.column to column info.
+    /// Try to resolve alias. Column to column info.
     /// </summary>
     private static QuickInfoResponse? TryResolveColumn(
         string prefix, string columnName,
@@ -162,8 +162,8 @@ public class QuickInfoProvider
 
         var details = new List<QuickInfoDetail>
         {
-            new QuickInfoDetail("Type", column.TypeDisplay),
-            new QuickInfoDetail("Nullable", column.IsNullable ? "YES" : "NO")
+            new("Type", column.TypeDisplay),
+            new("Nullable", column.IsNullable ? "YES" : "NO")
         };
 
         if (column.IsPrimaryKey)
@@ -260,8 +260,8 @@ public class QuickInfoProvider
 
         var details = new List<QuickInfoDetail>
         {
-            new QuickInfoDetail("Schema", dbObject.SchemaName),
-            new QuickInfoDetail("Type", dbObject.ObjectType.ToString())
+            new("Schema", dbObject.SchemaName),
+            new("Type", dbObject.ObjectType.ToString())
         };
 
         if (dbObject.ColumnsLoaded)
@@ -328,12 +328,12 @@ public class QuickInfoProvider
 
     private static QuickInfoResponse MakeFunctionInfo(string functionName)
     {
-        if (BuiltinFunctionDictionary.TryGetSignature(functionName, out var overloads) && overloads.Length > 0)
+        if (BuiltinFunctionDictionary.TryGetSignature(functionName, out var overloads) && overloads is { Length: > 0 })
         {
             var details = new List<QuickInfoDetail>
             {
-                new QuickInfoDetail("Kind", "Built-in Function"),
-                new QuickInfoDetail("Overloads", overloads.Length.ToString())
+                new("Kind", "Built-in Function"),
+                new("Overloads", overloads.Length.ToString())
             };
 
             return new QuickInfoResponse
@@ -353,10 +353,13 @@ public class QuickInfoProvider
         };
     }
 
-    private static QuickInfoResponse EmptyResponse() => new()
+    private static QuickInfoResponse EmptyResponse()
     {
-        ObjectType = string.Empty,
-        Header = string.Empty,
-        Details = []
-    };
+        return new QuickInfoResponse
+        {
+            ObjectType = string.Empty,
+            Header = string.Empty,
+            Details = []
+        };
+    }
 }

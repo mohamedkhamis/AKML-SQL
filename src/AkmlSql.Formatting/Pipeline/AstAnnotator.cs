@@ -17,7 +17,7 @@ public class AstAnnotator
         for (int i = 0; i < tokens.Count; i++)
         {
             var t = tokens[i];
-            if (t.TokenType == TSqlTokenType.SingleLineComment || t.TokenType == TSqlTokenType.MultilineComment)
+            if (t.TokenType is TSqlTokenType.SingleLineComment or TSqlTokenType.MultilineComment)
             {
                 comments.Add(new CommentAttachment
                 {
@@ -115,9 +115,9 @@ public class AstAnnotator
     private static int CountNewlines(string text)
     {
         int count = 0;
-        for (int i = 0; i < text.Length; i++)
+        foreach (var t in text)
         {
-            if (text[i] == '\n')
+            if (t == '\n')
                 count++;
         }
         return count;

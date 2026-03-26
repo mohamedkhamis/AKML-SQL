@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.RegularExpressions;
 
 namespace AkmlSql.Formatting.Pipeline;
@@ -70,7 +69,7 @@ public class SqlcmdPreprocessor
             var placeholder = $"{VarPlaceholderPrefix}{varName}{VarPlaceholderSuffix}";
 
             // Track unique replacements
-            if (!_varMap.Any(v => v.Placeholder == placeholder))
+            if (_varMap.All(v => v.Placeholder != placeholder))
                 _varMap.Add((placeholder, m.Value));
 
             return placeholder;

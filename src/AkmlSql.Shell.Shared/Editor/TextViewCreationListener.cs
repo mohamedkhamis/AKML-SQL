@@ -1,8 +1,9 @@
 using System;
 using System.ComponentModel.Composition;
+using AkmlSql.Shell.Shared.Analysis;
 using Microsoft.VisualStudio.Editor;
+using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Text.Editor;
-using Microsoft.VisualStudio.TextManager.Interop;
 using Microsoft.VisualStudio.Utilities;
 using Serilog;
 
@@ -15,6 +16,9 @@ namespace AkmlSql.Shell.Shared.Editor
     {
         [Import]
         internal IVsEditorAdaptersFactoryService AdapterService { get; set; }
+
+        [Import(typeof(SVsServiceProvider))]
+        internal IServiceProvider ServiceProvider { get; set; }
 
         public void TextViewCreated(IWpfTextView textView)
         {
@@ -33,6 +37,24 @@ namespace AkmlSql.Shell.Shared.Editor
                 var filter = new CompletionCommandHandler(textView, vsView);
                 vsView.AddCommandFilter(filter, out var nextTarget);
                 filter.NextTarget = nextTarget;
+
+                // Wire up real-time code analysis (T052)
+                // AnalysisController drives debounced RPC → DiagnosticTagger reads it via MEF
+                var buffer    = textView.TextBuffer;
+                var sessionId = Guid.NewGuid().ToString("N");
+                var controller = buffer.Properties.GetOrCreateSingletonProperty(
+                    typeof(AnalysisController),
+                    () => new AnalysisController(buffer, sessionId));
+
+                // ErrorListReporter: document path is retrieved at display-time via DTE
+                string docPath = string.Empty;
+
+                if (ServiceProvider != null)
+                {
+                    buffer.Properties.GetOrCreateSingletonProperty(
+                        typeof(ErrorListReporter),
+                        () => new ErrorListReporter(controller, ServiceProvider, docPath));
+                }
 
                 // TODO (T039): Detect SSMS active connection changes via ServiceCache.ScriptFactory.
                 // SSMS exposes the current connection through the IVsMonitorSelection service and

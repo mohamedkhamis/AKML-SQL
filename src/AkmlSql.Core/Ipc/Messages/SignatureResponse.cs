@@ -9,7 +9,7 @@ namespace AkmlSql.Core.Ipc.Messages
         public string FunctionName { get; set; } = string.Empty;
 
         [Key(1)]
-        public SignatureOverload[] Overloads { get; set; } = [];
+        public SignatureOverload[]? Overloads { get; set; } = [];
 
         [Key(2)]
         public int ActiveOverload { get; set; }

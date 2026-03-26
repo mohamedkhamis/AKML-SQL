@@ -1,7 +1,12 @@
 using System;
 using System.ComponentModel.Design;
 using System.Windows.Forms;
+using AkmlSql.Core.Config;
+using AkmlSql.Core.Ipc;
+using AkmlSql.Shell.Shared.Dialogs;
+using AkmlSql.Shell.Shared.Ipc;
 using Microsoft.VisualStudio.Shell;
+using Serilog;
 using Constants = AkmlSql.Core.Constants;
 
 namespace AkmlSql.Shell.Shared.Commands
@@ -29,17 +34,37 @@ namespace AkmlSql.Shell.Shared.Commands
 
         private void Execute(object sender, EventArgs e)
         {
-            // TODO T102: Replace this placeholder with a WPF SettingsDialog that exposes
-            //   IntelliSenseSettings and CacheSettings from AppSettings for editing.
-            //   Dialog should bind to ConfigManager.Load() and Save() on OK.
-            // TODO T103: After settings are saved, propagate changes to the running engine
-            //   by sending a SettingsChanged notification via PipeRpcClient so the engine
-            //   can update MaxSuggestions, RefreshInterval, FuzzyMatch, etc. without restart.
-            MessageBox.Show(
-                "Settings will be available in a future update.",
-                Constants.ProductName + " Options",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+            try
+            {
+                var settings = ConfigManager.Load();
+                using (var dialog = new SettingsDialog(settings))
+                {
+                    if (dialog.ShowDialog() == DialogResult.OK)
+                    {
+                        var updated = dialog.GetSettings();
+                        ConfigManager.Save(updated);
+                        Log.Information("Settings saved successfully.");
+
+                        // T066: Notify the engine to reload its settings cache (fire-and-forget)
+                        var client = EngineLifecycle.Manager?.Client;
+                        if (client != null && client.IsConnected)
+                        {
+                            _ = client.SendNotificationAsync(
+                                MessageTypes.AnalysisSettingsChanged,
+                                new { });
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Failed to open settings dialog");
+                MessageBox.Show(
+                    "Failed to load settings: " + ex.Message,
+                    Constants.ProductName,
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+            }
         }
     }
 }

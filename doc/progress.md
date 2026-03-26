@@ -199,4 +199,91 @@ Get-Content "<path>\ActivityLog.xml" -Encoding Unicode | Select-String "akml"
 
 ---
 
-*Last updated: 2026-03-19*
+## Build: Analyzer CLI (Phase 5)
+
+`AkmlSql.Analyzer` is a self-contained .NET 10 CLI tool for static SQL analysis in CI/CD pipelines.
+
+### Build & Publish
+
+```bash
+dotnet publish src/AkmlSql.Analyzer/AkmlSql.Analyzer.csproj -c Release -r win-x64
+# Output: src/AkmlSql.Analyzer/bin/Release/net10.0/win-x64/publish/AkmlSql.Analyzer.exe
+```
+
+### CLI Usage Examples
+
+```bash
+# Analyze a single file
+AkmlSql.Analyzer.exe --file query.sql
+
+# Analyze a directory recursively (exit 1 if any warnings found — for CI/CD)
+AkmlSql.Analyzer.exe --directory scripts/ --recursive --check --severity warning
+
+# Analyze with specific rules only
+AkmlSql.Analyzer.exe --file query.sql --rules PE001,BP004,SE001
+
+# Exclude rules
+AkmlSql.Analyzer.exe --directory scripts/ --exclude-rules NM006,ST001
+
+# JSON report (stdout) + file report
+AkmlSql.Analyzer.exe --file query.sql --format json --report report.json
+
+# With custom settings file
+AkmlSql.Analyzer.exe --directory scripts/ --settings .casettings
+
+# Show help / version
+AkmlSql.Analyzer.exe --help
+AkmlSql.Analyzer.exe --version
+```
+
+### Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| 0    | Clean — no violations at `--severity` level, or `--check` not specified |
+| 1    | Violations found (only when `--check` is used) |
+| 2    | Fatal error (parse failure, invalid args, missing file) |
+
+### Importing SQL Prompt Settings
+
+To convert an existing SQL Prompt `.casettings` XML file to AKML's JSON format:
+
+```csharp
+// In code (SqlPromptImporter.Convert returns the count of converted rules)
+int count = AkmlSql.Engine.Analysis.SqlPromptImporter.Convert(
+    xmlInputPath: "SqlPrompt.casettings",
+    jsonOutputPath: ".casettings");
+```
+
+The importer maps 55 SQL Prompt rule IDs to their AKML equivalents. Unknown SQL Prompt rule IDs are logged and skipped.
+
+### Configuring CAsettings in CI/CD
+
+Place a `.casettings` file in the root of the SQL scripts directory. The analyzer walks up the directory tree to find the nearest file. Example `.casettings`:
+
+```json
+{
+  "metadata": { "name": "CI Rules", "version": "1.0" },
+  "rules": {
+    "PE001": { "enabled": true, "severity": "error" },
+    "NM006": { "enabled": false, "severity": "ignore" },
+    "ST001": { "enabled": true, "severity": "warning" }
+  },
+  "globalSuppressions": [
+    { "rule": "BP012", "reason": "Date literals intentional in migration scripts" }
+  ]
+}
+```
+
+GitHub Actions example:
+
+```yaml
+- name: SQL Static Analysis
+  run: |
+    AkmlSql.Analyzer.exe --directory sql/ --recursive --check --severity warning --report analysis-report.json
+  continue-on-error: false
+```
+
+---
+
+*Last updated: 2026-03-22*

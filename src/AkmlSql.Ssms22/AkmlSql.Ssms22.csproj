@@ -12,6 +12,7 @@
     <IncludeDebugSymbolsInLocalVSIXDeployment>false</IncludeDebugSymbolsInLocalVSIXDeployment>
     <CopyBuildOutputToOutputDirectory>true</CopyBuildOutputToOutputDirectory>
     <LangVersion>latest</LangVersion>
+    <DefineConstants>$(DefineConstants);VS_SDK_17</DefineConstants>
     <!-- Prevent VSIX container creation (we use Inno Setup installer) -->
     <CreateVsixContainer>false</CreateVsixContainer>
     <DeployExtension>false</DeployExtension>

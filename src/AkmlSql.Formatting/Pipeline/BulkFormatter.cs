@@ -144,7 +144,7 @@ public class BulkFormatter
                 var scanner = new NoformatScanner();
                 var regions = scanner.Scan(originalText);
                 // If the entire file is in a noformat region, skip it
-                if (regions.Count == 1 && regions[0].StartOffset == 0 && regions[0].EndOffset >= originalText.Length)
+                if (regions is [{ StartOffset: 0 }] && regions[0].EndOffset >= originalText.Length)
                     return new FileFormatResult
                     {
                         FilePath = filePath,

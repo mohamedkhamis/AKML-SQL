@@ -1,4 +1,6 @@
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
+// ReSharper disable UnusedMember.Global
 
 namespace AkmlSql.Engine.Parser;
 
@@ -7,6 +9,8 @@ namespace AkmlSql.Engine.Parser;
 /// Handles both explicit column lists and inferred columns from the SELECT clause.
 /// Supports nested CTE resolution where one CTE references another.
 /// </summary>
+// ReSharper disable once UnusedMember.Global
+[SuppressMessage("ReSharper", "GrammarMistakeInComment")]
 public class CteResolver
 {
     /// <summary>
@@ -95,6 +99,7 @@ public class CteResolver
                             var identifiers = colRef.MultiPartIdentifier?.Identifiers;
                             if (identifiers is { Count: > 0 })
                             {
+                                // ReSharper disable once UseIndexFromEndExpression
                                 columns.Add(identifiers[identifiers.Count - 1].Value);
                             }
                         }
@@ -109,6 +114,7 @@ public class CteResolver
                         // SELECT * — try to resolve from known CTEs or tables
                         if (star.Qualifier != null && star.Qualifier.Identifiers.Count > 0)
                         {
+                            // ReSharper disable once UseIndexFromEndExpression
                             var qualifierName = star.Qualifier.Identifiers[star.Qualifier.Identifiers.Count - 1].Value;
                             if (resolvedCtes.TryGetValue(qualifierName, out var cteColumns))
                             {

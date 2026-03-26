@@ -71,5 +71,12 @@ namespace AkmlSql.Core.Ipc
         public const int SnippetSaveResult = 122;
         public const int SnippetDeleteResult = 123;
         public const int SnippetImportResult = 124;
+
+        // Shell → Engine (Code Analysis)
+        public const int RequestAnalyze = 25;
+        public const int AnalysisSettingsChanged = 26;
+
+        // Engine → Shell (Code Analysis)
+        public const int AnalysisResult = 125;
     }
 }

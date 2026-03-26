@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Parser;
@@ -6,6 +7,7 @@ namespace AkmlSql.Engine.Parser;
 /// T073: Walks AST for DECLARE @name type statements to extract variable declarations.
 /// Returns a dictionary of variable name → type name.
 /// </summary>
+[SuppressMessage("ReSharper", "UnusedMember.Global")]
 public class VariableTracker
 {
     /// <summary>
@@ -39,15 +41,9 @@ public class VariableTracker
         return result;
     }
 
-    private class VariableVisitor : TSqlFragmentVisitor
+    private class VariableVisitor(int cursorOffset) : TSqlFragmentVisitor
     {
-        private readonly int _cursorOffset;
         public List<(string Name, string TypeName)> Variables { get; } = [];
-
-        public VariableVisitor(int cursorOffset)
-        {
-            _cursorOffset = cursorOffset;
-        }
 
         /// <summary>
         /// Handle DECLARE @var type, @var2 type2 statements.
@@ -55,7 +51,7 @@ public class VariableTracker
         public override void Visit(DeclareVariableElement node)
         {
             // Only include declarations that appear before the cursor
-            if (node.StartOffset > _cursorOffset)
+            if (node.StartOffset > cursorOffset)
             {
                 return;
             }

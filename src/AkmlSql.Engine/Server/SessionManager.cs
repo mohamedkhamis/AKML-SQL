@@ -36,7 +36,7 @@ public class SessionManager
     {
         if (_sessions.TryGetValue(change.SessionId, out var session))
         {
-            if (change.ChangeType == 0 && change.FullText != null) // Full
+            if (change is { ChangeType: 0, FullText: not null }) // Full
             {
                 session.DocumentText = change.FullText;
             }

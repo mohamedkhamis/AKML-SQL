@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using AkmlSql.Formatting.Layout;
 using AkmlSql.Formatting.Profiles;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
@@ -10,6 +11,7 @@ namespace AkmlSql.Formatting.Rules;
 /// indentContents, spaceInside, removeRedundant, createTableColumns,
 /// procedureParameters, subqueryStyle.
 /// </summary>
+[SuppressMessage("ReSharper", "UnusedMember.Global")]
 public class ParenthesisRules : IRuleSet
 {
     public void Apply(List<LayoutNode> nodes, FormattingProfile profile)
@@ -70,7 +72,7 @@ public class ParenthesisRules : IRuleSet
             if (paren.OpenOnSameLine)
             {
                 // Keep the open paren on the same line
-                if (node.PrecedingBreak == BreakType.NewLine || node.PrecedingBreak == BreakType.EmptyLine)
+                if (node.PrecedingBreak is BreakType.NewLine or BreakType.EmptyLine)
                 {
                     node.PrecedingBreak = BreakType.None;
                     node.PrecedingSpaces = 0;
@@ -124,10 +126,6 @@ public class ParenthesisRules : IRuleSet
                         node.IndentLevel = nodes[matchOpenIdx].IndentLevel;
                         node.PrecedingSpaces = 0;
                     }
-                    break;
-
-                default: // "false"
-                    // Only collapse if contents are on one line
                     break;
             }
         }

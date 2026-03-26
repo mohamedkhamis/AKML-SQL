@@ -59,6 +59,7 @@ Source: "..\AkmlSql.Ssms22\bin\Release\net472\Serilog.dll"; DestDir: "{app}"; Fl
 Source: "..\AkmlSql.Ssms22\bin\Release\net472\Serilog.Sinks.File.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\AkmlSql.Updater\bin\Release\net10.0\win-x64\publish\AkmlSql.Updater.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\AkmlSql.Engine.exe"; DestDir: "{app}\Engine"; Flags: ignoreversion
+Source: "..\AkmlSql.Analyzer\bin\Release\net10.0\win-x64\publish\AkmlSql.Analyzer.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 ; SSMS 20 (x86) extension files — all DLLs from build output plus pkgdef and manifest
@@ -117,12 +118,6 @@ var
   AutoUpdateEnabled: Boolean;
   TelemetryEnabled: Boolean;
 
-// --- Checkbox click handler: sync selections ---
-// Note: We do NOT manipulate WizardForm.NextButton.Enabled here because
-// Inno Setup's framework resets button state after CurPageChanged returns
-// on custom pages, causing the button to stay disabled even when checkboxes
-// are pre-checked. Instead, NextButtonClick validates the selection.
-
 // --- Wizard Initialization ---
 
 procedure InitializeWizard;
@@ -145,6 +140,7 @@ begin
   EnvCheckListBox.ShowLines := True;
 
   PopulateEnvCheckList;
+  EnvCheckListBox.OnClickCheck := @EnvCheckListBoxClickCheck;
 
   // Create Additional Options page (Screen 5)
   OptionsPage := CreateInputOptionPage(wpSelectDir,
@@ -204,6 +200,7 @@ begin
     // Refresh scan when entering the environment page
     RunFullScan;
     PopulateEnvCheckList;
+    UpdateEnvNextButton;
   end;
 
   // When leaving the environment page, sync selections

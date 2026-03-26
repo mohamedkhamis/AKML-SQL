@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using AkmlSql.Formatting.Layout;
 using AkmlSql.Formatting.Profiles;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
@@ -10,6 +11,8 @@ namespace AkmlSql.Formatting.Rules;
 /// oneItemPerLine, collapseShortLists, collapseThreshold, indentListItems,
 /// alignDataTypesInDDL, alignValuesInInsert, spaceAfterListComma.
 /// </summary>
+[SuppressMessage("ReSharper", "UnusedParameter.Local")]
+[SuppressMessage("ReSharper", "UnusedVariable")]
 public class ListRules : IRuleSet
 {
     public void Apply(List<LayoutNode> nodes, FormattingProfile profile)
@@ -47,7 +50,7 @@ public class ListRules : IRuleSet
                 var next = nodes[i + 1];
 
                 // If the next token was going to be on a new line, move the comma there
-                if (next.PrecedingBreak == BreakType.NewLine || next.PrecedingBreak == BreakType.EmptyLine)
+                if (next.PrecedingBreak is BreakType.NewLine or BreakType.EmptyLine)
                 {
                     // Transfer the break from next to the comma
                     node.PrecedingBreak = next.PrecedingBreak;
@@ -111,9 +114,8 @@ public class ListRules : IRuleSet
 
         var context = ClauseContext.None;
 
-        for (int i = 0; i < nodes.Count; i++)
+        foreach (var node in nodes)
         {
-            var node = nodes[i];
             if (node.IsInNoformatRegion)
                 continue;
 
@@ -327,11 +329,7 @@ public class ListRules : IRuleSet
 
     private static bool IsListClause(ClauseContext context)
     {
-        return context == ClauseContext.Select ||
-               context == ClauseContext.GroupBy ||
-               context == ClauseContext.OrderBy ||
-               context == ClauseContext.Set ||
-               context == ClauseContext.Values;
+        return context is ClauseContext.Select or ClauseContext.GroupBy or ClauseContext.OrderBy or ClauseContext.Set or ClauseContext.Values;
     }
 
     private static bool IsClauseKeyword(TSqlTokenType tokenType)
@@ -429,7 +427,7 @@ public class ListRules : IRuleSet
         if (keywordIndex + 1 < nodes.Count)
         {
             var next = nodes[keywordIndex + 1];
-            if (next.TokenType == TSqlTokenType.By || next.TokenType == TSqlTokenType.Into)
+            if (next.TokenType is TSqlTokenType.By or TSqlTokenType.Into)
             {
                 length += 1 + next.FormattedText.Length; // +1 for space
             }

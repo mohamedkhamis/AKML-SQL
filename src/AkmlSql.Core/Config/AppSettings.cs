@@ -1,9 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Serialization;
+// ReSharper disable UnusedMember.Global
 
 namespace AkmlSql.Core.Config
 {
+    [SuppressMessage("ReSharper", "UnusedMember.Global")]
     public class AppSettings
     {
         public int ConfigVersion { get; set; } = 1;
@@ -11,15 +14,18 @@ namespace AkmlSql.Core.Config
         public bool TelemetryEnabled { get; set; }
         public DateTimeOffset? LastUpdateCheck { get; set; }
         public string InstallId { get; set; } = Guid.NewGuid().ToString();
-        public List<InstalledTarget> InstalledTargets { get; set; } = new List<InstalledTarget>();
-        public IntelliSenseSettings IntelliSense { get; set; } = new IntelliSenseSettings();
-        public CacheSettings Cache { get; set; } = new CacheSettings();
+        public List<InstalledTarget> InstalledTargets { get; set; } = [];
+        public IntelliSenseSettings IntelliSense { get; set; } = new();
+        public CacheSettings Cache { get; set; } = new();
 
         [JsonPropertyName("formatter")]
-        public FormatterSettings Formatter { get; set; } = new FormatterSettings();
+        public FormatterSettings Formatter { get; set; } = new();
 
         [JsonPropertyName("snippets")]
-        public SnippetSettings Snippets { get; set; } = new SnippetSettings();
+        public SnippetSettings Snippets { get; set; } = new();
+
+        [JsonPropertyName("codeAnalysis")]
+        public CodeAnalysisSettings CodeAnalysis { get; set; } = new();
 
         /// <summary>
         /// T093-T095: Whether the user has been prompted about native IntelliSense conflict.
@@ -144,5 +150,26 @@ namespace AkmlSql.Core.Config
 
         [JsonPropertyName("trackUsage")]
         public bool TrackUsage { get; set; } = true;
+    }
+
+    public class CodeAnalysisSettings
+    {
+        [JsonPropertyName("enabled")]
+        public bool Enabled { get; set; } = true;
+
+        [JsonPropertyName("runOnType")]
+        public bool RunOnType { get; set; } = true;
+
+        [JsonPropertyName("runOnSave")]
+        public bool RunOnSave { get; set; } = true;
+
+        [JsonPropertyName("autoFixOnFormat")]
+        public bool AutoFixOnFormat { get; set; }
+
+        [JsonPropertyName("squiggleStyle")]
+        public string SquiggleStyle { get; set; } = "underline";
+
+        [JsonPropertyName("showInErrorList")]
+        public bool ShowInErrorList { get; set; } = true;
     }
 }

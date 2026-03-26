@@ -30,7 +30,7 @@ public partial class ChangeDetector
             cmd.CommandTimeout = 10;
 
             var result = await cmd.ExecuteScalarAsync(ct);
-            var currentChecksum = result is DBNull || result is null ? 0 : (int)result;
+            var currentChecksum = result is DBNull or null ? 0 : (int)result;
 
             if (currentChecksum == cache.LastChangeChecksum)
             {

@@ -1,8 +1,10 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text.RegularExpressions;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Parser;
 
+[SuppressMessage("ReSharper", "UnusedMember.Local")]
 public partial class TsqlParserService
 {
     private readonly object _lock = new();
@@ -54,10 +56,7 @@ public partial class TsqlParserService
 
     private TSqlParser GetParser()
     {
-        if (_parser == null)
-        {
-            _parser = CreateParser(_serverVersion);
-        }
+        _parser ??= CreateParser(_serverVersion);
 
         return _parser;
     }

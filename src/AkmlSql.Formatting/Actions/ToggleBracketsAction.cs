@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using AkmlSql.Formatting.Pipeline;
 using AkmlSql.Formatting.Profiles;
@@ -11,6 +12,9 @@ namespace AkmlSql.Formatting.Actions;
 /// If the profile's addSquareBrackets is true, wraps unbracketed identifiers with [brackets].
 /// If false, removes brackets from quoted identifiers.
 /// </summary>
+[SuppressMessage("ReSharper", "CollectionNeverUpdated.Local")]
+[SuppressMessage("ReSharper", "UnusedVariable")]
+[SuppressMessage("ReSharper", "UnusedMember.Global")]
 public class ToggleBracketsAction : IFormatAction
 {
     public FormatResult Execute(string sql, FormattingProfile profile)

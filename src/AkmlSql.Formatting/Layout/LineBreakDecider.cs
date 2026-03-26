@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using AkmlSql.Formatting.Profiles;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
@@ -6,15 +7,9 @@ namespace AkmlSql.Formatting.Layout;
 /// <summary>
 /// Determines PrecedingBreak and indentation for tokens based on clause context and profile rules.
 /// </summary>
-public class LineBreakDecider
+[SuppressMessage("ReSharper", "UnusedParameter.Local")]
+public class LineBreakDecider(FormattingProfile profile)
 {
-    private readonly FormattingProfile _profile;
-
-    public LineBreakDecider(FormattingProfile profile)
-    {
-        _profile = profile;
-    }
-
     /// <summary>
     /// Decides whether a line break should precede this token, and at what indent level.
     /// </summary>
@@ -31,9 +26,9 @@ public class LineBreakDecider
             return new BreakDecision(BreakType.None, 0, 0);
 
         var upperText = tokenText.ToUpperInvariant();
-        var dml = _profile.Dml;
-        var join = _profile.Join;
-        var ws = _profile.Whitespace;
+        var dml = profile.Dml;
+        var join = profile.Join;
+        var ws = profile.Whitespace;
 
         // New statement: empty line between statements
         if (isFirstInStatement && ws.EmptyLineBetweenStatements > 0)
@@ -43,7 +38,7 @@ public class LineBreakDecider
         if (tokenType == TSqlTokenType.Go)
         {
             return new BreakDecision(
-                ws.EmptyLineBeforeGO ? BreakType.EmptyLine : BreakType.NewLine, 0, 0);
+                ws.EmptyLineBeforeGo ? BreakType.EmptyLine : BreakType.NewLine, 0, 0);
         }
 
         // SELECT keyword at start of statement
@@ -106,7 +101,7 @@ public class LineBreakDecider
         }
 
         // AND/OR
-        if (tokenType == TSqlTokenType.And || tokenType == TSqlTokenType.Or)
+        if (tokenType is TSqlTokenType.And or TSqlTokenType.Or)
         {
             return dml.AndOrNewLine switch
             {
@@ -141,7 +136,7 @@ public class LineBreakDecider
         {
             if (currentClause == ClauseContext.Select && dml.SelectItemsOnNewLine)
                 return new BreakDecision(BreakType.NewLine, 1, 0);
-            if (currentClause == ClauseContext.GroupBy || currentClause == ClauseContext.OrderBy)
+            if (currentClause is ClauseContext.GroupBy or ClauseContext.OrderBy)
                 return new BreakDecision(BreakType.NewLine, 1, 0);
 
             // Default: space after comma
@@ -169,7 +164,7 @@ public class LineBreakDecider
     private static bool IsJoinModifier(TSqlTokenType tokenType, string upperText, ClauseContext currentClause)
     {
         // These tokens often appear immediately before JOIN
-        if (currentClause == ClauseContext.From || currentClause == ClauseContext.Join)
+        if (currentClause is ClauseContext.From or ClauseContext.Join)
         {
             return tokenType switch
             {
@@ -206,5 +201,7 @@ public enum ClauseContext
     Set,
     Values,
     With,
+    // ReSharper disable UnusedMember.Global
     Other
+    // ReSharper restore UnusedMember.Global
 }

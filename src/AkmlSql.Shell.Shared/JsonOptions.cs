@@ -4,7 +4,7 @@ namespace AkmlSql.Shell.Shared
 {
     internal static class JsonOptions
     {
-        public static readonly JsonSerializerOptions CamelCase = new JsonSerializerOptions
+        public static readonly JsonSerializerOptions CamelCase = new()
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         };

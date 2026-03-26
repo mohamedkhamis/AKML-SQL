@@ -33,8 +33,7 @@ public class AliasProvider : ICompletionProvider
         }
 
         var tokenType = context.PrecedingToken.TokenType;
-        return tokenType == Microsoft.SqlServer.TransactSql.ScriptDom.TSqlTokenType.Identifier
-            || tokenType == Microsoft.SqlServer.TransactSql.ScriptDom.TSqlTokenType.QuotedIdentifier;
+        return tokenType is Microsoft.SqlServer.TransactSql.ScriptDom.TSqlTokenType.Identifier or Microsoft.SqlServer.TransactSql.ScriptDom.TSqlTokenType.QuotedIdentifier;
     }
 
     public IEnumerable<CompletionItem> GetCompletions(CursorContext context, DatabaseCache? cache)
