@@ -31,6 +31,7 @@
     <Reference Include="System.ComponentModel.Composition" />
     <Reference Include="System.Design" />
     <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xaml" />
     <Reference Include="PresentationCore" />
     <Reference Include="PresentationFramework" />
     <Reference Include="WindowsBase" />
@@ -54,7 +55,7 @@
        With MergeWithCTO=false, the CTO merge into VSPackage.resources is not needed.
        The VSCT compiler already registers the CTO as Menus.ctmenu embedded resource
        via the VSCTCompile item's ResourceName property. -->
-  <Target Name="MergeCtoResource" />
+  <!-- MergeCtoResource restored: needed for CTO embedding in all VSSDK versions -->
 
   <ItemGroup>
     <VSCTCompile Include="AkmlSqlVS2022.vsct">
@@ -64,7 +65,7 @@
 
   <ItemGroup>
     <EmbeddedResource Update="VSPackage.resx">
-      <MergeWithCTO>false</MergeWithCTO>
+      <MergeWithCTO>true</MergeWithCTO>
       <ManifestResourceName>VSPackage</ManifestResourceName>
     </EmbeddedResource>
   </ItemGroup>

@@ -21,15 +21,21 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.VisualStudio.SDK" Version="15.9.3" ExcludeAssets="runtime" />
-    <PackageReference Include="Microsoft.VisualStudio.Language.Intellisense" Version="15.*" ExcludeAssets="runtime" />
-    <PackageReference Include="Microsoft.VisualStudio.Text.UI.Wpf" Version="15.*" ExcludeAssets="runtime" />
-    <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="15.*" PrivateAssets="all" />
+    <!-- Pin to 15.8.525 — wildcard 15.* is safe but explicit versions prevent future surprises -->
+    <PackageReference Include="Microsoft.VisualStudio.Language.Intellisense" Version="15.8.525" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.VisualStudio.Text.UI.Wpf" Version="15.8.525" ExcludeAssets="runtime" />
+    <!-- Override the transitive CoreUtility 16.0.112 pulled by Microsoft.VisualStudio.SDK 15.9.3.
+         SSMS 20 only ships CoreUtility 15.0.0.0; loading 16.0.0.0 causes MEF scanning failure.
+         NU1605 suppressed because this intentional downgrade is required for SSMS 20 compatibility. -->
+    <PackageReference Include="Microsoft.VisualStudio.CoreUtility" Version="15.8.525" ExcludeAssets="runtime" NoWarn="NU1605" />
+    <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="15.9.3084" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>
     <Reference Include="System.ComponentModel.Composition" />
     <Reference Include="System.Design" />
     <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xaml" />
     <Reference Include="PresentationCore" />
     <Reference Include="PresentationFramework" />
     <Reference Include="WindowsBase" />
@@ -49,11 +55,9 @@
   <Target Name="CopyVsixExtensionFiles" />
   <Target Name="GetVsixDeploymentPath" />
   <Target Name="DeployVsixExtensionFiles" />
-  <!-- Override MergeCtoResource to prevent CTO cross-contamination in parallel builds.
-       With MergeWithCTO=false, the CTO merge into VSPackage.resources is not needed.
-       The VSCT compiler already registers the CTO as Menus.ctmenu embedded resource
-       via the VSCTCompile item's ResourceName property. -->
-  <Target Name="MergeCtoResource" />
+  <!-- VSSDK 15.x requires MergeCtoResource to embed the CTO into VSPackage.resources.
+       Unlike VSSDK 17.x, the ResourceName property on VSCTCompile alone is not sufficient.
+       Build individually (not via solution) to avoid CTO cross-contamination. -->
 
   <ItemGroup>
     <VSCTCompile Include="AkmlSqlSsms20.vsct">
@@ -63,7 +67,7 @@
 
   <ItemGroup>
     <EmbeddedResource Update="VSPackage.resx">
-      <MergeWithCTO>false</MergeWithCTO>
+      <MergeWithCTO>true</MergeWithCTO>
       <ManifestResourceName>VSPackage</ManifestResourceName>
     </EmbeddedResource>
   </ItemGroup>

@@ -20,6 +20,7 @@ using AkmlSql.Shell.Shared.Safety;
 using AkmlSql.Shell.Shared.Tabs;
 using AkmlSql.Shell.Shared.Update;
 using AkmlSql.Shell.Shared.Ai;
+using AkmlSql.Shell.Shared.Ipc;
 using AkmlSql.Shell.Shared.Validation;
 using Serilog;
 
@@ -40,6 +41,9 @@ namespace AkmlSql.Ssms22
             CancellationToken cancellationToken,
             IProgress<ServiceProgressData> progress)
         {
+            // Register assembly resolver BEFORE anything that loads our dependencies
+            ExtensionAssemblyResolver.Register();
+
             await base.InitializeAsync(cancellationToken, progress);
 
             // Switch to UI thread for menu registration — do this FIRST
@@ -117,6 +121,10 @@ namespace AkmlSql.Ssms22
                 }
 
                 UpdateLauncher.LaunchIfDue();
+
+                // Launch Engine process for IntelliSense, formatting, analysis
+                System.Threading.Tasks.Task.Run(() => EngineLifecycle.LaunchAsync());
+
                 ExecutionCapture.Initialize(this);
                 ExecutionInterceptor.Initialize(this);
                 TabManagementInitializer.Initialize(this);

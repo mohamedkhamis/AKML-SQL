@@ -1,6 +1,5 @@
 #nullable enable
 using System;
-using System.Threading.Tasks;
 using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
@@ -8,6 +7,7 @@ using AkmlSql.Core.Models.History;
 using AkmlSql.Shell.Shared.Ipc;
 using Microsoft.VisualStudio.Shell;
 using Serilog;
+using Task = System.Threading.Tasks.Task;
 
 namespace AkmlSql.Shell.Shared.History
 {

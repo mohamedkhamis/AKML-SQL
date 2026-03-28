@@ -30,7 +30,19 @@ namespace AkmlSql.Shell.Shared.Commands
         /// Immutable snapshot of the last captured execution error.
         /// Updated atomically via <see cref="Interlocked.CompareExchange{T}"/>.
         /// </summary>
-        private sealed record ErrorSnapshot(string FailingSql, string ErrorMessage, int ErrorNumber);
+        private sealed class ErrorSnapshot
+        {
+            public string FailingSql { get; }
+            public string ErrorMessage { get; }
+            public int ErrorNumber { get; }
+
+            public ErrorSnapshot(string failingSql, string errorMessage, int errorNumber)
+            {
+                FailingSql = failingSql;
+                ErrorMessage = errorMessage;
+                ErrorNumber = errorNumber;
+            }
+        }
         private static ErrorSnapshot? _lastError;
 
         private AiFixCommand(AsyncPackage package, OleMenuCommandService commandService)

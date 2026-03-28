@@ -136,6 +136,27 @@ namespace AkmlSql.Shell.Shared.Ipc
                 return enginePath;
             }
 
+            // Check base install directory (installer deploys Engine to {app}\Engine\)
+            var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+            if (!string.IsNullOrEmpty(programFiles))
+            {
+                enginePath = Path.Combine(programFiles, "AKML SQL", "Engine", "AkmlSql.Engine.exe");
+                if (File.Exists(enginePath))
+                {
+                    return enginePath;
+                }
+            }
+
+            programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+            if (!string.IsNullOrEmpty(programFiles))
+            {
+                enginePath = Path.Combine(programFiles, "AKML SQL", "Engine", "AkmlSql.Engine.exe");
+                if (File.Exists(enginePath))
+                {
+                    return enginePath;
+                }
+            }
+
             return null;
         }
 

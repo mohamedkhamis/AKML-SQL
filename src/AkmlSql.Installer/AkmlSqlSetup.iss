@@ -197,9 +197,8 @@ var
 begin
   if CurPageID = EnvPage.ID then
   begin
-    // Refresh scan when entering the environment page
-    RunFullScan;
-    PopulateEnvCheckList;
+    // Sync Next button state with existing checkboxes
+    // (scan and populate already done in InitializeWizard)
     UpdateEnvNextButton;
   end;
 
@@ -321,6 +320,7 @@ end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 var
+  I: Integer;
   ConfigDir: String;
   ConfigPath: String;
   ConfigJson: String;
@@ -345,6 +345,20 @@ begin
       ClearVSMefCaches('18.0');
 
     Log('MEF caches cleared.');
+
+    // Touch extensions.configurationchanged marker so the IDE re-scans for new extensions
+    Log('Touching extensions.configurationchanged markers...');
+    for I := 0 to TargetCount - 1 do
+    begin
+      if Targets[I].IsSelected and (Targets[I].ExtensionsPath <> '') then
+      begin
+        // Go up from ..\Extensions\AkmlSql to ..\Extensions\
+        ConfigDir := ExtractFilePath(Targets[I].ExtensionsPath);
+        ConfigPath := ConfigDir + 'extensions.configurationchanged';
+        SaveStringToFile(ConfigPath, GetDateTimeString('yyyy-mm-dd hh:nn:ss', #0, #0), False);
+        Log('Touched: ' + ConfigPath);
+      end;
+    end;
 
     // Write config.json only if it does not already exist (preserve on upgrade)
     ConfigDir := ExpandConstant('{userappdata}') + '\AKML SQL';

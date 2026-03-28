@@ -94,19 +94,19 @@ begin
     if Pos('SQL Server Management Studio 22', Line) > 0 then
     begin
       // vswhere reports ...\SSMS 22\Release as installationPath
-      // The Extensions folder is at the SSMS root level, not under Release
-      // Strip \Release suffix to get the root
+      // Strip \Release suffix to get the display root
       RootPath := Line;
       if (Length(RootPath) > 8) and (Copy(RootPath, Length(RootPath) - 6, 7) = 'Release') then
         RootPath := Copy(RootPath, 1, Length(RootPath) - 8);
 
+      // Extensions must be under Release\Common7\IDE\Extensions (where the IDE runs)
       if FileExists(Line + '\Common7\IDE\SSMS.exe') or
          FileExists(Line + '\Common7\IDE\Ssms.exe') then
         AddTarget('SSMS 22', '22', 'x64', RootPath,
-          RootPath + '\Common7\IDE\Extensions\AkmlSql', True, '')
+          Line + '\Common7\IDE\Extensions\AkmlSql', True, '')
       else if DirExists(RootPath) then
         AddTarget('SSMS 22', '22', 'x64', RootPath,
-          RootPath + '\Common7\IDE\Extensions\AkmlSql', True, '');
+          Line + '\Common7\IDE\Extensions\AkmlSql', True, '');
     end
 
     // Detect VS 2019 (x86)

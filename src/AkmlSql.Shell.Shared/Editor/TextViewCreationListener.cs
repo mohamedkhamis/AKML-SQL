@@ -1,6 +1,8 @@
 using System;
 using System.ComponentModel.Composition;
+using AkmlSql.Core.Logging;
 using AkmlSql.Shell.Shared.Analysis;
+using AkmlSql.Shell.Shared.Ipc;
 using Microsoft.VisualStudio.Editor;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Text.Editor;
@@ -24,6 +26,12 @@ namespace AkmlSql.Shell.Shared.Editor
         {
             try
             {
+                // Bootstrap: assembly resolver + logger + engine
+                // (Package AutoLoad is unreliable in SSMS IsolatedShell and after registry rebuild)
+                ExtensionAssemblyResolver.Register();
+                LoggerFactory.Initialize();
+                System.Threading.Tasks.Task.Run(() => EngineLifecycle.LaunchAsync());
+
                 Log.Information("TextViewCreated for content type: {Type}",
                     textView.TextBuffer.ContentType.TypeName);
 

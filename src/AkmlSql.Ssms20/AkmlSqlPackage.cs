@@ -18,6 +18,7 @@ using AkmlSql.Shell.Shared.Safety;
 using AkmlSql.Shell.Shared.Tabs;
 using AkmlSql.Shell.Shared.Update;
 using AkmlSql.Shell.Shared.Ai;
+using AkmlSql.Shell.Shared.Ipc;
 using AkmlSql.Shell.Shared.Validation;
 using Serilog;
 
@@ -38,6 +39,9 @@ namespace AkmlSql.Ssms20
         {
             try
             {
+                // Register assembly resolver BEFORE anything that loads our dependencies
+                ExtensionAssemblyResolver.Register();
+
                 base.Initialize();
 
                 // Register menu commands FIRST — before anything that might fail
@@ -112,6 +116,10 @@ namespace AkmlSql.Ssms20
                     }
 
                     UpdateLauncher.LaunchIfDue();
+
+                    // Launch Engine process for IntelliSense, formatting, analysis
+                    System.Threading.Tasks.Task.Run(() => EngineLifecycle.LaunchAsync());
+
                     ExecutionCapture.Initialize(this);
                     ExecutionInterceptor.Initialize(this);
                     TabCloseMonitor.Initialize(this);
