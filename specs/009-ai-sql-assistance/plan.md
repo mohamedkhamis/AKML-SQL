@@ -1,134 +1,164 @@
-# Implementation Plan: AI-Powered SQL Assistance
+# Implementation Plan: Custom WPF Completion Popup
 
-**Branch**: `009-ai-sql-assistance` | **Date**: 2026-03-25 | **Spec**: [spec.md](spec.md)
-**Input**: Feature specification from `/specs/009-ai-sql-assistance/spec.md`
+**Branch**: `009-ai-sql-assistance` | **Date**: 2026-03-29 | **Spec**: [design](../../docs/superpowers/specs/2026-03-29-custom-completion-popup-design.md)
+**Input**: Custom WPF Completion Popup design spec
 
 ## Summary
 
-Phase 9 integrates AI into the deterministic foundation built by Phases 2–8. It adds 7 AI features (text-to-SQL, explain, fix, optimize, index suggestions, chat panel, inline ghost text) via a multi-model provider architecture supporting 7 provider types (Anthropic, OpenAI, Azure OpenAI, Gemini, Ollama, LM Studio, custom). All features are opt-in, never auto-execute, and support 5 privacy modes (full, schemaOnly, anonymous, offline, disabled). The technical approach uses `Microsoft.Extensions.AI` (`IChatClient` abstraction) for provider-agnostic AI calls, DPAPI for API key encryption, AST-based privacy redaction, and streaming responses over the existing named pipe IPC.
+Replace the broken VS `ICompletionSourceProvider` with a custom WPF adorner popup replicating Redgate SQL Prompt's autocomplete UX. Code-only WPF (no XAML), non-blocking Engine RPC, client-side filtering, SQL Prompt color scheme, keyboard navigation, schema loading spinner.
 
 ## Technical Context
 
-**Language/Version**: C# / .NET 10 (Engine), .NET Framework 4.7.2 (Shell), netstandard2.0 (Core shared library)
-**Primary Dependencies**: Microsoft.Extensions.AI 10.4.1, Anthropic.SDK 5.10.0, OllamaSharp 5.4.25, OpenAI 2.9.1, Mscc.GenerativeAI 3.1.0, Microsoft.ML.Tokenizers 2.0.0
-**Storage**: `%AppData%/AKML SQL/config.json` (AiSettings section with DPAPI-encrypted API keys)
-**Testing**: xunit 2.x, Microsoft.NET.Test.Sdk 17.x, `dotnet test`
-**Target Platform**: Windows (SSMS 20/21/22, VS 2019/2022/2026) — desktop IDE extensions
-**Project Type**: IDE extension (out-of-process engine + in-process shell)
-**Performance Goals**: Text-to-SQL < 5s (cloud) / < 15s (local), Explain < 3s, Ghost text < 500ms, Schema context prep < 200ms
-**Constraints**: Opt-in only; zero auto-execution; privacy modes enforced; offline-capable via local models; DPAPI encryption for keys
-**Scale/Scope**: Databases with up to 1000+ tables; 500 object max per AI request; 7 provider types; 6 IDE targets
-
-## Constitution Check
-
-*No constitution file exists. Gate passes by default.*
-
-**Post-Phase 1 re-check**: Design follows all existing codebase conventions:
-- Out-of-process engine pattern (AI providers run in Engine, not Shell)
-- MessagePack IPC with `[MessagePackObject]` POCOs
-- Shared `.projitems` pattern for 6-target shell compilation
-- `AppSettings` POCO pattern for configuration
-- `OleMenuCommand` pattern for VS SDK commands
-- `ToolWindowPane` pattern for dockable panels
-- DPAPI pattern (already used in `HistoryEncryption.cs`)
+**Language/Version**: C# / .NET Framework 4.7.2 (shared project compiled for 6 host targets)
+**Primary Dependencies**: VS SDK (MEF IWpfTextViewCreationListener, IAdornmentLayer, IOleCommandTarget), WPF (System.Windows)
+**Storage**: N/A (Engine handles schema caching)
+**Testing**: Manual testing in SSMS 22 (MEF adornments can't be unit tested without VS host)
+**Target Platform**: SSMS 20 (x86), SSMS 21/22 (x64), VS 2019/2022/2026
+**Project Type**: VS/SSMS extension (shared project)
+**Performance Goals**: <200ms popup appearance, <16ms client-side filter (60fps)
+**Constraints**: No [Import] on MEF types, code-only WPF (no XAML), IPC types behind [NoInlining], ContentType "SQL Server Tools"+"SQL"+"T-SQL", TextViewRole Document
+**Scale/Scope**: 7 new files, 3 deleted files, 2 modified files
 
 ## Project Structure
 
-### Documentation (this feature)
-
 ```text
-specs/009-ai-sql-assistance/
-├── plan.md              # This file
-├── research.md          # Phase 0 output — technology decisions
-├── data-model.md        # Phase 1 output — entity definitions
-├── quickstart.md        # Phase 1 output — architecture & build guide
-├── contracts/
-│   ├── ai-ipc.md        # Phase 1 output — IPC message contracts
-│   └── ai-settings.md   # Phase 1 output — configuration contract
-└── tasks.md             # Phase 2 output (/speckit.tasks command)
+src/AkmlSql.Shell.Shared/
+├── Editor/
+│   ├── Completion/                    # NEW directory
+│   │   ├── AkmlCompletionPopup.cs     # Popup UI (code-only WPF)
+│   │   ├── CompletionPopupAdornment.cs # Adornment lifecycle (show/hide/position)
+│   │   ├── CompletionPopupProvider.cs  # MEF provider (IWpfTextViewCreationListener)
+│   │   ├── CompletionController.cs     # Keystrokes → Engine RPC → popup updates
+│   │   ├── CompletionItemModel.cs      # Item data model
+│   │   └── SchemaStatusIndicator.cs    # Bottom-right loading spinner
+│   ├── CompletionRpcHelper.cs          # KEEP — Engine RPC utility
+│   ├── ConnectionWiringHelper.cs       # KEEP — connection detection
+│   ├── SsmsConnectionDetector.cs       # KEEP — caption parsing
+│   ├── SqlPromptIcons.cs               # KEEP — color scheme (used by popup)
+│   ├── TextViewCreationListener.cs     # MODIFY — remove old handler, add new
+│   ├── CompletionCommandHandler.cs     # DELETE — replaced by CompletionController
+│   └── CompletionSource.cs             # DELETE — replaced by custom popup
 ```
 
-### Source Code (repository root)
+## Implementation Tasks
 
-```text
-src/
-  AkmlSql.Core/                           # Shared library (netstandard2.0 + net10.0)
-    Config/
-      AppSettings.cs                       # + AiSettings nested class
-    Ipc/
-      RpcMessage.cs                        # + Message types 70-78, 170-178
-      Messages/
-        Ai*.cs                             # 18 new request/response POCOs
-        ChatTurnDto.cs
-        AnnotationDto.cs
-        IndexSuggestionDto.cs
-        CodeActionDto.cs
-    Models/
-      Ai/
-        SchemaContext.cs                   # Schema context model
-        SchemaObjectSummary.cs
-        ColumnSummary.cs
-        PrivacyTransformation.cs
+### Task 1: CompletionItemModel — data model
+**File**: `Editor/Completion/CompletionItemModel.cs`
+**Dependencies**: None
+**Effort**: Small
 
-  AkmlSql.Engine/                          # Out-of-process .NET 10 engine
-    Ai/
-      AiRequestHandler.cs                 # Main dispatcher (routes by request type)
-      Providers/
-        AiProviderFactory.cs              # IChatClient factory
-        GeminiChatClientAdapter.cs        # Thin adapter for Gemini SDK
-      Context/
-        SchemaContextBuilder.cs           # Builds compressed schema from cache
-        SchemaContextFormatter.cs         # Compact DDL-like format
-        TokenEstimator.cs                 # Token count estimation
-      Privacy/
-        LiteralRedactor.cs               # AST-based literal replacement
-        IdentifierHasher.cs              # HMAC-based name hashing
-        PrivacyTransformer.cs            # Orchestrates redaction pipeline
-      Prompts/
-        PromptTemplates.cs               # All prompt templates
-      Streaming/
-        StreamCoalescer.cs               # Batch stream chunks
-      Security/
-        CredentialManager.cs             # DPAPI encrypt/decrypt
-    Server/
-      PipeRpcServer.cs                    # + AI dispatch cases
+Simple POCO with properties matching Engine's CompletionItem:
+- `DisplayText`, `InsertText`, `SecondaryText`, `ObjectType`, `SortPriority`
+- `IconLetter` and `IconColor` computed from ObjectType (SQL Prompt scheme)
+- `MatchesFilter(string filter)` method for client-side fuzzy filtering
 
-  AkmlSql.Shell.Shared/                    # Shared project for all 6 targets
-    Commands/
-      TextToSqlCommand.cs                 # Ctrl+Shift+G
-      AiExplainCommand.cs                 # Ctrl+Shift+E
-      AiFixCommand.cs                     # Shift+Alt+R
-      AiOptimizeCommand.cs                # Ctrl+Shift+O
-      AiChatPanelCommand.cs               # Ctrl+Shift+A
-    Ai/
-      DiffPreviewPanel.cs                 # WPF diff view
-      ExplanationPanel.cs                 # Structured explanation view
-      AiChatToolWindow.cs                 # ToolWindowPane
-      AiChatPanel.cs                      # WPF chat UI
-      GhostTextAdornment.cs              # Inline editor adornment
-      GhostTextAdornmentProvider.cs      # MEF provider
-      AiResponseHandler.cs               # Response → UI mapping
-    Dialogs/
-      SettingsDialog.cs                   # + AI settings tab
-    PackageGuids.cs                       # + AI command IDs (0x0700+)
+### Task 2: AkmlCompletionPopup — code-only WPF popup
+**File**: `Editor/Completion/AkmlCompletionPopup.cs`
+**Dependencies**: Task 1
+**Effort**: Large
 
-  AkmlSql.Ssms20..VS2026/                 # 6 target projects
-    AkmlSqlPackage.cs                     # + AI command registration
-    AkmlSqlXxx.vsct                       # + AI buttons + keybindings
+WPF Border containing:
+- `ListBox` with custom ItemTemplate (badge + display text + secondary text)
+- Footer `TextBlock` ("5 of 56 objects • Toledo")
+- Loading indicator ("Loading..." when waiting for Engine)
+- SQL Prompt dark theme styling (background #252526, selected #094771, border #3c3c3c)
 
-tests/
-  AkmlSql.Core.Tests/
-    Ai/
-      SchemaContextBuilderTests.cs
-      LiteralRedactorTests.cs
-      IdentifierHasherTests.cs
-      PrivacyTransformerTests.cs
-      TokenEstimatorTests.cs
-      PromptTemplateTests.cs
+Public API:
+- `SetItems(CompletionItemModel[] items)` — populate list
+- `SetFilter(string text)` — filter displayed items client-side
+- `MoveSelection(int delta)` — up/down navigation
+- `GetSelectedItem()` → `CompletionItemModel`
+- `IsVisible` property
+- `Show()` / `Hide()`
+
+### Task 3: CompletionPopupAdornment — adornment lifecycle
+**File**: `Editor/Completion/CompletionPopupAdornment.cs`
+**Dependencies**: Task 2
+**Effort**: Medium
+
+Manages popup position on a text view:
+- Creates `AkmlCompletionPopup` as a WPF element in the adornment layer
+- Positions popup below caret (flips above if near editor bottom)
+- Repositions on scroll/caret move
+- Hides on editor deactivation
+- Uses adornment layer "AkmlSqlCompletion" (defined via MEF export)
+
+### Task 4: CompletionController — keystroke orchestrator
+**File**: `Editor/Completion/CompletionController.cs`
+**Dependencies**: Task 2, Task 3, CompletionRpcHelper
+**Effort**: Large
+
+Implements `IOleCommandTarget`:
+- Intercepts all keystrokes per the keyboard handling spec
+- Manages debounced Engine RPC (150ms idle timer)
+- Sends DocumentChanged on each keystroke
+- Sends CompletionRequest on trigger (letter/dot/Ctrl+Space)
+- Updates popup with Engine response
+- Client-side filter on subsequent keystrokes (no round-trip)
+- Suppresses native IntelliSense via `ICompletionBroker.DismissAllSessions`
+- Handles commit (Tab/Enter) — inserts text into editor buffer
+- Handles dismiss (Esc/Space/parens)
+
+### Task 5: CompletionPopupProvider — MEF wiring
+**File**: `Editor/Completion/CompletionPopupProvider.cs`
+**Dependencies**: Task 3, Task 4
+**Effort**: Small
+
+MEF `IWpfTextViewCreationListener` that:
+- No `[Import]` properties (use ServiceProvider.GlobalProvider)
+- Exports adornment layer definition "AkmlSqlCompletion"
+- Content types: "SQL Server Tools" + "SQL" + "T-SQL"
+- TextViewRole: Document
+- Creates `CompletionPopupAdornment` + `CompletionController` per text view
+- Registers controller as `IOleCommandTarget` filter
+
+### Task 6: SchemaStatusIndicator — loading spinner
+**File**: `Editor/Completion/SchemaStatusIndicator.cs`
+**Dependencies**: None (independent adornment)
+**Effort**: Small
+
+WPF `TextBlock` in bottom-right adornment layer:
+- Listens for ConnectionChanged event (from ConnectionWiringHelper)
+- Shows "⟳ Loading schema for {database}..." during Phase A
+- Shows "✓ {database} ready ({n} objects)" for 3 seconds
+- Then hides
+- Semi-transparent dark background, white text
+
+### Task 7: Wire everything + cleanup
+**File**: `TextViewCreationListener.cs`, `projitems`, delete old files
+**Dependencies**: Tasks 1-6
+**Effort**: Medium
+
+- Remove `CompletionCommandHandler` creation from TextViewCreationListener
+- Delete `CompletionCommandHandler.cs` and `CompletionSource.cs`
+- Add all new files to `AkmlSql.Shell.Shared.projitems`
+- Remove old files from projitems
+- Update `CompletionRpcHelper` if needed for new calling pattern
+- Build and test in SSMS 22
+
+### Task 8: Build, deploy, test end-to-end
+**Dependencies**: Task 7
+**Effort**: Medium
+
+- Clean rebuild all 6 shell projects
+- Rebuild installer
+- Deploy to SSMS 22
+- Test: type `SELECT * FROM ` → see tables with SQL Prompt icons
+- Test: type `se` → see SELECT keyword
+- Test: Ctrl+Space → manual trigger
+- Test: Tab/Enter commits
+- Test: schema loading spinner appears on connection
+- Test: JOIN context shows related tables
+- Test: dot navigation (schema.table.column)
+
+## Execution Order
+
+```
+Task 1 (model) ──┐
+                  ├── Task 2 (popup UI) ── Task 3 (adornment) ──┐
+Task 6 (spinner) ─────────────────────────────────────────────────┤
+                                                                   ├── Task 5 (MEF) ── Task 7 (wiring) ── Task 8 (test)
+                  Task 4 (controller) ─────────────────────────────┘
 ```
 
-**Structure Decision**: Follows the existing multi-project architecture. AI provider logic is entirely in the Engine (out-of-process, .NET 10). AI UI components are in Shell.Shared (in-process, .NET Framework 4.7.2, compiled against 6 VS SDK versions). Core IPC messages and models are in the shared Core library (netstandard2.0). No new projects are needed — all new code fits into existing project boundaries.
-
-## Complexity Tracking
-
-No constitution violations. The design adds no new projects, no new abstraction layers beyond what the provider SDKs already provide (IChatClient), and follows all existing patterns.
+Tasks 1 and 6 can be done in parallel. Tasks 2→3→5 are sequential. Task 4 is independent until wiring.

@@ -42,6 +42,7 @@ User types letter/dot
 3. **Client-side filtering** — after initial fetch, typing filters cached results instantly (no round-trip)
 4. **Debounced fetch** — new Engine request only after 150ms of idle typing (prevents flooding)
 5. **Replace CompletionCommandHandler** — the new CompletionController replaces the existing one entirely
+6. **Suppress native IntelliSense** — dismiss SSMS's native completion session when our popup is active (prevents two popups competing)
 
 ## Popup UI Design (SQL Prompt Style)
 
@@ -76,7 +77,7 @@ User types letter/dot
 
 ### Popup Behavior
 
-- **Show:** On letter typed (after 1+ chars), on dot, on Ctrl+Space
+- **Show:** On letter typed (after 1+ chars), on dot, on Ctrl+Space. If Engine responds within 200ms, items appear instantly. If slower, show "Loading..." placeholder first.
 - **Hide:** On Esc, on space (outside identifier), on clicking outside editor
 - **Filter:** Real-time as user types — fuzzy match against DisplayText
 - **Navigate:** Up/Down arrows move selection, wraps at top/bottom
@@ -124,8 +125,7 @@ The `CompletionController` implements `IOleCommandTarget` and intercepts:
 ## Files to Modify/Create
 
 ### New Files
-- `Editor/Completion/AkmlCompletionPopup.xaml` — popup XAML
-- `Editor/Completion/AkmlCompletionPopup.xaml.cs` — popup code-behind
+- `Editor/Completion/AkmlCompletionPopup.cs` — popup UI built in code-only WPF (no XAML — avoids shared project XAML compilation issues across 6 host projects)
 - `Editor/Completion/CompletionPopupAdornment.cs` — adornment lifecycle
 - `Editor/Completion/CompletionPopupProvider.cs` — MEF provider
 - `Editor/Completion/CompletionController.cs` — keystroke → RPC → popup
@@ -145,4 +145,11 @@ The `CompletionController` implements `IOleCommandTarget` and intercepts:
 - Content types: `"SQL Server Tools"` + `"SQL"` + `"T-SQL"`
 - TextViewRole: `Document`
 - IPC types behind `[NoInlining]` barrier
-- XAML files need `<Resource>` in projitems, not `<Compile>`
+- Code-only WPF (no XAML) — avoids shared project XAML compilation issues across 6 host projects
+
+## Clarifications
+
+### Session 2026-03-29
+- Q: XAML vs code-only WPF for popup UI in shared project? → A: Code-only WPF (Option B) — matches StickyScroll/Minimap pattern, avoids XAML compilation issues across 6 host projects
+- Q: Handle SSMS native IntelliSense coexistence? → A: Suppress native IntelliSense when AKML popup is active (Option A) — prevents two popups competing, matches SQL Prompt behavior
+- Q: Acceptable latency before showing completion items? → A: 200ms — show "Loading..." placeholder if Engine takes longer; expect 50-100ms with cached schema
