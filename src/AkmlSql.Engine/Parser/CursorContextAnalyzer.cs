@@ -110,7 +110,10 @@ public class CursorContextAnalyzer
             return context;
         }
 
-        // Check for dot prefix
+        // Check for dot prefix.
+        // Case 1: cursor is past the dot — tokenAtCursor is after the dot, prevToken IS the dot.
+        // Case 2: cursor is immediately after the dot — tokenAtCursor IS the dot itself.
+        //   This happens when user types "BomItems." and cursor is at the end with no further text.
         if (prevToken is { TokenType: TSqlTokenType.Dot })
         {
             context.PrecedingDot = true;
@@ -118,6 +121,19 @@ public class CursorContextAnalyzer
             if (tokenIndex >= 2)
             {
                 var beforeDot = tokens[tokenIndex - 2];
+                if (beforeDot.TokenType is TSqlTokenType.Identifier or TSqlTokenType.QuotedIdentifier)
+                {
+                    context.DotPrefix = beforeDot.Text.Trim('[', ']', '"');
+                }
+            }
+        }
+        else if (tokenAtCursor is { TokenType: TSqlTokenType.Dot })
+        {
+            // Cursor is right at or immediately after the dot token itself
+            context.PrecedingDot = true;
+            if (tokenIndex >= 1)
+            {
+                var beforeDot = tokens[tokenIndex - 1];
                 if (beforeDot.TokenType is TSqlTokenType.Identifier or TSqlTokenType.QuotedIdentifier)
                 {
                     context.DotPrefix = beforeDot.Text.Trim('[', ']', '"');

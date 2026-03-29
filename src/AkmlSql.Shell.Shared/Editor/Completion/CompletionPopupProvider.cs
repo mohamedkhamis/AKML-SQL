@@ -79,12 +79,27 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                     controller.NextTarget = nextTarget;
 
                     // Handle Ctrl+Space via raw WPF keyboard event (SSMS swallows the
-                    // VS completion command when native IntelliSense is disabled)
+                    // VS completion command when native IntelliSense is disabled).
+                    // Use e.KeyboardDevice.Modifiers (from the event) instead of the static
+                    // Keyboard.Modifiers which can miss modifier state in hosted scenarios.
                     textView.VisualElement.PreviewKeyDown += (s, e) =>
                     {
-                        if (e.Key == System.Windows.Input.Key.Space &&
-                            (System.Windows.Input.Keyboard.Modifiers & System.Windows.Input.ModifierKeys.Control) != 0)
+                        // Ctrl+Space may arrive as Key.Space with Ctrl modifier,
+                        // or as Key.None/Key.System — check both paths
+                        var actualKey = e.Key == System.Windows.Input.Key.System ? e.SystemKey : e.Key;
+                        var mods = e.KeyboardDevice.Modifiers;
+
+                        // Only log when Ctrl is held to avoid flooding on every keystroke
+                        if ((mods & System.Windows.Input.ModifierKeys.Control) != 0)
                         {
+                            Log.Debug("PreviewKeyDown: Key={Key} SystemKey={SystemKey} ActualKey={ActualKey} Modifiers={Modifiers}",
+                                e.Key, e.SystemKey, actualKey, mods);
+                        }
+
+                        if (actualKey == System.Windows.Input.Key.Space &&
+                            (mods & System.Windows.Input.ModifierKeys.Control) != 0)
+                        {
+                            Log.Debug("PreviewKeyDown: Ctrl+Space detected — triggering manual completion");
                             controller.TriggerManualCompletion();
                             e.Handled = true;
                         }

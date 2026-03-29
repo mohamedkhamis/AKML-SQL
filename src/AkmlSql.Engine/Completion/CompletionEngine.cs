@@ -62,6 +62,19 @@ public class CompletionEngine
                     context.AvailableAliases[alias] = tableRef.FullName;
             }
 
+            // Fallback: if AST parsing failed or produced no aliases, extract aliases
+            // from the token stream. This handles incomplete SQL like
+            // "SELECT * FROM BomItems b JOIN " where the parser can't produce an AST.
+            if (context.AvailableAliases.Count == 0 && context.ClauseType == ClauseType.From)
+            {
+                var fallbackAliases = TokenBasedAliasExtractor.Extract(tokens, cursorOffset);
+                foreach (var (alias, fullName) in fallbackAliases)
+                    context.AvailableAliases[alias] = fullName;
+
+                if (fallbackAliases.Count > 0)
+                    Log.Debug("Alias fallback: extracted {Count} aliases from tokens", fallbackAliases.Count);
+            }
+
             // Route to providers
             var allItems = new List<CompletionItem>();
             foreach (var provider in _providers)

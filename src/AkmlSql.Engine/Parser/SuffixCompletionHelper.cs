@@ -21,14 +21,27 @@ public static class SuffixCompletionHelper
             return trimmed + $" {DummyIdentifier}";
         }
 
-        // After FROM/JOIN — needs table reference
-        if (upper.EndsWith("FROM") || upper.EndsWith("JOIN") ||
+        // After FROM — needs table reference
+        if (upper.EndsWith("FROM"))
+        {
+            return trimmed + $" {DummyIdentifier}";
+        }
+
+        // After JOIN — needs table reference AND an ON clause for the parser to accept it.
+        // Without ON, the parser rejects the JOIN and we lose earlier aliases from the AST.
+        // CROSS JOIN doesn't require ON, so handle it separately.
+        if (upper.EndsWith("CROSS JOIN"))
+        {
+            return trimmed + $" {DummyIdentifier}";
+        }
+
+        if (upper.EndsWith("JOIN") ||
             upper.EndsWith("INNER JOIN") || upper.EndsWith("LEFT JOIN") ||
-            upper.EndsWith("RIGHT JOIN") || upper.EndsWith("CROSS JOIN") ||
+            upper.EndsWith("RIGHT JOIN") ||
             upper.EndsWith("LEFT OUTER JOIN") || upper.EndsWith("RIGHT OUTER JOIN") ||
             upper.EndsWith("FULL OUTER JOIN") || upper.EndsWith("FULL JOIN"))
         {
-            return trimmed + $" {DummyIdentifier}";
+            return trimmed + $" {DummyIdentifier} ON 1=1";
         }
 
         // After WHERE/AND/OR — needs expression
