@@ -1,6 +1,6 @@
 using System;
 using System.Windows;
-using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using Microsoft.VisualStudio.Text;
 using Microsoft.VisualStudio.Text.Editor;
 using Microsoft.VisualStudio.Text.Formatting;
@@ -9,59 +9,78 @@ using Serilog;
 namespace AkmlSql.Shell.Shared.Editor.Completion
 {
     /// <summary>
-    /// Manages the AkmlCompletionPopup's lifecycle on a text view.
-    /// Positions below the caret, flips above if near the bottom of the editor.
-    /// Repositions on scroll and layout changes.
+    /// Manages the AkmlCompletionPopup using a WPF Popup (top-level window).
+    /// This ensures our popup renders ABOVE SSMS's native IntelliSense which
+    /// also uses a top-level window. The Popup doesn't steal focus from the editor.
     /// </summary>
     internal sealed class CompletionPopupAdornment
     {
         private readonly IWpfTextView _textView;
-        private readonly IAdornmentLayer _adornmentLayer;
-        private readonly AkmlCompletionPopup _popup;
-        private bool _isAdded;
+        private readonly AkmlCompletionPopup _popupContent;
+        private readonly Popup _popup;
 
-        public AkmlCompletionPopup Popup => _popup;
+        public AkmlCompletionPopup Popup => _popupContent;
 
         public CompletionPopupAdornment(IWpfTextView textView, IAdornmentLayer adornmentLayer)
         {
             _textView = textView;
-            _adornmentLayer = adornmentLayer;
-            _popup = new AkmlCompletionPopup();
+            _popupContent = new AkmlCompletionPopup();
+
+            // Use WPF Popup for top-level rendering (above SSMS native IntelliSense)
+            _popup = new Popup
+            {
+                Child = _popupContent,
+                AllowsTransparency = true,
+                PopupAnimation = PopupAnimation.None,
+                Placement = PlacementMode.Custom,
+                CustomPopupPlacementCallback = PlacePopup,
+                StaysOpen = true,  // We control dismissal ourselves
+                Focusable = false,
+                IsOpen = false
+            };
+
+            // Make the popup content always visible (we control show/hide via IsOpen)
+            _popupContent.Visibility = Visibility.Visible;
 
             _textView.LayoutChanged += OnLayoutChanged;
             _textView.Closed += OnClosed;
+            _textView.LostAggregateFocus += (s, e) => Hide();
         }
 
         /// <summary>Show the popup at the current caret position.</summary>
         public void Show()
         {
-            EnsureAdded();
-            PositionAtCaret();
-            _popup.Show();
+            _popup.PlacementTarget = _textView.VisualElement;
+            _popup.IsOpen = true;
         }
 
         /// <summary>Hide the popup.</summary>
         public void Hide()
         {
-            _popup.Hide();
+            _popup.IsOpen = false;
+            _popupContent.Hide();
         }
 
         /// <summary>Reposition the popup at the current caret.</summary>
         public void Reposition()
         {
             if (_popup.IsOpen)
-                PositionAtCaret();
+            {
+                // Force WPF to recalculate position
+                _popup.HorizontalOffset += 0.01;
+                _popup.HorizontalOffset -= 0.01;
+            }
         }
 
-        private void PositionAtCaret()
+        private CustomPopupPlacement[] PlacePopup(Size popupSize, Size targetSize, Point offset)
         {
             try
             {
                 var caretPos = _textView.Caret.Position.BufferPosition;
                 var caretLine = _textView.GetTextViewLineContainingBufferPosition(caretPos);
-                if (caretLine == null) return;
+                if (caretLine == null) return new[] { new CustomPopupPlacement(new Point(0, 0), PopupPrimaryAxis.Vertical) };
 
-                // Find the start of the current word for left alignment
+                // Find word start for left alignment
                 var wordStart = FindWordStart(caretPos);
                 var wordLine = _textView.GetTextViewLineContainingBufferPosition(wordStart);
 
@@ -76,26 +95,23 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                     left = _textView.Caret.Left - _textView.ViewportLeft;
                 }
 
-                // Position below caret line
+                // Below caret line
                 double top = caretLine.Bottom - _textView.ViewportTop + 2;
 
-                // Flip above if near bottom of editor
-                double popupHeight = Math.Min(15 * 22 + 30, _popup.ActualHeight > 0 ? _popup.ActualHeight : 360);
-                if (top + popupHeight > _textView.ViewportHeight)
+                // Flip above if near bottom
+                if (top + popupSize.Height > _textView.ViewportHeight)
                 {
-                    top = caretLine.Top - _textView.ViewportTop - popupHeight - 2;
+                    top = caretLine.Top - _textView.ViewportTop - popupSize.Height - 2;
                 }
 
-                // Clamp to viewport
-                left = Math.Max(0, Math.Min(left, _textView.ViewportWidth - 380));
+                left = Math.Max(0, left);
                 top = Math.Max(0, top);
 
-                Canvas.SetLeft(_popup, left);
-                Canvas.SetTop(_popup, top);
+                return new[] { new CustomPopupPlacement(new Point(left, top), PopupPrimaryAxis.Vertical) };
             }
-            catch (Exception ex)
+            catch
             {
-                Log.Debug(ex, "Failed to position completion popup");
+                return new[] { new CustomPopupPlacement(new Point(0, 0), PopupPrimaryAxis.Vertical) };
             }
         }
 
@@ -114,33 +130,17 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             return new SnapshotPoint(snapshot, pos);
         }
 
-        private void EnsureAdded()
-        {
-            if (_isAdded) return;
-            try
-            {
-                _adornmentLayer.AddAdornment(
-                    AdornmentPositioningBehavior.ViewportRelative,
-                    null, null, _popup, null);
-                _isAdded = true;
-            }
-            catch (Exception ex)
-            {
-                Log.Debug(ex, "Failed to add completion popup adornment");
-            }
-        }
-
         private void OnLayoutChanged(object sender, TextViewLayoutChangedEventArgs e)
         {
             if (_popup.IsOpen)
-                PositionAtCaret();
+                Reposition();
         }
 
         private void OnClosed(object sender, EventArgs e)
         {
             _textView.LayoutChanged -= OnLayoutChanged;
             _textView.Closed -= OnClosed;
-            _popup.Hide();
+            Hide();
         }
     }
 }

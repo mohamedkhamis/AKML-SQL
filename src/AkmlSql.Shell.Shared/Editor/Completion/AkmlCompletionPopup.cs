@@ -24,6 +24,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         private CompletionItemModel[] _filteredItems = Array.Empty<CompletionItemModel>();
         private string _currentFilter = string.Empty;
         private string _databaseName = string.Empty;
+        private bool _isOpen;
 
         private const int MaxVisibleItems = 15;
         private const double ItemHeight = 22;
@@ -95,7 +96,6 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             };
             Child = _root;
             Width = PopupWidth;
-            Visibility = Visibility.Collapsed;
             Focusable = false;
         }
 
@@ -112,7 +112,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             _loadingText.Visibility = Visibility.Visible;
             _listBox.Visibility = Visibility.Collapsed;
             _footer.Text = "";
-            Visibility = Visibility.Visible;
+            _isOpen = true;
         }
 
         /// <summary>Set the full list of completion items from the Engine.</summary>
@@ -150,19 +150,19 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             return _filteredItems[_listBox.SelectedIndex];
         }
 
-        /// <summary>True if popup is visible and has items.</summary>
-        public bool IsOpen => Visibility == Visibility.Visible && _filteredItems.Length > 0;
+        /// <summary>True if popup is showing and has items.</summary>
+        public bool IsOpen => _isOpen && _filteredItems.Length > 0;
 
         /// <summary>Show the popup.</summary>
         public void Show()
         {
-            Visibility = Visibility.Visible;
+            _isOpen = true;
         }
 
         /// <summary>Hide the popup and reset state.</summary>
         public void Hide()
         {
-            Visibility = Visibility.Collapsed;
+            _isOpen = false;
             _currentFilter = string.Empty;
         }
 
@@ -185,7 +185,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             }
             else
             {
-                Visibility = Visibility.Visible;
+                _isOpen = true;
                 if (_listBox.SelectedIndex < 0 && _filteredItems.Length > 0)
                     _listBox.SelectedIndex = 0;
             }

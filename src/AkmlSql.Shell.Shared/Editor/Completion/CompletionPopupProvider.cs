@@ -36,6 +36,9 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
 
             try
             {
+                // Disable SSMS native IntelliSense via DTE options (one-time)
+                DisableNativeIntelliSense();
+
                 WireCompletion(textView);
             }
             catch (Exception ex)
@@ -74,6 +77,19 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 {
                     vsView.AddCommandFilter(controller, out var nextTarget);
                     controller.NextTarget = nextTarget;
+
+                    // Handle Ctrl+Space via raw WPF keyboard event (SSMS swallows the
+                    // VS completion command when native IntelliSense is disabled)
+                    textView.VisualElement.PreviewKeyDown += (s, e) =>
+                    {
+                        if (e.Key == System.Windows.Input.Key.Space &&
+                            (System.Windows.Input.Keyboard.Modifiers & System.Windows.Input.ModifierKeys.Control) != 0)
+                        {
+                            controller.TriggerManualCompletion();
+                            e.Handled = true;
+                        }
+                    };
+
                     Log.Debug("CompletionPopupProvider: controller wired for session {Session}", sessionId);
                 }
 
@@ -106,5 +122,49 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 textView.Properties.GetOrCreateSingletonProperty("AkmlSchemaIndicator", () => indicator);
             }
         }
+
+        private static bool _nativeDisabled;
+
+        /// <summary>
+        /// Disables SSMS native IntelliSense via DTE automation options.
+        /// This is the only reliable way to prevent SSMS's internal IntelliSense
+        /// from triggering — the IOleCommandTarget and ICompletionBroker approaches
+        /// can't catch SSMS's text-change-triggered IntelliSense.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void DisableNativeIntelliSense()
+        {
+            if (_nativeDisabled) return;
+            _nativeDisabled = true;
+
+            // Delay execution — the Query.IntelliSenseEnabled command requires
+            // an active query window. Execute 2 seconds after first text view opens.
+            System.Threading.Tasks.Task.Run(async () =>
+            {
+                await System.Threading.Tasks.Task.Delay(2000);
+                try
+                {
+                    System.Windows.Application.Current?.Dispatcher?.Invoke(() =>
+                    {
+                        try
+                        {
+                            var dte = Microsoft.VisualStudio.Shell.Package.GetGlobalService(
+                                typeof(EnvDTE.DTE)) as EnvDTE.DTE;
+                            if (dte == null) return;
+
+                            // Toggle SSMS IntelliSense OFF via menu command
+                            dte.ExecuteCommand("Query.IntelliSenseEnabled");
+                            Log.Information("Executed Query.IntelliSenseEnabled to disable native IntelliSense");
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Debug(ex, "Query.IntelliSenseEnabled command failed");
+                        }
+                    });
+                }
+                catch { }
+            });
+        }
     }
 }
+

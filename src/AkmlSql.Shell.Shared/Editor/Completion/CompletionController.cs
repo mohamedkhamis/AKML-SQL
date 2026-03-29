@@ -147,6 +147,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                     case VSConstants.VSStd2KCmdID.BACKSPACE:
                     {
                         var result = NextTarget.Exec(ref pguidCmdGroup, nCmdId, nCmdexecopt, pvaIn, pvaOut);
+                        SuppressNativeIntelliSense();
                         HandleBackspace();
                         return result;
                     }
@@ -173,8 +174,13 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 }
             }
 
-            return NextTarget?.Exec(ref pguidCmdGroup, nCmdId, nCmdexecopt, pvaIn, pvaOut)
-                   ?? VSConstants.S_OK;
+            var finalResult = NextTarget?.Exec(ref pguidCmdGroup, nCmdId, nCmdexecopt, pvaIn, pvaOut)
+                             ?? VSConstants.S_OK;
+
+            // Nuclear option: after EVERY command, dismiss any native IntelliSense that appeared
+            SuppressNativeIntelliSense();
+
+            return finalResult;
         }
 
         private void HandleTypedChar(char c)
@@ -205,8 +211,9 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 }
                 else
                 {
-                    // Start new completion
-                    TriggerCompletionDebounced();
+                    // Trigger IMMEDIATELY — no debounce. Show cached items instantly
+                    // to beat SSMS native IntelliSense which also triggers immediately.
+                    TriggerCompletion();
                 }
             }
             else if (c == ' ' || c == '(' || c == ')' || c == ';' || c == ',')
@@ -252,6 +259,9 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 DismissPopup();
             }
         }
+
+        /// <summary>Public entry point for Ctrl+Space from WPF PreviewKeyDown.</summary>
+        public void TriggerManualCompletion() => TriggerCompletion();
 
         private void TriggerCompletion()
         {
@@ -540,7 +550,6 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         [MethodImpl(MethodImplOptions.NoInlining)]
         private void SuppressNativeIntelliSense()
         {
-            // Always suppress — not just when our popup is open
             try
             {
                 if (_broker == null)
@@ -550,7 +559,14 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                             typeof(Microsoft.VisualStudio.ComponentModelHost.SComponentModel));
                     _broker = componentModel?.GetService<ICompletionBroker>();
                 }
-                _broker?.DismissAllSessions(_textView);
+
+                if (_broker == null) return;
+
+                // Dismiss ALL native sessions unconditionally
+                if (_broker.IsCompletionActive(_textView))
+                {
+                    _broker.DismissAllSessions(_textView);
+                }
             }
             catch { /* non-critical */ }
         }
