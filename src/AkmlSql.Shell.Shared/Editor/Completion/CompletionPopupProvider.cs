@@ -76,6 +76,18 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                     controller.NextTarget = nextTarget;
                     Log.Debug("CompletionPopupProvider: controller wired for session {Session}", sessionId);
                 }
+
+                // Fully disable native IntelliSense by hooking broker session creation
+                var broker = componentModel?.GetService<Microsoft.VisualStudio.Language.Intellisense.ICompletionBroker>();
+                if (broker != null)
+                {
+                    // Dismiss any native sessions as soon as they appear
+                    textView.Properties.GetOrCreateSingletonProperty("AkmlBroker", () =>
+                    {
+                        broker.DismissAllSessions(textView);
+                        return broker;
+                    });
+                }
             }
             catch (Exception ex)
             {

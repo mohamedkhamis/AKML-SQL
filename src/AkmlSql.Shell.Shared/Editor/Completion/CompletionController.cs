@@ -40,7 +40,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             // Timer that continuously suppresses native IntelliSense while our popup is open
             _suppressTimer = new System.Windows.Threading.DispatcherTimer
             {
-                Interval = TimeSpan.FromMilliseconds(50)
+                Interval = TimeSpan.FromMilliseconds(20)
             };
             _suppressTimer.Tick += (s, e) =>
             {

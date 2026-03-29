@@ -186,6 +186,15 @@ public class PipeRpcServer
                                 await _schemaMetadataService.PopulatePhaseAAsync(
                                     cache, connInfo.ConnectionString, CancellationToken.None);
                                 _schemaCacheManager.EvictLru();
+
+                                // Phase B: load columns, FKs, parameters in background
+                                // Required for JOIN completions and column suggestions
+                                if (cache.Phase == PopulationPhase.PhaseA)
+                                {
+                                    Log.Information("Starting Phase B for {Db}", connInfo.DatabaseName);
+                                    await _schemaMetadataService.PopulatePhaseBAsync(
+                                        cache, connInfo.ConnectionString, CancellationToken.None);
+                                }
                             }
                         }
                         catch (Exception ex)
