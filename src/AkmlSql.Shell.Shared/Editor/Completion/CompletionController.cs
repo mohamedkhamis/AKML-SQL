@@ -25,6 +25,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         private ICompletionBroker _broker;
         private string _filterText = string.Empty;
         private bool _fetchPending;
+        private System.Windows.Threading.DispatcherTimer _suppressTimer;
 
         public IOleCommandTarget NextTarget { get; set; }
 
@@ -35,10 +36,48 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             _textView = textView;
             _adornment = adornment;
             _sessionId = sessionId;
+
+            // Timer that continuously suppresses native IntelliSense while our popup is open
+            _suppressTimer = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromMilliseconds(50)
+            };
+            _suppressTimer.Tick += (s, e) =>
+            {
+                if (_adornment.Popup.IsOpen)
+                    SuppressNativeIntelliSense();
+                else
+                    _suppressTimer.Stop();
+            };
         }
 
         public int QueryStatus(ref Guid pguidCmdGroup, uint cCmds, OLECMD[] prgCmds, IntPtr pCmdText)
         {
+            // Report completion commands as supported+enabled so SSMS doesn't skip our filter
+            if (prgCmds != null && cCmds > 0)
+            {
+                if (pguidCmdGroup == VSConstants.VSStd2K)
+                {
+                    var cmdId = (VSConstants.VSStd2KCmdID)prgCmds[0].cmdID;
+                    if (cmdId == VSConstants.VSStd2KCmdID.COMPLETEWORD ||
+                        cmdId == VSConstants.VSStd2KCmdID.SHOWMEMBERLIST ||
+                        cmdId == VSConstants.VSStd2KCmdID.AUTOCOMPLETE)
+                    {
+                        prgCmds[0].cmdf = (uint)(OLECMDF.OLECMDF_ENABLED | OLECMDF.OLECMDF_SUPPORTED);
+                        return VSConstants.S_OK;
+                    }
+                }
+                else if (pguidCmdGroup == VSConstants.GUID_VSStandardCommandSet97)
+                {
+                    var cmdId97 = (VSConstants.VSStd97CmdID)prgCmds[0].cmdID;
+                    if (cmdId97 == (VSConstants.VSStd97CmdID)898)
+                    {
+                        prgCmds[0].cmdf = (uint)(OLECMDF.OLECMDF_ENABLED | OLECMDF.OLECMDF_SUPPORTED);
+                        return VSConstants.S_OK;
+                    }
+                }
+            }
+
             return NextTarget?.QueryStatus(ref pguidCmdGroup, cCmds, prgCmds, pCmdText)
                    ?? (int)Constants.OLECMDERR_E_NOTSUPPORTED;
         }
@@ -122,6 +161,18 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 }
             }
 
+            // Handle VSStd97 command group — Ctrl+Space in SSMS 22 may arrive here
+            if (pguidCmdGroup == VSConstants.GUID_VSStandardCommandSet97)
+            {
+                var cmdId97 = (VSConstants.VSStd97CmdID)nCmdId;
+                if (cmdId97 == (VSConstants.VSStd97CmdID)898)
+                {
+                    SuppressNativeIntelliSense();
+                    TriggerCompletion();
+                    return VSConstants.S_OK; // Don't pass to next handler
+                }
+            }
+
             return NextTarget?.Exec(ref pguidCmdGroup, nCmdId, nCmdexecopt, pvaIn, pvaOut)
                    ?? VSConstants.S_OK;
         }
@@ -161,6 +212,13 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             else if (c == ' ' || c == '(' || c == ')' || c == ';' || c == ',')
             {
                 DismissPopup();
+
+                // After space, check if the preceding word is a keyword that expects
+                // object names (table/view). If so, auto-trigger a fresh completion.
+                if (c == ' ' && IsObjectExpectingKeywordBeforeCaret())
+                {
+                    TriggerCompletion();
+                }
             }
             else if (char.IsDigit(c))
             {
@@ -238,6 +296,11 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                     _adornment.Show();
                 }
 
+                // Start suppress timer to continuously dismiss native IntelliSense
+                SuppressNativeIntelliSense();
+                if (!_suppressTimer.IsEnabled)
+                    _suppressTimer.Start();
+
                 _fetchPending = true;
 
                 // Fetch fresh results from Engine (background)
@@ -249,7 +312,10 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                         var client = Ipc.EngineLifecycle.Manager?.Client;
                         if (client == null || !client.IsConnected) return;
 
-                        // Send document text
+                        // Send document text and wait for Engine to process it.
+                        // 150ms is needed because the Engine must parse the document
+                        // and update the session before CursorContextAnalyzer can see
+                        // the FROM/JOIN context for table completions.
                         await client.SendNotificationAsync(
                             AkmlSql.Core.Ipc.MessageTypes.DocumentChanged,
                             new AkmlSql.Core.Ipc.Messages.DocumentChange
@@ -259,7 +325,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                                 FullText = docText
                             });
 
-                        await System.Threading.Tasks.Task.Delay(30);
+                        await System.Threading.Tasks.Task.Delay(150);
 
                         // Request completions
                         var response = await client.SendRequestAsync<
@@ -405,6 +471,70 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             }
             catch { }
             return string.Empty;
+        }
+
+        /// <summary>
+        /// Checks if the word immediately before the caret (before the just-typed space)
+        /// is a SQL keyword that expects an object name (table, view, etc.).
+        /// Used to auto-trigger table/view completions after "FROM ", "JOIN ", etc.
+        /// </summary>
+        private bool IsObjectExpectingKeywordBeforeCaret()
+        {
+            try
+            {
+                var snapshot = _textView.TextBuffer.CurrentSnapshot;
+                int pos = _textView.Caret.Position.BufferPosition.Position;
+
+                // Caret is after the space. Move back past the space.
+                int end = pos - 1;
+                while (end > 0 && snapshot[end - 1] == ' ')
+                    end--;
+
+                // Now find the word before the space(s)
+                int start = end;
+                while (start > 0 && char.IsLetter(snapshot[start - 1]))
+                    start--;
+
+                if (start >= end)
+                    return false;
+
+                var word = snapshot.GetText(start, end - start);
+                return IsObjectExpectingKeyword(word);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool IsObjectExpectingKeyword(string word)
+        {
+            // Case-insensitive check for SQL keywords that expect object names
+            if (string.IsNullOrEmpty(word))
+                return false;
+
+            switch (word.ToUpperInvariant())
+            {
+                case "FROM":
+                case "JOIN":
+                case "INNER":
+                case "LEFT":
+                case "RIGHT":
+                case "CROSS":
+                case "FULL":
+                case "INTO":
+                case "UPDATE":
+                case "TABLE":
+                case "VIEW":
+                case "EXEC":
+                case "EXECUTE":
+                case "TRUNCATE":
+                case "DROP":
+                case "ALTER":
+                    return true;
+                default:
+                    return false;
+            }
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]

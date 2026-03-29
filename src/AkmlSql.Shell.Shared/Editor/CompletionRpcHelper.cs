@@ -44,11 +44,12 @@ namespace AkmlSql.Shell.Shared.Editor
                     var client = EngineLifecycle.Manager?.Client;
                     if (client == null || !client.IsConnected) return;
 
-                    // Send document text first
+                    // Send document text first, then wait for Engine to parse and
+                    // update the session so CursorContextAnalyzer sees FROM/JOIN context
                     await client.SendNotificationAsync(MessageTypes.DocumentChanged,
                         new DocumentChange { SessionId = sessionId, ChangeType = 0, FullText = docText });
 
-                    await Task.Delay(30); // Let Engine process the document
+                    await Task.Delay(150); // Let Engine process the document
 
                     var response = await client.SendRequestAsync<CompletionResponse, CompletionRequest>(
                         MessageTypes.RequestCompletion,
