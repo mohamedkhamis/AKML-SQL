@@ -78,30 +78,28 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                     vsView.AddCommandFilter(controller, out var nextTarget);
                     controller.NextTarget = nextTarget;
 
-                    // Handle Ctrl+Space via raw WPF keyboard event (SSMS swallows the
-                    // VS completion command when native IntelliSense is disabled).
-                    // Use e.KeyboardDevice.Modifiers (from the event) instead of the static
-                    // Keyboard.Modifiers which can miss modifier state in hosted scenarios.
-                    textView.VisualElement.PreviewKeyDown += (s, e) =>
+                    // Handle Ctrl+Space via Win32 message interception.
+                    // SSMS 22's SQL editor is a Win32 control hosted in WPF — WPF
+                    // PreviewKeyDown events don't propagate to it.
+                    // ComponentDispatcher.ThreadPreprocessMessage intercepts raw Win32
+                    // keyboard messages BEFORE the host processes them, which works
+                    // for all hosted controls.
+                    System.Windows.Interop.ComponentDispatcher.ThreadPreprocessMessage += (ref System.Windows.Interop.MSG msg, ref bool handled) =>
                     {
-                        // Ctrl+Space may arrive as Key.Space with Ctrl modifier,
-                        // or as Key.None/Key.System — check both paths
-                        var actualKey = e.Key == System.Windows.Input.Key.System ? e.SystemKey : e.Key;
-                        var mods = e.KeyboardDevice.Modifiers;
-
-                        // Only log when Ctrl is held to avoid flooding on every keystroke
-                        if ((mods & System.Windows.Input.ModifierKeys.Control) != 0)
+                        // WM_KEYDOWN = 0x0100, VK_SPACE = 0x20
+                        if (msg.message == 0x0100 && msg.wParam.ToInt32() == 0x20)
                         {
-                            Log.Debug("PreviewKeyDown: Key={Key} SystemKey={SystemKey} ActualKey={ActualKey} Modifiers={Modifiers}",
-                                e.Key, e.SystemKey, actualKey, mods);
-                        }
-
-                        if (actualKey == System.Windows.Input.Key.Space &&
-                            (mods & System.Windows.Input.ModifierKeys.Control) != 0)
-                        {
-                            Log.Debug("PreviewKeyDown: Ctrl+Space detected — triggering manual completion");
-                            controller.TriggerManualCompletion();
-                            e.Handled = true;
+                            // Check if Ctrl is held
+                            if ((System.Windows.Input.Keyboard.Modifiers & System.Windows.Input.ModifierKeys.Control) != 0)
+                            {
+                                // Only handle if our text view has focus
+                                if (textView.HasAggregateFocus)
+                                {
+                                    Log.Debug("ThreadPreprocessMessage: Ctrl+Space detected — triggering manual completion");
+                                    controller.TriggerManualCompletion();
+                                    handled = true;
+                                }
+                            }
                         }
                     };
 
