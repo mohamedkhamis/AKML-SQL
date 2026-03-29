@@ -9,6 +9,12 @@
     <Import_RootNamespace>AkmlSql.Shell.Shared</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\AkmlCompletionPopup.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\CompletionController.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\CompletionItemModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\CompletionPopupAdornment.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\CompletionPopupProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\SchemaStatusIndicator.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\CompletionRpcHelper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\ConnectionWiringHelper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\SqlPromptIcons.cs" />
@@ -32,8 +38,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Ipc\EngineProcessManager.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ipc\EngineLifecycle.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\TextViewCreationListener.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Editor\CompletionCommandHandler.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Editor\CompletionSource.cs" />
+    <!-- CompletionCommandHandler.cs and CompletionSource.cs DELETED — replaced by Editor/Completion/ -->
     <Compile Include="$(MSBuildThisFileDirectory)Editor\ContentTypeDetector.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\SignatureHelpSource.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\QuickInfoSource.cs" />

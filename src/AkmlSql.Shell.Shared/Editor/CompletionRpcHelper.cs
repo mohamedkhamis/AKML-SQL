@@ -1,58 +1,41 @@
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
-using System.Windows.Media;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
+using AkmlSql.Shell.Shared.Editor.Completion;
 using AkmlSql.Shell.Shared.Ipc;
-using Microsoft.VisualStudio.Language.Intellisense;
-using Microsoft.VisualStudio.Text;
 using Serilog;
 
 namespace AkmlSql.Shell.Shared.Editor
 {
     /// <summary>
-    /// Non-blocking completion helper. AugmentCompletionSession runs on the UI thread,
-    /// so we CANNOT make synchronous RPC calls. Instead:
-    /// 1. Return cached completions immediately (if available)
-    /// 2. Trigger a background RPC fetch for next time
-    /// 3. First Ctrl+Space after connecting returns keywords only; second returns full results
+    /// Non-blocking Engine RPC helper for completions.
+    /// All methods are safe to call from any thread. Engine calls are always async.
+    /// Used by CompletionController to fetch items from the Engine.
     /// </summary>
     internal static class CompletionRpcHelper
     {
-        // Per-session cached completions from the last successful RPC
-        private static readonly ConcurrentDictionary<string, CompletionItem[]> Cache = new();
+        // Per-session cached completion items
+        private static readonly ConcurrentDictionary<string, CompletionItemModel[]> Cache = new();
 
         /// <summary>
-        /// Returns cached completions immediately (NEVER blocks UI thread).
-        /// Triggers a background fetch for fresh results at the current cursor position.
-        /// Flow: type SQL → document synced via OnBufferChanged → Ctrl+Space →
-        /// returns cached items + triggers fresh fetch → next Ctrl+Space shows fresh results.
+        /// Returns cached completion items for the session (never blocks).
         /// </summary>
-        public static List<Completion> GetCachedCompletions(ITextBuffer buffer, ICompletionSession session)
+        public static CompletionItemModel[] GetCached(string sessionId)
         {
-            if (!buffer.Properties.TryGetProperty("AkmlSqlSessionId", out string sessionId))
-                return new List<Completion>();
-
-            var point = session.GetTriggerPoint(buffer.CurrentSnapshot);
-            if (point == null)
-                return new List<Completion>();
-
-            var cursorOffset = point.Value.Position;
-            var docText = buffer.CurrentSnapshot.GetText();
-
-            // Trigger background fetch with current document text and cursor
-            TriggerBackgroundFetch(sessionId, cursorOffset, docText);
-
-            // Return cached results immediately
-            if (Cache.TryGetValue(sessionId, out var items) && items != null && items.Length > 0)
-                return ConvertItems(items);
-
-            return new List<Completion>();
+            if (Cache.TryGetValue(sessionId, out var items))
+                return items;
+            return Array.Empty<CompletionItemModel>();
         }
 
-        private static void TriggerBackgroundFetch(string sessionId, int cursorOffset, string docText)
+        /// <summary>
+        /// Triggers a background fetch from the Engine. Sends document text first,
+        /// then requests completions at the cursor offset. Results are cached.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static void FetchAsync(string sessionId, int cursorOffset, string docText)
         {
             Task.Run(async () =>
             {
@@ -65,8 +48,7 @@ namespace AkmlSql.Shell.Shared.Editor
                     await client.SendNotificationAsync(MessageTypes.DocumentChanged,
                         new DocumentChange { SessionId = sessionId, ChangeType = 0, FullText = docText });
 
-                    // Small delay to let Engine process the document
-                    await Task.Delay(50);
+                    await Task.Delay(30); // Let Engine process the document
 
                     var response = await client.SendRequestAsync<CompletionResponse, CompletionRequest>(
                         MessageTypes.RequestCompletion,
@@ -75,38 +57,36 @@ namespace AkmlSql.Shell.Shared.Editor
 
                     if (response?.Items != null && response.Items.Length > 0)
                     {
-                        Cache[sessionId] = response.Items;
+                        var models = new CompletionItemModel[response.Items.Length];
+                        for (int i = 0; i < response.Items.Length; i++)
+                        {
+                            var item = response.Items[i];
+                            models[i] = new CompletionItemModel
+                            {
+                                DisplayText = item.DisplayText ?? string.Empty,
+                                InsertText = item.InsertText ?? item.DisplayText ?? string.Empty,
+                                SecondaryText = item.SecondaryText ?? string.Empty,
+                                ObjectType = item.ObjectType,
+                                SortPriority = item.SortPriority
+                            };
+                        }
+
+                        Cache[sessionId] = models;
                         Log.Debug("Completion fetch: {Count} items at offset {Offset}",
-                            response.Items.Length, cursorOffset);
+                            models.Length, cursorOffset);
                     }
                 }
-                catch (Exception ex) { Log.Debug(ex, "Completion fetch failed"); }
+                catch (Exception ex)
+                {
+                    Log.Debug(ex, "Completion fetch failed");
+                }
             });
         }
 
-        private static List<Completion> ConvertItems(CompletionItem[] items)
+        /// <summary>Clears cached completions for a session.</summary>
+        public static void ClearCache(string sessionId)
         {
-            var completions = new List<Completion>(items.Length);
-            foreach (var item in items)
-            {
-                ImageSource icon = null;
-                try { icon = SqlPromptIcons.GetIcon(item.ObjectType); }
-                catch { /* icon is optional */ }
-
-                var description = !string.IsNullOrEmpty(item.SecondaryText)
-                    ? $"{item.DisplayText} — {item.SecondaryText}"
-                    : item.DisplayText;
-
-                completions.Add(new Completion(
-                    displayText: item.DisplayText,
-                    insertionText: item.InsertText ?? item.DisplayText,
-                    description: description,
-                    iconSource: icon,
-                    iconAutomationText: null));
-            }
-            return completions;
+            Cache.TryRemove(sessionId, out _);
         }
-
-        internal class SessionIdKey { }
     }
 }
