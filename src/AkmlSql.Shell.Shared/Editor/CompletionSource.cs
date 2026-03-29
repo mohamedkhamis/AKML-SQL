@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
+using System.Windows.Media;
 using Microsoft.VisualStudio.Language.Intellisense;
 using Microsoft.VisualStudio.Text;
 using Microsoft.VisualStudio.Utilities;
@@ -9,6 +10,8 @@ using Serilog;
 namespace AkmlSql.Shell.Shared.Editor
 {
     [Export(typeof(ICompletionSourceProvider))]
+    [ContentType("SQL Server Tools")]
+    [ContentType("SQL")]
     [ContentType("T-SQL")]
     [Name("AkmlSqlCompletionSource")]
     [Order(Before = "default")]
@@ -20,26 +23,30 @@ namespace AkmlSql.Shell.Shared.Editor
         }
     }
 
-    internal class CompletionSource(ITextBuffer buffer) : ICompletionSource
+    internal class CompletionSource : ICompletionSource
     {
+        private readonly ITextBuffer _buffer;
         private bool _disposed;
+
+        public CompletionSource(ITextBuffer buffer)
+        {
+            _buffer = buffer;
+        }
 
         public void AugmentCompletionSession(ICompletionSession session, IList<CompletionSet> completionSets)
         {
             if (_disposed)
-            {
                 return;
-            }
 
             try
             {
-                // Will be wired to PipeRpcClient for real completions
-                // For now, return empty set (silent when engine unavailable)
+                // Get completions — MUST be non-blocking (this runs on UI thread)
+                var items = CompletionRpcHelper.GetCachedCompletions(_buffer, session);
                 var completionSet = new CompletionSet(
                     "AKML SQL",
                     "AKML SQL",
                     FindTokenSpanAtPosition(session),
-                    [],
+                    items,
                     null);
                 completionSets.Add(completionSet);
             }
@@ -51,16 +58,13 @@ namespace AkmlSql.Shell.Shared.Editor
 
         private ITrackingSpan FindTokenSpanAtPosition(ICompletionSession session)
         {
-            var point = session.GetTriggerPoint(buffer.CurrentSnapshot);
+            var point = session.GetTriggerPoint(_buffer.CurrentSnapshot);
             if (point == null)
-            {
-                return buffer.CurrentSnapshot.CreateTrackingSpan(0, 0, SpanTrackingMode.EdgeInclusive);
-            }
+                return _buffer.CurrentSnapshot.CreateTrackingSpan(0, 0, SpanTrackingMode.EdgeInclusive);
 
             var position = point.Value.Position;
-            var snapshot = buffer.CurrentSnapshot;
+            var snapshot = _buffer.CurrentSnapshot;
 
-            // Walk backwards to find start of current word
             int start = position;
             while (start > 0 && IsIdentifierChar(snapshot[start - 1]))
                 start--;

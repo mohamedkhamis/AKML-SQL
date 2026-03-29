@@ -9,6 +9,10 @@
     <Import_RootNamespace>AkmlSql.Shell.Shared</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\CompletionRpcHelper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\ConnectionWiringHelper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\SqlPromptIcons.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\SsmsConnectionDetector.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ExtensionAssemblyResolver.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)PackageGuids.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\AboutCommand.cs" />

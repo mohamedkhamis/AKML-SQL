@@ -1,5 +1,8 @@
 using System;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using Microsoft.VisualStudio;
+using Microsoft.VisualStudio.Language.Intellisense;
 using Microsoft.VisualStudio.OLE.Interop;
 using Microsoft.VisualStudio.Text.Editor;
 using Microsoft.VisualStudio.TextManager.Interop;
@@ -10,6 +13,8 @@ namespace AkmlSql.Shell.Shared.Editor
     internal class CompletionCommandHandler : IOleCommandTarget
     {
         private readonly IWpfTextView _textView;
+        private ICompletionBroker _broker;
+        private ICompletionSession _activeSession;
 
         public IOleCommandTarget NextTarget { get; set; }
 
@@ -31,37 +36,49 @@ namespace AkmlSql.Shell.Shared.Editor
                 switch ((VSConstants.VSStd2KCmdID)nCmdId)
                 {
                     case VSConstants.VSStd2KCmdID.TYPECHAR:
-                        var typedChar = (char)(ushort)System.Runtime.InteropServices.Marshal.GetObjectForNativeVariant(pvaIn);
+                        var typedChar = (char)(ushort)Marshal.GetObjectForNativeVariant(pvaIn);
 
-                        // Pass to next handler first
+                        // Pass to next handler first (let VS insert the character)
                         var result = NextTarget.Exec(ref pguidCmdGroup, nCmdId, nCmdexecopt, pvaIn, pvaOut);
 
-                        // T064: Trigger completion after dot
+                        // Trigger completion after typing
                         if (typedChar == '.')
                         {
-                            TriggerCompletion(typedChar);
+                            TriggerCompletionSession();
                         }
-                        // T064: Trigger signature help after open parenthesis
-                        else if (typedChar == '(')
+                        else if (char.IsLetter(typedChar) || typedChar == '_' || typedChar == '@')
                         {
-                            TriggerSignatureHelp();
+                            // Auto-trigger on letters — like SQL Prompt
+                            TriggerOrFilterCompletion();
                         }
-                        // T064: Update active parameter after comma
-                        else if (typedChar == ',')
+                        else if (typedChar == ' ' || typedChar == '(' || typedChar == ')')
                         {
-                            UpdateSignatureHelpActiveParameter();
+                            DismissCompletion();
                         }
 
                         return result;
 
                     case VSConstants.VSStd2KCmdID.RETURN:
                     case VSConstants.VSStd2KCmdID.TAB:
-                        // Commit completion if active
+                        if (_activeSession != null && !_activeSession.IsDismissed)
+                        {
+                            if (_activeSession.SelectedCompletionSet?.SelectionStatus?.IsSelected == true)
+                            {
+                                _activeSession.Commit();
+                                return VSConstants.S_OK; // Don't pass to next handler
+                            }
+                        }
                         break;
 
                     case VSConstants.VSStd2KCmdID.CANCEL:
-                        // Dismiss completion if active
+                        DismissCompletion();
                         break;
+
+                    // Ctrl+Space (complete word)
+                    case VSConstants.VSStd2KCmdID.COMPLETEWORD:
+                    case VSConstants.VSStd2KCmdID.SHOWMEMBERLIST:
+                        TriggerCompletionSession();
+                        return VSConstants.S_OK;
                 }
             }
 
@@ -69,31 +86,76 @@ namespace AkmlSql.Shell.Shared.Editor
                 ?? VSConstants.S_OK;
         }
 
-        private void TriggerCompletion(char triggerChar)
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private void TriggerCompletionSession()
         {
-            // Will be wired to PipeRpcClient in T039
-            Log.Debug("Completion triggered by '{Char}' at offset {Offset}",
-                triggerChar, _textView.Caret.Position.BufferPosition.Position);
+            try
+            {
+                DismissCompletion();
+                var broker = GetBroker();
+                if (broker == null) return;
+
+                _activeSession = broker.TriggerCompletion(_textView);
+                if (_activeSession != null)
+                {
+                    _activeSession.Dismissed += (s, e) => _activeSession = null;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "Failed to trigger completion");
+            }
         }
 
-        /// <summary>
-        /// T064: Trigger signature help when '(' is typed.
-        /// </summary>
-        private void TriggerSignatureHelp()
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private void TriggerOrFilterCompletion()
         {
-            // Will be wired to PipeRpcClient for SignatureRequest/SignatureResponse
-            Log.Debug("Signature help triggered at offset {Offset}",
-                _textView.Caret.Position.BufferPosition.Position);
+            try
+            {
+                if (_activeSession != null && !_activeSession.IsDismissed)
+                {
+                    // Session exists — let VS filter it
+                    _activeSession.Filter();
+                    return;
+                }
+
+                // No active session — trigger new one
+                var broker = GetBroker();
+                if (broker == null) return;
+
+                _activeSession = broker.TriggerCompletion(_textView);
+                if (_activeSession != null)
+                {
+                    _activeSession.Dismissed += (s, e) => _activeSession = null;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "Failed to trigger/filter completion");
+            }
         }
 
-        /// <summary>
-        /// T064: Update active parameter when ',' is typed inside a function call.
-        /// </summary>
-        private void UpdateSignatureHelpActiveParameter()
+        private void DismissCompletion()
         {
-            // Will be wired to update the active parameter in the current signature help session
-            Log.Debug("Signature help parameter update at offset {Offset}",
-                _textView.Caret.Position.BufferPosition.Position);
+            if (_activeSession != null && !_activeSession.IsDismissed)
+            {
+                _activeSession.Dismiss();
+            }
+            _activeSession = null;
+        }
+
+        private ICompletionBroker GetBroker()
+        {
+            if (_broker != null) return _broker;
+            try
+            {
+                var componentModel = (Microsoft.VisualStudio.ComponentModelHost.IComponentModel)
+                    Microsoft.VisualStudio.Shell.Package.GetGlobalService(
+                        typeof(Microsoft.VisualStudio.ComponentModelHost.SComponentModel));
+                _broker = componentModel?.GetService<ICompletionBroker>();
+            }
+            catch { }
+            return _broker;
         }
     }
 }

@@ -1,82 +1,65 @@
 using System;
 using System.ComponentModel.Composition;
-using AkmlSql.Core.Logging;
-using AkmlSql.Shell.Shared.Analysis;
-using AkmlSql.Shell.Shared.Ipc;
-using Microsoft.VisualStudio.Editor;
-using Microsoft.VisualStudio.Shell;
+using System.Runtime.CompilerServices;
 using Microsoft.VisualStudio.Text.Editor;
 using Microsoft.VisualStudio.Utilities;
 using Serilog;
 
 namespace AkmlSql.Shell.Shared.Editor
 {
+    /// <summary>
+    /// MEF listener that fires when a SQL editor is opened.
+    /// Bootstraps assembly resolver, logger, engine, and connection detection.
+    /// NOTE: No [Import] properties — MEF import satisfaction failures silently
+    /// prevent instantiation. Services are obtained programmatically instead.
+    /// </summary>
     [Export(typeof(IWpfTextViewCreationListener))]
+    [ContentType("SQL Server Tools")]
+    [ContentType("SQL")]
     [ContentType("T-SQL")]
-    [TextViewRole(PredefinedTextViewRoles.Editable)]
-    internal class TextViewCreationListener : IWpfTextViewCreationListener
+    [TextViewRole(PredefinedTextViewRoles.Document)]
+    internal sealed class TextViewCreationListener : IWpfTextViewCreationListener
     {
-        [Import]
-        internal IVsEditorAdaptersFactoryService AdapterService { get; set; }
-
-        [Import(typeof(SVsServiceProvider))]
-        internal IServiceProvider ServiceProvider { get; set; }
-
         public void TextViewCreated(IWpfTextView textView)
         {
+            // Phase 1: bootstrap (no IPC type references)
+            ExtensionAssemblyResolver.Register();
+            AkmlSql.Core.Logging.LoggerFactory.Initialize();
+            Ipc.EngineLifecycle.LaunchAsync(); // fire-and-forget
+
             try
             {
-                // Bootstrap: assembly resolver + logger + engine
-                // (Package AutoLoad is unreliable in SSMS IsolatedShell and after registry rebuild)
-                ExtensionAssemblyResolver.Register();
-                LoggerFactory.Initialize();
-                System.Threading.Tasks.Task.Run(() => EngineLifecycle.LaunchAsync());
-
                 Log.Information("TextViewCreated for content type: {Type}",
                     textView.TextBuffer.ContentType.TypeName);
 
-                var vsView = AdapterService.GetViewAdapter(textView);
-                if (vsView == null)
-                {
-                    return;
-                }
+                // Session ID stored as plain string
+                var sessionId = textView.TextBuffer.Properties.GetOrCreateSingletonProperty(
+                    "AkmlSqlSessionId", () => Guid.NewGuid().ToString("N"));
 
-                // Attach command handler for keystroke interception
-                var filter = new CompletionCommandHandler(textView, vsView);
-                vsView.AddCommandFilter(filter, out var nextTarget);
-                filter.NextTarget = nextTarget;
-
-                // Wire up real-time code analysis (T052)
-                // AnalysisController drives debounced RPC → DiagnosticTagger reads it via MEF
-                var buffer    = textView.TextBuffer;
-                var sessionId = Guid.NewGuid().ToString("N");
-                var controller = buffer.Properties.GetOrCreateSingletonProperty(
-                    typeof(AnalysisController),
-                    () => new AnalysisController(buffer, sessionId));
-
-                // ErrorListReporter: document path is retrieved at display-time via DTE
-                string docPath = string.Empty;
-
-                if (ServiceProvider != null)
-                {
-                    buffer.Properties.GetOrCreateSingletonProperty(
-                        typeof(ErrorListReporter),
-                        () => new ErrorListReporter(controller, ServiceProvider, docPath));
-                }
-
-                // TODO (T039): Detect SSMS active connection changes via ServiceCache.ScriptFactory.
-                // SSMS exposes the current connection through the IVsMonitorSelection service and
-                // the ScriptFactory/QueryExecutionSettings COM objects. When a user changes the
-                // connection dropdown or executes "USE [db]", we need to:
-                //   1. Obtain the new connection string from ServiceCache.ScriptFactory
-                //   2. Extract server/database/version info
-                //   3. Send a ConnectionChanged message via EngineLifecycle.Manager.Client
-                // This requires SSMS-specific COM interop that differs between SSMS 20 (IsolatedShell)
-                // and SSMS 21/22 (VS-based). Implementation deferred to a future task.
+                // Phase 2: IPC wiring (isolated behind NoInlining)
+                WireToEngine(textView, sessionId);
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "Failed to create text view listener");
+                Log.Error(ex, "TextViewCreationListener failed");
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void WireToEngine(IWpfTextView textView, string sessionId)
+        {
+            try
+            {
+                // Get service provider from the VS global service
+                var sp = Microsoft.VisualStudio.Shell.ServiceProvider.GlobalProvider as IServiceProvider;
+                ConnectionWiringHelper.DetectAndSendConnection(sp, sessionId);
+                ConnectionWiringHelper.SendFullDocument(sessionId, textView.TextBuffer);
+                textView.TextBuffer.Changed += (s, e) =>
+                    ConnectionWiringHelper.OnBufferChanged(sessionId, e);
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "Engine wiring failed (non-critical)");
             }
         }
     }

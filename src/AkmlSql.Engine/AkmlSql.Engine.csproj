@@ -10,9 +10,18 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
-    <PublishSingleFile>true</PublishSingleFile>
-    <PublishTrimmed>true</PublishTrimmed>
+    <!-- SingleFile disabled: Microsoft.Data.SqlClient native SNI interop is incompatible
+         with single-file extraction. The Engine runs as a background process so multiple
+         files in the Engine directory are acceptable. -->
+    <PublishSingleFile>false</PublishSingleFile>
+    <PublishTrimmed>false</PublishTrimmed>
   </PropertyGroup>
+
+  <!-- Preserve types for MessagePack, SqlClient native interop, and JSON reflection -->
+  <ItemGroup>
+    <TrimmerRootAssembly Include="AkmlSql.Core" />
+    <TrimmerRootAssembly Include="Microsoft.Data.SqlClient" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.SqlClient" Version="6.*" />

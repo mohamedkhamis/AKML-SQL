@@ -46,10 +46,24 @@ public class CursorContextAnalyzer
     {
         var context = new CursorContext { CursorOffset = cursorOffset };
 
-        if (tokens.Count == 0)
+        if (tokens == null || tokens.Count == 0)
         {
             return context;
         }
+
+        try
+        {
+            return AnalyzeCore(tokens, cursorOffset, context);
+        }
+        catch
+        {
+            // Return basic context on any parse error — completions degrade gracefully
+            return context;
+        }
+    }
+
+    private CursorContext AnalyzeCore(IList<TSqlParserToken> tokens, int cursorOffset, CursorContext context)
+    {
 
         // Find token at/before cursor
         TSqlParserToken? tokenAtCursor = null;
@@ -59,6 +73,7 @@ public class CursorContextAnalyzer
         for (int i = 0; i < tokens.Count; i++)
         {
             var t = tokens[i];
+            if (t.Text == null) continue;
             if (t.Offset + t.Text.Length >= cursorOffset)
             {
                 tokenAtCursor = t;
