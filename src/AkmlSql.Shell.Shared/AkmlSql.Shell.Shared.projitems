@@ -29,6 +29,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Commands\ViewLogsCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\AboutDialog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\SettingsDialog.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Dialogs\SettingsWindow.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\LogViewerDialog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)StatusBar\StatusBarManager.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Update\UpdateLauncher.cs" />

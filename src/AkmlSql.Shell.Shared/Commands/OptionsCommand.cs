@@ -1,6 +1,6 @@
 using System;
 using System.ComponentModel.Design;
-using System.Windows.Forms;
+using System.Windows;
 using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Shell.Shared.Dialogs;
@@ -37,22 +37,20 @@ namespace AkmlSql.Shell.Shared.Commands
             try
             {
                 var settings = ConfigManager.Load();
-                using (var dialog = new SettingsDialog(settings))
+                var window = new SettingsWindow(settings);
+                if (window.ShowDialog())
                 {
-                    if (dialog.ShowDialog() == DialogResult.OK)
-                    {
-                        var updated = dialog.GetSettings();
-                        ConfigManager.Save(updated);
-                        Log.Information("Settings saved successfully.");
+                    var updated = window.GetSettings();
+                    ConfigManager.Save(updated);
+                    Log.Information("Settings saved successfully.");
 
-                        // T066: Notify the engine to reload its settings cache (fire-and-forget)
-                        var client = EngineLifecycle.Manager?.Client;
-                        if (client != null && client.IsConnected)
-                        {
-                            _ = client.SendNotificationAsync(
-                                MessageTypes.AnalysisSettingsChanged,
-                                new { });
-                        }
+                    // T066: Notify the engine to reload its settings cache (fire-and-forget)
+                    var client = EngineLifecycle.Manager?.Client;
+                    if (client != null && client.IsConnected)
+                    {
+                        _ = client.SendNotificationAsync(
+                            MessageTypes.AnalysisSettingsChanged,
+                            new { });
                     }
                 }
             }
@@ -62,8 +60,8 @@ namespace AkmlSql.Shell.Shared.Commands
                 MessageBox.Show(
                     "Failed to load settings: " + ex.Message,
                     Constants.ProductName,
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error);
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
             }
         }
     }
