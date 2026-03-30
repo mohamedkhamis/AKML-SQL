@@ -168,15 +168,34 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                     return; // Already installed
 
                 _keyboardHook = new KeyboardHook();
-                _keyboardHook.Install(() =>
-                {
-                    // Ctrl+Space detected. Route to the active controller if one exists.
-                    var ctrl = _activeController;
-                    if (ctrl != null)
+                _keyboardHook.Install(
+                    onCtrlSpace: () =>
                     {
-                        ctrl.SuppressAndTrigger();
-                    }
-                });
+                        var ctrl = _activeController;
+                        ctrl?.SuppressAndTrigger();
+                    },
+                    onFormat: () =>
+                    {
+                        // Ctrl+K,Y or Ctrl+D → Format Document
+                        // MUST use BeginInvoke (async) — Invoke deadlocks inside hook callback
+                        System.Windows.Application.Current?.Dispatcher?.BeginInvoke(new Action(() =>
+                        {
+                            try
+                            {
+                                var sp = Microsoft.VisualStudio.Shell.ServiceProvider.GlobalProvider;
+                                var commandService = sp?.GetService(typeof(System.ComponentModel.Design.IMenuCommandService))
+                                    as Microsoft.VisualStudio.Shell.OleMenuCommandService;
+                                var cmdId = new System.ComponentModel.Design.CommandID(
+                                    PackageGuids.AkmlSqlCmdSet, 0x0200); // CmdFormatDocument
+                                commandService?.GlobalInvoke(cmdId);
+                                Log.Information("Format Document invoked via keyboard hook");
+                            }
+                            catch (Exception ex)
+                            {
+                                Log.Debug(ex, "Format via hook failed");
+                            }
+                        }));
+                    });
             }
         }
 
