@@ -2,9 +2,13 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using AkmlSql.Core.Config;
@@ -401,10 +405,12 @@ namespace AkmlSql.Shell.Shared.Dialogs
             // Left side: Import/Export
             var btnImport = MakeButton("Import Profile...", 120);
             btnImport.Margin = new Thickness(0, 0, 8, 0);
+            btnImport.Click += OnImportProfileClick;
             DockPanel.SetDock(btnImport, Dock.Left);
             dock.Children.Add(btnImport);
 
             var btnExport = MakeButton("Export Profile...", 120);
+            btnExport.Click += OnExportProfileClick;
             DockPanel.SetDock(btnExport, Dock.Left);
             dock.Children.Add(btnExport);
 
@@ -1119,7 +1125,15 @@ namespace AkmlSql.Shell.Shared.Dialogs
             StyleComboBox(combo);
 
             foreach (var item in items)
-                combo.Items.Add(new ComboBoxItem { Content = item, Foreground = _theme.FgPrimary });
+            {
+                // Use TextBlock as content so foreground propagates correctly
+                // through the Chrome template's ContentPresenter
+                combo.Items.Add(new ComboBoxItem
+                {
+                    Content = new TextBlock { Text = item, Foreground = _theme.FgPrimary },
+                    Foreground = _theme.FgPrimary
+                });
+            }
 
             if (combo.Items.Count > 0)
                 combo.SelectedIndex = 0;
@@ -1163,6 +1177,13 @@ namespace AkmlSql.Shell.Shared.Dialogs
             combo.Resources[SystemColors.ControlTextBrushKey] = _theme.FgPrimary;
             combo.Resources[SystemColors.InactiveSelectionHighlightBrushKey] = _theme.Selected;
             combo.Resources[SystemColors.InactiveSelectionHighlightTextBrushKey] = _theme.SelectedText;
+
+            // The default Chrome template's ContentPresenter inherits TextElement.Foreground
+            // from its template parent (the toggle button), not from the ComboBox.Foreground
+            // property. Setting TextElement.Foreground as an attached property on the ComboBox
+            // ensures it propagates through the visual tree to the ContentPresenter, fixing
+            // the bad text color/shadow in dark mode.
+            combo.SetValue(TextElement.ForegroundProperty, _theme.FgPrimary);
 
             var itemStyle = new Style(typeof(ComboBoxItem));
             itemStyle.Setters.Add(new Setter(Control.BackgroundProperty, _theme.Input));
@@ -1421,6 +1442,116 @@ namespace AkmlSql.Shell.Shared.Dialogs
             ThemeChangeRequested = true;
             _dialogResult = true;
             _window?.Close();
+        }
+
+        // ─── Export / Import ─────────────────────────────────────────────────
+
+        private static readonly JsonSerializerOptions ExportSerializerOptions = new()
+        {
+            WriteIndented = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+        };
+
+        private void OnExportProfileClick(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Capture current UI state into settings before exporting
+                SaveControlsToSettings();
+
+                var dlg = new Microsoft.Win32.SaveFileDialog
+                {
+                    Title = "Export AKML SQL Settings",
+                    Filter = "JSON Files (*.json)|*.json|All Files (*.*)|*.*",
+                    FileName = "akml-settings.json",
+                    DefaultExt = ".json",
+                    OverwritePrompt = true
+                };
+
+                if (dlg.ShowDialog(_window) == true)
+                {
+                    var json = JsonSerializer.Serialize(_settings, ExportSerializerOptions);
+                    File.WriteAllText(dlg.FileName, json);
+                    Log.Information("Settings exported to {Path}", dlg.FileName);
+                    MessageBox.Show(
+                        "Settings exported successfully.",
+                        Constants.ProductName,
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "SettingsWindow: Export failed");
+                MessageBox.Show(
+                    "Failed to export settings: " + ex.Message,
+                    Constants.ProductName,
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            }
+        }
+
+        private void OnImportProfileClick(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var dlg = new Microsoft.Win32.OpenFileDialog
+                {
+                    Title = "Import AKML SQL Settings",
+                    Filter = "JSON Files (*.json)|*.json|All Files (*.*)|*.*",
+                    DefaultExt = ".json",
+                    CheckFileExists = true
+                };
+
+                if (dlg.ShowDialog(_window) != true)
+                    return;
+
+                var content = File.ReadAllText(dlg.FileName);
+
+                var imported = JsonSerializer.Deserialize<AppSettings>(content, ExportSerializerOptions);
+                if (imported == null)
+                {
+                    MessageBox.Show(
+                        "The selected file does not contain valid AKML SQL settings.",
+                        Constants.ProductName,
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                    return;
+                }
+
+                // Preserve the current install-specific fields that should not be overwritten
+                imported.InstallId = _settings.InstallId;
+                imported.InstalledTargets = _settings.InstalledTargets;
+                imported.LastUpdateCheck = _settings.LastUpdateCheck;
+
+                _settings = imported;
+                LoadSettingsToControls();
+                Log.Information("Settings imported from {Path}", dlg.FileName);
+                MessageBox.Show(
+                    "Settings imported successfully.\nClick OK or Apply to save.",
+                    Constants.ProductName,
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+            }
+            catch (JsonException ex)
+            {
+                Log.Warning(ex, "SettingsWindow: Import parse failed");
+                MessageBox.Show(
+                    "The selected file is not valid JSON:\n" + ex.Message,
+                    Constants.ProductName,
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "SettingsWindow: Import failed");
+                MessageBox.Show(
+                    "Failed to import settings: " + ex.Message,
+                    Constants.ProductName,
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            }
         }
 
         // ═══════════════════════════════════════════════════════════════════════
