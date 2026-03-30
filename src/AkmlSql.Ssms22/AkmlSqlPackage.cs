@@ -20,6 +20,7 @@ using AkmlSql.Shell.Shared.Safety;
 using AkmlSql.Shell.Shared.Tabs;
 using AkmlSql.Shell.Shared.Update;
 using AkmlSql.Shell.Shared.Ai;
+using AkmlSql.Shell.Shared.Formatting;
 using AkmlSql.Shell.Shared.Ipc;
 using AkmlSql.Shell.Shared.Validation;
 using Serilog;
@@ -96,8 +97,8 @@ namespace AkmlSql.Ssms22
                 NavigateMatchingPairCommand.Initialize(this, commandService);
 
                 // Formatting commands
-                Formatting.FormatDocumentCommand.Initialize(this, commandService);
-                Formatting.FormatSelectionCommand.Initialize(this, commandService);
+                FormatDocumentCommand.Initialize(this, commandService);
+                FormatSelectionCommand.Initialize(this, commandService);
 
                 // Phase 9 US2 — AI Explain
                 AiExplainCommand.Initialize(this, commandService);

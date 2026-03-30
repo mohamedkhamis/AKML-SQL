@@ -37,31 +37,32 @@ namespace AkmlSql.Shell.Shared.Formatting
 
         private void OnBeforeQueryStatus(object sender, EventArgs e)
         {
-            ThreadHelper.ThrowIfNotOnUIThread();
-
+            // Always enable — IVsTextManager.GetActiveView returns null in SSMS 22
             var cmd = (OleMenuCommand)sender;
-            var textManager = (IVsTextManager)Package.GetGlobalService(typeof(SVsTextManager));
-            if (textManager == null)
-            {
-                cmd.Enabled = false;
-                return;
-            }
-
-            textManager.GetActiveView(1, null, out var textView);
-            cmd.Enabled = textView != null;
+            cmd.Enabled = true;
+            cmd.Visible = true;
         }
 
         private void Execute(object sender, EventArgs e)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
+            Log.Information("Format Document: command invoked");
 
             try
             {
                 var textManager = (IVsTextManager)Package.GetGlobalService(typeof(SVsTextManager));
-                if (textManager == null) return;
+                if (textManager == null)
+                {
+                    Log.Warning("Format Document: IVsTextManager not available");
+                    return;
+                }
 
                 textManager.GetActiveView(1, null, out var textView);
-                if (textView == null) return;
+                if (textView == null)
+                {
+                    Log.Warning("Format Document: no active text view");
+                    return;
+                }
 
                 textView.GetBuffer(out var buffer);
                 if (buffer == null) return;
