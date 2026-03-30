@@ -16,43 +16,113 @@ using Constants = AkmlSql.Core.Constants;
 namespace AkmlSql.Shell.Shared.Dialogs
 {
     /// <summary>
-    /// Professional dark-themed WPF Settings window inspired by Redgate SQL Prompt.
-    /// Code-only (no XAML) — compatible with SharedProject (.projitems) across all 6 host targets.
+    /// Professional themed WPF Settings window inspired by Redgate SQL Prompt.
+    /// Supports Dark and Light themes. Code-only (no XAML) — compatible with
+    /// SharedProject (.projitems) across all 6 host targets.
     /// </summary>
     internal sealed class SettingsWindow
     {
-        // ─── Theme colors ────────────────────────────────────────────────────
-        private static readonly Color BgMain        = Color.FromRgb(0x1E, 0x1E, 0x1E); // #1E1E1E
-        private static readonly Color BgSidebar     = Color.FromRgb(0x25, 0x25, 0x26); // #252526
-        private static readonly Color BgPanel       = Color.FromRgb(0x2D, 0x2D, 0x30); // #2D2D30
-        private static readonly Color BgInput       = Color.FromRgb(0x3C, 0x3C, 0x3C); // #3C3C3C
-        private static readonly Color BgButton      = Color.FromRgb(0x3C, 0x3C, 0x3C); // #3C3C3C
-        private static readonly Color BgButtonHover = Color.FromRgb(0x50, 0x50, 0x54); // #505054
-        private static readonly Color BgSelected    = Color.FromRgb(0x09, 0x47, 0x71); // #094771
-        private static readonly Color BorderColor   = Color.FromRgb(0x3C, 0x3C, 0x3C); // #3C3C3C
-        private static readonly Color FgPrimary     = Color.FromRgb(0xD4, 0xD4, 0xD4); // #D4D4D4
-        private static readonly Color FgSecondary   = Color.FromRgb(0x88, 0x88, 0x88); // #888888
-        private static readonly Color FgAccent      = Color.FromRgb(0x00, 0x7A, 0xCC); // #007ACC
-        private static readonly Color FgWhite       = Color.FromRgb(0xFF, 0xFF, 0xFF); // #FFFFFF
-        private static readonly Color SepColor      = Color.FromRgb(0x3C, 0x3C, 0x3C); // #3C3C3C
+        // ─── Theme brush set ────────────────────────────────────────────────
+        /// <summary>
+        /// Holds all frozen brushes for a single theme variant (Dark or Light).
+        /// </summary>
+        private sealed class ThemeBrushSet
+        {
+            public SolidColorBrush Main { get; }
+            public SolidColorBrush Sidebar { get; }
+            public SolidColorBrush Panel { get; }
+            public SolidColorBrush Input { get; }
+            public SolidColorBrush InputReadOnly { get; }
+            public SolidColorBrush Button { get; }
+            public SolidColorBrush ButtonHover { get; }
+            public SolidColorBrush Selected { get; }
+            public SolidColorBrush Border { get; }
+            public SolidColorBrush ComboBorder { get; }
+            public SolidColorBrush FgPrimary { get; }
+            public SolidColorBrush FgSecondary { get; }
+            public SolidColorBrush FgAccent { get; }
+            public SolidColorBrush FgWhite { get; }
+            public SolidColorBrush SelectedText { get; }
+            public SolidColorBrush Sep { get; }
+            public SolidColorBrush Transparent { get; }
+            public SolidColorBrush TreeHover { get; }
+            public SolidColorBrush Caret { get; }
 
-        // ─── Brushes ─────────────────────────────────────────────────────────
-        private static readonly SolidColorBrush BrMain        = Freeze(new SolidColorBrush(BgMain));
-        private static readonly SolidColorBrush BrSidebar     = Freeze(new SolidColorBrush(BgSidebar));
-        private static readonly SolidColorBrush BrPanel       = Freeze(new SolidColorBrush(BgPanel));
-        private static readonly SolidColorBrush BrInput       = Freeze(new SolidColorBrush(BgInput));
-        private static readonly SolidColorBrush BrButton      = Freeze(new SolidColorBrush(BgButton));
-        private static readonly SolidColorBrush BrButtonHover = Freeze(new SolidColorBrush(BgButtonHover));
-        private static readonly SolidColorBrush BrSelected    = Freeze(new SolidColorBrush(BgSelected));
-        private static readonly SolidColorBrush BrBorder      = Freeze(new SolidColorBrush(BorderColor));
-        private static readonly SolidColorBrush BrFgPrimary   = Freeze(new SolidColorBrush(FgPrimary));
-        private static readonly SolidColorBrush BrFgSecondary = Freeze(new SolidColorBrush(FgSecondary));
-        private static readonly SolidColorBrush BrFgAccent    = Freeze(new SolidColorBrush(FgAccent));
-        private static readonly SolidColorBrush BrFgWhite     = Freeze(new SolidColorBrush(FgWhite));
-        private static readonly SolidColorBrush BrSep         = Freeze(new SolidColorBrush(SepColor));
-        private static readonly SolidColorBrush BrTransparent = Freeze(new SolidColorBrush(Colors.Transparent));
+            private ThemeBrushSet(
+                Color main, Color sidebar, Color panel, Color input, Color inputReadOnly,
+                Color button, Color buttonHover, Color selected,
+                Color border, Color comboBorder,
+                Color fgPrimary, Color fgSecondary, Color fgAccent, Color fgWhite,
+                Color selectedText, Color sep, Color treeHover, Color caret)
+            {
+                Main = Freeze(new SolidColorBrush(main));
+                Sidebar = Freeze(new SolidColorBrush(sidebar));
+                Panel = Freeze(new SolidColorBrush(panel));
+                Input = Freeze(new SolidColorBrush(input));
+                InputReadOnly = Freeze(new SolidColorBrush(inputReadOnly));
+                Button = Freeze(new SolidColorBrush(button));
+                ButtonHover = Freeze(new SolidColorBrush(buttonHover));
+                Selected = Freeze(new SolidColorBrush(selected));
+                Border = Freeze(new SolidColorBrush(border));
+                ComboBorder = Freeze(new SolidColorBrush(comboBorder));
+                FgPrimary = Freeze(new SolidColorBrush(fgPrimary));
+                FgSecondary = Freeze(new SolidColorBrush(fgSecondary));
+                FgAccent = Freeze(new SolidColorBrush(fgAccent));
+                FgWhite = Freeze(new SolidColorBrush(fgWhite));
+                SelectedText = Freeze(new SolidColorBrush(selectedText));
+                Sep = Freeze(new SolidColorBrush(sep));
+                Transparent = Freeze(new SolidColorBrush(Colors.Transparent));
+                TreeHover = Freeze(new SolidColorBrush(treeHover));
+                Caret = Freeze(new SolidColorBrush(caret));
+            }
+
+            public static readonly ThemeBrushSet Dark = new ThemeBrushSet(
+                main:        Color.FromRgb(0x1E, 0x1E, 0x1E), // #1E1E1E
+                sidebar:     Color.FromRgb(0x25, 0x25, 0x26), // #252526
+                panel:       Color.FromRgb(0x2D, 0x2D, 0x30), // #2D2D30
+                input:       Color.FromRgb(0x3C, 0x3C, 0x3C), // #3C3C3C
+                inputReadOnly: Color.FromRgb(0x1E, 0x1E, 0x1E), // #1E1E1E
+                button:      Color.FromRgb(0x3C, 0x3C, 0x3C), // #3C3C3C
+                buttonHover: Color.FromRgb(0x50, 0x50, 0x54), // #505054
+                selected:    Color.FromRgb(0x09, 0x47, 0x71), // #094771
+                border:      Color.FromRgb(0x3C, 0x3C, 0x3C), // #3C3C3C
+                comboBorder: Color.FromRgb(0x55, 0x55, 0x55), // #555555
+                fgPrimary:   Color.FromRgb(0xD4, 0xD4, 0xD4), // #D4D4D4
+                fgSecondary: Color.FromRgb(0x88, 0x88, 0x88), // #888888
+                fgAccent:    Color.FromRgb(0x00, 0x7A, 0xCC), // #007ACC
+                fgWhite:     Color.FromRgb(0xFF, 0xFF, 0xFF), // #FFFFFF
+                selectedText: Color.FromRgb(0xFF, 0xFF, 0xFF), // #FFFFFF
+                sep:         Color.FromRgb(0x3C, 0x3C, 0x3C), // #3C3C3C
+                treeHover:   Color.FromRgb(0x2A, 0x2D, 0x2E), // #2A2D2E
+                caret:       Color.FromRgb(0xFF, 0xFF, 0xFF)  // #FFFFFF
+            );
+
+            public static readonly ThemeBrushSet Light = new ThemeBrushSet(
+                main:        Color.FromRgb(0xF5, 0xF5, 0xF5), // #F5F5F5 — window background
+                sidebar:     Color.FromRgb(0xF0, 0xF0, 0xF0), // #F0F0F0 — sidebar background
+                panel:       Color.FromRgb(0xFF, 0xFF, 0xFF), // #FFFFFF — content background
+                input:       Color.FromRgb(0xFF, 0xFF, 0xFF), // #FFFFFF — input background
+                inputReadOnly: Color.FromRgb(0xF0, 0xF0, 0xF0), // #F0F0F0
+                button:      Color.FromRgb(0xE0, 0xE0, 0xE0), // #E0E0E0 — button background
+                buttonHover: Color.FromRgb(0xD0, 0xD0, 0xD0), // #D0D0D0 — button hover
+                selected:    Color.FromRgb(0xCC, 0xE8, 0xFF), // #CCE8FF — selected/highlight
+                border:      Color.FromRgb(0xE0, 0xE0, 0xE0), // #E0E0E0 — border
+                comboBorder: Color.FromRgb(0xCC, 0xCC, 0xCC), // #CCCCCC — input border
+                fgPrimary:   Color.FromRgb(0x1E, 0x1E, 0x1E), // #1E1E1E — text primary
+                fgSecondary: Color.FromRgb(0x66, 0x66, 0x66), // #666666 — text secondary
+                fgAccent:    Color.FromRgb(0x00, 0x7A, 0xCC), // #007ACC — accent blue
+                fgWhite:     Color.FromRgb(0x1E, 0x1E, 0x1E), // #1E1E1E — headings (dark on light)
+                selectedText: Color.FromRgb(0x1E, 0x1E, 0x1E), // #1E1E1E — selected text (dark on light blue)
+                sep:         Color.FromRgb(0xE0, 0xE0, 0xE0), // #E0E0E0 — separator
+                treeHover:   Color.FromRgb(0xE8, 0xE8, 0xE8), // #E8E8E8 — hover
+                caret:       Color.FromRgb(0x1E, 0x1E, 0x1E)  // #1E1E1E
+            );
+        }
 
         private static SolidColorBrush Freeze(SolidColorBrush b) { b.Freeze(); return b; }
+
+        // ─── Active theme ───────────────────────────────────────────────────
+        private readonly ThemeBrushSet _theme;
 
         // ─── State ───────────────────────────────────────────────────────────
         private Window? _window;
@@ -64,11 +134,18 @@ namespace AkmlSql.Shell.Shared.Dialogs
         // Track whether user confirmed via OK
         private bool _dialogResult;
 
+        /// <summary>
+        /// When set to true by the theme-changed handler, the caller should
+        /// reopen the settings window to apply the new theme.
+        /// </summary>
+        public bool ThemeChangeRequested { get; private set; }
+
         // ─── Control references (for Load / Save) ───────────────────────────
 
         // General
         private CheckBox? _chkAutoUpdate;
         private CheckBox? _chkTelemetry;
+        private ComboBox? _cboTheme;
 
         // IntelliSense
         private CheckBox? _chkIsEnabled;
@@ -188,6 +265,10 @@ namespace AkmlSql.Shell.Shared.Dialogs
         public SettingsWindow(AppSettings settings)
         {
             _settings = settings;
+
+            // Pick theme based on settings
+            var themeName = settings.Theme?.ToLowerInvariant() ?? "dark";
+            _theme = themeName == "light" ? ThemeBrushSet.Light : ThemeBrushSet.Dark;
         }
 
         /// <summary>
@@ -229,8 +310,8 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 Height = 620,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
                 ResizeMode = ResizeMode.NoResize,
-                Background = BrMain,
-                Foreground = BrFgPrimary,
+                Background = _theme.Main,
+                Foreground = _theme.FgPrimary,
                 ShowInTaskbar = false,
                 WindowStyle = WindowStyle.SingleBorderWindow,
             };
@@ -248,7 +329,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             }
 
             // Root layout: DockPanel
-            var root = new DockPanel { Background = BrMain };
+            var root = new DockPanel { Background = _theme.Main };
 
             // ─── Bottom bar ──────────────────────────────────────────────
             var bottomBar = CreateBottomBar();
@@ -256,7 +337,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             root.Children.Add(bottomBar);
 
             // ─── Separator above bottom bar ──────────────────────────────
-            var sep = new Border { Height = 1, Background = BrSep };
+            var sep = new Border { Height = 1, Background = _theme.Sep };
             DockPanel.SetDock(sep, Dock.Bottom);
             root.Children.Add(sep);
 
@@ -266,14 +347,14 @@ namespace AkmlSql.Shell.Shared.Dialogs
             root.Children.Add(sidebar);
 
             // ─── Vertical separator ──────────────────────────────────────
-            var vertSep = new Border { Width = 1, Background = BrSep };
+            var vertSep = new Border { Width = 1, Background = _theme.Sep };
             DockPanel.SetDock(vertSep, Dock.Left);
             root.Children.Add(vertSep);
 
             // ─── Right content area ──────────────────────────────────────
             _contentHost = new ContentControl
             {
-                Background = BrPanel,
+                Background = _theme.Panel,
                 VerticalContentAlignment = VerticalAlignment.Stretch,
                 HorizontalContentAlignment = HorizontalAlignment.Stretch
             };
@@ -292,7 +373,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             var bar = new Border
             {
                 Height = 50,
-                Background = BrSidebar,
+                Background = _theme.Sidebar,
                 Padding = new Thickness(12, 8, 12, 8)
             };
 
@@ -338,7 +419,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             var sidebar = new Border
             {
                 Width = 200,
-                Background = BrSidebar,
+                Background = _theme.Sidebar,
                 Padding = new Thickness(0, 8, 0, 0)
             };
 
@@ -350,7 +431,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 Text = "Settings",
                 FontSize = 16,
                 FontWeight = FontWeights.SemiBold,
-                Foreground = BrFgWhite,
+                Foreground = _theme.FgWhite,
                 Margin = new Thickness(16, 4, 0, 12)
             };
             panel.Children.Add(title);
@@ -358,29 +439,37 @@ namespace AkmlSql.Shell.Shared.Dialogs
             // TreeView for navigation
             _navTree = new TreeView
             {
-                Background = BrTransparent,
+                Background = _theme.Transparent,
                 BorderThickness = new Thickness(0),
-                Foreground = BrFgPrimary,
+                Foreground = _theme.FgPrimary,
                 Padding = new Thickness(0)
             };
 
-            // Apply dark style to TreeViewItems
+            // Override system highlight colors so TreeView items stay themed
+            // even when focus moves between tree and content panel
+            _navTree.Resources[SystemColors.HighlightBrushKey] = _theme.Selected;
+            _navTree.Resources[SystemColors.HighlightTextBrushKey] = _theme.SelectedText;
+            _navTree.Resources[SystemColors.InactiveSelectionHighlightBrushKey] = _theme.Selected;
+            _navTree.Resources[SystemColors.InactiveSelectionHighlightTextBrushKey] = _theme.SelectedText;
+            _navTree.Resources[SystemColors.ControlBrushKey] = _theme.Selected;
+            _navTree.Resources[SystemColors.ControlTextBrushKey] = _theme.SelectedText;
+
+            // Apply themed style to TreeViewItems
             var itemStyle = new Style(typeof(TreeViewItem));
-            itemStyle.Setters.Add(new Setter(Control.ForegroundProperty, BrFgPrimary));
+            itemStyle.Setters.Add(new Setter(Control.ForegroundProperty, _theme.FgPrimary));
             itemStyle.Setters.Add(new Setter(Control.FontSizeProperty, 13.0));
             itemStyle.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(8, 6, 8, 6)));
             itemStyle.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0)));
-            itemStyle.Setters.Add(new Setter(Control.BackgroundProperty, BrTransparent));
+            itemStyle.Setters.Add(new Setter(Control.BackgroundProperty, _theme.Transparent));
             itemStyle.Setters.Add(new Setter(FrameworkElement.MarginProperty, new Thickness(0)));
 
             var selectedTrigger = new Trigger { Property = TreeViewItem.IsSelectedProperty, Value = true };
-            selectedTrigger.Setters.Add(new Setter(Control.BackgroundProperty, BrSelected));
-            selectedTrigger.Setters.Add(new Setter(Control.ForegroundProperty, BrFgWhite));
+            selectedTrigger.Setters.Add(new Setter(Control.BackgroundProperty, _theme.Selected));
+            selectedTrigger.Setters.Add(new Setter(Control.ForegroundProperty, _theme.SelectedText));
             itemStyle.Triggers.Add(selectedTrigger);
 
             var mouseOverTrigger = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
-            mouseOverTrigger.Setters.Add(new Setter(Control.BackgroundProperty,
-                Freeze(new SolidColorBrush(Color.FromRgb(0x2A, 0x2D, 0x2E)))));
+            mouseOverTrigger.Setters.Add(new Setter(Control.BackgroundProperty, _theme.TreeHover));
             itemStyle.Triggers.Add(mouseOverTrigger);
 
             _navTree.ItemContainerStyle = itemStyle;
@@ -438,6 +527,13 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
             AddPageHeader(panel, "General Settings");
 
+            AddGroupHeader(panel, "Appearance");
+            _cboTheme = AddDropdown(panel, "Theme",
+                new[] { "Dark", "Light", "System" },
+                "UI color theme for AKML SQL dialogs");
+            _cboTheme.SelectionChanged += OnThemeSelectionChanged;
+
+            AddGroupSeparator(panel);
             AddGroupHeader(panel, "Updates & Telemetry");
             _chkAutoUpdate = AddToggle(panel, "Check for updates automatically",
                 "Checks for new versions every 24 hours on startup");
@@ -835,67 +931,67 @@ namespace AkmlSql.Shell.Shared.Dialogs
         //  UI Builder Helpers
         // ═══════════════════════════════════════════════════════════════════════
 
-        private static StackPanel CreatePagePanel()
+        private StackPanel CreatePagePanel()
         {
             return new StackPanel
             {
                 Margin = new Thickness(24, 16, 24, 24),
-                Background = BrTransparent
+                Background = _theme.Transparent
             };
         }
 
-        private static ScrollViewer WrapInScrollViewer(UIElement content)
+        private ScrollViewer WrapInScrollViewer(UIElement content)
         {
             return new ScrollViewer
             {
                 Content = content,
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                Background = BrPanel
+                Background = _theme.Panel
             };
         }
 
-        private static void AddPageHeader(StackPanel panel, string text)
+        private void AddPageHeader(StackPanel panel, string text)
         {
             panel.Children.Add(new TextBlock
             {
                 Text = text,
                 FontSize = 20,
                 FontWeight = FontWeights.SemiBold,
-                Foreground = BrFgWhite,
+                Foreground = _theme.FgWhite,
                 Margin = new Thickness(0, 0, 0, 16)
             });
         }
 
-        private static void AddGroupHeader(StackPanel panel, string text)
+        private void AddGroupHeader(StackPanel panel, string text)
         {
             panel.Children.Add(new TextBlock
             {
                 Text = text,
                 FontSize = 13,
                 FontWeight = FontWeights.Bold,
-                Foreground = BrFgAccent,
+                Foreground = _theme.FgAccent,
                 Margin = new Thickness(0, 4, 0, 10)
             });
         }
 
-        private static void AddGroupSeparator(StackPanel panel)
+        private void AddGroupSeparator(StackPanel panel)
         {
             panel.Children.Add(new Border
             {
                 Height = 1,
-                Background = BrSep,
+                Background = _theme.Sep,
                 Margin = new Thickness(0, 16, 0, 12)
             });
         }
 
-        private static CheckBox AddToggle(StackPanel panel, string label, string description)
+        private CheckBox AddToggle(StackPanel panel, string label, string description)
         {
             var row = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
 
             var cb = new CheckBox
             {
-                Foreground = BrFgPrimary,
+                Foreground = _theme.FgPrimary,
                 FontSize = 13,
                 VerticalContentAlignment = VerticalAlignment.Center
             };
@@ -905,7 +1001,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             contentPanel.Children.Add(new TextBlock
             {
                 Text = label,
-                Foreground = BrFgPrimary,
+                Foreground = _theme.FgPrimary,
                 FontSize = 13
             });
             if (!string.IsNullOrEmpty(description))
@@ -913,7 +1009,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 contentPanel.Children.Add(new TextBlock
                 {
                     Text = description,
-                    Foreground = BrFgSecondary,
+                    Foreground = _theme.FgSecondary,
                     FontSize = 11,
                     FontStyle = FontStyles.Italic,
                     Margin = new Thickness(0, 2, 0, 0)
@@ -926,7 +1022,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             return cb;
         }
 
-        private static (Slider slider, TextBlock valueLabel) AddSlider(
+        private (Slider slider, TextBlock valueLabel) AddSlider(
             StackPanel panel, string label, double min, double max, double defaultValue,
             string description, bool largeRange = false)
         {
@@ -938,7 +1034,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             var valueLabel = new TextBlock
             {
                 Text = defaultValue.ToString(CultureInfo.InvariantCulture),
-                Foreground = BrFgAccent,
+                Foreground = _theme.FgAccent,
                 FontSize = 13,
                 FontWeight = FontWeights.SemiBold,
                 MinWidth = 60,
@@ -950,7 +1046,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             headerRow.Children.Add(new TextBlock
             {
                 Text = label,
-                Foreground = BrFgPrimary,
+                Foreground = _theme.FgPrimary,
                 FontSize = 13
             });
 
@@ -965,7 +1061,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 IsSnapToTickEnabled = true,
                 TickFrequency = largeRange ? Math.Max(1, (max - min) / 100) : 1,
                 Height = 22,
-                Foreground = BrFgAccent
+                Foreground = _theme.FgAccent
             };
 
             // Update value label on change
@@ -983,7 +1079,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 container.Children.Add(new TextBlock
                 {
                     Text = description,
-                    Foreground = BrFgSecondary,
+                    Foreground = _theme.FgSecondary,
                     FontSize = 11,
                     FontStyle = FontStyles.Italic,
                     Margin = new Thickness(0, 2, 0, 0)
@@ -994,23 +1090,23 @@ namespace AkmlSql.Shell.Shared.Dialogs
             return (slider, valueLabel);
         }
 
-        private static ComboBox AddDropdown(StackPanel panel, string label, string[] items, string description)
+        private ComboBox AddDropdown(StackPanel panel, string label, string[] items, string description)
         {
             var container = new StackPanel { Margin = new Thickness(0, 0, 0, 12) };
 
             container.Children.Add(new TextBlock
             {
                 Text = label,
-                Foreground = BrFgPrimary,
+                Foreground = _theme.FgPrimary,
                 FontSize = 13,
                 Margin = new Thickness(0, 0, 0, 4)
             });
 
             var combo = new ComboBox
             {
-                Background = BrInput,
-                Foreground = BrFgPrimary,
-                BorderBrush = BrBorder,
+                Background = _theme.Input,
+                Foreground = _theme.FgPrimary,
+                BorderBrush = _theme.ComboBorder,
                 BorderThickness = new Thickness(1),
                 FontSize = 13,
                 Height = 28,
@@ -1019,8 +1115,11 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 HorizontalAlignment = HorizontalAlignment.Left
             };
 
+            // Apply themed styling to dropdown items
+            StyleComboBox(combo);
+
             foreach (var item in items)
-                combo.Items.Add(new ComboBoxItem { Content = item, Foreground = BrFgPrimary });
+                combo.Items.Add(new ComboBoxItem { Content = item, Foreground = _theme.FgPrimary });
 
             if (combo.Items.Count > 0)
                 combo.SelectedIndex = 0;
@@ -1032,7 +1131,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 container.Children.Add(new TextBlock
                 {
                     Text = description,
-                    Foreground = BrFgSecondary,
+                    Foreground = _theme.FgSecondary,
                     FontSize = 11,
                     FontStyle = FontStyles.Italic,
                     Margin = new Thickness(0, 2, 0, 0)
@@ -1043,7 +1142,49 @@ namespace AkmlSql.Shell.Shared.Dialogs
             return combo;
         }
 
-        private static TextBox AddTextInput(StackPanel panel, string label, string description,
+        /// <summary>
+        /// Applies themed styling to a ComboBox so the dropdown popup, items,
+        /// hover highlight, and selected item all match the active theme.
+        /// </summary>
+        private void StyleComboBox(ComboBox combo)
+        {
+            combo.Background = _theme.Input;
+            combo.Foreground = _theme.FgPrimary;
+            combo.BorderBrush = _theme.ComboBorder;
+
+            // Override system colors used by the default ComboBox Chrome template.
+            // This is the ONLY reliable way to theme dropdown popups without
+            // rewriting the entire ControlTemplate.
+            combo.Resources[SystemColors.WindowBrushKey] = _theme.Input;
+            combo.Resources[SystemColors.WindowTextBrushKey] = _theme.FgPrimary;
+            combo.Resources[SystemColors.HighlightBrushKey] = _theme.Selected;
+            combo.Resources[SystemColors.HighlightTextBrushKey] = _theme.SelectedText;
+            combo.Resources[SystemColors.ControlBrushKey] = _theme.Input;
+            combo.Resources[SystemColors.ControlTextBrushKey] = _theme.FgPrimary;
+            combo.Resources[SystemColors.InactiveSelectionHighlightBrushKey] = _theme.Selected;
+            combo.Resources[SystemColors.InactiveSelectionHighlightTextBrushKey] = _theme.SelectedText;
+
+            var itemStyle = new Style(typeof(ComboBoxItem));
+            itemStyle.Setters.Add(new Setter(Control.BackgroundProperty, _theme.Input));
+            itemStyle.Setters.Add(new Setter(Control.ForegroundProperty, _theme.FgPrimary));
+            itemStyle.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0)));
+            itemStyle.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(6, 4, 6, 4)));
+
+            var hoverTrigger = new Trigger { Property = ComboBoxItem.IsHighlightedProperty, Value = true };
+            hoverTrigger.Setters.Add(new Setter(Control.BackgroundProperty, _theme.Selected));
+            hoverTrigger.Setters.Add(new Setter(Control.ForegroundProperty, _theme.SelectedText));
+            itemStyle.Triggers.Add(hoverTrigger);
+
+            var selectedTrigger = new Trigger { Property = ComboBoxItem.IsSelectedProperty, Value = true };
+            selectedTrigger.Setters.Add(new Setter(Control.BackgroundProperty, _theme.FgAccent));
+            selectedTrigger.Setters.Add(new Setter(Control.ForegroundProperty,
+                Freeze(new SolidColorBrush(Colors.White))));
+            itemStyle.Triggers.Add(selectedTrigger);
+
+            combo.ItemContainerStyle = itemStyle;
+        }
+
+        private TextBox AddTextInput(StackPanel panel, string label, string description,
             bool isPassword = false)
         {
             var container = new StackPanel { Margin = new Thickness(0, 0, 0, 12) };
@@ -1051,18 +1192,18 @@ namespace AkmlSql.Shell.Shared.Dialogs
             container.Children.Add(new TextBlock
             {
                 Text = label,
-                Foreground = BrFgPrimary,
+                Foreground = _theme.FgPrimary,
                 FontSize = 13,
                 Margin = new Thickness(0, 0, 0, 4)
             });
 
             var textBox = new TextBox
             {
-                Background = BrInput,
-                Foreground = BrFgPrimary,
-                BorderBrush = BrBorder,
+                Background = _theme.Input,
+                Foreground = _theme.FgPrimary,
+                BorderBrush = _theme.ComboBorder,
                 BorderThickness = new Thickness(1),
-                CaretBrush = BrFgWhite,
+                CaretBrush = _theme.Caret,
                 FontSize = 13,
                 Height = 28,
                 Padding = new Thickness(6, 4, 6, 4),
@@ -1085,7 +1226,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 container.Children.Add(new TextBlock
                 {
                     Text = description,
-                    Foreground = BrFgSecondary,
+                    Foreground = _theme.FgSecondary,
                     FontSize = 11,
                     FontStyle = FontStyles.Italic,
                     Margin = new Thickness(0, 2, 0, 0)
@@ -1096,14 +1237,14 @@ namespace AkmlSql.Shell.Shared.Dialogs
             return textBox;
         }
 
-        private static void AddReadOnlyField(StackPanel panel, string label, string value)
+        private void AddReadOnlyField(StackPanel panel, string label, string value)
         {
             var container = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
 
             container.Children.Add(new TextBlock
             {
                 Text = label,
-                Foreground = BrFgSecondary,
+                Foreground = _theme.FgSecondary,
                 FontSize = 11,
                 Margin = new Thickness(0, 0, 0, 2)
             });
@@ -1111,9 +1252,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
             var textBox = new TextBox
             {
                 Text = value,
-                Background = Freeze(new SolidColorBrush(Color.FromRgb(0x1E, 0x1E, 0x1E))),
-                Foreground = BrFgSecondary,
-                BorderBrush = BrBorder,
+                Background = _theme.InputReadOnly,
+                Foreground = _theme.FgSecondary,
+                BorderBrush = _theme.Border,
                 BorderThickness = new Thickness(1),
                 FontSize = 12,
                 IsReadOnly = true,
@@ -1128,14 +1269,14 @@ namespace AkmlSql.Shell.Shared.Dialogs
             panel.Children.Add(container);
         }
 
-        private static void AddInfoRow(StackPanel panel, string label, string value)
+        private void AddInfoRow(StackPanel panel, string label, string value)
         {
             var row = new DockPanel { Margin = new Thickness(0, 2, 0, 6) };
 
             row.Children.Add(new TextBlock
             {
                 Text = label + ":",
-                Foreground = BrFgSecondary,
+                Foreground = _theme.FgSecondary,
                 FontSize = 12,
                 MinWidth = 120,
                 Margin = new Thickness(0, 0, 8, 0)
@@ -1144,7 +1285,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             row.Children.Add(new TextBlock
             {
                 Text = value,
-                Foreground = BrFgPrimary,
+                Foreground = _theme.FgPrimary,
                 FontSize = 12,
                 TextWrapping = TextWrapping.Wrap
             });
@@ -1152,7 +1293,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             panel.Children.Add(row);
         }
 
-        private static Button MakeButton(string text, double width)
+        private Button MakeButton(string text, double width)
         {
             var btn = new Button
             {
@@ -1160,16 +1301,17 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 Width = width,
                 Height = 30,
                 FontSize = 13,
-                Foreground = BrFgPrimary,
-                Background = BrButton,
-                BorderBrush = BrBorder,
+                Foreground = _theme.FgPrimary,
+                Background = _theme.Button,
+                BorderBrush = _theme.Border,
                 BorderThickness = new Thickness(1),
                 Padding = new Thickness(12, 4, 12, 4),
                 Cursor = Cursors.Hand
             };
 
-            btn.MouseEnter += (s, e) => btn.Background = BrButtonHover;
-            btn.MouseLeave += (s, e) => btn.Background = BrButton;
+            var theme = _theme; // capture for lambda
+            btn.MouseEnter += (s, e) => btn.Background = theme.ButtonHover;
+            btn.MouseLeave += (s, e) => btn.Background = theme.Button;
 
             return btn;
         }
@@ -1236,6 +1378,51 @@ namespace AkmlSql.Shell.Shared.Dialogs
             }
         }
 
+        private void OnThemeSelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_cboTheme == null) return;
+            var idx = _cboTheme.SelectedIndex;
+
+            // Index 0 = Dark, Index 1 = Light, Index 2 = System
+            if (idx == 2)
+            {
+                // System theme not yet implemented — revert
+                MessageBox.Show(
+                    "System theme is coming soon.\nOnly Dark and Light themes are currently available.",
+                    Constants.ProductName,
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+
+                _cboTheme.SelectionChanged -= OnThemeSelectionChanged;
+                _cboTheme.SelectedIndex = _theme == ThemeBrushSet.Dark ? 0 : 1;
+                _cboTheme.SelectionChanged += OnThemeSelectionChanged;
+                return;
+            }
+
+            // Determine which theme is currently active
+            var currentIsDark = _theme == ThemeBrushSet.Dark;
+            var requestedDark = idx == 0;
+
+            if (currentIsDark == requestedDark)
+                return; // no change needed
+
+            // Save the new theme preference immediately so the reopened window uses it
+            SaveControlsToSettings();
+            try
+            {
+                ConfigManager.Save(_settings);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "SettingsWindow: Failed to save theme change");
+            }
+
+            // Signal that the window should be reopened with the new theme
+            ThemeChangeRequested = true;
+            _dialogResult = true;
+            _window?.Close();
+        }
+
         // ═══════════════════════════════════════════════════════════════════════
         //  Load settings into controls
         // ═══════════════════════════════════════════════════════════════════════
@@ -1245,6 +1432,13 @@ namespace AkmlSql.Shell.Shared.Dialogs
             // ── General ──────────────────────────────────────────────────
             SetChecked(_chkAutoUpdate, _settings.AutoUpdateEnabled);
             SetChecked(_chkTelemetry, _settings.TelemetryEnabled);
+            var themeIdx = (_settings.Theme?.ToLowerInvariant()) switch
+            {
+                "light" => 1,
+                "system" => 2,
+                _ => 0 // "dark" or unset
+            };
+            SetCombo(_cboTheme, themeIdx);
 
             // ── IntelliSense ─────────────────────────────────────────────
             var i = _settings.IntelliSense;
@@ -1394,6 +1588,12 @@ namespace AkmlSql.Shell.Shared.Dialogs
             // ── General ──────────────────────────────────────────────────
             _settings.AutoUpdateEnabled = IsChecked(_chkAutoUpdate);
             _settings.TelemetryEnabled = IsChecked(_chkTelemetry);
+            _settings.Theme = GetComboIndex(_cboTheme) switch
+            {
+                1 => "light",
+                2 => "system",
+                _ => "dark"
+            };
 
             // ── IntelliSense ─────────────────────────────────────────────
             _settings.IntelliSense.Enabled = IsChecked(_chkIsEnabled);

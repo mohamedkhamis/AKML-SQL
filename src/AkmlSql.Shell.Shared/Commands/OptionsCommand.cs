@@ -37,21 +37,38 @@ namespace AkmlSql.Shell.Shared.Commands
             try
             {
                 var settings = ConfigManager.Load();
-                var window = new SettingsWindow(settings);
-                if (window.ShowDialog())
-                {
-                    var updated = window.GetSettings();
-                    ConfigManager.Save(updated);
-                    Log.Information("Settings saved successfully.");
 
-                    // T066: Notify the engine to reload its settings cache (fire-and-forget)
-                    var client = EngineLifecycle.Manager?.Client;
-                    if (client != null && client.IsConnected)
+                // Loop to support theme-change reopen: when the user switches between
+                // Dark and Light themes, the window closes and immediately reopens with
+                // the new theme applied.
+                while (true)
+                {
+                    var window = new SettingsWindow(settings);
+                    if (window.ShowDialog())
                     {
-                        _ = client.SendNotificationAsync(
-                            MessageTypes.AnalysisSettingsChanged,
-                            new { });
+                        if (window.ThemeChangeRequested)
+                        {
+                            // Settings were already saved by the theme handler —
+                            // reload them so the next window instance picks up the new theme
+                            settings = ConfigManager.Load();
+                            continue;
+                        }
+
+                        var updated = window.GetSettings();
+                        ConfigManager.Save(updated);
+                        Log.Information("Settings saved successfully.");
+
+                        // T066: Notify the engine to reload its settings cache (fire-and-forget)
+                        var client = EngineLifecycle.Manager?.Client;
+                        if (client != null && client.IsConnected)
+                        {
+                            _ = client.SendNotificationAsync(
+                                MessageTypes.AnalysisSettingsChanged,
+                                new { });
+                        }
                     }
+
+                    break;
                 }
             }
             catch (Exception ex)

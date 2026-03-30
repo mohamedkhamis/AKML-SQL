@@ -23,6 +23,13 @@ namespace AkmlSql.Core.Config
         /// <summary>Reserved for future telemetry opt-in. Defaults to <c>false</c>.</summary>
         public bool TelemetryEnabled { get; set; }
 
+        /// <summary>
+        /// UI theme for AKML SQL dialogs. Valid values: "dark", "light", "system".
+        /// Currently only "dark" is fully implemented; "light" and "system" are reserved for future use.
+        /// </summary>
+        [JsonPropertyName("theme")]
+        public string Theme { get; set; } = "dark";
+
         /// <summary>ISO 8601 timestamp of the last successful update check. <c>null</c> if never checked.</summary>
         public DateTimeOffset? LastUpdateCheck { get; set; }
 
