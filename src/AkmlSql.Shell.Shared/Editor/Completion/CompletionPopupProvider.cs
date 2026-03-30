@@ -228,7 +228,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
-        private static void FormatDirectly()
+        internal static void FormatDirectly()
         {
             // Get active text view and format via Engine RPC
             var textManager = (Microsoft.VisualStudio.TextManager.Interop.IVsTextManager)

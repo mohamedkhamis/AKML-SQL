@@ -215,5 +215,8 @@
     <!-- Phase 9 US7: Inline Ghost Text -->
     <Compile Include="$(MSBuildThisFileDirectory)Ai\GhostTextAdornment.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ai\GhostTextAdornmentProvider.cs" />
+    <!-- Editor Toolbar: SQL Prompt-style action bar at top of each SQL editor -->
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\Toolbar\EditorToolbar.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\Toolbar\EditorToolbarProvider.cs" />
   </ItemGroup>
 </Project>
