@@ -95,6 +95,10 @@ namespace AkmlSql.Ssms22
                 NavigateStatementCommand.Initialize(this, commandService);
                 NavigateMatchingPairCommand.Initialize(this, commandService);
 
+                // Formatting commands
+                Formatting.FormatDocumentCommand.Initialize(this, commandService);
+                Formatting.FormatSelectionCommand.Initialize(this, commandService);
+
                 // Phase 9 US2 — AI Explain
                 AiExplainCommand.Initialize(this, commandService);
 
