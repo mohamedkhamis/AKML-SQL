@@ -78,27 +78,37 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                     vsView.AddCommandFilter(controller, out var nextTarget);
                     controller.NextTarget = nextTarget;
 
-                    // Handle Ctrl+Space via Win32 message interception.
-                    // SSMS 22's SQL editor is a Win32 control hosted in WPF — WPF
-                    // PreviewKeyDown events don't propagate to it.
-                    // ComponentDispatcher.ThreadPreprocessMessage intercepts raw Win32
-                    // keyboard messages BEFORE the host processes them, which works
-                    // for all hosted controls.
+                    // Ctrl+Space is deeply wired to SSMS native IntelliSense and cannot
+                    // be reliably intercepted. Use Ctrl+J as the AKML manual trigger.
+                    // Also intercept Ctrl+Space via WM_KEYDOWN to dismiss native + show AKML.
                     System.Windows.Interop.ComponentDispatcher.ThreadPreprocessMessage += (ref System.Windows.Interop.MSG msg, ref bool handled) =>
                     {
-                        // WM_KEYDOWN = 0x0100, VK_SPACE = 0x20
-                        if (msg.message == 0x0100 && msg.wParam.ToInt32() == 0x20)
+                        if (!textView.HasAggregateFocus) return;
+
+                        // WM_KEYDOWN = 0x0100
+                        if (msg.message == 0x0100)
                         {
-                            // Check if Ctrl is held
-                            if ((System.Windows.Input.Keyboard.Modifiers & System.Windows.Input.ModifierKeys.Control) != 0)
+                            int vk = msg.wParam.ToInt32();
+                            bool ctrl = (System.Windows.Input.Keyboard.Modifiers & System.Windows.Input.ModifierKeys.Control) != 0;
+
+                            // Ctrl+J = manual AKML trigger (reliable alternative to Ctrl+Space)
+                            // VK_J = 0x4A
+                            if (ctrl && vk == 0x4A)
                             {
-                                // Only handle if our text view has focus
-                                if (textView.HasAggregateFocus)
-                                {
-                                    Log.Debug("ThreadPreprocessMessage: Ctrl+Space detected — triggering manual completion");
-                                    controller.TriggerManualCompletion();
-                                    handled = true;
-                                }
+                                controller.TriggerManualCompletion();
+                                handled = true;
+                            }
+                            // Ctrl+Space = dismiss native + trigger AKML
+                            // VK_SPACE = 0x20
+                            else if (ctrl && vk == 0x20)
+                            {
+                                // Let native handle it first, then immediately trigger ours
+                                System.Windows.Application.Current?.Dispatcher?.BeginInvoke(
+                                    System.Windows.Threading.DispatcherPriority.Input,
+                                    new Action(() =>
+                                    {
+                                        controller.SuppressAndTrigger();
+                                    }));
                             }
                         }
                     };
@@ -147,36 +157,9 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static void DisableNativeIntelliSense()
         {
-            if (_nativeDisabled) return;
-            _nativeDisabled = true;
-
-            // Delay execution — the Query.IntelliSenseEnabled command requires
-            // an active query window. Execute 2 seconds after first text view opens.
-            System.Threading.Tasks.Task.Run(async () =>
-            {
-                await System.Threading.Tasks.Task.Delay(2000);
-                try
-                {
-                    System.Windows.Application.Current?.Dispatcher?.Invoke(() =>
-                    {
-                        try
-                        {
-                            var dte = Microsoft.VisualStudio.Shell.Package.GetGlobalService(
-                                typeof(EnvDTE.DTE)) as EnvDTE.DTE;
-                            if (dte == null) return;
-
-                            // Toggle SSMS IntelliSense OFF via menu command
-                            dte.ExecuteCommand("Query.IntelliSenseEnabled");
-                            Log.Information("Executed Query.IntelliSenseEnabled to disable native IntelliSense");
-                        }
-                        catch (Exception ex)
-                        {
-                            Log.Debug(ex, "Query.IntelliSenseEnabled command failed");
-                        }
-                    });
-                }
-                catch { }
-            });
+            // Keep native IntelliSense ENABLED so Ctrl+Space commands route through
+            // IOleCommandTarget where we intercept them. Our WPF Popup renders on
+            // top, and the 20ms suppress timer dismisses native sessions.
         }
     }
 }

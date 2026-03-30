@@ -263,6 +263,13 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         /// <summary>Public entry point for Ctrl+Space from WPF PreviewKeyDown.</summary>
         public void TriggerManualCompletion() => TriggerCompletion();
 
+        /// <summary>Dismiss native IntelliSense then show AKML popup (for Ctrl+Space).</summary>
+        public void SuppressAndTrigger()
+        {
+            SuppressNativeIntelliSense();
+            TriggerCompletion();
+        }
+
         private void TriggerCompletion()
         {
             _filterText = GetWordAtCaret();
