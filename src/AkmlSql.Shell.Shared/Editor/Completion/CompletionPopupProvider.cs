@@ -177,22 +177,31 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                     onFormat: () =>
                     {
                         // Ctrl+K,Y or Ctrl+D → Format Document
-                        // MUST use BeginInvoke (async) — Invoke deadlocks inside hook callback
+                        // MUST use BeginInvoke — Invoke deadlocks inside hook callback
                         System.Windows.Application.Current?.Dispatcher?.BeginInvoke(new Action(() =>
                         {
                             try
                             {
-                                var sp = Microsoft.VisualStudio.Shell.ServiceProvider.GlobalProvider;
-                                var commandService = sp?.GetService(typeof(System.ComponentModel.Design.IMenuCommandService))
-                                    as Microsoft.VisualStudio.Shell.OleMenuCommandService;
-                                var cmdId = new System.ComponentModel.Design.CommandID(
-                                    PackageGuids.AkmlSqlCmdSet, 0x0200); // CmdFormatDocument
-                                commandService?.GlobalInvoke(cmdId);
-                                Log.Information("Format Document invoked via keyboard hook");
+                                // Invoke format directly via DTE (works even if package not loaded)
+                                var dte = Microsoft.VisualStudio.Shell.Package.GetGlobalService(
+                                    typeof(EnvDTE.DTE)) as EnvDTE.DTE;
+                                if (dte != null)
+                                {
+                                    dte.ExecuteCommand("AKML_SQL.FormatDocument");
+                                    Log.Information("Format via DTE command");
+                                }
                             }
-                            catch (Exception ex)
+                            catch
                             {
-                                Log.Debug(ex, "Format via hook failed");
+                                // Fallback: invoke format logic directly
+                                try
+                                {
+                                    FormatDirectly();
+                                }
+                                catch (Exception ex2)
+                                {
+                                    Log.Debug(ex2, "Format direct fallback failed");
+                                }
                             }
                         }));
                     });
@@ -216,6 +225,63 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                     _keyboardHook = null;
                 }
             }
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void FormatDirectly()
+        {
+            // Get active text view and format via Engine RPC
+            var textManager = (Microsoft.VisualStudio.TextManager.Interop.IVsTextManager)
+                Microsoft.VisualStudio.Shell.Package.GetGlobalService(
+                    typeof(Microsoft.VisualStudio.TextManager.Interop.SVsTextManager));
+            if (textManager == null) { Log.Warning("Format: no text manager"); return; }
+
+            textManager.GetActiveView(1, null, out var vsView);
+            if (vsView == null) { Log.Warning("Format: no active view"); return; }
+
+            vsView.GetBuffer(out var vsBuffer);
+            if (vsBuffer == null) return;
+
+            vsBuffer.GetLastLineIndex(out var lastLine, out var lastCol);
+            vsBuffer.GetLineText(0, 0, lastLine, lastCol, out var text);
+            if (string.IsNullOrEmpty(text)) return;
+
+            Log.Information("Format: formatting {Len} chars via Engine", text.Length);
+
+            // Send format request to Engine
+            System.Threading.Tasks.Task.Run(async () =>
+            {
+                try
+                {
+                    var client = Ipc.EngineLifecycle.Manager?.Client;
+                    if (client == null || !client.IsConnected) { Log.Warning("Format: engine not connected"); return; }
+
+                    var response = await client.SendRequestAsync<
+                        AkmlSql.Core.Ipc.Messages.FormatResponse,
+                        AkmlSql.Core.Ipc.Messages.FormatRequest>(
+                        AkmlSql.Core.Ipc.MessageTypes.FormatDocument,
+                        new AkmlSql.Core.Ipc.Messages.FormatRequest { Text = text },
+                        timeoutMs: 10000);
+
+                    if (response != null && response.Success && !string.IsNullOrEmpty(response.FormattedText))
+                    {
+                        System.Windows.Application.Current?.Dispatcher?.Invoke(() =>
+                        {
+                            Microsoft.VisualStudio.Shell.ThreadHelper.ThrowIfNotOnUIThread();
+                            // Use IVsTextBuffer.Replace via IntPtr for the new text
+                            var newText = response.FormattedText;
+                            var ptr = System.Runtime.InteropServices.Marshal.StringToHGlobalUni(newText);
+                            try
+                            {
+                                vsBuffer.ReplaceLines(0, 0, lastLine, lastCol, ptr, newText.Length, null);
+                            }
+                            finally { System.Runtime.InteropServices.Marshal.FreeHGlobal(ptr); }
+                            Log.Information("Format: replaced with {Len} chars", newText.Length);
+                        });
+                    }
+                }
+                catch (Exception ex) { Log.Error(ex, "Format: Engine RPC failed"); }
+            });
         }
 
         private static bool _nativeDisabled;

@@ -11,6 +11,15 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
     /// WPF PreviewKeyDown, ComponentDispatcher.ThreadPreprocessMessage, and IOleCommandTarget
     /// all fail to intercept Ctrl+Space before SSMS consumes it. A SetWindowsHookEx thread hook
     /// sits earlier in the message chain and can swallow the keystroke.
+    ///
+    /// For chord shortcuts like Ctrl+K,Y (Format Document) and Ctrl+D, a WH_KEYBOARD_LL
+    /// (low-level) hook is used because SSMS's accelerator table captures Ctrl+K before
+    /// WH_KEYBOARD can see it. The LL hook runs before TranslateAccelerator.
+    ///
+    /// Known .NET issue: SetWindowsHookEx(WH_KEYBOARD_LL, ...) requires a valid native
+    /// module handle. Using Process.MainModule.BaseAddress fails in managed processes.
+    /// The workaround is LoadLibrary("user32.dll") — see:
+    /// https://learn.microsoft.com/en-us/archive/blogs/toub/low-level-keyboard-hook-in-c
     /// </summary>
     internal sealed class KeyboardHook : IDisposable
     {
@@ -31,6 +40,9 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         [DllImport("user32.dll")]
         private static extern short GetKeyState(int nVirtKey);
 
+        [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        private static extern IntPtr LoadLibrary(string lpFileName);
+
         private delegate IntPtr HookProc(int nCode, IntPtr wParam, IntPtr lParam);
 
         private const int WH_KEYBOARD_LL = 13;
@@ -39,6 +51,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         private const int WM_KEYDOWN = 0x0100;
         private const int VK_SPACE = 0x20;
         private const int VK_CONTROL = 0x11;
+        private const int VK_D = 0x44;
         private const int VK_K = 0x4B;
         private const int VK_Y = 0x59;
 
@@ -74,12 +87,21 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             uint threadId = GetCurrentThreadId();
             _hookHandle = SetWindowsHookEx(WH_KEYBOARD, _hookProc, IntPtr.Zero, threadId);
 
-            // WH_KEYBOARD_LL for Ctrl+K,Y chord. Uses MAIN PROCESS module handle
-            // (not our assembly's handle). LL hooks run before TranslateAccelerator.
+            // WH_KEYBOARD_LL for Ctrl+K,Y chord and Ctrl+D.
+            // LL hooks run before TranslateAccelerator, so they see keystrokes
+            // that SSMS's accelerator table would otherwise consume.
+            //
+            // IMPORTANT: Use LoadLibrary("user32.dll") as the module handle.
+            // Process.MainModule.BaseAddress does NOT work for managed .NET processes
+            // because SetWindowsHookEx needs a real HMODULE, not just a base address.
+            // LoadLibrary("user32.dll") is the standard .NET workaround for LL hooks.
             _llHookProc = LowLevelHookCallback;
-            IntPtr moduleHandle;
-            try { moduleHandle = System.Diagnostics.Process.GetCurrentProcess().MainModule.BaseAddress; }
-            catch { moduleHandle = IntPtr.Zero; }
+            IntPtr moduleHandle = LoadLibrary("user32.dll");
+            if (moduleHandle == IntPtr.Zero)
+            {
+                int loadError = Marshal.GetLastWin32Error();
+                Log.Warning("KeyboardHook: LoadLibrary(user32.dll) failed with error {Error}", loadError);
+            }
             _llHookHandle = SetWindowsHookEx(WH_KEYBOARD_LL, _llHookProc, moduleHandle, 0);
             Log.Debug("KeyboardHook: WH_KEYBOARD_LL installed={Installed} handle={Handle} module={Module}",
                 _llHookHandle != IntPtr.Zero, _llHookHandle, moduleHandle);
@@ -139,12 +161,6 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                         short ctrlState = GetKeyState(VK_CONTROL);
                         bool ctrlHeld = (ctrlState & 0x8000) != 0;
 
-                        // Log ALL Ctrl+key combos to see what the hook receives
-                        if (ctrlHeld)
-                        {
-                            Log.Debug("KeyboardHook: Ctrl+{VK} (0x{VKHex:X2})", (char)vkCode, vkCode);
-                        }
-
                         // Ctrl+Space → trigger completion
                         if (ctrlHeld && vkCode == VK_SPACE)
                         {
@@ -152,14 +168,8 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                             return (IntPtr)1;
                         }
 
-                        // Ctrl+D → format document (fallback for Ctrl+K,Y)
-                        // VK_D = 0x44
-                        if (ctrlHeld && vkCode == 0x44)
-                        {
-                            try { _onFormat?.Invoke(); } catch { }
-                            return (IntPtr)1;
-                        }
-
+                        // NOTE: Ctrl+K,Y and Ctrl+D are handled in LowLevelHookCallback
+                        // because SSMS's accelerator table captures them before WH_KEYBOARD.
                     }
                 }
             }
@@ -169,7 +179,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         }
 
         /// <summary>
-        /// WH_KEYBOARD_LL callback for Ctrl+K,Y chord.
+        /// WH_KEYBOARD_LL callback for Ctrl+K,Y chord and Ctrl+D.
         /// Low-level hooks run before TranslateAccelerator, so they see
         /// keystrokes that SSMS's accelerator table would otherwise consume.
         /// wParam = WM_KEYDOWN/WM_KEYUP, lParam = pointer to KBDLLHOOKSTRUCT.
@@ -186,26 +196,37 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                     bool ctrlHeld = (ctrlState & 0x8000) != 0;
 
                     if (ctrlHeld)
-                        Log.Debug("KeyboardHook LL: Ctrl+VK=0x{VK:X2}", vkCode);
+                        Log.Debug("KeyboardHook LL: Ctrl+VK=0x{VK:X2} ({Key})", vkCode, (char)vkCode);
 
-                    // Ctrl+K → start chord
+                    // Ctrl+K → start chord, swallow so SSMS doesn't start its own chord
                     if (ctrlHeld && vkCode == VK_K)
                     {
+                        Log.Debug("KeyboardHook LL: Ctrl+K detected, waiting for Y");
                         _waitingForY = true;
                         return (IntPtr)1; // Swallow
                     }
 
-                    // Y after Ctrl+K → format
+                    // Y after Ctrl+K → format document
                     if (_waitingForY && vkCode == VK_Y)
                     {
                         _waitingForY = false;
+                        Log.Debug("KeyboardHook LL: Ctrl+K,Y chord complete, invoking format");
                         try { _onFormat?.Invoke(); } catch { }
                         return (IntPtr)1; // Swallow
                     }
 
-                    // Reset chord on non-modifier
+                    // Ctrl+D → format document (alternative shortcut)
+                    if (ctrlHeld && vkCode == VK_D)
+                    {
+                        Log.Debug("KeyboardHook LL: Ctrl+D detected, invoking format");
+                        try { _onFormat?.Invoke(); } catch { }
+                        return (IntPtr)1; // Swallow
+                    }
+
+                    // Reset chord on any non-modifier key that isn't Y
                     if (_waitingForY && vkCode != VK_CONTROL)
                     {
+                        Log.Debug("KeyboardHook LL: chord reset (VK=0x{VK:X2})", vkCode);
                         _waitingForY = false;
                     }
                 }
