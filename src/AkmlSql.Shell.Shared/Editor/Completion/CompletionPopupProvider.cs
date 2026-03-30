@@ -29,6 +29,22 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         [Order(After = PredefinedAdornmentLayers.Text)]
         public AdornmentLayerDefinition SchemaStatusLayerDefinition;
 
+        /// <summary>
+        /// Single WH_KEYBOARD hook for the UI thread. Shared across all text views because
+        /// WH_KEYBOARD is a thread-level hook — one hook per thread is sufficient to intercept
+        /// keystrokes for every editor hosted on that thread.
+        /// </summary>
+        private static KeyboardHook _keyboardHook;
+        private static readonly object _hookLock = new object();
+        private static int _activeViewCount;
+
+        /// <summary>
+        /// The controller for the text view that currently has focus. Updated when views
+        /// gain/lose focus. The keyboard hook callback uses this to route Ctrl+Space
+        /// to the correct controller.
+        /// </summary>
+        private static CompletionController _activeController;
+
         public void TextViewCreated(IWpfTextView textView)
         {
             // Bootstrap assembly resolver before touching any IPC types
@@ -78,39 +94,31 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                     vsView.AddCommandFilter(controller, out var nextTarget);
                     controller.NextTarget = nextTarget;
 
-                    // Ctrl+Space is deeply wired to SSMS native IntelliSense and cannot
-                    // be reliably intercepted. Use Ctrl+J as the AKML manual trigger.
-                    // Also intercept Ctrl+Space via WM_KEYDOWN to dismiss native + show AKML.
-                    System.Windows.Interop.ComponentDispatcher.ThreadPreprocessMessage += (ref System.Windows.Interop.MSG msg, ref bool handled) =>
+                    // Install the thread-level keyboard hook (once per UI thread) to intercept
+                    // Ctrl+Space before SSMS's native IntelliSense handler can consume it.
+                    // WH_KEYBOARD hooks sit earlier in the message chain than IOleCommandTarget,
+                    // WPF PreviewKeyDown, or ComponentDispatcher.ThreadPreprocessMessage.
+                    InstallKeyboardHook();
+
+                    // Track which controller is active based on text view focus.
+                    // When Ctrl+Space fires, the hook routes to _activeController.
+                    textView.GotAggregateFocus += (s, e) => _activeController = controller;
+                    textView.LostAggregateFocus += (s, e) =>
                     {
-                        if (!textView.HasAggregateFocus) return;
+                        if (_activeController == controller)
+                            _activeController = null;
+                    };
 
-                        // WM_KEYDOWN = 0x0100
-                        if (msg.message == 0x0100)
-                        {
-                            int vk = msg.wParam.ToInt32();
-                            bool ctrl = (System.Windows.Input.Keyboard.Modifiers & System.Windows.Input.ModifierKeys.Control) != 0;
+                    // Set as active immediately if this view already has focus
+                    if (textView.HasAggregateFocus)
+                        _activeController = controller;
 
-                            // Ctrl+J = manual AKML trigger (reliable alternative to Ctrl+Space)
-                            // VK_J = 0x4A
-                            if (ctrl && vk == 0x4A)
-                            {
-                                controller.TriggerManualCompletion();
-                                handled = true;
-                            }
-                            // Ctrl+Space = dismiss native + trigger AKML
-                            // VK_SPACE = 0x20
-                            else if (ctrl && vk == 0x20)
-                            {
-                                // Let native handle it first, then immediately trigger ours
-                                System.Windows.Application.Current?.Dispatcher?.BeginInvoke(
-                                    System.Windows.Threading.DispatcherPriority.Input,
-                                    new Action(() =>
-                                    {
-                                        controller.SuppressAndTrigger();
-                                    }));
-                            }
-                        }
+                    // Uninstall hook when the last text view closes
+                    textView.Closed += (s, e) =>
+                    {
+                        if (_activeController == controller)
+                            _activeController = null;
+                        UninstallKeyboardHookIfLast();
                     };
 
                     Log.Debug("CompletionPopupProvider: controller wired for session {Session}", sessionId);
@@ -143,6 +151,51 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
 
                 // Store for ConnectionWiringHelper to update
                 textView.Properties.GetOrCreateSingletonProperty("AkmlSchemaIndicator", () => indicator);
+            }
+        }
+
+        /// <summary>
+        /// Installs the WH_KEYBOARD hook on the current UI thread if not already installed.
+        /// Thread-safe: uses a lock to protect against concurrent TextViewCreated calls.
+        /// </summary>
+        private static void InstallKeyboardHook()
+        {
+            lock (_hookLock)
+            {
+                _activeViewCount++;
+
+                if (_keyboardHook != null)
+                    return; // Already installed
+
+                _keyboardHook = new KeyboardHook();
+                _keyboardHook.Install(() =>
+                {
+                    // Ctrl+Space detected. Route to the active controller if one exists.
+                    var ctrl = _activeController;
+                    if (ctrl != null)
+                    {
+                        ctrl.SuppressAndTrigger();
+                    }
+                });
+            }
+        }
+
+        /// <summary>
+        /// Decrements the active view count and uninstalls the keyboard hook when the
+        /// last SQL editor view on this thread closes.
+        /// </summary>
+        private static void UninstallKeyboardHookIfLast()
+        {
+            lock (_hookLock)
+            {
+                _activeViewCount--;
+
+                if (_activeViewCount <= 0)
+                {
+                    _activeViewCount = 0;
+                    _keyboardHook?.Dispose();
+                    _keyboardHook = null;
+                }
             }
         }
 
