@@ -94,19 +94,22 @@ public class JoinProvider : ICompletionProvider
                 // T057: Build ON clause
                 var onClause = BuildOnClause(joinAlias, otherColumns, alias, existingColumns);
 
-                var displayText = otherTable;
                 var qualifiedName = otherSchema.Equals("dbo", StringComparison.OrdinalIgnoreCase)
                     ? otherTable
                     : otherFullName;
 
                 var insertText = $"{qualifiedName} {joinAlias} ON {onClause}";
 
+                // SQL Prompt style: show "TableName alias" as display, "ON a.Col = b.Col" as secondary
+                var displayText = $"{otherTable} {joinAlias}";
+                var secondaryText = $"ON {onClause}";
+
                 yield return new CompletionItem
                 {
                     DisplayText = displayText,
                     InsertText = insertText,
                     ObjectType = (int)CompletionObjectType.Table,
-                    SecondaryText = $"FK: {fk.FkName}",
+                    SecondaryText = secondaryText,
                     SourceObject = otherFullName,
                     SortPriority = 10
                 };
