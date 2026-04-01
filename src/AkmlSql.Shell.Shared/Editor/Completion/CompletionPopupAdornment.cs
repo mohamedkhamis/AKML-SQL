@@ -18,8 +18,11 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         private readonly IWpfTextView _textView;
         private readonly AkmlCompletionPopup _popupContent;
         private readonly Popup _popup;
+        private readonly WildcardExpansionPopup _wildcardContent;
+        private readonly Popup _wildcardPopup;
 
         public AkmlCompletionPopup Popup => _popupContent;
+        public WildcardExpansionPopup WildcardPopup => _wildcardContent;
 
         public CompletionPopupAdornment(IWpfTextView textView, IAdornmentLayer adornmentLayer)
         {
@@ -42,9 +45,24 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             // Make the popup content always visible (we control show/hide via IsOpen)
             _popupContent.Visibility = Visibility.Visible;
 
+            // Wildcard expansion popup (checkbox list)
+            _wildcardContent = new WildcardExpansionPopup();
+            _wildcardPopup = new Popup
+            {
+                Child = _wildcardContent,
+                AllowsTransparency = true,
+                PopupAnimation = PopupAnimation.None,
+                Placement = PlacementMode.Custom,
+                CustomPopupPlacementCallback = PlacePopup,
+                StaysOpen = true,
+                Focusable = false,
+                IsOpen = false
+            };
+            _wildcardContent.Visibility = Visibility.Visible;
+
             _textView.LayoutChanged += OnLayoutChanged;
             _textView.Closed += OnClosed;
-            _textView.LostAggregateFocus += (s, e) => Hide();
+            _textView.LostAggregateFocus += (s, e) => { Hide(); HideWildcard(); };
         }
 
         /// <summary>Show the popup at the current caret position.</summary>
@@ -70,6 +88,36 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 _popup.HorizontalOffset += 0.01;
                 _popup.HorizontalOffset -= 0.01;
             }
+        }
+
+        /// <summary>Show the wildcard expansion popup at the current caret position.</summary>
+        public void ShowWildcard()
+        {
+            _wildcardPopup.PlacementTarget = _textView.VisualElement;
+            _wildcardPopup.IsOpen = true;
+        }
+
+        /// <summary>Hide the wildcard expansion popup.</summary>
+        public void HideWildcard()
+        {
+            _wildcardPopup.IsOpen = false;
+            _wildcardContent.Hide();
+        }
+
+        /// <summary>Reposition the wildcard popup at the current caret.</summary>
+        public void RepositionWildcard()
+        {
+            if (_wildcardPopup.IsOpen)
+            {
+                _wildcardPopup.HorizontalOffset += 0.01;
+                _wildcardPopup.HorizontalOffset -= 0.01;
+            }
+        }
+
+        /// <summary>True if the wildcard expansion popup is currently showing.</summary>
+        public bool IsWildcardOpen
+        {
+            get { return _wildcardPopup.IsOpen && _wildcardContent.IsOpen; }
         }
 
         private CustomPopupPlacement[] PlacePopup(Size popupSize, Size targetSize, Point offset)
@@ -134,6 +182,8 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         {
             if (_popup.IsOpen)
                 Reposition();
+            if (_wildcardPopup.IsOpen)
+                RepositionWildcard();
         }
 
         private void OnClosed(object sender, EventArgs e)
@@ -141,6 +191,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             _textView.LayoutChanged -= OnLayoutChanged;
             _textView.Closed -= OnClosed;
             Hide();
+            HideWildcard();
         }
     }
 }

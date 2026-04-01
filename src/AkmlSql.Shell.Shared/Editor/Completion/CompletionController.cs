@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -25,6 +27,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         private ICompletionBroker _broker;
         private string _filterText = string.Empty;
         private bool _fetchPending;
+        private bool _wildcardPending;
         private System.Windows.Threading.DispatcherTimer _suppressTimer;
 
         public IOleCommandTarget NextTarget { get; set; }
@@ -94,6 +97,13 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                     {
                         var typedChar = (char)(ushort)Marshal.GetObjectForNativeVariant(pvaIn);
 
+                        // Space toggles checkbox in wildcard popup
+                        if (typedChar == ' ' && _adornment.IsWildcardOpen)
+                        {
+                            _adornment.WildcardPopup.ToggleSelected();
+                            return VSConstants.S_OK; // Don't insert space
+                        }
+
                         // Suppress native IntelliSense BEFORE letting VS handle the keystroke
                         SuppressNativeIntelliSense();
 
@@ -109,6 +119,13 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
 
                     case VSConstants.VSStd2KCmdID.RETURN:
                     case VSConstants.VSStd2KCmdID.TAB:
+                        // Wildcard expansion popup is open — commit checked columns
+                        if (_adornment.IsWildcardOpen)
+                        {
+                            CommitWildcardExpansion();
+                            return VSConstants.S_OK;
+                        }
+                        // Completion popup is open — commit selected item
                         if (_adornment.Popup.IsOpen)
                         {
                             var item = _adornment.Popup.GetSelectedItem();
@@ -118,9 +135,24 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                                 return VSConstants.S_OK; // Swallow the key
                             }
                         }
+                        // Tab only: check for wildcard at cursor
+                        if (cmdId == VSConstants.VSStd2KCmdID.TAB)
+                        {
+                            var wildcardInfo = DetectWildcardAtCursor();
+                            if (wildcardInfo != null)
+                            {
+                                TriggerWildcardExpansion(wildcardInfo.Value.starPos, wildcardInfo.Value.qualifier);
+                                return VSConstants.S_OK;
+                            }
+                        }
                         break;
 
                     case VSConstants.VSStd2KCmdID.CANCEL:
+                        if (_adornment.IsWildcardOpen)
+                        {
+                            DismissWildcardPopup();
+                            return VSConstants.S_OK;
+                        }
                         if (_adornment.Popup.IsOpen)
                         {
                             DismissPopup();
@@ -129,6 +161,11 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                         break;
 
                     case VSConstants.VSStd2KCmdID.UP:
+                        if (_adornment.IsWildcardOpen)
+                        {
+                            _adornment.WildcardPopup.MoveSelection(-1);
+                            return VSConstants.S_OK;
+                        }
                         if (_adornment.Popup.IsOpen)
                         {
                             _adornment.Popup.MoveSelection(-1);
@@ -137,6 +174,11 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                         break;
 
                     case VSConstants.VSStd2KCmdID.DOWN:
+                        if (_adornment.IsWildcardOpen)
+                        {
+                            _adornment.WildcardPopup.MoveSelection(1);
+                            return VSConstants.S_OK;
+                        }
                         if (_adornment.Popup.IsOpen)
                         {
                             _adornment.Popup.MoveSelection(1);
@@ -582,5 +624,361 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         {
             return char.IsLetterOrDigit(c) || c == '_' || c == '#' || c == '@';
         }
+
+        #region Wildcard Expansion
+
+        /// <summary>
+        /// Detects if the cursor is at a SELECT wildcard (* or alias.*).
+        /// Returns the star position and optional qualifier, or null if not a wildcard.
+        /// </summary>
+        private (int starPos, string qualifier)? DetectWildcardAtCursor()
+        {
+            try
+            {
+                var snapshot = _textView.TextBuffer.CurrentSnapshot;
+                var caretPos = _textView.Caret.Position.BufferPosition.Position;
+                int length = snapshot.Length;
+
+                // Find the * character at or adjacent to cursor
+                int starPos = -1;
+                if (caretPos > 0 && caretPos <= length && snapshot[caretPos - 1] == '*')
+                {
+                    starPos = caretPos - 1; // Cursor right after *
+                }
+                else if (caretPos < length && snapshot[caretPos] == '*')
+                {
+                    starPos = caretPos; // Cursor right before *
+                }
+
+                if (starPos < 0) return null;
+
+                // Check for qualified wildcard: identifier.*
+                string qualifier = null;
+                if (starPos >= 2 && snapshot[starPos - 1] == '.')
+                {
+                    int idEnd = starPos - 2;
+                    int idStart = idEnd;
+                    while (idStart > 0 && IsIdentifierChar(snapshot[idStart - 1]))
+                        idStart--;
+
+                    if (idStart <= idEnd)
+                    {
+                        qualifier = snapshot.GetText(idStart, idEnd - idStart + 1);
+                    }
+                }
+
+                // Verify SELECT context: scan backwards for SELECT keyword
+                if (!IsInSelectContext(snapshot, starPos))
+                    return null;
+
+                return (starPos, qualifier);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Verify that the * at starPos is in a SELECT context (not arithmetic).
+        /// </summary>
+        private static bool IsInSelectContext(ITextSnapshot snapshot, int starPos)
+        {
+            int pos = starPos - 1;
+
+            // Skip qualifier.* prefix if present
+            if (pos >= 0 && snapshot[pos] == '.')
+            {
+                pos--;
+                while (pos >= 0 && IsIdentifierChar(snapshot[pos]))
+                    pos--;
+            }
+
+            // Skip whitespace and commas (handles "SELECT col1, *")
+            while (pos >= 0 && (snapshot[pos] == ' ' || snapshot[pos] == '\t' ||
+                                snapshot[pos] == '\r' || snapshot[pos] == '\n' ||
+                                snapshot[pos] == ','))
+                pos--;
+
+            // Now extract the word at this position
+            int wordEnd = pos;
+            while (pos >= 0 && char.IsLetter(snapshot[pos]))
+                pos--;
+            pos++;
+
+            if (pos > wordEnd) return false;
+            var word = snapshot.GetText(pos, wordEnd - pos + 1).ToUpperInvariant();
+
+            // Direct SELECT before the *
+            if (word == "SELECT") return true;
+
+            // DISTINCT or ALL after SELECT
+            if (word == "DISTINCT" || word == "ALL")
+            {
+                return HasSelectBefore(snapshot, pos);
+            }
+
+            // TOP N — check for SELECT before TOP
+            if (word == "TOP")
+            {
+                return HasSelectBefore(snapshot, pos);
+            }
+
+            // Could be after a comma in the select list (SELECT col1, *)
+            return FindSelectBeforePosition(snapshot, pos);
+        }
+
+        private static bool HasSelectBefore(ITextSnapshot snapshot, int pos)
+        {
+            pos--;
+            while (pos >= 0 && char.IsWhiteSpace(snapshot[pos]))
+                pos--;
+
+            // Skip a number (TOP 10)
+            while (pos >= 0 && char.IsDigit(snapshot[pos]))
+                pos--;
+            while (pos >= 0 && char.IsWhiteSpace(snapshot[pos]))
+                pos--;
+
+            int wordEnd = pos;
+            while (pos >= 0 && char.IsLetter(snapshot[pos]))
+                pos--;
+            pos++;
+
+            if (pos > wordEnd) return false;
+            var word = snapshot.GetText(pos, wordEnd - pos + 1).ToUpperInvariant();
+            if (word == "SELECT") return true;
+            if (word == "TOP") return HasSelectBefore(snapshot, pos);
+            if (word == "DISTINCT" || word == "ALL") return HasSelectBefore(snapshot, pos);
+            return false;
+        }
+
+        /// <summary>
+        /// Walk backwards from pos to find SELECT, skipping identifiers and commas.
+        /// Returns false if FROM/WHERE/JOIN is encountered first.
+        /// </summary>
+        private static bool FindSelectBeforePosition(ITextSnapshot snapshot, int pos)
+        {
+            int current = pos - 1;
+            int maxScan = 2000;
+            int scanned = 0;
+
+            while (current >= 0 && scanned < maxScan)
+            {
+                scanned++;
+                char c = snapshot[current];
+
+                if (char.IsWhiteSpace(c) || c == ',' || c == '.' || c == '*' ||
+                    c == '(' || c == ')' || c == '[' || c == ']' || c == '"' ||
+                    char.IsDigit(c))
+                {
+                    current--;
+                    continue;
+                }
+
+                if (char.IsLetter(c) || c == '_')
+                {
+                    int wordEnd = current;
+                    while (current >= 0 && (char.IsLetterOrDigit(snapshot[current]) || snapshot[current] == '_'))
+                        current--;
+                    current++;
+
+                    var word = snapshot.GetText(current, wordEnd - current + 1).ToUpperInvariant();
+
+                    if (word == "SELECT") return true;
+                    if (word == "FROM" || word == "WHERE" || word == "JOIN" ||
+                        word == "ON" || word == "SET" || word == "INTO" ||
+                        word == "UPDATE" || word == "DELETE" || word == "INSERT")
+                        return false;
+
+                    current--;
+                    continue;
+                }
+
+                current--;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Send WildcardExpansionRequest to the engine and show the checkbox popup.
+        /// </summary>
+        private void TriggerWildcardExpansion(int starPos, string qualifier)
+        {
+            var docText = _textView.TextBuffer.CurrentSnapshot.GetText();
+
+            _wildcardPending = true;
+
+            System.Threading.Tasks.Task.Run(async () =>
+            {
+                try
+                {
+                    var client = Ipc.EngineLifecycle.Manager?.Client;
+                    if (client == null || !client.IsConnected) return;
+
+                    var response = await client.SendRequestAsync<
+                        AkmlSql.Core.Ipc.Messages.WildcardExpansionResponse,
+                        AkmlSql.Core.Ipc.Messages.WildcardExpansionRequest>(
+                        AkmlSql.Core.Ipc.MessageTypes.WildcardExpansion,
+                        new AkmlSql.Core.Ipc.Messages.WildcardExpansionRequest
+                        {
+                            SessionId = _sessionId,
+                            CursorOffset = starPos,
+                            DocumentText = docText,
+                            Qualifier = qualifier
+                        },
+                        timeoutMs: 5000);
+
+                    if (response?.Success == true && response.Tables != null && response.Tables.Length > 0)
+                    {
+                        _textView.VisualElement.Dispatcher.Invoke(() =>
+                        {
+                            if (!_wildcardPending) return;
+                            _wildcardPending = false;
+
+                            var groups = new List<WildcardExpansionPopup.TableGroupData>();
+                            foreach (var t in response.Tables)
+                            {
+                                var cols = new WildcardExpansionPopup.ColumnData[t.Columns.Length];
+                                for (int i = 0; i < t.Columns.Length; i++)
+                                {
+                                    cols[i] = new WildcardExpansionPopup.ColumnData
+                                    {
+                                        ColumnName = t.Columns[i].ColumnName,
+                                        TypeDisplay = t.Columns[i].TypeDisplay
+                                    };
+                                }
+
+                                groups.Add(new WildcardExpansionPopup.TableGroupData
+                                {
+                                    TableName = t.TableName,
+                                    Qualifier = t.Qualifier,
+                                    Columns = cols
+                                });
+                            }
+
+                            _adornment.WildcardPopup.SetData(groups);
+                            _adornment.ShowWildcard();
+                            _adornment.RepositionWildcard();
+                            SuppressNativeIntelliSense();
+                        });
+                    }
+                    else
+                    {
+                        _textView.VisualElement.Dispatcher.Invoke(() => _wildcardPending = false);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Debug(ex, "Wildcard expansion RPC failed");
+                    try
+                    {
+                        _textView.VisualElement.Dispatcher.Invoke(() => _wildcardPending = false);
+                    }
+                    catch { }
+                }
+            });
+        }
+
+        /// <summary>
+        /// Replace * or alias.* with the checked columns, formatted multi-line.
+        /// </summary>
+        private void CommitWildcardExpansion()
+        {
+            try
+            {
+                var columns = _adornment.WildcardPopup.GetCheckedColumns();
+                if (columns == null)
+                {
+                    // No columns checked — just dismiss
+                    DismissWildcardPopup();
+                    return;
+                }
+
+                var snapshot = _textView.TextBuffer.CurrentSnapshot;
+                var caretPos = _textView.Caret.Position.BufferPosition.Position;
+
+                // Find the * position and replacement span
+                int starPos = -1;
+                if (caretPos > 0 && caretPos <= snapshot.Length && snapshot[caretPos - 1] == '*')
+                    starPos = caretPos - 1;
+                else if (caretPos < snapshot.Length && snapshot[caretPos] == '*')
+                    starPos = caretPos;
+
+                if (starPos < 0)
+                {
+                    DismissWildcardPopup();
+                    return;
+                }
+
+                // Determine replacement span start (includes qualifier.* if present)
+                int spanStart = starPos;
+                if (starPos >= 2 && snapshot[starPos - 1] == '.')
+                {
+                    int idEnd = starPos - 2;
+                    int idStart = idEnd;
+                    while (idStart > 0 && IsIdentifierChar(snapshot[idStart - 1]))
+                        idStart--;
+                    spanStart = idStart;
+                }
+
+                int spanLength = starPos - spanStart + 1; // +1 for the * itself
+
+                // Calculate indentation: number of characters from line start to spanStart
+                var line = snapshot.GetLineFromPosition(spanStart);
+                int indentChars = spanStart - line.Start.Position;
+                string indent = new string(' ', indentChars);
+
+                // Determine if columns need qualifier prefix
+                bool useQualifier = columns.Select(c => c.Qualifier).Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1
+                                    || (spanStart < starPos); // qualifier.* was explicit
+
+                // Build expansion text
+                var parts = new List<string>();
+                foreach (var col in columns)
+                {
+                    string colText = useQualifier ? col.Qualifier + "." + col.ColumnName : col.ColumnName;
+                    parts.Add(colText);
+                }
+
+                string expansion;
+                if (parts.Count == 1)
+                {
+                    expansion = parts[0];
+                }
+                else
+                {
+                    // First column on same line, rest indented
+                    var sb = new System.Text.StringBuilder();
+                    sb.Append(parts[0]);
+                    for (int i = 1; i < parts.Count; i++)
+                    {
+                        sb.Append(",\r\n");
+                        sb.Append(indent);
+                        sb.Append(parts[i]);
+                    }
+                    expansion = sb.ToString();
+                }
+
+                var span = new Span(spanStart, spanLength);
+                _textView.TextBuffer.Replace(span, expansion);
+
+                DismissWildcardPopup();
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "Failed to commit wildcard expansion");
+                DismissWildcardPopup();
+            }
+        }
+
+        private void DismissWildcardPopup()
+        {
+            _adornment.HideWildcard();
+            _wildcardPending = false;
+        }
+
+        #endregion
     }
 }

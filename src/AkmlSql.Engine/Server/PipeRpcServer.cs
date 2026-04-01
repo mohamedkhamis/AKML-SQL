@@ -36,6 +36,7 @@ public class PipeRpcServer
     private readonly SessionManager _sessionManager = new();
     private readonly TsqlParserService _parserService = new();
     private readonly CompletionEngine _completionEngine;
+    private readonly WildcardExpansionHandler _wildcardHandler;
     private readonly SchemaCacheManager _schemaCacheManager = new();
     private readonly SchemaMetadataService _schemaMetadataService = new();
     private readonly SignatureProvider _signatureProvider = new();
@@ -61,6 +62,7 @@ public class PipeRpcServer
     {
         _pipeName = pipeName;
         _completionEngine = new CompletionEngine(_parserService);
+        _wildcardHandler = new WildcardExpansionHandler(_parserService);
         _formatHandler = new FormatRequestHandler(ProfileManager.CreateDefault());
         _analysisEngine = new AnalysisEngine(_parserService, new RuleRegistry(), _caSettingsLoader);
         _refactoringEngine = new RefactoringEngine(_parserService, _schemaCacheManager);
@@ -228,6 +230,21 @@ public class PipeRpcServer
                         : null;
                     var compResp = _completionEngine.GetCompletions(documentText, compReq.CursorOffset, dbCache);
                     return Task.FromResult(CreateResponse(MessageTypes.CompletionResult, message.RequestId, compResp));
+
+                case MessageTypes.WildcardExpansion:
+                    if (message.Payload == null)
+                    {
+                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
+                    }
+
+                    var wcReq = MessagePackSerializer.Deserialize<WildcardExpansionRequest>(message.Payload);
+                    var wcSession = _sessionManager.GetSession(wcReq.SessionId);
+                    var wcCache = wcSession != null
+                        ? _schemaCacheManager.GetCache(wcReq.SessionId, wcSession.DatabaseName)
+                        : null;
+                    var wcResp = _wildcardHandler.Handle(
+                        wcReq.DocumentText, wcReq.CursorOffset, wcReq.Qualifier, wcCache);
+                    return Task.FromResult(CreateResponse(MessageTypes.WildcardExpansionResult, message.RequestId, wcResp));
 
                 case MessageTypes.RequestSignatureHelp:
                     if (message.Payload == null)

@@ -90,8 +90,14 @@ namespace AkmlSql.Core.Ipc
         public const int RequestAnalyze = 25;
         public const int AnalysisSettingsChanged = 26;
 
+        // Shell → Engine (Wildcard Expansion)
+        public const int WildcardExpansion = 27;
+
         // Engine → Shell (Code Analysis)
         public const int AnalysisResult = 125;
+
+        // Engine → Shell (Wildcard Expansion)
+        public const int WildcardExpansionResult = 127;
 
         // Shell → Engine (Refactoring — heavyweight preview/apply)
         public const int RequestRefactorPreview = 30;
