@@ -45,12 +45,14 @@ namespace AkmlSql.Shell.Shared.Safety
                 var settings = ConfigManager.Load();
                 var safety = settings.Safety;
 
+                // Note: TransactionReminder is handled by TransactionMonitor, not ExecutionInterceptor.
+                // Including it here would cause unnecessary engine IPC on every execution when
+                // only TransactionReminder is enabled (engine has no corresponding warning type).
                 _anySettingEnabled = safety.ProductionWarning
                                      || safety.DeleteWithoutWhere
                                      || safety.UpdateWithoutWhere
                                      || safety.DropConfirmation
-                                     || safety.TruncateConfirmation
-                                     || safety.TransactionReminder;
+                                     || safety.TruncateConfirmation;
 
                 // Always install the DTE hook — settings may be enabled later without restart.
                 // OnBeforeExecute re-checks settings dynamically on each invocation.
@@ -90,8 +92,7 @@ namespace AkmlSql.Shell.Shared.Safety
                                      || cachedSafety.DeleteWithoutWhere
                                      || cachedSafety.UpdateWithoutWhere
                                      || cachedSafety.DropConfirmation
-                                     || cachedSafety.TruncateConfirmation
-                                     || cachedSafety.TransactionReminder;
+                                     || cachedSafety.TruncateConfirmation;
             }
             catch
             {
