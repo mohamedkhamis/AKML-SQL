@@ -21,7 +21,10 @@ namespace AkmlSql.Core.Ipc.Messages
         ConvertOldStyleJoins = 12,
         AddGroupByColumns = 13,
         EncapsulateBeginEnd = 14,
-        ReplaceDeprecatedSyntax = 15
+        ReplaceDeprecatedSyntax = 15,
+
+        // Phase 10 — SQL Prompt Core Parity remaining gaps
+        ConvertSpExecutesql = 16
     }
 
     [MessagePackObject]

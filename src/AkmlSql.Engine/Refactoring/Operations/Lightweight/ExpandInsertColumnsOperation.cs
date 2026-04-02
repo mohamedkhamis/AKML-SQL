@@ -1,10 +1,13 @@
+using AkmlSql.Core.Config;
+using AkmlSql.Engine.Schema.Models;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Refactoring.Operations.Lightweight;
 
 /// <summary>
 /// Expands INSERT statements that have no column list by adding explicit column names
-/// sourced from the schema cache.
+/// sourced from the schema cache. When <c>InsertColumnsIncludeTypes</c> is enabled,
+/// each column receives an inline comment with its data type, nullability, and default.
 /// </summary>
 public class ExpandInsertColumnsOperation : ILightweightOperation
 {
@@ -36,6 +39,11 @@ public class ExpandInsertColumnsOperation : ILightweightOperation
 
             if (candidates.Count == 0)
                 return (context.DocumentText, []);
+
+            // Read formatter settings once (cached for this invocation)
+            bool includeTypes;
+            try { includeTypes = ConfigManager.Load().Formatter.InsertColumnsIncludeTypes; }
+            catch { includeTypes = true; } // Default to showing types on config failure
 
             var text = context.DocumentText;
 
@@ -73,8 +81,9 @@ public class ExpandInsertColumnsOperation : ILightweightOperation
                     continue;
                 }
 
-                var columnList    = string.Join(", ", dbObj.Columns.Select(c => c.ColumnName));
-                var insertionText = $"({columnList}) ";
+                var insertionText = includeTypes
+                    ? BuildColumnListWithTypes(dbObj.Columns)
+                    : BuildColumnListSimple(dbObj.Columns);
 
                 // Insertion point: just after the table reference (including alias if any)
                 var insertOffset = tableRef.Alias != null
@@ -94,6 +103,63 @@ public class ExpandInsertColumnsOperation : ILightweightOperation
         {
             return (context.DocumentText, []);
         }
+    }
+
+    /// <summary>
+    /// Builds a simple inline column list without type annotations (original behaviour).
+    /// </summary>
+    private static string BuildColumnListSimple(List<Column> columns)
+    {
+        var names = columns
+            .Where(c => !c.IsIdentity && !c.IsComputed)
+            .Select(c => c.ColumnName);
+        return $"({string.Join(", ", names)}) ";
+    }
+
+    /// <summary>
+    /// Builds a multi-line column list with inline type-metadata comments.
+    /// Identity columns are included but annotated as IDENTITY; computed columns are skipped.
+    /// </summary>
+    public static string BuildColumnListWithTypes(List<Column> columns)
+    {
+        var lines = new List<string>();
+
+        foreach (var col in columns)
+        {
+            if (col.IsComputed) continue;
+
+            if (col.IsIdentity)
+            {
+                lines.Add($"    {col.ColumnName}    -- IDENTITY, auto-generated");
+                continue;
+            }
+
+            var nullable = col.IsNullable ? "null" : "not null";
+            var comment = $"-- {col.TypeDisplay}, {nullable}";
+
+            if (!string.IsNullOrEmpty(col.DefaultValue))
+                comment += $", default ({col.DefaultValue})";
+
+            lines.Add($"    {col.ColumnName},    {comment}");
+        }
+
+        // Remove the trailing comma from the last line (if it has one)
+        if (lines.Count > 0)
+        {
+            var last = lines[^1];
+            var commaIdx = last.IndexOf(',');
+            var commentIdx = last.IndexOf("--");
+            // Only strip the column-separator comma (the one before the comment), not commas inside comments
+            if (commaIdx >= 0 && commentIdx >= 0 && commaIdx < commentIdx)
+            {
+                last = last.Remove(commaIdx, 1);
+                // Pad with a space to keep alignment
+                last = last.Insert(commaIdx, " ");
+                lines[^1] = last;
+            }
+        }
+
+        return "\n(\n" + string.Join("\n", lines) + "\n) ";
     }
 
     private sealed class InsertStatementCollector : TSqlFragmentVisitor

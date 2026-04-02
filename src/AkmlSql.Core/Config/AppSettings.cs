@@ -230,6 +230,10 @@ namespace AkmlSql.Core.Config
 
         [JsonPropertyName("semanticValidation")]
         public bool SemanticValidation { get; set; } = true;
+
+        /// <summary>Include column data types and nullability as inline comments in INSERT column expansions.</summary>
+        [JsonPropertyName("insertColumnsIncludeTypes")]
+        public bool InsertColumnsIncludeTypes { get; set; } = true;
     }
 
     /// <summary>Settings for the SQL snippet feature.</summary>
@@ -364,6 +368,10 @@ namespace AkmlSql.Core.Config
 
         [JsonPropertyName("customWindowTitle")]
         public string CustomWindowTitle { get; set; } = "{server} - {database} - SSMS";
+
+        /// <summary>Use gradient colors on tab header bars (lighter top, base color bottom).</summary>
+        [JsonPropertyName("gradientColors")]
+        public bool GradientColors { get; set; }
     }
 
     /// <summary>Configuration for a single tab coloring environment rule.</summary>
@@ -437,6 +445,10 @@ namespace AkmlSql.Core.Config
 
         [JsonPropertyName("freezeHeaders")]
         public bool FreezeHeaders { get; set; } = true;
+
+        /// <summary>Format 15+ digit numbers as text in Excel exports to prevent rounding.</summary>
+        [JsonPropertyName("excelLargeNumberAsText")]
+        public bool ExcelLargeNumberAsText { get; set; } = true;
     }
 
     /// <summary>Editor productivity settings (Phase 8).</summary>

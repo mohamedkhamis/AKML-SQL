@@ -102,6 +102,7 @@ namespace AkmlSql.Ssms20
                     // Phase 10 — SQL Prompt Core Parity
                     Snippets.SnippetManagerCommand.Initialize(this, commandService);
                     Navigation.BookmarkCommands.Initialize(this, commandService);
+                Refactoring.SplitTableCommand.Initialize(this, commandService);
                 }
 
                 // Now do non-critical initialization that may fail

@@ -101,6 +101,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Refactoring\ExtractToProcCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Refactoring\ExtractToDerivedTableCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Refactoring\EncapsulateAsViewCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Refactoring\SplitTableCommand.cs" />
     <!-- Phase 7 — SQL History: execution capture, search, and tool window -->
     <Compile Include="$(MSBuildThisFileDirectory)History\ExecutionCapture.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)History\HistoryViewModel.cs" />

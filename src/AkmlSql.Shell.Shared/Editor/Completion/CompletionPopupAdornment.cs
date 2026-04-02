@@ -27,6 +27,23 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         public WildcardExpansionPopup WildcardPopup => _wildcardContent;
         public ObjectDefinitionPanel DefinitionPanel => _definitionPanel;
 
+        /// <summary>
+        /// Controls the opacity of the completion popup.
+        /// Used to make the popup semi-transparent while Ctrl is held down.
+        /// </summary>
+        public double PopupOpacity
+        {
+            get => _popup?.Opacity ?? 1.0;
+            set
+            {
+                if (_popup != null) _popup.Opacity = value;
+                if (_definitionPopup != null) _definitionPopup.Opacity = value;
+            }
+        }
+
+        /// <summary>True if the main completion popup is currently showing.</summary>
+        public bool IsPopupVisible => _popup.IsOpen && _popupContent.IsOpen;
+
         public CompletionPopupAdornment(IWpfTextView textView, IAdornmentLayer adornmentLayer)
         {
             _textView = textView;
@@ -93,6 +110,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         /// <summary>Hide the popup.</summary>
         public void Hide()
         {
+            _popup.Opacity = 1.0;
             _popup.IsOpen = false;
             _popupContent.Hide();
             HideDefinition();

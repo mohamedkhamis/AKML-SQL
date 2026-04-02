@@ -116,6 +116,7 @@ public class FormatRequestHandler(ProfileManager profileManager)
                 FormatActionType.AddGroupByColumns      => new AddGroupByColumnsOperation(),
                 FormatActionType.EncapsulateBeginEnd    => new EncapsulateBeginEndOperation(),
                 FormatActionType.ReplaceDeprecatedSyntax => new ReplaceDeprecatedSyntaxOperation(),
+                FormatActionType.ConvertSpExecutesql    => new ConvertSpExecutesqlOperation(),
                 _ => null
             };
 

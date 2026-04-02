@@ -120,6 +120,13 @@ namespace AkmlSql.Shell.Shared.Analysis
                     _buffer, "Qualify Object Names", FormatActionType.QualifyObjectNames));
             }
 
+            // Detect sp_executesql — offer Convert to Static SQL
+            if (ContainsSpExecutesql(snapshot, range))
+            {
+                refactorActions.Add(new RefactoringAction(
+                    _buffer, "Convert sp_executesql to Static SQL", FormatActionType.ConvertSpExecutesql));
+            }
+
             // If there is a selection, offer surround-with actions
             if (!string.IsNullOrWhiteSpace(rangeText) && rangeText.Length > 1)
             {
@@ -169,6 +176,23 @@ namespace AkmlSql.Shell.Shared.Analysis
                     || lineText.IndexOf("JOIN", StringComparison.OrdinalIgnoreCase) >= 0
                     || lineText.IndexOf("EXEC", StringComparison.OrdinalIgnoreCase) >= 0
                     || lineText.IndexOf("INTO", StringComparison.OrdinalIgnoreCase) >= 0;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Checks if the range's line contains "sp_executesql" (case-insensitive).
+        /// </summary>
+        private static bool ContainsSpExecutesql(ITextSnapshot snapshot, SnapshotSpan range)
+        {
+            try
+            {
+                var lineNumber = snapshot.GetLineNumberFromPosition(range.Start.Position);
+                var lineText = snapshot.GetLineFromLineNumber(lineNumber).GetText();
+                return lineText.IndexOf("sp_executesql", StringComparison.OrdinalIgnoreCase) >= 0;
             }
             catch
             {

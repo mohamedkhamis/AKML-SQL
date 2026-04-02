@@ -93,7 +93,8 @@ public class GridExportService
                 canonicalPath,
                 exportRequest.ColumnHeaders ?? [],
                 exportRequest.Rows ?? [],
-                exportRequest.ColumnTypes ?? []));
+                exportRequest.ColumnTypes ?? [],
+                exportRequest.ExcelLargeNumberAsText));
 
             return CreateResponse(request.RequestId, response);
         }
@@ -115,7 +116,8 @@ public class GridExportService
         string outputPath,
         string[] columnHeaders,
         string[][] rows,
-        string[] columnTypes)
+        string[] columnTypes,
+        bool excelLargeNumberAsText)
     {
         try
         {
@@ -159,7 +161,7 @@ public class GridExportService
                         ? columnTypes[colIdx]?.ToLowerInvariant() ?? ""
                         : "";
 
-                    SetTypedCellValue(cell, value, colType);
+                    SetTypedCellValue(cell, value, colType, excelLargeNumberAsText);
                 }
             }
 
@@ -198,13 +200,29 @@ public class GridExportService
     }
 
     /// <summary>
-    /// Sets a cell value with type-appropriate formatting based on the SQL column type.
+    /// First digit count at which Excel loses numeric precision.
+    /// IEEE 754 double has ~15.95 decimal digits of precision, so 15 significant digits
+    /// are safe; the 16th digit is the first that gets rounded. Guard: >= 16.
     /// </summary>
-    private static void SetTypedCellValue(IXLCell cell, string value, string colType)
+    private const int ExcelPrecisionLimit = 16;
+
+    /// <summary>
+    /// Sets a cell value with type-appropriate formatting based on the SQL column type.
+    /// When <paramref name="excelLargeNumberAsText"/> is true, numbers with 15+ significant
+    /// digits are written as text to prevent Excel from rounding them.
+    /// </summary>
+    private static void SetTypedCellValue(IXLCell cell, string value, string colType, bool excelLargeNumberAsText)
     {
         switch (colType)
         {
             case "int" or "bigint" or "smallint" or "tinyint":
+                // Guard: if the number has 16+ significant digits, Excel will lose precision.
+                // Use CountSignificantDigits (not value.Length) to ignore minus signs and whitespace.
+                if (excelLargeNumberAsText && CountSignificantDigits(value) >= ExcelPrecisionLimit)
+                {
+                    cell.SetValue("'" + value);   // leading apostrophe forces text in Excel
+                    break;
+                }
                 if (long.TryParse(value, out var longVal))
                 {
                     cell.Value = longVal;
@@ -217,6 +235,12 @@ public class GridExportService
                 break;
 
             case "decimal" or "numeric" or "money" or "smallmoney" or "float" or "real":
+                // Guard: if the integral portion of the number is 15+ digits, write as text.
+                if (excelLargeNumberAsText && CountSignificantDigits(value) >= ExcelPrecisionLimit)
+                {
+                    cell.SetValue("'" + value);
+                    break;
+                }
                 if (double.TryParse(value, System.Globalization.NumberStyles.Any,
                     System.Globalization.CultureInfo.InvariantCulture, out var dblVal))
                 {
@@ -287,6 +311,26 @@ public class GridExportService
                 cell.Value = value;
                 break;
         }
+    }
+
+    /// <summary>
+    /// Counts the number of significant digits in a numeric string value.
+    /// Strips leading minus sign, leading zeros, and counts digits before/after decimal point.
+    /// </summary>
+    private static int CountSignificantDigits(string value)
+    {
+        int count = 0;
+        bool foundNonZero = false;
+        foreach (var ch in value)
+        {
+            if (ch == '-' || ch == '+') continue;
+            if (ch == '.' || ch == ',') continue;
+            if (ch < '0' || ch > '9') continue;
+            if (!foundNonZero && ch == '0') continue; // skip leading zeros
+            foundNonZero = true;
+            count++;
+        }
+        return count;
     }
 
     private static RpcMessage CreateResponse(int requestId, GridExportResponse response)

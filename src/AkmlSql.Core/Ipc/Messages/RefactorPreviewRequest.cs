@@ -11,7 +11,8 @@ namespace AkmlSql.Core.Ipc.Messages
         EncapsulateAsView     = 4,
         ConvertTempToTableVar = 5,
         ConvertTableVarToTemp = 6,
-        ParameterizeValues    = 7
+        ParameterizeValues    = 7,
+        SplitTable            = 8
     }
 
     public enum RefactorScope

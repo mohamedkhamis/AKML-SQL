@@ -120,6 +120,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                         SuppressNativeIntelliSense();
 
                         HandleTypedChar(typedChar);
+                        UpdatePopupCtrlTransparency();
                         return result;
                     }
 
@@ -197,6 +198,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                         var result = NextTarget.Exec(ref pguidCmdGroup, nCmdId, nCmdexecopt, pvaIn, pvaOut);
                         SuppressNativeIntelliSense();
                         HandleBackspace();
+                        UpdatePopupCtrlTransparency();
                         return result;
                     }
 
@@ -227,6 +229,9 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
 
             // Nuclear option: after EVERY command, dismiss any native IntelliSense that appeared
             SuppressNativeIntelliSense();
+
+            // Ctrl transparency: make popup semi-transparent while Ctrl is held
+            UpdatePopupCtrlTransparency();
 
             return finalResult;
         }
@@ -518,6 +523,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         private void DismissPopup()
         {
             CancelQuickInfo();
+            _adornment.PopupOpacity = 1.0;
             _adornment.Hide();
             _filterText = string.Empty;
             _fetchPending = false;
@@ -625,6 +631,21 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 }
             }
             catch { /* non-critical */ }
+        }
+
+        /// <summary>
+        /// Checks if Ctrl is currently held and adjusts popup opacity.
+        /// When Ctrl is down (and the popup is visible), set opacity to 30%
+        /// so the user can see through the popup to the code underneath.
+        /// </summary>
+        private void UpdatePopupCtrlTransparency()
+        {
+            if (_adornment.IsPopupVisible)
+            {
+                bool ctrlDown = (System.Windows.Input.Keyboard.Modifiers
+                                 & System.Windows.Input.ModifierKeys.Control) != 0;
+                _adornment.PopupOpacity = ctrlDown ? 0.3 : 1.0;
+            }
         }
 
         private static bool IsIdentifierChar(char c)

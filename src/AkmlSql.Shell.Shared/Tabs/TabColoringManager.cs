@@ -211,8 +211,9 @@ namespace AkmlSql.Shell.Shared.Tabs
 
             try
             {
-                // Convert hex color string to WPF brush.
-                var brush = CreateBrushFromHex(rule.Color);
+                // Convert hex color string to WPF brush, with optional gradient.
+                var settings = ConfigManager.Load();
+                var brush = CreateBrushFromHex(rule.Color, settings.Tabs.GradientColors);
                 if (brush == null) return;
 
                 // TODO: Walk the WPF visual tree to find the tab header for this document window.
@@ -261,10 +262,12 @@ namespace AkmlSql.Shell.Shared.Tabs
         }
 
         /// <summary>
-        /// Converts a hex colour string (e.g. <c>"#FF4444"</c>) to a frozen <see cref="SolidColorBrush"/>.
+        /// Converts a hex colour string (e.g. <c>"#FF4444"</c>) to a frozen <see cref="Brush"/>.
+        /// When <paramref name="gradient"/> is true, returns a vertical <see cref="LinearGradientBrush"/>
+        /// from a lighter tint at the top to the base colour at the bottom.
         /// Returns <c>null</c> if parsing fails.
         /// </summary>
-        private static SolidColorBrush? CreateBrushFromHex(string hex)
+        private static Brush? CreateBrushFromHex(string hex, bool gradient = false)
         {
             try
             {
@@ -278,9 +281,24 @@ namespace AkmlSql.Shell.Shared.Tabs
                 var color = (Color)ColorConverter.ConvertFromString(hex);
 
                 // Use semi-transparent for tab backgrounds so text remains readable.
-                var tabColor = Color.FromArgb(60, color.R, color.G, color.B);
+                var baseColor = Color.FromArgb(60, color.R, color.G, color.B);
 
-                var brush = new SolidColorBrush(tabColor);
+                Brush brush;
+                if (gradient)
+                {
+                    // Lighter tint at top (20% toward white), base color at bottom
+                    var lighter = Color.FromArgb(
+                        baseColor.A,
+                        (byte)Math.Min(baseColor.R + (255 - baseColor.R) / 5, 255),
+                        (byte)Math.Min(baseColor.G + (255 - baseColor.G) / 5, 255),
+                        (byte)Math.Min(baseColor.B + (255 - baseColor.B) / 5, 255));
+                    brush = new LinearGradientBrush(lighter, baseColor, 90.0); // top to bottom
+                }
+                else
+                {
+                    brush = new SolidColorBrush(baseColor);
+                }
+
                 brush.Freeze(); // Thread-safe after freezing.
                 return brush;
             }

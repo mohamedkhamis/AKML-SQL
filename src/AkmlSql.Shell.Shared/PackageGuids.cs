@@ -88,5 +88,6 @@ namespace AkmlSql.Shell.Shared
         public const int CmdBookmarkToggle          = 0x0801;
         public const int CmdBookmarkNext            = 0x0802;
         public const int CmdBookmarkPrev            = 0x0803;
+        public const int CmdSplitTable              = 0x0804;
     }
 }

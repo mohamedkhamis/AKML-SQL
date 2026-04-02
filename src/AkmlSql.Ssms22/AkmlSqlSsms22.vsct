@@ -245,6 +245,13 @@
           <ButtonText>Previous Bookmark</ButtonText>
         </Strings>
       </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdSplitTable" priority="0x0814" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <Strings>
+          <ButtonText>Split Table</ButtonText>
+        </Strings>
+      </Button>
 
       <!-- Phase 9: AI Assistance -->
       <Button guid="guidAkmlSqlCmdSet" id="CmdTextToSql" priority="0x0900" type="Button">
@@ -416,6 +423,7 @@
       <IDSymbol name="CmdBookmarkToggle" value="0x0801" />
       <IDSymbol name="CmdBookmarkNext" value="0x0802" />
       <IDSymbol name="CmdBookmarkPrev" value="0x0803" />
+      <IDSymbol name="CmdSplitTable" value="0x0804" />
     </GuidSymbol>
   </Symbols>
 

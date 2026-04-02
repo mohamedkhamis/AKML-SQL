@@ -105,6 +105,7 @@ namespace AkmlSql.VS2019
                 // Phase 10 — SQL Prompt Core Parity
                 Snippets.SnippetManagerCommand.Initialize(this, commandService);
                 Navigation.BookmarkCommands.Initialize(this, commandService);
+                Refactoring.SplitTableCommand.Initialize(this, commandService);
             }
 
             // Non-critical initialization — failures must not break the extension

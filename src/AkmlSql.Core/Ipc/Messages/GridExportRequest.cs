@@ -28,5 +28,9 @@ namespace AkmlSql.Core.Ipc.Messages
         /// <summary>Export format as int. Maps to <see cref="AkmlSql.Core.Models.Productivity.GridExportFormat"/>.</summary>
         [Key(4)]
         public int Format { get; set; }
+
+        /// <summary>When true, numeric values with 15+ digits are written as text to prevent Excel rounding.</summary>
+        [Key(5)]
+        public bool ExcelLargeNumberAsText { get; set; } = true;
     }
 }

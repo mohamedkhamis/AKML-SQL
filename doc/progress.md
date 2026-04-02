@@ -2,9 +2,209 @@
 
 ## Overview
 
-This document tracks the development progress, issues encountered, root causes identified, and solutions applied during the AKML SQL extension development. It serves as institutional knowledge for future debugging sessions.
+This document tracks the development progress, complete feature inventory, issues encountered, root causes identified, and solutions applied during the AKML SQL extension development. It serves as institutional knowledge for future sessions.
 
 ---
+
+## Complete Feature Inventory (as of 2026-04-02, updated with spec 011 features)
+
+### 1. IntelliSense & Code Completion
+- Custom dark-themed completion popup (replicates SQL Prompt design)
+- **Ctrl transparency**: Hold Ctrl to make popup semi-transparent (see code behind)
+- Auto-trigger on typing with configurable debounce delay
+- Dot-trigger for table.column completion
+- Fuzzy matching (substring + prefix)
+- Column provider (CTEs, temp tables, derived tables, aliases)
+- Alias provider with alias-qualified column resolution
+- Object provider (schema-qualified tables, views, procedures, functions)
+- Keyword provider with configurable casing (UPPER/lower/PascalCase/AsIs)
+- Snippet integration in completion list
+- Variable provider (@variables in scope)
+- Quick Info tooltips (column types, nullability, PK/FK badges)
+- Function signature help with parameter types
+- Wildcard expansion popup (SELECT * to explicit column list)
+- Object Definition Panel (Summary/Script tabs alongside completion popup)
+- Auto alias suggestion on table completion
+- JOIN assist (FK-based condition suggestions)
+- Schema status indicator (cache load progress)
+
+### 2. Code Formatting (20 commands)
+- Format Document (Ctrl+K, Y)
+- Format Selection
+- Format on Save / Format on Paste / Format on Delimiter (semicolons/GO)
+- Casing Only (apply keyword casing without structural changes)
+- Expand Wildcards (SELECT * to column list)
+- Expand Insert Columns (with **metadata comments**: type, nullability, defaults as inline comments) / Expand Update Columns / Expand Exec Parameters
+- **Convert sp_executesql to Static SQL** (substitutes parameter values into template)
+- Add GROUP BY Columns
+- Insert Semicolons / Remove Semicolons
+- Toggle Brackets (add/remove square brackets)
+- Toggle AS Keywords
+- Qualify Object Names (add dbo. schema prefix)
+- Convert Old-Style JOINs to ANSI syntax
+- Replace Deprecated Syntax
+- Encapsulate in BEGIN/END
+- Formatting profiles (.akmlstyle JSON files)
+- SQL Prompt profile importer
+
+### 3. Code Analysis (130+ rules across 8 categories)
+- Real-time AST-based static analysis
+- Diagnostic squiggles (wavy underlines)
+- Error List integration
+- Lightbulb quick-fix suggestions
+- Analysis suppression (NOANALYZE comments)
+- Rule categories:
+  - **Best Practices (BP)**: 28 rules (@@IDENTITY, TRY/CATCH, NULL comparison, etc.)
+  - **Performance (PE)**: 31 rules (SELECT *, NOCOUNT, leading wildcard LIKE, etc.)
+  - **Security (SE)**: 20 rules (SQL injection, hard-coded passwords, xp_cmdshell, etc.)
+  - **Style (ST)**: 24 rules (keyword casing, alias format, semicolons, etc.)
+  - **Deprecated (DEP)**: 8 rules (old data types, old JOIN syntax, RAISERROR, etc.)
+  - **Design (DE)**: 7 rules (missing PK, FLOAT for money, sql_variant, etc.)
+  - **Execution (EX)**: 6 rules (division by zero, data truncation, unreachable code)
+  - **Naming (NM)**: 6 rules (reserved words, sp_ prefix, Hungarian notation)
+
+### 4. Code Refactoring (15 operations)
+- **Heavyweight** (with preview dialog):
+  - Extract to CTE
+  - Extract to Derived Table
+  - Extract to Stored Procedure (with parameter inference)
+  - Safe Rename (cross-script, generates ALTER scripts)
+  - Parameterize Values
+  - Encapsulate as View
+  - Convert Temp Table to Table Variable (or reverse)
+- **Lightweight** (instant):
+  - Remove Semicolons, Expand Insert/Update/Exec Columns
+  - Add GROUP BY Columns, Encapsulate BEGIN/END
+  - Replace Deprecated Syntax, Convert Old-Style JOINs
+- Refactoring Preview Dialog with diff tree view
+- Rename Script Generator (SQL script output, no direct DB execution)
+
+### 5. Execution Safety Guard
+- Intercepts query execution (F5) via DTE command hook
+- DELETE without WHERE warning
+- UPDATE without WHERE warning
+- DROP TABLE/DATABASE confirmation
+- TRUNCATE TABLE confirmation
+- Environment-aware severity:
+  - Production: type server name to confirm (case-sensitive)
+  - Non-Production: simple Yes/No dialog
+  - Configurable per environment
+- Transaction Reminder (uncommitted transaction detection)
+- Structured audit logging (server, environment, statement type, outcome)
+
+### 6. Snippet Manager
+- WPF Snippet Manager dialog (search, CRUD, import/export)
+- Personal + Team + Built-in snippet sources
+- Snippet variables ($CURSOR$, $SELECTEDTEXT$, $DATE$, $DBNAME$, etc.)
+- Context filtering (global, after_select, after_from, etc.)
+- Surround-with snippets (wraps selected text)
+- Format on expand (optional)
+- Usage tracking for ranking
+
+### 7. SQL History
+- SQLite-backed execution history recording
+- History Tool Window with search and filtering
+- History diff view (side-by-side comparison)
+- Encryption at rest (optional)
+- Configurable retention period and max entries
+- Record failures (optional)
+- Deduplication
+
+### 8. Tab Management & Session Recovery
+- Tab coloring by environment (Production=red, Staging=orange, Dev=green) with **optional gradient** (lighter top, base bottom)
+- Custom window title template ({server} - {database})
+- Restore Closed Tab (Ctrl+Shift+T)
+- Pin Tab / Duplicate Tab / Close All Unmodified
+- Session auto-save with configurable interval
+- Session recovery on startup (always/prompt/never)
+
+### 9. Results Grid Enhancements (15 features)
+- Aggregate statistics (SUM, AVG, COUNT, MIN, MAX) in status bar
+- Column statistics popup on header right-click
+- NULL value highlighting
+- Row numbers column
+- Column sorting (3-click cycle: Asc/Desc/None)
+- Column filtering (right-click popup with text filter)
+- Grid Find bar
+- Export to CSV, JSON, XML, SQL, Markdown, Excel (with **15+ digit precision** option — numbers exported as text to prevent rounding)
+- Copy as JSON, XML, SQL INSERT, SQL VALUES
+- Script Generator (INSERT/UPDATE/DELETE from rows)
+- Cell Edit dialog (Ctrl+DoubleClick)
+- Transpose Results view (rows as columns)
+- Freeze column headers
+
+### 10. Navigation & Bookmarks
+- Go to Definition (F12)
+- Peek Definition (Alt+F12) with inline popup
+- Find All References (Shift+F12)
+- Object Search (Ctrl+T) with fuzzy matching
+- Navigate Matching Pair (Ctrl+]) — BEGIN/END, parentheses, TRY/CATCH
+- Navigate Next/Previous Statement
+- Bookmark Toggle (Ctrl+K, Ctrl+K) with blue margin glyphs
+- Bookmark Next/Previous (Ctrl+K, Ctrl+N / Ctrl+K, Ctrl+P)
+- Document Outline tool window (procedures, functions, CTEs, temp tables)
+
+### 11. Editor Productivity
+- Execute Current Statement (Alt+Enter)
+- Execute to Cursor
+- Highlight Occurrences of selected identifier
+- Bracket Matching
+- Named Regions (--region / --endregion code folding)
+- Sticky Scroll (parent scope header pinning)
+- Code Minimap
+
+### 12. Settings System
+- WPF Settings dialog with 15 category pages
+- Dark/Light theme support
+- Per-category Reset This Page / Reset All
+- Export All Settings / Import Settings (JSON)
+- 50+ configurable options across all feature areas
+
+### 13. AI Assistance
+- Multi-provider support (OpenAI, Anthropic, Gemini, Ollama, LM Studio, Custom)
+- Text to SQL (natural language to T-SQL generation)
+- AI Explain (query explanation in plain English)
+- AI Fix (error correction suggestions)
+- AI Optimize (performance optimization suggestions)
+- AI Index Analysis (missing index suggestions)
+- AI Chat Panel (multi-turn conversation with database context)
+- Ghost Text Completion (inline AI suggestions, experimental)
+- Privacy modes (schemaOnly, full, anonymous, offline, disabled)
+- Privacy transformer (redacts sensitive data before sending)
+
+### 14. Command Palette
+- Fuzzy-search command launcher (Ctrl+Shift+P)
+- 32+ registered commands
+- Usage-based ranking
+
+### 15. Schema Cache
+- In-memory cache of database objects
+- Phase A (fast): tables, views, procedures, row counts (<500ms)
+- Phase B (background): columns, FKs, parameters
+- Change detection via CHECKSUM_AGG polling
+- DDL-triggered refresh
+- LRU eviction for multiple databases
+- Persistent cache to disk (optional)
+
+### 16. Infrastructure
+- Shared Project (.projitems) compiled into 6 shell targets
+- Out-of-process Engine (.NET 10, self-contained)
+- MessagePack IPC over named pipes (30+ message types)
+- Serilog structured logging
+- Atomic config writes (temp file + rename)
+- Self-contained updater (.NET 10)
+- Inno Setup 7 installer with environment scanner
+
+### Test Coverage
+- 451 unit tests (xunit, .NET 10)
+- SafetyCheckHandler: 15 tests
+- SnippetImport: 6 tests
+- SafeRenameOperation: 6 tests
+- DocumentOutline: 15 tests
+
+---
+
+## Development History
 
 ## Phase 1: Foundation and Installer
 

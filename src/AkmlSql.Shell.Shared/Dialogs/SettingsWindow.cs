@@ -223,6 +223,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
         // Tabs
         private CheckBox? _chkTabColoringEnabled;
+        private CheckBox? _chkTabGradientColors;
         private CheckBox? _chkTabSessionRecovery;
         private Slider? _sldTabAutoSaveInterval;
         private TextBlock? _lblTabAutoSaveValue;
@@ -269,6 +270,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
         private CheckBox? _chkGridNullHighlight;
         private CheckBox? _chkGridRowNumbers;
         private CheckBox? _chkGridFreezeHeaders;
+        private CheckBox? _chkGridExcelLargeNumberAsText;
 
         // Editor Productivity
         private CheckBox? _chkEdHighlightOccurrences;
@@ -854,6 +856,8 @@ namespace AkmlSql.Shell.Shared.Dialogs
             AddGroupHeader(panel, "Tab Coloring");
             _chkTabColoringEnabled = AddToggle(panel, "Enable environment-based tab coloring",
                 "Color tabs based on server name patterns (e.g. PROD=red, DEV=green)");
+            _chkTabGradientColors = AddToggle(panel, "Use gradient colors",
+                "Apply a vertical gradient to tab color bars (lighter at top, base color at bottom)");
 
             AddGroupSeparator(panel);
             AddGroupHeader(panel, "Session Recovery");
@@ -930,6 +934,11 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 "Show row numbers column");
             _chkGridFreezeHeaders = AddToggle(panel, "Freeze headers",
                 "Freeze column headers while scrolling");
+
+            AddGroupSeparator(panel);
+            AddGroupHeader(panel, "Excel Export");
+            _chkGridExcelLargeNumberAsText = AddToggle(panel, "Save 15+ digit numbers as text",
+                "Numbers with 15 or more digits are saved as text to prevent Excel from rounding them");
 
             return WrapInScrollViewer(panel);
         }
@@ -1840,6 +1849,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             // ── Tabs & UI ────────────────────────────────────────────────
             var t = _settings.Tabs;
             SetChecked(_chkTabColoringEnabled, t.ColoringEnabled);
+            SetChecked(_chkTabGradientColors, t.GradientColors);
             SetChecked(_chkTabSessionRecovery, t.SessionRecovery);
             SetSlider(_sldTabAutoSaveInterval, _lblTabAutoSaveValue, t.AutoSaveInterval);
             SetSlider(_sldTabMaxClosedTabs, _lblTabMaxClosedTabsValue, t.MaxClosedTabs);
@@ -1910,6 +1920,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             SetChecked(_chkGridNullHighlight, gr.NullHighlight);
             SetChecked(_chkGridRowNumbers, gr.RowNumbers);
             SetChecked(_chkGridFreezeHeaders, gr.FreezeHeaders);
+            SetChecked(_chkGridExcelLargeNumberAsText, gr.ExcelLargeNumberAsText);
 
             // ── Editor Productivity ──────────────────────────────────────
             var ep = _settings.EditorProductivity;
@@ -2017,6 +2028,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
             // ── Tabs & UI ────────────────────────────────────────────────
             _settings.Tabs.ColoringEnabled = IsChecked(_chkTabColoringEnabled);
+            _settings.Tabs.GradientColors = IsChecked(_chkTabGradientColors);
             _settings.Tabs.SessionRecovery = IsChecked(_chkTabSessionRecovery);
             _settings.Tabs.AutoSaveInterval = GetSliderInt(_sldTabAutoSaveInterval);
             _settings.Tabs.MaxClosedTabs = GetSliderInt(_sldTabMaxClosedTabs);
@@ -2080,6 +2092,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             _settings.Grid.NullHighlight = IsChecked(_chkGridNullHighlight);
             _settings.Grid.RowNumbers = IsChecked(_chkGridRowNumbers);
             _settings.Grid.FreezeHeaders = IsChecked(_chkGridFreezeHeaders);
+            _settings.Grid.ExcelLargeNumberAsText = IsChecked(_chkGridExcelLargeNumberAsText);
 
             // ── Editor Productivity ──────────────────────────────────────
             _settings.EditorProductivity.HighlightOccurrences = IsChecked(_chkEdHighlightOccurrences);

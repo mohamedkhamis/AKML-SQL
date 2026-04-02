@@ -39,6 +39,8 @@ public class RefactoringEngine(TsqlParserService parser, SchemaCacheManager sche
                     await new ConvertTempTableOperation().PreviewAsync(request, ctx, ct),
                 RefactorOperationType.ParameterizeValues =>
                     await new ParameterizeValuesOperation().PreviewAsync(request, ctx, ct),
+                RefactorOperationType.SplitTable =>
+                    await new SplitTableOperation().PreviewAsync(request, ctx, ct),
                 _ => new RefactorPreviewResponse
                 {
                     CanApply = false,
@@ -80,6 +82,8 @@ public class RefactoringEngine(TsqlParserService parser, SchemaCacheManager sche
                     await new ConvertTempTableOperation().ApplyAsync(request, ct),
                 RefactorOperationType.ParameterizeValues =>
                     await new ParameterizeValuesOperation().ApplyAsync(request, ct),
+                RefactorOperationType.SplitTable =>
+                    await new SplitTableOperation().ApplyAsync(request, ct),
                 _ => new RefactorApplyResponse { Success = false }
             };
         }
