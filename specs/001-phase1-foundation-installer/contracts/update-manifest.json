@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://updates.akmlsql.com/manifest.schema.json",
+  "title": "AKML SQL Update Manifest",
+  "description": "Schema for the remote update manifest checked by AkmlSql.Updater",
+  "type": "object",
+  "required": ["version", "downloadUrl", "releaseNotesUrl", "minimumOsVersion", "sha256Hash"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "Latest stable version in SemVer format",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9.]+)?$",
+      "examples": ["1.0.0", "1.1.0", "2.0.0-beta.1"]
+    },
+    "downloadUrl": {
+      "type": "string",
+      "format": "uri",
+      "description": "URL to download the installer EXE"
+    },
+    "releaseNotesUrl": {
+      "type": "string",
+      "format": "uri",
+      "description": "URL to the release notes page"
+    },
+    "minimumOsVersion": {
+      "type": "string",
+      "description": "Minimum supported Windows version",
+      "examples": ["10.0.19044"]
+    },
+    "sha256Hash": {
+      "type": "string",
+      "description": "SHA-256 hash of the installer EXE for integrity verification",
+      "pattern": "^[a-fA-F0-9]{64}$"
+    }
+  },
+  "additionalProperties": false
+}

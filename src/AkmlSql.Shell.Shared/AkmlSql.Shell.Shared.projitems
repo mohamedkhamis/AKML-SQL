@@ -1,0 +1,239 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects Condition="'$(MSBuildVersion)' == '' Or '$(MSBuildVersion)' &lt; '16.0'">$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>{B1A2C3D4-E5F6-7890-ABCD-EF1234567890}</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>AkmlSql.Shell.Shared</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\AkmlCompletionPopup.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\ObjectDefinitionPanel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\WildcardExpansionPopup.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\CompletionController.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\KeyboardHook.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\CompletionItemModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\CompletionPopupAdornment.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\CompletionPopupProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\SchemaStatusIndicator.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\CompletionRpcHelper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\ConnectionWiringHelper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\SqlPromptIcons.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\SsmsConnectionDetector.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ExtensionAssemblyResolver.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)PackageGuids.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\AboutCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\CheckUpdateCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\OptionsCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\SendFeedbackCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\ViewLogsCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Dialogs\AboutDialog.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Dialogs\SettingsDialog.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Dialogs\SettingsWindow.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Dialogs\LogViewerDialog.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)StatusBar\StatusBarManager.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Update\UpdateLauncher.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Update\UpdateNotifier.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Validation\LoadValidator.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)JsonOptions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ipc\PipeRpcClient.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ipc\EngineProcessManager.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ipc\EngineLifecycle.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\TextViewCreationListener.cs" />
+    <!-- CompletionCommandHandler.cs and CompletionSource.cs DELETED — replaced by Editor/Completion/ -->
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\ContentTypeDetector.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\SignatureHelpSource.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\QuickInfoSource.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\RefreshCacheCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\ThemeManager.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\DpiHelper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\CompletionItemViewModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\CompletionPopup.xaml.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IntelliSense\NativeIntelliSenseManager.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatDocumentCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatSelectionCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\ProfileSelectorDropdown.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatOnPasteHandler.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatOnSaveHandler.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatOnDelimiterHandler.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\BulkFormatWizard.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\BulkFormatProgressDialog.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\ProfileEditorDialog.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\ProfileEditorViewModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\OptionCategoryTreeBuilder.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\SqlPreviewRenderer.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\EditProfileCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatActionHelper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\CasingOnlyCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\InsertSemicolonsCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\ExpandWildcardsCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\QualifyNamesCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\ToggleBracketsCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\ToggleAsCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\RemoveSemicolonsCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\ExpandInsertColumnsCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\ExpandExecParametersCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\ExpandUpdateColumnsCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\ConvertOldStyleJoinsCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\AddGroupByColumnsCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\EncapsulateBeginEndCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\ReplaceDeprecatedSyntaxCommand.cs" />
+    <!-- Analysis: real-time squiggles, error list, lightbulb fix actions -->
+    <Compile Include="$(MSBuildThisFileDirectory)Analysis\AnalysisController.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Analysis\DiagnosticTagger.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Analysis\ErrorListReporter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Analysis\FixAction.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Analysis\LightbulbProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Analysis\RefactoringAction.cs" />
+    <!-- Bulk analysis command and result dialog -->
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\BulkAnalysisCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Dialogs\BulkAnalysisResultDialog.cs" />
+    <!-- Refactoring: preview dialog and safe rename command stubs (T039, T040) -->
+    <Compile Include="$(MSBuildThisFileDirectory)Refactoring\RefactoringPreviewDialog.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Refactoring\SafeRenameCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Refactoring\RenameScriptGenerator.cs" />
+    <!-- Heavyweight refactoring commands -->
+    <Compile Include="$(MSBuildThisFileDirectory)Refactoring\ConvertTempTableCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Refactoring\ParameterizeValuesCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Refactoring\ExtractToCteCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Refactoring\ExtractToProcCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Refactoring\ExtractToDerivedTableCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Refactoring\EncapsulateAsViewCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Refactoring\SplitTableCommand.cs" />
+    <!-- Phase 7 — SQL History: execution capture, search, and tool window -->
+    <Compile Include="$(MSBuildThisFileDirectory)History\ExecutionCapture.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)History\HistoryViewModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)History\HistoryToolWindowControl.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)History\HistoryDiffWindow.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)History\HistoryToolWindow.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)History\HistorySearchParser.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\HistoryPanelCommand.cs" />
+    <!-- Phase 7 — Tab management: environment detection, coloring, tooltips -->
+    <Compile Include="$(MSBuildThisFileDirectory)Tabs\EnvironmentDetector.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Tabs\TabColoringManager.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Tabs\TabTooltipProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Tabs\TabManagementInitializer.cs" />
+    <!-- Phase 7 US6 — Restore Recently Closed Tabs -->
+    <Compile Include="$(MSBuildThisFileDirectory)Tabs\ClosedTabStack.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Tabs\TabCloseMonitor.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\RestoreClosedTabCommand.cs" />
+    <!-- Phase 7 US7 — Execution Safety Warnings -->
+    <Compile Include="$(MSBuildThisFileDirectory)Safety\SafetyWarningDialog.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Safety\ExecutionInterceptor.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Safety\ExecutionCommandFilter.cs" />
+    <!-- Phase 7 US8 — Transaction Reminder -->
+    <Compile Include="$(MSBuildThisFileDirectory)Safety\TransactionMonitor.cs" />
+    <!-- Phase 7 US10 — Custom Window Title and Tab Enhancements -->
+    <Compile Include="$(MSBuildThisFileDirectory)Tabs\WindowTitleManager.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\PinTabCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\DuplicateTabCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\CloseUnmodifiedCommand.cs" />
+    <!-- Phase 8 US1 — Grid Search & Aggregates -->
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\Grid\GridAccessHelper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\Grid\GridFindBar.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\Grid\GridAggregatesProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\GridCommands.cs" />
+    <!-- Phase 8 US9 — Grid Advanced Features -->
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\Grid\ColumnStatisticsPopup.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\Grid\TransposeResultsView.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\Grid\NullHighlighter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\Grid\RowNumberProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\Grid\CellEditDialog.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\Grid\GridFeatureInitializer.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\Grid\GridSortHandler.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\Grid\GridFilterPopup.cs" />
+    <!-- Phase 8 US4 — Execute Current Statement -->
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\ExecuteCurrentStatementCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\ExecuteToCursorCommand.cs" />
+    <!-- Phase 8 US5 — Document Outline -->
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\DocumentOutline\DocumentOutlineViewModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\DocumentOutline\DocumentOutlineControl.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\DocumentOutline\DocumentOutlineToolWindow.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\DocumentOutlineCommand.cs" />
+    <!-- Phase 8 US8 — Named Regions & Navigation -->
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\RegionTagger.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\RegionTaggerProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\NavigateStatementCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\NavigateMatchingPairCommand.cs" />
+    <!-- Phase 8 US2 — Copy & Export -->
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\Grid\GridCopyAsMenu.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\Grid\GridExportManager.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\Grid\GridScriptGenerator.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\Grid\GridContextMenuWiring.cs" />
+    <!-- Phase 8 US3 — Command Palette -->
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\CommandPalette\CommandRegistry.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\CommandPalette\FuzzyMatcher.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\CommandPalette\CommandPaletteViewModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\CommandPalette\CommandPaletteWindow.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\CommandPaletteCommand.cs" />
+    <!-- Phase 8 US6 — Highlight Occurrences & Bracket Matching -->
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\OccurrenceHighlightTagger.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\OccurrenceHighlightTaggerProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\BracketMatchingTagger.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\BracketMatchingTaggerProvider.cs" />
+    <!-- Phase 8 US7 — Go to Definition & Peek Definition -->
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\GoToDefinitionCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\PeekDefinitionCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\Navigation\PeekDefinitionControl.cs" />
+    <!-- Phase 8 US12 — Object Search & Find References -->
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\ObjectSearchCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\FindReferencesCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\Navigation\ObjectSearchWindow.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\Navigation\ReferencesPanel.cs" />
+    <!-- Phase 8 US10 — Multi-Database Execution -->
+    <Compile Include="$(MSBuildThisFileDirectory)Execution\MultiDatabaseSelector.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Execution\MultiDatabaseExecutor.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Execution\MultiDatabaseResultsView.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Execution\MultiDatabaseCommand.cs" />
+    <!-- Phase 8 US11 — Execution Timer & Notifications -->
+    <Compile Include="$(MSBuildThisFileDirectory)Execution\ExecutionTimerManager.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Execution\CompletionNotifier.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Execution\ExecutionProductivityInitializer.cs" />
+    <!-- Phase 8 US13 — Sticky Scroll & Minimap -->
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\Adornments\StickyScrollAdornment.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\Adornments\StickyScrollAdornmentProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\Adornments\MinimapAdornment.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\Adornments\MinimapAdornmentProvider.cs" />
+    <!-- Phase 8 US14 — CRUD Generation & Script As -->
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\CrudGenerationCommand.cs" />
+    <!-- Phase 8 US15 — Connection Aliases -->
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\ConnectionAliasManager.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\ConnectionAliasIntegration.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\ConnectionAliasEditor.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\ConnectionAliasInitializer.cs" />
+    <!-- Phase 9: AI Assistance -->
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\AiCommandVisibility.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ai\AiSettingsValidator.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ai\DiffPreviewPanel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ai\TextToSqlInputDialog.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\TextToSqlCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\AiOptimizeCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\AiIndexAnalysisCommand.cs" />
+    <!-- Phase 9 US2: AI Explain -->
+    <Compile Include="$(MSBuildThisFileDirectory)Ai\ExplanationPanel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\AiExplainCommand.cs" />
+    <!-- Phase 9 US3: AI Fix -->
+    <Compile Include="$(MSBuildThisFileDirectory)Ai\FixPreviewPanel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\AiFixCommand.cs" />
+    <!-- Phase 9 US6: AI Chat Panel -->
+    <Compile Include="$(MSBuildThisFileDirectory)Ai\AiChatToolWindow.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ai\AiChatPanel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\AiChatPanelCommand.cs" />
+    <!-- Phase 9 US7: Inline Ghost Text -->
+    <Compile Include="$(MSBuildThisFileDirectory)Ai\GhostTextAdornment.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ai\GhostTextAdornmentProvider.cs" />
+    <!-- Editor Toolbar: SQL Prompt-style action bar at top of each SQL editor -->
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\Toolbar\EditorToolbar.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\Toolbar\EditorToolbarProvider.cs" />
+    <!-- Phase 10: SQL Prompt Core Parity — Snippet Manager -->
+    <Compile Include="$(MSBuildThisFileDirectory)Snippets\SnippetManagerViewModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Snippets\SnippetManagerDialog.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Snippets\SnippetManagerCommand.cs" />
+    <!-- Phase 10 US8 — Bookmarks & Document Outline -->
+    <Compile Include="$(MSBuildThisFileDirectory)Navigation\BookmarkManager.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Navigation\BookmarkGlyphFactory.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Navigation\BookmarkCommands.cs" />
+  </ItemGroup>
+</Project>

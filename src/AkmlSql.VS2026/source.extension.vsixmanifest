@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011">
+  <Metadata>
+    <Identity Id="AkmlSql.VS2026.A1B2C3D4-1111-2222-3333-444455556666"
+              Version="1.0.0"
+              Language="en-US"
+              Publisher="mohamed Khamis" />
+    <DisplayName>AKML SQL for Visual Studio 2026</DisplayName>
+    <Description xml:space="preserve">AI-powered SQL development assistance for Visual Studio 2026 with SSDT.</Description>
+    <Tags>SQL, VisualStudio, AKML, SSDT</Tags>
+  </Metadata>
+  <Installation>
+    <InstallationTarget Id="Microsoft.VisualStudio.Community" Version="[18.0,19.0)">
+      <ProductArchitecture>amd64</ProductArchitecture>
+    </InstallationTarget>
+    <InstallationTarget Id="Microsoft.VisualStudio.Pro" Version="[18.0,19.0)">
+      <ProductArchitecture>amd64</ProductArchitecture>
+    </InstallationTarget>
+    <InstallationTarget Id="Microsoft.VisualStudio.Enterprise" Version="[18.0,19.0)">
+      <ProductArchitecture>amd64</ProductArchitecture>
+    </InstallationTarget>
+  </Installation>
+  <Dependencies>
+    <Dependency Id="Microsoft.Framework.NDP" DisplayName="Microsoft .NET Framework" Version="[4.7.2,)" />
+  </Dependencies>
+  <Assets>
+    <Asset Type="Microsoft.VisualStudio.VsPackage" Path="AkmlSql.VS2026.pkgdef" />
+    <Asset Type="Microsoft.VisualStudio.MefComponent" Path="AkmlSql.VS2026.dll" />
+  </Assets>
+</PackageManifest>

@@ -1,0 +1,100 @@
+<h2>SQL Prompt-Style Completion Popup</h2>
+<p class="subtitle">Which approach should we take for the custom autocomplete UI?</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Custom WPF Adorner Popup (Recommended)</h3>
+      <p>Build a WPF popup as a <strong>text view adornment</strong> (like StickyScroll/Minimap that already work). The popup renders as a WPF overlay on the editor, positioned at the caret. Uses the same MEF pattern that's proven to work in SSMS 22.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul>
+          <li>Uses proven MEF adornment pattern (StickyScroll works)</li>
+          <li>Full control over rendering, colors, layout</li>
+          <li>No dependency on VS IntelliSense framework</li>
+          <li>Can exactly replicate SQL Prompt look</li>
+        </ul></div>
+        <div class="cons"><h4>Cons</h4><ul>
+          <li>More code to write (popup, filtering, keyboard handling)</li>
+          <li>Need to handle z-order and positioning ourselves</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>WPF Window Popup (Separate Window)</h3>
+      <p>Create a <strong>borderless WPF Window</strong> that appears near the caret. Completely independent of VS editor — just a floating window positioned manually.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul>
+          <li>Simplest to implement — standard WPF Window</li>
+          <li>Complete independence from VS editor</li>
+          <li>Easy to style exactly like SQL Prompt</li>
+        </ul></div>
+        <div class="cons"><h4>Cons</h4><ul>
+          <li>Window focus management tricky (stealing focus from editor)</li>
+          <li>May flash/flicker on show/hide</li>
+          <li>Doesn't move with scrolling editor</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Fix VS ICompletionSource (Current Approach)</h3>
+      <p>Debug why VS's built-in IntelliSense popup doesn't show our completions. Continue using <code>ICompletionSourceProvider</code> + <code>ICompletionBroker</code>.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul>
+          <li>Least code — VS handles popup, filtering, keyboard</li>
+          <li>Consistent with VS extension conventions</li>
+        </ul></div>
+        <div class="cons"><h4>Cons</h4><ul>
+          <li>We spent hours and it didn't work in SSMS 22</li>
+          <li>Limited control over appearance (VS default styling)</li>
+          <li>Can't replicate SQL Prompt look exactly</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 2rem;">
+  <h3>SQL Prompt Reference — What We're Building</h3>
+  <div class="mockup">
+    <div class="mockup-header">SQL Prompt Popup Style</div>
+    <div class="mockup-body" style="background:#1e1e1e; color:#d4d4d4; font-family:'Consolas',monospace; padding:16px; font-size:13px;">
+      <div style="margin-bottom:8px;">
+        <span style="color:#569cd6;">SELECT</span> * <span style="color:#569cd6;">FROM</span> <span style="color:#9cdcfe; background:#264f78; padding:1px 2px;">|</span>
+      </div>
+      <div style="background:#252526; border:1px solid #3c3c3c; border-radius:3px; width:340px; box-shadow:0 4px 12px rgba(0,0,0,0.5); margin-top:4px;">
+        <div style="padding:4px 8px; background:#094771; display:flex; align-items:center;">
+          <span style="background:#1565C0; color:white; font-size:10px; font-weight:bold; padding:1px 5px; border-radius:2px; margin-right:8px;">T</span>
+          <span style="color:#fff; font-weight:bold;">Customers</span>
+          <span style="color:#888; margin-left:auto; font-size:11px;">Table (~1.2M rows)</span>
+        </div>
+        <div style="padding:4px 8px; display:flex; align-items:center;">
+          <span style="background:#1565C0; color:white; font-size:10px; font-weight:bold; padding:1px 5px; border-radius:2px; margin-right:8px;">T</span>
+          <span>CustomerAddresses</span>
+          <span style="color:#888; margin-left:auto; font-size:11px;">Table (~500K rows)</span>
+        </div>
+        <div style="padding:4px 8px; display:flex; align-items:center;">
+          <span style="background:#2E7D32; color:white; font-size:10px; font-weight:bold; padding:1px 5px; border-radius:2px; margin-right:8px;">V</span>
+          <span>vw_CustomerSummary</span>
+          <span style="color:#888; margin-left:auto; font-size:11px;">View</span>
+        </div>
+        <div style="padding:4px 8px; display:flex; align-items:center;">
+          <span style="background:#6A1B9A; color:white; font-size:10px; font-weight:bold; padding:1px 5px; border-radius:2px; margin-right:8px;">P</span>
+          <span>usp_GetCustomer</span>
+          <span style="color:#888; margin-left:auto; font-size:11px;">Procedure</span>
+        </div>
+        <div style="padding:3px 8px; border-top:1px solid #3c3c3c; color:#888; font-size:11px;">
+          4 of 56 objects • Toledo
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

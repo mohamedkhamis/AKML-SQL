@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>AkmlSql.Engine</RootNamespace>
+    <AssemblyName>AkmlSql.Engine</AssemblyName>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <!-- SingleFile disabled: Microsoft.Data.SqlClient native SNI interop is incompatible
+         with single-file extraction. The Engine runs as a background process so multiple
+         files in the Engine directory are acceptable. -->
+    <PublishSingleFile>false</PublishSingleFile>
+    <PublishTrimmed>false</PublishTrimmed>
+  </PropertyGroup>
+
+  <!-- Preserve types for MessagePack, SqlClient native interop, and JSON reflection -->
+  <ItemGroup>
+    <TrimmerRootAssembly Include="AkmlSql.Core" />
+    <TrimmerRootAssembly Include="Microsoft.Data.SqlClient" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.*" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.*" />
+    <PackageReference Include="Microsoft.SqlServer.TransactSql.ScriptDom" Version="170.*" />
+    <PackageReference Include="ClosedXML" Version="0.104.*" />
+    <PackageReference Include="MessagePack" Version="2.*" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="9.*" />
+
+    <!-- Phase 9: AI Assistance -->
+    <PackageReference Include="Microsoft.Extensions.AI" Version="10.4.1" />
+    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.4.1" />
+    <PackageReference Include="Anthropic.SDK" Version="5.10.0" />
+    <PackageReference Include="OllamaSharp" Version="5.4.25" />
+    <PackageReference Include="Mscc.GenerativeAI" Version="3.1.0" />
+    <PackageReference Include="Microsoft.ML.Tokenizers" Version="2.0.0" />
+    <PackageReference Include="Microsoft.ML.Tokenizers.Data.Cl100kBase" Version="2.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AkmlSql.Core\AkmlSql.Core.csproj" />
+    <ProjectReference Include="..\AkmlSql.Formatting\AkmlSql.Formatting.csproj" />
+  </ItemGroup>
+
+</Project>

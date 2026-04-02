@@ -1,0 +1,75 @@
+<svg viewBox="0 0 420 480" xmlns="http://www.w3.org/2000/svg" font-family="Arial, sans-serif">
+  <rect width="420" height="480" rx="10" fill="#1E1E2E" stroke="#2A3040" stroke-width="1"/>
+
+  <!-- Title bar -->
+  <rect width="420" height="36" rx="10" fill="#16161E"/>
+  <rect y="26" width="420" height="10" fill="#16161E"/>
+  <text x="12" y="23" fill="#D4D4D4" font-size="13" font-weight="bold">🤖 SQL Prompt AI</text>
+  <text x="340" y="23" fill="#5C6370" font-size="13">📌  ✕</text>
+
+  <!-- Connection info -->
+  <rect x="10" y="44" width="400" height="28" rx="6" fill="#141820"/>
+  <text x="18" y="62" fill="#D4D4D4" font-size="11">Connected:</text>
+  <text x="85" y="62" fill="#4F8CFF" font-size="11" font-weight="bold">AdventureWorks</text>
+  <text x="195" y="62" fill="#5C6370" font-size="11">SQL Server 2022</text>
+
+  <!-- Response area -->
+  <rect x="10" y="82" width="400" height="300" rx="8" fill="#141820" stroke="#2A3040" stroke-width="1"/>
+  
+  <!-- User prompt -->
+  <rect x="20" y="92" width="380" height="30" rx="6" fill="rgba(79,140,255,0.08)"/>
+  <text x="30" y="112" fill="#4F8CFF" font-size="11">💬 Show all customers who ordered in 2024 with total > $1000</text>
+
+  <!-- AI response - SQL code -->
+  <text x="20" y="140" fill="#5C6370" font-size="10">Generated SQL:</text>
+  
+  <rect x="20" y="148" width="380" height="170" rx="6" fill="#0C0F14"/>
+  <text font-family="Consolas, monospace" font-size="11">
+    <tspan x="30" y="168" fill="#C678DD" font-weight="bold">SELECT</tspan>
+    <tspan x="80" y="168" fill="#D4D4D4"> c.CustomerName,</tspan>
+    <tspan x="80" y="185" fill="#61AFEF">SUM</tspan>
+    <tspan x="106" y="185" fill="#D4D4D4">(o.TotalAmount)</tspan>
+    <tspan x="210" y="185" fill="#C678DD"> AS</tspan>
+    <tspan x="230" y="185" fill="#D4D4D4"> TotalSpent</tspan>
+    <tspan x="30" y="202" fill="#C678DD" font-weight="bold">FROM</tspan>
+    <tspan x="68" y="202" fill="#E5C07B"> dbo.Customers</tspan>
+    <tspan x="175" y="202" fill="#D4D4D4"> c</tspan>
+    <tspan x="30" y="219" fill="#C678DD" font-weight="bold">INNER JOIN</tspan>
+    <tspan x="120" y="219" fill="#E5C07B"> dbo.Orders</tspan>
+    <tspan x="200" y="219" fill="#D4D4D4"> o</tspan>
+    <tspan x="50" y="236" fill="#C678DD" font-weight="bold">ON</tspan>
+    <tspan x="68" y="236" fill="#D4D4D4"> c.CustomerID = o.CustomerID</tspan>
+    <tspan x="30" y="253" fill="#C678DD" font-weight="bold">WHERE</tspan>
+    <tspan x="75" y="253" fill="#D4D4D4"> o.OrderDate >= </tspan>
+    <tspan x="182" y="253" fill="#CE9178">'2024-01-01'</tspan>
+    <tspan x="30" y="270" fill="#C678DD" font-weight="bold">GROUP BY</tspan>
+    <tspan x="100" y="270" fill="#D4D4D4"> c.CustomerName</tspan>
+    <tspan x="30" y="287" fill="#C678DD" font-weight="bold">HAVING</tspan>
+    <tspan x="80" y="287" fill="#61AFEF"> SUM</tspan>
+    <tspan x="106" y="287" fill="#D4D4D4">(o.TotalAmount) > </tspan>
+    <tspan x="218" y="287" fill="#D19A66">1000</tspan>
+    <tspan x="247" y="287" fill="#D4D4D4">;</tspan>
+  </text>
+
+  <!-- Follow-up suggestion -->
+  <rect x="20" y="328" width="380" height="24" rx="6" fill="rgba(79,140,255,0.05)"/>
+  <text x="30" y="344" fill="#4F8CFF" font-size="10">💡 Follow-up: "Add the customer's email address"</text>
+
+  <!-- Copy button -->
+  <rect x="20" y="358" width="100" height="18" rx="4" fill="rgba(79,140,255,0.15)" stroke="rgba(79,140,255,0.3)" stroke-width="1"/>
+  <text x="30" y="371" fill="#4F8CFF" font-size="9" font-weight="bold">Copy to editor</text>
+
+  <!-- Input area -->
+  <rect x="10" y="392" width="400" height="42" rx="8" fill="#141820" stroke="#3A3F4E" stroke-width="1"/>
+  <text x="18" y="417" fill="#5C6370" font-size="12">Type your request...</text>
+  <!-- Send button -->
+  <rect x="370" y="400" width="30" height="26" rx="6" fill="#4F8CFF"/>
+  <text x="379" y="418" fill="#FFFFFF" font-size="14" font-weight="bold">▶</text>
+
+  <!-- Footer -->
+  <text x="14" y="455" fill="#4F8CFF" font-size="10" text-decoration="underline">Give feedback</text>
+  <text x="320" y="455" fill="#5C6370" font-size="10">Alt+Z to open</text>
+  
+  <!-- Labels -->
+  <text x="14" y="475" fill="#5C6370" font-size="9">Features: NL→SQL | Explain SQL | AI Fix | Optimize | Query Index Analysis</text>
+</svg>

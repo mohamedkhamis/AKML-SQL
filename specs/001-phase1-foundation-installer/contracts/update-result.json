@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://akmlsql.com/schemas/update-result.json",
+  "title": "AKML SQL Update Check Result",
+  "description": "Schema for %AppData%\\AKML SQL\\update-available.json written by AkmlSql.Updater",
+  "type": "object",
+  "required": ["available", "checkedAt"],
+  "properties": {
+    "available": {
+      "type": "boolean",
+      "description": "Whether a newer version is available"
+    },
+    "version": {
+      "type": "string",
+      "description": "The available version (present only if available=true)",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9.]+)?$"
+    },
+    "downloadUrl": {
+      "type": "string",
+      "format": "uri",
+      "description": "Direct download URL (present only if available=true)"
+    },
+    "releaseNotesUrl": {
+      "type": "string",
+      "format": "uri",
+      "description": "Release notes URL (present only if available=true)"
+    },
+    "checkedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC timestamp of when the check was performed"
+    }
+  },
+  "additionalProperties": false
+}
