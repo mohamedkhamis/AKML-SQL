@@ -408,6 +408,19 @@ namespace AkmlSql.Core.Config
 
         [JsonPropertyName("transactionReminderInterval")]
         public int TransactionReminderInterval { get; set; } = 300;
+
+        /// <summary>
+        /// Maps environment label (e.g. "PRODUCTION", "STAGING", "DEV") to confirmation
+        /// severity: "TypeServerName" (must type server name), "SimpleConfirm" (Yes/No dialog),
+        /// or "Disabled" (no guard for that environment).
+        /// </summary>
+        [JsonPropertyName("environmentSeverity")]
+        public Dictionary<string, string> EnvironmentSeverity { get; set; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["PRODUCTION"] = "TypeServerName",
+            ["STAGING"] = "SimpleConfirm",
+            ["DEV"] = "Disabled"
+        };
     }
 
     /// <summary>Results grid productivity settings (Phase 8).</summary>

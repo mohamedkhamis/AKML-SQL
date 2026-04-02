@@ -29,8 +29,11 @@ namespace AkmlSql.Shell.Shared.Productivity.Grid
         private static GridAggregatesProvider? _aggregatesProvider;
         private static NullHighlighter? _nullHighlighter;
         private static RowNumberProvider? _rowNumberProvider;
+        private static GridSortHandler? _sortHandler;
+        private static GridFilterPopup? _filterPopup;
         private static Timer? _gridMonitorTimer;
         private static DataGridView? _lastKnownGrid;
+        private static DataGridViewCellEventHandler? _cellEditHandler;
         private static bool _initialized;
 
         /// <summary>
@@ -67,6 +70,11 @@ namespace AkmlSql.Shell.Shared.Productivity.Grid
                     Log.Debug("GridFeatureInitializer: row number provider created");
                 }
 
+                // Phase 10: Sort and filter handlers (always enabled — no separate setting)
+                _sortHandler = new GridSortHandler();
+                _filterPopup = new GridFilterPopup();
+                Log.Debug("GridFeatureInitializer: sort handler and filter popup created");
+
                 // Start polling timer to detect new results grids
                 // Check every 2 seconds — lightweight since it only calls GetActiveResultsGrid()
                 _gridMonitorTimer = new Timer { Interval = 2000 };
@@ -99,6 +107,12 @@ namespace AkmlSql.Shell.Shared.Productivity.Grid
 
             _rowNumberProvider?.Dispose();
             _rowNumberProvider = null;
+
+            _sortHandler?.Dispose();
+            _sortHandler = null;
+
+            _filterPopup?.Dispose();
+            _filterPopup = null;
 
             _lastKnownGrid = null;
             _initialized = false;
@@ -154,6 +168,10 @@ namespace AkmlSql.Shell.Shared.Productivity.Grid
 
             // T076: Cell edit on double-click (with Ctrl held)
             AttachCellEditHandler(grid);
+
+            // Phase 10: Column sorting on header click + filtering on header right-click
+            _sortHandler?.Attach(grid);
+            _filterPopup?.Attach(grid);
         }
 
         /// <summary>
@@ -161,7 +179,14 @@ namespace AkmlSql.Shell.Shared.Productivity.Grid
         /// </summary>
         private static void AttachCellEditHandler(DataGridView grid)
         {
-            grid.CellDoubleClick += (sender, e) =>
+            // Detach from previous grid to prevent handler leak
+            if (_lastKnownGrid != null && _cellEditHandler != null)
+            {
+                try { _lastKnownGrid.CellDoubleClick -= _cellEditHandler; }
+                catch (ObjectDisposedException) { }
+            }
+
+            _cellEditHandler = (sender, e) =>
             {
                 try
                 {
@@ -177,6 +202,7 @@ namespace AkmlSql.Shell.Shared.Productivity.Grid
                     Log.Debug(ex, "GridFeatureInitializer: cell edit handler failed");
                 }
             };
+            grid.CellDoubleClick += _cellEditHandler;
         }
     }
 }

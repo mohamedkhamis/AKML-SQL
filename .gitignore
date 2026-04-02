@@ -60,3 +60,5 @@ desktop.ini
 *.swp
 *.swo
 *~
+/doc/SQL-Prompt-History
+/doc/SQL-Prompt-Option

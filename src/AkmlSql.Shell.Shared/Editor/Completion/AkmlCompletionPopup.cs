@@ -26,6 +26,12 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         private string _databaseName = string.Empty;
         private bool _isOpen;
 
+        /// <summary>
+        /// Raised when the selected completion item changes (keyboard navigation or filter).
+        /// The controller subscribes to this to trigger QuickInfo requests with debounce.
+        /// </summary>
+        public event EventHandler<CompletionItemModel> SelectionChanged;
+
         private const int MaxVisibleItems = 15;
         private const double ItemHeight = 22;
         private const double PopupWidth = 380;
@@ -140,6 +146,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             if (idx >= _filteredItems.Length) idx = 0;
             _listBox.SelectedIndex = idx;
             _listBox.ScrollIntoView(_listBox.SelectedItem);
+            RaiseSelectionChanged();
         }
 
         /// <summary>Get the currently selected item, or null if none.</summary>
@@ -200,7 +207,17 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             }
 
             if (_filteredItems.Length > 0)
+            {
                 _listBox.SelectedIndex = 0;
+                RaiseSelectionChanged();
+            }
+        }
+
+        private void RaiseSelectionChanged()
+        {
+            var item = GetSelectedItem();
+            if (item != null)
+                SelectionChanged?.Invoke(this, item);
         }
 
         private UIElement CreateItemVisual(CompletionItemModel item)

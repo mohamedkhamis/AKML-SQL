@@ -82,5 +82,11 @@ namespace AkmlSql.Shell.Shared
         public const int CmdAiOptimize              = 0x0703;
         public const int CmdAiIndexAnalysis         = 0x0704;
         public const int CmdAiChatPanel             = 0x0705;
+
+        // Phase 10 — SQL Prompt Core Parity
+        public const int CmdSnippetManager          = 0x0800;
+        public const int CmdBookmarkToggle          = 0x0801;
+        public const int CmdBookmarkNext            = 0x0802;
+        public const int CmdBookmarkPrev            = 0x0803;
     }
 }

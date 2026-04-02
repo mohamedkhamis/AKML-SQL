@@ -216,6 +216,36 @@
         </Strings>
       </Button>
 
+      <!-- Phase 10: SQL Prompt Core Parity -->
+      <Button guid="guidAkmlSqlCmdSet" id="CmdSnippetManager" priority="0x0810" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <Strings>
+          <ButtonText>Snippet Manager</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdBookmarkToggle" priority="0x0811" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <Strings>
+          <ButtonText>Toggle Bookmark</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdBookmarkNext" priority="0x0812" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <Strings>
+          <ButtonText>Next Bookmark</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdBookmarkPrev" priority="0x0813" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <Strings>
+          <ButtonText>Previous Bookmark</ButtonText>
+        </Strings>
+      </Button>
+
       <!-- Phase 9: AI Assistance -->
       <Button guid="guidAkmlSqlCmdSet" id="CmdTextToSql" priority="0x0900" type="Button">
         <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
@@ -331,6 +361,13 @@
                 editor="guidVSStd97" key1="O" mod1="Control Shift" />
     <KeyBinding guid="guidAkmlSqlCmdSet" id="CmdAiChatPanel"
                 editor="guidVSStd97" key1="A" mod1="Control Shift" />
+    <!-- Phase 10: SQL Prompt Core Parity -->
+    <KeyBinding guid="guidAkmlSqlCmdSet" id="CmdBookmarkToggle"
+                editor="guidVSStd97" key1="K" mod1="Control" key2="K" mod2="Control" />
+    <KeyBinding guid="guidAkmlSqlCmdSet" id="CmdBookmarkNext"
+                editor="guidVSStd97" key1="K" mod1="Control" key2="N" mod2="Control" />
+    <KeyBinding guid="guidAkmlSqlCmdSet" id="CmdBookmarkPrev"
+                editor="guidVSStd97" key1="K" mod1="Control" key2="P" mod2="Control" />
   </KeyBindings>
 
   <Symbols>
@@ -374,6 +411,11 @@
       <IDSymbol name="CmdAiOptimize" value="0x0703" />
       <IDSymbol name="CmdAiIndexAnalysis" value="0x0704" />
       <IDSymbol name="CmdAiChatPanel" value="0x0705" />
+      <!-- Phase 10: SQL Prompt Core Parity -->
+      <IDSymbol name="CmdSnippetManager" value="0x0800" />
+      <IDSymbol name="CmdBookmarkToggle" value="0x0801" />
+      <IDSymbol name="CmdBookmarkNext" value="0x0802" />
+      <IDSymbol name="CmdBookmarkPrev" value="0x0803" />
     </GuidSymbol>
   </Symbols>
 

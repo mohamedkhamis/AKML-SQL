@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Core.Models.Analysis;
+using AkmlSql.Shell.Shared.Formatting;
 using Microsoft.VisualStudio.Language.Intellisense;
 using Microsoft.VisualStudio.Text;
 using Microsoft.VisualStudio.Text.Editor;
@@ -53,10 +54,18 @@ namespace AkmlSql.Shell.Shared.Analysis
         public Task<bool> HasSuggestedActionsAsync(ISuggestedActionCategorySet requestedActionCategories,
             SnapshotSpan range, CancellationToken cancellationToken)
         {
+            // Always true — refactoring actions (Comment, Format) are always available
+            // even when no analysis issues exist on the current line
             foreach (var issue in _issues)
             {
                 if (SpanOverlapsIssue(range, issue)) return Task.FromResult(true);
             }
+
+            // Check if contextual refactoring actions apply
+            var text = range.GetText();
+            if (!string.IsNullOrWhiteSpace(text))
+                return Task.FromResult(true);
+
             return Task.FromResult(false);
         }
 
@@ -69,21 +78,19 @@ namespace AkmlSql.Shell.Shared.Analysis
         {
             var snapshot = _buffer.CurrentSnapshot;
 
+            // ── Analysis fix actions ────────────────────────────────────
             foreach (var issue in _issues)
             {
                 if (!SpanOverlapsIssue(range, issue)) continue;
 
                 var actions = new List<ISuggestedAction>();
 
-                // One fix action per repair suggestion from the engine
-                // Skip FixType.Suppress here — it is always added unconditionally below
                 foreach (var fix in issue.FixActions)
                 {
                     if (fix.FixType != (int)FixType.Suppress)
                         actions.Add(new FixAction(_buffer, fix, issue.RuleId));
                 }
 
-                // Always offer suppress-line and disable-globally actions
                 if (!string.IsNullOrEmpty(issue.RuleId))
                 {
                     actions.Add(new SuppressLineFixAction(_buffer, issue.Line, issue.RuleId));
@@ -92,6 +99,80 @@ namespace AkmlSql.Shell.Shared.Analysis
 
                 if (actions.Count > 0)
                     yield return new SuggestedActionSet(actions);
+            }
+
+            // ── Contextual refactoring actions ──────────────────────────
+            var refactorActions = new List<ISuggestedAction>();
+            var rangeText = range.GetText();
+
+            // Detect SELECT * — offer Expand Wildcards
+            if (ContainsSelectStar(snapshot, range))
+            {
+                refactorActions.Add(new RefactoringAction(
+                    _buffer, "Expand Wildcards (SELECT *)", FormatActionType.ExpandWildcards));
+            }
+
+            // Detect unqualified table reference — offer Qualify Object Names
+            // Only show when the line contains a FROM/JOIN keyword (likely table reference context)
+            if (ContainsTableContext(snapshot, range))
+            {
+                refactorActions.Add(new RefactoringAction(
+                    _buffer, "Qualify Object Names", FormatActionType.QualifyObjectNames));
+            }
+
+            // If there is a selection, offer surround-with actions
+            if (!string.IsNullOrWhiteSpace(rangeText) && rangeText.Length > 1)
+            {
+                refactorActions.Add(new RefactoringAction(
+                    _buffer, "Surround with BEGIN/END", FormatActionType.EncapsulateBeginEnd));
+            }
+
+            // Always available actions
+            refactorActions.Add(new CommentToggleAction(_buffer));
+
+            if (refactorActions.Count > 0)
+                yield return new SuggestedActionSet(refactorActions);
+        }
+
+        /// <summary>
+        /// Checks if the range or its containing line contains "SELECT *" or "SELECT  *".
+        /// </summary>
+        private static bool ContainsSelectStar(ITextSnapshot snapshot, SnapshotSpan range)
+        {
+            try
+            {
+                var lineNumber = snapshot.GetLineNumberFromPosition(range.Start.Position);
+                var line = snapshot.GetLineFromLineNumber(lineNumber);
+                var lineText = line.GetText();
+                // Simple heuristic: look for "SELECT" followed by "*" on the same line
+                var selectIdx = lineText.IndexOf("SELECT", StringComparison.OrdinalIgnoreCase);
+                if (selectIdx < 0) return false;
+                var afterSelect = lineText.Substring(selectIdx + 6).TrimStart();
+                return afterSelect.StartsWith("*", StringComparison.Ordinal);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Checks if the range's line contains FROM, JOIN, or EXEC keywords (table/proc reference context).
+        /// </summary>
+        private static bool ContainsTableContext(ITextSnapshot snapshot, SnapshotSpan range)
+        {
+            try
+            {
+                var lineNumber = snapshot.GetLineNumberFromPosition(range.Start.Position);
+                var lineText = snapshot.GetLineFromLineNumber(lineNumber).GetText();
+                return lineText.IndexOf("FROM", StringComparison.OrdinalIgnoreCase) >= 0
+                    || lineText.IndexOf("JOIN", StringComparison.OrdinalIgnoreCase) >= 0
+                    || lineText.IndexOf("EXEC", StringComparison.OrdinalIgnoreCase) >= 0
+                    || lineText.IndexOf("INTO", StringComparison.OrdinalIgnoreCase) >= 0;
+            }
+            catch
+            {
+                return false;
             }
         }
 

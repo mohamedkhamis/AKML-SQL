@@ -5,6 +5,7 @@ using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Shell.Shared.Ipc;
+using AkmlSql.Core.Models.Tabs;
 using AkmlSql.Shell.Shared.Tabs;
 using Microsoft.VisualStudio.Shell;
 using Serilog;
@@ -48,35 +49,12 @@ namespace AkmlSql.Shell.Shared.Safety
                                      || safety.DeleteWithoutWhere
                                      || safety.UpdateWithoutWhere
                                      || safety.DropConfirmation
-                                     || safety.TruncateConfirmation;
+                                     || safety.TruncateConfirmation
+                                     || safety.TransactionReminder;
 
-                if (!_anySettingEnabled)
-                {
-                    Log.Information("ExecutionInterceptor: all safety checks are disabled");
-                    return;
-                }
-
-                // TODO: Hook into the SSMS/VS pre-execution path.
-                //
-                // The exact hookup mechanism varies between SSMS 20/21/22 and VS 2019/2022/2026.
-                // In SSMS, the pre-execution event is typically exposed via:
-                //   - ScriptFactory.Instance for SSMS 20 (IsolatedShell)
-                //   - SSMS 21/22 may expose events through IVsQueryExecution or similar COM interop
-                //
-                // The general approach is:
-                //   1. Get the ScriptFactory or query execution service from the package
-                //   2. Subscribe to the QueryExecuting / BeforeExecute event
-                //   3. In the event handler, call OnBeforeExecute() with the SQL text and server name
-                //   4. If OnBeforeExecute() returns false, cancel the execution
-                //
-                // Example (pseudo-code for SSMS 22):
-                //   var scriptFactory = package.GetService(typeof(IScriptFactory)) as IScriptFactory;
-                //   scriptFactory.QueryExecuting += (sender, args) => {
-                //       if (!OnBeforeExecute(args.SqlText, args.ServerName))
-                //       {
-                //           args.Cancel = true;
-                //       }
-                //   };
+                // Always install the DTE hook — settings may be enabled later without restart.
+                // OnBeforeExecute re-checks settings dynamically on each invocation.
+                ExecutionCommandFilter.Install(package);
 
                 Log.Information("ExecutionInterceptor: initialized (safety checks enabled)");
             }
@@ -101,8 +79,30 @@ namespace AkmlSql.Shell.Shared.Safety
         /// </returns>
         public static bool OnBeforeExecute(string sqlText, string? serverName)
         {
+            // Re-check settings dynamically on each invocation so that enabling
+            // safety settings via Options takes effect without an IDE restart.
+            // Cache the loaded settings to avoid a second disk read in FilterBySettings.
+            SafetySettings? cachedSafety = null;
+            try
+            {
+                cachedSafety = ConfigManager.Load().Safety;
+                _anySettingEnabled = cachedSafety.ProductionWarning
+                                     || cachedSafety.DeleteWithoutWhere
+                                     || cachedSafety.UpdateWithoutWhere
+                                     || cachedSafety.DropConfirmation
+                                     || cachedSafety.TruncateConfirmation
+                                     || cachedSafety.TransactionReminder;
+            }
+            catch
+            {
+                // Config load failure — use last known value
+            }
+
             if (!_anySettingEnabled)
+            {
+                Log.Debug("[ExecutionGuard] Bypassed — all safety checks disabled");
                 return true;
+            }
 
             if (string.IsNullOrWhiteSpace(sqlText))
                 return true;
@@ -116,15 +116,15 @@ namespace AkmlSql.Shell.Shared.Safety
                     return true; // Fail-open: allow execution if engine is unavailable
                 }
 
-                // Determine if this is a production server
+                // Resolve environment info once — used for production detection, dialog mode, and audit
+                EnvironmentRule? matchedEnvRule = null;
                 bool isProductionServer = false;
                 try
                 {
-                    var envRule = EnvironmentDetector.Match(serverName);
-                    if (envRule != null)
+                    matchedEnvRule = EnvironmentDetector.Match(serverName);
+                    if (matchedEnvRule != null)
                     {
-                        // Check if the label indicates production
-                        isProductionServer = envRule.Label.IndexOf(
+                        isProductionServer = matchedEnvRule.Label.IndexOf(
                             "PROD", StringComparison.OrdinalIgnoreCase) >= 0;
                     }
                 }
@@ -156,27 +156,29 @@ namespace AkmlSql.Shell.Shared.Safety
                     return true; // No warnings — proceed
                 }
 
-                // Filter warnings based on which safety settings are enabled
-                var filteredWarnings = FilterBySettings(response.Warnings);
+                // Filter warnings based on which safety settings are enabled (reuse cached settings)
+                var filteredWarnings = FilterBySettings(response.Warnings, cachedSafety);
                 if (filteredWarnings.Length == 0)
                 {
                     return true; // All detected warnings are for disabled settings
                 }
 
-                // Show the warning dialog on the UI thread
+                var envLabel = matchedEnvRule?.Label ?? "Unknown";
+                var envColor = matchedEnvRule?.Color ?? "";
+
+                // Show the warning dialog on the UI thread, passing environment info
+                // so the dialog can use EnvironmentSeverity config to determine mode
                 DialogResult dialogResult = DialogResult.Cancel;
                 ThreadHelper.ThrowIfNotOnUIThread();
-                dialogResult = SafetyWarningDialog.Show(filteredWarnings);
+                dialogResult = SafetyWarningDialog.Show(filteredWarnings, serverName, envLabel, envColor);
 
                 if (dialogResult == DialogResult.OK)
                 {
-                    Log.Information("ExecutionInterceptor: user confirmed execution despite {Count} warning(s) on server '{Server}'",
-                        filteredWarnings.Length, serverName);
+                    LogAuditEvent(serverName, envLabel, envColor, filteredWarnings, "Confirmed");
                     return true;
                 }
 
-                Log.Information("ExecutionInterceptor: user cancelled execution due to {Count} warning(s) on server '{Server}'",
-                    filteredWarnings.Length, serverName);
+                LogAuditEvent(serverName, envLabel, envColor, filteredWarnings, "Blocked");
                 return false;
             }
             catch (OperationCanceledException)
@@ -192,19 +194,48 @@ namespace AkmlSql.Shell.Shared.Safety
         }
 
         /// <summary>
-        /// Filters warnings based on which safety settings are currently enabled in config.
+        /// Writes a structured audit log entry for an execution guard event.
+        /// Logged at Warning level so audit entries are always visible in the log file.
         /// </summary>
-        private static SafetyWarningDto[] FilterBySettings(SafetyWarningDto[] warnings)
+        private static void LogAuditEvent(
+            string? serverName,
+            string environment,
+            string environmentColor,
+            SafetyWarningDto[] warnings,
+            string outcome)
         {
-            SafetySettings? safety;
-            try
+            foreach (var w in warnings)
             {
-                var settings = ConfigManager.Load();
-                safety = settings.Safety;
+                var statementType = ((Core.Models.Safety.SafetyWarningType)w.WarningType).ToString();
+                var sqlPreview = w.Message?.Length > 500 ? w.Message.Substring(0, 500) : w.Message;
+
+                Log.Warning(
+                    "[ExecutionGuard] {Outcome} | Server={Server} | Environment={Environment} | Color={EnvironmentColor} | StatementType={StatementType} | Object={ObjectName} | SQL={SqlPreview}",
+                    outcome,
+                    serverName ?? "(unknown)",
+                    environment,
+                    environmentColor,
+                    statementType,
+                    w.ObjectName ?? "",
+                    sqlPreview ?? "");
             }
-            catch
+        }
+
+        /// <summary>
+        /// Filters warnings based on which safety settings are currently enabled.
+        /// </summary>
+        private static SafetyWarningDto[] FilterBySettings(SafetyWarningDto[] warnings, SafetySettings? safety = null)
+        {
+            if (safety == null)
             {
-                return warnings; // Can't load config — show all warnings
+                try
+                {
+                    safety = ConfigManager.Load().Safety;
+                }
+                catch
+                {
+                    return warnings; // Can't load config — show all warnings
+                }
             }
 
             var filtered = new System.Collections.Generic.List<SafetyWarningDto>(warnings.Length);

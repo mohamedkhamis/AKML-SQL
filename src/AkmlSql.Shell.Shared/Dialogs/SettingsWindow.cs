@@ -264,6 +264,32 @@ namespace AkmlSql.Shell.Shared.Dialogs
         private Slider? _sldAiRetries;
         private TextBlock? _lblAiRetriesValue;
 
+        // Grid
+        private CheckBox? _chkGridAggregates;
+        private CheckBox? _chkGridNullHighlight;
+        private CheckBox? _chkGridRowNumbers;
+        private CheckBox? _chkGridFreezeHeaders;
+
+        // Editor Productivity
+        private CheckBox? _chkEdHighlightOccurrences;
+        private CheckBox? _chkEdBracketMatching;
+        private CheckBox? _chkEdNamedRegions;
+        private CheckBox? _chkEdStickyScroll;
+        private CheckBox? _chkEdMinimap;
+        private CheckBox? _chkEdDocumentOutline;
+
+        // Execution
+        private CheckBox? _chkExecShowTimer;
+        private CheckBox? _chkExecMultiDatabase;
+        private Slider? _sldExecNotificationThreshold;
+        private TextBlock? _lblExecNotificationValue;
+
+        // Navigation
+        private CheckBox? _chkNavGoToDefinition;
+        private CheckBox? _chkNavPeekDefinition;
+        private CheckBox? _chkNavFindReferences;
+        private CheckBox? _chkNavObjectSearch;
+
         // ─── Public API ──────────────────────────────────────────────────────
 
         public SettingsWindow(AppSettings settings)
@@ -414,6 +440,18 @@ namespace AkmlSql.Shell.Shared.Dialogs
             DockPanel.SetDock(btnExport, Dock.Left);
             dock.Children.Add(btnExport);
 
+            var btnResetPage = MakeButton("Reset This Page", 120);
+            btnResetPage.Margin = new Thickness(8, 0, 0, 0);
+            btnResetPage.Click += OnResetThisPageClick;
+            DockPanel.SetDock(btnResetPage, Dock.Left);
+            dock.Children.Add(btnResetPage);
+
+            var btnResetAll = MakeButton("Reset All", 80);
+            btnResetAll.Margin = new Thickness(8, 0, 0, 0);
+            btnResetAll.Click += OnResetAllClick;
+            DockPanel.SetDock(btnResetAll, Dock.Left);
+            dock.Children.Add(btnResetAll);
+
             bar.Child = dock;
             return bar;
         }
@@ -486,7 +524,8 @@ namespace AkmlSql.Shell.Shared.Dialogs
             string[] categories =
             {
                 "General", "IntelliSense", "Schema Cache", "Formatting", "Snippets",
-                "Code Analysis", "Refactoring", "History", "Tabs & UI", "Safety", "AI Assistance"
+                "Code Analysis", "Refactoring", "History", "Tabs & UI", "Safety",
+                "Grid", "Editor", "Execution", "Navigation", "AI Assistance"
             };
 
             foreach (var cat in categories)
@@ -522,6 +561,10 @@ namespace AkmlSql.Shell.Shared.Dialogs
             _pages["Tabs & UI"] = BuildTabsPage();
             _pages["Safety"] = BuildSafetyPage();
             _pages["AI Assistance"] = BuildAiPage();
+            _pages["Grid"] = BuildGridPage();
+            _pages["Editor"] = BuildEditorPage();
+            _pages["Execution"] = BuildExecutionPage();
+            _pages["Navigation"] = BuildNavigationPage();
         }
 
         // ═══════════════════════════════════════════════════════════════════════
@@ -866,6 +909,94 @@ namespace AkmlSql.Shell.Shared.Dialogs
             (_sldSafetyTransReminderInterval, _lblSafetyTransReminderValue) = AddSlider(panel,
                 "Reminder interval (seconds)", 30, 3600, 300,
                 "Time between transaction reminder notifications");
+
+            return WrapInScrollViewer(panel);
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════
+        //  Grid
+        // ═══════════════════════════════════════════════════════════════════════
+        private UIElement BuildGridPage()
+        {
+            var panel = CreatePagePanel();
+            AddPageHeader(panel, "Results Grid");
+            AddDescription(panel, "Configure the results grid behavior and appearance.");
+
+            _chkGridAggregates = AddToggle(panel, "Aggregate statistics",
+                "Show Sum, Avg, Count, Min, Max for selected cells");
+            _chkGridNullHighlight = AddToggle(panel, "Highlight NULL cells",
+                "Highlight NULL cells in results grid");
+            _chkGridRowNumbers = AddToggle(panel, "Row numbers",
+                "Show row numbers column");
+            _chkGridFreezeHeaders = AddToggle(panel, "Freeze headers",
+                "Freeze column headers while scrolling");
+
+            return WrapInScrollViewer(panel);
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════
+        //  Editor Productivity
+        // ═══════════════════════════════════════════════════════════════════════
+        private UIElement BuildEditorPage()
+        {
+            var panel = CreatePagePanel();
+            AddPageHeader(panel, "Editor Productivity");
+            AddDescription(panel, "Configure editor enhancement features.");
+
+            _chkEdHighlightOccurrences = AddToggle(panel, "Highlight occurrences",
+                "Highlight all occurrences of selected identifier");
+            _chkEdBracketMatching = AddToggle(panel, "Bracket matching",
+                "Highlight matching BEGIN/END and parenthesis pairs");
+            _chkEdNamedRegions = AddToggle(panel, "Named regions",
+                "Show named region markers in editor");
+            _chkEdStickyScroll = AddToggle(panel, "Sticky scroll",
+                "Pin parent scope headers while scrolling");
+            _chkEdMinimap = AddToggle(panel, "Code minimap",
+                "Show code minimap in editor margin");
+            _chkEdDocumentOutline = AddToggle(panel, "Document Outline",
+                "Enable Document Outline panel");
+
+            return WrapInScrollViewer(panel);
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════
+        //  Execution Productivity
+        // ═══════════════════════════════════════════════════════════════════════
+        private UIElement BuildExecutionPage()
+        {
+            var panel = CreatePagePanel();
+            AddPageHeader(panel, "Execution");
+            AddDescription(panel, "Configure query execution behavior.");
+
+            _chkExecShowTimer = AddToggle(panel, "Execution timer",
+                "Show execution timer in status bar");
+            _chkExecMultiDatabase = AddToggle(panel, "Multi-database execution",
+                "Enable multi-database execution mode");
+
+            AddSectionHeader(panel, "Notifications");
+            (_sldExecNotificationThreshold, _lblExecNotificationValue) = AddSlider(panel,
+                "Long-running query notification threshold (seconds)", 5, 300, 30);
+
+            return WrapInScrollViewer(panel);
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════
+        //  Navigation
+        // ═══════════════════════════════════════════════════════════════════════
+        private UIElement BuildNavigationPage()
+        {
+            var panel = CreatePagePanel();
+            AddPageHeader(panel, "Navigation");
+            AddDescription(panel, "Configure code navigation features.");
+
+            _chkNavGoToDefinition = AddToggle(panel, "Go to Definition",
+                "Enable Go to Definition (F12)");
+            _chkNavPeekDefinition = AddToggle(panel, "Peek Definition",
+                "Enable Peek Definition (Alt+F12)");
+            _chkNavFindReferences = AddToggle(panel, "Find All References",
+                "Enable Find All References (Shift+F12)");
+            _chkNavObjectSearch = AddToggle(panel, "Object Search",
+                "Enable Object Search (Ctrl+T)");
 
             return WrapInScrollViewer(panel);
         }
@@ -1554,6 +1685,70 @@ namespace AkmlSql.Shell.Shared.Dialogs
             }
         }
 
+        private void OnResetThisPageClick(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var selectedItem = _navTree?.SelectedItem as TreeViewItem;
+                var pageName = selectedItem?.Tag as string;
+                if (string.IsNullOrEmpty(pageName))
+                {
+                    MessageBox.Show("Select a settings page first.", Constants.ProductName, MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
+
+                if (MessageBox.Show($"Reset all settings on the '{pageName}' page to defaults?",
+                    Constants.ProductName, MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+                    return;
+
+                var defaults = new AppSettings();
+                switch (pageName)
+                {
+                    case "General":
+                        _settings.AutoUpdateEnabled = defaults.AutoUpdateEnabled;
+                        _settings.TelemetryEnabled = defaults.TelemetryEnabled;
+                        _settings.Theme = defaults.Theme;
+                        break;
+                    case "IntelliSense": _settings.IntelliSense = defaults.IntelliSense; break;
+                    case "Schema Cache": _settings.Cache = defaults.Cache; break;
+                    case "Formatting": _settings.Formatter = defaults.Formatter; break;
+                    case "Snippets": _settings.Snippets = defaults.Snippets; break;
+                    case "Code Analysis": _settings.CodeAnalysis = defaults.CodeAnalysis; break;
+                    case "Refactoring": _settings.Refactoring = defaults.Refactoring; break;
+                    case "History": _settings.History = defaults.History; break;
+                    case "Tabs & UI": _settings.Tabs = defaults.Tabs; break;
+                    case "Safety": _settings.Safety = defaults.Safety; break;
+                    case "Grid": _settings.Grid = defaults.Grid; break;
+                    case "Editor": _settings.EditorProductivity = defaults.EditorProductivity; break;
+                    case "Execution": _settings.ExecutionProductivity = defaults.ExecutionProductivity; break;
+                    case "Navigation": _settings.Navigation = defaults.Navigation; break;
+                    case "AI Assistance": _settings.Ai = defaults.Ai; break;
+                }
+                LoadSettingsToControls();
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "SettingsWindow: Reset page failed");
+            }
+        }
+
+        private void OnResetAllClick(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (MessageBox.Show("Reset ALL settings to defaults? This cannot be undone.",
+                    Constants.ProductName, MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+                    return;
+
+                _settings = new AppSettings();
+                LoadSettingsToControls();
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "SettingsWindow: Reset all failed");
+            }
+        }
+
         // ═══════════════════════════════════════════════════════════════════════
         //  Load settings into controls
         // ═══════════════════════════════════════════════════════════════════════
@@ -1708,6 +1903,35 @@ namespace AkmlSql.Shell.Shared.Dialogs
             SetChecked(_chkAiChatPanel, ai.ChatPanel);
             SetChecked(_chkAiInlineCompletion, ai.InlineCompletion);
             SetChecked(_chkAiAutoFixOnError, ai.AutoFixOnError);
+
+            // ── Grid ─────────────────────────────────────────────────────
+            var gr = _settings.Grid;
+            SetChecked(_chkGridAggregates, gr.Aggregates);
+            SetChecked(_chkGridNullHighlight, gr.NullHighlight);
+            SetChecked(_chkGridRowNumbers, gr.RowNumbers);
+            SetChecked(_chkGridFreezeHeaders, gr.FreezeHeaders);
+
+            // ── Editor Productivity ──────────────────────────────────────
+            var ep = _settings.EditorProductivity;
+            SetChecked(_chkEdHighlightOccurrences, ep.HighlightOccurrences);
+            SetChecked(_chkEdBracketMatching, ep.BracketMatching);
+            SetChecked(_chkEdNamedRegions, ep.NamedRegions);
+            SetChecked(_chkEdStickyScroll, ep.StickyScroll);
+            SetChecked(_chkEdMinimap, ep.Minimap);
+            SetChecked(_chkEdDocumentOutline, ep.DocumentOutline);
+
+            // ── Execution ────────────────────────────────────────────────
+            var ex = _settings.ExecutionProductivity;
+            SetChecked(_chkExecShowTimer, ex.ShowExecutionTimer);
+            SetChecked(_chkExecMultiDatabase, ex.MultiDatabase);
+            SetSlider(_sldExecNotificationThreshold, _lblExecNotificationValue, ex.NotificationThreshold);
+
+            // ── Navigation ───────────────────────────────────────────────
+            var nav = _settings.Navigation;
+            SetChecked(_chkNavGoToDefinition, nav.GoToDefinition);
+            SetChecked(_chkNavPeekDefinition, nav.PeekDefinition);
+            SetChecked(_chkNavFindReferences, nav.FindReferences);
+            SetChecked(_chkNavObjectSearch, nav.ObjectSearch);
         }
 
         // ═══════════════════════════════════════════════════════════════════════
@@ -1850,6 +2074,31 @@ namespace AkmlSql.Shell.Shared.Dialogs
             _settings.Ai.ChatPanel = IsChecked(_chkAiChatPanel);
             _settings.Ai.InlineCompletion = IsChecked(_chkAiInlineCompletion);
             _settings.Ai.AutoFixOnError = IsChecked(_chkAiAutoFixOnError);
+
+            // ── Grid ─────────────────────────────────────────────────────
+            _settings.Grid.Aggregates = IsChecked(_chkGridAggregates);
+            _settings.Grid.NullHighlight = IsChecked(_chkGridNullHighlight);
+            _settings.Grid.RowNumbers = IsChecked(_chkGridRowNumbers);
+            _settings.Grid.FreezeHeaders = IsChecked(_chkGridFreezeHeaders);
+
+            // ── Editor Productivity ──────────────────────────────────────
+            _settings.EditorProductivity.HighlightOccurrences = IsChecked(_chkEdHighlightOccurrences);
+            _settings.EditorProductivity.BracketMatching = IsChecked(_chkEdBracketMatching);
+            _settings.EditorProductivity.NamedRegions = IsChecked(_chkEdNamedRegions);
+            _settings.EditorProductivity.StickyScroll = IsChecked(_chkEdStickyScroll);
+            _settings.EditorProductivity.Minimap = IsChecked(_chkEdMinimap);
+            _settings.EditorProductivity.DocumentOutline = IsChecked(_chkEdDocumentOutline);
+
+            // ── Execution ────────────────────────────────────────────────
+            _settings.ExecutionProductivity.ShowExecutionTimer = IsChecked(_chkExecShowTimer);
+            _settings.ExecutionProductivity.MultiDatabase = IsChecked(_chkExecMultiDatabase);
+            _settings.ExecutionProductivity.NotificationThreshold = GetSliderInt(_sldExecNotificationThreshold);
+
+            // ── Navigation ───────────────────────────────────────────────
+            _settings.Navigation.GoToDefinition = IsChecked(_chkNavGoToDefinition);
+            _settings.Navigation.PeekDefinition = IsChecked(_chkNavPeekDefinition);
+            _settings.Navigation.FindReferences = IsChecked(_chkNavFindReferences);
+            _settings.Navigation.ObjectSearch = IsChecked(_chkNavObjectSearch);
         }
 
         // ═══════════════════════════════════════════════════════════════════════

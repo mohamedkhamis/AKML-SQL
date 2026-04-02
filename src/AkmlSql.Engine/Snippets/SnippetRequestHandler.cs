@@ -147,7 +147,118 @@ public class SnippetRequestHandler
 
     public SnippetImportResponse HandleImport(SnippetImportRequest request)
     {
-        // TODO: Implement in Phase 12 (US10)
-        return new SnippetImportResponse { Success = false, FailedCount = 1, FailedDetails = ["Import not yet implemented"] };
+        try
+        {
+            if (string.IsNullOrWhiteSpace(request.FileContent))
+                return new SnippetImportResponse { Success = false, FailedCount = 1, FailedDetails = ["File content is empty"] };
+
+            if (request.FileContent.Length > MaxSnippetJsonChars)
+                return new SnippetImportResponse { Success = false, FailedCount = 1, FailedDetails = ["Import content exceeds maximum allowed size (1 MB)"] };
+
+            var personalSource = _sources.FirstOrDefault(s => s.Type == SnippetSourceType.Personal);
+            if (personalSource == null)
+                return new SnippetImportResponse { Success = false, FailedCount = 1, FailedDetails = ["No personal snippet folder configured"] };
+
+            var snippets = ParseImportContent(request.FileContent, request.SourceFormat);
+            if (snippets == null)
+                return new SnippetImportResponse { Success = false, FailedCount = 1, FailedDetails = [$"Failed to parse content as source format {request.SourceFormat}"] };
+
+            var importedCount = 0;
+            var failedDetails = new List<string>();
+            var importedIds = new List<string>();
+
+            foreach (var snippet in snippets)
+            {
+                try
+                {
+                    if (string.IsNullOrWhiteSpace(snippet.Metadata.Shortcode))
+                    {
+                        var name = string.IsNullOrWhiteSpace(snippet.Metadata.Name) ? "(unnamed)" : snippet.Metadata.Name;
+                        failedDetails.Add($"Snippet '{name}' has no shortcode");
+                        continue;
+                    }
+
+                    snippet.Metadata.Modified = DateTime.UtcNow;
+                    if (string.IsNullOrWhiteSpace(snippet.Metadata.Id))
+                        snippet.Metadata.Id = Guid.NewGuid().ToString();
+
+                    _loader.SaveSnippet(snippet, personalSource.Path);
+                    importedIds.Add(snippet.Metadata.Id);
+                    importedCount++;
+                }
+                catch (Exception ex)
+                {
+                    failedDetails.Add($"Failed to save snippet '{snippet.Metadata.Shortcode}': {ex.Message}");
+                }
+            }
+
+            if (importedCount > 0)
+                ReloadIndex();
+
+            return new SnippetImportResponse
+            {
+                Success = importedCount > 0,
+                ImportedCount = importedCount,
+                FailedCount = failedDetails.Count,
+                FailedDetails = failedDetails.ToArray(),
+                SnippetIds = importedIds.ToArray()
+            };
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Unexpected error during snippet import");
+            return new SnippetImportResponse { Success = false, FailedCount = 1, FailedDetails = [ex.Message] };
+        }
+    }
+
+    private static readonly JsonSerializerOptions ImportJsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true,
+        ReadCommentHandling = JsonCommentHandling.Skip
+    };
+
+    private static List<Snippet>? ParseImportContent(string content, int sourceFormat)
+    {
+        // SourceFormat: 0=Auto, 4=AkmlSnippet
+        if (sourceFormat == 4 || sourceFormat == 0)
+        {
+            var result = TryParseAkmlSnippet(content);
+            if (result != null)
+                return result;
+        }
+
+        if (sourceFormat == 0)
+        {
+            Log.Warning("Auto-detect: no supported format matched the import content");
+        }
+        else if (sourceFormat != 4)
+        {
+            Log.Warning("Source format {Format} is not yet supported for import", sourceFormat);
+        }
+
+        return null;
+    }
+
+    private static List<Snippet>? TryParseAkmlSnippet(string content)
+    {
+        var trimmed = content.TrimStart();
+
+        try
+        {
+            if (trimmed.StartsWith("["))
+            {
+                var array = JsonSerializer.Deserialize<Snippet[]>(content, ImportJsonOptions);
+                return array?.ToList();
+            }
+
+            var single = JsonSerializer.Deserialize<Snippet>(content, ImportJsonOptions);
+            return single != null ? [single] : null;
+        }
+        catch (JsonException ex)
+        {
+            Log.Debug(ex, "Failed to parse content as AkmlSnippet format");
+            return null;
+        }
     }
 }

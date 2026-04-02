@@ -20,9 +20,12 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         private readonly Popup _popup;
         private readonly WildcardExpansionPopup _wildcardContent;
         private readonly Popup _wildcardPopup;
+        private readonly ObjectDefinitionPanel _definitionPanel;
+        private readonly Popup _definitionPopup;
 
         public AkmlCompletionPopup Popup => _popupContent;
         public WildcardExpansionPopup WildcardPopup => _wildcardContent;
+        public ObjectDefinitionPanel DefinitionPanel => _definitionPanel;
 
         public CompletionPopupAdornment(IWpfTextView textView, IAdornmentLayer adornmentLayer)
         {
@@ -60,6 +63,21 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             };
             _wildcardContent.Visibility = Visibility.Visible;
 
+            // Object Definition panel (shows beside the completion popup)
+            _definitionPanel = new ObjectDefinitionPanel();
+            _definitionPopup = new Popup
+            {
+                Child = _definitionPanel,
+                AllowsTransparency = true,
+                PopupAnimation = PopupAnimation.None,
+                Placement = PlacementMode.Custom,
+                CustomPopupPlacementCallback = PlaceDefinitionPopup,
+                StaysOpen = true,
+                Focusable = false,
+                IsOpen = false
+            };
+            _definitionPanel.Visibility = Visibility.Visible;
+
             _textView.LayoutChanged += OnLayoutChanged;
             _textView.Closed += OnClosed;
             _textView.LostAggregateFocus += (s, e) => { Hide(); HideWildcard(); };
@@ -77,6 +95,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         {
             _popup.IsOpen = false;
             _popupContent.Hide();
+            HideDefinition();
         }
 
         /// <summary>Reposition the popup at the current caret.</summary>
@@ -118,6 +137,31 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         public bool IsWildcardOpen
         {
             get { return _wildcardPopup.IsOpen && _wildcardContent.IsOpen; }
+        }
+
+        /// <summary>Show the object definition panel to the right of the completion popup.</summary>
+        public void ShowDefinition()
+        {
+            if (!_definitionPanel.HasContent) return;
+            _definitionPopup.PlacementTarget = _textView.VisualElement;
+            _definitionPopup.IsOpen = true;
+        }
+
+        /// <summary>Hide the object definition panel.</summary>
+        public void HideDefinition()
+        {
+            _definitionPopup.IsOpen = false;
+            _definitionPanel.Clear();
+        }
+
+        /// <summary>Reposition the object definition panel.</summary>
+        public void RepositionDefinition()
+        {
+            if (_definitionPopup.IsOpen)
+            {
+                _definitionPopup.HorizontalOffset += 0.01;
+                _definitionPopup.HorizontalOffset -= 0.01;
+            }
         }
 
         private CustomPopupPlacement[] PlacePopup(Size popupSize, Size targetSize, Point offset)
@@ -163,6 +207,60 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             }
         }
 
+        /// <summary>
+        /// Places the definition popup to the right of the completion popup.
+        /// Falls back to left side if there is not enough space on the right.
+        /// </summary>
+        private CustomPopupPlacement[] PlaceDefinitionPopup(Size popupSize, Size targetSize, Point offset)
+        {
+            try
+            {
+                var caretPos = _textView.Caret.Position.BufferPosition;
+                var caretLine = _textView.GetTextViewLineContainingBufferPosition(caretPos);
+                if (caretLine == null)
+                    return new[] { new CustomPopupPlacement(new Point(0, 0), PopupPrimaryAxis.Vertical) };
+
+                // Calculate same left/top as the main popup
+                var wordStart = FindWordStart(caretPos);
+                var wordLine = _textView.GetTextViewLineContainingBufferPosition(wordStart);
+
+                double popupLeft;
+                if (wordLine != null)
+                {
+                    var bounds = wordLine.GetCharacterBounds(wordStart);
+                    popupLeft = bounds.Left - _textView.ViewportLeft;
+                }
+                else
+                {
+                    popupLeft = _textView.Caret.Left - _textView.ViewportLeft;
+                }
+                popupLeft = Math.Max(0, popupLeft);
+
+                double top = caretLine.Bottom - _textView.ViewportTop + 2;
+                if (top + popupSize.Height > _textView.ViewportHeight)
+                {
+                    top = caretLine.Top - _textView.ViewportTop - popupSize.Height - 2;
+                }
+                top = Math.Max(0, top);
+
+                // Position to the right of the completion popup (380px wide + 2px gap)
+                double left = popupLeft + 382;
+
+                // If it would exceed the viewport, place it to the left of the popup
+                if (left + popupSize.Width > _textView.ViewportWidth)
+                {
+                    left = popupLeft - popupSize.Width - 2;
+                    if (left < 0) left = 0;
+                }
+
+                return new[] { new CustomPopupPlacement(new Point(left, top), PopupPrimaryAxis.Vertical) };
+            }
+            catch
+            {
+                return new[] { new CustomPopupPlacement(new Point(0, 0), PopupPrimaryAxis.Vertical) };
+            }
+        }
+
         private SnapshotPoint FindWordStart(SnapshotPoint point)
         {
             var snapshot = point.Snapshot;
@@ -184,6 +282,8 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 Reposition();
             if (_wildcardPopup.IsOpen)
                 RepositionWildcard();
+            if (_definitionPopup.IsOpen)
+                RepositionDefinition();
         }
 
         private void OnClosed(object sender, EventArgs e)
@@ -192,6 +292,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             _textView.Closed -= OnClosed;
             Hide();
             HideWildcard();
+            HideDefinition();
         }
     }
 }

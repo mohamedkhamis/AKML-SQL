@@ -24,21 +24,27 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         private readonly CompletionPopupAdornment _adornment;
         private readonly string _sessionId;
         private Timer _debounceTimer;
+        private Timer _quickInfoTimer;
         private ICompletionBroker _broker;
         private string _filterText = string.Empty;
         private bool _fetchPending;
         private bool _wildcardPending;
+        private int _quickInfoVersion;
         private System.Windows.Threading.DispatcherTimer _suppressTimer;
 
         public IOleCommandTarget NextTarget { get; set; }
 
         private const int DebounceMs = 150;
+        private const int QuickInfoDebounceMs = 300;
 
         public CompletionController(IWpfTextView textView, CompletionPopupAdornment adornment, string sessionId)
         {
             _textView = textView;
             _adornment = adornment;
             _sessionId = sessionId;
+
+            // Subscribe to selection changes for QuickInfo debounce
+            _adornment.Popup.SelectionChanged += OnCompletionSelectionChanged;
 
             // Timer that continuously suppresses native IntelliSense while our popup is open
             _suppressTimer = new System.Windows.Threading.DispatcherTimer
@@ -511,6 +517,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
 
         private void DismissPopup()
         {
+            CancelQuickInfo();
             _adornment.Hide();
             _filterText = string.Empty;
             _fetchPending = false;
@@ -624,6 +631,128 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         {
             return char.IsLetterOrDigit(c) || c == '_' || c == '#' || c == '@';
         }
+
+        #region Object Definition (QuickInfo)
+
+        /// <summary>
+        /// Called when the selected item in the completion popup changes.
+        /// Restarts the 300ms debounce timer before sending a QuickInfo request.
+        /// </summary>
+        private void OnCompletionSelectionChanged(object sender, CompletionItemModel item)
+        {
+            if (item == null || !_adornment.Popup.IsOpen)
+            {
+                CancelQuickInfo();
+                return;
+            }
+
+            // Increment version to invalidate any in-flight requests
+            var version = Interlocked.Increment(ref _quickInfoVersion);
+
+            _quickInfoTimer?.Dispose();
+            _quickInfoTimer = new Timer(_ =>
+            {
+                try
+                {
+                    // Check that our version is still current (no newer selection change)
+                    if (Volatile.Read(ref _quickInfoVersion) != version) return;
+
+                    FetchQuickInfo(item, version);
+                }
+                catch { /* Timer callback safety */ }
+            }, null, QuickInfoDebounceMs, Timeout.Infinite);
+        }
+
+        /// <summary>
+        /// Send a QuickInfo request to the engine for the currently selected completion item.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private void FetchQuickInfo(CompletionItemModel item, int version)
+        {
+            System.Threading.Tasks.Task.Run(async () =>
+            {
+                try
+                {
+                    var client = Ipc.EngineLifecycle.Manager?.Client;
+                    if (client == null || !client.IsConnected) return;
+
+                    // Cancelled if a newer selection arrived
+                    if (Volatile.Read(ref _quickInfoVersion) != version) return;
+
+                    var caretPos = 0;
+                    try
+                    {
+                        _textView.VisualElement.Dispatcher.Invoke(() =>
+                        {
+                            caretPos = _textView.Caret.Position.BufferPosition.Position;
+                        });
+                    }
+                    catch { return; }
+
+                    var response = await client.SendRequestAsync<
+                        AkmlSql.Core.Ipc.Messages.QuickInfoResponse,
+                        AkmlSql.Core.Ipc.Messages.QuickInfoRequest>(
+                        AkmlSql.Core.Ipc.MessageTypes.RequestQuickInfo,
+                        new AkmlSql.Core.Ipc.Messages.QuickInfoRequest
+                        {
+                            SessionId = _sessionId,
+                            CursorOffset = caretPos
+                        },
+                        timeoutMs: 3000);
+
+                    // Cancelled if a newer selection arrived
+                    if (Volatile.Read(ref _quickInfoVersion) != version) return;
+
+                    _textView.VisualElement.Dispatcher.Invoke(() =>
+                    {
+                        // Final version check on the UI thread
+                        if (Volatile.Read(ref _quickInfoVersion) != version) return;
+                        if (!_adornment.Popup.IsOpen) return;
+
+                        if (response != null && !string.IsNullOrEmpty(response.Header))
+                        {
+                            _adornment.DefinitionPanel.UpdateContent(
+                                response.ObjectType,
+                                response.Header,
+                                response.Details,
+                                response.Description);
+                            _adornment.ShowDefinition();
+                            _adornment.RepositionDefinition();
+                        }
+                        else
+                        {
+                            _adornment.HideDefinition();
+                        }
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Log.Debug(ex, "QuickInfo RPC failed");
+                    try
+                    {
+                        _textView.VisualElement.Dispatcher.Invoke(() => _adornment.HideDefinition());
+                    }
+                    catch { }
+                }
+            });
+        }
+
+        /// <summary>
+        /// Cancel any pending QuickInfo requests and hide the definition panel.
+        /// </summary>
+        private void CancelQuickInfo()
+        {
+            Interlocked.Increment(ref _quickInfoVersion);
+            _quickInfoTimer?.Dispose();
+            _quickInfoTimer = null;
+            try
+            {
+                _adornment.HideDefinition();
+            }
+            catch { }
+        }
+
+        #endregion
 
         #region Wildcard Expansion
 

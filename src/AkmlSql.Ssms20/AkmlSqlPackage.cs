@@ -98,6 +98,10 @@ namespace AkmlSql.Ssms20
 
                     // Phase 9 US6 — AI Chat Panel
                     AiChatPanelCommand.Initialize(this, commandService);
+
+                    // Phase 10 — SQL Prompt Core Parity
+                    Snippets.SnippetManagerCommand.Initialize(this, commandService);
+                    Navigation.BookmarkCommands.Initialize(this, commandService);
                 }
 
                 // Now do non-critical initialization that may fail

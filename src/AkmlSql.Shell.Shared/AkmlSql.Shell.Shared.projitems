@@ -10,6 +10,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\AkmlCompletionPopup.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\ObjectDefinitionPanel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\WildcardExpansionPopup.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\CompletionController.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\KeyboardHook.cs" />
@@ -85,12 +86,14 @@
     <Compile Include="$(MSBuildThisFileDirectory)Analysis\ErrorListReporter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Analysis\FixAction.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Analysis\LightbulbProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Analysis\RefactoringAction.cs" />
     <!-- Bulk analysis command and result dialog -->
     <Compile Include="$(MSBuildThisFileDirectory)Commands\BulkAnalysisCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\BulkAnalysisResultDialog.cs" />
     <!-- Refactoring: preview dialog and safe rename command stubs (T039, T040) -->
     <Compile Include="$(MSBuildThisFileDirectory)Refactoring\RefactoringPreviewDialog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Refactoring\SafeRenameCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Refactoring\RenameScriptGenerator.cs" />
     <!-- Heavyweight refactoring commands -->
     <Compile Include="$(MSBuildThisFileDirectory)Refactoring\ConvertTempTableCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Refactoring\ParameterizeValuesCommand.cs" />
@@ -117,6 +120,7 @@
     <!-- Phase 7 US7 — Execution Safety Warnings -->
     <Compile Include="$(MSBuildThisFileDirectory)Safety\SafetyWarningDialog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Safety\ExecutionInterceptor.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Safety\ExecutionCommandFilter.cs" />
     <!-- Phase 7 US8 — Transaction Reminder -->
     <Compile Include="$(MSBuildThisFileDirectory)Safety\TransactionMonitor.cs" />
     <!-- Phase 7 US10 — Custom Window Title and Tab Enhancements -->
@@ -136,6 +140,8 @@
     <Compile Include="$(MSBuildThisFileDirectory)Productivity\Grid\RowNumberProvider.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Productivity\Grid\CellEditDialog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Productivity\Grid\GridFeatureInitializer.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\Grid\GridSortHandler.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\Grid\GridFilterPopup.cs" />
     <!-- Phase 8 US4 — Execute Current Statement -->
     <Compile Include="$(MSBuildThisFileDirectory)Commands\ExecuteCurrentStatementCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\ExecuteToCursorCommand.cs" />
@@ -219,5 +225,13 @@
     <!-- Editor Toolbar: SQL Prompt-style action bar at top of each SQL editor -->
     <Compile Include="$(MSBuildThisFileDirectory)Editor\Toolbar\EditorToolbar.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\Toolbar\EditorToolbarProvider.cs" />
+    <!-- Phase 10: SQL Prompt Core Parity — Snippet Manager -->
+    <Compile Include="$(MSBuildThisFileDirectory)Snippets\SnippetManagerViewModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Snippets\SnippetManagerDialog.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Snippets\SnippetManagerCommand.cs" />
+    <!-- Phase 10 US8 — Bookmarks & Document Outline -->
+    <Compile Include="$(MSBuildThisFileDirectory)Navigation\BookmarkManager.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Navigation\BookmarkGlyphFactory.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Navigation\BookmarkCommands.cs" />
   </ItemGroup>
 </Project>

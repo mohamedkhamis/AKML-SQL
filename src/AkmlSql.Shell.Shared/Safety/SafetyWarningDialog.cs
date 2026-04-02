@@ -24,6 +24,7 @@ namespace AkmlSql.Shell.Shared.Safety
         private Button? _cancelButton;
         private TextBox? _confirmTextBox;
         private string? _expectedObjectName;
+        private StringComparison _confirmComparison = StringComparison.OrdinalIgnoreCase;
 
         private SafetyWarningDialog()
         {
@@ -41,10 +42,67 @@ namespace AkmlSql.Shell.Shared.Safety
         /// <see cref="DialogResult.OK"/> to proceed with execution,
         /// <see cref="DialogResult.Cancel"/> to abort.
         /// </returns>
+        /// <summary>
+        /// Shows the safety warning dialog for the given warnings using default mode detection.
+        /// </summary>
         public static DialogResult Show(SafetyWarningDto[] warnings)
+        {
+            return Show(warnings, serverName: null, environmentLabel: null);
+        }
+
+        /// <summary>
+        /// Shows the safety warning dialog for the given warnings.
+        /// When <paramref name="serverName"/> and <paramref name="environmentLabel"/> are provided,
+        /// the dialog severity is determined by the <c>EnvironmentSeverity</c> setting:
+        /// "TypeServerName" forces type-to-confirm with the server name, "SimpleConfirm" shows
+        /// a Yes/No dialog, and "Disabled" skips the dialog entirely.
+        /// </summary>
+        public static DialogResult Show(SafetyWarningDto[] warnings, string? serverName, string? environmentLabel, string? envColor = null)
         {
             if (warnings == null || warnings.Length == 0)
                 return DialogResult.OK;
+
+            // Check environment severity override
+            if (!string.IsNullOrEmpty(environmentLabel))
+            {
+                try
+                {
+                    var settings = AkmlSql.Core.Config.ConfigManager.Load();
+                    var severity = settings.Safety.EnvironmentSeverity;
+                    if (severity.TryGetValue(environmentLabel, out var level))
+                    {
+                        if (string.Equals(level, "Disabled", StringComparison.OrdinalIgnoreCase))
+                            return DialogResult.OK; // Skip dialog for this environment
+
+                        if (string.Equals(level, "TypeServerName", StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (!string.IsNullOrEmpty(serverName))
+                            {
+                                // Force type-to-confirm mode with server name
+                                using var typeDialog = new SafetyWarningDialog();
+                                typeDialog.BuildTypeServerNameLayout(warnings, serverName, environmentLabel, envColor);
+                                return typeDialog.ShowDialog();
+                            }
+                            // Server name unavailable — degrade to SimpleConfirm, not default mode
+                            using var fallbackDialog = new SafetyWarningDialog();
+                            fallbackDialog.BuildSimpleConfirmLayout(warnings);
+                            return fallbackDialog.ShowDialog();
+                        }
+
+                        // "SimpleConfirm" or any other value falls through to default mode
+                        if (string.Equals(level, "SimpleConfirm", StringComparison.OrdinalIgnoreCase))
+                        {
+                            using var simpleDialog = new SafetyWarningDialog();
+                            simpleDialog.BuildSimpleConfirmLayout(warnings);
+                            return simpleDialog.ShowDialog();
+                        }
+                    }
+                }
+                catch
+                {
+                    // Config load failure — fall through to default mode detection
+                }
+            }
 
             using var dialog = new SafetyWarningDialog();
             dialog.BuildLayout(warnings);
@@ -258,6 +316,123 @@ namespace AkmlSql.Shell.Shared.Safety
             ActiveControl = _confirmTextBox;
         }
 
+        /// <summary>
+        /// Type-to-confirm dialog for Production environments.
+        /// User must type the server name to enable the Proceed button.
+        /// Background color matches the environment color for maximum visibility.
+        /// </summary>
+        private void BuildTypeServerNameLayout(SafetyWarningDto[] warnings, string serverName, string environmentLabel, string? envColorHex = null)
+        {
+            Size = new Size(540, 360);
+            _expectedObjectName = serverName;
+            _confirmComparison = StringComparison.Ordinal; // Case-sensitive for production server name
+
+            // Use pre-resolved color from caller to avoid redundant EnvironmentDetector.Match call
+            Color envColor = Color.DarkRed;
+            try
+            {
+                if (!string.IsNullOrEmpty(envColorHex))
+                {
+                    envColor = ColorTranslator.FromHtml(envColorHex);
+                }
+            }
+            catch { }
+
+            // Apply environment color as a subtle background tint
+            BackColor = Color.FromArgb(
+                Math.Min(envColor.R + 200, 255),
+                Math.Min(envColor.G + 200, 255),
+                Math.Min(envColor.B + 200, 255));
+
+            // Environment banner
+            var bannerPanel = new Panel
+            {
+                BackColor = envColor,
+                Location = new Point(0, 0),
+                Size = new Size(540, 36),
+                Dock = DockStyle.Top
+            };
+            var bannerLabel = new Label
+            {
+                Text = $"  {environmentLabel} — {serverName}",
+                ForeColor = Color.White,
+                Font = new Font(Font.FontFamily, 11, FontStyle.Bold),
+                Location = new Point(4, 8),
+                AutoSize = true
+            };
+            bannerPanel.Controls.Add(bannerLabel);
+
+            // Warning icon + message
+            var iconBox = new PictureBox
+            {
+                Image = SystemIcons.Warning.ToBitmap(),
+                SizeMode = PictureBoxSizeMode.AutoSize,
+                Location = new Point(20, 50)
+            };
+
+            var messageLabel = new Label
+            {
+                Text = BuildCombinedMessage(warnings),
+                Location = new Point(68, 50),
+                Size = new Size(440, 100),
+                AutoSize = false
+            };
+
+            // Instruction: type server name
+            var instructionLabel = new Label
+            {
+                Text = $"To confirm execution on this {environmentLabel} server, type the server name exactly:",
+                Font = new Font(Font.FontFamily, 9, FontStyle.Bold),
+                Location = new Point(20, 165),
+                Size = new Size(490, 20),
+                AutoSize = false
+            };
+
+            var expectedLabel = new Label
+            {
+                Text = serverName,
+                Font = new Font("Consolas", 10, FontStyle.Bold),
+                ForeColor = envColor,
+                Location = new Point(20, 190),
+                AutoSize = true
+            };
+
+            _confirmTextBox = new TextBox
+            {
+                Location = new Point(20, 215),
+                Size = new Size(490, 24),
+                Font = new Font("Consolas", 10)
+            };
+            _confirmTextBox.TextChanged += OnConfirmTextChanged;
+
+            _proceedButton = new Button
+            {
+                Text = "Execute",
+                Location = new Point(320, 280),
+                Size = new Size(90, 30),
+                DialogResult = DialogResult.OK,
+                Enabled = false
+            };
+
+            _cancelButton = new Button
+            {
+                Text = "Cancel",
+                Location = new Point(420, 280),
+                Size = new Size(90, 30),
+                DialogResult = DialogResult.Cancel
+            };
+
+            CancelButton = _cancelButton;
+
+            Controls.AddRange(new Control[]
+            {
+                bannerPanel, iconBox, messageLabel, instructionLabel,
+                expectedLabel, _confirmTextBox, _proceedButton, _cancelButton
+            });
+
+            ActiveControl = _confirmTextBox;
+        }
+
         private void OnConfirmTextChanged(object? sender, EventArgs e)
         {
             if (_proceedButton == null || _confirmTextBox == null || _expectedObjectName == null)
@@ -266,7 +441,7 @@ namespace AkmlSql.Shell.Shared.Safety
             _proceedButton.Enabled = string.Equals(
                 _confirmTextBox.Text.Trim(),
                 _expectedObjectName,
-                StringComparison.OrdinalIgnoreCase);
+                _confirmComparison);
         }
 
         /// <summary>
