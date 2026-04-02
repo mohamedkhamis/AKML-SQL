@@ -278,7 +278,10 @@ begin
     try
       repeat
         if (FindRec.Attributes and FILE_ATTRIBUTE_DIRECTORY) <> 0 then
+        begin
           DelTree(BasePath + FindRec.Name + '\ComponentModelCache', True, True, True);
+          DeleteFile(BasePath + FindRec.Name + '\privateregistry.bin');
+        end;
       until not FindNext(FindRec);
     finally
       FindClose(FindRec);
@@ -298,7 +301,10 @@ begin
     try
       repeat
         if (FindRec.Attributes and FILE_ATTRIBUTE_DIRECTORY) <> 0 then
+        begin
           DelTree(BasePath + FindRec.Name + '\ComponentModelCache', True, True, True);
+          DeleteFile(BasePath + FindRec.Name + '\privateregistry.bin');
+        end;
       until not FindNext(FindRec);
     finally
       FindClose(FindRec);
@@ -312,7 +318,12 @@ begin
     try
       repeat
         if (FindRec.Attributes and FILE_ATTRIBUTE_DIRECTORY) <> 0 then
+        begin
           DelTree(BasePath + FindRec.Name + '\ComponentModelCache', True, True, True);
+          // Also delete privateregistry.bin — caches VS package registration and can
+          // prevent updated/new extensions from loading after reinstall
+          DeleteFile(BasePath + FindRec.Name + '\privateregistry.bin');
+        end;
       until not FindNext(FindRec);
     finally
       FindClose(FindRec);
