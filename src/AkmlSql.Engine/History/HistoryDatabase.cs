@@ -135,6 +135,17 @@ public sealed class HistoryDatabase : IDisposable
                 INSERT INTO history_fts(history_fts, rowid, sql_text) VALUES ('delete', old.id, old.sql_text);
             END;");
 
+        // Create version history table for tracking SQL edits over time
+        await ExecuteNonQueryAsync(conn, @"
+            CREATE TABLE IF NOT EXISTS history_versions (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                history_id INTEGER NOT NULL REFERENCES history(id) ON DELETE CASCADE,
+                sql_text   TEXT    NOT NULL,
+                saved_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+            );");
+        await ExecuteNonQueryAsync(conn,
+            "CREATE INDEX IF NOT EXISTS IX_history_versions_history_id ON history_versions(history_id);");
+
         Log.Information("History database initialized at {ConnectionString}", _connectionString);
     }
 
@@ -626,13 +637,17 @@ public sealed class HistoryDatabase : IDisposable
         await using var conn = new SqliteConnection(_connectionString);
         await conn.OpenAsync();
 
-        // Toggle: set is_favorite = 1 - is_favorite
-        await using var cmd = new SqliteCommand(
-            "UPDATE history SET is_favorite = 1 - is_favorite WHERE id = @id; SELECT is_favorite FROM history WHERE id = @id2;", conn);
-        cmd.Parameters.AddWithValue("@id", entryId);
-        cmd.Parameters.AddWithValue("@id2", entryId);
+        // Step 1: Toggle the favorite flag
+        await using var updateCmd = new SqliteCommand(
+            "UPDATE history SET is_favorite = 1 - is_favorite WHERE id = @id", conn);
+        updateCmd.Parameters.AddWithValue("@id", entryId);
+        await updateCmd.ExecuteNonQueryAsync();
 
-        var result = await cmd.ExecuteScalarAsync();
+        // Step 2: Read back the new state (separate command — ExecuteScalarAsync only runs first statement)
+        await using var selectCmd = new SqliteCommand(
+            "SELECT is_favorite FROM history WHERE id = @id", conn);
+        selectCmd.Parameters.AddWithValue("@id", entryId);
+        var result = await selectCmd.ExecuteScalarAsync();
         var newState = result != null && Convert.ToInt32(result) != 0;
 
         Log.Debug("History entry {Id}: favorite toggled to {State}", entryId, newState);
@@ -912,6 +927,65 @@ public sealed class HistoryDatabase : IDisposable
         var bytes = Encoding.UTF8.GetBytes(normalized);
         var hashBytes = SHA256.HashData(bytes);
         return Convert.ToHexString(hashBytes).ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// Updates the tab_title (display name) for a history entry.
+    /// Used by the "Rename" feature for closed queries.
+    /// </summary>
+    public async Task UpdateTabTitleAsync(long entryId, string newName)
+    {
+        await using var conn = new SqliteConnection(_connectionString);
+        await conn.OpenAsync();
+
+        await using var cmd = new SqliteCommand(
+            "UPDATE history SET tab_title = @name WHERE id = @id;", conn);
+        cmd.Parameters.AddWithValue("@name", newName);
+        cmd.Parameters.AddWithValue("@id", entryId);
+
+        await cmd.ExecuteNonQueryAsync();
+        Log.Debug("History entry {Id}: tab_title updated to '{Name}'", entryId, newName);
+    }
+
+    /// <summary>
+    /// Inserts a version snapshot for a history entry (for version history tracking).
+    /// </summary>
+    public async Task InsertVersionAsync(long historyId, string sqlText)
+    {
+        await using var conn = new SqliteConnection(_connectionString);
+        await conn.OpenAsync();
+
+        await using var cmd = new SqliteCommand(@"
+            INSERT INTO history_versions (history_id, sql_text)
+            VALUES (@historyId, @sqlText);", conn);
+        cmd.Parameters.AddWithValue("@historyId", historyId);
+        cmd.Parameters.AddWithValue("@sqlText", sqlText);
+
+        await cmd.ExecuteNonQueryAsync();
+        Log.Debug("History version inserted for entry {Id}", historyId);
+    }
+
+    /// <summary>
+    /// Retrieves all version snapshots for a history entry, ordered by save time descending.
+    /// Returns a list of (id, sqlText, savedAt) tuples.
+    /// </summary>
+    public async Task<List<(long Id, string SqlText, string SavedAt)>> GetVersionsAsync(long historyId)
+    {
+        await using var conn = new SqliteConnection(_connectionString);
+        await conn.OpenAsync();
+
+        var versions = new List<(long, string, string)>();
+        await using var cmd = new SqliteCommand(
+            "SELECT id, sql_text, saved_at FROM history_versions WHERE history_id = @historyId ORDER BY saved_at DESC;", conn);
+        cmd.Parameters.AddWithValue("@historyId", historyId);
+
+        await using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            versions.Add((reader.GetInt64(0), reader.GetString(1), reader.GetString(2)));
+        }
+
+        return versions;
     }
 
     public void Dispose()

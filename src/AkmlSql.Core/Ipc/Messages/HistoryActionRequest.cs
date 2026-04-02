@@ -45,6 +45,12 @@ namespace AkmlSql.Core.Ipc.Messages
         /// </summary>
         [Key(4)]
         public HistorySearchRequest? Filter { get; set; }
+
+        /// <summary>
+        /// New display name for a history entry (only used when Action = Rename).
+        /// </summary>
+        [Key(5)]
+        public string? NewName { get; set; }
     }
 
     /// <summary>
@@ -58,5 +64,7 @@ namespace AkmlSql.Core.Ipc.Messages
         public const int Export = 3;
         public const int GetDiff = 4;
         public const int DeleteAll = 5;
+        public const int Rename = 6;
+        public const int GetVersions = 7;
     }
 }

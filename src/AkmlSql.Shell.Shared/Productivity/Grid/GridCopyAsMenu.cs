@@ -97,6 +97,7 @@ namespace AkmlSql.Shell.Shared.Productivity.Grid
             copyAsMenu.DropDownItems.Add(CreateMenuItem("HTML Table", CopyAsHtml));
             copyAsMenu.DropDownItems.Add(new ToolStripSeparator());
             copyAsMenu.DropDownItems.Add(CreateMenuItem("INSERT Statements", CopyAsInsert));
+            copyAsMenu.DropDownItems.Add(CreateMenuItem("IN Clause", CopyAsInClause));
             copyAsMenu.DropDownItems.Add(CreateMenuItem("Markdown Table", CopyAsMarkdown));
 
             menu.Items.Add(new ToolStripSeparator());
@@ -144,6 +145,11 @@ namespace AkmlSql.Shell.Shared.Productivity.Grid
         private static void CopyAsInsert(object? sender, EventArgs e)
         {
             CopyFormattedData(FormatAsInsert);
+        }
+
+        private static void CopyAsInClause(object? sender, EventArgs e)
+        {
+            CopyFormattedData(FormatAsInClause);
         }
 
         private static void CopyAsMarkdown(object? sender, EventArgs e)
@@ -353,6 +359,69 @@ namespace AkmlSql.Shell.Shared.Productivity.Grid
                 }
                 sb.AppendLine(");");
             }
+            return sb.ToString();
+        }
+
+        internal static string FormatAsInClause(string[] headers, List<string[]> rows)
+        {
+            var sb = new StringBuilder();
+            var columnName = headers.Length > 0 ? headers[0] : "Column";
+
+            // Collect values from the first column
+            var values = new List<string>();
+            bool hasNulls = false;
+
+            foreach (var row in rows)
+            {
+                var val = row.Length > 0 ? row[0] : "NULL";
+                if (val == "NULL")
+                {
+                    hasNulls = true;
+                    continue;
+                }
+                values.Add(val);
+            }
+
+            // Build the formatted values list
+            var formattedValues = new List<string>();
+            foreach (var val in values)
+            {
+                // Detect numeric values: leave unquoted
+                if (long.TryParse(val, out _))
+                {
+                    formattedValues.Add(val);
+                }
+                else if (double.TryParse(val, System.Globalization.NumberStyles.Any,
+                    System.Globalization.CultureInfo.InvariantCulture, out _))
+                {
+                    formattedValues.Add(val);
+                }
+                else
+                {
+                    // String value: wrap in single quotes with escaped internal quotes
+                    formattedValues.Add("'" + val.Replace("'", "''") + "'");
+                }
+            }
+
+            sb.Append("WHERE [");
+            sb.Append(columnName);
+            sb.Append("] IN (");
+            sb.Append(string.Join(", ", formattedValues));
+            sb.Append(')');
+
+            if (hasNulls)
+            {
+                sb.AppendLine();
+                sb.Append("-- NULL values excluded");
+            }
+
+            if (values.Count > 1000)
+            {
+                sb.AppendLine();
+                sb.Append("-- Note: SQL Server IN clause limited to ~1000 values");
+            }
+
+            sb.AppendLine();
             return sb.ToString();
         }
 

@@ -32,5 +32,28 @@ namespace AkmlSql.Core.Ipc.Messages
         /// <summary>Error message if the action failed; null on success.</summary>
         [Key(5)]
         public string? Error { get; set; }
+
+        /// <summary>
+        /// Version snapshots for a history entry (returned by GetVersions action).
+        /// Each item contains: Id, SqlText, SavedAt.
+        /// </summary>
+        [Key(6)]
+        public HistoryVersionDto[]? Versions { get; set; }
+    }
+
+    /// <summary>
+    /// Lightweight DTO for a history version snapshot.
+    /// </summary>
+    [MessagePackObject]
+    public class HistoryVersionDto
+    {
+        [Key(0)]
+        public long Id { get; set; }
+
+        [Key(1)]
+        public string SqlText { get; set; } = string.Empty;
+
+        [Key(2)]
+        public string SavedAt { get; set; } = string.Empty;
     }
 }

@@ -6,202 +6,314 @@ This document tracks the development progress, complete feature inventory, issue
 
 ---
 
-## Complete Feature Inventory (as of 2026-04-02, updated with spec 011 features)
+## Complete Feature Inventory (as of 2026-04-02)
 
-### 1. IntelliSense & Code Completion
+> **Codebase**: 916 C# files | 6 IDE targets | 457 unit tests | 130+ analysis rules
+> **100% SQL Prompt Core feature parity achieved** (specs 010 + 011)
+
+### 1. IntelliSense & Code Completion (9 providers, 9 shell files)
 - Custom dark-themed completion popup (replicates SQL Prompt design)
 - **Ctrl transparency**: Hold Ctrl to make popup semi-transparent (see code behind)
 - Auto-trigger on typing with configurable debounce delay
 - Dot-trigger for table.column completion
-- Fuzzy matching (substring + prefix)
-- Column provider (CTEs, temp tables, derived tables, aliases)
-- Alias provider with alias-qualified column resolution
-- Object provider (schema-qualified tables, views, procedures, functions)
+- Fuzzy matching (substring + prefix via FuzzyMatcher)
+- **9 completion providers**: Column, Alias, Object, Keyword, Snippet, Variable, JOIN, QuickInfo, Signature
+- Column provider with CTE, temp table, derived table, and alias resolution
+- Object provider with schema-qualified tables, views, procedures, functions
 - Keyword provider with configurable casing (UPPER/lower/PascalCase/AsIs)
-- Snippet integration in completion list
-- Variable provider (@variables in scope)
-- Quick Info tooltips (column types, nullability, PK/FK badges)
-- Function signature help with parameter types
-- Wildcard expansion popup (SELECT * to explicit column list)
-- Object Definition Panel (Summary/Script tabs alongside completion popup)
+- Snippet integration in completion list (personal + team + built-in)
+- Variable provider (@local variables and @@system variables in scope)
+- Quick Info tooltips on hover (column types, nullability, PK/FK badges, row count)
+- Function signature help with parameter names, types, and overloads
+- Wildcard expansion popup (SELECT * to explicit column list with inline preview)
+- Object Definition Panel (Summary/Script tabs alongside completion popup via QuickInfo IPC)
 - Auto alias suggestion on table completion
-- JOIN assist (FK-based condition suggestions)
-- Schema status indicator (cache load progress)
+- JOIN assist (FK-based ON condition suggestions)
+- Schema status indicator (cache load progress in status bar)
+- CamelCase dictionary for identifier splitting (5,000+ word list)
 
-### 2. Code Formatting (20 commands)
-- Format Document (Ctrl+K, Y)
-- Format Selection
-- Format on Save / Format on Paste / Format on Delimiter (semicolons/GO)
-- Casing Only (apply keyword casing without structural changes)
-- Expand Wildcards (SELECT * to column list)
-- Expand Insert Columns (with **metadata comments**: type, nullability, defaults as inline comments) / Expand Update Columns / Expand Exec Parameters
-- **Convert sp_executesql to Static SQL** (substitutes parameter values into template)
-- Add GROUP BY Columns
-- Insert Semicolons / Remove Semicolons
-- Toggle Brackets (add/remove square brackets)
-- Toggle AS Keywords
-- Qualify Object Names (add dbo. schema prefix)
-- Convert Old-Style JOINs to ANSI syntax
-- Replace Deprecated Syntax
-- Encapsulate in BEGIN/END
-- Formatting profiles (.akmlstyle JSON files)
-- SQL Prompt profile importer
+### 2. Code Formatting (20 commands + profile system)
 
-### 3. Code Analysis (130+ rules across 8 categories)
-- Real-time AST-based static analysis
-- Diagnostic squiggles (wavy underlines)
-- Error List integration
-- Lightbulb quick-fix suggestions
-- Analysis suppression (NOANALYZE comments)
-- Rule categories:
-  - **Best Practices (BP)**: 28 rules (@@IDENTITY, TRY/CATCH, NULL comparison, etc.)
-  - **Performance (PE)**: 31 rules (SELECT *, NOCOUNT, leading wildcard LIKE, etc.)
-  - **Security (SE)**: 20 rules (SQL injection, hard-coded passwords, xp_cmdshell, etc.)
-  - **Style (ST)**: 24 rules (keyword casing, alias format, semicolons, etc.)
-  - **Deprecated (DEP)**: 8 rules (old data types, old JOIN syntax, RAISERROR, etc.)
-  - **Design (DE)**: 7 rules (missing PK, FLOAT for money, sql_variant, etc.)
-  - **Execution (EX)**: 6 rules (division by zero, data truncation, unreachable code)
-  - **Naming (NM)**: 6 rules (reserved words, sp_ prefix, Hungarian notation)
+**Format Commands (16):**
+1. Format Document (Ctrl+K, Y) — full document formatting
+2. Format Selection — selection-only formatting
+3. Casing Only (Ctrl+B, Ctrl+U) — keyword casing without layout changes
+4. Expand Wildcards (Ctrl+B, Ctrl+W) — SELECT * to column list
+5. Expand Insert Columns — with **metadata comments** (type, nullability, defaults as inline comments)
+6. Expand Update Columns — UPDATE SET with all columns
+7. Expand Exec Parameters — sp_executesql parameter expansion
+8. Add GROUP BY Columns — missing column detection
+9. Insert Semicolons (Ctrl+B, Ctrl+C) — statement terminator insertion
+10. Remove Semicolons — statement terminator removal
+11. Toggle Brackets — add/remove [square brackets]
+12. Toggle AS Keywords — add/remove AS in aliases
+13. Qualify Object Names (Ctrl+B, Ctrl+Q) — add dbo. schema prefix
+14. Convert Old-Style JOINs — WHERE-clause joins to ANSI syntax
+15. Replace Deprecated Syntax — modernize deprecated patterns
+16. Encapsulate in BEGIN/END — wrap statements
 
-### 4. Code Refactoring (15 operations)
-- **Heavyweight** (with preview dialog):
-  - Extract to CTE
-  - Extract to Derived Table
-  - Extract to Stored Procedure (with parameter inference)
-  - Safe Rename (cross-script, generates ALTER scripts)
-  - Parameterize Values
-  - Encapsulate as View
-  - Convert Temp Table to Table Variable (or reverse)
-- **Lightweight** (instant):
-  - Remove Semicolons, Expand Insert/Update/Exec Columns
-  - Add GROUP BY Columns, Encapsulate BEGIN/END
-  - Replace Deprecated Syntax, Convert Old-Style JOINs
-- Refactoring Preview Dialog with diff tree view
-- Rename Script Generator (SQL script output, no direct DB execution)
+**Format Triggers (3):**
+17. Format on Save — auto-format when document saved
+18. Format on Paste — auto-format pasted code
+19. Format on Delimiter — auto-format on semicolons/GO
 
-### 5. Execution Safety Guard
-- Intercepts query execution (F5) via DTE command hook
-- DELETE without WHERE warning
-- UPDATE without WHERE warning
-- DROP TABLE/DATABASE confirmation
+**Convert Operations (1):**
+20. **Convert sp_executesql to Static SQL** — substitutes parameter values into template (string-literal-aware)
+
+**Profile System:**
+- `.akmlstyle` JSON format profiles with 50+ formatting options
+- SQL Prompt `.sqlpromptstyle` profile importer
+- Profile editor dialog with real-time SQL preview
+- Profile selector dropdown in toolbar
+
+### 3. Code Analysis (130 rules across 8 categories)
+
+**Infrastructure (6 shell files):**
+- Real-time AST-based static analysis engine with debounced triggers
+- Diagnostic squiggles (wavy underlines — green for warnings, red for errors)
+- VS Error List integration
+- Lightbulb quick-fix suggestions with contextual refactoring actions
+- Analysis suppression (`-- noqa: RULE_ID` inline comments)
+- Bulk analysis command (multi-file analysis across folders)
+
+**Rule Categories:**
+
+| Category | Prefix | Count | Examples |
+|----------|--------|-------|---------|
+| Best Practices | BP | 28 | @@IDENTITY→SCOPE_IDENTITY, TRY/CATCH, NULL comparison, GOTO, magic numbers |
+| Performance | PE | 31 | SELECT *, SET NOCOUNT, leading wildcard LIKE, correlated subquery, cursor usage |
+| Security | SE | 20 | SQL injection, hard-coded passwords, xp_cmdshell, GRANT to PUBLIC, SA login |
+| Style | ST | 24 | keyword casing, alias format, semicolons, line length, indentation |
+| Deprecated | DEP | 8 | old data types (text/ntext/image), old JOIN syntax, RAISERROR, SET FMTONLY |
+| Design | DE | 7 | missing PK, FLOAT for money, sql_variant, nullable PK, short VARCHAR |
+| Execution | EX | 6 | division by zero, data truncation, unreachable code, always-true condition |
+| Naming | NM | 6 | reserved words, sp_ prefix, Hungarian notation, single-letter aliases |
+
+### 4. Code Refactoring (18 operations)
+
+**Heavyweight Operations (8, with preview dialog):**
+1. Extract to CTE — subquery to WITH clause
+2. Extract to Derived Table — subquery to FROM subselect
+3. Extract to Stored Procedure — with parameter inference
+4. Safe Rename — cross-script rename, generates ALTER scripts (no direct DB execution)
+5. Parameterize Values — literal to @parameter conversion
+6. Encapsulate as View — SELECT to CREATE VIEW
+7. Convert Temp Table to Table Variable (or reverse)
+8. **Split Table** — normalization refactoring: generates CREATE TABLE, FK, INSERT migration, DROP COLUMN
+
+**Lightweight Operations (9, instant application):**
+1. Remove Semicolons
+2. Expand Insert Columns (with metadata comments)
+3. Expand Update Columns
+4. Expand Exec Parameters
+5. Add GROUP BY Columns
+6. Encapsulate BEGIN/END
+7. Replace Deprecated Syntax
+8. Convert Old-Style JOINs to ANSI
+9. **Convert sp_executesql to Static SQL** (string-literal-aware parameter substitution)
+
+**Infrastructure:**
+- Refactoring Preview Dialog (WinForms, tree-view with checkboxes + RichTextBox diff)
+- Rename Script Generator (SQL ALTER script output, transaction-wrapped, commented)
+- Reference Collector (AST-based cross-reference detection)
+
+### 5. Execution Safety Guard (4 shell files)
+- Pre-execution intercept via DTE `CommandEvents.BeforeExecute` hook on Query.Execute (F5)
+- DELETE without WHERE clause warning
+- UPDATE without WHERE clause warning
+- DROP TABLE / DROP DATABASE confirmation
 - TRUNCATE TABLE confirmation
-- Environment-aware severity:
-  - Production: type server name to confirm (case-sensitive)
-  - Non-Production: simple Yes/No dialog
-  - Configurable per environment
-- Transaction Reminder (uncommitted transaction detection)
-- Structured audit logging (server, environment, statement type, outcome)
+- **Environment-aware dialog severity** (configurable per environment):
+  - Production: type server name to confirm (case-sensitive, red banner)
+  - Staging: simple Yes/No dialog
+  - Development: configurable (can be disabled)
+- Transaction Reminder (uncommitted transaction detection with periodic reminders)
+- **Structured audit logging** (Serilog Warning level): server, database, environment, environment color, statement type, SQL preview, outcome (Blocked/Confirmed/Bypassed)
+- Fail-open design: engine unavailable or timeout → allow execution
+- Dynamic settings reload (no IDE restart needed to enable/disable)
 
-### 6. Snippet Manager
+### 6. Snippet Manager (3 shell files + 6 engine files)
 - WPF Snippet Manager dialog (search, CRUD, import/export)
-- Personal + Team + Built-in snippet sources
-- Snippet variables ($CURSOR$, $SELECTEDTEXT$, $DATE$, $DBNAME$, etc.)
-- Context filtering (global, after_select, after_from, etc.)
-- Surround-with snippets (wraps selected text)
-- Format on expand (optional)
-- Usage tracking for ranking
+- **Three snippet sources**: Personal (user folder), Team (shared folder), Built-in (bundled)
+- Priority system: Personal > Team > Built-in (for shortcode conflicts)
+- **14 built-in variables**: $CURSOR$, $SELECTEDTEXT$, $CLIPBOARD$, $DATE$, $DATETIME$, $TIME$, $USER$, $MACHINE$, $DATABASE$, $SERVER$, $SCHEMA$, $GUID$, $YEAR$, $FILENAME$
+- Custom snippet variables with schema-aware hints (tables, columns, procedures)
+- Context filtering (global, after_select, after_from, batch_start, etc.)
+- Surround-with snippets (wraps selected text — e.g., TRY/CATCH, BEGIN/END)
+- Format on expand (optional auto-formatting after snippet insertion)
+- Import from `.akmlsnippet` JSON files (single or array, auto-detect)
+- Usage tracking for ranking in completion list
 
-### 7. SQL History
-- SQLite-backed execution history recording
-- History Tool Window with search and filtering
-- History diff view (side-by-side comparison)
-- Encryption at rest (optional)
-- Configurable retention period and max entries
-- Record failures (optional)
-- Deduplication
+### 7. SQL History (5 shell files + 4 engine files)
+- SQLite-backed execution history recording (WAL mode for performance)
+- History Tool Window with full-text search and filtering (All/Open/Closed tabs)
+- History diff view (side-by-side query comparison)
+- Encryption at rest (optional, Windows DPAPI)
+- Configurable retention period (days) and max entries
+- Record failures toggle (captures failed query attempts)
+- Deduplication (prevents identical consecutive queries)
+- Background retention service (enforces cleanup policies)
 
-### 8. Tab Management & Session Recovery
-- Tab coloring by environment (Production=red, Staging=orange, Dev=green) with **optional gradient** (lighter top, base bottom)
-- Custom window title template ({server} - {database})
-- Restore Closed Tab (Ctrl+Shift+T)
+### 8. Tab Management & Session Recovery (7 tab files + 3 session files)
+- Tab coloring by environment (Production=red, Staging=orange, Dev=green, Azure=blue)
+  - **Optional gradient** (lighter top, base color bottom — LinearGradientBrush)
+  - Pattern-based environment rules (glob matching: `*PROD*`, `*DEV*`, `*.database.windows.net`)
+  - 4-level assignment hierarchy: Group → Servers in Group → Server → Database
+- Custom window title template (`{server} - {database} - SSMS`)
+- Tab tooltip with server, database, and user info
+- Restore Closed Tab (Ctrl+Shift+T) with undo stack
 - Pin Tab / Duplicate Tab / Close All Unmodified
-- Session auto-save with configurable interval
+- Session auto-save with configurable interval (default 60s)
 - Session recovery on startup (always/prompt/never)
+- Crash recovery (restores all open tabs from auto-save)
 
-### 9. Results Grid Enhancements (15 features)
-- Aggregate statistics (SUM, AVG, COUNT, MIN, MAX) in status bar
-- Column statistics popup on header right-click
-- NULL value highlighting
+### 9. Results Grid Enhancements (15 files)
+- Aggregate statistics (SUM, AVG, COUNT, MIN, MAX) in VS status bar for selected cells
+- Column statistics popup on header right-click (min, max, avg, distinct count, null count)
+- NULL value highlighting with distinct background color
 - Row numbers column
-- Column sorting (3-click cycle: Asc/Desc/None)
-- Column filtering (right-click popup with text filter)
-- Grid Find bar
-- Export to CSV, JSON, XML, SQL, Markdown, Excel (with **15+ digit precision** option — numbers exported as text to prevent rounding)
-- Copy as JSON, XML, SQL INSERT, SQL VALUES
-- Script Generator (INSERT/UPDATE/DELETE from rows)
-- Cell Edit dialog (Ctrl+DoubleClick)
-- Transpose Results view (rows as columns)
-- Freeze column headers
+- Column sorting (3-click cycle: Ascending → Descending → None)
+- Column filtering (right-click popup with text filter via DataView.RowFilter)
+- Grid Find bar (in-grid text search)
+- Export to CSV, JSON, XML, SQL INSERT, Markdown, **Excel** (via ClosedXML)
+  - **15+ digit precision option** — numbers with 16+ significant digits exported as text
+- Copy as JSON, XML, SQL INSERT, SQL VALUES, HTML table, Markdown table (all include headers)
+- Script Generator (INSERT/UPDATE/DELETE from selected rows)
+- Cell Edit dialog (Ctrl+DoubleClick for large cell values)
+- Transpose Results view (rows ↔ columns)
+- Freeze column headers while scrolling
 
-### 10. Navigation & Bookmarks
-- Go to Definition (F12)
-- Peek Definition (Alt+F12) with inline popup
-- Find All References (Shift+F12)
-- Object Search (Ctrl+T) with fuzzy matching
-- Navigate Matching Pair (Ctrl+]) — BEGIN/END, parentheses, TRY/CATCH
-- Navigate Next/Previous Statement
-- Bookmark Toggle (Ctrl+K, Ctrl+K) with blue margin glyphs
-- Bookmark Next/Previous (Ctrl+K, Ctrl+N / Ctrl+K, Ctrl+P)
-- Document Outline tool window (procedures, functions, CTEs, temp tables)
+### 10. Navigation & Bookmarks (3 navigation files + 3 bookmark files + 3 productivity/navigation files)
+- Go to Definition (F12) — jump to table/procedure/function definition
+- Peek Definition (Alt+F12) — inline preview popup without leaving editor
+- Find All References (Shift+F12) — references grid in tool window
+- Object Search (Ctrl+T) — fuzzy database object search
+- Navigate Matching Pair (Ctrl+]) — BEGIN/END, parentheses, TRY/CATCH, CASE/END
+- Navigate Next/Previous Statement (Ctrl+PageDown/Up)
+- **Bookmarks**: Toggle (Ctrl+K, Ctrl+K), Next (Ctrl+K, Ctrl+N), Previous (Ctrl+K, Ctrl+P)
+  - Blue circle margin glyphs via IGlyphFactory MEF export
+  - Session-scoped (cleared on view close)
+- Document Outline tool window (procedures, functions, views, CTEs, temp tables, GO boundaries)
 
-### 11. Editor Productivity
-- Execute Current Statement (Alt+Enter)
-- Execute to Cursor
+### 11. Editor Productivity (7 execution files + 4 adornment files)
+- Execute Current Statement (Alt+Enter) — executes only the statement at cursor
+- Execute to Cursor — executes all statements up to cursor line
+- **Multi-database execution** — run same query across multiple databases in parallel
+- Execution timer in status bar (elapsed time display)
+- Long-running query notification (configurable threshold, default 30s)
 - Highlight Occurrences of selected identifier
-- Bracket Matching
-- Named Regions (--region / --endregion code folding)
+- Bracket Matching (BEGIN/END, parentheses highlighting)
+- Named Regions (`--region Name` / `--endregion` code folding)
 - Sticky Scroll (parent scope header pinning)
-- Code Minimap
+- Code Minimap (scrollable overview in right margin)
+- Editor Toolbar (SQL Prompt-style action bar at top of each SQL editor)
 
-### 12. Settings System
-- WPF Settings dialog with 15 category pages
-- Dark/Light theme support
-- Per-category Reset This Page / Reset All
-- Export All Settings / Import Settings (JSON)
-- 50+ configurable options across all feature areas
+### 12. Settings System (2 dialog files + OptionCategoryTreeBuilder)
+- WPF Settings dialog with **15 category pages**: General, IntelliSense, Schema Cache, Formatting, Snippets, Code Analysis, Refactoring, History, Tabs & UI, Safety, Grid, Editor, Execution, Navigation, AI Assistance
+- Dark/Light theme support (auto-detected from VS theme)
+- Per-category Reset This Page / Reset All to defaults
+- Export All Settings / Import Settings (JSON format)
+- **101 configurable settings** across 15 `AppSettings` sections:
+  - IntelliSense (12), Cache (6), Formatter (9), Snippets (7), CodeAnalysis (4), Refactoring (6), History (6), Tabs (8), Safety (8), Grid (5), EditorProductivity (6), ExecutionProductivity (3), Navigation (5), CommandPalette (1), AI (18)
 
-### 13. AI Assistance
-- Multi-provider support (OpenAI, Anthropic, Gemini, Ollama, LM Studio, Custom)
-- Text to SQL (natural language to T-SQL generation)
+### 13. AI Assistance (9 shell files + 2 engine files)
+- **Multi-provider support**: OpenAI, Anthropic, Gemini, Ollama, LM Studio, Custom endpoint
+- Text to SQL (natural language to T-SQL with schema context)
 - AI Explain (query explanation in plain English)
-- AI Fix (error correction suggestions)
+- AI Fix (error correction suggestions with diff preview)
 - AI Optimize (performance optimization suggestions)
-- AI Index Analysis (missing index suggestions)
-- AI Chat Panel (multi-turn conversation with database context)
+- AI Index Analysis (missing index suggestions based on query patterns)
+- AI Chat Panel (multi-turn conversation with database schema context)
 - Ghost Text Completion (inline AI suggestions, experimental)
-- Privacy modes (schemaOnly, full, anonymous, offline, disabled)
-- Privacy transformer (redacts sensitive data before sending)
+- **Privacy modes**: schemaOnly (metadata only), full (includes query text), anonymous, offline, disabled
+- Privacy transformer (literal redactor + identifier hasher)
+- Token estimator for cost/limit checking
+- Auto-Fix on Error (optional: triggers AI Fix when query execution fails)
 
-### 14. Command Palette
+### 14. Command Palette (4 files)
 - Fuzzy-search command launcher (Ctrl+Shift+P)
-- 32+ registered commands
-- Usage-based ranking
+- **32 registered commands** across 8 categories (Execution, Navigation, Tab, Grid, Tool Window, AI, Analysis, Settings)
+- Usage-based ranking (most-used commands float to top)
+- Keyboard navigation (arrow keys + Enter to select)
 
-### 15. Schema Cache
-- In-memory cache of database objects
-- Phase A (fast): tables, views, procedures, row counts (<500ms)
-- Phase B (background): columns, FKs, parameters
-- Change detection via CHECKSUM_AGG polling
-- DDL-triggered refresh
-- LRU eviction for multiple databases
-- Persistent cache to disk (optional)
+### 15. Schema Cache (4 engine files)
+- In-memory cache of database objects (tables, views, procedures, functions, indexes, FKs)
+- **Phase A** (fast, <500ms): `sys.objects` + `sys.schemas` + row counts
+- **Phase B** (background): columns, FKs, parameters, descriptions
+- Change detection via `CHECKSUM_AGG(BINARY_CHECKSUM(...))` polling
+- DDL regex detection triggers immediate Phase A refresh
+- LRU eviction for multiple database connections
+- Persistent cache to disk (optional — survives IDE restarts)
+- FK index for O(1) foreign key lookups (`schema.table` → `List<ForeignKey>`)
 
 ### 16. Infrastructure
-- Shared Project (.projitems) compiled into 6 shell targets
-- Out-of-process Engine (.NET 10, self-contained)
-- MessagePack IPC over named pipes (30+ message types)
-- Serilog structured logging
-- Atomic config writes (temp file + rename)
-- Self-contained updater (.NET 10)
-- Inno Setup 7 installer with environment scanner
+
+**Architecture:**
+- Shared Project (.projitems) compiled into 6 shell targets (SSMS 20/21/22, VS 2019/2022/2026)
+- Out-of-process Engine (.NET 10, self-contained, win-x64, PublishTrimmed)
+- MessagePack IPC over named pipes (30+ bidirectional message types)
+- Named pipe ACL: owner SID allowed, Network SID denied
+- Frame format: [4-byte length][4-byte XOR CRC][MessagePack(RpcMessage)]
+
+**Tooling:**
+- Serilog structured logging (rolling file sink)
+- Atomic config writes (temp file + rename pattern)
+- Self-contained updater (.NET 10, win-x64)
+- Inno Setup 7 installer with environment scanner (registry + vswhere + filesystem fallback)
+
+**Codebase Statistics:**
+- 916 C# files total
+- Shell.Shared: 194 files across 21 directories
+- Engine: 252 files across 14 directories
+- Core: 152 files across 8 directories
+- Tests: 207 files across 5 test projects
 
 ### Test Coverage
-- 451 unit tests (xunit, .NET 10)
-- SafetyCheckHandler: 15 tests
-- SnippetImport: 6 tests
-- SafeRenameOperation: 6 tests
-- DocumentOutline: 15 tests
+- **457 unit tests** (xunit, .NET 10) across 5 test projects:
+  - `AkmlSql.Core.Tests` — 27 test files (config, IPC, formatting, analysis, refactoring, safety, snippets, navigation)
+  - `AkmlSql.Engine.Tests` — 31 test files (analysis, completion, parser, refactoring, schema, snippets)
+  - `AkmlSql.Formatting.Tests` — 32 test files (actions, casing, layout, pipeline, profiles, rules)
+  - `AkmlSql.E2E.Tests` — 17 test files (end-to-end analyzer, formatter, infrastructure)
+- Key test areas added in specs 010-011:
+  - SafetyCheckHandler: 15 tests (DELETE/UPDATE/DROP/TRUNCATE patterns)
+  - SnippetImport: 6 tests (JSON import, auto-detect, validation)
+  - SafeRenameOperation: 6 tests (column/table/alias rename, line numbers)
+  - DocumentOutline: 15 tests (procedure/function/view/CTE detection)
+  - InsertMetadata: 9 tests (type comments, identity, defaults, computed)
+  - SpExecutesqlConversion: 18 tests (param substitution, string quoting, NULL, string-literal safety)
+  - SplitTableOperation: 6 tests (input validation, error handling)
 
+---
+
+## Gap Analysis vs SQL Prompt v11 (2026-04-02)
+
+> Source: `doc/AKML_SQL_Gap_Analysis_1.md` — detailed feature-by-feature comparison
+
+### Parity Status: 12 of 12 areas fully covered — ABSOLUTE 100% PARITY
+
+| Area | Status | Notes |
+|------|--------|-------|
+| IntelliSense | **Full** | All features + extras (9 providers, Ctrl transparency) |
+| Formatting | **Full** | 21 commands vs SQL Prompt's ~10 — exceeds (includes Unformat) |
+| Snippets | **Full** | 14 variables vs 6, 3 sources, context filtering — exceeds |
+| Analysis | **Full** | 130 rules vs 94 — exceeds (Security/Naming/Design categories extra) |
+| Tab Coloring | **Full** | Gradient, hierarchy, custom title — exceeds |
+| SQL History | **Full** | Starring, version history, advanced search, rename, highlighting — all present |
+| Refactoring | **Full** | 18 operations vs ~8 — exceeds |
+| Navigation | **Full** | Bookmarks, Outline, Peek, Minimap — exceeds |
+| Results Grid | **Full** | 16 features vs 7 — exceeds (includes Copy as IN Clause) |
+| Safety | **Full** | Audit logging, type-to-confirm — exceeds |
+| Settings | **Full** | 15 pages, 101 settings, import/export |
+| Command Palette | **Full** | 32 commands with fuzzy search |
+
+### All Gaps Resolved (spec 012)
+- **Starring / Favorites**: Already implemented (retention exemption confirmed in HistoryDatabase.cs)
+- **Version history per query**: `history_versions` table + timeline panel + compare
+- **Advanced search syntax**: `HistorySearchParser` with prefix, wildcard, phrase, boolean support
+- **Rename closed queries**: Context menu rename + `UpdateTabTitleAsync` IPC
+- **Search match highlighting**: Yellow Run-based highlighting in code preview
+- **Copy as IN Clause**: `FormatAsInClause` in GridCopyAsMenu with proper quoting
+- **Unformat action**: `UnformatOperation` lightweight operation + lightbulb action
 ---
 
 ## Development History

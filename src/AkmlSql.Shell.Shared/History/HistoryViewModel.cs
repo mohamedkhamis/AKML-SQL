@@ -339,15 +339,35 @@ namespace AkmlSql.Shell.Shared.History
                 var settings = Core.Config.ConfigManager.Load();
                 var deduplicate = settings.History.Deduplication;
 
+                // Parse advanced search syntax (prefix filters, wildcards, etc.)
+                var parsed = HistorySearchParser.Parse(SearchText);
+
+                // If the search text contains prefix filters, apply them to override the UI filter fields
+                var effectiveServer = SelectedServer;
+                var effectiveDatabase = SelectedDatabase;
+                var effectiveFavoritesOnly = FavoritesOnly;
+                var effectiveSearchText = string.IsNullOrWhiteSpace(SearchText) ? null : SearchText.Trim();
+
+                if (parsed.HasPrefixes)
+                {
+                    if (parsed.ServerFilter != null) effectiveServer = parsed.ServerFilter;
+                    if (parsed.DatabaseFilter != null) effectiveDatabase = parsed.DatabaseFilter;
+                    if (parsed.StarredFilter.HasValue) effectiveFavoritesOnly = parsed.StarredFilter.Value;
+                    // Use the SQL filter as FTS5 query if specified, otherwise use the plain text query
+                    effectiveSearchText = !string.IsNullOrWhiteSpace(parsed.SqlFilter)
+                        ? parsed.SqlFilter
+                        : (!string.IsNullOrWhiteSpace(parsed.PlainTextQuery) ? parsed.PlainTextQuery : null);
+                }
+
                 var request = new HistorySearchRequest
                 {
-                    SearchText = string.IsNullOrWhiteSpace(SearchText) ? null : SearchText.Trim(),
-                    Server = SelectedServer,
-                    Database = SelectedDatabase,
+                    SearchText = effectiveSearchText,
+                    Server = effectiveServer,
+                    Database = effectiveDatabase,
                     Status = SelectedStatus,
                     DateFrom = DateFrom?.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture),
                     DateTo = DateTo?.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture),
-                    FavoritesOnly = FavoritesOnly,
+                    FavoritesOnly = effectiveFavoritesOnly,
                     Deduplicate = deduplicate,
                     Offset = _currentOffset,
                     Limit = PageSize

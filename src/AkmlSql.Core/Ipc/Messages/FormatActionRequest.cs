@@ -24,7 +24,10 @@ namespace AkmlSql.Core.Ipc.Messages
         ReplaceDeprecatedSyntax = 15,
 
         // Phase 10 — SQL Prompt Core Parity remaining gaps
-        ConvertSpExecutesql = 16
+        ConvertSpExecutesql = 16,
+
+        // Phase 12 — SQL History & Final Gaps
+        Unformat = 17
     }
 
     [MessagePackObject]

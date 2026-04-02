@@ -135,6 +135,8 @@ namespace AkmlSql.Shell.Shared.Analysis
             }
 
             // Always available actions
+            refactorActions.Add(new RefactoringAction(
+                _buffer, "Unformat (Compact SQL)", FormatActionType.Unformat));
             refactorActions.Add(new CommentToggleAction(_buffer));
 
             if (refactorActions.Count > 0)

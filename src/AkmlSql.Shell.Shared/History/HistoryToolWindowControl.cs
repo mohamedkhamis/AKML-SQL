@@ -1,12 +1,16 @@
 #nullable enable
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
+using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
+using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
+using AkmlSql.Shell.Shared.Ipc;
 using AkmlSql.Shell.Shared.Ui;
 
 namespace AkmlSql.Shell.Shared.History
@@ -22,6 +26,8 @@ namespace AkmlSql.Shell.Shared.History
     {
         private readonly HistoryViewModel _viewModel;
         private ListView? _listView;
+        private TextBlock? _previewTextBlock;
+        private ListBox? _versionListBox;
 
         public HistoryToolWindowControl()
         {
@@ -54,10 +60,11 @@ namespace AkmlSql.Shell.Shared.History
             fg.Freeze();
             border.Freeze();
 
-            // Main layout: search bar on top, list in center, action bar at bottom
+            // Main layout: search bar on top, list in center, preview/versions, status, action bar
             var mainGrid = new Grid { Background = bg };
             mainGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Search/filter bar
-            mainGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // ListView
+            mainGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(2, GridUnitType.Star) }); // ListView
+            mainGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // Preview + Versions
             mainGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Status bar / load more
             mainGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Action buttons
 
@@ -76,17 +83,24 @@ namespace AkmlSql.Shell.Shared.History
             mainGrid.Children.Add(_listView);
 
             // ================================================================
-            // ROW 2: Status bar with total count and Load More button
+            // ROW 2: Preview panel (code preview + version history)
+            // ================================================================
+            var previewPanel = BuildPreviewPanel(bg, fg, border);
+            Grid.SetRow(previewPanel, 2);
+            mainGrid.Children.Add(previewPanel);
+
+            // ================================================================
+            // ROW 3: Status bar with total count and Load More button
             // ================================================================
             var statusBar = BuildStatusBar(bg, fg);
-            Grid.SetRow(statusBar, 2);
+            Grid.SetRow(statusBar, 3);
             mainGrid.Children.Add(statusBar);
 
             // ================================================================
-            // ROW 3: Action buttons
+            // ROW 4: Action buttons
             // ================================================================
             var actionBar = BuildActionBar(bg, fg, border);
-            Grid.SetRow(actionBar, 3);
+            Grid.SetRow(actionBar, 4);
             mainGrid.Children.Add(actionBar);
 
             Content = mainGrid;
@@ -347,6 +361,38 @@ namespace AkmlSql.Shell.Shared.History
 
             listView.View = gridView;
 
+            // Build context menu for right-click actions
+            var contextMenu = new ContextMenu();
+            var copySqlMenuItem = new MenuItem { Header = "Copy SQL" };
+            copySqlMenuItem.SetBinding(MenuItem.CommandProperty,
+                new Binding(nameof(HistoryViewModel.CopySqlCommand)));
+            contextMenu.Items.Add(copySqlMenuItem);
+
+            var openMenuItem = new MenuItem { Header = "Open in New Tab" };
+            openMenuItem.SetBinding(MenuItem.CommandProperty,
+                new Binding(nameof(HistoryViewModel.OpenInNewTabCommand)));
+            contextMenu.Items.Add(openMenuItem);
+
+            contextMenu.Items.Add(new Separator());
+
+            var renameMenuItem = new MenuItem { Header = "Rename" };
+            renameMenuItem.Click += OnRenameMenuItemClick;
+            contextMenu.Items.Add(renameMenuItem);
+
+            var favMenuItem = new MenuItem { Header = "Toggle Favorite" };
+            favMenuItem.SetBinding(MenuItem.CommandProperty,
+                new Binding(nameof(HistoryViewModel.ToggleFavoriteCommand)));
+            contextMenu.Items.Add(favMenuItem);
+
+            contextMenu.Items.Add(new Separator());
+
+            var deleteMenuItem = new MenuItem { Header = "Delete" };
+            deleteMenuItem.SetBinding(MenuItem.CommandProperty,
+                new Binding(nameof(HistoryViewModel.DeleteCommand)));
+            contextMenu.Items.Add(deleteMenuItem);
+
+            listView.ContextMenu = contextMenu;
+
             // Double-click to copy SQL to clipboard
             listView.MouseDoubleClick += OnListViewDoubleClick;
 
@@ -473,6 +519,65 @@ namespace AkmlSql.Shell.Shared.History
             panel.Children.Add(exportBtn);
 
             return panel;
+        }
+
+        /// <summary>
+        /// Builds the preview panel with SQL code preview (with search highlighting)
+        /// and a version history list on the right side.
+        /// </summary>
+        private Grid BuildPreviewPanel(Brush bg, Brush fg, Brush border)
+        {
+            var grid = new Grid();
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(3, GridUnitType.Star) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            // SQL preview with highlighting
+            _previewTextBlock = new TextBlock
+            {
+                FontFamily = new FontFamily("Consolas"),
+                FontSize = 11.0,
+                TextWrapping = TextWrapping.Wrap,
+                Padding = new Thickness(4),
+                Foreground = fg,
+                Background = bg
+            };
+            var previewScroll = new ScrollViewer
+            {
+                Content = _previewTextBlock,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+                BorderBrush = border,
+                BorderThickness = new Thickness(0, 0, 1, 0)
+            };
+            Grid.SetColumn(previewScroll, 0);
+            grid.Children.Add(previewScroll);
+
+            // Version history list
+            var versionPanel = new DockPanel { Background = bg };
+
+            var versionHeader = new TextBlock
+            {
+                Text = "Versions",
+                FontWeight = FontWeights.SemiBold,
+                Foreground = fg,
+                Padding = new Thickness(4, 2, 4, 2)
+            };
+            DockPanel.SetDock(versionHeader, Dock.Top);
+            versionPanel.Children.Add(versionHeader);
+
+            _versionListBox = new ListBox
+            {
+                Background = bg,
+                Foreground = fg,
+                BorderThickness = new Thickness(0)
+            };
+            _versionListBox.SelectionChanged += OnVersionSelectionChanged;
+            versionPanel.Children.Add(_versionListBox);
+
+            Grid.SetColumn(versionPanel, 1);
+            grid.Children.Add(versionPanel);
+
+            return grid;
         }
 
         #region DataTemplate Factories
@@ -618,6 +723,241 @@ namespace AkmlSql.Shell.Shared.History
             {
                 _viewModel.UpdateSelectedEntries(_listView.SelectedItems);
             }
+
+            // Update the code preview with search highlighting
+            UpdatePreviewWithHighlighting();
+
+            // Load version history for the selected entry
+            LoadVersionHistory();
+        }
+
+        /// <summary>
+        /// Updates the code preview TextBlock with search match highlighting.
+        /// When SearchText is active, matching segments get a yellow background.
+        /// </summary>
+        private void UpdatePreviewWithHighlighting()
+        {
+            if (_previewTextBlock == null) return;
+            _previewTextBlock.Inlines.Clear();
+
+            var entry = _viewModel.SelectedEntry;
+            if (entry == null) return;
+
+            var sqlText = entry.SqlText ?? string.Empty;
+            var searchText = _viewModel.SearchText;
+
+            if (string.IsNullOrWhiteSpace(searchText))
+            {
+                // No search active: plain text
+                _previewTextBlock.Inlines.Add(new Run(sqlText));
+                return;
+            }
+
+            // Highlight matching segments with yellow background
+            var highlightBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0xEB, 0x3B));
+            highlightBrush.Freeze();
+
+            int pos = 0;
+            while (pos < sqlText.Length)
+            {
+                int matchIdx = sqlText.IndexOf(searchText, pos, StringComparison.OrdinalIgnoreCase);
+                if (matchIdx < 0)
+                {
+                    // No more matches: add remaining text
+                    _previewTextBlock.Inlines.Add(new Run(sqlText.Substring(pos)));
+                    break;
+                }
+
+                // Add non-matching segment before the match
+                if (matchIdx > pos)
+                {
+                    _previewTextBlock.Inlines.Add(new Run(sqlText.Substring(pos, matchIdx - pos)));
+                }
+
+                // Add highlighted matching segment
+                var matchRun = new Run(sqlText.Substring(matchIdx, searchText.Length))
+                {
+                    Background = highlightBrush
+                };
+                _previewTextBlock.Inlines.Add(matchRun);
+
+                pos = matchIdx + searchText.Length;
+            }
+        }
+
+        /// <summary>
+        /// Loads version history for the currently selected entry.
+        /// </summary>
+        private async void LoadVersionHistory()
+        {
+            if (_versionListBox == null) return;
+            _versionListBox.Items.Clear();
+
+            var entry = _viewModel.SelectedEntry;
+            if (entry == null) return;
+
+            try
+            {
+                var client = EngineLifecycle.Manager?.Client;
+                if (client == null || !client.IsConnected) return;
+
+                var actionRequest = new HistoryActionRequest
+                {
+                    Action = HistoryActions.GetVersions,
+                    EntryIds = new[] { entry.Id }
+                };
+
+                var response = await client.SendRequestAsync<HistoryActionResponse, HistoryActionRequest>(
+                    MessageTypes.HistoryAction, actionRequest, timeoutMs: 5000);
+
+                if (response.Success && response.Versions != null)
+                {
+                    foreach (var version in response.Versions)
+                    {
+                        var item = new ListBoxItem
+                        {
+                            Content = version.SavedAt,
+                            Tag = version.SqlText,
+                            ToolTip = $"Version {version.Id} - {version.SavedAt}"
+                        };
+                        _versionListBox.Items.Add(item);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Debug(ex, "HistoryToolWindowControl: failed to load versions");
+            }
+        }
+
+        /// <summary>
+        /// When a version is selected in the version list, update the preview to show that version's SQL.
+        /// </summary>
+        private void OnVersionSelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_previewTextBlock == null || _versionListBox == null) return;
+
+            if (_versionListBox.SelectedItem is ListBoxItem item && item.Tag is string versionSql)
+            {
+                _previewTextBlock.Inlines.Clear();
+                _previewTextBlock.Inlines.Add(new Run(versionSql));
+            }
+        }
+
+        /// <summary>
+        /// Handles the Rename context menu click. Shows a simple input dialog
+        /// and sends an IPC message to update the entry's tab_title.
+        /// </summary>
+        private async void OnRenameMenuItemClick(object sender, RoutedEventArgs e)
+        {
+            var entry = _viewModel.SelectedEntry;
+            if (entry == null) return;
+
+            // Show a simple WPF input dialog for the new name
+            var currentName = entry.TabTitle ?? string.Empty;
+            var newName = ShowInputDialog("Rename History Entry", "Enter new name:", currentName);
+            if (newName == null || newName == currentName) return;
+
+            try
+            {
+                var client = EngineLifecycle.Manager?.Client;
+                if (client == null || !client.IsConnected) return;
+
+                var actionRequest = new HistoryActionRequest
+                {
+                    Action = HistoryActions.Rename,
+                    EntryIds = new[] { entry.Id },
+                    NewName = newName
+                };
+
+                var response = await client.SendRequestAsync<HistoryActionResponse, HistoryActionRequest>(
+                    MessageTypes.HistoryAction, actionRequest, timeoutMs: 5000);
+
+                if (response.Success)
+                {
+                    // Update the local entry for immediate feedback
+                    entry.TabTitle = newName;
+                    // Refresh the list
+                    _viewModel.SearchCommand.Execute(null);
+                }
+                else
+                {
+                    Serilog.Log.Warning("HistoryToolWindowControl: rename failed: {Error}", response.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Error(ex, "HistoryToolWindowControl: rename failed");
+            }
+        }
+
+        /// <summary>
+        /// Shows a simple WPF input dialog and returns the entered text, or null if cancelled.
+        /// </summary>
+        private static string? ShowInputDialog(string title, string prompt, string defaultValue)
+        {
+            var dialog = new Window
+            {
+                Title = title,
+                Width = 400,
+                Height = 160,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                ResizeMode = ResizeMode.NoResize
+            };
+
+            var panel = new StackPanel { Margin = new Thickness(12) };
+
+            var label = new TextBlock { Text = prompt, Margin = new Thickness(0, 0, 0, 8) };
+            panel.Children.Add(label);
+
+            var textBox = new TextBox
+            {
+                Text = defaultValue,
+                Margin = new Thickness(0, 0, 0, 12)
+            };
+            textBox.SelectAll();
+            panel.Children.Add(textBox);
+
+            var buttonPanel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+
+            string? result = null;
+
+            var okButton = new Button
+            {
+                Content = "OK",
+                Width = 75,
+                Margin = new Thickness(0, 0, 8, 0),
+                IsDefault = true
+            };
+            okButton.Click += (s, args) =>
+            {
+                result = textBox.Text;
+                dialog.Close();
+            };
+            buttonPanel.Children.Add(okButton);
+
+            var cancelButton = new Button
+            {
+                Content = "Cancel",
+                Width = 75,
+                IsCancel = true
+            };
+            cancelButton.Click += (s, args) => dialog.Close();
+            buttonPanel.Children.Add(cancelButton);
+
+            panel.Children.Add(buttonPanel);
+            dialog.Content = panel;
+
+            // Set owner to prevent dialog from going behind the main VS/SSMS window
+            try { dialog.Owner = System.Windows.Application.Current?.MainWindow; }
+            catch { /* Non-critical — centering may not work but dialog still functions */ }
+
+            dialog.ShowDialog();
+            return result;
         }
 
         /// <summary>

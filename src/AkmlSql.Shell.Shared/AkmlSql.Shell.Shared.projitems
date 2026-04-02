@@ -108,6 +108,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)History\HistoryToolWindowControl.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)History\HistoryDiffWindow.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)History\HistoryToolWindow.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)History\HistorySearchParser.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\HistoryPanelCommand.cs" />
     <!-- Phase 7 — Tab management: environment detection, coloring, tooltips -->
     <Compile Include="$(MSBuildThisFileDirectory)Tabs\EnvironmentDetector.cs" />

@@ -304,6 +304,57 @@ public class HistoryRequestHandler(HistoryDatabase database)
                     });
                 }
 
+                case HistoryActions.Rename:
+                {
+                    if (actionRequest.EntryIds.Length == 0)
+                    {
+                        return CreateActionResponse(request.RequestId, new HistoryActionResponse
+                        {
+                            Success = false,
+                            Error = "EntryIds required for Rename"
+                        });
+                    }
+
+                    if (string.IsNullOrEmpty(actionRequest.NewName))
+                    {
+                        return CreateActionResponse(request.RequestId, new HistoryActionResponse
+                        {
+                            Success = false,
+                            Error = "NewName required for Rename"
+                        });
+                    }
+
+                    await _database.UpdateTabTitleAsync(actionRequest.EntryIds[0], actionRequest.NewName);
+                    return CreateActionResponse(request.RequestId, new HistoryActionResponse
+                    {
+                        Success = true
+                    });
+                }
+
+                case HistoryActions.GetVersions:
+                {
+                    if (actionRequest.EntryIds.Length == 0)
+                    {
+                        return CreateActionResponse(request.RequestId, new HistoryActionResponse
+                        {
+                            Success = false,
+                            Error = "EntryIds required for GetVersions"
+                        });
+                    }
+
+                    var versions = await _database.GetVersionsAsync(actionRequest.EntryIds[0]);
+                    return CreateActionResponse(request.RequestId, new HistoryActionResponse
+                    {
+                        Success = true,
+                        Versions = versions.Select(v => new HistoryVersionDto
+                        {
+                            Id = v.Id,
+                            SqlText = v.SqlText,
+                            SavedAt = v.SavedAt
+                        }).ToArray()
+                    });
+                }
+
                 default:
                     return CreateActionResponse(request.RequestId, new HistoryActionResponse
                     {
