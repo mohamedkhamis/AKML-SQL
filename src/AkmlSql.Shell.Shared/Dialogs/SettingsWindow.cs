@@ -924,7 +924,6 @@ namespace AkmlSql.Shell.Shared.Dialogs
         {
             var panel = CreatePagePanel();
             AddPageHeader(panel, "Results Grid");
-            AddDescription(panel, "Configure the results grid behavior and appearance.");
 
             _chkGridAggregates = AddToggle(panel, "Aggregate statistics",
                 "Show Sum, Avg, Count, Min, Max for selected cells");
@@ -950,7 +949,6 @@ namespace AkmlSql.Shell.Shared.Dialogs
         {
             var panel = CreatePagePanel();
             AddPageHeader(panel, "Editor Productivity");
-            AddDescription(panel, "Configure editor enhancement features.");
 
             _chkEdHighlightOccurrences = AddToggle(panel, "Highlight occurrences",
                 "Highlight all occurrences of selected identifier");
@@ -975,16 +973,16 @@ namespace AkmlSql.Shell.Shared.Dialogs
         {
             var panel = CreatePagePanel();
             AddPageHeader(panel, "Execution");
-            AddDescription(panel, "Configure query execution behavior.");
 
             _chkExecShowTimer = AddToggle(panel, "Execution timer",
                 "Show execution timer in status bar");
             _chkExecMultiDatabase = AddToggle(panel, "Multi-database execution",
                 "Enable multi-database execution mode");
 
-            AddSectionHeader(panel, "Notifications");
+            AddGroupHeader(panel, "Notifications");
             (_sldExecNotificationThreshold, _lblExecNotificationValue) = AddSlider(panel,
-                "Long-running query notification threshold (seconds)", 5, 300, 30);
+                "Notification threshold", 5, 300, 30,
+                "Seconds before showing long-running query notification");
 
             return WrapInScrollViewer(panel);
         }
@@ -996,7 +994,6 @@ namespace AkmlSql.Shell.Shared.Dialogs
         {
             var panel = CreatePagePanel();
             AddPageHeader(panel, "Navigation");
-            AddDescription(panel, "Configure code navigation features.");
 
             _chkNavGoToDefinition = AddToggle(panel, "Go to Definition",
                 "Enable Go to Definition (F12)");

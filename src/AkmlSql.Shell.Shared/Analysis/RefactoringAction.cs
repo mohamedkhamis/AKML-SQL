@@ -65,7 +65,7 @@ namespace AkmlSql.Shell.Shared.Analysis
                 var request = new FormatActionRequest
                 {
                     SessionId = _sessionId,
-                    SqlText = snapshot.GetText(),
+                    Text = snapshot.GetText(),
                     ActionType = (int)_actionType
                 };
 

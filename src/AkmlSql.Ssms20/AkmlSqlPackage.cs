@@ -20,6 +20,8 @@ using AkmlSql.Shell.Shared.Update;
 using AkmlSql.Shell.Shared.Ai;
 using AkmlSql.Shell.Shared.Ipc;
 using AkmlSql.Shell.Shared.Validation;
+using AkmlSql.Shell.Shared.Snippets;
+using AkmlSql.Shell.Shared.Refactoring;
 using Serilog;
 
 namespace AkmlSql.Ssms20
@@ -100,9 +102,9 @@ namespace AkmlSql.Ssms20
                     AiChatPanelCommand.Initialize(this, commandService);
 
                     // Phase 10 — SQL Prompt Core Parity
-                    Snippets.SnippetManagerCommand.Initialize(this, commandService);
-                    Navigation.BookmarkCommands.Initialize(this, commandService);
-                Refactoring.SplitTableCommand.Initialize(this, commandService);
+                    SnippetManagerCommand.Initialize(this, commandService);
+                    AkmlSql.Shell.Shared.Navigation.BookmarkCommands.Initialize(this, commandService);
+                    SplitTableCommand.Initialize(this, commandService);
                 }
 
                 // Now do non-critical initialization that may fail
