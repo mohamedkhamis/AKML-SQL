@@ -21,19 +21,26 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         public SolidColorBrush IconBrush => new SolidColorBrush(IconColor);
 
         /// <summary>
-        /// Case-insensitive prefix + substring match for client-side filtering.
-        /// Returns true if filter is empty or DisplayText contains the filter text.
+        /// Matches via prefix, substring, or CamelCase initials.
+        /// CamelCase: "PC" matches "ProductCategory", "sc" matches "sys_columns".
         /// </summary>
         public bool MatchesFilter(string filter)
         {
             if (string.IsNullOrEmpty(filter))
                 return true;
-            return DisplayText.IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0;
+
+            // Prefix or substring match (case-insensitive)
+            if (DisplayText.IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0)
+                return true;
+
+            // CamelCase / underscore initial match: extract initials from DisplayText
+            // and check if the filter matches them as a prefix
+            return MatchesCamelCase(DisplayText, filter);
         }
 
         /// <summary>
         /// Scoring for sort order during filtering. Lower = better match.
-        /// Prefix matches score higher than substring matches.
+        /// Prefix > CamelCase > Substring.
         /// </summary>
         public int FilterScore(string filter)
         {
@@ -43,10 +50,56 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             if (DisplayText.StartsWith(filter, StringComparison.OrdinalIgnoreCase))
                 return 0; // Prefix match — best
 
+            if (MatchesCamelCase(DisplayText, filter))
+                return 50; // CamelCase match — good
+
             if (DisplayText.IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0)
                 return 100; // Substring match
 
             return int.MaxValue; // No match
+        }
+
+        /// <summary>
+        /// CamelCase / underscore boundary matching.
+        /// Extracts initials from word boundaries and checks if filter matches.
+        /// Examples: "PC" → ProductCategory, "gco" → GetCustomerOrders, "sc" → sys_columns
+        /// </summary>
+        private static bool MatchesCamelCase(string text, string filter)
+        {
+            if (string.IsNullOrEmpty(text) || string.IsNullOrEmpty(filter))
+                return false;
+
+            // Extract initials: first char + each char after uppercase boundary or underscore
+            var initials = new char[text.Length];
+            int count = 0;
+            initials[count++] = text[0];
+
+            for (int i = 1; i < text.Length; i++)
+            {
+                var c = text[i];
+                // Uppercase letter after lowercase = CamelCase boundary
+                if (char.IsUpper(c) && i > 0 && char.IsLower(text[i - 1]))
+                {
+                    initials[count++] = c;
+                }
+                // Letter after underscore = boundary
+                else if (char.IsLetterOrDigit(c) && text[i - 1] == '_')
+                {
+                    initials[count++] = c;
+                }
+            }
+
+            if (count < filter.Length)
+                return false;
+
+            // Check if filter matches the initials as a prefix (case-insensitive)
+            for (int i = 0; i < filter.Length; i++)
+            {
+                if (char.ToUpperInvariant(filter[i]) != char.ToUpperInvariant(initials[i]))
+                    return false;
+            }
+
+            return true;
         }
 
         // SQL Prompt color scheme

@@ -32,6 +32,10 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         private int _quickInfoVersion;
         private System.Windows.Threading.DispatcherTimer _suppressTimer;
 
+        // Stored wildcard expansion context to avoid re-detection on commit
+        private int _wildcardStarPos = -1;
+        private string _wildcardQualifier = string.Empty;
+
         public IOleCommandTarget NextTarget { get; set; }
 
         private const int DebounceMs = 150;
@@ -142,7 +146,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                                 return VSConstants.S_OK; // Swallow the key
                             }
                         }
-                        // Tab only: check for wildcard at cursor
+                        // Tab only: check for wildcard at cursor, then snippet abbreviation
                         if (cmdId == VSConstants.VSStd2KCmdID.TAB)
                         {
                             var wildcardInfo = DetectWildcardAtCursor();
@@ -150,6 +154,14 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                             {
                                 TriggerWildcardExpansion(wildcardInfo.Value.starPos, wildcardInfo.Value.qualifier);
                                 return VSConstants.S_OK;
+                            }
+
+                            // Check for snippet abbreviation at cursor (e.g., "ssf" + Tab → expand snippet)
+                            var wordAtCaret = GetWordAtCaret();
+                            if (!string.IsNullOrEmpty(wordAtCaret) && wordAtCaret.Length >= 2)
+                            {
+                                if (TryExpandSnippet(wordAtCaret))
+                                    return VSConstants.S_OK;
                             }
                         }
                         break;
@@ -266,6 +278,31 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 {
                     // Trigger IMMEDIATELY — no debounce. Show cached items instantly
                     // to beat SSMS native IntelliSense which also triggers immediately.
+                    TriggerCompletion();
+                }
+            }
+            else if (c == ' ' && _adornment.Popup.IsOpen)
+            {
+                // Space as insertion key (SQL Prompt style): commit if enabled in settings
+                try
+                {
+                    var settings = AkmlSql.Core.Config.ConfigManager.Load();
+                    if (settings.IntelliSense.SpaceCommits)
+                    {
+                        var item = _adornment.Popup.GetSelectedItem();
+                        if (item != null)
+                        {
+                            CommitItem(item);
+                            return; // Space is already inserted by VS before HandleTypedChar
+                        }
+                    }
+                }
+                catch { /* Settings load failure — fall through to default dismiss */ }
+
+                DismissPopup();
+
+                if (IsObjectExpectingKeywordBeforeCaret())
+                {
                     TriggerCompletion();
                 }
             }
@@ -482,9 +519,49 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                     start--;
 
                 var span = new Span(start, caretPos - start);
-                _textView.TextBuffer.Replace(span, item.InsertText);
 
-                DismissPopup();
+                // Type-specific commit behavior
+                switch (item.ObjectType)
+                {
+                    case 3: // Keyword — append trailing space for flow
+                    {
+                        var textAfter = caretPos < snapshot.Length ? snapshot[caretPos] : ' ';
+                        var insertText = textAfter == ' ' ? item.InsertText : item.InsertText + " ";
+                        _textView.TextBuffer.Replace(span, insertText);
+                        DismissPopup();
+                        // Auto-trigger for keywords that expect objects (FROM, JOIN, etc.)
+                        if (IsObjectExpectingKeyword(item.InsertText))
+                        {
+                            TriggerCompletion();
+                        }
+                        return;
+                    }
+
+                    case 4: // Snippet — expand via engine
+                    {
+                        _textView.TextBuffer.Replace(span, ""); // Remove abbreviation
+                        DismissPopup();
+                        TryExpandSnippet(item.InsertText);
+                        return;
+                    }
+
+                    default:
+                        _textView.TextBuffer.Replace(span, item.InsertText);
+                        DismissPopup();
+
+                        // Table/View commit → auto-trigger column completion after dot
+                        if (item.ObjectType == 0 || item.ObjectType == 1) // Table or View
+                        {
+                            // If next char is a dot, trigger column completion
+                            var newCaretPos = _textView.Caret.Position.BufferPosition.Position;
+                            var newSnapshot = _textView.TextBuffer.CurrentSnapshot;
+                            if (newCaretPos < newSnapshot.Length && newSnapshot[newCaretPos] == '.')
+                            {
+                                TriggerCompletion();
+                            }
+                        }
+                        return;
+                }
             }
             catch (Exception ex)
             {
@@ -517,6 +594,85 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             catch (Exception ex)
             {
                 Log.Debug(ex, "Failed to commit before dot");
+            }
+        }
+
+        /// <summary>
+        /// Attempts to expand a snippet by its abbreviation (shortcode).
+        /// Sends SnippetExpand IPC request to the engine. If the snippet exists,
+        /// replaces the abbreviation text with the expanded body.
+        /// Returns true if a snippet was found and expanded.
+        /// </summary>
+        private bool TryExpandSnippet(string abbreviation)
+        {
+            try
+            {
+                var client = Ipc.EngineLifecycle.Manager?.Client;
+                if (client == null || !client.IsConnected) return false;
+
+                var snapshot = _textView.TextBuffer.CurrentSnapshot;
+                var caretPos = _textView.Caret.Position.BufferPosition.Position;
+
+                // Find word start for replacement span
+                int start = caretPos;
+                while (start > 0 && IsIdentifierChar(snapshot[start - 1]))
+                    start--;
+
+                var request = new AkmlSql.Core.Ipc.Messages.SnippetExpandRequest
+                {
+                    SessionId = _sessionId,
+                    Shortcode = abbreviation,
+                    CursorOffset = caretPos,
+                    FormatOnExpand = true
+                };
+
+                // Fire-and-forget with callback on UI thread
+                System.Threading.Tasks.Task.Run(async () =>
+                {
+                    try
+                    {
+                        var response = await client.SendRequestAsync<
+                            AkmlSql.Core.Ipc.Messages.SnippetExpandResponse,
+                            AkmlSql.Core.Ipc.Messages.SnippetExpandRequest>(
+                            AkmlSql.Core.Ipc.MessageTypes.SnippetExpand, request, timeoutMs: 3000);
+
+                        if (response?.Success == true && !string.IsNullOrEmpty(response.ExpandedText))
+                        {
+                            _textView.VisualElement.Dispatcher.Invoke(() =>
+                            {
+                                try
+                                {
+                                    var currentSnapshot = _textView.TextBuffer.CurrentSnapshot;
+                                    int replaceLen = caretPos - start;
+                                    if (start + replaceLen <= currentSnapshot.Length)
+                                    {
+                                        _textView.TextBuffer.Replace(
+                                            new Span(start, replaceLen),
+                                            response.ExpandedText);
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    Log.Debug(ex, "Snippet expansion: failed to insert text");
+                                }
+                            });
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Debug(ex, "Snippet expansion RPC failed for '{Abbreviation}'", abbreviation);
+                    }
+                });
+
+                // Return true to swallow Tab — the expansion happens async
+                // If the snippet doesn't exist, the engine returns Success=false and nothing happens
+                // The Tab key is already consumed; worst case is a no-op
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "Snippet expansion failed");
+                return false;
             }
         }
 
@@ -962,6 +1118,9 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         {
             var docText = _textView.TextBuffer.CurrentSnapshot.GetText();
 
+            // Store position so CommitWildcardExpansion doesn't need to re-detect
+            _wildcardStarPos = starPos;
+            _wildcardQualifier = qualifier ?? string.Empty;
             _wildcardPending = true;
 
             System.Threading.Tasks.Task.Run(async () =>
@@ -1053,12 +1212,22 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 var snapshot = _textView.TextBuffer.CurrentSnapshot;
                 var caretPos = _textView.Caret.Position.BufferPosition.Position;
 
-                // Find the * position and replacement span
+                // Use stored position first, then fallback to re-detection from caret
                 int starPos = -1;
-                if (caretPos > 0 && caretPos <= snapshot.Length && snapshot[caretPos - 1] == '*')
+                if (_wildcardStarPos >= 0 && _wildcardStarPos < snapshot.Length && snapshot[_wildcardStarPos] == '*')
+                {
+                    starPos = _wildcardStarPos;
+                }
+                else if (caretPos > 0 && caretPos <= snapshot.Length && snapshot[caretPos - 1] == '*')
+                {
                     starPos = caretPos - 1;
+                }
                 else if (caretPos < snapshot.Length && snapshot[caretPos] == '*')
+                {
                     starPos = caretPos;
+                }
+
+                _wildcardStarPos = -1; // Reset stored position
 
                 if (starPos < 0)
                 {

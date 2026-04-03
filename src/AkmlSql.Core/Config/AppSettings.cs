@@ -153,6 +153,10 @@ namespace AkmlSql.Core.Config
         public KeywordCaseOption KeywordCase { get; set; } = KeywordCaseOption.Upper;
         /// <summary>Whether to disable native SSMS IntelliSense to avoid conflicts.</summary>
         public bool DisableNativeIntelliSense { get; set; } = true;
+        /// <summary>Use Space key to commit the selected completion item (SQL Prompt style).</summary>
+        public bool SpaceCommits { get; set; } = true;
+        /// <summary>Use Dot key to commit the selected completion item.</summary>
+        public bool DotCommits { get; set; } = true;
     }
 
     /// <summary>Settings for the in-memory schema cache.</summary>
