@@ -15,7 +15,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DiffPlex" Version="1.7.*" />
+    <PackageReference Include="DiffPlex" Version="1.9.*" />
   </ItemGroup>
 
   <ItemGroup>
