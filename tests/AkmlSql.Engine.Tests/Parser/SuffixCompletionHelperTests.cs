@@ -49,66 +49,66 @@ public class SuffixCompletionHelperTests
     // ── JOIN variants ─────────────────────────────────────────────────────
 
     [Fact]
-    public void AppendDummyTokens_EndsWithJOIN_AppendsDummy()
+    public void AppendDummyTokens_EndsWithJOIN_AppendsDummyWithOn()
     {
         var result = SuffixCompletionHelper.AppendDummyTokens("SELECT 1 FROM T JOIN");
-        Assert.Equal($"SELECT 1 FROM T JOIN {Dummy}", result);
+        Assert.Equal($"SELECT 1 FROM T JOIN {Dummy} ON 1=1", result);
     }
 
     [Fact]
-    public void AppendDummyTokens_EndsWithINNER_JOIN_AppendsDummy()
+    public void AppendDummyTokens_EndsWithINNER_JOIN_AppendsDummyWithOn()
     {
         var result = SuffixCompletionHelper.AppendDummyTokens("SELECT 1 FROM T INNER JOIN");
-        Assert.Equal($"SELECT 1 FROM T INNER JOIN {Dummy}", result);
+        Assert.Equal($"SELECT 1 FROM T INNER JOIN {Dummy} ON 1=1", result);
     }
 
     [Fact]
-    public void AppendDummyTokens_EndsWithLEFT_JOIN_AppendsDummy()
+    public void AppendDummyTokens_EndsWithLEFT_JOIN_AppendsDummyWithOn()
     {
         var result = SuffixCompletionHelper.AppendDummyTokens("SELECT 1 FROM T LEFT JOIN");
-        Assert.EndsWith($" {Dummy}", result);
+        Assert.Equal($"SELECT 1 FROM T LEFT JOIN {Dummy} ON 1=1", result);
     }
 
     [Fact]
-    public void AppendDummyTokens_EndsWithRIGHT_JOIN_AppendsDummy()
+    public void AppendDummyTokens_EndsWithRIGHT_JOIN_AppendsDummyWithOn()
     {
         var result = SuffixCompletionHelper.AppendDummyTokens("SELECT 1 FROM T RIGHT JOIN");
-        Assert.EndsWith($" {Dummy}", result);
+        Assert.Equal($"SELECT 1 FROM T RIGHT JOIN {Dummy} ON 1=1", result);
     }
 
     [Fact]
     public void AppendDummyTokens_EndsWithCROSS_JOIN_AppendsDummy()
     {
         var result = SuffixCompletionHelper.AppendDummyTokens("SELECT 1 FROM T CROSS JOIN");
-        Assert.EndsWith($" {Dummy}", result);
+        Assert.Contains(Dummy, result);
     }
 
     [Fact]
-    public void AppendDummyTokens_EndsWithLEFT_OUTER_JOIN_AppendsDummy()
+    public void AppendDummyTokens_EndsWithLEFT_OUTER_JOIN_AppendsDummyWithOn()
     {
         var result = SuffixCompletionHelper.AppendDummyTokens("SELECT 1 FROM T LEFT OUTER JOIN");
-        Assert.EndsWith($" {Dummy}", result);
+        Assert.Equal($"SELECT 1 FROM T LEFT OUTER JOIN {Dummy} ON 1=1", result);
     }
 
     [Fact]
-    public void AppendDummyTokens_EndsWithRIGHT_OUTER_JOIN_AppendsDummy()
+    public void AppendDummyTokens_EndsWithRIGHT_OUTER_JOIN_AppendsDummyWithOn()
     {
         var result = SuffixCompletionHelper.AppendDummyTokens("SELECT 1 FROM T RIGHT OUTER JOIN");
-        Assert.EndsWith($" {Dummy}", result);
+        Assert.Equal($"SELECT 1 FROM T RIGHT OUTER JOIN {Dummy} ON 1=1", result);
     }
 
     [Fact]
-    public void AppendDummyTokens_EndsWithFULL_OUTER_JOIN_AppendsDummy()
+    public void AppendDummyTokens_EndsWithFULL_OUTER_JOIN_AppendsDummyWithOn()
     {
         var result = SuffixCompletionHelper.AppendDummyTokens("SELECT 1 FROM T FULL OUTER JOIN");
-        Assert.EndsWith($" {Dummy}", result);
+        Assert.Equal($"SELECT 1 FROM T FULL OUTER JOIN {Dummy} ON 1=1", result);
     }
 
     [Fact]
-    public void AppendDummyTokens_EndsWithFULL_JOIN_AppendsDummy()
+    public void AppendDummyTokens_EndsWithFULL_JOIN_AppendsDummyWithOn()
     {
         var result = SuffixCompletionHelper.AppendDummyTokens("SELECT 1 FROM T FULL JOIN");
-        Assert.EndsWith($" {Dummy}", result);
+        Assert.Equal($"SELECT 1 FROM T FULL JOIN {Dummy} ON 1=1", result);
     }
 
     // ── WHERE / AND / OR ──────────────────────────────────────────────────

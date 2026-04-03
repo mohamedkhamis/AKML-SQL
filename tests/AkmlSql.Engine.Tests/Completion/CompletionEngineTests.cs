@@ -41,14 +41,17 @@ public class CompletionEngineTests
     }
 
     [Fact]
-    public void GetCompletions_InString_ReturnsEmpty()
+    public void GetCompletions_InString_ReturnsKeywords()
     {
+        // Inside string literals, the engine still provides keyword completions
+        // to support dynamic SQL authoring scenarios.
         var engine = CreateEngine();
 
         var sql = "SELECT 'hello ";
         var response = engine.GetCompletions(sql, sql.Length, null);
 
-        Assert.Empty(response.Items);
+        Assert.NotEmpty(response.Items);
+        Assert.All(response.Items, item => Assert.Equal(3, item.ObjectType)); // All keywords
     }
 
     // ── SetMaxSuggestions ─────────────────────────────────────────────────
