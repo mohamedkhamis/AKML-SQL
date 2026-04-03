@@ -6,13 +6,13 @@ This document tracks the development progress, complete feature inventory, issue
 
 ---
 
-## Complete Feature Inventory (as of 2026-04-02)
+## Complete Feature Inventory (as of 2026-04-03)
 
-> **Codebase**: 916 C# files | 6 IDE targets | 457 unit tests | 130+ analysis rules
-> **100% SQL Prompt Core feature parity achieved** (specs 010 + 011)
+> **Codebase**: 917 C# files | 6 IDE targets | 915 unit tests | 130+ analysis rules
+> **100% SQL Prompt Core feature parity achieved** (specs 010 + 011 + 013)
 
 ### 1. IntelliSense & Code Completion (9 providers, 9 shell files)
-- Custom dark-themed completion popup (replicates SQL Prompt design)
+- Custom dark-themed completion popup (replicates SQL Prompt design, One Dark icon palette for all 12 object types with semi-transparent badge backgrounds)
 - **Ctrl transparency**: Hold Ctrl to make popup semi-transparent (see code behind)
 - Auto-trigger on typing with configurable debounce delay
 - Dot-trigger for table.column completion
@@ -32,12 +32,12 @@ This document tracks the development progress, complete feature inventory, issue
 - Schema status indicator (cache load progress in status bar)
 - CamelCase dictionary for identifier splitting (5,000+ word list)
 
-### 2. Code Formatting (20 commands + profile system)
+### 2. Code Formatting (21 commands + profile system + formatting directives)
 
-**Format Commands (16):**
+**Format Commands (17):**
 1. Format Document (Ctrl+K, Y) — full document formatting
 2. Format Selection — selection-only formatting
-3. Casing Only (Ctrl+B, Ctrl+U) — keyword casing without layout changes
+3. Casing Only (Ctrl+B, Ctrl+C) — keyword casing without layout changes
 4. Expand Wildcards (Ctrl+B, Ctrl+W) — SELECT * to column list
 5. Expand Insert Columns — with **metadata comments** (type, nullability, defaults as inline comments)
 6. Expand Update Columns — UPDATE SET with all columns
@@ -59,6 +59,16 @@ This document tracks the development progress, complete feature inventory, issue
 
 **Convert Operations (1):**
 20. **Convert sp_executesql to Static SQL** — substitutes parameter values into template (string-literal-aware)
+
+**New in spec 013:**
+21. **Unformat Document** (Ctrl+B, Ctrl+U) — strips all formatting whitespace to minimal single-line SQL
+
+**Formatting Region Directives:**
+- `-- noformat` / `-- endnoformat` (original syntax)
+- `-- AKML formatting off` / `-- AKML formatting on` (new alias)
+- `-- SQL Prompt formatting off` / `-- SQL Prompt formatting on` (migration compatibility)
+- Block comment variants: `/* noformat */`, `/* AKML formatting off */`, etc.
+- All three syntaxes are interchangeable and case-insensitive
 
 **Profile System:**
 - `.akmlstyle` JSON format profiles with 50+ formatting options
@@ -146,19 +156,29 @@ This document tracks the development progress, complete feature inventory, issue
 
 ### 7. SQL History (5 shell files + 4 engine files)
 - SQLite-backed execution history recording (WAL mode for performance)
-- History Tool Window with full-text search and filtering (All/Open/Closed tabs)
+- History Tool Window with SQL Prompt 3-panel layout (query list, version timeline, code preview)
+- Full-text search with filtering (All/Starred/Open/Closed tabs)
+- **Advanced search syntax** (spec 013): wildcards (`*`, `?`), boolean operators (`OR`, `NOT`), exact phrase (`"..."`), CamelCase boundary matching (`PC` → ProductCategory), prefix filters (`server:`, `database:`, `name:`, `sql:`, `starred:`, `open:`)
+- **Search match highlighting**: Yellow Ochre (#F9A825, 30% opacity) multi-term highlighting in code preview
+- **Starring / Favorites**: Star toggle per query, starred filter tab, exempt from retention auto-trim
+- **Version history per query**: Timestamped snapshots with timeline panel and compare
+- **Rename closed queries**: Right-click context menu rename with `name:` prefix search support
 - History diff view (side-by-side query comparison)
 - Encryption at rest (optional, Windows DPAPI)
 - Configurable retention period (days) and max entries
 - Record failures toggle (captures failed query attempts)
 - Deduplication (prevents identical consecutive queries)
 - Background retention service (enforces cleanup policies)
+- FTS5 error fallback: malformed queries gracefully degrade to LIKE-based search
 
 ### 8. Tab Management & Session Recovery (7 tab files + 3 session files)
 - Tab coloring by environment (Production=red, Staging=orange, Dev=green, Azure=blue)
   - **Optional gradient** (lighter top, base color bottom — LinearGradientBrush)
   - Pattern-based environment rules (glob matching: `*PROD*`, `*DEV*`, `*.database.windows.net`)
   - 4-level assignment hierarchy: Group → Servers in Group → Server → Database
+  - **Status bar color propagation** (spec 013): 60% opacity environment color on SSMS status bar
+  - **Floating window border** (spec 013): 3px solid environment-colored border on undocked query windows
+  - Both configurable via `StatusBarColorEnabled` / `FloatingWindowBorderEnabled` settings
 - Custom window title template (`{server} - {database} - SSMS`)
 - Tab tooltip with server, database, and user info
 - Restore Closed Tab (Ctrl+Shift+T) with undo stack
@@ -210,7 +230,7 @@ This document tracks the development progress, complete feature inventory, issue
 
 ### 12. Settings System (2 dialog files + OptionCategoryTreeBuilder)
 - WPF Settings dialog with **15 category pages**: General, IntelliSense, Schema Cache, Formatting, Snippets, Code Analysis, Refactoring, History, Tabs & UI, Safety, Grid, Editor, Execution, Navigation, AI Assistance
-- Dark/Light theme support (auto-detected from VS theme)
+- Dark/Light/System theme support (SQL Prompt-accurate hex palette: Light #F0F0F0/#0078D4, Dark #2D2D3B/#1E1E2E/#8892A8/#3A3F4E)
 - Per-category Reset This Page / Reset All to defaults
 - Export All Settings / Import Settings (JSON format)
 - **101 configurable settings** across 15 `AppSettings` sections:
@@ -260,6 +280,10 @@ This document tracks the development progress, complete feature inventory, issue
 - Atomic config writes (temp file + rename pattern)
 - Self-contained updater (.NET 10, win-x64)
 - Inno Setup 7 installer with environment scanner (registry + vswhere + filesystem fallback)
+  - SSMS/VS running detection via CloseApplications (spec 013)
+  - `/LOG` verbose logging support (native Inno Setup feature, documented)
+  - In-place upgrade/repair via fixed AppId + UsePreviousAppDir
+  - **SQL Prompt style importer** (spec 013): detects Red Gate config, stages `.sqlpromptstyle` files, engine imports on first startup via `SqlPromptImporter` (99-option mapping)
 
 **Codebase Statistics:**
 - 916 C# files total
@@ -269,10 +293,10 @@ This document tracks the development progress, complete feature inventory, issue
 - Tests: 207 files across 5 test projects
 
 ### Test Coverage
-- **457 unit tests** (xunit, .NET 10) across 5 test projects:
-  - `AkmlSql.Core.Tests` — 27 test files (config, IPC, formatting, analysis, refactoring, safety, snippets, navigation)
+- **915 unit tests** (xunit, .NET 10) across 5 test projects:
+  - `AkmlSql.Core.Tests` — 27 test files, 457 tests (config, IPC, formatting, analysis, refactoring, safety, snippets, navigation)
   - `AkmlSql.Engine.Tests` — 31 test files (analysis, completion, parser, refactoring, schema, snippets)
-  - `AkmlSql.Formatting.Tests` — 32 test files (actions, casing, layout, pipeline, profiles, rules)
+  - `AkmlSql.Formatting.Tests` — 33 test files, 458 tests (actions, casing, layout, pipeline, profiles, rules)
   - `AkmlSql.E2E.Tests` — 17 test files (end-to-end analyzer, formatter, infrastructure)
 - Key test areas added in specs 010-011:
   - SafetyCheckHandler: 15 tests (DELETE/UPDATE/DROP/TRUNCATE patterns)
@@ -282,10 +306,12 @@ This document tracks the development progress, complete feature inventory, issue
   - InsertMetadata: 9 tests (type comments, identity, defaults, computed)
   - SpExecutesqlConversion: 18 tests (param substitution, string quoting, NULL, string-literal safety)
   - SplitTableOperation: 6 tests (input validation, error handling)
+- Key test areas added in spec 013:
+  - NoformatScanner directive aliases: 11 tests (AKML/SQL Prompt/mixed syntax, case-insensitivity, block comments)
 
 ---
 
-## Gap Analysis vs SQL Prompt v11 (2026-04-02)
+## Gap Analysis vs SQL Prompt v11 (2026-04-03)
 
 > Source: `doc/AKML_SQL_Gap_Analysis_1.md` — detailed feature-by-feature comparison
 
@@ -293,27 +319,33 @@ This document tracks the development progress, complete feature inventory, issue
 
 | Area | Status | Notes |
 |------|--------|-------|
-| IntelliSense | **Full** | All features + extras (9 providers, Ctrl transparency) |
-| Formatting | **Full** | 21 commands vs SQL Prompt's ~10 — exceeds (includes Unformat) |
+| IntelliSense | **Full** | All features + extras (9 providers, Ctrl transparency, SQL Prompt One Dark icon palette) |
+| Formatting | **Full** | 21 commands vs SQL Prompt's ~10 — exceeds (Unformat + formatting off/on directives) |
 | Snippets | **Full** | 14 variables vs 6, 3 sources, context filtering — exceeds |
 | Analysis | **Full** | 130 rules vs 94 — exceeds (Security/Naming/Design categories extra) |
-| Tab Coloring | **Full** | Gradient, hierarchy, custom title — exceeds |
+| Tab Coloring | **Full** | Gradient, hierarchy, custom title, status bar + floating window color — exceeds |
 | SQL History | **Full** | Starring, version history, advanced search, rename, highlighting — all present |
 | Refactoring | **Full** | 18 operations vs ~8 — exceeds |
 | Navigation | **Full** | Bookmarks, Outline, Peek, Minimap — exceeds |
 | Results Grid | **Full** | 16 features vs 7 — exceeds (includes Copy as IN Clause) |
 | Safety | **Full** | Audit logging, type-to-confirm — exceeds |
-| Settings | **Full** | 15 pages, 101 settings, import/export |
+| Settings | **Full** | 15 pages, 103 settings, import/export, SQL Prompt-accurate color palette |
 | Command Palette | **Full** | 32 commands with fuzzy search |
 
-### All Gaps Resolved (spec 012)
+### All Gaps Resolved (specs 012 + 013)
 - **Starring / Favorites**: Already implemented (retention exemption confirmed in HistoryDatabase.cs)
 - **Version history per query**: `history_versions` table + timeline panel + compare
-- **Advanced search syntax**: `HistorySearchParser` with prefix, wildcard, phrase, boolean support
-- **Rename closed queries**: Context menu rename + `UpdateTabTitleAsync` IPC
-- **Search match highlighting**: Yellow Run-based highlighting in code preview
+- **Advanced search syntax**: `HistorySearchParser` with prefix, wildcard, phrase, boolean, CamelCase support + FTS5 error fallback
+- **Rename closed queries**: Context menu rename + `UpdateTabTitleAsync` IPC + `name:` prefix search via NameFilter
+- **Search match highlighting**: Yellow Ochre (#F9A825, 30% opacity) multi-term highlighting in code preview
 - **Copy as IN Clause**: `FormatAsInClause` in GridCopyAsMenu with proper quoting
-- **Unformat action**: `UnformatOperation` lightweight operation + lightbulb action
+- **Unformat command**: `UnformatCommand` shell wiring (Ctrl+B,Ctrl+U) to existing `UnformatOperation`
+- **Formatting region directives**: `-- AKML formatting off/on` and `-- SQL Prompt formatting off/on` as aliases for `-- noformat`
+- **Options dialog colors**: SQL Prompt-accurate hex palette (Light #F0F0F0/#0078D4, Dark #2D2D3B/#1E1E2E/#8892A8/#3A3F4E)
+- **IntelliSense icon colors**: SQL Prompt One Dark palette for all 12 object types (semi-transparent badge backgrounds)
+- **Tab color propagation**: Status bar (60% opacity) + floating window border (3px solid)
+- **Installer enhancements**: SSMS detection via CloseApplications, `/LOG` documentation, repair/upgrade verification
+- **SQL Prompt style importer**: Installer detects Red Gate config, stages files, engine imports on startup
 ---
 
 ## Development History
@@ -598,4 +630,4 @@ GitHub Actions example:
 
 ---
 
-*Last updated: 2026-03-22*
+*Last updated: 2026-04-03*
