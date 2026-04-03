@@ -109,7 +109,9 @@ public class HistoryRequestHandler(HistoryDatabase database)
                 Deduplicate = searchRequest.Deduplicate,
                 Offset = searchRequest.Offset,
                 Limit = searchRequest.Limit > 0 ? searchRequest.Limit : 100,
-                IsOpen = searchRequest.IsOpen
+                IsOpen = searchRequest.IsOpen,
+                NameFilter = searchRequest.NameFilter,
+                CamelCaseTokens = searchRequest.CamelCaseTokens
             };
 
             // Parse ISO 8601 date strings to DateTime
@@ -470,7 +472,8 @@ public class HistoryRequestHandler(HistoryDatabase database)
             FavoritesOnly = f.FavoritesOnly,
             Deduplicate = f.Deduplicate,
             Offset = 0,
-            Limit = int.MaxValue // Export: no pagination
+            Limit = int.MaxValue, // Export: no pagination
+            NameFilter = f.NameFilter
         };
 
         if (!string.IsNullOrEmpty(f.DateFrom) &&

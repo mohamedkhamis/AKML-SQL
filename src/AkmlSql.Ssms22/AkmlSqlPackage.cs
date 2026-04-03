@@ -101,6 +101,7 @@ namespace AkmlSql.Ssms22
                 // Formatting commands
                 FormatDocumentCommand.Initialize(this, commandService);
                 FormatSelectionCommand.Initialize(this, commandService);
+                UnformatCommand.Initialize(this, commandService);
 
                 // Phase 9 US2 — AI Explain
                 AiExplainCommand.Initialize(this, commandService);

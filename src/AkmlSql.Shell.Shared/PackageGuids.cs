@@ -30,6 +30,7 @@ namespace AkmlSql.Shell.Shared
         public const int CmdQualifyNames = 0x0214;
         public const int CmdToggleBrackets = 0x0215;
         public const int CmdToggleAs = 0x0216;
+        public const int CmdUnformat = 0x021E;
         public const int CmdEditProfile = 0x0220;
         public const int CmdBulkAnalysis = 0x0300;
 

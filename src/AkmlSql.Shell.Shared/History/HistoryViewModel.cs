@@ -372,6 +372,11 @@ namespace AkmlSql.Shell.Shared.History
                 if (parsed.HasPrefixes && parsed.OpenFilter.HasValue)
                     effectiveIsOpen = parsed.OpenFilter.Value;
 
+                // Extract name filter from parsed search prefixes
+                string? effectiveNameFilter = null;
+                if (parsed.HasPrefixes && parsed.NameFilter != null)
+                    effectiveNameFilter = parsed.NameFilter;
+
                 var request = new HistorySearchRequest
                 {
                     SearchText = effectiveSearchText,
@@ -384,7 +389,9 @@ namespace AkmlSql.Shell.Shared.History
                     Deduplicate = deduplicate,
                     Offset = _currentOffset,
                     Limit = PageSize,
-                    IsOpen = effectiveIsOpen
+                    IsOpen = effectiveIsOpen,
+                    NameFilter = effectiveNameFilter,
+                    CamelCaseTokens = parsed.CamelCaseTokens?.ToArray()
                 };
 
                 var response = await client.SendRequestAsync<HistorySearchResponse, HistorySearchRequest>(

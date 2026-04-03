@@ -375,6 +375,14 @@ namespace AkmlSql.Core.Config
         /// <summary>Use gradient colors on tab header bars (lighter top, base color bottom).</summary>
         [JsonPropertyName("gradientColors")]
         public bool GradientColors { get; set; }
+
+        /// <summary>Propagate environment color to the SSMS/VS status bar (T027).</summary>
+        [JsonPropertyName("statusBarColorEnabled")]
+        public bool StatusBarColorEnabled { get; set; } = true;
+
+        /// <summary>Propagate environment color as a border on floating (undocked) query windows (T028).</summary>
+        [JsonPropertyName("floatingWindowBorderEnabled")]
+        public bool FloatingWindowBorderEnabled { get; set; } = true;
     }
 
     /// <summary>Configuration for a single tab coloring environment rule.</summary>

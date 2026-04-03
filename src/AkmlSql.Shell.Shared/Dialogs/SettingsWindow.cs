@@ -81,43 +81,43 @@ namespace AkmlSql.Shell.Shared.Dialogs
             }
 
             public static readonly ThemeBrushSet Dark = new ThemeBrushSet(
-                main:        Color.FromRgb(0x1E, 0x1E, 0x1E), // #1E1E1E
-                sidebar:     Color.FromRgb(0x25, 0x25, 0x26), // #252526
-                panel:       Color.FromRgb(0x2D, 0x2D, 0x30), // #2D2D30
-                input:       Color.FromRgb(0x3C, 0x3C, 0x3C), // #3C3C3C
-                inputReadOnly: Color.FromRgb(0x1E, 0x1E, 0x1E), // #1E1E1E
-                button:      Color.FromRgb(0x3C, 0x3C, 0x3C), // #3C3C3C
-                buttonHover: Color.FromRgb(0x50, 0x50, 0x54), // #505054
-                selected:    Color.FromRgb(0x09, 0x47, 0x71), // #094771
-                border:      Color.FromRgb(0x3C, 0x3C, 0x3C), // #3C3C3C
-                comboBorder: Color.FromRgb(0x55, 0x55, 0x55), // #555555
-                fgPrimary:   Color.FromRgb(0xD4, 0xD4, 0xD4), // #D4D4D4
-                fgSecondary: Color.FromRgb(0x88, 0x88, 0x88), // #888888
-                fgAccent:    Color.FromRgb(0x00, 0x7A, 0xCC), // #007ACC
+                main:        Color.FromRgb(0x2D, 0x2D, 0x3B), // #2D2D3B — dialog background (SQL Prompt spec)
+                sidebar:     Color.FromRgb(0x25, 0x25, 0x33), // #252533 — sidebar (darker than main)
+                panel:       Color.FromRgb(0x1E, 0x1E, 0x2E), // #1E1E2E — panel background (SQL Prompt spec)
+                input:       Color.FromRgb(0x3A, 0x3F, 0x4E), // #3A3F4E — input (matches border)
+                inputReadOnly: Color.FromRgb(0x2D, 0x2D, 0x3B), // #2D2D3B — read-only (matches main)
+                button:      Color.FromRgb(0x3A, 0x3F, 0x4E), // #3A3F4E — button background
+                buttonHover: Color.FromRgb(0x4A, 0x4F, 0x5E), // #4A4F5E — button hover (lighter)
+                selected:    Color.FromRgb(0x00, 0x78, 0xD4), // #0078D4 — selected item (accent blue)
+                border:      Color.FromRgb(0x3A, 0x3F, 0x4E), // #3A3F4E — border (SQL Prompt spec)
+                comboBorder: Color.FromRgb(0x3A, 0x3F, 0x4E), // #3A3F4E — input border
+                fgPrimary:   Color.FromRgb(0xD4, 0xD4, 0xD4), // #D4D4D4 — text primary
+                fgSecondary: Color.FromRgb(0x88, 0x92, 0xA8), // #8892A8 — unselected text (SQL Prompt spec)
+                fgAccent:    Color.FromRgb(0x00, 0x78, 0xD4), // #0078D4 — accent
                 fgWhite:     Color.FromRgb(0xFF, 0xFF, 0xFF), // #FFFFFF
-                selectedText: Color.FromRgb(0xFF, 0xFF, 0xFF), // #FFFFFF
-                sep:         Color.FromRgb(0x3C, 0x3C, 0x3C), // #3C3C3C
-                treeHover:   Color.FromRgb(0x2A, 0x2D, 0x2E), // #2A2D2E
+                selectedText: Color.FromRgb(0xFF, 0xFF, 0xFF), // #FFFFFF — selected text (white on accent)
+                sep:         Color.FromRgb(0x3A, 0x3F, 0x4E), // #3A3F4E — separator
+                treeHover:   Color.FromRgb(0x33, 0x33, 0x44), // #333344 — hover
                 caret:       Color.FromRgb(0xFF, 0xFF, 0xFF)  // #FFFFFF
             );
 
             public static readonly ThemeBrushSet Light = new ThemeBrushSet(
-                main:        Color.FromRgb(0xF5, 0xF5, 0xF5), // #F5F5F5 — window background
+                main:        Color.FromRgb(0xF0, 0xF0, 0xF0), // #F0F0F0 — dialog background (SQL Prompt spec)
                 sidebar:     Color.FromRgb(0xF0, 0xF0, 0xF0), // #F0F0F0 — sidebar background
-                panel:       Color.FromRgb(0xFF, 0xFF, 0xFF), // #FFFFFF — content background
+                panel:       Color.FromRgb(0xFF, 0xFF, 0xFF), // #FFFFFF — panel background (SQL Prompt spec)
                 input:       Color.FromRgb(0xFF, 0xFF, 0xFF), // #FFFFFF — input background
                 inputReadOnly: Color.FromRgb(0xF0, 0xF0, 0xF0), // #F0F0F0
-                button:      Color.FromRgb(0xE0, 0xE0, 0xE0), // #E0E0E0 — button background
-                buttonHover: Color.FromRgb(0xD0, 0xD0, 0xD0), // #D0D0D0 — button hover
-                selected:    Color.FromRgb(0xCC, 0xE8, 0xFF), // #CCE8FF — selected/highlight
-                border:      Color.FromRgb(0xE0, 0xE0, 0xE0), // #E0E0E0 — border
+                button:      Color.FromRgb(0x00, 0x78, 0xD4), // #0078D4 — primary button (SQL Prompt spec)
+                buttonHover: Color.FromRgb(0x10, 0x6E, 0xBE), // #106EBE — button hover (darker accent)
+                selected:    Color.FromRgb(0x00, 0x78, 0xD4), // #0078D4 — selected item (SQL Prompt spec)
+                border:      Color.FromRgb(0xCC, 0xCC, 0xCC), // #CCCCCC — border (SQL Prompt spec)
                 comboBorder: Color.FromRgb(0xCC, 0xCC, 0xCC), // #CCCCCC — input border
                 fgPrimary:   Color.FromRgb(0x1E, 0x1E, 0x1E), // #1E1E1E — text primary
                 fgSecondary: Color.FromRgb(0x66, 0x66, 0x66), // #666666 — text secondary
-                fgAccent:    Color.FromRgb(0x00, 0x7A, 0xCC), // #007ACC — accent blue
+                fgAccent:    Color.FromRgb(0x00, 0x78, 0xD4), // #0078D4 — accent (SQL Prompt spec)
                 fgWhite:     Color.FromRgb(0x1E, 0x1E, 0x1E), // #1E1E1E — headings (dark on light)
-                selectedText: Color.FromRgb(0x1E, 0x1E, 0x1E), // #1E1E1E — selected text (dark on light blue)
-                sep:         Color.FromRgb(0xE0, 0xE0, 0xE0), // #E0E0E0 — separator
+                selectedText: Color.FromRgb(0xFF, 0xFF, 0xFF), // #FFFFFF — selected text (white on #0078D4)
+                sep:         Color.FromRgb(0xCC, 0xCC, 0xCC), // #CCCCCC — separator
                 treeHover:   Color.FromRgb(0xE8, 0xE8, 0xE8), // #E8E8E8 — hover
                 caret:       Color.FromRgb(0x1E, 0x1E, 0x1E)  // #1E1E1E
             );

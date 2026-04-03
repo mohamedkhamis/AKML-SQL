@@ -8,10 +8,17 @@ namespace AkmlSql.Shell.Shared.History
     /// <summary>
     /// Parses advanced search syntax for the SQL History search bar.
     /// Supports prefix filters (server:, database:, db:, sql:, name:, starred:, open:),
-    /// quoted phrases, wildcard characters (* -> %, ? -> _), and boolean keywords (OR, NOT).
+    /// quoted phrases, wildcard characters (* for FTS5 prefix queries), boolean keywords (OR, NOT),
+    /// and CamelCase token detection (short all-uppercase 2-4 char tokens like PC, GCO, SCO).
     /// </summary>
     internal static class HistorySearchParser
     {
+        // FTS5 boolean keywords that should be preserved as-is in the query string.
+        private static readonly HashSet<string> Fts5BooleanKeywords = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "OR", "NOT", "AND"
+        };
+
         public static ParsedSearch Parse(string query)
         {
             var result = new ParsedSearch();
@@ -24,6 +31,7 @@ namespace AkmlSql.Shell.Shared.History
 
             var tokens = Tokenize(query);
             var plainParts = new List<string>();
+            var camelCaseTokens = new List<string>();
 
             foreach (var token in tokens)
             {
@@ -59,9 +67,7 @@ namespace AkmlSql.Shell.Shared.History
                             continue;
 
                         case "name":
-                            // name: filter maps to tab_title search — append to plain text
-                            // since the engine's HistorySearchRequest doesn't have a TabTitle filter field.
-                            plainParts.Add(value);
+                            result.NameFilter = value;
                             result.HasPrefixes = true;
                             continue;
 
@@ -87,15 +93,48 @@ namespace AkmlSql.Shell.Shared.History
                     }
                 }
 
-                // FTS5 uses * as native prefix wildcard — don't convert to %.
-                // ? has no FTS5 equivalent — leave as literal.
-                // Keep OR and NOT as-is for boolean logic.
-                // Keep quoted strings as-is.
+                // FTS5 uses * as native prefix wildcard — keep as-is.
+                // Keep OR, NOT, AND as-is for FTS5 boolean logic.
+                // Keep quoted strings "..." as-is for FTS5 exact phrase matching.
+
+                // Detect CamelCase tokens: short all-uppercase alphabetic tokens (2-4 chars)
+                // that are NOT FTS5 boolean keywords. These are extracted for post-filter matching.
+                if (IsCamelCaseToken(token))
+                {
+                    camelCaseTokens.Add(token);
+                    continue;
+                }
+
                 plainParts.Add(token);
             }
 
             result.PlainTextQuery = string.Join(" ", plainParts);
+            if (camelCaseTokens.Count > 0)
+            {
+                result.CamelCaseTokens = camelCaseTokens;
+            }
             return result;
+        }
+
+        /// <summary>
+        /// Returns true if the token is a short (2-4 chars) all-uppercase alphabetic string
+        /// that is not an FTS5 boolean keyword (OR, NOT, AND).
+        /// Such tokens are treated as CamelCase initials for post-filter matching.
+        /// </summary>
+        private static bool IsCamelCaseToken(string token)
+        {
+            if (token.Length < 2 || token.Length > 4)
+                return false;
+
+            // Must be all uppercase alphabetic characters
+            for (int i = 0; i < token.Length; i++)
+            {
+                if (!char.IsLetter(token[i]) || !char.IsUpper(token[i]))
+                    return false;
+            }
+
+            // Exclude FTS5 boolean keywords
+            return !Fts5BooleanKeywords.Contains(token);
         }
 
         /// <summary>
@@ -183,12 +222,20 @@ namespace AkmlSql.Shell.Shared.History
         public bool? OpenFilter { get; set; }
 
         /// <summary>
-        /// The remaining plain text query after prefix extraction.
-        /// Wildcard characters are converted: * -> %, ? -> _.
+        /// The remaining plain text query after prefix and CamelCase token extraction.
+        /// Preserves FTS5 syntax: * for prefix wildcards, "..." for exact phrases,
+        /// and OR/NOT/AND for boolean logic.
         /// </summary>
         public string PlainTextQuery { get; set; } = "";
 
         /// <summary>True if any prefix filter was found in the query.</summary>
         public bool HasPrefixes { get; set; }
+
+        /// <summary>
+        /// Short all-uppercase tokens (2-4 chars) detected as CamelCase initials.
+        /// These are applied as in-memory post-filters after FTS5 returns results.
+        /// For example, "PC" matches words like "ProductCategory" or "price_calculator".
+        /// </summary>
+        public List<string>? CamelCaseTokens { get; set; }
     }
 }

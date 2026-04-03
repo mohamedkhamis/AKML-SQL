@@ -66,6 +66,13 @@
           <ButtonText>Format Selection</ButtonText>
         </Strings>
       </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="cmdUnformat" priority="0x0602" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <Strings>
+          <ButtonText>Unformat Document</ButtonText>
+        </Strings>
+      </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdHistoryPanel" priority="0x0700" type="Button">
         <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
@@ -289,6 +296,8 @@
   <KeyBindings>
     <KeyBinding guid="guidAkmlSqlCmdSet" id="cmdFormatDocument"
                 editor="guidVSStd97" key1="K" mod1="Control" key2="Y" mod2="None" />
+    <KeyBinding guid="guidAkmlSqlCmdSet" id="cmdUnformat"
+                editor="guidVSStd97" key1="B" mod1="Control" key2="U" mod2="Control" />
     <KeyBinding guid="guidAkmlSqlCmdSet" id="CmdHistoryPanel"
                 editor="guidVSStd97" key1="H" mod1="Control Alt" />
     <KeyBinding guid="guidAkmlSqlCmdSet" id="CmdRestoreClosedTab"
@@ -344,6 +353,7 @@
       <IDSymbol name="cmdViewLogs" value="0x0104" />
       <IDSymbol name="cmdFormatDocument" value="0x0200" />
       <IDSymbol name="cmdFormatSelection" value="0x0201" />
+      <IDSymbol name="cmdUnformat" value="0x021E" />
       <IDSymbol name="CmdHistoryPanel" value="0x0500" />
       <IDSymbol name="CmdRestoreClosedTab" value="0x0501" />
       <IDSymbol name="CmdCloseUnmodified" value="0x0502" />

@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
@@ -987,6 +988,9 @@ namespace AkmlSql.Shell.Shared.History
         /// <summary>
         /// Updates the code preview TextBlock with search match highlighting.
         /// When SearchText is active, matching segments get the HistorySearchHighlight background.
+        /// Supports multi-term highlighting: splits by OR, strips NOT terms, extracts quoted phrases,
+        /// removes prefix filters (server:, database:, name:, sql:, starred:, open:), and merges
+        /// overlapping highlight regions.
         /// </summary>
         private void UpdatePreviewWithHighlighting()
         {
@@ -1022,35 +1026,263 @@ namespace AkmlSql.Shell.Shared.History
                 return;
             }
 
-            // Highlight matching segments
+            // Parse search text into individual highlight terms
+            var highlightTerms = ExtractHighlightTerms(searchText);
+
+            if (highlightTerms.Count == 0)
+            {
+                // All terms were prefix filters or NOT terms — no highlighting needed
+                _codePreviewTextBlock.Inlines.Add(new Run(sqlText));
+                return;
+            }
+
+            // Find all match regions across all terms
+            var regions = FindHighlightRegions(sqlText, highlightTerms);
+
+            if (regions.Count == 0)
+            {
+                // No matches found
+                _codePreviewTextBlock.Inlines.Add(new Run(sqlText));
+                return;
+            }
+
+            // Render the text with highlighted regions
             var theme = ThemeManager.Instance;
             var highlightBrush = Freeze(theme.HistorySearchHighlight);
 
             int pos = 0;
-            while (pos < sqlText.Length)
+            foreach (var region in regions)
             {
-                int matchIdx = sqlText.IndexOf(searchText, pos, StringComparison.OrdinalIgnoreCase);
-                if (matchIdx < 0)
+                // Add non-matching segment before this region
+                if (region.Start > pos)
                 {
-                    // No more matches: add remaining text
-                    _codePreviewTextBlock.Inlines.Add(new Run(sqlText.Substring(pos)));
-                    break;
+                    _codePreviewTextBlock.Inlines.Add(new Run(sqlText.Substring(pos, region.Start - pos)));
                 }
 
-                // Add non-matching segment before the match
-                if (matchIdx > pos)
-                {
-                    _codePreviewTextBlock.Inlines.Add(new Run(sqlText.Substring(pos, matchIdx - pos)));
-                }
-
-                // Add highlighted matching segment
-                var matchRun = new Run(sqlText.Substring(matchIdx, searchText.Length))
+                // Add highlighted segment
+                var matchRun = new Run(sqlText.Substring(region.Start, region.Length))
                 {
                     Background = highlightBrush
                 };
                 _codePreviewTextBlock.Inlines.Add(matchRun);
 
-                pos = matchIdx + searchText.Length;
+                pos = region.Start + region.Length;
+            }
+
+            // Add remaining text after last highlight
+            if (pos < sqlText.Length)
+            {
+                _codePreviewTextBlock.Inlines.Add(new Run(sqlText.Substring(pos)));
+            }
+        }
+
+        /// <summary>
+        /// Extracts highlight terms from the search text.
+        /// - Splits by OR (case-sensitive word boundary) into separate groups
+        /// - Strips NOT-prefixed terms (these filter but should not highlight)
+        /// - Extracts quoted phrases as whole terms (quotes stripped for matching)
+        /// - Removes prefix filters (server:, database:, db:, name:, sql:, starred:, open:)
+        /// - Each remaining word/phrase becomes a highlight term
+        /// </summary>
+        private static List<string> ExtractHighlightTerms(string searchText)
+        {
+            var terms = new List<string>();
+
+            // Split by OR at word boundaries: " OR " or start/end anchored OR
+            var orParts = Regex.Split(searchText, @"(?<=\s)OR(?=\s)|^OR(?=\s)|(?<=\s)OR$");
+
+            foreach (var orPart in orParts)
+            {
+                var part = orPart.Trim();
+                if (string.IsNullOrEmpty(part)) continue;
+
+                // Tokenize the part respecting quoted strings
+                var tokens = TokenizeForHighlight(part);
+
+                bool skipNext = false;
+                for (int i = 0; i < tokens.Count; i++)
+                {
+                    var token = tokens[i];
+
+                    // Skip AND keyword (FTS5 boolean, not a highlight term)
+                    if (string.Equals(token, "AND", StringComparison.Ordinal))
+                        continue;
+
+                    // NOT: skip the NOT keyword and the next token (the negated term)
+                    if (string.Equals(token, "NOT", StringComparison.Ordinal))
+                    {
+                        skipNext = true;
+                        continue;
+                    }
+
+                    if (skipNext)
+                    {
+                        skipNext = false;
+                        continue;
+                    }
+
+                    // Check for prefix filters — skip these entirely
+                    if (IsPrefixFilter(token))
+                        continue;
+
+                    // Strip quotes from quoted phrases
+                    var term = token;
+                    if (term.Length >= 2 && term.StartsWith("\"", StringComparison.Ordinal)
+                                        && term.EndsWith("\"", StringComparison.Ordinal))
+                    {
+                        term = term.Substring(1, term.Length - 2);
+                    }
+
+                    // Strip trailing wildcard (*) used for FTS5 prefix search
+                    if (term.EndsWith("*", StringComparison.Ordinal))
+                    {
+                        term = term.Substring(0, term.Length - 1);
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(term) && !terms.Contains(term))
+                    {
+                        terms.Add(term);
+                    }
+                }
+            }
+
+            return terms;
+        }
+
+        /// <summary>
+        /// Tokenizes a search string respecting quoted phrases.
+        /// Quoted strings (including prefix:&quot;value&quot;) are kept as single tokens.
+        /// </summary>
+        private static List<string> TokenizeForHighlight(string text)
+        {
+            var tokens = new List<string>();
+            var sb = new System.Text.StringBuilder();
+            bool inQuotes = false;
+
+            for (int i = 0; i < text.Length; i++)
+            {
+                char c = text[i];
+
+                if (c == '"')
+                {
+                    inQuotes = !inQuotes;
+                    sb.Append(c);
+                    continue;
+                }
+
+                if (char.IsWhiteSpace(c) && !inQuotes)
+                {
+                    if (sb.Length > 0)
+                    {
+                        tokens.Add(sb.ToString());
+                        sb.Clear();
+                    }
+                    continue;
+                }
+
+                sb.Append(c);
+            }
+
+            if (sb.Length > 0)
+            {
+                tokens.Add(sb.ToString());
+            }
+
+            return tokens;
+        }
+
+        /// <summary>
+        /// Returns true if the token is a prefix filter (server:val, database:val, db:val,
+        /// sql:val, name:val, starred:val, open:val). These should not be highlighted.
+        /// </summary>
+        private static bool IsPrefixFilter(string token)
+        {
+            var colonIdx = token.IndexOf(':');
+            if (colonIdx <= 0) return false;
+
+            var prefix = token.Substring(0, colonIdx).ToLowerInvariant();
+            switch (prefix)
+            {
+                case "server":
+                case "database":
+                case "db":
+                case "sql":
+                case "name":
+                case "starred":
+                case "open":
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        /// <summary>
+        /// Finds all highlight regions in the SQL text for the given terms.
+        /// Performs case-insensitive matching. Overlapping regions are merged.
+        /// Returns a sorted, non-overlapping list of (Start, Length) regions.
+        /// </summary>
+        private static List<HighlightRegion> FindHighlightRegions(string sqlText, List<string> terms)
+        {
+            var regions = new List<HighlightRegion>();
+
+            foreach (var term in terms)
+            {
+                if (string.IsNullOrEmpty(term)) continue;
+
+                int pos = 0;
+                while (pos < sqlText.Length)
+                {
+                    int matchIdx = sqlText.IndexOf(term, pos, StringComparison.OrdinalIgnoreCase);
+                    if (matchIdx < 0) break;
+
+                    regions.Add(new HighlightRegion(matchIdx, term.Length));
+                    pos = matchIdx + 1; // advance by 1 to find overlapping matches from different terms
+                }
+            }
+
+            if (regions.Count == 0) return regions;
+
+            // Sort by start position, then by length descending (longer matches first for merging)
+            regions.Sort((a, b) =>
+            {
+                int cmp = a.Start.CompareTo(b.Start);
+                return cmp != 0 ? cmp : b.Length.CompareTo(a.Length);
+            });
+
+            // Merge overlapping/adjacent regions
+            var merged = new List<HighlightRegion> { regions[0] };
+            for (int i = 1; i < regions.Count; i++)
+            {
+                var last = merged[merged.Count - 1];
+                var current = regions[i];
+
+                if (current.Start <= last.Start + last.Length)
+                {
+                    // Overlapping or adjacent — extend the last region
+                    int newEnd = Math.Max(last.Start + last.Length, current.Start + current.Length);
+                    merged[merged.Count - 1] = new HighlightRegion(last.Start, newEnd - last.Start);
+                }
+                else
+                {
+                    merged.Add(current);
+                }
+            }
+
+            return merged;
+        }
+
+        /// <summary>
+        /// Represents a highlighted region in the SQL text (start index + length).
+        /// </summary>
+        private readonly struct HighlightRegion
+        {
+            public readonly int Start;
+            public readonly int Length;
+
+            public HighlightRegion(int start, int length)
+            {
+                Start = start;
+                Length = length;
             }
         }
 

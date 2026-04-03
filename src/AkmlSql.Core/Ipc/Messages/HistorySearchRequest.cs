@@ -52,5 +52,17 @@ namespace AkmlSql.Core.Ipc.Messages
         /// <summary>Filter by open/closed tab status. Null for all.</summary>
         [Key(10)]
         public bool? IsOpen { get; set; }
+
+        /// <summary>Filter by tab/entry display name (tab_title). Uses LIKE '%value%' matching. Null for no name filter.</summary>
+        [Key(11)]
+        public string? NameFilter { get; set; }
+
+        /// <summary>
+        /// Short all-uppercase CamelCase tokens (e.g., "PC", "GCO") for in-memory post-filtering.
+        /// After FTS5 returns results, entries are filtered to those whose sql_text contains words
+        /// matching ALL CamelCase tokens at CamelCase/underscore boundaries.
+        /// </summary>
+        [Key(12)]
+        public string[]? CamelCaseTokens { get; set; }
     }
 }

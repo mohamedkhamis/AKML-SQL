@@ -102,19 +102,52 @@ The installer script (`AkmlSqlSetup.iss`) runs this automatically via Pascal Scr
 
 ---
 
-## Silent Install
+## Silent Installation
+
+The installer supports fully unattended installation for scripted deployments, group policy, and CI/CD pipelines.
+
+### Basic Usage
 
 ```
-AKMLSQLSetup.exe /VERYSILENT /ACCEPTEULA /TARGETS=20,22,2022 /NOUPDATE
+AKMLSQLSetup.exe /VERYSILENT /ACCEPTEULA
 ```
+
+### Examples
+
+```bash
+# Install to specific targets only
+AKMLSQLSetup.exe /VERYSILENT /ACCEPTEULA /TARGETS=ssms22,vs2022
+
+# Install with verbose logging (for troubleshooting)
+AKMLSQLSetup.exe /VERYSILENT /ACCEPTEULA /LOG="C:\Logs\akmlsql-install.log"
+
+# Install with auto-update and telemetry disabled
+AKMLSQLSetup.exe /VERYSILENT /ACCEPTEULA /NOUPDATE /NOTELEMETRY
+
+# Force-close running SSMS/VS instances before installing
+AKMLSQLSetup.exe /VERYSILENT /ACCEPTEULA /FORCECLOSEAPPS
+
+# Import SQL Prompt formatting styles during installation
+AKMLSQLSetup.exe /VERYSILENT /ACCEPTEULA /IMPORTSQLPROMPT
+```
+
+### Flags
 
 | Flag | Description |
 |------|-------------|
 | `/VERYSILENT` | No UI, no progress dialog |
-| `/ACCEPTEULA` | Accept the EULA without prompting |
-| `/TARGETS=20,21,22,2019,2022,2026` | Comma-separated list of IDE targets to install to |
+| `/ACCEPTEULA` | Accept the EULA (required when `/VERYSILENT` is used) |
+| `/TARGETS=ssms22,vs2022` | Comma-separated target list: `ssms20`, `ssms21`, `ssms22`, `vs2019`, `vs2022`, `vs2026`. If omitted, all detected targets are selected. |
 | `/NOUPDATE` | Disable the built-in auto-update check |
-| `/LOG=path\install.log` | Write detailed install log |
+| `/TELEMETRY` | Enable anonymous usage telemetry (off by default) |
+| `/NOTELEMETRY` | Explicitly disable telemetry |
+| `/FORCECLOSEAPPS` | Force-close running SSMS/VS instances without prompting |
+| `/IMPORTSQLPROMPT` | Import SQL Prompt formatting styles if SQL Prompt config is detected |
+| `/LOG[=path]` | Write detailed install log. This is a native Inno Setup flag. If a path is given (`/LOG="C:\install.log"`), logs are written there. If no path is given (`/LOG`), Inno Setup writes to `%TEMP%\Setup Log YYYY-MM-DD #NNN.txt`. |
+
+### Repair / Upgrade Behavior
+
+The installer uses a fixed `AppId` and `UsePreviousAppDir=yes`, so re-running the installer over an existing installation performs an in-place upgrade. No prior uninstall is needed. User configuration (`config.json`, profiles, snippets) is preserved across upgrades.
 
 ---
 

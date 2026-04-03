@@ -15,24 +15,33 @@ public class NoformatRegion
 
 /// <summary>
 /// Pre-scans raw SQL text for noformat region markers before parsing.
-/// Supports line comments (--noformat / --endnoformat) and
-/// block comments (/* noformat */ / /* endnoformat */).
+/// Supports three equivalent directive syntaxes (all case-insensitive):
+///   1. --noformat / --endnoformat  (also /* noformat */ / /* endnoformat */)
+///   2. -- AKML formatting off / -- AKML formatting on  (also block comment form)
+///   3. -- SQL Prompt formatting off / -- SQL Prompt formatting on  (also block comment form)
 /// Unmatched open tags extend to EOF. Nested opens merge into a single region.
 /// Returns sorted, non-overlapping regions.
 /// </summary>
 public class NoformatScanner
 {
-    // Matches: --noformat (with optional surrounding whitespace in the comment)
-    // or /* noformat */ (with optional whitespace inside)
+    // Matches open directives (case-insensitive):
+    //   --noformat  |  -- noformat  |  /* noformat */
+    //   -- AKML formatting off      |  /* AKML formatting off */
+    //   -- SQL Prompt formatting off |  /* SQL Prompt formatting off */
     // Timeout guards against catastrophic backtracking on malformed input.
     private static readonly Regex OpenPattern = new(
-        @"-- *noformat\b|/\* *noformat *\*/",
+        @"-- *(?:noformat\b|AKML formatting off\b|SQL Prompt formatting off\b)"
+        + @"|/\* *(?:noformat|AKML formatting off|SQL Prompt formatting off) *\*/",
         RegexOptions.IgnoreCase | RegexOptions.Compiled,
         TimeSpan.FromSeconds(2));
 
-    // Matches: --endnoformat or /* endnoformat */
+    // Matches close directives (case-insensitive):
+    //   --endnoformat  |  -- endnoformat  |  /* endnoformat */
+    //   -- AKML formatting on             |  /* AKML formatting on */
+    //   -- SQL Prompt formatting on       |  /* SQL Prompt formatting on */
     private static readonly Regex ClosePattern = new(
-        @"-- *endnoformat\b|/\* *endnoformat *\*/",
+        @"-- *(?:endnoformat\b|AKML formatting on\b|SQL Prompt formatting on\b)"
+        + @"|/\* *(?:endnoformat|AKML formatting on|SQL Prompt formatting on) *\*/",
         RegexOptions.IgnoreCase | RegexOptions.Compiled,
         TimeSpan.FromSeconds(2));
 

@@ -80,6 +80,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\AddGroupByColumnsCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\EncapsulateBeginEndCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\ReplaceDeprecatedSyntaxCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\UnformatCommand.cs" />
     <!-- Analysis: real-time squiggles, error list, lightbulb fix actions -->
     <Compile Include="$(MSBuildThisFileDirectory)Analysis\AnalysisController.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Analysis\DiagnosticTagger.cs" />
