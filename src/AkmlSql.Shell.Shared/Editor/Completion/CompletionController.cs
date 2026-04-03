@@ -527,6 +527,10 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             _adornment.Hide();
             _filterText = string.Empty;
             _fetchPending = false;
+            // Clear stale cached items so the next trigger fetches fresh results
+            // from the engine with the correct context (e.g., keywords after table name,
+            // not table names after FROM).
+            CompletionRpcHelper.ClearCache(_sessionId);
         }
 
         private string GetWordAtCaret()

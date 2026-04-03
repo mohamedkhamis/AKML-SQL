@@ -41,5 +41,8 @@ namespace AkmlSql.Core.Models.History
 
         /// <summary>Maximum number of entries to return. Defaults to 100.</summary>
         public int Limit { get; set; } = 100;
+
+        /// <summary>Filter by open/closed tab status. Null for all.</summary>
+        public bool? IsOpen { get; set; }
     }
 }

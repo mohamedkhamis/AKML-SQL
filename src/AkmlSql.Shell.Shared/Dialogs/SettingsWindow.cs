@@ -298,9 +298,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
         {
             _settings = settings;
 
-            // Pick theme based on settings
-            var themeName = settings.Theme?.ToLowerInvariant() ?? "dark";
-            _theme = themeName == "light" ? ThemeBrushSet.Light : ThemeBrushSet.Dark;
+            // Pick theme based on settings (default: light, like SQL Prompt)
+            var themeName = settings.Theme?.ToLowerInvariant() ?? "light";
+            _theme = themeName == "dark" ? ThemeBrushSet.Dark : ThemeBrushSet.Light;
         }
 
         /// <summary>
@@ -1541,27 +1541,16 @@ namespace AkmlSql.Shell.Shared.Dialogs
             if (_cboTheme == null) return;
             var idx = _cboTheme.SelectedIndex;
 
-            // Index 0 = Dark, Index 1 = Light, Index 2 = System
-            if (idx == 2)
+            // Index 0 = Dark, Index 1 = Light, Index 2 = System (auto-detect from VS/SSMS)
+            var requestedTheme = idx switch
             {
-                // System theme not yet implemented — revert
-                MessageBox.Show(
-                    "System theme is coming soon.\nOnly Dark and Light themes are currently available.",
-                    Constants.ProductName,
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Information);
+                0 => ThemeBrushSet.Dark,
+                2 => Ui.ThemeManager.DetectFromEnvironment() == Ui.VsThemeKind.Dark
+                    ? ThemeBrushSet.Dark : ThemeBrushSet.Light,
+                _ => ThemeBrushSet.Light
+            };
 
-                _cboTheme.SelectionChanged -= OnThemeSelectionChanged;
-                _cboTheme.SelectedIndex = _theme == ThemeBrushSet.Dark ? 0 : 1;
-                _cboTheme.SelectionChanged += OnThemeSelectionChanged;
-                return;
-            }
-
-            // Determine which theme is currently active
-            var currentIsDark = _theme == ThemeBrushSet.Dark;
-            var requestedDark = idx == 0;
-
-            if (currentIsDark == requestedDark)
+            if (_theme == requestedTheme)
                 return; // no change needed
 
             // Save the new theme preference immediately so the reopened window uses it
@@ -1574,6 +1563,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
             {
                 Log.Warning(ex, "SettingsWindow: Failed to save theme change");
             }
+
+            // Update ThemeManager so all AKML SQL UI picks up the new theme
+            Ui.ThemeManager.Instance.SetUserTheme(_settings.Theme);
 
             // Signal that the window should be reopened with the new theme
             ThemeChangeRequested = true;

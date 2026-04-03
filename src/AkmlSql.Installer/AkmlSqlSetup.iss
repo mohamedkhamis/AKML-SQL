@@ -58,9 +58,8 @@ Source: "..\AkmlSql.Ssms22\bin\Release\net472\AkmlSql.Core.dll"; DestDir: "{app}
 Source: "..\AkmlSql.Ssms22\bin\Release\net472\Serilog.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\AkmlSql.Ssms22\bin\Release\net472\Serilog.Sinks.File.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\AkmlSql.Updater\bin\Release\net10.0\win-x64\publish\AkmlSql.Updater.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\AkmlSql.Engine.exe"; DestDir: "{app}\Engine"; Flags: ignoreversion
-; Native SNI removed — Engine uses managed SqlClient provider on .NET 10
-Source: "..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\e_sqlite3.dll"; DestDir: "{app}\Engine"; Flags: ignoreversion
+; Engine is SelfContained + PublishSingleFile=false — deploy ALL published output
+Source: "..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\*"; DestDir: "{app}\Engine"; Flags: ignoreversion recursesubdirs
 Source: "..\AkmlSql.Analyzer\bin\Release\net10.0\win-x64\publish\AkmlSql.Analyzer.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
 

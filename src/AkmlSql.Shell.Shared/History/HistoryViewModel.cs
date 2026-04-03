@@ -31,6 +31,7 @@ namespace AkmlSql.Shell.Shared.History
         private DateTime? _dateFrom;
         private DateTime? _dateTo;
         private bool _favoritesOnly;
+        private bool? _isOpenFilter;
         private int _totalCount;
         private bool _isLoading;
         private int _currentOffset;
@@ -128,6 +129,13 @@ namespace AkmlSql.Shell.Shared.History
         {
             get => _favoritesOnly;
             set => SetField(ref _favoritesOnly, value);
+        }
+
+        /// <summary>Filter by open/closed tab status. Null = all, true = open, false = closed.</summary>
+        public bool? IsOpenFilter
+        {
+            get => _isOpenFilter;
+            set => SetField(ref _isOpenFilter, value);
         }
 
         /// <summary>Total number of matching entries across all pages.</summary>
@@ -359,6 +367,11 @@ namespace AkmlSql.Shell.Shared.History
                         : (!string.IsNullOrWhiteSpace(parsed.PlainTextQuery) ? parsed.PlainTextQuery : null);
                 }
 
+                // Determine effective open/closed filter from tab or search prefix
+                bool? effectiveIsOpen = IsOpenFilter;
+                if (parsed.HasPrefixes && parsed.OpenFilter.HasValue)
+                    effectiveIsOpen = parsed.OpenFilter.Value;
+
                 var request = new HistorySearchRequest
                 {
                     SearchText = effectiveSearchText,
@@ -370,7 +383,8 @@ namespace AkmlSql.Shell.Shared.History
                     FavoritesOnly = effectiveFavoritesOnly,
                     Deduplicate = deduplicate,
                     Offset = _currentOffset,
-                    Limit = PageSize
+                    Limit = PageSize,
+                    IsOpen = effectiveIsOpen
                 };
 
                 var response = await client.SendRequestAsync<HistorySearchResponse, HistorySearchRequest>(

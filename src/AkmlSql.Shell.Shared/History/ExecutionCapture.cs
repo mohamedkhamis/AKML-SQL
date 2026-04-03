@@ -5,6 +5,7 @@ using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Core.Models.History;
 using AkmlSql.Shell.Shared.Ipc;
+using EnvDTE;
 using Microsoft.VisualStudio.Shell;
 using Serilog;
 using Task = System.Threading.Tasks.Task;
@@ -14,11 +15,35 @@ namespace AkmlSql.Shell.Shared.History
     /// <summary>
     /// Captures SQL execution events from SSMS/VS and sends history recording requests
     /// to the out-of-process engine via fire-and-forget IPC notifications.
+    /// <para>
+    /// Uses <see cref="DTE.Events.CommandEvents"/> to intercept "Query.Execute" (F5)
+    /// completion, the same portable pattern as
+    /// <see cref="Safety.ExecutionCommandFilter"/>. This works across all SSMS 20/21/22
+    /// and VS 2019/2022/2026 without version-specific COM interop.
+    /// </para>
     /// </summary>
     internal static class ExecutionCapture
     {
         private static bool _initialized;
         private static bool _enabled;
+
+        // DTE references — must keep strong references to prevent GC collection
+        private static DTE? _dte;
+        private static CommandEvents? _commandEvents;
+        private static DocumentEvents? _documentEvents;
+        private static WindowEvents? _windowEvents;
+
+        // Tracks execution start time between BeforeExecute and AfterExecute
+        private static DateTime? _executeStartTimeUtc;
+
+        // Tracks the last active SQL document content hash for dedup on tab switch
+        private static string? _lastActiveDocumentPath;
+        private static string? _lastRecordedContentHash;
+
+        private const string QueryExecuteCommandName = "Query.Execute";
+
+        // Cached Query.Execute command GUID — avoids resolving every DTE command
+        private static string? _queryExecuteGuid;
 
         /// <summary>
         /// Initializes execution capture. Reads configuration to determine if history
@@ -27,6 +52,8 @@ namespace AkmlSql.Shell.Shared.History
         /// <param name="package">The VS/SSMS package for service resolution.</param>
         public static void Initialize(Package package)
         {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
             if (_initialized) return;
             _initialized = true;
 
@@ -41,43 +68,430 @@ namespace AkmlSql.Shell.Shared.History
                     return;
                 }
 
-                // TODO: Hook into SSMS query execution completion events.
-                //
-                // The exact hookup varies between SSMS 20/21/22 and VS 2019/2022/2026.
-                // In SSMS, the execution event is typically exposed via:
-                //   - ScriptFactory.Instance for SSMS 20 (IsolatedShell)
-                //   - SSMS 21/22 may expose events through IVsQueryExecution or similar COM interop
-                //
-                // The general approach is:
-                //   1. Get the ScriptFactory or query execution service from the package
-                //   2. Subscribe to the QueryExecutionCompleted event
-                //   3. In the event handler, call OnExecutionCompleted() with the captured data
-                //
-                // For now, the OnExecutionCompleted method below provides the capture logic
-                // that any execution event handler should call.
-                //
-                // Example (pseudo-code for SSMS 22):
-                //   var scriptFactory = package.GetService(typeof(IScriptFactory)) as IScriptFactory;
-                //   scriptFactory.QueryExecutionCompleted += (sender, args) => {
-                //       OnExecutionCompleted(
-                //           sqlText: args.SqlText,
-                //           server: args.ServerName,
-                //           database: args.DatabaseName,
-                //           username: args.UserName,
-                //           durationMs: (long)args.Duration.TotalMilliseconds,
-                //           rowCount: args.RowCount,
-                //           status: args.Succeeded ? ExecutionStatus.Success : ExecutionStatus.Error,
-                //           errorMessage: args.ErrorMessage,
-                //           source: args.FilePath,
-                //           tabTitle: args.TabTitle);
-                //   };
+                _dte = Package.GetGlobalService(typeof(DTE)) as DTE;
+                if (_dte == null)
+                {
+                    Log.Warning("ExecutionCapture: DTE service not available; history capture disabled");
+                    return;
+                }
 
-                Log.Information("ExecutionCapture: initialized and ready for SSMS execution event hookup");
+                // Cache the Query.Execute command GUID to avoid resolving every command
+                try
+                {
+                    var cmd = _dte.Commands.Item(QueryExecuteCommandName);
+                    if (cmd != null) _queryExecuteGuid = cmd.Guid;
+                }
+                catch
+                {
+                    Log.Debug("ExecutionCapture: could not cache Query.Execute GUID; will resolve per-command");
+                }
+
+                // Hook CommandEvents for Query.Execute — strong reference prevents GC
+                _commandEvents = _dte.Events.CommandEvents;
+                _commandEvents.BeforeExecute += OnBeforeCommandExecute;
+                _commandEvents.AfterExecute += OnAfterCommandExecute;
+
+                // Hook DocumentClosing to capture a final SQL snapshot when a tab closes
+                _documentEvents = _dte.Events.DocumentEvents;
+                _documentEvents.DocumentClosing += OnDocumentClosing;
+
+                // Hook WindowActivated to record the previous tab's SQL on focus change
+                _windowEvents = _dte.Events.WindowEvents;
+                _windowEvents.WindowActivated += OnWindowActivated;
+
+                // Initialize the last active document path
+                try
+                {
+                    if (_dte.ActiveDocument != null)
+                    {
+                        _lastActiveDocumentPath = _dte.ActiveDocument.FullName;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Debug(ex, "ExecutionCapture: failed to read initial active document");
+                }
+
+                Log.Information("ExecutionCapture: initialized with DTE command, document, and window hooks");
             }
             catch (Exception ex)
             {
                 Log.Error(ex, "ExecutionCapture: failed to initialize");
             }
+        }
+
+        /// <summary>
+        /// Unsubscribes from all DTE events. Called during package disposal.
+        /// </summary>
+        public static void Shutdown()
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
+            try
+            {
+                if (_commandEvents != null)
+                {
+                    _commandEvents.BeforeExecute -= OnBeforeCommandExecute;
+                    _commandEvents.AfterExecute -= OnAfterCommandExecute;
+                    _commandEvents = null;
+                }
+
+                if (_documentEvents != null)
+                {
+                    _documentEvents.DocumentClosing -= OnDocumentClosing;
+                    _documentEvents = null;
+                }
+
+                if (_windowEvents != null)
+                {
+                    _windowEvents.WindowActivated -= OnWindowActivated;
+                    _windowEvents = null;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "ExecutionCapture: error detaching event handlers during shutdown");
+            }
+
+            _dte = null;
+            _executeStartTimeUtc = null;
+            _lastActiveDocumentPath = null;
+            _initialized = false;
+        }
+
+        // ----- DTE Command Event Handlers -----
+
+        /// <summary>
+        /// Fires before a DTE command runs. Records the start time for Query.Execute
+        /// so we can compute duration in <see cref="OnAfterCommandExecute"/>.
+        /// </summary>
+        private static void OnBeforeCommandExecute(
+            string guid, int id, object customIn, object customOut, ref bool cancelDefault)
+        {
+            try
+            {
+                if (!IsQueryExecuteCommand(guid, id)) return;
+
+                _executeStartTimeUtc = DateTime.UtcNow;
+                Log.Debug("ExecutionCapture: Query.Execute started at {Time}", _executeStartTimeUtc);
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "ExecutionCapture: error in BeforeExecute hook");
+            }
+        }
+
+        /// <summary>
+        /// Fires after a DTE command completes. For Query.Execute, captures the SQL text,
+        /// connection info, and duration, then sends a history record via
+        /// <see cref="OnExecutionCompleted"/>.
+        /// </summary>
+        private static void OnAfterCommandExecute(
+            string guid, int id, object customIn, object customOut)
+        {
+            try
+            {
+                ThreadHelper.ThrowIfNotOnUIThread();
+                if (_dte == null) return;
+
+                if (!IsQueryExecuteCommand(guid, id))
+                    return;
+
+                // Compute duration from the BeforeExecute timestamp
+                long durationMs = 0;
+                if (_executeStartTimeUtc.HasValue)
+                {
+                    durationMs = (long)(DateTime.UtcNow - _executeStartTimeUtc.Value).TotalMilliseconds;
+                    _executeStartTimeUtc = null;
+                }
+
+                // Extract SQL text from the active editor
+                var sqlText = GetActiveSqlText();
+                if (string.IsNullOrWhiteSpace(sqlText))
+                {
+                    Log.Debug("ExecutionCapture: empty SQL text after Query.Execute; skipping");
+                    return;
+                }
+
+                // Extract connection info
+                string? server = null;
+                string? database = null;
+                try
+                {
+                    var sp = ServiceProvider.GlobalProvider as IServiceProvider;
+                    if (sp != null)
+                    {
+                        var connectionResult = Editor.SsmsConnectionDetector.TryDetectConnection(sp);
+                        if (connectionResult != null)
+                        {
+                            server = connectionResult.Server;
+                            database = connectionResult.Database;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Debug(ex, "ExecutionCapture: failed to detect connection info");
+                }
+
+                // Get source file and tab title
+                string? source = null;
+                string? tabTitle = null;
+                try
+                {
+                    var activeDoc = _dte.ActiveDocument;
+                    if (activeDoc != null)
+                    {
+                        source = activeDoc.FullName;
+                        tabTitle = activeDoc.Name;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Debug(ex, "ExecutionCapture: failed to read active document info");
+                }
+
+                Log.Debug("ExecutionCapture: Query.Execute completed in {Duration}ms on {Server}.{Database}",
+                    durationMs, server, database);
+
+                // AfterExecute does not expose success/failure or row count.
+                // Record as Success; the engine can update status if error info becomes available.
+                OnExecutionCompleted(
+                    sqlText: sqlText!,
+                    server: server,
+                    database: database,
+                    username: null,
+                    durationMs: durationMs,
+                    rowCount: 0,
+                    status: ExecutionStatus.Success,
+                    errorMessage: null,
+                    source: source,
+                    tabTitle: tabTitle);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "ExecutionCapture: error in AfterExecute hook");
+            }
+        }
+
+        // ----- Document / Window Event Handlers -----
+
+        /// <summary>
+        /// Captures the final SQL text when a document tab is closing.
+        /// Saves as a version snapshot of the existing history entry (not a new entry),
+        /// so auto-saves don't pollute the query list with duplicate rows.
+        /// </summary>
+        private static void OnDocumentClosing(Document document)
+        {
+            try
+            {
+                ThreadHelper.ThrowIfNotOnUIThread();
+                if (document == null) return;
+
+                var textDoc = document.Object("TextDocument") as TextDocument;
+                if (textDoc == null) return;
+
+                var editPoint = textDoc.StartPoint.CreateEditPoint();
+                var content = editPoint.GetText(textDoc.EndPoint);
+
+                if (string.IsNullOrWhiteSpace(content)) return;
+
+                var tabTitle = document.Name;
+                Log.Debug("ExecutionCapture: saving version snapshot on close for '{Name}'", tabTitle);
+
+                SaveVersionSnapshot(tabTitle, content);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "ExecutionCapture: error capturing document close snapshot");
+            }
+        }
+
+        /// <summary>
+        /// When the user switches to a different window, records the SQL content of the
+        /// previously focused SQL document as an auto-save snapshot. This ensures that
+        /// unsaved edits are captured even if the user never executes the query.
+        /// </summary>
+        private static void OnWindowActivated(Window gotFocus, Window lostFocus)
+        {
+            try
+            {
+                ThreadHelper.ThrowIfNotOnUIThread();
+                if (_dte == null || lostFocus == null) return;
+
+                // Only capture if the lost-focus window had a document
+                Document lostDoc = null;
+                try
+                {
+                    lostDoc = lostFocus.Document;
+                }
+                catch
+                {
+                    // Some windows don't have documents (tool windows, etc.)
+                    return;
+                }
+
+                if (lostDoc == null) return;
+
+                // Only capture SQL-like documents (heuristic: .sql extension or untitled SSMS tabs)
+                var name = lostDoc.Name ?? "";
+                if (!name.EndsWith(".sql", StringComparison.OrdinalIgnoreCase) &&
+                    !name.StartsWith("SQLQuery", StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                // Skip if this is the same document we last recorded (avoid duplicate snapshots)
+                var docPath = lostDoc.FullName;
+                if (string.Equals(docPath, _lastActiveDocumentPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    // Same document — only record if we haven't already
+                    // Update tracking to the new active document
+                    try
+                    {
+                        _lastActiveDocumentPath = gotFocus?.Document?.FullName;
+                    }
+                    catch
+                    {
+                        _lastActiveDocumentPath = null;
+                    }
+                    return;
+                }
+
+                // Update tracking
+                try
+                {
+                    _lastActiveDocumentPath = gotFocus?.Document?.FullName;
+                }
+                catch
+                {
+                    _lastActiveDocumentPath = null;
+                }
+
+                var textDoc = lostDoc.Object("TextDocument") as TextDocument;
+                if (textDoc == null) return;
+
+                var editPoint = textDoc.StartPoint.CreateEditPoint();
+                var content = editPoint.GetText(textDoc.EndPoint);
+
+                if (string.IsNullOrWhiteSpace(content)) return;
+
+                // Content-hash dedup: skip if the content hasn't changed since last recording
+                var contentHash = ComputeSimpleHash(content);
+                if (string.Equals(contentHash, _lastRecordedContentHash, StringComparison.Ordinal))
+                    return;
+                _lastRecordedContentHash = contentHash;
+
+                Log.Debug("ExecutionCapture: saving version snapshot for '{Name}' on tab switch", name);
+
+                SaveVersionSnapshot(name, content);
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "ExecutionCapture: error in WindowActivated handler");
+            }
+        }
+
+        // ----- Helpers -----
+
+        /// <summary>
+        /// Fast check: is this command the Query.Execute command?
+        /// Uses the cached GUID when available (avoids per-command COM interop).
+        /// Falls back to full resolution only when the GUID wasn't cached during init.
+        /// </summary>
+        private static bool IsQueryExecuteCommand(string guid, int id)
+        {
+            // Fast path: compare cached GUID (covers 99%+ of calls — skips non-execute commands instantly)
+            if (_queryExecuteGuid != null)
+            {
+                return string.Equals(guid, _queryExecuteGuid, StringComparison.OrdinalIgnoreCase);
+            }
+
+            // Slow fallback: resolve command name via COM
+            ThreadHelper.ThrowIfNotOnUIThread();
+            try
+            {
+                if (_dte == null) return false;
+                var command = _dte.Commands.Item(guid, id);
+                return command?.Name?.Equals(QueryExecuteCommandName, StringComparison.OrdinalIgnoreCase) == true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Gets the SQL text from the active document editor. If there is a selection,
+        /// returns the selected text; otherwise returns the full document content.
+        /// </summary>
+        private static string? GetActiveSqlText()
+        {
+            try
+            {
+                ThreadHelper.ThrowIfNotOnUIThread();
+
+                if (_dte?.ActiveDocument == null) return null;
+
+                var textDoc = _dte.ActiveDocument.Object("TextDocument") as TextDocument;
+                if (textDoc == null) return null;
+
+                // If there's a selection, capture the selected text (user executed a fragment)
+                var selection = textDoc.Selection;
+                if (selection != null && !selection.IsEmpty)
+                {
+                    return selection.Text;
+                }
+
+                // Full document text
+                var startPoint = textDoc.StartPoint.CreateEditPoint();
+                return startPoint.GetText(textDoc.EndPoint);
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "ExecutionCapture: failed to get SQL text from active document");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Saves a version snapshot for an existing history entry (by tab title).
+        /// Used by tab-close and tab-focus-change auto-save triggers.
+        /// These record as versions of the existing entry, not new rows in the query list.
+        /// </summary>
+        private static void SaveVersionSnapshot(string tabTitle, string sqlText)
+        {
+            Task.Run(async () =>
+            {
+                try
+                {
+                    var client = EngineLifecycle.Manager?.Client;
+                    if (client == null || !client.IsConnected) return;
+
+                    var request = new HistoryActionRequest
+                    {
+                        Action = HistoryActions.SaveVersion,
+                        NewName = tabTitle, // reuse NewName field for tab title
+                        SqlText = sqlText
+                    };
+
+                    await client.SendRequestAsync<HistoryActionResponse, HistoryActionRequest>(
+                        MessageTypes.HistoryAction, request, timeoutMs: 5000);
+                }
+                catch (Exception ex)
+                {
+                    Log.Debug(ex, "ExecutionCapture: failed to save version snapshot for '{Title}'", tabTitle);
+                }
+            });
+        }
+
+        /// <summary>
+        /// Fast content hash for deduplication of auto-save snapshots.
+        /// Uses string hash code — not cryptographic, just for detecting identical content.
+        /// </summary>
+        private static string ComputeSimpleHash(string content)
+        {
+            return content.GetHashCode().ToString("X8");
         }
 
         /// <summary>

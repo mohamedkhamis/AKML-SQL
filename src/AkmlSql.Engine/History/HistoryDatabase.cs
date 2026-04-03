@@ -106,7 +106,8 @@ public sealed class HistoryDatabase : IDisposable
                 source        TEXT,
                 tab_title     TEXT,
                 content_hash  TEXT    NOT NULL,
-                is_favorite   INTEGER NOT NULL DEFAULT 0
+                is_favorite   INTEGER NOT NULL DEFAULT 0,
+                is_open       INTEGER NOT NULL DEFAULT 0
             );");
 
         // Create indexes for common query patterns
@@ -118,6 +119,23 @@ public sealed class HistoryDatabase : IDisposable
             "CREATE INDEX IF NOT EXISTS IX_history_server_db ON history (server, database_name);");
         await ExecuteNonQueryAsync(conn,
             "CREATE INDEX IF NOT EXISTS IX_history_status ON history (status);");
+        await ExecuteNonQueryAsync(conn,
+            "CREATE INDEX IF NOT EXISTS IX_history_is_open ON history (is_open);");
+
+        // Schema migration: add is_open column for existing databases
+        try
+        {
+            await ExecuteNonQueryAsync(conn,
+                "ALTER TABLE history ADD COLUMN is_open INTEGER NOT NULL DEFAULT 0;");
+        }
+        catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.Message.Contains("duplicate column"))
+        {
+            // Column already exists — expected for fresh databases or re-runs
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "History: is_open column migration failed (non-fatal)");
+        }
 
         // Create FTS5 virtual table for full-text search on SQL text
         await ExecuteNonQueryAsync(conn, @"
@@ -426,6 +444,12 @@ public sealed class HistoryDatabase : IDisposable
             whereClauses.Add("h.is_favorite = 1");
         }
 
+        if (filter.IsOpen.HasValue)
+        {
+            whereClauses.Add("h.is_open = @isOpen");
+            parameters.Add(new SqliteParameter("@isOpen", filter.IsOpen.Value ? 1 : 0));
+        }
+
         var whereClause = whereClauses.Count > 0
             ? "WHERE " + string.Join(" AND ", whereClauses)
             : "";
@@ -472,7 +496,8 @@ public sealed class HistoryDatabase : IDisposable
                     h.tab_title,
                     h.is_favorite,
                     COUNT(*) as exec_count,
-                    h.content_hash
+                    h.content_hash,
+                    MAX(h.is_open) as is_open
                 FROM {fromClause}
                 {whereClause}
                 GROUP BY h.content_hash
@@ -497,7 +522,8 @@ public sealed class HistoryDatabase : IDisposable
                     h.tab_title,
                     h.is_favorite,
                     1 as exec_count,
-                    h.content_hash
+                    h.content_hash,
+                    h.is_open
                 FROM {fromClause}
                 {whereClause}
                 ORDER BY h.executed_at DESC
@@ -532,7 +558,8 @@ public sealed class HistoryDatabase : IDisposable
                 TabTitle = reader.IsDBNull(11) ? null : reader.GetString(11),
                 IsFavorite = reader.GetInt32(12) != 0,
                 ExecutionCount = reader.GetInt32(13),
-                ContentHash = reader.IsDBNull(14) ? null : reader.GetString(14)
+                ContentHash = reader.IsDBNull(14) ? null : reader.GetString(14),
+                IsOpen = reader.GetInt32(15) != 0
             });
         }
 
@@ -652,6 +679,45 @@ public sealed class HistoryDatabase : IDisposable
 
         Log.Debug("History entry {Id}: favorite toggled to {State}", entryId, newState);
         return newState;
+    }
+
+    /// <summary>
+    /// Sets the is_open flag on one or more history entries.
+    /// </summary>
+    public async Task SetOpenStatusAsync(long[] entryIds, bool isOpen)
+    {
+        if (entryIds.Length == 0) return;
+
+        await using var conn = new SqliteConnection(_connectionString);
+        await conn.OpenAsync();
+
+        var paramNames = new string[entryIds.Length];
+        for (int i = 0; i < entryIds.Length; i++)
+            paramNames[i] = $"@id{i}";
+
+        var sql = $"UPDATE history SET is_open = @val WHERE id IN ({string.Join(", ", paramNames)})";
+        await using var cmd = new SqliteCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@val", isOpen ? 1 : 0);
+        for (int i = 0; i < entryIds.Length; i++)
+            cmd.Parameters.AddWithValue(paramNames[i], entryIds[i]);
+
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    /// <summary>
+    /// Marks all entries with a given tab title as closed (is_open = 0).
+    /// </summary>
+    public async Task CloseByTabTitleAsync(string tabTitle)
+    {
+        if (string.IsNullOrEmpty(tabTitle)) return;
+
+        await using var conn = new SqliteConnection(_connectionString);
+        await conn.OpenAsync();
+
+        await using var cmd = new SqliteCommand(
+            "UPDATE history SET is_open = 0 WHERE tab_title = @title AND is_open = 1", conn);
+        cmd.Parameters.AddWithValue("@title", tabTitle);
+        await cmd.ExecuteNonQueryAsync();
     }
 
     /// <summary>
@@ -950,6 +1016,44 @@ public sealed class HistoryDatabase : IDisposable
     /// <summary>
     /// Inserts a version snapshot for a history entry (for version history tracking).
     /// </summary>
+    /// <summary>
+    /// Finds the most recent history entry by tab title and inserts a version snapshot.
+    /// Used for auto-save on tab close / focus change (records as version, not new entry).
+    /// Returns true if a matching entry was found and a version was saved.
+    /// </summary>
+    public async Task<bool> SaveVersionByTabTitleAsync(string tabTitle, string sqlText)
+    {
+        if (string.IsNullOrEmpty(tabTitle) || string.IsNullOrWhiteSpace(sqlText)) return false;
+
+        await using var conn = new SqliteConnection(_connectionString);
+        await conn.OpenAsync();
+
+        // Find the most recent entry for this tab
+        await using var findCmd = new SqliteCommand(
+            "SELECT id FROM history WHERE tab_title = @title ORDER BY executed_at DESC LIMIT 1", conn);
+        findCmd.Parameters.AddWithValue("@title", tabTitle);
+        var result = await findCmd.ExecuteScalarAsync();
+        if (result == null) return false;
+
+        var historyId = Convert.ToInt64(result);
+        await using var insertCmd = new SqliteCommand(@"
+            INSERT INTO history_versions (history_id, sql_text)
+            VALUES (@historyId, @sqlText);", conn);
+        insertCmd.Parameters.AddWithValue("@historyId", historyId);
+        insertCmd.Parameters.AddWithValue("@sqlText", sqlText);
+        await insertCmd.ExecuteNonQueryAsync();
+
+        // Also update the main entry's sql_text to the latest version
+        await using var updateCmd = new SqliteCommand(
+            "UPDATE history SET sql_text = @sql, executed_at = datetime('now') WHERE id = @id", conn);
+        updateCmd.Parameters.AddWithValue("@sql", sqlText);
+        updateCmd.Parameters.AddWithValue("@id", historyId);
+        await updateCmd.ExecuteNonQueryAsync();
+
+        Log.Debug("History: saved version snapshot for tab '{Title}' (entry {Id})", tabTitle, historyId);
+        return true;
+    }
+
     public async Task InsertVersionAsync(long historyId, string sqlText)
     {
         await using var conn = new SqliteConnection(_connectionString);

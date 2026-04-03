@@ -7,9 +7,9 @@
 
   <Commands package="guidAkmlSqlPackage">
     <Menus>
-      <!-- Main menu under Tools -->
+      <!-- Top-level menu on the main menu bar (SQL Prompt style) -->
       <Menu guid="guidAkmlSqlCmdSet" id="AkmlSqlMenu" priority="0x700" type="Menu">
-        <Parent guid="guidSHLMainMenu" id="IDG_VS_MM_TOOLSADDINS"/>
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuBarGroup"/>
         <Strings>
           <ButtonText>AKML SQL</ButtonText>
         </Strings>
@@ -25,6 +25,11 @@
     </Menus>
 
     <Groups>
+      <!-- Custom group on the main menu bar — makes AKML SQL a top-level menu -->
+      <Group guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuBarGroup" priority="0x0900">
+        <Parent guid="guidVsMenuBar" id="IDM_VS_MENU_BAR"/>
+      </Group>
+
       <Group guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup" priority="0x0600">
         <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenu"/>
       </Group>
@@ -299,13 +304,7 @@
     </Buttons>
   </Commands>
 
-  <!-- Place the AKML SQL menu in multiple locations to ensure visibility -->
   <CommandPlacements>
-    <!-- Place in Tools menu (External Tools group) -->
-    <CommandPlacement guid="guidAkmlSqlCmdSet" id="AkmlSqlMenu" priority="0x0900">
-      <Parent guid="guidSHLMainMenu" id="IDG_VS_TOOLS_EXT_TOOLS"/>
-    </CommandPlacement>
-
     <!-- Toolbar buttons — SQL Prompt style quick access -->
     <CommandPlacement guid="guidAkmlSqlCmdSet" id="cmdFormatDocument" priority="0x0100">
       <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlToolbarGroup"/>
@@ -378,10 +377,16 @@
   </KeyBindings>
 
   <Symbols>
+    <!-- Define IDM_VS_MENU_BAR (0x0081) — not exposed by vsshlids.h in all SDK versions -->
+    <GuidSymbol name="guidVsMenuBar" value="{D309F791-903F-11D0-9EFC-00A0C911004F}">
+      <IDSymbol name="IDM_VS_MENU_BAR" value="0x0081" />
+    </GuidSymbol>
+
     <GuidSymbol name="guidAkmlSqlPackage" value="{A1B2C3D4-1111-2222-3333-444455556666}" />
     <GuidSymbol name="guidAkmlSqlCmdSet" value="{A1B2C3D4-1111-2222-3333-444455557777}">
       <IDSymbol name="AkmlSqlMenu" value="0x1000" />
       <IDSymbol name="AkmlSqlMenuGroup" value="0x1020" />
+      <IDSymbol name="AkmlSqlMenuBarGroup" value="0x1030" />
       <IDSymbol name="AkmlSqlToolbar" value="0x1040" />
       <IDSymbol name="AkmlSqlToolbarGroup" value="0x1050" />
       <IDSymbol name="cmdAbout" value="0x0100" />

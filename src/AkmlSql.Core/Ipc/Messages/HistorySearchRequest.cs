@@ -48,5 +48,9 @@ namespace AkmlSql.Core.Ipc.Messages
         /// <summary>Maximum number of entries to return.</summary>
         [Key(9)]
         public int Limit { get; set; } = 100;
+
+        /// <summary>Filter by open/closed tab status. Null for all.</summary>
+        [Key(10)]
+        public bool? IsOpen { get; set; }
     }
 }

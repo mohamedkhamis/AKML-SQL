@@ -70,5 +70,9 @@ namespace AkmlSql.Core.Ipc.Messages
         /// <summary>SHA-256 content hash for deduplication detection.</summary>
         [Key(14)]
         public string? ContentHash { get; set; }
+
+        /// <summary>Whether this query's tab is currently open in the editor.</summary>
+        [Key(15)]
+        public bool IsOpen { get; set; }
     }
 }

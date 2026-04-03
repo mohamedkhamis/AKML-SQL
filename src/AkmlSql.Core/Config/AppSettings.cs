@@ -25,10 +25,9 @@ namespace AkmlSql.Core.Config
 
         /// <summary>
         /// UI theme for AKML SQL dialogs. Valid values: "dark", "light", "system".
-        /// Currently only "dark" is fully implemented; "light" and "system" are reserved for future use.
         /// </summary>
         [JsonPropertyName("theme")]
-        public string Theme { get; set; } = "dark";
+        public string Theme { get; set; } = "light";
 
         /// <summary>ISO 8601 timestamp of the last successful update check. <c>null</c> if never checked.</summary>
         public DateTimeOffset? LastUpdateCheck { get; set; }

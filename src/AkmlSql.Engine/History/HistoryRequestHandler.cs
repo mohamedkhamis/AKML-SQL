@@ -108,7 +108,8 @@ public class HistoryRequestHandler(HistoryDatabase database)
                 FavoritesOnly = searchRequest.FavoritesOnly,
                 Deduplicate = searchRequest.Deduplicate,
                 Offset = searchRequest.Offset,
-                Limit = searchRequest.Limit > 0 ? searchRequest.Limit : 100
+                Limit = searchRequest.Limit > 0 ? searchRequest.Limit : 100,
+                IsOpen = searchRequest.IsOpen
             };
 
             // Parse ISO 8601 date strings to DateTime
@@ -352,6 +353,42 @@ public class HistoryRequestHandler(HistoryDatabase database)
                             SqlText = v.SqlText,
                             SavedAt = v.SavedAt
                         }).ToArray()
+                    });
+                }
+
+                case HistoryActions.SetOpenStatus:
+                {
+                    if (actionRequest.EntryIds.Length == 0 || !actionRequest.IsOpen.HasValue)
+                    {
+                        return CreateActionResponse(request.RequestId, new HistoryActionResponse
+                        {
+                            Success = false,
+                            Error = "EntryIds and IsOpen required for SetOpenStatus"
+                        });
+                    }
+
+                    await _database.SetOpenStatusAsync(actionRequest.EntryIds, actionRequest.IsOpen.Value);
+                    return CreateActionResponse(request.RequestId, new HistoryActionResponse
+                    {
+                        Success = true
+                    });
+                }
+
+                case HistoryActions.SaveVersion:
+                {
+                    if (string.IsNullOrEmpty(actionRequest.NewName) || string.IsNullOrEmpty(actionRequest.SqlText))
+                    {
+                        return CreateActionResponse(request.RequestId, new HistoryActionResponse
+                        {
+                            Success = false,
+                            Error = "NewName (tabTitle) and SqlText required for SaveVersion"
+                        });
+                    }
+
+                    var saved = await _database.SaveVersionByTabTitleAsync(actionRequest.NewName, actionRequest.SqlText);
+                    return CreateActionResponse(request.RequestId, new HistoryActionResponse
+                    {
+                        Success = saved
                     });
                 }
 

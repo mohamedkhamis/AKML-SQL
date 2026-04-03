@@ -51,6 +51,18 @@ namespace AkmlSql.Core.Ipc.Messages
         /// </summary>
         [Key(5)]
         public string? NewName { get; set; }
+
+        /// <summary>
+        /// Open/closed status to set (only used when Action = SetOpenStatus).
+        /// </summary>
+        [Key(6)]
+        public bool? IsOpen { get; set; }
+
+        /// <summary>
+        /// SQL text for SaveVersion action — the version snapshot content.
+        /// </summary>
+        [Key(7)]
+        public string? SqlText { get; set; }
     }
 
     /// <summary>
@@ -66,5 +78,7 @@ namespace AkmlSql.Core.Ipc.Messages
         public const int DeleteAll = 5;
         public const int Rename = 6;
         public const int GetVersions = 7;
+        public const int SetOpenStatus = 8;
+        public const int SaveVersion = 9;
     }
 }

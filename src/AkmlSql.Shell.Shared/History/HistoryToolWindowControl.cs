@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
@@ -16,18 +17,36 @@ using AkmlSql.Shell.Shared.Ui;
 namespace AkmlSql.Shell.Shared.History
 {
     /// <summary>
-    /// WPF UserControl that provides the UI for the SQL History tool window.
+    /// WPF UserControl that provides a SQL Prompt-style 3-panel layout for the SQL History tool window.
     /// Built programmatically (no XAML) for Shell.Shared compatibility across all 6 targets.
-    /// Features: search bar, filter dropdowns, date pickers, virtualized list view,
-    /// day-grouped entries with status icons, action buttons (copy, open, re-execute,
-    /// compare, toggle favorite, delete, export), and inline diff view.
+    /// Layout: top search/filter bar, then left query list | middle version history | right code preview.
+    /// Features: search bar, filter tabs (All/Starred/Open/Closed), virtualized query list,
+    /// version history, code preview with search highlighting, context menus, and all action commands.
     /// </summary>
     internal class HistoryToolWindowControl : UserControl
     {
         private readonly HistoryViewModel _viewModel;
-        private ListView? _listView;
-        private TextBlock? _previewTextBlock;
+
+        // Main panels
+        private ListView? _queryListView;
         private ListBox? _versionListBox;
+        private TextBlock? _codePreviewTextBlock;
+        private TextBlock? _codePreviewHeaderTimestamp;
+        private TextBlock? _metadataServerLabel;
+        private TextBlock? _metadataDatabaseLabel;
+        private TextBlock? _metadataVersionLabel;
+
+        // Filter tab borders (for visual toggle)
+        private Border? _filterAll;
+        private Border? _filterStarred;
+        private Border? _filterOpen;
+        private Border? _filterClosed;
+        private string _activeFilter = "all";
+
+        // Status bar elements
+        private TextBlock? _statusCountLabel;
+        private TextBlock? _statusLoadingLabel;
+        private Button? _loadMoreButton;
 
         public HistoryToolWindowControl()
         {
@@ -50,97 +69,96 @@ namespace AkmlSql.Shell.Shared.History
             _viewModel.InitializeAsync();
         }
 
+        // ================================================================
+        // Main UI Construction
+        // ================================================================
+
         private void BuildUi()
         {
             var theme = ThemeManager.Instance;
-            var bg = new SolidColorBrush(theme.Background);
-            var fg = new SolidColorBrush(theme.Foreground);
-            var border = new SolidColorBrush(theme.Border);
-            bg.Freeze();
-            fg.Freeze();
-            border.Freeze();
 
-            // Main layout: search bar on top, list in center, preview/versions, status, action bar
-            var mainGrid = new Grid { Background = bg };
-            mainGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Search/filter bar
-            mainGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(2, GridUnitType.Star) }); // ListView
-            mainGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // Preview + Versions
-            mainGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Status bar / load more
-            mainGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Action buttons
+            // Freeze all brushes for performance
+            var windowBg = Freeze(theme.HistoryWindowBackground);
+            var panelBg = Freeze(theme.HistoryPanelBackground);
+            var metaFg = Freeze(theme.HistoryMetadata);
 
-            // ================================================================
-            // ROW 0: Search and filter bar
-            // ================================================================
-            var filterPanel = BuildFilterPanel(bg, fg, border);
-            Grid.SetRow(filterPanel, 0);
-            mainGrid.Children.Add(filterPanel);
+            // Main layout: Row 0 = top bar, Row 1 = 3-panel area, Row 2 = status bar
+            var mainGrid = new Grid { Background = windowBg };
+            mainGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });    // Search + filter tabs
+            mainGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // 3-panel
+            mainGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });    // Status bar
 
-            // ================================================================
-            // ROW 1: History entries ListView with virtualization
-            // ================================================================
-            _listView = BuildListView(bg, fg, border);
-            Grid.SetRow(_listView, 1);
-            mainGrid.Children.Add(_listView);
+            // ROW 0: Search bar + filter tabs
+            var topBar = BuildTopBar(theme);
+            Grid.SetRow(topBar, 0);
+            mainGrid.Children.Add(topBar);
 
-            // ================================================================
-            // ROW 2: Preview panel (code preview + version history)
-            // ================================================================
-            var previewPanel = BuildPreviewPanel(bg, fg, border);
-            Grid.SetRow(previewPanel, 2);
-            mainGrid.Children.Add(previewPanel);
+            // ROW 1: 3-panel grid with splitters
+            var panelsGrid = BuildThreePanelGrid(theme);
+            Grid.SetRow(panelsGrid, 1);
+            mainGrid.Children.Add(panelsGrid);
 
-            // ================================================================
-            // ROW 3: Status bar with total count and Load More button
-            // ================================================================
-            var statusBar = BuildStatusBar(bg, fg);
-            Grid.SetRow(statusBar, 3);
+            // ROW 2: Status bar
+            var statusBar = BuildStatusBar(theme);
+            Grid.SetRow(statusBar, 2);
             mainGrid.Children.Add(statusBar);
-
-            // ================================================================
-            // ROW 4: Action buttons
-            // ================================================================
-            var actionBar = BuildActionBar(bg, fg, border);
-            Grid.SetRow(actionBar, 4);
-            mainGrid.Children.Add(actionBar);
 
             Content = mainGrid;
         }
 
-        private StackPanel BuildFilterPanel(Brush bg, Brush fg, Brush border)
+        // ================================================================
+        // ROW 0: Top bar (search + filter tabs)
+        // ================================================================
+
+        private StackPanel BuildTopBar(ThemeManager theme)
         {
-            var panel = new StackPanel { Margin = new Thickness(4) };
-
-            // Row 1: Search text box + Search/Clear buttons
-            var searchRow = new DockPanel { Margin = new Thickness(0, 0, 0, 4) };
-
-            var clearBtn = new Button
+            var panel = new StackPanel
             {
-                Content = "Clear",
-                Padding = new Thickness(8, 2, 8, 2),
-                Margin = new Thickness(2, 0, 0, 0),
-                ToolTip = "Clear all filters"
+                Margin = new Thickness(8, 8, 8, 4)
             };
-            clearBtn.SetBinding(System.Windows.Controls.Primitives.ButtonBase.CommandProperty,
-                new Binding(nameof(HistoryViewModel.ClearFiltersCommand)));
-            DockPanel.SetDock(clearBtn, Dock.Right);
-            searchRow.Children.Add(clearBtn);
 
-            var searchBtn = new Button
+            // ----- Search row -----
+            var searchRow = new DockPanel { Margin = new Thickness(0, 0, 0, 6) };
+
+            // Advanced search link (right-docked)
+            var advSearchLink = new TextBlock
             {
-                Content = "Search",
-                Padding = new Thickness(8, 2, 8, 2),
-                Margin = new Thickness(2, 0, 0, 0),
-                ToolTip = "Search history"
+                Text = "Advanced search",
+                Foreground = Freeze(theme.HistoryVersionCurrent),
+                FontSize = 11,
+                Cursor = Cursors.Hand,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(8, 0, 0, 0),
+                TextDecorations = TextDecorations.Underline,
+                ToolTip = "Use prefix filters: server:, db:, sql:, starred:yes, open:yes"
             };
-            searchBtn.SetBinding(System.Windows.Controls.Primitives.ButtonBase.CommandProperty,
-                new Binding(nameof(HistoryViewModel.SearchCommand)));
-            DockPanel.SetDock(searchBtn, Dock.Right);
-            searchRow.Children.Add(searchBtn);
+            advSearchLink.MouseLeftButtonDown += (_, __) =>
+            {
+                // Insert example prefix text to help the user
+                _viewModel.SearchText = "server: db: sql:SELECT ";
+            };
+            DockPanel.SetDock(advSearchLink, Dock.Right);
+            searchRow.Children.Add(advSearchLink);
+
+            // Search TextBox with rounded border
+            var searchBorder = new Border
+            {
+                CornerRadius = new CornerRadius(6),
+                Background = Freeze(theme.HistorySearchBackground),
+                BorderBrush = Freeze(theme.HistorySearchBorder),
+                BorderThickness = new Thickness(1),
+                Padding = new Thickness(0)
+            };
 
             var searchBox = new TextBox
             {
-                Padding = new Thickness(4, 2, 4, 2),
-                ToolTip = "Search SQL text (full-text search)"
+                Background = Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                Foreground = Freeze(theme.HistoryQueryName),
+                CaretBrush = Freeze(theme.HistoryQueryName),
+                Padding = new Thickness(8, 6, 8, 6),
+                FontSize = 12,
+                VerticalContentAlignment = VerticalAlignment.Center
             };
             searchBox.SetBinding(TextBox.TextProperty,
                 new Binding(nameof(HistoryViewModel.SearchText))
@@ -148,6 +166,40 @@ namespace AkmlSql.Shell.Shared.History
                     Mode = BindingMode.TwoWay,
                     UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged
                 });
+
+            // Placeholder behavior
+            var placeholderText = new TextBlock
+            {
+                Text = "\U0001F50D Search SQL history...",
+                Foreground = Freeze(theme.PlaceholderText),
+                IsHitTestVisible = false,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(10, 0, 0, 0),
+                FontSize = 12
+            };
+
+            var searchGrid = new Grid();
+            searchGrid.Children.Add(searchBox);
+            searchGrid.Children.Add(placeholderText);
+
+            // Show/hide placeholder based on text
+            searchBox.TextChanged += (_, __) =>
+            {
+                placeholderText.Visibility = string.IsNullOrEmpty(searchBox.Text)
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+            };
+            searchBox.GotFocus += (_, __) =>
+            {
+                placeholderText.Visibility = Visibility.Collapsed;
+            };
+            searchBox.LostFocus += (_, __) =>
+            {
+                placeholderText.Visibility = string.IsNullOrEmpty(searchBox.Text)
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+            };
+
             // Enter key triggers search
             searchBox.KeyDown += (s, e) =>
             {
@@ -156,556 +208,754 @@ namespace AkmlSql.Shell.Shared.History
                     _viewModel.SearchCommand.Execute(null);
                 }
             };
-            searchRow.Children.Add(searchBox);
 
+            searchBorder.Child = searchGrid;
+            searchRow.Children.Add(searchBorder);
             panel.Children.Add(searchRow);
 
-            // Row 2: Filter dropdowns (Server, Database, Status, Date range, Favorites)
-            var filterRow = new WrapPanel { Margin = new Thickness(0, 0, 0, 2) };
-
-            // Server filter
-            filterRow.Children.Add(new Label { Content = "Server:", Foreground = fg, Padding = new Thickness(0, 2, 2, 2) });
-            var serverCombo = new ComboBox
-            {
-                Width = 120,
-                IsEditable = true,
-                Margin = new Thickness(0, 0, 8, 0),
-                ToolTip = "Filter by server"
-            };
-            serverCombo.SetBinding(ItemsControl.ItemsSourceProperty,
-                new Binding(nameof(HistoryViewModel.Servers)));
-            serverCombo.SetBinding(ComboBox.TextProperty,
-                new Binding(nameof(HistoryViewModel.SelectedServer))
-                {
-                    Mode = BindingMode.TwoWay,
-                    UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged
-                });
-            filterRow.Children.Add(serverCombo);
-
-            // Database filter
-            filterRow.Children.Add(new Label { Content = "Database:", Foreground = fg, Padding = new Thickness(0, 2, 2, 2) });
-            var dbCombo = new ComboBox
-            {
-                Width = 120,
-                IsEditable = true,
-                Margin = new Thickness(0, 0, 8, 0),
-                ToolTip = "Filter by database"
-            };
-            dbCombo.SetBinding(ItemsControl.ItemsSourceProperty,
-                new Binding(nameof(HistoryViewModel.Databases)));
-            dbCombo.SetBinding(ComboBox.TextProperty,
-                new Binding(nameof(HistoryViewModel.SelectedDatabase))
-                {
-                    Mode = BindingMode.TwoWay,
-                    UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged
-                });
-            filterRow.Children.Add(dbCombo);
-
-            // Status filter
-            filterRow.Children.Add(new Label { Content = "Status:", Foreground = fg, Padding = new Thickness(0, 2, 2, 2) });
-            var statusCombo = new ComboBox
-            {
-                Width = 90,
-                Margin = new Thickness(0, 0, 8, 0),
-                ToolTip = "Filter by execution status"
-            };
-            statusCombo.Items.Add(new ComboBoxItem { Content = "(All)", Tag = null });
-            statusCombo.Items.Add(new ComboBoxItem { Content = "Success", Tag = 0 });
-            statusCombo.Items.Add(new ComboBoxItem { Content = "Error", Tag = 1 });
-            statusCombo.Items.Add(new ComboBoxItem { Content = "Cancelled", Tag = 2 });
-            statusCombo.SelectedIndex = 0;
-            statusCombo.SelectionChanged += (s, e) =>
-            {
-                if (statusCombo.SelectedItem is ComboBoxItem item)
-                {
-                    _viewModel.SelectedStatus = item.Tag as int?;
-                }
-            };
-            filterRow.Children.Add(statusCombo);
-
-            // Favorites toggle
-            var favCheckBox = new CheckBox
-            {
-                Content = "Favorites only",
-                Foreground = fg,
-                Margin = new Thickness(0, 2, 8, 0),
-                VerticalAlignment = VerticalAlignment.Center,
-                ToolTip = "Show only favorite entries"
-            };
-            favCheckBox.SetBinding(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty,
-                new Binding(nameof(HistoryViewModel.FavoritesOnly))
-                {
-                    Mode = BindingMode.TwoWay
-                });
-            filterRow.Children.Add(favCheckBox);
-
-            panel.Children.Add(filterRow);
-
-            // Row 3: Date range pickers
-            var dateRow = new WrapPanel { Margin = new Thickness(0, 0, 0, 2) };
-
-            dateRow.Children.Add(new Label { Content = "From:", Foreground = fg, Padding = new Thickness(0, 2, 2, 2) });
-            var dateFromPicker = new DatePicker
-            {
-                Width = 130,
-                Margin = new Thickness(0, 0, 8, 0),
-                ToolTip = "Start date filter"
-            };
-            dateFromPicker.SetBinding(DatePicker.SelectedDateProperty,
-                new Binding(nameof(HistoryViewModel.DateFrom))
-                {
-                    Mode = BindingMode.TwoWay
-                });
-            dateRow.Children.Add(dateFromPicker);
-
-            dateRow.Children.Add(new Label { Content = "To:", Foreground = fg, Padding = new Thickness(0, 2, 2, 2) });
-            var dateToPicker = new DatePicker
-            {
-                Width = 130,
-                Margin = new Thickness(0, 0, 8, 0),
-                ToolTip = "End date filter"
-            };
-            dateToPicker.SetBinding(DatePicker.SelectedDateProperty,
-                new Binding(nameof(HistoryViewModel.DateTo))
-                {
-                    Mode = BindingMode.TwoWay
-                });
-            dateRow.Children.Add(dateToPicker);
-
-            panel.Children.Add(dateRow);
-
-            return panel;
-        }
-
-        private ListView BuildListView(Brush bg, Brush fg, Brush border)
-        {
-            var listView = new ListView
-            {
-                Background = bg,
-                Foreground = fg,
-                BorderBrush = border,
-                BorderThickness = new Thickness(0, 1, 0, 1),
-                Margin = new Thickness(0),
-                SelectionMode = SelectionMode.Extended // Allow multi-select for Compare and Delete
-            };
-
-            // Enable virtualization for performance with large history
-            VirtualizingPanel.SetIsVirtualizing(listView, true);
-            VirtualizingPanel.SetVirtualizationMode(listView, VirtualizationMode.Recycling);
-            ScrollViewer.SetCanContentScroll(listView, true);
-
-            // Set ItemsSource binding
-            listView.SetBinding(ItemsControl.ItemsSourceProperty,
-                new Binding(nameof(HistoryViewModel.Entries)));
-
-            // Create a GridView for columnar display
-            var gridView = new GridView();
-
-            // Favorite star column (clickable to toggle)
-            gridView.Columns.Add(new GridViewColumn
-            {
-                Header = "",
-                Width = 30,
-                CellTemplate = CreateFavoriteTemplate()
-            });
-
-            // Status icon column
-            gridView.Columns.Add(new GridViewColumn
-            {
-                Header = "",
-                Width = 28,
-                CellTemplate = CreateStatusIconTemplate()
-            });
-
-            // Time column
-            gridView.Columns.Add(new GridViewColumn
-            {
-                Header = "Time",
-                Width = 130,
-                CellTemplate = CreateTextTemplate(nameof(HistoryEntryDto.ExecutedAt),
-                    new ExecutedAtConverter())
-            });
-
-            // SQL preview column
-            gridView.Columns.Add(new GridViewColumn
-            {
-                Header = "SQL",
-                Width = 350,
-                CellTemplate = CreateSqlPreviewTemplate()
-            });
-
-            // Server > Database column
-            gridView.Columns.Add(new GridViewColumn
-            {
-                Header = "Connection",
-                Width = 160,
-                CellTemplate = CreateConnectionTemplate()
-            });
-
-            // Duration column
-            gridView.Columns.Add(new GridViewColumn
-            {
-                Header = "Duration",
-                Width = 75,
-                CellTemplate = CreateTextTemplate(nameof(HistoryEntryDto.DurationMs),
-                    new DurationConverter())
-            });
-
-            // Row count column
-            gridView.Columns.Add(new GridViewColumn
-            {
-                Header = "Rows",
-                Width = 65,
-                CellTemplate = CreateTextTemplate(nameof(HistoryEntryDto.RowCount))
-            });
-
-            listView.View = gridView;
-
-            // Build context menu for right-click actions
-            var contextMenu = new ContextMenu();
-            var copySqlMenuItem = new MenuItem { Header = "Copy SQL" };
-            copySqlMenuItem.SetBinding(MenuItem.CommandProperty,
-                new Binding(nameof(HistoryViewModel.CopySqlCommand)));
-            contextMenu.Items.Add(copySqlMenuItem);
-
-            var openMenuItem = new MenuItem { Header = "Open in New Tab" };
-            openMenuItem.SetBinding(MenuItem.CommandProperty,
-                new Binding(nameof(HistoryViewModel.OpenInNewTabCommand)));
-            contextMenu.Items.Add(openMenuItem);
-
-            contextMenu.Items.Add(new Separator());
-
-            var renameMenuItem = new MenuItem { Header = "Rename" };
-            renameMenuItem.Click += OnRenameMenuItemClick;
-            contextMenu.Items.Add(renameMenuItem);
-
-            var favMenuItem = new MenuItem { Header = "Toggle Favorite" };
-            favMenuItem.SetBinding(MenuItem.CommandProperty,
-                new Binding(nameof(HistoryViewModel.ToggleFavoriteCommand)));
-            contextMenu.Items.Add(favMenuItem);
-
-            contextMenu.Items.Add(new Separator());
-
-            var deleteMenuItem = new MenuItem { Header = "Delete" };
-            deleteMenuItem.SetBinding(MenuItem.CommandProperty,
-                new Binding(nameof(HistoryViewModel.DeleteCommand)));
-            contextMenu.Items.Add(deleteMenuItem);
-
-            listView.ContextMenu = contextMenu;
-
-            // Double-click to copy SQL to clipboard
-            listView.MouseDoubleClick += OnListViewDoubleClick;
-
-            // Selection changed: update ViewModel's selected entries for multi-select actions
-            listView.SelectionChanged += OnListViewSelectionChanged;
-
-            return listView;
-        }
-
-        private DockPanel BuildStatusBar(Brush bg, Brush fg)
-        {
-            var statusBar = new DockPanel
-            {
-                Background = bg,
-                Margin = new Thickness(4, 2, 4, 2)
-            };
-
-            // Load More button on the right
-            var loadMoreBtn = new Button
-            {
-                Content = "Load More",
-                Padding = new Thickness(8, 2, 8, 2),
-                Margin = new Thickness(4, 0, 0, 0)
-            };
-            loadMoreBtn.SetBinding(System.Windows.Controls.Primitives.ButtonBase.CommandProperty,
-                new Binding(nameof(HistoryViewModel.LoadMoreCommand)));
-            loadMoreBtn.SetBinding(VisibilityProperty,
-                new Binding(nameof(HistoryViewModel.HasMoreEntries))
-                {
-                    Converter = new BoolToVisibilityConverter()
-                });
-            DockPanel.SetDock(loadMoreBtn, Dock.Right);
-            statusBar.Children.Add(loadMoreBtn);
-
-            // Loading indicator
-            var loadingLabel = new Label
-            {
-                Content = "Loading...",
-                Foreground = fg,
-                FontStyle = FontStyles.Italic
-            };
-            loadingLabel.SetBinding(VisibilityProperty,
-                new Binding(nameof(HistoryViewModel.IsLoading))
-                {
-                    Converter = new BoolToVisibilityConverter()
-                });
-            DockPanel.SetDock(loadingLabel, Dock.Right);
-            statusBar.Children.Add(loadingLabel);
-
-            // Total count display
-            var countLabel = new Label { Foreground = fg };
-            countLabel.SetBinding(ContentProperty,
-                new Binding(nameof(HistoryViewModel.TotalCount))
-                {
-                    StringFormat = "{0} entries found"
-                });
-            statusBar.Children.Add(countLabel);
-
-            return statusBar;
-        }
-
-        private StackPanel BuildActionBar(Brush bg, Brush fg, Brush border)
-        {
-            var panel = new StackPanel
+            // ----- Filter tabs row -----
+            var tabRow = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
-                Margin = new Thickness(4, 2, 4, 4),
-                HorizontalAlignment = HorizontalAlignment.Left
+                Margin = new Thickness(0, 0, 0, 4)
             };
 
-            var buttonStyle = new Style(typeof(Button));
-            buttonStyle.Setters.Add(new Setter(PaddingProperty, new Thickness(8, 2, 8, 2)));
-            buttonStyle.Setters.Add(new Setter(MarginProperty, new Thickness(0, 0, 4, 0)));
+            _filterAll = CreateFilterTab("\U0001F4CB All", "all", theme, isActive: true);
+            _filterStarred = CreateFilterTab("\u2B50 Starred", "starred", theme);
+            _filterOpen = CreateFilterTab("\U0001F4C2 Open", "open", theme);
+            _filterClosed = CreateFilterTab("\U0001F4D5 Closed", "closed", theme);
 
-            // "Copy SQL" button — copies selected entry's full SQL to clipboard
-            var copyBtn = new Button { Content = "Copy SQL", Style = buttonStyle, ToolTip = "Copy full SQL text to clipboard" };
-            copyBtn.SetBinding(System.Windows.Controls.Primitives.ButtonBase.CommandProperty,
-                new Binding(nameof(HistoryViewModel.CopySqlCommand)));
-            panel.Children.Add(copyBtn);
+            tabRow.Children.Add(_filterAll);
+            tabRow.Children.Add(_filterStarred);
+            tabRow.Children.Add(_filterOpen);
+            tabRow.Children.Add(_filterClosed);
 
-            // "Open in New Tab" button — opens full SQL in a new editor tab
-            var openBtn = new Button { Content = "Open in New Tab", Style = buttonStyle, ToolTip = "Open SQL in a new editor tab" };
-            openBtn.SetBinding(System.Windows.Controls.Primitives.ButtonBase.CommandProperty,
-                new Binding(nameof(HistoryViewModel.OpenInNewTabCommand)));
-            panel.Children.Add(openBtn);
-
-            // "Re-execute" button — re-executes the selected query
-            var reexecBtn = new Button { Content = "Re-execute", Style = buttonStyle, ToolTip = "Re-execute the selected query" };
-            reexecBtn.SetBinding(System.Windows.Controls.Primitives.ButtonBase.CommandProperty,
-                new Binding(nameof(HistoryViewModel.ReExecuteCommand)));
-            panel.Children.Add(reexecBtn);
-
-            // "Compare" button — compares two selected entries side-by-side
-            var compareBtn = new Button { Content = "Compare", Style = buttonStyle, ToolTip = "Compare two selected entries (select exactly 2)" };
-            compareBtn.SetBinding(System.Windows.Controls.Primitives.ButtonBase.CommandProperty,
-                new Binding(nameof(HistoryViewModel.CompareCommand)));
-            panel.Children.Add(compareBtn);
-
-            // Separator
-            panel.Children.Add(new Border
-            {
-                Width = 1,
-                Background = border,
-                Margin = new Thickness(4, 0, 4, 0),
-                VerticalAlignment = VerticalAlignment.Stretch
-            });
-
-            // "Toggle Favorite" button — toggles favorite on the selected entry
-            var favBtn = new Button { Content = "\u2605 Favorite", Style = buttonStyle, ToolTip = "Toggle favorite on selected entry" };
-            favBtn.SetBinding(System.Windows.Controls.Primitives.ButtonBase.CommandProperty,
-                new Binding(nameof(HistoryViewModel.ToggleFavoriteCommand)));
-            panel.Children.Add(favBtn);
-
-            // "Delete" button — deletes selected entries
-            var deleteBtn = new Button { Content = "Delete", Style = buttonStyle, ToolTip = "Delete selected entries" };
-            deleteBtn.SetBinding(System.Windows.Controls.Primitives.ButtonBase.CommandProperty,
-                new Binding(nameof(HistoryViewModel.DeleteCommand)));
-            panel.Children.Add(deleteBtn);
-
-            // "Export" button — exports filtered history
-            var exportBtn = new Button { Content = "Export", Style = buttonStyle, ToolTip = "Export history entries to file (CSV, JSON, or SQL)" };
-            exportBtn.SetBinding(System.Windows.Controls.Primitives.ButtonBase.CommandProperty,
-                new Binding(nameof(HistoryViewModel.ExportCommand)));
-            panel.Children.Add(exportBtn);
-
+            panel.Children.Add(tabRow);
             return panel;
         }
 
-        /// <summary>
-        /// Builds the preview panel with SQL code preview (with search highlighting)
-        /// and a version history list on the right side.
-        /// </summary>
-        private Grid BuildPreviewPanel(Brush bg, Brush fg, Brush border)
+        private Border CreateFilterTab(string label, string filterKey, ThemeManager theme, bool isActive = false)
+        {
+            var activeBg = Freeze(theme.HistoryActiveFilterBackground);
+            var activeBorder = Freeze(theme.HistoryActiveFilterBorder);
+            var inactiveBg = Freeze(theme.HistoryInactiveFilterBackground);
+            var inactiveBorder = Freeze(theme.HistoryInactiveFilterBorder);
+
+            var textBlock = new TextBlock
+            {
+                Text = label,
+                Foreground = Freeze(theme.HistoryQueryName),
+                FontSize = 11.5,
+                Padding = new Thickness(10, 4, 10, 4),
+                TextAlignment = TextAlignment.Center
+            };
+
+            var border = new Border
+            {
+                CornerRadius = new CornerRadius(5),
+                Background = isActive ? activeBg : inactiveBg,
+                BorderBrush = isActive ? activeBorder : inactiveBorder,
+                BorderThickness = new Thickness(1),
+                Margin = new Thickness(0, 0, 6, 0),
+                Cursor = Cursors.Hand,
+                Child = textBlock,
+                Tag = filterKey
+            };
+
+            border.MouseLeftButtonDown += OnFilterTabClick;
+
+            return border;
+        }
+
+        private void OnFilterTabClick(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is Border clicked && clicked.Tag is string filterKey)
+            {
+                _activeFilter = filterKey;
+                UpdateFilterTabVisuals();
+                ApplyFilterAndSearch();
+            }
+        }
+
+        private void UpdateFilterTabVisuals()
+        {
+            var theme = ThemeManager.Instance;
+            var activeBg = Freeze(theme.HistoryActiveFilterBackground);
+            var activeBorder = Freeze(theme.HistoryActiveFilterBorder);
+            var inactiveBg = Freeze(theme.HistoryInactiveFilterBackground);
+            var inactiveBorder = Freeze(theme.HistoryInactiveFilterBorder);
+
+            var tabs = new[] { _filterAll, _filterStarred, _filterOpen, _filterClosed };
+            foreach (var tab in tabs)
+            {
+                if (tab == null) continue;
+                var isActive = (string)tab.Tag == _activeFilter;
+                tab.Background = isActive ? activeBg : inactiveBg;
+                tab.BorderBrush = isActive ? activeBorder : inactiveBorder;
+            }
+        }
+
+        private void ApplyFilterAndSearch()
+        {
+            // Reset all filters before applying the active tab
+            _viewModel.FavoritesOnly = false;
+            _viewModel.IsOpenFilter = null;
+            _viewModel.SelectedStatus = null;
+
+            switch (_activeFilter)
+            {
+                case "starred":
+                    _viewModel.FavoritesOnly = true;
+                    break;
+                case "open":
+                    _viewModel.IsOpenFilter = true;
+                    break;
+                case "closed":
+                    _viewModel.IsOpenFilter = false;
+                    break;
+            }
+
+            if (_viewModel.SearchCommand.CanExecute(null))
+            {
+                _viewModel.SearchCommand.Execute(null);
+            }
+        }
+
+        // ================================================================
+        // ROW 1: Three-panel grid
+        // ================================================================
+
+        private Grid BuildThreePanelGrid(ThemeManager theme)
         {
             var grid = new Grid();
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(3, GridUnitType.Star) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-            // SQL preview with highlighting
-            _previewTextBlock = new TextBlock
+            // Column definitions: query list | splitter | version history | splitter | code preview
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(320, GridUnitType.Star), MinWidth = 200 });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); // splitter
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(170, GridUnitType.Star), MinWidth = 120 });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); // splitter
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(400, GridUnitType.Star), MinWidth = 200 });
+
+            // Left panel: Query List
+            var leftPanel = BuildQueryListPanel(theme);
+            Grid.SetColumn(leftPanel, 0);
+            grid.Children.Add(leftPanel);
+
+            // Splitter 1
+            var splitter1 = new GridSplitter
             {
-                FontFamily = new FontFamily("Consolas"),
-                FontSize = 11.0,
-                TextWrapping = TextWrapping.Wrap,
-                Padding = new Thickness(4),
-                Foreground = fg,
-                Background = bg
+                Width = 3,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Stretch,
+                Background = Freeze(theme.HistorySearchBorder),
+                ResizeBehavior = GridResizeBehavior.PreviousAndNext
             };
-            var previewScroll = new ScrollViewer
+            Grid.SetColumn(splitter1, 1);
+            grid.Children.Add(splitter1);
+
+            // Middle panel: Version History
+            var middlePanel = BuildVersionHistoryPanel(theme);
+            Grid.SetColumn(middlePanel, 2);
+            grid.Children.Add(middlePanel);
+
+            // Splitter 2
+            var splitter2 = new GridSplitter
             {
-                Content = _previewTextBlock,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-                BorderBrush = border,
-                BorderThickness = new Thickness(0, 0, 1, 0)
+                Width = 3,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Stretch,
+                Background = Freeze(theme.HistorySearchBorder),
+                ResizeBehavior = GridResizeBehavior.PreviousAndNext
             };
-            Grid.SetColumn(previewScroll, 0);
-            grid.Children.Add(previewScroll);
+            Grid.SetColumn(splitter2, 3);
+            grid.Children.Add(splitter2);
 
-            // Version history list
-            var versionPanel = new DockPanel { Background = bg };
-
-            var versionHeader = new TextBlock
-            {
-                Text = "Versions",
-                FontWeight = FontWeights.SemiBold,
-                Foreground = fg,
-                Padding = new Thickness(4, 2, 4, 2)
-            };
-            DockPanel.SetDock(versionHeader, Dock.Top);
-            versionPanel.Children.Add(versionHeader);
-
-            _versionListBox = new ListBox
-            {
-                Background = bg,
-                Foreground = fg,
-                BorderThickness = new Thickness(0)
-            };
-            _versionListBox.SelectionChanged += OnVersionSelectionChanged;
-            versionPanel.Children.Add(_versionListBox);
-
-            Grid.SetColumn(versionPanel, 1);
-            grid.Children.Add(versionPanel);
+            // Right panel: Code Preview
+            var rightPanel = BuildCodePreviewPanel(theme);
+            Grid.SetColumn(rightPanel, 4);
+            grid.Children.Add(rightPanel);
 
             return grid;
         }
 
-        #region DataTemplate Factories
+        // ================================================================
+        // Left Panel: Query List
+        // ================================================================
 
-        private static DataTemplate CreateStatusIconTemplate()
+        private DockPanel BuildQueryListPanel(ThemeManager theme)
         {
-            var template = new DataTemplate(typeof(HistoryEntryDto));
-            var factory = new FrameworkElementFactory(typeof(TextBlock));
-            factory.SetBinding(TextBlock.TextProperty,
-                new Binding(nameof(HistoryEntryDto.Status))
-                {
-                    Converter = new StatusIconConverter()
-                });
-            factory.SetBinding(TextBlock.ForegroundProperty,
-                new Binding(nameof(HistoryEntryDto.Status))
-                {
-                    Converter = new StatusColorConverter()
-                });
-            factory.SetValue(TextBlock.FontSizeProperty, 14.0);
-            factory.SetValue(TextBlock.TextAlignmentProperty, TextAlignment.Center);
-            factory.SetValue(ToolTipProperty, new Binding(nameof(HistoryEntryDto.Status))
+            var panelBg = Freeze(theme.HistoryPanelBackground);
+            var metaFg = Freeze(theme.HistoryMetadata);
+
+            var dock = new DockPanel { Background = panelBg };
+
+            // Header
+            var header = new TextBlock
             {
-                Converter = new StatusTextConverter()
-            });
-            template.VisualTree = factory;
-            return template;
+                Text = "QUERIES",
+                FontWeight = FontWeights.SemiBold,
+                FontSize = 10,
+                Foreground = metaFg,
+                Padding = new Thickness(10, 8, 10, 6),
+                // Letter spacing via character spacing is not directly supported in WPF TextBlock,
+                // so we just use uppercase + semibold for the same visual effect
+            };
+            DockPanel.SetDock(header, Dock.Top);
+            dock.Children.Add(header);
+
+            // Action bar below header
+            var actionBar = BuildActionBar(theme);
+            DockPanel.SetDock(actionBar, Dock.Bottom);
+            dock.Children.Add(actionBar);
+
+            // Query ListView
+            _queryListView = new ListView
+            {
+                Background = panelBg,
+                Foreground = Freeze(theme.HistoryQueryName),
+                BorderThickness = new Thickness(0),
+                Margin = new Thickness(0),
+                SelectionMode = SelectionMode.Extended,
+                HorizontalContentAlignment = HorizontalAlignment.Stretch
+            };
+
+            // Enable virtualization
+            VirtualizingPanel.SetIsVirtualizing(_queryListView, true);
+            VirtualizingPanel.SetVirtualizationMode(_queryListView, VirtualizationMode.Recycling);
+            ScrollViewer.SetCanContentScroll(_queryListView, true);
+
+            // Bind ItemsSource
+            _queryListView.SetBinding(ItemsControl.ItemsSourceProperty,
+                new Binding(nameof(HistoryViewModel.Entries)));
+
+            // Item template: custom card-like layout per entry
+            _queryListView.ItemTemplate = CreateQueryItemTemplate(theme);
+
+            // ItemContainerStyle: selected item accent
+            _queryListView.ItemContainerStyle = CreateQueryItemContainerStyle(theme);
+
+            // Context menu
+            _queryListView.ContextMenu = BuildQueryContextMenu();
+
+            // Events
+            _queryListView.MouseDoubleClick += OnListViewDoubleClick;
+            _queryListView.SelectionChanged += OnListViewSelectionChanged;
+
+            dock.Children.Add(_queryListView);
+
+            return dock;
         }
 
-        private static DataTemplate CreateTextTemplate(string propertyName, IValueConverter? converter = null)
-        {
-            var template = new DataTemplate(typeof(HistoryEntryDto));
-            var factory = new FrameworkElementFactory(typeof(TextBlock));
-            var binding = new Binding(propertyName);
-            if (converter != null) binding.Converter = converter;
-            factory.SetBinding(TextBlock.TextProperty, binding);
-            factory.SetValue(TextBlock.TextTrimmingProperty, TextTrimming.CharacterEllipsis);
-            template.VisualTree = factory;
-            return template;
-        }
-
-        private static DataTemplate CreateSqlPreviewTemplate()
+        private DataTemplate CreateQueryItemTemplate(ThemeManager theme)
         {
             var template = new DataTemplate(typeof(HistoryEntryDto));
 
-            var panel = new FrameworkElementFactory(typeof(StackPanel));
+            // Outer grid: icon column | content column | star+overflow column
+            var outerGrid = new FrameworkElementFactory(typeof(Grid));
+            outerGrid.SetValue(FrameworkElement.MarginProperty, new Thickness(4, 6, 4, 6));
 
-            // SQL text preview (first ~200 chars, single line)
-            var sqlText = new FrameworkElementFactory(typeof(TextBlock));
-            sqlText.SetBinding(TextBlock.TextProperty, new Binding(nameof(HistoryEntryDto.SqlText))
-            {
-                Converter = new SqlPreviewTrimConverter()
-            });
-            sqlText.SetValue(TextBlock.TextTrimmingProperty, TextTrimming.CharacterEllipsis);
-            sqlText.SetValue(TextBlock.FontFamilyProperty, new FontFamily("Consolas"));
-            sqlText.SetValue(TextBlock.FontSizeProperty, 11.0);
-            panel.AppendChild(sqlText);
+            // Column definitions
+            var col0 = new FrameworkElementFactory(typeof(ColumnDefinition));
+            col0.SetValue(ColumnDefinition.WidthProperty, GridLength.Auto);
+            var col1 = new FrameworkElementFactory(typeof(ColumnDefinition));
+            col1.SetValue(ColumnDefinition.WidthProperty, new GridLength(1, GridUnitType.Star));
+            var col2 = new FrameworkElementFactory(typeof(ColumnDefinition));
+            col2.SetValue(ColumnDefinition.WidthProperty, GridLength.Auto);
 
-            // Execution count line (only shown when deduplicated)
-            var execCount = new FrameworkElementFactory(typeof(TextBlock));
-            execCount.SetBinding(TextBlock.TextProperty, new Binding(nameof(HistoryEntryDto.ExecutionCount))
-            {
-                Converter = new ExecCountConverter()
-            });
-            execCount.SetValue(TextBlock.FontSizeProperty, 10.0);
-            execCount.SetValue(TextBlock.ForegroundProperty, Brushes.Gray);
-            execCount.SetBinding(VisibilityProperty,
-                new Binding(nameof(HistoryEntryDto.ExecutionCount))
-                {
-                    Converter = new ExecCountVisibilityConverter()
-                });
-            panel.AppendChild(execCount);
+            // We cannot add ColumnDefinitions via FrameworkElementFactory children.
+            // Instead, use a DockPanel-based layout which works with FrameworkElementFactory.
 
-            template.VisualTree = panel;
-            return template;
-        }
+            var outerDock = new FrameworkElementFactory(typeof(DockPanel));
+            outerDock.SetValue(FrameworkElement.MarginProperty, new Thickness(4, 4, 4, 4));
 
-        private static DataTemplate CreateConnectionTemplate()
-        {
-            var template = new DataTemplate(typeof(HistoryEntryDto));
-            var factory = new FrameworkElementFactory(typeof(TextBlock));
-            factory.SetBinding(TextBlock.TextProperty, new MultiBinding
-            {
-                Converter = new ConnectionInfoConverter(),
-                Bindings =
-                {
-                    new Binding(nameof(HistoryEntryDto.Server)),
-                    new Binding(nameof(HistoryEntryDto.Database)),
-                    new Binding(nameof(HistoryEntryDto.Username))
-                }
-            });
-            factory.SetValue(TextBlock.TextTrimmingProperty, TextTrimming.CharacterEllipsis);
-            factory.SetValue(TextBlock.FontSizeProperty, 10.0);
-            template.VisualTree = factory;
-            return template;
-        }
+            // Right side: Star + overflow menu
+            var rightStack = new FrameworkElementFactory(typeof(StackPanel));
+            rightStack.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
+            rightStack.SetValue(DockPanel.DockProperty, Dock.Right);
+            rightStack.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Top);
+            rightStack.SetValue(FrameworkElement.MarginProperty, new Thickness(4, 0, 0, 0));
 
-        /// <summary>
-        /// Creates the favorite column template with a clickable star icon.
-        /// Filled star for favorites, empty star outline for non-favorites.
-        /// </summary>
-        private DataTemplate CreateFavoriteTemplate()
-        {
-            var template = new DataTemplate(typeof(HistoryEntryDto));
-            var factory = new FrameworkElementFactory(typeof(TextBlock));
-            factory.SetBinding(TextBlock.TextProperty,
+            // Star icon
+            var starText = new FrameworkElementFactory(typeof(TextBlock));
+            starText.SetBinding(TextBlock.TextProperty,
                 new Binding(nameof(HistoryEntryDto.IsFavorite))
                 {
                     Converter = new FavoriteIconConverter()
                 });
-            factory.SetBinding(TextBlock.ForegroundProperty,
+            starText.SetBinding(TextBlock.ForegroundProperty,
                 new Binding(nameof(HistoryEntryDto.IsFavorite))
                 {
                     Converter = new FavoriteColorConverter()
                 });
-            factory.SetValue(TextBlock.FontSizeProperty, 14.0);
-            factory.SetValue(TextBlock.TextAlignmentProperty, TextAlignment.Center);
-            factory.SetValue(CursorProperty, Cursors.Hand);
-            factory.SetValue(ToolTipProperty, "Click to toggle favorite");
-
-            // Handle click on the star to toggle favorite
-            factory.AddHandler(MouseLeftButtonDownEvent,
+            starText.SetValue(TextBlock.FontSizeProperty, 14.0);
+            starText.SetValue(FrameworkElement.CursorProperty, Cursors.Hand);
+            starText.SetValue(ToolTipProperty, "Toggle favorite");
+            starText.AddHandler(UIElement.MouseLeftButtonDownEvent,
                 new MouseButtonEventHandler(OnFavoriteStarClick));
+            rightStack.AppendChild(starText);
 
-            template.VisualTree = factory;
+            // Overflow "..." button
+            var overflowText = new FrameworkElementFactory(typeof(TextBlock));
+            overflowText.SetValue(TextBlock.TextProperty, " \u22EE");
+            overflowText.SetValue(TextBlock.ForegroundProperty, Freeze(theme.HistoryMetadata));
+            overflowText.SetValue(TextBlock.FontSizeProperty, 14.0);
+            overflowText.SetValue(FrameworkElement.CursorProperty, Cursors.Hand);
+            overflowText.SetValue(ToolTipProperty, "More actions");
+            overflowText.AddHandler(UIElement.MouseLeftButtonDownEvent,
+                new MouseButtonEventHandler(OnOverflowClick));
+            rightStack.AppendChild(overflowText);
+
+            outerDock.AppendChild(rightStack);
+
+            // Left side: Status icon
+            var statusIcon = new FrameworkElementFactory(typeof(TextBlock));
+            statusIcon.SetBinding(TextBlock.TextProperty,
+                new Binding(nameof(HistoryEntryDto.IsOpen))
+                {
+                    Converter = new OpenClosedIconConverter()
+                });
+            statusIcon.SetBinding(TextBlock.ForegroundProperty,
+                new Binding(nameof(HistoryEntryDto.IsOpen))
+                {
+                    Converter = new OpenClosedColorConverter()
+                });
+            statusIcon.SetValue(TextBlock.FontSizeProperty, 16.0);
+            statusIcon.SetValue(DockPanel.DockProperty, Dock.Left);
+            statusIcon.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Top);
+            statusIcon.SetValue(FrameworkElement.MarginProperty, new Thickness(0, 0, 8, 0));
+            outerDock.AppendChild(statusIcon);
+
+            // Center: content stack (name, connection, time)
+            var contentStack = new FrameworkElementFactory(typeof(StackPanel));
+
+            // Row 1: Query name (TabTitle or first 60 chars of SQL)
+            var nameText = new FrameworkElementFactory(typeof(TextBlock));
+            nameText.SetBinding(TextBlock.TextProperty,
+                new Binding { Converter = new QueryNameConverter() });
+            nameText.SetValue(TextBlock.FontWeightProperty, FontWeights.SemiBold);
+            nameText.SetValue(TextBlock.FontSizeProperty, 12.0);
+            nameText.SetValue(TextBlock.ForegroundProperty, Freeze(theme.HistoryQueryName));
+            nameText.SetValue(TextBlock.TextTrimmingProperty, TextTrimming.CharacterEllipsis);
+            nameText.SetValue(TextBlock.MaxHeightProperty, 18.0);
+            contentStack.AppendChild(nameText);
+
+            // Row 2: Server -> Database
+            var connText = new FrameworkElementFactory(typeof(TextBlock));
+            connText.SetBinding(TextBlock.TextProperty, new MultiBinding
+            {
+                Converter = new ServerArrowDatabaseConverter(),
+                Bindings =
+                {
+                    new Binding(nameof(HistoryEntryDto.Server)),
+                    new Binding(nameof(HistoryEntryDto.Database))
+                }
+            });
+            connText.SetValue(TextBlock.FontSizeProperty, 10.5);
+            connText.SetValue(TextBlock.ForegroundProperty, Freeze(theme.HistoryMetadata));
+            connText.SetValue(TextBlock.TextTrimmingProperty, TextTrimming.CharacterEllipsis);
+            connText.SetValue(FrameworkElement.MarginProperty, new Thickness(0, 2, 0, 0));
+            contentStack.AppendChild(connText);
+
+            // Row 3: Relative timestamp + execution count
+            var timeText = new FrameworkElementFactory(typeof(TextBlock));
+            timeText.SetBinding(TextBlock.TextProperty,
+                new Binding(nameof(HistoryEntryDto.ExecutedAt))
+                {
+                    Converter = new RelativeTimeConverter()
+                });
+            timeText.SetValue(TextBlock.FontSizeProperty, 10.0);
+            timeText.SetValue(TextBlock.ForegroundProperty, Freeze(theme.HistoryMetadata));
+            timeText.SetValue(FrameworkElement.MarginProperty, new Thickness(0, 2, 0, 0));
+            contentStack.AppendChild(timeText);
+
+            // Row 4: Execution count (only visible when > 1)
+            var execCountText = new FrameworkElementFactory(typeof(TextBlock));
+            execCountText.SetBinding(TextBlock.TextProperty,
+                new Binding(nameof(HistoryEntryDto.ExecutionCount))
+                {
+                    Converter = new ExecCountConverter()
+                });
+            execCountText.SetValue(TextBlock.FontSizeProperty, 9.5);
+            execCountText.SetValue(TextBlock.ForegroundProperty, Freeze(theme.HistoryMetadata));
+            execCountText.SetValue(TextBlock.FontStyleProperty, FontStyles.Italic);
+            execCountText.SetBinding(VisibilityProperty,
+                new Binding(nameof(HistoryEntryDto.ExecutionCount))
+                {
+                    Converter = new ExecCountVisibilityConverter()
+                });
+            contentStack.AppendChild(execCountText);
+
+            outerDock.AppendChild(contentStack);
+
+            template.VisualTree = outerDock;
             return template;
         }
 
-        #endregion
+        private Style CreateQueryItemContainerStyle(ThemeManager theme)
+        {
+            var style = new Style(typeof(ListViewItem));
+
+            // Default: transparent background, no border
+            style.Setters.Add(new Setter(Control.BackgroundProperty, Brushes.Transparent));
+            style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(3, 0, 0, 0)));
+            style.Setters.Add(new Setter(Control.BorderBrushProperty, Brushes.Transparent));
+            style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(2, 0, 2, 0)));
+            style.Setters.Add(new Setter(Control.HorizontalContentAlignmentProperty, HorizontalAlignment.Stretch));
+
+            // Selected state: accent background + left border
+            var selectedTrigger = new Trigger
+            {
+                Property = ListViewItem.IsSelectedProperty,
+                Value = true
+            };
+            selectedTrigger.Setters.Add(new Setter(Control.BackgroundProperty, Freeze(theme.HistorySelectedBackground)));
+            selectedTrigger.Setters.Add(new Setter(Control.BorderBrushProperty, Freeze(theme.HistorySelectedBorder)));
+            style.Triggers.Add(selectedTrigger);
+
+            // Mouse over (not selected)
+            var hoverTrigger = new MultiTrigger();
+            hoverTrigger.Conditions.Add(new Condition(UIElement.IsMouseOverProperty, true));
+            hoverTrigger.Conditions.Add(new Condition(ListViewItem.IsSelectedProperty, false));
+            var hoverBg = Freeze(theme.HistorySearchBackground);
+            hoverTrigger.Setters.Add(new Setter(Control.BackgroundProperty, hoverBg));
+            style.Triggers.Add(hoverTrigger);
+
+            return style;
+        }
+
+        private ContextMenu BuildQueryContextMenu()
+        {
+            var contextMenu = new ContextMenu();
+
+            var copySqlItem = new MenuItem { Header = "Copy SQL" };
+            copySqlItem.SetBinding(MenuItem.CommandProperty,
+                new Binding(nameof(HistoryViewModel.CopySqlCommand)));
+            contextMenu.Items.Add(copySqlItem);
+
+            var openItem = new MenuItem { Header = "Open in New Tab" };
+            openItem.SetBinding(MenuItem.CommandProperty,
+                new Binding(nameof(HistoryViewModel.OpenInNewTabCommand)));
+            contextMenu.Items.Add(openItem);
+
+            var reExecItem = new MenuItem { Header = "Re-execute" };
+            reExecItem.SetBinding(MenuItem.CommandProperty,
+                new Binding(nameof(HistoryViewModel.ReExecuteCommand)));
+            contextMenu.Items.Add(reExecItem);
+
+            contextMenu.Items.Add(new Separator());
+
+            var renameItem = new MenuItem { Header = "Rename" };
+            renameItem.Click += OnRenameMenuItemClick;
+            contextMenu.Items.Add(renameItem);
+
+            var favItem = new MenuItem { Header = "Toggle Favorite" };
+            favItem.SetBinding(MenuItem.CommandProperty,
+                new Binding(nameof(HistoryViewModel.ToggleFavoriteCommand)));
+            contextMenu.Items.Add(favItem);
+
+            contextMenu.Items.Add(new Separator());
+
+            var compareItem = new MenuItem { Header = "Compare (select 2)" };
+            compareItem.SetBinding(MenuItem.CommandProperty,
+                new Binding(nameof(HistoryViewModel.CompareCommand)));
+            contextMenu.Items.Add(compareItem);
+
+            var exportItem = new MenuItem { Header = "Export..." };
+            exportItem.SetBinding(MenuItem.CommandProperty,
+                new Binding(nameof(HistoryViewModel.ExportCommand)));
+            contextMenu.Items.Add(exportItem);
+
+            contextMenu.Items.Add(new Separator());
+
+            var deleteItem = new MenuItem { Header = "Delete" };
+            deleteItem.SetBinding(MenuItem.CommandProperty,
+                new Binding(nameof(HistoryViewModel.DeleteCommand)));
+            contextMenu.Items.Add(deleteItem);
+
+            return contextMenu;
+        }
+
+        private StackPanel BuildActionBar(ThemeManager theme)
+        {
+            var panel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Margin = new Thickness(6, 4, 6, 6),
+                HorizontalAlignment = HorizontalAlignment.Left
+            };
+
+            var btnStyle = new Style(typeof(Button));
+            btnStyle.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(6, 2, 6, 2)));
+            btnStyle.Setters.Add(new Setter(FrameworkElement.MarginProperty, new Thickness(0, 0, 3, 0)));
+            btnStyle.Setters.Add(new Setter(Control.FontSizeProperty, 10.5));
+
+            var copyBtn = new Button { Content = "Copy", Style = btnStyle, ToolTip = "Copy full SQL to clipboard" };
+            copyBtn.SetBinding(System.Windows.Controls.Primitives.ButtonBase.CommandProperty,
+                new Binding(nameof(HistoryViewModel.CopySqlCommand)));
+            panel.Children.Add(copyBtn);
+
+            var openBtn = new Button { Content = "Open", Style = btnStyle, ToolTip = "Open in new editor tab" };
+            openBtn.SetBinding(System.Windows.Controls.Primitives.ButtonBase.CommandProperty,
+                new Binding(nameof(HistoryViewModel.OpenInNewTabCommand)));
+            panel.Children.Add(openBtn);
+
+            var reExecBtn = new Button { Content = "Re-run", Style = btnStyle, ToolTip = "Re-execute selected query" };
+            reExecBtn.SetBinding(System.Windows.Controls.Primitives.ButtonBase.CommandProperty,
+                new Binding(nameof(HistoryViewModel.ReExecuteCommand)));
+            panel.Children.Add(reExecBtn);
+
+            var compareBtn = new Button { Content = "Compare", Style = btnStyle, ToolTip = "Compare two selected entries" };
+            compareBtn.SetBinding(System.Windows.Controls.Primitives.ButtonBase.CommandProperty,
+                new Binding(nameof(HistoryViewModel.CompareCommand)));
+            panel.Children.Add(compareBtn);
+
+            // Visual separator
+            panel.Children.Add(new Border
+            {
+                Width = 1,
+                Background = Freeze(theme.HistorySearchBorder),
+                Margin = new Thickness(3, 0, 3, 0),
+                VerticalAlignment = VerticalAlignment.Stretch
+            });
+
+            var exportBtn = new Button { Content = "Export", Style = btnStyle, ToolTip = "Export history" };
+            exportBtn.SetBinding(System.Windows.Controls.Primitives.ButtonBase.CommandProperty,
+                new Binding(nameof(HistoryViewModel.ExportCommand)));
+            panel.Children.Add(exportBtn);
+
+            var deleteBtn = new Button { Content = "Delete", Style = btnStyle, ToolTip = "Delete selected" };
+            deleteBtn.SetBinding(System.Windows.Controls.Primitives.ButtonBase.CommandProperty,
+                new Binding(nameof(HistoryViewModel.DeleteCommand)));
+            panel.Children.Add(deleteBtn);
+
+            return panel;
+        }
+
+        // ================================================================
+        // Middle Panel: Version History
+        // ================================================================
+
+        private DockPanel BuildVersionHistoryPanel(ThemeManager theme)
+        {
+            var panelBg = Freeze(theme.HistoryPanelBackground);
+            var metaFg = Freeze(theme.HistoryMetadata);
+
+            var dock = new DockPanel { Background = panelBg };
+
+            // Header
+            var header = new TextBlock
+            {
+                Text = "HISTORY",
+                FontWeight = FontWeights.SemiBold,
+                FontSize = 10,
+                Foreground = metaFg,
+                Padding = new Thickness(10, 8, 10, 6)
+            };
+            DockPanel.SetDock(header, Dock.Top);
+            dock.Children.Add(header);
+
+            // Version ListBox
+            _versionListBox = new ListBox
+            {
+                Background = panelBg,
+                Foreground = Freeze(theme.HistoryQueryName),
+                BorderThickness = new Thickness(0),
+                Margin = new Thickness(0)
+            };
+            _versionListBox.SelectionChanged += OnVersionSelectionChanged;
+
+            dock.Children.Add(_versionListBox);
+
+            return dock;
+        }
+
+        // ================================================================
+        // Right Panel: Code Preview
+        // ================================================================
+
+        private DockPanel BuildCodePreviewPanel(ThemeManager theme)
+        {
+            var previewBg = Freeze(theme.HistoryCodePreviewBackground);
+            var metaFg = Freeze(theme.HistoryMetadata);
+            var queryNameFg = Freeze(theme.HistoryQueryName);
+
+            var dock = new DockPanel { Background = previewBg };
+
+            // Header row: "CODE PREVIEW" + timestamp
+            var headerRow = new DockPanel
+            {
+                Margin = new Thickness(10, 8, 10, 4)
+            };
+
+            _codePreviewHeaderTimestamp = new TextBlock
+            {
+                FontSize = 10,
+                Foreground = metaFg,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            DockPanel.SetDock(_codePreviewHeaderTimestamp, Dock.Right);
+            headerRow.Children.Add(_codePreviewHeaderTimestamp);
+
+            var headerLabel = new TextBlock
+            {
+                Text = "CODE PREVIEW",
+                FontWeight = FontWeights.SemiBold,
+                FontSize = 10,
+                Foreground = metaFg
+            };
+            headerRow.Children.Add(headerLabel);
+
+            DockPanel.SetDock(headerRow, Dock.Top);
+            dock.Children.Add(headerRow);
+
+            // Bottom metadata bar: server | database | version
+            var metaBar = new DockPanel
+            {
+                Margin = new Thickness(10, 4, 10, 8),
+                Background = Freeze(theme.HistoryPanelBackground)
+            };
+
+            _metadataVersionLabel = new TextBlock
+            {
+                FontSize = 10,
+                Foreground = metaFg,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            DockPanel.SetDock(_metadataVersionLabel, Dock.Right);
+            metaBar.Children.Add(_metadataVersionLabel);
+
+            var metaLeft = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            // Green circle + server name
+            _metadataServerLabel = new TextBlock
+            {
+                FontSize = 10.5,
+                Foreground = Freeze(theme.HistoryOpenIcon),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            metaLeft.Children.Add(_metadataServerLabel);
+
+            // Separator
+            metaLeft.Children.Add(new TextBlock
+            {
+                Text = " | ",
+                FontSize = 10.5,
+                Foreground = metaFg,
+                VerticalAlignment = VerticalAlignment.Center
+            });
+
+            // Database name
+            _metadataDatabaseLabel = new TextBlock
+            {
+                FontSize = 10.5,
+                Foreground = metaFg,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            metaLeft.Children.Add(_metadataDatabaseLabel);
+
+            metaBar.Children.Add(metaLeft);
+
+            DockPanel.SetDock(metaBar, Dock.Bottom);
+            dock.Children.Add(metaBar);
+
+            // Code preview TextBlock in ScrollViewer
+            _codePreviewTextBlock = new TextBlock
+            {
+                FontFamily = new FontFamily("Consolas"),
+                FontSize = 11.0,
+                TextWrapping = TextWrapping.Wrap,
+                Padding = new Thickness(10, 6, 10, 6),
+                Foreground = queryNameFg,
+                Background = previewBg
+            };
+            var previewScroll = new ScrollViewer
+            {
+                Content = _codePreviewTextBlock,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+                Background = previewBg
+            };
+
+            dock.Children.Add(previewScroll);
+
+            return dock;
+        }
+
+        // ================================================================
+        // ROW 2: Status bar
+        // ================================================================
+
+        private DockPanel BuildStatusBar(ThemeManager theme)
+        {
+            var metaFg = Freeze(theme.HistoryMetadata);
+            var windowBg = Freeze(theme.HistoryWindowBackground);
+
+            var bar = new DockPanel
+            {
+                Background = windowBg,
+                Margin = new Thickness(8, 2, 8, 4)
+            };
+
+            // Load More button on the right
+            _loadMoreButton = new Button
+            {
+                Content = "Load More",
+                Padding = new Thickness(8, 2, 8, 2),
+                Margin = new Thickness(4, 0, 0, 0),
+                FontSize = 10.5
+            };
+            _loadMoreButton.SetBinding(System.Windows.Controls.Primitives.ButtonBase.CommandProperty,
+                new Binding(nameof(HistoryViewModel.LoadMoreCommand)));
+            _loadMoreButton.SetBinding(VisibilityProperty,
+                new Binding(nameof(HistoryViewModel.HasMoreEntries))
+                {
+                    Converter = new BoolToVisibilityConverter()
+                });
+            DockPanel.SetDock(_loadMoreButton, Dock.Right);
+            bar.Children.Add(_loadMoreButton);
+
+            // Loading indicator
+            _statusLoadingLabel = new TextBlock
+            {
+                Text = "Loading...",
+                Foreground = metaFg,
+                FontStyle = FontStyles.Italic,
+                FontSize = 10.5,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(8, 0, 0, 0)
+            };
+            _statusLoadingLabel.SetBinding(VisibilityProperty,
+                new Binding(nameof(HistoryViewModel.IsLoading))
+                {
+                    Converter = new BoolToVisibilityConverter()
+                });
+            DockPanel.SetDock(_statusLoadingLabel, Dock.Right);
+            bar.Children.Add(_statusLoadingLabel);
+
+            // Total count
+            _statusCountLabel = new TextBlock
+            {
+                Foreground = metaFg,
+                FontSize = 10.5,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            _statusCountLabel.SetBinding(TextBlock.TextProperty,
+                new Binding(nameof(HistoryViewModel.TotalCount))
+                {
+                    StringFormat = "{0} entries found"
+                });
+            bar.Children.Add(_statusCountLabel);
+
+            return bar;
+        }
+
+        // ================================================================
+        // Event Handlers
+        // ================================================================
 
         #region Event Handlers
 
@@ -719,13 +969,16 @@ namespace AkmlSql.Shell.Shared.History
 
         private void OnListViewSelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (_listView != null)
+            if (_queryListView != null)
             {
-                _viewModel.UpdateSelectedEntries(_listView.SelectedItems);
+                _viewModel.UpdateSelectedEntries(_queryListView.SelectedItems);
             }
 
             // Update the code preview with search highlighting
             UpdatePreviewWithHighlighting();
+
+            // Update the bottom metadata bar
+            UpdateMetadataBar();
 
             // Load version history for the selected entry
             LoadVersionHistory();
@@ -733,15 +986,31 @@ namespace AkmlSql.Shell.Shared.History
 
         /// <summary>
         /// Updates the code preview TextBlock with search match highlighting.
-        /// When SearchText is active, matching segments get a yellow background.
+        /// When SearchText is active, matching segments get the HistorySearchHighlight background.
         /// </summary>
         private void UpdatePreviewWithHighlighting()
         {
-            if (_previewTextBlock == null) return;
-            _previewTextBlock.Inlines.Clear();
+            if (_codePreviewTextBlock == null) return;
+            _codePreviewTextBlock.Inlines.Clear();
 
             var entry = _viewModel.SelectedEntry;
-            if (entry == null) return;
+            if (entry == null)
+            {
+                if (_codePreviewHeaderTimestamp != null)
+                    _codePreviewHeaderTimestamp.Text = string.Empty;
+                return;
+            }
+
+            // Update the timestamp in the header
+            if (_codePreviewHeaderTimestamp != null)
+            {
+                if (DateTime.TryParse(entry.ExecutedAt, CultureInfo.InvariantCulture,
+                    DateTimeStyles.RoundtripKind, out var dt))
+                {
+                    _codePreviewHeaderTimestamp.Text = dt.ToLocalTime()
+                        .ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.CurrentCulture);
+                }
+            }
 
             var sqlText = entry.SqlText ?? string.Empty;
             var searchText = _viewModel.SearchText;
@@ -749,13 +1018,13 @@ namespace AkmlSql.Shell.Shared.History
             if (string.IsNullOrWhiteSpace(searchText))
             {
                 // No search active: plain text
-                _previewTextBlock.Inlines.Add(new Run(sqlText));
+                _codePreviewTextBlock.Inlines.Add(new Run(sqlText));
                 return;
             }
 
-            // Highlight matching segments with yellow background
-            var highlightBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0xEB, 0x3B));
-            highlightBrush.Freeze();
+            // Highlight matching segments
+            var theme = ThemeManager.Instance;
+            var highlightBrush = Freeze(theme.HistorySearchHighlight);
 
             int pos = 0;
             while (pos < sqlText.Length)
@@ -764,14 +1033,14 @@ namespace AkmlSql.Shell.Shared.History
                 if (matchIdx < 0)
                 {
                     // No more matches: add remaining text
-                    _previewTextBlock.Inlines.Add(new Run(sqlText.Substring(pos)));
+                    _codePreviewTextBlock.Inlines.Add(new Run(sqlText.Substring(pos)));
                     break;
                 }
 
                 // Add non-matching segment before the match
                 if (matchIdx > pos)
                 {
-                    _previewTextBlock.Inlines.Add(new Run(sqlText.Substring(pos, matchIdx - pos)));
+                    _codePreviewTextBlock.Inlines.Add(new Run(sqlText.Substring(pos, matchIdx - pos)));
                 }
 
                 // Add highlighted matching segment
@@ -779,9 +1048,35 @@ namespace AkmlSql.Shell.Shared.History
                 {
                     Background = highlightBrush
                 };
-                _previewTextBlock.Inlines.Add(matchRun);
+                _codePreviewTextBlock.Inlines.Add(matchRun);
 
                 pos = matchIdx + searchText.Length;
+            }
+        }
+
+        /// <summary>
+        /// Updates the bottom metadata bar in the code preview panel.
+        /// </summary>
+        private void UpdateMetadataBar()
+        {
+            var entry = _viewModel.SelectedEntry;
+
+            if (_metadataServerLabel != null)
+            {
+                _metadataServerLabel.Text = entry != null
+                    ? "\u25CF " + (entry.Server ?? "")
+                    : "";
+            }
+
+            if (_metadataDatabaseLabel != null)
+            {
+                _metadataDatabaseLabel.Text = entry?.Database ?? "";
+            }
+
+            if (_metadataVersionLabel != null)
+            {
+                // Will be updated when versions load
+                _metadataVersionLabel.Text = "";
             }
         }
 
@@ -812,15 +1107,66 @@ namespace AkmlSql.Shell.Shared.History
 
                 if (response.Success && response.Versions != null)
                 {
+                    var theme = ThemeManager.Instance;
+                    var versionCurrentFg = Freeze(theme.HistoryVersionCurrent);
+                    var metaFg = Freeze(theme.HistoryMetadata);
+                    int total = response.Versions.Length;
+                    int versionNumber = total;
+
                     foreach (var version in response.Versions)
                     {
+                        bool isCurrent = versionNumber == total;
+                        var label = isCurrent
+                            ? $"v{versionNumber} (current)"
+                            : $"v{versionNumber}";
+
+                        // Parse timestamp for display
+                        var timestampText = "";
+                        if (DateTime.TryParse(version.SavedAt, CultureInfo.InvariantCulture,
+                            DateTimeStyles.RoundtripKind, out var savedDt))
+                        {
+                            timestampText = savedDt.ToLocalTime()
+                                .ToString("MMM dd, HH:mm", CultureInfo.CurrentCulture);
+                        }
+
+                        var itemPanel = new StackPanel { Margin = new Thickness(4, 4, 4, 4) };
+
+                        var versionLabel = new TextBlock
+                        {
+                            Text = label,
+                            FontWeight = isCurrent ? FontWeights.SemiBold : FontWeights.Normal,
+                            FontSize = 11.5,
+                            Foreground = isCurrent ? versionCurrentFg : metaFg
+                        };
+                        itemPanel.Children.Add(versionLabel);
+
+                        if (!string.IsNullOrEmpty(timestampText))
+                        {
+                            var timeLabel = new TextBlock
+                            {
+                                Text = timestampText,
+                                FontSize = 9.5,
+                                Foreground = metaFg,
+                                Margin = new Thickness(0, 1, 0, 0)
+                            };
+                            itemPanel.Children.Add(timeLabel);
+                        }
+
                         var item = new ListBoxItem
                         {
-                            Content = version.SavedAt,
+                            Content = itemPanel,
                             Tag = version.SqlText,
-                            ToolTip = $"Version {version.Id} - {version.SavedAt}"
+                            ToolTip = $"Version {versionNumber} - {version.SavedAt}"
                         };
                         _versionListBox.Items.Add(item);
+
+                        versionNumber--;
+                    }
+
+                    // Update version count in metadata bar
+                    if (_metadataVersionLabel != null && total > 0)
+                    {
+                        _metadataVersionLabel.Text = $"v{total} of {total}";
                     }
                 }
             }
@@ -835,12 +1181,21 @@ namespace AkmlSql.Shell.Shared.History
         /// </summary>
         private void OnVersionSelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (_previewTextBlock == null || _versionListBox == null) return;
+            if (_codePreviewTextBlock == null || _versionListBox == null) return;
 
             if (_versionListBox.SelectedItem is ListBoxItem item && item.Tag is string versionSql)
             {
-                _previewTextBlock.Inlines.Clear();
-                _previewTextBlock.Inlines.Add(new Run(versionSql));
+                _codePreviewTextBlock.Inlines.Clear();
+                _codePreviewTextBlock.Inlines.Add(new Run(versionSql));
+
+                // Update version label in metadata bar
+                if (_metadataVersionLabel != null)
+                {
+                    int selectedIndex = _versionListBox.SelectedIndex;
+                    int total = _versionListBox.Items.Count;
+                    int versionNum = total - selectedIndex;
+                    _metadataVersionLabel.Text = $"v{versionNum} of {total}";
+                }
             }
         }
 
@@ -896,24 +1251,37 @@ namespace AkmlSql.Shell.Shared.History
         /// </summary>
         private static string? ShowInputDialog(string title, string prompt, string defaultValue)
         {
+            var theme = ThemeManager.Instance;
+
             var dialog = new Window
             {
                 Title = title,
                 Width = 400,
-                Height = 160,
+                Height = 170,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                ResizeMode = ResizeMode.NoResize
+                ResizeMode = ResizeMode.NoResize,
+                Owner = Application.Current?.MainWindow,
+                Background = new SolidColorBrush(theme.HistoryWindowBackground)
             };
 
-            var panel = new StackPanel { Margin = new Thickness(12) };
+            var panel = new StackPanel { Margin = new Thickness(16) };
 
-            var label = new TextBlock { Text = prompt, Margin = new Thickness(0, 0, 0, 8) };
+            var label = new TextBlock
+            {
+                Text = prompt,
+                Margin = new Thickness(0, 0, 0, 8),
+                Foreground = new SolidColorBrush(theme.HistoryQueryName)
+            };
             panel.Children.Add(label);
 
             var textBox = new TextBox
             {
                 Text = defaultValue,
-                Margin = new Thickness(0, 0, 0, 12)
+                Margin = new Thickness(0, 0, 0, 12),
+                Padding = new Thickness(6, 4, 6, 4),
+                Background = new SolidColorBrush(theme.HistorySearchBackground),
+                Foreground = new SolidColorBrush(theme.HistoryQueryName),
+                BorderBrush = new SolidColorBrush(theme.HistorySearchBorder)
             };
             textBox.SelectAll();
             panel.Children.Add(textBox);
@@ -954,7 +1322,7 @@ namespace AkmlSql.Shell.Shared.History
 
             // Set owner to prevent dialog from going behind the main VS/SSMS window
             try { dialog.Owner = System.Windows.Application.Current?.MainWindow; }
-            catch { /* Non-critical — centering may not work but dialog still functions */ }
+            catch { /* Non-critical -- centering may not work but dialog still functions */ }
 
             dialog.ShowDialog();
             return result;
@@ -973,6 +1341,26 @@ namespace AkmlSql.Shell.Shared.History
                 if (_viewModel.ToggleFavoriteCommand.CanExecute(null))
                 {
                     _viewModel.ToggleFavoriteCommand.Execute(null);
+                }
+                e.Handled = true;
+            }
+        }
+
+        /// <summary>
+        /// Handles clicking on the overflow "..." icon to open the context menu.
+        /// </summary>
+        private void OnOverflowClick(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is TextBlock textBlock && textBlock.DataContext is HistoryEntryDto entry)
+            {
+                _viewModel.SelectedEntry = entry;
+
+                // Open the query list's context menu at the overflow icon position
+                if (_queryListView?.ContextMenu != null)
+                {
+                    _queryListView.ContextMenu.PlacementTarget = textBlock;
+                    _queryListView.ContextMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+                    _queryListView.ContextMenu.IsOpen = true;
                 }
                 e.Handled = true;
             }
@@ -1076,7 +1464,135 @@ namespace AkmlSql.Shell.Shared.History
 
         #endregion
 
+        // ================================================================
+        // Helpers
+        // ================================================================
+
+        /// <summary>
+        /// Creates and freezes a SolidColorBrush from a Color.
+        /// </summary>
+        private static SolidColorBrush Freeze(Color color)
+        {
+            var brush = new SolidColorBrush(color);
+            brush.Freeze();
+            return brush;
+        }
+
+        // ================================================================
+        // Value Converters
+        // ================================================================
+
         #region Value Converters
+
+        /// <summary>Converts IsOpen bool to open/closed folder icon.</summary>
+        private class OpenClosedIconConverter : IValueConverter
+        {
+            public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+            {
+                return value is true ? "\U0001F4C2" : "\U0001F4D5"; // open folder vs closed book
+            }
+
+            public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+            {
+                throw new NotSupportedException();
+            }
+        }
+
+        /// <summary>Converts IsOpen bool to a theme-aware color (green for open, red for closed).</summary>
+        private class OpenClosedColorConverter : IValueConverter
+        {
+            public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+            {
+                var theme = ThemeManager.Instance;
+                var color = value is true ? theme.HistoryOpenIcon : theme.HistoryClosedIcon;
+                var brush = new SolidColorBrush(color);
+                brush.Freeze();
+                return brush;
+            }
+
+            public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+            {
+                throw new NotSupportedException();
+            }
+        }
+
+        /// <summary>
+        /// Converts the full HistoryEntryDto to a display name:
+        /// TabTitle if set, otherwise first 60 chars of SQL with whitespace collapsed.
+        /// </summary>
+        private class QueryNameConverter : IValueConverter
+        {
+            public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+            {
+                if (value is HistoryEntryDto entry)
+                {
+                    if (!string.IsNullOrWhiteSpace(entry.TabTitle))
+                        return entry.TabTitle;
+
+                    var sql = entry.SqlText ?? string.Empty;
+                    var collapsed = System.Text.RegularExpressions.Regex.Replace(sql, @"\s+", " ").Trim();
+                    if (collapsed.Length > 60)
+                        return collapsed.Substring(0, 60) + "...";
+                    return collapsed;
+                }
+                return "";
+            }
+
+            public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+            {
+                throw new NotSupportedException();
+            }
+        }
+
+        /// <summary>Formats Server -> Database for the connection line.</summary>
+        private class ServerArrowDatabaseConverter : IMultiValueConverter
+        {
+            public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
+            {
+                var server = values.Length > 0 ? values[0] as string : null;
+                var database = values.Length > 1 ? values[1] as string : null;
+
+                if (!string.IsNullOrEmpty(server) && !string.IsNullOrEmpty(database))
+                    return $"{server}\u2192{database}";
+                if (!string.IsNullOrEmpty(server))
+                    return server;
+                if (!string.IsNullOrEmpty(database))
+                    return database;
+                return "";
+            }
+
+            public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture)
+            {
+                throw new NotSupportedException();
+            }
+        }
+
+        /// <summary>Formats ISO 8601 ExecutedAt string to a relative time format.</summary>
+        private class RelativeTimeConverter : IValueConverter
+        {
+            public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+            {
+                if (value is string isoDate && DateTime.TryParse(isoDate, CultureInfo.InvariantCulture,
+                    DateTimeStyles.RoundtripKind, out var dt))
+                {
+                    var local = dt.ToLocalTime();
+                    var elapsed = DateTime.Now - local;
+
+                    if (elapsed.TotalMinutes < 1) return "just now";
+                    if (elapsed.TotalMinutes < 60) return $"{(int)elapsed.TotalMinutes}m ago";
+                    if (elapsed.TotalHours < 24) return local.ToString("HH:mm", CultureInfo.CurrentCulture);
+                    if (local.Date == DateTime.Today.AddDays(-1))
+                        return "Yesterday " + local.ToString("HH:mm", CultureInfo.CurrentCulture);
+                    return local.ToString("yyyy-MM-dd HH:mm", CultureInfo.CurrentCulture);
+                }
+                return value?.ToString() ?? "";
+            }
+
+            public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+            {
+                throw new NotSupportedException();
+            }
+        }
 
         /// <summary>Converts ExecutionStatus int to a Unicode icon character.</summary>
         private class StatusIconConverter : IValueConverter
@@ -1225,7 +1741,7 @@ namespace AkmlSql.Shell.Shared.History
                 var database = values.Length > 1 ? values[1] as string : null;
                 var username = values.Length > 2 ? values[2] as string : null;
 
-                var parts = new System.Collections.Generic.List<string>();
+                var parts = new List<string>();
                 if (!string.IsNullOrEmpty(server)) parts.Add(server);
                 if (!string.IsNullOrEmpty(database)) parts.Add(database);
                 if (!string.IsNullOrEmpty(username)) parts.Add(username);
@@ -1253,12 +1769,16 @@ namespace AkmlSql.Shell.Shared.History
             }
         }
 
-        /// <summary>Converts IsFavorite bool to a color (gold for favorites, gray for non-favorites).</summary>
+        /// <summary>Converts IsFavorite bool to a theme-aware color.</summary>
         private class FavoriteColorConverter : IValueConverter
         {
             public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
             {
-                return value is true ? Brushes.Gold : Brushes.Gray;
+                var theme = ThemeManager.Instance;
+                var color = value is true ? theme.HistoryStarActive : theme.HistoryStarInactive;
+                var brush = new SolidColorBrush(color);
+                brush.Freeze();
+                return brush;
             }
 
             public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
