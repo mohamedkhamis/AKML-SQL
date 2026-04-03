@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Text.Json;
 using AkmlSql.Core.Logging;
+using AkmlSql.Formatting.Profiles;
 using Serilog;
 
 namespace AkmlSql.Engine;
@@ -76,6 +78,10 @@ public class Program
 
         try
         {
+            // T035: Process pending SQL Prompt import before starting the RPC server.
+            // This runs once at startup if the installer staged files for import.
+            ProcessPendingImports();
+
             var server = new Server.PipeRpcServer(pipeName);
             await server.RunAsync(token);
         }
@@ -95,5 +101,136 @@ public class Program
         }
 
         return 0;
+    }
+
+    /// <summary>
+    /// T035: Checks for pending-import.json written by the installer, imports each
+    /// SQL Prompt style file via SqlPromptImporter, saves the resulting profiles,
+    /// and deletes the manifest file.
+    /// </summary>
+    private static void ProcessPendingImports()
+    {
+        try
+        {
+            var appDataFolder = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AKML SQL");
+            var pendingPath = Path.Combine(appDataFolder, "pending-import.json");
+
+            if (!File.Exists(pendingPath))
+                return;
+
+            Log.Information("Found pending-import.json — processing SQL Prompt style imports.");
+
+            var json = File.ReadAllText(pendingPath);
+            var manifest = JsonSerializer.Deserialize<ImportManifest>(json);
+            if (manifest?.Files == null || manifest.Files.Count == 0)
+            {
+                Log.Warning("pending-import.json contains no files. Removing manifest.");
+                File.Delete(pendingPath);
+                return;
+            }
+
+            var profileManager = ProfileManager.CreateDefault();
+            var importedCount = 0;
+            var failedCount = 0;
+
+            foreach (var filePath in manifest.Files)
+            {
+                try
+                {
+                    if (!Path.IsPathRooted(filePath))
+                    {
+                        Log.Warning("Skipping non-absolute import path: {Path}", filePath);
+                        failedCount++;
+                        continue;
+                    }
+
+                    if (!File.Exists(filePath))
+                    {
+                        Log.Warning("Staged import file not found: {Path}", filePath);
+                        failedCount++;
+                        continue;
+                    }
+
+                    // Derive a profile name from the file name (without extension)
+                    var fileName = Path.GetFileNameWithoutExtension(filePath);
+                    var profileName = $"SQL Prompt - {fileName}";
+
+                    Log.Information("Importing SQL Prompt style: {File} as '{ProfileName}'",
+                        filePath, profileName);
+
+                    var result = SqlPromptImporter.ImportFromFile(filePath, profileName);
+                    profileManager.Save(result.Profile);
+
+                    Log.Information("Imported '{ProfileName}': {Mapped} options mapped, {Unmapped} unmapped",
+                        profileName, result.MappedCount, result.UnmappedCount);
+
+                    if (result.UnmappedOptions.Count > 0)
+                    {
+                        Log.Debug("Unmapped options for '{ProfileName}': {Options}",
+                            profileName, string.Join(", ", result.UnmappedOptions));
+                    }
+
+                    importedCount++;
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "Failed to import SQL Prompt style: {Path}", filePath);
+                    failedCount++;
+                }
+            }
+
+            // Clean up: delete the manifest and staging directory
+            File.Delete(pendingPath);
+            Log.Information("Deleted pending-import.json.");
+
+            var stagingDir = Path.Combine(appDataFolder, "import-staging");
+            if (Directory.Exists(stagingDir))
+            {
+                try
+                {
+                    Directory.Delete(stagingDir, recursive: true);
+                    Log.Information("Cleaned up import-staging directory.");
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning(ex, "Failed to clean up import-staging directory.");
+                }
+            }
+
+            Log.Information("SQL Prompt import complete: {Imported} imported, {Failed} failed.",
+                importedCount, failedCount);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Error processing pending SQL Prompt imports.");
+            // Non-fatal: don't prevent engine startup if import fails.
+            // Try to clean up the manifest to avoid retrying on every startup.
+            try
+            {
+                var pendingPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "AKML SQL", "pending-import.json");
+                if (File.Exists(pendingPath))
+                    File.Delete(pendingPath);
+            }
+            catch
+            {
+                // Best-effort cleanup
+            }
+        }
+    }
+
+    /// <summary>
+    /// JSON model for the pending-import.json manifest written by the installer.
+    /// Example: {"source":"SQL Prompt","files":["C:\\...\\file.sqlpromptstylev2"]}
+    /// </summary>
+    private sealed class ImportManifest
+    {
+        [System.Text.Json.Serialization.JsonPropertyName("source")]
+        public string? Source { get; set; }
+
+        [System.Text.Json.Serialization.JsonPropertyName("files")]
+        public List<string>? Files { get; set; }
     }
 }

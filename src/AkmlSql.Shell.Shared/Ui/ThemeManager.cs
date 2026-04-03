@@ -551,13 +551,9 @@ namespace AkmlSql.Shell.Shared.Ui
         {
             get
             {
-                switch (DetectTheme())
-                {
-                    case VsThemeKind.Dark:
-                        return System.Windows.Media.Color.FromRgb(218, 165, 32);
-                    default:
-                        return System.Windows.Media.Color.FromRgb(255, 248, 220);
-                }
+                // Yellow Ochre #F9A825 at 30% opacity (0x4D ≈ 77/255 ≈ 30%)
+                // Same color for both light and dark themes — the alpha provides contrast on any background
+                return System.Windows.Media.Color.FromArgb(0x4D, 0xF9, 0xA8, 0x25);
             }
         }
     }

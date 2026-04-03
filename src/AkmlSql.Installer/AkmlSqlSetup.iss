@@ -1,8 +1,43 @@
 ; ============================================================================
 ; AKML SQL Installer
 ; Wizard-based Windows EXE installer for SSMS 20/21/22 and VS 2019/2022/2026
-; Built with Inno Setup 6
+; Built with Inno Setup 7
 ; ============================================================================
+;
+; --- Silent Installation ---
+;
+; The installer supports fully silent (unattended) installation. Examples:
+;
+;   AKMLSQLSetup.exe /VERYSILENT /ACCEPTEULA
+;     Install to all detected targets with no UI.
+;
+;   AKMLSQLSetup.exe /VERYSILENT /ACCEPTEULA /TARGETS=ssms22,vs2022
+;     Install only to SSMS 22 and VS 2022.
+;
+;   AKMLSQLSetup.exe /VERYSILENT /ACCEPTEULA /LOG="C:\Logs\install.log"
+;     Install with verbose logging. /LOG is a native Inno Setup flag that
+;     writes detailed setup activity to the specified file. If no path is
+;     given (/LOG without =), defaults to %TEMP%\Setup Log YYYY-MM-DD #NNN.txt.
+;
+;   AKMLSQLSetup.exe /VERYSILENT /ACCEPTEULA /NOUPDATE /NOTELEMETRY
+;     Install with auto-update and telemetry disabled.
+;
+;   AKMLSQLSetup.exe /VERYSILENT /ACCEPTEULA /FORCECLOSEAPPS
+;     Force-close running SSMS/VS instances before installing.
+;
+;   AKMLSQLSetup.exe /VERYSILENT /ACCEPTEULA /IMPORTSQLPROMPT
+;     Import SQL Prompt formatting styles during installation.
+;
+; Flags:
+;   /VERYSILENT       No UI, no progress dialog
+;   /ACCEPTEULA       Accept the EULA (required for silent mode)
+;   /TARGETS=...      Comma-separated target list: ssms20,ssms21,ssms22,vs2019,vs2022,vs2026
+;   /LOG[=file]       Write detailed install log (native Inno Setup feature)
+;   /NOUPDATE         Disable built-in auto-update check
+;   /TELEMETRY        Enable anonymous usage telemetry (off by default)
+;   /NOTELEMETRY      Explicitly disable telemetry
+;   /FORCECLOSEAPPS   Force-close running SSMS/VS without prompting
+;   /IMPORTSQLPROMPT  Import SQL Prompt styles (only if SQL Prompt config detected)
 ;
 ; TODO T096: On uninstall, restore native SSMS IntelliSense if AKML SQL disabled it.
 ;   Read %AppData%/AKML SQL/config.json, check DisabledNativeIntelliSense flag,
@@ -19,6 +54,11 @@
 #define MyAppId "{{F7E8A9B0-C1D2-E3F4-A5B6-C7D8E9F0A1B2}"
 
 [Setup]
+; AppId is fixed — Inno Setup uses this to detect existing installations.
+; Together with UsePreviousAppDir=yes, this enables seamless in-place upgrade:
+; re-running the installer over an existing installation will upgrade in-place
+; without requiring uninstall first. Inno Setup's built-in repair/upgrade logic
+; handles version bumps automatically as long as AppId remains the same.
 AppId={#MyAppId}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
@@ -44,6 +84,13 @@ WizardStyle=modern
 WizardSizePercent=120
 DisableWelcomePage=no
 UninstallDisplayIcon={app}\AkmlSql.Core.dll
+; T030: Prompt user to close running SSMS/VS instances before installing.
+; Note: AppMutex is not used because SSMS/VS do not create named mutexes that
+; we can reliably detect. CloseApplications with CloseApplicationsFilter is the
+; correct approach — Inno Setup uses the Windows Restart Manager API to detect
+; which apps hold locks on files being replaced.
+CloseApplications=yes
+CloseApplicationsFilter=Ssms.exe,devenv.exe
 
 ; Code signing (configure via iscc.exe /S flag)
 ; SignTool=mysigntool
@@ -100,6 +147,7 @@ Name: "{autodesktop}\{#MyAppName} Settings"; Filename: "{app}\AkmlSql.Core.dll";
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription: "Additional shortcuts:"
+Name: "importsqlprompt"; Description: "Import formatting styles from &SQL Prompt"; GroupDescription: "Migration:"; Check: SqlPromptConfigExists; Flags: unchecked
 
 [UninstallDelete]
 ; Clean up extension directories for selected targets only
@@ -118,6 +166,171 @@ var
   OptionsPage: TInputOptionWizardPage;
   AutoUpdateEnabled: Boolean;
   TelemetryEnabled: Boolean;
+  ImportSqlPromptEnabled: Boolean;
+
+// --- SQL Prompt Detection (T033) ---
+
+// Returns True if Redgate SQL Prompt config directory exists on this machine.
+// Used as a [Tasks] Check function to show the import checkbox only when relevant.
+function SqlPromptConfigExists: Boolean;
+begin
+  Result := DirExists(ExpandConstant('{localappdata}\Red Gate\SQL Prompt'));
+end;
+
+// --- SQL Prompt Import Staging (T034) ---
+
+// Escapes backslashes in a path for safe embedding in JSON strings.
+// e.g. 'C:\Users\foo' -> 'C:\\Users\\foo'
+function EscapeJsonPath(const Path: String): String;
+var
+  I: Integer;
+begin
+  Result := '';
+  for I := 1 to Length(Path) do
+  begin
+    if Path[I] = '\' then
+      Result := Result + '\\'
+    else
+      Result := Result + Path[I];
+  end;
+end;
+
+// Scans the SQL Prompt config directory for .sqlpromptstylev2 and .sqlpromptstyle files,
+// copies them to an import staging directory, and writes a pending-import.json manifest.
+// The engine picks up this manifest on next startup and runs SqlPromptImporter.
+procedure StageSqlPromptStyles;
+var
+  SqlPromptDir: String;
+  StagingDir: String;
+  PendingPath: String;
+  FindRec: TFindRec;
+  FileList: String;
+  FileCount: Integer;
+  SourcePath: String;
+  DestPath: String;
+begin
+  SqlPromptDir := ExpandConstant('{localappdata}\Red Gate\SQL Prompt');
+  StagingDir := ExpandConstant('{userappdata}\AKML SQL\import-staging');
+  PendingPath := ExpandConstant('{userappdata}\AKML SQL\pending-import.json');
+
+  if not DirExists(SqlPromptDir) then
+  begin
+    Log('SQL Prompt directory not found; skipping import staging.');
+    Exit;
+  end;
+
+  ForceDirectories(StagingDir);
+  FileList := '';
+  FileCount := 0;
+
+  // Search for .sqlpromptstylev2 files (newer format)
+  if FindFirst(SqlPromptDir + '\*.sqlpromptstylev2', FindRec) then
+  begin
+    try
+      repeat
+        if (FindRec.Attributes and FILE_ATTRIBUTE_DIRECTORY) = 0 then
+        begin
+          SourcePath := SqlPromptDir + '\' + FindRec.Name;
+          DestPath := StagingDir + '\' + FindRec.Name;
+          if FileCopy(SourcePath, DestPath, False) then
+          begin
+            if FileList <> '' then
+              FileList := FileList + ',';
+            FileList := FileList + '"' + EscapeJsonPath(StagingDir + '\' + FindRec.Name) + '"';
+            FileCount := FileCount + 1;
+            Log('Staged SQL Prompt style: ' + FindRec.Name);
+          end;
+        end;
+      until not FindNext(FindRec);
+    finally
+      FindClose(FindRec);
+    end;
+  end;
+
+  // Search for .sqlpromptstyle files (older format)
+  if FindFirst(SqlPromptDir + '\*.sqlpromptstyle', FindRec) then
+  begin
+    try
+      repeat
+        if (FindRec.Attributes and FILE_ATTRIBUTE_DIRECTORY) = 0 then
+        begin
+          SourcePath := SqlPromptDir + '\' + FindRec.Name;
+          DestPath := StagingDir + '\' + FindRec.Name;
+          if FileCopy(SourcePath, DestPath, False) then
+          begin
+            if FileList <> '' then
+              FileList := FileList + ',';
+            FileList := FileList + '"' + EscapeJsonPath(StagingDir + '\' + FindRec.Name) + '"';
+            FileCount := FileCount + 1;
+            Log('Staged SQL Prompt style: ' + FindRec.Name);
+          end;
+        end;
+      until not FindNext(FindRec);
+    finally
+      FindClose(FindRec);
+    end;
+  end;
+
+  // Also check in Styles subdirectory (some SQL Prompt versions store styles there)
+  if DirExists(SqlPromptDir + '\Styles') then
+  begin
+    if FindFirst(SqlPromptDir + '\Styles\*.sqlpromptstylev2', FindRec) then
+    begin
+      try
+        repeat
+          if (FindRec.Attributes and FILE_ATTRIBUTE_DIRECTORY) = 0 then
+          begin
+            SourcePath := SqlPromptDir + '\Styles\' + FindRec.Name;
+            DestPath := StagingDir + '\' + FindRec.Name;
+            if FileCopy(SourcePath, DestPath, False) then
+            begin
+              if FileList <> '' then
+                FileList := FileList + ',';
+              FileList := FileList + '"' + EscapeJsonPath(StagingDir + '\' + FindRec.Name) + '"';
+              FileCount := FileCount + 1;
+              Log('Staged SQL Prompt style (Styles subdir): ' + FindRec.Name);
+            end;
+          end;
+        until not FindNext(FindRec);
+      finally
+        FindClose(FindRec);
+      end;
+    end;
+
+    if FindFirst(SqlPromptDir + '\Styles\*.sqlpromptstyle', FindRec) then
+    begin
+      try
+        repeat
+          if (FindRec.Attributes and FILE_ATTRIBUTE_DIRECTORY) = 0 then
+          begin
+            SourcePath := SqlPromptDir + '\Styles\' + FindRec.Name;
+            DestPath := StagingDir + '\' + FindRec.Name;
+            if FileCopy(SourcePath, DestPath, False) then
+            begin
+              if FileList <> '' then
+                FileList := FileList + ',';
+              FileList := FileList + '"' + EscapeJsonPath(StagingDir + '\' + FindRec.Name) + '"';
+              FileCount := FileCount + 1;
+              Log('Staged SQL Prompt style (Styles subdir): ' + FindRec.Name);
+            end;
+          end;
+        until not FindNext(FindRec);
+      finally
+        FindClose(FindRec);
+      end;
+    end;
+  end;
+
+  if FileCount > 0 then
+  begin
+    // Write the pending-import.json manifest for the engine to process
+    SaveStringToFile(PendingPath,
+      '{"source":"SQL Prompt","files":[' + FileList + ']}', False);
+    Log('Wrote pending-import.json with ' + IntToStr(FileCount) + ' file(s).');
+  end
+  else
+    Log('No SQL Prompt style files found to stage.');
+end;
 
 // --- Wizard Initialization ---
 
@@ -188,6 +401,9 @@ begin
   TelemetryEnabled := ExpandConstant('{param:TELEMETRY|}') <> ''; // Off by default, enable with /TELEMETRY
   if ExpandConstant('{param:NOTELEMETRY|}') <> '' then
     TelemetryEnabled := False;
+
+  // Apply /IMPORTSQLPROMPT for silent mode SQL Prompt style import
+  ImportSqlPromptEnabled := ExpandConstant('{param:IMPORTSQLPROMPT|}') <> '';
 end;
 
 // --- Sync checkbox state back to targets array ---
@@ -401,6 +617,25 @@ begin
 
     // Create logs directory
     ForceDirectories(ConfigDir + '\logs');
+
+    // T034: Stage SQL Prompt styles for engine import if user opted in
+    // In interactive mode, check the task checkbox; in silent mode, check the /IMPORTSQLPROMPT flag
+    if WizardSilent then
+    begin
+      if ImportSqlPromptEnabled and SqlPromptConfigExists then
+      begin
+        Log('SQL Prompt import requested via /IMPORTSQLPROMPT flag.');
+        StageSqlPromptStyles;
+      end;
+    end
+    else
+    begin
+      if WizardIsTaskSelected('importsqlprompt') then
+      begin
+        Log('SQL Prompt import task selected by user.');
+        StageSqlPromptStyles;
+      end;
+    end;
   end;
 end;
 

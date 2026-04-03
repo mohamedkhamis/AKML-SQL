@@ -1,5 +1,8 @@
 #nullable enable
 using System;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Interop;
 using System.Windows.Media;
 using AkmlSql.Core.Config;
 using AkmlSql.Core.Models.Tabs;
@@ -7,15 +10,21 @@ using EnvDTE;
 using EnvDTE80;
 using Microsoft.VisualStudio.Shell;
 using Serilog;
+using Window = EnvDTE.Window;
 
 namespace AkmlSql.Shell.Shared.Tabs
 {
     /// <summary>
-    /// Monitors document window activations and applies background colour and environment
-    /// labels to WPF document tab headers based on the connected server environment.
+    /// Monitors document window activations and applies background colour, environment
+    /// labels, status bar tinting, and floating window borders based on the connected
+    /// server environment.
     /// <para>
     /// Colour mapping is driven by <see cref="EnvironmentDetector"/> which evaluates
     /// <see cref="ColoringRule"/> entries from <c>config.json</c>.
+    /// </para>
+    /// <para>
+    /// Status bar coloring (T027) and floating window border (T028) are applied on
+    /// every window activation (T029) so the visual cue follows focus changes.
     /// </para>
     /// </summary>
     internal static class TabColoringManager
@@ -23,6 +32,18 @@ namespace AkmlSql.Shell.Shared.Tabs
         private static DTE2? _dte;
         private static WindowEvents? _windowEvents;
         private static bool _initialized;
+
+        /// <summary>
+        /// Tracks the last environment color applied to the status bar so we can avoid
+        /// redundant visual tree walks when the color hasn't changed.
+        /// </summary>
+        private static Color? _lastStatusBarColor;
+
+        /// <summary>
+        /// Tracks the WPF element we last used as the status bar, to allow clearing
+        /// it when the environment changes or becomes unresolved.
+        /// </summary>
+        private static WeakReference<FrameworkElement>? _statusBarElement;
 
         /// <summary>
         /// Subscribes to DTE window activation events. Must be called on the UI thread
@@ -67,7 +88,8 @@ namespace AkmlSql.Shell.Shared.Tabs
 
         /// <summary>
         /// Fired whenever a VS/SSMS window receives focus. If the window is a document
-        /// window, we detect the connected server and apply tab colouring.
+        /// window, we detect the connected server and apply tab colouring, status bar
+        /// tinting (T027), and floating window border (T028).
         /// </summary>
         private static void OnWindowActivated(Window gotFocus, Window lostFocus)
         {
@@ -84,6 +106,7 @@ namespace AkmlSql.Shell.Shared.Tabs
                 if (!settings.Tabs.ColoringEnabled)
                 {
                     ClearTabColor(gotFocus);
+                    ClearStatusBarColor();
                     return;
                 }
 
@@ -92,6 +115,7 @@ namespace AkmlSql.Shell.Shared.Tabs
                 if (string.IsNullOrWhiteSpace(serverName))
                 {
                     ClearTabColor(gotFocus);
+                    ClearStatusBarColor();
                     return;
                 }
 
@@ -100,10 +124,28 @@ namespace AkmlSql.Shell.Shared.Tabs
                 if (rule != null)
                 {
                     ApplyTabColor(gotFocus, rule);
+
+                    // Parse the rule color once for status bar and floating window.
+                    var envColor = ParseHexColor(rule.Color);
+                    if (envColor.HasValue)
+                    {
+                        // T027: status bar color propagation
+                        if (settings.Tabs.StatusBarColorEnabled)
+                        {
+                            ApplyStatusBarColor(envColor.Value, rule.Label);
+                        }
+
+                        // T028: floating window border
+                        if (settings.Tabs.FloatingWindowBorderEnabled)
+                        {
+                            ApplyFloatingWindowBorder(gotFocus, envColor.Value);
+                        }
+                    }
                 }
                 else
                 {
                     ClearTabColor(gotFocus);
+                    ClearStatusBarColor();
                 }
             }
             catch (Exception ex)
@@ -111,6 +153,392 @@ namespace AkmlSql.Shell.Shared.Tabs
                 Log.Warning(ex, "TabColoringManager: error processing window activation");
             }
         }
+
+        // ────────────────────────────────────────────────────────────────────────────
+        //  T027 — Status bar environment color
+        // ────────────────────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Applies a semi-transparent environment color to the SSMS/VS main window status bar.
+        /// Uses WPF visual tree walking to locate the status bar element.
+        /// All operations are wrapped in try/catch for graceful degradation across SSMS versions.
+        /// </summary>
+        private static void ApplyStatusBarColor(Color envColor, string label)
+        {
+            try
+            {
+                // Skip if the color hasn't changed since last application.
+                if (_lastStatusBarColor.HasValue && _lastStatusBarColor.Value == envColor)
+                    return;
+
+                var mainWindow = System.Windows.Application.Current?.MainWindow;
+                if (mainWindow == null) return;
+
+                var statusBarElement = FindStatusBar(mainWindow);
+                if (statusBarElement == null)
+                {
+                    Log.Debug("TabColoringManager: status bar element not found in visual tree");
+                    return;
+                }
+
+                // 60% opacity (alpha = 153) for status bar so underlying theme remains visible.
+                var semiTransparent = Color.FromArgb(153, envColor.R, envColor.G, envColor.B);
+                var brush = new SolidColorBrush(semiTransparent);
+                brush.Freeze();
+
+                statusBarElement.SetValue(Control.BackgroundProperty, brush);
+
+                // Cache the element and color to avoid redundant walks.
+                _statusBarElement = new WeakReference<FrameworkElement>(statusBarElement);
+                _lastStatusBarColor = envColor;
+
+                Log.Debug("TabColoringManager: applied status bar color {Color} for environment '{Label}'",
+                    envColor, label);
+            }
+            catch (Exception ex)
+            {
+                // Graceful degradation — different SSMS/VS version may have different visual tree.
+                Log.Debug(ex, "TabColoringManager: failed to apply status bar color");
+            }
+        }
+
+        /// <summary>
+        /// Clears any previously applied environment color from the status bar,
+        /// restoring the default theme background.
+        /// </summary>
+        private static void ClearStatusBarColor()
+        {
+            try
+            {
+                if (_lastStatusBarColor == null)
+                    return;
+
+                FrameworkElement? element = null;
+                if (_statusBarElement != null && _statusBarElement.TryGetTarget(out element) && element != null)
+                {
+                    // Reset to the default value, which causes the theme brush to take over.
+                    element.ClearValue(Control.BackgroundProperty);
+                }
+
+                _lastStatusBarColor = null;
+                _statusBarElement = null;
+
+                Log.Debug("TabColoringManager: cleared status bar color");
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "TabColoringManager: failed to clear status bar color");
+            }
+        }
+
+        /// <summary>
+        /// Searches the WPF visual tree of the main window to locate the status bar.
+        /// Tries multiple strategies in priority order to handle differences between
+        /// SSMS 20, SSMS 21/22, VS 2019, VS 2022, and VS 2026.
+        /// </summary>
+        private static FrameworkElement? FindStatusBar(DependencyObject root)
+        {
+            try
+            {
+                // Strategy 1: Look for the standard WPF StatusBar control.
+                var statusBar = FindDescendantByType<System.Windows.Controls.Primitives.StatusBar>(root);
+                if (statusBar != null)
+                    return statusBar;
+
+                // Strategy 2: Search by common element names used in VS/SSMS shells.
+                string[] knownNames =
+                {
+                    "StatusBarContainer",
+                    "PART_StatusBar",
+                    "StatusBar",
+                    "StatusBarPanel",
+                    "MainStatusBar"
+                };
+                foreach (var name in knownNames)
+                {
+                    var element = FindDescendantByName(root, name);
+                    if (element != null)
+                        return element;
+                }
+
+                // Strategy 3: Look for a DockPanel child docked at the bottom — common status bar pattern.
+                var bottomDocked = FindBottomDockedElement(root);
+                if (bottomDocked != null)
+                    return bottomDocked;
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "TabColoringManager: error during status bar search");
+            }
+
+            return null;
+        }
+
+        // ────────────────────────────────────────────────────────────────────────────
+        //  T028 — Floating window environment border
+        // ────────────────────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// If the active document window is undocked (floating), finds the hosting WPF
+        /// <see cref="System.Windows.Window"/> and applies a solid 3px environment-colored border.
+        /// </summary>
+        private static void ApplyFloatingWindowBorder(Window dteWindow, Color envColor)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
+            try
+            {
+                // A floating window in DTE has Linkable == false or is in its own frame.
+                // The most reliable check: the window is not "linked" (i.e., it's floating).
+                bool isFloating;
+                try
+                {
+                    // In some SSMS versions, accessing Linkable can throw for certain window types.
+                    isFloating = !dteWindow.Linkable;
+                }
+                catch
+                {
+                    // If Linkable is not accessible, try an alternative check.
+                    isFloating = IsWindowFloating(dteWindow);
+                }
+
+                if (!isFloating)
+                    return;
+
+                // Find the WPF Window hosting this floating document.
+                var wpfWindow = FindFloatingWpfWindow(dteWindow);
+                if (wpfWindow == null) return;
+
+                // Apply solid 3px border — no transparency for clear visual distinction.
+                var borderBrush = new SolidColorBrush(envColor);
+                borderBrush.Freeze();
+
+                wpfWindow.BorderBrush = borderBrush;
+                wpfWindow.BorderThickness = new Thickness(3);
+
+                Log.Debug("TabColoringManager: applied floating window border for '{Caption}'", dteWindow.Caption);
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "TabColoringManager: failed to apply floating window border");
+            }
+        }
+
+        /// <summary>
+        /// Attempts to determine whether a DTE window is floating using its <c>Left</c>/<c>Top</c>
+        /// properties compared to the main window bounds. This is a fallback when <c>Linkable</c>
+        /// is not accessible.
+        /// </summary>
+        private static bool IsWindowFloating(Window dteWindow)
+        {
+            try
+            {
+                ThreadHelper.ThrowIfNotOnUIThread();
+                // A floating window typically has its own Top/Left outside the main client area,
+                // or is not contained within the main window's document well.
+                // The safest heuristic: if the window's LinkedWindowFrame is null or
+                // the window is not in the main document group.
+                var frame = dteWindow.LinkedWindowFrame;
+                return frame != null && frame.LinkedWindows.Count <= 1;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Locates the WPF <see cref="System.Windows.Window"/> hosting a floating DTE document window.
+        /// Enumerates all open WPF windows and matches by HWND or title.
+        /// </summary>
+        private static System.Windows.Window? FindFloatingWpfWindow(Window dteWindow)
+        {
+            try
+            {
+                ThreadHelper.ThrowIfNotOnUIThread();
+
+                // Approach 1: Get the HWND from the DTE window and find the owning WPF Window.
+                var hwnd = (IntPtr)dteWindow.HWnd;
+                if (hwnd != IntPtr.Zero)
+                {
+                    var hwndSource = HwndSource.FromHwnd(hwnd);
+                    if (hwndSource?.RootVisual is System.Windows.Window directWindow)
+                        return directWindow;
+
+                    // The DTE HWnd might be a child; walk up to find the top-level WPF Window.
+                    if (hwndSource?.RootVisual is DependencyObject rootVisual)
+                    {
+                        var parentWindow = System.Windows.Window.GetWindow(rootVisual);
+                        if (parentWindow != null && parentWindow != System.Windows.Application.Current?.MainWindow)
+                            return parentWindow;
+                    }
+                }
+
+                // Approach 2: Enumerate all WPF windows and find one whose title matches.
+                var caption = dteWindow.Caption;
+                if (!string.IsNullOrEmpty(caption))
+                {
+                    foreach (System.Windows.Window wpfWin in System.Windows.Application.Current.Windows)
+                    {
+                        try
+                        {
+                            if (wpfWin == System.Windows.Application.Current.MainWindow)
+                                continue;
+
+                            if (wpfWin.Title != null &&
+                                wpfWin.Title.IndexOf(caption, StringComparison.OrdinalIgnoreCase) >= 0)
+                            {
+                                return wpfWin;
+                            }
+                        }
+                        catch
+                        {
+                            // Some windows may not be accessible — skip.
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "TabColoringManager: failed to find floating WPF window");
+            }
+
+            return null;
+        }
+
+        // ────────────────────────────────────────────────────────────────────────────
+        //  WPF visual tree helpers
+        // ────────────────────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Recursively searches the WPF visual tree for the first descendant of type <typeparamref name="T"/>.
+        /// Returns <c>null</c> if not found. Wrapped in try/catch for safety.
+        /// </summary>
+        private static T? FindDescendantByType<T>(DependencyObject parent) where T : DependencyObject
+        {
+            try
+            {
+                int childCount = VisualTreeHelper.GetChildrenCount(parent);
+                for (int i = 0; i < childCount; i++)
+                {
+                    var child = VisualTreeHelper.GetChild(parent, i);
+                    if (child is T match)
+                        return match;
+
+                    var descendant = FindDescendantByType<T>(child);
+                    if (descendant != null)
+                        return descendant;
+                }
+            }
+            catch
+            {
+                // Visual tree walking can fail for disconnected elements.
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Recursively searches the WPF visual tree for a <see cref="FrameworkElement"/>
+        /// whose <c>Name</c> matches <paramref name="name"/> (case-insensitive).
+        /// Returns <c>null</c> if not found.
+        /// </summary>
+        private static FrameworkElement? FindDescendantByName(DependencyObject parent, string name)
+        {
+            try
+            {
+                int childCount = VisualTreeHelper.GetChildrenCount(parent);
+                for (int i = 0; i < childCount; i++)
+                {
+                    var child = VisualTreeHelper.GetChild(parent, i);
+                    if (child is FrameworkElement fe &&
+                        string.Equals(fe.Name, name, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return fe;
+                    }
+
+                    var descendant = FindDescendantByName(child, name);
+                    if (descendant != null)
+                        return descendant;
+                }
+            }
+            catch
+            {
+                // Visual tree walking can fail for disconnected elements.
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Searches for the first <see cref="FrameworkElement"/> that is docked at the bottom
+        /// of a <see cref="DockPanel"/> — a common layout pattern for status bars.
+        /// Only returns elements that look like status bars (height &lt; 40px).
+        /// </summary>
+        private static FrameworkElement? FindBottomDockedElement(DependencyObject parent)
+        {
+            try
+            {
+                int childCount = VisualTreeHelper.GetChildrenCount(parent);
+                for (int i = 0; i < childCount; i++)
+                {
+                    var child = VisualTreeHelper.GetChild(parent, i);
+
+                    if (child is FrameworkElement fe)
+                    {
+                        var dock = DockPanel.GetDock(fe);
+                        if (dock == Dock.Bottom && fe.ActualHeight > 0 && fe.ActualHeight < 40)
+                        {
+                            return fe;
+                        }
+                    }
+
+                    // Only recurse one level into DockPanels for performance.
+                    if (child is DockPanel)
+                    {
+                        var result = FindBottomDockedElement(child);
+                        if (result != null)
+                            return result;
+                    }
+                }
+            }
+            catch
+            {
+                // Visual tree walking can fail for disconnected elements.
+            }
+
+            return null;
+        }
+
+        // ────────────────────────────────────────────────────────────────────────────
+        //  Color parsing
+        // ────────────────────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Parses a hex colour string (e.g. <c>"#FF4444"</c>) into a WPF <see cref="Color"/>.
+        /// Returns <c>null</c> if parsing fails.
+        /// </summary>
+        private static Color? ParseHexColor(string? hex)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(hex))
+                    return null;
+
+                if (!hex!.StartsWith("#", StringComparison.Ordinal))
+                    hex = "#" + hex;
+
+                return (Color)ColorConverter.ConvertFromString(hex);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        // ────────────────────────────────────────────────────────────────────────────
+        //  Original tab coloring (existing functionality)
+        // ────────────────────────────────────────────────────────────────────────────
 
         /// <summary>
         /// Attempts to retrieve the connected SQL Server instance name from the active

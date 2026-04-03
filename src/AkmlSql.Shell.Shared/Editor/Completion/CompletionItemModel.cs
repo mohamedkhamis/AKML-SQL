@@ -102,26 +102,29 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             return true;
         }
 
-        // SQL Prompt color scheme
+        // SQL Prompt One Dark color scheme (from SQL_Prompt_Features_Core.md §1.2)
         private static Color GetColor(int objectType)
         {
             switch (objectType)
             {
-                case 0: return Color.FromRgb(0x15, 0x65, 0xC0);   // Table — Blue
-                case 1: return Color.FromRgb(0x2E, 0x7D, 0x32);   // View — Green
-                case 2: return Color.FromRgb(0xF9, 0xA8, 0x25);   // Column — Gold
-                case 3: return Color.FromRgb(0x54, 0x6E, 0x7A);   // Keyword — Blue-Gray
-                case 4: return Color.FromRgb(0xE6, 0x51, 0x00);   // Snippet — Orange
-                case 5: return Color.FromRgb(0xAD, 0x14, 0x57);   // Function — Magenta
-                case 6: return Color.FromRgb(0x6A, 0x1B, 0x9A);   // Procedure — Purple
-                case 7: return Color.FromRgb(0x61, 0x61, 0x61);   // Schema — Gray
-                case 8: return Color.FromRgb(0x00, 0x69, 0x5C);   // Database — Teal
-                case 9: return Color.FromRgb(0x00, 0x83, 0x8F);   // Variable — Cyan
-                case 10: return Color.FromRgb(0x28, 0x35, 0x93);  // Alias — Indigo
-                case 11: return Color.FromRgb(0x4E, 0x34, 0x2E);  // Parameter — Brown
-                default: return Color.FromRgb(0x61, 0x61, 0x61);  // Unknown — Gray
+                case 0: return Color.FromRgb(0xE5, 0xC0, 0x4B);   // Table — Yellow #E5C04B
+                case 1: return Color.FromRgb(0x56, 0xB6, 0xC2);   // View — Teal #56B6C2
+                case 2: return Color.FromRgb(0x61, 0xAF, 0xEF);   // Column — Blue #61AFEF
+                case 3: return Color.FromRgb(0xAB, 0xB2, 0xBF);   // Keyword — Silver #ABB2BF
+                case 4: return Color.FromRgb(0x3D, 0xD6, 0x8C);   // Snippet — Green #3DD68C
+                case 5: return Color.FromRgb(0xD1, 0x9A, 0x66);   // Function — Orange #D19A66
+                case 6: return Color.FromRgb(0xC6, 0x78, 0xDD);   // Procedure — Purple #C678DD
+                case 7: return Color.FromRgb(0x98, 0xC3, 0x79);   // Schema — Green #98C379
+                case 8: return Color.FromRgb(0xE0, 0x6C, 0x75);   // Database — Red #E06C75
+                case 9: return Color.FromRgb(0x56, 0xB6, 0xC2);   // Variable — Teal #56B6C2
+                case 10: return Color.FromRgb(0x61, 0xAF, 0xEF);  // Alias — Blue #61AFEF
+                case 11: return Color.FromRgb(0xC6, 0x78, 0xDD);  // Parameter — Purple #C678DD
+                default: return Color.FromRgb(0xAB, 0xB2, 0xBF);  // Unknown — Silver #ABB2BF
             }
         }
+
+        /// <summary>Returns the badge background opacity (0.20 for most types, 0.15 for Keyword).</summary>
+        public double IconBackgroundOpacity => ObjectType == 3 ? 0.15 : 0.20;
 
         private static string GetLetter(int objectType)
         {

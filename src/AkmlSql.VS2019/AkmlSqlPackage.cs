@@ -20,6 +20,7 @@ using AkmlSql.Shell.Shared.Safety;
 using AkmlSql.Shell.Shared.Tabs;
 using AkmlSql.Shell.Shared.Update;
 using AkmlSql.Shell.Shared.Ai;
+using AkmlSql.Shell.Shared.Formatting;
 using AkmlSql.Shell.Shared.Ipc;
 using AkmlSql.Shell.Shared.Validation;
 using AkmlSql.Shell.Shared.Snippets;
@@ -108,6 +109,9 @@ namespace AkmlSql.VS2019
                 SnippetManagerCommand.Initialize(this, commandService);
                 AkmlSql.Shell.Shared.Navigation.BookmarkCommands.Initialize(this, commandService);
                 SplitTableCommand.Initialize(this, commandService);
+
+                // Formatting commands
+                UnformatCommand.Initialize(this, commandService);
             }
 
             // Non-critical initialization — failures must not break the extension

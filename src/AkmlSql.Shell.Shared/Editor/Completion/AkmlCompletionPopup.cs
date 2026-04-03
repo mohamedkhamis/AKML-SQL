@@ -222,18 +222,24 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
 
         private UIElement CreateItemVisual(CompletionItemModel item)
         {
-            // Badge: colored square with letter
+            // Badge: semi-transparent background with colored letter (SQL Prompt style)
+            var badgeBgColor = item.IconColor;
+            badgeBgColor.A = (byte)(255 * item.IconBackgroundOpacity); // 20% opacity (15% for Keyword)
+            var bgBrush = new SolidColorBrush(badgeBgColor);
+            bgBrush.Freeze();
+            var letterBrush = new SolidColorBrush(item.IconColor);
+            letterBrush.Freeze();
             var badge = new Border
             {
                 Width = 18,
                 Height = 16,
                 CornerRadius = new CornerRadius(2),
-                Background = new SolidColorBrush(item.IconColor),
+                Background = bgBrush,
                 Margin = new Thickness(4, 0, 6, 0),
                 Child = new TextBlock
                 {
                     Text = item.IconLetter,
-                    Foreground = Brushes.White,
+                    Foreground = letterBrush,
                     FontSize = 10,
                     FontWeight = FontWeights.Bold,
                     HorizontalAlignment = HorizontalAlignment.Center,

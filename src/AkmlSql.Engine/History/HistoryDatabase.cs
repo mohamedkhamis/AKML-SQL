@@ -399,11 +399,15 @@ public sealed class HistoryDatabase : IDisposable
         var fromClause = "history h";
         if (!string.IsNullOrWhiteSpace(filter.SearchText))
         {
-            // Sanitize the search text for FTS5: escape double quotes and wrap terms
-            var sanitized = filter.SearchText.Replace("\"", "\"\"");
-            fromClause = "history h INNER JOIN history_fts fts ON h.id = fts.rowid";
-            whereClauses.Add("history_fts MATCH @search");
-            parameters.Add(new SqliteParameter("@search", $"\"{sanitized}\""));
+            // Sanitize for FTS5: remove unsafe special chars but preserve FTS5 syntax:
+            //   * (prefix wildcard), " (phrase quotes), OR/NOT/AND (boolean operators)
+            var sanitized = SanitizeFts5Query(filter.SearchText);
+            if (!string.IsNullOrWhiteSpace(sanitized))
+            {
+                fromClause = "history h INNER JOIN history_fts fts ON h.id = fts.rowid";
+                whereClauses.Add("history_fts MATCH @search");
+                parameters.Add(new SqliteParameter("@search", sanitized));
+            }
         }
 
         // Column filters
@@ -450,6 +454,12 @@ public sealed class HistoryDatabase : IDisposable
             parameters.Add(new SqliteParameter("@isOpen", filter.IsOpen.Value ? 1 : 0));
         }
 
+        if (!string.IsNullOrEmpty(filter.NameFilter))
+        {
+            whereClauses.Add("h.tab_title LIKE '%' || @nameFilter || '%'");
+            parameters.Add(new SqliteParameter("@nameFilter", filter.NameFilter));
+        }
+
         var whereClause = whereClauses.Count > 0
             ? "WHERE " + string.Join(" AND ", whereClauses)
             : "";
@@ -465,15 +475,46 @@ public sealed class HistoryDatabase : IDisposable
             countSql = $"SELECT COUNT(*) FROM {fromClause} {whereClause}";
         }
 
-        // Execute count query
+        // Execute count query — wrap in try/catch for FTS5 parse error fallback.
+        // Despite quote-balancing in SanitizeFts5Query, other malformed queries can still
+        // cause FTS5 to throw (e.g., dangling operators like trailing OR/NOT).
         int totalCount;
-        await using (var countCmd = new SqliteCommand(countSql, conn))
+        try
         {
-            foreach (var p in parameters)
+            await using (var countCmd = new SqliteCommand(countSql, conn))
             {
-                countCmd.Parameters.Add(CloneParameter(p));
+                foreach (var p in parameters)
+                {
+                    countCmd.Parameters.Add(CloneParameter(p));
+                }
+                totalCount = Convert.ToInt32(await countCmd.ExecuteScalarAsync());
             }
-            totalCount = Convert.ToInt32(await countCmd.ExecuteScalarAsync());
+        }
+        catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 1)
+        {
+            // FTS5 parse error — fall back to LIKE-based search
+            Log.Warning(ex, "FTS5 query parse error for '{SearchText}', falling back to LIKE search",
+                filter.SearchText);
+
+            // Rebuild without FTS5: replace MATCH join with LIKE on sql_text
+            fromClause = "history h";
+            var likeSearch = "%" + filter.SearchText!.Replace("%", "").Replace("_", "") + "%";
+            whereClauses.RemoveAll(c => c.Contains("history_fts MATCH"));
+            parameters.RemoveAll(p => p.ParameterName == "@search");
+            whereClauses.Add("h.sql_text LIKE @searchLike");
+            parameters.Add(new SqliteParameter("@searchLike", likeSearch));
+
+            whereClause = whereClauses.Count > 0
+                ? "WHERE " + string.Join(" AND ", whereClauses)
+                : "";
+            countSql = filter.Deduplicate
+                ? $"SELECT COUNT(DISTINCT h.content_hash) FROM {fromClause} {whereClause}"
+                : $"SELECT COUNT(*) FROM {fromClause} {whereClause}";
+
+            await using var fallbackCountCmd = new SqliteCommand(countSql, conn);
+            foreach (var p in parameters)
+                fallbackCountCmd.Parameters.Add(CloneParameter(p));
+            totalCount = Convert.ToInt32(await fallbackCountCmd.ExecuteScalarAsync());
         }
 
         // Build the data query
@@ -561,6 +602,22 @@ public sealed class HistoryDatabase : IDisposable
                 ContentHash = reader.IsDBNull(14) ? null : reader.GetString(14),
                 IsOpen = reader.GetInt32(15) != 0
             });
+        }
+
+        // Apply CamelCase post-filtering in memory if CamelCaseTokens are provided.
+        // This filters results to only entries whose sql_text contains words matching
+        // ALL CamelCase tokens at CamelCase/underscore boundaries.
+        if (filter.CamelCaseTokens is { Length: > 0 })
+        {
+            var beforeCount = entries.Count;
+            entries = entries.Where(e => MatchesAllCamelCaseTokens(e.SqlText, filter.CamelCaseTokens)).ToList();
+            var removed = beforeCount - entries.Count;
+            if (removed > 0)
+            {
+                totalCount = Math.Max(0, totalCount - removed);
+                Log.Debug("CamelCase post-filter removed {Removed} entries for tokens [{Tokens}]",
+                    removed, string.Join(", ", filter.CamelCaseTokens));
+            }
         }
 
         Log.Debug("History search completed: {Count} entries returned, {Total} total matches",
@@ -861,6 +918,12 @@ public sealed class HistoryDatabase : IDisposable
             whereClauses.Add("h.is_favorite = 1");
         }
 
+        if (!string.IsNullOrEmpty(filter.NameFilter))
+        {
+            whereClauses.Add("h.tab_title LIKE '%' || @nameFilter || '%'");
+            parameters.Add(new SqliteParameter("@nameFilter", filter.NameFilter));
+        }
+
         var whereClause = whereClauses.Count > 0
             ? "WHERE " + string.Join(" AND ", whereClauses)
             : "";
@@ -1113,6 +1176,162 @@ public sealed class HistoryDatabase : IDisposable
     private static SqliteParameter CloneParameter(SqliteParameter source)
     {
         return new SqliteParameter(source.ParameterName, source.Value);
+    }
+
+    /// <summary>
+    /// Sanitizes a search query for FTS5: removes characters that are special to FTS5 syntax
+    /// (colons, parentheses, carets, curly braces, square brackets) while preserving
+    /// valid FTS5 operators: * (prefix wildcard), " (phrase quotes), OR/NOT/AND (boolean keywords).
+    /// Unbalanced double quotes are fixed by appending a closing quote.
+    /// </summary>
+    private static string SanitizeFts5Query(string query)
+    {
+        // Characters that are special in FTS5 and must be removed:
+        // : (column filter), ( ) (grouping), ^ (initial token), { } [ ] (reserved)
+        var sb = new StringBuilder(query.Length);
+        int quoteCount = 0;
+        for (int i = 0; i < query.Length; i++)
+        {
+            var c = query[i];
+            switch (c)
+            {
+                case ':':
+                case '(':
+                case ')':
+                case '^':
+                case '{':
+                case '}':
+                case '[':
+                case ']':
+                    // Strip these FTS5-unsafe characters
+                    sb.Append(' ');
+                    break;
+                case '"':
+                    quoteCount++;
+                    sb.Append(c);
+                    break;
+                default:
+                    sb.Append(c);
+                    break;
+            }
+        }
+
+        // Balance unmatched quotes — FTS5 throws on unbalanced double quotes
+        if (quoteCount % 2 != 0)
+            sb.Append('"');
+
+        return sb.ToString().Trim();
+    }
+
+    /// <summary>
+    /// Returns true if the SQL text contains words matching ALL CamelCase tokens.
+    /// Each token (e.g., "PC") is checked against every word in the SQL text at
+    /// CamelCase and underscore boundaries.
+    /// </summary>
+    private static bool MatchesAllCamelCaseTokens(string? sqlText, string[] tokens)
+    {
+        if (string.IsNullOrEmpty(sqlText))
+            return false;
+
+        // Extract words from SQL text (identifiers, keywords — split on whitespace and SQL punctuation)
+        var words = ExtractWords(sqlText);
+
+        foreach (var token in tokens)
+        {
+            bool found = false;
+            foreach (var word in words)
+            {
+                if (MatchesCamelCaseToken(word, token))
+                {
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found)
+                return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Extracts identifier-like words from SQL text by splitting on whitespace and
+    /// SQL punctuation characters (commas, parentheses, semicolons, operators, etc.).
+    /// </summary>
+    private static List<string> ExtractWords(string text)
+    {
+        var words = new List<string>();
+        var sb = new StringBuilder();
+
+        for (int i = 0; i < text.Length; i++)
+        {
+            var c = text[i];
+            if (char.IsLetterOrDigit(c) || c == '_')
+            {
+                sb.Append(c);
+            }
+            else
+            {
+                if (sb.Length > 0)
+                {
+                    words.Add(sb.ToString());
+                    sb.Clear();
+                }
+            }
+        }
+
+        if (sb.Length > 0)
+        {
+            words.Add(sb.ToString());
+        }
+
+        return words;
+    }
+
+    /// <summary>
+    /// CamelCase / underscore boundary matching.
+    /// Extracts initials from word boundaries in <paramref name="word"/> and checks if
+    /// <paramref name="token"/> matches them as a prefix (case-insensitive).
+    /// Examples: "PC" matches "ProductCategory", "GCO" matches "GetCustomerOrders",
+    /// "SC" matches "sys_columns", "pc" matches "price_calculator".
+    /// </summary>
+    private static bool MatchesCamelCaseToken(string word, string token)
+    {
+        if (string.IsNullOrEmpty(word) || string.IsNullOrEmpty(token))
+            return false;
+
+        // Extract initials: first char + each char at an uppercase boundary or after underscore
+        var initials = new char[word.Length];
+        int count = 0;
+        initials[count++] = word[0];
+
+        for (int i = 1; i < word.Length; i++)
+        {
+            var c = word[i];
+            // Uppercase letter after lowercase = CamelCase boundary
+            if (char.IsUpper(c) && char.IsLower(word[i - 1]))
+            {
+                initials[count++] = c;
+            }
+            // Letter/digit after underscore = boundary
+            else if (char.IsLetterOrDigit(c) && word[i - 1] == '_')
+            {
+                initials[count++] = c;
+            }
+        }
+
+        if (count < token.Length)
+            return false;
+
+        // Check if token matches the initials as a prefix (case-insensitive)
+        for (int i = 0; i < token.Length; i++)
+        {
+            if (char.ToUpperInvariant(token[i]) != char.ToUpperInvariant(initials[i]))
+                return false;
+        }
+
+        return true;
     }
 }
 

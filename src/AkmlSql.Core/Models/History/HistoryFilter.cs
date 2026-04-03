@@ -44,5 +44,14 @@ namespace AkmlSql.Core.Models.History
 
         /// <summary>Filter by open/closed tab status. Null for all.</summary>
         public bool? IsOpen { get; set; }
+
+        /// <summary>Filter by tab/entry display name (tab_title). Uses LIKE '%value%' matching. Null for no name filter.</summary>
+        public string? NameFilter { get; set; }
+
+        /// <summary>
+        /// Short all-uppercase CamelCase tokens for in-memory post-filtering after FTS5.
+        /// Entries must contain words matching ALL tokens at CamelCase/underscore boundaries.
+        /// </summary>
+        public string[]? CamelCaseTokens { get; set; }
     }
 }

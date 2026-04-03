@@ -230,4 +230,111 @@ public class NoformatScannerTests
         // Both should exist as separate non-overlapping regions
         Assert.True(regions.Count >= 1);
     }
+
+    // ── AKML formatting off/on syntax ─────────────────────────────────────
+
+    [Fact]
+    public void Scan_AkmlFormattingOff_LineComment_Recognized()
+    {
+        var text = "code\n-- AKML formatting off\nstuff\n-- AKML formatting on\nmore";
+        var regions = _scanner.Scan(text);
+        Assert.Single(regions);
+        Assert.True(regions[0].HasClosingTag);
+    }
+
+    [Fact]
+    public void Scan_AkmlFormattingOff_BlockComment_Recognized()
+    {
+        var text = "code\n/* AKML formatting off */\nstuff\n/* AKML formatting on */\nmore";
+        var regions = _scanner.Scan(text);
+        Assert.Single(regions);
+        Assert.True(regions[0].HasClosingTag);
+    }
+
+    [Fact]
+    public void Scan_AkmlFormattingOff_CaseInsensitive()
+    {
+        var text = "-- akml FORMATTING OFF\nstuff\n-- akml formatting on\n";
+        var regions = _scanner.Scan(text);
+        Assert.Single(regions);
+        Assert.True(regions[0].HasClosingTag);
+    }
+
+    [Fact]
+    public void Scan_AkmlFormattingOff_UnmatchedOpen_ExtendsToEof()
+    {
+        var text = "-- AKML formatting off\nsome sql\n";
+        var regions = _scanner.Scan(text);
+        Assert.Single(regions);
+        Assert.Equal(text.Length, regions[0].EndOffset);
+        Assert.False(regions[0].HasClosingTag);
+    }
+
+    // ── SQL Prompt formatting off/on syntax ───────────────────────────────
+
+    [Fact]
+    public void Scan_SqlPromptFormattingOff_LineComment_Recognized()
+    {
+        var text = "code\n-- SQL Prompt formatting off\nstuff\n-- SQL Prompt formatting on\nmore";
+        var regions = _scanner.Scan(text);
+        Assert.Single(regions);
+        Assert.True(regions[0].HasClosingTag);
+    }
+
+    [Fact]
+    public void Scan_SqlPromptFormattingOff_BlockComment_Recognized()
+    {
+        var text = "code\n/* SQL Prompt formatting off */\nstuff\n/* SQL Prompt formatting on */\nmore";
+        var regions = _scanner.Scan(text);
+        Assert.Single(regions);
+        Assert.True(regions[0].HasClosingTag);
+    }
+
+    [Fact]
+    public void Scan_SqlPromptFormattingOff_CaseInsensitive()
+    {
+        var text = "-- sql prompt FORMATTING OFF\nstuff\n-- SQL PROMPT FORMATTING ON\n";
+        var regions = _scanner.Scan(text);
+        Assert.Single(regions);
+        Assert.True(regions[0].HasClosingTag);
+    }
+
+    [Fact]
+    public void Scan_SqlPromptFormattingOff_UnmatchedOpen_ExtendsToEof()
+    {
+        var text = "-- SQL Prompt formatting off\nsome sql\n";
+        var regions = _scanner.Scan(text);
+        Assert.Single(regions);
+        Assert.Equal(text.Length, regions[0].EndOffset);
+        Assert.False(regions[0].HasClosingTag);
+    }
+
+    // ── Mixed syntax: open with one, close with another ───────────────────
+
+    [Fact]
+    public void Scan_MixedSyntax_NoformatOpenAndAkmlClose()
+    {
+        var text = "--noformat\nstuff\n-- AKML formatting on\nmore";
+        var regions = _scanner.Scan(text);
+        Assert.Single(regions);
+        Assert.True(regions[0].HasClosingTag);
+    }
+
+    [Fact]
+    public void Scan_MixedSyntax_SqlPromptOpenAndNoformatClose()
+    {
+        var text = "-- SQL Prompt formatting off\nstuff\n--endnoformat\nmore";
+        var regions = _scanner.Scan(text);
+        Assert.Single(regions);
+        Assert.True(regions[0].HasClosingTag);
+    }
+
+    [Fact]
+    public void Scan_MixedSyntax_AkmlOpenAndSqlPromptClose()
+    {
+        var text = "-- AKML formatting off\nstuff\n-- SQL Prompt formatting on\nmore";
+        var regions = _scanner.Scan(text);
+        Assert.Single(regions);
+        Assert.True(regions[0].HasClosingTag);
+    }
 }
