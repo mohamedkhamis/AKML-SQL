@@ -176,7 +176,9 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         private void ApplyFilter()
         {
             _filteredItems = string.IsNullOrEmpty(_currentFilter)
-                ? _allItems
+                ? _allItems.OrderBy(i => i.SortPriority)
+                    .ThenBy(i => i.DisplayText, StringComparer.OrdinalIgnoreCase)
+                    .ToArray()
                 : _allItems.Where(i => i.MatchesFilter(_currentFilter))
                     .OrderBy(i => i.FilterScore(_currentFilter))
                     .ThenBy(i => i.SortPriority)
