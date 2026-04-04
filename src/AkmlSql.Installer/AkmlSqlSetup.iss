@@ -731,4 +731,19 @@ begin
       Result := 'Please close the running applications and try again.';
     end;
   end;
+
+  // Pre-install: clear ALL IDE caches unconditionally to ensure a clean slate.
+  // This prevents stale package registration, MEF composition, or command table
+  // data from hiding the extension or its menu after reinstall/upgrade.
+  if Result = '' then
+  begin
+    Log('PrepareToInstall: clearing all IDE caches before deployment...');
+    ClearSSMSMefCaches('20.0');
+    ClearSSMSMefCaches('21.0');
+    ClearSSMSMefCaches('22.0');
+    ClearVSMefCaches('16.0');
+    ClearVSMefCaches('17.0');
+    ClearVSMefCaches('18.0');
+    Log('PrepareToInstall: all IDE caches cleared.');
+  end;
 end;
