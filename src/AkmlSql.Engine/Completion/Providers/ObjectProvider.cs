@@ -16,6 +16,7 @@ public class ObjectProvider : ICompletionProvider
     private static readonly HashSet<ClauseType> ObjectClauseTypes =
     [
         ClauseType.From,
+        ClauseType.JoinTable,
         ClauseType.Exec,
         ClauseType.Create,
         ClauseType.Alter,
@@ -169,7 +170,7 @@ public class ObjectProvider : ICompletionProvider
         return clauseType switch
         {
             ClauseType.Exec => ExecObjectTypes,
-            ClauseType.From or ClauseType.JoinOn or ClauseType.Delete => FromJoinObjectTypes,
+            ClauseType.From or ClauseType.JoinTable or ClauseType.JoinOn or ClauseType.Delete => FromJoinObjectTypes,
             _ => null // null means all types allowed
         };
     }

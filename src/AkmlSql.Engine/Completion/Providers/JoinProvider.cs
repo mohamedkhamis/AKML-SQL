@@ -15,9 +15,9 @@ public class JoinProvider : ICompletionProvider
 
     public bool CanHandle(CursorContext context, DatabaseCache? cache)
     {
-        // Activate when in FROM clause (JOIN is mapped to From by CursorContextAnalyzer)
-        // and there are already referenced tables (aliases) available
-        if (context.ClauseType != ClauseType.From)
+        // Activate when in FROM or JoinTable clause and there are already
+        // referenced tables (aliases) available for FK-based suggestions
+        if (context.ClauseType != ClauseType.From && context.ClauseType != ClauseType.JoinTable)
         {
             return false;
         }

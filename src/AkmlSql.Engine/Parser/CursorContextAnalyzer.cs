@@ -20,7 +20,8 @@ public enum ClauseType
     Create,
     Alter,
     Exec,
-    With
+    With,
+    JoinTable    // After JOIN/INNER JOIN/LEFT JOIN etc. — expects table name, not more JOIN keywords
 }
 
 public class CursorContext
@@ -178,7 +179,7 @@ public class CursorContextAnalyzer
                 case TSqlTokenType.Select: return ClauseType.Select;
                 case TSqlTokenType.From: return ClauseType.From;
                 case TSqlTokenType.Where: return ClauseType.Where;
-                case TSqlTokenType.Join: return ClauseType.From;
+                case TSqlTokenType.Join: return ClauseType.JoinTable;
                 case TSqlTokenType.On: return ClauseType.JoinOn;
                 case TSqlTokenType.Having: return ClauseType.Having;
                 case TSqlTokenType.Delete: return ClauseType.Delete;

@@ -166,6 +166,7 @@ public static class KeywordDictionary
         {
             ClauseType.Select => AfterSelect,
             ClauseType.From => AfterFrom,
+            ClauseType.JoinTable => AfterJoinTable,
             ClauseType.Where => AfterWhere,
             ClauseType.JoinOn => AfterJoinOn,
             ClauseType.GroupBy => AfterGroupBy,
@@ -216,6 +217,15 @@ public static class KeywordDictionary
         "ROW_NUMBER", "RANK", "DENSE_RANK", "NTILE",
         "LAG", "LEAD", "FIRST_VALUE", "LAST_VALUE",
         "FROM"
+    ];
+
+    // After JOIN/INNER JOIN/LEFT JOIN — user needs a table name, not more JOIN keywords
+    private static readonly string[] AfterJoinTable =
+    [
+        "AS",
+        "WITH", "NOLOCK", "READUNCOMMITTED", "READCOMMITTED",
+        "REPEATABLEREAD", "SERIALIZABLE", "TABLOCK", "TABLOCKX",
+        "UPDLOCK", "HOLDLOCK", "ROWLOCK", "PAGLOCK"
     ];
 
     private static readonly string[] AfterFrom =

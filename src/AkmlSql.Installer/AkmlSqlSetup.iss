@@ -495,7 +495,11 @@ begin
         if (FindRec.Attributes and FILE_ATTRIBUTE_DIRECTORY) <> 0 then
         begin
           DelTree(BasePath + FindRec.Name + '\ComponentModelCache', True, True, True);
+          DelTree(BasePath + FindRec.Name + '\MEFCacheBackup', True, True, True);
           DeleteFile(BasePath + FindRec.Name + '\privateregistry.bin');
+          DeleteFile(BasePath + FindRec.Name + '\privateregistry.bin.LOG1');
+          DeleteFile(BasePath + FindRec.Name + '\privateregistry.bin.LOG2');
+          Log('Cleared all caches for VS ' + FindRec.Name);
         end;
       until not FindNext(FindRec);
     finally
@@ -518,7 +522,11 @@ begin
         if (FindRec.Attributes and FILE_ATTRIBUTE_DIRECTORY) <> 0 then
         begin
           DelTree(BasePath + FindRec.Name + '\ComponentModelCache', True, True, True);
+          DelTree(BasePath + FindRec.Name + '\MEFCacheBackup', True, True, True);
           DeleteFile(BasePath + FindRec.Name + '\privateregistry.bin');
+          DeleteFile(BasePath + FindRec.Name + '\privateregistry.bin.LOG1');
+          DeleteFile(BasePath + FindRec.Name + '\privateregistry.bin.LOG2');
+          Log('Cleared all caches for SSMS ' + FindRec.Name);
         end;
       until not FindNext(FindRec);
     finally
@@ -535,9 +543,15 @@ begin
         if (FindRec.Attributes and FILE_ATTRIBUTE_DIRECTORY) <> 0 then
         begin
           DelTree(BasePath + FindRec.Name + '\ComponentModelCache', True, True, True);
-          // Also delete privateregistry.bin — caches VS package registration and can
-          // prevent updated/new extensions from loading after reinstall
+          DelTree(BasePath + FindRec.Name + '\MEFCacheBackup', True, True, True);
+          // Delete privateregistry.bin + .LOG1/.LOG2 — caches VS package registration
+          // and can prevent updated/new extensions from loading after reinstall
           DeleteFile(BasePath + FindRec.Name + '\privateregistry.bin');
+          DeleteFile(BasePath + FindRec.Name + '\privateregistry.bin.LOG1');
+          DeleteFile(BasePath + FindRec.Name + '\privateregistry.bin.LOG2');
+          // Delete CTM files — compiled command table cache
+          DelTree(BasePath + FindRec.Name + '\1033', True, True, False);
+          Log('Cleared all caches for SSMS ' + FindRec.Name);
         end;
       until not FindNext(FindRec);
     finally
