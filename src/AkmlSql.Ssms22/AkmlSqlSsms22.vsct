@@ -312,6 +312,12 @@
   </Commands>
 
   <CommandPlacements>
+    <!-- Fallback: also place menu under Tools > External Tools group for SSMS versions
+         where IDM_VS_MENU_BAR is not accessible via SSMSMnu.dll custom menu bar -->
+    <CommandPlacement guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuBarGroup" priority="0x0900">
+      <Parent guid="guidSHLMainMenu" id="IDG_VS_TOOLS_EXT_TOOLS"/>
+    </CommandPlacement>
+
     <!-- Toolbar buttons — SQL Prompt style quick access -->
     <CommandPlacement guid="guidAkmlSqlCmdSet" id="cmdFormatDocument" priority="0x0100">
       <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlToolbarGroup"/>

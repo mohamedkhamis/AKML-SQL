@@ -298,6 +298,14 @@
     </Buttons>
   </Commands>
 
+  <CommandPlacements>
+    <!-- Fallback: also place menu under Tools > External Tools group for SSMS versions
+         where IDM_VS_MENU_BAR is not accessible via SSMSMnu.dll custom menu bar -->
+    <CommandPlacement guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuBarGroup" priority="0x0900">
+      <Parent guid="guidSHLMainMenu" id="IDG_VS_TOOLS_EXT_TOOLS"/>
+    </CommandPlacement>
+  </CommandPlacements>
+
   <!-- Keyboard shortcut: Ctrl+K, Y for Format Document (chord key binding) -->
   <KeyBindings>
     <KeyBinding guid="guidAkmlSqlCmdSet" id="cmdFormatDocument"

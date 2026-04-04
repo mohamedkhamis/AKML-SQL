@@ -449,19 +449,32 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
 
                         if (response?.Items != null && response.Items.Length > 0)
                         {
-                            var models = new CompletionItemModel[response.Items.Length];
+                            // Check if snippets should be shown in completion
+                            bool showSnippets = false;
+                            try
+                            {
+                                var s = AkmlSql.Core.Config.ConfigManager.Load();
+                                showSnippets = s.IntelliSense.SnippetsInCompletion;
+                            }
+                            catch { }
+
+                            var modelList = new System.Collections.Generic.List<CompletionItemModel>(response.Items.Length);
                             for (int i = 0; i < response.Items.Length; i++)
                             {
                                 var item = response.Items[i];
-                                models[i] = new CompletionItemModel
+                                // ObjectType 4 = Snippet — skip if disabled
+                                if (item.ObjectType == 4 && !showSnippets)
+                                    continue;
+                                modelList.Add(new CompletionItemModel
                                 {
                                     DisplayText = item.DisplayText ?? string.Empty,
                                     InsertText = item.InsertText ?? item.DisplayText ?? string.Empty,
                                     SecondaryText = item.SecondaryText ?? string.Empty,
                                     ObjectType = item.ObjectType,
                                     SortPriority = item.SortPriority
-                                };
+                                });
                             }
+                            var models = modelList.ToArray();
 
                             // Update UI on dispatcher thread
                             _textView.VisualElement.Dispatcher.Invoke(() =>

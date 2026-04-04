@@ -157,6 +157,8 @@ namespace AkmlSql.Core.Config
         public bool SpaceCommits { get; set; } = true;
         /// <summary>Use Dot key to commit the selected completion item.</summary>
         public bool DotCommits { get; set; } = true;
+        /// <summary>Show snippet shortcuts (sel, ssf, ins, etc.) in the completion popup. Default disabled.</summary>
+        public bool SnippetsInCompletion { get; set; } = false;
     }
 
     /// <summary>Settings for the in-memory schema cache.</summary>
