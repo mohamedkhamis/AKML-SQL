@@ -28,6 +28,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         private ICompletionBroker _broker;
         private string _filterText = string.Empty;
         private bool _fetchPending;
+        private bool _expectsObjects; // true when auto-triggered after FROM/JOIN — skip keyword-only results
         private bool _wildcardPending;
         private int _quickInfoVersion;
         private System.Windows.Threading.DispatcherTimer _suppressTimer;
@@ -303,6 +304,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
 
                 if (IsObjectExpectingKeywordBeforeCaret())
                 {
+                    _expectsObjects = true;
                     TriggerCompletion();
                 }
             }
@@ -314,6 +316,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 // object names (table/view). If so, auto-trigger a fresh completion.
                 if (c == ' ' && IsObjectExpectingKeywordBeforeCaret())
                 {
+                    _expectsObjects = true;
                     TriggerCompletion();
                 }
             }
@@ -449,22 +452,35 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
 
                         if (response?.Items != null && response.Items.Length > 0)
                         {
-                            // Check if snippets should be shown in completion
+                            // Check configurable completion options
                             bool showSnippets = false;
+                            bool showAlias = false;
                             try
                             {
                                 var s = AkmlSql.Core.Config.ConfigManager.Load();
                                 showSnippets = s.IntelliSense.SnippetsInCompletion;
+                                showAlias = s.IntelliSense.AutoAlias;
                             }
                             catch { }
 
+                            // Capture flag on background thread before switching to UI
+                            var expectsObj = _expectsObjects;
+                            _expectsObjects = false;
+
                             var modelList = new System.Collections.Generic.List<CompletionItemModel>(response.Items.Length);
+                            bool hasObjects = false;
                             for (int i = 0; i < response.Items.Length; i++)
                             {
                                 var item = response.Items[i];
                                 // ObjectType 4 = Snippet — skip if disabled
                                 if (item.ObjectType == 4 && !showSnippets)
                                     continue;
+                                // ObjectType 10 = Alias suggestion — skip if disabled
+                                if (item.ObjectType == 10 && !showAlias)
+                                    continue;
+                                // Track if we have any non-keyword items (tables, views, etc.)
+                                if (item.ObjectType != 3 && item.ObjectType != 4) // not keyword, not snippet
+                                    hasObjects = true;
                                 modelList.Add(new CompletionItemModel
                                 {
                                     DisplayText = item.DisplayText ?? string.Empty,
@@ -474,6 +490,14 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                                     SortPriority = item.SortPriority
                                 });
                             }
+
+                            // When auto-triggered after FROM/JOIN and we have schema objects,
+                            // filter out keywords to prevent accidental keyword insertion via Tab
+                            if (expectsObj && hasObjects)
+                            {
+                                modelList.RemoveAll(m => m.ObjectType == 3); // Remove keywords
+                            }
+
                             var models = modelList.ToArray();
 
                             // Update UI on dispatcher thread

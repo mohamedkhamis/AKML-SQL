@@ -145,8 +145,8 @@ namespace AkmlSql.Core.Config
         public bool ShowNullability { get; set; } = true;
         /// <summary>Show PK/FK badge indicators in completion details.</summary>
         public bool ShowPkFk { get; set; } = true;
-        /// <summary>Suggest automatic table aliases when completing table names.</summary>
-        public bool AutoAlias { get; set; } = true;
+        /// <summary>Suggest automatic table aliases when completing table names. Default disabled.</summary>
+        public bool AutoAlias { get; set; } = false;
         /// <summary>Suggest JOIN conditions based on foreign key relationships.</summary>
         public bool JoinAssist { get; set; } = true;
         /// <summary>Keyword casing applied to completions inserted into the editor.</summary>
