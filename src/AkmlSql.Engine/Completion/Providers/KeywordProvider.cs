@@ -54,13 +54,16 @@ public class KeywordProvider(
             }
 
             var displayText = ApplyCasing(keyword);
+            // Single-word keywords (JOIN, WHERE) sort before compound ones
+            // (CROSS JOIN, LEFT OUTER JOIN) so plain "JOIN" appears first.
+            int priority = keyword.Contains(' ') ? 510 : 500;
             yield return new CompletionItem
             {
                 DisplayText = displayText,
                 InsertText = displayText,
                 ObjectType = (int)CompletionObjectType.Keyword,
                 SecondaryText = "Keyword",
-                SortPriority = 500 // Keywords rank below schema objects
+                SortPriority = priority
             };
         }
 

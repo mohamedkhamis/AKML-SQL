@@ -13,7 +13,7 @@ namespace AkmlSql.Shell.Shared.StatusBar
         public static void SetLoaded(IVsStatusbar statusBar)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
-            SetText(statusBar, $"AKML SQL v{Core.Constants.Version}");
+            SetText(statusBar, $"AKML SQL v{Core.Constants.RuntimeVersion}");
         }
 
         public static void SetFailed(IVsStatusbar statusBar)
@@ -46,7 +46,7 @@ namespace AkmlSql.Shell.Shared.StatusBar
             ThreadHelper.ThrowIfNotOnUIThread();
             if (!_transactionIndicatorActive) return;
 
-            SetText(statusBar, $"AKML SQL v{Core.Constants.Version}");
+            SetText(statusBar, $"AKML SQL v{Core.Constants.RuntimeVersion}");
             _transactionIndicatorActive = false;
         }
 

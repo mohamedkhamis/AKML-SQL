@@ -5,7 +5,11 @@ namespace AkmlSql.Engine.Parser;
 public class AliasResolver
 {
     /// <summary>
-    /// Walk AST to build alias → (schema, table) dictionary for a batch.
+    /// Walk AST to build alias → (schema, table) dictionary for the SQL statement
+    /// containing the cursor. Statements are scoped per-semicolon: aliases from a
+    /// previous statement (e.g. <c>SELECT ... FROM A; SELECT ... FROM |</c>) are
+    /// NOT included, otherwise <see cref="JoinProvider"/> would suggest cross-statement joins.
+    ///
     /// Self-join scenario (T044): handled naturally because each NamedTableReference
     /// with a distinct alias produces a separate entry. For example:
     ///   FROM Employees e1 JOIN Employees e2 ON e1.ManagerId = e2.EmployeeId
@@ -28,8 +32,30 @@ public class AliasResolver
                 continue;
             }
 
+            // Find the specific statement that contains the cursor.
+            // If the cursor falls between statements (e.g. immediately after a ';'
+            // or while typing a new statement), no statement contains it — return empty.
+            TSqlStatement? cursorStatement = null;
+            foreach (var statement in batch.Statements)
+            {
+                int stmtStart = statement.StartOffset;
+                int stmtEnd = stmtStart + statement.FragmentLength;
+                if (cursorOffset >= stmtStart && cursorOffset <= stmtEnd)
+                {
+                    cursorStatement = statement;
+                    break;
+                }
+            }
+
+            if (cursorStatement == null)
+            {
+                // Cursor is between statements (after a ';' or in a partial new statement).
+                // Don't pull aliases from neighboring statements.
+                continue;
+            }
+
             var visitor = new AliasVisitor();
-            batch.Accept(visitor);
+            cursorStatement.Accept(visitor);
 
             foreach (var (alias, tableRef) in visitor.Aliases)
                 aliases[alias] = tableRef;

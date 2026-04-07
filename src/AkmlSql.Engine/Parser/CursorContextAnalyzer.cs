@@ -21,7 +21,16 @@ public enum ClauseType
     Alter,
     Exec,
     With,
-    JoinTable    // After JOIN/INNER JOIN/LEFT JOIN etc. — expects table name, not more JOIN keywords
+    JoinTable,   // After JOIN/INNER JOIN/LEFT JOIN etc. — expects table name, not more JOIN keywords
+    UpdateTable, // After UPDATE keyword — expects table name, before SET
+    Over,        // After OVER( — window specification context
+    Option,      // After OPTION( — query hint context
+    Set,         // After SET — SET option context (SET NOCOUNT, SET ANSI_NULLS, etc.)
+    Declare,     // After DECLARE — variable/cursor/table declaration
+    Drop,        // After DROP — object type context
+    Grant,       // After GRANT/REVOKE/DENY — permission context
+    ForXml,      // After FOR XML — XML output mode
+    ForJson      // After FOR JSON — JSON output mode
 }
 
 public class CursorContext
@@ -176,6 +185,9 @@ public class CursorContextAnalyzer
 
             switch (t.TokenType)
             {
+                // Statement boundary — stop scanning, treat as new statement (#22)
+                case TSqlTokenType.Semicolon: return ClauseType.Unknown;
+
                 case TSqlTokenType.Select: return ClauseType.Select;
                 case TSqlTokenType.From: return ClauseType.From;
                 case TSqlTokenType.Where: return ClauseType.Where;
@@ -187,8 +199,26 @@ public class CursorContextAnalyzer
                 case TSqlTokenType.Alter: return ClauseType.Alter;
                 case TSqlTokenType.With: return ClauseType.With;
                 case TSqlTokenType.Set:
-                    return ClauseType.UpdateSet;
+                    // Distinguish SET in UPDATE ... SET from standalone SET options.
+                    // If we already saw UPDATE earlier, this is UpdateSet.
+                    // Otherwise it's a standalone SET (SET NOCOUNT, etc.)
+                    // For simplicity, walk back to see if UPDATE precedes.
+                    for (int j = i - 1; j >= 0; j--)
+                    {
+                        var tj = tokens[j];
+                        if (IsWhitespaceOrComment(tj)) continue;
+                        if (tj.TokenType == TSqlTokenType.Update) return ClauseType.UpdateSet;
+                        break; // Not preceded by UPDATE — standalone SET
+                    }
+                    return ClauseType.Set;
                 case TSqlTokenType.Execute: return ClauseType.Exec;
+                case TSqlTokenType.Grant: return ClauseType.Grant;
+                case TSqlTokenType.Deny: return ClauseType.Grant;
+                case TSqlTokenType.Revoke: return ClauseType.Grant;
+                case TSqlTokenType.Drop: return ClauseType.Drop;
+                case TSqlTokenType.Declare: return ClauseType.Declare;
+                case TSqlTokenType.Over: return ClauseType.Over;
+                case TSqlTokenType.Option: return ClauseType.Option;
                 case TSqlTokenType.Identifier:
                     var upper = t.Text.ToUpperInvariant();
                     if (upper == "GROUP")
@@ -217,13 +247,48 @@ public class CursorContextAnalyzer
                         // JOIN qualifiers — continue scanning to find JOIN/FROM
                         continue;
                     }
+                    if (upper is "UNION" or "INTERSECT" or "EXCEPT")
+                    {
+                        // Set operators — treat as statement boundary so the next
+                        // SELECT gets fresh context, not the FROM/JOIN of the previous query
+                        return ClauseType.Unknown;
+                    }
+                    if (upper == "ALL")
+                    {
+                        // "ALL" after UNION — continue scanning to find UNION
+                        continue;
+                    }
+                    // FOR XML / FOR JSON detection
+                    if (upper is "XML")
+                    {
+                        // Check if preceded by FOR
+                        for (int j = i - 1; j >= 0; j--)
+                        {
+                            var tj = tokens[j];
+                            if (IsWhitespaceOrComment(tj)) continue;
+                            if (tj.Text?.Equals("FOR", StringComparison.OrdinalIgnoreCase) == true)
+                                return ClauseType.ForXml;
+                            break;
+                        }
+                    }
+                    if (upper is "JSON")
+                    {
+                        for (int j = i - 1; j >= 0; j--)
+                        {
+                            var tj = tokens[j];
+                            if (IsWhitespaceOrComment(tj)) continue;
+                            if (tj.Text?.Equals("FOR", StringComparison.OrdinalIgnoreCase) == true)
+                                return ClauseType.ForJson;
+                            break;
+                        }
+                    }
                     break;
                 case TSqlTokenType.Insert:
                     return ClauseType.InsertColumns;
                 case TSqlTokenType.Values:
                     return ClauseType.InsertValues;
                 case TSqlTokenType.Update:
-                    return ClauseType.UpdateSet;
+                    return ClauseType.UpdateTable; // After UPDATE: expects table name (#7)
             }
         }
 

@@ -481,7 +481,10 @@ begin
     + IntToStr(Random(999999999999));
 end;
 
-// Helper: Clear MEF caches for VS with wildcard prefix (e.g. '16.0')
+// Helper: Clear MEF component model cache for VS with wildcard prefix (e.g. '16.0').
+// SAFETY: Only clears ComponentModelCache (MEF composition cache).
+// NEVER touches privateregistry.bin — that contains IDE settings, tool window layouts,
+// keybindings, and other user state that must not be reset.
 procedure ClearVSMefCaches(const VersionPrefix: String);
 var
   BasePath: String;
@@ -495,11 +498,7 @@ begin
         if (FindRec.Attributes and FILE_ATTRIBUTE_DIRECTORY) <> 0 then
         begin
           DelTree(BasePath + FindRec.Name + '\ComponentModelCache', True, True, True);
-          DelTree(BasePath + FindRec.Name + '\MEFCacheBackup', True, True, True);
-          DeleteFile(BasePath + FindRec.Name + '\privateregistry.bin');
-          DeleteFile(BasePath + FindRec.Name + '\privateregistry.bin.LOG1');
-          DeleteFile(BasePath + FindRec.Name + '\privateregistry.bin.LOG2');
-          Log('Cleared all caches for VS ' + FindRec.Name);
+          Log('Cleared ComponentModelCache for VS ' + FindRec.Name);
         end;
       until not FindNext(FindRec);
     finally
@@ -508,7 +507,9 @@ begin
   end;
 end;
 
-// Helper: Clear MEF caches for SSMS with wildcard prefix (e.g. '22.0')
+// Helper: Clear MEF component model cache for SSMS with wildcard prefix (e.g. '22.0').
+// SAFETY: Only clears ComponentModelCache (MEF composition cache).
+// NEVER touches privateregistry.bin, 1033/ CTM cache, or other IDE state.
 procedure ClearSSMSMefCaches(const VersionPrefix: String);
 var
   BasePath: String;
@@ -522,11 +523,7 @@ begin
         if (FindRec.Attributes and FILE_ATTRIBUTE_DIRECTORY) <> 0 then
         begin
           DelTree(BasePath + FindRec.Name + '\ComponentModelCache', True, True, True);
-          DelTree(BasePath + FindRec.Name + '\MEFCacheBackup', True, True, True);
-          DeleteFile(BasePath + FindRec.Name + '\privateregistry.bin');
-          DeleteFile(BasePath + FindRec.Name + '\privateregistry.bin.LOG1');
-          DeleteFile(BasePath + FindRec.Name + '\privateregistry.bin.LOG2');
-          Log('Cleared all caches for SSMS ' + FindRec.Name);
+          Log('Cleared ComponentModelCache for SSMS ' + FindRec.Name);
         end;
       until not FindNext(FindRec);
     finally
@@ -543,15 +540,7 @@ begin
         if (FindRec.Attributes and FILE_ATTRIBUTE_DIRECTORY) <> 0 then
         begin
           DelTree(BasePath + FindRec.Name + '\ComponentModelCache', True, True, True);
-          DelTree(BasePath + FindRec.Name + '\MEFCacheBackup', True, True, True);
-          // Delete privateregistry.bin + .LOG1/.LOG2 — caches VS package registration
-          // and can prevent updated/new extensions from loading after reinstall
-          DeleteFile(BasePath + FindRec.Name + '\privateregistry.bin');
-          DeleteFile(BasePath + FindRec.Name + '\privateregistry.bin.LOG1');
-          DeleteFile(BasePath + FindRec.Name + '\privateregistry.bin.LOG2');
-          // Delete CTM files — compiled command table cache
-          DelTree(BasePath + FindRec.Name + '\1033', True, True, False);
-          Log('Cleared all caches for SSMS ' + FindRec.Name);
+          Log('Cleared ComponentModelCache for SSMS ' + FindRec.Name);
         end;
       until not FindNext(FindRec);
     finally
@@ -661,7 +650,8 @@ var
 begin
   if CurUninstallStep = usPostUninstall then
   begin
-    // Clear MEF caches using proper directory enumeration
+    // Clear MEF ComponentModelCache so the IDE stops trying to load the removed extension.
+    // SAFETY: Only clears ComponentModelCache — never touches privateregistry.bin or other IDE state.
     ClearSSMSMefCaches('20.0');
     ClearSSMSMefCaches('21.0');
     ClearSSMSMefCaches('22.0');
@@ -732,18 +722,7 @@ begin
     end;
   end;
 
-  // Pre-install: clear ALL IDE caches unconditionally to ensure a clean slate.
-  // This prevents stale package registration, MEF composition, or command table
-  // data from hiding the extension or its menu after reinstall/upgrade.
-  if Result = '' then
-  begin
-    Log('PrepareToInstall: clearing all IDE caches before deployment...');
-    ClearSSMSMefCaches('20.0');
-    ClearSSMSMefCaches('21.0');
-    ClearSSMSMefCaches('22.0');
-    ClearVSMefCaches('16.0');
-    ClearVSMefCaches('17.0');
-    ClearVSMefCaches('18.0');
-    Log('PrepareToInstall: all IDE caches cleared.');
-  end;
+  // MEF cache clearing is done in ssPostInstall (after files are deployed),
+  // not here. Clearing before deployment is unnecessary and wasteful.
+  // SAFETY: We never touch privateregistry.bin, 1033/ CTM, or other IDE state.
 end;

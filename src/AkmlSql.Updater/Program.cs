@@ -32,12 +32,12 @@ namespace AkmlSql.Updater
                     return 1;
                 }
 
-                Log.Information("Update check started for v{Version}", Constants.Version);
+                Log.Information("Update check started for v{Version}", Constants.RuntimeVersion);
 
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
                 using var client = new HttpClient();
                 client.DefaultRequestHeaders.UserAgent.ParseAdd(
-                    $"AkmlSql.Updater/{Constants.Version}");
+                    $"AkmlSql.Updater/{Constants.RuntimeVersion}");
 
                 var json = await client.GetStringAsync(Constants.UpdateManifestUrl, cts.Token);
                 var manifest = JsonSerializer.Deserialize<UpdateManifest>(json, JsonOptions);
@@ -49,10 +49,10 @@ namespace AkmlSql.Updater
                     return 0;
                 }
 
-                if (IsNewerVersion(manifest.Version, Constants.Version))
+                if (IsNewerVersion(manifest.Version, Constants.RuntimeVersion))
                 {
                     Log.Information("Update available: v{Current} -> v{Latest}",
-                        Constants.Version, manifest.Version);
+                        Constants.RuntimeVersion, manifest.Version);
 
                     var result = new UpdateResult
                     {
@@ -81,7 +81,7 @@ namespace AkmlSql.Updater
                 else
                 {
                     Log.Information("No update available (current: v{Current}, latest: v{Latest})",
-                        Constants.Version, manifest.Version);
+                        Constants.RuntimeVersion, manifest.Version);
 
                     // Remove stale update result if present
                     if (File.Exists(Constants.UpdateResultFilePath))

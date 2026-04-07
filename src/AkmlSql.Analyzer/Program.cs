@@ -31,7 +31,7 @@ internal static class Program
 
         if (opts.Version)
         {
-            Console.WriteLine($"AkmlSql.Analyzer {Constants.Version}");
+            Console.WriteLine($"AkmlSql.Analyzer {Constants.RuntimeVersion}");
             return 0;
         }
 
@@ -88,7 +88,7 @@ internal static class Program
     private static void PrintHelp()
     {
         Console.WriteLine($"""
-            AkmlSql.Analyzer {Constants.Version} — Static SQL code analysis
+            AkmlSql.Analyzer {Constants.RuntimeVersion} — Static SQL code analysis
 
             Usage:
               AkmlSql.Analyzer.exe [options]

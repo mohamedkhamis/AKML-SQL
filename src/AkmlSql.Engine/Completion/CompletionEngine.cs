@@ -14,6 +14,13 @@ public class CompletionEngine
     private readonly AliasResolver _aliasResolver = new();
     private int _maxSuggestions = 50;
 
+    /// <summary>
+    /// Whether JoinProvider is allowed to suggest tables with auto-generated alias
+    /// and ON clause when in a JOIN context. Defaults to false so plain table names
+    /// are suggested unless the user explicitly enables JoinAssist in settings.
+    /// </summary>
+    public bool JoinAssistEnabled { get; set; } = false;
+
     public CompletionEngine(TsqlParserService parserService)
     {
         _parserService = parserService;
@@ -82,6 +89,12 @@ public class CompletionEngine
             var allItems = new List<CompletionItem>();
             foreach (var provider in _providers)
             {
+                // Skip JoinProvider entirely if JoinAssist is disabled in settings.
+                if (provider is JoinProvider && !JoinAssistEnabled)
+                {
+                    continue;
+                }
+
                 if (provider.CanHandle(context, cache))
                 {
                     var items = provider.GetCompletions(context, cache);

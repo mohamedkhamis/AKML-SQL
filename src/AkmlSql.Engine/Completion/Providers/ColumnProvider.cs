@@ -28,7 +28,22 @@ public class ColumnProvider : ICompletionProvider
             return false;
         }
 
-        return context.AvailableAliases.ContainsKey(context.DotPrefix);
+        // Check aliases first, then fall back to direct table name lookup in cache (#11)
+        if (context.AvailableAliases.ContainsKey(context.DotPrefix))
+            return true;
+
+        // Direct table name without alias: e.g., "SELECT Customers." without FROM alias
+        if (cache.FindObject("dbo", context.DotPrefix) != null)
+            return true;
+
+        // Try all schemas for schema-qualified or cross-schema direct references
+        foreach (var schema in cache.Schemas.Values)
+        {
+            if (cache.FindObject(schema.SchemaName, context.DotPrefix) != null)
+                return true;
+        }
+
+        return false;
     }
 
     public IEnumerable<CompletionItem> GetCompletions(CursorContext context, DatabaseCache? cache)
@@ -38,17 +53,33 @@ public class ColumnProvider : ICompletionProvider
             yield break;
         }
 
-        if (!context.AvailableAliases.TryGetValue(context.DotPrefix, out var fullTableName))
+        string schemaName;
+        string tableName;
+
+        if (context.AvailableAliases.TryGetValue(context.DotPrefix, out var fullTableName))
         {
-            yield break;
+            // Resolve via alias
+            var parts = fullTableName.Split('.');
+            schemaName = parts.Length >= 2 ? parts[0] : "dbo";
+            tableName = parts.Length >= 2 ? parts[1] : parts[0];
+        }
+        else
+        {
+            // Direct table name without alias (#11) — try dbo first, then all schemas
+            schemaName = "dbo";
+            tableName = context.DotPrefix;
         }
 
-        // Parse "schema.table" from the full name
-        var parts = fullTableName.Split('.');
-        var schemaName = parts.Length >= 2 ? parts[0] : "dbo";
-        var tableName = parts.Length >= 2 ? parts[1] : parts[0];
-
         var dbObject = cache.FindObject(schemaName, tableName);
+        // If not found in dbo, try all schemas
+        if (dbObject == null)
+        {
+            foreach (var schema in cache.Schemas.Values)
+            {
+                dbObject = cache.FindObject(schema.SchemaName, tableName);
+                if (dbObject != null) break;
+            }
+        }
         if (dbObject == null)
         {
             Log.Debug("ColumnProvider: table {Schema}.{Table} not found in cache", schemaName, tableName);

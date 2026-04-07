@@ -32,7 +32,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
             var versionLabel = new Label
             {
-                Text = $"Version {Constants.Version}",
+                Text = $"Version {Constants.RuntimeVersion}",
                 Location = new Point(20, 55),
                 AutoSize = true
             };
@@ -81,7 +81,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             copyDiagButton.Click += (_, _2) =>
             {
                 var diagnostics =
-                    $"{Constants.ProductName} v{Constants.Version}\n" +
+                    $"{Constants.ProductName} v{Constants.RuntimeVersion}\n" +
                     $"Build: {Constants.BuildDate}\n" +
                     $"Runtime: {RuntimeInformation.FrameworkDescription}\n" +
                     $"OS: {RuntimeInformation.OSDescription}\n" +

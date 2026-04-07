@@ -245,26 +245,44 @@ namespace AkmlSql.Shell.Shared.Editor.Toolbar
         }
 
         /// <summary>
-        /// Invokes a registered AKML SQL command by its command ID using the global OleMenuCommandService.
+        /// Invokes a registered AKML SQL command by its command ID.
+        /// Uses DTE.Commands to find the command by GUID+ID, then executes via its
+        /// canonical name. This works reliably in SSMS 22's custom menu system
+        /// (GlobalInvoke on OleMenuCommandService can silently fail).
         /// </summary>
         private static void InvokeVsCommand(int commandId, string commandName)
         {
             try
             {
+                var dte = Microsoft.VisualStudio.Shell.Package.GetGlobalService(
+                    typeof(EnvDTE.DTE)) as EnvDTE.DTE;
+                if (dte != null)
+                {
+                    var cmd = dte.Commands.Item(
+                        "{" + PackageGuids.AkmlSqlCmdSetString + "}", commandId);
+                    if (cmd != null && !string.IsNullOrEmpty(cmd.Name))
+                    {
+                        dte.ExecuteCommand(cmd.Name);
+                        Log.Debug("EditorToolbar: {Command} invoked via DTE.ExecuteCommand({Name})",
+                            commandName, cmd.Name);
+                        return;
+                    }
+                }
+
+                // Fallback: try GlobalInvoke if DTE path failed
                 var commandService = (Microsoft.VisualStudio.Shell.OleMenuCommandService?)
                     Microsoft.VisualStudio.Shell.Package.GetGlobalService(
                         typeof(System.ComponentModel.Design.IMenuCommandService));
-
                 if (commandService != null)
                 {
                     var cmdId = new System.ComponentModel.Design.CommandID(
                         PackageGuids.AkmlSqlCmdSet, commandId);
                     commandService.GlobalInvoke(cmdId);
-                    Log.Debug("EditorToolbar: {Command} invoked via GlobalInvoke", commandName);
+                    Log.Debug("EditorToolbar: {Command} invoked via GlobalInvoke fallback", commandName);
                 }
                 else
                 {
-                    Log.Warning("EditorToolbar: OleMenuCommandService not available for {Command}", commandName);
+                    Log.Warning("EditorToolbar: no command service available for {Command}", commandName);
                 }
             }
             catch (Exception ex)

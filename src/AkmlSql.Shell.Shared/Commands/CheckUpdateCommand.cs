@@ -74,7 +74,7 @@ namespace AkmlSql.Shell.Shared.Commands
                 }
 
                 MessageBox.Show(
-                    $"{Constants.ProductName} v{Constants.Version} is up to date.",
+                    $"{Constants.ProductName} v{Constants.RuntimeVersion} is up to date.",
                     Constants.ProductName,
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information);

@@ -598,7 +598,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
             AddGroupSeparator(panel);
             AddGroupHeader(panel, "About");
-            AddInfoRow(panel, "Version", Constants.Version + " (" + Constants.BuildDate + ")");
+            AddInfoRow(panel, "Version", Constants.RuntimeVersion + " (" + Constants.BuildDate + ")");
 
             return WrapInScrollViewer(panel);
         }
@@ -648,7 +648,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             _chkAutoAlias = AddToggle(panel, "Auto-generate table aliases",
                 "Suggest aliases when completing table names in FROM clauses");
             _chkJoinAssist = AddToggle(panel, "JOIN clause assistance",
-                "Suggest JOIN conditions based on foreign key relationships");
+                "After typing JOIN, suggest related tables with auto-generated alias and ON clause from foreign keys. When off, plain table names are suggested. Default: off.");
             _chkDisableNativeIs = AddToggle(panel, "Disable native SSMS IntelliSense",
                 "Recommended to avoid conflicts with AKML SQL IntelliSense");
 
@@ -1295,7 +1295,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
         /// <summary>
         /// Applies themed styling to a ComboBox so the dropdown popup, items,
-        /// hover highlight, and selected item all match the active theme.
+        /// hover highlight, selected item, and the toggle button all match the active theme.
+        /// Uses system color overrides (reliable with the default Chrome template) plus a
+        /// Loaded handler that walks the visual tree to restyle the toggle button background.
         /// </summary>
         private void StyleComboBox(ComboBox combo)
         {
@@ -1303,9 +1305,10 @@ namespace AkmlSql.Shell.Shared.Dialogs
             combo.Foreground = _theme.FgPrimary;
             combo.BorderBrush = _theme.ComboBorder;
 
+            // TextElement.Foreground propagates through the Chrome template's ContentPresenter
+            combo.SetValue(TextElement.ForegroundProperty, _theme.FgPrimary);
+
             // Override system colors used by the default ComboBox Chrome template.
-            // This is the ONLY reliable way to theme dropdown popups without
-            // rewriting the entire ControlTemplate.
             combo.Resources[SystemColors.WindowBrushKey] = _theme.Input;
             combo.Resources[SystemColors.WindowTextBrushKey] = _theme.FgPrimary;
             combo.Resources[SystemColors.HighlightBrushKey] = _theme.Selected;
@@ -1314,32 +1317,98 @@ namespace AkmlSql.Shell.Shared.Dialogs
             combo.Resources[SystemColors.ControlTextBrushKey] = _theme.FgPrimary;
             combo.Resources[SystemColors.InactiveSelectionHighlightBrushKey] = _theme.Selected;
             combo.Resources[SystemColors.InactiveSelectionHighlightTextBrushKey] = _theme.SelectedText;
+            // ComboBox dropdown border color
+            combo.Resources[SystemColors.ActiveBorderBrushKey] = _theme.ComboBorder;
+            combo.Resources[SystemColors.InactiveBorderBrushKey] = _theme.ComboBorder;
 
-            // The default Chrome template's ContentPresenter inherits TextElement.Foreground
-            // from its template parent (the toggle button), not from the ComboBox.Foreground
-            // property. Setting TextElement.Foreground as an attached property on the ComboBox
-            // ensures it propagates through the visual tree to the ContentPresenter, fixing
-            // the bad text color/shadow in dark mode.
-            combo.SetValue(TextElement.ForegroundProperty, _theme.FgPrimary);
+            // Walk the visual tree after layout to restyle the toggle button chrome
+            var theme = _theme;
+            combo.Loaded += (s, e) => ThemeComboBoxVisualTree((ComboBox)s!, theme);
 
+            // Item container style (dropdown rows)
             var itemStyle = new Style(typeof(ComboBoxItem));
             itemStyle.Setters.Add(new Setter(Control.BackgroundProperty, _theme.Input));
             itemStyle.Setters.Add(new Setter(Control.ForegroundProperty, _theme.FgPrimary));
             itemStyle.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0)));
             itemStyle.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(6, 4, 6, 4)));
+            itemStyle.Setters.Add(new Setter(TextElement.ForegroundProperty, _theme.FgPrimary));
 
             var hoverTrigger = new Trigger { Property = ComboBoxItem.IsHighlightedProperty, Value = true };
             hoverTrigger.Setters.Add(new Setter(Control.BackgroundProperty, _theme.Selected));
             hoverTrigger.Setters.Add(new Setter(Control.ForegroundProperty, _theme.SelectedText));
+            hoverTrigger.Setters.Add(new Setter(TextElement.ForegroundProperty, _theme.SelectedText));
             itemStyle.Triggers.Add(hoverTrigger);
 
             var selectedTrigger = new Trigger { Property = ComboBoxItem.IsSelectedProperty, Value = true };
             selectedTrigger.Setters.Add(new Setter(Control.BackgroundProperty, _theme.FgAccent));
             selectedTrigger.Setters.Add(new Setter(Control.ForegroundProperty,
                 Freeze(new SolidColorBrush(Colors.White))));
+            selectedTrigger.Setters.Add(new Setter(TextElement.ForegroundProperty,
+                Freeze(new SolidColorBrush(Colors.White))));
             itemStyle.Triggers.Add(selectedTrigger);
 
             combo.ItemContainerStyle = itemStyle;
+        }
+
+        /// <summary>
+        /// After the ComboBox template is applied, walk the visual tree to restyle the
+        /// Chrome toggle button and dropdown border that ignore standard properties.
+        /// </summary>
+        private static void ThemeComboBoxVisualTree(ComboBox combo, ThemeBrushSet theme)
+        {
+            try
+            {
+                // Find the ToggleButton inside the ComboBox template
+                var toggleButton = FindChild<ToggleButton>(combo);
+                if (toggleButton != null)
+                {
+                    toggleButton.Background = theme.Input;
+                    toggleButton.BorderBrush = theme.ComboBorder;
+                    toggleButton.Foreground = theme.FgPrimary;
+                    toggleButton.SetValue(TextElement.ForegroundProperty, theme.FgPrimary);
+
+                    // Override system colors inside the toggle button too
+                    toggleButton.Resources[SystemColors.ControlBrushKey] = theme.Input;
+                    toggleButton.Resources[SystemColors.ControlTextBrushKey] = theme.FgPrimary;
+                    toggleButton.Resources[SystemColors.ControlLightBrushKey] = theme.Input;
+                    toggleButton.Resources[SystemColors.ControlDarkBrushKey] = theme.ComboBorder;
+
+                    // Theme the arrow Path if present
+                    var arrow = FindChild<System.Windows.Shapes.Path>(toggleButton);
+                    if (arrow != null)
+                    {
+                        arrow.Fill = theme.FgSecondary;
+                    }
+                }
+
+                // Theme the dropdown popup border
+                var popup = FindChild<Popup>(combo);
+                if (popup?.Child is Border popupBorder)
+                {
+                    popupBorder.Background = theme.Input;
+                    popupBorder.BorderBrush = theme.ComboBorder;
+                }
+            }
+            catch
+            {
+                // Non-fatal: worst case dropdown keeps system colors
+            }
+        }
+
+        /// <summary>
+        /// Walks the visual tree depth-first to find the first child of type T.
+        /// </summary>
+        private static T? FindChild<T>(DependencyObject parent) where T : DependencyObject
+        {
+            int count = VisualTreeHelper.GetChildrenCount(parent);
+            for (int i = 0; i < count; i++)
+            {
+                var child = VisualTreeHelper.GetChild(parent, i);
+                if (child is T found) return found;
+                var result = FindChild<T>(child);
+                if (result != null) return result;
+            }
+            return null;
         }
 
         private TextBox AddTextInput(StackPanel panel, string label, string description,

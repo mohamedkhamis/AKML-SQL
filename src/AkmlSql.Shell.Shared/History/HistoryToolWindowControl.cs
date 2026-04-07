@@ -962,9 +962,10 @@ namespace AkmlSql.Shell.Shared.History
 
         private void OnListViewDoubleClick(object sender, MouseButtonEventArgs e)
         {
-            if (_viewModel.CopySqlCommand.CanExecute(null))
+            // Double-click opens the SQL in a new editor tab (not just copy)
+            if (_viewModel.OpenInNewTabCommand.CanExecute(null))
             {
-                _viewModel.CopySqlCommand.Execute(null);
+                _viewModel.OpenInNewTabCommand.Execute(null);
             }
         }
 
@@ -1599,9 +1600,10 @@ namespace AkmlSql.Shell.Shared.History
         }
 
         /// <summary>
-        /// Opens the given SQL text in a new editor tab via DTE.
+        /// Opens the given SQL text in a new editor tab via DTE,
+        /// and sets the connection to the original server/database if available.
         /// </summary>
-        private void OnOpenInNewTabRequested(string sqlText)
+        private void OnOpenInNewTabRequested(string sqlText, string? server, string? database)
         {
             try
             {
@@ -1624,6 +1626,46 @@ namespace AkmlSql.Shell.Shared.History
                     var editPoint = textDocument.StartPoint.CreateEditPoint();
                     editPoint.Insert(sqlText);
                     textDocument.Selection.StartOfDocument();
+                }
+
+                // Try to set the connection on the new query window via SSMS ScriptFactory
+                if (!string.IsNullOrEmpty(server))
+                {
+                    try
+                    {
+                        Serilog.Log.Debug("History: restoring connection to {Server}.{Database}", server, database);
+                        var sfType = Type.GetType(
+                            "Microsoft.SqlServer.Management.UI.VSIntegration.ScriptFactory, SqlWorkbench.Interfaces");
+                        if (sfType != null && activeDoc != null)
+                        {
+                            var sfProp = sfType.GetProperty("Instance",
+                                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+                            var scriptFactory = sfProp?.GetValue(null);
+                            if (scriptFactory != null)
+                            {
+                                // Try to get the current script and set its connection
+                                var getCurrentScript = sfType.GetMethod("GetCurrentScript");
+                                var currentScript = getCurrentScript?.Invoke(scriptFactory, null);
+                                if (currentScript != null)
+                                {
+                                    // Build a connection string and use SetConnectionInfo
+                                    var connStr = string.IsNullOrEmpty(database)
+                                        ? $"Data Source={server};Integrated Security=True;Trust Server Certificate=True"
+                                        : $"Data Source={server};Initial Catalog={database};Integrated Security=True;Trust Server Certificate=True";
+                                    var setConn = currentScript.GetType().GetMethod("SetConnectionInfo");
+                                    if (setConn != null)
+                                    {
+                                        setConn.Invoke(currentScript, new object[] { connStr });
+                                        Serilog.Log.Information("History: connection set to {Server}.{Database}", server, database);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception connEx)
+                    {
+                        Serilog.Log.Debug(connEx, "History: connection restore failed (non-fatal)");
+                    }
                 }
             }
             catch (Exception ex)

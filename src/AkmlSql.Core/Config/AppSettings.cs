@@ -147,8 +147,12 @@ namespace AkmlSql.Core.Config
         public bool ShowPkFk { get; set; } = true;
         /// <summary>Suggest automatic table aliases when completing table names. Default disabled.</summary>
         public bool AutoAlias { get; set; } = false;
-        /// <summary>Suggest JOIN conditions based on foreign key relationships.</summary>
-        public bool JoinAssist { get; set; } = true;
+        /// <summary>
+        /// Suggest JOIN target tables with auto-generated alias and ON clause based on
+        /// foreign key relationships when typing after JOIN. Default disabled — when
+        /// off, plain table names are suggested instead.
+        /// </summary>
+        public bool JoinAssist { get; set; } = false;
         /// <summary>Keyword casing applied to completions inserted into the editor.</summary>
         public KeywordCaseOption KeywordCase { get; set; } = KeywordCaseOption.Upper;
         /// <summary>Whether to disable native SSMS IntelliSense to avoid conflicts.</summary>

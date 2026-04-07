@@ -112,6 +112,9 @@ namespace AkmlSql.Ssms22
                 // Phase 9 US6 — AI Chat Panel
                 AiChatPanelCommand.Initialize(this, commandService);
 
+                // Phase 5 — Bulk Analysis
+                BulkAnalysisCommand.Initialize(this, commandService);
+
                 // Phase 10 — SQL Prompt Core Parity
                 SnippetManagerCommand.Initialize(this, commandService);
                 AkmlSql.Shell.Shared.Navigation.BookmarkCommands.Initialize(this, commandService);
@@ -144,6 +147,14 @@ namespace AkmlSql.Ssms22
                 TransactionMonitor.Initialize(this);
                 AiSettingsValidator.Initialize();
 
+                // SSMS 22 uses a custom menu bar (SSMSMnu.dll) that ignores the
+                // standard VSCT IDM_VS_MENU_BAR parent. Programmatically inject
+                // our top-level "AKML SQL" popup into DTE's MenuBar command bar.
+                EnsureTopLevelMenu(this);
+
+                // Add SQL History button to the Standard toolbar (beside New Query)
+                AddHistoryButtonToStandardToolbar();
+
                 Log.Information("AKML SQL package initialized successfully for SSMS 22");
             }
             catch (Exception ex)
@@ -162,6 +173,152 @@ namespace AkmlSql.Ssms22
                 {
                     // Swallow — we must never crash the IDE
                 }
+            }
+        }
+
+        /// <summary>
+        /// SSMS 22's custom menu bar (SSMSMnu.dll) ignores the standard VSCT
+        /// IDM_VS_MENU_BAR parent, so menus defined in the CTO are orphaned.
+        /// This method programmatically adds an "AKML SQL" popup to the DTE
+        /// MenuBar and places our registered commands into it.
+        /// </summary>
+        private static void EnsureTopLevelMenu(AsyncPackage package)
+        {
+            try
+            {
+                ThreadHelper.ThrowIfNotOnUIThread();
+                var dte = (EnvDTE.DTE)Microsoft.VisualStudio.Shell.Package.GetGlobalService(typeof(EnvDTE.DTE));
+                if (dte == null) return;
+
+                dynamic bars = dte.CommandBars;
+                if (bars == null) return;
+
+                dynamic menuBar = bars["Menu Bar"];
+                if (menuBar == null) return;
+
+                // Check if already added (idempotent on re-load).
+                // Strip '&' accelerator chars and trim whitespace to match the
+                // VSCT-rendered caption robustly.
+                foreach (dynamic ctrl in menuBar.Controls)
+                {
+                    var cap = ((string)ctrl.Caption).Replace("&", "").Trim();
+                    if (cap.Equals("AKML SQL", StringComparison.OrdinalIgnoreCase)) return;
+                }
+
+                // Insert before &Window (or at end)
+                int insertPos = (int)menuBar.Controls.Count;
+                foreach (dynamic ctrl in menuBar.Controls)
+                {
+                    string cap = ((string)ctrl.Caption).Replace("&", "");
+                    if (cap.StartsWith("Window"))
+                    {
+                        insertPos = (int)ctrl.Index;
+                        break;
+                    }
+                }
+
+                // msoControlPopup = 10
+                dynamic popup = menuBar.Controls.Add(10, Type.Missing, Type.Missing, insertPos, true);
+                popup.Caption = "AKML SQL";
+
+                // Add registered DTE commands to the popup using guid:id pairs.
+                // DTE.Commands wraps OleMenuCommands — clicking invokes our handlers.
+                var cmdSetGuid = PackageGuids.AkmlSqlCmdSetString;
+                var cmds = new (int id, string label)[]
+                {
+                    (CommandIds.CmdAbout, "About AKML SQL"),
+                    (CommandIds.CmdCheckUpdate, "Check for Updates"),
+                    (CommandIds.CmdOptions, "Options"),
+                    (CommandIds.CmdSendFeedback, "Send Feedback"),
+                    (CommandIds.CmdViewLogs, "View Logs"),
+                    (CommandIds.CmdFormatDocument, "Format Document"),
+                    (CommandIds.CmdFormatSelection, "Format Selection"),
+                    (CommandIds.CmdUnformat, "Unformat Document"),
+                    (CommandIds.CmdHistoryPanel, "SQL History"),
+                    (CommandIds.CmdRestoreClosedTab, "Restore Closed Tab"),
+                    (CommandIds.CmdCommandPalette, "Command Palette"),
+                    (CommandIds.CmdDocumentOutline, "Document Outline"),
+                    (CommandIds.CmdObjectSearch, "Object Search"),
+                };
+
+                dynamic popupBar = popup.CommandBar;
+                foreach (var (id, label) in cmds)
+                {
+                    try
+                    {
+                        var cmd = dte.Commands.Item("{" + cmdSetGuid + "}", id);
+                        if (cmd != null)
+                        {
+                            cmd.AddControl(popupBar, popupBar.Controls.Count + 1);
+                        }
+                    }
+                    catch
+                    {
+                        // Command not found in DTE — add a placeholder button
+                        try
+                        {
+                            dynamic btn = popupBar.Controls.Add(1, Type.Missing, Type.Missing, Type.Missing, true);
+                            btn.Caption = label;
+                            btn.Enabled = false;
+                        }
+                        catch { /* Swallow */ }
+                    }
+                }
+
+                popup.Visible = true;
+                Log.Information("AKML SQL top-level menu injected into SSMS 22 menu bar");
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Failed to create AKML SQL top-level menu (non-fatal)");
+            }
+        }
+
+        /// <summary>
+        /// Adds a "SQL History" button to the SSMS Standard toolbar (next to New Query).
+        /// Uses DTE.Commands to wire it to our registered CmdHistoryPanel command.
+        /// </summary>
+        private static void AddHistoryButtonToStandardToolbar()
+        {
+            try
+            {
+                ThreadHelper.ThrowIfNotOnUIThread();
+                var dte = (EnvDTE.DTE)Microsoft.VisualStudio.Shell.Package.GetGlobalService(typeof(EnvDTE.DTE));
+                if (dte == null) return;
+
+                dynamic bars = dte.CommandBars;
+                if (bars == null) return;
+
+                dynamic standardBar = null;
+                try { standardBar = bars["Standard"]; } catch { return; }
+                if (standardBar == null) return;
+
+                // Check if already added
+                foreach (dynamic ctrl in standardBar.Controls)
+                {
+                    if ((string)ctrl.Tag == "AkmlSql.HistoryToolbar") return;
+                }
+
+                // Find our History command and add it to the toolbar
+                try
+                {
+                    var cmd = dte.Commands.Item("{" + PackageGuids.AkmlSqlCmdSetString + "}", CommandIds.CmdHistoryPanel);
+                    if (cmd != null)
+                    {
+                        // Add after position 3 (typically after New Query, Open, Save)
+                        var ctrl = cmd.AddControl(standardBar, 4);
+                        ctrl.Tag = "AkmlSql.HistoryToolbar";
+                        Log.Information("SQL History button added to Standard toolbar");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Debug(ex, "Could not add History command to Standard toolbar");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "AddHistoryButtonToStandardToolbar failed (non-fatal)");
             }
         }
 

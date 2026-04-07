@@ -47,7 +47,7 @@ namespace AkmlSql.Core.Logging
                     outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
                 .CreateLogger();
 
-            Log.Information("AKML SQL {Version} logger initialized", Constants.Version);
+            Log.Information("AKML SQL {Version} logger initialized", Constants.RuntimeVersion);
         }
 
         public static void Shutdown()

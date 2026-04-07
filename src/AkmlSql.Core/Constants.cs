@@ -5,7 +5,20 @@ namespace AkmlSql.Core
     public static class Constants
     {
         public const string ProductName = "AKML SQL";
+
+        /// <summary>
+        /// Compile-time version string. Used only where a const is required
+        /// (e.g. <c>[InstalledProductRegistration]</c> attributes).
+        /// For runtime version display, use <see cref="AppVersion.Current"/> instead.
+        /// </summary>
         public const string Version = "1.0.0";
+
+        /// <summary>
+        /// Runtime version computed from git commit count + build timestamp.
+        /// Format: 1.{commitCount}.{MMddHHmm}  (e.g. "1.265.04051456")
+        /// </summary>
+        public static string RuntimeVersion => AppVersion.Current;
+
         public const string BuildDate = "2026-03-17";
         public const string FeedbackUrl = "https://github.com/AkmlSql/feedback";
         public const string UpdateManifestUrl = "https://updates.akmlsql.com/manifest.json";

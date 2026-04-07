@@ -102,6 +102,9 @@ namespace AkmlSql.Ssms20
                     // Phase 9 US6 — AI Chat Panel
                     AiChatPanelCommand.Initialize(this, commandService);
 
+                    // Phase 5 — Bulk Analysis
+                    BulkAnalysisCommand.Initialize(this, commandService);
+
                     // Phase 10 — SQL Prompt Core Parity
                     SnippetManagerCommand.Initialize(this, commandService);
                     AkmlSql.Shell.Shared.Navigation.BookmarkCommands.Initialize(this, commandService);

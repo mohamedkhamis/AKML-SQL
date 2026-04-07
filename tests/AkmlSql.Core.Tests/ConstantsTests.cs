@@ -10,9 +10,20 @@ namespace AkmlSql.Core.Tests
             Assert.Equal("AKML SQL", Constants.ProductName);
         }
 
-        [Fact] public void Version()
+        [Fact] public void Version_ConstIsSet()
         {
             Assert.Equal("1.0.0", Constants.Version);
+        }
+
+        [Fact] public void RuntimeVersion_IsNotEmpty()
+        {
+            Assert.False(string.IsNullOrEmpty(Constants.RuntimeVersion));
+            Assert.StartsWith("1.", Constants.RuntimeVersion);
+        }
+
+        [Fact] public void AppVersion_Current_MatchesRuntimeVersion()
+        {
+            Assert.Equal(Constants.RuntimeVersion, AppVersion.Current);
         }
 
         [Fact] public void BuildDate()

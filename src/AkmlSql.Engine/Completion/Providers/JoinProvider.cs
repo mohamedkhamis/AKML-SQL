@@ -15,9 +15,10 @@ public class JoinProvider : ICompletionProvider
 
     public bool CanHandle(CursorContext context, DatabaseCache? cache)
     {
-        // Activate when in FROM or JoinTable clause and there are already
-        // referenced tables (aliases) available for FK-based suggestions
-        if (context.ClauseType != ClauseType.From && context.ClauseType != ClauseType.JoinTable)
+        // Activate ONLY when in JoinTable clause (after a JOIN keyword) — never in plain FROM.
+        // In a plain FROM context the user is choosing the FIRST table; suggesting an
+        // FK-joined table here would insert "TableName alias ON ..." which is wrong.
+        if (context.ClauseType != ClauseType.JoinTable)
         {
             return false;
         }

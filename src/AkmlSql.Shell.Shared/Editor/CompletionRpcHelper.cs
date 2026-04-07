@@ -84,6 +84,12 @@ namespace AkmlSql.Shell.Shared.Editor
             });
         }
 
+        /// <summary>Updates cached completions for a session (called after fresh fetch).</summary>
+        public static void UpdateCache(string sessionId, CompletionItemModel[] models)
+        {
+            Cache[sessionId] = models;
+        }
+
         /// <summary>Clears cached completions for a session.</summary>
         public static void ClearCache(string sessionId)
         {

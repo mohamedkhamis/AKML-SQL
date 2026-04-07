@@ -17,6 +17,7 @@ public class ObjectProvider : ICompletionProvider
     [
         ClauseType.From,
         ClauseType.JoinTable,
+        ClauseType.UpdateTable,
         ClauseType.Exec,
         ClauseType.Create,
         ClauseType.Alter,
@@ -50,6 +51,10 @@ public class ObjectProvider : ICompletionProvider
         // Handle dot-qualified: schema.object or database.schema
         if (context.PrecedingDot && !string.IsNullOrEmpty(context.DotPrefix))
         {
+            // If DotPrefix is a known alias, let ColumnProvider handle it (#19)
+            if (context.AvailableAliases.ContainsKey(context.DotPrefix))
+                return false;
+
             // Check if DotPrefix is a known schema name
             if (cache.Schemas.ContainsKey(context.DotPrefix))
             {
@@ -170,7 +175,7 @@ public class ObjectProvider : ICompletionProvider
         return clauseType switch
         {
             ClauseType.Exec => ExecObjectTypes,
-            ClauseType.From or ClauseType.JoinTable or ClauseType.JoinOn or ClauseType.Delete => FromJoinObjectTypes,
+            ClauseType.From or ClauseType.JoinTable or ClauseType.JoinOn or ClauseType.Delete or ClauseType.UpdateTable => FromJoinObjectTypes,
             _ => null // null means all types allowed
         };
     }

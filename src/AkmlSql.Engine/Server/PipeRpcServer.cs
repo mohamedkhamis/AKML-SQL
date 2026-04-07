@@ -228,6 +228,11 @@ public class PipeRpcServer
                     var dbCache = session != null
                         ? _schemaCacheManager.GetCache(compReq.SessionId, session.DatabaseName)
                         : null;
+                    // Push current IntelliSense settings into the engine before each request
+                    // so toggles in the Settings dialog take effect immediately (cache is
+                    // invalidated on AnalysisSettingsChanged).
+                    _cachedSettings ??= Core.Config.ConfigManager.Load();
+                    _completionEngine.JoinAssistEnabled = _cachedSettings.IntelliSense.JoinAssist;
                     var compResp = _completionEngine.GetCompletions(documentText, compReq.CursorOffset, dbCache);
                     return Task.FromResult(CreateResponse(MessageTypes.CompletionResult, message.RequestId, compResp));
 

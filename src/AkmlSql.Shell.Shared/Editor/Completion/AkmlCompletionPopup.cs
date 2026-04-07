@@ -34,7 +34,11 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
 
         private const int MaxVisibleItems = 15;
         private const double ItemHeight = 22;
-        private const double PopupWidth = 380;
+        private const double DefaultPopupWidth = 380;
+        private const double MinPopupWidth = 280;
+        private const double MaxPopupWidth = 900;
+        private const double MinPopupHeight = 100;
+        private const double MaxPopupHeight = 800;
 
         // SQL Prompt dark theme colors
         private static readonly SolidColorBrush BgBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x25, 0x25, 0x26)));
@@ -44,6 +48,13 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         private static readonly SolidColorBrush SecondaryBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)));
         private static readonly SolidColorBrush FooterBg = Freeze(new SolidColorBrush(Color.FromRgb(0x1E, 0x1E, 0x1E)));
         private static readonly SolidColorBrush TransparentBrush = Freeze(new SolidColorBrush(Colors.Transparent));
+
+        // Resize state
+        private bool _isResizing;
+        private Point _resizeStart;
+        private double _resizeStartWidth;
+        private double _resizeStartHeight;
+        private readonly Border _resizeGrip;
 
         public AkmlCompletionPopup()
         {
@@ -57,7 +68,6 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 BorderThickness = new Thickness(0),
                 Padding = new Thickness(0),
                 MaxHeight = MaxVisibleItems * ItemHeight,
-                Width = PopupWidth,
                 Focusable = false,
                 SelectionMode = SelectionMode.Single
             };
@@ -75,18 +85,52 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 Visibility = Visibility.Collapsed
             };
 
-            // Footer
+            // Footer with resize grip
+            var footerGrid = new Grid();
+            footerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            footerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
             _footer = new TextBlock
             {
                 Foreground = SecondaryBrush,
                 FontSize = 11,
                 Padding = new Thickness(8, 3, 8, 3),
-                Background = FooterBg
+                Background = FooterBg,
+                VerticalAlignment = VerticalAlignment.Center
             };
+            Grid.SetColumn(_footer, 0);
+
+            // Resize grip: triangle in bottom-right corner
+            _resizeGrip = new Border
+            {
+                Width = 14,
+                Height = 14,
+                Cursor = Cursors.SizeNWSE,
+                Background = Brushes.Transparent,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Bottom,
+                Child = new TextBlock
+                {
+                    Text = "\u25E2", // ◢ triangle
+                    Foreground = SecondaryBrush,
+                    FontSize = 10,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center
+                }
+            };
+            Grid.SetColumn(_resizeGrip, 1);
+
+            _resizeGrip.MouseLeftButtonDown += OnResizeGripMouseDown;
+            _resizeGrip.MouseMove += OnResizeGripMouseMove;
+            _resizeGrip.MouseLeftButtonUp += OnResizeGripMouseUp;
+
+            footerGrid.Children.Add(_footer);
+            footerGrid.Children.Add(_resizeGrip);
+            footerGrid.Background = FooterBg;
 
             _root.Children.Add(_loadingText);
             _root.Children.Add(_listBox);
-            _root.Children.Add(_footer);
+            _root.Children.Add(footerGrid);
 
             // Border styling
             Background = BgBrush;
@@ -101,7 +145,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 Color = Colors.Black
             };
             Child = _root;
-            Width = PopupWidth;
+            Width = DefaultPopupWidth;
             Focusable = false;
         }
 
@@ -316,6 +360,43 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             style.Triggers.Add(hoverTrigger);
 
             return style;
+        }
+
+        // ─── Resize Grip Handlers ───────────────────────────────────────
+
+        private void OnResizeGripMouseDown(object sender, MouseButtonEventArgs e)
+        {
+            _isResizing = true;
+            _resizeStart = _resizeGrip.PointToScreen(e.GetPosition(_resizeGrip));
+            _resizeStartWidth = ActualWidth;
+            _resizeStartHeight = _listBox.MaxHeight;
+            _resizeGrip.CaptureMouse();
+            e.Handled = true;
+        }
+
+        private void OnResizeGripMouseMove(object sender, MouseEventArgs e)
+        {
+            if (!_isResizing) return;
+
+            var currentPos = _resizeGrip.PointToScreen(e.GetPosition(_resizeGrip));
+            var deltaX = currentPos.X - _resizeStart.X;
+            var deltaY = currentPos.Y - _resizeStart.Y;
+
+            var newWidth = Math.Max(MinPopupWidth, Math.Min(MaxPopupWidth, _resizeStartWidth + deltaX));
+            Width = newWidth;
+
+            var newListHeight = Math.Max(MinPopupHeight, Math.Min(MaxPopupHeight, _resizeStartHeight + deltaY));
+            _listBox.MaxHeight = newListHeight;
+
+            e.Handled = true;
+        }
+
+        private void OnResizeGripMouseUp(object sender, MouseButtonEventArgs e)
+        {
+            if (!_isResizing) return;
+            _isResizing = false;
+            _resizeGrip.ReleaseMouseCapture();
+            e.Handled = true;
         }
 
         private static SolidColorBrush Freeze(SolidColorBrush brush)

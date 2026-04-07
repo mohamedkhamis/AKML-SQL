@@ -261,8 +261,9 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 }
                 top = Math.Max(0, top);
 
-                // Position to the right of the completion popup (380px wide + 2px gap)
-                double left = popupLeft + 382;
+                // Position to the right of the completion popup (actual width + 2px gap)
+                double completionWidth = _popupContent.ActualWidth > 0 ? _popupContent.ActualWidth : 380;
+                double left = popupLeft + completionWidth + 2;
 
                 // If it would exceed the viewport, place it to the left of the popup
                 if (left + popupSize.Width > _textView.ViewportWidth)

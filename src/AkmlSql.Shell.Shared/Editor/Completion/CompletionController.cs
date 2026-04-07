@@ -158,11 +158,13 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                             }
 
                             // Check for snippet abbreviation at cursor (e.g., "ssf" + Tab → expand snippet)
+                            // Only attempt expansion if the word matches a known snippet shortcode
                             var wordAtCaret = GetWordAtCaret();
-                            if (!string.IsNullOrEmpty(wordAtCaret) && wordAtCaret.Length >= 2)
+                            if (!string.IsNullOrEmpty(wordAtCaret) && wordAtCaret.Length >= 2
+                                && IsKnownSnippetShortcode(wordAtCaret))
                             {
-                                if (TryExpandSnippet(wordAtCaret))
-                                    return VSConstants.S_OK;
+                                TryExpandSnippet(wordAtCaret);
+                                return VSConstants.S_OK;
                             }
                         }
                         break;
@@ -284,7 +286,9 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             }
             else if (c == ' ' && _adornment.Popup.IsOpen)
             {
-                // Space as insertion key (SQL Prompt style): commit if enabled in settings
+                // Space as insertion key (SQL Prompt style): commit if enabled in settings.
+                // VS inserts the space BEFORE HandleTypedChar, so the caret is after the space.
+                // We must compute the replacement span from before the space to cover the partial text.
                 try
                 {
                     var settings = AkmlSql.Core.Config.ConfigManager.Load();
@@ -293,7 +297,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                         var item = _adornment.Popup.GetSelectedItem();
                         if (item != null)
                         {
-                            CommitItem(item);
+                            CommitItemFromSpaceKey(item);
                             return; // Space is already inserted by VS before HandleTypedChar
                         }
                     }
@@ -500,6 +504,9 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
 
                             var models = modelList.ToArray();
 
+                            // Populate cache for instant show on next trigger (#10)
+                            CompletionRpcHelper.UpdateCache(_sessionId, models);
+
                             // Update UI on dispatcher thread
                             _textView.VisualElement.Dispatcher.Invoke(() =>
                             {
@@ -576,9 +583,11 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
 
                     case 4: // Snippet — expand via engine
                     {
-                        _textView.TextBuffer.Replace(span, ""); // Remove abbreviation
+                        // Capture position before deleting abbreviation (fix #3: race condition)
+                        int snippetInsertPos = start;
+                        int snippetReplaceLen = span.Length;
                         DismissPopup();
-                        TryExpandSnippet(item.InsertText);
+                        TryExpandSnippetAtPosition(item.InsertText, snippetInsertPos, snippetReplaceLen);
                         return;
                     }
 
@@ -701,15 +710,131 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                     }
                 });
 
-                // Return true to swallow Tab — the expansion happens async
-                // If the snippet doesn't exist, the engine returns Success=false and nothing happens
-                // The Tab key is already consumed; worst case is a no-op
                 return true;
             }
             catch (Exception ex)
             {
                 Log.Debug(ex, "Snippet expansion failed");
                 return false;
+            }
+        }
+
+        /// <summary>
+        /// Expand a snippet at a known position (used when committing from popup).
+        /// The position is captured at commit time to avoid race conditions (#3).
+        /// </summary>
+        private void TryExpandSnippetAtPosition(string abbreviation, int insertPos, int replaceLen)
+        {
+            try
+            {
+                var client = Ipc.EngineLifecycle.Manager?.Client;
+                if (client == null || !client.IsConnected) return;
+
+                var request = new AkmlSql.Core.Ipc.Messages.SnippetExpandRequest
+                {
+                    SessionId = _sessionId,
+                    Shortcode = abbreviation,
+                    CursorOffset = insertPos + replaceLen,
+                    FormatOnExpand = true
+                };
+
+                System.Threading.Tasks.Task.Run(async () =>
+                {
+                    try
+                    {
+                        var response = await client.SendRequestAsync<
+                            AkmlSql.Core.Ipc.Messages.SnippetExpandResponse,
+                            AkmlSql.Core.Ipc.Messages.SnippetExpandRequest>(
+                            AkmlSql.Core.Ipc.MessageTypes.SnippetExpand, request, timeoutMs: 3000);
+
+                        if (response?.Success == true && !string.IsNullOrEmpty(response.ExpandedText))
+                        {
+                            _textView.VisualElement.Dispatcher.Invoke(() =>
+                            {
+                                try
+                                {
+                                    var currentSnapshot = _textView.TextBuffer.CurrentSnapshot;
+                                    if (insertPos + replaceLen <= currentSnapshot.Length)
+                                    {
+                                        _textView.TextBuffer.Replace(
+                                            new Span(insertPos, replaceLen),
+                                            response.ExpandedText);
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    Log.Debug(ex, "Snippet expansion: failed to insert at position {Pos}", insertPos);
+                                }
+                            });
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Debug(ex, "Snippet expansion RPC failed for '{Abbreviation}'", abbreviation);
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "Snippet expansion at position failed");
+            }
+        }
+
+        /// <summary>
+        /// Known built-in snippet shortcodes. Tab only attempts expansion for these.
+        /// Prevents Tab key from being swallowed for non-snippet words (#2).
+        /// </summary>
+        private static readonly System.Collections.Generic.HashSet<string> KnownSnippetShortcodes =
+            new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "ssf", "sel", "ins", "upd", "del", "cte"
+            };
+
+        private static bool IsKnownSnippetShortcode(string word)
+        {
+            return KnownSnippetShortcodes.Contains(word);
+        }
+
+        /// <summary>
+        /// Space-key commit: the space was already inserted by VS, so caret is AFTER the space.
+        /// We must scan backwards past the space to find the partial text to replace (#5).
+        /// </summary>
+        private void CommitItemFromSpaceKey(CompletionItemModel item)
+        {
+            try
+            {
+                var snapshot = _textView.TextBuffer.CurrentSnapshot;
+                var caretPos = _textView.Caret.Position.BufferPosition.Position;
+
+                // Caret is after the space. Walk back past the space to find the partial text.
+                int beforeSpace = caretPos - 1; // position of the space
+                if (beforeSpace < 0 || snapshot[beforeSpace] != ' ')
+                {
+                    // Unexpected state — fall back to normal commit
+                    CommitItem(item);
+                    return;
+                }
+
+                // Find word start before the space
+                int start = beforeSpace;
+                while (start > 0 && IsIdentifierChar(snapshot[start - 1]))
+                    start--;
+
+                // Replace: partial text + space → insertText + space
+                var span = new Span(start, beforeSpace - start); // exclude the space itself
+                _textView.TextBuffer.Replace(span, item.InsertText);
+                DismissPopup();
+
+                // Auto-trigger for keywords that expect objects (FROM, JOIN, etc.)
+                if (item.ObjectType == 3 && IsObjectExpectingKeyword(item.InsertText))
+                {
+                    _expectsObjects = true;
+                    TriggerCompletion();
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Space-commit failed");
             }
         }
 
@@ -786,11 +911,8 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             {
                 case "FROM":
                 case "JOIN":
-                case "INNER":
-                case "LEFT":
-                case "RIGHT":
-                case "CROSS":
-                case "FULL":
+                // Note: INNER, LEFT, RIGHT, CROSS, FULL are join qualifiers that expect
+                // the JOIN keyword next, not table names. Only trigger after full "JOIN".
                 case "INTO":
                 case "UPDATE":
                 case "TABLE":

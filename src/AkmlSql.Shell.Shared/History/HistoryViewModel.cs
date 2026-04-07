@@ -46,9 +46,9 @@ namespace AkmlSql.Shell.Shared.History
 
         /// <summary>
         /// Raised when an "Open in New Tab" action completes with the full SQL text.
-        /// The event handler receives the SQL text to open.
+        /// The event handler receives the SQL text, server, and database to open.
         /// </summary>
-        internal event Action<string>? OpenInNewTabRequested;
+        internal event Action<string, string?, string?>? OpenInNewTabRequested;
 
         /// <summary>
         /// Raised when a "Re-execute" action completes with the full SQL text.
@@ -498,10 +498,11 @@ namespace AkmlSql.Shell.Shared.History
             {
                 if (SelectedEntry == null) return;
 
-                var fullSql = await GetFullSqlAsync(SelectedEntry.Id);
+                var entry = SelectedEntry;
+                var fullSql = await GetFullSqlAsync(entry.Id);
                 if (fullSql != null)
                 {
-                    OpenInNewTabRequested?.Invoke(fullSql);
+                    OpenInNewTabRequested?.Invoke(fullSql, entry.Server, entry.Database);
                 }
             }
             catch (Exception ex)

@@ -48,7 +48,19 @@ public static class FuzzyMatcher
         int filterIdx = 0;
         for (int i = 0; i < text.Length && filterIdx < filter.Length; i++)
         {
-            if (i == 0 || char.IsUpper(text[i]) || text[i] == '_')
+            // Underscore is a boundary marker — compare the character AFTER it (#18)
+            if (text[i] == '_')
+            {
+                if (i + 1 < text.Length)
+                {
+                    i++; // skip underscore, check next char
+                    if (char.ToUpperInvariant(text[i]) == char.ToUpperInvariant(filter[filterIdx]))
+                        filterIdx++;
+                }
+                continue;
+            }
+
+            if (i == 0 || char.IsUpper(text[i]))
             {
                 if (char.ToUpperInvariant(text[i]) == char.ToUpperInvariant(filter[filterIdx]))
                 {
