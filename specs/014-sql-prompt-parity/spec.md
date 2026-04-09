@@ -7,19 +7,23 @@
 
 ## Summary
 
-AKML SQL already delivers most of Red Gate SQL Prompt's core productivity features: IntelliSense, a seven-stage formatting pipeline, 120+ code-analysis rules, snippet expansion, SQL history, refactoring, and AI assistance. However, a structured review of the SQL Prompt 11.3 documentation (all 20 top-level sections, every sub-page) surfaced a concrete list of capabilities that AKML SQL either does not have or has only partially implemented. This feature specification covers every one of those gaps so SQL authors working in SSMS 20/21/22 and Visual Studio 2019/2022/2026 with AKML SQL can accomplish every task SQL Prompt users can accomplish, without having to fall back to SQL Prompt or to copy-paste workarounds.
+AKML SQL already delivers most of Red Gate SQL Prompt's core productivity features: IntelliSense, a seven-stage formatting pipeline, 120+ code-analysis rules, snippet expansion, SQL history, refactoring, and AI assistance. However, two structured reviews of the SQL Prompt 11.3 documentation surfaced concrete capabilities AKML SQL either does not have or has only partially implemented. The first review (12 user stories below) covered the core gaps. A second crawl on 2026-04-09 (User Stories 13–20) added the remaining items the first pass missed, primarily around script navigation/outline, object discovery, smart rename, result-grid productivity, AI explain/index analysis, code-analysis quick-fixes, and completion polish.
 
-The gaps, grouped by workflow, are:
+The combined gap inventory, grouped by workflow:
 
-1. **Completion UX:** column picker, wildcard-to-column expansion on `*` + Tab, a two-tab object definition box (Summary + Script), richer object tooltips with dependency information.
-2. **Refactoring reach:** full `Ctrl+B` chord family (Apply Casing, Qualify Object Names, Expand Wildcards, Insert Semicolons, Add/Remove Brackets, Inline Procedure, Encapsulate as Procedure), plus database-wide Smart Rename and Split Table.
-3. **Formatting ergonomics:** inline `-- formatting off / on` marker blocks in the currently-active style, on-demand formatting-errors panel, per-text-selection Disable Formatting action.
-4. **Safety:** pre-execution warning dialog for `DELETE` / `UPDATE` without `WHERE`, for the same pattern inside `INNER JOIN`, and for procedure/trigger creation that contains those patterns.
-5. **Session productivity:** a unified Command Palette that filters across AKML SQL commands, SSMS/VS built-in commands, AKML SQL options and (in SSMS) database objects in the active connection.
-6. **Tab management:** environment-based tab coloring with gradients, color inheritance from Registered Server Groups / Central Management Servers, and a single options surface to edit the environment palette.
-7. **Analysis discoverability:** a dockable "All Issues" window for the current script with grouping, CSV export, and click-to-navigate behavior.
-8. **AI feature shortcuts:** dedicated keyboard bindings for open-panel, fix-selection, optimize-selection, and manual ghost-text trigger — so users never need to use the mouse for AI workflows.
-9. **Dual-instance awareness:** completions must use the exact connection of the query window that spawned them, never leaking objects from a different window's server (follow-through on the Apr 9 diagnosis that the issue was caption mis-attribution).
+1. **Completion UX:** column picker, wildcard-to-column expansion on `*` + Tab, two-tab object definition box (Summary + Script), object tooltips with dependency information, suggestion-list polish (toggle on/off, refresh cache, custom commit keys, category filter, encrypted-object decryption, MS_Description tooltips, parameter highlighting, temp-table IntelliSense, customizable ALTER/INSERT templates).
+2. **Refactoring reach:** full `Ctrl+B` chord family, database-wide Smart Rename with dependency preview, Split Table, Find Invalid Objects, Find Unused Variables and Parameters, Summarize Script, Refactor INSERT into UPDATE.
+3. **Navigation:** Script Object as ALTER (`F12`), Select in Object Explorer (`Ctrl+F12`), Browse Open Tabs (`Ctrl+Q`).
+4. **Execution shortcuts:** Execute Current Batch (`Alt+Shift+F5`), Execute To Cursor (`Ctrl+Shift+F5`).
+5. **Formatting ergonomics:** inline `-- formatting off / on` marker blocks, per-text-selection Disable Formatting action.
+6. **Safety:** pre-execution warning dialog for `DELETE` / `UPDATE` without `WHERE`, for the same pattern inside `INNER JOIN`, and for procedure/trigger creation that contains those patterns.
+7. **Session productivity:** a unified Command Palette that filters across AKML SQL commands, SSMS/VS built-in commands, AKML SQL options and (in SSMS) database objects in the active connection.
+8. **Tab management:** environment-based tab coloring with gradients, color inheritance from Registered Server Groups, options surface to edit the environment palette.
+9. **Analysis discoverability:** a dockable "All Issues" window plus lightbulb auto-fix actions for individual rules and an Issue Details popup with rule/problem/remediation text.
+10. **AI feature reach:** keyboard bindings for open-panel/fix-selection/optimize-selection/manual ghost-text trigger; Explain SQL; Query Index Analysis with ML-based recommendations; auto syntax-error fix popup after failed execution; comment-to-SQL; AI panel history/follow-up suggestions; editor-selection icon.
+11. **Result-grid productivity:** Copy as IN Clause, Script as INSERT, Open in Excel with full-precision preservation.
+12. **Dual-instance awareness:** completions must use the exact connection of the query window that spawned them, never leaking objects from a different window's server.
+13. **Discoverability:** F1 contextual help linking from any AKML SQL UI surface to the matching documentation page.
 
 This feature does **not** re-scope existing capabilities that already work; it only closes the measurable gaps listed above. Each gap is expressed as an independently shippable user story so the team can deliver incremental value with every milestone.
 
@@ -248,6 +252,183 @@ Every feature added above must be toggleable and discoverable from the existing 
 
 ---
 
+### User Story 13 — Script navigation chords: Summarize, Script-as-ALTER, Find Unused, Open in Object Explorer (Priority: P2)
+
+When working with a long script or hovering over an unfamiliar object reference, SQL Prompt gives keyboard-only authors four navigation moves AKML SQL today does not have: a hierarchical **Summarize Script** outline (`Ctrl+B, Ctrl+S`); **Script Object as ALTER** for the object under the caret (`F12`); **Select in Object Explorer** to jump the OE tree to that object (`Ctrl+F12`); and **Find Unused Variables and Parameters** within the active script (`Ctrl+B, Ctrl+F`). Each one removes a several-step menu dive.
+
+**Why this priority**: every senior SQL author uses these dozens of times per day in SQL Prompt. They are pure productivity wins with low engine surface — most of the underlying queries already exist in `SchemaMetadataService` and the parser.
+
+**Independent Test**: Open a 500-line script with multiple stored-procedure definitions. Press `Ctrl+B, Ctrl+S` — verify a hierarchical outline appears showing each statement type and its line range. Click an entry — verify the editor jumps to that line. Place the caret on a `dbo.MyProc` reference and press `F12` — verify a new query window opens with that procedure scripted as an `ALTER`. Press `Ctrl+F12` on the same identifier — verify Object Explorer expands to that node and selects it. Type a script with an unused `@p2` variable, press `Ctrl+B, Ctrl+F` — verify a panel lists `@p2` with line/column.
+
+**Acceptance Scenarios**:
+
+1. **Given** any script with multiple statements, **When** the user presses `Ctrl+B, Ctrl+S`, **Then** the **Summarize Script** dialog appears showing each top-level statement (CREATE/ALTER/SELECT/INSERT/UPDATE/DELETE/EXEC/USE), grouped and indented, with line numbers.
+2. **Given** the Summarize dialog is open, **When** the user clicks an entry, **Then** the editor scrolls to and highlights the matching line.
+3. **Given** the caret is on an object reference like `schema.Object`, **When** the user presses `F12`, **Then** a new query window opens containing the `ALTER` script for that object on the active connection.
+4. **Given** the same caret position, **When** the user presses `Ctrl+F12`, **Then** Object Explorer expands to and selects the node for that object.
+5. **Given** a script containing `DECLARE @unused INT;` that is never read, **When** the user presses `Ctrl+B, Ctrl+F`, **Then** an Unused Variables panel lists `@unused` with the line and column.
+6. **Given** the same script also contains a stored procedure with an unused parameter, **When** the analysis runs, **Then** the parameter is also reported.
+7. **Given** the user has no active connection, **When** they press `F12`, **Then** a status-bar message indicates a connection is required and no error dialog appears.
+
+---
+
+### User Story 14 — Find Invalid Objects across the database (Priority: P2)
+
+After a schema migration or when adopting an unfamiliar database, the first question is "what is broken?". SQL Prompt's **Find Invalid Objects** scans every object in the connected database for broken references (missing tables, dropped columns, renamed schemas, deleted procedures cited in synonyms) and presents a dockable list. AKML SQL has nothing comparable today.
+
+**Why this priority**: it pays for itself the first time it runs. Migrations routinely leave behind dozens of invalid views and procedures and there is no cheap way to find them all without writing a multi-statement metadata query.
+
+**Independent Test**: Connect to a database with at least 3 known invalid objects (a view referencing a dropped column, a procedure referencing a missing table, a synonym pointing nowhere). Right-click the database in Object Explorer → **Find Invalid Objects**. Verify a dockable window lists all three with object name, schema, type, error message, and the offending line number from the original definition. Select one row, click **Script as ALTER**, and verify the matching `ALTER` script opens in a new query window.
+
+**Acceptance Scenarios**:
+
+1. **Given** a database with broken-reference objects, **When** the user runs Find Invalid Objects, **Then** a dockable tool window lists each invalid object with name, schema, type, error message, and line number.
+2. **Given** the list is shown, **When** the user double-clicks a row, **Then** Object Explorer jumps to that object and the error message is shown in the status bar.
+3. **Given** the list is shown, **When** the user clicks **Script as ALTER**, **Then** a new query window opens with the `ALTER` script for that object.
+4. **Given** the user multi-selects rows and clicks **Script as ALTER**, **Then** all selected scripts are concatenated into one new query window.
+5. **Given** a database with no invalid objects, **When** the scan completes, **Then** the window shows "No invalid objects found" and a refresh button.
+6. **Given** the user lacks the permissions to read object metadata, **When** the scan runs, **Then** the window reports the permission error and lists only the objects it could verify.
+
+---
+
+### User Story 15 — Smart Rename with dependency preview (Priority: P3)
+
+SQL Prompt's **Smart Rename** scans the entire connected database for every reference to a target table/column/procedure/parameter, generates a single rename script with `sp_rename` plus dependent-object updates, shows the user a preview dialog (Actions / Warnings / Dependencies tabs), and only applies the script after explicit confirmation. AKML SQL today only renames within the current document.
+
+**Why this priority**: it is the single most-feared refactoring without it, because any DB-wide rename otherwise requires manual grep across hundreds of object definitions. The engine already has the schema metadata to do it.
+
+**Independent Test**: In a test database, pick a table column referenced by 3 views, 2 procedures, and 1 trigger. Press `F2` on the column. Verify a dialog appears with Actions / Warnings / Dependencies tabs showing the count of dependent objects, the generated script, and any rename warnings (e.g. extended-property breakage). Click **Apply** — verify the column is renamed and all 6 dependent objects still parse cleanly.
+
+**Acceptance Scenarios**:
+
+1. **Given** the caret is on an identifier the user wants to rename, **When** they press `F2`, **Then** a Smart Rename dialog appears with the current name and a new-name field.
+2. **Given** the new name is typed, **When** the user clicks **Preview**, **Then** the dialog shows Actions / Warnings / Dependencies tabs listing every dependent object with its count and updated definition.
+3. **Given** there is a name collision in the target schema, **When** the preview runs, **Then** the Warnings tab lists the collision and the **Apply** button is disabled until the user changes the name.
+4. **Given** the rename involves an extended property or permission, **When** the script runs, **Then** the property and permission are preserved on the renamed object.
+5. **Given** any step of the rename fails (transient connection drop, permission error), **When** the failure is detected, **Then** the rename is rolled back and the original object is unchanged.
+6. **Given** the same rename can also be invoked from Object Explorer right-click on the target node, **When** invoked that way, **Then** the same dialog appears.
+
+---
+
+### User Story 16 — Result-grid productivity: Copy as IN Clause, Script as INSERT, Open in Excel (Priority: P3)
+
+After running a query, SQL Prompt lets users right-click the result grid and pick **Copy as IN Clause** (selected rows → `('val1','val2',…)` for the next query), **Script as INSERT** (selected rows → `INSERT INTO X (cols) VALUES …`), or **Open in Excel** (with full numeric precision preserved beyond Excel's default 15-digit truncation). AKML SQL has none of these today.
+
+**Why this priority**: removes the most common copy-paste-and-edit dance in SQL day-to-day work. The Open in Excel precision fix is a niche but high-impact win for finance teams.
+
+**Independent Test**: Run `SELECT TOP 10 Id FROM Customers`. Right-click the result grid → **Copy as IN Clause**. Paste into a new query — verify the clipboard contains `(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)`. Right-click again → **Script as INSERT** — verify the clipboard contains a fully-formed `INSERT INTO Customers (Id) VALUES (1), (2), …` statement. Right-click → **Open in Excel** with a column containing `12345678901234567890.123` — verify the value in Excel is the full number, not the 15-digit truncation Excel does by default.
+
+**Acceptance Scenarios**:
+
+1. **Given** rows selected in a result grid, **When** the user picks **Copy as IN Clause**, **Then** the clipboard contains the values comma-separated, properly quoted by data type, wrapped in parentheses.
+2. **Given** rows selected, **When** the user picks **Script as INSERT**, **Then** the clipboard contains a `INSERT INTO <table> (<cols>) VALUES (...), (...), ...` statement that round-trips.
+3. **Given** the result grid contains numeric columns with > 15 significant digits, **When** the user picks **Open in Excel**, **Then** the cells in Excel contain the full original precision.
+4. **Given** no rows are selected, **When** the user picks any of the three actions, **Then** they operate on all visible rows.
+5. **Given** the result grid contains binary or geography/geometry columns, **When** **Script as INSERT** runs, **Then** the binary values are emitted as `0x...` literals and a warning is shown for unsupported types.
+
+---
+
+### User Story 17 — Code Analysis lightbulb quick-fixes and Issue Details popup (Priority: P2)
+
+AKML SQL today shows squiggles for analysis violations but does not offer one-click fixes. SQL Prompt shows a **lightbulb icon** next to each violation (orange for fixable, blue for advisory) and an **Issue Details** popup when the user holds `Ctrl` over the squiggle, with the rule id, the problem text, and a remediation paragraph plus an **Apply Fix** button for the ~27 rules that have a known mechanical fix.
+
+**Why this priority**: it converts the existing 120+ analysis rules from a passive nag into an active assistant. The auto-fix logic for many rules already exists in `RefactoringEngine`; the gap is wiring it to the squiggle UI.
+
+**Independent Test**: Type a query that triggers a known auto-fixable rule (e.g. `BP002` deprecated `!=` operator). Verify an orange lightbulb appears in the gutter on that line. Hover the squiggle while holding `Ctrl` — verify a popup shows the rule id, problem text, remediation, and an **Apply Fix** button. Click the button — verify the `!=` is replaced by `<>`. Repeat for an advisory-only rule and verify the lightbulb is blue and no Apply button is shown.
+
+**Acceptance Scenarios**:
+
+1. **Given** a script triggers an auto-fixable analysis rule, **When** the squiggle is rendered, **Then** an orange lightbulb appears in the gutter on that line.
+2. **Given** the squiggle is for an advisory-only rule, **When** rendered, **Then** the lightbulb is blue.
+3. **Given** the user holds `Ctrl` and hovers the squiggle, **When** the popup appears, **Then** it contains the rule id, severity, the problem statement, and a remediation paragraph.
+4. **Given** the popup is for an auto-fixable rule, **When** the user clicks **Apply Fix**, **Then** the offending text is replaced and the squiggle disappears.
+5. **Given** the popup is open, **When** the user clicks **Disable this rule**, **Then** the rule is added to the inline `-- akml-disable` list at the top of the file (or to the per-project `.casettings` if the user picks the project-wide option).
+6. **Given** an auto-fix would require schema-aware transformation that depends on cached metadata not yet loaded, **When** the user clicks **Apply Fix**, **Then** the fix is queued until Phase B completes and a status-bar message indicates "waiting for schema".
+
+---
+
+### User Story 18 — AI Explain, Query Index Analysis, auto-fix-on-error, comment-to-SQL (Priority: P3)
+
+The AI feature shortcuts in User Story 10 cover the *transport* (open panel, fix selection, optimize selection, manual ghost-text). This story covers the *missing AI capabilities themselves* that SQL Prompt 11.3 ships:
+
+- **Explain SQL** — selected SQL → plain-language paragraph in the AI panel.
+- **Query Index Analysis** — uses an ML model to evaluate candidate indexes for a `SELECT … WHERE …` or `SELECT … JOIN …`, showing existing vs hinted plans with estimated impact and a copyable `CREATE INDEX` script.
+- **Auto syntax-error fix popup** — after a failed execution, AKML SQL surfaces a one-click "Fix with AI" toast that pre-fills the AI panel with the failing batch and the SQL Server error.
+- **Comment-to-SQL** — when the user types a `-- generate: …` comment line and presses Tab, AKML SQL asks the AI to produce the matching SQL beneath the comment.
+- **AI panel history tab** — shows previous prompts and their answers within the current session, with a "revert to this state" action.
+- **Editor selection icon** — when the user selects a SQL block, an unobtrusive AI icon appears at the selection's right edge with hover actions: Explain / Fix / Optimize.
+- **Follow-up suggestions** — after an AI answer, the panel shows clickable next-prompt suggestions ("Show me an example", "Convert to CTE").
+
+**Why this priority**: every item is independently valuable but each is also independently optional, so they collectively merit P3.
+
+**Independent Test**: Select a 30-line stored procedure body. Right-click → **Explain SQL** — verify the AI panel shows a plain-language explanation. Open a query with a slow `SELECT … WHERE col = @p`. Run **Query Index Analysis** — verify the panel shows the existing plan, a hinted plan with the candidate index, and a `CREATE INDEX` script with an estimated improvement percentage. Run a query that has a typo. Verify a toast appears offering "Fix with AI". Type `-- generate: list the top 10 customers by revenue` and press Tab — verify the AI generates the matching SQL beneath the comment.
+
+**Acceptance Scenarios**:
+
+1. **Given** SQL is selected, **When** the user invokes **Explain SQL**, **Then** the AI panel returns a plain-language explanation within 10 seconds.
+2. **Given** a query with a `WHERE` or `JOIN` clause is open, **When** the user invokes **Query Index Analysis**, **Then** the panel returns existing-vs-hinted plans, an estimated impact percentage, and a `CREATE INDEX` script ready to copy.
+3. **Given** a query has just failed with a syntax error, **When** the failure dialog closes, **Then** a non-blocking toast offers "Fix with AI" and clicking it pre-fills the AI panel with the failing batch and the SQL Server error message.
+4. **Given** the user types `-- generate: <natural language>` on a blank line and presses Tab, **When** the request returns, **Then** the natural-language line is replaced by SQL that satisfies the request, with the original comment retained above it.
+5. **Given** the AI panel has history, **When** the user clicks the History tab, **Then** previous prompts and answers are listed in reverse chronological order with "revert to this state" actions.
+6. **Given** the user selects a SQL block in the editor, **When** the selection is committed, **Then** an AI icon appears at the right edge of the selection with Explain / Fix / Optimize hover actions.
+7. **Given** the AI returned an answer, **When** the panel renders, **Then** 1–3 follow-up prompt buttons are shown beneath the answer.
+8. **Given** the user is offline or AI is rate-limited, **When** any of the above features is invoked, **Then** a clear status message indicates the reason and no partial state is left in the panel.
+
+---
+
+### User Story 19 — Completion suggestion polish (toggle, refresh, commit keys, category filter, tooltips, encrypted decryption) (Priority: P3)
+
+Several SQL Prompt completion-popup conveniences are missing from AKML SQL today:
+
+- **Toggle suggestions on/off** (`Ctrl+Shift+P`) — disable IntelliSense for the current session without opening Options.
+- **Refresh suggestions cache** (`Ctrl+Shift+D`) — force the schema metadata to re-load (Phase A + Phase B) for the active connection.
+- **Custom commit keys** — let the user pick which keystrokes (Space, Dot, Comma, Open Paren, Tab, Enter) commit the highlighted suggestion. Default Tab+Enter only.
+- **Suggestion category filter** with `Ctrl+Up` / `Ctrl+Down` to cycle through Tables / Views / Columns / Functions / Procedures / Snippets / All.
+- **MS_Description in tooltips** — extended property `MS_Description` shown on hover for every object that has one, with clickable references to the underlying object.
+- **Parameter highlighting** in function-call signature popups — the next expected parameter is bolded.
+- **Encrypted object decryption** — when the object definition box shows the Script tab for an encrypted procedure/function and the user has DAC permission, the decrypted body is shown (with a clear "decrypted" badge).
+- **Customizable ALTER and INSERT statement templates** — when AKML SQL inserts a generated `ALTER TABLE` or `INSERT INTO` statement on commit, the template format is configurable (column order, line breaks, default values).
+- **Temporary table IntelliSense** — `#temp` / `##temp` table column metadata is parsed from CREATE/SELECT-INTO and offered in completion within the same statement scope.
+
+**Why this priority**: each item is small but together they remove the "rough edges" the first 12 user stories don't address. Power users notice the difference within an hour.
+
+**Independent Test**: Press `Ctrl+Shift+P` — verify the completion popup stops appearing. Press `Ctrl+Shift+P` again — verify it resumes. Press `Ctrl+Shift+D` — verify a status-bar message says "Refreshing schema cache" and the cache is reloaded. Open Options → Completion → Commit keys, enable Space — verify typing `Ord ` commits `Orders`. Inside the popup press `Ctrl+Down` — verify the category badge changes from "All" to "Tables", filtering the list. Hover an object that has `MS_Description = 'top-level customer table'` — verify the description appears in the tooltip. Type `#tmp1 (a INT, b VARCHAR(50))` then `INSERT INTO #tmp1 (` — verify `a` and `b` are suggested. Open the definition of an encrypted procedure with DAC connection — verify the decrypted body shows.
+
+**Acceptance Scenarios**:
+
+1. **Given** the editor has focus, **When** the user presses `Ctrl+Shift+P`, **Then** the completion popup is suppressed for the rest of the session and a status-bar message confirms "AKML SQL completions: off".
+2. **Given** the user presses `Ctrl+Shift+P` again, **When** the next character is typed, **Then** the popup resumes.
+3. **Given** the user presses `Ctrl+Shift+D`, **When** the engine receives the request, **Then** Phase A and Phase B run for the active session and a status-bar message indicates progress.
+4. **Given** the user has enabled Space as a commit key in Options, **When** they highlight a suggestion and press Space, **Then** the suggestion is committed followed by a single space.
+5. **Given** the popup is open in a long suggestion list, **When** the user presses `Ctrl+Down`, **Then** the category filter cycles through Tables → Views → Columns → Functions → Procedures → Snippets → All, with the badge updating each press.
+6. **Given** a hovered object has `MS_Description`, **When** the tooltip is rendered, **Then** the description text appears beneath the object name and any cited identifiers in the description are clickable to open their definition box.
+7. **Given** the user is inside a function-call's argument list, **When** the parameter signature popup is shown, **Then** the next-expected parameter is bolded.
+8. **Given** the user has DAC permission and views an encrypted object's definition, **When** the Script tab is selected, **Then** the decrypted body is shown with a clear "decrypted" badge.
+9. **Given** the user has typed `CREATE TABLE #tmp (a INT, b NVARCHAR(20))` earlier in the same script, **When** they then type `INSERT INTO #tmp (`, **Then** completions for `a` and `b` appear.
+10. **Given** a generated `ALTER TABLE` template, **When** the user has changed the column-order setting in Options, **Then** the inserted template reflects that order.
+
+---
+
+### User Story 20 — Execute-Current-Batch and Execute-To-Cursor execution shortcuts (Priority: P3)
+
+SSMS exposes only `F5` (execute everything in the editor or selection) and `Shift+F5` (execute current statement). SQL Prompt adds two more shortcuts that AKML SQL can host:
+
+- **Execute Current Batch** (`Alt+Shift+F5`) — execute the batch from the previous `GO` to the next `GO`.
+- **Execute To Cursor** (`Ctrl+Shift+F5`) — execute everything from the start of the current batch up to (but not including) the line containing the cursor.
+
+**Why this priority**: a small but daily-used pair that complements User Story 1's safety dialog (the dialog must hook all four execute paths, not just F5/Shift+F5).
+
+**Independent Test**: Open a script with three batches separated by `GO`. Place the cursor in the second batch. Press `Alt+Shift+F5` — verify only the second batch runs. Place the cursor mid-way through the second batch. Press `Ctrl+Shift+F5` — verify only the lines from the start of the batch up to the line above the cursor run.
+
+**Acceptance Scenarios**:
+
+1. **Given** a script with multiple `GO`-separated batches, **When** the user presses `Alt+Shift+F5`, **Then** only the batch containing the cursor is executed.
+2. **Given** the cursor is mid-batch, **When** the user presses `Ctrl+Shift+F5`, **Then** the execution runs from the start of the batch up to the line above the cursor and stops.
+3. **Given** the safety dialog (User Story 1) is enabled and the about-to-run portion contains an unsafe statement, **When** either shortcut is pressed, **Then** the safety dialog appears the same way it does for `F5` / `Shift+F5`.
+4. **Given** the user has no active connection, **When** either shortcut is pressed, **Then** SSMS's standard "no connection" prompt appears (AKML SQL does not interfere).
+
+---
+
 ### Edge Cases
 
 - **DELETE with subquery WHERE**: A statement like `DELETE FROM X WHERE id IN (SELECT id FROM Y)` is safe — the safety check must recognize a WHERE clause exists even if it references a subquery, and not warn.
@@ -261,6 +442,26 @@ Every feature added above must be toggleable and discoverable from the existing 
 - **Safety dialog in unsaved-buffer scenario**: Even if the file has no path, the dialog must still work using the session's connection info from the existing session manager.
 - **Two query windows on same server, different databases**: USE completion must use the window-specific database, not cross-mix database lists.
 - **AI shortcuts while AI is rate-limited**: Show a clear "rate limited, retry in N seconds" status; do not silently ignore.
+- **Summarize Script with > 10,000 lines**: The outline must virtualize entries; clicking an entry must scroll to the line in under 200 ms.
+- **F12 Script-as-ALTER on a schema-bound object**: The generated `ALTER` must include the WITH SCHEMABINDING clause; without it the object would lose its binding.
+- **Find Invalid Objects on a database with thousands of objects**: The scan must run in chunks and stream results into the window so users see partial results within 2 seconds.
+- **Smart Rename on a column that is also a foreign-key target**: The preview must include the FK-side change; the apply step must be transactional so a failure in either side rolls both back.
+- **Smart Rename on a system table or system column**: The preview must refuse and surface a clear "system objects cannot be renamed" message.
+- **Copy as IN Clause on a column with NULL values**: NULL values must be omitted (an `IN` clause cannot match NULL); a status message must report the omission count.
+- **Script as INSERT for a table with an IDENTITY column**: The generated INSERT must wrap with `SET IDENTITY_INSERT ON/OFF` only if the user opts in via the dialog.
+- **Open in Excel with a date-only column**: Excel must show the date without spurious time components.
+- **Lightbulb Apply Fix on multiple identical violations in one click**: Holding Shift on Apply Fix must apply the same fix to every occurrence in the document.
+- **Issue Details popup over a multi-line span**: The popup must anchor to the first line of the span and the Apply Fix must operate on the entire span.
+- **AI Explain on > 5000 lines of selection**: The selection must be truncated with a clear "truncated to first 5000 lines" warning.
+- **Query Index Analysis on a table without column statistics**: The result must clearly indicate the recommendation is uncertain because statistics are missing.
+- **Comment-to-SQL inside a comment block** (`/* generate: ... */`): The generation must trigger only on single-line `-- generate:` comments to avoid interfering with multi-line documentation.
+- **Toggle suggestions off (`Ctrl+Shift+P`) persists across editor windows**: The toggle is per-session; closing all editor windows resets it back to "on" the next time SSMS is launched.
+- **Refresh suggestions cache (`Ctrl+Shift+D`) while Phase B is already running**: The request must be coalesced — no second background populate runs concurrently.
+- **Custom commit-key conflict with snippet expansion**: If the user picks Tab as a commit key but Tab is also the snippet trigger, snippet expansion takes precedence when the highlighted suggestion is a snippet.
+- **Encrypted decryption without DAC permission**: The Script tab must show the encrypted placeholder and a "DAC required" hint; no decryption attempt is made.
+- **Temp-table IntelliSense across statements**: A `#temp` table created in one batch must remain visible to completion in later batches within the same script until a `DROP TABLE #temp` is encountered.
+- **Execute To Cursor on the very first line of a batch**: Nothing runs (the range is empty); a status-bar message indicates "no statements before cursor".
+- **Browse Open Tabs (`Ctrl+Q`) when no tabs are open**: Show an empty popup with a "no open tabs" hint; do not crash.
 
 ## Requirements *(mandatory)*
 
@@ -356,6 +557,78 @@ Every feature added above must be toggleable and discoverable from the existing 
 - **FR-059**: The Options search box MUST find each new feature by its display label and description.
 - **FR-060**: Toggling a feature off MUST take effect within 1 second without requiring an SSMS restart.
 
+#### Script navigation chords (P2, US13)
+
+- **FR-061**: System MUST provide **Summarize Script** (`Ctrl+B, Ctrl+S`) producing a hierarchical outline of every top-level statement in the active document with a click-to-navigate behavior.
+- **FR-062**: System MUST provide **Script Object as ALTER** (`F12`) that opens a new query window containing the `ALTER` definition for the object under the caret on the active connection.
+- **FR-063**: System MUST provide **Select in Object Explorer** (`Ctrl+F12`) that expands the Object Explorer tree to and selects the node for the object under the caret.
+- **FR-064**: System MUST provide **Find Unused Variables and Parameters** (`Ctrl+B, Ctrl+F`) that lists every declared variable and procedure/function parameter in the active document that is never read, with line and column.
+
+#### Find Invalid Objects (P2, US14)
+
+- **FR-065**: System MUST provide a **Find Invalid Objects** action on the Object Explorer database right-click menu that scans every user object for broken references and lists them in a dockable tool window.
+- **FR-066**: The Invalid Objects window MUST contain columns for object name, schema, type, error message, and source line number, and MUST allow multi-row selection.
+- **FR-067**: The Invalid Objects window MUST provide **Script as ALTER** that emits the matching `ALTER` script for the selected rows in a new query window (concatenated when multiple rows are selected).
+- **FR-068**: Double-clicking an Invalid Objects row MUST jump Object Explorer to that node and surface the error message in the status bar.
+
+#### Smart Rename (P3, US15)
+
+- **FR-069**: System MUST provide a **Smart Rename** action (`F2` editor, Object Explorer right-click) that renames a database object/column/procedure/parameter across every dependent object in the active connection.
+- **FR-070**: Smart Rename MUST display a preview dialog with Actions / Warnings / Dependencies tabs showing the generated script, every dependent object, and any name-collision or extended-property warnings before applying.
+- **FR-071**: Smart Rename MUST be transactional: any failure mid-script rolls back the rename so the database is left in its original state.
+- **FR-072**: Smart Rename MUST preserve extended properties and object permissions on the renamed object.
+- **FR-073**: Smart Rename MUST disable the **Apply** button when the preview detects an unresolved name collision.
+
+#### Result-grid productivity (P3, US16)
+
+- **FR-074**: System MUST add **Copy as IN Clause**, **Script as INSERT**, and **Open in Excel** actions to the result-grid right-click menu for every connected database.
+- **FR-075**: **Copy as IN Clause** MUST emit values comma-separated with proper string quoting and parenthesis wrapping, suitable to paste directly into a `WHERE col IN (...)` clause.
+- **FR-076**: **Script as INSERT** MUST emit a `INSERT INTO <schema.table> (<cols>) VALUES (...), (...)` statement that round-trips when executed.
+- **FR-077**: **Open in Excel** MUST preserve full numeric precision beyond Excel's default 15-digit truncation by formatting wide-precision cells as text.
+- **FR-078**: All three actions MUST operate on the selected rows when a selection exists, else on every visible row.
+
+#### Code Analysis lightbulbs (P2, US17)
+
+- **FR-079**: For each analysis violation, the system MUST render a gutter lightbulb: orange for auto-fixable rules, blue for advisory-only rules.
+- **FR-080**: Holding `Ctrl` over a squiggle MUST show an Issue Details popup containing the rule id, severity, problem text, remediation paragraph, and (for auto-fixable rules) an **Apply Fix** button.
+- **FR-081**: Clicking **Apply Fix** MUST replace the offending text with the remediation; the squiggle MUST clear within 1 second.
+- **FR-082**: The Issue Details popup MUST include a **Disable this rule** button offering both inline (`-- akml-disable RuleId`) and project-level (`.casettings`) targets.
+- **FR-083**: When an auto-fix depends on schema metadata not yet loaded (Phase B in progress), the fix MUST be queued until Phase B completes and a status-bar message MUST indicate "waiting for schema".
+
+#### AI feature reach (P3, US18)
+
+- **FR-084**: System MUST provide an **Explain SQL** action (right-click selection, AKML SQL menu, Command Palette) that returns a plain-language explanation of the selected SQL in the AI panel within 10 seconds.
+- **FR-085**: System MUST provide a **Query Index Analysis** action that runs an ML-based evaluation of candidate indexes for the active SELECT/JOIN statement and returns existing-vs-hinted plan summaries plus a copyable `CREATE INDEX` script.
+- **FR-086**: After a SQL execution failure (any of the four execute shortcuts), the system MUST surface a non-blocking toast offering "Fix with AI" that, when clicked, pre-fills the AI panel with the failing batch and the SQL Server error message.
+- **FR-087**: System MUST provide **comment-to-SQL**: when the user types `-- generate: <natural language>` on a blank line and presses Tab, the natural-language line MUST be replaced by the AI-generated SQL with the original comment retained above it.
+- **FR-088**: The AI panel MUST include a History tab listing previous prompts and answers in reverse chronological order with a "revert to this state" action per entry.
+- **FR-089**: When a SQL block is selected in the editor, the system MUST render a small AI icon at the right edge of the selection with hover actions: Explain / Fix / Optimize.
+- **FR-090**: After every AI answer, the panel MUST render 1–3 clickable follow-up prompt buttons.
+- **FR-091**: When AI is unavailable (offline, rate-limited, disabled), all of the above features MUST surface a clear status message and leave no partial state in the panel.
+
+#### Completion polish (P3, US19)
+
+- **FR-092**: System MUST bind `Ctrl+Shift+P` to a session-level toggle that suppresses / resumes the IntelliSense suggestion popup.
+- **FR-093**: System MUST bind `Ctrl+Shift+D` to a manual schema cache refresh that re-runs Phase A and Phase B for the active session.
+- **FR-094**: System MUST allow the user to configure which keystrokes commit the highlighted suggestion (Space, Dot, Comma, Open Paren, Tab, Enter), with Tab+Enter as the default.
+- **FR-095**: While the suggestion popup is open, `Ctrl+Up` and `Ctrl+Down` MUST cycle the category filter through Tables → Views → Columns → Functions → Procedures → Snippets → All, with a visible badge.
+- **FR-096**: Object tooltips MUST surface the `MS_Description` extended property when present, and any object identifier cited in the description MUST be a clickable link that opens the cited object's definition box.
+- **FR-097**: When the parameter signature popup is shown for a function call, the next-expected parameter MUST be visually emphasised (bold).
+- **FR-098**: For encrypted procedures/functions, when the user has DAC permission, the Script tab in the object definition box MUST show the decrypted body with a clear "decrypted" badge; without DAC permission it MUST show the encrypted placeholder.
+- **FR-099**: Generated `ALTER TABLE` and `INSERT INTO` statement templates produced by completion MUST follow user-configurable formatting (column order, line breaks, default values).
+- **FR-100**: System MUST parse `CREATE TABLE #temp …` and `SELECT … INTO #temp …` statements within the active script and offer column completions for `#temp` references later in the same script scope.
+
+#### Execution shortcuts (P3, US20)
+
+- **FR-101**: System MUST bind `Alt+Shift+F5` to **Execute Current Batch** (run the batch between the surrounding `GO` markers, or the whole document if there are none).
+- **FR-102**: System MUST bind `Ctrl+Shift+F5` to **Execute To Cursor** (run from the start of the current batch up to the line above the cursor, exclusive).
+- **FR-103**: Both new execution shortcuts MUST trigger the safety check from User Story 1 (FR-001) on the about-to-run text.
+
+#### Discoverability (P3)
+
+- **FR-104**: Every AKML SQL UI surface (Options pages, dialogs, tool windows, Settings sub-tabs) MUST honour `F1` to open the matching documentation page.
+- **FR-105**: System MUST provide a **Browse Open Tabs** popup (`Ctrl+Q`) listing every open query tab across all SSMS / VS windows for the active host, with fuzzy search and Enter-to-activate.
+
 ### Key Entities
 
 - **Execution Safety Rule**: A named rule (DELETE without WHERE, UPDATE without WHERE, etc.) that the pre-execution safety check evaluates against the about-to-run SQL. Each rule has an enabled/disabled flag (global and per-environment), a severity, a detection routine, and a message template shown in the safety dialog.
@@ -372,6 +645,26 @@ Every feature added above must be toggleable and discoverable from the existing 
 
 - **Command Palette Entry**: A single searchable item with a display label, a category (AKML Command / AKML Option / SSMS Command / Database Object), a fuzzy-match score, an invoke action, and an optional icon.
 
+- **Script Outline Node**: A single entry in the Summarize Script tree with a statement type (CREATE/ALTER/SELECT/INSERT/UPDATE/DELETE/EXEC/USE/...), a display label, a parent node id (for nested CTEs / EXEC AS REVERT pairs), and an editor offset for click-to-navigate.
+
+- **Invalid Object Record**: An object found by Find Invalid Objects with object name, schema, type (TABLE/VIEW/PROC/FUNC/TRIG/SYNONYM), error message, source line number, and a reference to the dependent object that broke (for chained breakage).
+
+- **Smart Rename Plan**: The bundle of (target identifier, new identifier, list of dependent objects to update, generated `sp_rename` + ALTER script, list of warnings, list of preserved permissions/extended properties). Persisted only for the duration of the preview dialog.
+
+- **Result Grid Action Context**: The set of (table name + schema, column metadata with types and identity flags, selected row payload) needed by Copy as IN Clause / Script as INSERT / Open in Excel.
+
+- **Lightbulb Fix**: A fix descriptor attached to an analysis rule containing the rule id, a "fixable" flag, the remediation text, and a fix-routine reference (the same routines `RefactoringEngine` already exposes).
+
+- **AI Conversation Turn**: A single (prompt, answer) pair in the AI panel history, with timestamp, source action (Explain / Fix / Optimize / Comment-to-SQL / Manual), token count, and an optional "follow-up suggestions" array generated by the AI.
+
+- **Suggestion Toggle State**: Per-session boolean (suppressed / active) controlled by `Ctrl+Shift+P`. Resets to "active" when SSMS is restarted.
+
+- **Custom Commit Key Set**: A user-configurable set of keystrokes that commit the highlighted suggestion. Default `{Tab, Enter}`. Editable via Options → Completion → Commit keys.
+
+- **Temp Table Schema**: An ephemeral schema descriptor for a `#temp` / `##temp` table parsed from the active document, with column name, type, and a scope (statement / batch / file).
+
+- **Browse Open Tabs Entry**: A single entry in the `Ctrl+Q` popup with display label (filename + connection), host (SSMS / VS), tab index, and an activate action.
+
 ## Success Criteria *(mandatory)*
 
 ### Measurable Outcomes
@@ -386,6 +679,15 @@ Every feature added above must be toggleable and discoverable from the existing 
 - **SC-008**: The pre-execution safety check completes in under 500 ms for 99% of statements measured across a corpus of 1,000 representative queries (the documented limit from FR-009).
 - **SC-009**: Zero regressions: all existing 861+ engine tests and 459+ core tests continue to pass for every milestone delivered under this spec.
 - **SC-010**: Every new feature introduced by this spec is controllable via an Options toggle, and the Options search finds each one by name with 100% recall.
+- **SC-011**: After installing the release that includes User Story 13, 80% of test users complete a "find a stored procedure named X and open its definition" task in under 5 seconds via `F12`, vs. 25+ seconds via Object Explorer click-through.
+- **SC-012**: User Story 14's Find Invalid Objects scan completes in under 30 seconds for a database with 5,000 user objects on average hardware, and produces zero false positives across a corpus of 10 known-clean databases.
+- **SC-013**: User Story 15's Smart Rename, when applied to a column referenced by 20 dependent objects, leaves all 20 dependents parseable and executable in 100% of test runs (zero broken dependents).
+- **SC-014**: User Story 17's lightbulb auto-fix reduces the median time-to-fix for an `BP002` (deprecated `!=`) violation from 15+ seconds (manual edit) to under 2 seconds (one click).
+- **SC-015**: User Story 18's Explain SQL returns a plain-language explanation in under 10 seconds for 95% of selections of ≤ 500 lines.
+- **SC-016**: User Story 18's Query Index Analysis returns a recommendation in under 30 seconds for 95% of `SELECT … WHERE`/`JOIN` statements against tables with up to 1 million rows.
+- **SC-017**: User Story 19's `Ctrl+Shift+P` toggle suppresses the popup within 100 ms of being pressed, measured in the editor.
+- **SC-018**: User Story 20's `Alt+Shift+F5` and `Ctrl+Shift+F5` execution shortcuts trigger the User Story 1 safety dialog with the same coverage as `F5` / `Shift+F5`, verified by a regression suite of 30 unsafe-statement test cases.
+- **SC-019**: F1 contextual help opens the matching documentation page in 100% of AKML SQL UI surfaces (Options pages, dialogs, tool windows).
 
 ## Assumptions
 
@@ -401,6 +703,15 @@ Every feature added above must be toggleable and discoverable from the existing 
 - **A10**: Phase A / Phase B schema loading already provides the column metadata consumed by the Column Picker, including PK/FK identification.
 - **A11**: The test environment has at least one local SQL Server instance and at least one remote SQL Server instance reachable from the machine — required for User Story 11 acceptance testing.
 - **A12**: Settings storage in `%AppData%\AKML SQL\config.json` is the single source of truth for feature toggles; no new persistence layer is introduced.
+- **A13**: The existing `TsqlParserService` and the `ScriptDom` AST it produces are sufficient for User Story 13's Summarize Script outline; no new parser is needed.
+- **A14**: `SchemaMetadataService` already exposes the metadata queries needed by User Story 14's Find Invalid Objects (broken-reference detection via `sys.sql_expression_dependencies` and `sys.sql_modules`).
+- **A15**: `RefactoringEngine`'s rename routines are sufficient for User Story 15's Smart Rename core; the new work is the dependency-resolution preview dialog and the transactional apply path.
+- **A16**: The result-grid actions in User Story 16 hook the existing SSMS / VS result-grid right-click extensibility surface; no new grid renderer is built.
+- **A17**: The auto-fix routines for the ~27 fixable rules in User Story 17 are the same routines `RefactoringEngine` already exposes for the corresponding `Ctrl+B` chords; no new fix engines are written.
+- **A18**: The AI feature reach in User Story 18 reuses the existing `AiRequestHandler` for transport, model selection, rate limiting, and credential storage; this spec only covers the new request types and the new UI surfaces.
+- **A19**: The completion polish in User Story 19 extends the existing `CompletionEngine` and `AkmlCompletionPopup`; the only persistence is in `config.json` (FR-094, FR-099).
+- **A20**: User Story 20's two new execution shortcuts hook the same SSMS / VS execute-command pipeline that User Story 1 already intercepts.
+- **A21**: The "second crawl" of the SQL Prompt 11.3 documentation completed on 2026-04-09 is the authoritative source for User Stories 13–20. If a future SQL Prompt release adds capabilities beyond what was crawled, those will be filed as a separate spec, not as further additions to 014.
 
 ## Out of Scope
 
