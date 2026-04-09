@@ -100,28 +100,51 @@ namespace AkmlSql.Shell.Shared.Editor
                 }
 
                 // Find the DTE Document with matching FullName (case-insensitive).
+                //
+                // IMPORTANT: use an indexed loop instead of `foreach` so that a
+                // single malformed COM object (throwing from its enumerator's
+                // MoveNext or from Item(i)) only skips THAT document. A foreach
+                // here would swallow the exception at the outer try/catch and
+                // abandon the rest of the collection, silently returning null
+                // for a valid text view whose match sits further down the list.
+                EnvDTE.Documents docs = null;
+                int count = 0;
                 try
                 {
-                    foreach (EnvDTE.Document doc in dte.Documents)
-                    {
-                        try
-                        {
-                            if (string.Equals(doc.FullName, filePath, StringComparison.OrdinalIgnoreCase))
-                            {
-                                var win = doc.ActiveWindow;
-                                if (win != null && !string.IsNullOrEmpty(win.Caption))
-                                {
-                                    Log.Debug("SsmsConnectionDetector: matched text view to document '{Caption}'", win.Caption);
-                                    return ParseCaption(win.Caption);
-                                }
-                            }
-                        }
-                        catch { /* some documents throw when accessing FullName or ActiveWindow */ }
-                    }
+                    docs = dte.Documents;
+                    count = docs?.Count ?? 0;
                 }
                 catch (Exception ex)
                 {
-                    Log.Debug(ex, "SsmsConnectionDetector: document enumeration failed");
+                    Log.Debug(ex, "SsmsConnectionDetector: unable to read DTE.Documents.Count");
+                    return null;
+                }
+
+                for (int i = 1; i <= count; i++)
+                {
+                    string docFullName = null;
+                    EnvDTE.Window win = null;
+                    try
+                    {
+                        var doc = docs.Item(i);
+                        if (doc == null) continue;
+                        docFullName = doc.FullName;
+                        if (!string.Equals(docFullName, filePath, StringComparison.OrdinalIgnoreCase))
+                            continue;
+                        win = doc.ActiveWindow;
+                    }
+                    catch
+                    {
+                        // This specific document is broken — skip it and keep
+                        // looking for a match in the remaining documents.
+                        continue;
+                    }
+
+                    if (win != null && !string.IsNullOrEmpty(win.Caption))
+                    {
+                        Log.Debug("SsmsConnectionDetector: matched text view to document '{Caption}'", win.Caption);
+                        return ParseCaption(win.Caption);
+                    }
                 }
 
                 // No matching document found — return null so the retry loop

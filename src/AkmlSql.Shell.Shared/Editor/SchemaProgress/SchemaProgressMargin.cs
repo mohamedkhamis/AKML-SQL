@@ -48,6 +48,7 @@ namespace AkmlSql.Shell.Shared.Editor.SchemaProgress
         private readonly Border _rootBorder;
 
         private bool _disposed;
+        private bool _polling;
         private string _sessionId = string.Empty;
         private MarginState _state = MarginState.Hidden;
         private string _lastDatabase = string.Empty;
@@ -170,14 +171,22 @@ namespace AkmlSql.Shell.Shared.Editor.SchemaProgress
         {
             if (_disposed) return;
 
-            if (string.IsNullOrEmpty(_sessionId))
-            {
-                TryLoadSessionId();
-                if (string.IsNullOrEmpty(_sessionId)) return;
-            }
+            // Re-entrancy guard: the DispatcherTimer fires every 1s but the
+            // IPC call below can take up to 3s (its timeout). Without this
+            // guard a slow engine response would let a second Tick race ahead
+            // of the first, and the two Apply(resp) calls could interleave
+            // state transitions (a stale response stomping on a newer one).
+            if (_polling) return;
+            _polling = true;
 
             try
             {
+                if (string.IsNullOrEmpty(_sessionId))
+                {
+                    TryLoadSessionId();
+                    if (string.IsNullOrEmpty(_sessionId)) return;
+                }
+
                 var client = EngineLifecycle.Manager?.Client;
                 if (client == null || !client.IsConnected)
                 {
@@ -189,11 +198,16 @@ namespace AkmlSql.Shell.Shared.Editor.SchemaProgress
                 var resp = await client.SendRequestAsync<SchemaStatusResponse, SchemaStatusRequest>(
                     MessageTypes.SchemaStatusRequest, req, timeoutMs: 3000);
 
+                if (_disposed) return;
                 Apply(resp);
             }
             catch (Exception ex)
             {
                 Log.Debug(ex, "SchemaProgressMargin: poll failed");
+            }
+            finally
+            {
+                _polling = false;
             }
         }
 

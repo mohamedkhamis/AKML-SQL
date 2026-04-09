@@ -43,7 +43,7 @@ public class DatabaseProvider : ICompletionProvider
 
     public IEnumerable<CompletionItem> GetCompletions(CursorContext context, DatabaseCache? cache)
     {
-        var sessionId = CompletionEngine.CurrentSessionId;
+        var sessionId = context.SessionId;
         if (string.IsNullOrEmpty(sessionId))
         {
             Serilog.Log.Debug("DatabaseProvider: no sessionId on completion request, skipping");
@@ -64,7 +64,19 @@ public class DatabaseProvider : ICompletionProvider
             "DatabaseProvider.GetCompletions: session={Session} server={Server} currentDb={Db}",
             sessionId, scrubbedServer, connInfo.DatabaseName);
 
-        var databases = GetDatabasesForSession(sessionId, connInfo.ConnectionString);
+        // Cache-only lookup: never block the completion thread on SQL I/O.
+        // On a miss, schedule a background prefetch so the next keystroke
+        // will find the cache populated.
+        var databases = TryGetCached(sessionId, connInfo.ConnectionString);
+        if (databases == null)
+        {
+            SchedulePrefetch(sessionId, connInfo.ConnectionString);
+            Serilog.Log.Debug(
+                "DatabaseProvider: cache miss for session {Session} on server {Server} — prefetching",
+                sessionId, scrubbedServer);
+            yield break;
+        }
+
         Serilog.Log.Information(
             "DatabaseProvider: returning {Count} databases for server {Server}: {Dbs}",
             databases.Count, scrubbedServer, string.Join(", ", databases.Take(15)));
@@ -85,10 +97,12 @@ public class DatabaseProvider : ICompletionProvider
     }
 
     /// <summary>
-    /// Returns the database list for the given session, querying the server
-    /// only if the cache is empty, stale, or the connection string changed.
+    /// Returns the cached database list if it is fresh AND was built from the
+    /// same connection string, else <c>null</c>. This is the only code path that
+    /// completion providers are allowed to hit during a keystroke — SQL I/O is
+    /// deferred to <see cref="SchedulePrefetch"/>.
     /// </summary>
-    private static List<string> GetDatabasesForSession(string sessionId, string connectionString)
+    private static List<string>? TryGetCached(string sessionId, string connectionString)
     {
         lock (_cacheLock)
         {
@@ -100,35 +114,65 @@ public class DatabaseProvider : ICompletionProvider
                 {
                     return cached.Databases;
                 }
-                // Stale or connection changed — drop the entry.
+                // Stale or connection changed — drop the entry so the next
+                // prefetch rebuilds it.
                 _cache.Remove(sessionId);
             }
         }
+        return null;
+    }
 
-        // Query the current session's server for its database list.
-        var svc = new SchemaMetadataService();
-        List<string> list;
-        try
-        {
-            list = svc.ListDatabasesAsync(connectionString, CancellationToken.None)
-                .GetAwaiter().GetResult();
-        }
-        catch (Exception ex)
-        {
-            Serilog.Log.Warning(ex, "DatabaseProvider: ListDatabasesAsync failed for session {Session}", sessionId);
-            list = new List<string>();
-        }
+    // Track in-flight prefetches so repeated completion requests don't pile up
+    // concurrent ListDatabasesAsync calls for the same session.
+    private static readonly HashSet<string> _prefetchesInFlight = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Kicks off a background task that queries <c>sys.databases</c> for the
+    /// given session's connection and populates the cache. Idempotent per
+    /// session: if a prefetch is already running, this is a no-op.
+    /// </summary>
+    public static void SchedulePrefetch(string sessionId, string connectionString)
+    {
+        if (string.IsNullOrEmpty(sessionId) || string.IsNullOrEmpty(connectionString)) return;
 
         lock (_cacheLock)
         {
-            _cache[sessionId] = new CachedEntry
+            if (!_prefetchesInFlight.Add(sessionId))
             {
-                ConnectionString = connectionString,
-                Databases = list,
-                CachedAtUtc = DateTime.UtcNow
-            };
+                // Already fetching for this session — coalesce.
+                return;
+            }
         }
-        return list;
+
+        _ = Task.Run(async () =>
+        {
+            List<string> list;
+            try
+            {
+                var svc = new SchemaMetadataService();
+                list = await svc.ListDatabasesAsync(connectionString, CancellationToken.None)
+                    .ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Warning(ex, "DatabaseProvider: ListDatabasesAsync failed for session {Session}", sessionId);
+                list = new List<string>();
+            }
+
+            lock (_cacheLock)
+            {
+                _cache[sessionId] = new CachedEntry
+                {
+                    ConnectionString = connectionString,
+                    Databases = list,
+                    CachedAtUtc = DateTime.UtcNow
+                };
+                _prefetchesInFlight.Remove(sessionId);
+            }
+            Serilog.Log.Information(
+                "DatabaseProvider: prefetch complete for session {Session} — {Count} databases cached",
+                sessionId, list.Count);
+        });
     }
 
     /// <summary>
@@ -153,7 +197,9 @@ public class DatabaseProvider : ICompletionProvider
 /// </summary>
 public static class SessionTrackerBridge
 {
-    private static Func<string, ConnectionLookupResult?>? _getConnectionInfo;
+    // volatile ensures the startup-time write by Configure() is visible to all
+    // completion threads without an explicit memory barrier.
+    private static volatile Func<string, ConnectionLookupResult?>? _getConnectionInfo;
 
     public static void Configure(Func<string, ConnectionLookupResult?> getConnectionInfo)
     {

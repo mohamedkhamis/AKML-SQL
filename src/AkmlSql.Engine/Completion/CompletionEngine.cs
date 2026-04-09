@@ -15,15 +15,6 @@ public class CompletionEngine
     private int _maxSuggestions = 50;
 
     /// <summary>
-    /// AsyncLocal holds the current request's sessionId so providers that need
-    /// per-session state (like <see cref="DatabaseProvider"/>, which needs the
-    /// active connection string) can look it up without changing every provider
-    /// signature. Set by <see cref="GetCompletions(string, int, DatabaseCache?, string)"/>.
-    /// </summary>
-    private static readonly System.Threading.AsyncLocal<string> _currentSessionId = new();
-    public static string CurrentSessionId => _currentSessionId.Value ?? string.Empty;
-
-    /// <summary>
     /// Master switch for all table-alias completion features. Controls:
     /// - <see cref="AliasProvider"/> (suggests aliases like "o", "od" after a table name in FROM)
     /// - <see cref="JoinProvider"/> (suggests <c>Table alias ON ...</c> after JOIN, FK-aware)
@@ -64,12 +55,12 @@ public class CompletionEngine
 
     public CompletionResponse GetCompletions(string documentText, int cursorOffset, DatabaseCache? cache, string sessionId)
     {
-        _currentSessionId.Value = sessionId;
         try
         {
             // Fast tier: tokenize for context analysis
             var tokens = _parserService.GetTokenStream(documentText);
             var context = _contextAnalyzer.Analyze(tokens, cursorOffset);
+            context.SessionId = sessionId ?? string.Empty;
 
             // Attach the token stream to the context so providers like
             // SmartGroupByProvider can re-scan the SELECT list without re-tokenizing.

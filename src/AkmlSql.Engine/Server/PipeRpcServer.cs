@@ -199,6 +199,17 @@ public class PipeRpcServer
                     // connection may be to a different server and we must not leak
                     // the previous server's databases into USE-completion.
                     Completion.Providers.DatabaseProvider.InvalidateSession(connInfo.SessionId);
+                    // Warm the database-list cache in the background so the first
+                    // USE-completion keystroke finds it already populated and does
+                    // not have to block on a SQL round trip.
+                    {
+                        var s = _sessionManager.GetSession(connInfo.SessionId);
+                        if (s != null && !string.IsNullOrEmpty(s.ConnectionString))
+                        {
+                            Completion.Providers.DatabaseProvider.SchedulePrefetch(
+                                connInfo.SessionId, s.ConnectionString);
+                        }
+                    }
                     Log.Information("Connection changed: {Session} -> {Db}", connInfo.SessionId, connInfo.DatabaseName);
 
                     // Fire-and-forget: populate schema cache Phase A

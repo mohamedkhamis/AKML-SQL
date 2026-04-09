@@ -235,4 +235,81 @@ public class SmartGroupByProviderTests
         Assert.Equal("a", result[0]);
         Assert.Equal("ISNULL(b, 0)", result[1]);
     }
+
+    // ── Implicit-alias expressions (arithmetic / cast / function) ──
+
+    [Fact]
+    public void ArithmeticWithImplicitAlias_StripsAlias()
+    {
+        // `col1 + col2 total` — the trailing identifier after the expression
+        // is an implicit column alias and should be stripped, leaving the
+        // pure expression.
+        var item = RunAndGetSmartItem(
+            "SELECT col1 + col2 total, COUNT(*) FROM tbl GROUP BY |");
+
+        Assert.NotNull(item);
+        Assert.Equal("col1 + col2", item!.InsertText);
+    }
+
+    [Fact]
+    public void ArithmeticWithoutAlias_KeepsFullExpression()
+    {
+        // No trailing alias — the whole expression must be preserved,
+        // including the second operand.
+        var item = RunAndGetSmartItem(
+            "SELECT col1 + col2, COUNT(*) FROM tbl GROUP BY |");
+
+        Assert.NotNull(item);
+        Assert.Equal("col1 + col2", item!.InsertText);
+    }
+
+    [Fact]
+    public void ConvertFunctionWithImplicitAlias_StripsAlias()
+    {
+        // CONVERT(INT, col) alias → strip trailing implicit alias, keep
+        // the function call intact.
+        var item = RunAndGetSmartItem(
+            "SELECT CONVERT(INT, col) intCol, COUNT(*) FROM tbl GROUP BY |");
+
+        Assert.NotNull(item);
+        Assert.Equal("CONVERT(INT, col)", item!.InsertText);
+    }
+
+    [Fact]
+    public void CastExpressionWithAsAlias_StripsAlias()
+    {
+        // CAST(x AS INT) AS whole — the inner `AS INT` is part of the cast,
+        // the outer `AS whole` is the alias. The extractor must strip only
+        // the outer alias and keep the full cast expression.
+        var item = RunAndGetSmartItem(
+            "SELECT CAST(x AS INT) AS whole, COUNT(*) FROM tbl GROUP BY |");
+
+        Assert.NotNull(item);
+        Assert.Equal("CAST(x AS INT)", item!.InsertText);
+    }
+
+    [Fact]
+    public void ConcatExpressionWithImplicitAlias_StripsAlias()
+    {
+        // String concat + implicit alias.
+        var item = RunAndGetSmartItem(
+            "SELECT firstName + ' ' + lastName fullName, COUNT(*) FROM tbl GROUP BY |");
+
+        Assert.NotNull(item);
+        Assert.Equal("firstName + ' ' + lastName", item!.InsertText);
+    }
+
+    [Fact]
+    public void ParenthesizedExpression_WithoutAlias_Preserved()
+    {
+        // Expression with parens, subtraction and division — nothing should be stripped.
+        // (Note: `*` cannot appear in a smart-GROUP-BY expression because the
+        // provider's wildcard detector treats any Star token as SELECT *; that's
+        // a known pre-existing limitation, unrelated to alias handling.)
+        var item = RunAndGetSmartItem(
+            "SELECT (price - discount) / 100, COUNT(*) FROM tbl GROUP BY |");
+
+        Assert.NotNull(item);
+        Assert.Equal("(price - discount) / 100", item!.InsertText);
+    }
 }

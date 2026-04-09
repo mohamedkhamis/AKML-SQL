@@ -45,6 +45,13 @@ public class CursorContext
     public bool InComment { get; set; }
     public bool InString { get; set; }
     public bool InSqlcmdDirective { get; set; }
+    /// <summary>
+    /// The session id of the request that produced this context. Populated by
+    /// <see cref="Completion.CompletionEngine.GetCompletions(string, int, Schema.DatabaseCache?, string)"/>
+    /// so providers that need per-session state (e.g. <c>DatabaseProvider</c>'s
+    /// per-connection database list cache) can look it up without static state.
+    /// </summary>
+    public string SessionId { get; set; } = string.Empty;
     public Dictionary<string, string> AvailableAliases { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, List<string>> AvailableCtes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, List<string>> AvailableTempTables { get; set; } = new(StringComparer.OrdinalIgnoreCase);
