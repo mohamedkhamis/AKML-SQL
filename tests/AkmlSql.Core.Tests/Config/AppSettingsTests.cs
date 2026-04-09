@@ -270,5 +270,164 @@ namespace AkmlSql.Core.Tests.Config
             Assert.Equal(@"\\srv\snip", s.TeamFolder);
             Assert.False(s.TrackUsage);
         }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Spec 014, Phase 2 (Foundational): tests for the new properties added
+        // by Phase 2 of the SQL Prompt parity work. These tests verify defaults
+        // and basic mutation round-trip; full feature behaviour is tested per
+        // user story phase.
+        // ─────────────────────────────────────────────────────────────────────
+
+        // ── SafetySettings (US1 extensions) ──
+
+        [Fact]
+        public void SafetySettings_Spec014_Defaults()
+        {
+            var s = new SafetySettings();
+            Assert.True(s.MergeNoFilter);
+            Assert.True(s.InsideJoin);
+            Assert.True(s.InsideProcOrTrigger);
+            Assert.Equal("Cancel", s.DefaultButton);
+            Assert.True(s.ShowEnvironmentColorInHeader);
+        }
+
+        [Fact]
+        public void SafetySettings_Spec014_Mutations()
+        {
+            var s = new SafetySettings
+            {
+                MergeNoFilter = false,
+                InsideJoin = false,
+                InsideProcOrTrigger = false,
+                DefaultButton = "Execute",
+                ShowEnvironmentColorInHeader = false
+            };
+            Assert.False(s.MergeNoFilter);
+            Assert.False(s.InsideJoin);
+            Assert.False(s.InsideProcOrTrigger);
+            Assert.Equal("Execute", s.DefaultButton);
+            Assert.False(s.ShowEnvironmentColorInHeader);
+        }
+
+        // ── GridSettings (US16 extensions) ──
+
+        [Fact]
+        public void GridSettings_Spec014_Defaults()
+        {
+            var s = new GridSettings();
+            Assert.True(s.EnableCopyAsInClause);
+            Assert.True(s.EnableScriptAsInsert);
+            Assert.True(s.EnableOpenInExcel);
+            Assert.False(s.ScriptAsInsertIncludesIdentity);
+        }
+
+        // ── CodeAnalysisSettings (US17 extensions) ──
+
+        [Fact]
+        public void CodeAnalysisSettings_Spec014_Defaults()
+        {
+            var s = new CodeAnalysisSettings();
+            Assert.True(s.LightbulbsEnabled);
+            Assert.True(s.ShowAdvisoryHints);
+            Assert.Equal("Shift+Click", s.ApplyFixOnAllOccurrencesShortcut);
+        }
+
+        // ── NavigationSettings (US13 + US20 extensions) ──
+
+        [Fact]
+        public void NavigationSettings_Spec014_Defaults()
+        {
+            var s = new NavigationSettings();
+            Assert.True(s.EnableF12ScriptAsAlter);
+            Assert.True(s.EnableCtrlF12SelectInOe);
+            Assert.True(s.EnableSummarizeScript);
+            Assert.True(s.EnableFindUnused);
+            Assert.True(s.EnableExecuteCurrentBatch);
+            Assert.True(s.EnableExecuteToCursor);
+            Assert.True(s.EnableBrowseOpenTabs);
+            Assert.Equal("Ctrl+Q", s.BrowseOpenTabsShortcut);
+        }
+
+        // ── CommandPaletteSettings (US4 extensions) ──
+
+        [Fact]
+        public void CommandPaletteSettings_Spec014_Defaults()
+        {
+            var s = new CommandPaletteSettings();
+            Assert.True(s.Enabled);
+            Assert.True(s.IncludeAkmlCommands);
+            Assert.True(s.IncludeAkmlOptions);
+            Assert.True(s.IncludeHostCommands);
+            Assert.True(s.IncludeDbObjects);
+            Assert.Equal(10, s.MaxRecentItems);
+            Assert.NotNull(s.RecentItems);
+            Assert.Empty(s.RecentItems);
+        }
+
+        // ── AiSettings (US10 + US18 extensions) ──
+
+        [Fact]
+        public void AiSettings_Spec014_Defaults()
+        {
+            var s = new AiSettings();
+            Assert.Equal("Alt+Z", s.OpenChatShortcut);
+            Assert.Equal("Shift+Alt+R", s.FixShortcut);
+            Assert.Equal("Ctrl+Alt+Z", s.OptimizeShortcut);
+            Assert.Equal("Ctrl+Alt+Up", s.GhostTextShortcut);
+            Assert.True(s.ShowEditorIcon);
+            Assert.True(s.ShowFollowupSuggestions);
+            Assert.Equal("-- generate:", s.CommentTriggerPrefix);
+            Assert.Equal(500, s.GhostTextDelayMs);
+        }
+
+        // ── CompletionPolishSettings (US19 + US2 + US8 — new section) ──
+
+        [Fact]
+        public void CompletionPolishSettings_Defaults()
+        {
+            var s = new CompletionPolishSettings();
+            Assert.True(s.EnableMsDescription);
+            Assert.True(s.EnableParameterHighlight);
+            Assert.True(s.EnableEncryptedDecryption);
+            Assert.True(s.EnableTempTableIntellisense);
+            Assert.Null(s.AlterTableTemplate);
+            Assert.Null(s.InsertIntoTemplate);
+            Assert.Equal(400, s.ObjectDefinitionBoxWidth);
+            Assert.Equal(300, s.ObjectDefinitionBoxHeight);
+            Assert.Equal("TableOrder", s.ColumnPickerDefaultSort);
+        }
+
+        [Fact]
+        public void CompletionPolishSettings_Mutations()
+        {
+            var s = new CompletionPolishSettings
+            {
+                EnableMsDescription = false,
+                EnableParameterHighlight = false,
+                EnableEncryptedDecryption = false,
+                EnableTempTableIntellisense = false,
+                AlterTableTemplate = "ALTER TABLE [{schema}].[{name}]",
+                InsertIntoTemplate = "INSERT INTO [{schema}].[{name}] ({columns}) VALUES ({values})",
+                ObjectDefinitionBoxWidth = 800,
+                ObjectDefinitionBoxHeight = 600,
+                ColumnPickerDefaultSort = "Alphabetical"
+            };
+            Assert.False(s.EnableMsDescription);
+            Assert.False(s.EnableEncryptedDecryption);
+            Assert.Equal("ALTER TABLE [{schema}].[{name}]", s.AlterTableTemplate);
+            Assert.Equal(800, s.ObjectDefinitionBoxWidth);
+            Assert.Equal(600, s.ObjectDefinitionBoxHeight);
+            Assert.Equal("Alphabetical", s.ColumnPickerDefaultSort);
+        }
+
+        // ── AppSettings root: CompletionPolish wired up ──
+
+        [Fact]
+        public void AppSettings_HasCompletionPolish()
+        {
+            var s = new AppSettings();
+            Assert.NotNull(s.CompletionPolish);
+            Assert.IsType<CompletionPolishSettings>(s.CompletionPolish);
+        }
     }
 }

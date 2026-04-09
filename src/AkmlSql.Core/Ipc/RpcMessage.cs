@@ -28,6 +28,17 @@ namespace AkmlSql.Core.Ipc
     /// <summary>
     /// Integer constants for <see cref="RpcMessage.MessageType"/>.
     /// Values 1–31 are sent Shell→Engine; values 101–131 are sent Engine→Shell.
+    /// <para>
+    /// <b>Spec 014 reservation</b> (SQL Prompt parity, 2026-04-09): the integer ranges
+    /// <c>90..99</c> (shell→engine requests) and <c>190..199</c> (engine→shell responses)
+    /// are reserved for spec-014 features that did not exist before. The first three
+    /// allocations are <see cref="FindInvalidObjects"/> (90), <see cref="FindUnusedVariables"/> (91)
+    /// and <see cref="EncryptedObjectDecryption"/> (92). Most other spec-014 features
+    /// reuse pre-existing message types from the previous Phase 7/8/9 work
+    /// (e.g. <see cref="DocumentOutline"/>, <see cref="ScriptAs"/>, <see cref="GridExport"/>,
+    /// <see cref="AiExplain"/>, <see cref="AiIndexAnalysis"/>, <see cref="AiTextToSql"/>,
+    /// <see cref="SafetyCheck"/>, <see cref="RequestRefactorPreview"/>).
+    /// </para>
     /// </summary>
     public static class MessageTypes
     {
@@ -131,6 +142,12 @@ namespace AkmlSql.Core.Ipc
         // Shell → Engine (Schema loading status poll)
         public const int SchemaStatusRequest = 80;
 
+        // Shell → Engine (Spec 014: SQL Prompt parity)
+        // — see the class XML doc for the reservation policy on the 90..99 range.
+        public const int FindInvalidObjects = 90;
+        public const int FindUnusedVariables = 91;
+        public const int EncryptedObjectDecryption = 92;
+
         // Shell → Engine (AI Assistance — Phase 9)
         public const int AiTextToSql = 70;
         public const int AiExplain = 71;
@@ -184,5 +201,10 @@ namespace AkmlSql.Core.Ipc
 
         // Engine → Shell (Schema loading status response)
         public const int SchemaStatusResponse = 180;
+
+        // Engine → Shell (Spec 014 responses)
+        public const int FindInvalidObjectsResult = 190;
+        public const int FindUnusedVariablesResult = 191;
+        public const int EncryptedObjectDecryptionResult = 192;
     }
 }

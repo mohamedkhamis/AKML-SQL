@@ -861,5 +861,178 @@ namespace AkmlSql.Core.Tests.Ipc.Messages
             Assert.Single(r.FailedDetails);
             Assert.Equal(3, r.SnippetIds.Length);
         }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Spec 014 — new IPC DTOs (Phase 2 / T010..T017)
+        // ─────────────────────────────────────────────────────────────────────
+
+        // ── FindInvalidObjectsRequest (US14) ──
+
+        [Fact]
+        public void FindInvalidObjectsRequest_DefaultsAndMutations()
+        {
+            var r = new FindInvalidObjectsRequest();
+            Assert.Equal(string.Empty, r.SessionId);
+            Assert.Equal(string.Empty, r.DatabaseName);
+            Assert.Equal(50, r.ChunkSize);
+
+            r.SessionId = "s1"; r.DatabaseName = "AdventureWorks"; r.ChunkSize = 200;
+            Assert.Equal("s1", r.SessionId);
+            Assert.Equal("AdventureWorks", r.DatabaseName);
+            Assert.Equal(200, r.ChunkSize);
+        }
+
+        // ── InvalidObjectRecord (US14) ──
+
+        [Fact]
+        public void InvalidObjectRecord_DefaultsAndMutations()
+        {
+            var r = new InvalidObjectRecord();
+            Assert.Equal(string.Empty, r.Schema);
+            Assert.Equal(string.Empty, r.Name);
+            Assert.Equal(0, r.Type);
+            Assert.Equal(string.Empty, r.ErrorMessage);
+            Assert.Null(r.SourceLine);
+            Assert.Null(r.MissingDependency);
+            Assert.Equal(default(System.DateTime), r.ScannedAtUtc);
+
+            var now = System.DateTime.UtcNow;
+            r.Schema = "dbo"; r.Name = "vw_Bad"; r.Type = 1;
+            r.ErrorMessage = "missing column"; r.SourceLine = 42;
+            r.MissingDependency = "dbo.OldTable.RemovedColumn"; r.ScannedAtUtc = now;
+            Assert.Equal("dbo", r.Schema);
+            Assert.Equal("vw_Bad", r.Name);
+            Assert.Equal(1, r.Type);
+            Assert.Equal("missing column", r.ErrorMessage);
+            Assert.Equal(42, r.SourceLine);
+            Assert.Equal("dbo.OldTable.RemovedColumn", r.MissingDependency);
+            Assert.Equal(now, r.ScannedAtUtc);
+        }
+
+        // ── FindInvalidObjectsResponse (US14) ──
+
+        [Fact]
+        public void FindInvalidObjectsResponse_DefaultsAndMutations()
+        {
+            var r = new FindInvalidObjectsResponse();
+            Assert.Equal(0, r.Status);
+            Assert.NotNull(r.Records);
+            Assert.Empty(r.Records);
+            Assert.False(r.IsFinalChunk);
+            Assert.Equal(0, r.TotalScanned);
+            Assert.Null(r.ErrorMessage);
+
+            r.Status = 1; r.Records = [new InvalidObjectRecord { Name = "x" }];
+            r.IsFinalChunk = true; r.TotalScanned = 10; r.ErrorMessage = "denied";
+            Assert.Equal(1, r.Status);
+            Assert.Single(r.Records);
+            Assert.True(r.IsFinalChunk);
+            Assert.Equal(10, r.TotalScanned);
+            Assert.Equal("denied", r.ErrorMessage);
+        }
+
+        // ── FindUnusedVariablesRequest (US13) ──
+
+        [Fact]
+        public void FindUnusedVariablesRequest_DefaultsAndMutations()
+        {
+            var r = new FindUnusedVariablesRequest();
+            Assert.Equal(string.Empty, r.SessionId);
+            Assert.Equal(string.Empty, r.DocumentText);
+
+            r.SessionId = "s2"; r.DocumentText = "DECLARE @x INT;";
+            Assert.Equal("s2", r.SessionId);
+            Assert.Equal("DECLARE @x INT;", r.DocumentText);
+        }
+
+        // ── UnusedDeclarationDto (US13) ──
+
+        [Fact]
+        public void UnusedDeclarationDto_DefaultsAndMutations()
+        {
+            var d = new UnusedDeclarationDto();
+            Assert.Equal(0, d.Kind);
+            Assert.Equal(string.Empty, d.Name);
+            Assert.Equal(0, d.DeclaredLine);
+            Assert.Equal(0, d.DeclaredColumn);
+            Assert.Null(d.EnclosingObject);
+
+            d.Kind = 1; d.Name = "@p1"; d.DeclaredLine = 5; d.DeclaredColumn = 12;
+            d.EnclosingObject = "dbo.usp_Foo";
+            Assert.Equal(1, d.Kind);
+            Assert.Equal("@p1", d.Name);
+            Assert.Equal(5, d.DeclaredLine);
+            Assert.Equal(12, d.DeclaredColumn);
+            Assert.Equal("dbo.usp_Foo", d.EnclosingObject);
+        }
+
+        // ── FindUnusedVariablesResponse (US13) ──
+
+        [Fact]
+        public void FindUnusedVariablesResponse_DefaultsAndMutations()
+        {
+            var r = new FindUnusedVariablesResponse();
+            Assert.Equal(0, r.Status);
+            Assert.NotNull(r.Unused);
+            Assert.Empty(r.Unused);
+            Assert.Null(r.ErrorMessage);
+
+            r.Status = 1; r.Unused = [new UnusedDeclarationDto { Name = "@unused" }];
+            r.ErrorMessage = "parse failed";
+            Assert.Equal(1, r.Status);
+            Assert.Single(r.Unused);
+            Assert.Equal("parse failed", r.ErrorMessage);
+        }
+
+        // ── EncryptedObjectDecryptionRequest (US19) ──
+
+        [Fact]
+        public void EncryptedObjectDecryptionRequest_DefaultsAndMutations()
+        {
+            var r = new EncryptedObjectDecryptionRequest();
+            Assert.Equal(string.Empty, r.SessionId);
+            Assert.Equal(string.Empty, r.DatabaseName);
+            Assert.Equal(string.Empty, r.Schema);
+            Assert.Equal(string.Empty, r.Name);
+
+            r.SessionId = "s3"; r.DatabaseName = "AdventureWorks";
+            r.Schema = "dbo"; r.Name = "usp_Secret";
+            Assert.Equal("s3", r.SessionId);
+            Assert.Equal("AdventureWorks", r.DatabaseName);
+            Assert.Equal("dbo", r.Schema);
+            Assert.Equal("usp_Secret", r.Name);
+        }
+
+        // ── EncryptedObjectDecryptionResponse (US19) ──
+
+        [Fact]
+        public void EncryptedObjectDecryptionResponse_DefaultsAndMutations()
+        {
+            var r = new EncryptedObjectDecryptionResponse();
+            Assert.Equal(0, r.Status);
+            Assert.Null(r.DecryptedScript);
+            Assert.False(r.WasDecrypted);
+            Assert.Null(r.ErrorMessage);
+
+            r.Status = 0; r.DecryptedScript = "CREATE PROCEDURE..."; r.WasDecrypted = true;
+            Assert.Equal("CREATE PROCEDURE...", r.DecryptedScript);
+            Assert.True(r.WasDecrypted);
+        }
+
+        // ── MessageType allocation cross-check (Spec 014, T004 + T009) ──
+
+        [Fact]
+        public void Spec014_NewMessageTypes_AreAllocated()
+        {
+            // Sanity check that the three new spec 014 MessageType integers are
+            // present and live in the documented 90..99 / 190..199 ranges.
+            Assert.Equal(90, AkmlSql.Core.Ipc.MessageTypes.FindInvalidObjects);
+            Assert.Equal(91, AkmlSql.Core.Ipc.MessageTypes.FindUnusedVariables);
+            Assert.Equal(92, AkmlSql.Core.Ipc.MessageTypes.EncryptedObjectDecryption);
+
+            Assert.Equal(190, AkmlSql.Core.Ipc.MessageTypes.FindInvalidObjectsResult);
+            Assert.Equal(191, AkmlSql.Core.Ipc.MessageTypes.FindUnusedVariablesResult);
+            Assert.Equal(192, AkmlSql.Core.Ipc.MessageTypes.EncryptedObjectDecryptionResult);
+        }
     }
 }

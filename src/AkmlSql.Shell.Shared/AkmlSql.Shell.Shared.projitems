@@ -23,6 +23,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Editor\SqlPromptIcons.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\SsmsConnectionDetector.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ExtensionAssemblyResolver.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Help\F1HelpListener.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)PackageGuids.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\AboutCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\CheckUpdateCommand.cs" />

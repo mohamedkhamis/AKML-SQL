@@ -622,6 +622,43 @@ public class PipeRpcServer
                 case MessageTypes.AiProviderTest:
                     return _aiProviderTestHandler.HandleAsync(message, ct);
 
+                // ── Spec 014 (SQL Prompt parity) — Phase 2 stubs ────────────────
+                // Real handlers land in the user-story phases (US14, US13, US19).
+                // The dispatch entries exist now so the IPC layer is wired end-to-end
+                // and the shell can be built against the new MessageType integers
+                // without referencing not-yet-existing classes.
+
+                case MessageTypes.FindInvalidObjects:
+                {
+                    var resp = new FindInvalidObjectsResponse
+                    {
+                        Status = 2, // Error
+                        ErrorMessage = "FindInvalidObjects not yet implemented (spec 014, US14)",
+                        IsFinalChunk = true
+                    };
+                    return Task.FromResult(CreateResponse(MessageTypes.FindInvalidObjectsResult, message.RequestId, resp));
+                }
+
+                case MessageTypes.FindUnusedVariables:
+                {
+                    var resp = new FindUnusedVariablesResponse
+                    {
+                        Status = 1, // ParseError used as a stand-in for "not implemented"
+                        ErrorMessage = "FindUnusedVariables not yet implemented (spec 014, US13)"
+                    };
+                    return Task.FromResult(CreateResponse(MessageTypes.FindUnusedVariablesResult, message.RequestId, resp));
+                }
+
+                case MessageTypes.EncryptedObjectDecryption:
+                {
+                    var resp = new EncryptedObjectDecryptionResponse
+                    {
+                        Status = 4, // Error
+                        ErrorMessage = "EncryptedObjectDecryption not yet implemented (spec 014, US19)"
+                    };
+                    return Task.FromResult(CreateResponse(MessageTypes.EncryptedObjectDecryptionResult, message.RequestId, resp));
+                }
+
                 case MessageTypes.Shutdown:
                     Log.Information("Shutdown requested by client.");
                     throw new OperationCanceledException("Shutdown requested");

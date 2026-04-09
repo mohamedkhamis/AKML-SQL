@@ -93,6 +93,16 @@ namespace AkmlSql.Core.Config
         public AiSettings Ai { get; set; } = new();
 
         /// <summary>
+        /// Completion popup polish (spec 014, US19, US2, US8): MS_Description tooltips,
+        /// parameter highlighting, encrypted-object decryption, temp-table IntelliSense,
+        /// custom ALTER/INSERT templates, object definition box size, column picker
+        /// sort default. Existing fields like SpaceCommits / DotCommits live in
+        /// <see cref="IntelliSenseSettings"/> and are unchanged.
+        /// </summary>
+        [JsonPropertyName("completionPolish")]
+        public CompletionPolishSettings CompletionPolish { get; set; } = new();
+
+        /// <summary>
         /// T093-T095: Whether the user has been prompted about native IntelliSense conflict.
         /// </summary>
         public bool NativeIntelliSensePrompted { get; set; }
@@ -303,6 +313,26 @@ namespace AkmlSql.Core.Config
 
         [JsonPropertyName("showInErrorList")]
         public bool ShowInErrorList { get; set; } = true;
+
+        // ── Spec 014, US17: Lightbulb quick-fixes and Issue Details popup ──
+
+        /// <summary>US17 / FR-079 — render lightbulb gutter icons for analysis violations.</summary>
+        [JsonPropertyName("lightbulbsEnabled")]
+        public bool LightbulbsEnabled { get; set; } = true;
+
+        /// <summary>
+        /// US17 / FR-079 — show blue lightbulbs for advisory-only rules (no auto-fix).
+        /// When false, only auto-fixable rules (orange) get a lightbulb.
+        /// </summary>
+        [JsonPropertyName("showAdvisoryHints")]
+        public bool ShowAdvisoryHints { get; set; } = true;
+
+        /// <summary>
+        /// US17 — modifier key combination that, when held while clicking Apply Fix,
+        /// applies the same fix to every occurrence in the document.
+        /// </summary>
+        [JsonPropertyName("applyFixOnAllOccurrencesShortcut")]
+        public string ApplyFixOnAllOccurrencesShortcut { get; set; } = "Shift+Click";
     }
 
     /// <summary>Settings for the refactoring engine.</summary>
@@ -453,6 +483,44 @@ namespace AkmlSql.Core.Config
             ["STAGING"] = "SimpleConfirm",
             ["DEV"] = "Disabled"
         };
+
+        // ── Spec 014, US1: Pre-execution safety extensions ──
+
+        /// <summary>
+        /// US1 / FR-002 — warn when a MERGE statement has no WHEN MATCHED filter
+        /// (equivalent to UPDATE / DELETE without WHERE for the target table).
+        /// </summary>
+        [JsonPropertyName("mergeNoFilter")]
+        public bool MergeNoFilter { get; set; } = true;
+
+        /// <summary>
+        /// US1 / FR-002 — warn when a DELETE / UPDATE wraps an INNER JOIN with no
+        /// WHERE clause; the join is not a row filter.
+        /// </summary>
+        [JsonPropertyName("insideJoin")]
+        public bool InsideJoin { get; set; } = true;
+
+        /// <summary>
+        /// US1 / FR-003 — warn when a CREATE / ALTER PROCEDURE or CREATE / ALTER
+        /// TRIGGER body contains DELETE / UPDATE / MERGE without a row filter.
+        /// </summary>
+        [JsonPropertyName("insideProcOrTrigger")]
+        public bool InsideProcOrTrigger { get; set; } = true;
+
+        /// <summary>
+        /// US1 / FR-005 — default focus button on the warning dialog.
+        /// "Cancel" (default) or "Execute". Cancel is the safe default so accidental
+        /// Enter presses do not run unsafe SQL.
+        /// </summary>
+        [JsonPropertyName("defaultButton")]
+        public string DefaultButton { get; set; } = "Cancel";
+
+        /// <summary>
+        /// US1 / FR-008 — when the target server is tagged Production via tab
+        /// coloring, render the safety dialog header in that environment color.
+        /// </summary>
+        [JsonPropertyName("showEnvironmentColorInHeader")]
+        public bool ShowEnvironmentColorInHeader { get; set; } = true;
     }
 
     /// <summary>Results grid productivity settings (Phase 8).</summary>
@@ -473,6 +541,28 @@ namespace AkmlSql.Core.Config
         /// <summary>Format 15+ digit numbers as text in Excel exports to prevent rounding.</summary>
         [JsonPropertyName("excelLargeNumberAsText")]
         public bool ExcelLargeNumberAsText { get; set; } = true;
+
+        // ── Spec 014, US16: Result-grid productivity ──
+
+        /// <summary>US16 / FR-074 — surface "Copy as IN Clause" on the result grid right-click menu.</summary>
+        [JsonPropertyName("enableCopyAsInClause")]
+        public bool EnableCopyAsInClause { get; set; } = true;
+
+        /// <summary>US16 / FR-074 — surface "Script as INSERT" on the result grid right-click menu.</summary>
+        [JsonPropertyName("enableScriptAsInsert")]
+        public bool EnableScriptAsInsert { get; set; } = true;
+
+        /// <summary>US16 / FR-074 — surface "Open in Excel" on the result grid right-click menu.</summary>
+        [JsonPropertyName("enableOpenInExcel")]
+        public bool EnableOpenInExcel { get; set; } = true;
+
+        /// <summary>
+        /// US16 — when emitting INSERT statements for a table with an IDENTITY column,
+        /// wrap with <c>SET IDENTITY_INSERT &lt;table&gt; ON / OFF</c>. Opt-in by default
+        /// because IDENTITY_INSERT can fail if the user lacks ALTER permission.
+        /// </summary>
+        [JsonPropertyName("scriptAsInsertIncludesIdentity")]
+        public bool ScriptAsInsertIncludesIdentity { get; set; } = false;
     }
 
     /// <summary>Editor productivity settings (Phase 8).</summary>
@@ -510,7 +600,7 @@ namespace AkmlSql.Core.Config
         public bool MultiDatabase { get; set; } = true;
     }
 
-    /// <summary>Navigation settings (Phase 8).</summary>
+    /// <summary>Navigation settings (Phase 8 + spec 014 US13/US20).</summary>
     public class NavigationSettings
     {
         [JsonPropertyName("goToDefinition")]
@@ -527,6 +617,45 @@ namespace AkmlSql.Core.Config
 
         [JsonPropertyName("connectionAliases")]
         public List<ConnectionAliasEntry> ConnectionAliases { get; set; } = [];
+
+        // ── Spec 014, US13: Script navigation chords ──
+
+        /// <summary>US13 / FR-062 — bind <c>F12</c> to "Script Object as ALTER".</summary>
+        [JsonPropertyName("enableF12ScriptAsAlter")]
+        public bool EnableF12ScriptAsAlter { get; set; } = true;
+
+        /// <summary>US13 / FR-063 — bind <c>Ctrl+F12</c> to "Select in Object Explorer" (SSMS only).</summary>
+        [JsonPropertyName("enableCtrlF12SelectInOe")]
+        public bool EnableCtrlF12SelectInOe { get; set; } = true;
+
+        /// <summary>US13 / FR-061 — bind <c>Ctrl+B, Ctrl+S</c> to "Summarize Script".</summary>
+        [JsonPropertyName("enableSummarizeScript")]
+        public bool EnableSummarizeScript { get; set; } = true;
+
+        /// <summary>US13 / FR-064 — bind <c>Ctrl+B, Ctrl+F</c> to "Find Unused Variables and Parameters".</summary>
+        [JsonPropertyName("enableFindUnused")]
+        public bool EnableFindUnused { get; set; } = true;
+
+        // ── Spec 014, US20: New execution shortcuts and Browse Open Tabs ──
+
+        /// <summary>US20 / FR-101 — bind <c>Alt+Shift+F5</c> to "Execute Current Batch".</summary>
+        [JsonPropertyName("enableExecuteCurrentBatch")]
+        public bool EnableExecuteCurrentBatch { get; set; } = true;
+
+        /// <summary>US20 / FR-102 — bind <c>Ctrl+Shift+F5</c> to "Execute To Cursor".</summary>
+        [JsonPropertyName("enableExecuteToCursor")]
+        public bool EnableExecuteToCursor { get; set; } = true;
+
+        /// <summary>
+        /// US20 / FR-105 — bind <c>Ctrl+Q</c> to a fuzzy "Browse Open Tabs" popup.
+        /// SSMS-only by default; in VS hosts <c>Ctrl+Q</c> is the host's Quick Launch.
+        /// </summary>
+        [JsonPropertyName("enableBrowseOpenTabs")]
+        public bool EnableBrowseOpenTabs { get; set; } = true;
+
+        /// <summary>US20 — keystroke for the Browse Open Tabs popup.</summary>
+        [JsonPropertyName("browseOpenTabsShortcut")]
+        public string BrowseOpenTabsShortcut { get; set; } = "Ctrl+Q";
     }
 
     /// <summary>A server name to friendly alias mapping.</summary>
@@ -539,11 +668,47 @@ namespace AkmlSql.Core.Config
         public string Alias { get; set; } = string.Empty;
     }
 
-    /// <summary>Command Palette usage tracking (Phase 8).</summary>
+    /// <summary>Command Palette usage tracking (Phase 8) and aggregation toggles (spec 014, US4).</summary>
     public class CommandPaletteSettings
     {
         [JsonPropertyName("usageCounts")]
         public Dictionary<string, int> UsageCounts { get; set; } = new();
+
+        // ── Spec 014, US4: unified Command Palette ──
+
+        /// <summary>US4 / FR-047 — master switch for the Command Palette.</summary>
+        [JsonPropertyName("enabled")]
+        public bool Enabled { get; set; } = true;
+
+        /// <summary>US4 / FR-048 — include AKML SQL commands as a result source.</summary>
+        [JsonPropertyName("includeAkmlCommands")]
+        public bool IncludeAkmlCommands { get; set; } = true;
+
+        /// <summary>US4 / FR-048 — include AKML SQL Options entries as a result source.</summary>
+        [JsonPropertyName("includeAkmlOptions")]
+        public bool IncludeAkmlOptions { get; set; } = true;
+
+        /// <summary>US4 / FR-048 — include the SSMS / VS host's built-in commands as a result source.</summary>
+        [JsonPropertyName("includeHostCommands")]
+        public bool IncludeHostCommands { get; set; } = true;
+
+        /// <summary>
+        /// US4 / FR-048 — include database objects from the active connection as a result
+        /// source. SSMS only; ignored in VS hosts.
+        /// </summary>
+        [JsonPropertyName("includeDbObjects")]
+        public bool IncludeDbObjects { get; set; } = true;
+
+        /// <summary>US4 / FR-052 — number of recent items the palette remembers per host.</summary>
+        [JsonPropertyName("maxRecentItems")]
+        public int MaxRecentItems { get; set; } = 10;
+
+        /// <summary>
+        /// US4 / FR-052 — recent palette selections, most recent first. Per machine
+        /// only — not synced across installations.
+        /// </summary>
+        [JsonPropertyName("recentItems")]
+        public List<string> RecentItems { get; set; } = new();
     }
 
     /// <summary>AI assistance settings (Phase 9).</summary>
@@ -640,5 +805,119 @@ namespace AkmlSql.Core.Config
         /// </summary>
         [JsonPropertyName("privacyConsentRequired")]
         public bool PrivacyConsentRequired { get; set; } = true;
+
+        // ── Spec 014, US10 + US18: AI shortcuts and reach ──
+
+        /// <summary>US10 / FR-053 — keystroke for "Open AI chat panel". Default <c>Alt+Z</c>.</summary>
+        [JsonPropertyName("openChatShortcut")]
+        public string OpenChatShortcut { get; set; } = "Alt+Z";
+
+        /// <summary>US10 / FR-054 — keystroke for "AI Fix Selection". Default <c>Shift+Alt+R</c>.</summary>
+        [JsonPropertyName("fixShortcut")]
+        public string FixShortcut { get; set; } = "Shift+Alt+R";
+
+        /// <summary>US10 / FR-055 — keystroke for "AI Optimize Selection". Default <c>Ctrl+Alt+Z</c>.</summary>
+        [JsonPropertyName("optimizeShortcut")]
+        public string OptimizeShortcut { get; set; } = "Ctrl+Alt+Z";
+
+        /// <summary>US10 / FR-056 — keystroke for "AI Manual Ghost Text". Default <c>Ctrl+Alt+Up</c>.</summary>
+        [JsonPropertyName("ghostTextShortcut")]
+        public string GhostTextShortcut { get; set; } = "Ctrl+Alt+Up";
+
+        /// <summary>US18 / FR-089 — render the floating AI icon at the right edge of any non-empty selection.</summary>
+        [JsonPropertyName("showEditorIcon")]
+        public bool ShowEditorIcon { get; set; } = true;
+
+        /// <summary>US18 / FR-090 — render 1–3 follow-up suggestion buttons after every AI answer.</summary>
+        [JsonPropertyName("showFollowupSuggestions")]
+        public bool ShowFollowupSuggestions { get; set; } = true;
+
+        /// <summary>
+        /// US18 / FR-087 — comment line prefix that triggers comment-to-SQL when followed
+        /// by Tab. Default <c>-- generate:</c>.
+        /// </summary>
+        [JsonPropertyName("commentTriggerPrefix")]
+        public string CommentTriggerPrefix { get; set; } = "-- generate:";
+
+        /// <summary>US18 — debounce delay before AI ghost-text auto-suggest fires (milliseconds).</summary>
+        [JsonPropertyName("ghostTextDelayMs")]
+        public int GhostTextDelayMs { get; set; } = 500;
+    }
+
+    /// <summary>
+    /// Spec 014, US19 (and US2/US8): completion popup polish settings that did not
+    /// fit into the existing <see cref="IntelliSenseSettings"/> class. Lives as a
+    /// separate top-level section so the Options dialog can present it on its own page.
+    /// Persisted under <c>completionPolish</c> in <c>config.json</c>.
+    /// </summary>
+    public class CompletionPolishSettings
+    {
+        // ── Tooltips and parameter help ──
+
+        /// <summary>
+        /// US19 / FR-096 — surface the <c>MS_Description</c> extended property in
+        /// object tooltips, with clickable cross-references to other objects.
+        /// </summary>
+        [JsonPropertyName("enableMsDescription")]
+        public bool EnableMsDescription { get; set; } = true;
+
+        /// <summary>US19 / FR-097 — bold the next-expected parameter in function-signature popups.</summary>
+        [JsonPropertyName("enableParameterHighlight")]
+        public bool EnableParameterHighlight { get; set; } = true;
+
+        // ── Encrypted object decryption ──
+
+        /// <summary>
+        /// US19 / FR-098 — when the user has DAC permission, attempt to decrypt
+        /// encrypted procedures and functions and render the plaintext in the
+        /// Object Definition Box's Script tab with a "decrypted" badge.
+        /// </summary>
+        [JsonPropertyName("enableEncryptedDecryption")]
+        public bool EnableEncryptedDecryption { get; set; } = true;
+
+        // ── Temp-table IntelliSense ──
+
+        /// <summary>
+        /// US19 / FR-100 — parse <c>CREATE TABLE #x</c> and <c>SELECT … INTO #x</c>
+        /// statements in the active script and offer column completions for the
+        /// resulting temp tables in later statements within the same script.
+        /// </summary>
+        [JsonPropertyName("enableTempTableIntellisense")]
+        public bool EnableTempTableIntellisense { get; set; } = true;
+
+        // ── Customisable insertion templates ──
+
+        /// <summary>
+        /// US19 / FR-099 — user-customised template for the <c>ALTER TABLE</c>
+        /// statement that completion inserts. <c>null</c> = use the built-in default.
+        /// </summary>
+        [JsonPropertyName("alterTableTemplate")]
+        public string? AlterTableTemplate { get; set; }
+
+        /// <summary>
+        /// US19 / FR-099 — user-customised template for the <c>INSERT INTO</c>
+        /// statement that completion inserts. <c>null</c> = use the built-in default.
+        /// </summary>
+        [JsonPropertyName("insertIntoTemplate")]
+        public string? InsertIntoTemplate { get; set; }
+
+        // ── Object Definition Box (US8) ──
+
+        /// <summary>US8 / FR-023 — persisted width of the Object Definition Box. Default 400.</summary>
+        [JsonPropertyName("objectDefinitionBoxWidth")]
+        public double ObjectDefinitionBoxWidth { get; set; } = 400;
+
+        /// <summary>US8 / FR-023 — persisted height of the Object Definition Box. Default 300.</summary>
+        [JsonPropertyName("objectDefinitionBoxHeight")]
+        public double ObjectDefinitionBoxHeight { get; set; } = 300;
+
+        // ── Column Picker (US2) ──
+
+        /// <summary>
+        /// US2 / FR-011 — default sort mode for the Column Picker:
+        /// <c>"TableOrder"</c> (default) or <c>"Alphabetical"</c>.
+        /// </summary>
+        [JsonPropertyName("columnPickerDefaultSort")]
+        public string ColumnPickerDefaultSort { get; set; } = "TableOrder";
     }
 }
