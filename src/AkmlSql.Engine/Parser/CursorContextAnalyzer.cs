@@ -30,7 +30,8 @@ public enum ClauseType
     Drop,        // After DROP — object type context
     Grant,       // After GRANT/REVOKE/DENY — permission context
     ForXml,      // After FOR XML — XML output mode
-    ForJson      // After FOR JSON — JSON output mode
+    ForJson,     // After FOR JSON — JSON output mode
+    Use          // After USE keyword — expects a database name (to be inserted as [Name])
 }
 
 public class CursorContext
@@ -219,6 +220,25 @@ public class CursorContextAnalyzer
                 case TSqlTokenType.Declare: return ClauseType.Declare;
                 case TSqlTokenType.Over: return ClauseType.Over;
                 case TSqlTokenType.Option: return ClauseType.Option;
+                case TSqlTokenType.Use: return ClauseType.Use;
+
+                // TSqlTokenType.By is a dedicated token. When we encounter it scanning
+                // backwards, walk back one more non-whitespace token and check its TEXT
+                // (ScriptDom may tokenize GROUP/ORDER as dedicated keyword tokens OR as
+                // Identifiers depending on version, so we match on text, not token type).
+                case TSqlTokenType.By:
+                    for (int j = i - 1; j >= 0; j--)
+                    {
+                        var tj = tokens[j];
+                        if (IsWhitespaceOrComment(tj)) continue;
+                        var upperBy = tj.Text?.ToUpperInvariant();
+                        if (upperBy == "GROUP") return ClauseType.GroupBy;
+                        if (upperBy == "ORDER") return ClauseType.OrderBy;
+                        break;
+                    }
+                    // Unrecognized use of BY — continue scanning further back
+                    continue;
+
                 case TSqlTokenType.Identifier:
                     var upper = t.Text.ToUpperInvariant();
                     if (upper == "GROUP")
@@ -236,12 +256,9 @@ public class CursorContextAnalyzer
                         return ClauseType.Exec;
                     }
 
-                    if (upper == "BY")
-                    {
-                        // "BY" alone doesn't tell us which clause; continue scanning
-                        // to find the preceding GROUP or ORDER keyword.
-                        continue;
-                    }
+                    // (BY is handled explicitly above as TSqlTokenType.By — ScriptDom
+                    //  tokenizes it as a dedicated token, never as Identifier.)
+
                     if (upper is "CROSS" or "INNER" or "LEFT" or "RIGHT" or "FULL" or "OUTER")
                     {
                         // JOIN qualifiers — continue scanning to find JOIN/FROM

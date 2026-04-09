@@ -87,10 +87,18 @@ public class ObjectProvider : ICompletionProvider
         // No dot: return objects from default schema (dbo) + all schema names
         var allowedTypes = GetAllowedObjectTypes(context.ClauseType);
 
+        // ── FK annotation for JOIN/FROM table suggestions ──
+        // Build a set of tables that are FK-related to any already-referenced table
+        // in the current statement. In JoinTable/From context those tables get a
+        // visual marker ("FK → <other>") in their SecondaryText AND a priority boost
+        // so they appear at the top of the suggestion list. This works even when
+        // TableAliasEnabled is off (it's orthogonal to alias generation).
+        var fkRelated = BuildFkRelatedLookup(context, cache);
+
         // First, yield objects from default schema (dbo) with higher priority
         foreach (var obj in GetFilteredObjects(cache, "dbo", allowedTypes))
         {
-            yield return ToCompletionItem(obj, sortPriorityBase: 100);
+            yield return ToCompletionItem(obj, sortPriorityBase: 100, fkRelated: fkRelated);
         }
 
         // Yield objects from non-dbo schemas, schema-qualified
@@ -103,7 +111,7 @@ public class ObjectProvider : ICompletionProvider
 
             foreach (var obj in GetFilteredObjects(cache, schema.SchemaName, allowedTypes))
             {
-                yield return ToCompletionItem(obj, sortPriorityBase: 200, includeSchema: true);
+                yield return ToCompletionItem(obj, sortPriorityBase: 200, includeSchema: true, fkRelated: fkRelated);
             }
         }
 
@@ -121,6 +129,55 @@ public class ObjectProvider : ICompletionProvider
         }
     }
 
+    /// <summary>
+    /// Builds a map of "schema.table" → "related existing table name" for every table
+    /// that has a foreign key relationship (in either direction) with any already-
+    /// referenced table in <see cref="CursorContext.AvailableAliases"/>. Returns an
+    /// empty dictionary when the clause context is not JOIN/FROM or when there are
+    /// no existing table references.
+    /// </summary>
+    private static Dictionary<string, string> BuildFkRelatedLookup(CursorContext context, DatabaseCache cache)
+    {
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (context.ClauseType != ClauseType.JoinTable && context.ClauseType != ClauseType.From)
+        {
+            return result;
+        }
+
+        foreach (var (_, fullTableName) in context.AvailableAliases)
+        {
+            var parts = fullTableName.Split('.');
+            var schemaName = parts.Length >= 2 ? parts[0] : "dbo";
+            var tableName = parts.Length >= 2 ? parts[1] : parts[0];
+
+            foreach (var fk in cache.GetForeignKeysForTable(schemaName, tableName))
+            {
+                // Identify the "other" side of the relationship.
+                string otherSchema, otherTable;
+                bool isParent = fk.ParentSchema.Equals(schemaName, StringComparison.OrdinalIgnoreCase) &&
+                                fk.ParentTable.Equals(tableName, StringComparison.OrdinalIgnoreCase);
+                if (isParent)
+                {
+                    otherSchema = fk.ReferencedSchema;
+                    otherTable = fk.ReferencedTable;
+                }
+                else
+                {
+                    otherSchema = fk.ParentSchema;
+                    otherTable = fk.ParentTable;
+                }
+
+                var key = $"{otherSchema}.{otherTable}";
+                if (!result.ContainsKey(key))
+                {
+                    result[key] = tableName;
+                }
+            }
+        }
+
+        return result;
+    }
+
     private static IEnumerable<CompletionItem> GetDotQualifiedCompletions(CursorContext context, DatabaseCache cache)
     {
         var prefix = context.DotPrefix;
@@ -136,7 +193,7 @@ public class ObjectProvider : ICompletionProvider
 
             foreach (var obj in GetFilteredObjects(cache, schemaName, allowedTypes))
             {
-                yield return ToCompletionItem(obj, sortPriorityBase: 100);
+                yield return ToCompletionItem(obj, sortPriorityBase: 100, fkRelated: null);
             }
             yield break;
         }
@@ -147,7 +204,7 @@ public class ObjectProvider : ICompletionProvider
             var allowedTypes = GetAllowedObjectTypes(context.ClauseType);
             foreach (var obj in GetFilteredObjects(cache, prefix, allowedTypes))
             {
-                yield return ToCompletionItem(obj, sortPriorityBase: 100);
+                yield return ToCompletionItem(obj, sortPriorityBase: 100, fkRelated: null);
             }
             yield break;
         }
@@ -196,7 +253,11 @@ public class ObjectProvider : ICompletionProvider
             .ThenBy(o => o.ObjectName, StringComparer.OrdinalIgnoreCase);
     }
 
-    private static CompletionItem ToCompletionItem(DatabaseObject obj, int sortPriorityBase, bool includeSchema = false)
+    private static CompletionItem ToCompletionItem(
+        DatabaseObject obj,
+        int sortPriorityBase,
+        bool includeSchema = false,
+        Dictionary<string, string>? fkRelated = null)
     {
         var displayText = includeSchema ? obj.FullName : obj.ObjectName;
         var insertText = includeSchema ? obj.FullName : obj.ObjectName;
@@ -225,6 +286,16 @@ public class ObjectProvider : ICompletionProvider
             // Subtract a bonus based on log of row count (max bonus ~50)
             var bonus = (int)Math.Min(50, Math.Log10(obj.ApproxRowCount + 1) * 10);
             sortPriority -= bonus;
+        }
+
+        // ── FK annotation ──
+        // When this table has a foreign-key relationship with a table already in
+        // the current query (JOIN/FROM context), surface that in the secondary
+        // text and boost the sort priority so it appears near the top.
+        if (fkRelated != null && fkRelated.TryGetValue(obj.FullName, out var relatedTo))
+        {
+            secondaryText = $"{secondaryText}  •  \uD83D\uDD11 FK ↔ {relatedTo}";
+            sortPriority -= 500; // strong bump: FK-related tables are almost always the right pick
         }
 
         return new CompletionItem

@@ -228,6 +228,9 @@
     <!-- Editor Toolbar: SQL Prompt-style action bar at top of each SQL editor -->
     <Compile Include="$(MSBuildThisFileDirectory)Editor\Toolbar\EditorToolbar.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\Toolbar\EditorToolbarProvider.cs" />
+    <!-- Schema Progress: bottom-right margin showing schema cache loading state -->
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\SchemaProgress\SchemaProgressMargin.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\SchemaProgress\SchemaProgressMarginProvider.cs" />
     <!-- Phase 10: SQL Prompt Core Parity — Snippet Manager -->
     <Compile Include="$(MSBuildThisFileDirectory)Snippets\SnippetManagerViewModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Snippets\SnippetManagerDialog.cs" />

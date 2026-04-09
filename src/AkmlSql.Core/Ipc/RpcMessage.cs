@@ -128,6 +128,9 @@ namespace AkmlSql.Core.Ipc
         public const int ScriptAs = 67;
         public const int GridExport = 68;
 
+        // Shell → Engine (Schema loading status poll)
+        public const int SchemaStatusRequest = 80;
+
         // Shell → Engine (AI Assistance — Phase 9)
         public const int AiTextToSql = 70;
         public const int AiExplain = 71;
@@ -178,5 +181,8 @@ namespace AkmlSql.Core.Ipc
         public const int AiGhostTextResult = 176;
         public const int AiProviderTestResult = 177;
         public const int AiStreamChunk = 178;
+
+        // Engine → Shell (Schema loading status response)
+        public const int SchemaStatusResponse = 180;
     }
 }

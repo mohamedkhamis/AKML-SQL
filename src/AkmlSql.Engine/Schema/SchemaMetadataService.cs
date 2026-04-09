@@ -18,6 +18,79 @@ public enum PermissionLevel
 [SuppressMessage("ReSharper", "UnusedMember.Global")]
 public class SchemaMetadataService
 {
+    /// <summary>
+    /// Lists all accessible online databases on the target server. Used by
+    /// the USE-clause completion provider to offer database names for auto-complete.
+    ///
+    /// Verifies the actual connected server via <c>@@SERVERNAME</c> first so the
+    /// log trail makes it obvious if a connection string is routing to the wrong
+    /// physical instance.
+    /// </summary>
+    public async Task<List<string>> ListDatabasesAsync(string connectionString, CancellationToken ct)
+    {
+        var databases = new List<string>();
+
+        // Scrub password before logging the connection string so it's safe to emit.
+        string scrubbedDataSource = "(unknown)";
+        try
+        {
+            var cb = new SqlConnectionStringBuilder(connectionString);
+            scrubbedDataSource = cb.DataSource ?? "(unknown)";
+        }
+        catch { }
+
+        try
+        {
+            await using var conn = new SqlConnection(connectionString);
+            await conn.OpenAsync(ct);
+
+            // Sanity check: verify the actual physical server we connected to.
+            // If caption parsing gave us the wrong Data Source, @@SERVERNAME
+            // will reveal the mismatch in the log.
+            string actualServer = "(unknown)";
+            try
+            {
+                await using var probe = conn.CreateCommand();
+                probe.CommandText = "SELECT @@SERVERNAME";
+                probe.CommandTimeout = 3;
+                var result = await probe.ExecuteScalarAsync(ct);
+                actualServer = result?.ToString() ?? "(null)";
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "ListDatabasesAsync: @@SERVERNAME probe failed");
+            }
+
+            Log.Information(
+                "ListDatabasesAsync: opened connection — DataSource='{DataSource}', @@SERVERNAME='{ActualServer}'",
+                scrubbedDataSource, actualServer);
+
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = @"
+                SELECT name
+                FROM sys.databases
+                WHERE state = 0 AND HAS_DBACCESS(name) = 1
+                ORDER BY
+                    CASE WHEN name IN ('master','tempdb','model','msdb') THEN 1 ELSE 0 END,
+                    name;";
+            cmd.CommandTimeout = 5;
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct))
+            {
+                databases.Add(reader.GetString(0));
+            }
+
+            Log.Information(
+                "ListDatabasesAsync: returned {Count} databases from '{ActualServer}' for DataSource='{DataSource}'",
+                databases.Count, actualServer, scrubbedDataSource);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "ListDatabasesAsync failed for DataSource='{DataSource}'", scrubbedDataSource);
+        }
+        return databases;
+    }
+
     public async Task<PermissionLevel> ProbePermissionsAsync(string connectionString, CancellationToken ct)
     {
         try

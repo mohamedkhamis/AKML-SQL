@@ -52,7 +52,9 @@ namespace AkmlSql.Shell.Shared.Editor
             {
                 // Get service provider from the VS global service
                 var sp = Microsoft.VisualStudio.Shell.ServiceProvider.GlobalProvider as IServiceProvider;
-                ConnectionWiringHelper.DetectAndSendConnection(sp, sessionId);
+                // Pass the specific text view so connection detection resolves
+                // to THIS view's document, not whatever is currently focused.
+                ConnectionWiringHelper.DetectAndSendConnection(sp, sessionId, textView);
                 ConnectionWiringHelper.SendFullDocument(sessionId, textView.TextBuffer);
                 textView.TextBuffer.Changed += (s, e) =>
                     ConnectionWiringHelper.OnBufferChanged(sessionId, e);

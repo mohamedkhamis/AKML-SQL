@@ -14,13 +14,14 @@ namespace AkmlSql.Shell.Shared.Editor
     /// </summary>
     internal static class ConnectionWiringHelper
     {
-        public static void DetectAndSendConnection(IServiceProvider serviceProvider, string sessionId)
+        public static void DetectAndSendConnection(IServiceProvider serviceProvider, string sessionId,
+            Microsoft.VisualStudio.Text.Editor.IWpfTextView textView = null)
         {
             try
             {
                 // DTE.ActiveDocument may not be ready when TextViewCreated fires.
                 // Retry with a short delay to let the document initialize.
-                var connection = SsmsConnectionDetector.TryDetectConnection(serviceProvider);
+                var connection = SsmsConnectionDetector.TryDetectConnection(serviceProvider, textView);
                 if (connection == null)
                 {
                     // Retry after a delay on a background thread
@@ -35,7 +36,7 @@ namespace AkmlSql.Shell.Shared.Editor
                                 SsmsConnectionDetector.ConnectionResult conn = null;
                                 await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                                 {
-                                    conn = SsmsConnectionDetector.TryDetectConnection(serviceProvider);
+                                    conn = SsmsConnectionDetector.TryDetectConnection(serviceProvider, textView);
                                 });
                                 if (conn != null)
                                 {

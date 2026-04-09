@@ -145,12 +145,19 @@ namespace AkmlSql.Core.Config
         public bool ShowNullability { get; set; } = true;
         /// <summary>Show PK/FK badge indicators in completion details.</summary>
         public bool ShowPkFk { get; set; } = true;
-        /// <summary>Suggest automatic table aliases when completing table names. Default disabled.</summary>
+        /// <summary>
+        /// Master switch for "Tables Alias" — controls all automatic alias-related
+        /// completions across the app. When enabled:
+        /// - After typing a table name in FROM, alias candidates ("o", "od", ...) are suggested.
+        /// - After typing JOIN, target tables are suggested with auto-generated alias and
+        ///   FK-based ON clause (e.g. <c>Conversations c ON c.Id = A.ConversationId</c>).
+        /// When disabled, plain table names are suggested in both cases. Default disabled.
+        /// </summary>
         public bool AutoAlias { get; set; } = false;
         /// <summary>
-        /// Suggest JOIN target tables with auto-generated alias and ON clause based on
-        /// foreign key relationships when typing after JOIN. Default disabled — when
-        /// off, plain table names are suggested instead.
+        /// DEPRECATED — superseded by <see cref="AutoAlias"/> which is now the single
+        /// master switch for all alias-related completions. Field retained for
+        /// backward compatibility with existing config.json files; the value is ignored.
         /// </summary>
         public bool JoinAssist { get; set; } = false;
         /// <summary>Keyword casing applied to completions inserted into the editor.</summary>

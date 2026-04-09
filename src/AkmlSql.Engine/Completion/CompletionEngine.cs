@@ -15,17 +15,30 @@ public class CompletionEngine
     private int _maxSuggestions = 50;
 
     /// <summary>
-    /// Whether JoinProvider is allowed to suggest tables with auto-generated alias
-    /// and ON clause when in a JOIN context. Defaults to false so plain table names
-    /// are suggested unless the user explicitly enables JoinAssist in settings.
+    /// AsyncLocal holds the current request's sessionId so providers that need
+    /// per-session state (like <see cref="DatabaseProvider"/>, which needs the
+    /// active connection string) can look it up without changing every provider
+    /// signature. Set by <see cref="GetCompletions(string, int, DatabaseCache?, string)"/>.
     /// </summary>
-    public bool JoinAssistEnabled { get; set; } = false;
+    private static readonly System.Threading.AsyncLocal<string> _currentSessionId = new();
+    public static string CurrentSessionId => _currentSessionId.Value ?? string.Empty;
+
+    /// <summary>
+    /// Master switch for all table-alias completion features. Controls:
+    /// - <see cref="AliasProvider"/> (suggests aliases like "o", "od" after a table name in FROM)
+    /// - <see cref="JoinProvider"/> (suggests <c>Table alias ON ...</c> after JOIN, FK-aware)
+    /// Defaults to false so plain table names are suggested unless the user explicitly
+    /// enables "Tables Alias" in settings.
+    /// </summary>
+    public bool TableAliasEnabled { get; set; } = false;
 
     public CompletionEngine(TsqlParserService parserService)
     {
         _parserService = parserService;
 
         // Register built-in providers (order matters for routing priority)
+        RegisterProvider(new SmartGroupByProvider());
+        RegisterProvider(new DatabaseProvider());
         RegisterProvider(new ColumnProvider());
         RegisterProvider(new ObjectProvider());
         RegisterProvider(new KeywordProvider());
@@ -47,12 +60,20 @@ public class CompletionEngine
     }
 
     public CompletionResponse GetCompletions(string documentText, int cursorOffset, DatabaseCache? cache)
+        => GetCompletions(documentText, cursorOffset, cache, sessionId: string.Empty);
+
+    public CompletionResponse GetCompletions(string documentText, int cursorOffset, DatabaseCache? cache, string sessionId)
     {
+        _currentSessionId.Value = sessionId;
         try
         {
             // Fast tier: tokenize for context analysis
             var tokens = _parserService.GetTokenStream(documentText);
             var context = _contextAnalyzer.Analyze(tokens, cursorOffset);
+
+            // Attach the token stream to the context so providers like
+            // SmartGroupByProvider can re-scan the SELECT list without re-tokenizing.
+            Providers.SmartGroupByContextExtensions.AttachTokens(context, tokens);
 
             // Suppress in comments/strings
             if (context.InComment || context.InString)
@@ -89,8 +110,8 @@ public class CompletionEngine
             var allItems = new List<CompletionItem>();
             foreach (var provider in _providers)
             {
-                // Skip JoinProvider entirely if JoinAssist is disabled in settings.
-                if (provider is JoinProvider && !JoinAssistEnabled)
+                // Skip alias-related providers entirely when "Tables Alias" is disabled.
+                if (!TableAliasEnabled && (provider is JoinProvider || provider is AliasProvider))
                 {
                     continue;
                 }

@@ -7,77 +7,179 @@ using Serilog;
 namespace AkmlSql.Engine.Completion.Providers;
 
 /// <summary>
-/// Provides column completions when typing after an alias dot (e.g., "o." where o is an alias for Orders).
-/// Resolves alias → table via AvailableAliases, then pulls columns from DatabaseCache.
+/// Provides column completions in two scenarios:
+/// 1. <b>Dot-qualified</b>: after typing <c>alias.</c> or <c>table.</c> — yields columns from that table.
+/// 2. <b>Expression-position</b>: in WHERE/JOIN ON/SELECT list/GROUP BY/HAVING/ORDER BY/UPDATE SET
+///    contexts — yields columns from ALL tables already in scope (resolved via FROM/JOIN clauses).
+///    When multiple tables are in scope the column is qualified with its alias to avoid ambiguity.
 /// Ranking: PK columns first (priority 10), FK columns second (priority 20), then by ordinal (priority 30).
 /// </summary>
 public class ColumnProvider : ICompletionProvider
 {
     public string Name => "Column";
 
+    /// <summary>
+    /// Clause contexts where bare column names are valid completions
+    /// (i.e. expression positions inside a query referencing in-scope tables).
+    /// </summary>
+    private static readonly HashSet<ClauseType> ExpressionClauses =
+    [
+        ClauseType.Select,
+        ClauseType.Where,
+        ClauseType.JoinOn,
+        ClauseType.GroupBy,
+        ClauseType.Having,
+        ClauseType.OrderBy,
+        ClauseType.UpdateSet,
+        ClauseType.InsertColumns
+    ];
+
     public bool CanHandle(CursorContext context, DatabaseCache? cache)
     {
-        // Only handle when there's a dot prefix that matches a known alias
-        if (!context.PrecedingDot || string.IsNullOrEmpty(context.DotPrefix))
-        {
-            return false;
-        }
-
         if (cache == null)
         {
             return false;
         }
 
-        // Check aliases first, then fall back to direct table name lookup in cache (#11)
-        if (context.AvailableAliases.ContainsKey(context.DotPrefix))
-            return true;
-
-        // Direct table name without alias: e.g., "SELECT Customers." without FROM alias
-        if (cache.FindObject("dbo", context.DotPrefix) != null)
-            return true;
-
-        // Try all schemas for schema-qualified or cross-schema direct references
-        foreach (var schema in cache.Schemas.Values)
+        // ── Path 1: dot-qualified completion ("alias." / "table.") ──
+        if (context.PrecedingDot && !string.IsNullOrEmpty(context.DotPrefix))
         {
-            if (cache.FindObject(schema.SchemaName, context.DotPrefix) != null)
+            if (context.AvailableAliases.ContainsKey(context.DotPrefix))
                 return true;
+
+            if (cache.FindObject("dbo", context.DotPrefix) != null)
+                return true;
+
+            foreach (var schema in cache.Schemas.Values)
+            {
+                if (cache.FindObject(schema.SchemaName, context.DotPrefix) != null)
+                    return true;
+            }
+
+            return false;
         }
 
-        return false;
+        // ── Path 2: bare column name in an expression-position clause ──
+        // The cursor is in WHERE/JOIN ON/SELECT/etc. AND there is at least one
+        // table already referenced in the FROM/JOIN clause that we can pull columns from.
+        return ExpressionClauses.Contains(context.ClauseType)
+               && context.AvailableAliases.Count > 0;
     }
 
     public IEnumerable<CompletionItem> GetCompletions(CursorContext context, DatabaseCache? cache)
     {
-        if (cache == null || string.IsNullOrEmpty(context.DotPrefix))
+        if (cache == null)
         {
             yield break;
         }
 
+        // ── Path 1: dot-qualified columns from a single table ──
+        if (context.PrecedingDot && !string.IsNullOrEmpty(context.DotPrefix))
+        {
+            foreach (var item in GetDotQualifiedColumns(context, cache))
+                yield return item;
+            yield break;
+        }
+
+        // ── Path 2: bare columns from ALL tables in scope ──
+        if (!ExpressionClauses.Contains(context.ClauseType) || context.AvailableAliases.Count == 0)
+        {
+            yield break;
+        }
+
+        bool multiTable = context.AvailableAliases.Count > 1;
+        var seenColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (alias, fullTableName) in context.AvailableAliases)
+        {
+            var parts = fullTableName.Split('.');
+            var schemaName = parts.Length >= 2 ? parts[0] : "dbo";
+            var tableName = parts.Length >= 2 ? parts[1] : parts[0];
+
+            var dbObject = cache.FindObject(schemaName, tableName);
+            if (dbObject == null)
+            {
+                // Try all schemas if not found in dbo
+                foreach (var schema in cache.Schemas.Values)
+                {
+                    dbObject = cache.FindObject(schema.SchemaName, tableName);
+                    if (dbObject != null) { schemaName = schema.SchemaName; break; }
+                }
+            }
+            if (dbObject == null)
+            {
+                Log.Debug("ColumnProvider (bare path): table {Schema}.{Table} not found in cache", schemaName, tableName);
+                continue;
+            }
+            if (!dbObject.ColumnsLoaded || dbObject.Columns.Count == 0)
+            {
+                Log.Debug("ColumnProvider (bare path): columns not loaded for {Table}", dbObject.FullName);
+                continue;
+            }
+
+            var fkColumnNames = BuildFkColumnSet(cache, schemaName, tableName);
+
+            foreach (var column in dbObject.Columns)
+            {
+                // Qualify with alias when multiple tables are in scope so the user
+                // can disambiguate. Single-table queries get plain column names.
+                var displayText = multiTable
+                    ? $"{alias}.{column.ColumnName}"
+                    : column.ColumnName;
+                var insertText = displayText;
+
+                // Avoid duplicate identical entries when the same alias resolves twice
+                if (!seenColumns.Add(displayText))
+                {
+                    continue;
+                }
+
+                int priority;
+                if (column.IsPrimaryKey) priority = 10;
+                else if (fkColumnNames.Contains(column.ColumnName)) priority = 20;
+                else priority = 30;
+
+                yield return new CompletionItem
+                {
+                    DisplayText = displayText,
+                    InsertText = insertText,
+                    ObjectType = (int)CompletionObjectType.Column,
+                    SecondaryText = FormatSecondaryText(column) + " • " + tableName,
+                    SourceObject = dbObject.FullName,
+                    SortPriority = priority
+                };
+            }
+        }
+    }
+
+    /// <summary>
+    /// Yields columns for a single table identified by <see cref="CursorContext.DotPrefix"/>
+    /// (the original "alias." / "table." behavior).
+    /// </summary>
+    private static IEnumerable<CompletionItem> GetDotQualifiedColumns(CursorContext context, DatabaseCache cache)
+    {
         string schemaName;
         string tableName;
 
         if (context.AvailableAliases.TryGetValue(context.DotPrefix, out var fullTableName))
         {
-            // Resolve via alias
             var parts = fullTableName.Split('.');
             schemaName = parts.Length >= 2 ? parts[0] : "dbo";
             tableName = parts.Length >= 2 ? parts[1] : parts[0];
         }
         else
         {
-            // Direct table name without alias (#11) — try dbo first, then all schemas
             schemaName = "dbo";
             tableName = context.DotPrefix;
         }
 
         var dbObject = cache.FindObject(schemaName, tableName);
-        // If not found in dbo, try all schemas
         if (dbObject == null)
         {
             foreach (var schema in cache.Schemas.Values)
             {
                 dbObject = cache.FindObject(schema.SchemaName, tableName);
-                if (dbObject != null) break;
+                if (dbObject != null) { schemaName = schema.SchemaName; break; }
             }
         }
         if (dbObject == null)
@@ -92,7 +194,33 @@ public class ColumnProvider : ICompletionProvider
             yield break;
         }
 
-        // Build a set of FK column names for this table
+        var fkColumnNames = BuildFkColumnSet(cache, schemaName, tableName);
+
+        foreach (var column in dbObject.Columns)
+        {
+            int priority;
+            if (column.IsPrimaryKey) priority = 10;
+            else if (fkColumnNames.Contains(column.ColumnName)) priority = 20;
+            else priority = 30;
+
+            yield return new CompletionItem
+            {
+                DisplayText = column.ColumnName,
+                InsertText = column.ColumnName,
+                ObjectType = (int)CompletionObjectType.Column,
+                SecondaryText = FormatSecondaryText(column),
+                SourceObject = dbObject.FullName,
+                SortPriority = priority
+            };
+        }
+    }
+
+    /// <summary>
+    /// Builds the set of column names that are part of any FK on the given table
+    /// (used to bump FK columns higher in the completion ranking).
+    /// </summary>
+    private static HashSet<string> BuildFkColumnSet(DatabaseCache cache, string schemaName, string tableName)
+    {
         var fkColumnNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var fk in cache.GetForeignKeysForTable(schemaName, tableName))
         {
@@ -109,33 +237,7 @@ public class ColumnProvider : ICompletionProvider
                     fkColumnNames.Add(col);
             }
         }
-
-        foreach (var column in dbObject.Columns)
-        {
-            int priority;
-            if (column.IsPrimaryKey)
-            {
-                priority = 10;
-            }
-            else if (fkColumnNames.Contains(column.ColumnName))
-            {
-                priority = 20;
-            }
-            else
-            {
-                priority = 30;
-            }
-
-            yield return new CompletionItem
-            {
-                DisplayText = column.ColumnName,
-                InsertText = column.ColumnName,
-                ObjectType = (int)CompletionObjectType.Column,
-                SecondaryText = FormatSecondaryText(column),
-                SourceObject = dbObject.FullName,
-                SortPriority = priority
-            };
-        }
+        return fkColumnNames;
     }
 
     private static string FormatSecondaryText(Column column)

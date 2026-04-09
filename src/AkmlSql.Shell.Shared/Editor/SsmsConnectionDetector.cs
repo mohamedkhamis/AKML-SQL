@@ -1,5 +1,6 @@
 using System;
 using Microsoft.VisualStudio.Shell;
+using Microsoft.VisualStudio.Text;
 using Microsoft.VisualStudio.Text.Editor;
 using Serilog;
 
@@ -14,8 +15,10 @@ namespace AkmlSql.Shell.Shared.Editor
     internal static class SsmsConnectionDetector
     {
         /// <summary>
-        /// Attempts to detect the SQL Server connection for the given text view
-        /// by parsing the SSMS window caption. Returns null if detection fails.
+        /// Attempts to detect the SQL Server connection for the CURRENTLY ACTIVE
+        /// document (whatever SSMS has focused). Kept for call sites that only
+        /// care about the active window (e.g. execution-time safety checks).
+        /// For per-text-view detection use the overload that takes an <see cref="IWpfTextView"/>.
         /// Must be called on the UI thread.
         /// </summary>
         public static ConnectionResult TryDetectConnection(IServiceProvider serviceProvider)
@@ -39,6 +42,96 @@ namespace AkmlSql.Shell.Shared.Editor
             catch (Exception ex)
             {
                 Log.Debug(ex, "SsmsConnectionDetector: failed to detect connection");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Attempts to detect the SQL Server connection for a SPECIFIC text view
+        /// by resolving the view's file path to the matching DTE Document and
+        /// reading ITS window caption. This prevents the cross-window leak where
+        /// a new Server-B query window was being assigned Server-A's connection
+        /// because DTE.ActiveDocument still pointed to the previously focused
+        /// Server-A window at the moment the new view was created.
+        ///
+        /// CRITICAL: this overload does NOT fall back to
+        /// <see cref="TryDetectConnection(IServiceProvider)"/>. If the text view
+        /// has no resolvable file path yet (brand-new unsaved buffer), we return
+        /// <c>null</c> so the caller's retry loop can try again after SSMS finishes
+        /// wiring up the document. Falling back to ActiveDocument would pick up the
+        /// previously focused window and leak the wrong connection info.
+        /// Must be called on the UI thread.
+        /// </summary>
+        public static ConnectionResult TryDetectConnection(IServiceProvider serviceProvider, IWpfTextView textView)
+        {
+            try
+            {
+                ThreadHelper.ThrowIfNotOnUIThread();
+
+                if (textView == null)
+                {
+                    return TryDetectConnection(serviceProvider);
+                }
+
+                var dte = serviceProvider.GetService(typeof(EnvDTE.DTE)) as EnvDTE.DTE;
+                if (dte == null)
+                {
+                    return null;
+                }
+
+                // Resolve the text view's file path via ITextDocument.
+                string filePath = null;
+                try
+                {
+                    if (textView.TextBuffer.Properties.TryGetProperty<ITextDocument>(typeof(ITextDocument), out var textDoc))
+                    {
+                        filePath = textDoc?.FilePath;
+                    }
+                }
+                catch { /* not fatal */ }
+
+                if (string.IsNullOrEmpty(filePath))
+                {
+                    // Brand-new unsaved buffer — the document isn't registered with
+                    // DTE yet. Return null so the retry loop waits 500ms and tries
+                    // again; by then the file path and caption will be wired up.
+                    Log.Debug("SsmsConnectionDetector: no file path for text view, returning null (retry expected)");
+                    return null;
+                }
+
+                // Find the DTE Document with matching FullName (case-insensitive).
+                try
+                {
+                    foreach (EnvDTE.Document doc in dte.Documents)
+                    {
+                        try
+                        {
+                            if (string.Equals(doc.FullName, filePath, StringComparison.OrdinalIgnoreCase))
+                            {
+                                var win = doc.ActiveWindow;
+                                if (win != null && !string.IsNullOrEmpty(win.Caption))
+                                {
+                                    Log.Debug("SsmsConnectionDetector: matched text view to document '{Caption}'", win.Caption);
+                                    return ParseCaption(win.Caption);
+                                }
+                            }
+                        }
+                        catch { /* some documents throw when accessing FullName or ActiveWindow */ }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Debug(ex, "SsmsConnectionDetector: document enumeration failed");
+                }
+
+                // No matching document found — return null so the retry loop
+                // waits and tries again. NO fallback to ActiveDocument.
+                Log.Debug("SsmsConnectionDetector: no DTE document matched '{Path}' yet, returning null", filePath);
+                return null;
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "SsmsConnectionDetector: per-textview detection failed");
                 return null;
             }
         }
@@ -102,7 +195,8 @@ namespace AkmlSql.Shell.Shared.Editor
                           "Integrated Security=true;TrustServerCertificate=true;Encrypt=false;" +
                           "Connect Timeout=5;Application Name=AKML SQL Engine";
 
-            Log.Information("SsmsConnectionDetector: detected {Server}.{Database}", server, database);
+            Log.Information("SsmsConnectionDetector: parsed caption='{Caption}' → server='{Server}' database='{Database}'",
+                caption, server, database);
 
             return new ConnectionResult
             {

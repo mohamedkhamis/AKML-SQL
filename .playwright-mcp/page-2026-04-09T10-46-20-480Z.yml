@@ -1,0 +1,274 @@
+- generic [active] [ref=e1]:
+  - navigation [ref=e3]:
+    - link [ref=e4] [cursor=pointer]:
+      - /url: https://www.red-gate.com/
+    - link "Documentation" [ref=e5] [cursor=pointer]:
+      - /url: /home
+    - list [ref=e6]:
+      - listitem [ref=e7]:
+        - link "All Products" [ref=e8] [cursor=pointer]:
+          - /url: /home
+      - listitem [ref=e9]:
+        - link "Support" [ref=e10] [cursor=pointer]:
+          - /url: https://productsupport.red-gate.com/
+      - listitem [ref=e11]:
+        - link "Forums" [ref=e12] [cursor=pointer]:
+          - /url: https://forum.red-gate.com/
+    - text: 
+  - generic [ref=e15]:
+    - img [ref=e16]
+    - generic [ref=e17]:
+      - heading "SQL Prompt 11" [level=1] [ref=e18]
+      - list [ref=e21]:
+        - listitem [ref=e22]:
+          - link "SQL Prompt 11 documentation" [ref=e23] [cursor=pointer]:
+            - /url: /sp
+          - text: ">"
+        - listitem [ref=e24]: Getting Started
+  - generic [ref=e26]:
+    - generic [ref=e29]:
+      - navigation [ref=e30]:
+        - list [ref=e31]:
+          - listitem [ref=e32]:
+            - link " Getting Started" [ref=e33] [cursor=pointer]:
+              - /url: /sp/getting-started
+              - generic [ref=e34]: 
+              - text: Getting Started
+            - list [ref=e35]:
+              - listitem [ref=e36]:
+                - link " Why SQL Prompt?" [ref=e37] [cursor=pointer]:
+                  - /url: /sp/getting-started/why-sql-prompt
+                  - generic [ref=e38]: 
+                  - text: Why SQL Prompt?
+              - listitem [ref=e39]:
+                - link " Requirements" [ref=e40] [cursor=pointer]:
+                  - /url: /sp/getting-started/requirements
+                  - generic [ref=e41]: 
+                  - text: Requirements
+              - listitem [ref=e42]:
+                - link "Installing and running SQL Prompt" [ref=e43] [cursor=pointer]:
+                  - /url: /sp/getting-started/installing-and-running-sql-prompt
+              - listitem [ref=e44]:
+                - link " Licensing" [ref=e45] [cursor=pointer]:
+                  - /url: /sp/getting-started/licensing
+                  - generic [ref=e46]: 
+                  - text: Licensing
+              - listitem [ref=e47]:
+                - link "Privacy Information" [ref=e48] [cursor=pointer]:
+                  - /url: /sp/getting-started/privacy-information
+          - listitem [ref=e49]:
+            - link " Upgrading" [ref=e50] [cursor=pointer]:
+              - /url: /sp/upgrading
+              - generic [ref=e51]: 
+              - text: Upgrading
+          - listitem [ref=e52]:
+            - link " Features requiring a specific license" [ref=e53] [cursor=pointer]:
+              - /url: /sp/features-requiring-a-specific-license
+              - generic [ref=e54]: 
+              - text: Features requiring a specific license
+          - listitem [ref=e55]:
+            - link " Managing SQL Prompt behavior" [ref=e56] [cursor=pointer]:
+              - /url: /sp/managing-sql-prompt-behavior
+              - generic [ref=e57]: 
+              - text: Managing SQL Prompt behavior
+          - listitem [ref=e58]:
+            - link " SQL Code Analysis" [ref=e59] [cursor=pointer]:
+              - /url: /sp/sql-code-analysis
+              - generic [ref=e60]: 
+              - text: SQL Code Analysis
+          - listitem [ref=e61]:
+            - link " SQL Code Completion and IntelliSense" [ref=e62] [cursor=pointer]:
+              - /url: /sp/sql-code-completion-and-intellisense
+              - generic [ref=e63]: 
+              - text: SQL Code Completion and IntelliSense
+          - listitem [ref=e64]:
+            - link " SQL Code Formatting and Styles" [ref=e65] [cursor=pointer]:
+              - /url: /sp/sql-code-formatting-and-styles
+              - generic [ref=e66]: 
+              - text: SQL Code Formatting and Styles
+          - listitem [ref=e67]:
+            - link " SQL Code Snippets" [ref=e68] [cursor=pointer]:
+              - /url: /sp/sql-code-snippets
+              - generic [ref=e69]: 
+              - text: SQL Code Snippets
+          - listitem [ref=e70]:
+            - link " SQL Prompt AI" [ref=e71] [cursor=pointer]:
+              - /url: /sp/sql-prompt-ai
+              - generic [ref=e72]: 
+              - text: SQL Prompt AI
+          - listitem [ref=e73]:
+            - link " SQL Refactoring" [ref=e74] [cursor=pointer]:
+              - /url: /sp/sql-refactoring
+              - generic [ref=e75]: 
+              - text: SQL Refactoring
+          - listitem [ref=e76]:
+            - link " SSMS Tab Management" [ref=e77] [cursor=pointer]:
+              - /url: /sp/ssms-tab-management
+              - generic [ref=e78]: 
+              - text: SSMS Tab Management
+          - listitem [ref=e79]:
+            - link "Microsoft Fabric" [ref=e80] [cursor=pointer]:
+              - /url: /sp/microsoft-fabric
+          - listitem [ref=e81]:
+            - link "Azure Synapse Dedicated SQL Pool" [ref=e82] [cursor=pointer]:
+              - /url: /sp/azure-synapse-dedicated-sql-pool
+          - listitem [ref=e83]:
+            - link "SQL Server 2025" [ref=e84] [cursor=pointer]:
+              - /url: /sp/sql-server-2025
+          - listitem [ref=e85]:
+            - link "Command Palette" [ref=e86] [cursor=pointer]:
+              - /url: /sp/command-palette
+          - listitem [ref=e87]:
+            - link "Entra ID MFA Authentication" [ref=e88] [cursor=pointer]:
+              - /url: /sp/entra-id-mfa-authentication
+          - listitem [ref=e89]:
+            - link "Custom Entra ID Authentication Configuration" [ref=e90] [cursor=pointer]:
+              - /url: /sp/custom-entra-id-authentication-configuration
+          - listitem [ref=e91]:
+            - link "Worked examples" [ref=e92] [cursor=pointer]:
+              - /url: /sp/worked-examples
+          - listitem [ref=e93]:
+            - link " Troubleshooting" [ref=e94] [cursor=pointer]:
+              - /url: /sp/troubleshooting
+              - generic [ref=e95]: 
+              - text: Troubleshooting
+          - listitem [ref=e96]:
+            - link " Release notes and other versions" [ref=e97] [cursor=pointer]:
+              - /url: /sp/release-notes-and-other-versions
+              - generic [ref=e98]: 
+              - text: Release notes and other versions
+      - generic [ref=e105]:
+        - generic [ref=e110]: Have you used SQL Prompt AI features?
+        - group "Have you used SQL Prompt AI features?" [ref=e112]:
+          - generic [ref=e114]:
+            - radio "I've not heard of the AI features" [ref=e116]
+            - generic [ref=e117] [cursor=pointer]: I've not heard of the AI features
+          - generic [ref=e119]:
+            - radio "Yes - against dev/test environments only" [ref=e121]
+            - generic [ref=e122] [cursor=pointer]: Yes - against dev/test environments only
+          - generic [ref=e124]:
+            - radio "Yes - against production environments" [ref=e126]
+            - generic [ref=e127] [cursor=pointer]: Yes - against production environments
+          - generic [ref=e129]:
+            - radio "Yes - against both dev/test and production" [ref=e131]
+            - generic [ref=e132] [cursor=pointer]: Yes - against both dev/test and production
+          - generic [ref=e134]:
+            - radio "No - I haven't tried it yet" [ref=e136]
+            - generic [ref=e137] [cursor=pointer]: No - I haven't tried it yet
+          - generic [ref=e139]:
+            - radio "No - we're not allowed to use AI against our databases" [ref=e141]
+            - generic [ref=e142] [cursor=pointer]: No - we're not allowed to use AI against our databases
+          - generic [ref=e144]:
+            - radio "Other:" [ref=e146]
+            - generic [ref=e147] [cursor=pointer]: "Other:"
+            - textbox [ref=e149]
+        - generic [ref=e151]:
+          - button "Vote" [ref=e152] [cursor=pointer]
+          - link "View Results" [ref=e154] [cursor=pointer]:
+            - /url: javascript:PD_vote16559509(1);
+    - generic [ref=e156]:
+      - heading "Getting Started" [level=1] [ref=e157]
+      - paragraph [ref=e158]: Page last updated 29 October 2019
+      - paragraph [ref=e159]: Published 29 October 2019
+      - generic [ref=e163]:
+        - paragraph [ref=e164]: "Learn how to get started with SQL Prompt:"
+        - paragraph
+        - list [ref=e165]:
+          - listitem [ref=e166]:
+            - link "Why SQL Prompt?" [ref=e167] [cursor=pointer]:
+              - /url: /sp/getting-started/why-sql-prompt
+          - listitem [ref=e168]:
+            - link "Requirements" [ref=e169] [cursor=pointer]:
+              - /url: /sp/getting-started/requirements
+          - listitem [ref=e170]:
+            - link "Installing and running SQL Prompt" [ref=e171] [cursor=pointer]:
+              - /url: /sp/getting-started/installing-and-running-sql-prompt
+          - listitem [ref=e172]:
+            - link "Licensing" [ref=e173] [cursor=pointer]:
+              - /url: /sp/getting-started/licensing
+          - listitem [ref=e174]:
+            - link "Privacy Information" [ref=e175] [cursor=pointer]:
+              - /url: /sp/getting-started/privacy-information
+        - paragraph
+        - paragraph [ref=e176]: "Alongside this documentation, we also provide other learning resources, as follows:"
+        - heading "Learn SQL Prompt (training videos)" [level=2] [ref=e177]
+        - paragraph [ref=e178]:
+          - text: Get started and master the fundamentals of SQL Prompt with this easy to follow
+          - link "Redgate University course" [ref=e179] [cursor=pointer]:
+            - /url: https://www.red-gate.com/hub/university/sql-prompt
+          - text: .
+        - paragraph [ref=e180]:
+          - link [ref=e181] [cursor=pointer]:
+            - /url: https://www.red-gate.com/hub/university/sql-prompt
+            - img [ref=e183]
+        - paragraph [ref=e184]:
+          - strong [ref=e185]:
+            - link "Start the course" [ref=e186] [cursor=pointer]:
+              - /url: https://www.red-gate.com/hub/university/sql-prompt
+        - heading "Get the most out of SQL Prompt (technical how-to articles)" [level=2] [ref=e187]
+        - paragraph [ref=e188]:
+          - text: Redgate's
+          - link "Product Learning articles for SQL Prompt" [ref=e189] [cursor=pointer]:
+            - /url: https://www.red-gate.com/hub/product-learning/sql-prompt
+          - text: demonstrate practical uses for all of its main features.
+        - paragraph [ref=e190]:
+          - text: Use the "
+          - strong [ref=e191]: Topics
+          - text: "\" list, on the right, to navigate to the SQL Prompt topics of interest. You can also filter by the level (or type) of article."
+        - paragraph [ref=e192]:
+          - link [ref=e194] [cursor=pointer]:
+            - /url: /sp/files/296815226/296815231/1/1747980512187/SQLPromptHome.png
+            - img [ref=e195]
+        - paragraph [ref=e196]
+      - generic [ref=e197]:
+        - separator [ref=e198]
+        - paragraph [ref=e199]: Didn't find what you were looking for?
+        - list [ref=e201]:
+          - listitem [ref=e202]:
+            - text: Visit the
+            - link "Redgate forum" [ref=e203] [cursor=pointer]:
+              - /url: https://forum.red-gate.com/
+          - listitem [ref=e204]:
+            - link "Contact Support" [ref=e205] [cursor=pointer]:
+              - /url: http://redgatesupport.red-gate.com/home
+  - generic [ref=e207]:
+    - link "Product Articles Tips and how-to guides for Redgate products" [ref=e209] [cursor=pointer]:
+      - /url: https://www.red-gate.com/hub/product-learning/
+      - paragraph [ref=e210]: Product Articles
+      - paragraph [ref=e211]: Tips and how-to guides for Redgate products
+    - link "University Easy to follow video courses" [ref=e213] [cursor=pointer]:
+      - /url: https://www.red-gate.com/hub/university/
+      - paragraph [ref=e214]: University
+      - paragraph [ref=e215]: Easy to follow video courses
+    - link "Community Forums Ask, discuss, and solve questions about Redgate's tools" [ref=e217] [cursor=pointer]:
+      - /url: https://forum.red-gate.com
+      - paragraph [ref=e218]: Community Forums
+      - paragraph [ref=e219]: Ask, discuss, and solve questions about Redgate's tools
+    - link "Events & Friends Meet us at an event, get sponsored, and join our Friends of Redgate" [ref=e221] [cursor=pointer]:
+      - /url: https://www.red-gate.com/hub/events/
+      - paragraph [ref=e222]: Events & Friends
+      - paragraph [ref=e223]: Meet us at an event, get sponsored, and join our Friends of Redgate
+    - link "Simple Talk In-depth articles and opinion from Redgate's technical journal" [ref=e225] [cursor=pointer]:
+      - /url: https://www.red-gate.com/simple-talk/
+      - paragraph [ref=e226]: Simple Talk
+      - paragraph [ref=e227]: In-depth articles and opinion from Redgate's technical journal
+  - generic [ref=e230]:
+    - heading "Cookies on red-gate.com" [level=1] [ref=e231]
+    - generic [ref=e232]:
+      - paragraph [ref=e233]: This website stores cookies on your computer.
+      - paragraph [ref=e234]: These cookies are used to improve your website experience and provide more personalized services to you, both on this website and through other media.
+      - paragraph [ref=e235]:
+        - text: To find out more about the cookies we use, see our
+        - link "Privacy Policy" [ref=e236] [cursor=pointer]:
+          - /url: https://www.red-gate.com/trust/privacy-notice
+    - list [ref=e237]:
+      - listitem [ref=e238]:
+        - button "Accept additional cookies" [ref=e239] [cursor=pointer]
+      - listitem [ref=e240]:
+        - button "Reject additional cookies" [ref=e241] [cursor=pointer]
+      - listitem [ref=e242]:
+        - link "Customize additional cookies" [ref=e243] [cursor=pointer]:
+          - /url: "#"
+      - listitem [ref=e244]:
+        - link "Privacy notice" [ref=e245] [cursor=pointer]:
+          - /url: https://www.red-gate.com/website/legal

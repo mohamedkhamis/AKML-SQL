@@ -103,6 +103,102 @@ public class CursorContextAnalyzerTests
         Assert.Equal(ClauseType.Where, context.ClauseType);
     }
 
+    [Fact]
+    public void Analyze_CursorAfterGroupBy_ClauseTypeGroupBy()
+    {
+        // Regression guard: ScriptDom tokenizes GROUP as a dedicated keyword token
+        // (not Identifier), so the analyzer must handle TSqlTokenType.By by walking
+        // back to match on the text "GROUP".
+        var sql = "SELECT a, COUNT(*) FROM tbl GROUP BY ";
+        var tokens = Tokenize(sql);
+
+        var context = _analyzer.Analyze(tokens, sql.Length);
+
+        Assert.Equal(ClauseType.GroupBy, context.ClauseType);
+    }
+
+    [Fact]
+    public void Analyze_CursorAfterOrderBy_ClauseTypeOrderBy()
+    {
+        var sql = "SELECT * FROM tbl ORDER BY ";
+        var tokens = Tokenize(sql);
+
+        var context = _analyzer.Analyze(tokens, sql.Length);
+
+        Assert.Equal(ClauseType.OrderBy, context.ClauseType);
+    }
+
+    [Fact]
+    public void Analyze_CursorInGroupByAfterComma_ClauseTypeGroupBy()
+    {
+        // Cursor is in the GROUP BY list after a comma — still GroupBy context.
+        var sql = "SELECT a, b, COUNT(*) FROM tbl GROUP BY a, ";
+        var tokens = Tokenize(sql);
+
+        var context = _analyzer.Analyze(tokens, sql.Length);
+
+        Assert.Equal(ClauseType.GroupBy, context.ClauseType);
+    }
+
+    [Fact]
+    public void Analyze_CursorAfterHaving_ClauseTypeHaving()
+    {
+        var sql = "SELECT a, COUNT(*) FROM tbl GROUP BY a HAVING ";
+        var tokens = Tokenize(sql);
+
+        var context = _analyzer.Analyze(tokens, sql.Length);
+
+        Assert.Equal(ClauseType.Having, context.ClauseType);
+    }
+
+    [Fact]
+    public void Analyze_CursorAfterJoinOn_ClauseTypeJoinOn()
+    {
+        var sql = "SELECT * FROM a JOIN b ON ";
+        var tokens = Tokenize(sql);
+
+        var context = _analyzer.Analyze(tokens, sql.Length);
+
+        Assert.Equal(ClauseType.JoinOn, context.ClauseType);
+    }
+
+    [Fact]
+    public void Analyze_CursorAfterLeftJoin_ClauseTypeJoinTable()
+    {
+        var sql = "SELECT * FROM a LEFT JOIN ";
+        var tokens = Tokenize(sql);
+
+        var context = _analyzer.Analyze(tokens, sql.Length);
+
+        Assert.Equal(ClauseType.JoinTable, context.ClauseType);
+    }
+
+    [Fact]
+    public void Analyze_CursorAfterSemicolon_ClauseTypeUnknown()
+    {
+        // A semicolon ends the previous statement. A cursor immediately after one
+        // should not inherit any clause type from the prior statement.
+        var sql = "SELECT * FROM tbl; ";
+        var tokens = Tokenize(sql);
+
+        var context = _analyzer.Analyze(tokens, sql.Length);
+
+        Assert.Equal(ClauseType.Unknown, context.ClauseType);
+    }
+
+    [Fact]
+    public void Analyze_CursorAfterUnion_ClauseTypeSelect()
+    {
+        // Set operators act as soft statement boundaries so the next SELECT
+        // gets a fresh context.
+        var sql = "SELECT a FROM t1 UNION SELECT ";
+        var tokens = Tokenize(sql);
+
+        var context = _analyzer.Analyze(tokens, sql.Length);
+
+        Assert.Equal(ClauseType.Select, context.ClauseType);
+    }
+
     // ── PrecedingDot ──────────────────────────────────────────────────────
 
     [Fact]

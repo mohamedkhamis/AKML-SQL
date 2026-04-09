@@ -79,6 +79,28 @@ public class PipeRpcServer
         _scriptAsHandler = new ScriptAsHandler(_schemaCacheManager);
         _aiHandler = new AiRequestHandler(_schemaCacheManager, _parserService);
 
+        // Wire SessionTrackerBridge so completion providers (e.g. DatabaseProvider)
+        // can look up the active connection string for a given session without
+        // holding a direct reference to SessionManager.
+        Completion.Providers.SessionTrackerBridge.Configure(sessionId =>
+        {
+            var s = _sessionManager.GetSession(sessionId);
+            if (s == null) return null;
+            string server = string.Empty;
+            try
+            {
+                var builder = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(s.ConnectionString);
+                server = builder.DataSource ?? string.Empty;
+            }
+            catch { /* ignore — fallback to empty server name */ }
+            return new Completion.Providers.ConnectionLookupResult
+            {
+                ConnectionString = s.ConnectionString,
+                DatabaseName = s.DatabaseName,
+                ServerName = server
+            };
+        });
+
         // History: initialize database and retention service
         var historyDb = new HistoryDatabase();
         _historyHandler = new HistoryRequestHandler(historyDb);
@@ -173,6 +195,10 @@ public class PipeRpcServer
                     var connInfo = MessagePackSerializer.Deserialize<ConnectionInfo>(message.Payload);
                     _sessionManager.UpdateSession(connInfo);
                     _parserService.SetServerVersion(connInfo.ServerVersion);
+                    // Invalidate any cached database list for this session — a new
+                    // connection may be to a different server and we must not leak
+                    // the previous server's databases into USE-completion.
+                    Completion.Providers.DatabaseProvider.InvalidateSession(connInfo.SessionId);
                     Log.Information("Connection changed: {Session} -> {Db}", connInfo.SessionId, connInfo.DatabaseName);
 
                     // Fire-and-forget: populate schema cache Phase A
@@ -232,8 +258,8 @@ public class PipeRpcServer
                     // so toggles in the Settings dialog take effect immediately (cache is
                     // invalidated on AnalysisSettingsChanged).
                     _cachedSettings ??= Core.Config.ConfigManager.Load();
-                    _completionEngine.JoinAssistEnabled = _cachedSettings.IntelliSense.JoinAssist;
-                    var compResp = _completionEngine.GetCompletions(documentText, compReq.CursorOffset, dbCache);
+                    _completionEngine.TableAliasEnabled = _cachedSettings.IntelliSense.AutoAlias;
+                    var compResp = _completionEngine.GetCompletions(documentText, compReq.CursorOffset, dbCache, compReq.SessionId);
                     return Task.FromResult(CreateResponse(MessageTypes.CompletionResult, message.RequestId, compResp));
 
                 case MessageTypes.WildcardExpansion:
@@ -308,6 +334,41 @@ public class PipeRpcServer
                     }
                     var refResp = new RefreshResponse { Success = true, ObjectCount = refreshedCount };
                     return Task.FromResult(CreateResponse(MessageTypes.SchemaRefreshComplete, message.RequestId, refResp));
+
+                case MessageTypes.SchemaStatusRequest:
+                    if (message.Payload == null)
+                    {
+                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
+                    }
+                    {
+                        var statusReq = MessagePackSerializer.Deserialize<SchemaStatusRequest>(message.Payload);
+                        var statusSession = !string.IsNullOrEmpty(statusReq.SessionId)
+                            ? _sessionManager.GetSession(statusReq.SessionId) : null;
+                        var statusResp = new SchemaStatusResponse();
+                        if (statusSession != null && !string.IsNullOrEmpty(statusSession.DatabaseName))
+                        {
+                            statusResp.DatabaseName = statusSession.DatabaseName;
+                            var statCache = _schemaCacheManager.GetCache(statusReq.SessionId, statusSession.DatabaseName);
+                            if (statCache != null)
+                            {
+                                statusResp.Exists = true;
+                                statusResp.Phase = (int)statCache.Phase;
+                                int objCount = 0;
+                                int colsLoaded = 0;
+                                foreach (var schema in statCache.Schemas.Values)
+                                {
+                                    foreach (var obj in schema.Objects)
+                                    {
+                                        objCount++;
+                                        if (obj.ColumnsLoaded) colsLoaded++;
+                                    }
+                                }
+                                statusResp.ObjectCount = objCount;
+                                statusResp.ColumnsLoadedCount = colsLoaded;
+                            }
+                        }
+                        return Task.FromResult(CreateResponse(MessageTypes.SchemaStatusResponse, message.RequestId, statusResp));
+                    }
 
                 case MessageTypes.Ping:
                     var status = new EngineStatusInfo

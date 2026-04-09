@@ -10,28 +10,52 @@ namespace AkmlSql.Engine.Parser;
 public static class TokenBasedAliasExtractor
 {
     /// <summary>
-    /// Extracts alias→"schema.table" mappings from the token stream.
-    /// Only considers tokens before <paramref name="cursorOffset"/>.
+    /// Extracts alias→"schema.table" mappings from the token stream for the SQL
+    /// statement containing the cursor. Considers FROM/JOIN tokens both BEFORE and
+    /// AFTER the cursor (within the same statement), so that partial expressions
+    /// like <c>SELECT COUNT(DISTINCT |) FROM Terminals</c> still resolve table
+    /// references that come later in the same statement.
+    /// Statement bounds are detected via the surrounding semicolons.
     /// </summary>
     public static Dictionary<string, string> Extract(IList<TSqlParserToken> tokens, int cursorOffset)
     {
         var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         if (tokens == null || tokens.Count == 0) return result;
 
-        // Scan for patterns: FROM/JOIN <identifier> [<identifier>]
-        // We look for FROM/JOIN keyword, then expect:
-        //   [schemaName DOT] tableName [alias]
-        // where alias is an identifier that is NOT a keyword.
+        // Compute the [statementStart, statementEnd) byte range that bounds the
+        // statement containing the cursor. Semicolons act as boundaries; absent
+        // semicolons we use the start/end of the token stream.
+        int statementStart = 0;
+        int statementEnd = int.MaxValue;
         for (int i = 0; i < tokens.Count; i++)
         {
             var t = tokens[i];
-            if (t.Offset >= cursorOffset) break;
+            if (t.TokenType != TSqlTokenType.Semicolon) continue;
+            if (t.Offset < cursorOffset)
+            {
+                // The semicolon ends the previous statement; current statement starts after it.
+                statementStart = t.Offset + 1;
+            }
+            else
+            {
+                // First semicolon at/after the cursor terminates the current statement.
+                statementEnd = t.Offset;
+                break;
+            }
+        }
+
+        // Scan for FROM/JOIN <identifier> [alias] patterns within the statement.
+        for (int i = 0; i < tokens.Count; i++)
+        {
+            var t = tokens[i];
+            if (t.Offset < statementStart) continue;
+            if (t.Offset >= statementEnd) break;
 
             if (!IsFromOrJoinKeyword(t)) continue;
 
             // Skip whitespace after FROM/JOIN
             int j = SkipWhitespace(tokens, i + 1);
-            if (j >= tokens.Count || tokens[j].Offset >= cursorOffset) continue;
+            if (j >= tokens.Count || tokens[j].Offset >= statementEnd) continue;
 
             // Check for optional schema prefix: schema.table
             string schemaName = "dbo";
@@ -49,7 +73,7 @@ public static class TokenBasedAliasExtractor
                     int m = SkipWhitespace(tokens, k + 1);
                     if (m < tokens.Count &&
                         tokens[m].TokenType is TSqlTokenType.Identifier or TSqlTokenType.QuotedIdentifier &&
-                        tokens[m].Offset < cursorOffset)
+                        tokens[m].Offset < statementEnd)
                     {
                         tableName = tokens[m].Text.Trim('[', ']', '"');
                         j = m;
@@ -72,14 +96,14 @@ public static class TokenBasedAliasExtractor
             int next = SkipWhitespace(tokens, j + 1);
             string? alias = null;
 
-            if (next < tokens.Count && tokens[next].Offset < cursorOffset)
+            if (next < tokens.Count && tokens[next].Offset < statementEnd)
             {
                 var nextToken = tokens[next];
                 // Skip optional AS keyword
                 if (nextToken.TokenType == TSqlTokenType.As)
                 {
                     next = SkipWhitespace(tokens, next + 1);
-                    if (next < tokens.Count && tokens[next].Offset < cursorOffset)
+                    if (next < tokens.Count && tokens[next].Offset < statementEnd)
                         nextToken = tokens[next];
                     else
                         nextToken = null;

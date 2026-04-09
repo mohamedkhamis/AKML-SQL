@@ -13,18 +13,45 @@ public class SessionManager
 
     public void UpdateSession(ConnectionInfo info)
     {
+        // Scrub password before logging the connection string so the log is safe
+        // to share. This is our primary diagnostic for diagnosing which connection
+        // info is being associated with each session.
+        string scrubbedDataSource = "(unknown)";
+        try
+        {
+            var cb = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(info.ConnectionString ?? string.Empty);
+            scrubbedDataSource = cb.DataSource ?? "(unknown)";
+        }
+        catch { }
+
         _sessions.AddOrUpdate(info.SessionId,
-            _ => new SessionState
+            _ =>
             {
-                SessionId = info.SessionId,
-                ConnectionString = info.ConnectionString,
-                ServerVersion = info.ServerVersion,
-                EngineEdition = info.EngineEdition,
-                DatabaseName = info.DatabaseName,
-                IsConnected = true
+                Log.Information(
+                    "SessionManager.UpdateSession (CREATE): session={Session} server={Server} db={Db}",
+                    info.SessionId, scrubbedDataSource, info.DatabaseName);
+                return new SessionState
+                {
+                    SessionId = info.SessionId,
+                    ConnectionString = info.ConnectionString,
+                    ServerVersion = info.ServerVersion,
+                    EngineEdition = info.EngineEdition,
+                    DatabaseName = info.DatabaseName,
+                    IsConnected = true
+                };
             },
             (_, existing) =>
             {
+                string oldServer = "(unknown)";
+                try
+                {
+                    var ob = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(existing.ConnectionString ?? string.Empty);
+                    oldServer = ob.DataSource ?? "(unknown)";
+                }
+                catch { }
+                Log.Information(
+                    "SessionManager.UpdateSession (MODIFY): session={Session} oldServer={OldServer} newServer={NewServer} newDb={Db}",
+                    info.SessionId, oldServer, scrubbedDataSource, info.DatabaseName);
                 existing.ConnectionString = info.ConnectionString;
                 existing.ServerVersion = info.ServerVersion;
                 existing.EngineEdition = info.EngineEdition;

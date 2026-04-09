@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel.Design;
 using System.IO;
 using System.Reflection;
@@ -147,13 +148,17 @@ namespace AkmlSql.Ssms22
                 TransactionMonitor.Initialize(this);
                 AiSettingsValidator.Initialize();
 
-                // SSMS 22 uses a custom menu bar (SSMSMnu.dll) that ignores the
-                // standard VSCT IDM_VS_MENU_BAR parent. Programmatically inject
-                // our top-level "AKML SQL" popup into DTE's MenuBar command bar.
-                EnsureTopLevelMenu(this);
+                // STANDARD TOOLBAR SQL HISTORY BUTTON — guarded add with accumulation
+                // recovery. Adds exactly one button if none exists, does nothing if
+                // one already exists, and hard-resets the Standard toolbar if more
+                // than one exists (recovers from any historical accumulation bug).
+                EnsureStandardToolbarHistoryButton();
 
-                // Add SQL History button to the Standard toolbar (beside New Query)
-                AddHistoryButtonToStandardToolbar();
+                // Top-level AKML SQL menu bar popup. This is added ONCE per process
+                // via a static guard and was never actually accumulating — only the
+                // Standard toolbar button was. We restore this call so the user has
+                // the AKML SQL menu back.
+                EnsureTopLevelMenu(this);
 
                 Log.Information("AKML SQL package initialized successfully for SSMS 22");
             }
@@ -176,14 +181,147 @@ namespace AkmlSql.Ssms22
             }
         }
 
+        // Process-static guard: EnsureStandardToolbarHistoryButton runs at most ONCE per process.
+        private static int _toolbarHistoryDone;
+
         /// <summary>
-        /// SSMS 22's custom menu bar (SSMSMnu.dll) ignores the standard VSCT
-        /// IDM_VS_MENU_BAR parent, so menus defined in the CTO are orphaned.
-        /// This method programmatically adds an "AKML SQL" popup to the DTE
-        /// MenuBar and places our registered commands into it.
+        /// Ensures the SSMS Standard toolbar has exactly ONE SQL History button
+        /// (SQL Prompt-style, placed next to New Query). Handles three cases:
+        /// <list type="number">
+        /// <item><description><b>Count == 0:</b> add exactly one button via <c>cmd.AddControl</c>.</description></item>
+        /// <item><description><b>Count == 1:</b> do nothing — the correct state is already there
+        ///   (either from a previous install's persisted binding or from this session's earlier add).</description></item>
+        /// <item><description><b>Count &gt; 1:</b> accumulation detected. Call <c>standardBar.Reset()</c>
+        ///   to wipe ALL customizations on the bar (the only reliable way to clear the persisted
+        ///   state that SSMS 22 hides beneath per-control <c>Delete()</c>), then add exactly one.</description></item>
+        /// </list>
+        ///
+        /// This combines the previous <c>CleanupStaleToolbarEntries</c> and
+        /// <c>AddHistoryButtonToStandardToolbar</c> into a single guarded function
+        /// so there's exactly one decision point for the toolbar state per process.
+        /// </summary>
+        private static void EnsureStandardToolbarHistoryButton()
+        {
+            if (System.Threading.Interlocked.CompareExchange(ref _toolbarHistoryDone, 1, 0) != 0)
+            {
+                Log.Debug("EnsureStandardToolbarHistoryButton: already run this process, skipping");
+                return;
+            }
+
+            try
+            {
+                ThreadHelper.ThrowIfNotOnUIThread();
+                var dte = (EnvDTE.DTE)Microsoft.VisualStudio.Shell.Package.GetGlobalService(typeof(EnvDTE.DTE));
+                if (dte == null) return;
+
+                dynamic bars = dte.CommandBars;
+                if (bars == null) return;
+
+                dynamic standardBar = null;
+                try { standardBar = bars["Standard"]; }
+                catch (Exception ex)
+                {
+                    Log.Debug(ex, "Standard toolbar not found — skipping History button setup");
+                    return;
+                }
+                if (standardBar == null) return;
+
+                int sqlHistoryCount = CountSqlHistoryControls(standardBar);
+                Log.Information("EnsureStandardToolbarHistoryButton: Standard toolbar has {Count} SQL History control(s)", sqlHistoryCount);
+
+                if (sqlHistoryCount == 1)
+                {
+                    // Already in the desired state — do nothing.
+                    return;
+                }
+
+                if (sqlHistoryCount > 1)
+                {
+                    // Accumulation — reset the entire bar. This wipes all customizations
+                    // but is the only reliable way to clear the persisted stale bindings
+                    // that SSMS 22 hides beneath per-control Delete() APIs.
+                    Log.Information("EnsureStandardToolbarHistoryButton: {Count} duplicates — resetting Standard toolbar", sqlHistoryCount);
+                    try { standardBar.Reset(); }
+                    catch (Exception ex)
+                    {
+                        Log.Warning(ex, "Standard toolbar Reset() failed — falling back to Delete/Hide");
+                        var knownLabels = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "SQL History" };
+                        CleanupControls(standardBar, knownLabels, "Standard", depth: 0);
+                    }
+                    sqlHistoryCount = CountSqlHistoryControls(standardBar);
+                }
+
+                // Count is now 0 (either from the start or after reset). Add exactly one.
+                if (sqlHistoryCount == 0)
+                {
+                    try
+                    {
+                        var cmd = dte.Commands.Item(
+                            "{" + PackageGuids.AkmlSqlCmdSetString + "}",
+                            CommandIds.CmdHistoryPanel);
+                        if (cmd != null)
+                        {
+                            // Position 4: typically right after New Query, Open, Save.
+                            var ctrl = cmd.AddControl(standardBar, 4);
+                            try { ctrl.Tag = "AkmlSql.HistoryToolbar"; } catch { }
+                            Log.Information("EnsureStandardToolbarHistoryButton: added SQL History button to Standard toolbar");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Debug(ex, "Failed to add SQL History button to Standard toolbar");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "EnsureStandardToolbarHistoryButton failed (non-fatal)");
+                System.Threading.Interlocked.Exchange(ref _toolbarHistoryDone, 0);
+            }
+        }
+
+        /// <summary>
+        /// Counts the controls on a CommandBar whose caption matches "SQL History"
+        /// (case-insensitive, ampersand-stripped). Used by
+        /// <see cref="EnsureStandardToolbarHistoryButton"/> to drive its state machine.
+        /// </summary>
+        private static int CountSqlHistoryControls(dynamic bar)
+        {
+            int count = 0;
+            try
+            {
+                foreach (dynamic ctrl in bar.Controls)
+                {
+                    string cap;
+                    try { cap = ((string)ctrl.Caption ?? string.Empty).Replace("&", "").Trim(); }
+                    catch { continue; }
+                    if (cap.Equals("SQL History", StringComparison.OrdinalIgnoreCase))
+                    {
+                        count++;
+                    }
+                }
+            }
+            catch { /* bar enumeration failed — treat as 0 */ }
+            return count;
+        }
+
+        // Process-static guard: EnsureTopLevelMenu runs at most ONCE per process.
+        private static int _menuInjected;
+
+        /// <summary>
+        /// Programmatically adds the top-level "AKML SQL" popup to the DTE Menu Bar.
+        /// This function never accumulated duplicates (only the Standard toolbar did),
+        /// so we keep it. The once-per-process guard plus the duplicate-detection
+        /// loop at the top prevent any re-addition.
         /// </summary>
         private static void EnsureTopLevelMenu(AsyncPackage package)
         {
+            if (System.Threading.Interlocked.CompareExchange(ref _menuInjected, 1, 0) != 0)
+            {
+                Log.Debug("EnsureTopLevelMenu: already injected this process, skipping");
+                return;
+            }
+
             try
             {
                 ThreadHelper.ThrowIfNotOnUIThread();
@@ -196,20 +334,28 @@ namespace AkmlSql.Ssms22
                 dynamic menuBar = bars["Menu Bar"];
                 if (menuBar == null) return;
 
-                // Check if already added (idempotent on re-load).
-                // Strip '&' accelerator chars and trim whitespace to match the
-                // VSCT-rendered caption robustly.
+                // If an AKML SQL popup already exists, REUSE it as-is (don't add
+                // commands again — they're persisted from the previous load). This
+                // is the key to not accumulating child commands on re-loads.
                 foreach (dynamic ctrl in menuBar.Controls)
                 {
-                    var cap = ((string)ctrl.Caption).Replace("&", "").Trim();
-                    if (cap.Equals("AKML SQL", StringComparison.OrdinalIgnoreCase)) return;
+                    string cap;
+                    try { cap = ((string)ctrl.Caption).Replace("&", "").Trim(); }
+                    catch { continue; }
+                    if (cap.Equals("AKML SQL", StringComparison.OrdinalIgnoreCase))
+                    {
+                        Log.Information("EnsureTopLevelMenu: AKML SQL popup already present, leaving as-is");
+                        return;
+                    }
                 }
 
-                // Insert before &Window (or at end)
+                // Not found — insert a new popup just before the Window menu.
                 int insertPos = (int)menuBar.Controls.Count;
                 foreach (dynamic ctrl in menuBar.Controls)
                 {
-                    string cap = ((string)ctrl.Caption).Replace("&", "");
+                    string cap;
+                    try { cap = ((string)ctrl.Caption).Replace("&", ""); }
+                    catch { continue; }
                     if (cap.StartsWith("Window"))
                     {
                         insertPos = (int)ctrl.Index;
@@ -217,12 +363,11 @@ namespace AkmlSql.Ssms22
                     }
                 }
 
-                // msoControlPopup = 10
+                // msoControlPopup = 10, Temporary = true
                 dynamic popup = menuBar.Controls.Add(10, Type.Missing, Type.Missing, insertPos, true);
                 popup.Caption = "AKML SQL";
 
-                // Add registered DTE commands to the popup using guid:id pairs.
-                // DTE.Commands wraps OleMenuCommands — clicking invokes our handlers.
+                // Populate commands via DTE.Commands
                 var cmdSetGuid = PackageGuids.AkmlSqlCmdSetString;
                 var cmds = new (int id, string label)[]
                 {
@@ -254,7 +399,6 @@ namespace AkmlSql.Ssms22
                     }
                     catch
                     {
-                        // Command not found in DTE — add a placeholder button
                         try
                         {
                             dynamic btn = popupBar.Controls.Add(1, Type.Missing, Type.Missing, Type.Missing, true);
@@ -266,61 +410,124 @@ namespace AkmlSql.Ssms22
                 }
 
                 popup.Visible = true;
-                Log.Information("AKML SQL top-level menu injected into SSMS 22 menu bar");
+                Log.Information("AKML SQL top-level menu created with {Count} items", cmds.Length);
             }
             catch (Exception ex)
             {
                 Log.Warning(ex, "Failed to create AKML SQL top-level menu (non-fatal)");
+                System.Threading.Interlocked.Exchange(ref _menuInjected, 0);
             }
         }
 
         /// <summary>
-        /// Adds a "SQL History" button to the SSMS Standard toolbar (next to New Query).
-        /// Uses DTE.Commands to wire it to our registered CmdHistoryPanel command.
+        /// Recursively deletes AKML SQL controls from a CommandBar's Controls collection.
+        /// For popup controls, recurses into the child CommandBar. Returns the total
+        /// number of controls deleted from this bar and all descendants.
         /// </summary>
-        private static void AddHistoryButtonToStandardToolbar()
+        private static int CleanupControls(dynamic bar, HashSet<string> knownLabels, string barName, int depth)
         {
+            if (depth > 4) return 0; // safety against infinite recursion
+
+            int deleted = 0;
+            var toDelete = new List<object>();
+            var toRecurseInto = new List<object>();
+
             try
             {
-                ThreadHelper.ThrowIfNotOnUIThread();
-                var dte = (EnvDTE.DTE)Microsoft.VisualStudio.Shell.Package.GetGlobalService(typeof(EnvDTE.DTE));
-                if (dte == null) return;
-
-                dynamic bars = dte.CommandBars;
-                if (bars == null) return;
-
-                dynamic standardBar = null;
-                try { standardBar = bars["Standard"]; } catch { return; }
-                if (standardBar == null) return;
-
-                // Check if already added
-                foreach (dynamic ctrl in standardBar.Controls)
+                foreach (dynamic ctrl in bar.Controls)
                 {
-                    if ((string)ctrl.Tag == "AkmlSql.HistoryToolbar") return;
-                }
+                    string cap;
+                    try { cap = ((string)ctrl.Caption ?? string.Empty).Replace("&", "").Trim(); }
+                    catch { continue; }
 
-                // Find our History command and add it to the toolbar
-                try
-                {
-                    var cmd = dte.Commands.Item("{" + PackageGuids.AkmlSqlCmdSetString + "}", CommandIds.CmdHistoryPanel);
-                    if (cmd != null)
+                    if (knownLabels.Contains(cap))
                     {
-                        // Add after position 3 (typically after New Query, Open, Save)
-                        var ctrl = cmd.AddControl(standardBar, 4);
-                        ctrl.Tag = "AkmlSql.HistoryToolbar";
-                        Log.Information("SQL History button added to Standard toolbar");
+                        toDelete.Add(ctrl);
                     }
-                }
-                catch (Exception ex)
-                {
-                    Log.Debug(ex, "Could not add History command to Standard toolbar");
+                    else
+                    {
+                        // Popup control (msoControlPopup = 10) with a foreign caption —
+                        // recurse into its child bar so we can find nested AKML SQL entries
+                        // (e.g. if they ended up under Tools > External Tools > AKML SQL).
+                        try
+                        {
+                            int ctrlType = (int)ctrl.Type;
+                            if (ctrlType == 10) // msoControlPopup
+                            {
+                                toRecurseInto.Add(ctrl);
+                            }
+                        }
+                        catch { /* control doesn't expose Type */ }
+                    }
                 }
             }
             catch (Exception ex)
             {
-                Log.Debug(ex, "AddHistoryButtonToStandardToolbar failed (non-fatal)");
+                Log.Debug(ex, "CleanupControls: enumeration failed on bar {Bar} (depth {Depth})", barName, depth);
+                return 0;
             }
+
+            foreach (dynamic ctrl in toDelete)
+            {
+                string cap = "";
+                try { cap = (string)ctrl.Caption; } catch { }
+
+                // Primary: try to delete the control outright.
+                bool deletedOk = false;
+                try
+                {
+                    ctrl.Delete();
+                    deletedOk = true;
+                    deleted++;
+                    Log.Debug("Deleted control '{Caption}' from CommandBar '{Bar}'", cap, barName);
+                }
+                catch (Exception ex)
+                {
+                    Log.Debug(ex, "Delete failed for control '{Caption}' on bar {Bar}", cap, barName);
+                }
+
+                // Fallback: hide the control so the user doesn't see it even if the
+                // persisted entry survived. This handles SSMS 22's quirk where
+                // cmd.AddControl bindings persist at a layer beneath Delete().
+                if (!deletedOk)
+                {
+                    try
+                    {
+                        ctrl.Visible = false;
+                        Log.Debug("Hid control '{Caption}' on bar {Bar} (delete failed, visibility=false fallback)", cap, barName);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Debug(ex, "Failed to hide control '{Caption}' on bar {Bar}", cap, barName);
+                    }
+                }
+            }
+
+            // Recurse into non-AKML popups
+            foreach (dynamic popup in toRecurseInto)
+            {
+                try
+                {
+                    dynamic childBar = popup.CommandBar;
+                    if (childBar != null)
+                    {
+                        string childName = barName + " > " + (string)popup.Caption;
+                        deleted += CleanupControls(childBar, knownLabels, childName, depth + 1);
+                    }
+                }
+                catch { /* not all popups expose a child CommandBar */ }
+            }
+
+            return deleted;
         }
+
+        // AddHistoryButtonToStandardToolbar was removed — every call to
+        // cmd.AddControl(standardBar, 4) persisted a new binding at a layer beneath
+        // our Delete() calls, causing 4 → 6 → 8 → 9 SQL History duplicates to
+        // accumulate across package reloads. Users can still open SQL History via:
+        //   • The keyboard shortcut Ctrl+Alt+H
+        //   • The AKML SQL top-level menu (injected by EnsureTopLevelMenu)
+        //   • The editor margin toolbar on SQL files (WPF, no DTE involvement)
 
         protected override void Dispose(bool disposing)
         {

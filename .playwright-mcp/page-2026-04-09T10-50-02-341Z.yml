@@ -1,0 +1,283 @@
+- generic [active] [ref=e1]:
+  - navigation [ref=e3]:
+    - link [ref=e4] [cursor=pointer]:
+      - /url: https://www.red-gate.com/
+    - link "Documentation" [ref=e5] [cursor=pointer]:
+      - /url: /home
+    - list [ref=e6]:
+      - listitem [ref=e7]:
+        - link "All Products" [ref=e8] [cursor=pointer]:
+          - /url: /home
+      - listitem [ref=e9]:
+        - link "Support" [ref=e10] [cursor=pointer]:
+          - /url: https://productsupport.red-gate.com/
+      - listitem [ref=e11]:
+        - link "Forums" [ref=e12] [cursor=pointer]:
+          - /url: https://forum.red-gate.com/
+    - text: 
+  - generic [ref=e15]:
+    - img [ref=e16]
+    - generic [ref=e17]:
+      - heading "SQL Prompt 11" [level=1] [ref=e18]
+      - list [ref=e21]:
+        - listitem [ref=e22]:
+          - link "SQL Prompt 11 documentation" [ref=e23] [cursor=pointer]:
+            - /url: /sp
+          - text: ">"
+        - listitem [ref=e24]:
+          - link "SQL Code Formatting and Styles" [ref=e25] [cursor=pointer]:
+            - /url: /sp/sql-code-formatting-and-styles
+          - text: ">"
+        - listitem [ref=e26]: Customizing your Formatting Style
+  - generic [ref=e28]:
+    - generic [ref=e31]:
+      - navigation [ref=e32]:
+        - list [ref=e33]:
+          - listitem [ref=e34]:
+            - link " Getting Started" [ref=e35] [cursor=pointer]:
+              - /url: /sp/getting-started
+              - generic [ref=e36]: 
+              - text: Getting Started
+          - listitem [ref=e37]:
+            - link " Upgrading" [ref=e38] [cursor=pointer]:
+              - /url: /sp/upgrading
+              - generic [ref=e39]: 
+              - text: Upgrading
+          - listitem [ref=e40]:
+            - link " Features requiring a specific license" [ref=e41] [cursor=pointer]:
+              - /url: /sp/features-requiring-a-specific-license
+              - generic [ref=e42]: 
+              - text: Features requiring a specific license
+          - listitem [ref=e43]:
+            - link " Managing SQL Prompt behavior" [ref=e44] [cursor=pointer]:
+              - /url: /sp/managing-sql-prompt-behavior
+              - generic [ref=e45]: 
+              - text: Managing SQL Prompt behavior
+          - listitem [ref=e46]:
+            - link " SQL Code Analysis" [ref=e47] [cursor=pointer]:
+              - /url: /sp/sql-code-analysis
+              - generic [ref=e48]: 
+              - text: SQL Code Analysis
+          - listitem [ref=e49]:
+            - link " SQL Code Completion and IntelliSense" [ref=e50] [cursor=pointer]:
+              - /url: /sp/sql-code-completion-and-intellisense
+              - generic [ref=e51]: 
+              - text: SQL Code Completion and IntelliSense
+          - listitem [ref=e52]:
+            - link " SQL Code Formatting and Styles" [ref=e53] [cursor=pointer]:
+              - /url: /sp/sql-code-formatting-and-styles
+              - generic [ref=e54]: 
+              - text: SQL Code Formatting and Styles
+            - list [ref=e55]:
+              - listitem [ref=e56]:
+                - link "Working with SQL Code Formatting and Styles (Quick Ref)" [ref=e57] [cursor=pointer]:
+                  - /url: /sp/sql-code-formatting-and-styles/working-with-sql-code-formatting-and-styles-quick-ref
+              - listitem [ref=e58]:
+                - link "Customizing your Formatting Style" [ref=e59] [cursor=pointer]:
+                  - /url: /sp/sql-code-formatting-and-styles/customizing-your-formatting-style
+              - listitem [ref=e60]:
+                - link "Using styles" [ref=e61] [cursor=pointer]:
+                  - /url: /sp/sql-code-formatting-and-styles/using-styles
+              - listitem [ref=e62]:
+                - link "Using a shared folder for formatting styles" [ref=e63] [cursor=pointer]:
+                  - /url: /sp/sql-code-formatting-and-styles/using-a-shared-folder-for-formatting-styles
+              - listitem [ref=e64]:
+                - link "Updating style files from before version 10.5" [ref=e65] [cursor=pointer]:
+                  - /url: /sp/sql-code-formatting-and-styles/updating-style-files-from-before-version-10-5
+          - listitem [ref=e66]:
+            - link " SQL Code Snippets" [ref=e67] [cursor=pointer]:
+              - /url: /sp/sql-code-snippets
+              - generic [ref=e68]: 
+              - text: SQL Code Snippets
+          - listitem [ref=e69]:
+            - link " SQL Prompt AI" [ref=e70] [cursor=pointer]:
+              - /url: /sp/sql-prompt-ai
+              - generic [ref=e71]: 
+              - text: SQL Prompt AI
+          - listitem [ref=e72]:
+            - link " SQL Refactoring" [ref=e73] [cursor=pointer]:
+              - /url: /sp/sql-refactoring
+              - generic [ref=e74]: 
+              - text: SQL Refactoring
+          - listitem [ref=e75]:
+            - link " SSMS Tab Management" [ref=e76] [cursor=pointer]:
+              - /url: /sp/ssms-tab-management
+              - generic [ref=e77]: 
+              - text: SSMS Tab Management
+          - listitem [ref=e78]:
+            - link "Microsoft Fabric" [ref=e79] [cursor=pointer]:
+              - /url: /sp/microsoft-fabric
+          - listitem [ref=e80]:
+            - link "Azure Synapse Dedicated SQL Pool" [ref=e81] [cursor=pointer]:
+              - /url: /sp/azure-synapse-dedicated-sql-pool
+          - listitem [ref=e82]:
+            - link "SQL Server 2025" [ref=e83] [cursor=pointer]:
+              - /url: /sp/sql-server-2025
+          - listitem [ref=e84]:
+            - link "Command Palette" [ref=e85] [cursor=pointer]:
+              - /url: /sp/command-palette
+          - listitem [ref=e86]:
+            - link "Entra ID MFA Authentication" [ref=e87] [cursor=pointer]:
+              - /url: /sp/entra-id-mfa-authentication
+          - listitem [ref=e88]:
+            - link "Custom Entra ID Authentication Configuration" [ref=e89] [cursor=pointer]:
+              - /url: /sp/custom-entra-id-authentication-configuration
+          - listitem [ref=e90]:
+            - link "Worked examples" [ref=e91] [cursor=pointer]:
+              - /url: /sp/worked-examples
+          - listitem [ref=e92]:
+            - link " Troubleshooting" [ref=e93] [cursor=pointer]:
+              - /url: /sp/troubleshooting
+              - generic [ref=e94]: 
+              - text: Troubleshooting
+          - listitem [ref=e95]:
+            - link " Release notes and other versions" [ref=e96] [cursor=pointer]:
+              - /url: /sp/release-notes-and-other-versions
+              - generic [ref=e97]: 
+              - text: Release notes and other versions
+      - generic [ref=e104]:
+        - generic [ref=e109]: Have you used SQL Prompt AI features?
+        - group "Have you used SQL Prompt AI features?" [ref=e111]:
+          - generic [ref=e113]:
+            - radio "I've not heard of the AI features" [ref=e115]
+            - generic [ref=e116] [cursor=pointer]: I've not heard of the AI features
+          - generic [ref=e118]:
+            - radio "Yes - against dev/test environments only" [ref=e120]
+            - generic [ref=e121] [cursor=pointer]: Yes - against dev/test environments only
+          - generic [ref=e123]:
+            - radio "Yes - against production environments" [ref=e125]
+            - generic [ref=e126] [cursor=pointer]: Yes - against production environments
+          - generic [ref=e128]:
+            - radio "Yes - against both dev/test and production" [ref=e130]
+            - generic [ref=e131] [cursor=pointer]: Yes - against both dev/test and production
+          - generic [ref=e133]:
+            - radio "No - I haven't tried it yet" [ref=e135]
+            - generic [ref=e136] [cursor=pointer]: No - I haven't tried it yet
+          - generic [ref=e138]:
+            - radio "No - we're not allowed to use AI against our databases" [ref=e140]
+            - generic [ref=e141] [cursor=pointer]: No - we're not allowed to use AI against our databases
+          - generic [ref=e143]:
+            - radio "Other:" [ref=e145]
+            - generic [ref=e146] [cursor=pointer]: "Other:"
+            - textbox [ref=e148]
+        - generic [ref=e150]:
+          - button "Vote" [ref=e151] [cursor=pointer]
+          - link "View Results" [ref=e153] [cursor=pointer]:
+            - /url: javascript:PD_vote16559509(1);
+    - generic [ref=e155]:
+      - heading "Customizing your Formatting Style" [level=1] [ref=e156]
+      - paragraph [ref=e157]: Page last updated 29 October 2019
+      - paragraph [ref=e158]: Published 29 October 2019
+      - generic [ref=e162]:
+        - paragraph [ref=e163]:
+          - text: A formatting style is a saved set of options for how to lay out your SQL. To create or edit a formatting style, on the
+          - strong [ref=e164]: SQL Prompt
+          - text: menu, click
+          - strong [ref=e165]: Edit Formatting Styles
+          - text: .
+        - paragraph [ref=e166]: "SQL Prompt includes some Redgate styles that you can use as a starting point for your own style:"
+        - paragraph [ref=e167]:
+          - link [ref=e169] [cursor=pointer]:
+            - /url: /sp/files/296815597/296815599/1/1747980536282/image2016-11-28+15%3A47%3A12.png
+            - img [ref=e170]
+        - paragraph [ref=e171]:
+          - text: To create your own style, under
+          - strong [ref=e172]: YOUR STYLES
+          - text: ", click"
+          - strong [ref=e173]: + Create a style
+          - text: .
+        - paragraph [ref=e174]:
+          - text: Your
+          - emphasis [ref=e175]: active
+          - text: style
+          - strong [ref=e176]
+          - text: is the formatting style that is applied when you run Format SQL,
+          - strong [ref=e177]
+          - text: and is marked with
+          - subscript [ref=e178]:
+            - link [ref=e180] [cursor=pointer]:
+              - /url: /sp/files/296815597/296815600/1/1747980536260/image2017-4-24+16%3A5%3A47.png
+              - img [ref=e181]
+          - text: . To make a style active, make sure it is selected and click
+          - strong [ref=e182]: Set as active
+          - text: .
+        - generic [ref=e184]:
+          - paragraph [ref=e185]: Old formatting styles
+          - text:  
+          - generic [ref=e186]:
+            - paragraph [ref=e187]:
+              - text: Styles created before SQL Prompt 8 will be imported automatically. These will appear under
+              - strong [ref=e188]: YOUR STYLES
+              - text: and have the suffix
+              - strong [ref=e189]: (old)
+              - text: .
+            - paragraph [ref=e190]:
+              - strong [ref=e191]: "Note:"
+              - text: SQL Prompt 8 includes new formatting options, so old styles might have changed after being imported.
+        - paragraph [ref=e192]:
+          - text: To edit a style, make sure it is selected and click
+          - strong [ref=e193]: Edit style
+          - text: ". SQL Prompt includes options for formatting DML statements, DDL statements, CASE statements, JOINs, CTEs, and more:"
+        - paragraph [ref=e194]:
+          - link [ref=e196] [cursor=pointer]:
+            - /url: /sp/files/296815597/296815601/1/1747980536235/image2017-4-26+10%3A27%3A22.png
+            - img [ref=e197]
+        - heading "Disable formatting for blocks of code" [level=2] [ref=e198]
+        - paragraph [ref=e199]: "You can disable SQL Prompt formatting for certain blocks of code in a query:"
+        - list [ref=e200]:
+          - listitem [ref=e201]:
+            - text: In a query window, select the code you don't want SQL Prompt to format, and click
+            - strong [ref=e202]: Ctrl
+            - text: to open the actions list.
+          - listitem [ref=e203]:
+            - text: Type
+            - emphasis [ref=e204]: di
+            - text: and select
+            - strong [ref=e205]: Disable formatting for selected text
+            - text: ":"
+            - link [ref=e207] [cursor=pointer]:
+              - /url: /sp/files/296815597/296815602/1/1747980536213/image2016-8-3+15%3A49%3A17.png
+              - img [ref=e208]
+            - generic [ref=e209]: "SQL Prompt encloses the selected code within comments:"
+            - link [ref=e211] [cursor=pointer]:
+              - /url: /sp/files/296815597/296815603/1/1747980536192/image2016-8-3+15%3A52%3A41.png
+              - img [ref=e212]
+        - paragraph [ref=e213]: This code now won't be formatted when you run Format SQL.
+        - heading "Formatting errors" [level=2] [ref=e214]
+        - paragraph [ref=e215]: "If SQL Prompt wasn't able to format your code, a pop-up window will be displayed showing the reasons:"
+        - paragraph [ref=e216]:
+          - link [ref=e218] [cursor=pointer]:
+            - /url: /sp/files/296815597/296815604/1/1747980536162/image2018-3-16_9-24-7.png
+            - img [ref=e219]
+      - generic [ref=e220]:
+        - separator [ref=e221]
+        - paragraph [ref=e222]: Didn't find what you were looking for?
+        - list [ref=e224]:
+          - listitem [ref=e225]:
+            - text: Visit the
+            - link "Redgate forum" [ref=e226] [cursor=pointer]:
+              - /url: https://forum.red-gate.com/
+          - listitem [ref=e227]:
+            - link "Contact Support" [ref=e228] [cursor=pointer]:
+              - /url: http://redgatesupport.red-gate.com/home
+  - generic [ref=e230]:
+    - link "Product Articles Tips and how-to guides for Redgate products" [ref=e232] [cursor=pointer]:
+      - /url: https://www.red-gate.com/hub/product-learning/
+      - paragraph [ref=e233]: Product Articles
+      - paragraph [ref=e234]: Tips and how-to guides for Redgate products
+    - link "University Easy to follow video courses" [ref=e236] [cursor=pointer]:
+      - /url: https://www.red-gate.com/hub/university/
+      - paragraph [ref=e237]: University
+      - paragraph [ref=e238]: Easy to follow video courses
+    - link "Community Forums Ask, discuss, and solve questions about Redgate's tools" [ref=e240] [cursor=pointer]:
+      - /url: https://forum.red-gate.com
+      - paragraph [ref=e241]: Community Forums
+      - paragraph [ref=e242]: Ask, discuss, and solve questions about Redgate's tools
+    - link "Events & Friends Meet us at an event, get sponsored, and join our Friends of Redgate" [ref=e244] [cursor=pointer]:
+      - /url: https://www.red-gate.com/hub/events/
+      - paragraph [ref=e245]: Events & Friends
+      - paragraph [ref=e246]: Meet us at an event, get sponsored, and join our Friends of Redgate
+    - link "Simple Talk In-depth articles and opinion from Redgate's technical journal" [ref=e248] [cursor=pointer]:
+      - /url: https://www.red-gate.com/simple-talk/
+      - paragraph [ref=e249]: Simple Talk
+      - paragraph [ref=e250]: In-depth articles and opinion from Redgate's technical journal

@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Windows;
@@ -80,46 +81,48 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 Caret = Freeze(new SolidColorBrush(caret));
             }
 
+            // ── SQL Prompt-aligned theme palettes ──
+            // Source: doc/SQL-PROMPT/SQL-Prompt-Option/SQL_Prompt_Options_Dialog.md §18.5
             public static readonly ThemeBrushSet Dark = new ThemeBrushSet(
-                main:        Color.FromRgb(0x2D, 0x2D, 0x3B), // #2D2D3B — dialog background (SQL Prompt spec)
-                sidebar:     Color.FromRgb(0x25, 0x25, 0x33), // #252533 — sidebar (darker than main)
-                panel:       Color.FromRgb(0x1E, 0x1E, 0x2E), // #1E1E2E — panel background (SQL Prompt spec)
-                input:       Color.FromRgb(0x3A, 0x3F, 0x4E), // #3A3F4E — input (matches border)
-                inputReadOnly: Color.FromRgb(0x2D, 0x2D, 0x3B), // #2D2D3B — read-only (matches main)
-                button:      Color.FromRgb(0x3A, 0x3F, 0x4E), // #3A3F4E — button background
-                buttonHover: Color.FromRgb(0x4A, 0x4F, 0x5E), // #4A4F5E — button hover (lighter)
-                selected:    Color.FromRgb(0x00, 0x78, 0xD4), // #0078D4 — selected item (accent blue)
-                border:      Color.FromRgb(0x3A, 0x3F, 0x4E), // #3A3F4E — border (SQL Prompt spec)
-                comboBorder: Color.FromRgb(0x3A, 0x3F, 0x4E), // #3A3F4E — input border
-                fgPrimary:   Color.FromRgb(0xD4, 0xD4, 0xD4), // #D4D4D4 — text primary
-                fgSecondary: Color.FromRgb(0x88, 0x92, 0xA8), // #8892A8 — unselected text (SQL Prompt spec)
-                fgAccent:    Color.FromRgb(0x00, 0x78, 0xD4), // #0078D4 — accent
+                main:        Color.FromRgb(0x2D, 0x2D, 0x3B), // #2D2D3B  dialog background
+                sidebar:     Color.FromRgb(0x1E, 0x1E, 0x2E), // #1E1E2E  tree nav background (SQL Prompt panel)
+                panel:       Color.FromRgb(0x1E, 0x1E, 0x2E), // #1E1E2E  content panel background
+                input:       Color.FromRgb(0x2D, 0x2D, 0x3B), // #2D2D3B  input bg (matches dialog)
+                inputReadOnly: Color.FromRgb(0x25, 0x28, 0x36), // #252836 read-only field
+                button:      Color.FromRgb(0x3A, 0x3F, 0x4E), // #3A3F4E  outlined button bg
+                buttonHover: Color.FromRgb(0x4A, 0x4F, 0x5E), // #4A4F5E  button hover
+                selected:    Color.FromRgb(0x00, 0x78, 0xD4), // #0078D4  accent (selected nav, primary button)
+                border:      Color.FromRgb(0x3A, 0x3F, 0x4E), // #3A3F4E  border
+                comboBorder: Color.FromRgb(0x3A, 0x3F, 0x4E), // #3A3F4E  input border
+                fgPrimary:   Color.FromRgb(0xD4, 0xD4, 0xD4), // #D4D4D4  primary text + section header
+                fgSecondary: Color.FromRgb(0x88, 0x92, 0xA8), // #8892A8  unselected nav + setting label
+                fgAccent:    Color.FromRgb(0x4F, 0x8C, 0xFF), // #4F8CFF  page title + link (dark variant)
                 fgWhite:     Color.FromRgb(0xFF, 0xFF, 0xFF), // #FFFFFF
-                selectedText: Color.FromRgb(0xFF, 0xFF, 0xFF), // #FFFFFF — selected text (white on accent)
-                sep:         Color.FromRgb(0x3A, 0x3F, 0x4E), // #3A3F4E — separator
-                treeHover:   Color.FromRgb(0x33, 0x33, 0x44), // #333344 — hover
-                caret:       Color.FromRgb(0xFF, 0xFF, 0xFF)  // #FFFFFF
+                selectedText: Color.FromRgb(0xFF, 0xFF, 0xFF),// #FFFFFF  text on accent
+                sep:         Color.FromRgb(0x3A, 0x3F, 0x4E), // #3A3F4E  separator
+                treeHover:   Color.FromRgb(0x25, 0x28, 0x36), // #252836  nav hover (matches row alt)
+                caret:       Color.FromRgb(0xFF, 0xFF, 0xFF)
             );
 
             public static readonly ThemeBrushSet Light = new ThemeBrushSet(
-                main:        Color.FromRgb(0xF0, 0xF0, 0xF0), // #F0F0F0 — dialog background (SQL Prompt spec)
-                sidebar:     Color.FromRgb(0xF0, 0xF0, 0xF0), // #F0F0F0 — sidebar background
-                panel:       Color.FromRgb(0xFF, 0xFF, 0xFF), // #FFFFFF — panel background (SQL Prompt spec)
-                input:       Color.FromRgb(0xFF, 0xFF, 0xFF), // #FFFFFF — input background
-                inputReadOnly: Color.FromRgb(0xF0, 0xF0, 0xF0), // #F0F0F0
-                button:      Color.FromRgb(0x00, 0x78, 0xD4), // #0078D4 — primary button (SQL Prompt spec)
-                buttonHover: Color.FromRgb(0x10, 0x6E, 0xBE), // #106EBE — button hover (darker accent)
-                selected:    Color.FromRgb(0x00, 0x78, 0xD4), // #0078D4 — selected item (SQL Prompt spec)
-                border:      Color.FromRgb(0xCC, 0xCC, 0xCC), // #CCCCCC — border (SQL Prompt spec)
-                comboBorder: Color.FromRgb(0xCC, 0xCC, 0xCC), // #CCCCCC — input border
-                fgPrimary:   Color.FromRgb(0x1E, 0x1E, 0x1E), // #1E1E1E — text primary
-                fgSecondary: Color.FromRgb(0x66, 0x66, 0x66), // #666666 — text secondary
-                fgAccent:    Color.FromRgb(0x00, 0x78, 0xD4), // #0078D4 — accent (SQL Prompt spec)
-                fgWhite:     Color.FromRgb(0x1E, 0x1E, 0x1E), // #1E1E1E — headings (dark on light)
-                selectedText: Color.FromRgb(0xFF, 0xFF, 0xFF), // #FFFFFF — selected text (white on #0078D4)
-                sep:         Color.FromRgb(0xCC, 0xCC, 0xCC), // #CCCCCC — separator
-                treeHover:   Color.FromRgb(0xE8, 0xE8, 0xE8), // #E8E8E8 — hover
-                caret:       Color.FromRgb(0x1E, 0x1E, 0x1E)  // #1E1E1E
+                main:        Color.FromRgb(0xF0, 0xF0, 0xF0), // #F0F0F0  dialog background
+                sidebar:     Color.FromRgb(0xFF, 0xFF, 0xFF), // #FFFFFF  tree nav background (SQL Prompt panel)
+                panel:       Color.FromRgb(0xFF, 0xFF, 0xFF), // #FFFFFF  content panel background
+                input:       Color.FromRgb(0xFF, 0xFF, 0xFF), // #FFFFFF  input bg
+                inputReadOnly: Color.FromRgb(0xF8, 0xF8, 0xF8), // #F8F8F8 read-only / row alt
+                button:      Color.FromRgb(0xFF, 0xFF, 0xFF), // #FFFFFF  outlined button bg
+                buttonHover: Color.FromRgb(0xE8, 0xE8, 0xE8), // #E8E8E8  button hover
+                selected:    Color.FromRgb(0x00, 0x78, 0xD4), // #0078D4  accent (selected nav, primary button)
+                border:      Color.FromRgb(0xCC, 0xCC, 0xCC), // #CCCCCC  border
+                comboBorder: Color.FromRgb(0xCC, 0xCC, 0xCC), // #CCCCCC  input border
+                fgPrimary:   Color.FromRgb(0x33, 0x33, 0x33), // #333333  primary text + section header
+                fgSecondary: Color.FromRgb(0x55, 0x55, 0x55), // #555555  unselected nav + setting label
+                fgAccent:    Color.FromRgb(0x00, 0x78, 0xD4), // #0078D4  page title + link
+                fgWhite:     Color.FromRgb(0x33, 0x33, 0x33), // #333333  headings on light
+                selectedText: Color.FromRgb(0xFF, 0xFF, 0xFF),// #FFFFFF  text on accent
+                sep:         Color.FromRgb(0xCC, 0xCC, 0xCC), // #CCCCCC  separator
+                treeHover:   Color.FromRgb(0xF0, 0xF0, 0xF0), // #F0F0F0  nav hover
+                caret:       Color.FromRgb(0x1E, 0x1E, 0x1E)
             );
         }
 
@@ -137,6 +140,26 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
         // Track whether user confirmed via OK
         private bool _dialogResult;
+
+        // ─── Search index (built lazily by Add* helpers) ─────────────────────
+        /// <summary>One entry per searchable setting across all pages.</summary>
+        private sealed class SearchEntry
+        {
+            public string Label { get; set; } = string.Empty;
+            public string Description { get; set; } = string.Empty;
+            public string PageKey { get; set; } = string.Empty;
+            public string PageDisplay { get; set; } = string.Empty;
+            public string Kind { get; set; } = string.Empty; // "Toggle", "Slider", "Dropdown", "Text", "Info"
+            public FrameworkElement? Row { get; set; }       // The row Border to scroll/flash
+            public string Haystack { get; set; } = string.Empty; // lowercased combined text for matching
+        }
+
+        private readonly List<SearchEntry> _searchIndex = new();
+        private string _currentPageKey = string.Empty;
+        private string _currentPageDisplay = string.Empty;
+        private TextBox? _searchBox;
+        private Popup? _searchResultsPopup;
+        private ListBox? _searchResultsList;
 
         /// <summary>
         /// When set to true by the theme-changed handler, the caller should
@@ -160,7 +183,6 @@ namespace AkmlSql.Shell.Shared.Dialogs
         private CheckBox? _chkShowNullability;
         private CheckBox? _chkShowPkFk;
         private CheckBox? _chkAutoAlias;
-        private CheckBox? _chkJoinAssist;
         private CheckBox? _chkDisableNativeIs;
         private Slider? _sldTriggerDelay;
         private TextBlock? _lblTriggerDelayValue;
@@ -337,11 +359,13 @@ namespace AkmlSql.Shell.Shared.Dialogs
         {
             var window = new Window
             {
-                Title = Constants.ProductName + " Settings",
-                Width = 820,
+                Title = Constants.ProductName + " Options",
+                Width = 880,
                 Height = 620,
+                MinWidth = 720,
+                MinHeight = 520,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                ResizeMode = ResizeMode.NoResize,
+                ResizeMode = ResizeMode.CanResize,
                 Background = _theme.Main,
                 Foreground = _theme.FgPrimary,
                 ShowInTaskbar = false,
@@ -404,55 +428,44 @@ namespace AkmlSql.Shell.Shared.Dialogs
         {
             var bar = new Border
             {
-                Height = 50,
-                Background = _theme.Sidebar,
-                Padding = new Thickness(12, 8, 12, 8)
+                Height = 52,
+                Background = _theme.Main,
+                BorderBrush = _theme.Sep,
+                BorderThickness = new Thickness(0, 1, 0, 0),
+                Padding = new Thickness(12, 10, 12, 10)
             };
 
             var dock = new DockPanel { LastChildFill = false };
 
-            // Right side: OK, Cancel, Apply
-            var btnApply = MakeButton("Apply", 80);
-            btnApply.Click += OnApplyClick;
-            DockPanel.SetDock(btnApply, Dock.Right);
-            dock.Children.Add(btnApply);
-
+            // ─── Right side: Cancel, OK (primary) ───
             var btnCancel = MakeButton("Cancel", 80);
-            btnCancel.Margin = new Thickness(0, 0, 8, 0);
             btnCancel.Click += OnCancelClick;
             DockPanel.SetDock(btnCancel, Dock.Right);
             dock.Children.Add(btnCancel);
 
-            var btnOk = MakeButton("OK", 80);
+            var btnOk = MakePrimaryButton("OK", 80);
             btnOk.Margin = new Thickness(0, 0, 8, 0);
-            btnOk.FontWeight = FontWeights.SemiBold;
             btnOk.Click += OnOkClick;
             DockPanel.SetDock(btnOk, Dock.Right);
             dock.Children.Add(btnOk);
 
-            // Left side: Import/Export
-            var btnImport = MakeButton("Import Profile...", 120);
-            btnImport.Margin = new Thickness(0, 0, 8, 0);
+            // ─── Left side: Restore All Defaults, Import, Export ───
+            var btnResetAll = MakeButton("Restore All Defaults", 140);
+            btnResetAll.Click += OnResetAllClick;
+            DockPanel.SetDock(btnResetAll, Dock.Left);
+            dock.Children.Add(btnResetAll);
+
+            var btnImport = MakeButton("Import…", 90);
+            btnImport.Margin = new Thickness(8, 0, 0, 0);
             btnImport.Click += OnImportProfileClick;
             DockPanel.SetDock(btnImport, Dock.Left);
             dock.Children.Add(btnImport);
 
-            var btnExport = MakeButton("Export Profile...", 120);
+            var btnExport = MakeButton("Export…", 90);
+            btnExport.Margin = new Thickness(8, 0, 0, 0);
             btnExport.Click += OnExportProfileClick;
             DockPanel.SetDock(btnExport, Dock.Left);
             dock.Children.Add(btnExport);
-
-            var btnResetPage = MakeButton("Reset This Page", 120);
-            btnResetPage.Margin = new Thickness(8, 0, 0, 0);
-            btnResetPage.Click += OnResetThisPageClick;
-            DockPanel.SetDock(btnResetPage, Dock.Left);
-            dock.Children.Add(btnResetPage);
-
-            var btnResetAll = MakeButton("Reset All", 80);
-            btnResetAll.Margin = new Thickness(8, 0, 0, 0);
-            btnResetAll.Click += OnResetAllClick;
-            DockPanel.SetDock(btnResetAll, Dock.Left);
-            dock.Children.Add(btnResetAll);
 
             bar.Child = dock;
             return bar;
@@ -464,23 +477,36 @@ namespace AkmlSql.Shell.Shared.Dialogs
         {
             var sidebar = new Border
             {
-                Width = 200,
+                Width = 220,
                 Background = _theme.Sidebar,
-                Padding = new Thickness(0, 8, 0, 0)
+                BorderBrush = _theme.Sep,
+                BorderThickness = new Thickness(0, 0, 1, 0),
+                Padding = new Thickness(0, 12, 0, 0)
             };
 
             var panel = new StackPanel();
 
-            // Title label
+            // Title label — SQL Prompt style ("AKML SQL Options")
             var title = new TextBlock
             {
-                Text = "Settings",
-                FontSize = 16,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = _theme.FgWhite,
-                Margin = new Thickness(16, 4, 0, 12)
+                Text = Constants.ProductName + " Options",
+                FontSize = 13,
+                FontWeight = FontWeights.Bold,
+                Foreground = _theme.FgPrimary,
+                Margin = new Thickness(16, 0, 16, 14)
             };
             panel.Children.Add(title);
+
+            // Title underline
+            panel.Children.Add(new Border
+            {
+                Height = 1,
+                Background = _theme.Sep,
+                Margin = new Thickness(12, 0, 12, 10)
+            });
+
+            // ── Search box (Visual Studio Options-style, but better) ──
+            panel.Children.Add(BuildSearchBox());
 
             // TreeView for navigation
             _navTree = new TreeView
@@ -523,23 +549,38 @@ namespace AkmlSql.Shell.Shared.Dialogs
             // Build categories and pages
             BuildPages();
 
-            string[] categories =
-            {
-                "General", "IntelliSense", "Schema Cache", "Formatting", "Snippets",
-                "Code Analysis", "Refactoring", "History", "Tabs & UI", "Safety",
-                "Grid", "Editor", "Execution", "Navigation", "AI Assistance"
-            };
+            // ── SQL Prompt-style hierarchical tree ──
+            // Source: doc/SQL-PROMPT/SQL-Prompt-Option/SQL_Prompt_Options_Dialog.md §1.2
+            // Parent nodes have no Tag (not selectable as a page); leaves carry the page key.
 
-            foreach (var cat in categories)
-            {
-                var item = new TreeViewItem
-                {
-                    Header = cat,
-                    Tag = cat,
-                    IsExpanded = false
-                };
-                _navTree.Items.Add(item);
-            }
+            AddTreeGroup("Suggestions", expanded: true,
+                ("Behavior", "IntelliSense"),
+                ("Database", "Schema Cache"));
+
+            AddTreeGroup("Inserted Code", expanded: false,
+                ("Refactoring", "Refactoring"));
+
+            AddTreeGroup("Format", expanded: false,
+                ("Styles", "Formatting"));
+
+            AddTreeGroup("Queries", expanded: false,
+                ("History", "History"),
+                ("Execution Warnings", "Safety"),
+                ("Query Results", "Grid"),
+                ("Execution", "Execution"));
+
+            AddTreeGroup("Tabs", expanded: false,
+                ("Color", "Tabs & UI"));
+
+            AddTreeLeaf("Code Analysis", "Code Analysis");
+            AddTreeLeaf("Snippets", "Snippets");
+            AddTreeLeaf("Prompt AI", "AI Assistance");
+
+            AddTreeGroup("Editor", expanded: false,
+                ("Productivity", "Editor"),
+                ("Navigation", "Navigation"));
+
+            AddTreeLeaf("Miscellaneous", "General");
 
             _navTree.SelectedItemChanged += OnNavSelectionChanged;
 
@@ -548,25 +589,564 @@ namespace AkmlSql.Shell.Shared.Dialogs
             return sidebar;
         }
 
+        /// <summary>
+        /// Adds a non-selectable parent group with one or more leaf children.
+        /// Each leaf is a tuple of (display label, page key in <see cref="_pages"/>).
+        /// </summary>
+        private void AddTreeGroup(string header, bool expanded, params (string Label, string PageKey)[] children)
+        {
+            var parent = new TreeViewItem
+            {
+                Header = header,
+                Tag = null, // null = not a page, just a group
+                IsExpanded = expanded,
+                FontWeight = FontWeights.SemiBold
+            };
+
+            foreach (var (label, pageKey) in children)
+            {
+                parent.Items.Add(new TreeViewItem
+                {
+                    Header = label,
+                    Tag = pageKey,
+                    FontWeight = FontWeights.Normal
+                });
+            }
+
+            _navTree!.Items.Add(parent);
+        }
+
+        /// <summary>
+        /// Adds a top-level leaf (no children, directly selectable).
+        /// </summary>
+        private void AddTreeLeaf(string header, string pageKey)
+        {
+            _navTree!.Items.Add(new TreeViewItem
+            {
+                Header = header,
+                Tag = pageKey,
+                FontWeight = FontWeights.SemiBold
+            });
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════
+        //  Search box & results popup
+        // ═══════════════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// Builds the SQL Prompt-style search box at the top of the sidebar.
+        /// Includes a magnifying-glass icon, placeholder, and clear button.
+        /// </summary>
+        private Border BuildSearchBox()
+        {
+            var container = new Border
+            {
+                Background = _theme.Input,
+                BorderBrush = _theme.ComboBorder,
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(3),
+                Margin = new Thickness(12, 0, 12, 12),
+                Padding = new Thickness(0)
+            };
+
+            var grid = new Grid();
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            // Magnifying glass icon
+            var icon = new TextBlock
+            {
+                Text = "\uD83D\uDD0D", // 🔍
+                FontSize = 11,
+                Foreground = _theme.FgSecondary,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(8, 0, 6, 0)
+            };
+            Grid.SetColumn(icon, 0);
+            grid.Children.Add(icon);
+
+            // Text input
+            _searchBox = new TextBox
+            {
+                Background = _theme.Transparent,
+                Foreground = _theme.FgPrimary,
+                CaretBrush = _theme.Caret,
+                BorderThickness = new Thickness(0),
+                FontSize = 12,
+                Height = 26,
+                Padding = new Thickness(0, 4, 0, 4),
+                VerticalContentAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(_searchBox, 1);
+            grid.Children.Add(_searchBox);
+
+            // Placeholder overlay (shows when text is empty)
+            var placeholder = new TextBlock
+            {
+                Text = "Search options... (Ctrl+E)",
+                Foreground = _theme.FgSecondary,
+                FontSize = 12,
+                FontStyle = FontStyles.Italic,
+                IsHitTestVisible = false,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(2, 0, 0, 0)
+            };
+            Grid.SetColumn(placeholder, 1);
+            grid.Children.Add(placeholder);
+
+            // Clear button (visible only when text present)
+            var clearBtn = new TextBlock
+            {
+                Text = "\u2715", // ✕
+                FontSize = 12,
+                Foreground = _theme.FgSecondary,
+                Cursor = Cursors.Hand,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(4, 0, 8, 0),
+                Visibility = Visibility.Collapsed
+            };
+            Grid.SetColumn(clearBtn, 2);
+            grid.Children.Add(clearBtn);
+
+            // Wire up events
+            _searchBox.TextChanged += (s, e) =>
+            {
+                placeholder.Visibility = string.IsNullOrEmpty(_searchBox.Text) ? Visibility.Visible : Visibility.Collapsed;
+                clearBtn.Visibility = string.IsNullOrEmpty(_searchBox.Text) ? Visibility.Collapsed : Visibility.Visible;
+                OnSearchTextChanged(_searchBox.Text);
+            };
+
+            _searchBox.PreviewKeyDown += OnSearchBoxKeyDown;
+            _searchBox.GotFocus += (s, e) => container.BorderBrush = _theme.FgAccent;
+            _searchBox.LostFocus += (s, e) =>
+            {
+                container.BorderBrush = _theme.ComboBorder;
+                // Delay close so click on result registers
+                _searchBox.Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    if (_searchResultsPopup != null && _searchResultsList?.IsKeyboardFocusWithin != true)
+                    {
+                        _searchResultsPopup.IsOpen = false;
+                    }
+                }), System.Windows.Threading.DispatcherPriority.Background);
+            };
+
+            clearBtn.MouseLeftButtonUp += (s, e) =>
+            {
+                _searchBox.Text = string.Empty;
+                _searchBox.Focus();
+            };
+
+            container.Child = grid;
+
+            // Build the results popup (separate WPF Popup positioned next to the search box)
+            BuildSearchResultsPopup(container);
+
+            return container;
+        }
+
+        /// <summary>
+        /// Builds the WPF Popup that holds the search results list. Positioned to the right
+        /// of the sidebar so it doesn't squash the tree.
+        /// </summary>
+        private void BuildSearchResultsPopup(Border anchor)
+        {
+            _searchResultsList = new ListBox
+            {
+                Background = _theme.Panel,
+                Foreground = _theme.FgPrimary,
+                BorderThickness = new Thickness(0),
+                MaxHeight = 420,
+                MinWidth = 420,
+                MaxWidth = 520,
+                FontSize = 12,
+                Focusable = true
+            };
+
+            // Themed item container — flat rows with hover/selected highlight
+            var itemStyle = new Style(typeof(ListBoxItem));
+            itemStyle.Setters.Add(new Setter(Control.BackgroundProperty, _theme.Transparent));
+            itemStyle.Setters.Add(new Setter(Control.ForegroundProperty, _theme.FgPrimary));
+            itemStyle.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(10, 7, 10, 7)));
+            itemStyle.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0)));
+            itemStyle.Setters.Add(new Setter(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Stretch));
+            itemStyle.Setters.Add(new Setter(Control.HorizontalContentAlignmentProperty, HorizontalAlignment.Stretch));
+            var hoverTrigger = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
+            hoverTrigger.Setters.Add(new Setter(Control.BackgroundProperty, _theme.TreeHover));
+            itemStyle.Triggers.Add(hoverTrigger);
+            var selTrigger = new Trigger { Property = ListBoxItem.IsSelectedProperty, Value = true };
+            selTrigger.Setters.Add(new Setter(Control.BackgroundProperty, _theme.Selected));
+            selTrigger.Setters.Add(new Setter(Control.ForegroundProperty, _theme.SelectedText));
+            selTrigger.Setters.Add(new Setter(TextElement.ForegroundProperty, _theme.SelectedText));
+            itemStyle.Triggers.Add(selTrigger);
+            _searchResultsList.ItemContainerStyle = itemStyle;
+
+            _searchResultsList.MouseLeftButtonUp += (s, e) => CommitSelectedSearchResult();
+            _searchResultsList.PreviewKeyDown += OnSearchResultsKeyDown;
+
+            var border = new Border
+            {
+                Background = _theme.Panel,
+                BorderBrush = _theme.FgAccent,
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(3),
+                Effect = new System.Windows.Media.Effects.DropShadowEffect
+                {
+                    BlurRadius = 16,
+                    ShadowDepth = 4,
+                    Opacity = 0.45,
+                    Color = Colors.Black
+                },
+                Child = _searchResultsList
+            };
+
+            _searchResultsPopup = new Popup
+            {
+                Child = border,
+                PlacementTarget = anchor,
+                Placement = PlacementMode.Right,
+                HorizontalOffset = 8,
+                VerticalOffset = -2,
+                AllowsTransparency = true,
+                StaysOpen = false,
+                Focusable = false,
+                IsOpen = false
+            };
+        }
+
+        /// <summary>
+        /// Filters the search index against the current query and refreshes the results popup.
+        /// </summary>
+        private void OnSearchTextChanged(string query)
+        {
+            if (_searchResultsList == null || _searchResultsPopup == null) return;
+
+            query = (query ?? string.Empty).Trim().ToLowerInvariant();
+            _searchResultsList.Items.Clear();
+
+            if (query.Length == 0)
+            {
+                _searchResultsPopup.IsOpen = false;
+                return;
+            }
+
+            // Score: label-prefix=100, label-substring=60, description=30, page=10
+            var matches = new List<(SearchEntry Entry, int Score)>(_searchIndex.Count);
+            foreach (var entry in _searchIndex)
+            {
+                int score = 0;
+                var lowerLabel = entry.Label.ToLowerInvariant();
+                if (lowerLabel.StartsWith(query, StringComparison.Ordinal)) score += 100;
+                else if (lowerLabel.Contains(query, StringComparison.Ordinal)) score += 60;
+                if (entry.Description.ToLowerInvariant().Contains(query, StringComparison.Ordinal)) score += 30;
+                if (entry.PageDisplay.ToLowerInvariant().Contains(query, StringComparison.Ordinal)) score += 10;
+                if (score > 0) matches.Add((entry, score));
+            }
+
+            if (matches.Count == 0)
+            {
+                _searchResultsList.Items.Add(BuildNoResultsItem());
+                _searchResultsPopup.IsOpen = true;
+                return;
+            }
+
+            foreach (var (entry, _) in matches
+                         .OrderByDescending(m => m.Score)
+                         .ThenBy(m => m.Entry.Label, StringComparer.OrdinalIgnoreCase)
+                         .Take(20))
+            {
+                _searchResultsList.Items.Add(BuildResultItem(entry));
+            }
+
+            _searchResultsList.SelectedIndex = 0;
+            _searchResultsPopup.IsOpen = true;
+        }
+
+        private UIElement BuildResultItem(SearchEntry entry)
+        {
+            var grid = new Grid { Tag = entry };
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            // Type badge — colored letter that matches setting kind
+            var (letter, color) = entry.Kind switch
+            {
+                "Toggle"   => ("T", Color.FromRgb(0x00, 0x78, 0xD4)),
+                "Slider"   => ("S", Color.FromRgb(0xE0, 0x83, 0x00)),
+                "Dropdown" => ("D", Color.FromRgb(0x6B, 0x46, 0xC1)),
+                "Text"     => ("X", Color.FromRgb(0x16, 0xA3, 0x4A)),
+                _           => ("i", Color.FromRgb(0x88, 0x92, 0xA8)),
+            };
+            var badgeBrush = new SolidColorBrush(color);
+            badgeBrush.Freeze();
+            var badge = new Border
+            {
+                Width = 18,
+                Height = 18,
+                CornerRadius = new CornerRadius(3),
+                Background = badgeBrush,
+                Margin = new Thickness(0, 1, 10, 0),
+                VerticalAlignment = VerticalAlignment.Top,
+                Child = new TextBlock
+                {
+                    Text = letter,
+                    Foreground = Brushes.White,
+                    FontSize = 10,
+                    FontWeight = FontWeights.Bold,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center
+                }
+            };
+            Grid.SetColumn(badge, 0);
+            grid.Children.Add(badge);
+
+            // Two-line text: label (bold) + page breadcrumb + description snippet
+            var textPanel = new StackPanel();
+            textPanel.Children.Add(new TextBlock
+            {
+                Text = entry.Label,
+                FontWeight = FontWeights.SemiBold,
+                FontSize = 12,
+                Foreground = _theme.FgPrimary,
+                TextTrimming = TextTrimming.CharacterEllipsis
+            });
+            textPanel.Children.Add(new TextBlock
+            {
+                Text = entry.PageDisplay,
+                FontSize = 10,
+                Foreground = _theme.FgAccent,
+                Margin = new Thickness(0, 1, 0, 0),
+                TextTrimming = TextTrimming.CharacterEllipsis
+            });
+            if (!string.IsNullOrEmpty(entry.Description))
+            {
+                textPanel.Children.Add(new TextBlock
+                {
+                    Text = entry.Description.Length > 100
+                        ? entry.Description.Substring(0, 100) + "…"
+                        : entry.Description,
+                    FontSize = 11,
+                    Foreground = _theme.FgSecondary,
+                    Margin = new Thickness(0, 2, 0, 0),
+                    TextWrapping = TextWrapping.Wrap,
+                    MaxHeight = 32,
+                    TextTrimming = TextTrimming.CharacterEllipsis
+                });
+            }
+            Grid.SetColumn(textPanel, 1);
+            grid.Children.Add(textPanel);
+
+            return grid;
+        }
+
+        private UIElement BuildNoResultsItem()
+        {
+            return new TextBlock
+            {
+                Text = "No matching settings",
+                FontSize = 12,
+                FontStyle = FontStyles.Italic,
+                Foreground = _theme.FgSecondary,
+                Padding = new Thickness(12, 12, 12, 12),
+                HorizontalAlignment = HorizontalAlignment.Center
+            };
+        }
+
+        /// <summary>
+        /// Keyboard shortcuts inside the search textbox: Down jumps into results,
+        /// Enter commits the selected result, Escape clears.
+        /// </summary>
+        private void OnSearchBoxKeyDown(object sender, KeyEventArgs e)
+        {
+            if (_searchResultsPopup == null || _searchResultsList == null) return;
+
+            if (e.Key == Key.Down && _searchResultsPopup.IsOpen)
+            {
+                _searchResultsList.Focus();
+                if (_searchResultsList.Items.Count > 0)
+                {
+                    _searchResultsList.SelectedIndex = 0;
+                    if (_searchResultsList.ItemContainerGenerator.ContainerFromIndex(0) is ListBoxItem first)
+                        first.Focus();
+                }
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Enter && _searchResultsPopup.IsOpen)
+            {
+                CommitSelectedSearchResult();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Escape)
+            {
+                if (_searchBox != null && _searchBox.Text.Length > 0)
+                {
+                    _searchBox.Text = string.Empty;
+                }
+                else
+                {
+                    _searchResultsPopup.IsOpen = false;
+                }
+                e.Handled = true;
+            }
+        }
+
+        private void OnSearchResultsKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Enter)
+            {
+                CommitSelectedSearchResult();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Escape)
+            {
+                _searchResultsPopup!.IsOpen = false;
+                _searchBox?.Focus();
+                e.Handled = true;
+            }
+        }
+
+        /// <summary>
+        /// Navigates to the page containing the selected search result, scrolls the
+        /// matching row into view, and flashes its background to draw attention.
+        /// </summary>
+        private void CommitSelectedSearchResult()
+        {
+            if (_searchResultsList?.SelectedItem is not Grid grid || grid.Tag is not SearchEntry entry)
+                return;
+
+            // 1. Navigate to the target page by selecting its tree leaf.
+            SelectTreeLeafByPageKey(entry.PageKey);
+
+            // 2. Close the popup.
+            if (_searchResultsPopup != null) _searchResultsPopup.IsOpen = false;
+
+            // 3. Scroll the target row into view + flash highlight.
+            //    Defer to the dispatcher so the page swap completes first.
+            var row = entry.Row;
+            if (row != null)
+            {
+                row.Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    try
+                    {
+                        row.BringIntoView();
+                        FlashRow(row);
+                    }
+                    catch { /* non-fatal */ }
+                }), System.Windows.Threading.DispatcherPriority.Background);
+            }
+        }
+
+        /// <summary>
+        /// Walks the tree (including parent groups) to find the leaf with the given
+        /// page key Tag, expands its parent if needed, and selects it.
+        /// </summary>
+        private void SelectTreeLeafByPageKey(string pageKey)
+        {
+            if (_navTree == null) return;
+
+            foreach (var obj in _navTree.Items)
+            {
+                if (obj is not TreeViewItem item) continue;
+
+                if (item.Tag is string topKey && topKey == pageKey)
+                {
+                    item.IsSelected = true;
+                    return;
+                }
+
+                foreach (var childObj in item.Items)
+                {
+                    if (childObj is not TreeViewItem child) continue;
+                    if (child.Tag is string childKey && childKey == pageKey)
+                    {
+                        item.IsExpanded = true;
+                        child.IsSelected = true;
+                        return;
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Briefly flashes the row background with the accent color so the user
+        /// can spot the setting they jumped to.
+        /// </summary>
+        private void FlashRow(FrameworkElement row)
+        {
+            if (row is not Border border) return;
+
+            var originalBrush = border.Background;
+            var flashBrush = new SolidColorBrush(((SolidColorBrush)_theme.Selected).Color);
+            border.Background = flashBrush;
+
+            var animation = new System.Windows.Media.Animation.ColorAnimation
+            {
+                From = ((SolidColorBrush)_theme.Selected).Color,
+                To = (originalBrush is SolidColorBrush sb) ? sb.Color : Colors.Transparent,
+                Duration = TimeSpan.FromMilliseconds(900),
+                EasingFunction = new System.Windows.Media.Animation.QuadraticEase
+                {
+                    EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut
+                }
+            };
+            animation.Completed += (s, e) => border.Background = originalBrush;
+            flashBrush.BeginAnimation(SolidColorBrush.ColorProperty, animation);
+        }
+
         // ─── Page building ───────────────────────────────────────────────────
 
         private void BuildPages()
         {
-            _pages["General"] = BuildGeneralPage();
-            _pages["IntelliSense"] = BuildIntelliSensePage();
-            _pages["Schema Cache"] = BuildSchemaCachePage();
-            _pages["Formatting"] = BuildFormattingPage();
-            _pages["Snippets"] = BuildSnippetsPage();
-            _pages["Code Analysis"] = BuildCodeAnalysisPage();
-            _pages["Refactoring"] = BuildRefactoringPage();
-            _pages["History"] = BuildHistoryPage();
-            _pages["Tabs & UI"] = BuildTabsPage();
-            _pages["Safety"] = BuildSafetyPage();
-            _pages["AI Assistance"] = BuildAiPage();
-            _pages["Grid"] = BuildGridPage();
-            _pages["Editor"] = BuildEditorPage();
-            _pages["Execution"] = BuildExecutionPage();
-            _pages["Navigation"] = BuildNavigationPage();
+            // Mapping: page key (used for navigation tag) → SQL Prompt-style display label
+            var pages = new (string Key, string Display, Func<UIElement> Builder)[]
+            {
+                ("General",       "Miscellaneous",       BuildGeneralPage),
+                ("IntelliSense",  "Suggestions › Behavior", BuildIntelliSensePage),
+                ("Schema Cache",  "Suggestions › Database", BuildSchemaCachePage),
+                ("Formatting",    "Format › Styles",     BuildFormattingPage),
+                ("Snippets",      "Snippets",            BuildSnippetsPage),
+                ("Code Analysis", "Code Analysis",       BuildCodeAnalysisPage),
+                ("Refactoring",   "Inserted Code › Refactoring", BuildRefactoringPage),
+                ("History",       "Queries › History",   BuildHistoryPage),
+                ("Tabs & UI",     "Tabs › Color",        BuildTabsPage),
+                ("Safety",        "Queries › Execution Warnings", BuildSafetyPage),
+                ("AI Assistance", "Prompt AI",           BuildAiPage),
+                ("Grid",          "Queries › Query Results", BuildGridPage),
+                ("Editor",        "Editor › Productivity", BuildEditorPage),
+                ("Execution",     "Queries › Execution", BuildExecutionPage),
+                ("Navigation",    "Editor › Navigation", BuildNavigationPage),
+            };
+
+            foreach (var (key, display, builder) in pages)
+            {
+                _currentPageKey = key;
+                _currentPageDisplay = display;
+                _pages[key] = builder();
+            }
+
+            _currentPageKey = string.Empty;
+            _currentPageDisplay = string.Empty;
+        }
+
+        /// <summary>
+        /// Records a setting in the search index. Called by Add* helpers.
+        /// </summary>
+        private void RegisterSearchEntry(string label, string description, string kind, FrameworkElement row)
+        {
+            if (string.IsNullOrEmpty(_currentPageKey)) return;
+            _searchIndex.Add(new SearchEntry
+            {
+                Label = label,
+                Description = description ?? string.Empty,
+                PageKey = _currentPageKey,
+                PageDisplay = _currentPageDisplay,
+                Kind = kind,
+                Row = row,
+                Haystack = ((label ?? "") + " " + (description ?? "") + " " + _currentPageDisplay)
+                    .ToLowerInvariant()
+            });
         }
 
         // ═══════════════════════════════════════════════════════════════════════
@@ -645,10 +1225,8 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
             AddGroupSeparator(panel);
             AddGroupHeader(panel, "Assistance");
-            _chkAutoAlias = AddToggle(panel, "Auto-generate table aliases",
-                "Suggest aliases when completing table names in FROM clauses");
-            _chkJoinAssist = AddToggle(panel, "JOIN clause assistance",
-                "After typing JOIN, suggest related tables with auto-generated alias and ON clause from foreign keys. When off, plain table names are suggested. Default: off.");
+            _chkAutoAlias = AddToggle(panel, "Tables Alias",
+                "Master switch for all table-alias completions. When on: alias candidates (o, od, ...) are suggested after a table name in FROM, AND tables are suggested with auto-generated alias and FK-based ON clause after JOIN. When off, plain table names are suggested in both cases. Default: off.");
             _chkDisableNativeIs = AddToggle(panel, "Disable native SSMS IntelliSense",
                 "Recommended to avoid conflicts with AKML SQL IntelliSense");
 
@@ -1074,11 +1652,15 @@ namespace AkmlSql.Shell.Shared.Dialogs
         //  UI Builder Helpers
         // ═══════════════════════════════════════════════════════════════════════
 
+        // Tracks the alternating zebra-stripe state per page (reset on each new panel).
+        private int _zebraIndex;
+
         private StackPanel CreatePagePanel()
         {
+            _zebraIndex = 0;
             return new StackPanel
             {
-                Margin = new Thickness(24, 16, 24, 24),
+                Margin = new Thickness(24, 18, 24, 24),
                 Background = _theme.Transparent
             };
         }
@@ -1090,31 +1672,67 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 Content = content,
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                Background = _theme.Panel
+                Background = _theme.Panel,
+                Padding = new Thickness(0)
             };
         }
 
+        /// <summary>
+        /// SQL Prompt-style page header: blue accent title on the left, "Restore Defaults"
+        /// link on the right, and a thin separator underline.
+        /// </summary>
         private void AddPageHeader(StackPanel panel, string text)
         {
-            panel.Children.Add(new TextBlock
+            var header = new Grid { Margin = new Thickness(0, 0, 0, 14) };
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var title = new TextBlock
             {
                 Text = text,
-                FontSize = 20,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = _theme.FgWhite,
-                Margin = new Thickness(0, 0, 0, 16)
+                FontSize = 16,
+                FontWeight = FontWeights.Bold,
+                Foreground = _theme.FgAccent
+            };
+            Grid.SetColumn(title, 0);
+            header.Children.Add(title);
+
+            var restoreLink = new TextBlock
+            {
+                Text = "Restore Defaults",
+                FontSize = 11,
+                Foreground = _theme.FgAccent,
+                TextDecorations = TextDecorations.Underline,
+                Cursor = Cursors.Hand,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            restoreLink.MouseLeftButtonUp += (s, e) => OnResetThisPageClick(s, new RoutedEventArgs());
+            Grid.SetColumn(restoreLink, 1);
+            header.Children.Add(restoreLink);
+
+            panel.Children.Add(header);
+
+            // Underline separator
+            panel.Children.Add(new Border
+            {
+                Height = 1,
+                Background = _theme.Sep,
+                Margin = new Thickness(0, 0, 0, 12)
             });
         }
 
+        /// <summary>
+        /// Section header inside a page (bold, foreground primary). SQL Prompt style.
+        /// </summary>
         private void AddGroupHeader(StackPanel panel, string text)
         {
             panel.Children.Add(new TextBlock
             {
                 Text = text,
-                FontSize = 13,
-                FontWeight = FontWeights.Bold,
-                Foreground = _theme.FgAccent,
-                Margin = new Thickness(0, 4, 0, 10)
+                FontSize = 12,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = _theme.FgPrimary,
+                Margin = new Thickness(0, 8, 0, 6)
             });
         }
 
@@ -1124,14 +1742,29 @@ namespace AkmlSql.Shell.Shared.Dialogs
             {
                 Height = 1,
                 Background = _theme.Sep,
-                Margin = new Thickness(0, 16, 0, 12)
+                Margin = new Thickness(0, 14, 0, 10)
             });
+        }
+
+        /// <summary>
+        /// Wraps a setting row in a zebra-striped <see cref="Border"/>. Alternates between
+        /// transparent and <see cref="ThemeBrushSet.InputReadOnly"/> for readability,
+        /// matching the SQL Prompt Options dialog row style.
+        /// </summary>
+        private Border WrapZebraRow(UIElement content)
+        {
+            var bg = (_zebraIndex++ % 2 == 0) ? _theme.InputReadOnly : _theme.Transparent;
+            return new Border
+            {
+                Background = bg,
+                Padding = new Thickness(12, 8, 12, 8),
+                Margin = new Thickness(-12, 0, -12, 0),
+                Child = content
+            };
         }
 
         private CheckBox AddToggle(StackPanel panel, string label, string description)
         {
-            var row = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
-
             var cb = new CheckBox
             {
                 Foreground = _theme.FgPrimary,
@@ -1155,13 +1788,15 @@ namespace AkmlSql.Shell.Shared.Dialogs
                     Foreground = _theme.FgSecondary,
                     FontSize = 11,
                     FontStyle = FontStyles.Italic,
-                    Margin = new Thickness(0, 2, 0, 0)
+                    Margin = new Thickness(0, 2, 0, 0),
+                    TextWrapping = TextWrapping.Wrap
                 });
             }
 
             cb.Content = contentPanel;
-            row.Children.Add(cb);
+            var row = WrapZebraRow(cb);
             panel.Children.Add(row);
+            RegisterSearchEntry(label, description, "Toggle", row);
             return cb;
         }
 
@@ -1230,6 +1865,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             }
 
             panel.Children.Add(container);
+            RegisterSearchEntry(label, description, "Slider", container);
             return (slider, valueLabel);
         }
 
@@ -1290,6 +1926,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             }
 
             panel.Children.Add(container);
+            RegisterSearchEntry(label, description, "Dropdown", container);
             return combo;
         }
 
@@ -1461,6 +2098,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             }
 
             panel.Children.Add(container);
+            RegisterSearchEntry(label, description, "Text", container);
             return textBox;
         }
 
@@ -1494,6 +2132,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
             container.Children.Add(textBox);
             panel.Children.Add(container);
+            RegisterSearchEntry(label, value, "Info", container);
         }
 
         private void AddInfoRow(StackPanel panel, string label, string value)
@@ -1518,6 +2157,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             });
 
             panel.Children.Add(row);
+            RegisterSearchEntry(label, value, "Info", row);
         }
 
         private Button MakeButton(string text, double width)
@@ -1527,7 +2167,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 Content = text,
                 Width = width,
                 Height = 30,
-                FontSize = 13,
+                FontSize = 12,
                 Foreground = _theme.FgPrimary,
                 Background = _theme.Button,
                 BorderBrush = _theme.Border,
@@ -1543,18 +2183,63 @@ namespace AkmlSql.Shell.Shared.Dialogs
             return btn;
         }
 
+        /// <summary>
+        /// Primary action button — solid blue accent (SQL Prompt style for OK).
+        /// </summary>
+        private Button MakePrimaryButton(string text, double width)
+        {
+            var btn = new Button
+            {
+                Content = text,
+                Width = width,
+                Height = 30,
+                FontSize = 12,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = _theme.SelectedText,
+                Background = _theme.Selected,
+                BorderBrush = _theme.Selected,
+                BorderThickness = new Thickness(1),
+                Padding = new Thickness(12, 4, 12, 4),
+                Cursor = Cursors.Hand
+            };
+
+            var theme = _theme;
+            // Subtle hover: slightly lighter accent
+            var hoverBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x10, 0x88, 0xE4)));
+            btn.MouseEnter += (s, e) => { btn.Background = hoverBrush; btn.BorderBrush = hoverBrush; };
+            btn.MouseLeave += (s, e) => { btn.Background = theme.Selected; btn.BorderBrush = theme.Selected; };
+
+            return btn;
+        }
+
         // ═══════════════════════════════════════════════════════════════════════
         //  Navigation
         // ═══════════════════════════════════════════════════════════════════════
 
         private void OnNavSelectionChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
         {
-            if (_navTree?.SelectedItem is TreeViewItem item && item.Tag is string category)
+            if (_navTree?.SelectedItem is not TreeViewItem item)
             {
-                if (_pages.TryGetValue(category, out var page) && _contentHost != null)
+                return;
+            }
+
+            // Parent group node clicked: expand it and select the first child instead.
+            if (item.Tag is null)
+            {
+                item.IsExpanded = true;
+                if (item.Items.Count > 0 && item.Items[0] is TreeViewItem firstChild)
                 {
-                    _contentHost.Content = page;
+                    firstChild.IsSelected = true;
                 }
+                return;
+            }
+
+            // Leaf node: load its page into the content host.
+            if (item.Tag is string pageKey
+                && _pages.TryGetValue(pageKey, out var page)
+                && _contentHost != null)
+            {
+                _contentHost.Content = page;
             }
         }
 
@@ -1597,8 +2282,20 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
         private void OnWindowKeyDown(object sender, KeyEventArgs e)
         {
+            // Ctrl+E or Ctrl+F → focus search box (VS Options shortcut convention)
+            if ((e.Key == Key.E || e.Key == Key.F)
+                && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+            {
+                _searchBox?.Focus();
+                _searchBox?.SelectAll();
+                e.Handled = true;
+                return;
+            }
+
             if (e.Key == Key.Escape)
             {
+                // If the search popup is open, let its own handler clear it instead.
+                if (_searchResultsPopup?.IsOpen == true) return;
                 _dialogResult = false;
                 _window?.Close();
                 e.Handled = true;
@@ -1843,7 +2540,6 @@ namespace AkmlSql.Shell.Shared.Dialogs
             SetChecked(_chkShowNullability, i.ShowNullability);
             SetChecked(_chkShowPkFk, i.ShowPkFk);
             SetChecked(_chkAutoAlias, i.AutoAlias);
-            SetChecked(_chkJoinAssist, i.JoinAssist);
             SetChecked(_chkDisableNativeIs, i.DisableNativeIntelliSense);
             SetSlider(_sldTriggerDelay, _lblTriggerDelayValue, i.TriggerDelayMs);
             SetSlider(_sldMaxSuggestions, _lblMaxSuggestionsValue, i.MaxSuggestions);
@@ -2028,7 +2724,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
             _settings.IntelliSense.ShowNullability = IsChecked(_chkShowNullability);
             _settings.IntelliSense.ShowPkFk = IsChecked(_chkShowPkFk);
             _settings.IntelliSense.AutoAlias = IsChecked(_chkAutoAlias);
-            _settings.IntelliSense.JoinAssist = IsChecked(_chkJoinAssist);
+            // Keep deprecated JoinAssist field in sync with the master AutoAlias
+            // toggle so older engines still see the correct value.
+            _settings.IntelliSense.JoinAssist = IsChecked(_chkAutoAlias);
             _settings.IntelliSense.DisableNativeIntelliSense = IsChecked(_chkDisableNativeIs);
             _settings.IntelliSense.TriggerDelayMs = GetSliderInt(_sldTriggerDelay);
             _settings.IntelliSense.MaxSuggestions = GetSliderInt(_sldMaxSuggestions);

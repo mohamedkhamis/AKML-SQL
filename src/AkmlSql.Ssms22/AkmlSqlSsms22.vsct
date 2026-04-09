@@ -312,10 +312,10 @@
   </Commands>
 
   <CommandPlacements>
-    <!-- NOTE: We do NOT place AkmlSqlMenuBarGroup under IDG_VS_TOOLS_EXT_TOOLS as a
-         fallback. AkmlSqlPackage.EnsureTopLevelMenu programmatically injects the
-         "AKML SQL" popup into SSMS 22's custom menu bar. Adding a Tools menu copy
-         here would duplicate every menu item (e.g. two "SQL History" entries). -->
+    <!-- The top-level AKML SQL menu is created programmatically by
+         AkmlSqlPackage.EnsureTopLevelMenu (which has a once-per-process guard
+         and a reuse-existing check). We do NOT add a Tools > External Tools
+         fallback here — in the past it caused every menu item to appear twice. -->
 
     <!-- Toolbar buttons — SQL Prompt style quick access -->
     <CommandPlacement guid="guidAkmlSqlCmdSet" id="cmdFormatDocument" priority="0x0100">
