@@ -287,7 +287,7 @@ namespace AkmlSql.Core.Tests.Config
             Assert.True(s.MergeNoFilter);
             Assert.True(s.InsideJoin);
             Assert.True(s.InsideProcOrTrigger);
-            Assert.Equal("Cancel", s.DefaultButton);
+            Assert.Equal(SafetyDefaultButton.Cancel, s.DefaultButton);
             Assert.True(s.ShowEnvironmentColorInHeader);
         }
 
@@ -299,13 +299,13 @@ namespace AkmlSql.Core.Tests.Config
                 MergeNoFilter = false,
                 InsideJoin = false,
                 InsideProcOrTrigger = false,
-                DefaultButton = "Execute",
+                DefaultButton = SafetyDefaultButton.Execute,
                 ShowEnvironmentColorInHeader = false
             };
             Assert.False(s.MergeNoFilter);
             Assert.False(s.InsideJoin);
             Assert.False(s.InsideProcOrTrigger);
-            Assert.Equal("Execute", s.DefaultButton);
+            Assert.Equal(SafetyDefaultButton.Execute, s.DefaultButton);
             Assert.False(s.ShowEnvironmentColorInHeader);
         }
 
@@ -394,7 +394,7 @@ namespace AkmlSql.Core.Tests.Config
             Assert.Null(s.InsertIntoTemplate);
             Assert.Equal(400, s.ObjectDefinitionBoxWidth);
             Assert.Equal(300, s.ObjectDefinitionBoxHeight);
-            Assert.Equal("TableOrder", s.ColumnPickerDefaultSort);
+            Assert.Equal(ColumnPickerSortMode.TableOrder, s.ColumnPickerDefaultSort);
         }
 
         [Fact]
@@ -410,14 +410,14 @@ namespace AkmlSql.Core.Tests.Config
                 InsertIntoTemplate = "INSERT INTO [{schema}].[{name}] ({columns}) VALUES ({values})",
                 ObjectDefinitionBoxWidth = 800,
                 ObjectDefinitionBoxHeight = 600,
-                ColumnPickerDefaultSort = "Alphabetical"
+                ColumnPickerDefaultSort = ColumnPickerSortMode.Alphabetical
             };
             Assert.False(s.EnableMsDescription);
             Assert.False(s.EnableEncryptedDecryption);
             Assert.Equal("ALTER TABLE [{schema}].[{name}]", s.AlterTableTemplate);
             Assert.Equal(800, s.ObjectDefinitionBoxWidth);
             Assert.Equal(600, s.ObjectDefinitionBoxHeight);
-            Assert.Equal("Alphabetical", s.ColumnPickerDefaultSort);
+            Assert.Equal(ColumnPickerSortMode.Alphabetical, s.ColumnPickerDefaultSort);
         }
 
         // ── AppSettings root: CompletionPolish wired up ──

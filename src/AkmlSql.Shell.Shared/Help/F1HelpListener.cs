@@ -1,5 +1,5 @@
 using System;
-using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using Serilog;
 
@@ -37,8 +37,7 @@ namespace AkmlSql.Shell.Shared.Help
 
         // ── Registry ───────────────────────────────────────────────────────────
 
-        private readonly object _gate = new();
-        private readonly Dictionary<string, string> _contextMap =
+        private readonly ConcurrentDictionary<string, string> _contextMap =
             new(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
@@ -56,10 +55,7 @@ namespace AkmlSql.Shell.Shared.Help
             {
                 return;
             }
-            lock (_gate)
-            {
-                _contextMap[contextKey] = url ?? string.Empty;
-            }
+            _contextMap[contextKey] = url ?? string.Empty;
         }
 
         /// <summary>
@@ -72,17 +68,11 @@ namespace AkmlSql.Shell.Shared.Help
             {
                 return null;
             }
-            lock (_gate)
-            {
-                return _contextMap.TryGetValue(contextKey, out var url) ? url : null;
-            }
+            return _contextMap.TryGetValue(contextKey, out var url) ? url : null;
         }
 
         /// <summary>The number of registered context keys (used by tests).</summary>
-        public int Count
-        {
-            get { lock (_gate) { return _contextMap.Count; } }
-        }
+        public int Count => _contextMap.Count;
 
         // ── Open ──────────────────────────────────────────────────────────────
 

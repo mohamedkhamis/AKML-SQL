@@ -121,6 +121,24 @@ namespace AkmlSql.Core.Config
         public string LogMinimumLevel { get; set; } = "Debug";
     }
 
+    /// <summary>Default focus button for the pre-execution safety warning dialog (US1 / FR-005).</summary>
+    public enum SafetyDefaultButton
+    {
+        /// <summary>Focus Cancel so accidental Enter does not run unsafe SQL.</summary>
+        Cancel,
+        /// <summary>Focus Execute (for advanced users who prefer speed over safety).</summary>
+        Execute
+    }
+
+    /// <summary>Sort mode for the Column Picker inside the completion popup (US2 / FR-011).</summary>
+    public enum ColumnPickerSortMode
+    {
+        /// <summary>Columns in the order they are defined in the table.</summary>
+        TableOrder,
+        /// <summary>Columns sorted alphabetically by name.</summary>
+        Alphabetical
+    }
+
     /// <summary>Keyword casing mode for IntelliSense completions and the formatter.</summary>
     public enum KeywordCaseOption
     {
@@ -509,11 +527,10 @@ namespace AkmlSql.Core.Config
 
         /// <summary>
         /// US1 / FR-005 — default focus button on the warning dialog.
-        /// "Cancel" (default) or "Execute". Cancel is the safe default so accidental
-        /// Enter presses do not run unsafe SQL.
+        /// Cancel is the safe default so accidental Enter presses do not run unsafe SQL.
         /// </summary>
         [JsonPropertyName("defaultButton")]
-        public string DefaultButton { get; set; } = "Cancel";
+        public SafetyDefaultButton DefaultButton { get; set; } = SafetyDefaultButton.Cancel;
 
         /// <summary>
         /// US1 / FR-008 — when the target server is tagged Production via tab
@@ -914,10 +931,9 @@ namespace AkmlSql.Core.Config
         // ── Column Picker (US2) ──
 
         /// <summary>
-        /// US2 / FR-011 — default sort mode for the Column Picker:
-        /// <c>"TableOrder"</c> (default) or <c>"Alphabetical"</c>.
+        /// US2 / FR-011 — default sort mode for the Column Picker.
         /// </summary>
         [JsonPropertyName("columnPickerDefaultSort")]
-        public string ColumnPickerDefaultSort { get; set; } = "TableOrder";
+        public ColumnPickerSortMode ColumnPickerDefaultSort { get; set; } = ColumnPickerSortMode.TableOrder;
     }
 }
