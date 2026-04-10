@@ -194,4 +194,180 @@ public class SafetyCheckHandlerTests
         Assert.NotNull(warning.ObjectName);
         Assert.Contains("Customers", warning.ObjectName);
     }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Spec 014, US1 — new detection patterns (FR-002, FR-003)
+    // ─────────────────────────────────────────────────────────────────────
+
+    // ── MERGE without WHEN MATCHED (FR-002) ──
+
+    [Fact]
+    public async Task MergeWithoutWhenMatched_DetectsWarning()
+    {
+        var sql = @"
+            MERGE INTO dbo.Target AS t
+            USING dbo.Source AS s ON t.Id = s.Id
+            WHEN NOT MATCHED THEN INSERT (Id) VALUES (s.Id);";
+
+        var response = await AnalyzeAsync(sql);
+        Assert.True(response.RequiresConfirmation);
+        Assert.Contains(response.Warnings,
+            w => w.WarningType == (int)SafetyWarningType.MergeWithoutFilter);
+    }
+
+    [Fact]
+    public async Task MergeWithWhenMatched_NoMergeWarning()
+    {
+        var sql = @"
+            MERGE INTO dbo.Target AS t
+            USING dbo.Source AS s ON t.Id = s.Id
+            WHEN MATCHED THEN UPDATE SET t.Name = s.Name
+            WHEN NOT MATCHED THEN INSERT (Id, Name) VALUES (s.Id, s.Name);";
+
+        var response = await AnalyzeAsync(sql);
+        Assert.DoesNotContain(response.Warnings,
+            w => w.WarningType == (int)SafetyWarningType.MergeWithoutFilter);
+    }
+
+    // ── DELETE/UPDATE inside INNER JOIN without WHERE (FR-002) ──
+
+    [Fact]
+    public async Task DeleteWithJoinNoWhere_DetectsJoinWarning()
+    {
+        var sql = "DELETE t FROM dbo.Orders t INNER JOIN dbo.Customers c ON t.CustomerId = c.Id";
+
+        var response = await AnalyzeAsync(sql);
+        Assert.True(response.RequiresConfirmation);
+        Assert.Contains(response.Warnings,
+            w => w.WarningType == (int)SafetyWarningType.DmlInsideJoinWithoutWhere);
+    }
+
+    [Fact]
+    public async Task UpdateWithJoinNoWhere_DetectsJoinWarning()
+    {
+        var sql = "UPDATE t SET t.Status = 'X' FROM dbo.Orders t INNER JOIN dbo.Customers c ON t.CustomerId = c.Id";
+
+        var response = await AnalyzeAsync(sql);
+        Assert.True(response.RequiresConfirmation);
+        Assert.Contains(response.Warnings,
+            w => w.WarningType == (int)SafetyWarningType.DmlInsideJoinWithoutWhere);
+    }
+
+    [Fact]
+    public async Task DeleteWithJoinAndWhere_NoJoinWarning()
+    {
+        var sql = "DELETE t FROM dbo.Orders t INNER JOIN dbo.Customers c ON t.CustomerId = c.Id WHERE c.IsDeleted = 1";
+
+        var response = await AnalyzeAsync(sql);
+        Assert.DoesNotContain(response.Warnings,
+            w => w.WarningType == (int)SafetyWarningType.DmlInsideJoinWithoutWhere);
+        Assert.DoesNotContain(response.Warnings,
+            w => w.WarningType == (int)SafetyWarningType.DeleteWithoutWhere);
+    }
+
+    // ── Unsafe DML inside CREATE/ALTER PROCEDURE and TRIGGER (FR-003) ──
+
+    [Fact]
+    public async Task CreateProcWithDeleteNoWhere_DetectsProcWarning()
+    {
+        var sql = @"
+            CREATE PROCEDURE dbo.ClearOrders
+            AS
+            BEGIN
+                DELETE FROM dbo.Orders
+            END";
+
+        var response = await AnalyzeAsync(sql);
+        Assert.True(response.RequiresConfirmation);
+        Assert.Contains(response.Warnings,
+            w => w.WarningType == (int)SafetyWarningType.UnsafeDmlInProcOrTrigger);
+        var warning = Assert.Single(response.Warnings,
+            w => w.WarningType == (int)SafetyWarningType.UnsafeDmlInProcOrTrigger);
+        Assert.Contains("ClearOrders", warning.Message);
+    }
+
+    [Fact]
+    public async Task AlterProcWithUpdateNoWhere_DetectsProcWarning()
+    {
+        var sql = @"
+            ALTER PROCEDURE dbo.ResetStatus
+            AS
+            BEGIN
+                UPDATE dbo.Orders SET Status = 'New'
+            END";
+
+        var response = await AnalyzeAsync(sql);
+        Assert.Contains(response.Warnings,
+            w => w.WarningType == (int)SafetyWarningType.UnsafeDmlInProcOrTrigger);
+    }
+
+    [Fact]
+    public async Task CreateTriggerWithDeleteNoWhere_DetectsTriggerWarning()
+    {
+        var sql = @"
+            CREATE TRIGGER dbo.trg_Cleanup ON dbo.Customers
+            AFTER DELETE
+            AS
+            BEGIN
+                DELETE FROM dbo.Audit
+            END";
+
+        var response = await AnalyzeAsync(sql);
+        Assert.Contains(response.Warnings,
+            w => w.WarningType == (int)SafetyWarningType.UnsafeDmlInProcOrTrigger);
+        var warning = Assert.Single(response.Warnings,
+            w => w.WarningType == (int)SafetyWarningType.UnsafeDmlInProcOrTrigger);
+        Assert.Contains("trg_Cleanup", warning.Message);
+    }
+
+    [Fact]
+    public async Task CreateProcWithSafeDelete_NoProcWarning()
+    {
+        var sql = @"
+            CREATE PROCEDURE dbo.DeleteOrder @Id INT
+            AS
+            BEGIN
+                DELETE FROM dbo.Orders WHERE OrderId = @Id
+            END";
+
+        var response = await AnalyzeAsync(sql);
+        Assert.DoesNotContain(response.Warnings,
+            w => w.WarningType == (int)SafetyWarningType.UnsafeDmlInProcOrTrigger);
+    }
+
+    // ── Edge cases from spec ──
+
+    [Fact]
+    public async Task DeleteWithSubqueryWhere_NoWarning()
+    {
+        // DELETE FROM X WHERE id IN (SELECT ...) — has a WHERE clause, should not warn.
+        var sql = "DELETE FROM dbo.Orders WHERE OrderId IN (SELECT OrderId FROM dbo.OldOrders)";
+
+        var response = await AnalyzeAsync(sql);
+        Assert.DoesNotContain(response.Warnings,
+            w => w.WarningType == (int)SafetyWarningType.DeleteWithoutWhere);
+    }
+
+    [Fact]
+    public async Task DynamicSql_NoWarning_NoCrash()
+    {
+        // Dynamic SQL: the parser cannot see inside sp_executesql. Should not crash, should not warn.
+        var sql = "EXEC sp_executesql N'DELETE FROM dbo.Orders'";
+
+        var response = await AnalyzeAsync(sql);
+        // No DeleteWithoutWhere warning because the parser doesn't see the inner text.
+        Assert.DoesNotContain(response.Warnings,
+            w => w.WarningType == (int)SafetyWarningType.DeleteWithoutWhere);
+    }
+
+    [Theory]
+    [InlineData("DELETE FROM dbo.A", (int)SafetyWarningType.DeleteWithoutWhere)]
+    [InlineData("UPDATE dbo.A SET X = 1", (int)SafetyWarningType.UpdateWithoutWhere)]
+    [InlineData("DELETE t FROM dbo.A t JOIN dbo.B b ON t.Id = b.Id", (int)SafetyWarningType.DmlInsideJoinWithoutWhere)]
+    public async Task VariousUnsafePatterns_AllDetected(string sql, int expectedWarningType)
+    {
+        var response = await AnalyzeAsync(sql);
+        Assert.True(response.RequiresConfirmation);
+        Assert.Contains(response.Warnings, w => w.WarningType == expectedWarningType);
+    }
 }

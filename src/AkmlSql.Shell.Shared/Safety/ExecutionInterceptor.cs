@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Linq;
 using System.Windows.Forms;
 using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc;
@@ -28,6 +29,13 @@ namespace AkmlSql.Shell.Shared.Safety
         private static Package? _package;
 
         /// <summary>
+        /// Spec 014, US1 / FR-006 — per-session set of warning type ints the user
+        /// has opted out of via the "Don't ask again for this session" checkbox.
+        /// Cleared when the IDE session ends (static lifetime = package lifetime).
+        /// </summary>
+        private static readonly System.Collections.Generic.HashSet<int> _suppressedWarningTypes = new();
+
+        /// <summary>
         /// Initializes the execution interceptor. Reads safety settings from config to
         /// determine if any safety checks are enabled.
         /// </summary>
@@ -52,11 +60,18 @@ namespace AkmlSql.Shell.Shared.Safety
                                      || safety.DeleteWithoutWhere
                                      || safety.UpdateWithoutWhere
                                      || safety.DropConfirmation
-                                     || safety.TruncateConfirmation;
+                                     || safety.TruncateConfirmation
+                                     || safety.MergeNoFilter
+                                     || safety.InsideJoin
+                                     || safety.InsideProcOrTrigger;
 
                 // Always install the DTE hook — settings may be enabled later without restart.
                 // OnBeforeExecute re-checks settings dynamically on each invocation.
                 ExecutionCommandFilter.Install(package);
+
+                // Spec 014 / FR-104 — register F1 help context for the safety dialog.
+                Help.F1HelpListener.Default.Register("akmlsql.dialog.safety",
+                    "https://github.com/mohamedkhamis/AKML-SQL/blob/master/doc/execution-safety.md");
 
                 Log.Information("ExecutionInterceptor: initialized (safety checks enabled)");
             }
@@ -92,7 +107,10 @@ namespace AkmlSql.Shell.Shared.Safety
                                      || cachedSafety.DeleteWithoutWhere
                                      || cachedSafety.UpdateWithoutWhere
                                      || cachedSafety.DropConfirmation
-                                     || cachedSafety.TruncateConfirmation;
+                                     || cachedSafety.TruncateConfirmation
+                                     || cachedSafety.MergeNoFilter
+                                     || cachedSafety.InsideJoin
+                                     || cachedSafety.InsideProcOrTrigger;
             }
             catch
             {
@@ -146,10 +164,12 @@ namespace AkmlSql.Shell.Shared.Safety
                 SafetyCheckResponse? response = null;
                 ThreadHelper.JoinableTaskFactory.Run(async () =>
                 {
+                    // FR-009: safety check must not block execution if it takes > 500 ms.
+                    // On timeout the check yields and execution proceeds with a non-blocking toast.
                     response = await client.SendRequestAsync<SafetyCheckResponse, SafetyCheckRequest>(
                         MessageTypes.SafetyCheck,
                         request,
-                        timeoutMs: 10_000);
+                        timeoutMs: 500);
                 });
 
                 if (response == null || !response.RequiresConfirmation || response.Warnings.Length == 0)
@@ -164,17 +184,32 @@ namespace AkmlSql.Shell.Shared.Safety
                     return true; // All detected warnings are for disabled settings
                 }
 
+                // Spec 014, US1 / FR-006 — strip warnings the user suppressed for this session
+                filteredWarnings = filteredWarnings
+                    .Where(w => !_suppressedWarningTypes.Contains(w.WarningType))
+                    .ToArray();
+                if (filteredWarnings.Length == 0)
+                {
+                    return true;
+                }
+
                 var envLabel = matchedEnvRule?.Label ?? "Unknown";
                 var envColor = matchedEnvRule?.Color ?? "";
 
                 // Show the warning dialog on the UI thread, passing environment info
                 // so the dialog can use EnvironmentSeverity config to determine mode
-                DialogResult dialogResult = DialogResult.Cancel;
                 ThreadHelper.ThrowIfNotOnUIThread();
-                dialogResult = SafetyWarningDialog.Show(filteredWarnings, serverName, envLabel, envColor);
+                using var dialog = SafetyWarningDialog.CreateForWarnings(filteredWarnings, serverName, envLabel, envColor);
+                var dialogResult = dialog.ShowDialog();
 
                 if (dialogResult == DialogResult.OK)
                 {
+                    // FR-006 — record opt-out if the user ticked "Don't ask again"
+                    if (dialog.SuppressForSession)
+                    {
+                        foreach (var w in filteredWarnings)
+                            _suppressedWarningTypes.Add(w.WarningType);
+                    }
                     LogAuditEvent(serverName, envLabel, envColor, filteredWarnings, "Confirmed");
                     return true;
                 }
@@ -261,6 +296,16 @@ namespace AkmlSql.Shell.Shared.Safety
                         break;
                     case Core.Models.Safety.SafetyWarningType.TruncateTable:
                         if (safety.TruncateConfirmation) filtered.Add(w);
+                        break;
+                    // Spec 014, US1 — new detection patterns
+                    case Core.Models.Safety.SafetyWarningType.MergeWithoutFilter:
+                        if (safety.MergeNoFilter) filtered.Add(w);
+                        break;
+                    case Core.Models.Safety.SafetyWarningType.DmlInsideJoinWithoutWhere:
+                        if (safety.InsideJoin) filtered.Add(w);
+                        break;
+                    case Core.Models.Safety.SafetyWarningType.UnsafeDmlInProcOrTrigger:
+                        if (safety.InsideProcOrTrigger) filtered.Add(w);
                         break;
                     default:
                         filtered.Add(w); // Unknown type — show it

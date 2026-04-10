@@ -23,8 +23,16 @@ namespace AkmlSql.Shell.Shared.Safety
         private Button? _proceedButton;
         private Button? _cancelButton;
         private TextBox? _confirmTextBox;
+        private CheckBox? _suppressCheckBox;
         private string? _expectedObjectName;
         private StringComparison _confirmComparison = StringComparison.OrdinalIgnoreCase;
+
+        /// <summary>
+        /// Spec 014, US1 / FR-006 — when <c>true</c> after the dialog closes,
+        /// the caller should suppress future warnings for the same rule ids in
+        /// this editor session.
+        /// </summary>
+        public bool SuppressForSession { get; private set; }
 
         private SafetyWarningDialog()
         {
@@ -32,16 +40,39 @@ namespace AkmlSql.Shell.Shared.Safety
         }
 
         /// <summary>
-        /// Shows the safety warning dialog for the given warnings.
-        /// Displays the most severe warning mode.
-        /// Returns <see cref="DialogResult.OK"/> if the user confirms, or
-        /// <see cref="DialogResult.Cancel"/> if the user cancels.
+        /// Spec 014, US1 / FR-006 — factory method returning the dialog instance so
+        /// callers can inspect <see cref="SuppressForSession"/> after <c>ShowDialog()</c>.
+        /// The caller owns the lifetime and must dispose the dialog.
         /// </summary>
-        /// <param name="warnings">One or more safety warnings from the engine.</param>
-        /// <returns>
-        /// <see cref="DialogResult.OK"/> to proceed with execution,
-        /// <see cref="DialogResult.Cancel"/> to abort.
-        /// </returns>
+        public static SafetyWarningDialog CreateForWarnings(SafetyWarningDto[] warnings, string? serverName, string? environmentLabel, string? envColor = null)
+        {
+            var dialog = new SafetyWarningDialog();
+            if (!string.IsNullOrEmpty(environmentLabel))
+            {
+                try
+                {
+                    var settings = AkmlSql.Core.Config.ConfigManager.Load();
+                    var severity = settings.Safety.EnvironmentSeverity;
+                    if (severity.TryGetValue(environmentLabel, out var level))
+                    {
+                        if (string.Equals(level, "TypeServerName", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(serverName))
+                        {
+                            dialog.BuildTypeServerNameLayout(warnings, serverName, environmentLabel, envColor);
+                            return dialog;
+                        }
+                        if (string.Equals(level, "SimpleConfirm", StringComparison.OrdinalIgnoreCase))
+                        {
+                            dialog.BuildSimpleConfirmLayout(warnings);
+                            return dialog;
+                        }
+                    }
+                }
+                catch { }
+            }
+            dialog.BuildLayout(warnings);
+            return dialog;
+        }
+
         /// <summary>
         /// Shows the safety warning dialog for the given warnings using default mode detection.
         /// </summary>
@@ -183,11 +214,12 @@ namespace AkmlSql.Shell.Shared.Safety
         }
 
         /// <summary>
-        /// Error-level warning dialog for DELETE/UPDATE without WHERE.
+        /// Error-level warning dialog for DELETE/UPDATE without WHERE, MERGE without
+        /// WHEN MATCHED, INNER JOIN without WHERE, and unsafe DML inside proc/trigger bodies.
         /// </summary>
         private void BuildErrorLevelLayout(SafetyWarningDto[] warnings)
         {
-            Size = new Size(520, 300);
+            Size = new Size(520, 330);
 
             // Red warning icon
             var iconBox = new PictureBox
@@ -216,26 +248,37 @@ namespace AkmlSql.Shell.Shared.Safety
                 AutoSize = false
             };
 
+            // Spec 014, US1 / FR-006 — "Don't ask again for this session" checkbox
+            _suppressCheckBox = new CheckBox
+            {
+                Text = "Don't ask again for this session",
+                Location = new Point(20, 200),
+                Size = new Size(280, 20),
+                Checked = false
+            };
+
             _proceedButton = new Button
             {
-                Text = "I understand the risk \u2014 Proceed",
-                Location = new Point(220, 220),
-                Size = new Size(190, 30),
+                Text = "I understand the risk \u2014 Execute",
+                Location = new Point(200, 250),
+                Size = new Size(200, 30),
                 DialogResult = DialogResult.OK
             };
 
             _cancelButton = new Button
             {
                 Text = "Cancel",
-                Location = new Point(420, 220),
+                Location = new Point(410, 250),
                 Size = new Size(80, 30),
                 DialogResult = DialogResult.Cancel
             };
 
             CancelButton = _cancelButton;
-            // Deliberately not setting AcceptButton — user must click the explicit button
+            // Deliberately not setting AcceptButton — user must click the explicit button (FR-005)
 
-            Controls.AddRange(new Control[] { iconBox, headerLabel, messageLabel, _proceedButton, _cancelButton });
+            _proceedButton.Click += (_, _) => SuppressForSession = _suppressCheckBox?.Checked ?? false;
+
+            Controls.AddRange(new Control[] { iconBox, headerLabel, messageLabel, _suppressCheckBox, _proceedButton, _cancelButton });
         }
 
         /// <summary>
@@ -483,6 +526,10 @@ namespace AkmlSql.Shell.Shared.Safety
                         break;
                     case SafetyWarningType.DeleteWithoutWhere:
                     case SafetyWarningType.UpdateWithoutWhere:
+                    // Spec 014, US1 — new detection patterns use Error-level mode
+                    case SafetyWarningType.MergeWithoutFilter:
+                    case SafetyWarningType.DmlInsideJoinWithoutWhere:
+                    case SafetyWarningType.UnsafeDmlInProcOrTrigger:
                         hasErrorLevel = true;
                         break;
                 }
