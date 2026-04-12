@@ -60,9 +60,7 @@ public class JoinProvider : ICompletionProvider
 
         foreach (var (alias, fullTableName) in context.AvailableAliases)
         {
-            var parts = fullTableName.Split('.');
-            var schemaName = parts.Length >= 2 ? parts[0] : "dbo";
-            var tableName = parts.Length >= 2 ? parts[1] : parts[0];
+            var (schemaName, tableName) = FkHelpers.SplitName(fullTableName);
 
             var foreignKeys = cache.GetForeignKeysForTable(schemaName, tableName);
 
@@ -127,7 +125,7 @@ public class JoinProvider : ICompletionProvider
                     displayText = otherTable;
                 }
 
-                var onClause = BuildOnClause(targetReference, otherColumns, alias, existingColumns);
+                var onClause = FkHelpers.BuildFkPredicate(targetReference, otherColumns, alias, existingColumns);
                 var insertText = UseAliases
                     ? $"{qualifiedName} {targetReference} ON {onClause}"
                     : $"{qualifiedName} ON {onClause}";
@@ -144,27 +142,6 @@ public class JoinProvider : ICompletionProvider
                 };
             }
         }
-    }
-
-    /// <summary>
-    /// T057: Build ON clause text for a foreign key relationship.
-    /// Handles multi-column FKs: "ON a.col1 = b.col1 AND a.col2 = b.col2"
-    /// </summary>
-    private static string BuildOnClause(
-        string joinAlias,
-        List<string> joinColumns,
-        string existingAlias,
-        List<string> existingColumns)
-    {
-        var parts = new List<string>();
-
-        int count = Math.Min(joinColumns.Count, existingColumns.Count);
-        for (int i = 0; i < count; i++)
-        {
-            parts.Add($"{joinAlias}.{joinColumns[i]} = {existingAlias}.{existingColumns[i]}");
-        }
-
-        return string.Join(" AND ", parts);
     }
 
     /// <summary>

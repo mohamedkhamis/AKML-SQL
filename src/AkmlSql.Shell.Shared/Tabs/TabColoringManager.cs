@@ -34,10 +34,22 @@ namespace AkmlSql.Shell.Shared.Tabs
         private static bool _initialized;
 
         /// <summary>
+        /// Cached <see cref="TabSettings"/> to avoid calling <see cref="ConfigManager.Load()"/>
+        /// on every window activation. Invalidated in <see cref="RepaintAllTabs"/> when
+        /// settings are saved.
+        /// </summary>
+        private static AkmlSql.Core.Config.TabSettings? _cachedTabSettings;
+
+        /// <summary>
         /// Weak reference to the package, allowing <see cref="RepaintAllTabs"/> to
         /// late-initialize when coloring was disabled at startup but enabled later.
         /// </summary>
         private static WeakReference<AsyncPackage>? _packageRef;
+
+        private static AkmlSql.Core.Config.TabSettings GetTabSettings()
+        {
+            return _cachedTabSettings ??= ConfigManager.Load().Tabs;
+        }
 
         /// <summary>
         /// Tracks the last environment color applied to the status bar so we can avoid
@@ -70,6 +82,7 @@ namespace AkmlSql.Shell.Shared.Tabs
             {
                 // Guard: ensure coloring is enabled before subscribing to events
                 var settings = ConfigManager.Load();
+                _cachedTabSettings = settings.Tabs;
                 if (!settings.Tabs.ColoringEnabled)
                 {
                     Log.Information("TabColoringManager: tab coloring is disabled, skipping initialization");
@@ -117,10 +130,11 @@ namespace AkmlSql.Shell.Shared.Tabs
                 }
 
                 EnvironmentDetector.Reload();
+                _cachedTabSettings = null; // Force re-read after settings save
 
                 if (_dte == null) return;
 
-                var settings = ConfigManager.Load();
+                var tabSettings = GetTabSettings();
 
                 foreach (Window window in _dte.Windows)
                 {
@@ -128,7 +142,7 @@ namespace AkmlSql.Shell.Shared.Tabs
                     {
                         if (window.Kind != "Document") continue;
 
-                        if (!settings.Tabs.ColoringEnabled)
+                        if (!tabSettings.ColoringEnabled)
                         {
                             ClearTabColor(window);
                             continue;
@@ -164,7 +178,7 @@ namespace AkmlSql.Shell.Shared.Tabs
                         if (rule != null)
                         {
                             var color = ParseHexColor(rule.Color);
-                            if (color.HasValue && settings.Tabs.StatusBarColorEnabled)
+                            if (color.HasValue && tabSettings.StatusBarColorEnabled)
                             {
                                 _lastStatusBarColor = null; // Force refresh
                                 ApplyStatusBarColor(color.Value, rule.Label);
@@ -209,8 +223,8 @@ namespace AkmlSql.Shell.Shared.Tabs
                     return;
 
                 // Guard: check if coloring is enabled.
-                var settings = ConfigManager.Load();
-                if (!settings.Tabs.ColoringEnabled)
+                var tabSettings = GetTabSettings();
+                if (!tabSettings.ColoringEnabled)
                 {
                     ClearTabColor(gotFocus);
                     ClearStatusBarColor();
@@ -237,13 +251,13 @@ namespace AkmlSql.Shell.Shared.Tabs
                     if (envColor.HasValue)
                     {
                         // T027: status bar color propagation
-                        if (settings.Tabs.StatusBarColorEnabled)
+                        if (tabSettings.StatusBarColorEnabled)
                         {
                             ApplyStatusBarColor(envColor.Value, rule.Label);
                         }
 
                         // T028: floating window border
-                        if (settings.Tabs.FloatingWindowBorderEnabled)
+                        if (tabSettings.FloatingWindowBorderEnabled)
                         {
                             ApplyFloatingWindowBorder(gotFocus, envColor.Value);
                         }
@@ -952,8 +966,7 @@ namespace AkmlSql.Shell.Shared.Tabs
 
             try
             {
-                var settings = ConfigManager.Load();
-                var brush = CreateBrushFromHex(rule.Color, settings.Tabs.GradientColors);
+                var brush = CreateBrushFromHex(rule.Color, GetTabSettings().GradientColors);
                 if (brush == null) return;
 
                 var tabElement = FindDocumentTab(window);

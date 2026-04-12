@@ -463,7 +463,7 @@ namespace AkmlSql.Core.Config
         public string Pattern { get; set; } = string.Empty;
 
         [JsonPropertyName("matchTarget")]
-        public string MatchTarget { get; set; } = "serverName";
+        public string MatchTarget { get; set; } = Models.Tabs.EnvironmentMatcher.MatchTargetServerName;
 
         [JsonPropertyName("color")]
         public string Color { get; set; } = string.Empty;

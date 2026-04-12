@@ -52,7 +52,7 @@ public class JoinOnFkProvider : ICompletionProvider
 
         foreach (var (targetAlias, targetFullName) in context.AvailableAliases)
         {
-            var (targetSchema, targetTable) = SplitName(targetFullName);
+            var (targetSchema, targetTable) = FkHelpers.SplitName(targetFullName);
             var fks = cache.GetForeignKeysForTable(targetSchema, targetTable);
 
             foreach (var fk in fks)
@@ -64,7 +64,7 @@ public class JoinOnFkProvider : ICompletionProvider
                     if (otherAlias.Equals(targetAlias, StringComparison.OrdinalIgnoreCase))
                         continue;
 
-                    var (otherSchema, otherTable) = SplitName(otherFullName);
+                    var (otherSchema, otherTable) = FkHelpers.SplitName(otherFullName);
 
                     // Does this FK describe a relationship between the two tables?
                     bool targetIsParent = fk.ParentSchema.Equals(targetSchema, StringComparison.OrdinalIgnoreCase)
@@ -85,7 +85,7 @@ public class JoinOnFkProvider : ICompletionProvider
                     var targetColumns = targetIsParent ? fk.ParentColumns : fk.ReferencedColumns;
                     var otherColumns = targetIsParent ? fk.ReferencedColumns : fk.ParentColumns;
 
-                    var predicate = BuildPredicate(targetAlias, targetColumns, otherAlias, otherColumns);
+                    var predicate = FkHelpers.BuildFkPredicate(targetAlias, targetColumns, otherAlias, otherColumns);
 
                     // Dedup — the same FK can be matched from both directions.
                     if (!seen.Add(predicate))
@@ -107,32 +107,4 @@ public class JoinOnFkProvider : ICompletionProvider
         }
     }
 
-    private static (string schema, string table) SplitName(string fullName)
-    {
-        var parts = fullName.Split('.');
-        return parts.Length >= 2
-            ? (parts[0], parts[1])
-            : ("dbo", parts[0]);
-    }
-
-    /// <summary>
-    /// Build an equality predicate, handling multi-column FKs with <c>AND</c>.
-    /// E.g. <c>o.CustomerId = c.Id</c> or
-    /// <c>od.OrderId = o.Id AND od.ProductId = p.Id</c>.
-    /// </summary>
-    private static string BuildPredicate(
-        string leftAlias,
-        List<string> leftColumns,
-        string rightAlias,
-        List<string> rightColumns)
-    {
-        var count = Math.Min(leftColumns.Count, rightColumns.Count);
-        if (count == 1)
-            return $"{leftAlias}.{leftColumns[0]} = {rightAlias}.{rightColumns[0]}";
-
-        var parts = new List<string>(count);
-        for (int i = 0; i < count; i++)
-            parts.Add($"{leftAlias}.{leftColumns[i]} = {rightAlias}.{rightColumns[i]}");
-        return string.Join(" AND ", parts);
-    }
 }

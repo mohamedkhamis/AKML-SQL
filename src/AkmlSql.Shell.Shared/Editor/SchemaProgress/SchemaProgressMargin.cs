@@ -28,6 +28,8 @@ namespace AkmlSql.Shell.Shared.Editor.SchemaProgress
         private const int ReadyDisplayMs = 2000;
         private const int LoadingTimeoutMs = 15_000;
 
+        private static readonly FontFamily SegoeUiFont = new FontFamily("Segoe UI");
+
         private enum MarginState { Hidden, Loading, Ready }
 
         private readonly IWpfTextView _textView;
@@ -108,7 +110,7 @@ namespace AkmlSql.Shell.Shared.Editor.SchemaProgress
                 Text = string.Empty,
                 Foreground = _mutedBrush,
                 FontSize = 11,
-                FontFamily = new FontFamily("Segoe UI"),
+                FontFamily = SegoeUiFont,
                 VerticalAlignment = VerticalAlignment.Center,
                 TextTrimming = TextTrimming.CharacterEllipsis
             };

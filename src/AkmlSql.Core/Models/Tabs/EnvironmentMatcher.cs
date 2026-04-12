@@ -10,6 +10,9 @@ namespace AkmlSql.Core.Models.Tabs
     /// </summary>
     public static class EnvironmentMatcher
     {
+        /// <summary>The only currently supported match target value.</summary>
+        public const string MatchTargetServerName = "serverName";
+
         /// <summary>
         /// Tests <paramref name="serverName"/> against each rule in order.
         /// Returns the first matching rule, or <c>null</c> if none match.
@@ -22,7 +25,7 @@ namespace AkmlSql.Core.Models.Tabs
 
             foreach (var rule in rules)
             {
-                if (!string.Equals(rule.MatchTarget, "serverName", StringComparison.OrdinalIgnoreCase))
+                if (!string.Equals(rule.MatchTarget, MatchTargetServerName, StringComparison.OrdinalIgnoreCase))
                     continue;
 
                 if (MatchesPattern(rule.Pattern, serverName!))

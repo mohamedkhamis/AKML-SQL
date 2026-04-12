@@ -28,9 +28,9 @@ namespace AkmlSql.Shell.Shared.Safety
         private static Package? _package;
 
         /// <summary>
-        /// Spec 014, US1 / FR-006 — per-session set of warning type ints the user
-        /// has opted out of via the "Don't ask again for this session" checkbox.
-        /// Cleared when the IDE session ends (static lifetime = package lifetime).
+        /// Per-session set of warning type ints the user has opted out of via the
+        /// "Don't ask again for this session" checkbox.  Cleared when the IDE session
+        /// ends (static lifetime = package lifetime).
         /// </summary>
         private static readonly System.Collections.Generic.HashSet<int> _suppressedWarningTypes = new();
 
@@ -68,7 +68,7 @@ namespace AkmlSql.Shell.Shared.Safety
                 // OnBeforeExecute re-checks settings dynamically on each invocation.
                 ExecutionCommandFilter.Install(package);
 
-                // Spec 014 / FR-104 — register F1 help context for the safety dialog.
+                // Register F1 help context for the safety dialog.
                 Help.F1HelpListener.Default.Register("akmlsql.dialog.safety",
                     "https://github.com/mohamedkhamis/AKML-SQL/blob/master/doc/execution-safety.md");
 
@@ -163,8 +163,8 @@ namespace AkmlSql.Shell.Shared.Safety
                 SafetyCheckResponse? response = null;
                 ThreadHelper.JoinableTaskFactory.Run(async () =>
                 {
-                    // FR-009: safety check must not block execution if it takes > 500 ms.
-                    // On timeout the check yields and execution proceeds with a non-blocking toast.
+                    // Safety check must not block execution if it takes > 500 ms.
+                    // On timeout the check yields and execution proceeds (fail-open).
                     response = await client.SendRequestAsync<SafetyCheckResponse, SafetyCheckRequest>(
                         MessageTypes.SafetyCheck,
                         request,
@@ -183,7 +183,7 @@ namespace AkmlSql.Shell.Shared.Safety
                     return true; // All detected warnings are for disabled settings
                 }
 
-                // Spec 014, US1 / FR-006 — strip warnings the user suppressed for this session
+                // Strip warnings the user suppressed for this session
                 filteredWarnings = filteredWarnings
                     .Where(w => !_suppressedWarningTypes.Contains(w.WarningType))
                     .ToArray();
@@ -195,7 +195,7 @@ namespace AkmlSql.Shell.Shared.Safety
                 var envLabel = matchedEnvRule?.Label ?? "Unknown";
                 var envColor = matchedEnvRule?.Color ?? "";
 
-                // FR-006 — per-environment severity override: "Disabled" skips the
+                // Per-environment severity override: "Disabled" skips the
                 // guard entirely for this environment (e.g. the user's DEV boxes).
                 if (IsEnvironmentDisabled(envLabel, cachedSafety))
                 {
@@ -209,7 +209,7 @@ namespace AkmlSql.Shell.Shared.Safety
 
                 if (wpfResult == true)
                 {
-                    // FR-006 — record opt-out if the user ticked "Don't ask again"
+                    // Record opt-out if the user ticked "Don't ask again"
                     if (dialog.SuppressForSession)
                     {
                         foreach (var w in filteredWarnings)
@@ -263,7 +263,7 @@ namespace AkmlSql.Shell.Shared.Safety
         }
 
         /// <summary>
-        /// FR-006 — returns <c>true</c> if the user has configured the given environment
+        /// Returns <c>true</c> if the user has configured the given environment
         /// as "Disabled" in <c>Safety.EnvironmentSeverity</c>, meaning the execution guard
         /// should be a no-op for that environment.
         /// </summary>
@@ -318,7 +318,7 @@ namespace AkmlSql.Shell.Shared.Safety
                     case Core.Models.Safety.SafetyWarningType.TruncateTable:
                         if (safety.TruncateConfirmation) filtered.Add(w);
                         break;
-                    // Spec 014, US1 — new detection patterns
+                    // Extended detection patterns (MERGE, JOIN, proc/trigger)
                     case Core.Models.Safety.SafetyWarningType.MergeWithoutFilter:
                         if (safety.MergeNoFilter) filtered.Add(w);
                         break;

@@ -2958,7 +2958,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             var rule = new AkmlSql.Core.Config.ColoringRule
             {
                 Order = _settings.Tabs.ColoringRules.Count,
-                MatchTarget = "serverName"
+                MatchTarget = AkmlSql.Core.Models.Tabs.EnvironmentMatcher.MatchTargetServerName
             };
 
             if (ShowRuleEditor(rule, "Add Environment Rule"))
