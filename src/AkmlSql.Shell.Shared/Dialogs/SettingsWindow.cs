@@ -183,6 +183,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
         private CheckBox? _chkShowNullability;
         private CheckBox? _chkShowPkFk;
         private CheckBox? _chkAutoAlias;
+        private CheckBox? _chkJoinAssist;
         private CheckBox? _chkDisableNativeIs;
         private Slider? _sldTriggerDelay;
         private TextBlock? _lblTriggerDelayValue;
@@ -246,6 +247,10 @@ namespace AkmlSql.Shell.Shared.Dialogs
         // Tabs
         private CheckBox? _chkTabColoringEnabled;
         private CheckBox? _chkTabGradientColors;
+        private ListBox? _lstColoringRules;
+        private Button? _btnAddRule;
+        private Button? _btnEditRule;
+        private Button? _btnRemoveRule;
         private CheckBox? _chkTabSessionRecovery;
         private Slider? _sldTabAutoSaveInterval;
         private TextBlock? _lblTabAutoSaveValue;
@@ -1225,8 +1230,10 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
             AddGroupSeparator(panel);
             AddGroupHeader(panel, "Assistance");
+            _chkJoinAssist = AddToggle(panel, "JOIN clause assistance",
+                "Master switch for FK-assisted JOIN completion. When on: after typing 'JOIN', FK-related tables are suggested first with a full ON clause inserted; inside 'ON', ready-made FK equality predicates are suggested. Orthogonal to Tables Alias. Default: on.");
             _chkAutoAlias = AddToggle(panel, "Tables Alias",
-                "Master switch for all table-alias completions. When on: alias candidates (o, od, ...) are suggested after a table name in FROM, AND tables are suggested with auto-generated alias and FK-based ON clause after JOIN. When off, plain table names are suggested in both cases. Default: off.");
+                "When on, completion generates new aliases for inserted tables (e.g. 'Orders o ON o.CustomerId = c.Id'). When off, FK JOIN suggestions still fire but the target table is referenced by its bare name ('Orders ON Orders.CustomerId = c.Id'). Default: off.");
             _chkDisableNativeIs = AddToggle(panel, "Disable native SSMS IntelliSense",
                 "Recommended to avoid conflicts with AKML SQL IntelliSense");
 
@@ -1436,6 +1443,55 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 "Color tabs based on server name patterns (e.g. PROD=red, DEV=green)");
             _chkTabGradientColors = AddToggle(panel, "Use gradient colors",
                 "Apply a vertical gradient to tab color bars (lighter at top, base color at bottom)");
+
+            // Environment Rules editor
+            var rulesLabel = new TextBlock
+            {
+                Text = "Environment Rules",
+                FontWeight = FontWeights.SemiBold,
+                FontSize = 13,
+                Margin = new Thickness(20, 16, 20, 4),
+            };
+            panel.Children.Add(rulesLabel);
+
+            var rulesDesc = new TextBlock
+            {
+                Text = "Define server name patterns to match environments. Rules are evaluated top-down; first match wins.",
+                FontSize = 12,
+                Opacity = 0.7,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(20, 0, 20, 8),
+            };
+            panel.Children.Add(rulesDesc);
+
+            _lstColoringRules = new ListBox
+            {
+                Height = 120,
+                Margin = new Thickness(20, 4, 20, 4),
+                BorderThickness = new Thickness(1),
+                FontSize = 13,
+            };
+            panel.Children.Add(_lstColoringRules);
+
+            var buttonRow = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Margin = new Thickness(20, 4, 20, 4),
+                HorizontalAlignment = HorizontalAlignment.Left
+            };
+
+            _btnAddRule = new Button { Content = "Add...", Padding = new Thickness(12, 4, 12, 4), Margin = new Thickness(0, 0, 8, 0) };
+            _btnEditRule = new Button { Content = "Edit...", Padding = new Thickness(12, 4, 12, 4), Margin = new Thickness(0, 0, 8, 0) };
+            _btnRemoveRule = new Button { Content = "Remove", Padding = new Thickness(12, 4, 12, 4) };
+
+            _btnAddRule.Click += (s, e) => OnAddColoringRule();
+            _btnEditRule.Click += (s, e) => OnEditColoringRule();
+            _btnRemoveRule.Click += (s, e) => OnRemoveColoringRule();
+
+            buttonRow.Children.Add(_btnAddRule);
+            buttonRow.Children.Add(_btnEditRule);
+            buttonRow.Children.Add(_btnRemoveRule);
+            panel.Children.Add(buttonRow);
 
             AddGroupSeparator(panel);
             AddGroupHeader(panel, "Session Recovery");
@@ -2268,6 +2324,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 ConfigManager.Save(_settings);
                 _dialogResult = true;
                 Log.Information("Settings applied via SettingsWindow");
+
+                // FR-042: Live re-render tab colors after settings change
+                try { Tabs.TabColoringManager.RepaintAllTabs(); } catch { }
             }
             catch (Exception ex)
             {
@@ -2540,6 +2599,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             SetChecked(_chkShowNullability, i.ShowNullability);
             SetChecked(_chkShowPkFk, i.ShowPkFk);
             SetChecked(_chkAutoAlias, i.AutoAlias);
+            SetChecked(_chkJoinAssist, i.JoinAssist);
             SetChecked(_chkDisableNativeIs, i.DisableNativeIntelliSense);
             SetSlider(_sldTriggerDelay, _lblTriggerDelayValue, i.TriggerDelayMs);
             SetSlider(_sldMaxSuggestions, _lblMaxSuggestionsValue, i.MaxSuggestions);
@@ -2604,6 +2664,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             var t = _settings.Tabs;
             SetChecked(_chkTabColoringEnabled, t.ColoringEnabled);
             SetChecked(_chkTabGradientColors, t.GradientColors);
+            PopulateColoringRulesList();
             SetChecked(_chkTabSessionRecovery, t.SessionRecovery);
             SetSlider(_sldTabAutoSaveInterval, _lblTabAutoSaveValue, t.AutoSaveInterval);
             SetSlider(_sldTabMaxClosedTabs, _lblTabMaxClosedTabsValue, t.MaxClosedTabs);
@@ -2724,9 +2785,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             _settings.IntelliSense.ShowNullability = IsChecked(_chkShowNullability);
             _settings.IntelliSense.ShowPkFk = IsChecked(_chkShowPkFk);
             _settings.IntelliSense.AutoAlias = IsChecked(_chkAutoAlias);
-            // Keep deprecated JoinAssist field in sync with the master AutoAlias
-            // toggle so older engines still see the correct value.
-            _settings.IntelliSense.JoinAssist = IsChecked(_chkAutoAlias);
+            _settings.IntelliSense.JoinAssist = IsChecked(_chkJoinAssist);
             _settings.IntelliSense.DisableNativeIntelliSense = IsChecked(_chkDisableNativeIs);
             _settings.IntelliSense.TriggerDelayMs = GetSliderInt(_sldTriggerDelay);
             _settings.IntelliSense.MaxSuggestions = GetSliderInt(_sldMaxSuggestions);
@@ -2877,6 +2936,162 @@ namespace AkmlSql.Shell.Shared.Dialogs
         private static void SetChecked(CheckBox? cb, bool value)
         {
             if (cb != null) cb.IsChecked = value;
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════
+        //  Coloring Rules CRUD
+        // ═══════════════════════════════════════════════════════════════════════
+
+        private void PopulateColoringRulesList()
+        {
+            if (_lstColoringRules == null) return;
+            _lstColoringRules.Items.Clear();
+
+            foreach (var rule in _settings.Tabs.ColoringRules)
+            {
+                _lstColoringRules.Items.Add($"[{rule.Label}]  {rule.Pattern}  \u2192  {rule.Color}");
+            }
+        }
+
+        private void OnAddColoringRule()
+        {
+            var rule = new AkmlSql.Core.Config.ColoringRule
+            {
+                Order = _settings.Tabs.ColoringRules.Count,
+                MatchTarget = "serverName"
+            };
+
+            if (ShowRuleEditor(rule, "Add Environment Rule"))
+            {
+                _settings.Tabs.ColoringRules.Add(rule);
+                PopulateColoringRulesList();
+            }
+        }
+
+        private void OnEditColoringRule()
+        {
+            var index = _lstColoringRules?.SelectedIndex ?? -1;
+            if (index < 0 || index >= _settings.Tabs.ColoringRules.Count) return;
+
+            var rule = _settings.Tabs.ColoringRules[index];
+            if (ShowRuleEditor(rule, "Edit Environment Rule"))
+            {
+                PopulateColoringRulesList();
+                _lstColoringRules!.SelectedIndex = index;
+            }
+        }
+
+        private void OnRemoveColoringRule()
+        {
+            var index = _lstColoringRules?.SelectedIndex ?? -1;
+            if (index < 0 || index >= _settings.Tabs.ColoringRules.Count) return;
+
+            _settings.Tabs.ColoringRules.RemoveAt(index);
+            PopulateColoringRulesList();
+        }
+
+        private bool ShowRuleEditor(AkmlSql.Core.Config.ColoringRule rule, string title)
+        {
+            var dlg = new System.Windows.Window
+            {
+                Title = title,
+                Width = 420,
+                Height = 260,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                ResizeMode = ResizeMode.NoResize,
+            };
+
+            // Try to set owner to the SettingsWindow's dialog
+            try { dlg.Owner = _window; } catch { }
+
+            var grid = new Grid { Margin = new Thickness(16) };
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Label
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Pattern
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Color
+            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // spacer
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // buttons
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(80) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            // Row 0: Label
+            var lblLabel = new TextBlock { Text = "Label:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 4, 8, 4) };
+            Grid.SetRow(lblLabel, 0); Grid.SetColumn(lblLabel, 0);
+            var txtLabel = new TextBox { Text = rule.Label, Margin = new Thickness(0, 4, 0, 4) };
+            Grid.SetRow(txtLabel, 0); Grid.SetColumn(txtLabel, 1);
+
+            // Row 1: Pattern
+            var lblPattern = new TextBlock { Text = "Pattern:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 4, 8, 4) };
+            Grid.SetRow(lblPattern, 1); Grid.SetColumn(lblPattern, 0);
+            var txtPattern = new TextBox { Text = rule.Pattern, Margin = new Thickness(0, 4, 0, 4) };
+            Grid.SetRow(txtPattern, 1); Grid.SetColumn(txtPattern, 1);
+
+            // Row 2: Color
+            var lblColor = new TextBlock { Text = "Color:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 4, 8, 4) };
+            Grid.SetRow(lblColor, 2); Grid.SetColumn(lblColor, 0);
+            var colorPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 4) };
+            var txtColor = new TextBox { Text = rule.Color, Width = 100 };
+            var colorPreview = new Border
+            {
+                Width = 24, Height = 24, Margin = new Thickness(8, 0, 0, 0),
+                CornerRadius = new CornerRadius(2),
+                BorderThickness = new Thickness(1)
+            };
+
+            // Live color preview
+            Action updatePreview = () =>
+            {
+                try
+                {
+                    var hex = txtColor.Text?.Trim() ?? "";
+                    if (!hex.StartsWith("#")) hex = "#" + hex;
+                    var color = (Color)ColorConverter.ConvertFromString(hex);
+                    var brush = new SolidColorBrush(color);
+                    brush.Freeze();
+                    colorPreview.Background = brush;
+                }
+                catch { colorPreview.Background = null; }
+            };
+            updatePreview();
+            txtColor.TextChanged += (s, e) => updatePreview();
+
+            colorPanel.Children.Add(txtColor);
+            colorPanel.Children.Add(colorPreview);
+            Grid.SetRow(colorPanel, 2); Grid.SetColumn(colorPanel, 1);
+
+            // Row 4: Buttons
+            var buttonPanel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(0, 12, 0, 0)
+            };
+            var btnOk = new Button { Content = "OK", Width = 75, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
+            var btnCancel = new Button { Content = "Cancel", Width = 75, IsCancel = true };
+
+            bool accepted = false;
+            btnOk.Click += (s, e) =>
+            {
+                rule.Label = txtLabel.Text.Trim();
+                rule.Pattern = txtPattern.Text.Trim();
+                rule.Color = txtColor.Text.Trim();
+                accepted = true;
+                dlg.Close();
+            };
+
+            buttonPanel.Children.Add(btnOk);
+            buttonPanel.Children.Add(btnCancel);
+            Grid.SetRow(buttonPanel, 4); Grid.SetColumn(buttonPanel, 0);
+            Grid.SetColumnSpan(buttonPanel, 2);
+
+            grid.Children.Add(lblLabel); grid.Children.Add(txtLabel);
+            grid.Children.Add(lblPattern); grid.Children.Add(txtPattern);
+            grid.Children.Add(lblColor); grid.Children.Add(colorPanel);
+            grid.Children.Add(buttonPanel);
+
+            dlg.Content = grid;
+            dlg.ShowDialog();
+
+            return accepted;
         }
 
         private static bool IsChecked(CheckBox? cb) => cb?.IsChecked == true;
