@@ -1,7 +1,6 @@
 #nullable enable
 using System;
 using System.Linq;
-using System.Windows.Forms;
 using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
@@ -196,13 +195,19 @@ namespace AkmlSql.Shell.Shared.Safety
                 var envLabel = matchedEnvRule?.Label ?? "Unknown";
                 var envColor = matchedEnvRule?.Color ?? "";
 
-                // Show the warning dialog on the UI thread, passing environment info
-                // so the dialog can use EnvironmentSeverity config to determine mode
-                ThreadHelper.ThrowIfNotOnUIThread();
-                using var dialog = SafetyWarningDialog.CreateForWarnings(filteredWarnings, serverName, envLabel, envColor);
-                var dialogResult = dialog.ShowDialog();
+                // FR-006 — per-environment severity override: "Disabled" skips the
+                // guard entirely for this environment (e.g. the user's DEV boxes).
+                if (IsEnvironmentDisabled(envLabel, cachedSafety))
+                {
+                    LogAuditEvent(serverName, envLabel, envColor, filteredWarnings, "SkippedByEnvironmentConfig");
+                    return true;
+                }
 
-                if (dialogResult == DialogResult.OK)
+                ThreadHelper.ThrowIfNotOnUIThread();
+                var dialog = SafetyWarningDialog.CreateForWarnings(filteredWarnings, serverName, envLabel, envColor);
+                var wpfResult = dialog.ShowDialog();
+
+                if (wpfResult == true)
                 {
                     // FR-006 — record opt-out if the user ticked "Don't ask again"
                     if (dialog.SuppressForSession)
@@ -255,6 +260,22 @@ namespace AkmlSql.Shell.Shared.Safety
                     w.ObjectName ?? "",
                     sqlPreview ?? "");
             }
+        }
+
+        /// <summary>
+        /// FR-006 — returns <c>true</c> if the user has configured the given environment
+        /// as "Disabled" in <c>Safety.EnvironmentSeverity</c>, meaning the execution guard
+        /// should be a no-op for that environment.
+        /// </summary>
+        private static bool IsEnvironmentDisabled(string envLabel, SafetySettings? safety)
+        {
+            if (safety == null ||
+                string.IsNullOrEmpty(envLabel) ||
+                string.Equals(envLabel, "Unknown", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            return safety.EnvironmentSeverity.TryGetValue(envLabel, out var level) &&
+                   string.Equals(level, "Disabled", StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>

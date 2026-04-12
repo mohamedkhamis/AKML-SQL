@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Shapes;
 using System.Windows.Threading;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
@@ -15,35 +16,25 @@ using Serilog;
 namespace AkmlSql.Shell.Shared.Editor.SchemaProgress
 {
     /// <summary>
-    /// Top-of-editor WPF margin that shows the schema loading state for the
-    /// current session. Sits just below the <see cref="Toolbar.EditorToolbar"/>
-    /// and above the document text — matching SQL Prompt's layout.
-    ///
-    /// <para>
-    /// Uses a state machine (<see cref="MarginState"/>) to guarantee stable
-    /// visibility transitions: the margin shows ONCE when schema loading starts,
-    /// stays visible with live progress updates while Phase A / B are running,
-    /// briefly shows "ready" when complete, then auto-hides. It only redraws
-    /// when text actually changes — no more flicker from per-poll toggling.
-    /// </para>
+    /// Slim top-of-editor margin that mirrors SQL Prompt's "Populating suggestions
+    /// for …" indicator: a compact, right-aligned status strip with a thin circular
+    /// spinner, muted text, and a subtle bottom divider. Blends into the editor
+    /// chrome rather than stamping a bright bar across the top.
     /// </summary>
     internal sealed class SchemaProgressMargin : UserControl, IWpfTextViewMargin
     {
-        private const double MarginHeight = 22;
+        private const double MarginHeight = 20;
         private const int PollIntervalMs = 1000;
         private const int ReadyDisplayMs = 2000;
+        private const int LoadingTimeoutMs = 15_000;
 
-        private enum MarginState
-        {
-            Hidden,      // Nothing to show
-            Loading,     // Phase 0/1 — show spinner + progress
-            Ready,       // Phase 2/3 — briefly show "ready" before hiding
-        }
+        private enum MarginState { Hidden, Loading, Ready }
 
         private readonly IWpfTextView _textView;
         private readonly DispatcherTimer _pollTimer;
         private readonly TextBlock _statusText;
-        private readonly Border _spinner;
+        private readonly Ellipse _spinnerArc;
+        private readonly TextBlock _readyGlyph;
         private readonly RotateTransform _spinnerRotate;
         private readonly Border _rootBorder;
 
@@ -54,91 +45,110 @@ namespace AkmlSql.Shell.Shared.Editor.SchemaProgress
         private string _lastDatabase = string.Empty;
         private string _lastDisplayedText = string.Empty;
         private DateTime _readyShownAtUtc = DateTime.MinValue;
+        private DateTime _loadingStartedAtUtc = DateTime.MinValue;
+        private bool _loadingTimedOut;
 
-        // Theme brushes
+        // Theme brushes — resolved once in ctor, frozen for free cross-thread use.
         private readonly SolidColorBrush _bgBrush;
         private readonly SolidColorBrush _borderBrush;
-        private readonly SolidColorBrush _fgBrush;
+        private readonly SolidColorBrush _mutedBrush;
         private readonly SolidColorBrush _accentBrush;
+        private readonly SolidColorBrush _readyBrush;
 
         public SchemaProgressMargin(IWpfTextView textView)
         {
             _textView = textView ?? throw new ArgumentNullException(nameof(textView));
 
-            var theme = ThemeManager.Instance.DetectTheme();
-            var isDark = theme == VsThemeKind.Dark || theme == VsThemeKind.Blue;
-            if (isDark)
-            {
-                _bgBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x25, 0x28, 0x36)));
-                _borderBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x3A, 0x3F, 0x4E)));
-                _fgBrush = Freeze(new SolidColorBrush(Color.FromRgb(0xD4, 0xD4, 0xD4)));
-                _accentBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x4F, 0x8C, 0xFF)));
-            }
-            else
-            {
-                _bgBrush = Freeze(new SolidColorBrush(Color.FromRgb(0xF8, 0xF8, 0xF8)));
-                _borderBrush = Freeze(new SolidColorBrush(Color.FromRgb(0xCC, 0xCC, 0xCC)));
-                _fgBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)));
-                _accentBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x00, 0x78, 0xD4)));
-            }
+            var theme = ThemeManager.Instance;
+            _bgBrush     = Freeze(new SolidColorBrush(theme.PreviewBackground));
+            _borderBrush = Freeze(new SolidColorBrush(theme.Border));
+            _mutedBrush  = Freeze(new SolidColorBrush(theme.PlaceholderText));
+            _accentBrush = Freeze(new SolidColorBrush(theme.AccentColor));
+            // Semantic green used only for the "ready" checkmark; intentionally
+            // theme-independent so success always reads the same way.
+            _readyBrush  = Freeze(new SolidColorBrush(Color.FromRgb(0x2E, 0xA0, 0x43)));
 
             TryLoadSessionId();
 
-            // ── UI ──
             _spinnerRotate = new RotateTransform(0);
-            _spinner = new Border
+
+            // Thin circular arc — one stroke-dash sweeps ~90° of the circle;
+            // the rotate transform carries it around. Gives a modern "arc chasing
+            // its tail" spinner instead of the previous rotating rectangle border.
+            _spinnerArc = new Ellipse
             {
                 Width = 12,
                 Height = 12,
-                BorderBrush = _accentBrush,
-                BorderThickness = new Thickness(2, 2, 0, 0),
-                CornerRadius = new CornerRadius(6),
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(10, 0, 8, 0),
+                Stroke = _accentBrush,
+                StrokeThickness = 1.6,
+                StrokeDashCap = PenLineCap.Round,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round,
+                // Ellipse perimeter ≈ 2πr ≈ 37.7 → 10 visible + 30 gap ≈ 90° arc.
+                StrokeDashArray = new DoubleCollection { 10, 30 },
                 RenderTransformOrigin = new Point(0.5, 0.5),
-                RenderTransform = _spinnerRotate
+                RenderTransform = _spinnerRotate,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 6, 0)
+            };
+
+            _readyGlyph = new TextBlock
+            {
+                Text = "\u2713",
+                Foreground = _readyBrush,
+                FontSize = 12,
+                FontWeight = FontWeights.Bold,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 6, 0),
+                Visibility = Visibility.Collapsed
             };
 
             _statusText = new TextBlock
             {
                 Text = string.Empty,
-                Foreground = _fgBrush,
+                Foreground = _mutedBrush,
                 FontSize = 11,
                 FontFamily = new FontFamily("Segoe UI"),
-                VerticalAlignment = VerticalAlignment.Center
+                VerticalAlignment = VerticalAlignment.Center,
+                TextTrimming = TextTrimming.CharacterEllipsis
             };
 
-            var stack = new StackPanel
+            // Right-aligned content keeps the visual weight off the code area —
+            // the margin reads as a chrome strip rather than a banner.
+            var content = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Center
             };
-            stack.Children.Add(_spinner);
-            stack.Children.Add(_statusText);
+            content.Children.Add(_spinnerArc);
+            content.Children.Add(_readyGlyph);
+            content.Children.Add(_statusText);
 
             _rootBorder = new Border
             {
                 Background = _bgBrush,
                 BorderBrush = _borderBrush,
                 BorderThickness = new Thickness(0, 0, 0, 1),
-                Child = stack
+                Padding = new Thickness(8, 0, 12, 0),
+                Child = content
             };
 
             Content = _rootBorder;
-            Height = 0; // Start collapsed — no layout height reserved until state != Hidden
+            Height = 0;
+            Opacity = 0;
             Visibility = Visibility.Collapsed;
 
-            // Continuous spin animation (always running, only visible when we are)
-            var rotate = new DoubleAnimation
+            // Continuous rotation (stays running; visibility of the arc is gated
+            // by the state machine so the animation never stalls the first time).
+            _spinnerRotate.BeginAnimation(RotateTransform.AngleProperty, new DoubleAnimation
             {
                 From = 0,
                 To = 360,
-                Duration = TimeSpan.FromMilliseconds(1200),
+                Duration = TimeSpan.FromMilliseconds(1100),
                 RepeatBehavior = RepeatBehavior.Forever
-            };
-            _spinnerRotate.BeginAnimation(RotateTransform.AngleProperty, rotate);
+            });
 
-            // Polling timer
             _pollTimer = new DispatcherTimer(DispatcherPriority.Background)
             {
                 Interval = TimeSpan.FromMilliseconds(PollIntervalMs)
@@ -152,11 +162,6 @@ namespace AkmlSql.Shell.Shared.Editor.SchemaProgress
         // ─── IWpfTextViewMargin ─────────────────────────────────────────────
         public FrameworkElement VisualElement => this;
 
-        /// <summary>
-        /// Layout height reserved for the margin. Returns 0 when hidden so the
-        /// editor doesn't get a blank bar when nothing is loading, and
-        /// <see cref="MarginHeight"/> while loading/ready.
-        /// </summary>
         public double MarginSize => _state == MarginState.Hidden ? 0 : MarginHeight;
 
         public bool Enabled => !_disposed;
@@ -171,11 +176,9 @@ namespace AkmlSql.Shell.Shared.Editor.SchemaProgress
         {
             if (_disposed) return;
 
-            // Re-entrancy guard: the DispatcherTimer fires every 1s but the
-            // IPC call below can take up to 3s (its timeout). Without this
-            // guard a slow engine response would let a second Tick race ahead
-            // of the first, and the two Apply(resp) calls could interleave
-            // state transitions (a stale response stomping on a newer one).
+            // Re-entrancy guard: the DispatcherTimer fires every 1s but the IPC
+            // call below can take up to 3s; without this guard a slow engine
+            // response would let a second Tick race ahead and stomp state.
             if (_polling) return;
             _polling = true;
 
@@ -211,11 +214,6 @@ namespace AkmlSql.Shell.Shared.Editor.SchemaProgress
             }
         }
 
-        /// <summary>
-        /// Applies a poll response through the state machine. Only calls Show/Hide
-        /// when the state actually changes, avoiding the visual flicker from
-        /// per-poll visibility toggles.
-        /// </summary>
         private void Apply(SchemaStatusResponse? status)
         {
             if (status == null || !status.Exists || string.IsNullOrEmpty(status.DatabaseName))
@@ -224,18 +222,18 @@ namespace AkmlSql.Shell.Shared.Editor.SchemaProgress
                 return;
             }
 
-            // Detect database change — if the user switched to another DB,
-            // reset the state so the margin shows the new loading cycle.
+            // Database switch — restart the loading cycle for the new DB.
             if (!string.Equals(status.DatabaseName, _lastDatabase, StringComparison.OrdinalIgnoreCase))
             {
                 _lastDatabase = status.DatabaseName;
+                _loadingTimedOut = false;
                 if (status.Phase < 2)
                 {
                     TransitionTo(MarginState.Loading);
+                    _loadingStartedAtUtc = DateTime.UtcNow;
                 }
                 else
                 {
-                    // New DB already cached — skip straight to Ready (shown briefly).
                     TransitionTo(MarginState.Ready);
                     _readyShownAtUtc = DateTime.UtcNow;
                 }
@@ -244,27 +242,50 @@ namespace AkmlSql.Shell.Shared.Editor.SchemaProgress
             switch (status.Phase)
             {
                 case 0: // NotLoaded
-                    TransitionTo(MarginState.Loading);
-                    SetText($"Loading schema [{status.DatabaseName}]…");
+                    if (_loadingTimedOut)
+                    {
+                        TransitionTo(MarginState.Hidden);
+                        break;
+                    }
+                    if (_state != MarginState.Loading)
+                    {
+                        TransitionTo(MarginState.Loading);
+                        _loadingStartedAtUtc = DateTime.UtcNow;
+                    }
+                    else if ((DateTime.UtcNow - _loadingStartedAtUtc).TotalMilliseconds >= LoadingTimeoutMs)
+                    {
+                        _loadingTimedOut = true;
+                        TransitionTo(MarginState.Hidden);
+                        Log.Warning("SchemaProgressMargin: loading timed out for [{Database}] after {Timeout}ms",
+                            status.DatabaseName, LoadingTimeoutMs);
+                        break;
+                    }
+                    SetText($"Populating suggestions for {status.DatabaseName}");
                     break;
+
                 case 1: // PhaseA done, PhaseB loading columns
                     TransitionTo(MarginState.Loading);
-                    int pct = status.ObjectCount == 0
-                        ? 0
-                        : (int)(100.0 * status.ColumnsLoadedCount / status.ObjectCount);
-                    SetText($"Loading columns for [{status.DatabaseName}] — {pct}% ({status.ColumnsLoadedCount}/{status.ObjectCount})");
+                    if (status.ObjectCount > 0)
+                    {
+                        int pct = (int)(100.0 * status.ColumnsLoadedCount / status.ObjectCount);
+                        SetText($"Loading columns — {pct}% ({status.ColumnsLoadedCount}/{status.ObjectCount})");
+                    }
+                    else
+                    {
+                        SetText("Loading columns…");
+                    }
                     break;
+
                 case 2: // PhaseB done
                 case 3: // Complete
                     if (_state == MarginState.Loading)
                     {
                         TransitionTo(MarginState.Ready);
-                        SetText($"Schema [{status.DatabaseName}] ready — {status.ObjectCount} objects");
+                        SetText($"Schema cache ready — {status.ObjectCount} objects");
                         _readyShownAtUtc = DateTime.UtcNow;
                     }
                     else if (_state == MarginState.Ready)
                     {
-                        // Already in Ready — hide after the display duration elapses.
                         if ((DateTime.UtcNow - _readyShownAtUtc).TotalMilliseconds >= ReadyDisplayMs)
                         {
                             TransitionTo(MarginState.Hidden);
@@ -273,16 +294,12 @@ namespace AkmlSql.Shell.Shared.Editor.SchemaProgress
                     else
                     {
                         // Hidden → schema was already loaded before we first saw it.
-                        // Stay hidden — no point flashing.
                         TransitionTo(MarginState.Hidden);
                     }
                     break;
             }
         }
 
-        /// <summary>
-        /// Transitions to a new state, updating visibility ONLY on actual changes.
-        /// </summary>
         private void TransitionTo(MarginState newState)
         {
             if (_state == newState) return;
@@ -291,33 +308,58 @@ namespace AkmlSql.Shell.Shared.Editor.SchemaProgress
             switch (newState)
             {
                 case MarginState.Hidden:
-                    Height = 0;
-                    Visibility = Visibility.Collapsed;
+                    FadeTo(0, () =>
+                    {
+                        Height = 0;
+                        Visibility = Visibility.Collapsed;
+                    });
                     _lastDisplayedText = string.Empty;
                     break;
+
                 case MarginState.Loading:
+                    Height = MarginHeight;
+                    Visibility = Visibility.Visible;
+                    _spinnerArc.Visibility = Visibility.Visible;
+                    _readyGlyph.Visibility = Visibility.Collapsed;
+                    _statusText.Foreground = _mutedBrush;
+                    FadeTo(1, null);
+                    break;
+
                 case MarginState.Ready:
                     Height = MarginHeight;
                     Visibility = Visibility.Visible;
-                    _spinner.Visibility = newState == MarginState.Loading ? Visibility.Visible : Visibility.Collapsed;
+                    _spinnerArc.Visibility = Visibility.Collapsed;
+                    _readyGlyph.Visibility = Visibility.Visible;
+                    _statusText.Foreground = _mutedBrush;
+                    FadeTo(1, null);
                     break;
             }
 
-            // Force the editor to relayout because MarginSize changed.
+            // MarginSize changed — ask the editor to relayout.
             try
             {
                 if (_textView is FrameworkElement fe)
-                {
                     fe.InvalidateMeasure();
-                }
             }
             catch { /* non-fatal */ }
         }
 
         /// <summary>
-        /// Sets the status text only when it actually changes. Avoids redundant
-        /// TextBlock re-rendering.
+        /// Smooth opacity fade so the margin appears/disappears without flicker.
         /// </summary>
+        private void FadeTo(double target, Action? onCompleted)
+        {
+            var anim = new DoubleAnimation
+            {
+                To = target,
+                Duration = TimeSpan.FromMilliseconds(150),
+                FillBehavior = FillBehavior.HoldEnd
+            };
+            if (onCompleted != null)
+                anim.Completed += (_, _) => onCompleted();
+            BeginAnimation(OpacityProperty, anim);
+        }
+
         private void SetText(string text)
         {
             if (string.Equals(text, _lastDisplayedText, StringComparison.Ordinal)) return;
