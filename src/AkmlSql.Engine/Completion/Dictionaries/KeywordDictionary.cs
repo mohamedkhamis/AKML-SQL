@@ -620,6 +620,10 @@ public static class KeywordDictionary
 
     private static readonly string[] AfterJoinTable =
     [
+        // "ON" first — after "JOIN Orders" this is the single most likely next keyword,
+        // so it sorts at the top of the completion list when the user presses Ctrl+Space
+        // or starts typing "O".
+        "ON",
         "AS",
         "WITH", "NOLOCK", "READUNCOMMITTED", "READCOMMITTED",
         "REPEATABLEREAD", "SERIALIZABLE", "TABLOCK", "TABLOCKX",

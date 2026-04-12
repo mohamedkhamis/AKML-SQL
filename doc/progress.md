@@ -350,6 +350,116 @@ This document tracks the development progress, complete feature inventory, issue
 
 ## Development History
 
+## Spec 014 Phase 3b: UI Polish — Safety Dialog & Schema Progress Margin (2026-04-11)
+
+**Status**: Complete (uncommitted on branch `014-sql-prompt-parity`)
+**Scope**: Three files — `SafetyWarningDialog.cs`, `ExecutionInterceptor.cs`, `SchemaProgressMargin.cs`
+**Goal**: Match Redgate SQL Prompt's visual language for the pre-execution safety dialog and the schema-cache loading indicator. Eliminate hacky UI patterns introduced by the initial Phase 3 commit.
+
+### SafetyWarningDialog.cs — WinForms → WPF rewrite, theme-aware
+
+**Before**: Three separate WinForms `Form` layouts (`BuildSimpleConfirmLayout`, `BuildErrorLevelLayout`, `BuildTypeToConfirmLayout`, `BuildTypeServerNameLayout`) dispatched by `DetermineMode`. Hard-coded colors, no theme support, used `System.Drawing` primitives and `PictureBox`/`Label`/`Button` (WinForms).
+
+**After**: Single WPF `Window` (`internal sealed class SafetyWarningDialog : Window`) with a SQL Prompt-style unified layout:
+
+- **Environment banner** (top strip, accent color from `matchedEnvRule?.Color`) — shows "{envLabel}  •  {serverName}"
+- **Warning header row** — bold icon + title ("You are about to DROP an object" / "This statement may affect all rows" / "Execution requires confirmation")
+- **Body** — "Target: {serverName}" line + one card per warning (badge + message + optional "Object: {name}")
+- **Inline type-to-confirm for DROP** — appears within the same dialog when a `DropTable`/`DropDatabase` warning with an extractable object name is present
+- **Footer** — "Don't warn again this session" checkbox (left) + Cancel (default, `IsCancel=true`) + "Execute Anyway" / "Drop" button (right, deliberately not the default per FR-005)
+
+**Factory pattern**:
+```csharp
+var dialog = SafetyWarningDialog.CreateForWarnings(filteredWarnings, serverName, envLabel, envColor);
+var wpfResult = dialog.ShowDialog();   // bool? — true means execute
+if (wpfResult == true) { /* user confirmed */ }
+```
+
+**Semantic colors** kept as theme-independent statics (so warnings look the same in light/dark/blue):
+- `AmberBorder = #FFC107` — confirmation / medium severity
+- `ErrorBorder = #DC3545` — destructive / high severity
+- `BtnPrimary  = #0078D4` — "Execute Anyway" button
+
+**Chrome colors** pulled from `ThemeManager.Instance`:
+- `Background` / `Foreground` — window chrome
+- `Border` — divider between sections
+- `PlaceholderText` — muted text (Target, footer labels)
+- `EditorPanelBackground` — warning card background
+
+**Fixed bugs from the initial Phase 3 commit**:
+1. `Text = isError ? "\u26A0" : "\u26A0"` — both ternary branches identical (dead code). Replaced with `Text = "\u26A0"`.
+2. `CenterOwner` silently fell back to center-screen because `Owner` was never set. Added `TryAttachOwnerToHost()` which reads `EnvDTE.DTE.MainWindow.HWnd` and assigns via `WindowInteropHelper.Owner` (same pattern as `HistoryDiffWindow.cs`).
+3. `FormatRuleType` switched on `enum.ToString()` — not rename-safe. Rewritten as `GetRuleLabel(SafetyWarningType type) => type switch {...}` — direct enum switch, no per-call reflection.
+4. Repeated `new SolidColorBrush(...)` / `new FontFamily(...)` inside the warning-card loop. Moved to per-dialog frozen brushes (fields) and class-level `static readonly FontFamily SegoeUiFont / ConsolasFont`.
+5. Two `warnings.Any(...)` LINQ passes for `isError` / `isDrop` flags. Collapsed to a single `foreach` with early exit.
+
+**Dead code removed**:
+- Legacy `public static DialogResult Show(...)` method — no callers in the repo (grep confirmed zero references from src/). Its only purpose was to return `System.Windows.Forms.DialogResult`, which was the only reason the file imported `System.Windows.Forms`.
+- `using System.Windows.Forms;` — dropped along with the legacy `Show()`.
+- Section-divider narration comments (`// ── Palette ──`, `// ── Build ──`, etc.).
+
+**Method extraction**: The 300-line `Build` method is now split into `BuildHeader`, `BuildBody`, `BuildWarningCard`, `BuildConfirmPanel`, `BuildFooter` — reduces the near-duplicate `TextBlock`/`Border` clusters.
+
+### ExecutionInterceptor.cs — restored lost `EnvironmentSeverity = "Disabled"` behavior
+
+**Regression**: The initial Phase 3 WinForms→WPF rewrite dropped the `EnvironmentSeverity` config check from the dialog factory. The old `Show()` method honored three modes (`"Disabled"` → skip dialog, `"TypeServerName"` → force server-name type-to-confirm, `"SimpleConfirm"` → minimal dialog). The new unified WPF dialog intentionally drops `TypeServerName` and `SimpleConfirm` (SQL Prompt has one dialog style), but dropping `"Disabled"` was a real functional regression — users who configured `Safety.EnvironmentSeverity["DEV"] = "Disabled"` would still see the dialog.
+
+**Fix**: Added `IsEnvironmentDisabled(envLabel, cachedSafety)` static helper in `ExecutionInterceptor.cs` and short-circuit in `OnBeforeExecute` before calling `CreateForWarnings`:
+
+```csharp
+if (IsEnvironmentDisabled(envLabel, cachedSafety))
+{
+    LogAuditEvent(serverName, envLabel, envColor, filteredWarnings, "SkippedByEnvironmentConfig");
+    return true;
+}
+```
+
+Also dropped the now-unused `using System.Windows.Forms;` at the top of the file (no more `DialogResult.OK` comparison after the WPF rewrite).
+
+### SchemaProgressMargin.cs — arc spinner, slim compact layout, theme-aware
+
+**Before**: 22px-tall full-width bar with a rotating `Border` that had `CornerRadius(6)` and `BorderThickness(2, 2, 0, 0)` — literally rotating a rectangle corner to fake a spinner. Hardcoded light/dark hex colors. Left-aligned, pulled visual weight onto the code area. Messages read as dev-facing ("Loading schema [{db}]…").
+
+**After**: 20px-tall slim strip that blends into the editor chrome:
+
+- **Proper arc spinner**: 12×12 `Ellipse` with `Stroke = theme.AccentColor`, `StrokeThickness = 1.6`, `StrokeDashArray = { 10, 30 }` (≈90° visible arc over ≈270° gap — ellipse perimeter ≈ 2πr ≈ 37.7, so `10 + 30 ≈ 37.7`). Rotated by the same `RotateTransform` + `DoubleAnimation(0→360, 1100ms, Forever)` that ran on the old border. Gives a modern "arc chasing its tail" spinner.
+- **Ready state**: spinner hidden; shows a bold green `✓` (`Color.FromRgb(0x2E, 0xA0, 0x43)`) — intentionally semantic/theme-independent so success always reads the same.
+- **Right-aligned content**: `HorizontalAlignment = Right` on the inner `StackPanel`, padding `(8, 0, 12, 0)` on the root `Border` — pulls visual weight off the code area.
+- **Theme-aware background** via `ThemeManager.Instance`:
+  - `PreviewBackground` (editor bg) for the strip background
+  - `Border` for the 1px bottom divider
+  - `PlaceholderText` (muted gray) for the status text
+  - `AccentColor` (VS blue) for the spinner arc
+- **150ms opacity fade** on show/hide via `DoubleAnimation` on `OpacityProperty` — no more pop-in/pop-out flicker. `FadeTo(target, onCompleted)` helper wraps the animation and runs `onCompleted` (if provided) when `anim.Completed` fires.
+- **SQL Prompt-style copy**:
+  - Phase 0 (NotLoaded): `Populating suggestions for {db}` (was `Loading schema [{db}]…`)
+  - Phase 1 (Phase A done, Phase B loading columns): `Loading columns — {pct}% ({n}/{total})` (was `Loading columns for [{db}] — …`)
+  - Phase 2/3 (Complete): `Schema cache ready — {n} objects` (was `Schema [{db}] ready — {n} objects`)
+
+**State machine unchanged**: `Hidden` / `Loading` / `Ready` states, 1000ms polling via `DispatcherTimer`, 3000ms IPC timeout, 15000ms loading-stuck timeout (`_loadingTimedOut` flag reset on database switch), 2000ms ready-display duration, re-entrancy guard (`_polling` bool), database-change detection.
+
+### Related reference files (to consult for next WPF window work)
+
+| Purpose | File |
+|---------|------|
+| Canonical WPF `Window` with theme + DTE owner | `src/AkmlSql.Shell.Shared/History/HistoryDiffWindow.cs` |
+| Theme brush palette (ThemeManager singleton) | `src/AkmlSql.Shell.Shared/Ui/ThemeManager.cs` — exposes `Background`, `Foreground`, `Border`, `AccentColor`, `PlaceholderText`, `EditorPanelBackground`, `PreviewBackground`, `HighlightBackground`, and SQL Prompt History-specific colors |
+| Modern WPF dialog with frozen brushes + card layout | `src/AkmlSql.Shell.Shared/Safety/SafetyWarningDialog.cs` |
+| Arc-spinner pattern for IWpfTextViewMargin | `src/AkmlSql.Shell.Shared/Editor/SchemaProgress/SchemaProgressMargin.cs` |
+
+### Build verification
+
+Built via `MSBuild src/AkmlSql.Ssms22/AkmlSql.Ssms22.csproj -t:Build -p:Configuration=Release` — zero errors, zero new warnings from the three changed files. Pre-existing VSTHRD100 (`async void OnPollTick`) remains, same pattern as before the rewrite.
+
+### Spec 014 status (as of 2026-04-11)
+
+- Phase 1+2 (foundational scaffolding): **committed** — `fba63d6`
+- Phase 3 US1 (pre-execution safety — MERGE/JOIN/proc/trigger detection + session opt-out): **committed** — `f337729`
+- Phase 3b (this session — UI polish for safety dialog + schema progress margin): **uncommitted**, working tree dirty on branch `014-sql-prompt-parity`
+- Remaining US (from `specs/014-sql-prompt-parity/tasks.md`): US10 (AI shortcut bindings), US14 (Invalid Objects tool window), US19 (completion polish — Ctrl+Shift+D refresh, Ctrl+Shift+P toggle, custom commit keys, encrypted object decryption), US20 (remaining gaps)
+
+---
+
 ## Phase 1: Foundation and Installer
 
 ### Milestone 1: Project Scaffolding

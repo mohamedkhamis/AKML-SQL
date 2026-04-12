@@ -248,6 +248,44 @@ See [docs/analysis-rules.md](docs/analysis-rules.md) for all rules.
 - `ConfigManager.Load()` is idempotent and safe to call multiple times, but prefer caching the result
 - Default log level is `"Debug"` — change via `logMinimumLevel` in `config.json`
 
+### WPF UI conventions
+
+The shell has three established WPF surfaces: tool-window controls, modal dialogs (`Window` subclasses), and editor margins/adornments (`IWpfTextViewMargin` / adornment layers). **New WPF UI must match these rules** or it will look out of place — especially in dark/blue theme.
+
+- **Theme colors come from `ThemeManager.Instance`** — never hardcode hex for chrome (background, foreground, border, muted text, card background, accent). The singleton exposes `Background`, `Foreground`, `Border`, `AccentColor`, `HighlightBackground`, `HighlightForeground`, `EditorPanelBackground`, `PreviewBackground`, `PlaceholderText`, `SplitterColor`, plus History-specific properties. Semantic colors (amber for "confirm", red for "destructive", green for "success") are the only acceptable hardcoded hex — they should read the same in every theme.
+- **Freeze brushes**. Use `private static SolidColorBrush Freeze(SolidColorBrush b) { b.Freeze(); return b; }` and wrap every `new SolidColorBrush(...)` in it. Frozen brushes are thread-safe, skip change notifications, and share cheaply.
+- **Hoist `FontFamily` to `static readonly`**. `new FontFamily("Segoe UI")` / `new FontFamily("Consolas")` per call is a per-iteration allocation; make them class-level statics.
+- **Set `Owner` via DTE HWND** before `ShowDialog()` so the dialog parents to the VS/SSMS main window and `WindowStartupLocation = CenterOwner` actually works. Reference pattern in `src/AkmlSql.Shell.Shared/History/HistoryDiffWindow.cs` — reads `EnvDTE.DTE.MainWindow.HWnd` inside a try/catch and assigns via `WindowInteropHelper.Owner`. Silent no-op when DTE is unreachable.
+- **FR-005 safety dialogs**: Cancel must be `IsCancel = true` AND the `Loaded`-focused control; the "Execute/Drop/Proceed" button is *not* set as `AcceptButton`/default — it must be clicked deliberately. See `src/AkmlSql.Shell.Shared/Safety/SafetyWarningDialog.cs` for the canonical pattern.
+- **Reference implementations** (study before writing new WPF code):
+  - `src/AkmlSql.Shell.Shared/History/HistoryDiffWindow.cs` — minimal theme-aware `Window` with DTE owner
+  - `src/AkmlSql.Shell.Shared/Safety/SafetyWarningDialog.cs` — multi-section modal dialog with cards, inline type-to-confirm, frozen brushes, extracted helper methods
+  - `src/AkmlSql.Shell.Shared/Editor/SchemaProgress/SchemaProgressMargin.cs` — `IWpfTextViewMargin` with arc spinner (`Ellipse` + `StrokeDashArray { 10, 30 }` + rotating transform), fade-in/out animations, polling state machine
+
+### Editor margin spinner pattern
+
+For any editor-margin or adornment that needs a spinner: do **not** rotate a `Border` with a partial `BorderThickness` + `CornerRadius` (the old `SchemaProgressMargin` did this and it looked broken). Use an `Ellipse`:
+
+```csharp
+var spinner = new Ellipse {
+    Width = 12, Height = 12,
+    Stroke = accentBrush,
+    StrokeThickness = 1.6,
+    StrokeDashArray = new DoubleCollection { 10, 30 }, // ~90° arc, ~270° gap
+    StrokeStartLineCap = PenLineCap.Round,
+    StrokeEndLineCap = PenLineCap.Round,
+    RenderTransformOrigin = new Point(0.5, 0.5),
+    RenderTransform = new RotateTransform(0),
+};
+((RotateTransform)spinner.RenderTransform).BeginAnimation(
+    RotateTransform.AngleProperty,
+    new DoubleAnimation { From = 0, To = 360,
+        Duration = TimeSpan.FromMilliseconds(1100),
+        RepeatBehavior = RepeatBehavior.Forever });
+```
+
+The `StrokeDashArray` sum (`10 + 30 = 40`) must be ≥ the ellipse perimeter (`2πr ≈ 37.7` for a 12×12 ellipse) so only one arc segment is visible.
+
 ## Documentation
 
 | File | Content |
@@ -258,11 +296,13 @@ See [docs/analysis-rules.md](docs/analysis-rules.md) for all rules.
 | [docs/deployment.md](docs/deployment.md) | Build commands, install paths, MEF cache clearing, troubleshooting |
 | [docs/analysis-rules.md](docs/analysis-rules.md) | All 120+ analysis rules with descriptions and severities |
 | [docs/formatting.md](docs/formatting.md) | Formatting pipeline stages, profile schema, all options |
-| [doc/progress.md](doc/progress.md) | Development log: issues, root causes, fixes, cache clearing procedures |
+| [doc/progress.md](doc/progress.md) | Development log: issues, root causes, fixes, cache clearing procedures, Spec 014 Phase 3 status |
 
 ## Progress and Troubleshooting
 
 See [doc/progress.md](doc/progress.md) for the full development progress log including all issues encountered, root causes, fixes applied, cache clearing procedures, and deployment instructions.
+
+**Active branch**: `014-sql-prompt-parity`. Spec 014 Phase 1+2 and Phase 3/US1 are committed (`fba63d6`, `f337729`); Phase 3b (UI polish for `SafetyWarningDialog`, `SchemaProgressMargin`, and `ExecutionInterceptor` — detailed in the "Spec 014 Phase 3b" section of progress.md) is currently **uncommitted** in the working tree. Remaining user stories on this branch: US10 (AI shortcut bindings), US14 (Invalid Objects tool window), US19 (completion polish — `Ctrl+Shift+D` refresh, `Ctrl+Shift+P` toggle, custom commit keys, encrypted-object decryption), US20 (remaining gaps). See `specs/014-sql-prompt-parity/tasks.md` for the full task list.
 
 ## Git Rules (MANDATORY)
 

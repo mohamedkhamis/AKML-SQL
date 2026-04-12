@@ -58,6 +58,9 @@ namespace AkmlSql.Shell.Shared.Commands
                         ConfigManager.Save(updated);
                         Log.Information("Settings saved successfully.");
 
+                        // FR-042: Live re-render tab colors after settings change
+                        try { Tabs.TabColoringManager.RepaintAllTabs(); } catch { }
+
                         // T066: Notify the engine to reload its settings cache (fire-and-forget)
                         var client = EngineLifecycle.Manager?.Client;
                         if (client != null && client.IsConnected)

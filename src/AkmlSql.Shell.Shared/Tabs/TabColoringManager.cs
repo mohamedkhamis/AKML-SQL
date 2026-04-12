@@ -34,6 +34,24 @@ namespace AkmlSql.Shell.Shared.Tabs
         private static bool _initialized;
 
         /// <summary>
+        /// Cached <see cref="TabSettings"/> to avoid calling <see cref="ConfigManager.Load()"/>
+        /// on every window activation. Invalidated in <see cref="RepaintAllTabs"/> when
+        /// settings are saved.
+        /// </summary>
+        private static AkmlSql.Core.Config.TabSettings? _cachedTabSettings;
+
+        /// <summary>
+        /// Weak reference to the package, allowing <see cref="RepaintAllTabs"/> to
+        /// late-initialize when coloring was disabled at startup but enabled later.
+        /// </summary>
+        private static WeakReference<AsyncPackage>? _packageRef;
+
+        private static AkmlSql.Core.Config.TabSettings GetTabSettings()
+        {
+            return _cachedTabSettings ??= ConfigManager.Load().Tabs;
+        }
+
+        /// <summary>
         /// Tracks the last environment color applied to the status bar so we can avoid
         /// redundant visual tree walks when the color hasn't changed.
         /// </summary>
@@ -54,12 +72,17 @@ namespace AkmlSql.Shell.Shared.Tabs
         {
             ThreadHelper.ThrowIfNotOnUIThread();
 
+            // Always store the package reference so RepaintAllTabs can late-initialize
+            // even when coloring is currently disabled (FR-042).
+            _packageRef = new WeakReference<AsyncPackage>(package);
+
             if (_initialized) return;
 
             try
             {
                 // Guard: ensure coloring is enabled before subscribing to events
                 var settings = ConfigManager.Load();
+                _cachedTabSettings = settings.Tabs;
                 if (!settings.Tabs.ColoringEnabled)
                 {
                     Log.Information("TabColoringManager: tab coloring is disabled, skipping initialization");
@@ -87,6 +110,104 @@ namespace AkmlSql.Shell.Shared.Tabs
         }
 
         /// <summary>
+        /// Reloads environment rules and repaints all open document tabs.
+        /// Call from the UI thread after settings are saved (FR-042).
+        /// </summary>
+        public static void RepaintAllTabs()
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
+            try
+            {
+                // Late-initialize if coloring was disabled at startup but enabled later.
+                if (!_initialized)
+                {
+                    AsyncPackage? pkg = null;
+                    _packageRef?.TryGetTarget(out pkg);
+                    if (pkg != null)
+                        Initialize(pkg);
+                    if (_dte == null) return;
+                }
+
+                EnvironmentDetector.Reload();
+                _cachedTabSettings = null; // Force re-read after settings save
+
+                if (_dte == null) return;
+
+                var tabSettings = GetTabSettings();
+
+                foreach (Window window in _dte.Windows)
+                {
+                    try
+                    {
+                        if (window.Kind != "Document") continue;
+
+                        if (!tabSettings.ColoringEnabled)
+                        {
+                            ClearTabColor(window);
+                            continue;
+                        }
+
+                        var serverName = GetActiveServerName(window);
+                        if (string.IsNullOrWhiteSpace(serverName))
+                        {
+                            ClearTabColor(window);
+                            continue;
+                        }
+
+                        var rule = EnvironmentDetector.Match(serverName);
+                        if (rule != null)
+                            ApplyTabColor(window, rule);
+                        else
+                            ClearTabColor(window);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Debug(ex, "TabColoringManager: error repainting tab '{Caption}'", window.Caption);
+                    }
+                }
+
+                // Refresh status bar for the currently active window.
+                try
+                {
+                    var activeWindow = _dte.ActiveWindow;
+                    if (activeWindow?.Kind == "Document")
+                    {
+                        var server = GetActiveServerName(activeWindow);
+                        var rule = !string.IsNullOrWhiteSpace(server) ? EnvironmentDetector.Match(server) : null;
+                        if (rule != null)
+                        {
+                            var color = ParseHexColor(rule.Color);
+                            if (color.HasValue && tabSettings.StatusBarColorEnabled)
+                            {
+                                _lastStatusBarColor = null; // Force refresh
+                                ApplyStatusBarColor(color.Value, rule.Label);
+                            }
+                        }
+                        else
+                        {
+                            ClearStatusBarColor();
+                        }
+                    }
+                    else
+                    {
+                        ClearStatusBarColor();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Debug(ex, "TabColoringManager: error refreshing status bar during repaint");
+                }
+
+                Log.Information("TabColoringManager: repainted all tabs after settings change");
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "TabColoringManager: failed to repaint all tabs");
+            }
+        }
+
+        /// <summary>
         /// Fired whenever a VS/SSMS window receives focus. If the window is a document
         /// window, we detect the connected server and apply tab colouring, status bar
         /// tinting (T027), and floating window border (T028).
@@ -102,8 +223,8 @@ namespace AkmlSql.Shell.Shared.Tabs
                     return;
 
                 // Guard: check if coloring is enabled.
-                var settings = ConfigManager.Load();
-                if (!settings.Tabs.ColoringEnabled)
+                var tabSettings = GetTabSettings();
+                if (!tabSettings.ColoringEnabled)
                 {
                     ClearTabColor(gotFocus);
                     ClearStatusBarColor();
@@ -130,13 +251,13 @@ namespace AkmlSql.Shell.Shared.Tabs
                     if (envColor.HasValue)
                     {
                         // T027: status bar color propagation
-                        if (settings.Tabs.StatusBarColorEnabled)
+                        if (tabSettings.StatusBarColorEnabled)
                         {
                             ApplyStatusBarColor(envColor.Value, rule.Label);
                         }
 
                         // T028: floating window border
-                        if (settings.Tabs.FloatingWindowBorderEnabled)
+                        if (tabSettings.FloatingWindowBorderEnabled)
                         {
                             ApplyFloatingWindowBorder(gotFocus, envColor.Value);
                         }
@@ -511,6 +632,212 @@ namespace AkmlSql.Shell.Shared.Tabs
         }
 
         // ────────────────────────────────────────────────────────────────────────────
+        //  Document tab discovery
+        // ────────────────────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Maximum recursion depth for tab-discovery visual tree walks.
+        /// Document tabs are typically within 15-20 levels of the root; capping at 30
+        /// avoids runaway recursion in exotic host layouts.
+        /// </summary>
+        private const int MaxTabSearchDepth = 30;
+
+        /// <summary>
+        /// Finds the WPF <see cref="FrameworkElement"/> representing the document tab header
+        /// for the given DTE <paramref name="dteWindow"/>. Walks the main window's visual tree
+        /// looking for tab-like elements whose caption matches the window title.
+        /// Returns <c>null</c> if no matching tab is found (graceful degradation).
+        /// </summary>
+        private static FrameworkElement? FindDocumentTab(Window dteWindow)
+        {
+            try
+            {
+                ThreadHelper.ThrowIfNotOnUIThread();
+
+                var caption = dteWindow.Caption;
+                if (string.IsNullOrEmpty(caption))
+                    return null;
+
+                var mainWindow = System.Windows.Application.Current?.MainWindow;
+                if (mainWindow == null)
+                    return null;
+
+                return FindTabByCaption(mainWindow, caption, 0);
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "TabColoringManager: error finding document tab");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Recursively walks the WPF visual tree starting from <paramref name="root"/>,
+        /// looking for elements whose type name contains "TabItem" or "DocumentTab" and
+        /// whose content matches <paramref name="caption"/>.
+        /// <para>
+        /// Uses runtime <see cref="Type.Name"/> checks instead of compile-time type references
+        /// because the exact tab control types differ between VS 2019/2022/2026 and SSMS 20/21/22:
+        /// <list type="bullet">
+        ///   <item><c>DocumentTabItem</c> (VS 2022+, SSMS 21+)</item>
+        ///   <item><c>TabItem</c> (VS 2019, SSMS 20)</item>
+        /// </list>
+        /// </para>
+        /// </summary>
+        private static FrameworkElement? FindTabByCaption(DependencyObject root, string caption, int depth)
+        {
+            if (depth > MaxTabSearchDepth)
+                return null;
+
+            try
+            {
+                int childCount = VisualTreeHelper.GetChildrenCount(root);
+                for (int i = 0; i < childCount; i++)
+                {
+                    var child = VisualTreeHelper.GetChild(root, i);
+
+                    if (child is FrameworkElement fe)
+                    {
+                        var typeName = fe.GetType().Name;
+
+                        // Check for known VS/SSMS document tab type names.
+                        bool isTabLike = typeName.IndexOf("TabItem", StringComparison.OrdinalIgnoreCase) >= 0
+                                      || typeName.IndexOf("DocumentTab", StringComparison.OrdinalIgnoreCase) >= 0;
+
+                        if (isTabLike && TabContainsCaption(fe, caption))
+                        {
+                            return fe;
+                        }
+                    }
+
+                    // Recurse into children.
+                    var result = FindTabByCaption(child, caption, depth + 1);
+                    if (result != null)
+                        return result;
+                }
+            }
+            catch
+            {
+                // Visual tree walking can fail for disconnected or unloaded elements.
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Determines whether a tab-like <paramref name="tabElement"/> displays text matching
+        /// <paramref name="caption"/>. Checks the element's <c>Header</c> property (if it is
+        /// a <see cref="HeaderedContentControl"/> or exposes a <c>Header</c> property via
+        /// reflection) and falls back to searching descendant <see cref="TextBlock"/>s.
+        /// <para>
+        /// Uses <see cref="string.StartsWith(string, StringComparison)"/> because SSMS may
+        /// truncate long tab titles with an ellipsis or suffix.
+        /// </para>
+        /// </summary>
+        private static bool TabContainsCaption(FrameworkElement tabElement, string caption)
+        {
+            try
+            {
+                // Strategy 1: HeaderedContentControl.Header (TabItem inherits this).
+                if (tabElement is HeaderedContentControl hcc && hcc.Header != null)
+                {
+                    var headerText = hcc.Header as string;
+                    if (headerText == null && hcc.Header is FrameworkElement headerFe)
+                    {
+                        // The header might be a visual element containing a TextBlock.
+                        if (HasMatchingTextBlock(headerFe, caption))
+                            return true;
+                    }
+                    else if (headerText != null)
+                    {
+                        if (CaptionMatches(headerText, caption))
+                            return true;
+                    }
+
+                    // Header.ToString() fallback for non-string, non-visual headers.
+                    if (headerText == null)
+                    {
+                        var toString = hcc.Header.ToString();
+                        if (toString != null && CaptionMatches(toString, caption))
+                            return true;
+                    }
+                }
+
+                // Strategy 2: Reflection-based Header property for non-standard tab controls
+                // (e.g. VS PlatformUI DocumentTabItem that may not inherit HeaderedContentControl).
+                var headerProp = tabElement.GetType().GetProperty("Header");
+                if (headerProp != null)
+                {
+                    var headerVal = headerProp.GetValue(tabElement);
+                    if (headerVal is string hs && CaptionMatches(hs, caption))
+                        return true;
+                    if (headerVal is FrameworkElement hfe && HasMatchingTextBlock(hfe, caption))
+                        return true;
+                    if (headerVal != null)
+                    {
+                        var ts = headerVal.ToString();
+                        if (ts != null && CaptionMatches(ts, caption))
+                            return true;
+                    }
+                }
+
+                // Strategy 3: Search descendant TextBlocks within the tab element itself.
+                if (HasMatchingTextBlock(tabElement, caption))
+                    return true;
+            }
+            catch
+            {
+                // Graceful degradation for different SSMS/VS visual tree layouts.
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Recursively searches for <see cref="TextBlock"/> children of <paramref name="parent"/>
+        /// whose <see cref="TextBlock.Text"/> matches <paramref name="caption"/>.
+        /// Limited to 10 levels of depth to avoid excessive recursion within a single tab element.
+        /// </summary>
+        private static bool HasMatchingTextBlock(DependencyObject parent, string caption, int depth = 0)
+        {
+            if (depth > 10)
+                return false;
+
+            try
+            {
+                int childCount = VisualTreeHelper.GetChildrenCount(parent);
+                for (int i = 0; i < childCount; i++)
+                {
+                    var child = VisualTreeHelper.GetChild(parent, i);
+
+                    if (child is TextBlock tb && tb.Text != null && CaptionMatches(tb.Text, caption))
+                        return true;
+
+                    if (HasMatchingTextBlock(child, caption, depth + 1))
+                        return true;
+                }
+            }
+            catch
+            {
+                // Visual tree walking can fail for disconnected elements.
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Compares a tab's display text against the expected DTE window caption.
+        /// Uses <see cref="string.StartsWith(string, StringComparison)"/> because SSMS
+        /// may truncate long captions (e.g. appending "..." or omitting suffixes), and
+        /// also checks whether the caption starts with the tab text for the reverse case.
+        /// </summary>
+        private static bool CaptionMatches(string tabText, string caption)
+        {
+            return tabText.StartsWith(caption, StringComparison.OrdinalIgnoreCase)
+                || caption.StartsWith(tabText, StringComparison.OrdinalIgnoreCase);
+        }
+
+        // ────────────────────────────────────────────────────────────────────────────
         //  Color parsing
         // ────────────────────────────────────────────────────────────────────────────
 
@@ -639,30 +966,18 @@ namespace AkmlSql.Shell.Shared.Tabs
 
             try
             {
-                // Convert hex color string to WPF brush, with optional gradient.
-                var settings = ConfigManager.Load();
-                var brush = CreateBrushFromHex(rule.Color, settings.Tabs.GradientColors);
+                var brush = CreateBrushFromHex(rule.Color, GetTabSettings().GradientColors);
                 if (brush == null) return;
 
-                // TODO: Walk the WPF visual tree to find the tab header for this document window.
-                //
-                // The exact WPF element hierarchy varies between VS 2019/2022/2026 and SSMS 20/21/22.
-                // General approach:
-                //   1. Get the IVsWindowFrame for this window
-                //   2. Get the WPF FrameworkElement from the frame
-                //   3. Walk up the visual tree to find the DocumentTabItem / TabItem
-                //   4. Set the Background property on the tab header
-                //   5. Optionally add/update a TextBlock for the environment label
-                //
-                // Known element types in VS shell:
-                //   - Microsoft.VisualStudio.PlatformUI.Shell.Controls.DocumentTabItem (VS 2022+)
-                //   - Microsoft.VisualStudio.PlatformUI.TabItem (VS 2019)
-                //
-                // For SSMS-specific tab headers, the type hierarchy may differ.
-                // This requires runtime discovery via GetType().Name checks rather than
-                // compile-time type references, since the shell assembly types differ per target.
+                var tabElement = FindDocumentTab(window);
+                if (tabElement == null)
+                {
+                    Log.Debug("TabColoringManager: tab element not found for '{Caption}'", window.Caption);
+                    return;
+                }
 
-                Log.Debug("TabColoringManager: would apply color {Color} ({Label}) to tab for {Caption}",
+                tabElement.SetValue(Control.BackgroundProperty, brush);
+                Log.Debug("TabColoringManager: applied color {Color} ({Label}) to tab for '{Caption}'",
                     rule.Color, rule.Label, window.Caption);
             }
             catch (Exception ex)
@@ -680,8 +995,11 @@ namespace AkmlSql.Shell.Shared.Tabs
 
             try
             {
-                // TODO: Walk the WPF visual tree to find and reset the tab header for this window.
-                // Reset Background to the default theme brush and remove any environment label TextBlock.
+                var tabElement = FindDocumentTab(window);
+                if (tabElement == null) return;
+
+                tabElement.ClearValue(Control.BackgroundProperty);
+                Log.Debug("TabColoringManager: cleared tab color for '{Caption}'", window.Caption);
             }
             catch (Exception ex)
             {

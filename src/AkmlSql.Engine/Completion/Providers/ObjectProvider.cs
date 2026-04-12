@@ -91,13 +91,21 @@ public class ObjectProvider : ICompletionProvider
         // Build a set of tables that are FK-related to any already-referenced table
         // in the current statement. In JoinTable/From context those tables get a
         // visual marker ("FK → <other>") in their SecondaryText AND a priority boost
-        // so they appear at the top of the suggestion list. This works even when
-        // TableAliasEnabled is off (it's orthogonal to alias generation).
+        // so they appear at the top of the suggestion list.
         var fkRelated = BuildFkRelatedLookup(context, cache);
+
+        // In JoinTable context JoinProvider owns FK-related suggestions — it emits the
+        // full "TABLE ON left.fk = right.pk" insertion text. Skip them here to avoid
+        // showing each FK target twice (once as a full join clause, once as a bare name).
+        // In From context we still emit everything — the first table has no prior
+        // references to FK-join against, so JoinProvider wouldn't run anyway.
+        var skipFkTables = context.ClauseType == ClauseType.JoinTable && fkRelated.Count > 0;
 
         // First, yield objects from default schema (dbo) with higher priority
         foreach (var obj in GetFilteredObjects(cache, "dbo", allowedTypes))
         {
+            if (skipFkTables && fkRelated.ContainsKey(obj.FullName))
+                continue;
             yield return ToCompletionItem(obj, sortPriorityBase: 100, fkRelated: fkRelated);
         }
 
@@ -111,6 +119,8 @@ public class ObjectProvider : ICompletionProvider
 
             foreach (var obj in GetFilteredObjects(cache, schema.SchemaName, allowedTypes))
             {
+                if (skipFkTables && fkRelated.ContainsKey(obj.FullName))
+                    continue;
                 yield return ToCompletionItem(obj, sortPriorityBase: 200, includeSchema: true, fkRelated: fkRelated);
             }
         }

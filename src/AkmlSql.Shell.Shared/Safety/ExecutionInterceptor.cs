@@ -1,6 +1,6 @@
 #nullable enable
 using System;
-using System.Windows.Forms;
+using System.Linq;
 using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
@@ -28,6 +28,13 @@ namespace AkmlSql.Shell.Shared.Safety
         private static Package? _package;
 
         /// <summary>
+        /// Per-session set of warning type ints the user has opted out of via the
+        /// "Don't ask again for this session" checkbox.  Cleared when the IDE session
+        /// ends (static lifetime = package lifetime).
+        /// </summary>
+        private static readonly System.Collections.Generic.HashSet<int> _suppressedWarningTypes = new();
+
+        /// <summary>
         /// Initializes the execution interceptor. Reads safety settings from config to
         /// determine if any safety checks are enabled.
         /// </summary>
@@ -52,11 +59,18 @@ namespace AkmlSql.Shell.Shared.Safety
                                      || safety.DeleteWithoutWhere
                                      || safety.UpdateWithoutWhere
                                      || safety.DropConfirmation
-                                     || safety.TruncateConfirmation;
+                                     || safety.TruncateConfirmation
+                                     || safety.MergeNoFilter
+                                     || safety.InsideJoin
+                                     || safety.InsideProcOrTrigger;
 
                 // Always install the DTE hook — settings may be enabled later without restart.
                 // OnBeforeExecute re-checks settings dynamically on each invocation.
                 ExecutionCommandFilter.Install(package);
+
+                // Register F1 help context for the safety dialog.
+                Help.F1HelpListener.Default.Register("akmlsql.dialog.safety",
+                    "https://github.com/mohamedkhamis/AKML-SQL/blob/master/doc/execution-safety.md");
 
                 Log.Information("ExecutionInterceptor: initialized (safety checks enabled)");
             }
@@ -92,7 +106,10 @@ namespace AkmlSql.Shell.Shared.Safety
                                      || cachedSafety.DeleteWithoutWhere
                                      || cachedSafety.UpdateWithoutWhere
                                      || cachedSafety.DropConfirmation
-                                     || cachedSafety.TruncateConfirmation;
+                                     || cachedSafety.TruncateConfirmation
+                                     || cachedSafety.MergeNoFilter
+                                     || cachedSafety.InsideJoin
+                                     || cachedSafety.InsideProcOrTrigger;
             }
             catch
             {
@@ -146,10 +163,12 @@ namespace AkmlSql.Shell.Shared.Safety
                 SafetyCheckResponse? response = null;
                 ThreadHelper.JoinableTaskFactory.Run(async () =>
                 {
+                    // Safety check must not block execution if it takes > 500 ms.
+                    // On timeout the check yields and execution proceeds (fail-open).
                     response = await client.SendRequestAsync<SafetyCheckResponse, SafetyCheckRequest>(
                         MessageTypes.SafetyCheck,
                         request,
-                        timeoutMs: 10_000);
+                        timeoutMs: 500);
                 });
 
                 if (response == null || !response.RequiresConfirmation || response.Warnings.Length == 0)
@@ -164,17 +183,38 @@ namespace AkmlSql.Shell.Shared.Safety
                     return true; // All detected warnings are for disabled settings
                 }
 
+                // Strip warnings the user suppressed for this session
+                filteredWarnings = filteredWarnings
+                    .Where(w => !_suppressedWarningTypes.Contains(w.WarningType))
+                    .ToArray();
+                if (filteredWarnings.Length == 0)
+                {
+                    return true;
+                }
+
                 var envLabel = matchedEnvRule?.Label ?? "Unknown";
                 var envColor = matchedEnvRule?.Color ?? "";
 
-                // Show the warning dialog on the UI thread, passing environment info
-                // so the dialog can use EnvironmentSeverity config to determine mode
-                DialogResult dialogResult = DialogResult.Cancel;
-                ThreadHelper.ThrowIfNotOnUIThread();
-                dialogResult = SafetyWarningDialog.Show(filteredWarnings, serverName, envLabel, envColor);
-
-                if (dialogResult == DialogResult.OK)
+                // Per-environment severity override: "Disabled" skips the
+                // guard entirely for this environment (e.g. the user's DEV boxes).
+                if (IsEnvironmentDisabled(envLabel, cachedSafety))
                 {
+                    LogAuditEvent(serverName, envLabel, envColor, filteredWarnings, "SkippedByEnvironmentConfig");
+                    return true;
+                }
+
+                ThreadHelper.ThrowIfNotOnUIThread();
+                var dialog = SafetyWarningDialog.CreateForWarnings(filteredWarnings, serverName, envLabel, envColor);
+                var wpfResult = dialog.ShowDialog();
+
+                if (wpfResult == true)
+                {
+                    // Record opt-out if the user ticked "Don't ask again"
+                    if (dialog.SuppressForSession)
+                    {
+                        foreach (var w in filteredWarnings)
+                            _suppressedWarningTypes.Add(w.WarningType);
+                    }
                     LogAuditEvent(serverName, envLabel, envColor, filteredWarnings, "Confirmed");
                     return true;
                 }
@@ -223,6 +263,22 @@ namespace AkmlSql.Shell.Shared.Safety
         }
 
         /// <summary>
+        /// Returns <c>true</c> if the user has configured the given environment
+        /// as "Disabled" in <c>Safety.EnvironmentSeverity</c>, meaning the execution guard
+        /// should be a no-op for that environment.
+        /// </summary>
+        private static bool IsEnvironmentDisabled(string envLabel, SafetySettings? safety)
+        {
+            if (safety == null ||
+                string.IsNullOrEmpty(envLabel) ||
+                string.Equals(envLabel, "Unknown", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            return safety.EnvironmentSeverity.TryGetValue(envLabel, out var level) &&
+                   string.Equals(level, "Disabled", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
         /// Filters warnings based on which safety settings are currently enabled.
         /// </summary>
         private static SafetyWarningDto[] FilterBySettings(SafetyWarningDto[] warnings, SafetySettings? safety = null)
@@ -261,6 +317,16 @@ namespace AkmlSql.Shell.Shared.Safety
                         break;
                     case Core.Models.Safety.SafetyWarningType.TruncateTable:
                         if (safety.TruncateConfirmation) filtered.Add(w);
+                        break;
+                    // Extended detection patterns (MERGE, JOIN, proc/trigger)
+                    case Core.Models.Safety.SafetyWarningType.MergeWithoutFilter:
+                        if (safety.MergeNoFilter) filtered.Add(w);
+                        break;
+                    case Core.Models.Safety.SafetyWarningType.DmlInsideJoinWithoutWhere:
+                        if (safety.InsideJoin) filtered.Add(w);
+                        break;
+                    case Core.Models.Safety.SafetyWarningType.UnsafeDmlInProcOrTrigger:
+                        if (safety.InsideProcOrTrigger) filtered.Add(w);
                         break;
                     default:
                         filtered.Add(w); // Unknown type — show it

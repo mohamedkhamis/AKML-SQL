@@ -270,6 +270,7 @@ public class PipeRpcServer
                     // invalidated on AnalysisSettingsChanged).
                     _cachedSettings ??= Core.Config.ConfigManager.Load();
                     _completionEngine.TableAliasEnabled = _cachedSettings.IntelliSense.AutoAlias;
+                    _completionEngine.JoinAssistEnabled = _cachedSettings.IntelliSense.JoinAssist;
                     var compResp = _completionEngine.GetCompletions(documentText, compReq.CursorOffset, dbCache, compReq.SessionId);
                     return Task.FromResult(CreateResponse(MessageTypes.CompletionResult, message.RequestId, compResp));
 

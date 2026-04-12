@@ -174,20 +174,27 @@ namespace AkmlSql.Core.Config
         /// <summary>Show PK/FK badge indicators in completion details.</summary>
         public bool ShowPkFk { get; set; } = true;
         /// <summary>
-        /// Master switch for "Tables Alias" — controls all automatic alias-related
-        /// completions across the app. When enabled:
+        /// Controls whether a NEW alias is generated for tables inserted via completion.
+        /// When enabled:
         /// - After typing a table name in FROM, alias candidates ("o", "od", ...) are suggested.
-        /// - After typing JOIN, target tables are suggested with auto-generated alias and
-        ///   FK-based ON clause (e.g. <c>Conversations c ON c.Id = A.ConversationId</c>).
-        /// When disabled, plain table names are suggested in both cases. Default disabled.
+        /// - FK-assisted JOIN suggestions (see <see cref="JoinAssist"/>) insert
+        ///   <c>Orders o ON o.CustomerId = c.Id</c> with an alias prefix.
+        /// When disabled, FK-assisted JOIN suggestions still fire but the target table is
+        /// referenced by its unaliased name: <c>Orders ON Orders.CustomerId = c.Id</c>.
+        /// Default disabled — most users prefer explicit aliases.
         /// </summary>
         public bool AutoAlias { get; set; } = false;
         /// <summary>
-        /// DEPRECATED — superseded by <see cref="AutoAlias"/> which is now the single
-        /// master switch for all alias-related completions. Field retained for
-        /// backward compatibility with existing config.json files; the value is ignored.
+        /// Master switch for FK-assisted JOIN completion. When enabled:
+        /// - Typing <c>SELECT * FROM Customers JOIN </c> shows FK-related tables at the
+        ///   top of the suggestion list with the full <c>ON</c> clause in the insert text.
+        /// - Typing <c>JOIN Orders ON </c> surfaces ready-made FK equality predicates
+        ///   (e.g. <c>Orders.CustomerId = Customers.Id</c>) as atomic suggestions.
+        /// Orthogonal to <see cref="AutoAlias"/>, which only controls whether a new alias
+        /// is generated for the inserted table. Default enabled — this is the single
+        /// biggest productivity win in the completion pipeline.
         /// </summary>
-        public bool JoinAssist { get; set; } = false;
+        public bool JoinAssist { get; set; } = true;
         /// <summary>Keyword casing applied to completions inserted into the editor.</summary>
         public KeywordCaseOption KeywordCase { get; set; } = KeywordCaseOption.Upper;
         /// <summary>Whether to disable native SSMS IntelliSense to avoid conflicts.</summary>
@@ -456,7 +463,7 @@ namespace AkmlSql.Core.Config
         public string Pattern { get; set; } = string.Empty;
 
         [JsonPropertyName("matchTarget")]
-        public string MatchTarget { get; set; } = "serverName";
+        public string MatchTarget { get; set; } = Models.Tabs.EnvironmentMatcher.MatchTargetServerName;
 
         [JsonPropertyName("color")]
         public string Color { get; set; } = string.Empty;

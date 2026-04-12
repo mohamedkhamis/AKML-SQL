@@ -140,13 +140,30 @@ public class SafetyCheckHandler(TsqlParserService parserService)
                 if (deleteStmt.DeleteSpecification?.WhereClause == null)
                 {
                     var tableName = ExtractTargetTableName(deleteStmt.DeleteSpecification?.Target);
-                    warnings.Add(new SafetyWarningDto
+
+                    // Spec 014, US1 / FR-002 — also flag when the DELETE wraps an INNER JOIN
+                    // with no WHERE (the join is not a row filter).
+                    bool hasJoin = HasJoinInFromClause(deleteStmt.DeleteSpecification?.FromClause);
+                    if (hasJoin)
                     {
-                        WarningType = (int)SafetyWarningType.DeleteWithoutWhere,
-                        Message = $"DELETE statement without a WHERE clause will delete ALL rows{(tableName != null ? $" from '{tableName}'" : "")}.",
-                        ObjectName = tableName,
-                        Severity = 2 // Error
-                    });
+                        warnings.Add(new SafetyWarningDto
+                        {
+                            WarningType = (int)SafetyWarningType.DmlInsideJoinWithoutWhere,
+                            Message = $"DELETE with INNER JOIN but no WHERE clause will affect ALL joined rows{(tableName != null ? $" in '{tableName}'" : "")}.",
+                            ObjectName = tableName,
+                            Severity = 2
+                        });
+                    }
+                    else
+                    {
+                        warnings.Add(new SafetyWarningDto
+                        {
+                            WarningType = (int)SafetyWarningType.DeleteWithoutWhere,
+                            Message = $"DELETE statement without a WHERE clause will delete ALL rows{(tableName != null ? $" from '{tableName}'" : "")}.",
+                            ObjectName = tableName,
+                            Severity = 2
+                        });
+                    }
                 }
                 break;
 
@@ -155,13 +172,28 @@ public class SafetyCheckHandler(TsqlParserService parserService)
                 if (updateStmt.UpdateSpecification?.WhereClause == null)
                 {
                     var tableName = ExtractTargetTableName(updateStmt.UpdateSpecification?.Target);
-                    warnings.Add(new SafetyWarningDto
+
+                    bool hasJoin = HasJoinInFromClause(updateStmt.UpdateSpecification?.FromClause);
+                    if (hasJoin)
                     {
-                        WarningType = (int)SafetyWarningType.UpdateWithoutWhere,
-                        Message = $"UPDATE statement without a WHERE clause will update ALL rows{(tableName != null ? $" in '{tableName}'" : "")}.",
-                        ObjectName = tableName,
-                        Severity = 2 // Error
-                    });
+                        warnings.Add(new SafetyWarningDto
+                        {
+                            WarningType = (int)SafetyWarningType.DmlInsideJoinWithoutWhere,
+                            Message = $"UPDATE with INNER JOIN but no WHERE clause will affect ALL joined rows{(tableName != null ? $" in '{tableName}'" : "")}.",
+                            ObjectName = tableName,
+                            Severity = 2
+                        });
+                    }
+                    else
+                    {
+                        warnings.Add(new SafetyWarningDto
+                        {
+                            WarningType = (int)SafetyWarningType.UpdateWithoutWhere,
+                            Message = $"UPDATE statement without a WHERE clause will update ALL rows{(tableName != null ? $" in '{tableName}'" : "")}.",
+                            ObjectName = tableName,
+                            Severity = 2
+                        });
+                    }
                 }
                 break;
 
@@ -207,16 +239,53 @@ public class SafetyCheckHandler(TsqlParserService parserService)
                 });
                 break;
 
+            // Spec 014, US1 / FR-002 — MERGE without a WHEN MATCHED filter
+            case MergeStatement mergeStmt:
+                hasDml = true;
+                if (!HasWhenMatchedClause(mergeStmt))
+                {
+                    var mergeTarget = ExtractTargetTableName(mergeStmt.MergeSpecification?.Target);
+                    warnings.Add(new SafetyWarningDto
+                    {
+                        WarningType = (int)SafetyWarningType.MergeWithoutFilter,
+                        Message = $"MERGE statement without a WHEN MATCHED clause will affect ALL rows{(mergeTarget != null ? $" in '{mergeTarget}'" : "")}.",
+                        ObjectName = mergeTarget,
+                        Severity = 2
+                    });
+                }
+                break;
+
             // Track DML/DDL for production warning even when no specific safety issue
             case InsertStatement:
-            case MergeStatement:
                 hasDml = true;
+                break;
+
+            // Spec 014, US1 / FR-003 — recurse into CREATE/ALTER PROCEDURE and TRIGGER
+            // bodies to detect unsafe DML (DELETE/UPDATE without WHERE, MERGE without
+            // filter) inside the stored procedure or trigger being defined.
+            case CreateProcedureStatement createProc:
+                hasDdl = true;
+                AnalyzeProcOrTriggerBody(createProc.StatementList, "CREATE PROCEDURE",
+                    ExtractSchemaObjectName(createProc.ProcedureReference?.Name), warnings);
+                break;
+            case AlterProcedureStatement alterProc:
+                hasDdl = true;
+                AnalyzeProcOrTriggerBody(alterProc.StatementList, "ALTER PROCEDURE",
+                    ExtractSchemaObjectName(alterProc.ProcedureReference?.Name), warnings);
+                break;
+            case CreateTriggerStatement createTrigger:
+                hasDdl = true;
+                AnalyzeProcOrTriggerBody(createTrigger.StatementList, "CREATE TRIGGER",
+                    ExtractSchemaObjectName(createTrigger.Name), warnings);
+                break;
+            case AlterTriggerStatement alterTrigger:
+                hasDdl = true;
+                AnalyzeProcOrTriggerBody(alterTrigger.StatementList, "ALTER TRIGGER",
+                    ExtractSchemaObjectName(alterTrigger.Name), warnings);
                 break;
 
             case AlterTableStatement:
             case CreateTableStatement:
-            case CreateProcedureStatement:
-            case AlterProcedureStatement:
             case CreateViewStatement:
             case AlterViewStatement:
             case CreateFunctionStatement:
@@ -298,6 +367,76 @@ public class SafetyCheckHandler(TsqlParserService parserService)
             NamedTableReference namedTable => ExtractSchemaObjectName(namedTable.SchemaObject),
             _ => null
         };
+    }
+
+    /// <summary>
+    /// Checks whether a FROM clause contains any JOIN (INNER, LEFT, RIGHT, FULL, CROSS).
+    /// Used by the DmlInsideJoinWithoutWhere detection (FR-002).
+    /// </summary>
+    private static bool HasJoinInFromClause(FromClause? fromClause)
+    {
+        if (fromClause?.TableReferences == null) return false;
+        foreach (var tableRef in fromClause.TableReferences)
+        {
+            if (tableRef is JoinTableReference) return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Checks whether a MERGE statement has at least one WHEN MATCHED clause.
+    /// A MERGE without WHEN MATCHED is treated the same as DELETE/UPDATE without WHERE
+    /// because every source row will be acted upon regardless of match state.
+    /// </summary>
+    private static bool HasWhenMatchedClause(MergeStatement mergeStmt)
+    {
+        var actionClauses = mergeStmt.MergeSpecification?.ActionClauses;
+        if (actionClauses == null) return false;
+        foreach (var clause in actionClauses)
+        {
+            if (clause is MergeActionClause { Condition: MergeCondition.Matched })
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Spec 014, US1 / FR-003 — walk the body of a CREATE/ALTER PROCEDURE or
+    /// CREATE/ALTER TRIGGER looking for unsafe DML. Each finding is reported as
+    /// <see cref="SafetyWarningType.UnsafeDmlInProcOrTrigger"/> citing the
+    /// enclosing object name.
+    /// </summary>
+    private static void AnalyzeProcOrTriggerBody(StatementList? body, string statementKind,
+        string objectName, List<SafetyWarningDto> warnings)
+    {
+        if (body?.Statements == null) return;
+
+        bool dummyDml = false, dummyDdl = false;
+        var innerWarnings = new List<SafetyWarningDto>();
+
+        foreach (var stmt in body.Statements)
+        {
+            AnalyzeStatement(stmt, innerWarnings, ref dummyDml, ref dummyDdl);
+        }
+
+        // Re-tag every inner warning as UnsafeDmlInProcOrTrigger so the shell
+        // dialog can cite the enclosing object name in the warning text.
+        foreach (var w in innerWarnings)
+        {
+            if (w.WarningType is (int)SafetyWarningType.DeleteWithoutWhere
+                or (int)SafetyWarningType.UpdateWithoutWhere
+                or (int)SafetyWarningType.MergeWithoutFilter
+                or (int)SafetyWarningType.DmlInsideJoinWithoutWhere)
+            {
+                warnings.Add(new SafetyWarningDto
+                {
+                    WarningType = (int)SafetyWarningType.UnsafeDmlInProcOrTrigger,
+                    Message = $"{statementKind} '{objectName}' contains an unsafe statement: {w.Message}",
+                    ObjectName = objectName,
+                    Severity = 2
+                });
+            }
+        }
     }
 
     private static RpcMessage CreateResponse(int requestId, SafetyCheckResponse response)

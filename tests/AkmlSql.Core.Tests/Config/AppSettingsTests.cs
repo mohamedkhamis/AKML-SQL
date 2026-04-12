@@ -72,8 +72,8 @@ namespace AkmlSql.Core.Tests.Config
             Assert.True(s.ShowDataTypes);
             Assert.True(s.ShowNullability);
             Assert.True(s.ShowPkFk);
-            Assert.False(s.AutoAlias); // Default changed to false — user must enable via Options
-            Assert.False(s.JoinAssist); // Default changed to false — user must enable via Options
+            Assert.False(s.AutoAlias); // New aliases opt-in; FK joins still work unaliased
+            Assert.True(s.JoinAssist);  // FK-assisted JOIN completion on by default
             Assert.Equal(KeywordCaseOption.Upper, s.KeywordCase);
             Assert.True(s.DisableNativeIntelliSense);
         }
