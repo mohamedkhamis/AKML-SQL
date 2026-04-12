@@ -12,16 +12,26 @@ public class CompletionEngine
     private readonly TsqlParserService _parserService;
     private readonly CursorContextAnalyzer _contextAnalyzer = new();
     private readonly AliasResolver _aliasResolver = new();
+    private readonly JoinProvider _joinProvider = new();
+    private readonly JoinOnFkProvider _joinOnFkProvider = new();
     private int _maxSuggestions = 50;
 
     /// <summary>
-    /// Master switch for all table-alias completion features. Controls:
-    /// - <see cref="AliasProvider"/> (suggests aliases like "o", "od" after a table name in FROM)
-    /// - <see cref="JoinProvider"/> (suggests <c>Table alias ON ...</c> after JOIN, FK-aware)
-    /// Defaults to false so plain table names are suggested unless the user explicitly
-    /// enables "Tables Alias" in settings.
+    /// When enabled, the completion pipeline generates new aliases for tables inserted
+    /// via completion and for FK-assisted JOIN targets (<c>Orders o ON o.CustomerId = ...</c>).
+    /// When disabled, table names are inserted unaliased. Orthogonal to
+    /// <see cref="JoinAssistEnabled"/> — the alias-generation toggle doesn't disable JOIN
+    /// assist entirely.
     /// </summary>
     public bool TableAliasEnabled { get; set; } = false;
+
+    /// <summary>
+    /// Master switch for FK-assisted JOIN completion. When enabled, <see cref="JoinProvider"/>
+    /// emits full <c>TABLE ON left.fk = right.pk</c> insertion text for JOIN targets, and
+    /// <see cref="JoinOnFkProvider"/> emits ready-made FK equality predicates in the
+    /// <c>ON</c> clause. Default enabled.
+    /// </summary>
+    public bool JoinAssistEnabled { get; set; } = true;
 
     public CompletionEngine(TsqlParserService parserService)
     {
@@ -33,7 +43,8 @@ public class CompletionEngine
         RegisterProvider(new ColumnProvider());
         RegisterProvider(new ObjectProvider());
         RegisterProvider(new KeywordProvider());
-        RegisterProvider(new JoinProvider());
+        RegisterProvider(_joinProvider);
+        RegisterProvider(_joinOnFkProvider);
         RegisterProvider(new VariableProvider());
         RegisterProvider(new SnippetProvider());
         RegisterProvider(new AliasProvider());
@@ -97,15 +108,23 @@ public class CompletionEngine
                     Log.Debug("Alias fallback: extracted {Count} aliases from tokens", fallbackAliases.Count);
             }
 
+            // Push current toggles into the providers that need them. JoinProvider
+            // always runs when JoinAssist is enabled — AutoAlias only decides whether
+            // the inserted JOIN target carries a fresh alias or uses its bare name.
+            _joinProvider.UseAliases = TableAliasEnabled;
+
             // Route to providers
             var allItems = new List<CompletionItem>();
             foreach (var provider in _providers)
             {
-                // Skip alias-related providers entirely when "Tables Alias" is disabled.
-                if (!TableAliasEnabled && (provider is JoinProvider || provider is AliasProvider))
-                {
+                // AliasProvider (suggesting "o", "od" after a table name in FROM) is
+                // purely an alias-generation feature — skip when the toggle is off.
+                if (!TableAliasEnabled && provider is AliasProvider)
                     continue;
-                }
+
+                // FK-assisted JOIN providers gate on the JoinAssist master switch.
+                if (!JoinAssistEnabled && (provider is JoinProvider || provider is JoinOnFkProvider))
+                    continue;
 
                 if (provider.CanHandle(context, cache))
                 {

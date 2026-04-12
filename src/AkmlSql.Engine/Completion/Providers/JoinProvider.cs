@@ -8,10 +8,26 @@ namespace AkmlSql.Engine.Completion.Providers;
 /// T056-T058: Provides JOIN table completions based on foreign key relationships.
 /// When the cursor is in a FROM clause after a JOIN keyword, suggests tables that have
 /// FK relationships with already-referenced tables, including auto-generated ON clauses.
+/// <para>
+/// Controlled by two engine toggles:
+/// <list type="bullet">
+///   <item><c>JoinAssistEnabled</c> — gates the provider entirely. When off, nothing runs.</item>
+///   <item><c>UseAliases</c> — mirrors <c>TableAliasEnabled</c>. When on, emits
+///   <c>Orders o ON o.CustomerId = c.Id</c>. When off, emits
+///   <c>Orders ON Orders.CustomerId = c.Id</c> using the bare table name.</item>
+/// </list>
+/// </para>
 /// </summary>
 public class JoinProvider : ICompletionProvider
 {
     public string Name => "Join";
+
+    /// <summary>
+    /// When <c>true</c>, insertion text includes a generated alias for the JOIN target
+    /// (<c>Orders o ON ...</c>). When <c>false</c>, the bare table name is used on both
+    /// sides of the ON clause. Set by <see cref="CompletionEngine"/> before each call.
+    /// </summary>
+    public bool UseAliases { get; set; }
 
     public bool CanHandle(CursorContext context, DatabaseCache? cache)
     {
@@ -89,20 +105,32 @@ public class JoinProvider : ICompletionProvider
                     continue;
                 }
 
-                // T058: Generate alias for the join target
-                var joinAlias = GenerateAlias(otherTable, context.AvailableAliases);
-
-                // T057: Build ON clause
-                var onClause = BuildOnClause(joinAlias, otherColumns, alias, existingColumns);
-
                 var qualifiedName = otherSchema.Equals("dbo", StringComparison.OrdinalIgnoreCase)
                     ? otherTable
                     : otherFullName;
 
-                var insertText = $"{qualifiedName} {joinAlias} ON {onClause}";
+                // When UseAliases is off, both sides of the ON clause fall back to bare
+                // qualified names. The existing side (`alias`) is the user's alias from
+                // the query if they wrote one, otherwise the table name itself, so it's
+                // already valid either way.
+                string targetReference;
+                string displayText;
+                if (UseAliases)
+                {
+                    var joinAlias = GenerateAlias(otherTable, context.AvailableAliases);
+                    targetReference = joinAlias;
+                    displayText = $"{otherTable} {joinAlias}";
+                }
+                else
+                {
+                    targetReference = qualifiedName;
+                    displayText = otherTable;
+                }
 
-                // SQL Prompt style: show "TableName alias" as display, "ON a.Col = b.Col" as secondary
-                var displayText = $"{otherTable} {joinAlias}";
+                var onClause = BuildOnClause(targetReference, otherColumns, alias, existingColumns);
+                var insertText = UseAliases
+                    ? $"{qualifiedName} {targetReference} ON {onClause}"
+                    : $"{qualifiedName} ON {onClause}";
                 var secondaryText = $"ON {onClause}";
 
                 yield return new CompletionItem
