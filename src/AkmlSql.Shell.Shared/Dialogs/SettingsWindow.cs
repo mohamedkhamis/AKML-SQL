@@ -1955,11 +1955,13 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
             foreach (var item in items)
             {
-                // Use TextBlock as content so foreground propagates correctly
-                // through the Chrome template's ContentPresenter
+                // Do NOT set Foreground on the TextBlock — a local value has higher
+                // precedence than style triggers, which would prevent hover/selected
+                // triggers from changing the text color. Let it inherit from the
+                // ComboBoxItem via TextElement.Foreground set in ItemContainerStyle.
                 combo.Items.Add(new ComboBoxItem
                 {
-                    Content = new TextBlock { Text = item, Foreground = _theme.FgPrimary },
+                    Content = new TextBlock { Text = item },
                     Foreground = _theme.FgPrimary
                 });
             }
@@ -2018,6 +2020,10 @@ namespace AkmlSql.Shell.Shared.Dialogs
             var theme = _theme;
             combo.Loaded += (s, e) => ThemeComboBoxVisualTree((ComboBox)s!, theme);
 
+            // The Popup is lazy — it only enters the visual tree when the dropdown
+            // first opens, so Loaded can't theme it. Hook DropDownOpened to catch it.
+            combo.DropDownOpened += (s, e) => ThemeComboBoxPopup((ComboBox)s!, theme);
+
             // Item container style (dropdown rows)
             var itemStyle = new Style(typeof(ComboBoxItem));
             itemStyle.Setters.Add(new Setter(Control.BackgroundProperty, _theme.Input));
@@ -2045,7 +2051,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
         /// <summary>
         /// After the ComboBox template is applied, walk the visual tree to restyle the
-        /// Chrome toggle button and dropdown border that ignore standard properties.
+        /// Chrome toggle button that ignores standard properties.
         /// </summary>
         private static void ThemeComboBoxVisualTree(ComboBox combo, ThemeBrushSet theme)
         {
@@ -2074,17 +2080,50 @@ namespace AkmlSql.Shell.Shared.Dialogs
                     }
                 }
 
-                // Theme the dropdown popup border
+                // Also try to theme the popup if it's already in the tree
+                ThemeComboBoxPopup(combo, theme);
+            }
+            catch
+            {
+                // Non-fatal: worst case dropdown keeps system colors
+            }
+        }
+
+        /// <summary>
+        /// Themes the dropdown Popup of a ComboBox. Called from both <see cref="ThemeComboBoxVisualTree"/>
+        /// (if the popup is already in the tree) and from <c>DropDownOpened</c> (the first time the
+        /// user expands the dropdown, since the Popup is lazy and not in the visual tree at Loaded time).
+        /// Sets background, border, and <see cref="TextElement.ForegroundProperty"/> on the popup content
+        /// so that VS/SSMS theme inheritance doesn't override our text color.
+        /// </summary>
+        private static void ThemeComboBoxPopup(ComboBox combo, ThemeBrushSet theme)
+        {
+            try
+            {
                 var popup = FindChild<Popup>(combo);
                 if (popup?.Child is Border popupBorder)
                 {
                     popupBorder.Background = theme.Input;
                     popupBorder.BorderBrush = theme.ComboBorder;
+
+                    // Force text foreground on the popup content so that items in the
+                    // dropdown are readable even when the VS/SSMS host theme applies
+                    // its own inherited TextElement.Foreground to the Popup visual tree.
+                    popupBorder.SetValue(TextElement.ForegroundProperty, theme.FgPrimary);
+
+                    // Also set SystemColors on the popup border's resources — the Popup
+                    // is a separate HWND and doesn't inherit the ComboBox's resources.
+                    popupBorder.Resources[SystemColors.WindowBrushKey] = theme.Input;
+                    popupBorder.Resources[SystemColors.WindowTextBrushKey] = theme.FgPrimary;
+                    popupBorder.Resources[SystemColors.HighlightBrushKey] = theme.Selected;
+                    popupBorder.Resources[SystemColors.HighlightTextBrushKey] = theme.SelectedText;
+                    popupBorder.Resources[SystemColors.ControlBrushKey] = theme.Input;
+                    popupBorder.Resources[SystemColors.ControlTextBrushKey] = theme.FgPrimary;
                 }
             }
             catch
             {
-                // Non-fatal: worst case dropdown keeps system colors
+                // Non-fatal
             }
         }
 
