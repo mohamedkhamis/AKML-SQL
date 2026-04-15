@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using AkmlSql.Core.Ipc;
@@ -52,6 +53,8 @@ namespace AkmlSql.Shell.Shared.Analysis
         private async Task RunAnalysisAsync(int documentVersion, CancellationToken ct)
         {
             if (_disposed) return;
+            var sw = Stopwatch.StartNew();
+            Log.Debug("Analysis triggered for session {Session}", _sessionId);
             try
             {
                 var client = EngineLifecycle.Manager?.Client;
@@ -69,8 +72,14 @@ namespace AkmlSql.Shell.Shared.Analysis
                     MessageTypes.RequestAnalyze, request, timeoutMs: 10_000, ct: ct);
 
                 if (!ct.IsCancellationRequested)
+                {
+                    sw.Stop();
+                    var count = response?.Issues?.Length ?? 0;
+                    Log.Debug("Analysis complete: {Count} findings in {Ms}ms for session {Session}",
+                        count, sw.ElapsedMilliseconds, _sessionId);
                     DiagnosticsUpdated?.Invoke(this, new DiagnosticsUpdatedEventArgs(
                         _buffer.CurrentSnapshot, response?.Issues));
+                }
             }
             catch (OperationCanceledException) { }
             catch (Exception ex)

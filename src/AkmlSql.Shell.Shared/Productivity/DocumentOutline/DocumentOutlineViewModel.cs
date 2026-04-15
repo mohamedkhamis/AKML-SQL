@@ -84,7 +84,8 @@ namespace AkmlSql.Shell.Shared.Productivity.DocumentOutline
             RequestOutlineUpdate();
         }
 
-        private void RequestOutlineUpdate()
+        /// <summary>Manually trigger an outline rebuild (e.g., from the Refresh button).</summary>
+        public void RequestOutlineUpdate()
         {
             Interlocked.Increment(ref _version);
             var prev = _debounce;
@@ -111,6 +112,9 @@ namespace AkmlSql.Shell.Shared.Productivity.DocumentOutline
                 var text = _buffer.CurrentSnapshot.GetText();
                 if (string.IsNullOrEmpty(text))
                 {
+                    // Buffer is empty at this point. The permanent Changed subscription on
+                    // _buffer will trigger another outline pass when content first appears.
+                    Log.Debug("DocumentOutline: buffer empty for session {Session} — deferring until first edit", _sessionId);
                     await UpdateNodesOnUiThreadAsync(Array.Empty<OutlineNodeDto>());
                     return;
                 }

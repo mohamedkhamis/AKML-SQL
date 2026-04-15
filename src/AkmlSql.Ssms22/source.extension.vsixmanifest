@@ -2,7 +2,7 @@
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011">
   <Metadata>
     <Identity Id="AkmlSql.Ssms22.A1B2C3D4-1111-2222-3333-444455556666"
-              Version="1.0.0"
+              Version="$version$"
               Language="en-US"
               Publisher="mohamed Khamis" />
     <DisplayName>AKML SQL for SSMS 22</DisplayName>

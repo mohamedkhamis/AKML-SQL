@@ -132,7 +132,9 @@ public static class TokenBasedAliasExtractor
 
     private static bool IsFromOrJoinKeyword(TSqlParserToken t)
     {
-        return t.TokenType is TSqlTokenType.From or TSqlTokenType.Join;
+        // Include UPDATE so that "UPDATE <table> SET ..." injects the target table
+        // into AvailableAliases, enabling column completions after SET.
+        return t.TokenType is TSqlTokenType.From or TSqlTokenType.Join or TSqlTokenType.Update;
     }
 
     private static int SkipWhitespace(IList<TSqlParserToken> tokens, int start)

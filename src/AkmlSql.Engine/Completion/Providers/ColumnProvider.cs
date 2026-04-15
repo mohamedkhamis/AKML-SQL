@@ -31,7 +31,8 @@ public class ColumnProvider : ICompletionProvider
         ClauseType.Having,
         ClauseType.OrderBy,
         ClauseType.UpdateSet,
-        ClauseType.InsertColumns
+        ClauseType.InsertColumns,
+        ClauseType.AlterTableColumn
     ];
 
     public bool CanHandle(CursorContext context, DatabaseCache? cache)

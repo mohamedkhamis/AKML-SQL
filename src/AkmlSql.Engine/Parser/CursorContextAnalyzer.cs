@@ -19,6 +19,7 @@ public enum ClauseType
     Delete,
     Create,
     Alter,
+    AlterTableColumn, // After ALTER TABLE <name> ALTER COLUMN — yields columns from <name>
     Exec,
     With,
     JoinTable,   // After JOIN/INNER JOIN/LEFT JOIN etc. — expects table name, not more JOIN keywords
@@ -170,7 +171,7 @@ public class CursorContextAnalyzer
         }
 
         // Determine clause type by walking backwards through tokens
-        context.ClauseType = DetermineClauseType(tokens, tokenIndex);
+        context.ClauseType = DetermineClauseType(tokens, tokenIndex, context);
 
         return context;
     }
@@ -179,9 +180,11 @@ public class CursorContextAnalyzer
     /// Determines the SQL clause type by walking backwards through the token stream.
     /// Covers all clause contexts for alias resolution (T045):
     /// SELECT, FROM, WHERE, JOIN ON, GROUP BY, HAVING, ORDER BY, UPDATE SET,
-    /// INSERT (columns/values), DELETE, CREATE, ALTER, EXEC, WITH (CTEs).
+    /// INSERT (columns/values), DELETE, CREATE, ALTER, ALTER TABLE…ALTER COLUMN, EXEC, WITH (CTEs).
+    /// When <c>AlterTableColumn</c> is detected, populates <paramref name="context"/>.AvailableAliases
+    /// with the ALTER TABLE target table so ColumnProvider can resolve columns.
     /// </summary>
-    private ClauseType DetermineClauseType(IList<TSqlParserToken> tokens, int fromIndex)
+    private static ClauseType DetermineClauseType(IList<TSqlParserToken> tokens, int fromIndex, CursorContext context)
     {
         for (int i = fromIndex; i >= 0; i--)
         {
@@ -204,19 +207,23 @@ public class CursorContextAnalyzer
                 case TSqlTokenType.Having: return ClauseType.Having;
                 case TSqlTokenType.Delete: return ClauseType.Delete;
                 case TSqlTokenType.Create: return ClauseType.Create;
-                case TSqlTokenType.Alter: return ClauseType.Alter;
+                case TSqlTokenType.Alter:
+                    return DetectAlterClauseType(tokens, i, context);
                 case TSqlTokenType.With: return ClauseType.With;
                 case TSqlTokenType.Set:
-                    // Distinguish SET in UPDATE ... SET from standalone SET options.
-                    // If we already saw UPDATE earlier, this is UpdateSet.
-                    // Otherwise it's a standalone SET (SET NOCOUNT, etc.)
-                    // For simplicity, walk back to see if UPDATE precedes.
+                    // Distinguish "UPDATE [schema.]table SET" from standalone SET options.
+                    // Scan all the way back through table/schema tokens to find UPDATE.
+                    // Stop at any statement boundary or unambiguous non-UPDATE keyword.
                     for (int j = i - 1; j >= 0; j--)
                     {
                         var tj = tokens[j];
                         if (IsWhitespaceOrComment(tj)) continue;
                         if (tj.TokenType == TSqlTokenType.Update) return ClauseType.UpdateSet;
-                        break; // Not preceded by UPDATE — standalone SET
+                        // Identifiers and dots are table/schema name tokens — keep scanning.
+                        if (tj.TokenType == TSqlTokenType.Identifier ||
+                            tj.TokenType == TSqlTokenType.QuotedIdentifier ||
+                            tj.TokenType == TSqlTokenType.Dot) continue;
+                        break; // Hit a keyword or punctuation that can't be part of UPDATE table
                     }
                     return ClauseType.Set;
                 case TSqlTokenType.Execute: return ClauseType.Exec;
@@ -317,6 +324,74 @@ public class CursorContextAnalyzer
         }
 
         return ClauseType.Unknown;
+    }
+
+    /// <summary>
+    /// Inspects the ALTER keyword at <paramref name="alterIndex"/> to decide whether it
+    /// is the inner ALTER in an <c>ALTER TABLE [schema.]table ALTER COLUMN</c> statement.
+    /// If the pattern is confirmed the target table is injected into
+    /// <paramref name="context"/>.AvailableAliases and <c>AlterTableColumn</c> is returned;
+    /// otherwise <c>Alter</c> is returned (generic DDL context).
+    /// </summary>
+    private static ClauseType DetectAlterClauseType(
+        IList<TSqlParserToken> tokens, int alterIndex, CursorContext context)
+    {
+        // Peek forward: if the next non-whitespace token is COLUMN this is "ALTER COLUMN".
+        int fwd = alterIndex + 1;
+        while (fwd < tokens.Count && IsWhitespaceOrComment(tokens[fwd])) fwd++;
+
+        if (fwd >= tokens.Count || tokens[fwd].TokenType != TSqlTokenType.Column)
+            return ClauseType.Alter;
+
+        // Confirmed inner ALTER COLUMN. Scan backward to verify the full pattern:
+        //   <outer-ALTER>  TABLE  [schema .]  table  ALTER  COLUMN
+        int b = alterIndex - 1;
+        while (b >= 0 && IsWhitespaceOrComment(tokens[b])) b--;
+
+        // Expect the table name identifier
+        if (b < 0 || tokens[b].TokenType is not (TSqlTokenType.Identifier or TSqlTokenType.QuotedIdentifier))
+            return ClauseType.Alter;
+
+        var rawName = tokens[b].Text.Trim('[', ']', '"');
+        b--;
+        while (b >= 0 && IsWhitespaceOrComment(tokens[b])) b--;
+
+        string schemaName;
+        string tableName;
+
+        if (b >= 0 && tokens[b].TokenType == TSqlTokenType.Dot)
+        {
+            // schema.table — grab the schema identifier before the dot
+            b--;
+            while (b >= 0 && IsWhitespaceOrComment(tokens[b])) b--;
+            if (b < 0 || tokens[b].TokenType is not (TSqlTokenType.Identifier or TSqlTokenType.QuotedIdentifier))
+                return ClauseType.Alter;
+            schemaName = tokens[b].Text.Trim('[', ']', '"');
+            tableName  = rawName;
+            b--;
+            while (b >= 0 && IsWhitespaceOrComment(tokens[b])) b--;
+        }
+        else
+        {
+            schemaName = "dbo";
+            tableName  = rawName;
+            // b already points to the token before the table name
+        }
+
+        // Expect TABLE keyword
+        if (b < 0 || tokens[b].TokenType != TSqlTokenType.Table)
+            return ClauseType.Alter;
+        b--;
+        while (b >= 0 && IsWhitespaceOrComment(tokens[b])) b--;
+
+        // Expect outer ALTER keyword
+        if (b < 0 || tokens[b].TokenType != TSqlTokenType.Alter)
+            return ClauseType.Alter;
+
+        // Pattern confirmed — inject the table so ColumnProvider can resolve columns
+        if (!context.AvailableAliases.ContainsKey(tableName))
+            context.AvailableAliases[tableName] = $"{schemaName}.{tableName}";
+        return ClauseType.AlterTableColumn;
     }
 
     private static bool IsWhitespaceOrComment(TSqlParserToken t)

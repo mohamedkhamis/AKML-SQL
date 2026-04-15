@@ -29,6 +29,12 @@ param(
 $ErrorActionPreference = "Stop"
 $Root = $PSScriptRoot
 
+# --- Compute build version (UTC+2, matching Directory.Build.props formula) ---
+$_now        = [System.DateTime]::UtcNow.AddHours(2)
+$BuildYear   = $_now.ToString("yy")
+$BuildStamp  = $_now.ToString("MMddHHmm")
+$Version     = "1.$BuildYear.$BuildStamp"
+
 # --- Tool paths ---
 $MSBuild = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe"
 $ISCC    = "C:\Program Files\Inno Setup 7\ISCC.exe"
@@ -43,6 +49,8 @@ function Assert-Tool([string]$Path, [string]$Name) {
 
 Assert-Tool $MSBuild "MSBuild"
 Assert-Tool $ISCC    "Inno Setup 7"
+
+Write-Host "Build version : $Version" -ForegroundColor Magenta
 
 # --- Helpers ---
 $script:StepNum = 0
@@ -66,16 +74,16 @@ function Invoke-Build([string]$Description, [scriptblock]$Command) {
 function Build-Shell([string]$Project) {
     $Name = [System.IO.Path]::GetFileNameWithoutExtension($Project)
     Invoke-Build "Shell: $Name" {
-        & $MSBuild "$Root\$Project" -t:Restore -p:Configuration=$Configuration -v:quiet -nologo
+        & $MSBuild "$Root\$Project" -t:Restore -p:Configuration=$Configuration -p:Version=$Version -v:quiet -nologo
         if ($LASTEXITCODE -ne 0) { return }
-        & $MSBuild "$Root\$Project" -t:Build -p:Configuration=$Configuration -v:minimal -nologo
+        & $MSBuild "$Root\$Project" -t:Build -p:Configuration=$Configuration -p:Version=$Version -v:minimal -nologo
     }
 }
 
 # --- Installer-only shortcut ---
 if ($InstallerOnly) {
     Invoke-Build "Installer (Inno Setup)" {
-        & $ISCC "$Root\src\AkmlSql.Installer\AkmlSqlSetup.iss"
+        & $ISCC "$Root\src\AkmlSql.Installer\AkmlSqlSetup.iss" "/DMyAppVersion=$Version"
     }
     $Exe = "$Root\src\AkmlSql.Installer\Output\AKMLSQLSetup.exe"
     Write-Host "`nInstaller ready: $Exe" -ForegroundColor Yellow
@@ -86,27 +94,27 @@ $TotalSw = [System.Diagnostics.Stopwatch]::StartNew()
 
 # --- .NET projects ---
 Invoke-Build "Core library" {
-    dotnet build "$Root\src\AkmlSql.Core\AkmlSql.Core.csproj" -c $Configuration -v quiet --nologo
+    dotnet build "$Root\src\AkmlSql.Core\AkmlSql.Core.csproj" -c $Configuration -p:Version=$Version -v quiet --nologo
 }
 
 Invoke-Build "Formatting library" {
-    dotnet build "$Root\src\AkmlSql.Formatting\AkmlSql.Formatting.csproj" -c $Configuration -v quiet --nologo
+    dotnet build "$Root\src\AkmlSql.Formatting\AkmlSql.Formatting.csproj" -c $Configuration -p:Version=$Version -v quiet --nologo
 }
 
 Invoke-Build "Engine (publish)" {
-    dotnet publish "$Root\src\AkmlSql.Engine\AkmlSql.Engine.csproj" -c $Configuration -r win-x64 -v quiet --nologo
+    dotnet publish "$Root\src\AkmlSql.Engine\AkmlSql.Engine.csproj" -c $Configuration -r win-x64 -p:Version=$Version -v quiet --nologo
 }
 
 Invoke-Build "Updater (publish)" {
-    dotnet publish "$Root\src\AkmlSql.Updater\AkmlSql.Updater.csproj" -c $Configuration -v quiet --nologo
+    dotnet publish "$Root\src\AkmlSql.Updater\AkmlSql.Updater.csproj" -c $Configuration -p:Version=$Version -v quiet --nologo
 }
 
 Invoke-Build "Formatter CLI (publish)" {
-    dotnet publish "$Root\src\AkmlSql.Formatter\AkmlSql.Formatter.csproj" -c $Configuration -v quiet --nologo
+    dotnet publish "$Root\src\AkmlSql.Formatter\AkmlSql.Formatter.csproj" -c $Configuration -p:Version=$Version -v quiet --nologo
 }
 
 Invoke-Build "Analyzer CLI (publish)" {
-    dotnet publish "$Root\src\AkmlSql.Analyzer\AkmlSql.Analyzer.csproj" -c $Configuration -r win-x64 -v quiet --nologo
+    dotnet publish "$Root\src\AkmlSql.Analyzer\AkmlSql.Analyzer.csproj" -c $Configuration -r win-x64 -p:Version=$Version -v quiet --nologo
 }
 
 # --- Shell extensions (MSBuild, one at a time) ---
@@ -122,19 +130,19 @@ if (-not $SkipShell) {
 # --- Tests ---
 if (-not $SkipTests) {
     Invoke-Build "Tests: Core" {
-        dotnet test "$Root\tests\AkmlSql.Core.Tests\AkmlSql.Core.Tests.csproj" -c $Configuration -v quiet --nologo
+        dotnet test "$Root\tests\AkmlSql.Core.Tests\AkmlSql.Core.Tests.csproj" -c $Configuration -p:Version=$Version -v quiet --nologo
     }
     Invoke-Build "Tests: Engine" {
-        dotnet test "$Root\tests\AkmlSql.Engine.Tests\AkmlSql.Engine.Tests.csproj" -c $Configuration -v quiet --nologo
+        dotnet test "$Root\tests\AkmlSql.Engine.Tests\AkmlSql.Engine.Tests.csproj" -c $Configuration -p:Version=$Version -v quiet --nologo
     }
     Invoke-Build "Tests: Formatting" {
-        dotnet test "$Root\tests\AkmlSql.Formatting.Tests\AkmlSql.Formatting.Tests.csproj" -c $Configuration -v quiet --nologo
+        dotnet test "$Root\tests\AkmlSql.Formatting.Tests\AkmlSql.Formatting.Tests.csproj" -c $Configuration -p:Version=$Version -v quiet --nologo
     }
 }
 
 # --- Installer ---
 Invoke-Build "Installer (Inno Setup)" {
-    & $ISCC "$Root\src\AkmlSql.Installer\AkmlSqlSetup.iss"
+    & $ISCC "$Root\src\AkmlSql.Installer\AkmlSqlSetup.iss" "/DMyAppVersion=$Version"
 }
 
 $TotalSw.Stop()
@@ -143,6 +151,7 @@ $Size = [math]::Round((Get-Item $Exe).Length / 1MB, 2)
 
 Write-Host "`n========================================" -ForegroundColor Green
 Write-Host "  BUILD COMPLETE ($([math]::Round($TotalSw.Elapsed.TotalSeconds, 1))s)" -ForegroundColor Green
-Write-Host "  Output: $Exe" -ForegroundColor Yellow
-Write-Host "  Size:   $Size MB" -ForegroundColor Yellow
+Write-Host "  Version: $Version" -ForegroundColor Magenta
+Write-Host "  Output:  $Exe" -ForegroundColor Yellow
+Write-Host "  Size:    $Size MB" -ForegroundColor Yellow
 Write-Host "========================================" -ForegroundColor Green

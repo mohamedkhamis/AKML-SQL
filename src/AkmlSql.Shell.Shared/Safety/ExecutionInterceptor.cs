@@ -118,7 +118,7 @@ namespace AkmlSql.Shell.Shared.Safety
 
             if (!_anySettingEnabled)
             {
-                Log.Debug("[ExecutionGuard] Bypassed — all safety checks disabled");
+                Log.Warning("[ExecutionGuard] Safety check suppressed: all safety checks are disabled in config (Safety.dropConfirmation and all other safety flags are false)");
                 return true;
             }
 
@@ -199,6 +199,8 @@ namespace AkmlSql.Shell.Shared.Safety
                 // guard entirely for this environment (e.g. the user's DEV boxes).
                 if (IsEnvironmentDisabled(envLabel, cachedSafety))
                 {
+                    Log.Warning("[ExecutionGuard] Safety check suppressed for environment '{EnvLabel}': marked as Disabled in Safety.EnvironmentSeverity config",
+                        envLabel);
                     LogAuditEvent(serverName, envLabel, envColor, filteredWarnings, "SkippedByEnvironmentConfig");
                     return true;
                 }

@@ -6,11 +6,12 @@
     </Exec>
     <PropertyGroup>
       <GitCommitCount Condition="'$(GitExitCode)' != '0'">0</GitCommitCount>
-      <!-- InformationalVersion: 1.{commits}.{MMDDHHmm} — changes every build/publish -->
+      <!-- Version: 1.YY.MMDDHHmm (e.g. 1.26.04140511) — changes every build/publish -->
+      <_BuildYear>$([System.DateTime]::UtcNow.AddHours(2).ToString("yy"))</_BuildYear>
       <_BuildStamp>$([System.DateTime]::UtcNow.AddHours(2).ToString("MMddHHmm"))</_BuildStamp>
-      <Version>1.$(GitCommitCount).$(_BuildStamp)</Version>
-      <AssemblyVersion>1.0.$(GitCommitCount).0</AssemblyVersion>
-      <FileVersion>1.0.$(GitCommitCount).0</FileVersion>
+      <Version>1.$(_BuildYear).$(_BuildStamp)</Version>
+      <AssemblyVersion>1.0.$(_BuildYear).0</AssemblyVersion>
+      <FileVersion>1.0.$(_BuildYear).0</FileVersion>
       <InformationalVersion>$(Version)</InformationalVersion>
       <GitVersionComputed>true</GitVersionComputed>
     </PropertyGroup>

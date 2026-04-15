@@ -223,6 +223,26 @@ namespace AkmlSql.Shell.Shared.History
 
             _filterAll = CreateFilterTab("\U0001F4CB All", "all", theme, isActive: true);
             _filterStarred = CreateFilterTab("\u2B50 Starred", "starred", theme);
+
+            // Append a live count badge to the Starred tab, bound to HistoryViewModel.StarredCount
+            {
+                var labelText = (TextBlock)_filterStarred.Child;
+                var badge = new TextBlock
+                {
+                    FontSize = 10,
+                    FontWeight = FontWeights.SemiBold,
+                    Foreground = Freeze(theme.HistoryActiveFilterBorder),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(4, 0, 0, 0)
+                };
+                badge.SetBinding(TextBlock.TextProperty,
+                    new Binding(nameof(HistoryViewModel.StarredCount)) { StringFormat = "({0})" });
+                var tabStack = new StackPanel { Orientation = Orientation.Horizontal };
+                tabStack.Children.Add(labelText);
+                tabStack.Children.Add(badge);
+                _filterStarred.Child = tabStack;
+            }
+
             _filterOpen = CreateFilterTab("\U0001F4C2 Open", "open", theme);
             _filterClosed = CreateFilterTab("\U0001F4D5 Closed", "closed", theme);
 
@@ -538,6 +558,7 @@ namespace AkmlSql.Shell.Shared.History
             nameText.SetValue(TextBlock.ForegroundProperty, Freeze(theme.HistoryQueryName));
             nameText.SetValue(TextBlock.TextTrimmingProperty, TextTrimming.CharacterEllipsis);
             nameText.SetValue(TextBlock.MaxHeightProperty, 18.0);
+            nameText.SetValue(ToolTipProperty, "Right-click \u2192 Rename to give this query a custom name");
             contentStack.AppendChild(nameText);
 
             // Row 2: Server -> Database
@@ -1805,9 +1826,15 @@ namespace AkmlSql.Shell.Shared.History
 
                     var sql = entry.SqlText ?? string.Empty;
                     var collapsed = System.Text.RegularExpressions.Regex.Replace(sql, @"\s+", " ").Trim();
-                    if (collapsed.Length > 60)
-                        return collapsed.Substring(0, 60) + "...";
-                    return collapsed;
+                    if (collapsed.Length > 0)
+                    {
+                        if (collapsed.Length > 60)
+                            return collapsed.Substring(0, 60) + "...";
+                        return collapsed;
+                    }
+
+                    // No custom name and no SQL — show a discoverable placeholder
+                    return "(Untitled query \u2014 right-click to rename)";
                 }
                 return "";
             }

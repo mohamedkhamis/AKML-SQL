@@ -48,7 +48,9 @@
 ;
 
 #define MyAppName "AKML SQL"
-#define MyAppVersion "1.0.0"
+#ifndef MyAppVersion
+  #define MyAppVersion "1.0.0"
+#endif
 #define MyAppPublisher "Abdulrahman Khamis"
 #define MyAppURL "https://akmlsql.com"
 #define MyAppId "{{F7E8A9B0-C1D2-E3F4-A5B6-C7D8E9F0A1B2}"
@@ -77,6 +79,7 @@ SolidCompression=yes
 PrivilegesRequired=admin
 PrivilegesRequiredOverridesAllowed=commandline
 UsePreviousAppDir=yes
+; Assets to be replaced with branded versions from design team (US14 — deferred)
 SetupIconFile=assets\icon.ico
 WizardImageFile=assets\sidebar.bmp
 WizardSmallImageFile=assets\banner.bmp
@@ -143,10 +146,8 @@ Source: "..\AkmlSql.VS2026\source.extension.vsixmanifest"; DestDir: "{code:GetVS
 [Icons]
 Name: "{group}\{#MyAppName} Settings"; Filename: "{app}\AkmlSql.Core.dll"; Comment: "AKML SQL"
 Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#MyAppName} Settings"; Filename: "{app}\AkmlSql.Core.dll"; Tasks: desktopicon
 
 [Tasks]
-Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription: "Additional shortcuts:"
 Name: "importsqlprompt"; Description: "Import formatting styles from &SQL Prompt"; GroupDescription: "Migration:"; Check: SqlPromptConfigExists; Flags: unchecked
 
 [UninstallDelete]
