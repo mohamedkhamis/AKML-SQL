@@ -1,6 +1,6 @@
 # AKML SQL — Phase 9: AI-Powered SQL Assistance
 
-> **Version:** 1.0 | **Date:** March 2026 | **Author:** Abdulrahman Khamis
+> **Version:** 1.0 | **Date:** March 2026 | **Author:** Mohamed Khamis
 > **Status:** Ready for Implementation | **Classification:** Confidential
 > **Depends on:** Phase 2 (IntelliSense + schema cache), Phase 5 (code analysis)
 > **Branch prefix:** `009-ai-assistance`

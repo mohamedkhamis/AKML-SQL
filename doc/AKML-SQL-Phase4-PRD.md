@@ -1,6 +1,6 @@
 # AKML SQL — Phase 4: Snippet Manager
 
-> **Version:** 1.0 | **Date:** March 2026 | **Author:** Abdulrahman Khamis
+> **Version:** 1.0 | **Date:** March 2026 | **Author:** Mohamed Khamis
 > **Status:** Ready for Implementation | **Classification:** Confidential
 > **Depends on:** Phase 3 (SQL Formatter) — formatting engine must be complete
 > **Branch prefix:** `004-snippet-manager`

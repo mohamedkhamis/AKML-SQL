@@ -1,6 +1,6 @@
 # AKML SQL — Phase 2: Core IntelliSense Engine
 
-> **Version:** 1.0 | **Date:** March 2026 | **Author:** Abdulrahman Khamis
+> **Version:** 1.0 | **Date:** March 2026 | **Author:** Mohamed Khamis
 > **Status:** Ready for Implementation | **Classification:** Confidential
 > **Depends on:** Phase 1 (Foundation & Windows EXE Installer) — must be complete
 > **Branch prefix:** `002-core-intellisense`

@@ -1,6 +1,6 @@
 # AKML SQL — Phase 8: Productivity Toolkit
 
-> **Version:** 1.0 | **Date:** March 2026 | **Author:** Abdulrahman Khamis
+> **Version:** 1.0 | **Date:** March 2026 | **Author:** Mohamed Khamis
 > **Status:** Ready for Implementation | **Classification:** Confidential
 > **Depends on:** Phase 7 (SQL History & Tab Management) — editor hooks infrastructure
 > **Branch prefix:** `008-productivity-toolkit`

@@ -51,7 +51,7 @@
 #ifndef MyAppVersion
   #define MyAppVersion "1.0.0"
 #endif
-#define MyAppPublisher "Abdulrahman Khamis"
+#define MyAppPublisher "Mohamed Khamis"
 #define MyAppURL "https://akmlsql.com"
 #define MyAppId "{{F7E8A9B0-C1D2-E3F4-A5B6-C7D8E9F0A1B2}"
 

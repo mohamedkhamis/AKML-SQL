@@ -1,6 +1,6 @@
 # AKML SQL — Phase 5: Static Code Analysis
 
-> **Version:** 1.0 | **Date:** March 2026 | **Author:** Abdulrahman Khamis
+> **Version:** 1.0 | **Date:** March 2026 | **Author:** Mohamed Khamis
 > **Status:** Ready for Implementation | **Classification:** Confidential
 > **Depends on:** Phase 4 (Snippet Manager) — snippet-based fix suggestions
 > **Branch prefix:** `005-code-analysis`
