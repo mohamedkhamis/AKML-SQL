@@ -41,6 +41,7 @@ artifacts/
 
 # Inno Setup
 src/AkmlSql.Installer/Output/
+src/AkmlSql.Installer/generated/
 
 # Self-contained publish
 publish/

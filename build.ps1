@@ -30,10 +30,12 @@ $ErrorActionPreference = "Stop"
 $Root = $PSScriptRoot
 
 # --- Compute build version (UTC+2, matching Directory.Build.props formula) ---
+# 4 segments so every part fits in a ushort (VSIX / AssemblyVersion require ≤ 65535).
 $_now        = [System.DateTime]::UtcNow.AddHours(2)
 $BuildYear   = $_now.ToString("yy")
-$BuildStamp  = $_now.ToString("MMddHHmm")
-$Version     = "1.$BuildYear.$BuildStamp"
+$BuildDate   = $_now.ToString("MMdd")
+$BuildTime   = $_now.ToString("HHmm")
+$Version     = "1.$BuildYear.$BuildDate.$BuildTime"
 
 # --- Tool paths ---
 $MSBuild = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe"
@@ -80,8 +82,35 @@ function Build-Shell([string]$Project) {
     }
 }
 
+# Substitute $version$ in each source.extension.vsixmanifest and write the resolved
+# file to src/AkmlSql.Installer/generated/<Target>/extension.vsixmanifest, which the
+# installer sources. Without this the literal "$version$" would ship to end users
+# (CreateVsixContainer=false in every shell csproj disables VSSDK's auto-substitution).
+function Update-VsixManifests([string]$VersionText) {
+    Invoke-Build "Resolve VSIX manifests ($VersionText)" {
+        $targets = @(
+            "AkmlSql.Ssms20", "AkmlSql.Ssms21", "AkmlSql.Ssms22",
+            "AkmlSql.VS2019", "AkmlSql.VS2022", "AkmlSql.VS2026"
+        )
+        foreach ($target in $targets) {
+            $src = Join-Path $Root "src\$target\source.extension.vsixmanifest"
+            $outDir = Join-Path $Root "src\AkmlSql.Installer\generated\$target"
+            $dst = Join-Path $outDir "extension.vsixmanifest"
+            if (-not (Test-Path $src)) {
+                Write-Host "  MISSING: $src" -ForegroundColor Red
+                $script:LASTEXITCODE = 1
+                return
+            }
+            New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+            (Get-Content $src -Raw) -replace '\$version\$', $VersionText `
+                | Set-Content -NoNewline -Encoding UTF8 -Path $dst
+        }
+    }
+}
+
 # --- Installer-only shortcut ---
 if ($InstallerOnly) {
+    Update-VsixManifests $Version
     Invoke-Build "Installer (Inno Setup)" {
         & $ISCC "$Root\src\AkmlSql.Installer\AkmlSqlSetup.iss" "/DMyAppVersion=$Version"
     }
@@ -141,6 +170,7 @@ if (-not $SkipTests) {
 }
 
 # --- Installer ---
+Update-VsixManifests $Version
 Invoke-Build "Installer (Inno Setup)" {
     & $ISCC "$Root\src\AkmlSql.Installer\AkmlSqlSetup.iss" "/DMyAppVersion=$Version"
 }

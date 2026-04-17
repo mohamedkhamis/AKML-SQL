@@ -6,12 +6,14 @@
     </Exec>
     <PropertyGroup>
       <GitCommitCount Condition="'$(GitExitCode)' != '0'">0</GitCommitCount>
-      <!-- Version: 1.YY.MMDDHHmm (e.g. 1.26.04140511) — changes every build/publish -->
+      <!-- Version: 1.YY.MMDD.HHmm (e.g. 1.26.0414.0511). 4 segments so every part fits
+           in a ushort (VSIX/AssemblyVersion require each segment ≤ 65535). -->
       <_BuildYear>$([System.DateTime]::UtcNow.AddHours(2).ToString("yy"))</_BuildYear>
-      <_BuildStamp>$([System.DateTime]::UtcNow.AddHours(2).ToString("MMddHHmm"))</_BuildStamp>
-      <Version>1.$(_BuildYear).$(_BuildStamp)</Version>
-      <AssemblyVersion>1.0.$(_BuildYear).0</AssemblyVersion>
-      <FileVersion>1.0.$(_BuildYear).0</FileVersion>
+      <_BuildDate>$([System.DateTime]::UtcNow.AddHours(2).ToString("MMdd"))</_BuildDate>
+      <_BuildTime>$([System.DateTime]::UtcNow.AddHours(2).ToString("HHmm"))</_BuildTime>
+      <Version>1.$(_BuildYear).$(_BuildDate).$(_BuildTime)</Version>
+      <AssemblyVersion>1.$(_BuildYear).$(_BuildDate).$(_BuildTime)</AssemblyVersion>
+      <FileVersion>1.$(_BuildYear).$(_BuildDate).$(_BuildTime)</FileVersion>
       <InformationalVersion>$(Version)</InformationalVersion>
       <GitVersionComputed>true</GitVersionComputed>
     </PropertyGroup>

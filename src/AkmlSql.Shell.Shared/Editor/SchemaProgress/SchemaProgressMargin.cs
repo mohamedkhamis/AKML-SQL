@@ -186,8 +186,16 @@ namespace AkmlSql.Shell.Shared.Editor.SchemaProgress
         private void RepositionNotification()
         {
             // Place the notification box at the bottom-right corner of the viewport.
-            Canvas.SetRight(_notificationBorder, EdgeMargin);
-            Canvas.SetBottom(_notificationBorder, EdgeMargin);
+            // ViewportRelative adornments live in a Canvas whose coordinates are the
+            // viewport origin at (0,0); SetRight / SetBottom are ignored by that layer
+            // (proved in-repo by every other adornment — MinimapAdornment, StickyScroll,
+            // SchemaStatusIndicator — all using SetLeft / SetTop).
+            var left = _textView.ViewportWidth  - NotificationWidth  - EdgeMargin;
+            var top  = _textView.ViewportHeight - NotificationHeight - EdgeMargin;
+            if (left < 0) left = 0;
+            if (top  < 0) top  = 0;
+            Canvas.SetLeft(_notificationBorder, left);
+            Canvas.SetTop (_notificationBorder, top);
         }
 
         // ─── Poll loop ──────────────────────────────────────────────────────

@@ -116,32 +116,32 @@ Source: "LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
 ; SSMS 20 (x86) extension files — all DLLs from build output plus pkgdef and manifest
 Source: "..\AkmlSql.Ssms20\bin\Release\net472\*.dll"; DestDir: "{code:GetSSMS20ExtDir}"; Check: CheckSSMS20; Flags: ignoreversion
 Source: "..\AkmlSql.Ssms20\AkmlSql.Ssms20.pkgdef"; DestDir: "{code:GetSSMS20ExtDir}"; Check: CheckSSMS20; Flags: ignoreversion
-Source: "..\AkmlSql.Ssms20\source.extension.vsixmanifest"; DestDir: "{code:GetSSMS20ExtDir}"; DestName: "extension.vsixmanifest"; Check: CheckSSMS20; Flags: ignoreversion
+Source: "generated\AkmlSql.Ssms20\extension.vsixmanifest"; DestDir: "{code:GetSSMS20ExtDir}"; DestName: "extension.vsixmanifest"; Check: CheckSSMS20; Flags: ignoreversion
 
 ; SSMS 21 (x64) extension files
 Source: "..\AkmlSql.Ssms21\bin\Release\net472\*.dll"; DestDir: "{code:GetSSMS21ExtDir}"; Check: CheckSSMS21; Flags: ignoreversion
 Source: "..\AkmlSql.Ssms21\AkmlSql.Ssms21.pkgdef"; DestDir: "{code:GetSSMS21ExtDir}"; Check: CheckSSMS21; Flags: ignoreversion
-Source: "..\AkmlSql.Ssms21\source.extension.vsixmanifest"; DestDir: "{code:GetSSMS21ExtDir}"; DestName: "extension.vsixmanifest"; Check: CheckSSMS21; Flags: ignoreversion
+Source: "generated\AkmlSql.Ssms21\extension.vsixmanifest"; DestDir: "{code:GetSSMS21ExtDir}"; DestName: "extension.vsixmanifest"; Check: CheckSSMS21; Flags: ignoreversion
 
 ; SSMS 22 (x64) extension files
 Source: "..\AkmlSql.Ssms22\bin\Release\net472\*.dll"; DestDir: "{code:GetSSMS22ExtDir}"; Check: CheckSSMS22; Flags: ignoreversion
 Source: "..\AkmlSql.Ssms22\AkmlSql.Ssms22.pkgdef"; DestDir: "{code:GetSSMS22ExtDir}"; Check: CheckSSMS22; Flags: ignoreversion
-Source: "..\AkmlSql.Ssms22\source.extension.vsixmanifest"; DestDir: "{code:GetSSMS22ExtDir}"; DestName: "extension.vsixmanifest"; Check: CheckSSMS22; Flags: ignoreversion
+Source: "generated\AkmlSql.Ssms22\extension.vsixmanifest"; DestDir: "{code:GetSSMS22ExtDir}"; DestName: "extension.vsixmanifest"; Check: CheckSSMS22; Flags: ignoreversion
 
 ; VS 2019 (x86) extension files
 Source: "..\AkmlSql.VS2019\bin\Release\net472\*.dll"; DestDir: "{code:GetVS2019ExtDir}"; Check: CheckVS2019; Flags: ignoreversion
 Source: "..\AkmlSql.VS2019\AkmlSql.VS2019.pkgdef"; DestDir: "{code:GetVS2019ExtDir}"; Check: CheckVS2019; Flags: ignoreversion
-Source: "..\AkmlSql.VS2019\source.extension.vsixmanifest"; DestDir: "{code:GetVS2019ExtDir}"; DestName: "extension.vsixmanifest"; Check: CheckVS2019; Flags: ignoreversion
+Source: "generated\AkmlSql.VS2019\extension.vsixmanifest"; DestDir: "{code:GetVS2019ExtDir}"; DestName: "extension.vsixmanifest"; Check: CheckVS2019; Flags: ignoreversion
 
 ; VS 2022 (x64) extension files
 Source: "..\AkmlSql.VS2022\bin\Release\net472\*.dll"; DestDir: "{code:GetVS2022ExtDir}"; Check: CheckVS2022; Flags: ignoreversion
 Source: "..\AkmlSql.VS2022\AkmlSql.VS2022.pkgdef"; DestDir: "{code:GetVS2022ExtDir}"; Check: CheckVS2022; Flags: ignoreversion
-Source: "..\AkmlSql.VS2022\source.extension.vsixmanifest"; DestDir: "{code:GetVS2022ExtDir}"; DestName: "extension.vsixmanifest"; Check: CheckVS2022; Flags: ignoreversion
+Source: "generated\AkmlSql.VS2022\extension.vsixmanifest"; DestDir: "{code:GetVS2022ExtDir}"; DestName: "extension.vsixmanifest"; Check: CheckVS2022; Flags: ignoreversion
 
 ; VS 2026 (x64) extension files
 Source: "..\AkmlSql.VS2026\bin\Release\net472\*.dll"; DestDir: "{code:GetVS2026ExtDir}"; Check: CheckVS2026; Flags: ignoreversion
 Source: "..\AkmlSql.VS2026\AkmlSql.VS2026.pkgdef"; DestDir: "{code:GetVS2026ExtDir}"; Check: CheckVS2026; Flags: ignoreversion
-Source: "..\AkmlSql.VS2026\source.extension.vsixmanifest"; DestDir: "{code:GetVS2026ExtDir}"; DestName: "extension.vsixmanifest"; Check: CheckVS2026; Flags: ignoreversion
+Source: "generated\AkmlSql.VS2026\extension.vsixmanifest"; DestDir: "{code:GetVS2026ExtDir}"; DestName: "extension.vsixmanifest"; Check: CheckVS2026; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#MyAppName} Settings"; Filename: "{app}\AkmlSql.Core.dll"; Comment: "AKML SQL"
