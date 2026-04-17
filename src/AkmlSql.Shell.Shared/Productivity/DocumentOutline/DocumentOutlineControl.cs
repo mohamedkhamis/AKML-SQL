@@ -25,6 +25,8 @@ namespace AkmlSql.Shell.Shared.Productivity.DocumentOutline
         private readonly DocumentOutlineViewModel _viewModel;
         private readonly TextBlock _emptyState;
 
+        private static SolidColorBrush Freeze(SolidColorBrush b) { b.Freeze(); return b; }
+
         public DocumentOutlineControl()
         {
             _viewModel = new DocumentOutlineViewModel();
@@ -45,7 +47,7 @@ namespace AkmlSql.Shell.Shared.Productivity.DocumentOutline
             _emptyState = new TextBlock
             {
                 Text            = "No SQL structure found — add CTEs, stored procedures, or functions to see them listed here",
-                Foreground      = new SolidColorBrush(theme.PlaceholderText),
+                Foreground      = Freeze(new SolidColorBrush(theme.PlaceholderText)),
                 TextWrapping    = TextWrapping.Wrap,
                 Padding         = new Thickness(12, 16, 12, 0),
                 FontSize        = 11,
@@ -60,7 +62,7 @@ namespace AkmlSql.Shell.Shared.Productivity.DocumentOutline
             // Header row with title + Refresh button
             var headerPanel = new DockPanel
             {
-                Background = new SolidColorBrush(theme.EditorPanelBackground),
+                Background = Freeze(new SolidColorBrush(theme.EditorPanelBackground)),
                 LastChildFill = false
             };
 
@@ -80,10 +82,10 @@ namespace AkmlSql.Shell.Shared.Productivity.DocumentOutline
                 Margin     = new Thickness(0, 3, 4, 3),
                 FontSize   = 11,
                 Cursor     = Cursors.Hand,
-                Background = new SolidColorBrush(theme.Background),
-                Foreground = new SolidColorBrush(theme.Foreground),
+                Background = Freeze(new SolidColorBrush(theme.Background)),
+                Foreground = Freeze(new SolidColorBrush(theme.Foreground)),
                 BorderThickness = new Thickness(1),
-                BorderBrush     = new SolidColorBrush(theme.Border),
+                BorderBrush     = Freeze(new SolidColorBrush(theme.Border)),
                 ToolTip    = "Rebuild the outline from the current document"
             };
             refreshButton.Click += (_, _) => _viewModel.RequestOutlineUpdate();

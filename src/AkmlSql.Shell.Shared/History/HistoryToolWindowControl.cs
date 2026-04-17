@@ -1514,8 +1514,7 @@ namespace AkmlSql.Shell.Shared.History
                 Height = 170,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
                 ResizeMode = ResizeMode.NoResize,
-                Owner = Application.Current?.MainWindow,
-                Background = new SolidColorBrush(theme.HistoryWindowBackground)
+                Background = Freeze(theme.HistoryWindowBackground)
             };
 
             var panel = new StackPanel { Margin = new Thickness(16) };
@@ -1524,7 +1523,7 @@ namespace AkmlSql.Shell.Shared.History
             {
                 Text = prompt,
                 Margin = new Thickness(0, 0, 0, 8),
-                Foreground = new SolidColorBrush(theme.HistoryQueryName)
+                Foreground = Freeze(theme.HistoryQueryName)
             };
             panel.Children.Add(label);
 
@@ -1533,9 +1532,9 @@ namespace AkmlSql.Shell.Shared.History
                 Text = defaultValue,
                 Margin = new Thickness(0, 0, 0, 12),
                 Padding = new Thickness(6, 4, 6, 4),
-                Background = new SolidColorBrush(theme.HistorySearchBackground),
-                Foreground = new SolidColorBrush(theme.HistoryQueryName),
-                BorderBrush = new SolidColorBrush(theme.HistorySearchBorder)
+                Background = Freeze(theme.HistorySearchBackground),
+                Foreground = Freeze(theme.HistoryQueryName),
+                BorderBrush = Freeze(theme.HistorySearchBorder)
             };
             textBox.SelectAll();
             panel.Children.Add(textBox);
@@ -1574,9 +1573,20 @@ namespace AkmlSql.Shell.Shared.History
             panel.Children.Add(buttonPanel);
             dialog.Content = panel;
 
-            // Set owner to prevent dialog from going behind the main VS/SSMS window
-            try { dialog.Owner = System.Windows.Application.Current?.MainWindow; }
-            catch { /* Non-critical -- centering may not work but dialog still functions */ }
+            // Parent the dialog to the VS/SSMS main window via DTE HWND.
+            // Application.Current?.MainWindow is null in SSMS isolated-shell hosts,
+            // so the DTE path is the only reliable option. See HistoryDiffWindow.cs
+            // for the canonical pattern (CLAUDE.md "WPF UI conventions").
+            try
+            {
+                var dte = (EnvDTE.DTE)Microsoft.VisualStudio.Shell.Package.GetGlobalService(typeof(EnvDTE.DTE));
+                if (dte?.MainWindow != null)
+                {
+                    var helper = new System.Windows.Interop.WindowInteropHelper(dialog);
+                    helper.Owner = (IntPtr)dte.MainWindow.HWnd;
+                }
+            }
+            catch { /* Non-critical — CenterOwner falls back to screen centering */ }
 
             dialog.ShowDialog();
             return result;
