@@ -55,6 +55,22 @@
 #define MyAppURL "https://akmlsql.com"
 #define MyAppId "{{F7E8A9B0-C1D2-E3F4-A5B6-C7D8E9F0A1B2}"
 
+; --- Resolve $version$ in VSIX manifests before [Files] references them ---
+; Shell csprojs have CreateVsixContainer=false, so VSSDK never substitutes
+; $version$. We do it here via a PowerShell helper. Runs at ISCC compile
+; time so ANY invocation (build.ps1, Deploy-Build-Release.ps1, bare ISCC)
+; produces the generated\<Target>\extension.vsixmanifest files that the
+; [Files] section sources below.
+#define ManifestExit Exec( \
+    "powershell.exe", \
+    "-NoProfile -ExecutionPolicy Bypass -File " \
+      + AddQuotes(SourcePath + "preprocess-manifests.ps1") \
+      + " -Version " + AddQuotes(MyAppVersion), \
+    SourcePath)
+#if ManifestExit != 0
+  #error "preprocess-manifests.ps1 failed (see output above)"
+#endif
+
 [Setup]
 ; AppId is fixed — Inno Setup uses this to detect existing installations.
 ; Together with UsePreviousAppDir=yes, this enables seamless in-place upgrade:

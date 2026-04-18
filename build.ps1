@@ -82,29 +82,14 @@ function Build-Shell([string]$Project) {
     }
 }
 
-# Substitute $version$ in each source.extension.vsixmanifest and write the resolved
-# file to src/AkmlSql.Installer/generated/<Target>/extension.vsixmanifest, which the
-# installer sources. Without this the literal "$version$" would ship to end users
-# (CreateVsixContainer=false in every shell csproj disables VSSDK's auto-substitution).
+# ISCC now runs preprocess-manifests.ps1 itself via #expr Exec, so build.ps1
+# doesn't need a duplicate step. Keeping Update-VsixManifests as a thin wrapper
+# means an early failure surfaces before we start the heavy .NET builds.
 function Update-VsixManifests([string]$VersionText) {
     Invoke-Build "Resolve VSIX manifests ($VersionText)" {
-        $targets = @(
-            "AkmlSql.Ssms20", "AkmlSql.Ssms21", "AkmlSql.Ssms22",
-            "AkmlSql.VS2019", "AkmlSql.VS2022", "AkmlSql.VS2026"
-        )
-        foreach ($target in $targets) {
-            $src = Join-Path $Root "src\$target\source.extension.vsixmanifest"
-            $outDir = Join-Path $Root "src\AkmlSql.Installer\generated\$target"
-            $dst = Join-Path $outDir "extension.vsixmanifest"
-            if (-not (Test-Path $src)) {
-                Write-Host "  MISSING: $src" -ForegroundColor Red
-                $script:LASTEXITCODE = 1
-                return
-            }
-            New-Item -ItemType Directory -Force -Path $outDir | Out-Null
-            (Get-Content $src -Raw) -replace '\$version\$', $VersionText `
-                | Set-Content -NoNewline -Encoding UTF8 -Path $dst
-        }
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass `
+            -File "$Root\src\AkmlSql.Installer\preprocess-manifests.ps1" `
+            -Version $VersionText
     }
 }
 
