@@ -80,14 +80,30 @@
 AppId={#MyAppId}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
+; AppVerName is what Windows "Programs and Features" shows as the display name
+; — by setting it explicitly to "Name Version" we guarantee the version is
+; always visible in the installed-programs list (otherwise newer Windows
+; builds sometimes show only AppName without the version column populated).
+AppVerName={#MyAppName} {#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
+; VersionInfoVersion stamps the compiled installer .EXE's own file-properties
+; (Details tab in Explorer → "File version" / "Product version"). Inno Setup
+; requires the 4-segment x.y.z.w form here; our MyAppVersion already matches.
+VersionInfoVersion={#MyAppVersion}
+VersionInfoProductVersion={#MyAppVersion}
+VersionInfoProductName={#MyAppName}
+VersionInfoCompany={#MyAppPublisher}
+VersionInfoDescription={#MyAppName} Setup
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 LicenseFile=
 InfoBeforeFile=LICENSE.txt
+; Keep the installer filename stable — Deploy-Build-Release.ps1 and any
+; existing download links expect AKMLSQLSetup.exe. The version is embedded
+; in the EXE's file properties via VersionInfoVersion above.
 OutputBaseFilename=AKMLSQLSetup
 OutputDir=Output
 Compression=lzma2

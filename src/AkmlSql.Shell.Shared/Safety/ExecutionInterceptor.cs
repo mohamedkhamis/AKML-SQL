@@ -95,6 +95,14 @@ namespace AkmlSql.Shell.Shared.Safety
         /// </returns>
         public static bool OnBeforeExecute(string sqlText, string? serverName)
         {
+            // ── Trace entry + exit for each step so the next SSMS hang repro is
+            // localizable from logs alone (previous repro went 3 minutes silent
+            // after this method was called — no way to tell where it blocked).
+            // Use Information so the trace survives Debug-filtered configs.
+            var enterTs = DateTime.UtcNow;
+            Log.Information("[ExecutionGuard] ENTER OnBeforeExecute: sql.Length={SqlLen} server={Server}",
+                sqlText?.Length ?? 0, serverName ?? "(null)");
+
             // Re-check settings dynamically on each invocation so that enabling
             // safety settings via Options takes effect without an IDE restart.
             // Cache the loaded settings to avoid a second disk read in FilterBySettings.
@@ -116,21 +124,38 @@ namespace AkmlSql.Shell.Shared.Safety
                 // Config load failure — use last known value
             }
 
+            // ── Emergency kill-switch. If the safety check is suspected of hanging
+            // SSMS, the user can set `Safety.TemporarilyDisabled=true` in
+            // %AppData%\AKML SQL\config.json and F5 will go straight through without
+            // touching the engine or the modal dialog — no reinstall required.
+            if (cachedSafety?.TemporarilyDisabled == true)
+            {
+                Log.Warning("[ExecutionGuard] EXIT: Safety.TemporarilyDisabled=true in config — skipping all checks ({Ms} ms)",
+                    (DateTime.UtcNow - enterTs).TotalMilliseconds);
+                return true;
+            }
+
             if (!_anySettingEnabled)
             {
-                Log.Warning("[ExecutionGuard] Safety check suppressed: all safety checks are disabled in config (Safety.dropConfirmation and all other safety flags are false)");
+                Log.Warning("[ExecutionGuard] EXIT: all safety checks disabled in config ({Ms} ms)",
+                    (DateTime.UtcNow - enterTs).TotalMilliseconds);
                 return true;
             }
 
             if (string.IsNullOrWhiteSpace(sqlText))
+            {
+                Log.Debug("[ExecutionGuard] EXIT: empty SQL text ({Ms} ms)",
+                    (DateTime.UtcNow - enterTs).TotalMilliseconds);
                 return true;
+            }
 
             try
             {
                 var client = EngineLifecycle.Manager?.Client;
                 if (client == null || !client.IsConnected)
                 {
-                    Log.Debug("ExecutionInterceptor: engine not connected, skipping safety check");
+                    Log.Information("[ExecutionGuard] EXIT: engine not connected, skipping safety check ({Ms} ms)",
+                        (DateTime.UtcNow - enterTs).TotalMilliseconds);
                     return true; // Fail-open: allow execution if engine is unavailable
                 }
 
@@ -161,15 +186,32 @@ namespace AkmlSql.Shell.Shared.Safety
                 // Synchronous wait — must block before execution proceeds
                 // Use JoinableTaskFactory to avoid deadlock on the UI thread
                 SafetyCheckResponse? response = null;
-                ThreadHelper.JoinableTaskFactory.Run(async () =>
+                var beforeIpcTs = DateTime.UtcNow;
+                Log.Information("[ExecutionGuard] BEFORE engine SafetyCheck (500ms timeout)");
+                try
                 {
-                    // Safety check must not block execution if it takes > 500 ms.
-                    // On timeout the check yields and execution proceeds (fail-open).
-                    response = await client.SendRequestAsync<SafetyCheckResponse, SafetyCheckRequest>(
-                        MessageTypes.SafetyCheck,
-                        request,
-                        timeoutMs: 500);
-                });
+                    ThreadHelper.JoinableTaskFactory.Run(async () =>
+                    {
+                        // Safety check must not block execution if it takes > 500 ms.
+                        // On timeout the check yields and execution proceeds (fail-open).
+                        response = await client.SendRequestAsync<SafetyCheckResponse, SafetyCheckRequest>(
+                            MessageTypes.SafetyCheck,
+                            request,
+                            timeoutMs: 500);
+                    });
+                }
+                catch (Exception ipcEx)
+                {
+                    // JoinableTaskFactory.Run rethrows inner exceptions synchronously.
+                    // Log and fall through — response stays null → treated as "no warnings".
+                    Log.Information(ipcEx,
+                        "[ExecutionGuard] AFTER engine SafetyCheck: FAILED/TIMEOUT after {Ms} ms (fail-open)",
+                        (DateTime.UtcNow - beforeIpcTs).TotalMilliseconds);
+                }
+                Log.Information("[ExecutionGuard] AFTER engine SafetyCheck: response={ResponseState} ({Ms} ms)",
+                    response == null ? "null" :
+                        (response.RequiresConfirmation ? $"RequiresConfirmation w/ {response.Warnings?.Length ?? 0} warnings" : "no-warnings"),
+                    (DateTime.UtcNow - beforeIpcTs).TotalMilliseconds);
 
                 if (response == null || !response.RequiresConfirmation || response.Warnings.Length == 0)
                 {
@@ -207,7 +249,21 @@ namespace AkmlSql.Shell.Shared.Safety
 
                 ThreadHelper.ThrowIfNotOnUIThread();
                 var dialog = SafetyWarningDialog.CreateForWarnings(filteredWarnings, serverName, envLabel, envColor);
-                var wpfResult = dialog.ShowDialog();
+                var beforeDialogTs = DateTime.UtcNow;
+                Log.Information(
+                    "[ExecutionGuard] BEFORE SafetyWarningDialog.ShowDialog: {Count} warnings, env='{Env}' — if SSMS appears to freeze NOW, check Alt-Tab / other monitors for a hidden modal dialog",
+                    filteredWarnings.Length, envLabel);
+
+                bool? wpfResult;
+                try
+                {
+                    wpfResult = dialog.ShowDialog();
+                }
+                finally
+                {
+                    Log.Information("[ExecutionGuard] AFTER SafetyWarningDialog.ShowDialog: user sat on the dialog for {Ms} ms",
+                        (DateTime.UtcNow - beforeDialogTs).TotalMilliseconds);
+                }
 
                 if (wpfResult == true)
                 {
@@ -218,20 +274,26 @@ namespace AkmlSql.Shell.Shared.Safety
                             _suppressedWarningTypes.Add(w.WarningType);
                     }
                     LogAuditEvent(serverName, envLabel, envColor, filteredWarnings, "Confirmed");
+                    Log.Information("[ExecutionGuard] EXIT: user Confirmed ({Ms} ms total)",
+                        (DateTime.UtcNow - enterTs).TotalMilliseconds);
                     return true;
                 }
 
                 LogAuditEvent(serverName, envLabel, envColor, filteredWarnings, "Blocked");
+                Log.Information("[ExecutionGuard] EXIT: user Cancelled ({Ms} ms total)",
+                    (DateTime.UtcNow - enterTs).TotalMilliseconds);
                 return false;
             }
             catch (OperationCanceledException)
             {
-                Log.Debug("ExecutionInterceptor: safety check timed out, allowing execution (fail-open)");
+                Log.Information("[ExecutionGuard] EXIT: safety check timed out ({Ms} ms total, fail-open)",
+                    (DateTime.UtcNow - enterTs).TotalMilliseconds);
                 return true; // Fail-open on timeout
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "ExecutionInterceptor: safety check failed, allowing execution (fail-open)");
+                Log.Error(ex, "[ExecutionGuard] EXIT: failed with exception ({Ms} ms total, fail-open)",
+                    (DateTime.UtcNow - enterTs).TotalMilliseconds);
                 return true; // Fail-open on error
             }
         }

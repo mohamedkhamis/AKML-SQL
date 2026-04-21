@@ -210,7 +210,9 @@ public class PipeRpcServer
                                 connInfo.SessionId, s.ConnectionString);
                         }
                     }
-                    Log.Information("Connection changed: {Session} -> {Db}", connInfo.SessionId, connInfo.DatabaseName);
+                    Log.Information("Connection changed: session={Session} db={Db} — {ConnDesc}",
+                        connInfo.SessionId, connInfo.DatabaseName,
+                        Schema.ConnectionDiagnostics.Describe(connInfo.ConnectionString));
 
                     // Fire-and-forget: populate schema cache Phase A
                     _ = Task.Run(async () =>
@@ -331,21 +333,12 @@ public class PipeRpcServer
                         return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
                     }
 
-                    var refreshReq = MessagePackSerializer.Deserialize<RefreshRequest>(message.Payload);
-                    var refreshSession = !string.IsNullOrEmpty(refreshReq.SessionId)
-                        ? _sessionManager.GetSession(refreshReq.SessionId) : null;
-                    int refreshedCount = 0;
-                    if (refreshSession != null)
-                    {
-                        var refCache = _schemaCacheManager.GetCache(refreshReq.SessionId, refreshSession.DatabaseName);
-                        if (refCache != null)
-                        {
-                            refCache.IsStale = true;
-                            refreshedCount = refCache.Schemas.Values.Sum(s => s.Objects.Count);
-                        }
-                    }
-                    var refResp = new RefreshResponse { Success = true, ObjectCount = refreshedCount };
-                    return Task.FromResult(CreateResponse(MessageTypes.SchemaRefreshComplete, message.RequestId, refResp));
+                    // Fire-and-forget: the shell sends this via SendNotificationAsync
+                    // (RequestId = 0), so any response we build here would be dropped by
+                    // the client's read loop. Mirror the ConnectionChanged handler's
+                    // pattern — return null and let the background task do the work.
+                    HandleSchemaRefreshRequest(MessagePackSerializer.Deserialize<RefreshRequest>(message.Payload));
+                    return Task.FromResult<RpcMessage?>(null);
 
                 case MessageTypes.SchemaStatusRequest:
                     if (message.Payload == null)
@@ -804,6 +797,87 @@ public class PipeRpcServer
         if (session == null || !session.IsConnected)
             return (null, null);
         return (session.ConnectionString, session.DatabaseName);
+    }
+
+    /// <summary>
+    /// Handles a manual <c>Ctrl+Shift+D</c> schema refresh for the given session.
+    /// Fire-and-forget — no response is sent to the shell. Guards against racing
+    /// an in-flight <c>ConnectionChanged</c> populate: if Phase A or Phase B is
+    /// already running, marks the cache stale for next time and returns instead
+    /// of clearing concurrent-dictionary entries under an active writer.
+    /// </summary>
+    private void HandleSchemaRefreshRequest(RefreshRequest req)
+    {
+        var session = !string.IsNullOrEmpty(req.SessionId)
+            ? _sessionManager.GetSession(req.SessionId) : null;
+
+        if (session == null)
+        {
+            Log.Warning("SchemaRefreshRequest: session='{Session}' not found — nothing to refresh", req.SessionId);
+            return;
+        }
+        if (string.IsNullOrEmpty(session.ConnectionString))
+        {
+            Log.Warning(
+                "SchemaRefreshRequest: session='{Session}' has no connection string (disconnected or SQL auth not engine-usable) — nothing to refresh",
+                req.SessionId);
+            return;
+        }
+
+        var cache = _schemaCacheManager.GetCache(req.SessionId, session.DatabaseName);
+        if (cache != null && (cache.Phase == PopulationPhase.PhaseA || cache.Phase == PopulationPhase.PhaseB))
+        {
+            // A populate is already running (likely from the 10×500ms retry loop
+            // in ConnectionWiringHelper or a just-completed ConnectionChanged).
+            // Clearing the ConcurrentDictionary now would race GetOrAdd + List.Add
+            // in the background task and either lose newly-written entries or
+            // leave duplicates. Mark it stale and let the next populate pick up;
+            // the user can press Ctrl+Shift+D again once loading settles.
+            cache.IsStale = true;
+            Log.Information(
+                "SchemaRefreshRequest: populate already in progress for session={Session} db={Db} (phase={Phase}) — marked stale, skipping concurrent reset",
+                req.SessionId, session.DatabaseName, cache.Phase);
+            return;
+        }
+
+        int priorCount = 0;
+        if (cache != null)
+        {
+            priorCount = cache.Schemas.Values.Sum(s => s.Objects.Count);
+
+            // PopulatePhaseAAsync uses GetOrAdd + List.Add, so skipping the clear
+            // would duplicate every object on a second invocation. Phase B rebuilds
+            // the FK list and index, so clear that too.
+            cache.Schemas.Clear();
+            cache.ForeignKeys.Clear();
+            cache.Phase = PopulationPhase.NotLoaded;
+            cache.IsStale = false;
+            Log.Information(
+                "SchemaRefreshRequest: cache cleared for session={Session} db={Db} (previously {Count} objects) — re-running Phase A + Phase B",
+                req.SessionId, session.DatabaseName, priorCount);
+        }
+
+        var ctxSession = session;
+        var ctxSessionId = req.SessionId;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var c = _schemaCacheManager.GetOrCreateCache(ctxSessionId, ctxSession.DatabaseName);
+                await _schemaMetadataService.PopulatePhaseAAsync(
+                    c, ctxSession.ConnectionString, CancellationToken.None);
+                _schemaCacheManager.EvictLru();
+                if (c.Phase == PopulationPhase.PhaseA)
+                {
+                    await _schemaMetadataService.PopulatePhaseBAsync(
+                        c, ctxSession.ConnectionString, CancellationToken.None);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Manual schema refresh: background populate failed for session={Session}", ctxSessionId);
+            }
+        });
     }
 
     private static RpcMessage CreateErrorResponse(string message, int requestId)

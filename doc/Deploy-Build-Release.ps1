@@ -66,18 +66,43 @@ $srcDir     = Join-Path $repoRoot 'src'
 $testDir    = Join-Path $repoRoot 'tests'
 $installerDir = Join-Path $srcDir 'AkmlSql.Installer'
 
-# Locate MSBuild (VS 2022 Enterprise → Professional → Community → BuildTools)
-$msbuildCandidates = @(
-    "${env:ProgramFiles}\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe"
-    "${env:ProgramFiles}\Microsoft Visual Studio\2022\Professional\MSBuild\Current\Bin\MSBuild.exe"
-    "${env:ProgramFiles}\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe"
-    "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe"
-)
-$msbuild = $msbuildCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+# Locate MSBuild — prefer vswhere (handles VS 2022 / VS 2026 / Build Tools / Insiders)
+# and fall back to a fixed path list covering VS 2026 (folder "18"), VS 2022, VS 2019.
+$msbuild = $null
+$vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+if (Test-Path $vswhere) {
+    $found = & $vswhere -latest -prerelease -products * `
+        -requires Microsoft.Component.MSBuild `
+        -find 'MSBuild\**\Bin\MSBuild.exe' 2>$null |
+        Where-Object { $_ -and (Test-Path $_) } |
+        Select-Object -First 1
+    if ($found) { $msbuild = $found }
+}
 if (-not $msbuild) {
-    Write-Error "MSBuild not found. Install Visual Studio 2022 or Build Tools."
+    $msbuildCandidates = @(
+        # VS 2026 (version folder "18")
+        "${env:ProgramFiles}\Microsoft Visual Studio\18\Enterprise\MSBuild\Current\Bin\MSBuild.exe"
+        "${env:ProgramFiles}\Microsoft Visual Studio\18\Professional\MSBuild\Current\Bin\MSBuild.exe"
+        "${env:ProgramFiles}\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MSBuild.exe"
+        "${env:ProgramFiles}\Microsoft Visual Studio\18\Insiders\MSBuild\Current\Bin\MSBuild.exe"
+        # VS 2022
+        "${env:ProgramFiles}\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe"
+        "${env:ProgramFiles}\Microsoft Visual Studio\2022\Professional\MSBuild\Current\Bin\MSBuild.exe"
+        "${env:ProgramFiles}\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe"
+        "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe"
+        # VS 2019 (x86 install root)
+        "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2019\Enterprise\MSBuild\Current\Bin\MSBuild.exe"
+        "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2019\Professional\MSBuild\Current\Bin\MSBuild.exe"
+        "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2019\Community\MSBuild\Current\Bin\MSBuild.exe"
+        "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2019\BuildTools\MSBuild\Current\Bin\MSBuild.exe"
+    )
+    $msbuild = $msbuildCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+}
+if (-not $msbuild) {
+    Write-Error "MSBuild not found. Install Visual Studio 2022/2026 or Build Tools."
     exit 1
 }
+Write-Host "  Using MSBuild: $msbuild" -ForegroundColor DarkGray
 
 # Locate Inno Setup
 $isccCandidates = @(
@@ -85,6 +110,20 @@ $isccCandidates = @(
     "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
 )
 $iscc = $isccCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Build version — SAME formula as src/Directory.Build.props so the installer
+#  version in Programs & Features, the VSIX manifests, and the AssemblyVersion
+#  stamped on every DLL all agree. Formula: 1.YY.MMDD.HHmm (local +02:00).
+#
+#  Every segment is ≤ 65535, which VSIX/Assembly Version requires. Seeing a
+#  mismatched 1.0.0 in P&F was the sign that this wasn't being passed to ISCC.
+# ─────────────────────────────────────────────────────────────────────────────
+$buildTime  = [System.DateTime]::UtcNow.AddHours(2)
+$buildVersion = '1.{0}.{1}.{2}' -f `
+    $buildTime.ToString('yy'), `
+    $buildTime.ToString('MMdd'), `
+    $buildTime.ToString('HHmm')
 
 # All shell targets
 $allTargets = @('Ssms20', 'Ssms21', 'Ssms22', 'VS2019', 'VS2022', 'VS2026')
@@ -291,9 +330,12 @@ if (-not $SkipInstaller) {
         $script:errors += "Inno Setup (ISCC.exe) not found"
     } else {
         $issFile = Join-Path $installerDir 'AkmlSqlSetup.iss'
-        Write-Host "  Compiling $issFile..." -NoNewline
+        Write-Host "  Compiling $issFile (version=$buildVersion)..." -NoNewline
 
-        $output = & $iscc $issFile 2>&1
+        # Pass MyAppVersion via /D so it overrides the #ifndef fallback in the
+        # .iss. This is what makes "Programs and Features" show the real build
+        # version instead of the 1.0.0 placeholder.
+        $output = & $iscc "/DMyAppVersion=$buildVersion" $issFile 2>&1
         if ($LASTEXITCODE -ne 0) {
             Write-Fail " FAILED"
             $output | Select-String 'Error' | ForEach-Object { Write-Host "    $_" -ForegroundColor Red }

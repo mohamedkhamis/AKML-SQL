@@ -24,6 +24,7 @@ namespace AkmlSql.Shell.Shared.Editor
                 var connection = SsmsConnectionDetector.TryDetectConnection(serviceProvider, textView);
                 if (connection == null)
                 {
+                    Log.Debug("DetectAndSendConnection: initial detect returned null for session={SessionId}, starting 10×500ms retry loop", sessionId);
                     // Retry after a delay on a background thread
                     Task.Run(async () =>
                     {
@@ -40,20 +41,49 @@ namespace AkmlSql.Shell.Shared.Editor
                                 });
                                 if (conn != null)
                                 {
+                                    if (!conn.IsEngineUsable)
+                                    {
+                                        // Auth can't be silently reused by the engine
+                                        // (SQL auth / AAD Interactive / etc). ParseCaption
+                                        // already logged the one-time warning — just stop.
+                                        Log.Debug("DetectAndSendConnection: session={SessionId} detected on attempt {Attempt} but auth={Auth} is not engine-usable; skipping send",
+                                            sessionId, attempt + 1, conn.AuthMode);
+                                        return;
+                                    }
+                                    Log.Debug("DetectAndSendConnection: session={SessionId} detected on attempt {Attempt} → {Server}.{Db} auth={Auth}",
+                                        sessionId, attempt + 1, conn.Server, conn.Database, conn.AuthMode);
                                     var c = EngineLifecycle.Manager?.Client;
                                     if (c != null && c.IsConnected)
                                         await SendConnectionChangedAsync(c, sessionId, conn);
                                     else
-                                        Log.Debug("Engine not connected for deferred connection send");
+                                        Log.Debug("DetectAndSendConnection: engine not connected — deferred send skipped for session={SessionId}", sessionId);
                                     return;
                                 }
                             }
-                            catch { /* retry */ }
+                            catch (Exception retryEx)
+                            {
+                                Log.Debug(retryEx, "DetectAndSendConnection: retry attempt {Attempt} threw for session={SessionId}",
+                                    attempt + 1, sessionId);
+                            }
                         }
-                        Log.Debug("No SSMS connection detected after retries for session {SessionId}", sessionId);
+                        Log.Debug("DetectAndSendConnection: no SSMS connection detected after 10 retries for session {SessionId} (unsaved / not-yet-connected buffer is normal)", sessionId);
                     });
                     return;
                 }
+
+                if (!connection.IsEngineUsable)
+                {
+                    // Unsupported auth — engine cannot connect without prompting or
+                    // credentials we don't have. Skip sending ConnectionChanged so we
+                    // don't trigger a Phase A attempt that would fail with a noisy
+                    // login-failed error. ParseCaption already logged a one-shot warning.
+                    Log.Debug("DetectAndSendConnection: session={SessionId} detected {Server}.{Db} but auth={Auth} is not engine-usable; skipping send",
+                        sessionId, connection.Server, connection.Database, connection.AuthMode);
+                    return;
+                }
+
+                Log.Debug("DetectAndSendConnection: session={SessionId} detected synchronously → {Server}.{Db} auth={Auth}",
+                    sessionId, connection.Server, connection.Database, connection.AuthMode);
 
                 var client = EngineLifecycle.Manager?.Client;
                 if (client != null && client.IsConnected)
@@ -63,6 +93,7 @@ namespace AkmlSql.Shell.Shared.Editor
                 }
 
                 // Engine not ready yet — retry in background
+                Log.Debug("DetectAndSendConnection: engine not connected yet for session={SessionId}, polling up to 10s", sessionId);
                 Task.Run(async () =>
                 {
                     for (int i = 0; i < 20; i++)
@@ -71,11 +102,12 @@ namespace AkmlSql.Shell.Shared.Editor
                         var c = EngineLifecycle.Manager?.Client;
                         if (c != null && c.IsConnected)
                         {
+                            Log.Debug("DetectAndSendConnection: engine became ready after {Ms}ms for session={SessionId}", (i + 1) * 500, sessionId);
                             await SendConnectionChangedAsync(c, sessionId, connection);
                             return;
                         }
                     }
-                    Log.Warning("Engine did not connect within 10s, schema loading skipped");
+                    Log.Warning("DetectAndSendConnection: engine did not connect within 10s for session={SessionId}; schema loading skipped", sessionId);
                 });
             }
             catch (Exception ex)
@@ -146,8 +178,8 @@ namespace AkmlSql.Shell.Shared.Editor
                 };
 
                 await client.SendNotificationAsync(MessageTypes.ConnectionChanged, info);
-                Log.Information("Sent ConnectionChanged: {Server}.{Database} for session {Session}",
-                    conn.Server, conn.Database, sessionId);
+                Log.Information("Sent ConnectionChanged: {Server}.{Database} auth={Auth} for session {Session}",
+                    conn.Server, conn.Database, conn.AuthMode, sessionId);
 
                 // Wait for schema to load (poll Engine), then update status bar
                 await Task.Delay(2000); // Give Phase A time

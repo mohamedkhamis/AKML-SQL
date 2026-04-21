@@ -29,15 +29,7 @@ public class SchemaMetadataService
     public async Task<List<string>> ListDatabasesAsync(string connectionString, CancellationToken ct)
     {
         var databases = new List<string>();
-
-        // Scrub password before logging the connection string so it's safe to emit.
-        string scrubbedDataSource = "(unknown)";
-        try
-        {
-            var cb = new SqlConnectionStringBuilder(connectionString);
-            scrubbedDataSource = cb.DataSource ?? "(unknown)";
-        }
-        catch { }
+        var connDesc = ConnectionDiagnostics.Describe(connectionString);
 
         try
         {
@@ -62,8 +54,8 @@ public class SchemaMetadataService
             }
 
             Log.Information(
-                "ListDatabasesAsync: opened connection — DataSource='{DataSource}', @@SERVERNAME='{ActualServer}'",
-                scrubbedDataSource, actualServer);
+                "ListDatabasesAsync: opened connection — {ConnDesc}, @@SERVERNAME='{ActualServer}'",
+                connDesc, actualServer);
 
             await using var cmd = conn.CreateCommand();
             cmd.CommandText = @"
@@ -81,18 +73,31 @@ public class SchemaMetadataService
             }
 
             Log.Information(
-                "ListDatabasesAsync: returned {Count} databases from '{ActualServer}' for DataSource='{DataSource}'",
-                databases.Count, actualServer, scrubbedDataSource);
+                "ListDatabasesAsync: returned {Count} databases from '{ActualServer}' ({ConnDesc})",
+                databases.Count, actualServer, connDesc);
+        }
+        catch (SqlException sqlEx) when (sqlEx.Number is 4060 or 18456 or 18452 or 916)
+        {
+            Log.Warning(
+                "ListDatabasesAsync: login/permission denied (err={ErrorNumber} state={State}, {ConnDesc}); USE-completion will be empty for this server",
+                sqlEx.Number, sqlEx.State, connDesc);
+        }
+        catch (SqlException sqlEx)
+        {
+            Log.Warning(sqlEx,
+                "ListDatabasesAsync failed with SqlException err={ErrorNumber} state={State} ({ConnDesc})",
+                sqlEx.Number, sqlEx.State, connDesc);
         }
         catch (Exception ex)
         {
-            Log.Warning(ex, "ListDatabasesAsync failed for DataSource='{DataSource}'", scrubbedDataSource);
+            Log.Warning(ex, "ListDatabasesAsync failed ({ConnDesc})", connDesc);
         }
         return databases;
     }
 
     public async Task<PermissionLevel> ProbePermissionsAsync(string connectionString, CancellationToken ct)
     {
+        var connDesc = ConnectionDiagnostics.Describe(connectionString);
         try
         {
             await using var conn = new SqlConnection(connectionString);
@@ -130,9 +135,23 @@ public class SchemaMetadataService
                 return PermissionLevel.PublicOnly;
             }
         }
+        catch (SqlException sqlEx) when (sqlEx.Number is 4060 or 18456 or 18452 or 916)
+        {
+            Log.Warning(
+                "Permission probe login/permission denied (err={ErrorNumber} state={State}, {ConnDesc}); defaulting to PublicOnly",
+                sqlEx.Number, sqlEx.State, connDesc);
+            return PermissionLevel.PublicOnly;
+        }
+        catch (SqlException sqlEx)
+        {
+            Log.Warning(sqlEx,
+                "Permission probe failed with SqlException err={ErrorNumber} state={State} ({ConnDesc}); defaulting to PublicOnly",
+                sqlEx.Number, sqlEx.State, connDesc);
+            return PermissionLevel.PublicOnly;
+        }
         catch (Exception ex)
         {
-            Log.Warning(ex, "Permission probe failed, defaulting to PublicOnly");
+            Log.Warning(ex, "Permission probe failed ({ConnDesc}), defaulting to PublicOnly", connDesc);
             return PermissionLevel.PublicOnly;
         }
     }
@@ -140,10 +159,30 @@ public class SchemaMetadataService
     /// Phase A: Load object names (tables, views, procs, functions) — target <500ms
     public async Task PopulatePhaseAAsync(DatabaseCache cache, string connectionString, CancellationToken ct)
     {
+        var connDesc = ConnectionDiagnostics.Describe(connectionString);
+        var started = DateTime.UtcNow;
+        Log.Debug("Phase A starting for {Key}: {ConnDesc}", cache.CacheKey, connDesc);
+
         try
         {
             await using var conn = new SqlConnection(connectionString);
             await conn.OpenAsync(ct);
+
+            // Sanity-check which physical server we actually reached. If the caption
+            // parsing produced the wrong Data Source (aliases, registered-servers
+            // shortcuts, etc.), @@SERVERNAME in the log makes the drift obvious.
+            string actualServer = "(unknown)";
+            try
+            {
+                await using var probe = conn.CreateCommand();
+                probe.CommandText = "SELECT @@SERVERNAME";
+                probe.CommandTimeout = 3;
+                actualServer = (await probe.ExecuteScalarAsync(ct))?.ToString() ?? "(null)";
+            }
+            catch (Exception probeEx)
+            {
+                Log.Debug(probeEx, "Phase A @@SERVERNAME probe failed for {Key}", cache.CacheKey);
+            }
 
             // ORDER BY removed: results are loaded into a ConcurrentDictionary — sort is wasted work.
             var query = @"
@@ -184,12 +223,35 @@ public class SchemaMetadataService
 
             cache.Phase = PopulationPhase.PhaseA;
             cache.LastFullRefresh = DateTime.UtcNow;
-            Log.Information("Phase A complete for {Key}: {Count} objects",
-                cache.CacheKey, cache.GetAllObjects().Count());
+            var elapsedMs = (DateTime.UtcNow - started).TotalMilliseconds;
+            Log.Information(
+                "Phase A complete for {Key}: {Count} objects ({Elapsed:F0} ms, {ConnDesc}, @@SERVERNAME='{Server}')",
+                cache.CacheKey, cache.GetAllObjects().Count(), elapsedMs, connDesc, actualServer);
+        }
+        catch (SqlException sqlEx) when (sqlEx.Number is 4060 or 18456 or 18452 or 916)
+        {
+            // 4060 = cannot open database (permission), 18456 = login failed,
+            // 18452 = login from untrusted domain, 916 = no permission to use database.
+            // These all mean: the auth method / identity used to build the connection
+            // string doesn't have access to this database. No amount of retrying fixes
+            // this — the user needs to re-connect in SSMS with the right identity.
+            // Downgrade from Error to a one-line Warning so the log stays readable,
+            // but keep error number + state + class so the root cause is self-evident.
+            Log.Warning(
+                "Phase A skipped for {Key}: login/permission denied (err={ErrorNumber} state={State} class={Class}). Connection: {ConnDesc}. Schema-aware IntelliSense is disabled for this database until the user connects with an identity that can access it.",
+                cache.CacheKey, sqlEx.Number, sqlEx.State, sqlEx.Class, connDesc);
+        }
+        catch (SqlException sqlEx)
+        {
+            // Any other SQL error — include the number so repeat failures are greppable.
+            Log.Error(sqlEx,
+                "Phase A failed for {Key}: SqlException err={ErrorNumber} state={State} class={Class}. Connection: {ConnDesc}",
+                cache.CacheKey, sqlEx.Number, sqlEx.State, sqlEx.Class, connDesc);
+            cache.IsStale = true;
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Phase A failed for {Key}", cache.CacheKey);
+            Log.Error(ex, "Phase A failed for {Key}. Connection: {ConnDesc}", cache.CacheKey, connDesc);
             cache.IsStale = true;
         }
     }
@@ -202,6 +264,10 @@ public class SchemaMetadataService
             Log.Warning("Phase B skipped for {Key}: Phase A has not completed", cache.CacheKey);
             return;
         }
+
+        var connDesc = ConnectionDiagnostics.Describe(connectionString);
+        var started = DateTime.UtcNow;
+        Log.Debug("Phase B starting for {Key}: {ConnDesc}", cache.CacheKey, connDesc);
 
         try
         {
@@ -231,11 +297,28 @@ public class SchemaMetadataService
             await LoadDescriptionsAsync(conn, cache, objectIndex, columnLookup, ct);
 
             cache.Phase = PopulationPhase.PhaseB;
-            Log.Information("Phase B complete for {Key}", cache.CacheKey);
+            var elapsedMs = (DateTime.UtcNow - started).TotalMilliseconds;
+            Log.Information("Phase B complete for {Key} ({Elapsed:F0} ms, {ConnDesc})",
+                cache.CacheKey, elapsedMs, connDesc);
+        }
+        catch (SqlException sqlEx) when (sqlEx.Number is 4060 or 18456 or 18452 or 916)
+        {
+            // Same permission-denied family as Phase A — connection that worked before
+            // may have had its token expire, or the user switched to a different DB
+            // they don't own. Single warning, no stack trace.
+            Log.Warning(
+                "Phase B skipped for {Key}: login/permission denied (err={ErrorNumber} state={State}). Connection: {ConnDesc}. Column/FK completions disabled until reconnect.",
+                cache.CacheKey, sqlEx.Number, sqlEx.State, connDesc);
+        }
+        catch (SqlException sqlEx)
+        {
+            Log.Error(sqlEx,
+                "Phase B failed for {Key}: SqlException err={ErrorNumber} state={State} class={Class}. Connection: {ConnDesc}",
+                cache.CacheKey, sqlEx.Number, sqlEx.State, sqlEx.Class, connDesc);
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Phase B failed for {Key}", cache.CacheKey);
+            Log.Error(ex, "Phase B failed for {Key}. Connection: {ConnDesc}", cache.CacheKey, connDesc);
         }
     }
 

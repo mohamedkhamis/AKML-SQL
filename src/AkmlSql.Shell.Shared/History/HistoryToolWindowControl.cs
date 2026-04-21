@@ -1645,6 +1645,23 @@ namespace AkmlSql.Shell.Shared.History
                     return;
                 }
 
+                // Capture the PREVIOUSLY active document's auth mode BEFORE we create
+                // the new tab (which will steal focus). This lets us build a connection
+                // string that matches the user's current SSMS session (AAD vs Windows)
+                // instead of always hardcoding Integrated Security — otherwise history
+                // restore would fail for AAD-authenticated users just like Phase A did.
+                var preExistingAuth = AkmlSql.Shell.Shared.Editor.SsmsConnectionDetector.AuthMode.Unknown;
+                try
+                {
+                    var prevDoc = dte.ActiveDocument;
+                    if (prevDoc != null)
+                    {
+                        var (mode, _) = AkmlSql.Shell.Shared.Editor.SsmsConnectionDetector.ReadAuthModeFromDocument(prevDoc);
+                        preExistingAuth = mode;
+                    }
+                }
+                catch { /* best effort */ }
+
                 dte.ItemOperations.NewFile(
                     @"General\Sql File",
                     "History.sql",
@@ -1679,15 +1696,23 @@ namespace AkmlSql.Shell.Shared.History
                                 var currentScript = getCurrentScript?.Invoke(scriptFactory, null);
                                 if (currentScript != null)
                                 {
-                                    // Build a connection string and use SetConnectionInfo
+                                    // Match the user's current SSMS auth mode. We can't restore
+                                    // a password (SQL auth) or replay an interactive AAD flow, so
+                                    // for those modes we fall back to Integrated Security and let
+                                    // SSMS prompt the user if the token isn't cached.
+                                    string authClause =
+                                        preExistingAuth == AkmlSql.Shell.Shared.Editor.SsmsConnectionDetector.AuthMode.AzureAdIntegrated
+                                            ? "Authentication=Active Directory Integrated"
+                                            : "Integrated Security=True";
                                     var connStr = string.IsNullOrEmpty(database)
-                                        ? $"Data Source={server};Integrated Security=True;Trust Server Certificate=True"
-                                        : $"Data Source={server};Initial Catalog={database};Integrated Security=True;Trust Server Certificate=True";
+                                        ? $"Data Source={server};{authClause};Trust Server Certificate=True"
+                                        : $"Data Source={server};Initial Catalog={database};{authClause};Trust Server Certificate=True";
                                     var setConn = currentScript.GetType().GetMethod("SetConnectionInfo");
                                     if (setConn != null)
                                     {
                                         setConn.Invoke(currentScript, new object[] { connStr });
-                                        Serilog.Log.Information("History: connection set to {Server}.{Database}", server, database);
+                                        Serilog.Log.Information("History: connection set to {Server}.{Database} (auth={Auth})",
+                                            server, database, preExistingAuth);
                                     }
                                 }
                             }

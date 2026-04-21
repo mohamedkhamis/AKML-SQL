@@ -475,6 +475,17 @@ namespace AkmlSql.Core.Config
     /// <summary>Settings for execution safety warnings (Phase 7).</summary>
     public class SafetySettings
     {
+        /// <summary>
+        /// Emergency kill-switch. When <c>true</c>, <c>ExecutionInterceptor.OnBeforeExecute</c>
+        /// returns immediately without loading any safety config, calling the engine, or
+        /// showing any dialog. Intended as a diagnostic lever for users who hit a hang in
+        /// the execution-guard path — set this to <c>true</c> in
+        /// <c>%AppData%\AKML SQL\config.json</c> (under <c>"safety"</c>) and F5 will go
+        /// straight through with no AKML involvement. Default <c>false</c>.
+        /// </summary>
+        [JsonPropertyName("temporarilyDisabled")]
+        public bool TemporarilyDisabled { get; set; }
+
         [JsonPropertyName("productionWarning")]
         public bool ProductionWarning { get; set; } = true;
 
