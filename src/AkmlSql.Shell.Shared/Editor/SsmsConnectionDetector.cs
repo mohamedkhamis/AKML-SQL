@@ -316,7 +316,12 @@ namespace AkmlSql.Shell.Shared.Editor
 
             if (usable)
             {
-                Log.Information(
+                // Debug level: ParseCaption runs on every F5 (ExecutionCommandFilter
+                // calls us from its DTE Query.Execute hook). The "real" session-bind
+                // log is ConnectionWiringHelper.SendConnectionChangedAsync's
+                // "Sent ConnectionChanged: …" Info line, which fires once per
+                // session-to-server binding, not once per keypress.
+                Log.Debug(
                     "SsmsConnectionDetector: parsed '{Caption}' → server='{Server}' database='{Database}' auth={AuthMode} (raw='{RawAuth}')",
                     caption, server, database, authMode, rawAuthType ?? "(null)");
             }

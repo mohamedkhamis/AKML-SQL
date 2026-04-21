@@ -199,9 +199,20 @@ public class PipeRpcServer
                     // connection may be to a different server and we must not leak
                     // the previous server's databases into USE-completion.
                     Completion.Providers.DatabaseProvider.InvalidateSession(connInfo.SessionId);
+
+                    // Look up (or create) the schema cache for this session+database so we
+                    // can consult PermissionDenied BEFORE scheduling any SQL round-trip.
+                    // If a prior Phase A already hit 4060/18456/…, every subsequent
+                    // ConnectionChanged against the same session:db would otherwise
+                    // re-run Phase A, re-fire SchedulePrefetch, and re-log the warning.
+                    var schemaCache = _schemaCacheManager.GetOrCreateCache(
+                        connInfo.SessionId, connInfo.DatabaseName);
+
                     // Warm the database-list cache in the background so the first
                     // USE-completion keystroke finds it already populated and does
-                    // not have to block on a SQL round trip.
+                    // not have to block on a SQL round trip. Skip when the cache is
+                    // marked permission-denied — the prefetch would fail the same way.
+                    if (!schemaCache.PermissionDenied)
                     {
                         var s = _sessionManager.GetSession(connInfo.SessionId);
                         if (s != null && !string.IsNullOrEmpty(s.ConnectionString))
@@ -210,8 +221,9 @@ public class PipeRpcServer
                                 connInfo.SessionId, s.ConnectionString);
                         }
                     }
-                    Log.Information("Connection changed: session={Session} db={Db} — {ConnDesc}",
-                        connInfo.SessionId, connInfo.DatabaseName,
+
+                    Log.Information("Connection changed: session={Session} db={Db} permissionDenied={Denied} — {ConnDesc}",
+                        connInfo.SessionId, connInfo.DatabaseName, schemaCache.PermissionDenied,
                         Schema.ConnectionDiagnostics.Describe(connInfo.ConnectionString));
 
                     // Fire-and-forget: populate schema cache Phase A
@@ -219,22 +231,30 @@ public class PipeRpcServer
                     {
                         try
                         {
-                            var cache = _schemaCacheManager.GetOrCreateCache(
-                                connInfo.SessionId, connInfo.DatabaseName);
-                            if (cache.Phase == PopulationPhase.NotLoaded)
+                            if (schemaCache.PermissionDenied)
+                            {
+                                // Terminal state — a previous Phase A confirmed the current
+                                // identity can't open this DB. Quiet noop until the user
+                                // reconnects (which creates a fresh cache via new sessionId).
+                                return;
+                            }
+
+                            if (schemaCache.Phase == PopulationPhase.NotLoaded)
                             {
                                 Log.Information("Starting Phase A schema population for {Db}", connInfo.DatabaseName);
                                 await _schemaMetadataService.PopulatePhaseAAsync(
-                                    cache, connInfo.ConnectionString, CancellationToken.None);
+                                    schemaCache, connInfo.ConnectionString, CancellationToken.None);
                                 _schemaCacheManager.EvictLru();
 
                                 // Phase B: load columns, FKs, parameters in background
-                                // Required for JOIN completions and column suggestions
-                                if (cache.Phase == PopulationPhase.PhaseA)
+                                // Required for JOIN completions and column suggestions.
+                                // Skip if Phase A ended up permission-denied (terminal).
+                                if (schemaCache.Phase == PopulationPhase.PhaseA
+                                    && !schemaCache.PermissionDenied)
                                 {
                                     Log.Information("Starting Phase B for {Db}", connInfo.DatabaseName);
                                     await _schemaMetadataService.PopulatePhaseBAsync(
-                                        cache, connInfo.ConnectionString, CancellationToken.None);
+                                        schemaCache, connInfo.ConnectionString, CancellationToken.None);
                                 }
                             }
                         }

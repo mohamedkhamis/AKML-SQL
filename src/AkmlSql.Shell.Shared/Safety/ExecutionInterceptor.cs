@@ -188,6 +188,7 @@ namespace AkmlSql.Shell.Shared.Safety
                 SafetyCheckResponse? response = null;
                 var beforeIpcTs = DateTime.UtcNow;
                 Log.Information("[ExecutionGuard] BEFORE engine SafetyCheck (500ms timeout)");
+                bool ipcFaulted = false;
                 try
                 {
                     ThreadHelper.JoinableTaskFactory.Run(async () =>
@@ -203,15 +204,22 @@ namespace AkmlSql.Shell.Shared.Safety
                 catch (Exception ipcEx)
                 {
                     // JoinableTaskFactory.Run rethrows inner exceptions synchronously.
-                    // Log and fall through — response stays null → treated as "no warnings".
+                    // This catch is the ONLY exit point for timeout/failure — the outer
+                    // OperationCanceledException/Exception handlers below cannot reach us
+                    // for an IPC fault. Log once, flag the path, fall through to fail-open.
+                    ipcFaulted = true;
                     Log.Information(ipcEx,
                         "[ExecutionGuard] AFTER engine SafetyCheck: FAILED/TIMEOUT after {Ms} ms (fail-open)",
                         (DateTime.UtcNow - beforeIpcTs).TotalMilliseconds);
                 }
-                Log.Information("[ExecutionGuard] AFTER engine SafetyCheck: response={ResponseState} ({Ms} ms)",
-                    response == null ? "null" :
-                        (response.RequiresConfirmation ? $"RequiresConfirmation w/ {response.Warnings?.Length ?? 0} warnings" : "no-warnings"),
-                    (DateTime.UtcNow - beforeIpcTs).TotalMilliseconds);
+
+                if (!ipcFaulted)
+                {
+                    Log.Information("[ExecutionGuard] AFTER engine SafetyCheck: response={ResponseState} ({Ms} ms)",
+                        response == null ? "null" :
+                            (response.RequiresConfirmation ? $"RequiresConfirmation w/ {response.Warnings?.Length ?? 0} warnings" : "no-warnings"),
+                        (DateTime.UtcNow - beforeIpcTs).TotalMilliseconds);
+                }
 
                 if (response == null || !response.RequiresConfirmation || response.Warnings.Length == 0)
                 {
@@ -284,14 +292,11 @@ namespace AkmlSql.Shell.Shared.Safety
                     (DateTime.UtcNow - enterTs).TotalMilliseconds);
                 return false;
             }
-            catch (OperationCanceledException)
-            {
-                Log.Information("[ExecutionGuard] EXIT: safety check timed out ({Ms} ms total, fail-open)",
-                    (DateTime.UtcNow - enterTs).TotalMilliseconds);
-                return true; // Fail-open on timeout
-            }
             catch (Exception ex)
             {
+                // IPC timeout/faults are caught and logged inline near JoinableTaskFactory.Run;
+                // this outer handler is for anything that escapes (dialog construction, env
+                // detection, etc.). Keep it fail-open so a guard bug never blocks execution.
                 Log.Error(ex, "[ExecutionGuard] EXIT: failed with exception ({Ms} ms total, fail-open)",
                     (DateTime.UtcNow - enterTs).TotalMilliseconds);
                 return true; // Fail-open on error

@@ -235,8 +235,9 @@ public class SchemaMetadataService
             // These all mean: the auth method / identity used to build the connection
             // string doesn't have access to this database. No amount of retrying fixes
             // this — the user needs to re-connect in SSMS with the right identity.
-            // Downgrade from Error to a one-line Warning so the log stays readable,
-            // but keep error number + state + class so the root cause is self-evident.
+            // Mark the cache as permission-denied so callers stop re-dispatching Phase
+            // A, periodic refresh, and DatabaseProvider prefetch against this key.
+            cache.PermissionDenied = true;
             Log.Warning(
                 "Phase A skipped for {Key}: login/permission denied (err={ErrorNumber} state={State} class={Class}). Connection: {ConnDesc}. Schema-aware IntelliSense is disabled for this database until the user connects with an identity that can access it.",
                 cache.CacheKey, sqlEx.Number, sqlEx.State, sqlEx.Class, connDesc);
@@ -306,6 +307,7 @@ public class SchemaMetadataService
             // Same permission-denied family as Phase A — connection that worked before
             // may have had its token expire, or the user switched to a different DB
             // they don't own. Single warning, no stack trace.
+            cache.PermissionDenied = true;
             Log.Warning(
                 "Phase B skipped for {Key}: login/permission denied (err={ErrorNumber} state={State}). Connection: {ConnDesc}. Column/FK completions disabled until reconnect.",
                 cache.CacheKey, sqlEx.Number, sqlEx.State, connDesc);

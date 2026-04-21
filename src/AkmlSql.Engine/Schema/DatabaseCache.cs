@@ -48,6 +48,18 @@ public class DatabaseCache
     /// <summary><c>true</c> when change detection has determined that cached data is out of date.</summary>
     public bool IsStale { get; set; }
 
+    /// <summary>
+    /// Terminal flag set when Phase A fails with a login/permission SQL error
+    /// (4060, 18456, 18452, 916). Once set, the server is telling us the current
+    /// identity cannot access this database — no amount of retrying will fix it
+    /// until the user reconnects with a different identity, which arrives as a
+    /// brand-new ConnectionChanged (and hence a brand-new cache). Callers that
+    /// schedule background work (Phase A population, DatabaseProvider prefetch,
+    /// periodic change detection) MUST check this flag first to avoid repeat
+    /// log noise and wasted round-trips.
+    /// </summary>
+    public bool PermissionDenied { get; set; }
+
     // Index for O(1) FK lookup keyed by "schema.table" (both parent and referenced sides)
     private Dictionary<string, List<ForeignKey>>? _fkByTable;
 

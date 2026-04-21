@@ -117,16 +117,13 @@ namespace AkmlSql.Shell.Shared.Commands
                     return null;
                 }
 
-                // Direct cast works in VS 2022+; the adapter factory path covers
-                // SSMS and older hosts where IVsTextLines isn't an ITextBuffer.
-                var managedBuffer = vsBuffer as ITextBuffer;
-                if (managedBuffer == null)
-                {
-                    var componentModel = Package.GetGlobalService(typeof(SComponentModel)) as IComponentModel;
-                    var adapters = componentModel?.GetService<IVsEditorAdaptersFactoryService>();
-                    managedBuffer = adapters?.GetDocumentBuffer(vsBuffer);
-                }
-
+                // IVsTextLines is a COM interface; ITextBuffer is purely managed. They are
+                // NOT assignment-compatible — go through the editor adapter factory, which
+                // is the only supported way to bridge from VS's COM text surface to the
+                // managed editor buffer across all VS/SSMS hosts.
+                var componentModel = Package.GetGlobalService(typeof(SComponentModel)) as IComponentModel;
+                var adapters = componentModel?.GetService<IVsEditorAdaptersFactoryService>();
+                var managedBuffer = adapters?.GetDocumentBuffer(vsBuffer);
                 if (managedBuffer == null)
                 {
                     Log.Debug("RefreshCacheCommand: could not resolve managed ITextBuffer for active view");

@@ -198,6 +198,15 @@ public class SchemaCacheManager(int maxDatabases = 10) : IDisposable
             foreach (var kvp in _caches)
             {
                 var cache = kvp.Value;
+
+                // Skip caches that a previous Phase A already flagged as
+                // permission-denied — probing them again would log the same 4060
+                // every minute forever.
+                if (cache.PermissionDenied)
+                {
+                    continue;
+                }
+
                 if (!_connectionStrings.TryGetValue(cache.CacheKey, out var connectionString))
                 {
                     continue;
