@@ -58,6 +58,12 @@
           <ButtonText>View Logs</ButtonText>
         </Strings>
       </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="cmdRefreshCache" priority="0x0550" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Strings>
+          <ButtonText>Refresh Schema Cache</ButtonText>
+        </Strings>
+      </Button>
       <Button guid="guidAkmlSqlCmdSet" id="cmdFormatDocument" priority="0x0600" type="Button">
         <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
@@ -308,6 +314,9 @@
 
   <!-- Keyboard shortcut: Ctrl+K, Y for Format Document (chord key binding) -->
   <KeyBindings>
+    <!-- SQL Prompt parity: Ctrl+Shift+D refreshes the schema cache for the active editor -->
+    <KeyBinding guid="guidAkmlSqlCmdSet" id="cmdRefreshCache"
+                editor="guidVSStd97" key1="D" mod1="Control Shift" />
     <KeyBinding guid="guidAkmlSqlCmdSet" id="cmdFormatDocument"
                 editor="guidVSStd97" key1="K" mod1="Control" key2="Y" mod2="None" />
     <KeyBinding guid="guidAkmlSqlCmdSet" id="cmdUnformat"
@@ -371,6 +380,7 @@
       <IDSymbol name="cmdOptions" value="0x0102" />
       <IDSymbol name="cmdSendFeedback" value="0x0103" />
       <IDSymbol name="cmdViewLogs" value="0x0104" />
+      <IDSymbol name="cmdRefreshCache" value="0x0105" />
       <IDSymbol name="cmdFormatDocument" value="0x0200" />
       <IDSymbol name="cmdFormatSelection" value="0x0201" />
       <IDSymbol name="cmdUnformat" value="0x021E" />

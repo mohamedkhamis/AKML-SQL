@@ -58,6 +58,7 @@ namespace AkmlSql.Ssms20
                     OptionsCommand.Initialize(this, commandService);
                     SendFeedbackCommand.Initialize(this, commandService);
                     ViewLogsCommand.Initialize(this, commandService);
+                    RefreshCacheCommand.Initialize(this, commandService);
 
                     // Phase 7 — Tab management and safety commands
                     RestoreClosedTabCommand.Initialize(this, commandService);
