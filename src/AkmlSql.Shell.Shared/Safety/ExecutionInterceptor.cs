@@ -183,42 +183,60 @@ namespace AkmlSql.Shell.Shared.Safety
                     IsProductionServer = isProductionServer
                 };
 
-                // Synchronous wait — must block before execution proceeds
-                // Use JoinableTaskFactory to avoid deadlock on the UI thread
+                // Run the IPC on the thread pool and wall-clock-wait with a hard ceiling.
+                // JoinableTaskFactory.Run on the UI thread deadlocks if any continuation
+                // requires the UI thread back; Task.Run + Wait(timeout) avoids that
+                // because the awaiter is a thread-pool thread, not the UI thread.
+                const int SafetyCheckTimeoutMs = 500;
+                // Inner IPC timeout is slightly under the wall-clock ceiling so the inner
+                // cancellation normally wins and we see a clean TaskCanceledException
+                // rather than the outer Wait() timing out.
+                const int InnerTimeoutSlackMs = 50;
                 SafetyCheckResponse? response = null;
                 var beforeIpcTs = DateTime.UtcNow;
-                Log.Information("[ExecutionGuard] BEFORE engine SafetyCheck (500ms timeout)");
-                bool ipcFaulted = false;
+                Log.Information("[ExecutionGuard] BEFORE engine SafetyCheck ({TimeoutMs}ms timeout)", SafetyCheckTimeoutMs);
+
+                var ipcTask = System.Threading.Tasks.Task.Run(() =>
+                    client.SendRequestAsync<SafetyCheckResponse, SafetyCheckRequest>(
+                        MessageTypes.SafetyCheck,
+                        request,
+                        timeoutMs: SafetyCheckTimeoutMs - InnerTimeoutSlackMs));
+                Log.Information("[ExecutionGuard] TaskRun scheduled, status={Status}, about to Wait({TimeoutMs}ms)",
+                    ipcTask.Status, SafetyCheckTimeoutMs);
+
                 try
                 {
-                    ThreadHelper.JoinableTaskFactory.Run(async () =>
+                    if (!ipcTask.Wait(SafetyCheckTimeoutMs))
                     {
-                        // Safety check must not block execution if it takes > 500 ms.
-                        // On timeout the check yields and execution proceeds (fail-open).
-                        response = await client.SendRequestAsync<SafetyCheckResponse, SafetyCheckRequest>(
-                            MessageTypes.SafetyCheck,
-                            request,
-                            timeoutMs: 500);
-                    });
+                        // Wall-clock ceiling hit — fail-open without touching the task further.
+                        // The task continues in the background; its result is ignored.
+                        Log.Warning(
+                            "[ExecutionGuard] AFTER engine SafetyCheck: WALL-CLOCK TIMEOUT after {Ms} ms (fail-open)",
+                            (DateTime.UtcNow - beforeIpcTs).TotalMilliseconds);
+                        // Hook a continuation so we eventually see whether the orphaned task
+                        // completed (engine slow but alive) vs. hung indefinitely (engine dead).
+                        var orphanStartTs = beforeIpcTs;
+                        _ = ipcTask.ContinueWith(t => Log.Warning(
+                                "[ExecutionGuard] orphan ipcTask completed AFTER timeout: status={Status} faulted={Faulted} totalMs={Ms}",
+                                t.Status, t.IsFaulted, (DateTime.UtcNow - orphanStartTs).TotalMilliseconds),
+                            System.Threading.Tasks.TaskScheduler.Default);
+                        return true;
+                    }
+                    response = ipcTask.GetAwaiter().GetResult();
+                    Log.Information(
+                        "[ExecutionGuard] AFTER engine SafetyCheck: response={ResponseState} ({Ms} ms, taskStatus={Status})",
+                        response == null ? "null" :
+                            (response.RequiresConfirmation ? $"RequiresConfirmation w/ {response.Warnings?.Length ?? 0} warnings" : "no-warnings"),
+                        (DateTime.UtcNow - beforeIpcTs).TotalMilliseconds,
+                        ipcTask.Status);
                 }
                 catch (Exception ipcEx)
                 {
-                    // JoinableTaskFactory.Run rethrows inner exceptions synchronously.
-                    // This catch is the ONLY exit point for timeout/failure — the outer
-                    // OperationCanceledException/Exception handlers below cannot reach us
-                    // for an IPC fault. Log once, flag the path, fall through to fail-open.
-                    ipcFaulted = true;
-                    Log.Information(ipcEx,
+                    var inner = (ipcEx as AggregateException)?.InnerException ?? ipcEx;
+                    Log.Information(inner,
                         "[ExecutionGuard] AFTER engine SafetyCheck: FAILED/TIMEOUT after {Ms} ms (fail-open)",
                         (DateTime.UtcNow - beforeIpcTs).TotalMilliseconds);
-                }
-
-                if (!ipcFaulted)
-                {
-                    Log.Information("[ExecutionGuard] AFTER engine SafetyCheck: response={ResponseState} ({Ms} ms)",
-                        response == null ? "null" :
-                            (response.RequiresConfirmation ? $"RequiresConfirmation w/ {response.Warnings?.Length ?? 0} warnings" : "no-warnings"),
-                        (DateTime.UtcNow - beforeIpcTs).TotalMilliseconds);
+                    return true;
                 }
 
                 if (response == null || !response.RequiresConfirmation || response.Warnings.Length == 0)

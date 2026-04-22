@@ -70,6 +70,8 @@ namespace AkmlSql.Shell.Shared.Ipc
             var requestId = Interlocked.Increment(ref _nextRequestId);
             var tcs = new TaskCompletionSource<RpcMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
             _pending[requestId] = tcs;
+            Log.Information("[PipeRpc] SendRequest req#{Req} type={Type} timeout={TimeoutMs}ms pending.Count={Count}",
+                requestId, messageType, timeoutMs, _pending.Count);
 
             try
             {
@@ -80,15 +82,32 @@ namespace AkmlSql.Shell.Shared.Ipc
                     Payload = MessagePackSerializer.Serialize(payload)
                 };
 
-                await WriteAsync(msg, ct);
-
+                // Arm the timeout BEFORE the write — if the engine has stopped reading,
+                // pipe back-pressure (or contention on _writeLock) would otherwise block
+                // WriteAsync indefinitely because the timeout isn't in play yet.
                 using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
                 timeoutCts.CancelAfter(timeoutMs);
 
+                await WriteAsync(msg, timeoutCts.Token).ConfigureAwait(false);
+
                 var registration = timeoutCts.Token.Register(() => tcs.TrySetCanceled());
+                var awaitTs = DateTime.UtcNow;
+                Log.Information("[PipeRpc] req#{Req} awaiting tcs.Task", requestId);
                 try
                 {
-                    var response = await tcs.Task;
+                    RpcMessage response;
+                    try
+                    {
+                        response = await tcs.Task.ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        Log.Warning("[PipeRpc] req#{Req} CANCELLED after {Ms}ms (inner timeout fired)",
+                            requestId, (DateTime.UtcNow - awaitTs).TotalMilliseconds);
+                        throw;
+                    }
+                    Log.Information("[PipeRpc] req#{Req} tcs.Task COMPLETED in {Ms}ms (msgType={MsgType})",
+                        requestId, (DateTime.UtcNow - awaitTs).TotalMilliseconds, response.MessageType);
                     if (response.MessageType == MessageTypes.Error)
                     {
                         var error = MessagePackSerializer.Deserialize<ErrorInfo>(response.Payload);
@@ -104,15 +123,27 @@ namespace AkmlSql.Shell.Shared.Ipc
             finally
             {
                 _pending.TryRemove(requestId, out _);
+                Log.Debug("[PipeRpc] req#{Req} cleanup, remaining pending={Count}", requestId, _pending.Count);
             }
         }
 
         private async Task WriteAsync(RpcMessage msg, CancellationToken ct)
         {
-            await _writeLock.WaitAsync(ct);
+            var lockTs = DateTime.UtcNow;
+            Log.Information("[PipeRpc] WriteAsync req#{Req} type={Type} payload={Bytes}B awaiting _writeLock",
+                msg.RequestId, msg.MessageType, msg.Payload?.Length ?? 0);
+            await _writeLock.WaitAsync(ct).ConfigureAwait(false);
+            var lockMs = (DateTime.UtcNow - lockTs).TotalMilliseconds;
+            if (lockMs > 50)
+                Log.Warning("[PipeRpc] WriteAsync req#{Req} _writeLock acquired in {Ms}ms (CONTENDED)", msg.RequestId, lockMs);
+            else
+                Log.Debug("[PipeRpc] WriteAsync req#{Req} _writeLock acquired in {Ms}ms", msg.RequestId, lockMs);
             try
             {
-                await FrameProtocol.WriteFramedAsync(_pipe, msg, ct);
+                var wrTs = DateTime.UtcNow;
+                await FrameProtocol.WriteFramedAsync(_pipe, msg, ct).ConfigureAwait(false);
+                Log.Debug("[PipeRpc] WriteAsync req#{Req} WriteFramedAsync done in {Ms}ms",
+                    msg.RequestId, (DateTime.UtcNow - wrTs).TotalMilliseconds);
             }
             finally
             {
@@ -122,19 +153,30 @@ namespace AkmlSql.Shell.Shared.Ipc
 
         private async Task ReadLoopAsync(CancellationToken ct)
         {
+            int frameCount = 0;
             try
             {
                 while (!ct.IsCancellationRequested && _pipe.IsConnected)
                 {
-                    var msg = await FrameProtocol.ReadFramedAsync(_pipe, ct);
+                    var msg = await FrameProtocol.ReadFramedAsync(_pipe, ct).ConfigureAwait(false);
                     if (msg == null)
                     {
+                        Log.Information("[PipeRpc] ReadLoop received null frame after {Count} frames — pipe closed", frameCount);
                         break;
                     }
+                    frameCount++;
+                    if ((frameCount & 0xFF) == 0)
+                        Log.Debug("[PipeRpc] ReadLoop received {Count} frames so far (latest type={Type} req#{Req})",
+                            frameCount, msg.MessageType, msg.RequestId);
 
                     if (msg.RequestId != 0 && _pending.TryGetValue(msg.RequestId, out var tcs))
                     {
                         tcs.TrySetResult(msg);
+                    }
+                    else if (msg.RequestId != 0)
+                    {
+                        Log.Warning("[PipeRpc] ReadLoop: orphan response req#{Req} type={Type} — no pending entry (timed out?)",
+                            msg.RequestId, msg.MessageType);
                     }
                 }
             }
@@ -149,7 +191,8 @@ namespace AkmlSql.Shell.Shared.Ipc
             }
             finally
             {
-                // Fail all pending requests
+                if (_pending.Count > 0)
+                    Log.Warning("[PipeRpc] ReadLoop EXIT — failing {Count} pending requests with 'Engine disconnected'", _pending.Count);
                 foreach (var tcs in _pending.Values)
                     tcs.TrySetException(new IOException("Engine disconnected"));
                 _pending.Clear();
