@@ -517,7 +517,11 @@ namespace AkmlSql.Core.Config
         {
             ["PRODUCTION"] = "TypeServerName",
             ["STAGING"] = "SimpleConfirm",
-            ["DEV"] = "Disabled"
+            // DEV used to default to "Disabled" but that silently swallowed every
+            // safety warning on local boxes (most users' main work environment).
+            // Users who really want zero warnings on DEV can still opt in by
+            // editing config.json to set this back to "Disabled".
+            ["DEV"] = "SimpleConfirm"
         };
 
         // ── Spec 014, US1: Pre-execution safety extensions ──

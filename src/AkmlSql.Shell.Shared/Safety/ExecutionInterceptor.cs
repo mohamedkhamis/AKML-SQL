@@ -34,6 +34,20 @@ namespace AkmlSql.Shell.Shared.Safety
         /// </summary>
         private static readonly System.Collections.Generic.HashSet<int> _suppressedWarningTypes = new();
 
+        // ── Re-entry dedup ───────────────────────────────────────────────────────
+        // After the WPF dialog closes (Cancel or Execute), SSMS frequently re-dispatches
+        // Query.Execute within ~30 ms — observed every cycle in the field. The dialog's
+        // nested message pump processes a queued execute event, producing a tight loop:
+        // dialog → cancel → re-fire → dialog → ...  Cache the last decision keyed on
+        // (sqlHash, time); a re-entry with the same SQL inside the dedup window returns
+        // the cached decision without re-showing the dialog or re-calling the engine.
+        // The window is far below human re-press cadence (a deliberate retry takes
+        // seconds, not milliseconds), so real intent isn't suppressed.
+        private const int ReentryDedupWindowMs = 500;
+        private static int _lastDecisionSqlHash;
+        private static DateTime _lastDecisionTimeUtc;
+        private static bool _lastDecisionResult;
+
         /// <summary>
         /// Initializes the execution interceptor. Reads safety settings from config to
         /// determine if any safety checks are enabled.
@@ -102,6 +116,22 @@ namespace AkmlSql.Shell.Shared.Safety
             var enterTs = DateTime.UtcNow;
             Log.Information("[ExecutionGuard] ENTER OnBeforeExecute: sql.Length={SqlLen} server={Server}",
                 sqlText?.Length ?? 0, serverName ?? "(null)");
+
+            // Re-entry dedup — see field declarations above. If we just resolved a
+            // dialog for the same SQL within the dedup window, return the cached
+            // decision without re-prompting. Without this, SSMS's queued execute
+            // events post-dialog produce an infinite Cancel/Execute → re-fire loop.
+            int sqlHash = sqlText?.GetHashCode() ?? 0;
+            var sinceLastDecision = (enterTs - _lastDecisionTimeUtc).TotalMilliseconds;
+            if (sqlHash != 0 &&
+                sqlHash == _lastDecisionSqlHash &&
+                sinceLastDecision < ReentryDedupWindowMs)
+            {
+                Log.Warning(
+                    "[ExecutionGuard] Re-entry dedup: same SQL submitted {Ms} ms after last dialog — returning cached decision={Result} (likely SSMS event re-dispatch, not user retry)",
+                    sinceLastDecision, _lastDecisionResult);
+                return _lastDecisionResult;
+            }
 
             // Re-check settings dynamically on each invocation so that enabling
             // safety settings via Options takes effect without an IDE restart.
@@ -262,15 +292,30 @@ namespace AkmlSql.Shell.Shared.Safety
 
                 var envLabel = matchedEnvRule?.Label ?? "Unknown";
                 var envColor = matchedEnvRule?.Color ?? "";
+                var envSeverity = cachedSafety != null &&
+                                  cachedSafety.EnvironmentSeverity.TryGetValue(envLabel, out var sev)
+                                  ? sev : "(default)";
+                Log.Information("[ExecutionGuard] env: server='{Server}' label='{EnvLabel}' severity={Severity} → {Count} warning(s) about to be shown",
+                    serverName ?? "(null)", envLabel, envSeverity, filteredWarnings.Length);
 
-                // Per-environment severity override: "Disabled" skips the
-                // guard entirely for this environment (e.g. the user's DEV boxes).
+                // Per-environment severity override: "Disabled" silences the
+                // guard for the environment — but NEVER for destructive (Severity≥2)
+                // warnings (DELETE/UPDATE without WHERE, DROP, TRUNCATE). Even on
+                // a DEV box those should still be confirmed so users don't acci-
+                // dentally wipe a table just because the env happens to be local.
                 if (IsEnvironmentDisabled(envLabel, cachedSafety))
                 {
-                    Log.Warning("[ExecutionGuard] Safety check suppressed for environment '{EnvLabel}': marked as Disabled in Safety.EnvironmentSeverity config",
-                        envLabel);
-                    LogAuditEvent(serverName, envLabel, envColor, filteredWarnings, "SkippedByEnvironmentConfig");
-                    return true;
+                    var destructive = filteredWarnings.Where(w => w.Severity >= 2).ToArray();
+                    if (destructive.Length == 0)
+                    {
+                        Log.Warning("[ExecutionGuard] Safety check suppressed for environment '{EnvLabel}' (severity=Disabled, no destructive warnings)",
+                            envLabel);
+                        LogAuditEvent(serverName, envLabel, envColor, filteredWarnings, "SkippedByEnvironmentConfig");
+                        return true;
+                    }
+                    Log.Warning("[ExecutionGuard] Environment '{EnvLabel}' is Disabled but {Count} destructive warning(s) cannot be silently bypassed — showing dialog anyway",
+                        envLabel, destructive.Length);
+                    filteredWarnings = destructive;
                 }
 
                 ThreadHelper.ThrowIfNotOnUIThread();
@@ -302,12 +347,14 @@ namespace AkmlSql.Shell.Shared.Safety
                     LogAuditEvent(serverName, envLabel, envColor, filteredWarnings, "Confirmed");
                     Log.Information("[ExecutionGuard] EXIT: user Confirmed ({Ms} ms total)",
                         (DateTime.UtcNow - enterTs).TotalMilliseconds);
+                    RememberDecision(sqlHash, true);
                     return true;
                 }
 
                 LogAuditEvent(serverName, envLabel, envColor, filteredWarnings, "Blocked");
                 Log.Information("[ExecutionGuard] EXIT: user Cancelled ({Ms} ms total)",
                     (DateTime.UtcNow - enterTs).TotalMilliseconds);
+                RememberDecision(sqlHash, false);
                 return false;
             }
             catch (Exception ex)
@@ -354,6 +401,18 @@ namespace AkmlSql.Shell.Shared.Safety
         /// as "Disabled" in <c>Safety.EnvironmentSeverity</c>, meaning the execution guard
         /// should be a no-op for that environment.
         /// </summary>
+        /// <summary>
+        /// Records the user's dialog decision so the very next OnBeforeExecute
+        /// for the same SQL within <see cref="ReentryDedupWindowMs"/> ms can
+        /// short-circuit and return the same answer instead of re-prompting.
+        /// </summary>
+        private static void RememberDecision(int sqlHash, bool result)
+        {
+            _lastDecisionSqlHash = sqlHash;
+            _lastDecisionTimeUtc = DateTime.UtcNow;
+            _lastDecisionResult = result;
+        }
+
         private static bool IsEnvironmentDisabled(string envLabel, SafetySettings? safety)
         {
             if (safety == null ||
