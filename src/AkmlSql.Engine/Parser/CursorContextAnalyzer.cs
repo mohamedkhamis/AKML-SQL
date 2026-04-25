@@ -47,6 +47,15 @@ public class CursorContext
     public bool InString { get; set; }
     public bool InSqlcmdDirective { get; set; }
     /// <summary>
+    /// True when the cursor is inside the body of a CTE definition — i.e. directly
+    /// inside the parentheses of <c>WITH Name AS ( ... )</c> or <c>, Name AS ( ... )</c>.
+    /// Signals that providers should treat the position as a fresh query-start context
+    /// (offer SELECT, FROM, etc.) and that prior-CTE names should be suggested for
+    /// FROM/JOIN. Does not imply <c>ClauseType</c> — when true the analyzer also
+    /// returns <see cref="ClauseType.Unknown"/>.
+    /// </summary>
+    public bool IsInCteBody { get; set; }
+    /// <summary>
     /// The session id of the request that produced this context. Populated by
     /// <see cref="Completion.CompletionEngine.GetCompletions(string, int, Schema.DatabaseCache?, string)"/>
     /// so providers that need per-session state (e.g. <c>DatabaseProvider</c>'s
@@ -186,10 +195,52 @@ public class CursorContextAnalyzer
     /// </summary>
     private static ClauseType DetermineClauseType(IList<TSqlParserToken> tokens, int fromIndex, CursorContext context)
     {
+        // Track paren depth across the backward walk so tokens inside SIBLING balanced
+        // paren groups (e.g. the body of a preceding CTE) don't leak into the current
+        // clause classification. Without this, `WITH c1 AS (... JOIN .. ON ..), c2 AS (|`
+        // walks from the cursor, crosses `)` into c1's body and returns JoinOn — wrong.
+        int parenDepth = 0;
+        bool checkedEnclosingParen = false;
+        // True once we've crossed at least one balanced sibling paren group going back.
+        // Used when we hit WITH: if a sibling group was crossed, the CTE list is past
+        // us (cursor sits AFTER `WITH ... AS (...)`) and the next thing the user wants
+        // is a statement keyword (SELECT/INSERT/...), not the AfterWith table-hints.
+        bool sawSiblingParenGroup = false;
+
         for (int i = fromIndex; i >= 0; i--)
         {
             var t = tokens[i];
             if (IsWhitespaceOrComment(t))
+            {
+                continue;
+            }
+
+            if (t.TokenType == TSqlTokenType.RightParenthesis)
+            {
+                parenDepth++;
+                sawSiblingParenGroup = true;
+                continue;
+            }
+            if (t.TokenType == TSqlTokenType.LeftParenthesis)
+            {
+                parenDepth--;
+                // Moment we exit the cursor's enclosing paren: if it opens a CTE body
+                // (`[, | WITH] Name [(cols)] AS (`), classify as statement-start so
+                // GeneralKeywords (SELECT, WITH, INSERT, ...) are offered inside Cte2's body.
+                if (!checkedEnclosingParen && parenDepth == -1)
+                {
+                    checkedEnclosingParen = true;
+                    if (IsCteAsOpenParen(tokens, i))
+                    {
+                        context.IsInCteBody = true;
+                        return ClauseType.Unknown;
+                    }
+                }
+                continue;
+            }
+
+            // Inside a sibling balanced group we've already walked past — skip.
+            if (parenDepth > 0)
             {
                 continue;
             }
@@ -209,7 +260,12 @@ public class CursorContextAnalyzer
                 case TSqlTokenType.Create: return ClauseType.Create;
                 case TSqlTokenType.Alter:
                     return DetectAlterClauseType(tokens, i, context);
-                case TSqlTokenType.With: return ClauseType.With;
+                case TSqlTokenType.With:
+                    // After a CTE list (`WITH ... AS (body) |`) the cursor wants
+                    // statement-start keywords, not the AfterWith table-hint set.
+                    // Detect "list complete" by whether we crossed a balanced sibling
+                    // group on the way back from the cursor.
+                    return sawSiblingParenGroup ? ClauseType.Unknown : ClauseType.With;
                 case TSqlTokenType.Set:
                     // Distinguish "UPDATE [schema.]table SET" from standalone SET options.
                     // Scan all the way back through table/schema tokens to find UPDATE.
@@ -397,5 +453,49 @@ public class CursorContextAnalyzer
     private static bool IsWhitespaceOrComment(TSqlParserToken t)
     {
         return t.TokenType is TSqlTokenType.WhiteSpace or TSqlTokenType.SingleLineComment or TSqlTokenType.MultilineComment or TSqlTokenType.EndOfFile;
+    }
+
+    /// <summary>
+    /// Returns true if the <c>(</c> at <paramref name="lparenIndex"/> opens a CTE body.
+    /// Recognizes both the first CTE after <c>WITH</c> and subsequent CTEs after <c>,</c>,
+    /// with an optional column-list in between: <c>[WITH | ,] Name [(col, ...)] AS (</c>.
+    /// </summary>
+    private static bool IsCteAsOpenParen(IList<TSqlParserToken> tokens, int lparenIndex)
+    {
+        int i = lparenIndex - 1;
+        while (i >= 0 && IsWhitespaceOrComment(tokens[i])) i--;
+        // Expect 'AS' immediately before the open paren. Match by text — ScriptDom
+        // sometimes tokenizes AS as a dedicated keyword and sometimes as an Identifier.
+        if (i < 0 || !string.Equals(tokens[i].Text, "AS", StringComparison.OrdinalIgnoreCase))
+            return false;
+        i--;
+        while (i >= 0 && IsWhitespaceOrComment(tokens[i])) i--;
+
+        // Optional column list between the name and AS: `Name (c1, c2) AS (`
+        if (i >= 0 && tokens[i].TokenType == TSqlTokenType.RightParenthesis)
+        {
+            int depth = 1;
+            i--;
+            while (i >= 0 && depth > 0)
+            {
+                if (tokens[i].TokenType == TSqlTokenType.RightParenthesis) depth++;
+                else if (tokens[i].TokenType == TSqlTokenType.LeftParenthesis) depth--;
+                i--;
+            }
+            while (i >= 0 && IsWhitespaceOrComment(tokens[i])) i--;
+        }
+
+        // Expect the CTE name (identifier).
+        if (i < 0 ||
+            tokens[i].TokenType is not (TSqlTokenType.Identifier or TSqlTokenType.QuotedIdentifier))
+            return false;
+        i--;
+        while (i >= 0 && IsWhitespaceOrComment(tokens[i])) i--;
+
+        // Before the name must be WITH (first CTE) or ',' (subsequent CTE).
+        if (i < 0) return false;
+        if (tokens[i].TokenType == TSqlTokenType.With) return true;
+        if (tokens[i].TokenType == TSqlTokenType.Comma) return true;
+        return false;
     }
 }

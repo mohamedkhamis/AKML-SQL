@@ -43,6 +43,14 @@ public class ObjectProvider : ICompletionProvider
 
     public bool CanHandle(CursorContext context, DatabaseCache? cache)
     {
+        // CTE suggestions don't need a schema cache — they come from the current doc.
+        if (!context.PrecedingDot &&
+            context.AvailableCtes.Count > 0 &&
+            (context.ClauseType is ClauseType.From or ClauseType.JoinTable or ClauseType.JoinOn))
+        {
+            return true;
+        }
+
         if (cache is null)
         {
             return false;
@@ -71,6 +79,26 @@ public class ObjectProvider : ICompletionProvider
 
     public IEnumerable<CompletionItem> GetCompletions(CursorContext context, DatabaseCache? cache)
     {
+        // CTE names come BEFORE schema objects with a bumped priority — a CTE defined
+        // in the same statement is almost always the target when the user types a
+        // FROM/JOIN clause inside a subsequent CTE or the final SELECT.
+        if (!context.PrecedingDot &&
+            context.AvailableCtes.Count > 0 &&
+            context.ClauseType is ClauseType.From or ClauseType.JoinTable or ClauseType.JoinOn)
+        {
+            foreach (var cteName in context.AvailableCtes.Keys)
+            {
+                yield return new CompletionItem
+                {
+                    DisplayText = cteName,
+                    InsertText = cteName,
+                    ObjectType = (int)CompletionObjectType.Table,
+                    SecondaryText = "CTE",
+                    SortPriority = 50 // above dbo tables (100) and non-dbo (200)
+                };
+            }
+        }
+
         if (cache is null)
         {
             yield break;

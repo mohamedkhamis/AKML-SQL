@@ -253,4 +253,117 @@ public class CursorContextAnalyzerTests
 
         Assert.Equal(7, context.CursorOffset);
     }
+
+    // ── CTE body (paren-depth tracking) ──────────────────────────────────
+
+    [Fact]
+    public void Analyze_CursorInsideSecondCteBody_ClassifiesAsStatementStart()
+    {
+        // Repro: cursor inside `Cte2 AS (|`. Without paren-depth tracking the
+        // backward scan walks across `)` into Cte1's JOIN clause and returns
+        // ClauseType.JoinOn, suppressing SELECT in the keyword list.
+        var sql = "WITH Cte1 AS (SELECT * FROM Orders LEFT JOIN Customers ON Customers.CustomerID = Orders.CustomerID), Cte2 AS (";
+        var tokens = Tokenize(sql);
+
+        var context = _analyzer.Analyze(tokens, sql.Length);
+
+        Assert.Equal(ClauseType.Unknown, context.ClauseType);
+        Assert.True(context.IsInCteBody);
+    }
+
+    [Fact]
+    public void Analyze_CursorInsideFirstCteBody_ClassifiesAsStatementStart()
+    {
+        var sql = "WITH Cte1 AS (";
+        var tokens = Tokenize(sql);
+
+        var context = _analyzer.Analyze(tokens, sql.Length);
+
+        Assert.Equal(ClauseType.Unknown, context.ClauseType);
+        Assert.True(context.IsInCteBody);
+    }
+
+    [Fact]
+    public void Analyze_CursorInsideCteWithColumnList_ClassifiesAsStatementStart()
+    {
+        var sql = "WITH Cte1 (a, b) AS (";
+        var tokens = Tokenize(sql);
+
+        var context = _analyzer.Analyze(tokens, sql.Length);
+
+        Assert.Equal(ClauseType.Unknown, context.ClauseType);
+        Assert.True(context.IsInCteBody);
+    }
+
+    [Fact]
+    public void Analyze_CursorInWhereParenthesizedExpression_StillReturnsWhere()
+    {
+        // Sanity check: paren tracking must not break simple parenthesized exprs
+        // inside WHERE — the backward scan crosses `(` but depth goes to -1, and
+        // it's not a CTE open, so we should continue scanning back to the WHERE.
+        var sql = "SELECT * FROM t WHERE (col = ";
+        var tokens = Tokenize(sql);
+
+        var context = _analyzer.Analyze(tokens, sql.Length);
+
+        Assert.Equal(ClauseType.Where, context.ClauseType);
+        Assert.False(context.IsInCteBody);
+    }
+
+    [Fact]
+    public void Analyze_CursorAfterFromFollowingSiblingParenGroup_ReturnsFrom()
+    {
+        // Sibling paren group must not leak its clause classification: walking
+        // back from the cursor we encounter `(sub-query)` as a balanced block
+        // and skip its interior — the answer should be From, not whatever
+        // token was innermost in the subquery.
+        var sql = "SELECT (SELECT 1) AS x FROM ";
+        var tokens = Tokenize(sql);
+
+        var context = _analyzer.Analyze(tokens, sql.Length);
+
+        Assert.Equal(ClauseType.From, context.ClauseType);
+    }
+
+    [Fact]
+    public void Analyze_CursorAfterCteListEnds_ReturnsStatementStart()
+    {
+        // `WITH Cte1 AS (...) |` — CTE list is structurally complete; cursor is
+        // where the user starts typing the body query (SELECT/INSERT/UPDATE/...).
+        // The pre-fix analyzer hit `WITH` and returned ClauseType.With, which
+        // yields only AfterWith table-hint keywords (NOLOCK etc.) — no SELECT.
+        var sql = "WITH Cte1 AS (SELECT 1 AS a) ";
+        var tokens = Tokenize(sql);
+
+        var context = _analyzer.Analyze(tokens, sql.Length);
+
+        Assert.Equal(ClauseType.Unknown, context.ClauseType);
+        Assert.False(context.IsInCteBody);
+    }
+
+    [Fact]
+    public void Analyze_CursorBetweenWithAndCteName_StillReturnsWith()
+    {
+        // `WITH | Cte1 AS (...)` — sibling paren group not yet crossed.
+        // The AfterWith table-hint / RECURSIVE keywords are appropriate here.
+        var sql = "WITH ";
+        var tokens = Tokenize(sql);
+
+        var context = _analyzer.Analyze(tokens, sql.Length);
+
+        Assert.Equal(ClauseType.With, context.ClauseType);
+    }
+
+    [Fact]
+    public void Analyze_CursorAfterFromFollowingCteList_ReturnsFrom()
+    {
+        // Sanity: `WITH Cte1 AS (...) SELECT * FROM |` should still classify as
+        // From (FROM is hit before WITH on the backward walk).
+        var sql = "WITH Cte1 AS (SELECT 1 AS a) SELECT * FROM ";
+        var tokens = Tokenize(sql);
+
+        var context = _analyzer.Analyze(tokens, sql.Length);
+
+        Assert.Equal(ClauseType.From, context.ClauseType);
+    }
 }
