@@ -6,18 +6,21 @@ using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 using AkmlSql.Core.Models.Productivity;
+using AkmlSql.Shell.Shared.Ui.Theme;
 using Microsoft.VisualStudio.Shell;
 using Serilog;
 
 namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
 {
     /// <summary>
-    /// T036: WPF Popup-based Command Palette window.
+    /// WPF Popup-based Command Palette window.
     /// Centered on the main IDE window with a TextBox at top and ListBox below.
     /// Handles Up/Down/Enter/Escape keys. Auto-dismisses on focus loss.
     /// </summary>
     internal sealed class CommandPaletteWindow
     {
+        private const string PlaceholderText = "Type a command...";
+
         private Window? _window;
         private CommandPaletteViewModel? _viewModel;
         private TextBox? _searchBox;
@@ -86,11 +89,13 @@ namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
                 WindowStyle = WindowStyle.None,
                 AllowsTransparency = true,
-                Background = new SolidColorBrush(Color.FromRgb(37, 37, 38)),
                 ResizeMode = ResizeMode.NoResize,
                 ShowInTaskbar = false,
                 Topmost = true
             };
+            ThemeRegistry.Instance.AttachTo(window);
+            window.SetResourceReference(Window.BackgroundProperty, ThemeTokens.SurfacePanel);
+            window.SetResourceReference(Window.ForegroundProperty, ThemeTokens.TextPrimary);
 
             // Try to set the owner to the main IDE window
             try
@@ -109,16 +114,16 @@ namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
 
             // Build the UI
             var rootPanel = new DockPanel { Margin = new Thickness(1) };
-            rootPanel.Background = new SolidColorBrush(Color.FromRgb(45, 45, 48));
+            rootPanel.SetResourceReference(DockPanel.BackgroundProperty, ThemeTokens.SurfaceCanvas);
 
-            // Border for visual frame
+            // Border for visual frame — accent-coloured edge highlighting the popup.
             var border = new Border
             {
-                BorderBrush = new SolidColorBrush(Color.FromRgb(0, 122, 204)),
                 BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(4),
-                Background = new SolidColorBrush(Color.FromRgb(37, 37, 38))
+                CornerRadius = new CornerRadius(4)
             };
+            border.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.AccentPrimary);
+            border.SetResourceReference(Border.BackgroundProperty, ThemeTokens.SurfacePanel);
 
             var mainPanel = new DockPanel();
 
@@ -126,31 +131,30 @@ namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
             _searchBox = new TextBox
             {
                 FontSize = 16,
-                Padding = new Thickness(10, 8, 10, 8),
-                Background = new SolidColorBrush(Color.FromRgb(51, 51, 55)),
-                Foreground = new SolidColorBrush(Color.FromRgb(220, 220, 220)),
+                Padding = new Thickness(10, Spacing.Sm, 10, Spacing.Sm),
                 BorderThickness = new Thickness(0),
-                CaretBrush = new SolidColorBrush(Colors.White)
+                FocusVisualStyle = FocusVisualStyles.HighStakes,
+                Tag = PlaceholderText,
+                Text = PlaceholderText
             };
+            _searchBox.SetResourceReference(TextBox.BackgroundProperty, ThemeTokens.SurfaceInput);
+            _searchBox.SetResourceReference(System.Windows.Controls.Primitives.TextBoxBase.CaretBrushProperty, ThemeTokens.TextPrimary);
+            ApplyPlaceholderState(_searchBox, isPlaceholder: true);
 
-            // Watermark placeholder behavior via GotFocus/LostFocus
-            _searchBox.Tag = "Type a command...";
-            _searchBox.Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 150));
-            _searchBox.Text = "Type a command...";
             _searchBox.GotFocus += (s, e) =>
             {
-                if (_searchBox.Text == "Type a command...")
+                if (_searchBox.Text == PlaceholderText)
                 {
                     _searchBox.Text = "";
-                    _searchBox.Foreground = new SolidColorBrush(Color.FromRgb(220, 220, 220));
+                    ApplyPlaceholderState(_searchBox, isPlaceholder: false);
                 }
             };
             _searchBox.LostFocus += (s, e) =>
             {
                 if (string.IsNullOrEmpty(_searchBox.Text))
                 {
-                    _searchBox.Text = "Type a command...";
-                    _searchBox.Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 150));
+                    _searchBox.Text = PlaceholderText;
+                    ApplyPlaceholderState(_searchBox, isPlaceholder: true);
                 }
             };
 
@@ -160,28 +164,27 @@ namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
             DockPanel.SetDock(_searchBox, Dock.Top);
             mainPanel.Children.Add(_searchBox);
 
-            // Separator
+            // Separator under the search box
             var separator = new Border
             {
-                Height = 1,
-                Background = new SolidColorBrush(Color.FromRgb(63, 63, 70))
+                Height = 1
             };
+            separator.SetResourceReference(Border.BackgroundProperty, ThemeTokens.BorderDefault);
             DockPanel.SetDock(separator, Dock.Top);
             mainPanel.Children.Add(separator);
 
             // Results ListBox
             _listBox = new ListBox
             {
-                Background = new SolidColorBrush(Color.FromRgb(37, 37, 38)),
                 BorderThickness = new Thickness(0),
-                Foreground = new SolidColorBrush(Color.FromRgb(220, 220, 220)),
                 HorizontalContentAlignment = HorizontalAlignment.Stretch
             };
+            _listBox.SetResourceReference(ListBox.BackgroundProperty, ThemeTokens.SurfacePanel);
+            _listBox.SetResourceReference(ListBox.ForegroundProperty, ThemeTokens.TextPrimary);
             ScrollViewer.SetHorizontalScrollBarVisibility(_listBox, ScrollBarVisibility.Disabled);
 
             // Custom ItemTemplate
-            var itemTemplate = CreateItemTemplate();
-            _listBox.ItemTemplate = itemTemplate;
+            _listBox.ItemTemplate = CreateItemTemplate();
 
             // Bind ItemsSource to FilteredCommands
             _listBox.SetBinding(ItemsControl.ItemsSourceProperty,
@@ -191,32 +194,7 @@ namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
 
             _listBox.MouseDoubleClick += OnListBoxDoubleClick;
 
-            // Style the ListBox selection colors
-            var listBoxStyle = new Style(typeof(ListBoxItem));
-            listBoxStyle.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(8, 6, 8, 6)));
-            listBoxStyle.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0)));
-
-            var selectedTrigger = new Trigger
-            {
-                Property = ListBoxItem.IsSelectedProperty,
-                Value = true
-            };
-            selectedTrigger.Setters.Add(new Setter(Control.BackgroundProperty,
-                new SolidColorBrush(Color.FromRgb(9, 71, 113))));
-            selectedTrigger.Setters.Add(new Setter(Control.ForegroundProperty,
-                new SolidColorBrush(Colors.White)));
-            listBoxStyle.Triggers.Add(selectedTrigger);
-
-            var mouseOverTrigger = new Trigger
-            {
-                Property = UIElement.IsMouseOverProperty,
-                Value = true
-            };
-            mouseOverTrigger.Setters.Add(new Setter(Control.BackgroundProperty,
-                new SolidColorBrush(Color.FromRgb(62, 62, 64))));
-            listBoxStyle.Triggers.Add(mouseOverTrigger);
-
-            _listBox.ItemContainerStyle = listBoxStyle;
+            _listBox.ItemContainerStyle = CreateListBoxItemStyle();
 
             mainPanel.Children.Add(_listBox);
 
@@ -235,52 +213,82 @@ namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
             return window;
         }
 
+        /// <summary>
+        /// Switches the search box's foreground between placeholder and primary states using
+        /// <see cref="FrameworkElement.SetResourceReference(DependencyProperty, object)"/> so the
+        /// chosen colour stays live across theme switches even while the box holds the placeholder.
+        /// </summary>
+        private static void ApplyPlaceholderState(TextBox box, bool isPlaceholder)
+        {
+            box.SetResourceReference(
+                TextBox.ForegroundProperty,
+                isPlaceholder ? ThemeTokens.TextPlaceholder : ThemeTokens.TextPrimary);
+        }
+
+        private static Style CreateListBoxItemStyle()
+        {
+            var style = new Style(typeof(ListBoxItem));
+            style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(Spacing.Sm, 6, Spacing.Sm, 6)));
+            style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0)));
+            style.Setters.Add(new Setter(Control.FocusVisualStyleProperty, FocusVisualStyles.HighStakes));
+
+            // Selected state: strong-accent fill with on-accent text.
+            var selectedTrigger = new Trigger
+            {
+                Property = ListBoxItem.IsSelectedProperty,
+                Value = true
+            };
+            selectedTrigger.Setters.Add(new Setter(Control.BackgroundProperty,
+                new DynamicResourceExtension(ThemeTokens.SurfaceSelectionStrong)));
+            selectedTrigger.Setters.Add(new Setter(Control.ForegroundProperty,
+                new DynamicResourceExtension(ThemeTokens.TextOnAccent)));
+            style.Triggers.Add(selectedTrigger);
+
+            // Hover (not selected)
+            var mouseOverTrigger = new MultiTrigger();
+            mouseOverTrigger.Conditions.Add(new Condition(UIElement.IsMouseOverProperty, true));
+            mouseOverTrigger.Conditions.Add(new Condition(ListBoxItem.IsSelectedProperty, false));
+            mouseOverTrigger.Setters.Add(new Setter(Control.BackgroundProperty,
+                new DynamicResourceExtension(ThemeTokens.SurfaceHover)));
+            style.Triggers.Add(mouseOverTrigger);
+
+            return style;
+        }
+
         private static DataTemplate CreateItemTemplate()
         {
             var template = new DataTemplate(typeof(CommandEntry));
 
-            var gridFactory = new FrameworkElementFactory(typeof(System.Windows.Controls.Grid));
-
-            // Two columns: command name (left), shortcut (right)
-            var col1 = new FrameworkElementFactory(typeof(ColumnDefinition));
-            col1.SetValue(ColumnDefinition.WidthProperty, new GridLength(1, GridUnitType.Star));
-            var col2 = new FrameworkElementFactory(typeof(ColumnDefinition));
-            col2.SetValue(ColumnDefinition.WidthProperty, GridLength.Auto);
-
-            var colDefs = new FrameworkElementFactory(typeof(System.Windows.Controls.Grid));
-            // We'll use a DockPanel instead for simpler layout
+            // Outer DockPanel: category (left), shortcut (right), name (fill).
             var dockFactory = new FrameworkElementFactory(typeof(DockPanel));
 
-            // Shortcut hint (right-aligned, gray)
+            // Shortcut hint (right-aligned, secondary tone)
             var shortcutFactory = new FrameworkElementFactory(typeof(TextBlock));
             shortcutFactory.SetBinding(TextBlock.TextProperty, new Binding("KeyboardShortcut"));
-            shortcutFactory.SetValue(TextBlock.ForegroundProperty,
-                new SolidColorBrush(Color.FromRgb(128, 128, 128)));
+            shortcutFactory.SetResourceBinding(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
             shortcutFactory.SetValue(TextBlock.FontSizeProperty, 12.0);
             shortcutFactory.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
-            shortcutFactory.SetValue(FrameworkElement.MarginProperty, new Thickness(8, 0, 0, 0));
+            shortcutFactory.SetValue(FrameworkElement.MarginProperty, new Thickness(Spacing.Sm, 0, 0, 0));
             shortcutFactory.SetValue(DockPanel.DockProperty, Dock.Right);
             dockFactory.AppendChild(shortcutFactory);
 
-            // Category label (dimmed, before name)
+            // Category label (further dimmed, before name)
             var categoryFactory = new FrameworkElementFactory(typeof(TextBlock));
             categoryFactory.SetBinding(TextBlock.TextProperty, new Binding("Category"));
-            categoryFactory.SetValue(TextBlock.ForegroundProperty,
-                new SolidColorBrush(Color.FromRgb(100, 100, 100)));
+            categoryFactory.SetResourceBinding(TextBlock.ForegroundProperty, ThemeTokens.TextDisabled);
             categoryFactory.SetValue(TextBlock.FontSizeProperty, 11.0);
             categoryFactory.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
             categoryFactory.SetValue(FrameworkElement.MarginProperty, new Thickness(0, 0, 6, 0));
             categoryFactory.SetValue(DockPanel.DockProperty, Dock.Left);
             dockFactory.AppendChild(categoryFactory);
 
-            // Command name (bold, left-aligned)
+            // Command name (bold, left-aligned, primary tone)
             var nameFactory = new FrameworkElementFactory(typeof(TextBlock));
             nameFactory.SetBinding(TextBlock.TextProperty, new Binding("Name"));
             nameFactory.SetValue(TextBlock.FontWeightProperty, FontWeights.SemiBold);
             nameFactory.SetValue(TextBlock.FontSizeProperty, 13.0);
             nameFactory.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
-            nameFactory.SetValue(TextBlock.ForegroundProperty,
-                new SolidColorBrush(Color.FromRgb(220, 220, 220)));
+            nameFactory.SetResourceBinding(TextBlock.ForegroundProperty, ThemeTokens.TextPrimary);
             dockFactory.AppendChild(nameFactory);
 
             template.VisualTree = dockFactory;
@@ -296,7 +304,7 @@ namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
             if (_viewModel == null || _searchBox == null) return;
 
             var text = _searchBox.Text;
-            if (text == "Type a command...")
+            if (text == PlaceholderText)
                 text = "";
 
             _viewModel.SearchText = text;

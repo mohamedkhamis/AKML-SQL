@@ -103,7 +103,7 @@ description: "Task list for feature 016-wpf-theme-refresh"
 - [X] T035 [P] [US2] Migrate `src/AkmlSql.Shell.Shared/Ai/AiChatToolWindow.cs` — inherit `ThemeAwareUserControl` (or wrap content in one), use `Chat.UserBubble` / `Chat.AssistantBubble` / `Chat.SystemBubble` for message backgrounds. Apply `FocusVisualStyles.HighStakes` to the send button and prompt input. **Implementation note (2026-04-30):** the chrome lives in `AiChatPanel.cs` (33-line `AiChatToolWindow.cs` is just a `ToolWindowPane` shell that hosts `AiChatPanel`). `AiChatPanel` now inherits `ThemeAwareUserControl`. `Chat.SystemBubble` is reserved for system/status messages — currently the chat only renders user + assistant turns, so only `ChatUserBubble` and `ChatAssistantBubble` are wired today.
 - [X] T036 [P] [US2] Migrate `src/AkmlSql.Shell.Shared/Productivity/DocumentOutline/DocumentOutlineControl.cs` — apply `FocusVisualStyles.HighStakes` to outline item entries (treat as nav items).
 - [ ] T037 [P] [US2] Migrate `src/AkmlSql.Shell.Shared/Productivity/Navigation/ObjectSearchWindow.cs` — apply `FocusVisualStyles.HighStakes` to the search input and result-list items.
-- [ ] T038 [P] [US2] Migrate `src/AkmlSql.Shell.Shared/Productivity/CommandPalette/CommandPaletteWindow.cs` — apply `FocusVisualStyles.HighStakes` to the command input and result-list items.
+- [X] T038 [P] [US2] Migrate `src/AkmlSql.Shell.Shared/Productivity/CommandPalette/CommandPaletteWindow.cs` — apply `FocusVisualStyles.HighStakes` to the command input and result-list items.
 
 ### Cross-surface verification
 
