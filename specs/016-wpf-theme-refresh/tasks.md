@@ -78,28 +78,30 @@ description: "Task list for feature 016-wpf-theme-refresh"
 
 ### Pre-migration cleanup
 
-- [ ] T021 [US2] Delete the legacy `src/AkmlSql.Shell.Shared/Dialogs/SettingsDialog.cs` (1,444 lines of dead code per `research.md` § D5). First grep `src/AkmlSql.Shell.Shared/**/*.cs` for `SettingsDialog` to confirm zero callers. Remove the corresponding `<Compile Include>` from `AkmlSql.Shell.Shared.projitems`.
+- [X] T021 [US2] Delete the legacy `src/AkmlSql.Shell.Shared/Dialogs/SettingsDialog.cs` (1,444 lines of dead code per `research.md` § D5). First grep `src/AkmlSql.Shell.Shared/**/*.cs` for `SettingsDialog` to confirm zero callers. Remove the corresponding `<Compile Include>` from `AkmlSql.Shell.Shared.projitems`.
 
 ### Migrate dialogs (each one is one PR-sized task — different files, parallelizable)
 
-- [ ] T022 [P] [US2] Migrate `src/AkmlSql.Shell.Shared/Dialogs/AboutDialog.cs` to `ThemeAwareWindow` + tokens + `Typography` / `Spacing`. Apply `FocusVisualStyles.HighStakes` to the close button.
-- [ ] T023 [P] [US2] Migrate `src/AkmlSql.Shell.Shared/Safety/SafetyWarningDialog.cs`. **Preserve** the FR-005 cancel-button discipline: Cancel remains `IsCancel = true` AND focused on `Loaded`; the destructive button is *not* `AcceptButton`. Apply `FocusVisualStyles.HighStakes` to the Cancel button and the destructive (Drop / Proceed) button. The destructive button's background uses `ThemeTokens.StatusDanger` with `TextOnDanger`. Verify the type-to-confirm pattern still works.
-- [ ] T024 [P] [US2] Migrate `src/AkmlSql.Shell.Shared/Dialogs/BulkAnalysisResultDialog.cs`.
-- [ ] T025 [P] [US2] Migrate `src/AkmlSql.Shell.Shared/Dialogs/LogViewerDialog.cs`.
-- [ ] T026 [P] [US2] Migrate `src/AkmlSql.Shell.Shared/Refactoring/RefactoringPreviewDialog.cs`.
-- [ ] T027 [P] [US2] Migrate `src/AkmlSql.Shell.Shared/Sessions/SessionRecoveryDialog.cs`.
+> **Discovered during Phase 4 implementation (2026-04-30):** 8 dialogs in this list are `System.Windows.Forms.Form` subclasses, not WPF — the WPF token system does not apply to them. They are marked **DEFERRED — WinForms** below. Migrating them requires either a parallel WinForms theme adapter (separate, future spec) or a port to WPF (also separate). See spec.md § Assumptions.
+
+- [ ] T022 [DEFERRED — WinForms] [US2] Migrate `src/AkmlSql.Shell.Shared/Dialogs/AboutDialog.cs` (WinForms `Form`) — out of WPF token scope.
+- [X] T023 [P] [US2] Migrate `src/AkmlSql.Shell.Shared/Safety/SafetyWarningDialog.cs`. **Preserve** the FR-005 cancel-button discipline: Cancel remains `IsCancel = true` AND focused on `Loaded`; the destructive button is *not* `AcceptButton`. Apply `FocusVisualStyles.HighStakes` to the Cancel button and the destructive (Drop / Proceed) button. The destructive button's background uses `ThemeTokens.StatusDanger` with `TextOnDanger`. Verify the type-to-confirm pattern still works.
+- [ ] T024 [DEFERRED — WinForms] [US2] Migrate `src/AkmlSql.Shell.Shared/Dialogs/BulkAnalysisResultDialog.cs` (WinForms `Form`) — out of WPF token scope.
+- [ ] T025 [DEFERRED — WinForms] [US2] Migrate `src/AkmlSql.Shell.Shared/Dialogs/LogViewerDialog.cs` (WinForms `Form`) — out of WPF token scope.
+- [ ] T026 [DEFERRED — WinForms] [US2] Migrate `src/AkmlSql.Shell.Shared/Refactoring/RefactoringPreviewDialog.cs` (WinForms `Form`) — out of WPF token scope.
+- [ ] T027 [DEFERRED — WinForms] [US2] Migrate `src/AkmlSql.Shell.Shared/Sessions/SessionRecoveryDialog.cs` (WinForms `Form`) — out of WPF token scope.
 - [ ] T028 [P] [US2] Migrate `src/AkmlSql.Shell.Shared/Snippets/SnippetManagerDialog.cs`.
-- [ ] T029 [P] [US2] Migrate `src/AkmlSql.Shell.Shared/Ui/BulkFormatProgressDialog.cs`. If it has indeterminate progress motion, branch on `HostThemeWatcher.AnimationsEnabled` per FR-019 / O10.
-- [ ] T030 [P] [US2] Migrate `src/AkmlSql.Shell.Shared/Ui/ProfileEditorDialog.cs` — verify the formatter preview region uses `ThemeTokens.Editor.PopupBackground` so the syntax-highlighted preview matches host editor chrome.
-- [ ] T031 [P] [US2] Migrate `src/AkmlSql.Shell.Shared/Ai/TextToSqlInputDialog.cs`.
-- [ ] T032 [P] [US2] Migrate `src/AkmlSql.Shell.Shared/Productivity/Grid/CellEditDialog.cs`.
-- [ ] T033 [P] [US2] Migrate `src/AkmlSql.Shell.Shared/History/HistoryDiffWindow.cs`.
+- [ ] T029 [DEFERRED — WinForms] [US2] Migrate `src/AkmlSql.Shell.Shared/Ui/BulkFormatProgressDialog.cs` (WinForms `Form`) — out of WPF token scope. If WinForms theme adapter is built, branch on `HostThemeWatcher.AnimationsEnabled` per FR-019 / O10 for any indeterminate progress.
+- [X] T030 [P] [US2] Migrate `src/AkmlSql.Shell.Shared/Ui/ProfileEditorDialog.cs` — verify the formatter preview region uses `ThemeTokens.Editor.PopupBackground` so the syntax-highlighted preview matches host editor chrome.
+- [ ] T031 [DEFERRED — WinForms] [US2] Migrate `src/AkmlSql.Shell.Shared/Ai/TextToSqlInputDialog.cs` (WinForms `Form`) — out of WPF token scope.
+- [ ] T032 [DEFERRED — WinForms] [US2] Migrate `src/AkmlSql.Shell.Shared/Productivity/Grid/CellEditDialog.cs` (WinForms `Form`) — out of WPF token scope.
+- [X] T033 [P] [US2] Migrate `src/AkmlSql.Shell.Shared/History/HistoryDiffWindow.cs`.
 
 ### Migrate tool windows and their controls (each [P], different files)
 
 - [ ] T034 [P] [US2] Migrate `src/AkmlSql.Shell.Shared/History/HistoryToolWindowControl.cs`. Collapse history-specific tokens onto general semantic tokens: `HistoryStarActive` → `Status.Warning`, `HistoryOpenIcon` → `Status.Success`, `HistoryClosedIcon` → `Status.Danger`, `HistoryQueryName` → `Text.Primary`, `HistoryMetadata` → `Text.Secondary`, `HistoryVersionCurrent` → `Text.Link`, history backgrounds → `Surface.*`. Inherit `ThemeAwareUserControl`. Apply `FocusVisualStyles.HighStakes` to the search input and the four filter chips (All / Starred / Open / Closed).
 - [ ] T035 [P] [US2] Migrate `src/AkmlSql.Shell.Shared/Ai/AiChatToolWindow.cs` — inherit `ThemeAwareUserControl` (or wrap content in one), use `Chat.UserBubble` / `Chat.AssistantBubble` / `Chat.SystemBubble` for message backgrounds. Apply `FocusVisualStyles.HighStakes` to the send button and prompt input.
-- [ ] T036 [P] [US2] Migrate `src/AkmlSql.Shell.Shared/Productivity/DocumentOutline/DocumentOutlineControl.cs` — apply `FocusVisualStyles.HighStakes` to outline item entries (treat as nav items).
+- [X] T036 [P] [US2] Migrate `src/AkmlSql.Shell.Shared/Productivity/DocumentOutline/DocumentOutlineControl.cs` — apply `FocusVisualStyles.HighStakes` to outline item entries (treat as nav items).
 - [ ] T037 [P] [US2] Migrate `src/AkmlSql.Shell.Shared/Productivity/Navigation/ObjectSearchWindow.cs` — apply `FocusVisualStyles.HighStakes` to the search input and result-list items.
 - [ ] T038 [P] [US2] Migrate `src/AkmlSql.Shell.Shared/Productivity/CommandPalette/CommandPaletteWindow.cs` — apply `FocusVisualStyles.HighStakes` to the command input and result-list items.
 

@@ -159,6 +159,7 @@ The "WPF surfaces" the refresh applies to (the surface inventory):
 - The user's reference for "professional" is the visual quality bar set by Redgate SQL Prompt's Options dialog, which the existing `SettingsWindow` source already cites as inspiration.
 - Existing accessibility primitives (keyboard focus, screen reader names, tab order) will be preserved or improved.
 - The work targets all six host targets (SSMS 20/21/22, VS 2019/2022/2026) since the affected files live in `AkmlSql.Shell.Shared`.
+- **WinForms dialogs are out of scope for the WPF token system.** Implementation discovery (during Phase 4 / spec 016) found that 8 of the 13 inventory dialogs are `System.Windows.Forms.Form` subclasses, not WPF — `AboutDialog`, `BulkAnalysisResultDialog`, `LogViewerDialog`, `RefactoringPreviewDialog`, `SessionRecoveryDialog`, `BulkFormatProgressDialog`, `TextToSqlInputDialog`, `CellEditDialog`. WinForms uses `System.Drawing.Color` + `BackColor`/`ForeColor`, a separate UI stack incompatible with WPF `ResourceDictionary` and `SetResourceReference`. These surfaces remain on their pre-refresh chrome and require either a parallel WinForms theme adapter (separate, future spec) or a port to WPF (also separate). The WPF token system continues to apply to the remaining ~10 WPF surfaces.
 
 ## Dependencies
 
