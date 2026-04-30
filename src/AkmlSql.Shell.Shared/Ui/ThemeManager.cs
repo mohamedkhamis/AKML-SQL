@@ -10,15 +10,23 @@ namespace AkmlSql.Shell.Shared.Ui
     /// Existing callers continue to compile; their values are resolved through the new palette
     /// so themes apply correctly. Properties are <see cref="ObsoleteAttribute"/>-marked and will
     /// be removed once all call sites migrate (see spec 016 task T044).
+    ///
+    /// Pruned 2026-04-30 (T044): the History-specific chrome properties (HistoryWindowBackground,
+    /// HistoryPanelBackground, HistorySearchBackground, HistorySearchBorder,
+    /// HistoryCodePreviewBackground, HistorySelectedBackground, HistorySelectedBorder,
+    /// HistoryOpenIcon, HistoryClosedIcon, HistoryStarActive, HistoryStarInactive,
+    /// HistoryActiveFilterBackground, HistoryActiveFilterBorder,
+    /// HistoryInactiveFilterBackground, HistoryInactiveFilterBorder, HistoryQueryName,
+    /// HistoryMetadata, HistoryVersionCurrent), HighlightForeground, PreviewBackground, and
+    /// the InvalidateTheme() no-op were removed after T034 collapsed all their callers onto
+    /// general semantic tokens. <see cref="HistorySearchHighlight"/> remains as an FR-003
+    /// semantic constant.
     /// </summary>
     [Obsolete("Use AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens with SetResourceReference. Will be removed after migration (spec 016 T044).")]
     public enum VsThemeKind
     {
         Light,
         Dark,
-        /// <summary>Deprecated; kept for source compatibility during migration. Treated as <see cref="Light"/>.</summary>
-        [Obsolete("VsThemeKind.Blue is dropped. Use ThemeVariant via ThemeRegistry.Instance.Current.")]
-        Blue,
     }
 
     /// <summary>
@@ -78,10 +86,6 @@ namespace AkmlSql.Shell.Shared.Ui
             }
         }
 
-        /// <summary>No-op in the new system; the registry is always in sync.</summary>
-        [Obsolete("No-op — the theme registry is always in sync.")]
-        public void InvalidateTheme() { /* intentionally no-op */ }
-
         /// <summary>
         /// Auto-detects theme from the environment. Forwards to <see cref="HostThemeWatcher"/>.
         /// </summary>
@@ -106,7 +110,8 @@ namespace AkmlSql.Shell.Shared.Ui
                 : Colors.Magenta; // sentinel — visible bug if a token is unresolved
         }
 
-        // ---- Generic chrome ----
+        // ---- Generic chrome (still in use by ProfileEditorDialog, SnippetManagerDialog,
+        //      SchemaProgressMargin, OptionCategoryTreeBuilder until those are migrated) ----
 
         [Obsolete("Use ThemeTokens.SurfaceCanvas with SetResourceReference.")]
         public Color Background => FromToken(ThemeTokens.SurfaceCanvas);
@@ -120,12 +125,6 @@ namespace AkmlSql.Shell.Shared.Ui
         [Obsolete("Use ThemeTokens.SurfaceHover with SetResourceReference.")]
         public Color HighlightBackground => FromToken(ThemeTokens.SurfaceHover);
 
-        [Obsolete("Use ThemeTokens.TextPrimary with SetResourceReference.")]
-        public Color HighlightForeground => FromToken(ThemeTokens.TextPrimary);
-
-        [Obsolete("Use ThemeTokens.SurfacePanel with SetResourceReference.")]
-        public Color PreviewBackground => FromToken(ThemeTokens.SurfacePanel);
-
         [Obsolete("Use ThemeTokens.SurfaceElevated with SetResourceReference.")]
         public Color EditorPanelBackground => FromToken(ThemeTokens.SurfaceElevated);
 
@@ -138,61 +137,7 @@ namespace AkmlSql.Shell.Shared.Ui
         [Obsolete("Use ThemeTokens.TextPlaceholder with SetResourceReference.")]
         public Color PlaceholderText => FromToken(ThemeTokens.TextPlaceholder);
 
-        // ---- History tool window (legacy History-specific tokens) ----
-
-        [Obsolete("Use ThemeTokens.SurfaceCanvas.")]
-        public Color HistoryWindowBackground => FromToken(ThemeTokens.SurfaceCanvas);
-
-        [Obsolete("Use ThemeTokens.SurfacePanel.")]
-        public Color HistoryPanelBackground => FromToken(ThemeTokens.SurfacePanel);
-
-        [Obsolete("Use ThemeTokens.SurfaceInput.")]
-        public Color HistorySearchBackground => FromToken(ThemeTokens.SurfaceInput);
-
-        [Obsolete("Use ThemeTokens.BorderDefault.")]
-        public Color HistorySearchBorder => FromToken(ThemeTokens.BorderDefault);
-
-        [Obsolete("Use ThemeTokens.EditorPopupBackground.")]
-        public Color HistoryCodePreviewBackground => FromToken(ThemeTokens.EditorPopupBackground);
-
-        [Obsolete("Use ThemeTokens.SurfaceSelection.")]
-        public Color HistorySelectedBackground => FromToken(ThemeTokens.SurfaceSelection);
-
-        [Obsolete("Use ThemeTokens.BorderFocus.")]
-        public Color HistorySelectedBorder => FromToken(ThemeTokens.BorderFocus);
-
-        [Obsolete("Use ThemeTokens.StatusSuccess.")]
-        public Color HistoryOpenIcon => FromToken(ThemeTokens.StatusSuccess);
-
-        [Obsolete("Use ThemeTokens.StatusDanger.")]
-        public Color HistoryClosedIcon => FromToken(ThemeTokens.StatusDanger);
-
-        [Obsolete("Use ThemeTokens.StatusWarning.")]
-        public Color HistoryStarActive => FromToken(ThemeTokens.StatusWarning);
-
-        [Obsolete("Use ThemeTokens.BorderDefault.")]
-        public Color HistoryStarInactive => FromToken(ThemeTokens.BorderDefault);
-
-        [Obsolete("Use ThemeTokens.SurfaceSelection.")]
-        public Color HistoryActiveFilterBackground => FromToken(ThemeTokens.SurfaceSelection);
-
-        [Obsolete("Use ThemeTokens.AccentPrimary.")]
-        public Color HistoryActiveFilterBorder => FromToken(ThemeTokens.AccentPrimary);
-
-        [Obsolete("Use ThemeTokens.SurfaceInput.")]
-        public Color HistoryInactiveFilterBackground => FromToken(ThemeTokens.SurfaceInput);
-
-        [Obsolete("Use ThemeTokens.BorderDefault.")]
-        public Color HistoryInactiveFilterBorder => FromToken(ThemeTokens.BorderDefault);
-
-        [Obsolete("Use ThemeTokens.TextPrimary.")]
-        public Color HistoryQueryName => FromToken(ThemeTokens.TextPrimary);
-
-        [Obsolete("Use ThemeTokens.TextSecondary.")]
-        public Color HistoryMetadata => FromToken(ThemeTokens.TextSecondary);
-
-        [Obsolete("Use ThemeTokens.TextLink.")]
-        public Color HistoryVersionCurrent => FromToken(ThemeTokens.TextLink);
+        // ---- FR-003 semantic constant (intentionally theme-independent) ----
 
         /// <summary>
         /// Yellow Ochre #F9A825 at ~30% opacity — semantic constant, theme-independent. Used as a

@@ -35,7 +35,7 @@ namespace AkmlSql.Shell.Shared.Editor.Toolbar
 
             // Detect theme
             var theme = ThemeManager.Instance.DetectTheme();
-            var isDark = theme == VsThemeKind.Dark || theme == VsThemeKind.Blue;
+            var isDark = theme == VsThemeKind.Dark;
 
             // Build frozen brushes
             if (isDark)
