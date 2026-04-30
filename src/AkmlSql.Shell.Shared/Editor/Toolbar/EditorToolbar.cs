@@ -4,7 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
-using AkmlSql.Shell.Shared.Ui;
+using AkmlSql.Shell.Shared.Ui.Theme;
 using Microsoft.VisualStudio.Text.Editor;
 using Serilog;
 
@@ -12,59 +12,32 @@ namespace AkmlSql.Shell.Shared.Editor.Toolbar
 {
     /// <summary>
     /// SQL Prompt-style action bar that appears at the top of each SQL editor.
-    /// Code-only WPF UserControl (no XAML) - 30px tall with flat icon+text buttons.
-    /// Renders in Dark or Light theme based on <see cref="ThemeManager"/>.
+    /// Code-only WPF UserControl (no XAML) — 30 px tall with flat icon+text buttons.
+    /// Chrome flows through <see cref="ThemeRegistry"/>; theme variants are resolved by the
+    /// registry, not branched per-call-site.
     /// </summary>
-    internal sealed class EditorToolbar : UserControl, IWpfTextViewMargin
+    internal sealed class EditorToolbar : ThemeAwareUserControl, IWpfTextViewMargin
     {
         private readonly IWpfTextView _textView;
         private bool _disposed;
 
-        // Theme colors
-        private readonly SolidColorBrush _bgBrush;
-        private readonly SolidColorBrush _borderBrush;
-        private readonly SolidColorBrush _normalFg;
-        private readonly SolidColorBrush _hoverBg;
-        private readonly SolidColorBrush _hoverFg;
-        private readonly SolidColorBrush _activeBg;
-        private readonly SolidColorBrush _activeFg;
+        // Cached per-instance Style for the toolbar buttons. The Style hosts the rounded chrome
+        // template and the IsMouseOver / IsPressed triggers so each button reacts to hover/press
+        // without us having to wire mouse handlers manually.
+        private readonly Style _buttonStyle;
 
         public EditorToolbar(IWpfTextView textView)
         {
             _textView = textView ?? throw new ArgumentNullException(nameof(textView));
 
-            // Detect theme
-            var theme = ThemeManager.Instance.DetectTheme();
-            var isDark = theme == VsThemeKind.Dark;
-
-            // Build frozen brushes
-            if (isDark)
-            {
-                _bgBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x2D, 0x2D, 0x30)));
-                _borderBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x3E, 0x3E, 0x42)));
-                _normalFg = Freeze(new SolidColorBrush(Color.FromRgb(0x99, 0x99, 0x99)));
-                _hoverBg = Freeze(new SolidColorBrush(Color.FromRgb(0x3E, 0x3E, 0x42)));
-                _hoverFg = Freeze(new SolidColorBrush(Colors.White));
-                _activeBg = Freeze(new SolidColorBrush(Color.FromRgb(0x00, 0x7A, 0xCC)));
-                _activeFg = Freeze(new SolidColorBrush(Colors.White));
-            }
-            else
-            {
-                _bgBrush = Freeze(new SolidColorBrush(Color.FromRgb(0xEE, 0xEE, 0xF2)));
-                _borderBrush = Freeze(new SolidColorBrush(Color.FromRgb(0xCC, 0xCE, 0xDB)));
-                _normalFg = Freeze(new SolidColorBrush(Color.FromRgb(0x6E, 0x6E, 0x6E)));
-                _hoverBg = Freeze(new SolidColorBrush(Color.FromRgb(0xD8, 0xD8, 0xDC)));
-                _hoverFg = Freeze(new SolidColorBrush(Colors.Black));
-                _activeBg = Freeze(new SolidColorBrush(Color.FromRgb(0x00, 0x7A, 0xCC)));
-                _activeFg = Freeze(new SolidColorBrush(Colors.White));
-            }
+            _buttonStyle = BuildButtonStyle();
 
             BuildUi();
 
             _textView.Closed += OnTextViewClosed;
         }
 
-        // ─── IWpfTextViewMargin ─────────────────────────────────────────────
+        // --- IWpfTextViewMargin -----------------------------------------------
 
         public FrameworkElement VisualElement => this;
 
@@ -79,94 +52,69 @@ namespace AkmlSql.Shell.Shared.Editor.Toolbar
                 : null;
         }
 
-        // ─── UI Construction ────────────────────────────────────────────────
+        // --- UI Construction --------------------------------------------------
 
         private void BuildUi()
         {
             Height = 30;
-            Background = _bgBrush;
-            BorderBrush = _borderBrush;
             BorderThickness = new Thickness(0, 0, 0, 1);
             SnapsToDevicePixels = true;
 
+            // Override the SurfacePanel default that ThemeAwareUserControl applies — for an editor
+            // margin the EditorMarginBackground role is more semantic.
+            SetResourceReference(BackgroundProperty, ThemeTokens.EditorMarginBackground);
+            SetResourceReference(BorderBrushProperty, ThemeTokens.BorderDefault);
+
             var panel = new StackPanel
             {
-                Orientation = Orientation.Horizontal,
+                Orientation       = Orientation.Horizontal,
                 VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(4, 0, 4, 0)
+                Margin            = new Thickness(Spacing.Xs, 0, Spacing.Xs, 0)
             };
 
-            // Button definitions: icon, label, click handler
-            panel.Children.Add(CreateButton("\u229E", "Format", OnFormatClick));
-            panel.Children.Add(CreateButton("\u23F1", "History", OnHistoryClick));
-            panel.Children.Add(CreateButton("\u2261", "Outline", OnOutlineClick));
-            panel.Children.Add(CreateButton("\uD83D\uDD0D", "Search", OnSearchClick));
-            panel.Children.Add(CreateButton("\u26A1", "Analysis", OnAnalysisClick));
-            panel.Children.Add(CreateButton("\uD83D\uDCAC", "AI Chat", OnAiChatClick));
+            // Button definitions: icon, label, click handler.
+            panel.Children.Add(CreateButton("⊞", "Format",   OnFormatClick));
+            panel.Children.Add(CreateButton("⏱", "History",  OnHistoryClick));
+            panel.Children.Add(CreateButton("≡", "Outline",  OnOutlineClick));
+            panel.Children.Add(CreateButton("🔍", "Search",   OnSearchClick));
+            panel.Children.Add(CreateButton("⚡", "Analysis", OnAnalysisClick));
+            panel.Children.Add(CreateButton("💬", "AI Chat",  OnAiChatClick));
 
-            // Separator
+            // Vertical separator
             var sep = new Border
             {
-                Width = 1,
-                Height = 16,
-                Background = _borderBrush,
-                Margin = new Thickness(4, 0, 4, 0),
+                Width             = 1,
+                Height            = 16,
+                Margin            = new Thickness(Spacing.Xs, 0, Spacing.Xs, 0),
                 VerticalAlignment = VerticalAlignment.Center
             };
+            sep.SetResourceReference(Border.BackgroundProperty, ThemeTokens.BorderDefault);
             panel.Children.Add(sep);
 
-            panel.Children.Add(CreateButton("\u2699", "Settings", OnSettingsClick));
+            panel.Children.Add(CreateButton("⚙", "Settings", OnSettingsClick));
 
             Content = panel;
         }
 
-        private Border CreateButton(string icon, string label, Action clickHandler)
+        private Button CreateButton(string icon, string label, Action clickHandler)
         {
-            var textBlock = new TextBlock
+            var button = new Button
             {
-                Text = $"{icon}  {label}",
-                FontFamily = new FontFamily("Segoe UI"),
-                FontSize = 11,
-                Foreground = _normalFg,
+                Content           = $"{icon}  {label}",
+                FontFamily        = Typography.UiFont,
+                FontSize          = Typography.Small,
+                Margin            = new Thickness(1, 0, 1, 0),
+                Padding           = new Thickness(6, 2, 6, 2),
+                Cursor            = Cursors.Hand,
                 VerticalAlignment = VerticalAlignment.Center,
-                TextAlignment = TextAlignment.Center
+                Style             = _buttonStyle,
+                FocusVisualStyle  = FocusVisualStyles.HighStakes
             };
 
-            var border = new Border
+            button.Click += (_, _) =>
             {
-                Background = Brushes.Transparent,
-                CornerRadius = new CornerRadius(2),
-                Padding = new Thickness(6, 2, 6, 2),
-                Margin = new Thickness(1, 0, 1, 0),
-                Child = textBlock,
-                Cursor = Cursors.Hand,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-
-            border.MouseEnter += (s, e) =>
-            {
-                border.Background = _hoverBg;
-                textBlock.Foreground = _hoverFg;
-            };
-
-            border.MouseLeave += (s, e) =>
-            {
-                border.Background = Brushes.Transparent;
-                textBlock.Foreground = _normalFg;
-            };
-
-            border.MouseLeftButtonDown += (s, e) =>
-            {
-                border.Background = _activeBg;
-                textBlock.Foreground = _activeFg;
-            };
-
-            border.MouseLeftButtonUp += (s, e) =>
-            {
-                border.Background = _hoverBg;
-                textBlock.Foreground = _hoverFg;
-
-                // Use BeginInvoke to avoid blocking the mouse event handler
+                // Defer the work via dispatcher so the visual press-state can render before the
+                // command runs — preserves the ergonomic feedback the original mouse-down path had.
                 Application.Current?.Dispatcher?.BeginInvoke(new Action(() =>
                 {
                     try
@@ -180,10 +128,59 @@ namespace AkmlSql.Shell.Shared.Editor.Toolbar
                 }));
             };
 
-            return border;
+            return button;
         }
 
-        // ─── Click Handlers ─────────────────────────────────────────────────
+        /// <summary>
+        /// Builds the toolbar Button style: a rounded <see cref="Border"/> wrapping a
+        /// <see cref="ContentPresenter"/>, with hover and pressed triggers that swap Background
+        /// and Foreground via <see cref="DynamicResourceExtension"/> so the colours track
+        /// theme switches.
+        /// </summary>
+        private static Style BuildButtonStyle()
+        {
+            var border = new FrameworkElementFactory(typeof(Border));
+            border.SetValue(Border.CornerRadiusProperty, new CornerRadius(2));
+            border.SetValue(Border.BackgroundProperty,  new TemplateBindingExtension(Control.BackgroundProperty));
+            border.SetValue(Border.PaddingProperty,     new TemplateBindingExtension(Control.PaddingProperty));
+
+            var content = new FrameworkElementFactory(typeof(ContentPresenter));
+            content.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+            content.SetValue(FrameworkElement.VerticalAlignmentProperty,   VerticalAlignment.Center);
+            // ContentPresenter inherits Foreground via TextElement attached-property propagation
+            // from the Button's Foreground (which the Style + triggers below drive). No explicit
+            // template binding needed.
+            border.AppendChild(content);
+
+            var template = new ControlTemplate(typeof(Button)) { VisualTree = border };
+
+            var style = new Style(typeof(Button));
+            style.Setters.Add(new Setter(Control.TemplateProperty,        template));
+            style.Setters.Add(new Setter(Control.BackgroundProperty,      Brushes.Transparent));   // theme-independent placeholder
+            style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0)));
+            style.Setters.Add(new Setter(Control.ForegroundProperty,
+                new DynamicResourceExtension(ThemeTokens.TextSecondary)));
+
+            // Hover: subtle row tint + primary text colour
+            var hover = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
+            hover.Setters.Add(new Setter(Control.BackgroundProperty,
+                new DynamicResourceExtension(ThemeTokens.SurfaceHover)));
+            hover.Setters.Add(new Setter(Control.ForegroundProperty,
+                new DynamicResourceExtension(ThemeTokens.TextPrimary)));
+            style.Triggers.Add(hover);
+
+            // Pressed: accent fill, on-accent text
+            var pressed = new Trigger { Property = System.Windows.Controls.Primitives.ButtonBase.IsPressedProperty, Value = true };
+            pressed.Setters.Add(new Setter(Control.BackgroundProperty,
+                new DynamicResourceExtension(ThemeTokens.AccentPrimary)));
+            pressed.Setters.Add(new Setter(Control.ForegroundProperty,
+                new DynamicResourceExtension(ThemeTokens.TextOnAccent)));
+            style.Triggers.Add(pressed);
+
+            return style;
+        }
+
+        // --- Click Handlers ---------------------------------------------------
 
         private void OnFormatClick()
         {
@@ -214,35 +211,12 @@ namespace AkmlSql.Shell.Shared.Editor.Toolbar
             }
         }
 
-        private void OnHistoryClick()
-        {
-            InvokeVsCommand(CommandIds.CmdHistoryPanel, "HistoryPanel");
-        }
-
-        private void OnOutlineClick()
-        {
-            InvokeVsCommand(CommandIds.CmdDocumentOutline, "DocumentOutline");
-        }
-
-        private void OnSearchClick()
-        {
-            InvokeVsCommand(CommandIds.CmdObjectSearch, "ObjectSearch");
-        }
-
-        private void OnAnalysisClick()
-        {
-            InvokeVsCommand(CommandIds.CmdBulkAnalysis, "BulkAnalysis");
-        }
-
-        private void OnAiChatClick()
-        {
-            InvokeVsCommand(CommandIds.CmdAiChatPanel, "AiChatPanel");
-        }
-
-        private void OnSettingsClick()
-        {
-            InvokeVsCommand(CommandIds.CmdOptions, "Options");
-        }
+        private void OnHistoryClick()  => InvokeVsCommand(CommandIds.CmdHistoryPanel,    "HistoryPanel");
+        private void OnOutlineClick()  => InvokeVsCommand(CommandIds.CmdDocumentOutline, "DocumentOutline");
+        private void OnSearchClick()   => InvokeVsCommand(CommandIds.CmdObjectSearch,    "ObjectSearch");
+        private void OnAnalysisClick() => InvokeVsCommand(CommandIds.CmdBulkAnalysis,    "BulkAnalysis");
+        private void OnAiChatClick()   => InvokeVsCommand(CommandIds.CmdAiChatPanel,     "AiChatPanel");
+        private void OnSettingsClick() => InvokeVsCommand(CommandIds.CmdOptions,         "Options");
 
         /// <summary>
         /// Invokes a registered AKML SQL command by its command ID.
@@ -304,7 +278,7 @@ namespace AkmlSql.Shell.Shared.Editor.Toolbar
             }
         }
 
-        // ─── Cleanup ────────────────────────────────────────────────────────
+        // --- Cleanup ----------------------------------------------------------
 
         private void OnTextViewClosed(object sender, EventArgs e)
         {
@@ -317,12 +291,6 @@ namespace AkmlSql.Shell.Shared.Editor.Toolbar
             _disposed = true;
 
             _textView.Closed -= OnTextViewClosed;
-        }
-
-        private static SolidColorBrush Freeze(SolidColorBrush brush)
-        {
-            brush.Freeze();
-            return brush;
         }
     }
 }
