@@ -5,13 +5,15 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using AkmlSql.Shell.Shared.Ui.Theme;
 
 namespace AkmlSql.Shell.Shared.Editor.Completion
 {
     /// <summary>
-    /// Code-only WPF popup replicating Redgate SQL Prompt's completion list.
-    /// Dark theme, colored type badges, fuzzy filter, keyboard navigation.
-    /// No XAML — built entirely in C# to work across all 6 shared project hosts.
+    /// Code-only WPF popup replicating Redgate SQL Prompt's completion list. Coloured type
+    /// badges, fuzzy filter, keyboard navigation. Chrome flows through <see cref="ThemeRegistry"/>;
+    /// the per-item type colours come from <see cref="CompletionItemModel"/> which is an FR-003
+    /// domain-icon carveout (theme-independent).
     /// </summary>
     internal sealed class AkmlCompletionPopup : Border
     {
@@ -32,22 +34,13 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         /// </summary>
         public event EventHandler<CompletionItemModel> SelectionChanged;
 
-        private const int MaxVisibleItems = 15;
-        private const double ItemHeight = 22;
+        private const int    MaxVisibleItems   = 15;
+        private const double ItemHeight        = 22;
         private const double DefaultPopupWidth = 380;
-        private const double MinPopupWidth = 280;
-        private const double MaxPopupWidth = 900;
-        private const double MinPopupHeight = 100;
-        private const double MaxPopupHeight = 800;
-
-        // SQL Prompt dark theme colors
-        private static readonly SolidColorBrush BgBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x25, 0x25, 0x26)));
-        private static readonly SolidColorBrush BorderBrush_ = Freeze(new SolidColorBrush(Color.FromRgb(0x3C, 0x3C, 0x3C)));
-        private static readonly SolidColorBrush SelectedBg = Freeze(new SolidColorBrush(Color.FromRgb(0x09, 0x47, 0x71)));
-        private static readonly SolidColorBrush TextBrush = Freeze(new SolidColorBrush(Color.FromRgb(0xD4, 0xD4, 0xD4)));
-        private static readonly SolidColorBrush SecondaryBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)));
-        private static readonly SolidColorBrush FooterBg = Freeze(new SolidColorBrush(Color.FromRgb(0x1E, 0x1E, 0x1E)));
-        private static readonly SolidColorBrush TransparentBrush = Freeze(new SolidColorBrush(Colors.Transparent));
+        private const double MinPopupWidth     = 280;
+        private const double MaxPopupWidth     = 900;
+        private const double MinPopupHeight    = 100;
+        private const double MaxPopupHeight    = 800;
 
         // Resize state
         private bool _isResizing;
@@ -58,65 +51,69 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
 
         public AkmlCompletionPopup()
         {
-            // Root container
+            // Attach the theme registry so SetResourceReference on this Border AND any
+            // visual-tree descendant resolves through ThemeRegistry.Resources.
+            ThemeRegistry.Instance.AttachTo(this);
+
             _root = new StackPanel();
 
-            // List box with custom item rendering
+            // List box with custom item rendering. The container Style relies on the registry
+            // having been attached above for its DynamicResource setters to find tokens.
             _listBox = new ListBox
             {
-                Background = BgBrush,
-                BorderThickness = new Thickness(0),
-                Padding = new Thickness(0),
-                MaxHeight = MaxVisibleItems * ItemHeight,
-                Focusable = false,
-                SelectionMode = SelectionMode.Single
+                BorderThickness   = new Thickness(0),
+                Padding           = new Thickness(0),
+                MaxHeight         = MaxVisibleItems * ItemHeight,
+                Focusable         = false,
+                SelectionMode     = SelectionMode.Single,
+                ItemContainerStyle = CreateItemContainerStyle()
             };
-
-            // Remove default list box styling that causes focus issues
-            _listBox.ItemContainerStyle = CreateItemContainerStyle();
+            _listBox.SetResourceReference(ListBox.BackgroundProperty, ThemeTokens.EditorPopupBackground);
 
             // Loading text
             _loadingText = new TextBlock
             {
-                Text = "Loading...",
-                Foreground = SecondaryBrush,
-                FontSize = 12,
-                Padding = new Thickness(8, 6, 8, 6),
+                Text       = "Loading...",
+                FontSize   = Typography.Body,
+                Padding    = new Thickness(Spacing.Sm, 6, Spacing.Sm, 6),
                 Visibility = Visibility.Collapsed
             };
+            _loadingText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
 
             // Footer with resize grip
             var footerGrid = new Grid();
             footerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             footerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            footerGrid.SetResourceReference(Grid.BackgroundProperty, ThemeTokens.SurfaceCanvas);
 
             _footer = new TextBlock
             {
-                Foreground = SecondaryBrush,
-                FontSize = 11,
-                Padding = new Thickness(8, 3, 8, 3),
-                Background = FooterBg,
+                FontSize          = Typography.Small,
+                Padding           = new Thickness(Spacing.Sm, 3, Spacing.Sm, 3),
                 VerticalAlignment = VerticalAlignment.Center
             };
+            _footer.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+            _footer.SetResourceReference(TextBlock.BackgroundProperty, ThemeTokens.SurfaceCanvas);
             Grid.SetColumn(_footer, 0);
 
             // Resize grip: triangle in bottom-right corner
+            var gripGlyph = new TextBlock
+            {
+                Text                = "◢",
+                FontSize            = 10,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment   = VerticalAlignment.Center
+            };
+            gripGlyph.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
             _resizeGrip = new Border
             {
-                Width = 14,
-                Height = 14,
-                Cursor = Cursors.SizeNWSE,
-                Background = Brushes.Transparent,
+                Width               = 14,
+                Height              = 14,
+                Cursor              = Cursors.SizeNWSE,
+                Background          = Brushes.Transparent,   // theme-independent: hit-test region only
                 HorizontalAlignment = HorizontalAlignment.Right,
-                VerticalAlignment = VerticalAlignment.Bottom,
-                Child = new TextBlock
-                {
-                    Text = "\u25E2", // ◢ triangle
-                    Foreground = SecondaryBrush,
-                    FontSize = 10,
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center
-                }
+                VerticalAlignment   = VerticalAlignment.Bottom,
+                Child               = gripGlyph
             };
             Grid.SetColumn(_resizeGrip, 1);
 
@@ -126,26 +123,25 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
 
             footerGrid.Children.Add(_footer);
             footerGrid.Children.Add(_resizeGrip);
-            footerGrid.Background = FooterBg;
 
             _root.Children.Add(_loadingText);
             _root.Children.Add(_listBox);
             _root.Children.Add(footerGrid);
 
             // Border styling
-            Background = BgBrush;
-            BorderBrush = BorderBrush_;
+            SetResourceReference(BackgroundProperty,  ThemeTokens.EditorPopupBackground);
+            SetResourceReference(BorderBrushProperty, ThemeTokens.EditorPopupBorder);
             BorderThickness = new Thickness(1);
-            CornerRadius = new CornerRadius(3);
-            Effect = new System.Windows.Media.Effects.DropShadowEffect
+            CornerRadius    = new CornerRadius(3);
+            Effect          = new System.Windows.Media.Effects.DropShadowEffect
             {
-                BlurRadius = 12,
+                BlurRadius  = 12,
                 ShadowDepth = 4,
-                Opacity = 0.5,
-                Color = Colors.Black
+                Opacity     = 0.5,
+                Color       = Colors.Black
             };
-            Child = _root;
-            Width = DefaultPopupWidth;
+            Child     = _root;
+            Width     = DefaultPopupWidth;
             Focusable = false;
         }
 
@@ -268,51 +264,52 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
 
         private UIElement CreateItemVisual(CompletionItemModel item)
         {
-            // Badge: semi-transparent background with colored letter (SQL Prompt style)
+            // Badge: semi-transparent background with coloured letter (SQL Prompt style).
+            // item.IconColor is an FR-003 domain icon constant -- theme-independent.
             var badgeBgColor = item.IconColor;
-            badgeBgColor.A = (byte)(255 * item.IconBackgroundOpacity); // 20% opacity (15% for Keyword)
+            badgeBgColor.A = (byte)(255 * item.IconBackgroundOpacity); // 20% (15% for Keyword)
             var bgBrush = new SolidColorBrush(badgeBgColor);
             bgBrush.Freeze();
             var letterBrush = new SolidColorBrush(item.IconColor);
             letterBrush.Freeze();
             var badge = new Border
             {
-                Width = 18,
-                Height = 16,
+                Width        = 18,
+                Height       = 16,
                 CornerRadius = new CornerRadius(2),
-                Background = bgBrush,
-                Margin = new Thickness(4, 0, 6, 0),
+                Background   = bgBrush,
+                Margin       = new Thickness(4, 0, 6, 0),
                 Child = new TextBlock
                 {
-                    Text = item.IconLetter,
-                    Foreground = letterBrush,
-                    FontSize = 10,
-                    FontWeight = FontWeights.Bold,
+                    Text                = item.IconLetter,
+                    Foreground          = letterBrush,
+                    FontSize            = 10,
+                    FontWeight          = FontWeights.Bold,
                     HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center
+                    VerticalAlignment   = VerticalAlignment.Center
                 }
             };
 
             // Display text
             var displayText = new TextBlock
             {
-                Text = item.DisplayText,
-                Foreground = TextBrush,
-                FontSize = 12,
-                FontFamily = new FontFamily("Consolas"),
+                Text              = item.DisplayText,
+                FontSize          = Typography.Body,
+                FontFamily        = Typography.MonoFont,
                 VerticalAlignment = VerticalAlignment.Center
             };
+            displayText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPrimary);
 
             // Secondary text (type info, row count)
             var secondaryText = new TextBlock
             {
-                Text = item.SecondaryText,
-                Foreground = SecondaryBrush,
-                FontSize = 11,
-                VerticalAlignment = VerticalAlignment.Center,
+                Text                = item.SecondaryText,
+                FontSize            = Typography.Small,
+                VerticalAlignment   = VerticalAlignment.Center,
                 HorizontalAlignment = HorizontalAlignment.Right,
-                Margin = new Thickness(8, 0, 4, 0)
+                Margin              = new Thickness(Spacing.Sm, 0, 4, 0)
             };
+            secondaryText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
 
             // Row layout
             var grid = new Grid { Height = ItemHeight };
@@ -335,34 +332,37 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         {
             var total = _allItems.Length;
             var shown = _filteredItems.Length;
-            var db = string.IsNullOrEmpty(_databaseName) ? "" : $" \u2022 {_databaseName}";
+            var db = string.IsNullOrEmpty(_databaseName) ? "" : $" • {_databaseName}";
             _footer.Text = $"{shown} of {total} objects{db}";
         }
 
         private static Style CreateItemContainerStyle()
         {
             var style = new Style(typeof(ListBoxItem));
-            style.Setters.Add(new Setter(ListBoxItem.BackgroundProperty, TransparentBrush));
+            style.Setters.Add(new Setter(ListBoxItem.BackgroundProperty,      Brushes.Transparent));
             style.Setters.Add(new Setter(ListBoxItem.BorderThicknessProperty, new Thickness(0)));
-            style.Setters.Add(new Setter(ListBoxItem.PaddingProperty, new Thickness(0)));
-            style.Setters.Add(new Setter(ListBoxItem.MarginProperty, new Thickness(0)));
-            style.Setters.Add(new Setter(ListBoxItem.FocusableProperty, false));
+            style.Setters.Add(new Setter(ListBoxItem.PaddingProperty,         new Thickness(0)));
+            style.Setters.Add(new Setter(ListBoxItem.MarginProperty,          new Thickness(0)));
+            style.Setters.Add(new Setter(ListBoxItem.FocusableProperty,       false));
 
             // Selected item highlight
             var selectedTrigger = new Trigger { Property = ListBoxItem.IsSelectedProperty, Value = true };
-            selectedTrigger.Setters.Add(new Setter(ListBoxItem.BackgroundProperty, SelectedBg));
+            selectedTrigger.Setters.Add(new Setter(ListBoxItem.BackgroundProperty,
+                new DynamicResourceExtension(ThemeTokens.SurfaceSelectionStrong)));
             style.Triggers.Add(selectedTrigger);
 
-            // Mouse over highlight
-            var hoverTrigger = new Trigger { Property = ListBoxItem.IsMouseOverProperty, Value = true };
+            // Mouse over highlight (only when not selected)
+            var hoverTrigger = new MultiTrigger();
+            hoverTrigger.Conditions.Add(new Condition(ListBoxItem.IsMouseOverProperty, true));
+            hoverTrigger.Conditions.Add(new Condition(ListBoxItem.IsSelectedProperty, false));
             hoverTrigger.Setters.Add(new Setter(ListBoxItem.BackgroundProperty,
-                Freeze(new SolidColorBrush(Color.FromRgb(0x2A, 0x2D, 0x2E)))));
+                new DynamicResourceExtension(ThemeTokens.SurfaceHover)));
             style.Triggers.Add(hoverTrigger);
 
             return style;
         }
 
-        // ─── Resize Grip Handlers ───────────────────────────────────────
+        // --- Resize Grip Handlers ---------------------------------------------
 
         private void OnResizeGripMouseDown(object sender, MouseButtonEventArgs e)
         {
@@ -397,12 +397,6 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             _isResizing = false;
             _resizeGrip.ReleaseMouseCapture();
             e.Handled = true;
-        }
-
-        private static SolidColorBrush Freeze(SolidColorBrush brush)
-        {
-            brush.Freeze();
-            return brush;
         }
     }
 }

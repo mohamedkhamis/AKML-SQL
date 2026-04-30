@@ -3,18 +3,24 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Input;
 using System.Windows.Media;
+using AkmlSql.Shell.Shared.Ui.Theme;
 
 namespace AkmlSql.Shell.Shared.Editor.Completion
 {
     /// <summary>
     /// SQL Prompt-style checkbox popup for wildcard expansion.
-    /// Dark themed, code-only WPF (no XAML). Shows columns grouped by table
-    /// with checkboxes for selecting which columns to include in the expansion.
+    /// Code-only WPF (no XAML). Shows columns grouped by table with checkboxes for selecting
+    /// which columns to include in the expansion. Chrome flows through <see cref="ThemeRegistry"/>
+    /// so the popup tracks Light / Dark / High Contrast variants.
     /// </summary>
     internal sealed class WildcardExpansionPopup : Border
     {
+        // SQL Prompt Column badge — the gold "C" mark is a domain icon (FR-003 semantic constant,
+        // theme-independent — same role as the Column entry in SqlPromptIcons.cs).
+        private static readonly SolidColorBrush ColumnBadgeBrush =
+            FrozenBrush(Color.FromRgb(0xF9, 0xA8, 0x25));
+
         private readonly StackPanel _root;
         private readonly StackPanel _itemsPanel;
         private readonly TextBlock _footer;
@@ -29,58 +35,50 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         private const double ItemHeight = 22;
         private const int MaxVisibleItems = 18;
 
-        // SQL Prompt dark theme colors (same as AkmlCompletionPopup)
-        private static readonly SolidColorBrush BgBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x25, 0x25, 0x26)));
-        private static readonly SolidColorBrush BorderBrush_ = Freeze(new SolidColorBrush(Color.FromRgb(0x3C, 0x3C, 0x3C)));
-        private static readonly SolidColorBrush SelectedBg = Freeze(new SolidColorBrush(Color.FromRgb(0x09, 0x47, 0x71)));
-        private static readonly SolidColorBrush TextBrush = Freeze(new SolidColorBrush(Color.FromRgb(0xD4, 0xD4, 0xD4)));
-        private static readonly SolidColorBrush DimTextBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x6A, 0x6A, 0x6A)));
-        private static readonly SolidColorBrush SecondaryBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)));
-        private static readonly SolidColorBrush FooterBg = Freeze(new SolidColorBrush(Color.FromRgb(0x1E, 0x1E, 0x1E)));
-        private static readonly SolidColorBrush HeaderBg = Freeze(new SolidColorBrush(Color.FromRgb(0x2D, 0x2D, 0x30)));
-        private static readonly SolidColorBrush ColumnBadgeBrush = Freeze(new SolidColorBrush(Color.FromRgb(0xF9, 0xA8, 0x25)));
-        private static readonly SolidColorBrush CheckMarkBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x00, 0xC8, 0x53)));
-
         public WildcardExpansionPopup()
         {
+            // Attach the theme registry to ourselves so SetResourceReference on this Border AND
+            // any visual-tree descendant resolves through ThemeRegistry.Resources.
+            ThemeRegistry.Instance.AttachTo(this);
+
             _itemsPanel = new StackPanel();
 
             var scrollViewer = new ScrollViewer
             {
-                Content = _itemsPanel,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                Content                       = _itemsPanel,
+                VerticalScrollBarVisibility   = ScrollBarVisibility.Auto,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                MaxHeight = MaxVisibleItems * ItemHeight,
-                Focusable = false,
-                Background = BgBrush
+                MaxHeight                     = MaxVisibleItems * ItemHeight,
+                Focusable                     = false
             };
+            scrollViewer.SetResourceReference(ScrollViewer.BackgroundProperty, ThemeTokens.EditorPopupBackground);
 
             _footer = new TextBlock
             {
-                Foreground = SecondaryBrush,
-                FontSize = 11,
-                Padding = new Thickness(8, 3, 8, 3),
-                Background = FooterBg,
-                Text = "Space: toggle | Tab/Enter: expand | Esc: cancel"
+                FontSize = Typography.Small,
+                Padding  = new Thickness(Spacing.Sm, 3, Spacing.Sm, 3),
+                Text     = "Space: toggle | Tab/Enter: expand | Esc: cancel"
             };
+            _footer.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+            _footer.SetResourceReference(TextBlock.BackgroundProperty, ThemeTokens.SurfaceCanvas);
 
             _root = new StackPanel();
             _root.Children.Add(scrollViewer);
             _root.Children.Add(_footer);
 
-            Background = BgBrush;
-            BorderBrush = BorderBrush_;
+            SetResourceReference(BackgroundProperty,  ThemeTokens.EditorPopupBackground);
+            SetResourceReference(BorderBrushProperty, ThemeTokens.EditorPopupBorder);
             BorderThickness = new Thickness(1);
-            CornerRadius = new CornerRadius(3);
-            Effect = new System.Windows.Media.Effects.DropShadowEffect
+            CornerRadius    = new CornerRadius(3);
+            Effect          = new System.Windows.Media.Effects.DropShadowEffect
             {
-                BlurRadius = 12,
+                BlurRadius  = 12,
                 ShadowDepth = 4,
-                Opacity = 0.5,
-                Color = Colors.Black
+                Opacity     = 0.5,
+                Color       = Colors.Black
             };
-            Child = _root;
-            Width = PopupWidth;
+            Child     = _root;
+            Width     = PopupWidth;
             Focusable = false;
         }
 
@@ -114,10 +112,10 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 {
                     var row = new ColumnRow
                     {
-                        IsChecked = true,
-                        ColumnName = col.ColumnName,
+                        IsChecked   = true,
+                        ColumnName  = col.ColumnName,
                         TypeDisplay = col.TypeDisplay,
-                        Qualifier = group.Qualifier
+                        Qualifier   = group.Qualifier
                     };
                     row.Visual = CreateColumnVisual(row);
                     _columnRows.Add(row);
@@ -190,7 +188,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 {
                     result.Add(new QualifiedColumn
                     {
-                        Qualifier = row.Qualifier,
+                        Qualifier  = row.Qualifier,
                         ColumnName = row.ColumnName
                     });
                 }
@@ -209,82 +207,87 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
 
         private UIElement CreateTableHeader(string tableName)
         {
-            return new Border
+            var headerText = new TextBlock
             {
-                Background = HeaderBg,
-                Padding = new Thickness(8, 3, 8, 3),
-                Child = new TextBlock
-                {
-                    Text = tableName,
-                    Foreground = TextBrush,
-                    FontSize = 12,
-                    FontWeight = FontWeights.SemiBold,
-                    FontFamily = new FontFamily("Consolas")
-                }
+                Text       = tableName,
+                FontSize   = Typography.Body,
+                FontWeight = FontWeights.SemiBold,
+                FontFamily = Typography.MonoFont
             };
+            headerText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPrimary);
+
+            var border = new Border
+            {
+                Padding = new Thickness(Spacing.Sm, 3, Spacing.Sm, 3),
+                Child   = headerText
+            };
+            border.SetResourceReference(Border.BackgroundProperty, ThemeTokens.SurfaceElevated);
+            return border;
         }
 
         private Border CreateColumnVisual(ColumnRow row)
         {
             var checkMark = new TextBlock
             {
-                Text = "\u2713",
-                Foreground = CheckMarkBrush,
-                FontSize = 11,
-                FontWeight = FontWeights.Bold,
+                Text                = "✓",
+                FontSize            = Typography.Small,
+                FontWeight          = FontWeights.Bold,
                 HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-                Visibility = row.IsChecked ? Visibility.Visible : Visibility.Collapsed
+                VerticalAlignment   = VerticalAlignment.Center,
+                Visibility          = row.IsChecked ? Visibility.Visible : Visibility.Collapsed
             };
+            checkMark.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.StatusSuccess);
 
             var checkBox = new Border
             {
-                Width = 14,
-                Height = 14,
-                CornerRadius = new CornerRadius(2),
-                BorderBrush = SecondaryBrush,
+                Width           = 14,
+                Height          = 14,
+                CornerRadius    = new CornerRadius(2),
                 BorderThickness = new Thickness(1),
-                Margin = new Thickness(6, 0, 4, 0),
-                Background = BgBrush,
-                Child = checkMark
+                Margin          = new Thickness(6, 0, 4, 0),
+                Child           = checkMark
             };
+            checkBox.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.TextSecondary);
+            checkBox.SetResourceReference(Border.BackgroundProperty,  ThemeTokens.EditorPopupBackground);
 
+            // Domain badge — Column = gold (FR-003 carveout).
             var badge = new Border
             {
-                Width = 18,
-                Height = 16,
+                Width        = 18,
+                Height       = 16,
                 CornerRadius = new CornerRadius(2),
-                Background = ColumnBadgeBrush,
-                Margin = new Thickness(2, 0, 6, 0),
+                Background   = ColumnBadgeBrush,
+                Margin       = new Thickness(2, 0, 6, 0),
                 Child = new TextBlock
                 {
-                    Text = "C",
-                    Foreground = Brushes.White,
-                    FontSize = 10,
-                    FontWeight = FontWeights.Bold,
+                    Text                = "C",
+                    Foreground          = Brushes.White,   // theme-independent: white-on-gold reads same in both themes
+                    FontSize            = 10,
+                    FontWeight          = FontWeights.Bold,
                     HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center
+                    VerticalAlignment   = VerticalAlignment.Center
                 }
             };
 
             var nameText = new TextBlock
             {
-                Text = row.ColumnName,
-                Foreground = row.IsChecked ? TextBrush : DimTextBrush,
-                FontSize = 12,
-                FontFamily = new FontFamily("Consolas"),
+                Text              = row.ColumnName,
+                FontSize          = Typography.Body,
+                FontFamily        = Typography.MonoFont,
                 VerticalAlignment = VerticalAlignment.Center
             };
+            nameText.SetResourceReference(TextBlock.ForegroundProperty,
+                row.IsChecked ? ThemeTokens.TextPrimary : ThemeTokens.TextDisabled);
 
             var typeText = new TextBlock
             {
-                Text = row.TypeDisplay,
-                Foreground = SecondaryBrush,
-                FontSize = 11,
-                VerticalAlignment = VerticalAlignment.Center,
+                Text                = row.TypeDisplay,
+                FontSize            = Typography.Small,
+                VerticalAlignment   = VerticalAlignment.Center,
                 HorizontalAlignment = HorizontalAlignment.Right,
-                Margin = new Thickness(8, 0, 4, 0)
+                Margin              = new Thickness(Spacing.Sm, 0, 4, 0)
             };
+            typeText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
 
             var grid = new Grid { Height = ItemHeight };
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -304,9 +307,9 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
 
             return new Border
             {
-                Child = grid,
-                Background = Brushes.Transparent,
-                Padding = new Thickness(0)
+                Child      = grid,
+                Background = Brushes.Transparent,   // theme-independent placeholder; selected state replaces this
+                Padding    = new Thickness(0)
             };
         }
 
@@ -316,11 +319,12 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             var grid = (Grid)row.Visual.Child;
 
             var checkBorder = (Border)grid.Children[0];
-            var checkMark = (TextBlock)checkBorder.Child;
+            var checkMark   = (TextBlock)checkBorder.Child;
             checkMark.Visibility = row.IsChecked ? Visibility.Visible : Visibility.Collapsed;
 
             var nameText = (TextBlock)grid.Children[2];
-            nameText.Foreground = row.IsChecked ? TextBrush : DimTextBrush;
+            nameText.SetResourceReference(TextBlock.ForegroundProperty,
+                row.IsChecked ? ThemeTokens.TextPrimary : ThemeTokens.TextDisabled);
         }
 
         private void UpdateSelection()
@@ -328,9 +332,14 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             for (int i = 0; i < _columnRows.Count; i++)
             {
                 var row = _columnRows[i];
-                if (row.Visual != null)
+                if (row.Visual == null) continue;
+                if (i == _selectedIndex)
                 {
-                    row.Visual.Background = (i == _selectedIndex) ? SelectedBg : Brushes.Transparent;
+                    row.Visual.SetResourceReference(Border.BackgroundProperty, ThemeTokens.SurfaceSelectionStrong);
+                }
+                else
+                {
+                    row.Visual.Background = Brushes.Transparent;   // theme-independent placeholder
                 }
             }
 
@@ -348,37 +357,38 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             _footer.Text = string.Format("{0}/{1} columns selected | Space: toggle | Tab: expand", checkedCount, total);
         }
 
-        private static SolidColorBrush Freeze(SolidColorBrush brush)
+        private static SolidColorBrush FrozenBrush(Color color)
         {
-            brush.Freeze();
-            return brush;
+            var b = new SolidColorBrush(color);
+            b.Freeze();
+            return b;
         }
 
         internal class ColumnRow
         {
             public bool IsChecked;
-            public string ColumnName = string.Empty;
+            public string ColumnName  = string.Empty;
             public string TypeDisplay = string.Empty;
-            public string Qualifier = string.Empty;
+            public string Qualifier   = string.Empty;
             public Border Visual;
         }
 
         internal class QualifiedColumn
         {
-            public string Qualifier = string.Empty;
+            public string Qualifier  = string.Empty;
             public string ColumnName = string.Empty;
         }
 
         internal class TableGroupData
         {
-            public string TableName = string.Empty;
-            public string Qualifier = string.Empty;
+            public string TableName  = string.Empty;
+            public string Qualifier  = string.Empty;
             public ColumnData[] Columns = Array.Empty<ColumnData>();
         }
 
         internal class ColumnData
         {
-            public string ColumnName = string.Empty;
+            public string ColumnName  = string.Empty;
             public string TypeDisplay = string.Empty;
         }
     }
