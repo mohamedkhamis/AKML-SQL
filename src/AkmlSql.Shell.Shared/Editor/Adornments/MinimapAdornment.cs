@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using AkmlSql.Core.Config;
+using AkmlSql.Shell.Shared.Ui.Theme;
 using Microsoft.VisualStudio.Text.Editor;
 using Serilog;
 
@@ -20,6 +21,15 @@ namespace AkmlSql.Shell.Shared.Editor.Adornments
         private const string AdornmentLayerName = "AkmlSqlMinimap";
         private const double MinimapWidth = 80;
         private const double MinFontSize = 1.5;
+
+        // FR-003 semantic constants: the minimap viewport-highlight is intentionally a
+        // translucent accent overlay over the editor surface, so its visual identity is the
+        // alpha + hue, not a theme-dependent role. Same carveout pattern as
+        // HistoryToolWindowControl's 30%-yellow search highlight.
+        private static readonly SolidColorBrush ViewportFillBrush =
+            FrozenBrush(Color.FromArgb(50, 100, 140, 200));
+        private static readonly SolidColorBrush ViewportBorderBrush =
+            FrozenBrush(Color.FromArgb(100, 100, 140, 200));
 
         private readonly IWpfTextView _view;
         private readonly IAdornmentLayer _layer;
@@ -45,17 +55,20 @@ namespace AkmlSql.Shell.Shared.Editor.Adornments
 
             _minimapCanvas = new Canvas
             {
-                Width = MinimapWidth,
-                Background = new SolidColorBrush(Color.FromArgb(220, 248, 248, 250)),
+                Width        = MinimapWidth,
                 ClipToBounds = true
             };
+            // The Canvas needs the registry merged so its SetResourceReference resolves; the
+            // adornment-layer Canvas isn't under a ThemeAware* root in the visual tree.
+            ThemeRegistry.Instance.AttachTo(_minimapCanvas);
+            _minimapCanvas.SetResourceReference(Canvas.BackgroundProperty, ThemeTokens.EditorMarginBackground);
 
             _viewportHighlight = new Border
             {
-                Background = new SolidColorBrush(Color.FromArgb(50, 100, 140, 200)),
-                BorderBrush = new SolidColorBrush(Color.FromArgb(100, 100, 140, 200)),
+                Background      = ViewportFillBrush,    // FR-003 semantic translucent overlay
+                BorderBrush     = ViewportBorderBrush,  // FR-003 semantic translucent overlay
                 BorderThickness = new Thickness(1),
-                Width = MinimapWidth
+                Width           = MinimapWidth
             };
 
             _minimapCanvas.MouseLeftButtonDown += OnMinimapMouseDown;
@@ -97,6 +110,10 @@ namespace AkmlSql.Shell.Shared.Editor.Adornments
             var lineHeight = Math.Max(1.0, viewportHeight / totalLines);
             var fontSize = Math.Max(MinFontSize, lineHeight * 0.8);
 
+            // Line bars are recreated per render, so reading the brush from the registry once
+            // here picks up the current theme and avoids per-bar lookups.
+            var lineBarBrush = (Brush)ThemeRegistry.Instance.Resources[ThemeTokens.TextSecondary];
+
             // Render visible line indicators (simplified — just draw colored bars per line)
             for (int i = 0; i < totalLines && (i * lineHeight) < viewportHeight; i++)
             {
@@ -108,9 +125,10 @@ namespace AkmlSql.Shell.Shared.Editor.Adornments
 
                 var lineBar = new Border
                 {
-                    Width = Math.Max(2, textWidth),
-                    Height = Math.Max(1, lineHeight - 0.5),
-                    Background = new SolidColorBrush(Color.FromArgb(120, 80, 80, 100))
+                    Width      = Math.Max(2, textWidth),
+                    Height     = Math.Max(1, lineHeight - 0.5),
+                    Background = lineBarBrush,
+                    Opacity    = 0.5   // soft tint over the minimap canvas
                 };
 
                 Canvas.SetLeft(lineBar, 2);
@@ -200,6 +218,13 @@ namespace AkmlSql.Shell.Shared.Editor.Adornments
         {
             _view.LayoutChanged -= OnLayoutChanged;
             _view.Closed -= OnViewClosed;
+        }
+
+        private static SolidColorBrush FrozenBrush(Color color)
+        {
+            var b = new SolidColorBrush(color);
+            b.Freeze();
+            return b;
         }
     }
 }

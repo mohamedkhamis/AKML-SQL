@@ -6,6 +6,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using AkmlSql.Core.Config;
+using AkmlSql.Shell.Shared.Ui.Theme;
 using Microsoft.VisualStudio.Text.Editor;
 using Serilog;
 
@@ -40,9 +41,12 @@ namespace AkmlSql.Shell.Shared.Editor.Adornments
             _stickyPanel = new StackPanel
             {
                 Orientation = Orientation.Vertical,
-                Background = new SolidColorBrush(Color.FromArgb(240, 245, 245, 248)),
                 Opacity = 0.95
             };
+            // Attach the registry so the StackPanel's Background reference resolves; because the
+            // sticky panel is reused across UpdateStickyHeaders calls it must track theme changes.
+            ThemeRegistry.Instance.AttachTo(_stickyPanel);
+            _stickyPanel.SetResourceReference(StackPanel.BackgroundProperty, ThemeTokens.EditorMarginBackground);
 
             try
             {
@@ -111,16 +115,21 @@ namespace AkmlSql.Shell.Shared.Editor.Adornments
 
             if (scopeHeaders.Count == 0) return;
 
-            // Build the sticky panel
+            // Build the sticky panel. TextBlocks and the bottom rule are recreated on every
+            // UpdateStickyHeaders call, so reading the brush from the registry once per element
+            // creation always picks up the current theme.
+            var headerFg = (Brush)ThemeRegistry.Instance.Resources[ThemeTokens.TextSecondary];
+            var ruleBg   = (Brush)ThemeRegistry.Instance.Resources[ThemeTokens.BorderSubtle];
+
             foreach (var header in scopeHeaders)
             {
                 var textBlock = new TextBlock
                 {
                     Text = header,
                     FontFamily = _view.FormattedLineSource?.DefaultTextProperties?.Typeface?.FontFamily
-                                 ?? new FontFamily("Consolas"),
+                                 ?? Typography.MonoFont,
                     FontSize = (_view.FormattedLineSource?.DefaultTextProperties?.FontRenderingEmSize ?? 13.0) * 0.9,
-                    Foreground = new SolidColorBrush(Color.FromRgb(80, 80, 90)),
+                    Foreground = headerFg,
                     Padding = new Thickness(4, 1, 4, 1),
                     TextTrimming = TextTrimming.CharacterEllipsis,
                     MaxWidth = _view.ViewportWidth
@@ -129,11 +138,11 @@ namespace AkmlSql.Shell.Shared.Editor.Adornments
                 _stickyPanel.Children.Add(textBlock);
             }
 
-            // Add a bottom border
+            // Add a bottom border (1px rule under the sticky stack)
             _stickyPanel.Children.Add(new Border
             {
                 Height = 1,
-                Background = new SolidColorBrush(Color.FromRgb(200, 200, 210)),
+                Background = ruleBg,
                 Margin = new Thickness(0)
             });
 

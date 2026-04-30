@@ -1,15 +1,15 @@
 using System;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media;
+using AkmlSql.Shell.Shared.Ui.Theme;
 using Microsoft.VisualStudio.Text.Editor;
-using Serilog;
 
 namespace AkmlSql.Shell.Shared.Editor.Completion
 {
     /// <summary>
     /// Bottom-right adornment showing schema loading progress.
     /// "⟳ Loading schema for {database}..." → "✓ {database} ready ({n} objects)" → hides.
+    /// Chrome flows through <see cref="ThemeRegistry"/> attached to this Border.
     /// </summary>
     internal sealed class SchemaStatusIndicator : Border
     {
@@ -17,40 +17,38 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         private readonly IWpfTextView _textView;
         private System.Threading.Timer _hideTimer;
 
-        private static readonly SolidColorBrush BgBrush =
-            Freeze(new SolidColorBrush(Color.FromArgb(0xDD, 0x1E, 0x1E, 0x1E)));
-        private static readonly SolidColorBrush TextColor =
-            Freeze(new SolidColorBrush(Color.FromRgb(0xD4, 0xD4, 0xD4)));
-
         public SchemaStatusIndicator(IWpfTextView textView)
         {
             _textView = textView;
 
+            // Attach the registry so SetResourceReference resolves on us and our descendant.
+            ThemeRegistry.Instance.AttachTo(this);
+
             _text = new TextBlock
             {
-                Foreground = TextColor,
-                FontSize = 11,
-                Padding = new Thickness(8, 4, 8, 4)
+                FontSize = Typography.Small,
+                Padding  = new Thickness(Spacing.Sm, Spacing.Xs, Spacing.Sm, Spacing.Xs)
             };
+            _text.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
 
-            Background = BgBrush;
+            SetResourceReference(BackgroundProperty, ThemeTokens.EditorMarginBackground);
             CornerRadius = new CornerRadius(3, 0, 0, 0);
-            Child = _text;
-            Visibility = Visibility.Collapsed;
+            Child        = _text;
+            Visibility   = Visibility.Collapsed;
 
             _textView.LayoutChanged += (s, e) => Reposition();
         }
 
         public void ShowLoading(string database)
         {
-            _text.Text = $"\u27F3 Loading schema for {database}...";
+            _text.Text = $"⟳ Loading schema for {database}...";
             Visibility = Visibility.Visible;
             Reposition();
         }
 
         public void ShowReady(string database, int objectCount)
         {
-            _text.Text = $"\u2713 {database} ready ({objectCount} objects)";
+            _text.Text = $"✓ {database} ready ({objectCount} objects)";
             Visibility = Visibility.Visible;
             Reposition();
 
@@ -82,7 +80,5 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             }
             catch { }
         }
-
-        private static SolidColorBrush Freeze(SolidColorBrush b) { b.Freeze(); return b; }
     }
 }
