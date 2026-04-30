@@ -72,21 +72,6 @@ namespace AkmlSql.Shell.Shared.Ui
         public void SetUserTheme(string theme) => ThemeRegistry.Instance.SetPreference(theme);
 
         /// <summary>
-        /// Returns the active variant mapped to the legacy <see cref="VsThemeKind"/> enum.
-        /// HighContrast is reported as <see cref="VsThemeKind.Light"/> (legacy callers don't recognize HighContrast).
-        /// </summary>
-        [Obsolete("Use ThemeRegistry.Instance.Current.")]
-        public VsThemeKind DetectTheme()
-        {
-            switch (ThemeRegistry.Instance.Current)
-            {
-                case ThemeVariant.Dark: return VsThemeKind.Dark;
-                case ThemeVariant.HighContrast: return VsThemeKind.Light;
-                default: return VsThemeKind.Light;
-            }
-        }
-
-        /// <summary>
         /// Auto-detects theme from the environment. Forwards to <see cref="HostThemeWatcher"/>.
         /// </summary>
         [Obsolete("Use HostThemeWatcher.Instance.LastDetectedHostVariant.")]

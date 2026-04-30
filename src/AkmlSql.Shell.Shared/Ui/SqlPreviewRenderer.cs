@@ -88,12 +88,16 @@ namespace AkmlSql.Shell.Shared.Ui
         }
 
         /// <summary>
-        /// Refreshes colors based on the current theme.
+        /// Refreshes the syntax-highlighting palette to match the active theme variant.
+        /// Syntax-highlight colours are intentionally distinct per variant (FR-003 carveout):
+        /// each palette is a recognised editor convention (VS Code-ish dark, VS classic light)
+        /// chosen to be readable against the corresponding editor background. See
+        /// <c>specs/016-wpf-theme-refresh/audit-baseline.txt</c> § "Domain icon palettes".
         /// </summary>
         public void ApplyThemeColors()
         {
-            var theme = ThemeManager.Instance;
-            var isDark = theme.DetectTheme() == VsThemeKind.Dark;
+            var isDark = AkmlSql.Shell.Shared.Ui.Theme.ThemeRegistry.Instance.Current
+                         == AkmlSql.Shell.Shared.Ui.Theme.ThemeVariant.Dark;
 
             if (isDark)
             {
