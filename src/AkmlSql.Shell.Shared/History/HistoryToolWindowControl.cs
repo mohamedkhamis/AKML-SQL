@@ -237,6 +237,7 @@ namespace AkmlSql.Shell.Shared.History
                 };
                 badge.SetBinding(TextBlock.TextProperty,
                     new Binding(nameof(HistoryViewModel.StarredCount)) { StringFormat = "({0})" });
+                _filterStarred.Child = null; // detach labelText from the Border before re-parenting
                 var tabStack = new StackPanel { Orientation = Orientation.Horizontal };
                 tabStack.Children.Add(labelText);
                 tabStack.Children.Add(badge);
