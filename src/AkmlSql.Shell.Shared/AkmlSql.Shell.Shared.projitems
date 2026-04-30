@@ -49,6 +49,16 @@
     <Compile Include="$(MSBuildThisFileDirectory)Editor\QuickInfoSource.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\RefreshCacheCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\ThemeManager.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\ThemeVariant.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\ThemeTokens.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\Typography.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\Spacing.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\ThemePalette.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\ThemeRegistry.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\HostThemeWatcher.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\FocusVisualStyles.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\ThemeAwareWindow.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\ThemeAwareUserControl.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\DpiHelper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\CompletionItemViewModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\CompletionPopup.xaml.cs" />
