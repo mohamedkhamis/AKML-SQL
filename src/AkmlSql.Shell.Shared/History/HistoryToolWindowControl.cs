@@ -14,6 +14,7 @@ using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Shell.Shared.Ipc;
 using AkmlSql.Shell.Shared.Ui;
+using AkmlSql.Shell.Shared.Ui.Theme;
 
 namespace AkmlSql.Shell.Shared.History
 {
@@ -24,7 +25,7 @@ namespace AkmlSql.Shell.Shared.History
     /// Features: search bar, filter tabs (All/Starred/Open/Closed), virtualized query list,
     /// version history, code preview with search highlighting, context menus, and all action commands.
     /// </summary>
-    internal class HistoryToolWindowControl : UserControl
+    internal class HistoryToolWindowControl : ThemeAwareUserControl
     {
         private readonly HistoryViewModel _viewModel;
 
@@ -37,11 +38,11 @@ namespace AkmlSql.Shell.Shared.History
         private TextBlock? _metadataDatabaseLabel;
         private TextBlock? _metadataVersionLabel;
 
-        // Filter tab borders (for visual toggle)
-        private Border? _filterAll;
-        private Border? _filterStarred;
-        private Border? _filterOpen;
-        private Border? _filterClosed;
+        // Filter tab buttons (Button so they're keyboard-focusable and FocusVisualStyles.HighStakes can render).
+        private Button? _filterAll;
+        private Button? _filterStarred;
+        private Button? _filterOpen;
+        private Button? _filterClosed;
         private string _activeFilter = "all";
 
         // Status bar elements
@@ -76,31 +77,25 @@ namespace AkmlSql.Shell.Shared.History
 
         private void BuildUi()
         {
-            var theme = ThemeManager.Instance;
-
-            // Freeze all brushes for performance
-            var windowBg = Freeze(theme.HistoryWindowBackground);
-            var panelBg = Freeze(theme.HistoryPanelBackground);
-            var metaFg = Freeze(theme.HistoryMetadata);
-
             // Main layout: Row 0 = top bar, Row 1 = 3-panel area, Row 2 = status bar
-            var mainGrid = new Grid { Background = windowBg };
+            var mainGrid = new Grid();
+            mainGrid.SetResourceReference(BackgroundProperty, ThemeTokens.SurfaceCanvas);
             mainGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });    // Search + filter tabs
             mainGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // 3-panel
             mainGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });    // Status bar
 
             // ROW 0: Search bar + filter tabs
-            var topBar = BuildTopBar(theme);
+            var topBar = BuildTopBar();
             Grid.SetRow(topBar, 0);
             mainGrid.Children.Add(topBar);
 
             // ROW 1: 3-panel grid with splitters
-            var panelsGrid = BuildThreePanelGrid(theme);
+            var panelsGrid = BuildThreePanelGrid();
             Grid.SetRow(panelsGrid, 1);
             mainGrid.Children.Add(panelsGrid);
 
             // ROW 2: Status bar
-            var statusBar = BuildStatusBar(theme);
+            var statusBar = BuildStatusBar();
             Grid.SetRow(statusBar, 2);
             mainGrid.Children.Add(statusBar);
 
@@ -111,7 +106,7 @@ namespace AkmlSql.Shell.Shared.History
         // ROW 0: Top bar (search + filter tabs)
         // ================================================================
 
-        private StackPanel BuildTopBar(ThemeManager theme)
+        private StackPanel BuildTopBar()
         {
             var panel = new StackPanel
             {
@@ -124,15 +119,15 @@ namespace AkmlSql.Shell.Shared.History
             // Advanced search link (right-docked)
             var advSearchLink = new TextBlock
             {
-                Text = "Advanced search",
-                Foreground = Freeze(theme.HistoryVersionCurrent),
                 FontSize = 11,
                 Cursor = Cursors.Hand,
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(8, 0, 0, 0),
                 TextDecorations = TextDecorations.Underline,
-                ToolTip = "Use prefix filters: server:, db:, sql:, starred:yes, open:yes"
+                ToolTip = "Use prefix filters: server:, db:, sql:, starred:yes, open:yes",
+                Text = "Advanced search"
             };
+            advSearchLink.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextLink);
             advSearchLink.MouseLeftButtonDown += (_, __) =>
             {
                 // Insert example prefix text to help the user
@@ -145,22 +140,23 @@ namespace AkmlSql.Shell.Shared.History
             var searchBorder = new Border
             {
                 CornerRadius = new CornerRadius(6),
-                Background = Freeze(theme.HistorySearchBackground),
-                BorderBrush = Freeze(theme.HistorySearchBorder),
                 BorderThickness = new Thickness(1),
                 Padding = new Thickness(0)
             };
+            searchBorder.SetResourceReference(Border.BackgroundProperty, ThemeTokens.SurfaceInput);
+            searchBorder.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.BorderDefault);
 
             var searchBox = new TextBox
             {
-                Background = Brushes.Transparent,
+                Background = Brushes.Transparent, // theme-independent: lets the parent Border's background show through
                 BorderThickness = new Thickness(0),
-                Foreground = Freeze(theme.HistoryQueryName),
-                CaretBrush = Freeze(theme.HistoryQueryName),
                 Padding = new Thickness(8, 6, 8, 6),
                 FontSize = 12,
-                VerticalContentAlignment = VerticalAlignment.Center
+                VerticalContentAlignment = VerticalAlignment.Center,
+                FocusVisualStyle = FocusVisualStyles.HighStakes
             };
+            searchBox.SetResourceReference(TextBox.ForegroundProperty, ThemeTokens.TextPrimary);
+            searchBox.SetResourceReference(System.Windows.Controls.Primitives.TextBoxBase.CaretBrushProperty, ThemeTokens.TextPrimary);
             searchBox.SetBinding(TextBox.TextProperty,
                 new Binding(nameof(HistoryViewModel.SearchText))
                 {
@@ -172,12 +168,12 @@ namespace AkmlSql.Shell.Shared.History
             var placeholderText = new TextBlock
             {
                 Text = "\U0001F50D Search SQL history...",
-                Foreground = Freeze(theme.PlaceholderText),
                 IsHitTestVisible = false,
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(10, 0, 0, 0),
                 FontSize = 12
             };
+            placeholderText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPlaceholder);
 
             var searchGrid = new Grid();
             searchGrid.Children.Add(searchBox);
@@ -221,31 +217,13 @@ namespace AkmlSql.Shell.Shared.History
                 Margin = new Thickness(0, 0, 0, 4)
             };
 
-            _filterAll = CreateFilterTab("\U0001F4CB All", "all", theme, isActive: true);
-            _filterStarred = CreateFilterTab("\u2B50 Starred", "starred", theme);
+            _filterAll = CreateFilterTab("\U0001F4CB All", "all", isActive: true);
 
-            // Append a live count badge to the Starred tab, bound to HistoryViewModel.StarredCount
-            {
-                var labelText = (TextBlock)_filterStarred.Child;
-                var badge = new TextBlock
-                {
-                    FontSize = 10,
-                    FontWeight = FontWeights.SemiBold,
-                    Foreground = Freeze(theme.HistoryActiveFilterBorder),
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Margin = new Thickness(4, 0, 0, 0)
-                };
-                badge.SetBinding(TextBlock.TextProperty,
-                    new Binding(nameof(HistoryViewModel.StarredCount)) { StringFormat = "({0})" });
-                _filterStarred.Child = null; // detach labelText from the Border before re-parenting
-                var tabStack = new StackPanel { Orientation = Orientation.Horizontal };
-                tabStack.Children.Add(labelText);
-                tabStack.Children.Add(badge);
-                _filterStarred.Child = tabStack;
-            }
+            // Build the Starred tab with an embedded count badge bound to HistoryViewModel.StarredCount.
+            _filterStarred = CreateFilterTab(starredContentBuilder: BuildStarredTabContent, filterKey: "starred", isActive: false);
 
-            _filterOpen = CreateFilterTab("\U0001F4C2 Open", "open", theme);
-            _filterClosed = CreateFilterTab("\U0001F4D5 Closed", "closed", theme);
+            _filterOpen = CreateFilterTab("\U0001F4C2 Open", "open");
+            _filterClosed = CreateFilterTab("\U0001F4D5 Closed", "closed");
 
             tabRow.Children.Add(_filterAll);
             tabRow.Children.Add(_filterStarred);
@@ -256,42 +234,121 @@ namespace AkmlSql.Shell.Shared.History
             return panel;
         }
 
-        private Border CreateFilterTab(string label, string filterKey, ThemeManager theme, bool isActive = false)
+        /// <summary>
+        /// Builds the inner content for the Starred filter tab: label + live count badge
+        /// bound to <see cref="HistoryViewModel.StarredCount"/>.
+        /// </summary>
+        private static StackPanel BuildStarredTabContent()
         {
-            var activeBg = Freeze(theme.HistoryActiveFilterBackground);
-            var activeBorder = Freeze(theme.HistoryActiveFilterBorder);
-            var inactiveBg = Freeze(theme.HistoryInactiveFilterBackground);
-            var inactiveBorder = Freeze(theme.HistoryInactiveFilterBorder);
-
-            var textBlock = new TextBlock
+            var labelText = new TextBlock
             {
-                Text = label,
-                Foreground = Freeze(theme.HistoryQueryName),
+                Text = "\u2B50 Starred",
                 FontSize = 11.5,
-                Padding = new Thickness(10, 4, 10, 4),
-                TextAlignment = TextAlignment.Center
+                Padding = new Thickness(0),
+                TextAlignment = TextAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
             };
+            labelText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPrimary);
 
-            var border = new Border
+            var badge = new TextBlock
             {
-                CornerRadius = new CornerRadius(5),
-                Background = isActive ? activeBg : inactiveBg,
-                BorderBrush = isActive ? activeBorder : inactiveBorder,
-                BorderThickness = new Thickness(1),
-                Margin = new Thickness(0, 0, 6, 0),
-                Cursor = Cursors.Hand,
-                Child = textBlock,
-                Tag = filterKey
+                FontSize = 10,
+                FontWeight = FontWeights.SemiBold,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(4, 0, 0, 0)
             };
+            badge.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.AccentPrimary);
+            badge.SetBinding(TextBlock.TextProperty,
+                new Binding(nameof(HistoryViewModel.StarredCount)) { StringFormat = "({0})" });
 
-            border.MouseLeftButtonDown += OnFilterTabClick;
-
-            return border;
+            var tabStack = new StackPanel { Orientation = Orientation.Horizontal };
+            tabStack.Children.Add(labelText);
+            tabStack.Children.Add(badge);
+            return tabStack;
         }
 
-        private void OnFilterTabClick(object sender, MouseButtonEventArgs e)
+        /// <summary>
+        /// Creates a filter chip as a focusable <see cref="Button"/>. The Button is templated as a
+        /// rounded <see cref="Border"/> wrapping a <see cref="ContentPresenter"/>, so it visually
+        /// matches the prior pill chip while gaining keyboard focus + <see cref="FocusVisualStyles.HighStakes"/>.
+        /// </summary>
+        private Button CreateFilterTab(string label, string filterKey, bool isActive = false)
         {
-            if (sender is Border clicked && clicked.Tag is string filterKey)
+            var content = new TextBlock
+            {
+                Text = label,
+                FontSize = 11.5,
+                Padding = new Thickness(0),
+                TextAlignment = TextAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            content.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPrimary);
+            return CreateFilterTabCore(content, filterKey, isActive);
+        }
+
+        private Button CreateFilterTab(Func<UIElement> starredContentBuilder, string filterKey, bool isActive)
+        {
+            return CreateFilterTabCore(starredContentBuilder(), filterKey, isActive);
+        }
+
+        private Button CreateFilterTabCore(UIElement content, string filterKey, bool isActive)
+        {
+            var button = new Button
+            {
+                Content = content,
+                Tag = filterKey,
+                Margin = new Thickness(0, 0, 6, 0),
+                Padding = new Thickness(10, 4, 10, 4),
+                BorderThickness = new Thickness(1),
+                Cursor = Cursors.Hand,
+                FocusVisualStyle = FocusVisualStyles.HighStakes,
+                Template = BuildFilterTabTemplate()
+            };
+
+            ApplyFilterTabState(button, isActive);
+            button.Click += OnFilterTabClick;
+            return button;
+        }
+
+        /// <summary>
+        /// Custom <see cref="Button"/> template: a rounded <see cref="Border"/> wrapping a
+        /// <see cref="ContentPresenter"/>. Background / BorderBrush / BorderThickness / Padding flow
+        /// through TemplateBinding so imperative state changes via SetResourceReference still work.
+        /// </summary>
+        private static ControlTemplate BuildFilterTabTemplate()
+        {
+            var border = new FrameworkElementFactory(typeof(Border));
+            border.SetValue(Border.CornerRadiusProperty, new CornerRadius(5));
+            border.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Control.BackgroundProperty));
+            border.SetValue(Border.BorderBrushProperty, new TemplateBindingExtension(Control.BorderBrushProperty));
+            border.SetValue(Border.BorderThicknessProperty, new TemplateBindingExtension(Control.BorderThicknessProperty));
+            border.SetValue(Border.PaddingProperty, new TemplateBindingExtension(Control.PaddingProperty));
+
+            var content = new FrameworkElementFactory(typeof(ContentPresenter));
+            content.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+            content.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            border.AppendChild(content);
+
+            return new ControlTemplate(typeof(Button)) { VisualTree = border };
+        }
+
+        private static void ApplyFilterTabState(Button tab, bool isActive)
+        {
+            if (isActive)
+            {
+                tab.SetResourceReference(Control.BackgroundProperty, ThemeTokens.SurfaceSelectionStrong);
+                tab.SetResourceReference(Control.BorderBrushProperty, ThemeTokens.AccentPrimary);
+            }
+            else
+            {
+                tab.SetResourceReference(Control.BackgroundProperty, ThemeTokens.SurfaceElevated);
+                tab.SetResourceReference(Control.BorderBrushProperty, ThemeTokens.BorderDefault);
+            }
+        }
+
+        private void OnFilterTabClick(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button clicked && clicked.Tag is string filterKey)
             {
                 _activeFilter = filterKey;
                 UpdateFilterTabVisuals();
@@ -301,19 +358,11 @@ namespace AkmlSql.Shell.Shared.History
 
         private void UpdateFilterTabVisuals()
         {
-            var theme = ThemeManager.Instance;
-            var activeBg = Freeze(theme.HistoryActiveFilterBackground);
-            var activeBorder = Freeze(theme.HistoryActiveFilterBorder);
-            var inactiveBg = Freeze(theme.HistoryInactiveFilterBackground);
-            var inactiveBorder = Freeze(theme.HistoryInactiveFilterBorder);
-
             var tabs = new[] { _filterAll, _filterStarred, _filterOpen, _filterClosed };
             foreach (var tab in tabs)
             {
                 if (tab == null) continue;
-                var isActive = (string)tab.Tag == _activeFilter;
-                tab.Background = isActive ? activeBg : inactiveBg;
-                tab.BorderBrush = isActive ? activeBorder : inactiveBorder;
+                ApplyFilterTabState(tab, (string)tab.Tag == _activeFilter);
             }
         }
 
@@ -347,7 +396,7 @@ namespace AkmlSql.Shell.Shared.History
         // ROW 1: Three-panel grid
         // ================================================================
 
-        private Grid BuildThreePanelGrid(ThemeManager theme)
+        private Grid BuildThreePanelGrid()
         {
             var grid = new Grid();
 
@@ -359,57 +408,53 @@ namespace AkmlSql.Shell.Shared.History
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(400, GridUnitType.Star), MinWidth = 200 });
 
             // Left panel: Query List
-            var leftPanel = BuildQueryListPanel(theme);
+            var leftPanel = BuildQueryListPanel();
             Grid.SetColumn(leftPanel, 0);
             grid.Children.Add(leftPanel);
 
             // Splitter 1
-            var splitter1 = new GridSplitter
-            {
-                Width = 3,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Stretch,
-                Background = Freeze(theme.HistorySearchBorder),
-                ResizeBehavior = GridResizeBehavior.PreviousAndNext
-            };
-            Grid.SetColumn(splitter1, 1);
+            var splitter1 = BuildSplitter(column: 1);
             grid.Children.Add(splitter1);
 
             // Middle panel: Version History
-            var middlePanel = BuildVersionHistoryPanel(theme);
+            var middlePanel = BuildVersionHistoryPanel();
             Grid.SetColumn(middlePanel, 2);
             grid.Children.Add(middlePanel);
 
             // Splitter 2
-            var splitter2 = new GridSplitter
-            {
-                Width = 3,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Stretch,
-                Background = Freeze(theme.HistorySearchBorder),
-                ResizeBehavior = GridResizeBehavior.PreviousAndNext
-            };
-            Grid.SetColumn(splitter2, 3);
+            var splitter2 = BuildSplitter(column: 3);
             grid.Children.Add(splitter2);
 
             // Right panel: Code Preview
-            var rightPanel = BuildCodePreviewPanel(theme);
+            var rightPanel = BuildCodePreviewPanel();
             Grid.SetColumn(rightPanel, 4);
             grid.Children.Add(rightPanel);
 
             return grid;
         }
 
+        private static GridSplitter BuildSplitter(int column)
+        {
+            var splitter = new GridSplitter
+            {
+                Width = 3,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Stretch,
+                ResizeBehavior = GridResizeBehavior.PreviousAndNext
+            };
+            splitter.SetResourceReference(GridSplitter.BackgroundProperty, ThemeTokens.BorderSplitter);
+            Grid.SetColumn(splitter, column);
+            return splitter;
+        }
+
         // ================================================================
         // Left Panel: Query List
         // ================================================================
 
-        private DockPanel BuildQueryListPanel(ThemeManager theme)
+        private DockPanel BuildQueryListPanel()
         {
-            var panelBg = Freeze(theme.HistoryPanelBackground);
-            var metaFg = Freeze(theme.HistoryMetadata);
-
-            var dock = new DockPanel { Background = panelBg };
+            var dock = new DockPanel();
+            dock.SetResourceReference(DockPanel.BackgroundProperty, ThemeTokens.SurfacePanel);
 
             // Header
             var header = new TextBlock
@@ -417,29 +462,29 @@ namespace AkmlSql.Shell.Shared.History
                 Text = "QUERIES",
                 FontWeight = FontWeights.SemiBold,
                 FontSize = 10,
-                Foreground = metaFg,
                 Padding = new Thickness(10, 8, 10, 6),
                 // Letter spacing via character spacing is not directly supported in WPF TextBlock,
                 // so we just use uppercase + semibold for the same visual effect
             };
+            header.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
             DockPanel.SetDock(header, Dock.Top);
             dock.Children.Add(header);
 
             // Action bar below header
-            var actionBar = BuildActionBar(theme);
+            var actionBar = BuildActionBar();
             DockPanel.SetDock(actionBar, Dock.Bottom);
             dock.Children.Add(actionBar);
 
             // Query ListView
             _queryListView = new ListView
             {
-                Background = panelBg,
-                Foreground = Freeze(theme.HistoryQueryName),
                 BorderThickness = new Thickness(0),
                 Margin = new Thickness(0),
                 SelectionMode = SelectionMode.Extended,
                 HorizontalContentAlignment = HorizontalAlignment.Stretch
             };
+            _queryListView.SetResourceReference(ListView.BackgroundProperty, ThemeTokens.SurfacePanel);
+            _queryListView.SetResourceReference(ListView.ForegroundProperty, ThemeTokens.TextPrimary);
 
             // Enable virtualization
             VirtualizingPanel.SetIsVirtualizing(_queryListView, true);
@@ -451,10 +496,10 @@ namespace AkmlSql.Shell.Shared.History
                 new Binding(nameof(HistoryViewModel.Entries)));
 
             // Item template: custom card-like layout per entry
-            _queryListView.ItemTemplate = CreateQueryItemTemplate(theme);
+            _queryListView.ItemTemplate = CreateQueryItemTemplate();
 
             // ItemContainerStyle: selected item accent
-            _queryListView.ItemContainerStyle = CreateQueryItemContainerStyle(theme);
+            _queryListView.ItemContainerStyle = CreateQueryItemContainerStyle();
 
             // Context menu
             _queryListView.ContextMenu = BuildQueryContextMenu();
@@ -468,25 +513,11 @@ namespace AkmlSql.Shell.Shared.History
             return dock;
         }
 
-        private DataTemplate CreateQueryItemTemplate(ThemeManager theme)
+        private DataTemplate CreateQueryItemTemplate()
         {
             var template = new DataTemplate(typeof(HistoryEntryDto));
 
-            // Outer grid: icon column | content column | star+overflow column
-            var outerGrid = new FrameworkElementFactory(typeof(Grid));
-            outerGrid.SetValue(FrameworkElement.MarginProperty, new Thickness(4, 6, 4, 6));
-
-            // Column definitions
-            var col0 = new FrameworkElementFactory(typeof(ColumnDefinition));
-            col0.SetValue(ColumnDefinition.WidthProperty, GridLength.Auto);
-            var col1 = new FrameworkElementFactory(typeof(ColumnDefinition));
-            col1.SetValue(ColumnDefinition.WidthProperty, new GridLength(1, GridUnitType.Star));
-            var col2 = new FrameworkElementFactory(typeof(ColumnDefinition));
-            col2.SetValue(ColumnDefinition.WidthProperty, GridLength.Auto);
-
-            // We cannot add ColumnDefinitions via FrameworkElementFactory children.
-            // Instead, use a DockPanel-based layout which works with FrameworkElementFactory.
-
+            // We use a DockPanel-based layout because ColumnDefinitions cannot be added via FrameworkElementFactory.
             var outerDock = new FrameworkElementFactory(typeof(DockPanel));
             outerDock.SetValue(FrameworkElement.MarginProperty, new Thickness(4, 4, 4, 4));
 
@@ -497,7 +528,7 @@ namespace AkmlSql.Shell.Shared.History
             rightStack.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Top);
             rightStack.SetValue(FrameworkElement.MarginProperty, new Thickness(4, 0, 0, 0));
 
-            // Star icon
+            // Star icon \u2014 Foreground is bound through FavoriteColorConverter so it can collapse onto Status.Warning.
             var starText = new FrameworkElementFactory(typeof(TextBlock));
             starText.SetBinding(TextBlock.TextProperty,
                 new Binding(nameof(HistoryEntryDto.IsFavorite))
@@ -519,7 +550,7 @@ namespace AkmlSql.Shell.Shared.History
             // Overflow "..." button
             var overflowText = new FrameworkElementFactory(typeof(TextBlock));
             overflowText.SetValue(TextBlock.TextProperty, " \u22EE");
-            overflowText.SetValue(TextBlock.ForegroundProperty, Freeze(theme.HistoryMetadata));
+            overflowText.SetResourceBinding(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
             overflowText.SetValue(TextBlock.FontSizeProperty, 14.0);
             overflowText.SetValue(FrameworkElement.CursorProperty, Cursors.Hand);
             overflowText.SetValue(ToolTipProperty, "More actions");
@@ -529,7 +560,7 @@ namespace AkmlSql.Shell.Shared.History
 
             outerDock.AppendChild(rightStack);
 
-            // Left side: Status icon
+            // Left side: Status icon \u2014 Foreground via OpenClosedColorConverter (Status.Success / Status.Danger).
             var statusIcon = new FrameworkElementFactory(typeof(TextBlock));
             statusIcon.SetBinding(TextBlock.TextProperty,
                 new Binding(nameof(HistoryEntryDto.IsOpen))
@@ -556,7 +587,7 @@ namespace AkmlSql.Shell.Shared.History
                 new Binding { Converter = new QueryNameConverter() });
             nameText.SetValue(TextBlock.FontWeightProperty, FontWeights.SemiBold);
             nameText.SetValue(TextBlock.FontSizeProperty, 12.0);
-            nameText.SetValue(TextBlock.ForegroundProperty, Freeze(theme.HistoryQueryName));
+            nameText.SetResourceBinding(TextBlock.ForegroundProperty, ThemeTokens.TextPrimary);
             nameText.SetValue(TextBlock.TextTrimmingProperty, TextTrimming.CharacterEllipsis);
             nameText.SetValue(TextBlock.MaxHeightProperty, 18.0);
             nameText.SetValue(ToolTipProperty, "Right-click \u2192 Rename to give this query a custom name");
@@ -574,12 +605,12 @@ namespace AkmlSql.Shell.Shared.History
                 }
             });
             connText.SetValue(TextBlock.FontSizeProperty, 10.5);
-            connText.SetValue(TextBlock.ForegroundProperty, Freeze(theme.HistoryMetadata));
+            connText.SetResourceBinding(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
             connText.SetValue(TextBlock.TextTrimmingProperty, TextTrimming.CharacterEllipsis);
             connText.SetValue(FrameworkElement.MarginProperty, new Thickness(0, 2, 0, 0));
             contentStack.AppendChild(connText);
 
-            // Row 3: Relative timestamp + execution count
+            // Row 3: Relative timestamp
             var timeText = new FrameworkElementFactory(typeof(TextBlock));
             timeText.SetBinding(TextBlock.TextProperty,
                 new Binding(nameof(HistoryEntryDto.ExecutedAt))
@@ -587,7 +618,7 @@ namespace AkmlSql.Shell.Shared.History
                     Converter = new RelativeTimeConverter()
                 });
             timeText.SetValue(TextBlock.FontSizeProperty, 10.0);
-            timeText.SetValue(TextBlock.ForegroundProperty, Freeze(theme.HistoryMetadata));
+            timeText.SetResourceBinding(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
             timeText.SetValue(FrameworkElement.MarginProperty, new Thickness(0, 2, 0, 0));
             contentStack.AppendChild(timeText);
 
@@ -599,7 +630,7 @@ namespace AkmlSql.Shell.Shared.History
                     Converter = new ExecCountConverter()
                 });
             execCountText.SetValue(TextBlock.FontSizeProperty, 9.5);
-            execCountText.SetValue(TextBlock.ForegroundProperty, Freeze(theme.HistoryMetadata));
+            execCountText.SetResourceBinding(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
             execCountText.SetValue(TextBlock.FontStyleProperty, FontStyles.Italic);
             execCountText.SetBinding(VisibilityProperty,
                 new Binding(nameof(HistoryEntryDto.ExecutionCount))
@@ -614,11 +645,13 @@ namespace AkmlSql.Shell.Shared.History
             return template;
         }
 
-        private Style CreateQueryItemContainerStyle(ThemeManager theme)
+        private static Style CreateQueryItemContainerStyle()
         {
             var style = new Style(typeof(ListViewItem));
 
-            // Default: transparent background, no border
+            // Default: see-through background, 3px left border (will fill on selection).
+            // The transparent default is theme-independent \u2014 a "no chrome" placeholder that the
+            // triggers below replace once an item is selected or hovered.
             style.Setters.Add(new Setter(Control.BackgroundProperty, Brushes.Transparent));
             style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(3, 0, 0, 0)));
             style.Setters.Add(new Setter(Control.BorderBrushProperty, Brushes.Transparent));
@@ -631,16 +664,15 @@ namespace AkmlSql.Shell.Shared.History
                 Property = ListViewItem.IsSelectedProperty,
                 Value = true
             };
-            selectedTrigger.Setters.Add(new Setter(Control.BackgroundProperty, Freeze(theme.HistorySelectedBackground)));
-            selectedTrigger.Setters.Add(new Setter(Control.BorderBrushProperty, Freeze(theme.HistorySelectedBorder)));
+            selectedTrigger.Setters.Add(new Setter(Control.BackgroundProperty, new DynamicResourceExtension(ThemeTokens.SurfaceSelection)));
+            selectedTrigger.Setters.Add(new Setter(Control.BorderBrushProperty, new DynamicResourceExtension(ThemeTokens.AccentPrimary)));
             style.Triggers.Add(selectedTrigger);
 
             // Mouse over (not selected)
             var hoverTrigger = new MultiTrigger();
             hoverTrigger.Conditions.Add(new Condition(UIElement.IsMouseOverProperty, true));
             hoverTrigger.Conditions.Add(new Condition(ListViewItem.IsSelectedProperty, false));
-            var hoverBg = Freeze(theme.HistorySearchBackground);
-            hoverTrigger.Setters.Add(new Setter(Control.BackgroundProperty, hoverBg));
+            hoverTrigger.Setters.Add(new Setter(Control.BackgroundProperty, new DynamicResourceExtension(ThemeTokens.SurfaceHover)));
             style.Triggers.Add(hoverTrigger);
 
             return style;
@@ -698,7 +730,7 @@ namespace AkmlSql.Shell.Shared.History
             return contextMenu;
         }
 
-        private StackPanel BuildActionBar(ThemeManager theme)
+        private StackPanel BuildActionBar()
         {
             var panel = new StackPanel
             {
@@ -733,13 +765,14 @@ namespace AkmlSql.Shell.Shared.History
             panel.Children.Add(compareBtn);
 
             // Visual separator
-            panel.Children.Add(new Border
+            var separator = new Border
             {
                 Width = 1,
-                Background = Freeze(theme.HistorySearchBorder),
                 Margin = new Thickness(3, 0, 3, 0),
                 VerticalAlignment = VerticalAlignment.Stretch
-            });
+            };
+            separator.SetResourceReference(Border.BackgroundProperty, ThemeTokens.BorderDefault);
+            panel.Children.Add(separator);
 
             var exportBtn = new Button { Content = "Export", Style = btnStyle, ToolTip = "Export history" };
             exportBtn.SetBinding(System.Windows.Controls.Primitives.ButtonBase.CommandProperty,
@@ -758,12 +791,10 @@ namespace AkmlSql.Shell.Shared.History
         // Middle Panel: Version History
         // ================================================================
 
-        private DockPanel BuildVersionHistoryPanel(ThemeManager theme)
+        private DockPanel BuildVersionHistoryPanel()
         {
-            var panelBg = Freeze(theme.HistoryPanelBackground);
-            var metaFg = Freeze(theme.HistoryMetadata);
-
-            var dock = new DockPanel { Background = panelBg };
+            var dock = new DockPanel();
+            dock.SetResourceReference(DockPanel.BackgroundProperty, ThemeTokens.SurfacePanel);
 
             // Header
             var header = new TextBlock
@@ -771,20 +802,20 @@ namespace AkmlSql.Shell.Shared.History
                 Text = "HISTORY",
                 FontWeight = FontWeights.SemiBold,
                 FontSize = 10,
-                Foreground = metaFg,
                 Padding = new Thickness(10, 8, 10, 6)
             };
+            header.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
             DockPanel.SetDock(header, Dock.Top);
             dock.Children.Add(header);
 
             // Version ListBox
             _versionListBox = new ListBox
             {
-                Background = panelBg,
-                Foreground = Freeze(theme.HistoryQueryName),
                 BorderThickness = new Thickness(0),
                 Margin = new Thickness(0)
             };
+            _versionListBox.SetResourceReference(ListBox.BackgroundProperty, ThemeTokens.SurfacePanel);
+            _versionListBox.SetResourceReference(ListBox.ForegroundProperty, ThemeTokens.TextPrimary);
             _versionListBox.SelectionChanged += OnVersionSelectionChanged;
 
             dock.Children.Add(_versionListBox);
@@ -796,13 +827,10 @@ namespace AkmlSql.Shell.Shared.History
         // Right Panel: Code Preview
         // ================================================================
 
-        private DockPanel BuildCodePreviewPanel(ThemeManager theme)
+        private DockPanel BuildCodePreviewPanel()
         {
-            var previewBg = Freeze(theme.HistoryCodePreviewBackground);
-            var metaFg = Freeze(theme.HistoryMetadata);
-            var queryNameFg = Freeze(theme.HistoryQueryName);
-
-            var dock = new DockPanel { Background = previewBg };
+            var dock = new DockPanel();
+            dock.SetResourceReference(DockPanel.BackgroundProperty, ThemeTokens.EditorPopupBackground);
 
             // Header row: "CODE PREVIEW" + timestamp
             var headerRow = new DockPanel
@@ -813,9 +841,9 @@ namespace AkmlSql.Shell.Shared.History
             _codePreviewHeaderTimestamp = new TextBlock
             {
                 FontSize = 10,
-                Foreground = metaFg,
                 VerticalAlignment = VerticalAlignment.Center
             };
+            _codePreviewHeaderTimestamp.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
             DockPanel.SetDock(_codePreviewHeaderTimestamp, Dock.Right);
             headerRow.Children.Add(_codePreviewHeaderTimestamp);
 
@@ -823,9 +851,9 @@ namespace AkmlSql.Shell.Shared.History
             {
                 Text = "CODE PREVIEW",
                 FontWeight = FontWeights.SemiBold,
-                FontSize = 10,
-                Foreground = metaFg
+                FontSize = 10
             };
+            headerLabel.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
             headerRow.Children.Add(headerLabel);
 
             DockPanel.SetDock(headerRow, Dock.Top);
@@ -834,16 +862,16 @@ namespace AkmlSql.Shell.Shared.History
             // Bottom metadata bar: server | database | version
             var metaBar = new DockPanel
             {
-                Margin = new Thickness(10, 4, 10, 8),
-                Background = Freeze(theme.HistoryPanelBackground)
+                Margin = new Thickness(10, 4, 10, 8)
             };
+            metaBar.SetResourceReference(DockPanel.BackgroundProperty, ThemeTokens.SurfacePanel);
 
             _metadataVersionLabel = new TextBlock
             {
                 FontSize = 10,
-                Foreground = metaFg,
                 VerticalAlignment = VerticalAlignment.Center
             };
+            _metadataVersionLabel.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
             DockPanel.SetDock(_metadataVersionLabel, Dock.Right);
             metaBar.Children.Add(_metadataVersionLabel);
 
@@ -853,31 +881,32 @@ namespace AkmlSql.Shell.Shared.History
                 VerticalAlignment = VerticalAlignment.Center
             };
 
-            // Green circle + server name
+            // Green circle + server name (Status.Success — matches the Open icon role)
             _metadataServerLabel = new TextBlock
             {
                 FontSize = 10.5,
-                Foreground = Freeze(theme.HistoryOpenIcon),
                 VerticalAlignment = VerticalAlignment.Center
             };
+            _metadataServerLabel.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.StatusSuccess);
             metaLeft.Children.Add(_metadataServerLabel);
 
             // Separator
-            metaLeft.Children.Add(new TextBlock
+            var metaSeparator = new TextBlock
             {
                 Text = " | ",
                 FontSize = 10.5,
-                Foreground = metaFg,
                 VerticalAlignment = VerticalAlignment.Center
-            });
+            };
+            metaSeparator.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+            metaLeft.Children.Add(metaSeparator);
 
             // Database name
             _metadataDatabaseLabel = new TextBlock
             {
                 FontSize = 10.5,
-                Foreground = metaFg,
                 VerticalAlignment = VerticalAlignment.Center
             };
+            _metadataDatabaseLabel.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
             metaLeft.Children.Add(_metadataDatabaseLabel);
 
             metaBar.Children.Add(metaLeft);
@@ -888,20 +917,21 @@ namespace AkmlSql.Shell.Shared.History
             // Code preview TextBlock in ScrollViewer
             _codePreviewTextBlock = new TextBlock
             {
-                FontFamily = new FontFamily("Consolas"),
+                FontFamily = AkmlSql.Shell.Shared.Ui.Theme.Typography.MonoFont,
                 FontSize = 11.0,
                 TextWrapping = TextWrapping.Wrap,
-                Padding = new Thickness(10, 6, 10, 6),
-                Foreground = queryNameFg,
-                Background = previewBg
+                Padding = new Thickness(10, 6, 10, 6)
             };
+            _codePreviewTextBlock.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPrimary);
+            _codePreviewTextBlock.SetResourceReference(TextBlock.BackgroundProperty, ThemeTokens.EditorPopupBackground);
+
             var previewScroll = new ScrollViewer
             {
                 Content = _codePreviewTextBlock,
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-                Background = previewBg
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto
             };
+            previewScroll.SetResourceReference(ScrollViewer.BackgroundProperty, ThemeTokens.EditorPopupBackground);
 
             dock.Children.Add(previewScroll);
 
@@ -912,16 +942,13 @@ namespace AkmlSql.Shell.Shared.History
         // ROW 2: Status bar
         // ================================================================
 
-        private DockPanel BuildStatusBar(ThemeManager theme)
+        private DockPanel BuildStatusBar()
         {
-            var metaFg = Freeze(theme.HistoryMetadata);
-            var windowBg = Freeze(theme.HistoryWindowBackground);
-
             var bar = new DockPanel
             {
-                Background = windowBg,
                 Margin = new Thickness(8, 2, 8, 4)
             };
+            bar.SetResourceReference(DockPanel.BackgroundProperty, ThemeTokens.SurfaceCanvas);
 
             // Load More button on the right
             _loadMoreButton = new Button
@@ -945,12 +972,12 @@ namespace AkmlSql.Shell.Shared.History
             _statusLoadingLabel = new TextBlock
             {
                 Text = "Loading...",
-                Foreground = metaFg,
                 FontStyle = FontStyles.Italic,
                 FontSize = 10.5,
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(8, 0, 0, 0)
             };
+            _statusLoadingLabel.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
             _statusLoadingLabel.SetBinding(VisibilityProperty,
                 new Binding(nameof(HistoryViewModel.IsLoading))
                 {
@@ -962,10 +989,10 @@ namespace AkmlSql.Shell.Shared.History
             // Total count
             _statusCountLabel = new TextBlock
             {
-                Foreground = metaFg,
                 FontSize = 10.5,
                 VerticalAlignment = VerticalAlignment.Center
             };
+            _statusCountLabel.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
             _statusCountLabel.SetBinding(TextBlock.TextProperty,
                 new Binding(nameof(HistoryViewModel.TotalCount))
                 {
@@ -1069,9 +1096,10 @@ namespace AkmlSql.Shell.Shared.History
                 return;
             }
 
-            // Render the text with highlighted regions
-            var theme = ThemeManager.Instance;
-            var highlightBrush = Freeze(theme.HistorySearchHighlight);
+            // Render the text with highlighted regions. HistorySearchHighlight is a yellow-ochre at ~30%
+            // opacity — a semantic constant that's intentionally theme-independent (FR-003), so it stays
+            // on the ThemeManager facade rather than collapsing onto a chrome token.
+            var highlightBrush = Freeze(ThemeManager.Instance.HistorySearchHighlight);
 
             int pos = 0;
             foreach (var region in regions)
@@ -1362,9 +1390,6 @@ namespace AkmlSql.Shell.Shared.History
 
                 if (response.Success && response.Versions != null)
                 {
-                    var theme = ThemeManager.Instance;
-                    var versionCurrentFg = Freeze(theme.HistoryVersionCurrent);
-                    var metaFg = Freeze(theme.HistoryMetadata);
                     int total = response.Versions.Length;
                     int versionNumber = total;
 
@@ -1390,9 +1415,10 @@ namespace AkmlSql.Shell.Shared.History
                         {
                             Text = label,
                             FontWeight = isCurrent ? FontWeights.SemiBold : FontWeights.Normal,
-                            FontSize = 11.5,
-                            Foreground = isCurrent ? versionCurrentFg : metaFg
+                            FontSize = 11.5
                         };
+                        versionLabel.SetResourceReference(TextBlock.ForegroundProperty,
+                            isCurrent ? ThemeTokens.TextLink : ThemeTokens.TextSecondary);
                         itemPanel.Children.Add(versionLabel);
 
                         if (!string.IsNullOrEmpty(timestampText))
@@ -1401,9 +1427,9 @@ namespace AkmlSql.Shell.Shared.History
                             {
                                 Text = timestampText,
                                 FontSize = 9.5,
-                                Foreground = metaFg,
                                 Margin = new Thickness(0, 1, 0, 0)
                             };
+                            timeLabel.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
                             itemPanel.Children.Add(timeLabel);
                         }
 
@@ -1506,37 +1532,38 @@ namespace AkmlSql.Shell.Shared.History
         /// </summary>
         private static string? ShowInputDialog(string title, string prompt, string defaultValue)
         {
-            var theme = ThemeManager.Instance;
-
             var dialog = new Window
             {
                 Title = title,
                 Width = 400,
                 Height = 170,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                ResizeMode = ResizeMode.NoResize,
-                Background = Freeze(theme.HistoryWindowBackground)
+                ResizeMode = ResizeMode.NoResize
             };
+            ThemeRegistry.Instance.AttachTo(dialog);
+            dialog.SetResourceReference(Window.BackgroundProperty, ThemeTokens.SurfaceCanvas);
+            dialog.SetResourceReference(Window.ForegroundProperty, ThemeTokens.TextPrimary);
 
-            var panel = new StackPanel { Margin = new Thickness(16) };
+            var panel = new StackPanel { Margin = new Thickness(Spacing.Lg) };
 
             var label = new TextBlock
             {
                 Text = prompt,
-                Margin = new Thickness(0, 0, 0, 8),
-                Foreground = Freeze(theme.HistoryQueryName)
+                Margin = new Thickness(0, 0, 0, Spacing.Sm)
             };
+            label.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPrimary);
             panel.Children.Add(label);
 
             var textBox = new TextBox
             {
                 Text = defaultValue,
-                Margin = new Thickness(0, 0, 0, 12),
+                Margin = new Thickness(0, 0, 0, Spacing.Md),
                 Padding = new Thickness(6, 4, 6, 4),
-                Background = Freeze(theme.HistorySearchBackground),
-                Foreground = Freeze(theme.HistoryQueryName),
-                BorderBrush = Freeze(theme.HistorySearchBorder)
+                FocusVisualStyle = FocusVisualStyles.HighStakes
             };
+            textBox.SetResourceReference(TextBox.BackgroundProperty, ThemeTokens.SurfaceInput);
+            textBox.SetResourceReference(TextBox.ForegroundProperty, ThemeTokens.TextPrimary);
+            textBox.SetResourceReference(TextBox.BorderBrushProperty, ThemeTokens.BorderDefault);
             textBox.SelectAll();
             panel.Children.Add(textBox);
 
@@ -1829,16 +1856,13 @@ namespace AkmlSql.Shell.Shared.History
             }
         }
 
-        /// <summary>Converts IsOpen bool to a theme-aware color (green for open, red for closed).</summary>
+        /// <summary>Converts IsOpen bool to a theme-aware brush via Status.Success / Status.Danger.</summary>
         private class OpenClosedColorConverter : IValueConverter
         {
             public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
             {
-                var theme = ThemeManager.Instance;
-                var color = value is true ? theme.HistoryOpenIcon : theme.HistoryClosedIcon;
-                var brush = new SolidColorBrush(color);
-                brush.Freeze();
-                return brush;
+                var key = value is true ? ThemeTokens.StatusSuccess : ThemeTokens.StatusDanger;
+                return ThemeRegistry.Instance.Resources[key];
             }
 
             public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
@@ -1955,22 +1979,27 @@ namespace AkmlSql.Shell.Shared.History
             }
         }
 
-        /// <summary>Converts ExecutionStatus int to a color brush.</summary>
+        /// <summary>Converts ExecutionStatus int (0=Success, 1=Error, 2=Cancelled) to a theme-aware status brush.</summary>
         private class StatusColorConverter : IValueConverter
         {
             public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
             {
+                string key;
                 if (value is int status)
                 {
-                    return status switch
+                    key = status switch
                     {
-                        0 => Brushes.Green,
-                        1 => Brushes.Red,
-                        2 => Brushes.Orange,
-                        _ => Brushes.Gray
+                        0 => ThemeTokens.StatusSuccess,
+                        1 => ThemeTokens.StatusDanger,
+                        2 => ThemeTokens.StatusWarning,
+                        _ => ThemeTokens.TextDisabled
                     };
                 }
-                return Brushes.Gray;
+                else
+                {
+                    key = ThemeTokens.TextDisabled;
+                }
+                return ThemeRegistry.Instance.Resources[key];
             }
 
             public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
@@ -2106,16 +2135,13 @@ namespace AkmlSql.Shell.Shared.History
             }
         }
 
-        /// <summary>Converts IsFavorite bool to a theme-aware color.</summary>
+        /// <summary>Converts IsFavorite bool to a theme-aware brush: Status.Warning when active, Text.Disabled otherwise.</summary>
         private class FavoriteColorConverter : IValueConverter
         {
             public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
             {
-                var theme = ThemeManager.Instance;
-                var color = value is true ? theme.HistoryStarActive : theme.HistoryStarInactive;
-                var brush = new SolidColorBrush(color);
-                brush.Freeze();
-                return brush;
+                var key = value is true ? ThemeTokens.StatusWarning : ThemeTokens.TextDisabled;
+                return ThemeRegistry.Instance.Resources[key];
             }
 
             public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
