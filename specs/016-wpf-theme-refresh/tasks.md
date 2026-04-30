@@ -107,7 +107,7 @@ description: "Task list for feature 016-wpf-theme-refresh"
 
 ### Cross-surface verification
 
-- [ ] T039 [US2] Re-run `scripts/audit-wpf-theme.ps1` (T016) against `src/AkmlSql.Shell.Shared/**/*.cs`; verify the only remaining hits are inside `Ui/Theme/` or in the explicit semantic-constant allow-list. Update `specs/016-wpf-theme-refresh/audit-baseline.txt` with the post-US2 count. Depends on T022–T038.
+- [X] T039 [US2] Re-run `scripts/audit-wpf-theme.ps1` (T016) against `src/AkmlSql.Shell.Shared/**/*.cs`; verify the only remaining hits are inside `Ui/Theme/` or in the explicit semantic-constant allow-list. Update `specs/016-wpf-theme-refresh/audit-baseline.txt` with the post-US2 count. Depends on T022–T038.
 - [ ] T040 [US2] Smoke-verify each migrated surface in T022–T038 per `quickstart.md` § 6 steps 1–9 (Light + Dark + live switch + host follow + High Contrast + focus + reduced motion). Capture screenshots; record per-surface pass/fail in `specs/016-wpf-theme-refresh/us2-smoke-results.md`. Depends on T022–T038.
 
 **Checkpoint**: All dialogs and tool windows match the design language. Editor adornments (Phase 6) and final cleanup (Phase 5) remain.

@@ -1,29 +1,113 @@
 Static-audit baseline for branch 016-wpf-theme-refresh
-Captured: 2026-04-30T13:12:00Z
+Initial capture: 2026-04-30T13:12:00Z   (350 hits — branch start)
+Post-Phase-4 refresh: 2026-04-30T18:30:00Z   (184 hits — T039)
 Scope: src/AkmlSql.Shell.Shared/**/*.cs (excluding Ui/Theme/)
-Target by end of feature: 0
+Target by end of feature: 0 (excluding intentional FR-003 carveouts)
+
+=== Trajectory ===
+Branch start (T003 baseline):           350 hits
+After Phase 2 + Phase 3 (US1):          243 hits   (T017 SettingsWindow)
+After Phase 4 batch 1 (5e1b0f8):        236 hits   (T021/T023/T030/T033/T036)
+After T034 HistoryToolWindowControl:    231 hits
+After T035 AiChatPanel:                 213 hits
+After T038 CommandPaletteWindow:        196 hits
+After T037 ObjectSearchWindow:          184 hits   ← current
+Reduction so far: 166 hits (-47%)
 
 === Total chrome literals ===
-Total hits: 350
+Total hits: 184
+Files with hits: 31
 
-=== Per-file breakdown (top 20) ===
-src/AkmlSql.Shell.Shared/Ui/ThemeManager.cs:66
-src/AkmlSql.Shell.Shared/Dialogs/SettingsWindow.cs:43
-src/AkmlSql.Shell.Shared/Editor/SqlPromptIcons.cs:26
-src/AkmlSql.Shell.Shared/Dialogs/LogViewerDialog.cs:18
-src/AkmlSql.Shell.Shared/Ai/AiChatPanel.cs:18
-src/AkmlSql.Shell.Shared/Productivity/CommandPalette/CommandPaletteWindow.cs:17
-src/AkmlSql.Shell.Shared/Ui/SqlPreviewRenderer.cs:14
-src/AkmlSql.Shell.Shared/Productivity/Navigation/ObjectSearchWindow.cs:13
-src/AkmlSql.Shell.Shared/Editor/Completion/WildcardExpansionPopup.cs:13
-src/AkmlSql.Shell.Shared/Editor/Completion/CompletionItemModel.cs:13
-src/AkmlSql.Shell.Shared/Dialogs/BulkAnalysisResultDialog.cs:13
-src/AkmlSql.Shell.Shared/Editor/Toolbar/EditorToolbar.cs:12
-src/AkmlSql.Shell.Shared/Productivity/Navigation/PeekDefinitionControl.cs:9
-src/AkmlSql.Shell.Shared/Editor/Completion/ObjectDefinitionPanel.cs:9
-src/AkmlSql.Shell.Shared/History/HistoryToolWindowControl.cs:8
-src/AkmlSql.Shell.Shared/Editor/Completion/AkmlCompletionPopup.cs:8
-src/AkmlSql.Shell.Shared/Dialogs/SettingsDialog.cs:7
-src/AkmlSql.Shell.Shared/Safety/SafetyWarningDialog.cs:6
-src/AkmlSql.Shell.Shared/Tabs/TabColoringManager.cs:5
-src/AkmlSql.Shell.Shared/Refactoring/RefactoringPreviewDialog.cs:5
+=== Classification ===
+
+WinForms surfaces (out of WPF token scope per spec.md Assumptions —
+these need a separate WinForms theme adapter spec; tasks T022/T024/
+T025/T026/T027/T029/T031/T032 marked DEFERRED):
+
+  18  src/AkmlSql.Shell.Shared/Dialogs/LogViewerDialog.cs            (T025)
+  13  src/AkmlSql.Shell.Shared/Dialogs/BulkAnalysisResultDialog.cs   (T024)
+   5  src/AkmlSql.Shell.Shared/Refactoring/RefactoringPreviewDialog.cs (T026)
+   3  src/AkmlSql.Shell.Shared/Productivity/ConnectionAliasEditor.cs
+   2  src/AkmlSql.Shell.Shared/Productivity/Grid/GridFindBar.cs
+   1  src/AkmlSql.Shell.Shared/Execution/MultiDatabaseResultsView.cs
+   1  src/AkmlSql.Shell.Shared/Productivity/Grid/CellEditDialog.cs   (T032)
+   1  src/AkmlSql.Shell.Shared/Productivity/Grid/NullHighlighter.cs
+   1  src/AkmlSql.Shell.Shared/Productivity/Grid/RowNumberProvider.cs
+                                                            ----
+                                                              45  WinForms
+
+Domain icon palettes (FR-003 carveout — semantic constants whose
+identity IS their hex; "Table = blue" reads the same in both themes
+on purpose):
+
+  26  src/AkmlSql.Shell.Shared/Editor/SqlPromptIcons.cs
+   1  src/AkmlSql.Shell.Shared/Navigation/BookmarkGlyphFactory.cs
+                                                            ----
+                                                              27  Domain icons
+
+Editor adornments / completion popups (US4 / Phase 6 — not started):
+
+  14  src/AkmlSql.Shell.Shared/Ui/SqlPreviewRenderer.cs              (syntax highlighting brushes)
+  13  src/AkmlSql.Shell.Shared/Editor/Completion/CompletionItemModel.cs (T048)
+  13  src/AkmlSql.Shell.Shared/Editor/Completion/WildcardExpansionPopup.cs (T048)
+  12  src/AkmlSql.Shell.Shared/Editor/Toolbar/EditorToolbar.cs        (T047)
+   9  src/AkmlSql.Shell.Shared/Editor/Completion/ObjectDefinitionPanel.cs
+   9  src/AkmlSql.Shell.Shared/Productivity/Navigation/PeekDefinitionControl.cs (T049)
+   8  src/AkmlSql.Shell.Shared/Editor/Completion/AkmlCompletionPopup.cs (T048)
+   4  src/AkmlSql.Shell.Shared/Editor/Adornments/MinimapAdornment.cs
+   3  src/AkmlSql.Shell.Shared/Editor/Adornments/StickyScrollAdornment.cs
+   2  src/AkmlSql.Shell.Shared/Ai/FixPreviewPanel.cs                  (inline diff colours)
+   2  src/AkmlSql.Shell.Shared/Ai/GhostTextAdornment.cs
+   2  src/AkmlSql.Shell.Shared/Editor/Completion/SchemaStatusIndicator.cs
+   1  src/AkmlSql.Shell.Shared/Editor/SchemaProgress/SchemaProgressMargin.cs (T046)
+                                                            ----
+                                                              92  Phase 6 / US4
+
+Tab-colouring helpers (env tag colours; likely intentional but worth
+re-review during Phase 6 polish):
+
+   5  src/AkmlSql.Shell.Shared/Tabs/TabColoringManager.cs
+                                                            ----
+                                                               5  Tabs
+
+Migrated WPF surfaces — intentional remaining hits:
+
+   5  src/AkmlSql.Shell.Shared/Dialogs/SettingsWindow.cs              (FR-003: 5 setting-kind badge colours)
+   3  src/AkmlSql.Shell.Shared/Safety/SafetyWarningDialog.cs          (FR-003: AmberBorder / ErrorBorder / BtnPrimary)
+   3  src/AkmlSql.Shell.Shared/History/HistoryToolWindowControl.cs    (Brushes.Transparent placeholders)
+   1  src/AkmlSql.Shell.Shared/Productivity/Navigation/ObjectSearchWindow.cs (Brushes.Transparent — AllowsTransparency)
+   1  src/AkmlSql.Shell.Shared/Productivity/DocumentOutline/DocumentOutlineControl.cs (Brushes.Transparent)
+                                                            ----
+                                                              13  Intentional
+
+Theme infrastructure (FR-003 carveout):
+
+   2  src/AkmlSql.Shell.Shared/Ui/ThemeManager.cs                     (HistorySearchHighlight: 30 % yellow)
+                                                            ----
+                                                               2  Theme system
+
+=== Summary ===
+WinForms (deferred):                  45
+Domain icons (FR-003 carveout):       27
+Editor / US4 (not started):           92
+Tab colouring (review):                5
+Migrated WPF (FR-003 + Transparent):  13
+Theme facade (FR-003):                 2
+                                    ----
+                                     184  TOTAL
+
+=== Actionable for the rest of spec 016 ===
+- All 92 hits in the "Editor / US4" bucket are addressed by Phase 6
+  (T046–T051). After Phase 6 completes, the bucket should reach 0.
+- The 5 hits in TabColoringManager need a one-pass review during
+  Phase 7 polish — env tag colours may be domain semantic constants
+  (like SqlPromptIcons), in which case they stay; otherwise they
+  collapse onto Status.* tokens.
+- The remaining 87 hits (45 WinForms + 27 domain icons + 13 intentional
+  WPF + 2 theme facade) are all FR-003 carveouts or out-of-scope
+  WinForms surfaces. They should NOT count against the
+  "zero unjustified hits" target.
+
+The audit script does not currently distinguish carveouts from
+unjustified hits. Until it grows an allow-list (planned as part of
+T052 polish), these breakdowns serve as the manual reference.
