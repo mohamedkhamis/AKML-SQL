@@ -13,6 +13,7 @@ using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using AkmlSql.Core.Config;
+using AkmlSql.Shell.Shared.Ui.Theme;
 using Serilog;
 using Constants = AkmlSql.Core.Constants;
 
@@ -81,49 +82,36 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 Caret = Freeze(new SolidColorBrush(caret));
             }
 
-            // ── SQL Prompt-aligned theme palettes ──
-            // Source: doc/SQL-PROMPT/SQL-Prompt-Option/SQL_Prompt_Options_Dialog.md §18.5
-            public static readonly ThemeBrushSet Dark = new ThemeBrushSet(
-                main:        Color.FromRgb(0x2D, 0x2D, 0x3B), // #2D2D3B  dialog background
-                sidebar:     Color.FromRgb(0x1E, 0x1E, 0x2E), // #1E1E2E  tree nav background (SQL Prompt panel)
-                panel:       Color.FromRgb(0x1E, 0x1E, 0x2E), // #1E1E2E  content panel background
-                input:       Color.FromRgb(0x2D, 0x2D, 0x3B), // #2D2D3B  input bg (matches dialog)
-                inputReadOnly: Color.FromRgb(0x25, 0x28, 0x36), // #252836 read-only field
-                button:      Color.FromRgb(0x3A, 0x3F, 0x4E), // #3A3F4E  outlined button bg
-                buttonHover: Color.FromRgb(0x4A, 0x4F, 0x5E), // #4A4F5E  button hover
-                selected:    Color.FromRgb(0x00, 0x78, 0xD4), // #0078D4  accent (selected nav, primary button)
-                border:      Color.FromRgb(0x3A, 0x3F, 0x4E), // #3A3F4E  border
-                comboBorder: Color.FromRgb(0x3A, 0x3F, 0x4E), // #3A3F4E  input border
-                fgPrimary:   Color.FromRgb(0xD4, 0xD4, 0xD4), // #D4D4D4  primary text + section header
-                fgSecondary: Color.FromRgb(0x88, 0x92, 0xA8), // #8892A8  unselected nav + setting label
-                fgAccent:    Color.FromRgb(0x4F, 0x8C, 0xFF), // #4F8CFF  page title + link (dark variant)
-                fgWhite:     Color.FromRgb(0xFF, 0xFF, 0xFF), // #FFFFFF
-                selectedText: Color.FromRgb(0xFF, 0xFF, 0xFF),// #FFFFFF  text on accent
-                sep:         Color.FromRgb(0x3A, 0x3F, 0x4E), // #3A3F4E  separator
-                treeHover:   Color.FromRgb(0x25, 0x28, 0x36), // #252836  nav hover (matches row alt)
-                caret:       Color.FromRgb(0xFF, 0xFF, 0xFF)
-            );
+            // ── Theme palettes derived from the central ThemePalette (single source of truth) ──
+            // Each ThemeBrushSet field maps to a semantic token from contracts/theme-tokens.md.
+            // Spec 016 T017: chrome literals removed; values now flow from AkmlSql.Shell.Shared.Ui.Theme.ThemePalette.
+            public static readonly ThemeBrushSet Dark = FromPalette(AkmlSql.Shell.Shared.Ui.Theme.ThemePalette.Dark);
+            public static readonly ThemeBrushSet Light = FromPalette(AkmlSql.Shell.Shared.Ui.Theme.ThemePalette.Light);
 
-            public static readonly ThemeBrushSet Light = new ThemeBrushSet(
-                main:        Color.FromRgb(0xF0, 0xF0, 0xF0), // #F0F0F0  dialog background
-                sidebar:     Color.FromRgb(0xFF, 0xFF, 0xFF), // #FFFFFF  tree nav background (SQL Prompt panel)
-                panel:       Color.FromRgb(0xFF, 0xFF, 0xFF), // #FFFFFF  content panel background
-                input:       Color.FromRgb(0xFF, 0xFF, 0xFF), // #FFFFFF  input bg
-                inputReadOnly: Color.FromRgb(0xF8, 0xF8, 0xF8), // #F8F8F8 read-only / row alt
-                button:      Color.FromRgb(0xFF, 0xFF, 0xFF), // #FFFFFF  outlined button bg
-                buttonHover: Color.FromRgb(0xE8, 0xE8, 0xE8), // #E8E8E8  button hover
-                selected:    Color.FromRgb(0x00, 0x78, 0xD4), // #0078D4  accent (selected nav, primary button)
-                border:      Color.FromRgb(0xCC, 0xCC, 0xCC), // #CCCCCC  border
-                comboBorder: Color.FromRgb(0xCC, 0xCC, 0xCC), // #CCCCCC  input border
-                fgPrimary:   Color.FromRgb(0x33, 0x33, 0x33), // #333333  primary text + section header
-                fgSecondary: Color.FromRgb(0x55, 0x55, 0x55), // #555555  unselected nav + setting label
-                fgAccent:    Color.FromRgb(0x00, 0x78, 0xD4), // #0078D4  page title + link
-                fgWhite:     Color.FromRgb(0x33, 0x33, 0x33), // #333333  headings on light
-                selectedText: Color.FromRgb(0xFF, 0xFF, 0xFF),// #FFFFFF  text on accent
-                sep:         Color.FromRgb(0xCC, 0xCC, 0xCC), // #CCCCCC  separator
-                treeHover:   Color.FromRgb(0xF0, 0xF0, 0xF0), // #F0F0F0  nav hover
-                caret:       Color.FromRgb(0x1E, 0x1E, 0x1E)
-            );
+            private static ThemeBrushSet FromPalette(AkmlSql.Shell.Shared.Ui.Theme.ThemePalette p)
+            {
+                Color C(string token) => ((SolidColorBrush)p.Brushes[token]).Color;
+                return new ThemeBrushSet(
+                    main:          C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.SurfaceCanvas),
+                    sidebar:       C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.SurfaceSidebar),
+                    panel:         C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.SurfacePanel),
+                    input:         C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.SurfaceInput),
+                    inputReadOnly: C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.SurfaceInputReadOnly),
+                    button:        C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.SurfaceElevated),
+                    buttonHover:   C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.SurfaceHover),
+                    selected:      C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.AccentPrimary),
+                    border:        C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.BorderDefault),
+                    comboBorder:   C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.BorderDefault),
+                    fgPrimary:     C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.TextPrimary),
+                    fgSecondary:   C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.TextSecondary),
+                    fgAccent:      C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.TextLink),
+                    fgWhite:       C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.TextPrimary),
+                    selectedText:  C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.TextOnAccent),
+                    sep:           C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.BorderSubtle),
+                    treeHover:     C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.SurfaceHover),
+                    caret:         C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.TextPrimary)
+                );
+            }
         }
 
         private static SolidColorBrush Freeze(SolidColorBrush b) { b.Freeze(); return b; }
@@ -681,7 +669,8 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 FontSize = 12,
                 Height = 26,
                 Padding = new Thickness(0, 4, 0, 4),
-                VerticalContentAlignment = VerticalAlignment.Center
+                VerticalContentAlignment = VerticalAlignment.Center,
+                FocusVisualStyle = FocusVisualStyles.HighStakes // FR-018 / O9 (search input)
             };
             Grid.SetColumn(_searchBox, 1);
             grid.Children.Add(_searchBox);
@@ -895,8 +884,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 VerticalAlignment = VerticalAlignment.Top,
                 Child = new TextBlock
                 {
+                    // Letter sits on a colored badge; SelectedText is "text on accent" (white in both themes).
                     Text = letter,
-                    Foreground = Brushes.White,
+                    Foreground = _theme.SelectedText,
                     FontSize = 10,
                     FontWeight = FontWeights.Bold,
                     HorizontalAlignment = HorizontalAlignment.Center,
@@ -1975,7 +1965,8 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 Height = 28,
                 Padding = new Thickness(6, 4, 6, 4),
                 MaxWidth = 300,
-                HorizontalAlignment = HorizontalAlignment.Left
+                HorizontalAlignment = HorizontalAlignment.Left,
+                FocusVisualStyle = FocusVisualStyles.HighStakes // FR-018 / O9 (theme dropdown is the canonical high-stakes ComboBox)
             };
 
             // Apply themed styling to dropdown items
@@ -2306,7 +2297,8 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 BorderBrush = _theme.Border,
                 BorderThickness = new Thickness(1),
                 Padding = new Thickness(12, 4, 12, 4),
-                Cursor = Cursors.Hand
+                Cursor = Cursors.Hand,
+                FocusVisualStyle = FocusVisualStyles.HighStakes // FR-018 / O9
             };
 
             var theme = _theme; // capture for lambda
@@ -2335,12 +2327,13 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 BorderBrush = _theme.Selected,
                 BorderThickness = new Thickness(1),
                 Padding = new Thickness(12, 4, 12, 4),
-                Cursor = Cursors.Hand
+                Cursor = Cursors.Hand,
+                FocusVisualStyle = FocusVisualStyles.HighStakes // FR-018 / O9 (primary action)
             };
 
             var theme = _theme;
-            // Subtle hover: slightly lighter accent
-            var hoverBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x10, 0x88, 0xE4)));
+            // Subtle hover: slightly lighter accent — pulled from the central palette via AccentPrimaryHover token.
+            var hoverBrush = (SolidColorBrush)ThemeRegistry.Instance.Resources[ThemeTokens.AccentPrimaryHover];
             btn.MouseEnter += (s, e) => { btn.Background = hoverBrush; btn.BorderBrush = hoverBrush; };
             btn.MouseLeave += (s, e) => { btn.Background = theme.Selected; btn.BorderBrush = theme.Selected; };
 
