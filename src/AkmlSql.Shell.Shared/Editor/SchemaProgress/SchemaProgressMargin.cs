@@ -9,14 +9,14 @@ using System.Windows.Threading;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Shell.Shared.Ipc;
-using AkmlSql.Shell.Shared.Ui;
+using AkmlSql.Shell.Shared.Ui.Theme;
 using Microsoft.VisualStudio.Text.Editor;
 using Serilog;
 
 namespace AkmlSql.Shell.Shared.Editor.SchemaProgress
 {
     /// <summary>
-    /// Bottom-right toast adornment that mirrors the "Populating suggestions for …"
+    /// Bottom-right toast adornment that mirrors the "Populating suggestions for ..."
     /// indicator: a compact notification box with a circular spinner, muted text,
     /// and fade-in/out transitions. Hosted on the <c>AkmlSchemaProgress</c>
     /// adornment layer so it floats above the editor text rather than occupying
@@ -31,27 +31,19 @@ namespace AkmlSql.Shell.Shared.Editor.SchemaProgress
         private const int    ReadyDisplayMs     = 2000;
         private const int    LoadingTimeoutMs   = 15_000;
 
-        private static readonly FontFamily SegoeUiFont = new FontFamily("Segoe UI");
-
         private enum MarginState { Hidden, Loading, Ready }
 
         private readonly IWpfTextView    _textView;
         private readonly IAdornmentLayer _adornmentLayer;
         private readonly DispatcherTimer _pollTimer;
 
-        // Visual elements — all frozen-brush themed.
-        private readonly TextBlock      _statusText;
-        private readonly Ellipse        _spinnerArc;
-        private readonly TextBlock      _readyGlyph;
+        // Visual elements -- chrome flows through ThemeRegistry merged into _notificationBorder.Resources.
+        private readonly TextBlock       _statusText;
+        private readonly Ellipse         _spinnerArc;
+        private readonly TextBlock       _loadingLabel;   // FR-019/O10: static "Loading..." alternative when motion is disabled
+        private readonly TextBlock       _readyGlyph;
         private readonly RotateTransform _spinnerRotate;
-        private readonly Border         _notificationBorder;
-
-        // Theme brushes — resolved once in ctor, frozen for cross-thread safety.
-        private readonly SolidColorBrush _bgBrush;
-        private readonly SolidColorBrush _borderBrush;
-        private readonly SolidColorBrush _mutedBrush;
-        private readonly SolidColorBrush _accentBrush;
-        private readonly SolidColorBrush _readyBrush;
+        private readonly Border          _notificationBorder;
 
         private bool        _disposed;
         private bool        _polling;
@@ -69,55 +61,63 @@ namespace AkmlSql.Shell.Shared.Editor.SchemaProgress
             _textView       = textView       ?? throw new ArgumentNullException(nameof(textView));
             _adornmentLayer = adornmentLayer ?? throw new ArgumentNullException(nameof(adornmentLayer));
 
-            var theme    = ThemeManager.Instance;
-            _bgBrush     = Freeze(new SolidColorBrush(theme.EditorPanelBackground));
-            _borderBrush = Freeze(new SolidColorBrush(theme.Border));
-            _mutedBrush  = Freeze(new SolidColorBrush(theme.PlaceholderText));
-            _accentBrush = Freeze(new SolidColorBrush(theme.AccentColor));
-            // Semantic green for the "ready" checkmark — theme-independent.
-            _readyBrush  = Freeze(new SolidColorBrush(Color.FromRgb(0x2E, 0xA0, 0x43)));
-
             TryLoadSessionId();
 
             _spinnerRotate = new RotateTransform(0);
 
-            // Circular arc spinner (~90° arc, ~270° gap).
+            // Circular arc spinner (~90 deg arc, ~270 deg gap). Stroke flows through the registry
+            // merged into _notificationBorder.Resources -- editor-margin context, so
+            // EditorSpinnerStroke / EditorMarginBackground apply (Phase 6).
             _spinnerArc = new Ellipse
             {
-                Width               = 12,
-                Height              = 12,
-                Stroke              = _accentBrush,
-                StrokeThickness     = 1.6,
-                StrokeDashCap       = PenLineCap.Round,
-                StrokeStartLineCap  = PenLineCap.Round,
-                StrokeEndLineCap    = PenLineCap.Round,
-                StrokeDashArray     = new DoubleCollection { 10, 30 },
+                Width                 = 12,
+                Height                = 12,
+                StrokeThickness       = 1.6,
+                StrokeDashCap         = PenLineCap.Round,
+                StrokeStartLineCap    = PenLineCap.Round,
+                StrokeEndLineCap      = PenLineCap.Round,
+                StrokeDashArray       = new DoubleCollection { 10, 30 },
                 RenderTransformOrigin = new Point(0.5, 0.5),
-                RenderTransform     = _spinnerRotate,
-                VerticalAlignment   = VerticalAlignment.Center,
-                Margin              = new Thickness(0, 0, 8, 0)
+                RenderTransform       = _spinnerRotate,
+                VerticalAlignment     = VerticalAlignment.Center,
+                Margin                = new Thickness(0, 0, Spacing.Sm, 0)
             };
+            _spinnerArc.SetResourceReference(Shape.StrokeProperty, ThemeTokens.EditorSpinnerStroke);
+
+            // FR-019/O10: static "Loading..." alternative shown when ClientAreaAnimation is false.
+            // Same horizontal slot as the spinner; visibility is mutually exclusive in Loading state.
+            _loadingLabel = new TextBlock
+            {
+                Text              = "Loading...",
+                FontSize          = Typography.Small,
+                FontFamily        = Typography.UiFont,
+                FontWeight        = FontWeights.SemiBold,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin            = new Thickness(0, 0, Spacing.Sm, 0),
+                Visibility        = Visibility.Collapsed
+            };
+            _loadingLabel.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.EditorSpinnerStroke);
 
             _readyGlyph = new TextBlock
             {
-                Text              = "\u2713",
-                Foreground        = _readyBrush,
+                Text              = "✓",
                 FontSize          = 13,
                 FontWeight        = FontWeights.Bold,
                 VerticalAlignment = VerticalAlignment.Center,
-                Margin            = new Thickness(0, 0, 8, 0),
+                Margin            = new Thickness(0, 0, Spacing.Sm, 0),
                 Visibility        = Visibility.Collapsed
             };
+            _readyGlyph.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.StatusSuccess);
 
             _statusText = new TextBlock
             {
-                Text          = string.Empty,
-                Foreground    = _mutedBrush,
-                FontSize      = 11,
-                FontFamily    = SegoeUiFont,
+                Text              = string.Empty,
+                FontSize          = Typography.Small,
+                FontFamily        = Typography.UiFont,
                 VerticalAlignment = VerticalAlignment.Center,
-                TextTrimming  = TextTrimming.CharacterEllipsis
+                TextTrimming      = TextTrimming.CharacterEllipsis
             };
+            _statusText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
 
             var row = new StackPanel
             {
@@ -126,6 +126,7 @@ namespace AkmlSql.Shell.Shared.Editor.SchemaProgress
                 VerticalAlignment   = VerticalAlignment.Center
             };
             row.Children.Add(_spinnerArc);
+            row.Children.Add(_loadingLabel);
             row.Children.Add(_readyGlyph);
             row.Children.Add(_statusText);
 
@@ -133,24 +134,36 @@ namespace AkmlSql.Shell.Shared.Editor.SchemaProgress
             {
                 Width           = NotificationWidth,
                 Height          = NotificationHeight,
-                Background      = _bgBrush,
-                BorderBrush     = _borderBrush,
                 BorderThickness = new Thickness(1),
                 CornerRadius    = new CornerRadius(4),
-                Padding         = new Thickness(12, 0, 12, 0),
+                Padding         = new Thickness(Spacing.Md, 0, Spacing.Md, 0),
                 Child           = row,
                 Opacity         = 0,
                 Visibility      = Visibility.Collapsed
             };
 
-            // Continuous spinner rotation — gated by visibility.
-            _spinnerRotate.BeginAnimation(RotateTransform.AngleProperty, new DoubleAnimation
+            // Attach the registry HERE so resource lookups from children resolve via
+            // _notificationBorder.Resources -- adornment-layer adornments aren't placed under a
+            // ThemeAware* root, so the topmost element we control merges the dictionary.
+            ThemeRegistry.Instance.AttachTo(_notificationBorder);
+            _notificationBorder.SetResourceReference(Border.BackgroundProperty,  ThemeTokens.EditorMarginBackground);
+            _notificationBorder.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.BorderDefault);
+
+            // Continuous spinner rotation -- only START when motion is allowed (FR-019/O10).
+            // If the user toggles the preference at runtime, OnAnimationsEnabledChanged swaps the
+            // visual immediately if currently in Loading state; existing animations are not
+            // cancelled mid-loop per O10.
+            if (HostThemeWatcher.Instance.AnimationsEnabled)
             {
-                From             = 0,
-                To               = 360,
-                Duration         = TimeSpan.FromMilliseconds(1100),
-                RepeatBehavior   = RepeatBehavior.Forever
-            });
+                _spinnerRotate.BeginAnimation(RotateTransform.AngleProperty, new DoubleAnimation
+                {
+                    From           = 0,
+                    To             = 360,
+                    Duration       = TimeSpan.FromMilliseconds(1100),
+                    RepeatBehavior = RepeatBehavior.Forever
+                });
+            }
+            HostThemeWatcher.Instance.AnimationsEnabledChanged += OnAnimationsEnabledChanged;
 
             // Poll schema status every second.
             _pollTimer = new DispatcherTimer(DispatcherPriority.Background)
@@ -166,7 +179,41 @@ namespace AkmlSql.Shell.Shared.Editor.SchemaProgress
             _textView.Closed += OnTextViewClosed;
         }
 
-        // ─── Viewport positioning ───────────────────────────────────────────
+        /// <summary>
+        /// Reduced-motion preference flipped at runtime. If we're currently showing the Loading
+        /// state, swap between the spinner and the static "Loading..." label so the new preference
+        /// takes effect immediately. If we're not in Loading, the swap is deferred -- the next
+        /// TransitionTo(Loading) call applies the current preference (per O10).
+        /// </summary>
+        private void OnAnimationsEnabledChanged(object? sender, EventArgs e)
+        {
+            if (_disposed) return;
+            if (_state == MarginState.Loading)
+            {
+                ApplyMotionPreferenceForLoading();
+            }
+        }
+
+        /// <summary>
+        /// Applies the current motion preference to the Loading-state visuals: when animations are
+        /// enabled the spinner is visible and the static label is hidden; when disabled the spinner
+        /// is hidden and the static label is shown.
+        /// </summary>
+        private void ApplyMotionPreferenceForLoading()
+        {
+            if (HostThemeWatcher.Instance.AnimationsEnabled)
+            {
+                _spinnerArc.Visibility   = Visibility.Visible;
+                _loadingLabel.Visibility = Visibility.Collapsed;
+            }
+            else
+            {
+                _spinnerArc.Visibility   = Visibility.Collapsed;
+                _loadingLabel.Visibility = Visibility.Visible;
+            }
+        }
+
+        // --- Viewport positioning ------------------------------------------
 
         private void EnsureAdornmentAdded()
         {
@@ -188,8 +235,8 @@ namespace AkmlSql.Shell.Shared.Editor.SchemaProgress
             // Place the notification box at the bottom-right corner of the viewport.
             // ViewportRelative adornments live in a Canvas whose coordinates are the
             // viewport origin at (0,0); SetRight / SetBottom are ignored by that layer
-            // (proved in-repo by every other adornment — MinimapAdornment, StickyScroll,
-            // SchemaStatusIndicator — all using SetLeft / SetTop).
+            // (proved in-repo by every other adornment -- MinimapAdornment, StickyScroll,
+            // SchemaStatusIndicator -- all using SetLeft / SetTop).
             var left = _textView.ViewportWidth  - NotificationWidth  - EdgeMargin;
             var top  = _textView.ViewportHeight - NotificationHeight - EdgeMargin;
             if (left < 0) left = 0;
@@ -198,7 +245,7 @@ namespace AkmlSql.Shell.Shared.Editor.SchemaProgress
             Canvas.SetTop (_notificationBorder, top);
         }
 
-        // ─── Poll loop ──────────────────────────────────────────────────────
+        // --- Poll loop -----------------------------------------------------
 
         private async void OnPollTick(object sender, EventArgs e)
         {
@@ -246,7 +293,7 @@ namespace AkmlSql.Shell.Shared.Editor.SchemaProgress
                 return;
             }
 
-            // Database switch — restart the loading cycle for the new DB.
+            // Database switch -- restart the loading cycle for the new DB.
             if (!string.Equals(status.DatabaseName, _lastDatabase, StringComparison.OrdinalIgnoreCase))
             {
                 _lastDatabase    = status.DatabaseName;
@@ -292,11 +339,11 @@ namespace AkmlSql.Shell.Shared.Editor.SchemaProgress
                     if (status.ObjectCount > 0)
                     {
                         int pct = (int)(100.0 * status.ColumnsLoadedCount / status.ObjectCount);
-                        SetText($"Loading columns — {pct}% ({status.ColumnsLoadedCount}/{status.ObjectCount})");
+                        SetText($"Loading columns -- {pct}% ({status.ColumnsLoadedCount}/{status.ObjectCount})");
                     }
                     else
                     {
-                        SetText("Loading columns…");
+                        SetText("Loading columns...");
                     }
                     break;
 
@@ -305,7 +352,7 @@ namespace AkmlSql.Shell.Shared.Editor.SchemaProgress
                     if (_state == MarginState.Loading)
                     {
                         TransitionTo(MarginState.Ready);
-                        SetText($"Schema cache ready — {status.ObjectCount} objects");
+                        SetText($"Schema cache ready -- {status.ObjectCount} objects");
                         _readyShownAtUtc = DateTime.UtcNow;
                     }
                     else if (_state == MarginState.Ready)
@@ -315,7 +362,7 @@ namespace AkmlSql.Shell.Shared.Editor.SchemaProgress
                     }
                     else
                     {
-                        // Hidden → schema was already loaded before we first saw it.
+                        // Hidden -> schema was already loaded before we first saw it.
                         TransitionTo(MarginState.Hidden);
                     }
                     break;
@@ -337,18 +384,17 @@ namespace AkmlSql.Shell.Shared.Editor.SchemaProgress
                 case MarginState.Loading:
                     EnsureAdornmentAdded();
                     _notificationBorder.Visibility = Visibility.Visible;
-                    _spinnerArc.Visibility = Visibility.Visible;
+                    ApplyMotionPreferenceForLoading();   // FR-019/O10: spinner vs. static "Loading..." label
                     _readyGlyph.Visibility = Visibility.Collapsed;
-                    _statusText.Foreground = _mutedBrush;
                     FadeTo(1, null);
                     break;
 
                 case MarginState.Ready:
                     EnsureAdornmentAdded();
                     _notificationBorder.Visibility = Visibility.Visible;
-                    _spinnerArc.Visibility  = Visibility.Collapsed;
-                    _readyGlyph.Visibility  = Visibility.Visible;
-                    _statusText.Foreground  = _mutedBrush;
+                    _spinnerArc.Visibility   = Visibility.Collapsed;
+                    _loadingLabel.Visibility = Visibility.Collapsed;
+                    _readyGlyph.Visibility   = Visibility.Visible;
                     FadeTo(1, null);
                     break;
             }
@@ -356,6 +402,16 @@ namespace AkmlSql.Shell.Shared.Editor.SchemaProgress
 
         private void FadeTo(double target, Action? onCompleted)
         {
+            // Reduced-motion: skip the fade entirely so theme switches and visibility changes are
+            // instantaneous (per O10).
+            if (!HostThemeWatcher.Instance.AnimationsEnabled)
+            {
+                _notificationBorder.BeginAnimation(UIElement.OpacityProperty, null);
+                _notificationBorder.Opacity = target;
+                onCompleted?.Invoke();
+                return;
+            }
+
             var anim = new DoubleAnimation
             {
                 To           = target,
@@ -384,7 +440,7 @@ namespace AkmlSql.Shell.Shared.Editor.SchemaProgress
             catch { }
         }
 
-        // ─── Cleanup ────────────────────────────────────────────────────────
+        // --- Cleanup -------------------------------------------------------
 
         private void OnTextViewClosed(object sender, EventArgs e) => Dispose();
 
@@ -393,11 +449,10 @@ namespace AkmlSql.Shell.Shared.Editor.SchemaProgress
             if (_disposed) return;
             _disposed = true;
             try { _pollTimer.Stop(); } catch { }
+            try { HostThemeWatcher.Instance.AnimationsEnabledChanged -= OnAnimationsEnabledChanged; } catch { }
             try { _textView.ViewportWidthChanged  -= OnViewportSizeChanged; } catch { }
             try { _textView.ViewportHeightChanged -= OnViewportSizeChanged; } catch { }
             try { _textView.Closed -= OnTextViewClosed; } catch { }
         }
-
-        private static SolidColorBrush Freeze(SolidColorBrush b) { b.Freeze(); return b; }
     }
 }
