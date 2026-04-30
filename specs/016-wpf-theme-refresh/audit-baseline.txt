@@ -1,0 +1,29 @@
+Static-audit baseline for branch 016-wpf-theme-refresh
+Captured: 2026-04-30T13:12:00Z
+Scope: src/AkmlSql.Shell.Shared/**/*.cs (excluding Ui/Theme/)
+Target by end of feature: 0
+
+=== Total chrome literals ===
+Total hits: 350
+
+=== Per-file breakdown (top 20) ===
+src/AkmlSql.Shell.Shared/Ui/ThemeManager.cs:66
+src/AkmlSql.Shell.Shared/Dialogs/SettingsWindow.cs:43
+src/AkmlSql.Shell.Shared/Editor/SqlPromptIcons.cs:26
+src/AkmlSql.Shell.Shared/Dialogs/LogViewerDialog.cs:18
+src/AkmlSql.Shell.Shared/Ai/AiChatPanel.cs:18
+src/AkmlSql.Shell.Shared/Productivity/CommandPalette/CommandPaletteWindow.cs:17
+src/AkmlSql.Shell.Shared/Ui/SqlPreviewRenderer.cs:14
+src/AkmlSql.Shell.Shared/Productivity/Navigation/ObjectSearchWindow.cs:13
+src/AkmlSql.Shell.Shared/Editor/Completion/WildcardExpansionPopup.cs:13
+src/AkmlSql.Shell.Shared/Editor/Completion/CompletionItemModel.cs:13
+src/AkmlSql.Shell.Shared/Dialogs/BulkAnalysisResultDialog.cs:13
+src/AkmlSql.Shell.Shared/Editor/Toolbar/EditorToolbar.cs:12
+src/AkmlSql.Shell.Shared/Productivity/Navigation/PeekDefinitionControl.cs:9
+src/AkmlSql.Shell.Shared/Editor/Completion/ObjectDefinitionPanel.cs:9
+src/AkmlSql.Shell.Shared/History/HistoryToolWindowControl.cs:8
+src/AkmlSql.Shell.Shared/Editor/Completion/AkmlCompletionPopup.cs:8
+src/AkmlSql.Shell.Shared/Dialogs/SettingsDialog.cs:7
+src/AkmlSql.Shell.Shared/Safety/SafetyWarningDialog.cs:6
+src/AkmlSql.Shell.Shared/Tabs/TabColoringManager.cs:5
+src/AkmlSql.Shell.Shared/Refactoring/RefactoringPreviewDialog.cs:5
