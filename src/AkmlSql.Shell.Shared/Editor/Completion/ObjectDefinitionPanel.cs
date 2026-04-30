@@ -4,16 +4,23 @@ using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using AkmlSql.Shell.Shared.Ui.Theme;
 
 namespace AkmlSql.Shell.Shared.Editor.Completion
 {
     /// <summary>
     /// SQL Prompt-style Object Definition panel shown alongside the completion popup.
     /// Displays two tabs: Summary (Label: Value detail pairs) and Script (CREATE DDL).
-    /// Dark themed, code-only WPF (no XAML). ~300px wide.
+    /// Code-only WPF (no XAML), ~300px wide. Chrome flows through <see cref="ThemeRegistry"/>.
     /// </summary>
     internal sealed class ObjectDefinitionPanel : Border
     {
+        // Theme-independent: a 12% white tint used as a row separator on top of the panel
+        // background. Reads correctly on both Light and Dark surfaces because the alpha keeps
+        // it as a soft tint rather than a hard rule.
+        private static readonly SolidColorBrush RowSeparatorBrush = FrozenBrush(
+            Color.FromArgb(0x20, 0xFF, 0xFF, 0xFF));
+
         private readonly TabControl _tabControl;
         private readonly StackPanel _summaryContent;
         private readonly TextBlock _scriptContent;
@@ -22,82 +29,73 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         private readonly ScrollViewer _scriptScroll;
         private bool _hasContent;
 
-        private const double PanelWidth = 300;
+        private const double PanelWidth     = 300;
         private const double MaxPanelHeight = 340;
-
-        // SQL Prompt dark theme colors (matching AkmlCompletionPopup)
-        private static readonly SolidColorBrush BgBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x25, 0x28, 0x36)));
-        private static readonly SolidColorBrush BorderBrush_ = Freeze(new SolidColorBrush(Color.FromRgb(0x3A, 0x3F, 0x4E)));
-        private static readonly SolidColorBrush TextBrush = Freeze(new SolidColorBrush(Color.FromRgb(0xD4, 0xD4, 0xD4)));
-        private static readonly SolidColorBrush SecondaryBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)));
-        private static readonly SolidColorBrush LabelBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x9C, 0xA0, 0xB0)));
-        private static readonly SolidColorBrush HeaderBg = Freeze(new SolidColorBrush(Color.FromRgb(0x2D, 0x2D, 0x30)));
-        private static readonly SolidColorBrush TabSelectedBg = Freeze(new SolidColorBrush(Color.FromRgb(0x09, 0x47, 0x71)));
-        private static readonly SolidColorBrush TabNormalBg = Freeze(new SolidColorBrush(Color.FromRgb(0x2D, 0x30, 0x3D)));
-        private static readonly SolidColorBrush RowSeparatorBrush = Freeze(new SolidColorBrush(Color.FromArgb(0x20, 0xFF, 0xFF, 0xFF)));
 
         public ObjectDefinitionPanel()
         {
-            // Header showing object type and name
+            // Attach the registry so SetResourceReference on this Border AND any descendant
+            // resolves through ThemeRegistry.Resources.
+            ThemeRegistry.Instance.AttachTo(this);
+
+            // Header showing object type and name.
             _headerText = new TextBlock
             {
-                Foreground = TextBrush,
-                FontSize = 12,
-                FontWeight = FontWeights.SemiBold,
-                Padding = new Thickness(8, 5, 8, 5),
-                TextWrapping = TextWrapping.Wrap,
-                Background = HeaderBg
+                FontSize     = Typography.Body,
+                FontWeight   = FontWeights.SemiBold,
+                Padding      = new Thickness(Spacing.Sm, 5, Spacing.Sm, 5),
+                TextWrapping = TextWrapping.Wrap
             };
+            _headerText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPrimary);
+            _headerText.SetResourceReference(TextBlock.BackgroundProperty, ThemeTokens.SurfaceElevated);
 
-            // Summary tab content: list of Label: Value pairs
+            // Summary tab content: list of Label: Value pairs.
             _summaryContent = new StackPanel
             {
                 Margin = new Thickness(0)
             };
             _summaryScroll = new ScrollViewer
             {
-                Content = _summaryContent,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                Content                       = _summaryContent,
+                VerticalScrollBarVisibility   = ScrollBarVisibility.Auto,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                MaxHeight = MaxPanelHeight - 70, // Leave room for header + tabs
-                Background = BgBrush,
-                Focusable = false
+                MaxHeight                     = MaxPanelHeight - 70, // Leave room for header + tabs
+                Focusable                     = false
             };
+            _summaryScroll.SetResourceReference(ScrollViewer.BackgroundProperty, ThemeTokens.EditorPopupBackground);
 
-            // Script tab content: DDL text in Consolas
+            // Script tab content: DDL text in a mono font.
             _scriptContent = new TextBlock
             {
-                Foreground = TextBrush,
-                FontSize = 11,
-                FontFamily = new FontFamily("Consolas"),
-                Padding = new Thickness(8, 4, 8, 4),
-                TextWrapping = TextWrapping.Wrap,
-                Background = BgBrush
+                FontSize     = Typography.Small,
+                FontFamily   = Typography.MonoFont,
+                Padding      = new Thickness(Spacing.Sm, Spacing.Xs, Spacing.Sm, Spacing.Xs),
+                TextWrapping = TextWrapping.Wrap
             };
+            _scriptContent.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPrimary);
+            _scriptContent.SetResourceReference(TextBlock.BackgroundProperty, ThemeTokens.EditorPopupBackground);
+
             _scriptScroll = new ScrollViewer
             {
-                Content = _scriptContent,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                Content                       = _scriptContent,
+                VerticalScrollBarVisibility   = ScrollBarVisibility.Auto,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                MaxHeight = MaxPanelHeight - 70,
-                Background = BgBrush,
-                Focusable = false
+                MaxHeight                     = MaxPanelHeight - 70,
+                Focusable                     = false
             };
+            _scriptScroll.SetResourceReference(ScrollViewer.BackgroundProperty, ThemeTokens.EditorPopupBackground);
 
-            // Build tab control with Summary and Script tabs
+            // Build tab control with Summary and Script tabs.
             _tabControl = new TabControl
             {
-                Background = BgBrush,
                 BorderThickness = new Thickness(0),
-                Padding = new Thickness(0),
-                Focusable = false
+                Padding         = new Thickness(0),
+                Focusable       = false
             };
+            _tabControl.SetResourceReference(TabControl.BackgroundProperty, ThemeTokens.EditorPopupBackground);
 
-            var summaryTab = CreateTab("Summary", _summaryScroll);
-            var scriptTab = CreateTab("Script", _scriptScroll);
-
-            _tabControl.Items.Add(summaryTab);
-            _tabControl.Items.Add(scriptTab);
+            _tabControl.Items.Add(CreateTab("Summary", _summaryScroll));
+            _tabControl.Items.Add(CreateTab("Script",  _scriptScroll));
             _tabControl.SelectedIndex = 0;
 
             // Root layout
@@ -106,20 +104,20 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             root.Children.Add(_tabControl);
 
             // Border styling
-            Background = BgBrush;
-            BorderBrush = BorderBrush_;
+            SetResourceReference(BackgroundProperty,  ThemeTokens.EditorPopupBackground);
+            SetResourceReference(BorderBrushProperty, ThemeTokens.EditorPopupBorder);
             BorderThickness = new Thickness(1);
-            CornerRadius = new CornerRadius(3);
+            CornerRadius    = new CornerRadius(3);
             Effect = new System.Windows.Media.Effects.DropShadowEffect
             {
-                BlurRadius = 10,
+                BlurRadius  = 10,
                 ShadowDepth = 3,
-                Opacity = 0.4,
-                Color = Colors.Black
+                Opacity     = 0.4,
+                Color       = Colors.Black
             };
-            Child = root;
-            Width = PanelWidth;
-            Focusable = false;
+            Child      = root;
+            Width      = PanelWidth;
+            Focusable  = false;
             Visibility = Visibility.Collapsed;
         }
 
@@ -152,14 +150,15 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
 
             if (details == null || details.Length == 0)
             {
-                _summaryContent.Children.Add(new TextBlock
+                var empty = new TextBlock
                 {
-                    Text = "No details available.",
-                    Foreground = SecondaryBrush,
-                    FontSize = 11,
+                    Text      = "No details available.",
+                    FontSize  = Typography.Small,
                     FontStyle = FontStyles.Italic,
-                    Padding = new Thickness(8, 6, 8, 6)
-                });
+                    Padding   = new Thickness(Spacing.Sm, 6, Spacing.Sm, 6)
+                };
+                empty.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+                _summaryContent.Children.Add(empty);
             }
 
             // Script tab: DDL
@@ -176,7 +175,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             _tabControl.SelectedIndex = 0;
 
             _hasContent = true;
-            Visibility = Visibility.Visible;
+            Visibility  = Visibility.Visible;
         }
 
         /// <summary>Clear all content and hide the panel.</summary>
@@ -186,7 +185,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             _summaryContent.Children.Clear();
             _scriptContent.Text = string.Empty;
             _hasContent = false;
-            Visibility = Visibility.Collapsed;
+            Visibility  = Visibility.Collapsed;
         }
 
         /// <summary>Show the panel (if it has content).</summary>
@@ -206,24 +205,24 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         {
             var labelBlock = new TextBlock
             {
-                Text = label + ":",
-                Foreground = LabelBrush,
-                FontSize = 11,
-                FontWeight = FontWeights.SemiBold,
-                MinWidth = 80,
-                Padding = new Thickness(8, 2, 4, 2),
+                Text              = label + ":",
+                FontSize          = Typography.Small,
+                FontWeight        = FontWeights.SemiBold,
+                MinWidth          = 80,
+                Padding           = new Thickness(Spacing.Sm, 2, Spacing.Xs, 2),
                 VerticalAlignment = VerticalAlignment.Top
             };
+            labelBlock.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
 
             var valueBlock = new TextBlock
             {
-                Text = value ?? string.Empty,
-                Foreground = TextBrush,
-                FontSize = 11,
-                Padding = new Thickness(0, 2, 8, 2),
-                TextWrapping = TextWrapping.Wrap,
+                Text              = value ?? string.Empty,
+                FontSize          = Typography.Small,
+                Padding           = new Thickness(0, 2, Spacing.Sm, 2),
+                TextWrapping      = TextWrapping.Wrap,
                 VerticalAlignment = VerticalAlignment.Top
             };
+            valueBlock.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPrimary);
 
             var grid = new Grid();
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -237,42 +236,43 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
 
             return new Border
             {
-                Child = grid,
-                BorderBrush = RowSeparatorBrush,
+                Child           = grid,
+                BorderBrush     = RowSeparatorBrush,   // theme-independent 12% white tint
                 BorderThickness = new Thickness(0, 0, 0, 1),
-                Padding = new Thickness(0, 1, 0, 1)
+                Padding         = new Thickness(0, 1, 0, 1)
             };
         }
 
-        private TabItem CreateTab(string header, UIElement content)
+        private static TabItem CreateTab(string header, UIElement content)
         {
             var headerBlock = new TextBlock
             {
-                Text = header,
-                Foreground = TextBrush,
-                FontSize = 11,
-                Padding = new Thickness(10, 3, 10, 3)
+                Text     = header,
+                FontSize = Typography.Small,
+                Padding  = new Thickness(10, 3, 10, 3)
             };
+            headerBlock.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPrimary);
 
             var tab = new TabItem
             {
-                Header = headerBlock,
-                Content = content,
-                Background = TabNormalBg,
+                Header          = headerBlock,
+                Content         = content,
                 BorderThickness = new Thickness(0),
-                Focusable = false,
-                Padding = new Thickness(0)
+                Focusable       = false,
+                Padding         = new Thickness(0)
             };
 
-            // Apply custom style for dark theme tab headers
+            // Tab style with theme-aware Background via DynamicResourceExtension.
             var style = new Style(typeof(TabItem));
-            style.Setters.Add(new Setter(TabItem.BackgroundProperty, TabNormalBg));
+            style.Setters.Add(new Setter(TabItem.BackgroundProperty,
+                new DynamicResourceExtension(ThemeTokens.SurfaceElevated)));
             style.Setters.Add(new Setter(TabItem.BorderThicknessProperty, new Thickness(0)));
-            style.Setters.Add(new Setter(TabItem.PaddingProperty, new Thickness(0)));
-            style.Setters.Add(new Setter(TabItem.FocusableProperty, false));
+            style.Setters.Add(new Setter(TabItem.PaddingProperty,         new Thickness(0)));
+            style.Setters.Add(new Setter(TabItem.FocusableProperty,       false));
 
             var selectedTrigger = new Trigger { Property = TabItem.IsSelectedProperty, Value = true };
-            selectedTrigger.Setters.Add(new Setter(TabItem.BackgroundProperty, TabSelectedBg));
+            selectedTrigger.Setters.Add(new Setter(TabItem.BackgroundProperty,
+                new DynamicResourceExtension(ThemeTokens.SurfaceSelectionStrong)));
             style.Triggers.Add(selectedTrigger);
 
             tab.Style = style;
@@ -280,10 +280,11 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             return tab;
         }
 
-        private static SolidColorBrush Freeze(SolidColorBrush brush)
+        private static SolidColorBrush FrozenBrush(Color color)
         {
-            brush.Freeze();
-            return brush;
+            var b = new SolidColorBrush(color);
+            b.Freeze();
+            return b;
         }
     }
 }
