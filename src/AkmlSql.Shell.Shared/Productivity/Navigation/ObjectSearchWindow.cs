@@ -9,6 +9,7 @@ using System.Windows.Media;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Shell.Shared.Ipc;
+using AkmlSql.Shell.Shared.Ui.Theme;
 using Serilog;
 using Task = System.Threading.Tasks.Task;
 
@@ -19,8 +20,10 @@ namespace AkmlSql.Shell.Shared.Productivity.Navigation
     /// Shows a TextBox for search input and a ListBox with matching results.
     /// Enter navigates to the selected object's definition.
     /// </summary>
-    internal sealed class ObjectSearchWindow : Window
+    internal sealed class ObjectSearchWindow : ThemeAwareWindow
     {
+        private static readonly FontFamily MonoFont = new FontFamily("Cascadia Code, Consolas");
+
         private readonly TextBox _searchBox;
         private readonly ListBox _resultsList;
         private readonly TextBlock _statusBlock;
@@ -48,19 +51,19 @@ namespace AkmlSql.Shell.Shared.Productivity.Navigation
             ResizeMode = ResizeMode.NoResize;
             Width = 600;
             Height = 450;
-            WindowStartupLocation = WindowStartupLocation.CenterScreen;
             Topmost = true;
             ShowInTaskbar = false;
+
+            // Transparency lets the rounded mainBorder show through on the corners; this overrides
+            // the SurfaceCanvas background that ThemeAwareWindow sets via SetResourceReference.
             AllowsTransparency = true;
             Background = Brushes.Transparent;
 
             var mainBorder = new Border
             {
-                Background = new SolidColorBrush(Color.FromRgb(0x25, 0x25, 0x25)),
-                BorderBrush = new SolidColorBrush(Color.FromRgb(0x00, 0x7A, 0xCC)),
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(4),
-                Padding = new Thickness(8),
+                Padding = new Thickness(Spacing.Sm),
                 Effect = new System.Windows.Media.Effects.DropShadowEffect
                 {
                     Color = Colors.Black,
@@ -69,6 +72,8 @@ namespace AkmlSql.Shell.Shared.Productivity.Navigation
                     ShadowDepth = 4
                 }
             };
+            mainBorder.SetResourceReference(Border.BackgroundProperty, ThemeTokens.SurfacePanel);
+            mainBorder.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.AccentPrimary);
 
             var grid = new System.Windows.Controls.Grid();
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -79,14 +84,16 @@ namespace AkmlSql.Shell.Shared.Productivity.Navigation
             _searchBox = new TextBox
             {
                 FontSize = 16,
-                FontFamily = new FontFamily("Segoe UI"),
-                Background = new SolidColorBrush(Color.FromRgb(0x3C, 0x3C, 0x3C)),
-                Foreground = new SolidColorBrush(Color.FromRgb(0xCC, 0xCC, 0xCC)),
-                BorderBrush = new SolidColorBrush(Color.FromRgb(0x00, 0x7A, 0xCC)),
+                FontFamily = Typography.UiFont,
                 BorderThickness = new Thickness(1),
-                Padding = new Thickness(8, 6, 8, 6),
-                Margin = new Thickness(0, 0, 0, 8)
+                Padding = new Thickness(Spacing.Sm, 6, Spacing.Sm, 6),
+                Margin = new Thickness(0, 0, 0, Spacing.Sm),
+                FocusVisualStyle = FocusVisualStyles.HighStakes
             };
+            _searchBox.SetResourceReference(TextBox.BackgroundProperty, ThemeTokens.SurfaceInput);
+            _searchBox.SetResourceReference(TextBox.ForegroundProperty, ThemeTokens.TextPrimary);
+            _searchBox.SetResourceReference(TextBox.BorderBrushProperty, ThemeTokens.AccentPrimary);
+            _searchBox.SetResourceReference(System.Windows.Controls.Primitives.TextBoxBase.CaretBrushProperty, ThemeTokens.TextPrimary);
             _searchBox.TextChanged += OnSearchTextChanged;
             _searchBox.PreviewKeyDown += OnSearchBoxKeyDown;
             System.Windows.Controls.Grid.SetRow(_searchBox, 0);
@@ -96,41 +103,17 @@ namespace AkmlSql.Shell.Shared.Productivity.Navigation
             _resultsList = new ListBox
             {
                 ItemsSource = _results,
-                Background = new SolidColorBrush(Color.FromRgb(0x1E, 0x1E, 0x1E)),
-                Foreground = new SolidColorBrush(Color.FromRgb(0xD4, 0xD4, 0xD4)),
-                BorderBrush = new SolidColorBrush(Color.FromRgb(0x3C, 0x3C, 0x3C)),
                 BorderThickness = new Thickness(1),
-                FontFamily = new FontFamily("Cascadia Code, Consolas"),
+                FontFamily = MonoFont,
                 FontSize = 13
             };
+            _resultsList.SetResourceReference(ListBox.BackgroundProperty, ThemeTokens.SurfacePanel);
+            _resultsList.SetResourceReference(ListBox.ForegroundProperty, ThemeTokens.TextPrimary);
+            _resultsList.SetResourceReference(ListBox.BorderBrushProperty, ThemeTokens.BorderDefault);
             _resultsList.MouseDoubleClick += OnResultDoubleClick;
             _resultsList.PreviewKeyDown += OnResultsKeyDown;
-
-            // Item template
-            var factory = new FrameworkElementFactory(typeof(StackPanel));
-            factory.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
-            factory.SetValue(MarginProperty, new Thickness(4, 2, 4, 2));
-
-            var iconFactory = new FrameworkElementFactory(typeof(TextBlock));
-            iconFactory.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding("TypeIcon"));
-            iconFactory.SetValue(WidthProperty, 24.0);
-            iconFactory.SetValue(TextBlock.FontSizeProperty, 12.0);
-            iconFactory.SetValue(TextBlock.ForegroundProperty, new SolidColorBrush(Color.FromRgb(0x56, 0x9C, 0xD6)));
-            factory.AppendChild(iconFactory);
-
-            var nameFactory = new FrameworkElementFactory(typeof(TextBlock));
-            nameFactory.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding("DisplayName"));
-            nameFactory.SetValue(TextBlock.ForegroundProperty, new SolidColorBrush(Color.FromRgb(0xD4, 0xD4, 0xD4)));
-            factory.AppendChild(nameFactory);
-
-            var typeFactory = new FrameworkElementFactory(typeof(TextBlock));
-            typeFactory.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding("TypeLabel"));
-            typeFactory.SetValue(MarginProperty, new Thickness(8, 0, 0, 0));
-            typeFactory.SetValue(TextBlock.ForegroundProperty, new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80)));
-            typeFactory.SetValue(TextBlock.FontSizeProperty, 11.0);
-            factory.AppendChild(typeFactory);
-
-            _resultsList.ItemTemplate = new DataTemplate { VisualTree = factory };
+            _resultsList.ItemContainerStyle = CreateListBoxItemStyle();
+            _resultsList.ItemTemplate = CreateItemTemplate();
 
             System.Windows.Controls.Grid.SetRow(_resultsList, 1);
             grid.Children.Add(_resultsList);
@@ -139,10 +122,10 @@ namespace AkmlSql.Shell.Shared.Productivity.Navigation
             _statusBlock = new TextBlock
             {
                 Text = "Type to search database objects...",
-                Foreground = new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80)),
                 FontSize = 11,
-                Margin = new Thickness(4, 4, 4, 0)
+                Margin = new Thickness(Spacing.Xs, Spacing.Xs, Spacing.Xs, 0)
             };
+            _statusBlock.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
             System.Windows.Controls.Grid.SetRow(_statusBlock, 2);
             grid.Children.Add(_statusBlock);
 
@@ -153,6 +136,67 @@ namespace AkmlSql.Shell.Shared.Productivity.Navigation
             KeyDown += OnWindowKeyDown;
             Loaded += (_, __) => _searchBox.Focus();
             Deactivated += (_, __) => Close();
+        }
+
+        private static Style CreateListBoxItemStyle()
+        {
+            var style = new Style(typeof(ListBoxItem));
+            style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(Spacing.Xs, 2, Spacing.Xs, 2)));
+            style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0)));
+            style.Setters.Add(new Setter(Control.FocusVisualStyleProperty, FocusVisualStyles.HighStakes));
+
+            // Selected state: strong-accent fill with on-accent text.
+            var selectedTrigger = new Trigger
+            {
+                Property = ListBoxItem.IsSelectedProperty,
+                Value = true
+            };
+            selectedTrigger.Setters.Add(new Setter(Control.BackgroundProperty,
+                new DynamicResourceExtension(ThemeTokens.SurfaceSelectionStrong)));
+            selectedTrigger.Setters.Add(new Setter(Control.ForegroundProperty,
+                new DynamicResourceExtension(ThemeTokens.TextOnAccent)));
+            style.Triggers.Add(selectedTrigger);
+
+            // Hover (not selected)
+            var hoverTrigger = new MultiTrigger();
+            hoverTrigger.Conditions.Add(new Condition(UIElement.IsMouseOverProperty, true));
+            hoverTrigger.Conditions.Add(new Condition(ListBoxItem.IsSelectedProperty, false));
+            hoverTrigger.Setters.Add(new Setter(Control.BackgroundProperty,
+                new DynamicResourceExtension(ThemeTokens.SurfaceHover)));
+            style.Triggers.Add(hoverTrigger);
+
+            return style;
+        }
+
+        private static DataTemplate CreateItemTemplate()
+        {
+            var factory = new FrameworkElementFactory(typeof(StackPanel));
+            factory.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
+            factory.SetValue(MarginProperty, new Thickness(Spacing.Xs, 2, Spacing.Xs, 2));
+
+            // Type icon (uses TextLink so the affordance reads as link-like in both themes)
+            var iconFactory = new FrameworkElementFactory(typeof(TextBlock));
+            iconFactory.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding("TypeIcon"));
+            iconFactory.SetValue(WidthProperty, 24.0);
+            iconFactory.SetValue(TextBlock.FontSizeProperty, 12.0);
+            iconFactory.SetResourceBinding(TextBlock.ForegroundProperty, ThemeTokens.TextLink);
+            factory.AppendChild(iconFactory);
+
+            // Object display name (schema.name)
+            var nameFactory = new FrameworkElementFactory(typeof(TextBlock));
+            nameFactory.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding("DisplayName"));
+            nameFactory.SetResourceBinding(TextBlock.ForegroundProperty, ThemeTokens.TextPrimary);
+            factory.AppendChild(nameFactory);
+
+            // Object type label (Table / View / Procedure / ...) -- secondary tone
+            var typeFactory = new FrameworkElementFactory(typeof(TextBlock));
+            typeFactory.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding("TypeLabel"));
+            typeFactory.SetValue(MarginProperty, new Thickness(Spacing.Sm, 0, 0, 0));
+            typeFactory.SetResourceBinding(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+            typeFactory.SetValue(TextBlock.FontSizeProperty, 11.0);
+            factory.AppendChild(typeFactory);
+
+            return new DataTemplate { VisualTree = factory };
         }
 
         private void OnWindowKeyDown(object sender, KeyEventArgs e)
