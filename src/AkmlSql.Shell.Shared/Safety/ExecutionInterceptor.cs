@@ -34,19 +34,39 @@ namespace AkmlSql.Shell.Shared.Safety
         /// </summary>
         private static readonly System.Collections.Generic.HashSet<int> _suppressedWarningTypes = new();
 
-        // ── Re-entry dedup ───────────────────────────────────────────────────────
-        // After the WPF dialog closes (Cancel or Execute), SSMS frequently re-dispatches
-        // Query.Execute within ~30 ms — observed every cycle in the field. The dialog's
-        // nested message pump processes a queued execute event, producing a tight loop:
-        // dialog → cancel → re-fire → dialog → ...  Cache the last decision keyed on
-        // (sqlHash, time); a re-entry with the same SQL inside the dedup window returns
-        // the cached decision without re-showing the dialog or re-calling the engine.
-        // The window is far below human re-press cadence (a deliberate retry takes
-        // seconds, not milliseconds), so real intent isn't suppressed.
-        private const int ReentryDedupWindowMs = 500;
+        // ── Re-entry dedup (asymmetric: different windows for cancel vs. confirm) ─
+        // After the WPF dialog closes, SSMS re-dispatches Query.Execute differently
+        // depending on the user's choice:
+        //
+        //   • CANCEL: SSMS auto-retries the cancelled command at ~+4 s (and
+        //     occasionally a second time at ~+8 s), then gives up. Field logs
+        //     show a 22-second gap of silence between cancel and the user's
+        //     deliberate F5, confirming SSMS does not retry indefinitely.
+        //     A 10-second window catches the auto-retries while letting a
+        //     deliberate user retry through after a wait.
+        //
+        //   • CONFIRM: the SQL has executed; SSMS does NOT auto-retry. We only
+        //     need a short window (4000 ms) to absorb the immediate modal-pump
+        //     re-fire. A deliberate F5 after this window must re-prompt — caching
+        //     a confirm longer would silently bypass the safety dialog on
+        //     destructive re-runs (a safety regression).
+        //
+        // Cache is keyed on sqlHash; process-static, so persists across tabs (same
+        // SQL in another tab = same intent — acceptable).
+        private const int CancelDedupWindowMs = 10000;
+        private const int ConfirmDedupWindowMs = 4000;
         private static int _lastDecisionSqlHash;
         private static DateTime _lastDecisionTimeUtc;
         private static bool _lastDecisionResult;
+
+        // ── Concurrent-dialog guard ──────────────────────────────────────────────
+        // Re-entry dedup only catches re-fires AFTER ShowDialog returns (cache is
+        // populated in RememberDecision at end-of-flow). SSMS also re-fires
+        // Query.Execute *during* the dialog's modal pump — observed at 18:43:38.354
+        // BEFORE ShowDialog → 18:43:38.358 ENTER (4 ms later, dialog still open),
+        // both reaching the engine and stacking concurrent dialogs. While
+        // _dialogShowing is true, suppress the duplicate dispatch.
+        private static volatile bool _dialogShowing;
 
         /// <summary>
         /// Initializes the execution interceptor. Reads safety settings from config to
@@ -117,20 +137,41 @@ namespace AkmlSql.Shell.Shared.Safety
             Log.Information("[ExecutionGuard] ENTER OnBeforeExecute: sql.Length={SqlLen} server={Server}",
                 sqlText?.Length ?? 0, serverName ?? "(null)");
 
-            // Re-entry dedup — see field declarations above. If we just resolved a
-            // dialog for the same SQL within the dedup window, return the cached
-            // decision without re-prompting. Without this, SSMS's queued execute
-            // events post-dialog produce an infinite Cancel/Execute → re-fire loop.
+            // Concurrent-dialog guard — see field declarations above. If a dialog
+            // is currently showing, this is SSMS's modal-pump re-fire of the same
+            // Query.Execute (the cache from RememberDecision hasn't been populated
+            // yet because ShowDialog hasn't returned). Suppress the duplicate so
+            // we don't stack two dialogs for one F5 press.
+            if (_dialogShowing)
+            {
+                Log.Warning("[ExecutionGuard] Re-entry while dialog open: suppressing duplicate dispatch (SSMS modal-pump re-fire)");
+                return false;
+            }
+
+            // Re-entry dedup — see field declarations above. Asymmetric by outcome:
+            //   • cancel-window: same SQL within CancelDedupWindowMs of last cancel
+            //     → return false (suppresses SSMS auto-retries which fire at ~+4 s)
+            //   • confirm-window: same SQL within ConfirmDedupWindowMs of last confirm
+            //     → return true (just enough to absorb the immediate modal-pump re-fire)
+            // Past the window, a deliberate F5 falls through to a fresh check.
             int sqlHash = sqlText?.GetHashCode() ?? 0;
             var sinceLastDecision = (enterTs - _lastDecisionTimeUtc).TotalMilliseconds;
-            if (sqlHash != 0 &&
-                sqlHash == _lastDecisionSqlHash &&
-                sinceLastDecision < ReentryDedupWindowMs)
+            if (sqlHash != 0 && sqlHash == _lastDecisionSqlHash)
             {
-                Log.Warning(
-                    "[ExecutionGuard] Re-entry dedup: same SQL submitted {Ms} ms after last dialog — returning cached decision={Result} (likely SSMS event re-dispatch, not user retry)",
-                    sinceLastDecision, _lastDecisionResult);
-                return _lastDecisionResult;
+                if (!_lastDecisionResult && sinceLastDecision < CancelDedupWindowMs)
+                {
+                    Log.Warning(
+                        "[ExecutionGuard] Re-entry dedup (cancel-window): same SQL submitted {Ms} ms after last cancel — returning cached decision=false (wait {ExpiryS}s past cancel or edit SQL to retry)",
+                        sinceLastDecision, CancelDedupWindowMs / 1000);
+                    return false;
+                }
+                if (_lastDecisionResult && sinceLastDecision < ConfirmDedupWindowMs)
+                {
+                    Log.Warning(
+                        "[ExecutionGuard] Re-entry dedup (confirm-window): same SQL submitted {Ms} ms after last confirm — returning cached decision=true",
+                        sinceLastDecision);
+                    return true;
+                }
             }
 
             // Re-check settings dynamically on each invocation so that enabling
@@ -326,12 +367,14 @@ namespace AkmlSql.Shell.Shared.Safety
                     filteredWarnings.Length, envLabel);
 
                 bool? wpfResult;
+                _dialogShowing = true;
                 try
                 {
                     wpfResult = dialog.ShowDialog();
                 }
                 finally
                 {
+                    _dialogShowing = false;
                     Log.Information("[ExecutionGuard] AFTER SafetyWarningDialog.ShowDialog: user sat on the dialog for {Ms} ms",
                         (DateTime.UtcNow - beforeDialogTs).TotalMilliseconds);
                 }
