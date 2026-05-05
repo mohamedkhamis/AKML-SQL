@@ -173,10 +173,20 @@ namespace AkmlSql.Shell.Shared.Editor.SchemaProgress
             _pollTimer.Tick += OnPollTick;
             _pollTimer.Start();
 
-            // Reposition when the editor viewport is resized.
+            // Reposition when the editor viewport is resized OR when a layout pass
+            // runs (LayoutChanged catches the initial layout when ViewportWidth/Height
+            // first become non-zero — without it, the adornment can land at (0,0)
+            // = top-left if it's added before the editor has measured).
             _textView.ViewportWidthChanged  += OnViewportSizeChanged;
             _textView.ViewportHeightChanged += OnViewportSizeChanged;
+            _textView.LayoutChanged         += OnLayoutChanged;
             _textView.Closed += OnTextViewClosed;
+        }
+
+        private void OnLayoutChanged(object? sender, Microsoft.VisualStudio.Text.Editor.TextViewLayoutChangedEventArgs e)
+        {
+            if (_disposed || !_adornmentAdded) return;
+            RepositionNotification();
         }
 
         /// <summary>
@@ -226,6 +236,14 @@ namespace AkmlSql.Shell.Shared.Editor.SchemaProgress
                 null, null, _notificationBorder, null);
 
             RepositionNotification();
+
+            // The viewport may not have measured yet — Reposition above could have
+            // run with ViewportWidth/Height = 0, clamping the adornment to (0,0)
+            // = top-left of the text area (visible as "spinner at line 1"). Schedule
+            // a second pass at Loaded priority so it runs after the layout settles.
+            _notificationBorder.Dispatcher.BeginInvoke(
+                new Action(RepositionNotification),
+                DispatcherPriority.Loaded);
         }
 
         private void OnViewportSizeChanged(object? sender, EventArgs e) => RepositionNotification();
@@ -440,6 +458,34 @@ namespace AkmlSql.Shell.Shared.Editor.SchemaProgress
             catch { }
         }
 
+        // --- External triggers ---------------------------------------------
+
+        /// <summary>
+        /// Forces the toast into the Loading state immediately, before the next poll
+        /// cycle. Use this from <c>RefreshCacheCommand</c> so the user gets visible
+        /// feedback that their refresh request was received — without this, the
+        /// 1-second poll interval can miss the brief NotLoaded → PhaseA transition
+        /// for fast schemas, and the toast would jump straight from "Ready"
+        /// (previous cycle) to "Ready" (refreshed) with no loading spinner shown.
+        /// </summary>
+        public void BeginRefresh()
+        {
+            if (_disposed) return;
+
+            void Apply()
+            {
+                if (_disposed) return;
+                _loadingTimedOut     = false;
+                _loadingStartedAtUtc = DateTime.UtcNow;
+                TransitionTo(MarginState.Loading);
+                SetText("Refreshing schema cache...");
+            }
+
+            var dispatcher = _textView.VisualElement.Dispatcher;
+            if (dispatcher.CheckAccess()) Apply();
+            else dispatcher.BeginInvoke(new Action(Apply));
+        }
+
         // --- Cleanup -------------------------------------------------------
 
         private void OnTextViewClosed(object sender, EventArgs e) => Dispose();
@@ -452,6 +498,7 @@ namespace AkmlSql.Shell.Shared.Editor.SchemaProgress
             try { HostThemeWatcher.Instance.AnimationsEnabledChanged -= OnAnimationsEnabledChanged; } catch { }
             try { _textView.ViewportWidthChanged  -= OnViewportSizeChanged; } catch { }
             try { _textView.ViewportHeightChanged -= OnViewportSizeChanged; } catch { }
+            try { _textView.LayoutChanged         -= OnLayoutChanged; } catch { }
             try { _textView.Closed -= OnTextViewClosed; } catch { }
         }
     }

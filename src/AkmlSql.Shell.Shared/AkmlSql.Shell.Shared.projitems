@@ -17,7 +17,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\CompletionItemModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\CompletionPopupAdornment.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\CompletionPopupProvider.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\SchemaStatusIndicator.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\CompletionRpcHelper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\ConnectionWiringHelper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\SqlPromptIcons.cs" />

@@ -392,6 +392,7 @@ namespace AkmlSql.Ssms22
                     (CommandIds.CmdOptions, "Options"),
                     (CommandIds.CmdSendFeedback, "Send Feedback"),
                     (CommandIds.CmdViewLogs, "View Logs"),
+                    (CommandIds.CmdRefreshCache, "Refresh Schema Cache"),
                     (CommandIds.CmdFormatDocument, "Format Document"),
                     (CommandIds.CmdFormatSelection, "Format Selection"),
                     (CommandIds.CmdUnformat, "Unformat Document"),
