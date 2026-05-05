@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel.Design;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.ComponentModelHost;
 using Microsoft.VisualStudio.Editor;
@@ -35,6 +36,29 @@ namespace AkmlSql.Shell.Shared.Commands
             var cmdId = new CommandID(PackageGuids.AkmlSqlCmdSet, CommandIds.CmdRefreshCache);
             var menuItem = new MenuCommand(Execute, cmdId);
             commandService.AddCommand(menuItem);
+
+            // Diagnostic: confirm the MenuCommand round-trips through the same command
+            // service the menu/keyboard will consult later. If FindCommand returns null,
+            // the AddCommand silently failed and clicks/keypresses won't reach Execute.
+            // Logger isn't initialized yet at this point (LoggerFactory.Initialize runs
+            // later in package init) — defer the FindCommand log too.
+            System.Windows.Application.Current?.Dispatcher.BeginInvoke(
+                new Action(() =>
+                {
+                    try
+                    {
+                        var found = commandService.FindCommand(cmdId);
+                        Log.Information(
+                            "RefreshCacheCommand ctor: AddCommand({Guid}, {Id:X}) → FindCommand returned {Result}",
+                            PackageGuids.AkmlSqlCmdSetString, CommandIds.CmdRefreshCache,
+                            found == null ? "NULL (registration silently failed)" : $"Type={found.GetType().Name}");
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Warning(ex, "RefreshCacheCommand ctor: FindCommand round-trip failed");
+                    }
+                }),
+                System.Windows.Threading.DispatcherPriority.ApplicationIdle);
         }
 
         public static RefreshCacheCommand Instance { get; private set; }
@@ -42,10 +66,82 @@ namespace AkmlSql.Shell.Shared.Commands
         public static void Initialize(Package package, OleMenuCommandService commandService)
         {
             Instance = new RefreshCacheCommand(package, commandService);
+
+            // The VSCT-declared Ctrl+Shift+D binding has not dispatched in the field on
+            // SSMS 22 — the embedded .cto registers it but SSMS doesn't appear to route
+            // the keypress to our handler. Force the binding via DTE.Commands at runtime.
+            //
+            // This call is deferred to ApplicationIdle so it runs AFTER the rest of the
+            // package init (in particular, LoggerFactory.Initialize, which happens at
+            // line 129 of AkmlSqlPackage.cs — much later than this command's Initialize
+            // at line 67). Without the defer, all Log calls inside EnsureKeyBinding are
+            // dropped because Serilog hasn't been configured yet.
+            System.Windows.Application.Current?.Dispatcher.BeginInvoke(
+                new Action(EnsureKeyBinding),
+                System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+        }
+
+        /// <summary>
+        /// Programmatically (re-)applies the Global::Ctrl+Shift+D binding to the
+        /// Refresh Schema Cache command via the DTE Commands API. Safe no-op on
+        /// failure — the menu item still works as a fallback.
+        /// </summary>
+        private static void EnsureKeyBinding()
+        {
+            Log.Information("RefreshCacheCommand: EnsureKeyBinding starting (deferred from package init)");
+            ThreadHelper.ThrowIfNotOnUIThread();
+
+            try
+            {
+                var dte = Package.GetGlobalService(typeof(EnvDTE.DTE)) as EnvDTE.DTE;
+                if (dte == null)
+                {
+                    Log.Warning("RefreshCacheCommand: DTE service unavailable; cannot programmatically register Ctrl+Shift+D");
+                    return;
+                }
+
+                EnvDTE.Command cmd;
+                try
+                {
+                    cmd = dte.Commands.Item(
+                        "{" + PackageGuids.AkmlSqlCmdSetString + "}",
+                        CommandIds.CmdRefreshCache);
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning(ex, "RefreshCacheCommand: Commands.Item lookup failed for cmdRefreshCache");
+                    return;
+                }
+
+                if (cmd == null)
+                {
+                    Log.Warning("RefreshCacheCommand: Refresh Schema Cache command not found via DTE");
+                    return;
+                }
+
+                // Read existing bindings so we can log them (helpful for diagnosis when
+                // SSMS rejects the assignment because another command holds the chord).
+                var existing = cmd.Bindings as object[] ?? Array.Empty<object>();
+                var existingDesc = string.Join(", ", existing.Select(b => b?.ToString() ?? "(null)"));
+
+                // Force the binding. Single string overwrites all existing bindings on
+                // this command — that's what we want, since the only "existing" one was
+                // the broken VSCT-declared editor-scope binding.
+                cmd.Bindings = "Global::Ctrl+Shift+D";
+
+                Log.Information(
+                    "RefreshCacheCommand: registered Global::Ctrl+Shift+D for '{Name}' (previous bindings: [{Existing}])",
+                    cmd.Name, existingDesc);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "RefreshCacheCommand: failed to register Ctrl+Shift+D programmatically");
+            }
         }
 
         private void Execute(object sender, EventArgs e)
         {
+            Log.Information("RefreshCacheCommand.Execute ENTERED");
             ThreadHelper.ThrowIfNotOnUIThread();
 
             // Resolve the active editor's sessionId *on the UI thread*, then hand
@@ -60,6 +156,13 @@ namespace AkmlSql.Shell.Shared.Commands
             }
 
             Log.Information("RefreshCacheCommand: Ctrl+Shift+D invoked for session={SessionId}", sessionId);
+
+            // Show the bottom-right toast in Loading state immediately so the user
+            // gets visible feedback their refresh was received. Without this, the
+            // schema-progress poll runs every 1000 ms and can miss the brief
+            // NotLoaded → PhaseA transition on fast schemas, leaving the toast
+            // unchanged and looking like the click did nothing.
+            TryBeginRefreshOnActiveView();
 
             _ = Task.Run(async () =>
             {
@@ -82,6 +185,40 @@ namespace AkmlSql.Shell.Shared.Commands
                     Log.Error(ex, "RefreshCacheCommand: failed to send refresh request for session={SessionId}", sessionId);
                 }
             });
+        }
+
+        /// <summary>
+        /// Looks up the active editor's <see cref="Editor.SchemaProgress.SchemaProgressMargin"/>
+        /// (created per-view by <c>SchemaProgressListener</c> and stored as a
+        /// singleton property on the text view) and forces it into the Loading
+        /// state. Best-effort — any failure is logged at Debug and swallowed.
+        /// </summary>
+        private static void TryBeginRefreshOnActiveView()
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            try
+            {
+                var textManager = (IVsTextManager)Package.GetGlobalService(typeof(SVsTextManager));
+                if (textManager == null) return;
+                textManager.GetActiveView(1, null, out var vsView);
+                if (vsView == null) return;
+
+                var componentModel = Package.GetGlobalService(typeof(SComponentModel)) as IComponentModel;
+                var adapters = componentModel?.GetService<IVsEditorAdaptersFactoryService>();
+                var wpfView = adapters?.GetWpfTextView(vsView);
+                if (wpfView == null) return;
+
+                if (wpfView.Properties.TryGetProperty<Editor.SchemaProgress.SchemaProgressMargin>(
+                        typeof(Editor.SchemaProgress.SchemaProgressMargin), out var margin) &&
+                    margin != null)
+                {
+                    margin.BeginRefresh();
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "RefreshCacheCommand: failed to trigger BeginRefresh on active view");
+            }
         }
 
         /// <summary>

@@ -8,6 +8,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Shell.Shared.Ui;
+using AkmlSql.Shell.Shared.Ui.Theme;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.TextManager.Interop;
 using Serilog;
@@ -25,34 +26,32 @@ namespace AkmlSql.Shell.Shared.Productivity.DocumentOutline
         private readonly DocumentOutlineViewModel _viewModel;
         private readonly TextBlock _emptyState;
 
-        private static SolidColorBrush Freeze(SolidColorBrush b) { b.Freeze(); return b; }
-
         public DocumentOutlineControl()
         {
             _viewModel = new DocumentOutlineViewModel();
             DataContext = _viewModel;
 
-            var theme = ThemeManager.Instance;
-
             _treeView = new TreeView
             {
                 BorderThickness = new Thickness(0),
-                Background = Brushes.Transparent,
                 ItemsSource = _viewModel.RootNodes,
                 ItemTemplate = CreateNodeTemplate()
             };
+            // Transparent background so the panel's color shows through (theme-token chrome below).
+            _treeView.Background = System.Windows.Media.Brushes.Transparent;
             _treeView.SelectedItemChanged += OnSelectedItemChanged;
 
             // Empty-state message — shown when outline succeeds but finds no SQL structure.
             _emptyState = new TextBlock
             {
                 Text            = "No SQL structure found — add CTEs, stored procedures, or functions to see them listed here",
-                Foreground      = Freeze(new SolidColorBrush(theme.PlaceholderText)),
                 TextWrapping    = TextWrapping.Wrap,
-                Padding         = new Thickness(12, 16, 12, 0),
-                FontSize        = 11,
+                Padding         = new Thickness(Spacing.Md, Spacing.Lg, Spacing.Md, 0),
+                FontFamily      = Typography.UiFont,
+                FontSize        = Typography.Small,
                 Visibility      = Visibility.Collapsed
             };
+            _emptyState.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPlaceholder);
 
             // Subscribe to collection changes to toggle the empty state message.
             _viewModel.RootNodes.CollectionChanged += OnRootNodesChanged;
@@ -62,32 +61,35 @@ namespace AkmlSql.Shell.Shared.Productivity.DocumentOutline
             // Header row with title + Refresh button
             var headerPanel = new DockPanel
             {
-                Background = Freeze(new SolidColorBrush(theme.EditorPanelBackground)),
                 LastChildFill = false
             };
+            headerPanel.SetResourceReference(BackgroundProperty, ThemeTokens.SurfaceElevated);
 
             var headerText = new TextBlock
             {
                 Text       = "Document Outline",
-                FontWeight = FontWeights.SemiBold,
-                Padding    = new Thickness(8, 6, 8, 6),
+                FontFamily = Typography.UiFont,
+                FontWeight = Typography.WeightSemiBold,
+                Padding    = new Thickness(Spacing.Sm, 6, Spacing.Sm, 6),
                 VerticalAlignment = VerticalAlignment.Center
             };
+            headerText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPrimary);
             DockPanel.SetDock(headerText, Dock.Left);
 
             var refreshButton = new Button
             {
                 Content    = "\u21bb Refresh",
                 Padding    = new Thickness(6, 2, 6, 2),
-                Margin     = new Thickness(0, 3, 4, 3),
-                FontSize   = 11,
+                Margin     = new Thickness(0, 3, Spacing.Xs, 3),
+                FontSize   = Typography.Small,
                 Cursor     = Cursors.Hand,
-                Background = Freeze(new SolidColorBrush(theme.Background)),
-                Foreground = Freeze(new SolidColorBrush(theme.Foreground)),
                 BorderThickness = new Thickness(1),
-                BorderBrush     = Freeze(new SolidColorBrush(theme.Border)),
-                ToolTip    = "Rebuild the outline from the current document"
+                ToolTip    = "Rebuild the outline from the current document",
+                FocusVisualStyle = FocusVisualStyles.HighStakes // FR-018 / O9 (high-stakes nav action)
             };
+            refreshButton.SetResourceReference(BackgroundProperty, ThemeTokens.SurfaceCanvas);
+            refreshButton.SetResourceReference(ForegroundProperty, ThemeTokens.TextPrimary);
+            refreshButton.SetResourceReference(BorderBrushProperty, ThemeTokens.BorderDefault);
             refreshButton.Click += (_, _) => _viewModel.RequestOutlineUpdate();
             DockPanel.SetDock(refreshButton, Dock.Right);
 

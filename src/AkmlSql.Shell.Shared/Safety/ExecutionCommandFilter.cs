@@ -28,10 +28,19 @@ namespace AkmlSql.Shell.Shared.Safety
         // We hook via CommandEvents which matches by command name (more portable)
         private const string QueryExecuteCommandName = "Query.Execute";
 
-        // Cached GUID of Query.Execute, resolved by name during Install() so we can
-        // compare it in the hot handler path without a per-command COM lookup
+        // Cached (Guid, Id) of Query.Execute, resolved by name during Install() so we
+        // can compare them in the hot handler path without a per-command COM lookup
         // (Commands.Item(guid, id) throws COMException in SSMS 22 for this command).
+        //
+        // GUID alone is NOT sufficient: SSMS's database-tools command set
+        // {52692960-56BC-4989-B5D3-94C47A513E8D} contains many distinct commands
+        // (Query.Parse, Query.CancelExecuting, Query.IntelliSense*, ConnectionConnect,
+        // etc.) that all share that GUID and only differ by Id. Matching by GUID
+        // alone fires the safety check on typing/IntelliSense/connection events,
+        // not just F5. Verified in field logs: ENTER OnBeforeExecute fires every
+        // few hundred ms while the user types, before any deliberate F5 press.
         private static string? _queryExecuteGuid;
+        private static int _queryExecuteId = -1;
 
         /// <summary>
         /// Installs the DTE command event hooks. Called from
@@ -54,18 +63,23 @@ namespace AkmlSql.Shell.Shared.Safety
                     return;
                 }
 
-                // Cache Query.Execute GUID by name — Commands.Item(string) is reliable
+                // Cache Query.Execute (Guid, Id) by name — Commands.Item(string) is reliable
                 // where Commands.Item(guid, id) can throw COMException in SSMS 22.
                 try
                 {
                     var cmd = _dte.Commands.Item(QueryExecuteCommandName);
-                    if (cmd != null) _queryExecuteGuid = cmd.Guid;
-                    Log.Debug("ExecutionCommandFilter: cached Query.Execute GUID = {Guid}", _queryExecuteGuid);
+                    if (cmd != null)
+                    {
+                        _queryExecuteGuid = cmd.Guid;
+                        _queryExecuteId = cmd.ID;
+                    }
+                    Log.Debug("ExecutionCommandFilter: cached Query.Execute Guid={Guid} Id={Id}",
+                        _queryExecuteGuid, _queryExecuteId);
                 }
                 catch
                 {
-                    // Guid caching failed — handler will fall back to per-command name resolution
-                    Log.Debug("ExecutionCommandFilter: could not cache Query.Execute GUID; will resolve per-command");
+                    // Caching failed — handler will fall back to per-command name resolution
+                    Log.Debug("ExecutionCommandFilter: could not cache Query.Execute (Guid, Id); will resolve per-command");
                 }
 
                 // Hook all commands — filter to Query.Execute in the handler
@@ -89,10 +103,14 @@ namespace AkmlSql.Shell.Shared.Safety
 
                 if (_dte == null) return;
 
-                // Fast path: compare cached GUID (set during Install via Commands.Item(name))
-                if (_queryExecuteGuid != null)
+                // Fast path: compare cached (Guid, Id) — both are required because
+                // SSMS's database-tools command set GUID is shared across many
+                // commands (Parse, IntelliSense, ConnectionConnect, etc.) that
+                // differ only by Id.
+                if (_queryExecuteGuid != null && _queryExecuteId >= 0)
                 {
-                    if (!string.Equals(guid, _queryExecuteGuid, StringComparison.OrdinalIgnoreCase))
+                    if (id != _queryExecuteId ||
+                        !string.Equals(guid, _queryExecuteGuid, StringComparison.OrdinalIgnoreCase))
                         return;
                 }
                 else

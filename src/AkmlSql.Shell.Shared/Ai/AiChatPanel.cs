@@ -9,17 +9,18 @@ using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Shell.Shared.Ipc;
+using AkmlSql.Shell.Shared.Ui.Theme;
 using Serilog;
 using Task = System.Threading.Tasks.Task;
 
 namespace AkmlSql.Shell.Shared.Ai
 {
     /// <summary>
-    /// T052 / T054: WPF UserControl for the AI Chat panel.
+    /// WPF UserControl for the AI Chat panel.
     /// Built entirely in code (no XAML) since this is a shared project (.projitems).
     /// Layout: header with database context, scrollable conversation area, input bar with Send button.
     /// </summary>
-    internal sealed class AiChatPanel : UserControl
+    internal sealed class AiChatPanel : ThemeAwareUserControl
     {
         private readonly StackPanel _conversationPanel;
         private readonly ScrollViewer _scrollViewer;
@@ -39,9 +40,9 @@ namespace AkmlSql.Shell.Shared.Ai
             // ──── Top: Header bar showing AI Chat title and current database ────
             var headerBar = new Border
             {
-                Background = new SolidColorBrush(Color.FromRgb(45, 45, 48)),
-                Padding = new Thickness(8, 6, 8, 6)
+                Padding = new Thickness(Spacing.Sm, 6, Spacing.Sm, 6)
             };
+            headerBar.SetResourceReference(Border.BackgroundProperty, ThemeTokens.SurfaceElevated);
 
             var headerStack = new StackPanel { Orientation = Orientation.Horizontal };
 
@@ -50,19 +51,19 @@ namespace AkmlSql.Shell.Shared.Ai
                 Text = "AI Chat",
                 FontWeight = FontWeights.SemiBold,
                 FontSize = 13,
-                Foreground = Brushes.White,
                 VerticalAlignment = VerticalAlignment.Center
             };
+            titleLabel.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPrimary);
             headerStack.Children.Add(titleLabel);
 
             _headerLabel = new TextBlock
             {
                 Text = string.Empty,
                 FontSize = 11,
-                Foreground = new SolidColorBrush(Color.FromRgb(160, 160, 170)),
                 VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(12, 0, 0, 0)
+                Margin = new Thickness(Spacing.Md, 0, 0, 0)
             };
+            _headerLabel.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
             headerStack.Children.Add(_headerLabel);
 
             headerBar.Child = headerStack;
@@ -72,22 +73,23 @@ namespace AkmlSql.Shell.Shared.Ai
             // ──── Bottom: Input bar with TextBox + Send button ────
             var inputBar = new DockPanel
             {
-                Background = new SolidColorBrush(Color.FromRgb(37, 37, 38)),
                 Margin = new Thickness(0)
             };
+            inputBar.SetResourceReference(DockPanel.BackgroundProperty, ThemeTokens.SurfacePanel);
 
             _sendButton = new Button
             {
                 Content = "Send",
                 MinWidth = 60,
-                Padding = new Thickness(12, 6, 12, 6),
-                Margin = new Thickness(4, 4, 4, 4),
-                Background = new SolidColorBrush(Color.FromRgb(0, 122, 204)),
-                Foreground = Brushes.White,
+                Padding = new Thickness(Spacing.Md, 6, Spacing.Md, 6),
+                Margin = new Thickness(Spacing.Xs, Spacing.Xs, Spacing.Xs, Spacing.Xs),
                 BorderThickness = new Thickness(0),
                 Cursor = Cursors.Hand,
-                FontSize = 12
+                FontSize = 12,
+                FocusVisualStyle = FocusVisualStyles.HighStakes
             };
+            _sendButton.SetResourceReference(Button.BackgroundProperty, ThemeTokens.AccentPrimary);
+            _sendButton.SetResourceReference(Button.ForegroundProperty, ThemeTokens.TextOnAccent);
             _sendButton.Click += OnSendClick;
             DockPanel.SetDock(_sendButton, Dock.Right);
             inputBar.Children.Add(_sendButton);
@@ -98,15 +100,16 @@ namespace AkmlSql.Shell.Shared.Ai
                 AcceptsTab = false,
                 TextWrapping = TextWrapping.Wrap,
                 VerticalContentAlignment = VerticalAlignment.Center,
-                Padding = new Thickness(8, 6, 8, 6),
-                Margin = new Thickness(4, 4, 0, 4),
+                Padding = new Thickness(Spacing.Sm, 6, Spacing.Sm, 6),
+                Margin = new Thickness(Spacing.Xs, Spacing.Xs, 0, Spacing.Xs),
                 FontSize = 12,
-                Background = new SolidColorBrush(Color.FromRgb(51, 51, 55)),
-                Foreground = Brushes.White,
-                CaretBrush = Brushes.White,
                 BorderThickness = new Thickness(1),
-                BorderBrush = new SolidColorBrush(Color.FromRgb(63, 63, 70))
+                FocusVisualStyle = FocusVisualStyles.HighStakes
             };
+            _inputBox.SetResourceReference(TextBox.BackgroundProperty, ThemeTokens.SurfaceInput);
+            _inputBox.SetResourceReference(TextBox.ForegroundProperty, ThemeTokens.TextPrimary);
+            _inputBox.SetResourceReference(System.Windows.Controls.Primitives.TextBoxBase.CaretBrushProperty, ThemeTokens.TextPrimary);
+            _inputBox.SetResourceReference(TextBox.BorderBrushProperty, ThemeTokens.BorderDefault);
             _inputBox.KeyDown += OnInputKeyDown;
             inputBar.Children.Add(_inputBox);
 
@@ -124,11 +127,11 @@ namespace AkmlSql.Shell.Shared.Ai
             {
                 Text = "Thinking...",
                 FontStyle = FontStyles.Italic,
-                Foreground = new SolidColorBrush(Color.FromRgb(130, 130, 140)),
                 FontSize = 12,
-                Margin = new Thickness(12, 8, 12, 8),
+                Margin = new Thickness(Spacing.Md, Spacing.Sm, Spacing.Md, Spacing.Sm),
                 Visibility = Visibility.Collapsed
             };
+            _thinkingIndicator.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
 
             var innerStack = new StackPanel { Orientation = Orientation.Vertical };
             innerStack.Children.Add(_conversationPanel);
@@ -138,9 +141,9 @@ namespace AkmlSql.Shell.Shared.Ai
             {
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                Background = new SolidColorBrush(Color.FromRgb(30, 30, 30)),
                 Content = innerStack
             };
+            _scrollViewer.SetResourceReference(ScrollViewer.BackgroundProperty, ThemeTokens.SurfacePanel);
 
             rootPanel.Children.Add(_scrollViewer);
 
@@ -149,14 +152,13 @@ namespace AkmlSql.Shell.Shared.Ai
             // Add a welcome message
             AddAssistantMessage("Hello! I'm your AI SQL assistant. Ask me about queries, optimization, schema, or database best practices.");
 
-            // T054: Detect current database context
+            // Detect current database context
             DetectDatabaseContext();
         }
 
         /// <summary>
-        /// T054: Detects the current database name from config or connection state
-        /// and displays it in the header. This is a best-effort approach; full database
-        /// change detection can be added as a follow-up.
+        /// Detects the current database name from config or connection state and displays it
+        /// in the header. Best-effort; full database change detection can be added as a follow-up.
         /// </summary>
         private void DetectDatabaseContext()
         {
@@ -293,7 +295,8 @@ namespace AkmlSql.Shell.Shared.Ai
             var bubble = CreateMessageBubble(text, isUser: false);
             _conversationPanel.Children.Add(bubble);
 
-            // Add "Copy" buttons for any code actions
+            // Add code-action buttons (e.g., "Copy this SQL"). Border + foreground both use TextLink
+            // so the affordance reads as clickable in either theme; background is SurfaceElevated.
             if (codeActions != null && codeActions.Count > 0)
             {
                 foreach (var action in codeActions)
@@ -302,16 +305,17 @@ namespace AkmlSql.Shell.Shared.Ai
                     {
                         Content = action.Label,
                         Tag = action.Code,
-                        Margin = new Thickness(12, 2, 12, 2),
-                        Padding = new Thickness(8, 4, 8, 4),
+                        Margin = new Thickness(Spacing.Md, 2, Spacing.Md, 2),
+                        Padding = new Thickness(Spacing.Sm, Spacing.Xs, Spacing.Sm, Spacing.Xs),
                         FontSize = 11,
-                        Background = new SolidColorBrush(Color.FromRgb(60, 60, 65)),
-                        Foreground = new SolidColorBrush(Color.FromRgb(78, 201, 176)),
                         BorderThickness = new Thickness(1),
-                        BorderBrush = new SolidColorBrush(Color.FromRgb(78, 201, 176)),
                         Cursor = Cursors.Hand,
-                        HorizontalAlignment = HorizontalAlignment.Left
+                        HorizontalAlignment = HorizontalAlignment.Left,
+                        FocusVisualStyle = FocusVisualStyles.HighStakes
                     };
+                    actionButton.SetResourceReference(Button.BackgroundProperty, ThemeTokens.SurfaceElevated);
+                    actionButton.SetResourceReference(Button.ForegroundProperty, ThemeTokens.TextLink);
+                    actionButton.SetResourceReference(Button.BorderBrushProperty, ThemeTokens.TextLink);
                     actionButton.Click += OnCodeActionClick;
                     _conversationPanel.Children.Add(actionButton);
                 }
@@ -322,7 +326,8 @@ namespace AkmlSql.Shell.Shared.Ai
 
         /// <summary>
         /// Creates a message bubble (Border containing a TextBlock) for the conversation.
-        /// User messages appear on the right with blue background; assistant messages on the left with dark background.
+        /// User messages right-align with <see cref="ThemeTokens.ChatUserBubble"/> background;
+        /// assistant messages left-align with <see cref="ThemeTokens.ChatAssistantBubble"/>.
         /// </summary>
         private static Border CreateMessageBubble(string text, bool isUser)
         {
@@ -331,28 +336,27 @@ namespace AkmlSql.Shell.Shared.Ai
                 Text = text,
                 TextWrapping = TextWrapping.Wrap,
                 FontSize = 12,
-                Foreground = Brushes.White,
                 Padding = new Thickness(0)
             };
+            textBlock.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPrimary);
 
             var bubble = new Border
             {
                 Child = textBlock,
-                Padding = new Thickness(10, 8, 10, 8),
+                Padding = new Thickness(10, Spacing.Sm, 10, Spacing.Sm),
                 Margin = new Thickness(
-                    isUser ? 60 : 8,  // Left margin
-                    4,
-                    isUser ? 8 : 60,  // Right margin
-                    4),
-                CornerRadius = new CornerRadius(8),
-                Background = isUser
-                    ? new SolidColorBrush(Color.FromRgb(0, 99, 177))
-                    : new SolidColorBrush(Color.FromRgb(51, 51, 55)),
+                    isUser ? 60 : Spacing.Sm,  // Left margin
+                    Spacing.Xs,
+                    isUser ? Spacing.Sm : 60,  // Right margin
+                    Spacing.Xs),
+                CornerRadius = new CornerRadius(Spacing.Sm),
                 HorizontalAlignment = isUser
                     ? HorizontalAlignment.Right
                     : HorizontalAlignment.Left,
                 MaxWidth = 500
             };
+            bubble.SetResourceReference(Border.BackgroundProperty,
+                isUser ? ThemeTokens.ChatUserBubble : ThemeTokens.ChatAssistantBubble);
 
             return bubble;
         }

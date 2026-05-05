@@ -129,6 +129,21 @@ namespace AkmlSql.Ssms22
                 LoggerFactory.Initialize();
                 Log.Information("AKML SQL package initializing for SSMS 22 (x64)");
 
+                // Theme system init (spec 016 T015 — FR-007/FR-008/FR-009/FR-018/FR-019).
+                try
+                {
+                    var themeSettings = AkmlSql.Core.Config.ConfigManager.Load();
+                    AkmlSql.Shell.Shared.Ui.Theme.HostThemeWatcher.Instance.Initialize();
+                    AkmlSql.Shell.Shared.Ui.Theme.ThemeRegistry.Instance.Initialize(
+                        themeSettings.Theme,
+                        AkmlSql.Shell.Shared.Ui.Theme.HostThemeWatcher.Instance.LastDetectedHostVariant,
+                        AkmlSql.Shell.Shared.Ui.Theme.HostThemeWatcher.Instance.IsHighContrast);
+                }
+                catch (Exception themeEx)
+                {
+                    Log.Warning(themeEx, "Failed to initialize theme system; falling back to Light defaults");
+                }
+
                 var extensionDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
                 LoadValidator.Validate(extensionDir);
 
@@ -377,6 +392,7 @@ namespace AkmlSql.Ssms22
                     (CommandIds.CmdOptions, "Options"),
                     (CommandIds.CmdSendFeedback, "Send Feedback"),
                     (CommandIds.CmdViewLogs, "View Logs"),
+                    (CommandIds.CmdRefreshCache, "Refresh Schema Cache"),
                     (CommandIds.CmdFormatDocument, "Format Document"),
                     (CommandIds.CmdFormatSelection, "Format Selection"),
                     (CommandIds.CmdUnformat, "Unformat Document"),

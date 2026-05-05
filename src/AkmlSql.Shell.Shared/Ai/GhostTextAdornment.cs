@@ -9,6 +9,7 @@ using System.Windows.Threading;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Shell.Shared.Ipc;
+using AkmlSql.Shell.Shared.Ui.Theme;
 using Microsoft.VisualStudio.Text;
 using Microsoft.VisualStudio.Text.Editor;
 using Serilog;
@@ -188,14 +189,18 @@ namespace AkmlSql.Shell.Shared.Ai
                 var caretBounds = _view.Caret.Left;
                 var caretTop = caretLine.TextTop;
 
-                // Create the ghost text visual
+                // Create the ghost text visual. Foreground reads the current TextDisabled brush
+                // from the registry once at creation -- ghost text is short-lived (typed and
+                // dismissed) so live theme switches between show and dismiss are not a concern;
+                // each new ghost text picks up the current theme.
+                var ghostBrush = (Brush)ThemeRegistry.Instance.Resources[ThemeTokens.TextDisabled];
                 var textBlock = new TextBlock
                 {
                     Text = prediction,
                     FontFamily = _view.FormattedLineSource?.DefaultTextProperties?.Typeface?.FontFamily
-                                 ?? new FontFamily("Consolas"),
+                                 ?? Typography.MonoFont,
                     FontSize = _view.FormattedLineSource?.DefaultTextProperties?.FontRenderingEmSize ?? 13.0,
-                    Foreground = new SolidColorBrush(Color.FromArgb(128, 150, 150, 160)),
+                    Foreground = ghostBrush,
                     FontStyle = FontStyles.Italic,
                     IsHitTestVisible = false,
                     Background = Brushes.Transparent

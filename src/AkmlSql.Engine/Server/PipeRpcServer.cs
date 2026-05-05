@@ -845,14 +845,17 @@ public class PipeRpcServer
         }
 
         var cache = _schemaCacheManager.GetCache(req.SessionId, session.DatabaseName);
-        if (cache != null && (cache.Phase == PopulationPhase.PhaseA || cache.Phase == PopulationPhase.PhaseB))
+        if (cache != null && cache.Phase == PopulationPhase.PhaseA)
         {
-            // A populate is already running (likely from the 10×500ms retry loop
-            // in ConnectionWiringHelper or a just-completed ConnectionChanged).
-            // Clearing the ConcurrentDictionary now would race GetOrAdd + List.Add
-            // in the background task and either lose newly-written entries or
-            // leave duplicates. Mark it stale and let the next populate pick up;
-            // the user can press Ctrl+Shift+D again once loading settles.
+            // PhaseA means "Phase A complete, Phase B may or may not still be running".
+            // We can't safely Clear() while Phase B is mid-flight (race with GetOrAdd
+            // in the background task). Mark stale and bail; the in-flight populate
+            // will pick up the staleness when it finishes, or the user can retry
+            // once loading settles.
+            //
+            // PhaseB and Complete BOTH mean "fully loaded, no background populate
+            // running" — those are safe to clear and re-run. (Earlier code rejected
+            // PhaseB too, which made Ctrl+Shift+D a no-op once the cache was loaded.)
             cache.IsStale = true;
             Log.Information(
                 "SchemaRefreshRequest: populate already in progress for session={Session} db={Db} (phase={Phase}) — marked stale, skipping concurrent reset",

@@ -90,6 +90,13 @@ public class CompletionEngine
                 var aliases = _aliasResolver.ResolveAliases(script, cursorOffset);
                 foreach (var (alias, tableRef) in aliases)
                     context.AvailableAliases[alias] = tableRef.FullName;
+
+                // AST-based CTE resolution populates both names AND column lists
+                // (used by future column completion inside CTE bodies). The token
+                // fallback below covers the case where parsing failed mid-CTE.
+                var astCtes = new CteResolver().ResolveCtes(script, cursorOffset);
+                foreach (var (name, columns) in astCtes)
+                    context.AvailableCtes[name] = columns;
             }
 
             // Fallback: if AST parsing failed or produced no aliases, extract aliases
@@ -107,6 +114,27 @@ public class CompletionEngine
                 if (fallbackAliases.Count > 0)
                     Log.Debug("Alias fallback: extracted {Count} aliases from tokens", fallbackAliases.Count);
             }
+
+            // CTE fallback — runs whenever the AST missed CTEs (e.g. the user is
+            // typing inside an incomplete second CTE, so the batch doesn't parse).
+            // Extracts CTE names from the token stream so they show up in FROM/JOIN
+            // completion even while the SQL is unfinished.
+            if (context.AvailableCtes.Count == 0)
+            {
+                var fallbackCtes = TokenBasedCteExtractor.Extract(tokens, cursorOffset);
+                foreach (var name in fallbackCtes)
+                    if (!context.AvailableCtes.ContainsKey(name))
+                        context.AvailableCtes[name] = [];
+
+                if (fallbackCtes.Count > 0)
+                    Log.Debug("CTE fallback: extracted {Count} CTEs from tokens: {Names}",
+                        fallbackCtes.Count, string.Join(", ", fallbackCtes));
+            }
+
+            Log.Debug(
+                "Completion context: clause={Clause} inCteBody={InCte} partial='{Partial}' dotPrefix='{Dot}' aliases={Aliases} ctes={Ctes}",
+                context.ClauseType, context.IsInCteBody, context.PartialText, context.DotPrefix,
+                context.AvailableAliases.Count, context.AvailableCtes.Count);
 
             // Push current toggles into the providers that need them. JoinProvider
             // always runs when JoinAssist is enabled — AutoAlias only decides whether

@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using AkmlSql.Shell.Shared.Ui.Theme;
 
 namespace AkmlSql.Shell.Shared.Productivity.Navigation
 {
@@ -11,8 +12,10 @@ namespace AkmlSql.Shell.Shared.Productivity.Navigation
     /// WPF UserControl for inline peek definition display. Shows a read-only SQL definition
     /// below the current line in the editor as an adornment. Press Escape to dismiss.
     /// </summary>
-    internal sealed class PeekDefinitionControl : UserControl
+    internal sealed class PeekDefinitionControl : ThemeAwareUserControl
     {
+        private static readonly FontFamily MonoFont = new FontFamily("Cascadia Code, Consolas, Courier New");
+
         private readonly TextBox _contentBox;
         private readonly TextBlock _headerBlock;
 
@@ -33,92 +36,91 @@ namespace AkmlSql.Shell.Shared.Productivity.Navigation
             var grid = new System.Windows.Controls.Grid
             {
                 MaxHeight = 300,
-                MaxWidth = 800,
-                MinWidth = 400
+                MaxWidth  = 800,
+                MinWidth  = 400
             };
 
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
-            // Header bar with object info and close button
-            var headerPanel = new DockPanel
-            {
-                Background = new SolidColorBrush(Color.FromRgb(0x00, 0x7A, 0xCC)),
-                LastChildFill = true
-            };
+            // Header bar with object info and close button — accent-coloured strip.
+            var headerPanel = new DockPanel { LastChildFill = true };
+            headerPanel.SetResourceReference(DockPanel.BackgroundProperty, ThemeTokens.AccentPrimary);
 
             var closeButton = new Button
             {
-                Content = "X",
-                Width = 24,
-                Height = 24,
-                FontSize = 10,
-                FontWeight = FontWeights.Bold,
-                Foreground = Brushes.White,
-                Background = Brushes.Transparent,
-                BorderBrush = Brushes.Transparent,
-                Cursor = Cursors.Hand,
-                VerticalAlignment = VerticalAlignment.Center,
+                Content             = "X",
+                Width               = 24,
+                Height              = 24,
+                FontSize            = 10,
+                FontWeight          = FontWeights.Bold,
+                Background          = Brushes.Transparent,   // theme-independent: button on the accent strip
+                BorderBrush         = Brushes.Transparent,
+                Cursor              = Cursors.Hand,
+                VerticalAlignment   = VerticalAlignment.Center,
                 HorizontalAlignment = HorizontalAlignment.Right,
-                Margin = new Thickness(4, 0, 4, 0),
-                ToolTip = "Close (Escape)"
+                Margin              = new Thickness(Spacing.Xs, 0, Spacing.Xs, 0),
+                ToolTip             = "Close (Escape)",
+                FocusVisualStyle    = FocusVisualStyles.HighStakes
             };
+            closeButton.SetResourceReference(Button.ForegroundProperty, ThemeTokens.TextOnAccent);
             closeButton.Click += (_, __) => Dismissed?.Invoke(this, EventArgs.Empty);
             DockPanel.SetDock(closeButton, Dock.Right);
             headerPanel.Children.Add(closeButton);
 
             _headerBlock = new TextBlock
             {
-                Text = $"  {objectType}: {objectName}",
-                Foreground = Brushes.White,
-                FontWeight = FontWeights.SemiBold,
-                FontSize = 12,
+                Text              = $"  {objectType}: {objectName}",
+                FontWeight        = FontWeights.SemiBold,
+                FontSize          = Typography.Body,
                 VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(4, 2, 4, 2)
+                Margin            = new Thickness(Spacing.Xs, 2, Spacing.Xs, 2)
             };
+            _headerBlock.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextOnAccent);
             headerPanel.Children.Add(_headerBlock);
 
             System.Windows.Controls.Grid.SetRow(headerPanel, 0);
             grid.Children.Add(headerPanel);
 
-            // Content area with read-only SQL text
+            // Content area with read-only SQL text — editor popup chrome.
             _contentBox = new TextBox
             {
-                Text = definition,
-                IsReadOnly = true,
-                FontFamily = new FontFamily("Cascadia Code, Consolas, Courier New"),
-                FontSize = 12,
-                Background = new SolidColorBrush(Color.FromRgb(0x1E, 0x1E, 0x1E)),
-                Foreground = new SolidColorBrush(Color.FromRgb(0xD4, 0xD4, 0xD4)),
-                BorderBrush = new SolidColorBrush(Color.FromRgb(0x00, 0x7A, 0xCC)),
-                BorderThickness = new Thickness(1),
-                AcceptsReturn = true,
-                TextWrapping = TextWrapping.NoWrap,
+                Text                          = definition,
+                IsReadOnly                    = true,
+                FontFamily                    = MonoFont,
+                FontSize                      = Typography.Body,
+                BorderThickness               = new Thickness(1),
+                AcceptsReturn                 = true,
+                TextWrapping                  = TextWrapping.NoWrap,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                Padding = new Thickness(8, 4, 8, 4)
+                VerticalScrollBarVisibility   = ScrollBarVisibility.Auto,
+                Padding                       = new Thickness(Spacing.Sm, Spacing.Xs, Spacing.Sm, Spacing.Xs),
+                FocusVisualStyle              = FocusVisualStyles.HighStakes
             };
+            _contentBox.SetResourceReference(TextBox.BackgroundProperty,  ThemeTokens.EditorPopupBackground);
+            _contentBox.SetResourceReference(TextBox.ForegroundProperty,  ThemeTokens.TextPrimary);
+            _contentBox.SetResourceReference(TextBox.BorderBrushProperty, ThemeTokens.AccentPrimary);
 
             _contentBox.MouseDoubleClick += (_, __) => OpenFullRequested?.Invoke(this, EventArgs.Empty);
 
             System.Windows.Controls.Grid.SetRow(_contentBox, 1);
             grid.Children.Add(_contentBox);
 
-            // Wrap in a border for consistent appearance
+            // Wrap in a border for consistent appearance — accent edge to match the header.
             var border = new Border
             {
-                BorderBrush = new SolidColorBrush(Color.FromRgb(0x00, 0x7A, 0xCC)),
                 BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(2),
-                Child = grid,
+                CornerRadius    = new CornerRadius(2),
+                Child           = grid,
                 Effect = new System.Windows.Media.Effects.DropShadowEffect
                 {
-                    Color = Colors.Black,
-                    BlurRadius = 8,
-                    Opacity = 0.3,
+                    Color       = Colors.Black,
+                    BlurRadius  = 8,
+                    Opacity     = 0.3,
                     ShadowDepth = 2
                 }
             };
+            border.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.AccentPrimary);
 
             Content = border;
 
@@ -144,7 +146,7 @@ namespace AkmlSql.Shell.Shared.Productivity.Navigation
         /// </summary>
         public void UpdateContent(string definition, string objectName, string objectType)
         {
-            _contentBox.Text = definition;
+            _contentBox.Text  = definition;
             _headerBlock.Text = $"  {objectType}: {objectName}";
         }
     }

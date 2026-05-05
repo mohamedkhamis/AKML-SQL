@@ -9,6 +9,7 @@ using System.Windows.Media;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Core.Models.Safety;
 using AkmlSql.Shell.Shared.Ui;
+using AkmlSql.Shell.Shared.Ui.Theme;
 using HorizontalAlignment = System.Windows.HorizontalAlignment;
 using Orientation = System.Windows.Controls.Orientation;
 
@@ -40,6 +41,7 @@ namespace AkmlSql.Shell.Shared.Safety
         private SolidColorBrush _cardBgBrush = null!;
         private SolidColorBrush _chromeFgBrush = null!;
         private SolidColorBrush _accentBrush = null!;
+        private SolidColorBrush _onAccentBrush = null!; // "text on accent" (FR-018-adjacent semantic)
 
         private SafetyWarningDialog() { }
 
@@ -84,12 +86,14 @@ namespace AkmlSql.Shell.Shared.Safety
 
         private void Build(SafetyWarningDto[] warnings, string? serverName, string? envLabel, string? envColorHex)
         {
-            var theme = ThemeManager.Instance;
-            var chromeBg = Freeze(new SolidColorBrush(theme.Background));
-            _chromeFgBrush = Freeze(new SolidColorBrush(theme.Foreground));
-            _mutedBrush    = Freeze(new SolidColorBrush(theme.PlaceholderText));
-            _dividerBrush  = Freeze(new SolidColorBrush(theme.Border));
-            _cardBgBrush   = Freeze(new SolidColorBrush(theme.EditorPanelBackground));
+            // Pull theme brushes from the central registry. They're already frozen.
+            var registry = ThemeRegistry.Instance.Resources;
+            _chromeFgBrush = (SolidColorBrush)registry[ThemeTokens.TextPrimary];
+            _mutedBrush    = (SolidColorBrush)registry[ThemeTokens.TextPlaceholder];
+            _dividerBrush  = (SolidColorBrush)registry[ThemeTokens.BorderDefault];
+            _cardBgBrush   = (SolidColorBrush)registry[ThemeTokens.SurfaceElevated];
+            // "Text on accent" — white in both themes; reads correctly on amber/red severity banners and the destructive button.
+            _onAccentBrush = (SolidColorBrush)registry[ThemeTokens.TextOnAccent];
 
             Title = "Execution Warning";
             Width = 520;
@@ -97,8 +101,10 @@ namespace AkmlSql.Shell.Shared.Safety
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
             ResizeMode = ResizeMode.NoResize;
             ShowInTaskbar = false;
-            Background = chromeBg;
-            Foreground = _chromeFgBrush;
+            // Background/Foreground use SetResourceReference so the dialog tracks theme switches.
+            ThemeRegistry.Instance.AttachTo(this);
+            this.SetResourceReference(BackgroundProperty, ThemeTokens.SurfaceCanvas);
+            this.SetResourceReference(ForegroundProperty, ThemeTokens.TextPrimary);
             FontFamily = SegoeUiFont;
             FontSize = 13;
 
@@ -148,7 +154,7 @@ namespace AkmlSql.Shell.Shared.Safety
                     Child = new TextBlock
                     {
                         Text = envLabel + (serverName != null ? $"  \u2022  {serverName}" : string.Empty),
-                        Foreground = Brushes.White,
+                        Foreground = _onAccentBrush,
                         FontWeight = FontWeights.SemiBold,
                         FontSize = 13
                     }
@@ -259,7 +265,7 @@ namespace AkmlSql.Shell.Shared.Safety
                 Child = new TextBlock
                 {
                     Text = GetRuleLabel((SafetyWarningType)w.WarningType),
-                    Foreground = Brushes.White,
+                    Foreground = _onAccentBrush,
                     FontSize = 11,
                     FontWeight = FontWeights.SemiBold
                 }
@@ -369,7 +375,7 @@ namespace AkmlSql.Shell.Shared.Safety
                 MinWidth = 110,
                 Height = 32,
                 FontSize = 13,
-                Foreground = Brushes.White,
+                Foreground = _onAccentBrush,
                 Background = Freeze(new SolidColorBrush(isDrop ? ErrorBorder : BtnPrimary)),
                 BorderThickness = new Thickness(0),
                 Padding = new Thickness(16, 0, 16, 0),

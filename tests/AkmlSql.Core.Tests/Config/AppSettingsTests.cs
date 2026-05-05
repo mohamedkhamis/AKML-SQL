@@ -429,5 +429,24 @@ namespace AkmlSql.Core.Tests.Config
             Assert.NotNull(s.CompletionPolish);
             Assert.IsType<CompletionPolishSettings>(s.CompletionPolish);
         }
+
+        // ── SafetySettings.EnvironmentSeverity defaults ────────────────────────
+
+        [Fact]
+        public void SafetySettings_EnvironmentSeverity_DevDefault_IsNotDisabled()
+        {
+            // DEV used to default to "Disabled" which silently swallowed every
+            // safety warning on local boxes. This test pins the new default —
+            // change it deliberately and update the test together.
+            var s = new SafetySettings();
+
+            Assert.True(s.EnvironmentSeverity.TryGetValue("DEV", out var dev));
+            Assert.False(string.Equals(dev, "Disabled", StringComparison.OrdinalIgnoreCase),
+                "DEV must not default to 'Disabled' — it would suppress DELETE-without-WHERE warnings on local dev boxes.");
+            Assert.True(s.EnvironmentSeverity.TryGetValue("PRODUCTION", out var prod));
+            Assert.Equal("TypeServerName", prod);
+            Assert.True(s.EnvironmentSeverity.TryGetValue("STAGING", out var staging));
+            Assert.Equal("SimpleConfirm", staging);
+        }
     }
 }

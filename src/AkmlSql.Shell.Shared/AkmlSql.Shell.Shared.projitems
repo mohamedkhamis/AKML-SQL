@@ -17,7 +17,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\CompletionItemModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\CompletionPopupAdornment.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\CompletionPopupProvider.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\SchemaStatusIndicator.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\CompletionRpcHelper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\ConnectionWiringHelper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\SqlPromptIcons.cs" />
@@ -31,7 +30,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Commands\SendFeedbackCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\ViewLogsCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\AboutDialog.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Dialogs\SettingsDialog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\SettingsWindow.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\LogViewerDialog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)StatusBar\StatusBarManager.cs" />
@@ -49,6 +47,16 @@
     <Compile Include="$(MSBuildThisFileDirectory)Editor\QuickInfoSource.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\RefreshCacheCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\ThemeManager.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\ThemeVariant.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\ThemeTokens.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\Typography.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\Spacing.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\ThemePalette.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\ThemeRegistry.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\HostThemeWatcher.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\FocusVisualStyles.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\ThemeAwareWindow.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\ThemeAwareUserControl.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\DpiHelper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\CompletionItemViewModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\CompletionPopup.xaml.cs" />

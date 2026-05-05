@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using AkmlSql.Shell.Shared.Ui.Theme;
 using Microsoft.VisualStudio.PlatformUI;
 
 namespace AkmlSql.Shell.Shared.Ui
@@ -86,10 +87,10 @@ namespace AkmlSql.Shell.Shared.Ui
             var searchPlaceholder = new TextBlock
             {
                 Text = "Search options...",
-                Foreground = new SolidColorBrush(Color.FromRgb(128, 128, 128)),
                 Margin = new Thickness(6, 3, 0, 0),
                 IsHitTestVisible = false,
             };
+            searchPlaceholder.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPlaceholder);
 
             // Update placeholder visibility manually (avoids System.Xaml dependency for Binding)
             _searchBox.TextChanged += (s, _) =>
@@ -396,9 +397,9 @@ namespace AkmlSql.Shell.Shared.Ui
                             {
                                 Text = string.Format(" ({0}-{1})", opt.Min, opt.Max),
                                 VerticalAlignment = VerticalAlignment.Center,
-                                Foreground = new SolidColorBrush(Color.FromRgb(128, 128, 128)),
                                 FontSize = 11,
                             };
+                            rangeLabel.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
 
                             numericPanel.Children.Add(textBox);
                             numericPanel.Children.Add(rangeLabel);

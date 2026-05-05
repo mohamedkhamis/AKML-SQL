@@ -24,11 +24,6 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         [Order(After = PredefinedAdornmentLayers.Text, Before = PredefinedAdornmentLayers.Caret)]
         public AdornmentLayerDefinition CompletionLayerDefinition;
 
-        [Export(typeof(AdornmentLayerDefinition))]
-        [Name("AkmlSqlSchemaStatus")]
-        [Order(After = PredefinedAdornmentLayers.Text)]
-        public AdornmentLayerDefinition SchemaStatusLayerDefinition;
-
         /// <summary>
         /// Single WH_KEYBOARD hook for the UI thread. Shared across all text views because
         /// WH_KEYBOARD is a thread-level hook — one hook per thread is sufficient to intercept
@@ -68,7 +63,6 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         {
             // Get adornment layers
             var completionLayer = textView.GetAdornmentLayer("AkmlSqlCompletion");
-            var statusLayer = textView.GetAdornmentLayer("AkmlSqlSchemaStatus");
             if (completionLayer == null) return;
 
             // Get session ID (created by TextViewCreationListener)
@@ -141,17 +135,10 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 Log.Debug(ex, "CompletionPopupProvider: failed to add command filter");
             }
 
-            // Create schema status indicator
-            if (statusLayer != null)
-            {
-                var indicator = new SchemaStatusIndicator(textView);
-                statusLayer.AddAdornment(
-                    Microsoft.VisualStudio.Text.Editor.AdornmentPositioningBehavior.ViewportRelative,
-                    null, null, indicator, null);
-
-                // Store for ConnectionWiringHelper to update
-                textView.Properties.GetOrCreateSingletonProperty("AkmlSchemaIndicator", () => indicator);
-            }
+            // Schema progress is rendered by SchemaProgressMargin (bottom-right toast).
+            // The legacy SchemaStatusIndicator is no longer instantiated here — its
+            // ShowLoading / ShowReady methods were never invoked anywhere, so it was
+            // an invisible Border floating in the visual tree.
         }
 
         /// <summary>
@@ -202,6 +189,28 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                                 {
                                     Log.Debug(ex2, "Format direct fallback failed");
                                 }
+                            }
+                        }));
+                    },
+                    onRefresh: () =>
+                    {
+                        // Ctrl+Shift+D → Refresh Schema Cache (SQL Prompt parity).
+                        // Must use BeginInvoke — Invoke deadlocks inside the hook callback.
+                        System.Windows.Application.Current?.Dispatcher?.BeginInvoke(new Action(() =>
+                        {
+                            try
+                            {
+                                var dte = Microsoft.VisualStudio.Shell.Package.GetGlobalService(
+                                    typeof(EnvDTE.DTE)) as EnvDTE.DTE;
+                                if (dte != null)
+                                {
+                                    dte.ExecuteCommand("Edit.RefreshSchemaCache");
+                                    Log.Information("Refresh via DTE command (Ctrl+Shift+D)");
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                Log.Debug(ex, "Refresh via DTE command failed");
                             }
                         }));
                     });

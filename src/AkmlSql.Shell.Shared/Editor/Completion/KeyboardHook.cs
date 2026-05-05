@@ -51,6 +51,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         private const int WM_KEYDOWN = 0x0100;
         private const int VK_SPACE = 0x20;
         private const int VK_CONTROL = 0x11;
+        private const int VK_SHIFT = 0x10;
         private const int VK_D = 0x44;
         private const int VK_K = 0x4B;
         private const int VK_Y = 0x59;
@@ -59,6 +60,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         private HookProc _hookProc;  // prevent GC collection of the delegate
         private Action _onCtrlSpace;
         private Action _onFormat;
+        private Action _onRefresh;
         private int _disposed;
         private bool _waitingForY;
         private IntPtr _llHookHandle = IntPtr.Zero;
@@ -69,7 +71,9 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         /// Must be called from the UI thread.
         /// </summary>
         /// <param name="onCtrlSpace">Callback invoked when Ctrl+Space is pressed. Called on the UI thread.</param>
-        public void Install(Action onCtrlSpace, Action onFormat = null)
+        /// <param name="onFormat">Callback invoked when Ctrl+K,Y or Ctrl+D is pressed. Called on the UI thread.</param>
+        /// <param name="onRefresh">Callback invoked when Ctrl+Shift+D is pressed. Called on the UI thread.</param>
+        public void Install(Action onCtrlSpace, Action onFormat = null, Action onRefresh = null)
         {
             if (onCtrlSpace == null)
                 throw new ArgumentNullException(nameof(onCtrlSpace));
@@ -79,6 +83,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
 
             _onCtrlSpace = onCtrlSpace;
             _onFormat = onFormat;
+            _onRefresh = onRefresh;
 
             // Must hold a reference to prevent the delegate from being garbage-collected
             // while user32.dll still holds a native pointer to it.
@@ -192,14 +197,17 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 {
                     // KBDLLHOOKSTRUCT: first DWORD is vkCode
                     int vkCode = Marshal.ReadInt32(lParam);
-                    short ctrlState = GetKeyState(VK_CONTROL);
-                    bool ctrlHeld = (ctrlState & 0x8000) != 0;
+                    short ctrlState  = GetKeyState(VK_CONTROL);
+                    short shiftState = GetKeyState(VK_SHIFT);
+                    bool ctrlHeld  = (ctrlState  & 0x8000) != 0;
+                    bool shiftHeld = (shiftState & 0x8000) != 0;
 
                     if (ctrlHeld)
-                        Log.Debug("KeyboardHook LL: Ctrl+VK=0x{VK:X2} ({Key})", vkCode, (char)vkCode);
+                        Log.Debug("KeyboardHook LL: Ctrl{Shift}+VK=0x{VK:X2} ({Key})",
+                            shiftHeld ? "+Shift" : "", vkCode, (char)vkCode);
 
                     // Ctrl+K → start chord, swallow so SSMS doesn't start its own chord
-                    if (ctrlHeld && vkCode == VK_K)
+                    if (ctrlHeld && !shiftHeld && vkCode == VK_K)
                     {
                         Log.Debug("KeyboardHook LL: Ctrl+K detected, waiting for Y");
                         _waitingForY = true;
@@ -215,8 +223,18 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                         return (IntPtr)1; // Swallow
                     }
 
-                    // Ctrl+D → format document (alternative shortcut)
-                    if (ctrlHeld && vkCode == VK_D)
+                    // Ctrl+Shift+D → refresh schema cache. Must come BEFORE the Ctrl+D
+                    // branch (which doesn't check Shift state) — otherwise Ctrl+Shift+D
+                    // is silently routed to Format Document.
+                    if (ctrlHeld && shiftHeld && vkCode == VK_D)
+                    {
+                        Log.Debug("KeyboardHook LL: Ctrl+Shift+D detected, invoking refresh");
+                        try { _onRefresh?.Invoke(); } catch { }
+                        return (IntPtr)1; // Swallow
+                    }
+
+                    // Ctrl+D (no Shift) → format document (alternative shortcut)
+                    if (ctrlHeld && !shiftHeld && vkCode == VK_D)
                     {
                         Log.Debug("KeyboardHook LL: Ctrl+D detected, invoking format");
                         try { _onFormat?.Invoke(); } catch { }

@@ -37,9 +37,19 @@ public class CteResolver
             var visitor = new CteVisitor();
             batch.Accept(visitor);
 
-            // T072: Resolve CTEs in order (later CTEs can reference earlier ones)
+            // T072: Resolve CTEs in order (later CTEs can reference earlier ones).
+            // Exclude the CTE whose own QueryExpression contains the cursor — a
+            // non-recursive CTE can't reference itself, so suggesting its name as
+            // a FROM target inside its own body would be misleading.
             foreach (var cte in visitor.Ctes)
             {
+                var qe = cte.QueryExpression;
+                if (qe != null &&
+                    cursorOffset > qe.StartOffset &&
+                    cursorOffset <= qe.StartOffset + qe.FragmentLength)
+                {
+                    continue;
+                }
                 var columns = ResolveCteColumns(cte, result);
                 result[cte.ExpressionName.Value] = columns;
             }
