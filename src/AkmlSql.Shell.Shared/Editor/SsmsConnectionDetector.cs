@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Concurrent;
+using EnvDTE;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Text;
 using Microsoft.VisualStudio.Text.Editor;
@@ -14,6 +16,29 @@ namespace AkmlSql.Shell.Shared.Editor
     /// </summary>
     internal static class SsmsConnectionDetector
     {
+        // Dedupe "cannot silently reuse this auth" warnings so that the 10×500ms
+        // retry loop in ConnectionWiringHelper doesn't emit the same Warning ten
+        // times on a single session bind. Keyed by server|database|authMode; the
+        // content of the warning is identical across retries, so seeing it once
+        // is enough for the user.
+        private static readonly ConcurrentDictionary<string, byte> _warnedUnusableAuth
+            = new ConcurrentDictionary<string, byte>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Authentication mode derived from the SSMS document's <c>AuthenticationType</c>
+        /// DTE property. Drives how the engine's connection string is built.
+        /// </summary>
+        internal enum AuthMode
+        {
+            /// <summary>Auth type could not be read — fall back to Windows integrated.</summary>
+            Unknown,
+            /// <summary>Classic Windows integrated auth (Kerberos/NTLM).</summary>
+            Windows,
+            /// <summary>Azure AD integrated — engine inherits the user's AAD token.</summary>
+            AzureAdIntegrated,
+            /// <summary>Interactive/MFA/Password/SQL — engine cannot silently reuse these credentials.</summary>
+            Unsupported
+        }
         /// <summary>
         /// Attempts to detect the SQL Server connection for the CURRENTLY ACTIVE
         /// document (whatever SSMS has focused). Kept for call sites that only
@@ -28,20 +53,37 @@ namespace AkmlSql.Shell.Shared.Editor
                 ThreadHelper.ThrowIfNotOnUIThread();
 
                 var dte = serviceProvider.GetService(typeof(EnvDTE.DTE)) as EnvDTE.DTE;
-                if (dte?.ActiveDocument?.ActiveWindow == null)
+                if (dte == null)
+                {
+                    Log.Debug("TryDetectConnection(provider): DTE service unavailable → null");
                     return null;
+                }
+                if (dte.ActiveDocument == null)
+                {
+                    Log.Debug("TryDetectConnection(provider): no active document → null");
+                    return null;
+                }
+                if (dte.ActiveDocument.ActiveWindow == null)
+                {
+                    Log.Debug("TryDetectConnection(provider): active document '{Name}' has no active window → null", dte.ActiveDocument.Name);
+                    return null;
+                }
 
                 var caption = dte.ActiveDocument.ActiveWindow.Caption;
-                Log.Debug("SsmsConnectionDetector: window caption = '{Caption}'", caption);
+                Log.Debug("TryDetectConnection(provider): window caption = '{Caption}'", caption);
 
                 if (string.IsNullOrEmpty(caption))
+                {
+                    Log.Debug("TryDetectConnection(provider): empty caption → null");
                     return null;
+                }
 
-                return ParseCaption(caption);
+                var (authMode, rawAuth) = ReadAuthModeFromDocument(dte.ActiveDocument);
+                return ParseCaption(caption, authMode, rawAuth);
             }
             catch (Exception ex)
             {
-                Log.Debug(ex, "SsmsConnectionDetector: failed to detect connection");
+                Log.Debug(ex, "TryDetectConnection(provider): unexpected exception");
                 return null;
             }
         }
@@ -143,7 +185,11 @@ namespace AkmlSql.Shell.Shared.Editor
                     if (win != null && !string.IsNullOrEmpty(win.Caption))
                     {
                         Log.Debug("SsmsConnectionDetector: matched text view to document '{Caption}'", win.Caption);
-                        return ParseCaption(win.Caption);
+
+                        EnvDTE.Document matchedDoc = null;
+                        try { matchedDoc = docs.Item(i); } catch { /* ignore */ }
+                        var (authMode, rawAuth) = ReadAuthModeFromDocument(matchedDoc);
+                        return ParseCaption(win.Caption, authMode, rawAuth);
                     }
                 }
 
@@ -161,9 +207,21 @@ namespace AkmlSql.Shell.Shared.Editor
 
         /// <summary>
         /// Parses an SSMS window caption like "ServerName.DatabaseName - QueryFile.sql"
-        /// to extract server and database names.
+        /// to extract server and database names. Overload kept for tests and legacy callers
+        /// that don't have auth info; defaults to Windows auth (legacy behavior).
         /// </summary>
         internal static ConnectionResult ParseCaption(string caption)
+            => ParseCaption(caption, AuthMode.Unknown, null);
+
+        /// <summary>
+        /// Parses the caption AND builds the engine connection string using the supplied
+        /// <paramref name="authMode"/>. When the auth mode can't be silently reused by
+        /// the out-of-process engine (SQL auth, AAD Interactive/Password), the returned
+        /// <see cref="ConnectionResult"/> has <see cref="ConnectionResult.IsEngineUsable"/>
+        /// set to <c>false</c> and <see cref="ConnectionResult.ConnectionString"/> is <c>null</c>.
+        /// Caller must check and skip engine-side schema loading in that case.
+        /// </summary>
+        internal static ConnectionResult ParseCaption(string caption, AuthMode authMode, string rawAuthType)
         {
             // SSMS 22 caption format: "filename.sql - ServerName.DatabaseName (Username (SPID))"
             // SSMS 20 caption format: "ServerName.DatabaseName - filename.sql"
@@ -176,10 +234,28 @@ namespace AkmlSql.Shell.Shared.Editor
             // Try SSMS 22 format first: connection info is AFTER the dash
             var afterDash = caption.Substring(dashIndex + 3).Trim();
 
-            // Strip trailing "(Username (SPID))" pattern
+            // Before stripping, also try to extract the username from the
+            // "(Username (SPID))" trailing pattern. The username is what lets
+            // us distinguish Windows auth (DOMAIN\user), AAD (user@tenant),
+            // and SQL auth (bare name like 'sa') when DTE's AuthenticationType
+            // property is unavailable — which is the common case in SSMS today.
+            string captionUserName = null;
             var parenIdx = afterDash.IndexOf(" (", StringComparison.Ordinal);
             if (parenIdx > 0)
+            {
+                var trailing = afterDash.Substring(parenIdx + 1).Trim(); // "(sa (69))"
                 afterDash = afterDash.Substring(0, parenIdx).Trim();
+
+                if (trailing.Length >= 2 && trailing[0] == '(' && trailing[trailing.Length - 1] == ')')
+                {
+                    var inner = trailing.Substring(1, trailing.Length - 2).Trim(); // "sa (69)"
+                    // Username is everything before the FINAL " (SPID)" segment.
+                    var spidIdx = inner.LastIndexOf(" (", StringComparison.Ordinal);
+                    var user = spidIdx > 0 ? inner.Substring(0, spidIdx).Trim() : inner.Trim();
+                    if (!string.IsNullOrWhiteSpace(user))
+                        captionUserName = user;
+                }
+            }
 
             string server;
             string database;
@@ -211,29 +287,293 @@ namespace AkmlSql.Shell.Shared.Editor
             if (string.IsNullOrEmpty(server))
                 return null;
 
-            // Build a trusted connection string (Windows auth)
-            // SSMS uses the current user's credentials by default
-            // Build connection string manually to avoid SqlConnectionEncryptOption type issues
-            var connStr = $"Data Source={server};Initial Catalog={database};" +
-                          "Integrated Security=true;TrustServerCertificate=true;Encrypt=false;" +
-                          "Connect Timeout=5;Application Name=AKML SQL Engine";
+            // Heuristic: if DTE couldn't tell us the auth type but the caption
+            // shows a bare username (no DOMAIN\ prefix, no user@tenant UPN),
+            // it's almost certainly a SQL Server login. The engine can't
+            // silently reuse SQL auth (no password available across the process
+            // boundary — see R-017 in spec 014 for why ObjectExplorer reflection
+            // is not an option), so classify as Unsupported. This stops us from
+            // building an Integrated Security connection string that would fail
+            // with a noisy 4060 on every session bind.
+            if (authMode == AuthMode.Unknown && !string.IsNullOrEmpty(captionUserName))
+            {
+                bool hasDomainPrefix = captionUserName.IndexOf('\\') >= 0;
+                bool looksLikeUpn = captionUserName.IndexOf('@') >= 0;
 
-            Log.Information("SsmsConnectionDetector: parsed caption='{Caption}' → server='{Server}' database='{Database}'",
-                caption, server, database);
+                if (!hasDomainPrefix && !looksLikeUpn)
+                {
+                    Log.Debug(
+                        "ParseCaption: caption-user='{User}' has no domain/UPN markers → inferring SQL auth (Unsupported) for '{Caption}'",
+                        captionUserName, caption);
+                    authMode = AuthMode.Unsupported;
+                    if (string.IsNullOrEmpty(rawAuthType))
+                        rawAuthType = $"inferred-SqlAuth(user='{captionUserName}')";
+                }
+            }
+
+            var connStr = BuildEngineConnectionString(server, database, authMode);
+            var usable = connStr != null;
+
+            if (usable)
+            {
+                // Debug level: ParseCaption runs on every F5 (ExecutionCommandFilter
+                // calls us from its DTE Query.Execute hook). The "real" session-bind
+                // log is ConnectionWiringHelper.SendConnectionChangedAsync's
+                // "Sent ConnectionChanged: …" Info line, which fires once per
+                // session-to-server binding, not once per keypress.
+                Log.Debug(
+                    "SsmsConnectionDetector: parsed '{Caption}' → server='{Server}' database='{Database}' auth={AuthMode} (raw='{RawAuth}')",
+                    caption, server, database, authMode, rawAuthType ?? "(null)");
+            }
+            else
+            {
+                // One Warning per (server, database, authMode) — retries and repeated
+                // detect calls stay quiet after the first occurrence.
+                var dedupeKey = $"{server}|{database}|{authMode}";
+                if (_warnedUnusableAuth.TryAdd(dedupeKey, 0))
+                {
+                    // IMPORTANT: each unique placeholder name binds to ONE argument in
+                    // Serilog — repeated names overwrite each other in the property bag.
+                    // Keep placeholder names unique and match the argument count exactly.
+                    Log.Warning(
+                        "AKML SQL IntelliSense disabled for {Server}.{Database}: " +
+                        "this window is using {AuthMode} (raw='{RawAuth}'), which the out-of-process " +
+                        "engine cannot silently reuse. To enable IntelliSense, either (a) reconnect " +
+                        "this window using Windows authentication, or (b) grant your Windows user " +
+                        "access to {TargetDatabase} in SQL Server. Caption='{Caption}'.",
+                        server, database, authMode, rawAuthType ?? "(null)", database, caption);
+                }
+                else
+                {
+                    Log.Debug(
+                        "SsmsConnectionDetector: repeat unusable-auth detection for {Server}.{Database} ({AuthMode}) — warning already emitted",
+                        server, database, authMode);
+                }
+            }
 
             return new ConnectionResult
             {
                 Server = server,
                 Database = database,
-                ConnectionString = connStr
+                ConnectionString = connStr,
+                AuthMode = authMode,
+                IsEngineUsable = usable
             };
+        }
+
+        /// <summary>
+        /// Builds the connection string the engine process will use. Returns <c>null</c>
+        /// when the auth mode cannot be silently reused across the process boundary
+        /// (e.g. SQL auth where we'd need the password, or AAD Interactive which would
+        /// pop a second browser prompt in the engine).
+        /// </summary>
+        private static string BuildEngineConnectionString(string server, string database, AuthMode authMode)
+        {
+            // Common suffix — keep the short connect-timeout so schema probes don't hang
+            // the IntelliSense path when the server is unreachable.
+            const string commonSuffix = "TrustServerCertificate=true;Encrypt=false;" +
+                                        "Connect Timeout=5;Application Name=AKML SQL Engine";
+
+            switch (authMode)
+            {
+                case AuthMode.AzureAdIntegrated:
+                    // "Authentication=Active Directory Integrated" uses the signed-in
+                    // Windows/AAD identity without prompting — the engine process inherits
+                    // the same user token and negotiates AAD auth directly.
+                    return $"Data Source={server};Initial Catalog={database};" +
+                           "Authentication=Active Directory Integrated;" + commonSuffix;
+
+                case AuthMode.Windows:
+                case AuthMode.Unknown:
+                    // Unknown defaults to Integrated Security (legacy behavior) — for
+                    // non-AAD Windows domains this is correct. If this fires against an
+                    // AAD-only server, Phase A will log a single login-failed warning and
+                    // stop (see SchemaMetadataService).
+                    return $"Data Source={server};Initial Catalog={database};" +
+                           "Integrated Security=true;" + commonSuffix;
+
+                case AuthMode.Unsupported:
+                default:
+                    return null;
+            }
+        }
+
+        /// <summary>
+        /// Reads the <c>AuthenticationType</c> (and related) properties that SSMS
+        /// exposes on a DTE Document, and classifies them into one of the
+        /// <see cref="AuthMode"/> values.
+        ///
+        /// SSMS's DTE property bag is not formally documented and values differ
+        /// across SSMS 20/21/22 (sometimes a string like "Windows Authentication",
+        /// sometimes a numeric enum), so we match heuristically.
+        /// </summary>
+        internal static (AuthMode Mode, string Raw) ReadAuthModeFromDocument(EnvDTE.Document doc)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
+            if (doc == null)
+            {
+                Log.Debug("ReadAuthModeFromDocument: null document → AuthMode.Unknown");
+                return (AuthMode.Unknown, null);
+            }
+
+            string raw = null;
+            try
+            {
+                // ProjectItem is where SSMS attaches SQL-document properties (Server,
+                // Database, AuthenticationType, UserName). For plain .sql files opened
+                // without an SSMS connection, ProjectItem is null — that's expected,
+                // not a bug; we silently fall back to Unknown.
+                var projItem = doc.ProjectItem;
+                if (projItem == null)
+                {
+                    Log.Debug("ReadAuthModeFromDocument: doc '{Name}' has no ProjectItem (likely a non-SSMS document) → AuthMode.Unknown", doc.Name);
+                    return (AuthMode.Unknown, null);
+                }
+
+                var props = projItem.Properties;
+                if (props == null)
+                {
+                    Log.Debug("ReadAuthModeFromDocument: doc '{Name}' ProjectItem has no Properties → AuthMode.Unknown", doc.Name);
+                    return (AuthMode.Unknown, null);
+                }
+
+                raw = TryReadProperty(props, "AuthenticationType");
+                if (string.IsNullOrEmpty(raw))
+                {
+                    // Property missing — SSMS build may not expose it, or the window
+                    // is disconnected. Log the raw so the next bug report can tell us
+                    // which SSMS version / window state reproduces this.
+                    Log.Debug("ReadAuthModeFromDocument: doc '{Name}' did not expose 'AuthenticationType' property → AuthMode.Unknown", doc.Name);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "ReadAuthModeFromDocument: unable to read AuthenticationType property on doc '{Name}'", doc.Name);
+            }
+
+            var mode = ClassifyAuth(raw);
+            Log.Debug("ReadAuthModeFromDocument: doc='{Name}' rawAuth='{Raw}' → {Mode}", doc.Name, raw ?? "(null)", mode);
+            return (mode, raw);
+        }
+
+        private static string TryReadProperty(EnvDTE.Properties properties, string name)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            try
+            {
+                var prop = properties.Item(name);
+                var value = prop?.Value?.ToString();
+                return string.IsNullOrEmpty(value) ? null : value;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Classifies a raw <c>AuthenticationType</c> string (or numeric enum) into
+        /// <see cref="AuthMode"/>. Defensive substring matching — see class comment
+        /// for why this isn't a clean string→enum lookup.
+        ///
+        /// Logs the classification decision at Debug so that the NEXT time SSMS
+        /// ships a new auth-type string and the mapping is wrong, the log shows
+        /// exactly which raw value fell through to which branch.
+        /// </summary>
+        internal static AuthMode ClassifyAuth(string raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                Log.Debug("ClassifyAuth: raw value is null/empty → AuthMode.Unknown");
+                return AuthMode.Unknown;
+            }
+
+            // Numeric SqlAuthenticationMethod enum values that some SSMS builds return.
+            // Mapping per Microsoft.Data.SqlClient.SqlAuthenticationMethod:
+            //   0 NotSpecified, 1 SqlPassword, 2 ActiveDirectoryPassword,
+            //   3 ActiveDirectoryIntegrated, 4 ActiveDirectoryInteractive,
+            //   5 ActiveDirectoryServicePrincipal, 6 ActiveDirectoryDeviceCodeFlow,
+            //   7 ActiveDirectoryManagedIdentity, 8 ActiveDirectoryMSI,
+            //   9 ActiveDirectoryDefault, 10 ActiveDirectoryWorkloadIdentity.
+            if (int.TryParse(raw, out var numeric))
+            {
+                var mapped = numeric switch
+                {
+                    0 => AuthMode.Windows,   // NotSpecified → SSMS treats as Windows
+                    1 => AuthMode.Unsupported, // SqlPassword
+                    2 => AuthMode.Unsupported, // AAD Password
+                    3 => AuthMode.AzureAdIntegrated,
+                    4 => AuthMode.Unsupported, // AAD Interactive
+                    5 => AuthMode.Unsupported, // AAD ServicePrincipal (needs client secret)
+                    6 => AuthMode.Unsupported, // AAD DeviceCodeFlow
+                    7 => AuthMode.AzureAdIntegrated, // ManagedIdentity (engine runs as same user)
+                    8 => AuthMode.AzureAdIntegrated, // MSI alias
+                    9 => AuthMode.AzureAdIntegrated, // Default — tries integrated first
+                    10 => AuthMode.AzureAdIntegrated,
+                    _ => AuthMode.Unknown
+                };
+                Log.Debug("ClassifyAuth: numeric raw='{Raw}' → {Mode}", raw, mapped);
+                return mapped;
+            }
+
+            // String form. Match on stable substrings; strip case/whitespace.
+            var lower = raw.Trim();
+
+            if (lower.IndexOf("Active Directory", StringComparison.OrdinalIgnoreCase) >= 0
+                || lower.IndexOf("Azure", StringComparison.OrdinalIgnoreCase) >= 0
+                || lower.IndexOf("AAD", StringComparison.OrdinalIgnoreCase) >= 0
+                || lower.IndexOf("Entra", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                // AAD family — Integrated/Default are silent-reusable; the rest prompt.
+                if (lower.IndexOf("Integrated", StringComparison.OrdinalIgnoreCase) >= 0
+                    || lower.IndexOf("Default", StringComparison.OrdinalIgnoreCase) >= 0
+                    || lower.IndexOf("Managed", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    Log.Debug("ClassifyAuth: AAD-family raw='{Raw}' matched Integrated/Default/Managed → AzureAdIntegrated", raw);
+                    return AuthMode.AzureAdIntegrated;
+                }
+                Log.Debug("ClassifyAuth: AAD-family raw='{Raw}' did not match silent-reusable subset → Unsupported (engine would prompt)", raw);
+                return AuthMode.Unsupported;
+            }
+
+            if (lower.IndexOf("Windows", StringComparison.OrdinalIgnoreCase) >= 0
+                || lower.IndexOf("Integrated", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                Log.Debug("ClassifyAuth: string raw='{Raw}' → Windows", raw);
+                return AuthMode.Windows;
+            }
+
+            if (lower.IndexOf("SQL", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                // SQL Server auth — we'd need the password, which SSMS doesn't expose.
+                Log.Debug("ClassifyAuth: string raw='{Raw}' matched 'SQL' → Unsupported", raw);
+                return AuthMode.Unsupported;
+            }
+
+            Log.Debug("ClassifyAuth: string raw='{Raw}' matched no known pattern → Unknown (please add this value to ClassifyAuth if it recurs)", raw);
+            return AuthMode.Unknown;
         }
 
         internal class ConnectionResult
         {
             public string Server { get; set; }
             public string Database { get; set; }
+
+            /// <summary>
+            /// Connection string suitable for the engine process. <c>null</c> when the
+            /// detected auth mode can't be silently reused (SQL auth, AAD Interactive, …).
+            /// </summary>
             public string ConnectionString { get; set; }
+
+            public AuthMode AuthMode { get; set; } = AuthMode.Unknown;
+
+            /// <summary>
+            /// <c>true</c> when <see cref="ConnectionString"/> is non-null AND is expected
+            /// to succeed without user interaction. Callers should skip engine-side
+            /// schema auto-load when this is <c>false</c>.
+            /// </summary>
+            public bool IsEngineUsable { get; set; } = true;
         }
     }
 }

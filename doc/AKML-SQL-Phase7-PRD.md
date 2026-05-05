@@ -1,6 +1,6 @@
 # AKML SQL — Phase 7: SQL History & Tab Management
 
-> **Version:** 1.0 | **Date:** March 2026 | **Author:** Abdulrahman Khamis
+> **Version:** 1.0 | **Date:** March 2026 | **Author:** Mohamed Khamis
 > **Status:** Ready for Implementation | **Classification:** Confidential
 > **Depends on:** Phase 2 (IntelliSense engine) — uses the same editor hooks and named pipe infrastructure
 > **Branch prefix:** `007-sql-history-tabs`

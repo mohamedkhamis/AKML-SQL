@@ -1,6 +1,6 @@
 # AKML SQL — Phase 1: Foundation & Windows EXE Installer
 
-> **Version:** 1.1 | **Date:** March 2026 | **Author:** Abdulrahman Khamis
+> **Version:** 1.1 | **Date:** March 2026 | **Author:** Mohamed Khamis
 > **Status:** Ready for Implementation | **Classification:** Confidential
 
 ---

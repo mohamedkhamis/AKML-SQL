@@ -168,6 +168,10 @@ namespace AkmlSql.Shell.Shared.History
         /// <summary>Whether there are more entries available beyond the current page.</summary>
         public bool HasMoreEntries => _currentOffset + Entries.Count < TotalCount;
 
+        /// <summary>Count of entries in the current page that are marked as favorite.
+        /// Bound to the star badge on the Starred filter tab. Refreshed after every search.</summary>
+        public int StarredCount => Entries.Count(e => e.IsFavorite);
+
         /// <summary>Observable collection of history entries for the current page.</summary>
         public ObservableCollection<HistoryEntryDto> Entries { get; }
 
@@ -366,6 +370,17 @@ namespace AkmlSql.Shell.Shared.History
                         ? parsed.SqlFilter
                         : (!string.IsNullOrWhiteSpace(parsed.PlainTextQuery) ? parsed.PlainTextQuery : null);
                 }
+                else if (parsed.CamelCaseTokens?.Count > 0)
+                {
+                    // CamelCase tokens (e.g. "PC") were extracted and will be applied as an in-memory
+                    // post-filter. Do NOT pass them to FTS5 as a literal query — FTS5 would return no
+                    // results for "PC" when the actual matches are "ProductCategory", "price_calc", etc.
+                    // Use PlainTextQuery (the non-CamelCase remainder) for FTS5 so that broad results
+                    // are returned and the post-filter narrows them down correctly.
+                    effectiveSearchText = string.IsNullOrWhiteSpace(parsed.PlainTextQuery)
+                        ? null
+                        : parsed.PlainTextQuery.Trim();
+                }
 
                 // Determine effective open/closed filter from tab or search prefix
                 bool? effectiveIsOpen = IsOpenFilter;
@@ -410,6 +425,7 @@ namespace AkmlSql.Shell.Shared.History
                     }
 
                     TotalCount = response.TotalCount;
+                    OnPropertyChanged(nameof(StarredCount));
                 }
                 else
                 {

@@ -44,6 +44,9 @@ namespace AkmlSql.Core.Logging
                     rollOnFileSizeLimit: true,
                     fileSizeLimitBytes: Constants.LogMaxFileSize,
                     retainedFileCountLimit: Constants.LogMaxFiles,
+                    // Flush the file sink's buffer every 250ms so a UI-thread hang
+                    // cannot swallow the last breadcrumb before the process dies.
+                    flushToDiskInterval: TimeSpan.FromMilliseconds(250),
                     outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
                 .CreateLogger();
 

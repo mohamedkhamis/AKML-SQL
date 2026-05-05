@@ -258,18 +258,31 @@ namespace AkmlSql.Shell.Shared.Editor.Toolbar
                     typeof(EnvDTE.DTE)) as EnvDTE.DTE;
                 if (dte != null)
                 {
-                    var cmd = dte.Commands.Item(
-                        "{" + PackageGuids.AkmlSqlCmdSetString + "}", commandId);
-                    if (cmd != null && !string.IsNullOrEmpty(cmd.Name))
+                    // Commands.Item(guid, id) can throw COMException in SSMS 22 for some
+                    // command IDs — wrap in its own try-catch so failures fall through to
+                    // the GlobalInvoke path instead of being caught by the outer handler.
+                    string? resolvedName = null;
+                    try
                     {
-                        dte.ExecuteCommand(cmd.Name);
+                        var cmd = dte.Commands.Item(
+                            "{" + PackageGuids.AkmlSqlCmdSetString + "}", commandId);
+                        resolvedName = cmd?.Name;
+                    }
+                    catch
+                    {
+                        // Fall through to GlobalInvoke below
+                    }
+
+                    if (!string.IsNullOrEmpty(resolvedName))
+                    {
+                        dte.ExecuteCommand(resolvedName);
                         Log.Debug("EditorToolbar: {Command} invoked via DTE.ExecuteCommand({Name})",
-                            commandName, cmd.Name);
+                            commandName, resolvedName);
                         return;
                     }
                 }
 
-                // Fallback: try GlobalInvoke if DTE path failed
+                // Fallback: try GlobalInvoke if DTE path failed or Commands.Item threw
                 var commandService = (Microsoft.VisualStudio.Shell.OleMenuCommandService?)
                     Microsoft.VisualStudio.Shell.Package.GetGlobalService(
                         typeof(System.ComponentModel.Design.IMenuCommandService));

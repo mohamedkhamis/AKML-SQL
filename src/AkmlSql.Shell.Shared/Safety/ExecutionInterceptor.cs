@@ -95,6 +95,14 @@ namespace AkmlSql.Shell.Shared.Safety
         /// </returns>
         public static bool OnBeforeExecute(string sqlText, string? serverName)
         {
+            // ── Trace entry + exit for each step so the next SSMS hang repro is
+            // localizable from logs alone (previous repro went 3 minutes silent
+            // after this method was called — no way to tell where it blocked).
+            // Use Information so the trace survives Debug-filtered configs.
+            var enterTs = DateTime.UtcNow;
+            Log.Information("[ExecutionGuard] ENTER OnBeforeExecute: sql.Length={SqlLen} server={Server}",
+                sqlText?.Length ?? 0, serverName ?? "(null)");
+
             // Re-check settings dynamically on each invocation so that enabling
             // safety settings via Options takes effect without an IDE restart.
             // Cache the loaded settings to avoid a second disk read in FilterBySettings.
@@ -116,21 +124,38 @@ namespace AkmlSql.Shell.Shared.Safety
                 // Config load failure — use last known value
             }
 
+            // ── Emergency kill-switch. If the safety check is suspected of hanging
+            // SSMS, the user can set `Safety.TemporarilyDisabled=true` in
+            // %AppData%\AKML SQL\config.json and F5 will go straight through without
+            // touching the engine or the modal dialog — no reinstall required.
+            if (cachedSafety?.TemporarilyDisabled == true)
+            {
+                Log.Warning("[ExecutionGuard] EXIT: Safety.TemporarilyDisabled=true in config — skipping all checks ({Ms} ms)",
+                    (DateTime.UtcNow - enterTs).TotalMilliseconds);
+                return true;
+            }
+
             if (!_anySettingEnabled)
             {
-                Log.Debug("[ExecutionGuard] Bypassed — all safety checks disabled");
+                Log.Warning("[ExecutionGuard] EXIT: all safety checks disabled in config ({Ms} ms)",
+                    (DateTime.UtcNow - enterTs).TotalMilliseconds);
                 return true;
             }
 
             if (string.IsNullOrWhiteSpace(sqlText))
+            {
+                Log.Debug("[ExecutionGuard] EXIT: empty SQL text ({Ms} ms)",
+                    (DateTime.UtcNow - enterTs).TotalMilliseconds);
                 return true;
+            }
 
             try
             {
                 var client = EngineLifecycle.Manager?.Client;
                 if (client == null || !client.IsConnected)
                 {
-                    Log.Debug("ExecutionInterceptor: engine not connected, skipping safety check");
+                    Log.Information("[ExecutionGuard] EXIT: engine not connected, skipping safety check ({Ms} ms)",
+                        (DateTime.UtcNow - enterTs).TotalMilliseconds);
                     return true; // Fail-open: allow execution if engine is unavailable
                 }
 
@@ -158,18 +183,61 @@ namespace AkmlSql.Shell.Shared.Safety
                     IsProductionServer = isProductionServer
                 };
 
-                // Synchronous wait — must block before execution proceeds
-                // Use JoinableTaskFactory to avoid deadlock on the UI thread
+                // Run the IPC on the thread pool and wall-clock-wait with a hard ceiling.
+                // JoinableTaskFactory.Run on the UI thread deadlocks if any continuation
+                // requires the UI thread back; Task.Run + Wait(timeout) avoids that
+                // because the awaiter is a thread-pool thread, not the UI thread.
+                const int SafetyCheckTimeoutMs = 500;
+                // Inner IPC timeout is slightly under the wall-clock ceiling so the inner
+                // cancellation normally wins and we see a clean TaskCanceledException
+                // rather than the outer Wait() timing out.
+                const int InnerTimeoutSlackMs = 50;
                 SafetyCheckResponse? response = null;
-                ThreadHelper.JoinableTaskFactory.Run(async () =>
-                {
-                    // Safety check must not block execution if it takes > 500 ms.
-                    // On timeout the check yields and execution proceeds (fail-open).
-                    response = await client.SendRequestAsync<SafetyCheckResponse, SafetyCheckRequest>(
+                var beforeIpcTs = DateTime.UtcNow;
+                Log.Information("[ExecutionGuard] BEFORE engine SafetyCheck ({TimeoutMs}ms timeout)", SafetyCheckTimeoutMs);
+
+                var ipcTask = System.Threading.Tasks.Task.Run(() =>
+                    client.SendRequestAsync<SafetyCheckResponse, SafetyCheckRequest>(
                         MessageTypes.SafetyCheck,
                         request,
-                        timeoutMs: 500);
-                });
+                        timeoutMs: SafetyCheckTimeoutMs - InnerTimeoutSlackMs));
+                Log.Information("[ExecutionGuard] TaskRun scheduled, status={Status}, about to Wait({TimeoutMs}ms)",
+                    ipcTask.Status, SafetyCheckTimeoutMs);
+
+                try
+                {
+                    if (!ipcTask.Wait(SafetyCheckTimeoutMs))
+                    {
+                        // Wall-clock ceiling hit — fail-open without touching the task further.
+                        // The task continues in the background; its result is ignored.
+                        Log.Warning(
+                            "[ExecutionGuard] AFTER engine SafetyCheck: WALL-CLOCK TIMEOUT after {Ms} ms (fail-open)",
+                            (DateTime.UtcNow - beforeIpcTs).TotalMilliseconds);
+                        // Hook a continuation so we eventually see whether the orphaned task
+                        // completed (engine slow but alive) vs. hung indefinitely (engine dead).
+                        var orphanStartTs = beforeIpcTs;
+                        _ = ipcTask.ContinueWith(t => Log.Warning(
+                                "[ExecutionGuard] orphan ipcTask completed AFTER timeout: status={Status} faulted={Faulted} totalMs={Ms}",
+                                t.Status, t.IsFaulted, (DateTime.UtcNow - orphanStartTs).TotalMilliseconds),
+                            System.Threading.Tasks.TaskScheduler.Default);
+                        return true;
+                    }
+                    response = ipcTask.GetAwaiter().GetResult();
+                    Log.Information(
+                        "[ExecutionGuard] AFTER engine SafetyCheck: response={ResponseState} ({Ms} ms, taskStatus={Status})",
+                        response == null ? "null" :
+                            (response.RequiresConfirmation ? $"RequiresConfirmation w/ {response.Warnings?.Length ?? 0} warnings" : "no-warnings"),
+                        (DateTime.UtcNow - beforeIpcTs).TotalMilliseconds,
+                        ipcTask.Status);
+                }
+                catch (Exception ipcEx)
+                {
+                    var inner = (ipcEx as AggregateException)?.InnerException ?? ipcEx;
+                    Log.Information(inner,
+                        "[ExecutionGuard] AFTER engine SafetyCheck: FAILED/TIMEOUT after {Ms} ms (fail-open)",
+                        (DateTime.UtcNow - beforeIpcTs).TotalMilliseconds);
+                    return true;
+                }
 
                 if (response == null || !response.RequiresConfirmation || response.Warnings.Length == 0)
                 {
@@ -199,13 +267,29 @@ namespace AkmlSql.Shell.Shared.Safety
                 // guard entirely for this environment (e.g. the user's DEV boxes).
                 if (IsEnvironmentDisabled(envLabel, cachedSafety))
                 {
+                    Log.Warning("[ExecutionGuard] Safety check suppressed for environment '{EnvLabel}': marked as Disabled in Safety.EnvironmentSeverity config",
+                        envLabel);
                     LogAuditEvent(serverName, envLabel, envColor, filteredWarnings, "SkippedByEnvironmentConfig");
                     return true;
                 }
 
                 ThreadHelper.ThrowIfNotOnUIThread();
                 var dialog = SafetyWarningDialog.CreateForWarnings(filteredWarnings, serverName, envLabel, envColor);
-                var wpfResult = dialog.ShowDialog();
+                var beforeDialogTs = DateTime.UtcNow;
+                Log.Information(
+                    "[ExecutionGuard] BEFORE SafetyWarningDialog.ShowDialog: {Count} warnings, env='{Env}' — if SSMS appears to freeze NOW, check Alt-Tab / other monitors for a hidden modal dialog",
+                    filteredWarnings.Length, envLabel);
+
+                bool? wpfResult;
+                try
+                {
+                    wpfResult = dialog.ShowDialog();
+                }
+                finally
+                {
+                    Log.Information("[ExecutionGuard] AFTER SafetyWarningDialog.ShowDialog: user sat on the dialog for {Ms} ms",
+                        (DateTime.UtcNow - beforeDialogTs).TotalMilliseconds);
+                }
 
                 if (wpfResult == true)
                 {
@@ -216,20 +300,23 @@ namespace AkmlSql.Shell.Shared.Safety
                             _suppressedWarningTypes.Add(w.WarningType);
                     }
                     LogAuditEvent(serverName, envLabel, envColor, filteredWarnings, "Confirmed");
+                    Log.Information("[ExecutionGuard] EXIT: user Confirmed ({Ms} ms total)",
+                        (DateTime.UtcNow - enterTs).TotalMilliseconds);
                     return true;
                 }
 
                 LogAuditEvent(serverName, envLabel, envColor, filteredWarnings, "Blocked");
+                Log.Information("[ExecutionGuard] EXIT: user Cancelled ({Ms} ms total)",
+                    (DateTime.UtcNow - enterTs).TotalMilliseconds);
                 return false;
-            }
-            catch (OperationCanceledException)
-            {
-                Log.Debug("ExecutionInterceptor: safety check timed out, allowing execution (fail-open)");
-                return true; // Fail-open on timeout
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "ExecutionInterceptor: safety check failed, allowing execution (fail-open)");
+                // IPC timeout/faults are caught and logged inline near JoinableTaskFactory.Run;
+                // this outer handler is for anything that escapes (dialog construction, env
+                // detection, etc.). Keep it fail-open so a guard bug never blocks execution.
+                Log.Error(ex, "[ExecutionGuard] EXIT: failed with exception ({Ms} ms total, fail-open)",
+                    (DateTime.UtcNow - enterTs).TotalMilliseconds);
                 return true; // Fail-open on error
             }
         }

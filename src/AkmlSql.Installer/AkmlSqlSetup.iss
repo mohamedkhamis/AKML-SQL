@@ -48,10 +48,28 @@
 ;
 
 #define MyAppName "AKML SQL"
-#define MyAppVersion "1.0.0"
-#define MyAppPublisher "Abdulrahman Khamis"
+#ifndef MyAppVersion
+  #define MyAppVersion "1.0.0"
+#endif
+#define MyAppPublisher "Mohamed Khamis"
 #define MyAppURL "https://akmlsql.com"
 #define MyAppId "{{F7E8A9B0-C1D2-E3F4-A5B6-C7D8E9F0A1B2}"
+
+; --- Resolve $version$ in VSIX manifests before [Files] references them ---
+; Shell csprojs have CreateVsixContainer=false, so VSSDK never substitutes
+; $version$. We do it here via a PowerShell helper. Runs at ISCC compile
+; time so ANY invocation (build.ps1, Deploy-Build-Release.ps1, bare ISCC)
+; produces the generated\<Target>\extension.vsixmanifest files that the
+; [Files] section sources below.
+#define ManifestExit Exec( \
+    "powershell.exe", \
+    "-NoProfile -ExecutionPolicy Bypass -File " \
+      + AddQuotes(SourcePath + "preprocess-manifests.ps1") \
+      + " -Version " + AddQuotes(MyAppVersion), \
+    SourcePath)
+#if ManifestExit != 0
+  #error "preprocess-manifests.ps1 failed (see output above)"
+#endif
 
 [Setup]
 ; AppId is fixed — Inno Setup uses this to detect existing installations.
@@ -62,14 +80,30 @@
 AppId={#MyAppId}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
+; AppVerName is what Windows "Programs and Features" shows as the display name
+; — by setting it explicitly to "Name Version" we guarantee the version is
+; always visible in the installed-programs list (otherwise newer Windows
+; builds sometimes show only AppName without the version column populated).
+AppVerName={#MyAppName} {#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
+; VersionInfoVersion stamps the compiled installer .EXE's own file-properties
+; (Details tab in Explorer → "File version" / "Product version"). Inno Setup
+; requires the 4-segment x.y.z.w form here; our MyAppVersion already matches.
+VersionInfoVersion={#MyAppVersion}
+VersionInfoProductVersion={#MyAppVersion}
+VersionInfoProductName={#MyAppName}
+VersionInfoCompany={#MyAppPublisher}
+VersionInfoDescription={#MyAppName} Setup
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 LicenseFile=
 InfoBeforeFile=LICENSE.txt
+; Keep the installer filename stable — Deploy-Build-Release.ps1 and any
+; existing download links expect AKMLSQLSetup.exe. The version is embedded
+; in the EXE's file properties via VersionInfoVersion above.
 OutputBaseFilename=AKMLSQLSetup
 OutputDir=Output
 Compression=lzma2
@@ -77,6 +111,7 @@ SolidCompression=yes
 PrivilegesRequired=admin
 PrivilegesRequiredOverridesAllowed=commandline
 UsePreviousAppDir=yes
+; Assets to be replaced with branded versions from design team (US14 — deferred)
 SetupIconFile=assets\icon.ico
 WizardImageFile=assets\sidebar.bmp
 WizardSmallImageFile=assets\banner.bmp
@@ -113,40 +148,38 @@ Source: "LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
 ; SSMS 20 (x86) extension files — all DLLs from build output plus pkgdef and manifest
 Source: "..\AkmlSql.Ssms20\bin\Release\net472\*.dll"; DestDir: "{code:GetSSMS20ExtDir}"; Check: CheckSSMS20; Flags: ignoreversion
 Source: "..\AkmlSql.Ssms20\AkmlSql.Ssms20.pkgdef"; DestDir: "{code:GetSSMS20ExtDir}"; Check: CheckSSMS20; Flags: ignoreversion
-Source: "..\AkmlSql.Ssms20\source.extension.vsixmanifest"; DestDir: "{code:GetSSMS20ExtDir}"; DestName: "extension.vsixmanifest"; Check: CheckSSMS20; Flags: ignoreversion
+Source: "generated\AkmlSql.Ssms20\extension.vsixmanifest"; DestDir: "{code:GetSSMS20ExtDir}"; DestName: "extension.vsixmanifest"; Check: CheckSSMS20; Flags: ignoreversion
 
 ; SSMS 21 (x64) extension files
 Source: "..\AkmlSql.Ssms21\bin\Release\net472\*.dll"; DestDir: "{code:GetSSMS21ExtDir}"; Check: CheckSSMS21; Flags: ignoreversion
 Source: "..\AkmlSql.Ssms21\AkmlSql.Ssms21.pkgdef"; DestDir: "{code:GetSSMS21ExtDir}"; Check: CheckSSMS21; Flags: ignoreversion
-Source: "..\AkmlSql.Ssms21\source.extension.vsixmanifest"; DestDir: "{code:GetSSMS21ExtDir}"; DestName: "extension.vsixmanifest"; Check: CheckSSMS21; Flags: ignoreversion
+Source: "generated\AkmlSql.Ssms21\extension.vsixmanifest"; DestDir: "{code:GetSSMS21ExtDir}"; DestName: "extension.vsixmanifest"; Check: CheckSSMS21; Flags: ignoreversion
 
 ; SSMS 22 (x64) extension files
 Source: "..\AkmlSql.Ssms22\bin\Release\net472\*.dll"; DestDir: "{code:GetSSMS22ExtDir}"; Check: CheckSSMS22; Flags: ignoreversion
 Source: "..\AkmlSql.Ssms22\AkmlSql.Ssms22.pkgdef"; DestDir: "{code:GetSSMS22ExtDir}"; Check: CheckSSMS22; Flags: ignoreversion
-Source: "..\AkmlSql.Ssms22\source.extension.vsixmanifest"; DestDir: "{code:GetSSMS22ExtDir}"; DestName: "extension.vsixmanifest"; Check: CheckSSMS22; Flags: ignoreversion
+Source: "generated\AkmlSql.Ssms22\extension.vsixmanifest"; DestDir: "{code:GetSSMS22ExtDir}"; DestName: "extension.vsixmanifest"; Check: CheckSSMS22; Flags: ignoreversion
 
 ; VS 2019 (x86) extension files
 Source: "..\AkmlSql.VS2019\bin\Release\net472\*.dll"; DestDir: "{code:GetVS2019ExtDir}"; Check: CheckVS2019; Flags: ignoreversion
 Source: "..\AkmlSql.VS2019\AkmlSql.VS2019.pkgdef"; DestDir: "{code:GetVS2019ExtDir}"; Check: CheckVS2019; Flags: ignoreversion
-Source: "..\AkmlSql.VS2019\source.extension.vsixmanifest"; DestDir: "{code:GetVS2019ExtDir}"; DestName: "extension.vsixmanifest"; Check: CheckVS2019; Flags: ignoreversion
+Source: "generated\AkmlSql.VS2019\extension.vsixmanifest"; DestDir: "{code:GetVS2019ExtDir}"; DestName: "extension.vsixmanifest"; Check: CheckVS2019; Flags: ignoreversion
 
 ; VS 2022 (x64) extension files
 Source: "..\AkmlSql.VS2022\bin\Release\net472\*.dll"; DestDir: "{code:GetVS2022ExtDir}"; Check: CheckVS2022; Flags: ignoreversion
 Source: "..\AkmlSql.VS2022\AkmlSql.VS2022.pkgdef"; DestDir: "{code:GetVS2022ExtDir}"; Check: CheckVS2022; Flags: ignoreversion
-Source: "..\AkmlSql.VS2022\source.extension.vsixmanifest"; DestDir: "{code:GetVS2022ExtDir}"; DestName: "extension.vsixmanifest"; Check: CheckVS2022; Flags: ignoreversion
+Source: "generated\AkmlSql.VS2022\extension.vsixmanifest"; DestDir: "{code:GetVS2022ExtDir}"; DestName: "extension.vsixmanifest"; Check: CheckVS2022; Flags: ignoreversion
 
 ; VS 2026 (x64) extension files
 Source: "..\AkmlSql.VS2026\bin\Release\net472\*.dll"; DestDir: "{code:GetVS2026ExtDir}"; Check: CheckVS2026; Flags: ignoreversion
 Source: "..\AkmlSql.VS2026\AkmlSql.VS2026.pkgdef"; DestDir: "{code:GetVS2026ExtDir}"; Check: CheckVS2026; Flags: ignoreversion
-Source: "..\AkmlSql.VS2026\source.extension.vsixmanifest"; DestDir: "{code:GetVS2026ExtDir}"; DestName: "extension.vsixmanifest"; Check: CheckVS2026; Flags: ignoreversion
+Source: "generated\AkmlSql.VS2026\extension.vsixmanifest"; DestDir: "{code:GetVS2026ExtDir}"; DestName: "extension.vsixmanifest"; Check: CheckVS2026; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#MyAppName} Settings"; Filename: "{app}\AkmlSql.Core.dll"; Comment: "AKML SQL"
 Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#MyAppName} Settings"; Filename: "{app}\AkmlSql.Core.dll"; Tasks: desktopicon
 
 [Tasks]
-Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription: "Additional shortcuts:"
 Name: "importsqlprompt"; Description: "Import formatting styles from &SQL Prompt"; GroupDescription: "Migration:"; Check: SqlPromptConfigExists; Flags: unchecked
 
 [UninstallDelete]

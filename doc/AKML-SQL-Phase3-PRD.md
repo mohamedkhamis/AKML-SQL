@@ -1,6 +1,6 @@
 # AKML SQL — Phase 3: SQL Formatter & Code Beautifier
 
-> **Version:** 1.0 | **Date:** March 2026 | **Author:** Abdulrahman Khamis
+> **Version:** 1.0 | **Date:** March 2026 | **Author:** Mohamed Khamis
 > **Status:** Ready for Implementation | **Classification:** Confidential
 > **Depends on:** Phase 2 (Core IntelliSense Engine) — T-SQL parser & schema cache must be complete
 > **Branch prefix:** `003-sql-formatter`
@@ -511,7 +511,7 @@ Profiles are stored as human-readable, commented JSON files with a `.akmlstyle` 
     "id": "a3b7c9d1-e2f4-5678-9012-abcdef123456",
     "name": "Our Team Standard",
     "description": "Team-wide formatting standard for the data engineering team",
-    "author": "Abdulrahman Khamis",
+    "author": "Mohamed Khamis",
     "version": "1.2",
     "created": "2026-04-15T10:30:00Z",
     "modified": "2026-06-20T14:15:00Z",

@@ -1,7 +1,7 @@
 ﻿# AKML-SQL Development Guidelines
 
 AI-powered SQL development assistance for SSMS 20/21/22 and Visual Studio 2019/2022/2026.
-Author: Abdulrahman Khamis | License: MIT | Version: 1.0.0
+Author: Mohamed Khamis | License: MIT | Version: 1.0.0
 
 ## Project Structure
 

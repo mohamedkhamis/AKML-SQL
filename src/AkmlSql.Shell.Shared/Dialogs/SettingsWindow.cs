@@ -1658,6 +1658,34 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 "e.g. gpt-4o, claude-sonnet-4-20250514, gemini-pro");
             _txtAiApiKey = AddTextInput(panel, "API Key",
                 "Your API key for the selected provider", true);
+
+            // Inline help: how to get API keys for each provider + security note
+            var helpBorder = new Border
+            {
+                BorderBrush = _theme.FgAccent,
+                BorderThickness = new Thickness(2, 0, 0, 0),
+                Padding = new Thickness(10, 8, 10, 8),
+                Margin = new Thickness(0, 0, 0, 10),
+                Background = _theme.Panel
+            };
+            helpBorder.Child = new TextBlock
+            {
+                Text =
+                    "How to get your API key:\n" +
+                    "  \u2022 Anthropic (Claude): console.anthropic.com \u2192 API Keys" +
+                    "  \u2014  example model: claude-sonnet-4-6\n" +
+                    "  \u2022 Google (Gemini): aistudio.google.com \u2192 Get API Key" +
+                    "  \u2014  example model: gemini-2.0-flash\n" +
+                    "  \u2022 OpenAI: platform.openai.com \u2192 API Keys" +
+                    "  \u2014  example model: gpt-4o\n\n" +
+                    "Keys are stored encrypted with Windows DPAPI and never written in plain text.",
+                Foreground = _theme.FgSecondary,
+                FontSize = 11,
+                TextWrapping = TextWrapping.Wrap,
+                LineHeight = 18
+            };
+            panel.Children.Add(helpBorder);
+
             _txtAiEndpoint = AddTextInput(panel, "Endpoint URL",
                 "Custom endpoint (required for Azure OpenAI and custom providers)");
 
@@ -2080,6 +2108,16 @@ namespace AkmlSql.Shell.Shared.Dialogs
                     }
                 }
 
+                // Theme the selected-item ContentPresenter (PART_ContentSite).
+                // VS/SSMS host implicit styles can override TextElement.Foreground at
+                // the ContentPresenter level, making the selected item text appear faded
+                // in dark theme. Setting it directly on the ContentPresenter wins.
+                var contentSite = FindChild<ContentPresenter>(combo);
+                if (contentSite != null)
+                {
+                    contentSite.SetValue(TextElement.ForegroundProperty, theme.FgPrimary);
+                }
+
                 // Also try to theme the popup if it's already in the tree
                 ThemeComboBoxPopup(combo, theme);
             }
@@ -2272,8 +2310,10 @@ namespace AkmlSql.Shell.Shared.Dialogs
             };
 
             var theme = _theme; // capture for lambda
-            btn.MouseEnter += (s, e) => btn.Background = theme.ButtonHover;
-            btn.MouseLeave += (s, e) => btn.Background = theme.Button;
+            // Explicitly restore Foreground on both enter/leave so that the VS/SSMS host's
+            // default button-hover template doesn't override the text color in dark theme.
+            btn.MouseEnter += (s, e) => { btn.Background = theme.ButtonHover; btn.Foreground = theme.FgPrimary; };
+            btn.MouseLeave += (s, e) => { btn.Background = theme.Button;      btn.Foreground = theme.FgPrimary; };
 
             return btn;
         }

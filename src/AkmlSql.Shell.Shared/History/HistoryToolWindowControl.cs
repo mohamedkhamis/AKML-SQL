@@ -223,6 +223,26 @@ namespace AkmlSql.Shell.Shared.History
 
             _filterAll = CreateFilterTab("\U0001F4CB All", "all", theme, isActive: true);
             _filterStarred = CreateFilterTab("\u2B50 Starred", "starred", theme);
+
+            // Append a live count badge to the Starred tab, bound to HistoryViewModel.StarredCount
+            {
+                var labelText = (TextBlock)_filterStarred.Child;
+                var badge = new TextBlock
+                {
+                    FontSize = 10,
+                    FontWeight = FontWeights.SemiBold,
+                    Foreground = Freeze(theme.HistoryActiveFilterBorder),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(4, 0, 0, 0)
+                };
+                badge.SetBinding(TextBlock.TextProperty,
+                    new Binding(nameof(HistoryViewModel.StarredCount)) { StringFormat = "({0})" });
+                var tabStack = new StackPanel { Orientation = Orientation.Horizontal };
+                tabStack.Children.Add(labelText);
+                tabStack.Children.Add(badge);
+                _filterStarred.Child = tabStack;
+            }
+
             _filterOpen = CreateFilterTab("\U0001F4C2 Open", "open", theme);
             _filterClosed = CreateFilterTab("\U0001F4D5 Closed", "closed", theme);
 
@@ -538,6 +558,7 @@ namespace AkmlSql.Shell.Shared.History
             nameText.SetValue(TextBlock.ForegroundProperty, Freeze(theme.HistoryQueryName));
             nameText.SetValue(TextBlock.TextTrimmingProperty, TextTrimming.CharacterEllipsis);
             nameText.SetValue(TextBlock.MaxHeightProperty, 18.0);
+            nameText.SetValue(ToolTipProperty, "Right-click \u2192 Rename to give this query a custom name");
             contentStack.AppendChild(nameText);
 
             // Row 2: Server -> Database
@@ -1493,8 +1514,7 @@ namespace AkmlSql.Shell.Shared.History
                 Height = 170,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
                 ResizeMode = ResizeMode.NoResize,
-                Owner = Application.Current?.MainWindow,
-                Background = new SolidColorBrush(theme.HistoryWindowBackground)
+                Background = Freeze(theme.HistoryWindowBackground)
             };
 
             var panel = new StackPanel { Margin = new Thickness(16) };
@@ -1503,7 +1523,7 @@ namespace AkmlSql.Shell.Shared.History
             {
                 Text = prompt,
                 Margin = new Thickness(0, 0, 0, 8),
-                Foreground = new SolidColorBrush(theme.HistoryQueryName)
+                Foreground = Freeze(theme.HistoryQueryName)
             };
             panel.Children.Add(label);
 
@@ -1512,9 +1532,9 @@ namespace AkmlSql.Shell.Shared.History
                 Text = defaultValue,
                 Margin = new Thickness(0, 0, 0, 12),
                 Padding = new Thickness(6, 4, 6, 4),
-                Background = new SolidColorBrush(theme.HistorySearchBackground),
-                Foreground = new SolidColorBrush(theme.HistoryQueryName),
-                BorderBrush = new SolidColorBrush(theme.HistorySearchBorder)
+                Background = Freeze(theme.HistorySearchBackground),
+                Foreground = Freeze(theme.HistoryQueryName),
+                BorderBrush = Freeze(theme.HistorySearchBorder)
             };
             textBox.SelectAll();
             panel.Children.Add(textBox);
@@ -1553,9 +1573,20 @@ namespace AkmlSql.Shell.Shared.History
             panel.Children.Add(buttonPanel);
             dialog.Content = panel;
 
-            // Set owner to prevent dialog from going behind the main VS/SSMS window
-            try { dialog.Owner = System.Windows.Application.Current?.MainWindow; }
-            catch { /* Non-critical -- centering may not work but dialog still functions */ }
+            // Parent the dialog to the VS/SSMS main window via DTE HWND.
+            // Application.Current?.MainWindow is null in SSMS isolated-shell hosts,
+            // so the DTE path is the only reliable option. See HistoryDiffWindow.cs
+            // for the canonical pattern (CLAUDE.md "WPF UI conventions").
+            try
+            {
+                var dte = (EnvDTE.DTE)Microsoft.VisualStudio.Shell.Package.GetGlobalService(typeof(EnvDTE.DTE));
+                if (dte?.MainWindow != null)
+                {
+                    var helper = new System.Windows.Interop.WindowInteropHelper(dialog);
+                    helper.Owner = (IntPtr)dte.MainWindow.HWnd;
+                }
+            }
+            catch { /* Non-critical — CenterOwner falls back to screen centering */ }
 
             dialog.ShowDialog();
             return result;
@@ -1614,6 +1645,23 @@ namespace AkmlSql.Shell.Shared.History
                     return;
                 }
 
+                // Capture the PREVIOUSLY active document's auth mode BEFORE we create
+                // the new tab (which will steal focus). This lets us build a connection
+                // string that matches the user's current SSMS session (AAD vs Windows)
+                // instead of always hardcoding Integrated Security — otherwise history
+                // restore would fail for AAD-authenticated users just like Phase A did.
+                var preExistingAuth = AkmlSql.Shell.Shared.Editor.SsmsConnectionDetector.AuthMode.Unknown;
+                try
+                {
+                    var prevDoc = dte.ActiveDocument;
+                    if (prevDoc != null)
+                    {
+                        var (mode, _) = AkmlSql.Shell.Shared.Editor.SsmsConnectionDetector.ReadAuthModeFromDocument(prevDoc);
+                        preExistingAuth = mode;
+                    }
+                }
+                catch { /* best effort */ }
+
                 dte.ItemOperations.NewFile(
                     @"General\Sql File",
                     "History.sql",
@@ -1648,15 +1696,23 @@ namespace AkmlSql.Shell.Shared.History
                                 var currentScript = getCurrentScript?.Invoke(scriptFactory, null);
                                 if (currentScript != null)
                                 {
-                                    // Build a connection string and use SetConnectionInfo
+                                    // Match the user's current SSMS auth mode. We can't restore
+                                    // a password (SQL auth) or replay an interactive AAD flow, so
+                                    // for those modes we fall back to Integrated Security and let
+                                    // SSMS prompt the user if the token isn't cached.
+                                    string authClause =
+                                        preExistingAuth == AkmlSql.Shell.Shared.Editor.SsmsConnectionDetector.AuthMode.AzureAdIntegrated
+                                            ? "Authentication=Active Directory Integrated"
+                                            : "Integrated Security=True";
                                     var connStr = string.IsNullOrEmpty(database)
-                                        ? $"Data Source={server};Integrated Security=True;Trust Server Certificate=True"
-                                        : $"Data Source={server};Initial Catalog={database};Integrated Security=True;Trust Server Certificate=True";
+                                        ? $"Data Source={server};{authClause};Trust Server Certificate=True"
+                                        : $"Data Source={server};Initial Catalog={database};{authClause};Trust Server Certificate=True";
                                     var setConn = currentScript.GetType().GetMethod("SetConnectionInfo");
                                     if (setConn != null)
                                     {
                                         setConn.Invoke(currentScript, new object[] { connStr });
-                                        Serilog.Log.Information("History: connection set to {Server}.{Database}", server, database);
+                                        Serilog.Log.Information("History: connection set to {Server}.{Database} (auth={Auth})",
+                                            server, database, preExistingAuth);
                                     }
                                 }
                             }
@@ -1805,9 +1861,15 @@ namespace AkmlSql.Shell.Shared.History
 
                     var sql = entry.SqlText ?? string.Empty;
                     var collapsed = System.Text.RegularExpressions.Regex.Replace(sql, @"\s+", " ").Trim();
-                    if (collapsed.Length > 60)
-                        return collapsed.Substring(0, 60) + "...";
-                    return collapsed;
+                    if (collapsed.Length > 0)
+                    {
+                        if (collapsed.Length > 60)
+                            return collapsed.Substring(0, 60) + "...";
+                        return collapsed;
+                    }
+
+                    // No custom name and no SQL — show a discoverable placeholder
+                    return "(Untitled query \u2014 right-click to rename)";
                 }
                 return "";
             }

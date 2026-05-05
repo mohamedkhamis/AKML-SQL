@@ -1,6 +1,6 @@
 # AKML SQL — Installation & Testing Guide (Phases 1–4)
 
-> **Version:** 1.0 | **Date:** March 2026 | **Author:** Abdulrahman Khamis
+> **Version:** 1.0 | **Date:** March 2026 | **Author:** Mohamed Khamis
 > **Applies to:** Phase 1 (Foundation), Phase 2 (IntelliSense), Phase 3 (Formatter), Phase 4 (Snippet Manager)
 > **Branch:** `004-snippet-manager`
 

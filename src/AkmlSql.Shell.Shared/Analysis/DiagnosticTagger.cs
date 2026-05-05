@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
 using AkmlSql.Core.Ipc.Messages;
+using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Text;
 using Microsoft.VisualStudio.Text.Editor;
 using Microsoft.VisualStudio.Text.Tagging;
@@ -22,6 +23,15 @@ namespace AkmlSql.Shell.Shared.Analysis
             var controller = buffer.Properties.GetOrCreateSingletonProperty(
                 typeof(AnalysisController),
                 () => new AnalysisController(buffer, Guid.NewGuid().ToString("N")));
+
+            // Wire ErrorListReporter so Warning/Error findings appear in the VS/SSMS Error List (T010)
+            buffer.Properties.GetOrCreateSingletonProperty(typeof(ErrorListReporter), () =>
+            {
+                string docPath = string.Empty;
+                if (buffer.Properties.TryGetProperty(typeof(ITextDocument), out ITextDocument textDoc))
+                    docPath = textDoc.FilePath ?? string.Empty;
+                return new ErrorListReporter(controller, ServiceProvider.GlobalProvider, docPath);
+            });
 
             return buffer.Properties.GetOrCreateSingletonProperty(
                 typeof(DiagnosticTagger),

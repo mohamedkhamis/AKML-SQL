@@ -28,6 +28,11 @@ namespace AkmlSql.Shell.Shared.Safety
         // We hook via CommandEvents which matches by command name (more portable)
         private const string QueryExecuteCommandName = "Query.Execute";
 
+        // Cached GUID of Query.Execute, resolved by name during Install() so we can
+        // compare it in the hot handler path without a per-command COM lookup
+        // (Commands.Item(guid, id) throws COMException in SSMS 22 for this command).
+        private static string? _queryExecuteGuid;
+
         /// <summary>
         /// Installs the DTE command event hooks. Called from
         /// <see cref="ExecutionInterceptor.Initialize"/> after verifying at least
@@ -49,9 +54,21 @@ namespace AkmlSql.Shell.Shared.Safety
                     return;
                 }
 
-                // Hook "Query.Execute" (F5) via CommandEvents
-                // The empty GUID and 0 ID means "all commands" — we filter by name in the handler.
-                // Using specific command lookup avoids capturing unrelated commands.
+                // Cache Query.Execute GUID by name — Commands.Item(string) is reliable
+                // where Commands.Item(guid, id) can throw COMException in SSMS 22.
+                try
+                {
+                    var cmd = _dte.Commands.Item(QueryExecuteCommandName);
+                    if (cmd != null) _queryExecuteGuid = cmd.Guid;
+                    Log.Debug("ExecutionCommandFilter: cached Query.Execute GUID = {Guid}", _queryExecuteGuid);
+                }
+                catch
+                {
+                    // Guid caching failed — handler will fall back to per-command name resolution
+                    Log.Debug("ExecutionCommandFilter: could not cache Query.Execute GUID; will resolve per-command");
+                }
+
+                // Hook all commands — filter to Query.Execute in the handler
                 _executeEvents = _dte.Events.CommandEvents;
                 _executeEvents.BeforeExecute += OnBeforeCommandExecute;
 
@@ -70,28 +87,36 @@ namespace AkmlSql.Shell.Shared.Safety
             {
                 ThreadHelper.ThrowIfNotOnUIThread();
 
-                // Resolve the command name from GUID + ID
                 if (_dte == null) return;
 
-                string? commandName = null;
-                try
+                // Fast path: compare cached GUID (set during Install via Commands.Item(name))
+                if (_queryExecuteGuid != null)
                 {
-                    var command = _dte.Commands.Item(guid, id);
-                    commandName = command?.Name;
+                    if (!string.Equals(guid, _queryExecuteGuid, StringComparison.OrdinalIgnoreCase))
+                        return;
                 }
-                catch
+                else
                 {
-                    // Command lookup can fail for unknown GUIDs — ignore
-                    return;
+                    // Slow fallback: resolve command name from GUID + ID
+                    string? commandName = null;
+                    try
+                    {
+                        var command = _dte.Commands.Item(guid, id);
+                        commandName = command?.Name;
+                    }
+                    catch
+                    {
+                        // Commands.Item(guid, id) can throw COMException in SSMS 22 —
+                        // skip (don't return on unknown commands; just not Query.Execute)
+                        return;
+                    }
+
+                    if (commandName == null) return;
+                    if (!commandName.Equals(QueryExecuteCommandName, StringComparison.OrdinalIgnoreCase))
+                        return;
                 }
 
-                if (commandName == null) return;
-
-                // Only intercept query execution commands
-                if (!commandName.Equals(QueryExecuteCommandName, StringComparison.OrdinalIgnoreCase))
-                    return;
-
-                Log.Debug("ExecutionCommandFilter: intercepted {Command}", commandName);
+                Log.Debug("ExecutionCommandFilter: intercepted {Command}", QueryExecuteCommandName);
 
                 // Extract SQL text from the active editor buffer
                 var sqlText = GetActiveSqlText();

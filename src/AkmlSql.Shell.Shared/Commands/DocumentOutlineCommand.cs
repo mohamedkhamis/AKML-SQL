@@ -1,6 +1,8 @@
 #nullable enable
 using System;
 using System.ComponentModel.Design;
+using Microsoft.VisualStudio.ComponentModelHost;
+using Microsoft.VisualStudio.Editor;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
 using Microsoft.VisualStudio.Text;
@@ -98,8 +100,17 @@ namespace AkmlSql.Shell.Shared.Commands
                     return;
                 }
 
-                // Get the managed ITextBuffer from the VS interop buffer
-                if (vsBuffer is ITextBuffer managedBuffer)
+                // Get the managed ITextBuffer — try direct cast first, then adapter factory
+                // (direct cast works in VS2022+; adapter factory handles SSMS and older hosts)
+                ITextBuffer? managedBuffer = vsBuffer as ITextBuffer;
+                if (managedBuffer == null)
+                {
+                    var componentModel = Package.GetGlobalService(typeof(SComponentModel)) as IComponentModel;
+                    var adapters = componentModel?.GetService<IVsEditorAdaptersFactoryService>();
+                    managedBuffer = adapters?.GetDocumentBuffer(vsBuffer);
+                }
+
+                if (managedBuffer != null)
                 {
                     var sessionId = managedBuffer.Properties.GetOrCreateSingletonProperty(
                         "AkmlSqlSessionId", () => Guid.NewGuid().ToString("N"));

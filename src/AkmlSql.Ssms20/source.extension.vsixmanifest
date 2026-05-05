@@ -3,7 +3,7 @@
   <Identifier Id="AkmlSql.Ssms20.A1B2C3D4-1111-2222-3333-444455556666">
     <Name>AKML SQL for SSMS 20</Name>
     <Author>mohamed Khamis</Author>
-    <Version>1.0.0</Version>
+    <Version>$version$</Version>
     <Description xml:space="preserve">AI-powered SQL development assistance for SQL Server Management Studio 20.</Description>
     <Locale>1033</Locale>
     <InstalledByMsi>true</InstalledByMsi>

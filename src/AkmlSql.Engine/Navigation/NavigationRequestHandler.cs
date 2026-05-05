@@ -163,7 +163,10 @@ public class NavigationRequestHandler(SchemaCacheManager schemaCacheManager)
             var req = MessagePackSerializer.Deserialize<ObjectSearchRequest>(request.Payload);
             var (connectionString, databaseName) = sessionLookup(req.SessionId);
 
-            if (string.IsNullOrEmpty(databaseName))
+            Log.Debug("ObjectSearch: session={SessionId} hasConnection={HasConn} database={Db}",
+                req.SessionId, !string.IsNullOrEmpty(connectionString), databaseName ?? "(null)");
+
+            if (string.IsNullOrEmpty(connectionString) || string.IsNullOrEmpty(databaseName))
             {
                 return Task.FromResult<RpcMessage?>(CreateSearchResponse(request.RequestId, new ObjectSearchResponse
                 {

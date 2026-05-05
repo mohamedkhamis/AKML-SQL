@@ -1,6 +1,6 @@
 # AKML SQL — Phase 6: Code Refactoring
 
-> **Version:** 1.0 | **Date:** March 2026 | **Author:** Abdulrahman Khamis
+> **Version:** 1.0 | **Date:** March 2026 | **Author:** Mohamed Khamis
 > **Status:** Ready for Implementation | **Classification:** Confidential
 > **Depends on:** Phase 5 (Static Code Analysis) — analysis engine for safe transformations
 > **Branch prefix:** `006-code-refactoring`
