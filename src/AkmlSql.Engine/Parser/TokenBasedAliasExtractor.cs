@@ -44,12 +44,26 @@ public static class TokenBasedAliasExtractor
             }
         }
 
+        // Track parenthesis depth as we scan. CTE bodies, derived tables, and
+        // subqueries are all wrapped in (...). Their internal FROM/JOIN clauses
+        // are at depth >= 1 and must not leak into the outer-statement alias map
+        // — otherwise `WITH cte AS (SELECT * FROM Inner) SELECT * FROM cte` would
+        // surface "Inner" as an alias for the outer cursor's wildcard expansion.
+        int parenDepth = 0;
+
         // Scan for FROM/JOIN <identifier> [alias] patterns within the statement.
         for (int i = 0; i < tokens.Count; i++)
         {
             var t = tokens[i];
             if (t.Offset < statementStart) continue;
             if (t.Offset >= statementEnd) break;
+
+            if (t.TokenType == TSqlTokenType.LeftParenthesis) { parenDepth++; continue; }
+            if (t.TokenType == TSqlTokenType.RightParenthesis) { if (parenDepth > 0) parenDepth--; continue; }
+
+            // Only depth-0 FROM/JOIN are at the outer statement scope. Skip ones
+            // nested inside CTE bodies / derived tables / scalar subqueries.
+            if (parenDepth > 0) continue;
 
             if (!IsFromOrJoinKeyword(t)) continue;
 

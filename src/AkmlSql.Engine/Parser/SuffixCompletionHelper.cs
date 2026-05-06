@@ -50,6 +50,15 @@ public static class SuffixCompletionHelper
             return trimmed + $" {DummyIdentifier} = 1";
         }
 
+        // After JOIN-ON — needs a boolean predicate. Use the leading-space
+        // form (" ON") so this doesn't match keywords ending in "ON" like
+        // UNION (ends in "ION"). The single-line case sql == "ON" is also
+        // accepted.
+        if (upper.EndsWith(" ON") || upper == "ON")
+        {
+            return trimmed + $" {DummyIdentifier} = 1";
+        }
+
         // After SET — needs column = value
         if (upper.EndsWith("SET"))
         {

@@ -2,6 +2,7 @@ using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Engine.Parser;
 using AkmlSql.Engine.Schema;
 using AkmlSql.Engine.Schema.Models;
+using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Completion.Providers;
 
@@ -74,7 +75,36 @@ public class ObjectProvider : ICompletionProvider
         }
 
         // Handle non-dot contexts where objects are expected
-        return ObjectClauseTypes.Contains(context.ClauseType);
+        if (!ObjectClauseTypes.Contains(context.ClauseType))
+            return false;
+
+        // SQL Standard sequencing: after a FROM-target identifier we expect a
+        // clause keyword (WHERE / GROUP BY / ORDER BY / JOIN / UNION / etc.) or
+        // a comma for another table — NOT another bare table name. Suppress
+        // ObjectProvider so KeywordProvider's "AfterFrom" list dominates here.
+        // Same rule for JoinTable (after `JOIN <target>`) and UpdateTable.
+        if (IsAfterTableTargetIdentifier(context))
+            return false;
+
+        return true;
+    }
+
+    /// <summary>
+    /// True when the cursor sits immediately past a table-target identifier in a
+    /// FROM/JOIN/UPDATE clause — i.e., the previous non-whitespace token is an
+    /// identifier (the table name or its alias) or a closing paren (end of a
+    /// derived-table expression). This is the position where the user expects
+    /// the NEXT clause keyword, not another table.
+    /// </summary>
+    private static bool IsAfterTableTargetIdentifier(CursorContext context)
+    {
+        if (context.ClauseType is not (ClauseType.From or ClauseType.JoinTable or ClauseType.UpdateTable))
+            return false;
+        var prev = context.PrecedingToken;
+        if (prev == null) return false;
+        return prev.TokenType is TSqlTokenType.Identifier
+            or TSqlTokenType.QuotedIdentifier
+            or TSqlTokenType.RightParenthesis;
     }
 
     public IEnumerable<CompletionItem> GetCompletions(CursorContext context, DatabaseCache? cache)

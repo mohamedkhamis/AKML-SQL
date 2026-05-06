@@ -87,16 +87,81 @@ public class CompletionEngine
             var script = _parserService.ParseWithSuffix(documentText, out _);
             if (script != null)
             {
-                var aliases = _aliasResolver.ResolveAliases(script, cursorOffset);
+                // Use the scope-aware resolver so completion respects FROM-clause
+                // boundaries. For `WITH cte AS (SELECT * FROM Inner) SELECT |`
+                // FROM cte`, the cursor's outer scope sees only `cte` — not `Inner`
+                // (which lives inside the CTE body). Without this, ColumnProvider
+                // gets multi-alias context, qualifies CTE columns as `cte.Col`, and
+                // filters them out when the user types a bare partial.
+                var aliases = _aliasResolver.ResolveAliasesInCursorScope(script, cursorOffset);
                 foreach (var (alias, tableRef) in aliases)
                     context.AvailableAliases[alias] = tableRef.FullName;
 
-                // AST-based CTE resolution populates both names AND column lists
-                // (used by future column completion inside CTE bodies). The token
-                // fallback below covers the case where parsing failed mid-CTE.
-                var astCtes = new CteResolver().ResolveCtes(script, cursorOffset);
+                // AST-based CTE resolution populates both names AND column lists.
+                // The fallback below covers the case where parsing failed mid-CTE.
+                var cteResolver = new CteResolver();
+                var astCtes = cteResolver.ResolveCtes(script, cursorOffset);
                 foreach (var (name, columns) in astCtes)
                     context.AvailableCtes[name] = columns;
+
+                // Source-table tracking lets JoinOnFkProvider look up real FK
+                // relationships between two CTEs via the underlying tables their
+                // bodies select from.
+                var astCteSources = cteResolver.ResolveCteSources(script, cursorOffset);
+                foreach (var (name, sources) in astCteSources)
+                    context.AvailableCteSources[name] = sources;
+            }
+
+            // Prefix-parse recovery: when content AFTER the cursor breaks the
+            // full parse, the WITH clause that precedes the cursor still parses
+            // cleanly on its own. Re-run CteResolver on the prefix so column
+            // completion has access to CTE columns even with malformed tail content.
+            //
+            // Run when EITHER no CTEs are known yet OR any known CTE has an empty
+            // column list (the token-based fallback registers CTE names without
+            // columns when the parser can't recover them — we'd rather fill those
+            // in via the prefix parse than leave them empty).
+            bool anyCteMissingColumns =
+                context.AvailableCtes.Count == 0 ||
+                context.AvailableCtes.Values.Any(c => c.Count == 0);
+            if (anyCteMissingColumns && cursorOffset > 0 && cursorOffset <= documentText.Length)
+            {
+                // Trim trailing partial identifier / dot characters so the prefix
+                // is parseable by ParseWithSuffix. For `... FROM Cte1.<cursor>`,
+                // the trailing `.` and any partial-identifier chars are not valid
+                // in any SQL recovery context, so walking back over them gives a
+                // clean syntactic suffix that the suffix-completer can fill in.
+                int prefixLen = cursorOffset;
+                while (prefixLen > 0)
+                {
+                    char ch = documentText[prefixLen - 1];
+                    if (char.IsLetterOrDigit(ch) || ch == '_' || ch == '.')
+                    {
+                        prefixLen--;
+                        continue;
+                    }
+                    break;
+                }
+                if (prefixLen <= 0) prefixLen = cursorOffset; // pure-identifier doc — fall back to original
+                var prefix = documentText.Substring(0, prefixLen);
+                var prefixScript = _parserService.ParseWithSuffix(prefix, out _);
+                if (prefixScript != null)
+                {
+                    var prefixResolver = new CteResolver();
+                    var prefixCtes = prefixResolver.ResolveCtes(prefixScript, prefix.Length);
+                    foreach (var (name, columns) in prefixCtes)
+                    {
+                        // Always overwrite empty entries; never overwrite a list
+                        // that already has columns (keep authoritative AST data).
+                        if (!context.AvailableCtes.TryGetValue(name, out var existing) || existing.Count == 0)
+                            context.AvailableCtes[name] = columns;
+                    }
+
+                    var prefixSources = prefixResolver.ResolveCteSources(prefixScript, prefix.Length);
+                    foreach (var (name, sources) in prefixSources)
+                        if (!context.AvailableCteSources.ContainsKey(name))
+                            context.AvailableCteSources[name] = sources;
+                }
             }
 
             // Fallback: if AST parsing failed or produced no aliases, extract aliases
