@@ -324,6 +324,37 @@ namespace AkmlSql.Shell.Shared.Dialogs
         /// </summary>
         public bool ShowDialog()
         {
+            BuildWindowInner();
+            _window!.ShowDialog();
+            return _dialogResult;
+        }
+
+        /// <summary>
+        /// Test-only: build the dialog's visual tree without showing it. Used by
+        /// AkmlSql.Shell.Shared.Tests for chrome regression checks. Must NOT be
+        /// called from production code paths — this method exists solely to expose
+        /// the rendering seam to the test project.
+        /// No items are pre-selected so every TreeViewItem reflects its base (non-selected) style.
+        /// </summary>
+        public Window TestBuildWindowForRenderTest()
+        {
+            _window = CreateWindow();
+            LoadSettingsToControls();
+            // Intentionally do NOT select the first item — we want base (non-selected) style
+            // applied to all items so the chrome test can assert the unselected foreground.
+            _window.Measure(new System.Windows.Size(double.PositiveInfinity, double.PositiveInfinity));
+            _window.Arrange(new Rect(0, 0, _window.DesiredSize.Width, _window.DesiredSize.Height));
+            _window.UpdateLayout();
+            return _window!;
+        }
+
+        /// <summary>
+        /// Shared initialization: creates the window, populates controls, and selects the first
+        /// navigation item. Called by both <see cref="ShowDialog"/> and
+        /// <see cref="TestBuildWindowForRenderTest"/>.
+        /// </summary>
+        private void BuildWindowInner()
+        {
             _window = CreateWindow();
             LoadSettingsToControls();
 
@@ -334,9 +365,6 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 if (firstItem != null)
                     firstItem.IsSelected = true;
             }
-
-            _window.ShowDialog();
-            return _dialogResult;
         }
 
         /// <summary>Returns the (potentially modified) settings.</summary>

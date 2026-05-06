@@ -1,0 +1,57 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <RootNamespace>AkmlSql.Shell.Shared.Tests</RootNamespace>
+    <AssemblyName>AkmlSql.Shell.Shared.Tests</AssemblyName>
+    <Platforms>AnyCPU;x64</Platforms>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Test framework: use v2/v17 — xunit.runner.visualstudio v3+ and Test.Sdk v18+ dropped net472 support -->
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Xunit.StaFact" Version="1.1.11" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- VS SDK references — runtime assets included so the test runner can load the assembly.
+         (ExcludeAssets="runtime" causes xunit test discovery to fail with assembly-not-found.) -->
+    <PackageReference Include="Microsoft.VisualStudio.SDK" Version="17.14.*" />
+    <PackageReference Include="Microsoft.VisualStudio.Language.Intellisense" Version="17.*" />
+    <PackageReference Include="Microsoft.VisualStudio.Text.UI.Wpf" Version="17.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- WPF framework references -->
+    <Reference Include="System.ComponentModel.Composition" />
+    <Reference Include="System.Design" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xaml" />
+    <Reference Include="PresentationCore" />
+    <Reference Include="PresentationFramework" />
+    <Reference Include="WindowsBase" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Reference Core for AppSettings -->
+    <ProjectReference Include="..\..\src\AkmlSql.Core\AkmlSql.Core.csproj" />
+  </ItemGroup>
+
+  <!-- Compile Shell.Shared sources directly into the test assembly via the shared projitems.
+       Import is at top level (not inside ItemGroup) — this is the canonical MSBuild shared-project pattern.
+       See src/AkmlSql.VS2022/AkmlSql.VS2022.csproj for the reference implementation. -->
+  <Import Project="..\..\src\AkmlSql.Shell.Shared\AkmlSql.Shell.Shared.projitems" Label="Shared" />
+
+</Project>
