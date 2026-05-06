@@ -470,7 +470,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
         {
             var sidebar = new Border
             {
-                Width = 220,
+                Width = 240,  // wider to give long labels like "Execution Warnings" room
                 Background = _theme.Sidebar,
                 BorderBrush = _theme.Sep,
                 BorderThickness = new Thickness(0, 0, 1, 0),
@@ -550,11 +550,17 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 ("Behavior", "IntelliSense"),
                 ("Database", "Schema Cache"));
 
-            AddTreeGroup("Inserted Code", expanded: false,
-                ("Refactoring", "Refactoring"));
+            // "Inserted Code" group is reserved for Phase 2 (Qualification, INSERT, JOIN).
+            // Phase 1: empty group is hidden — do not add it yet, to avoid showing an
+            // empty parent node.
 
             AddTreeGroup("Format", expanded: false,
                 ("Styles", "Formatting"));
+
+            AddTreeGroup("Editor", expanded: false,
+                ("Productivity", "Editor"),
+                ("Navigation", "Navigation"),
+                ("Refactoring", "Refactoring"));   // moved from "Inserted Code"
 
             AddTreeGroup("Queries", expanded: false,
                 ("History", "History"),
@@ -567,13 +573,11 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
             AddTreeLeaf("Code Analysis", "Code Analysis");
             AddTreeLeaf("Snippets", "Snippets");
-            AddTreeLeaf("Prompt AI", "AI Assistance");
+            AddTreeLeaf("AI Assistance", "AI Assistance");
 
-            AddTreeGroup("Editor", expanded: false,
-                ("Productivity", "Editor"),
-                ("Navigation", "Navigation"));
-
-            AddTreeLeaf("Miscellaneous", "General");
+            AddTreeGroup("Miscellaneous", expanded: false,
+                ("Main", "General"));
+            // "Labs" sub-leaf is added in Phase 2.
 
             _navTree.SelectedItemChanged += OnNavSelectionChanged;
 
@@ -1097,21 +1101,21 @@ namespace AkmlSql.Shell.Shared.Dialogs
             // Mapping: page key (used for navigation tag) → SQL Prompt-style display label
             var pages = new (string Key, string Display, Func<UIElement> Builder)[]
             {
-                ("General",       "Miscellaneous",       BuildGeneralPage),
-                ("IntelliSense",  "Suggestions › Behavior", BuildIntelliSensePage),
-                ("Schema Cache",  "Suggestions › Database", BuildSchemaCachePage),
-                ("Formatting",    "Format › Styles",     BuildFormattingPage),
-                ("Snippets",      "Snippets",            BuildSnippetsPage),
-                ("Code Analysis", "Code Analysis",       BuildCodeAnalysisPage),
-                ("Refactoring",   "Inserted Code › Refactoring", BuildRefactoringPage),
-                ("History",       "Queries › History",   BuildHistoryPage),
-                ("Tabs & UI",     "Tabs › Color",        BuildTabsPage),
+                ("General",       "Miscellaneous › Main",         BuildGeneralPage),
+                ("IntelliSense",  "Suggestions › Behavior",       BuildIntelliSensePage),
+                ("Schema Cache",  "Suggestions › Database",       BuildSchemaCachePage),
+                ("Formatting",    "Format › Styles",              BuildFormattingPage),
+                ("Snippets",      "Snippets",                     BuildSnippetsPage),
+                ("Code Analysis", "Code Analysis",                BuildCodeAnalysisPage),
+                ("Refactoring",   "Editor › Refactoring",         BuildRefactoringPage),
+                ("History",       "Queries › History",            BuildHistoryPage),
+                ("Tabs & UI",     "Tabs › Color",                 BuildTabsPage),
                 ("Safety",        "Queries › Execution Warnings", BuildSafetyPage),
-                ("AI Assistance", "Prompt AI",           BuildAiPage),
-                ("Grid",          "Queries › Query Results", BuildGridPage),
-                ("Editor",        "Editor › Productivity", BuildEditorPage),
-                ("Execution",     "Queries › Execution", BuildExecutionPage),
-                ("Navigation",    "Editor › Navigation", BuildNavigationPage),
+                ("AI Assistance", "AI Assistance",                BuildAiPage),
+                ("Grid",          "Queries › Query Results",      BuildGridPage),
+                ("Editor",        "Editor › Productivity",        BuildEditorPage),
+                ("Execution",     "Queries › Execution",          BuildExecutionPage),
+                ("Navigation",    "Editor › Navigation",          BuildNavigationPage),
             };
 
             foreach (var (key, display, builder) in pages)
