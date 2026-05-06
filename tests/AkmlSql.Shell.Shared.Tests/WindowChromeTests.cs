@@ -83,8 +83,7 @@ namespace AkmlSql.Shell.Shared.Tests
         [StaFact]
         public void TreeViewItems_AllVisibleInDarkTheme()
         {
-            // Arrange — switch registry and settings to dark
-            ThemeRegistry.Instance.SetPreference("dark");
+            // Arrange — settings drives dark palette selection directly
             var settings = new AppSettings { Theme = "Dark" };
             var dialog = new SettingsWindow(settings);
             var window = dialog.TestBuildWindowForRenderTest();
@@ -127,9 +126,6 @@ namespace AkmlSql.Shell.Shared.Tests
                 Assert.NotNull(styledFg); // Fails if Style is null (ItemContainerStyle bug)
                 Assert.NotEqual(sidebarBg, styledFg!.Color);
             }
-
-            // Reset registry back to light so other tests are not affected
-            ThemeRegistry.Instance.SetPreference("light");
         }
 
         /// <summary>
@@ -150,7 +146,7 @@ namespace AkmlSql.Shell.Shared.Tests
             var window = dialog.TestBuildWindowForRenderTest();
 
             // Find the navigation TreeView
-            var treeView = FirstTreeView(window);
+            var treeView = FindTreeView(window);
             Assert.NotNull(treeView);
 
             // Collect all leaf TreeViewItems (items with no children, i.e., actual pages)
@@ -207,12 +203,6 @@ namespace AkmlSql.Shell.Shared.Tests
             }
             return null;
         }
-
-        /// <summary>
-        /// Alias for FindTreeView — identical depth-first logical tree walk.
-        /// Named separately so the restore-link test reads more clearly.
-        /// </summary>
-        private static TreeView? FirstTreeView(DependencyObject root) => FindTreeView(root);
 
         /// <summary>
         /// Recursively collects all TreeViewItems that are leaves (Items.Count == 0).
