@@ -516,8 +516,6 @@ namespace AkmlSql.Shell.Shared.Dialogs
             _navTree.Resources[SystemColors.HighlightTextBrushKey] = _theme.SelectedText;
             _navTree.Resources[SystemColors.InactiveSelectionHighlightBrushKey] = _theme.Selected;
             _navTree.Resources[SystemColors.InactiveSelectionHighlightTextBrushKey] = _theme.SelectedText;
-            _navTree.Resources[SystemColors.ControlBrushKey] = _theme.Selected;
-            _navTree.Resources[SystemColors.ControlTextBrushKey] = _theme.SelectedText;
 
             // Apply themed style to TreeViewItems
             var itemStyle = new Style(typeof(TreeViewItem));
@@ -537,7 +535,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
             mouseOverTrigger.Setters.Add(new Setter(Control.BackgroundProperty, _theme.TreeHover));
             itemStyle.Triggers.Add(mouseOverTrigger);
 
-            _navTree.ItemContainerStyle = itemStyle;
+            // Use implicit style by type so the style cascades to TreeViewItems at every depth.
+            // (TreeView.ItemContainerStyle only applies to direct children, breaking nested items.)
+            _navTree.Resources[typeof(TreeViewItem)] = itemStyle;
 
             // Build categories and pages
             BuildPages();
