@@ -45,6 +45,17 @@ namespace AkmlSql.Shell.Shared.Dialogs
         private TreeView? _navTree;
         private readonly Dictionary<string, UIElement> _pages = new();
 
+        // ─── Page-split builders (Phase 2 B.2+) ──────────────────────────────
+        // Pages migrated to per-file IPageBuilder implementations. Keys not present
+        // here fall back to the legacy inline Build*Page method via the BuildPages
+        // dispatch loop. Cleanup of the legacy methods happens in B.17 once all
+        // 15 pages have moved.
+        private readonly Dictionary<string, IPageBuilder> _pageBuilders = new()
+        {
+            ["Snippets"] = new SnippetsPage(),
+        };
+        private readonly Dictionary<string, IPageControls> _pageControlsByKey = new();
+
         // Track whether user confirmed via OK
         private bool _dialogResult;
 
@@ -119,13 +130,8 @@ namespace AkmlSql.Shell.Shared.Dialogs
         private CheckBox? _chkSemanticValidation;
 
         // Snippets
-        private CheckBox? _chkSnipEnabled;
-        private CheckBox? _chkSnipShowInCompletion;
-        private CheckBox? _chkSnipFormatOnExpand;
-        private CheckBox? _chkSnipContextFilter;
-        private CheckBox? _chkSnipTrackUsage;
-        private TextBox? _txtPersonalFolder;
-        private TextBox? _txtTeamFolder;
+        // Snippets controls migrated to Pages/SnippetsPage.cs (Phase 2 B.2);
+        // owned by the SnippetsControls record stored in _pageControlsByKey["Snippets"].
 
         // Code Analysis
         private CheckBox? _chkAnalysisEnabled;
@@ -1045,14 +1051,16 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
         private void BuildPages()
         {
-            // Mapping: page key (used for navigation tag) → SQL Prompt-style display label
-            var pages = new (string Key, string Display, Func<UIElement> Builder)[]
+            // Mapping: page key (used for navigation tag) → SQL Prompt-style display label.
+            // Pages migrated to Pages/*.cs (Phase 2 B.2+) have a null Builder — they're
+            // dispatched through _pageBuilders[key] instead.
+            var pages = new (string Key, string Display, Func<UIElement>? Builder)[]
             {
                 ("General",       "Miscellaneous › Main",         BuildGeneralPage),
                 ("IntelliSense",  "Suggestions › Behavior",       BuildIntelliSensePage),
                 ("Schema Cache",  "Suggestions › Database",       BuildSchemaCachePage),
                 ("Formatting",    "Format › Styles",              BuildFormattingPage),
-                ("Snippets",      "Snippets",                     BuildSnippetsPage),
+                ("Snippets",      "Snippets",                     null),
                 ("Code Analysis", "Code Analysis",                BuildCodeAnalysisPage),
                 ("Refactoring",   "Editor › Refactoring",         BuildRefactoringPage),
                 ("History",       "Queries › History",            BuildHistoryPage),
@@ -1069,7 +1077,19 @@ namespace AkmlSql.Shell.Shared.Dialogs
             {
                 _currentPageKey = key;
                 _currentPageDisplay = display;
-                _pages[key] = builder();
+
+                if (_pageBuilders.TryGetValue(key, out var pageBuilder))
+                {
+                    var hostPanel = CreatePagePanel();
+                    AddPageHeader(hostPanel, pageBuilder.Title);
+                    var ctx = new PageContext(_theme, _settings, new RowFactory(_theme), RegisterSearchEntry);
+                    _pageControlsByKey[key] = pageBuilder.Build(hostPanel, ctx);
+                    _pages[key] = WrapInScrollViewer(hostPanel);
+                }
+                else if (builder != null)
+                {
+                    _pages[key] = builder();
+                }
             }
 
             _currentPageKey = string.Empty;
@@ -1252,33 +1272,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
         // ═══════════════════════════════════════════════════════════════════════
         //  Snippets
         // ═══════════════════════════════════════════════════════════════════════
-        private UIElement BuildSnippetsPage()
-        {
-            var panel = CreatePagePanel();
-
-            AddPageHeader(panel, "Snippets");
-
-            AddGroupHeader(panel, "Snippet Manager");
-            _chkSnipEnabled = AddToggle(panel, "Enable snippets",
-                "Master switch for the snippet engine");
-            _chkSnipShowInCompletion = AddToggle(panel, "Show in IntelliSense completions",
-                "Include snippets in the main completion list");
-            _chkSnipFormatOnExpand = AddToggle(panel, "Format after expansion",
-                "Apply SQL formatting after expanding a snippet");
-            _chkSnipContextFilter = AddToggle(panel, "Filter by SQL context",
-                "Only show snippets valid for the current SQL position");
-            _chkSnipTrackUsage = AddToggle(panel, "Track usage for ranking",
-                "Boost frequently-used snippets to the top of the list");
-
-            AddGroupSeparator(panel);
-            AddGroupHeader(panel, "Snippet Folders");
-            _txtPersonalFolder = AddTextInput(panel, "Personal folder",
-                "Path to personal .akmlsnippet files (leave empty for default)");
-            _txtTeamFolder = AddTextInput(panel, "Team folder",
-                "Shared folder for team snippet distribution");
-
-            return WrapInScrollViewer(panel);
-        }
+        // BuildSnippetsPage migrated to Pages/SnippetsPage.cs (Phase 2 B.2).
 
         // ═══════════════════════════════════════════════════════════════════════
         //  Code Analysis
@@ -2648,15 +2642,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
             SetChecked(_chkRespectNoformat, f.RespectNoformat);
             SetChecked(_chkSemanticValidation, f.SemanticValidation);
 
-            // ── Snippets ─────────────────────────────────────────────────
-            var s = _settings.Snippets;
-            SetChecked(_chkSnipEnabled, s.Enabled);
-            SetChecked(_chkSnipShowInCompletion, s.ShowInCompletion);
-            SetChecked(_chkSnipFormatOnExpand, s.FormatOnExpand);
-            SetChecked(_chkSnipContextFilter, s.ContextFilter);
-            SetChecked(_chkSnipTrackUsage, s.TrackUsage);
-            SetText(_txtPersonalFolder, s.PersonalFolder);
-            SetText(_txtTeamFolder, s.TeamFolder);
+            // ── Snippets (page-split: B.2) ──────────────────────────────
+            if (_pageControlsByKey.TryGetValue("Snippets", out var snippetsLoad))
+                snippetsLoad.Load(_settings);
 
             // ── Code Analysis ────────────────────────────────────────────
             var ca = _settings.CodeAnalysis;
@@ -2833,13 +2821,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
             _settings.Formatter.SemanticValidation = IsChecked(_chkSemanticValidation);
 
             // ── Snippets ─────────────────────────────────────────────────
-            _settings.Snippets.Enabled = IsChecked(_chkSnipEnabled);
-            _settings.Snippets.ShowInCompletion = IsChecked(_chkSnipShowInCompletion);
-            _settings.Snippets.FormatOnExpand = IsChecked(_chkSnipFormatOnExpand);
-            _settings.Snippets.ContextFilter = IsChecked(_chkSnipContextFilter);
-            _settings.Snippets.TrackUsage = IsChecked(_chkSnipTrackUsage);
-            _settings.Snippets.PersonalFolder = GetText(_txtPersonalFolder);
-            _settings.Snippets.TeamFolder = GetText(_txtTeamFolder);
+            // ── Snippets (page-split: B.2) ──────────────────────────────
+            if (_pageControlsByKey.TryGetValue("Snippets", out var snippetsSave))
+                snippetsSave.Save(_settings);
 
             // ── Code Analysis ────────────────────────────────────────────
             _settings.CodeAnalysis.Enabled = IsChecked(_chkAnalysisEnabled);

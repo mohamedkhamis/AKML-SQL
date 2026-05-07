@@ -36,6 +36,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\IPageBuilder.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\PageContext.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\RowFactory.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\SnippetsPage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)StatusBar\StatusBarManager.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Update\UpdateLauncher.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Update\UpdateNotifier.cs" />

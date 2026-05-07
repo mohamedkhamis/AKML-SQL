@@ -1,26 +1,32 @@
 #nullable enable
-using System.Windows;
+using System.Windows.Controls;
 using AkmlSql.Core.Config;
 
 namespace AkmlSql.Shell.Shared.Dialogs.Pages
 {
     /// <summary>
     /// Builds one page of the Options dialog. Implementations are stateless —
-    /// each <see cref="Build"/> call produces a fresh <see cref="UIElement"/>
-    /// and a corresponding <see cref="IPageControls"/> for Save/Load/Reset.
+    /// each <see cref="Build"/> call appends rows to a host-owned <see cref="StackPanel"/>
+    /// (which already has the page header) and returns an <see cref="IPageControls"/>
+    /// for Save/Load/Reset.
     /// </summary>
     internal interface IPageBuilder
     {
         /// <summary>Page key used as <c>TreeViewItem.Tag</c> and in Reset / Search lookups.</summary>
         string Key { get; }
 
-        /// <summary>Display label shown in the page header (breadcrumb format).</summary>
+        /// <summary>Breadcrumb-style display label used in search results (e.g. "Snippets", "Suggestions › Behavior").</summary>
         string Display { get; }
 
+        /// <summary>Heading text rendered at the top of the page by the host's <c>AddPageHeader</c>.</summary>
+        string Title { get; }
+
         /// <summary>
-        /// Constructs the WPF panel + a controls bag the host uses to load/save settings.
+        /// Appends this page's body rows to <paramref name="panel"/> (which the host
+        /// has pre-populated with the page header). Returns a controls bag the host
+        /// uses to load/save settings for this page.
         /// </summary>
-        (UIElement Element, IPageControls Controls) Build(PageContext ctx);
+        IPageControls Build(StackPanel panel, PageContext ctx);
     }
 
     /// <summary>
