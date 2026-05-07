@@ -112,6 +112,9 @@ namespace AkmlSql.Core.Config
         /// </summary>
         public bool DisabledNativeIntelliSense { get; set; }
 
+        [JsonPropertyName("labs")]
+        public LabsSettings Labs { get; set; } = new();
+
         /// <summary>
         /// Minimum log level for the rolling file sink.
         /// Valid values: Verbose, Debug, Information, Warning, Error, Fatal.
@@ -119,6 +122,22 @@ namespace AkmlSql.Core.Config
         /// </summary>
         [JsonPropertyName("logMinimumLevel")]
         public string LogMinimumLevel { get; set; } = "Debug";
+    }
+
+    /// <summary>
+    /// Experimental / preview feature flags. Per-feature opt-ins for in-flight work.
+    /// Labs entries may change or be removed without notice.
+    /// </summary>
+    public class LabsSettings
+    {
+        [JsonPropertyName("ghostTextCompletion")]
+        public bool GhostTextCompletion { get; set; }
+
+        [JsonPropertyName("parallelSchemaCache")]
+        public bool ParallelSchemaCache { get; set; }
+
+        [JsonPropertyName("sharedSnippetSync")]
+        public bool SharedSnippetSync { get; set; }
     }
 
     /// <summary>Default focus button for the pre-execution safety warning dialog (US1 / FR-005).</summary>
@@ -155,6 +174,18 @@ namespace AkmlSql.Core.Config
     /// <summary>Settings for the IntelliSense completion engine.</summary>
     public class IntelliSenseSettings
     {
+        [JsonPropertyName("suggestionTypes")]
+        public SuggestionTypesSettings SuggestionTypes { get; set; } = new();
+
+        [JsonPropertyName("qualification")]
+        public QualificationSettings Qualification { get; set; } = new();
+
+        [JsonPropertyName("insertOptions")]
+        public InsertOptionsSettings InsertOptions { get; set; } = new();
+
+        [JsonPropertyName("joinOptions")]
+        public JoinOptionsSettings JoinOptions { get; set; } = new();
+
         /// <summary>Master switch — disabling this suppresses all IntelliSense features.</summary>
         public bool Enabled { get; set; } = true;
         /// <summary>Show completion list automatically while typing (no Ctrl+Space required).</summary>
@@ -205,6 +236,59 @@ namespace AkmlSql.Core.Config
         public bool DotCommits { get; set; } = true;
         /// <summary>Show snippet shortcuts (sel, ssf, ins, etc.) in the completion popup. Default disabled.</summary>
         public bool SnippetsInCompletion { get; set; } = false;
+    }
+
+    public enum ColumnSuggestionScope { All, ReferencedOnly }
+    public enum SchemaQualifyMode { Always, NonDefaultOnly, Never }
+    public enum BracketMode { Always, WhenRequired, Never }
+
+    /// <summary>Which categories of database objects appear in the suggestion list.</summary>
+    public class SuggestionTypesSettings
+    {
+        [JsonPropertyName("includeSystemObjects")]
+        public bool IncludeSystemObjects { get; set; }
+
+        [JsonPropertyName("suggestAllColumnsAfterSelect")]
+        public bool SuggestAllColumnsAfterSelect { get; set; }
+
+        [JsonPropertyName("columnScope")]
+        public ColumnSuggestionScope ColumnScope { get; set; } = ColumnSuggestionScope.ReferencedOnly;
+
+        [JsonPropertyName("includeKeywords")]
+        public bool IncludeKeywords { get; set; } = true;
+    }
+
+    /// <summary>How object names are formatted when inserted from the suggestion list.</summary>
+    public class QualificationSettings
+    {
+        [JsonPropertyName("schemaMode")]
+        public SchemaQualifyMode SchemaMode { get; set; } = SchemaQualifyMode.NonDefaultOnly;
+
+        [JsonPropertyName("bracketMode")]
+        public BracketMode BracketMode { get; set; } = BracketMode.WhenRequired;
+
+        [JsonPropertyName("qualifyColumnsWithTableOrAlias")]
+        public bool QualifyColumnsWithTableOrAlias { get; set; } = true;
+    }
+
+    /// <summary>What metadata is inserted when writing INSERT INTO statements.</summary>
+    public class InsertOptionsSettings
+    {
+        [JsonPropertyName("includeColumns")]
+        public bool IncludeColumns { get; set; } = true;
+
+        [JsonPropertyName("includeDefaultsAsComments")]
+        public bool IncludeDefaultsAsComments { get; set; } = true;
+
+        [JsonPropertyName("includeProcParamInfo")]
+        public bool IncludeProcParamInfo { get; set; } = true;
+    }
+
+    /// <summary>JOIN completion behavior.</summary>
+    public class JoinOptionsSettings
+    {
+        [JsonPropertyName("matchByColumnName")]
+        public bool MatchByColumnName { get; set; } = true;
     }
 
     /// <summary>Settings for the in-memory schema cache.</summary>
