@@ -53,6 +53,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
         private readonly Dictionary<string, IPageBuilder> _pageBuilders = new()
         {
             ["Snippets"] = new SnippetsPage(),
+            ["Code Analysis"] = new CodeAnalysisPage(),
         };
         private readonly Dictionary<string, IPageControls> _pageControlsByKey = new();
 
@@ -134,10 +135,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
         // owned by the SnippetsControls record stored in _pageControlsByKey["Snippets"].
 
         // Code Analysis
-        private CheckBox? _chkAnalysisEnabled;
-        private CheckBox? _chkAnalysisRunOnType;
-        private CheckBox? _chkAnalysisRunOnSave;
-        private CheckBox? _chkAnalysisShowInErrorList;
+        // Code Analysis controls migrated to Pages/CodeAnalysisPage.cs (Phase 2 B.3).
 
         // Refactoring
         private CheckBox? _chkRefPreviewBeforeApply;
@@ -1061,7 +1059,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 ("Schema Cache",  "Suggestions › Database",       BuildSchemaCachePage),
                 ("Formatting",    "Format › Styles",              BuildFormattingPage),
                 ("Snippets",      "Snippets",                     null),
-                ("Code Analysis", "Code Analysis",                BuildCodeAnalysisPage),
+                ("Code Analysis", "Code Analysis",                null),
                 ("Refactoring",   "Editor › Refactoring",         BuildRefactoringPage),
                 ("History",       "Queries › History",            BuildHistoryPage),
                 ("Tabs & UI",     "Tabs › Color",                 BuildTabsPage),
@@ -1277,29 +1275,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
         // ═══════════════════════════════════════════════════════════════════════
         //  Code Analysis
         // ═══════════════════════════════════════════════════════════════════════
-        private UIElement BuildCodeAnalysisPage()
-        {
-            var panel = CreatePagePanel();
-
-            AddPageHeader(panel, "Code Analysis");
-
-            AddGroupHeader(panel, "Analysis Engine");
-            _chkAnalysisEnabled = AddToggle(panel, "Enable code analysis",
-                "Master switch for all 120+ analysis rules");
-            _chkAnalysisRunOnType = AddToggle(panel, "Analyze while typing",
-                "Run analysis rules in real-time as you type");
-            _chkAnalysisRunOnSave = AddToggle(panel, "Analyze on save",
-                "Run full analysis when the document is saved");
-            _chkAnalysisShowInErrorList = AddToggle(panel, "Show in Error List",
-                "Report analysis issues in the VS/SSMS Error List window");
-
-            AddGroupSeparator(panel);
-            AddInfoRow(panel, "Rules", "120+ rules across 8 categories (PE, BP, SE, ST, DE, DEP, EX, NM)");
-            AddInfoRow(panel, "Per-project config", ".casettings JSON file searched upward from file");
-            AddInfoRow(panel, "Inline suppression", "-- akml-disable RuleId / -- akml-enable RuleId");
-
-            return WrapInScrollViewer(panel);
-        }
+        // BuildCodeAnalysisPage migrated to Pages/CodeAnalysisPage.cs (Phase 2 B.3).
 
         // ═══════════════════════════════════════════════════════════════════════
         //  Refactoring
@@ -2646,12 +2622,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
             if (_pageControlsByKey.TryGetValue("Snippets", out var snippetsLoad))
                 snippetsLoad.Load(_settings);
 
-            // ── Code Analysis ────────────────────────────────────────────
-            var ca = _settings.CodeAnalysis;
-            SetChecked(_chkAnalysisEnabled, ca.Enabled);
-            SetChecked(_chkAnalysisRunOnType, ca.RunOnType);
-            SetChecked(_chkAnalysisRunOnSave, ca.RunOnSave);
-            SetChecked(_chkAnalysisShowInErrorList, ca.ShowInErrorList);
+            // ── Code Analysis (page-split: B.3) ─────────────────────────
+            if (_pageControlsByKey.TryGetValue("Code Analysis", out var caLoad))
+                caLoad.Load(_settings);
 
             // ── Refactoring ──────────────────────────────────────────────
             var rf = _settings.Refactoring;
@@ -2826,10 +2799,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 snippetsSave.Save(_settings);
 
             // ── Code Analysis ────────────────────────────────────────────
-            _settings.CodeAnalysis.Enabled = IsChecked(_chkAnalysisEnabled);
-            _settings.CodeAnalysis.RunOnType = IsChecked(_chkAnalysisRunOnType);
-            _settings.CodeAnalysis.RunOnSave = IsChecked(_chkAnalysisRunOnSave);
-            _settings.CodeAnalysis.ShowInErrorList = IsChecked(_chkAnalysisShowInErrorList);
+            // ── Code Analysis (page-split: B.3) ─────────────────────────
+            if (_pageControlsByKey.TryGetValue("Code Analysis", out var caSave))
+                caSave.Save(_settings);
 
             // ── Refactoring ──────────────────────────────────────────────
             _settings.Refactoring.PreviewBeforeApply = IsChecked(_chkRefPreviewBeforeApply);
