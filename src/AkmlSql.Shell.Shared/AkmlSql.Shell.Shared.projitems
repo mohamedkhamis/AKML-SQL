@@ -32,6 +32,10 @@
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\AboutDialog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\SettingsWindow.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\LogViewerDialog.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\PageTheme.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\IPageBuilder.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\PageContext.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\RowFactory.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)StatusBar\StatusBarManager.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Update\UpdateLauncher.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Update\UpdateNotifier.cs" />

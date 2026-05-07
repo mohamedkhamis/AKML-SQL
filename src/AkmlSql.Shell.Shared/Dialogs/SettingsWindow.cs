@@ -13,6 +13,7 @@ using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using AkmlSql.Core.Config;
+using AkmlSql.Shell.Shared.Dialogs.Pages;
 using AkmlSql.Shell.Shared.Ui.Theme;
 using Serilog;
 using Constants = AkmlSql.Core.Constants;
@@ -29,95 +30,13 @@ namespace AkmlSql.Shell.Shared.Dialogs
     internal sealed class SettingsWindow
     {
         // ─── Theme brush set ────────────────────────────────────────────────
-        /// <summary>
-        /// Holds all frozen brushes for a single theme variant (Dark or Light).
-        /// </summary>
-        private sealed class ThemeBrushSet
-        {
-            public SolidColorBrush Main { get; }
-            public SolidColorBrush Sidebar { get; }
-            public SolidColorBrush Panel { get; }
-            public SolidColorBrush Input { get; }
-            public SolidColorBrush InputReadOnly { get; }
-            public SolidColorBrush Button { get; }
-            public SolidColorBrush ButtonHover { get; }
-            public SolidColorBrush Selected { get; }
-            public SolidColorBrush Border { get; }
-            public SolidColorBrush ComboBorder { get; }
-            public SolidColorBrush FgPrimary { get; }
-            public SolidColorBrush FgSecondary { get; }
-            public SolidColorBrush FgAccent { get; }
-            public SolidColorBrush FgWhite { get; }
-            public SolidColorBrush SelectedText { get; }
-            public SolidColorBrush Sep { get; }
-            public SolidColorBrush Transparent { get; }
-            public SolidColorBrush TreeHover { get; }
-            public SolidColorBrush Caret { get; }
-
-            private ThemeBrushSet(
-                Color main, Color sidebar, Color panel, Color input, Color inputReadOnly,
-                Color button, Color buttonHover, Color selected,
-                Color border, Color comboBorder,
-                Color fgPrimary, Color fgSecondary, Color fgAccent, Color fgWhite,
-                Color selectedText, Color sep, Color treeHover, Color caret)
-            {
-                Main = Freeze(new SolidColorBrush(main));
-                Sidebar = Freeze(new SolidColorBrush(sidebar));
-                Panel = Freeze(new SolidColorBrush(panel));
-                Input = Freeze(new SolidColorBrush(input));
-                InputReadOnly = Freeze(new SolidColorBrush(inputReadOnly));
-                Button = Freeze(new SolidColorBrush(button));
-                ButtonHover = Freeze(new SolidColorBrush(buttonHover));
-                Selected = Freeze(new SolidColorBrush(selected));
-                Border = Freeze(new SolidColorBrush(border));
-                ComboBorder = Freeze(new SolidColorBrush(comboBorder));
-                FgPrimary = Freeze(new SolidColorBrush(fgPrimary));
-                FgSecondary = Freeze(new SolidColorBrush(fgSecondary));
-                FgAccent = Freeze(new SolidColorBrush(fgAccent));
-                FgWhite = Freeze(new SolidColorBrush(fgWhite));
-                SelectedText = Freeze(new SolidColorBrush(selectedText));
-                Sep = Freeze(new SolidColorBrush(sep));
-                Transparent = Freeze(new SolidColorBrush(Colors.Transparent));
-                TreeHover = Freeze(new SolidColorBrush(treeHover));
-                Caret = Freeze(new SolidColorBrush(caret));
-            }
-
-            // ── Theme palettes derived from the central ThemePalette (single source of truth) ──
-            // Each ThemeBrushSet field maps to a semantic token from contracts/theme-tokens.md.
-            // Spec 016 T017: chrome literals removed; values now flow from AkmlSql.Shell.Shared.Ui.Theme.ThemePalette.
-            public static readonly ThemeBrushSet Dark = FromPalette(AkmlSql.Shell.Shared.Ui.Theme.ThemePalette.Dark);
-            public static readonly ThemeBrushSet Light = FromPalette(AkmlSql.Shell.Shared.Ui.Theme.ThemePalette.Light);
-
-            private static ThemeBrushSet FromPalette(AkmlSql.Shell.Shared.Ui.Theme.ThemePalette p)
-            {
-                Color C(string token) => ((SolidColorBrush)p.Brushes[token]).Color;
-                return new ThemeBrushSet(
-                    main:          C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.SurfaceCanvas),
-                    sidebar:       C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.SurfaceSidebar),
-                    panel:         C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.SurfacePanel),
-                    input:         C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.SurfaceInput),
-                    inputReadOnly: C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.SurfaceInputReadOnly),
-                    button:        C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.SurfaceElevated),
-                    buttonHover:   C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.SurfaceHover),
-                    selected:      C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.AccentPrimary),
-                    border:        C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.BorderDefault),
-                    comboBorder:   C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.BorderDefault),
-                    fgPrimary:     C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.TextPrimary),
-                    fgSecondary:   C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.TextSecondary),
-                    fgAccent:      C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.TextLink),
-                    fgWhite:       C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.TextPrimary),
-                    selectedText:  C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.TextOnAccent),
-                    sep:           C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.BorderSubtle),
-                    treeHover:     C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.SurfaceHover),
-                    caret:         C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.TextPrimary)
-                );
-            }
-        }
+        // PageTheme was lifted to Pages/PageTheme.cs (Phase 2 B.1) so per-page
+        // builders can consume it without depending on SettingsWindow internals.
 
         private static SolidColorBrush Freeze(SolidColorBrush b) { b.Freeze(); return b; }
 
         // ─── Active theme ───────────────────────────────────────────────────
-        private readonly ThemeBrushSet _theme;
+        private readonly PageTheme _theme;
 
         // ─── State ───────────────────────────────────────────────────────────
         private Window? _window;
@@ -315,7 +234,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
             // Pick theme based on settings (default: light, like SQL Prompt)
             var themeName = settings.Theme?.ToLowerInvariant() ?? "light";
-            _theme = themeName == "dark" ? ThemeBrushSet.Dark : ThemeBrushSet.Light;
+            _theme = themeName == "dark" ? PageTheme.Dark : PageTheme.Light;
         }
 
         /// <summary>
@@ -1854,7 +1773,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
         /// <summary>
         /// Wraps a setting row in a zebra-striped <see cref="Border"/>. Alternates between
-        /// transparent and <see cref="ThemeBrushSet.InputReadOnly"/> for readability,
+        /// transparent and <see cref="PageTheme.InputReadOnly"/> for readability,
         /// matching the SQL Prompt Options dialog row style.
         /// </summary>
         private Border WrapZebraRow(UIElement content)
@@ -2104,7 +2023,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
         /// After the ComboBox template is applied, walk the visual tree to restyle the
         /// Chrome toggle button that ignores standard properties.
         /// </summary>
-        private static void ThemeComboBoxVisualTree(ComboBox combo, ThemeBrushSet theme)
+        private static void ThemeComboBoxVisualTree(ComboBox combo, PageTheme theme)
         {
             try
             {
@@ -2157,7 +2076,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
         /// Sets background, border, and <see cref="TextElement.ForegroundProperty"/> on the popup content
         /// so that VS/SSMS theme inheritance doesn't override our text color.
         /// </summary>
-        private static void ThemeComboBoxPopup(ComboBox combo, ThemeBrushSet theme)
+        private static void ThemeComboBoxPopup(ComboBox combo, PageTheme theme)
         {
             try
             {
@@ -2473,10 +2392,10 @@ namespace AkmlSql.Shell.Shared.Dialogs
             // Index 0 = Dark, Index 1 = Light, Index 2 = System (auto-detect from VS/SSMS)
             var requestedTheme = idx switch
             {
-                0 => ThemeBrushSet.Dark,
+                0 => PageTheme.Dark,
                 2 => Ui.ThemeManager.DetectFromEnvironment() == Ui.VsThemeKind.Dark
-                    ? ThemeBrushSet.Dark : ThemeBrushSet.Light,
-                _ => ThemeBrushSet.Light
+                    ? PageTheme.Dark : PageTheme.Light,
+                _ => PageTheme.Light
             };
 
             if (_theme == requestedTheme)
