@@ -18,6 +18,14 @@ public class JoinOnFkProvider : ICompletionProvider
 {
     public string Name => "JoinOnFk";
 
+    /// <summary>
+    /// When <c>true</c> (default), the CTE name-match pass (Pass 3) emits suggestions for
+    /// join participants that share column names, even when no FK exists.
+    /// When <c>false</c>, only FK-based suggestions (Pass 1 and Pass 2) are emitted.
+    /// Maps to <c>IntelliSense.JoinOptions.MatchByColumnName</c> in config.
+    /// </summary>
+    public bool MatchByColumnName { get; set; } = true;
+
     public bool CanHandle(CursorContext context, DatabaseCache? cache)
     {
         if (cache == null)
@@ -193,46 +201,51 @@ public class JoinOnFkProvider : ICompletionProvider
         // side is a CTE — for table-to-table pairs the FK loop above is
         // authoritative and we don't want to suggest noisy unrelated name
         // collisions. Canonical order ensures one direction per pair.
-        foreach (var (leftAlias, leftFullName) in context.AvailableAliases)
+        // Gated by <see cref="MatchByColumnName"/>: when false, this entire
+        // pass is skipped so only FK-based suggestions (Pass 1/2) appear.
+        if (MatchByColumnName)
         {
-            foreach (var (rightAlias, rightFullName) in context.AvailableAliases)
+            foreach (var (leftAlias, leftFullName) in context.AvailableAliases)
             {
-                if (aliasOrder[leftAlias] >= aliasOrder[rightAlias]) continue;
-
-                bool leftIsCte  = context.AvailableCtes.ContainsKey(leftAlias);
-                bool rightIsCte = context.AvailableCtes.ContainsKey(rightAlias);
-                if (!leftIsCte && !rightIsCte)
-                    continue;
-
-                var leftCols  = ResolveJoinableColumnNames(leftAlias, leftFullName, context, cache);
-                var rightCols = ResolveJoinableColumnNames(rightAlias, rightFullName, context, cache);
-                if (leftCols.Count == 0 || rightCols.Count == 0)
-                    continue;
-
-                var rightLookup = new HashSet<string>(rightCols, StringComparer.OrdinalIgnoreCase);
-                foreach (var col in leftCols)
+                foreach (var (rightAlias, rightFullName) in context.AvailableAliases)
                 {
-                    if (!rightLookup.Contains(col)) continue;
-                    var predicate = $"{leftAlias}.{col} = {rightAlias}.{col}";
-                    if (!seen.Add(predicate)) continue;
+                    if (aliasOrder[leftAlias] >= aliasOrder[rightAlias]) continue;
 
-                    // Id columns rank highest (most likely the intended join key),
-                    // *Id-suffixed columns next, other name matches last. Still
-                    // beats bare columns (100) so suggestions surface up top.
-                    int priority =
-                        col.Equals("Id", StringComparison.OrdinalIgnoreCase)              ? 7 :
-                        col.EndsWith("Id", StringComparison.OrdinalIgnoreCase)            ? 8 :
-                                                                                            10;
+                    bool leftIsCte  = context.AvailableCtes.ContainsKey(leftAlias);
+                    bool rightIsCte = context.AvailableCtes.ContainsKey(rightAlias);
+                    if (!leftIsCte && !rightIsCte)
+                        continue;
 
-                    yield return new CompletionItem
+                    var leftCols  = ResolveJoinableColumnNames(leftAlias, leftFullName, context, cache);
+                    var rightCols = ResolveJoinableColumnNames(rightAlias, rightFullName, context, cache);
+                    if (leftCols.Count == 0 || rightCols.Count == 0)
+                        continue;
+
+                    var rightLookup = new HashSet<string>(rightCols, StringComparer.OrdinalIgnoreCase);
+                    foreach (var col in leftCols)
                     {
-                        DisplayText   = predicate,
-                        InsertText    = predicate,
-                        ObjectType    = (int)CompletionObjectType.Keyword,
-                        SecondaryText = "Name match · CTE",
-                        SourceObject  = $"{leftAlias}↔{rightAlias}",
-                        SortPriority  = priority
-                    };
+                        if (!rightLookup.Contains(col)) continue;
+                        var predicate = $"{leftAlias}.{col} = {rightAlias}.{col}";
+                        if (!seen.Add(predicate)) continue;
+
+                        // Id columns rank highest (most likely the intended join key),
+                        // *Id-suffixed columns next, other name matches last. Still
+                        // beats bare columns (100) so suggestions surface up top.
+                        int priority =
+                            col.Equals("Id", StringComparison.OrdinalIgnoreCase)              ? 7 :
+                            col.EndsWith("Id", StringComparison.OrdinalIgnoreCase)            ? 8 :
+                                                                                                10;
+
+                        yield return new CompletionItem
+                        {
+                            DisplayText   = predicate,
+                            InsertText    = predicate,
+                            ObjectType    = (int)CompletionObjectType.Keyword,
+                            SecondaryText = "Name match · CTE",
+                            SourceObject  = $"{leftAlias}↔{rightAlias}",
+                            SortPriority  = priority
+                        };
+                    }
                 }
             }
         }
