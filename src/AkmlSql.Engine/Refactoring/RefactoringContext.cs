@@ -22,6 +22,14 @@ public class RefactoringContext
     public DatabaseCache? SchemaCache  { get; set; }
     public string[] AdditionalFilePaths { get; set; } = [];
 
+    /// <summary>
+    /// IntelliSense policy flags consulted by lightweight refactoring operations
+    /// (e.g. <c>InsertOptions.IncludeColumns</c> gates ExpandInsertColumns).
+    /// When null, operations fall back to <c>ConfigManager.Load().IntelliSense</c>.
+    /// Tests inject explicit values here to avoid disk I/O.
+    /// </summary>
+    public IntelliSenseSettings? IntelliSense { get; set; }
+
     /// <summary>True if the request includes a non-empty text selection.</summary>
     public bool HasSelection => SelectionLength > 0;
 }

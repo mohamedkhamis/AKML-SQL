@@ -28,6 +28,12 @@ public class ExpandInsertColumnsOperation : ILightweightOperation
             if (visitor.Statements.Count == 0)
                 return (context.DocumentText, []);
 
+            // IntelliSense.InsertOptions.IncludeColumns gates the entire operation.
+            // When false, leave the INSERT untouched (no warning — user opted out).
+            var insertOptions = ResolveInsertOptions(context);
+            if (!insertOptions.IncludeColumns)
+                return (context.DocumentText, []);
+
             var warnings = new List<string>();
 
             // Only process INSERT ... VALUES with no column list
@@ -44,6 +50,7 @@ public class ExpandInsertColumnsOperation : ILightweightOperation
             bool includeTypes;
             try { includeTypes = ConfigManager.Load().Formatter.InsertColumnsIncludeTypes; }
             catch { includeTypes = true; } // Default to showing types on config failure
+            bool includeDefaults = insertOptions.IncludeDefaultsAsComments;
 
             var text = context.DocumentText;
 
@@ -82,7 +89,7 @@ public class ExpandInsertColumnsOperation : ILightweightOperation
                 }
 
                 var insertionText = includeTypes
-                    ? BuildColumnListWithTypes(dbObj.Columns)
+                    ? BuildColumnListWithTypes(dbObj.Columns, includeDefaults)
                     : BuildColumnListSimple(dbObj.Columns);
 
                 // Insertion point: just after the table reference (including alias if any)
@@ -121,6 +128,14 @@ public class ExpandInsertColumnsOperation : ILightweightOperation
     /// Identity columns are included but annotated as IDENTITY; computed columns are skipped.
     /// </summary>
     public static string BuildColumnListWithTypes(List<Column> columns)
+        => BuildColumnListWithTypes(columns, includeDefaults: true);
+
+    /// <summary>
+    /// Builds a multi-line column list with inline type-metadata comments.
+    /// When <paramref name="includeDefaults"/> is false, the trailing
+    /// <c>default (...)</c> segment is omitted (per <c>InsertOptions.IncludeDefaultsAsComments</c>).
+    /// </summary>
+    public static string BuildColumnListWithTypes(List<Column> columns, bool includeDefaults)
     {
         var lines = new List<string>();
 
@@ -137,7 +152,7 @@ public class ExpandInsertColumnsOperation : ILightweightOperation
             var nullable = col.IsNullable ? "null" : "not null";
             var comment = $"-- {col.TypeDisplay}, {nullable}";
 
-            if (!string.IsNullOrEmpty(col.DefaultValue))
+            if (includeDefaults && !string.IsNullOrEmpty(col.DefaultValue))
                 comment += $", default ({col.DefaultValue})";
 
             lines.Add($"    {col.ColumnName},    {comment}");
@@ -169,5 +184,12 @@ public class ExpandInsertColumnsOperation : ILightweightOperation
         {
             Statements.Add(node);
         }
+    }
+
+    private static InsertOptionsSettings ResolveInsertOptions(RefactoringContext context)
+    {
+        if (context.IntelliSense != null) return context.IntelliSense.InsertOptions;
+        try { return ConfigManager.Load().IntelliSense.InsertOptions; }
+        catch { return new InsertOptionsSettings(); }
     }
 }

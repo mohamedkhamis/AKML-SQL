@@ -1,3 +1,4 @@
+using AkmlSql.Core.Config;
 using AkmlSql.Engine.Refactoring.Operations.Lightweight;
 using Xunit;
 
@@ -72,5 +73,21 @@ public sealed class ExpandExecParametersTests
 
         // One warning per unresolvable EXEC
         Assert.Equal(2, warnings.Length);
+    }
+
+    // Phase 2 A.3: InsertOptions.IncludeProcParamInfo = false short-circuits the
+    // operation before cache lookup, so no warning is raised.
+    [Fact]
+    public void ExpandExecParameters_IncludeProcParamInfoFalse_ReturnsUnchangedNoWarning()
+    {
+        const string sql = "EXEC dbo.usp_GetOrders 1, 'active'";
+        var settings = new IntelliSenseSettings();
+        settings.InsertOptions.IncludeProcParamInfo = false;
+        var ctx = LightweightOperationTestHelper.CreateContext(sql, settings);
+
+        var (result, warnings) = _op.Apply(ctx);
+
+        Assert.Equal(sql, result);
+        Assert.Empty(warnings);
     }
 }

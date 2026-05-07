@@ -1,4 +1,6 @@
+using AkmlSql.Core.Config;
 using AkmlSql.Engine.Refactoring.Operations.Lightweight;
+using AkmlSql.Engine.Schema.Models;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Refactoring.Operations.Lightweight;
@@ -72,5 +74,40 @@ public sealed class ExpandInsertColumnsTests
 
         // One warning per unresolvable INSERT
         Assert.Equal(2, warnings.Length);
+    }
+
+    // Phase 2 A.3: InsertOptions.IncludeColumns = false short-circuits the operation
+    // before cache lookup, so no warning is raised even when the cache would be missing.
+    [Fact]
+    public void ExpandInsertColumns_IncludeColumnsFalse_ReturnsUnchangedNoWarning()
+    {
+        const string sql = "INSERT INTO dbo.Orders VALUES (1, 'Test', GETDATE())";
+        var settings = new IntelliSenseSettings();
+        settings.InsertOptions.IncludeColumns = false;
+        var ctx = LightweightOperationTestHelper.CreateContext(sql, settings);
+
+        var (result, warnings) = _op.Apply(ctx);
+
+        Assert.Equal(sql, result);
+        Assert.Empty(warnings);
+    }
+
+    // Phase 2 A.3: InsertOptions.IncludeDefaultsAsComments = false omits the
+    // "default (...)" suffix from per-column comments produced by BuildColumnListWithTypes.
+    [Fact]
+    public void BuildColumnListWithTypes_IncludeDefaultsFalse_OmitsDefaultSegment()
+    {
+        var columns = new List<Column>
+        {
+            new() { ColumnId = 1, ColumnName = "Id", TypeName = "int", IsNullable = false, DefaultValue = "((0))" },
+            new() { ColumnId = 2, ColumnName = "Name", TypeName = "nvarchar", MaxLength = 100, IsNullable = true }
+        };
+
+        var result = ExpandInsertColumnsOperation.BuildColumnListWithTypes(columns, includeDefaults: false);
+
+        Assert.DoesNotContain("default", result, System.StringComparison.OrdinalIgnoreCase);
+        // Other comment metadata (type + nullability) must still be present.
+        Assert.Contains("int", result, System.StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("not null", result, System.StringComparison.OrdinalIgnoreCase);
     }
 }

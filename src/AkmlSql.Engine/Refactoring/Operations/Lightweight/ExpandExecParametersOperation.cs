@@ -1,4 +1,5 @@
 using System.Text;
+using AkmlSql.Core.Config;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Refactoring.Operations.Lightweight;
@@ -24,6 +25,11 @@ public class ExpandExecParametersOperation : ILightweightOperation
             script.Accept(collector);
 
             if (collector.Statements.Count == 0)
+                return (context.DocumentText, []);
+
+            // IntelliSense.InsertOptions.IncludeProcParamInfo gates this op.
+            // When false, leave EXEC statements untouched (no warning — opted out).
+            if (!ResolveInsertOptions(context).IncludeProcParamInfo)
                 return (context.DocumentText, []);
 
             var warnings = new List<string>();
@@ -136,5 +142,12 @@ public class ExpandExecParametersOperation : ILightweightOperation
         {
             Statements.Add(node);
         }
+    }
+
+    private static InsertOptionsSettings ResolveInsertOptions(RefactoringContext context)
+    {
+        if (context.IntelliSense != null) return context.IntelliSense.InsertOptions;
+        try { return ConfigManager.Load().IntelliSense.InsertOptions; }
+        catch { return new InsertOptionsSettings(); }
     }
 }

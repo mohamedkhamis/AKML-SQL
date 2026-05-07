@@ -509,136 +509,198 @@ Refs: docs/superpowers/specs/2026-05-06-options-dialog-redgate-parity-design.md 
 
 ---
 
-## Task A.3: Wire `WildcardExpansionHandler` to read InsertOptions
+## Task A.3: Wire INSERT/EXEC expansion to read InsertOptions
+
+> **Plan correction (2026-05-08):** the spec §7.3 and earlier drafts of this plan
+> named `WildcardExpansionHandler` as the wiring target. That handler only
+> resolves `SELECT *` into per-table column lists — it has no INSERT, EXEC, or
+> DEFAULT-comment logic. The functionality `InsertOptions.*` is meant to gate
+> actually lives in two refactoring operations:
+>
+> - `src/AkmlSql.Engine/Refactoring/Operations/Lightweight/ExpandInsertColumnsOperation.cs`
+> - `src/AkmlSql.Engine/Refactoring/Operations/Lightweight/ExpandExecParametersOperation.cs`
+>
+> Both already read `Formatter.InsertColumnsIncludeTypes` directly via
+> `ConfigManager.Load()`. New `IntelliSense.InsertOptions.*` reads follow the
+> same pattern, with a `RefactoringContext.IntelliSense` injection point so
+> tests don't need to touch disk.
 
 **Files:**
-- Modify: `src/AkmlSql.Engine/Completion/WildcardExpansionHandler.cs`
-- Test: `tests/AkmlSql.Engine.Tests/Completion/WildcardExpansionHandlerTests.cs` (existing — extend)
+- Modify: `src/AkmlSql.Engine/Refactoring/RefactoringContext.cs` — add `IntelliSense` property (nullable)
+- Modify: `src/AkmlSql.Engine/Refactoring/Operations/Lightweight/ExpandInsertColumnsOperation.cs`
+- Modify: `src/AkmlSql.Engine/Refactoring/Operations/Lightweight/ExpandExecParametersOperation.cs`
+- Modify: `tests/AkmlSql.Engine.Tests/Refactoring/Operations/Lightweight/LightweightOperationTestHelper.cs` — accept optional `IntelliSenseSettings`
+- Test: `tests/AkmlSql.Engine.Tests/Refactoring/Operations/Lightweight/ExpandInsertColumnsTests.cs` — extend
+- Test: `tests/AkmlSql.Engine.Tests/Refactoring/Operations/Lightweight/ExpandExecParametersTests.cs` — extend
 
-- [ ] **Step A.3.1: Recon `WildcardExpansionHandler`**
+**Mapping of InsertOptions flags → operations:**
 
-```bash
-grep -n "FormatterSettings\|InsertColumns\|class WildcardExpansionHandler" src/AkmlSql.Engine/Completion/WildcardExpansionHandler.cs
+| Flag | Operation | Behavior when `false` |
+|---|---|---|
+| `IncludeColumns` | `ExpandInsertColumnsOperation.Apply` | Short-circuit: return original text, no warnings |
+| `IncludeDefaultsAsComments` | `ExpandInsertColumnsOperation.BuildColumnListWithTypes` | Omit `, default (...)` suffix on each column comment |
+| `IncludeProcParamInfo` | `ExpandExecParametersOperation.Apply` | Short-circuit: return original text, no warnings |
+
+- [ ] **Step A.3.1: Add `IntelliSense` injection point to `RefactoringContext`**
+
+Add a nullable property to `src/AkmlSql.Engine/Refactoring/RefactoringContext.cs`:
+
+```csharp
+/// <summary>
+/// IntelliSense policy flags consulted by lightweight refactoring operations
+/// (e.g. <c>InsertOptions.IncludeColumns</c> gates ExpandInsertColumns).
+/// When null, operations fall back to <c>ConfigManager.Load().IntelliSense</c>.
+/// Tests inject explicit values here to avoid disk I/O.
+/// </summary>
+public IntelliSenseSettings? IntelliSense { get; set; }
 ```
 
-Note where it currently reads settings (likely `FormatterSettings.InsertColumnsIncludeTypes`). After Block A, it should read `InsertOptionsSettings.*` instead — but the legacy flag stays for back-compat. If both are present, the new flag wins.
+Then update `LightweightOperationTestHelper.CreateContext` to take an optional `IntelliSenseSettings? intelliSense = null` and assign it on the context. Existing call sites continue to work (default null = read config).
 
-- [ ] **Step A.3.2: Read the existing tests**
+- [ ] **Step A.3.2: Wire `ExpandInsertColumnsOperation`**
 
-```bash
-cat tests/AkmlSql.Engine.Tests/Completion/WildcardExpansionHandlerTests.cs
+Add a `ResolveInsertOptions(context)` private helper that returns
+`context.IntelliSense?.InsertOptions ?? ConfigManager.Load().IntelliSense.InsertOptions`
+with try/catch fallback to `new InsertOptionsSettings()`.
+
+In `Apply`:
+
+```csharp
+// After visitor.Statements.Count == 0 short-circuit:
+var insertOptions = ResolveInsertOptions(context);
+if (!insertOptions.IncludeColumns)
+    return (context.DocumentText, []);
 ```
 
-Identify the test helper pattern (likely takes `AppSettings` or specific flags). Use it.
+Pass `insertOptions.IncludeDefaultsAsComments` to a new
+`BuildColumnListWithTypes(columns, includeDefaults)` overload. Keep the
+existing 1-arg `BuildColumnListWithTypes(columns)` as a thin wrapper that
+calls the new overload with `includeDefaults: true` so the
+`InsertMetadataTests` in `tests/AkmlSql.Core.Tests/Refactoring/` (which call
+the static helper directly) keep passing unchanged.
 
-- [ ] **Step A.3.3: Write failing tests for the new InsertOptions fields**
+- [ ] **Step A.3.3: Wire `ExpandExecParametersOperation`**
 
-Add three new tests to the existing file:
+Add `using AkmlSql.Core.Config;` at the top. Add the same
+`ResolveInsertOptions` helper. In `Apply`, after the
+`collector.Statements.Count == 0` short-circuit:
+
+```csharp
+if (!ResolveInsertOptions(context).IncludeProcParamInfo)
+    return (context.DocumentText, []);
+```
+
+- [ ] **Step A.3.4: Add three new tests**
+
+Both test files already exist. Add the new `using` directives
+(`AkmlSql.Core.Config;`, and for the Insert file
+`AkmlSql.Engine.Schema.Models;`) then append:
+
+In `ExpandInsertColumnsTests.cs`:
 
 ```csharp
 [Fact]
-public void IncludeColumns_False_ExpandsToAsterisk()
+public void ExpandInsertColumns_IncludeColumnsFalse_ReturnsUnchangedNoWarning()
 {
-    var settings = new AppSettings();
-    settings.IntelliSense.InsertOptions.IncludeColumns = false;
-    var handler = new WildcardExpansionHandler(settings);
+    const string sql = "INSERT INTO dbo.Orders VALUES (1, 'Test', GETDATE())";
+    var settings = new IntelliSenseSettings();
+    settings.InsertOptions.IncludeColumns = false;
+    var ctx = LightweightOperationTestHelper.CreateContext(sql, settings);
 
-    var schema = TestSchemas.WithTable("dbo", "Customers", "Id INT", "Name NVARCHAR(50)");
-    var result = handler.Expand("SELECT * FROM dbo.Customers", caretPos: 7, schema);
+    var (result, warnings) = _op.Apply(ctx);
 
-    // With IncludeColumns=false, the expansion should leave * as-is (no per-column rewrite).
-    Assert.Null(result.ExpandedSql);
+    Assert.Equal(sql, result);
+    Assert.Empty(warnings);
 }
 
 [Fact]
-public void IncludeDefaultsAsComments_False_OmitsDefaultCommentsFromInsert()
+public void BuildColumnListWithTypes_IncludeDefaultsFalse_OmitsDefaultSegment()
 {
-    var settings = new AppSettings();
-    settings.IntelliSense.InsertOptions.IncludeColumns = true;
-    settings.IntelliSense.InsertOptions.IncludeDefaultsAsComments = false;
-    var handler = new WildcardExpansionHandler(settings);
-
-    var schema = TestSchemas.WithTable("dbo", "Customers",
-        "Id INT NOT NULL DEFAULT(0)", "Name NVARCHAR(50) NULL");
-    var result = handler.Expand("SELECT * FROM dbo.Customers", caretPos: 7, schema);
-
-    Assert.NotNull(result.ExpandedSql);
-    Assert.DoesNotContain("DEFAULT", result.ExpandedSql, System.StringComparison.OrdinalIgnoreCase);
-}
-
-[Fact]
-public void IncludeProcParamInfo_False_OmitsParamCommentsFromExec()
-{
-    // Similar pattern for EXEC expansion of stored proc params.
-    var settings = new AppSettings();
-    settings.IntelliSense.InsertOptions.IncludeProcParamInfo = false;
-    var handler = new WildcardExpansionHandler(settings);
-
-    var schema = TestSchemas.WithProcedure("dbo", "GetCustomer",
-        "@id INT", "@name NVARCHAR(50)");
-    var result = handler.Expand("EXEC dbo.GetCustomer", caretPos: 20, schema);
-
-    if (result.ExpandedSql != null)
+    var columns = new List<Column>
     {
-        Assert.DoesNotContain("--", result.ExpandedSql);
-    }
+        new() { ColumnId = 1, ColumnName = "Id", TypeName = "int", IsNullable = false, DefaultValue = "((0))" },
+        new() { ColumnId = 2, ColumnName = "Name", TypeName = "nvarchar", MaxLength = 100, IsNullable = true }
+    };
+
+    var result = ExpandInsertColumnsOperation.BuildColumnListWithTypes(columns, includeDefaults: false);
+
+    Assert.DoesNotContain("default", result, System.StringComparison.OrdinalIgnoreCase);
+    Assert.Contains("int", result, System.StringComparison.OrdinalIgnoreCase);
+    Assert.Contains("not null", result, System.StringComparison.OrdinalIgnoreCase);
 }
 ```
 
-If the existing test file uses different names (`Expand` vs `Process`, `result.Sql` vs `result.ExpandedSql`), adapt these stubs to match. The asserted *behavior* — IncludeColumns gates column-list expansion; IncludeDefaults gates DEFAULT comments; IncludeProcParamInfo gates `--` comments on params — is what matters.
+In `ExpandExecParametersTests.cs`:
 
-- [ ] **Step A.3.4: Run tests — must FAIL**
+```csharp
+[Fact]
+public void ExpandExecParameters_IncludeProcParamInfoFalse_ReturnsUnchangedNoWarning()
+{
+    const string sql = "EXEC dbo.usp_GetOrders 1, 'active'";
+    var settings = new IntelliSenseSettings();
+    settings.InsertOptions.IncludeProcParamInfo = false;
+    var ctx = LightweightOperationTestHelper.CreateContext(sql, settings);
 
-```bash
-dotnet test tests/AkmlSql.Engine.Tests/AkmlSql.Engine.Tests.csproj --filter "FullyQualifiedName~WildcardExpansionHandlerTests"
+    var (result, warnings) = _op.Apply(ctx);
+
+    Assert.Equal(sql, result);
+    Assert.Empty(warnings);
+}
 ```
 
-Expected: 3 new tests fail; pre-existing tests still pass.
-
-- [ ] **Step A.3.5: Update `WildcardExpansionHandler` to read InsertOptions**
-
-In the handler, find the column-expansion branch:
-- If `settings.IntelliSense.InsertOptions.IncludeColumns == false`, short-circuit and return null/no-expansion.
-- When emitting per-column comments, skip the `DEFAULT(...)` portion if `IncludeDefaultsAsComments == false`.
-- When emitting EXEC param comments, skip param comments entirely if `IncludeProcParamInfo == false`.
-
-If the handler currently reads `FormatterSettings.InsertColumnsIncludeTypes`, leave that path intact for back-compat — new InsertOptions flags override only when explicitly set. (Since they default-construct, the defaults are the same as the legacy behavior.)
-
-- [ ] **Step A.3.6: Run tests — must PASS**
+- [ ] **Step A.3.5: Run tests**
 
 ```bash
-dotnet test tests/AkmlSql.Engine.Tests/AkmlSql.Engine.Tests.csproj --filter "FullyQualifiedName~WildcardExpansionHandlerTests"
+dotnet test tests/AkmlSql.Engine.Tests/AkmlSql.Engine.Tests.csproj --filter "FullyQualifiedName~ExpandInsertColumnsTests|FullyQualifiedName~ExpandExecParametersTests"
+dotnet test tests/AkmlSql.Core.Tests/AkmlSql.Core.Tests.csproj --filter "FullyQualifiedName~InsertMetadataTests"
+dotnet test tests/AkmlSql.Engine.Tests/AkmlSql.Engine.Tests.csproj
 ```
 
-Expected: all green.
+Expected: all green. The `InsertMetadataTests` run separately to confirm
+the `BuildColumnListWithTypes` overload preserved back-compat.
 
-- [ ] **Step A.3.7: Prepare commit**
+- [ ] **Step A.3.6: Prepare commit**
 
 ```bash
-git add src/AkmlSql.Engine/Completion/WildcardExpansionHandler.cs tests/AkmlSql.Engine.Tests/Completion/WildcardExpansionHandlerTests.cs
+git add src/AkmlSql.Engine/Refactoring/RefactoringContext.cs \
+        src/AkmlSql.Engine/Refactoring/Operations/Lightweight/ExpandInsertColumnsOperation.cs \
+        src/AkmlSql.Engine/Refactoring/Operations/Lightweight/ExpandExecParametersOperation.cs \
+        tests/AkmlSql.Engine.Tests/Refactoring/Operations/Lightweight/LightweightOperationTestHelper.cs \
+        tests/AkmlSql.Engine.Tests/Refactoring/Operations/Lightweight/ExpandInsertColumnsTests.cs \
+        tests/AkmlSql.Engine.Tests/Refactoring/Operations/Lightweight/ExpandExecParametersTests.cs
 ```
 
 Suggested message:
 
 ```
-Wire WildcardExpansionHandler to InsertOptionsSettings (Phase 2 A.3)
+Wire INSERT/EXEC refactoring ops to InsertOptionsSettings (Phase 2 A.3)
 
-InsertOptions.IncludeColumns gates column-list expansion entirely.
-InsertOptions.IncludeDefaultsAsComments gates the DEFAULT() suffix in
-column comments. InsertOptions.IncludeProcParamInfo gates the --comment
-suffix on EXEC parameters.
+Spec §7.3 named WildcardExpansionHandler as the wiring target, but that
+handler only resolves SELECT * into column metadata. The behavior the
+InsertOptions flags are meant to gate actually lives in two lightweight
+refactoring operations:
 
-Legacy FormatterSettings.InsertColumnsIncludeTypes path retained for
-back-compat — its behavior is preserved when InsertOptions defaults are
-unchanged.
+- ExpandInsertColumnsOperation now honors:
+  - IncludeColumns: false → operation is a no-op (no warning, opted out)
+  - IncludeDefaultsAsComments: false → omits ", default (...)" segment
+    from per-column type comments. New BuildColumnListWithTypes overload
+    takes the flag; the existing single-arg overload preserves back-compat
+    for InsertMetadataTests.
+- ExpandExecParametersOperation now honors:
+  - IncludeProcParamInfo: false → operation is a no-op
 
-Three integration tests added.
+RefactoringContext gains an IntelliSense property (nullable). Operations
+read context.IntelliSense.InsertOptions when injected, otherwise fall
+back to ConfigManager.Load(). Tests inject directly to avoid disk I/O.
+
+Three new tests added; full Engine.Tests suite (904 tests) and
+InsertMetadataTests (9 tests) still green.
 
 Refs: docs/superpowers/specs/2026-05-06-options-dialog-redgate-parity-design.md §7.3
       docs/superpowers/plans/2026-05-07-options-dialog-phase2.md A.3
 ```
 
-**Ask the user:** "WildcardExpansionHandler wiring ready. Approve commit?"
+**Ask the user:** "INSERT/EXEC InsertOptions wiring ready. Approve commit?"
 
 ---
 
