@@ -55,6 +55,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             ["Snippets"] = new SnippetsPage(),
             ["Code Analysis"] = new CodeAnalysisPage(),
             ["Refactoring"] = new RefactoringPage(),
+            ["Navigation"] = new NavigationPage(),
         };
         private readonly Dictionary<string, IPageControls> _pageControlsByKey = new();
 
@@ -221,10 +222,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
         private TextBlock? _lblExecNotificationValue;
 
         // Navigation
-        private CheckBox? _chkNavGoToDefinition;
-        private CheckBox? _chkNavPeekDefinition;
-        private CheckBox? _chkNavFindReferences;
-        private CheckBox? _chkNavObjectSearch;
+        // Navigation controls migrated to Pages/NavigationPage.cs (Phase 2 B.5).
 
         // ─── Public API ──────────────────────────────────────────────────────
 
@@ -1064,7 +1062,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 ("Grid",          "Queries › Query Results",      BuildGridPage),
                 ("Editor",        "Editor › Productivity",        BuildEditorPage),
                 ("Execution",     "Queries › Execution",          BuildExecutionPage),
-                ("Navigation",    "Editor › Navigation",          BuildNavigationPage),
+                ("Navigation",    "Editor › Navigation",          null),
             };
 
             foreach (var (key, display, builder) in pages)
@@ -1506,22 +1504,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
         // ═══════════════════════════════════════════════════════════════════════
         //  Navigation
         // ═══════════════════════════════════════════════════════════════════════
-        private UIElement BuildNavigationPage()
-        {
-            var panel = CreatePagePanel();
-            AddPageHeader(panel, "Navigation");
-
-            _chkNavGoToDefinition = AddToggle(panel, "Go to Definition",
-                "Enable Go to Definition (F12)");
-            _chkNavPeekDefinition = AddToggle(panel, "Peek Definition",
-                "Enable Peek Definition (Alt+F12)");
-            _chkNavFindReferences = AddToggle(panel, "Find All References",
-                "Enable Find All References (Shift+F12)");
-            _chkNavObjectSearch = AddToggle(panel, "Object Search",
-                "Enable Object Search (Ctrl+T)");
-
-            return WrapInScrollViewer(panel);
-        }
+        // BuildNavigationPage migrated to Pages/NavigationPage.cs (Phase 2 B.5).
 
         // ═══════════════════════════════════════════════════════════════════════
         //  AI Assistance
@@ -2703,11 +2686,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
             SetSlider(_sldExecNotificationThreshold, _lblExecNotificationValue, ex.NotificationThreshold);
 
             // ── Navigation ───────────────────────────────────────────────
-            var nav = _settings.Navigation;
-            SetChecked(_chkNavGoToDefinition, nav.GoToDefinition);
-            SetChecked(_chkNavPeekDefinition, nav.PeekDefinition);
-            SetChecked(_chkNavFindReferences, nav.FindReferences);
-            SetChecked(_chkNavObjectSearch, nav.ObjectSearch);
+            // ── Navigation (page-split: B.5) ────────────────────────────
+            if (_pageControlsByKey.TryGetValue("Navigation", out var navLoad))
+                navLoad.Load(_settings);
         }
 
         // ═══════════════════════════════════════════════════════════════════════
@@ -2863,10 +2844,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
             _settings.ExecutionProductivity.NotificationThreshold = GetSliderInt(_sldExecNotificationThreshold);
 
             // ── Navigation ───────────────────────────────────────────────
-            _settings.Navigation.GoToDefinition = IsChecked(_chkNavGoToDefinition);
-            _settings.Navigation.PeekDefinition = IsChecked(_chkNavPeekDefinition);
-            _settings.Navigation.FindReferences = IsChecked(_chkNavFindReferences);
-            _settings.Navigation.ObjectSearch = IsChecked(_chkNavObjectSearch);
+            // ── Navigation (page-split: B.5) ────────────────────────────
+            if (_pageControlsByKey.TryGetValue("Navigation", out var navSave))
+                navSave.Save(_settings);
         }
 
         // ═══════════════════════════════════════════════════════════════════════
