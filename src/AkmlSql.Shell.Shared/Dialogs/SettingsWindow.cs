@@ -54,6 +54,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
         {
             ["Snippets"] = new SnippetsPage(),
             ["Code Analysis"] = new CodeAnalysisPage(),
+            ["Refactoring"] = new RefactoringPage(),
         };
         private readonly Dictionary<string, IPageControls> _pageControlsByKey = new();
 
@@ -138,12 +139,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
         // Code Analysis controls migrated to Pages/CodeAnalysisPage.cs (Phase 2 B.3).
 
         // Refactoring
-        private CheckBox? _chkRefPreviewBeforeApply;
-        private CheckBox? _chkRefCreateBackups;
-        private CheckBox? _chkRefFormatAfterRefactor;
-        private CheckBox? _chkRefIncludeCommentsInRename;
-        private CheckBox? _chkRefIncludeStringLiteralsInRename;
-        private ComboBox? _cboRefRenameScope;
+        // Refactoring controls migrated to Pages/RefactoringPage.cs (Phase 2 B.4).
 
         // History
         private CheckBox? _chkHistEnabled;
@@ -1060,7 +1056,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 ("Formatting",    "Format › Styles",              BuildFormattingPage),
                 ("Snippets",      "Snippets",                     null),
                 ("Code Analysis", "Code Analysis",                null),
-                ("Refactoring",   "Editor › Refactoring",         BuildRefactoringPage),
+                ("Refactoring",   "Editor › Refactoring",         null),
                 ("History",       "Queries › History",            BuildHistoryPage),
                 ("Tabs & UI",     "Tabs › Color",                 BuildTabsPage),
                 ("Safety",        "Queries › Execution Warnings", BuildSafetyPage),
@@ -1280,32 +1276,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
         // ═══════════════════════════════════════════════════════════════════════
         //  Refactoring
         // ═══════════════════════════════════════════════════════════════════════
-        private UIElement BuildRefactoringPage()
-        {
-            var panel = CreatePagePanel();
-
-            AddPageHeader(panel, "Refactoring");
-
-            AddGroupHeader(panel, "Preview & Safety");
-            _chkRefPreviewBeforeApply = AddToggle(panel, "Show preview before applying",
-                "Display a diff preview dialog before applying refactoring changes");
-            _chkRefCreateBackups = AddToggle(panel, "Create backups",
-                "Save a backup copy before applying refactoring changes");
-            _chkRefFormatAfterRefactor = AddToggle(panel, "Format after refactoring",
-                "Apply SQL formatting after a refactoring operation completes");
-
-            AddGroupSeparator(panel);
-            AddGroupHeader(panel, "Rename Options");
-            _chkRefIncludeCommentsInRename = AddToggle(panel, "Include comments in rename scope",
-                "Also rename occurrences found inside SQL comments");
-            _chkRefIncludeStringLiteralsInRename = AddToggle(panel, "Include string literals in rename scope",
-                "Also rename occurrences found inside string literals");
-            _cboRefRenameScope = AddDropdown(panel, "Rename scope",
-                new[] { "Current Script", "Project Directory" },
-                "Scope of the Safe Rename operation");
-
-            return WrapInScrollViewer(panel);
-        }
+        // BuildRefactoringPage migrated to Pages/RefactoringPage.cs (Phase 2 B.4).
 
         // ═══════════════════════════════════════════════════════════════════════
         //  History
@@ -2626,14 +2597,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
             if (_pageControlsByKey.TryGetValue("Code Analysis", out var caLoad))
                 caLoad.Load(_settings);
 
-            // ── Refactoring ──────────────────────────────────────────────
-            var rf = _settings.Refactoring;
-            SetChecked(_chkRefPreviewBeforeApply, rf.PreviewBeforeApply);
-            SetChecked(_chkRefCreateBackups, rf.CreateBackups);
-            SetChecked(_chkRefFormatAfterRefactor, rf.FormatAfterRefactor);
-            SetChecked(_chkRefIncludeCommentsInRename, rf.IncludeCommentsInRename);
-            SetChecked(_chkRefIncludeStringLiteralsInRename, rf.IncludeStringLiteralsInRename);
-            SetCombo(_cboRefRenameScope, rf.RenameScope == "projectDirectory" ? 1 : 0);
+            // ── Refactoring (page-split: B.4) ───────────────────────────
+            if (_pageControlsByKey.TryGetValue("Refactoring", out var rfLoad))
+                rfLoad.Load(_settings);
 
             // ── History ──────────────────────────────────────────────────
             var h = _settings.History;
@@ -2803,14 +2769,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
             if (_pageControlsByKey.TryGetValue("Code Analysis", out var caSave))
                 caSave.Save(_settings);
 
-            // ── Refactoring ──────────────────────────────────────────────
-            _settings.Refactoring.PreviewBeforeApply = IsChecked(_chkRefPreviewBeforeApply);
-            _settings.Refactoring.CreateBackups = IsChecked(_chkRefCreateBackups);
-            _settings.Refactoring.FormatAfterRefactor = IsChecked(_chkRefFormatAfterRefactor);
-            _settings.Refactoring.IncludeCommentsInRename = IsChecked(_chkRefIncludeCommentsInRename);
-            _settings.Refactoring.IncludeStringLiteralsInRename = IsChecked(_chkRefIncludeStringLiteralsInRename);
-            _settings.Refactoring.RenameScope = GetComboIndex(_cboRefRenameScope) == 1
-                ? "projectDirectory" : "currentScript";
+            // ── Refactoring (page-split: B.4) ───────────────────────────
+            if (_pageControlsByKey.TryGetValue("Refactoring", out var rfSave))
+                rfSave.Save(_settings);
 
             // ── History ──────────────────────────────────────────────────
             _settings.History.Enabled = IsChecked(_chkHistEnabled);
