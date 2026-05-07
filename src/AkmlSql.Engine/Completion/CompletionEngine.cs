@@ -1,3 +1,4 @@
+using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Engine.Completion.Providers;
 using AkmlSql.Engine.Parser;
@@ -14,6 +15,7 @@ public class CompletionEngine
     private readonly AliasResolver _aliasResolver = new();
     private readonly JoinProvider _joinProvider = new();
     private readonly JoinOnFkProvider _joinOnFkProvider = new();
+    private readonly ObjectProvider _objectProvider = new();
     private int _maxSuggestions = 50;
 
     /// <summary>
@@ -33,6 +35,35 @@ public class CompletionEngine
     /// </summary>
     public bool JoinAssistEnabled { get; set; } = true;
 
+    /// <summary>
+    /// When false, <see cref="KeywordProvider"/> is skipped and no keyword items appear
+    /// in the completion list. Maps to <c>IntelliSense.SuggestionTypes.IncludeKeywords</c>.
+    /// Default true.
+    /// </summary>
+    public bool IncludeKeywords { get; set; } = true;
+
+    /// <summary>
+    /// When false, system stored procedures from <see cref="Dictionaries.SystemProcDictionary"/>
+    /// are excluded from the completion list. Maps to
+    /// <c>IntelliSense.SuggestionTypes.IncludeSystemObjects</c>. Default true.
+    /// </summary>
+    public bool IncludeSystemObjects { get; set; } = true;
+
+    /// <summary>
+    /// When <c>true</c> (default), <see cref="JoinOnFkProvider"/> falls back to
+    /// column-name matching for CTE join participants when no FK is found.
+    /// When <c>false</c>, only FK-based ON-clause suggestions are emitted.
+    /// Maps to <c>IntelliSense.JoinOptions.MatchByColumnName</c>.
+    /// </summary>
+    public bool MatchByColumnName { get; set; } = true;
+
+    /// <summary>
+    /// Controls how object names are qualified when inserted.
+    /// Maps to <c>IntelliSense.Qualification.SchemaMode</c>.
+    /// Default <see cref="SchemaQualifyMode.NonDefaultOnly"/>.
+    /// </summary>
+    public SchemaQualifyMode SchemaQualifyMode { get; set; } = SchemaQualifyMode.NonDefaultOnly;
+
     public CompletionEngine(TsqlParserService parserService)
     {
         _parserService = parserService;
@@ -41,7 +72,7 @@ public class CompletionEngine
         RegisterProvider(new SmartGroupByProvider());
         RegisterProvider(new DatabaseProvider());
         RegisterProvider(new ColumnProvider());
-        RegisterProvider(new ObjectProvider());
+        RegisterProvider(_objectProvider);
         RegisterProvider(new KeywordProvider());
         RegisterProvider(_joinProvider);
         RegisterProvider(_joinOnFkProvider);
@@ -206,6 +237,13 @@ public class CompletionEngine
             // the inserted JOIN target carries a fresh alias or uses its bare name.
             _joinProvider.UseAliases = TableAliasEnabled;
 
+            // Push IntelliSense policy flags into ObjectProvider before each request.
+            _objectProvider.IncludeSystemObjects = IncludeSystemObjects;
+            _objectProvider.SchemaQualifyMode = SchemaQualifyMode;
+
+            // Push join options into JoinOnFkProvider before each request.
+            _joinOnFkProvider.MatchByColumnName = MatchByColumnName;
+
             // Route to providers
             var allItems = new List<CompletionItem>();
             foreach (var provider in _providers)
@@ -217,6 +255,10 @@ public class CompletionEngine
 
                 // FK-assisted JOIN providers gate on the JoinAssist master switch.
                 if (!JoinAssistEnabled && (provider is JoinProvider || provider is JoinOnFkProvider))
+                    continue;
+
+                // IncludeKeywords = false: skip KeywordProvider entirely.
+                if (!IncludeKeywords && provider is KeywordProvider)
                     continue;
 
                 if (provider.CanHandle(context, cache))

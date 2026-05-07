@@ -1,4 +1,6 @@
+using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc.Messages;
+using AkmlSql.Engine.Completion.Dictionaries;
 using AkmlSql.Engine.Parser;
 using AkmlSql.Engine.Schema;
 using AkmlSql.Engine.Schema.Models;
@@ -13,6 +15,19 @@ namespace AkmlSql.Engine.Completion.Providers;
 public class ObjectProvider : ICompletionProvider
 {
     public string Name => "Object";
+
+    /// <summary>
+    /// When false, system stored procedures from <see cref="SystemProcDictionary"/> are
+    /// excluded from Exec-context completions.
+    /// Set by <see cref="CompletionEngine"/> before each request.
+    /// </summary>
+    public bool IncludeSystemObjects { get; set; } = true;
+
+    /// <summary>
+    /// Controls how object names are qualified in <see cref="InsertText"/>.
+    /// Set by <see cref="CompletionEngine"/> before each request.
+    /// </summary>
+    public SchemaQualifyMode SchemaQualifyMode { get; set; } = SchemaQualifyMode.NonDefaultOnly;
 
     private static readonly HashSet<ClauseType> ObjectClauseTypes =
     [
@@ -48,6 +63,14 @@ public class ObjectProvider : ICompletionProvider
         if (!context.PrecedingDot &&
             context.AvailableCtes.Count > 0 &&
             (context.ClauseType is ClauseType.From or ClauseType.JoinTable or ClauseType.JoinOn))
+        {
+            return true;
+        }
+
+        // System procs from SystemProcDictionary don't need a cache — they come from a static
+        // list. When IncludeSystemObjects is enabled and we're in an EXEC context, we can handle
+        // the request even without a cache.
+        if (cache is null && IncludeSystemObjects && context.ClauseType == ClauseType.Exec && !context.PrecedingDot)
         {
             return true;
         }
@@ -129,8 +152,15 @@ public class ObjectProvider : ICompletionProvider
             }
         }
 
+        // When there is no schema cache, we can still offer system stored procedures for
+        // EXEC context — they come from SystemProcDictionary, not the cache.
         if (cache is null)
         {
+            if (IncludeSystemObjects && context.ClauseType == ClauseType.Exec && !context.PrecedingDot)
+            {
+                foreach (var item in SystemProcDictionary.GetCompletionItems())
+                    yield return item;
+            }
             yield break;
         }
 
@@ -159,15 +189,19 @@ public class ObjectProvider : ICompletionProvider
         // references to FK-join against, so JoinProvider wouldn't run anyway.
         var skipFkTables = context.ClauseType == ClauseType.JoinTable && fkRelated.Count > 0;
 
-        // First, yield objects from default schema (dbo) with higher priority
+        // First, yield objects from default schema (dbo) with higher priority.
+        // When SchemaMode is Always, dbo objects also get the "dbo." prefix in InsertText.
+        bool qualifyDbo = SchemaQualifyMode == SchemaQualifyMode.Always;
         foreach (var obj in GetFilteredObjects(cache, "dbo", allowedTypes))
         {
             if (skipFkTables && fkRelated.ContainsKey(obj.FullName))
                 continue;
-            yield return ToCompletionItem(obj, sortPriorityBase: 100, fkRelated: fkRelated);
+            yield return ToCompletionItem(obj, sortPriorityBase: 100, includeSchema: qualifyDbo, fkRelated: fkRelated);
         }
 
-        // Yield objects from non-dbo schemas, schema-qualified
+        // Yield objects from non-dbo schemas, schema-qualified.
+        // NonDefaultOnly and Always both qualify non-dbo objects; Never skips the prefix.
+        bool qualifyNonDbo = SchemaQualifyMode != SchemaQualifyMode.Never;
         foreach (var schema in cache.Schemas.Values)
         {
             if (schema.SchemaName.Equals("dbo", StringComparison.OrdinalIgnoreCase))
@@ -179,7 +213,7 @@ public class ObjectProvider : ICompletionProvider
             {
                 if (skipFkTables && fkRelated.ContainsKey(obj.FullName))
                     continue;
-                yield return ToCompletionItem(obj, sortPriorityBase: 200, includeSchema: true, fkRelated: fkRelated);
+                yield return ToCompletionItem(obj, sortPriorityBase: 200, includeSchema: qualifyNonDbo, fkRelated: fkRelated);
             }
         }
 
@@ -194,6 +228,14 @@ public class ObjectProvider : ICompletionProvider
                 SecondaryText = "Schema",
                 SortPriority = 300
             };
+        }
+
+        // Yield system stored procedures in EXEC context — gated on IncludeSystemObjects.
+        // SystemProcDictionary contains ms-shipped system procs not present in the user schema cache.
+        if (IncludeSystemObjects && context.ClauseType == ClauseType.Exec)
+        {
+            foreach (var item in SystemProcDictionary.GetCompletionItems())
+                yield return item;
         }
     }
 

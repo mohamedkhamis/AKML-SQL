@@ -293,6 +293,10 @@ public class PipeRpcServer
                     _cachedSettings ??= Core.Config.ConfigManager.Load();
                     _completionEngine.TableAliasEnabled = _cachedSettings.IntelliSense.AutoAlias;
                     _completionEngine.JoinAssistEnabled = _cachedSettings.IntelliSense.JoinAssist;
+                    _completionEngine.IncludeKeywords = _cachedSettings.IntelliSense.SuggestionTypes.IncludeKeywords;
+                    _completionEngine.IncludeSystemObjects = _cachedSettings.IntelliSense.SuggestionTypes.IncludeSystemObjects;
+                    _completionEngine.SchemaQualifyMode = _cachedSettings.IntelliSense.Qualification.SchemaMode;
+                    _completionEngine.MatchByColumnName = _cachedSettings.IntelliSense.JoinOptions.MatchByColumnName;
                     var compResp = _completionEngine.GetCompletions(documentText, compReq.CursorOffset, dbCache, compReq.SessionId);
                     return Task.FromResult(CreateResponse(MessageTypes.CompletionResult, message.RequestId, compResp));
 
