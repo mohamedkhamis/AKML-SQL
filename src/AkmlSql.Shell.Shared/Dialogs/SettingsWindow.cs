@@ -62,6 +62,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             ["Execution"] = new ExecutionPage(),
             ["Editor"] = new EditorPage(),
             ["Schema Cache"] = new SchemaCachePage(),
+            ["History"] = new HistoryPage(),
         };
         private readonly Dictionary<string, IPageControls> _pageControlsByKey = new();
 
@@ -140,14 +141,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
         // Refactoring controls migrated to Pages/RefactoringPage.cs (Phase 2 B.4).
 
         // History
-        private CheckBox? _chkHistEnabled;
-        private CheckBox? _chkHistEncryptAtRest;
-        private CheckBox? _chkHistRecordFailures;
-        private CheckBox? _chkHistDeduplication;
-        private Slider? _sldHistRetentionDays;
-        private TextBlock? _lblHistRetentionValue;
-        private Slider? _sldHistMaxEntries;
-        private TextBlock? _lblHistMaxEntriesValue;
+        // History controls migrated to Pages/HistoryPage.cs (Phase 2 B.12).
 
         // Tabs
         private CheckBox? _chkTabColoringEnabled;
@@ -1033,7 +1027,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 ("Snippets",      "Snippets",                     null),
                 ("Code Analysis", "Code Analysis",                null),
                 ("Refactoring",   "Editor › Refactoring",         null),
-                ("History",       "Queries › History",            BuildHistoryPage),
+                ("History",       "Queries › History",            null),
                 ("Tabs & UI",     "Tabs › Color",                 BuildTabsPage),
                 ("Safety",        "Queries › Execution Warnings", null),
                 ("AI Assistance", "AI Assistance",                BuildAiPage),
@@ -1204,35 +1198,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
         // ═══════════════════════════════════════════════════════════════════════
         //  History
         // ═══════════════════════════════════════════════════════════════════════
-        private UIElement BuildHistoryPage()
-        {
-            var panel = CreatePagePanel();
-
-            AddPageHeader(panel, "SQL History");
-
-            AddGroupHeader(panel, "Recording");
-            _chkHistEnabled = AddToggle(panel, "Enable SQL history recording",
-                "Record all executed SQL statements to a local database");
-            _chkHistRecordFailures = AddToggle(panel, "Record failed executions",
-                "Also record statements that resulted in errors");
-            _chkHistDeduplication = AddToggle(panel, "Enable deduplication",
-                "Avoid storing duplicate statements in quick succession");
-
-            AddGroupSeparator(panel);
-            AddGroupHeader(panel, "Storage");
-
-            (_sldHistRetentionDays, _lblHistRetentionValue) = AddSlider(panel,
-                "Retention (days)", 1, 3650, 90,
-                "Number of days to keep history entries before pruning");
-            (_sldHistMaxEntries, _lblHistMaxEntriesValue) = AddSlider(panel,
-                "Max entries", 1000, 1_000_000, 100_000,
-                "Maximum number of history entries stored", true);
-
-            _chkHistEncryptAtRest = AddToggle(panel, "Encrypt at rest",
-                "Encrypt stored SQL history using DPAPI + AES-256");
-
-            return WrapInScrollViewer(panel);
-        }
+        // BuildHistoryPage migrated to Pages/HistoryPage.cs (Phase 2 B.12).
 
         // ═══════════════════════════════════════════════════════════════════════
         //  Tabs & UI
@@ -2417,13 +2383,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 rfLoad.Load(_settings);
 
             // ── History ──────────────────────────────────────────────────
-            var h = _settings.History;
-            SetChecked(_chkHistEnabled, h.Enabled);
-            SetChecked(_chkHistRecordFailures, h.RecordFailures);
-            SetChecked(_chkHistDeduplication, h.Deduplication);
-            SetChecked(_chkHistEncryptAtRest, h.EncryptAtRest);
-            SetSlider(_sldHistRetentionDays, _lblHistRetentionValue, h.RetentionDays);
-            SetSlider(_sldHistMaxEntries, _lblHistMaxEntriesValue, h.MaxEntries);
+            // ── History (page-split: B.12) ──────────────────────────────
+            if (_pageControlsByKey.TryGetValue("History", out var histLoad))
+                histLoad.Load(_settings);
 
             // ── Tabs & UI ────────────────────────────────────────────────
             var t = _settings.Tabs;
@@ -2563,12 +2525,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 rfSave.Save(_settings);
 
             // ── History ──────────────────────────────────────────────────
-            _settings.History.Enabled = IsChecked(_chkHistEnabled);
-            _settings.History.RecordFailures = IsChecked(_chkHistRecordFailures);
-            _settings.History.Deduplication = IsChecked(_chkHistDeduplication);
-            _settings.History.EncryptAtRest = IsChecked(_chkHistEncryptAtRest);
-            _settings.History.RetentionDays = GetSliderInt(_sldHistRetentionDays);
-            _settings.History.MaxEntries = GetSliderInt(_sldHistMaxEntries);
+            // ── History (page-split: B.12) ──────────────────────────────
+            if (_pageControlsByKey.TryGetValue("History", out var histSave))
+                histSave.Save(_settings);
 
             // ── Tabs & UI ────────────────────────────────────────────────
             _settings.Tabs.ColoringEnabled = IsChecked(_chkTabColoringEnabled);
