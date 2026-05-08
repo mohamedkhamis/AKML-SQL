@@ -66,6 +66,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             ["AI Assistance"] = new AiAssistancePage(),
             ["Formatting"] = new FormattingPage(),
             ["Tabs & UI"] = new TabsPage(),
+            ["IntelliSense"] = new IntelliSensePage(),
         };
         private readonly Dictionary<string, IPageControls> _pageControlsByKey = new();
 
@@ -104,21 +105,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
         // General controls migrated to Pages/GeneralPage.cs (Phase 2 B.7).
 
         // IntelliSense
-        private CheckBox? _chkIsEnabled;
-        private CheckBox? _chkAutoTrigger;
-        private CheckBox? _chkAfterDot;
-        private CheckBox? _chkFuzzyMatch;
-        private CheckBox? _chkShowDataTypes;
-        private CheckBox? _chkShowNullability;
-        private CheckBox? _chkShowPkFk;
-        private CheckBox? _chkAutoAlias;
-        private CheckBox? _chkJoinAssist;
-        private CheckBox? _chkDisableNativeIs;
-        private Slider? _sldTriggerDelay;
-        private TextBlock? _lblTriggerDelayValue;
-        private Slider? _sldMaxSuggestions;
-        private TextBlock? _lblMaxSuggestionsValue;
-        private ComboBox? _cboKeywordCase;
+        // IntelliSense controls migrated to Pages/IntelliSensePage.cs (Phase 2 B.16).
 
         // Schema Cache
         // Schema Cache controls migrated to Pages/SchemaCachePage.cs (Phase 2 B.11).
@@ -985,7 +972,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             var pages = new (string Key, string Display, Func<UIElement>? Builder)[]
             {
                 ("General",       "Miscellaneous › Main",         null),
-                ("IntelliSense",  "Suggestions › Behavior",       BuildIntelliSensePage),
+                ("IntelliSense",  "Suggestions › Behavior",       null),
                 ("Schema Cache",  "Suggestions › Database",       null),
                 ("Formatting",    "Format › Styles",              null),
                 ("Snippets",      "Snippets",                     null),
@@ -1067,54 +1054,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
         // ═══════════════════════════════════════════════════════════════════════
         //  IntelliSense
         // ═══════════════════════════════════════════════════════════════════════
-        private UIElement BuildIntelliSensePage()
-        {
-            var panel = CreatePagePanel();
-
-            AddPageHeader(panel, "IntelliSense");
-
-            AddGroupHeader(panel, "Core");
-            _chkIsEnabled = AddToggle(panel, "Enable IntelliSense",
-                "Master switch for all IntelliSense features");
-            _chkAutoTrigger = AddToggle(panel, "Auto-trigger completions while typing",
-                "Show completion list automatically without Ctrl+Space");
-            _chkAfterDot = AddToggle(panel, "Trigger after dot",
-                "Auto-complete after typing '.' for table.column references");
-            _chkFuzzyMatch = AddToggle(panel, "Enable fuzzy matching",
-                "Substring and approximate matching in addition to prefix");
-
-            AddGroupSeparator(panel);
-            AddGroupHeader(panel, "Display");
-
-            (_sldMaxSuggestions, _lblMaxSuggestionsValue) = AddSlider(panel,
-                "Maximum suggestions", 5, 200, 50,
-                "Maximum number of items shown in the completion list");
-            (_sldTriggerDelay, _lblTriggerDelayValue) = AddSlider(panel,
-                "Trigger delay (ms)", 0, 2000, 100,
-                "Debounce delay before showing completions");
-
-            _cboKeywordCase = AddDropdown(panel, "Keyword casing",
-                new[] { "UPPER", "lower", "PascalCase", "As-Is" },
-                "Casing applied to SQL keywords inserted by IntelliSense");
-
-            _chkShowDataTypes = AddToggle(panel, "Show column data types",
-                "Display data type information in completion details");
-            _chkShowNullability = AddToggle(panel, "Show nullability info",
-                "Show NOT NULL / NULL status in completion details");
-            _chkShowPkFk = AddToggle(panel, "Show PK/FK indicators",
-                "Show primary key and foreign key badges");
-
-            AddGroupSeparator(panel);
-            AddGroupHeader(panel, "Assistance");
-            _chkJoinAssist = AddToggle(panel, "JOIN clause assistance",
-                "Master switch for FK-assisted JOIN completion. When on: after typing 'JOIN', FK-related tables are suggested first with a full ON clause inserted; inside 'ON', ready-made FK equality predicates are suggested. Orthogonal to Tables Alias. Default: on.");
-            _chkAutoAlias = AddToggle(panel, "Tables Alias",
-                "When on, completion generates new aliases for inserted tables (e.g. 'Orders o ON o.CustomerId = c.Id'). When off, FK JOIN suggestions still fire but the target table is referenced by its bare name ('Orders ON Orders.CustomerId = c.Id'). Default: off.");
-            _chkDisableNativeIs = AddToggle(panel, "Disable native SSMS IntelliSense",
-                "Recommended to avoid conflicts with AKML SQL IntelliSense");
-
-            return WrapInScrollViewer(panel);
-        }
+        // BuildIntelliSensePage migrated to Pages/IntelliSensePage.cs (Phase 2 B.16).
 
         // ═══════════════════════════════════════════════════════════════════════
         //  Schema Cache
@@ -2114,21 +2054,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
             if (_pageControlsByKey.TryGetValue("General", out var genLoad))
                 genLoad.Load(_settings);
 
-            // ── IntelliSense ─────────────────────────────────────────────
-            var i = _settings.IntelliSense;
-            SetChecked(_chkIsEnabled, i.Enabled);
-            SetChecked(_chkAutoTrigger, i.AutoTrigger);
-            SetChecked(_chkAfterDot, i.AfterDot);
-            SetChecked(_chkFuzzyMatch, i.FuzzyMatch);
-            SetChecked(_chkShowDataTypes, i.ShowDataTypes);
-            SetChecked(_chkShowNullability, i.ShowNullability);
-            SetChecked(_chkShowPkFk, i.ShowPkFk);
-            SetChecked(_chkAutoAlias, i.AutoAlias);
-            SetChecked(_chkJoinAssist, i.JoinAssist);
-            SetChecked(_chkDisableNativeIs, i.DisableNativeIntelliSense);
-            SetSlider(_sldTriggerDelay, _lblTriggerDelayValue, i.TriggerDelayMs);
-            SetSlider(_sldMaxSuggestions, _lblMaxSuggestionsValue, i.MaxSuggestions);
-            SetCombo(_cboKeywordCase, (int)i.KeywordCase);
+            // ── IntelliSense (page-split: B.16) ─────────────────────────
+            if (_pageControlsByKey.TryGetValue("IntelliSense", out var isLoad))
+                isLoad.Load(_settings);
 
             // ── Schema Cache ─────────────────────────────────────────────
             // ── Schema Cache (page-split: B.11) ─────────────────────────
@@ -2203,19 +2131,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 genSave.Save(_settings);
 
             // ── IntelliSense ─────────────────────────────────────────────
-            _settings.IntelliSense.Enabled = IsChecked(_chkIsEnabled);
-            _settings.IntelliSense.AutoTrigger = IsChecked(_chkAutoTrigger);
-            _settings.IntelliSense.AfterDot = IsChecked(_chkAfterDot);
-            _settings.IntelliSense.FuzzyMatch = IsChecked(_chkFuzzyMatch);
-            _settings.IntelliSense.ShowDataTypes = IsChecked(_chkShowDataTypes);
-            _settings.IntelliSense.ShowNullability = IsChecked(_chkShowNullability);
-            _settings.IntelliSense.ShowPkFk = IsChecked(_chkShowPkFk);
-            _settings.IntelliSense.AutoAlias = IsChecked(_chkAutoAlias);
-            _settings.IntelliSense.JoinAssist = IsChecked(_chkJoinAssist);
-            _settings.IntelliSense.DisableNativeIntelliSense = IsChecked(_chkDisableNativeIs);
-            _settings.IntelliSense.TriggerDelayMs = GetSliderInt(_sldTriggerDelay);
-            _settings.IntelliSense.MaxSuggestions = GetSliderInt(_sldMaxSuggestions);
-            _settings.IntelliSense.KeywordCase = (KeywordCaseOption)GetComboIndex(_cboKeywordCase);
+            // ── IntelliSense (page-split: B.16) ─────────────────────────
+            if (_pageControlsByKey.TryGetValue("IntelliSense", out var isSave))
+                isSave.Save(_settings);
 
             // ── Schema Cache ─────────────────────────────────────────────
             // ── Schema Cache (page-split: B.11) ─────────────────────────
