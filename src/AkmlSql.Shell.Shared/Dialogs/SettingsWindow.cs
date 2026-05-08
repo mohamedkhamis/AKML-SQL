@@ -58,6 +58,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             ["Navigation"] = new NavigationPage(),
             ["Grid"] = new GridPage(),
             ["General"] = new GeneralPage(),
+            ["Safety"] = new SafetyPage(),
         };
         private readonly Dictionary<string, IPageControls> _pageControlsByKey = new();
 
@@ -168,14 +169,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
         private ComboBox? _cboTabRestoreOnStartup;
 
         // Safety
-        private CheckBox? _chkSafetyProductionWarning;
-        private CheckBox? _chkSafetyDeleteWithoutWhere;
-        private CheckBox? _chkSafetyUpdateWithoutWhere;
-        private CheckBox? _chkSafetyDropConfirmation;
-        private CheckBox? _chkSafetyTruncateConfirmation;
-        private CheckBox? _chkSafetyTransactionReminder;
-        private Slider? _sldSafetyTransReminderInterval;
-        private TextBlock? _lblSafetyTransReminderValue;
+        // Safety controls migrated to Pages/SafetyPage.cs (Phase 2 B.8).
 
         // AI
         private CheckBox? _chkAiTextToSql;
@@ -1053,7 +1047,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 ("Refactoring",   "Editor › Refactoring",         null),
                 ("History",       "Queries › History",            BuildHistoryPage),
                 ("Tabs & UI",     "Tabs › Color",                 BuildTabsPage),
-                ("Safety",        "Queries › Execution Warnings", BuildSafetyPage),
+                ("Safety",        "Queries › Execution Warnings", null),
                 ("AI Assistance", "AI Assistance",                BuildAiPage),
                 ("Grid",          "Queries › Query Results",      null),
                 ("Editor",        "Editor › Productivity",        BuildEditorPage),
@@ -1374,35 +1368,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
         // ═══════════════════════════════════════════════════════════════════════
         //  Safety
         // ═══════════════════════════════════════════════════════════════════════
-        private UIElement BuildSafetyPage()
-        {
-            var panel = CreatePagePanel();
-
-            AddPageHeader(panel, "Execution Safety");
-
-            AddGroupHeader(panel, "Warnings");
-            _chkSafetyProductionWarning = AddToggle(panel, "Production server warning",
-                "Show a warning banner when connected to production environments");
-            _chkSafetyDeleteWithoutWhere = AddToggle(panel, "DELETE without WHERE",
-                "Warn before executing DELETE statements with no WHERE clause");
-            _chkSafetyUpdateWithoutWhere = AddToggle(panel, "UPDATE without WHERE",
-                "Warn before executing UPDATE statements with no WHERE clause");
-            _chkSafetyDropConfirmation = AddToggle(panel, "DROP confirmation",
-                "Require confirmation before executing DROP statements");
-            _chkSafetyTruncateConfirmation = AddToggle(panel, "TRUNCATE confirmation",
-                "Require confirmation before executing TRUNCATE statements");
-
-            AddGroupSeparator(panel);
-            AddGroupHeader(panel, "Transaction Reminder");
-            _chkSafetyTransactionReminder = AddToggle(panel, "Enable transaction reminder",
-                "Periodically remind about open transactions on production servers");
-
-            (_sldSafetyTransReminderInterval, _lblSafetyTransReminderValue) = AddSlider(panel,
-                "Reminder interval (seconds)", 30, 3600, 300,
-                "Time between transaction reminder notifications");
-
-            return WrapInScrollViewer(panel);
-        }
+        // BuildSafetyPage migrated to Pages/SafetyPage.cs (Phase 2 B.8).
 
         // ═══════════════════════════════════════════════════════════════════════
         //  Grid
@@ -2557,15 +2523,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
             };
             SetCombo(_cboTabRestoreOnStartup, restoreIdx);
 
-            // ── Safety ───────────────────────────────────────────────────
-            var sf = _settings.Safety;
-            SetChecked(_chkSafetyProductionWarning, sf.ProductionWarning);
-            SetChecked(_chkSafetyDeleteWithoutWhere, sf.DeleteWithoutWhere);
-            SetChecked(_chkSafetyUpdateWithoutWhere, sf.UpdateWithoutWhere);
-            SetChecked(_chkSafetyDropConfirmation, sf.DropConfirmation);
-            SetChecked(_chkSafetyTruncateConfirmation, sf.TruncateConfirmation);
-            SetChecked(_chkSafetyTransactionReminder, sf.TransactionReminder);
-            SetSlider(_sldSafetyTransReminderInterval, _lblSafetyTransReminderValue, sf.TransactionReminderInterval);
+            // ── Safety (page-split: B.8) ────────────────────────────────
+            if (_pageControlsByKey.TryGetValue("Safety", out var sfLoad))
+                sfLoad.Load(_settings);
 
             // ── AI Assistance ────────────────────────────────────────────
             var ai = _settings.Ai;
@@ -2714,14 +2674,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 _ => "prompt"
             };
 
-            // ── Safety ───────────────────────────────────────────────────
-            _settings.Safety.ProductionWarning = IsChecked(_chkSafetyProductionWarning);
-            _settings.Safety.DeleteWithoutWhere = IsChecked(_chkSafetyDeleteWithoutWhere);
-            _settings.Safety.UpdateWithoutWhere = IsChecked(_chkSafetyUpdateWithoutWhere);
-            _settings.Safety.DropConfirmation = IsChecked(_chkSafetyDropConfirmation);
-            _settings.Safety.TruncateConfirmation = IsChecked(_chkSafetyTruncateConfirmation);
-            _settings.Safety.TransactionReminder = IsChecked(_chkSafetyTransactionReminder);
-            _settings.Safety.TransactionReminderInterval = GetSliderInt(_sldSafetyTransReminderInterval);
+            // ── Safety (page-split: B.8) ────────────────────────────────
+            if (_pageControlsByKey.TryGetValue("Safety", out var sfSave))
+                sfSave.Save(_settings);
 
             // ── AI Assistance ────────────────────────────────────────────
             _settings.Ai.Provider = GetComboIndex(_cboAiProvider) switch
