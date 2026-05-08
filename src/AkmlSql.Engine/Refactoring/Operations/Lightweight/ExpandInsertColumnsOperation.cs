@@ -28,9 +28,23 @@ public class ExpandInsertColumnsOperation : ILightweightOperation
             if (visitor.Statements.Count == 0)
                 return (context.DocumentText, []);
 
+            // Read AppSettings ONCE in the production path — both InsertOptions
+            // (gates the operation) and Formatter.InsertColumnsIncludeTypes
+            // (controls type comments) come from the same load. Tests can
+            // skip disk I/O entirely by pre-populating context.IntelliSense.
+            AppSettings? loaded = null;
+            if (context.IntelliSense == null)
+            {
+                try { loaded = ConfigManager.Load(); }
+                catch { /* fall through to defaults below */ }
+            }
+
+            var insertOptions = context.IntelliSense?.InsertOptions
+                ?? loaded?.IntelliSense.InsertOptions
+                ?? new InsertOptionsSettings();
+
             // IntelliSense.InsertOptions.IncludeColumns gates the entire operation.
             // When false, leave the INSERT untouched (no warning — user opted out).
-            var insertOptions = ResolveInsertOptions(context);
             if (!insertOptions.IncludeColumns)
                 return (context.DocumentText, []);
 
@@ -46,11 +60,10 @@ public class ExpandInsertColumnsOperation : ILightweightOperation
             if (candidates.Count == 0)
                 return (context.DocumentText, []);
 
-            // Read formatter settings once (cached for this invocation)
-            bool includeTypes;
-            try { includeTypes = ConfigManager.Load().Formatter.InsertColumnsIncludeTypes; }
-            catch { includeTypes = true; } // Default to showing types on config failure
-            bool includeDefaults = insertOptions.IncludeDefaultsAsComments;
+            // Same loaded AppSettings — no second ConfigManager.Load() call.
+            // Default true on failure / test path (matches legacy behaviour).
+            var includeTypes = loaded?.Formatter.InsertColumnsIncludeTypes ?? true;
+            var includeDefaults = insertOptions.IncludeDefaultsAsComments;
 
             var text = context.DocumentText;
 
@@ -186,10 +199,4 @@ public class ExpandInsertColumnsOperation : ILightweightOperation
         }
     }
 
-    private static InsertOptionsSettings ResolveInsertOptions(RefactoringContext context)
-    {
-        if (context.IntelliSense != null) return context.IntelliSense.InsertOptions;
-        try { return ConfigManager.Load().IntelliSense.InsertOptions; }
-        catch { return new InsertOptionsSettings(); }
-    }
 }
