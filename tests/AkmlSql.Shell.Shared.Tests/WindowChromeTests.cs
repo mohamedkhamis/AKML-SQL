@@ -1,4 +1,6 @@
+using System.Collections;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -181,6 +183,54 @@ namespace AkmlSql.Shell.Shared.Tests
                 var pageKey = leaf.Tag as string ?? leaf.Header?.ToString() ?? "(unknown)";
                 Assert.True(found,
                     $"Page '{pageKey}' (header='{leaf.Header}') does not contain a 'Restore Defaults' TextBlock.");
+            }
+        }
+
+        /// <summary>
+        /// Phase 2 C.6 regression test: every page key registered in
+        /// <c>_pageBuilders</c> must have a matching case in
+        /// <c>ResetPageToDefaultsCore</c>. The Phase 1 final reviewer flagged
+        /// that the OnResetThisPageClick switch coverage is brittle when new
+        /// pages are added — a missing case used to silently no-op. This test
+        /// reflects on <c>_pageBuilders.Keys</c>, calls
+        /// <c>ResetPageToDefaultsCore(key)</c> for each, and asserts no throw.
+        /// The default branch in <c>ResetPageToDefaultsCore</c> throws
+        /// <c>InvalidOperationException</c> for unhandled keys, so a missing
+        /// case fails the test loudly.
+        /// </summary>
+        [Fact]
+        public void ResetPageToDefaultsCore_HasCaseForEveryRegisteredPageKey()
+        {
+            var settings = new AppSettings();
+            var dialog = new SettingsWindow(settings);
+
+            var pageBuildersField = typeof(SettingsWindow).GetField(
+                "_pageBuilders",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(pageBuildersField);
+            var pageBuilders = (IDictionary)pageBuildersField!.GetValue(dialog)!;
+            Assert.True(pageBuilders.Count > 0, "Expected at least one registered IPageBuilder");
+
+            var resetMethod = typeof(SettingsWindow).GetMethod(
+                "ResetPageToDefaultsCore",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(resetMethod);
+
+            foreach (DictionaryEntry entry in pageBuilders)
+            {
+                var key = (string)entry.Key;
+                try
+                {
+                    resetMethod!.Invoke(dialog, new object[] { key });
+                }
+                catch (TargetInvocationException tie)
+                    when (tie.InnerException is System.InvalidOperationException ioe)
+                {
+                    Assert.Fail(
+                        $"ResetPageToDefaultsCore is missing a case for page key '{key}'. " +
+                        $"When adding a page to _pageBuilders, also add a case to " +
+                        $"ResetPageToDefaultsCore. Inner: {ioe.Message}");
+                }
             }
         }
 

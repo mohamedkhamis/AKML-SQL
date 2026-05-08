@@ -1514,39 +1514,55 @@ namespace AkmlSql.Shell.Shared.Dialogs
                     Constants.ProductName, MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
                     return;
 
-                var defaults = new AppSettings();
-                switch (pageName)
-                {
-                    case "General":
-                        _settings.AutoUpdateEnabled = defaults.AutoUpdateEnabled;
-                        _settings.TelemetryEnabled = defaults.TelemetryEnabled;
-                        _settings.Theme = defaults.Theme;
-                        break;
-                    case "IntelliSense": _settings.IntelliSense = defaults.IntelliSense; break;
-                    case "SuggestionTypes": _settings.IntelliSense.SuggestionTypes = defaults.IntelliSense.SuggestionTypes; break;
-                    case "Qualification": _settings.IntelliSense.Qualification = defaults.IntelliSense.Qualification; break;
-                    case "InsertOptions": _settings.IntelliSense.InsertOptions = defaults.IntelliSense.InsertOptions; break;
-                    case "JoinOptions": _settings.IntelliSense.JoinOptions = defaults.IntelliSense.JoinOptions; break;
-                    case "Labs": _settings.Labs = defaults.Labs; break;
-                    case "Schema Cache": _settings.Cache = defaults.Cache; break;
-                    case "Formatting": _settings.Formatter = defaults.Formatter; break;
-                    case "Snippets": _settings.Snippets = defaults.Snippets; break;
-                    case "Code Analysis": _settings.CodeAnalysis = defaults.CodeAnalysis; break;
-                    case "Refactoring": _settings.Refactoring = defaults.Refactoring; break;
-                    case "History": _settings.History = defaults.History; break;
-                    case "Tabs & UI": _settings.Tabs = defaults.Tabs; break;
-                    case "Safety": _settings.Safety = defaults.Safety; break;
-                    case "Grid": _settings.Grid = defaults.Grid; break;
-                    case "Editor": _settings.EditorProductivity = defaults.EditorProductivity; break;
-                    case "Execution": _settings.ExecutionProductivity = defaults.ExecutionProductivity; break;
-                    case "Navigation": _settings.Navigation = defaults.Navigation; break;
-                    case "AI Assistance": _settings.Ai = defaults.Ai; break;
-                }
+                ResetPageToDefaultsCore(pageName);
                 LoadSettingsToControls();
             }
             catch (Exception ex)
             {
                 Log.Warning(ex, "SettingsWindow: Reset page failed");
+            }
+        }
+
+        /// <summary>
+        /// Mutates <c>_settings</c> back to defaults for the named page. Extracted
+        /// from <see cref="OnResetThisPageClick"/> so tests can exercise every page
+        /// key without spawning the confirmation MessageBox. Throws when a page
+        /// key has no Reset case — the missing-case bug becomes a loud failure
+        /// (Phase 2 C.6 regression test).
+        /// </summary>
+        internal void ResetPageToDefaultsCore(string pageName)
+        {
+            var defaults = new AppSettings();
+            switch (pageName)
+            {
+                case "General":
+                    _settings.AutoUpdateEnabled = defaults.AutoUpdateEnabled;
+                    _settings.TelemetryEnabled = defaults.TelemetryEnabled;
+                    _settings.Theme = defaults.Theme;
+                    break;
+                case "IntelliSense": _settings.IntelliSense = defaults.IntelliSense; break;
+                case "SuggestionTypes": _settings.IntelliSense.SuggestionTypes = defaults.IntelliSense.SuggestionTypes; break;
+                case "Qualification": _settings.IntelliSense.Qualification = defaults.IntelliSense.Qualification; break;
+                case "InsertOptions": _settings.IntelliSense.InsertOptions = defaults.IntelliSense.InsertOptions; break;
+                case "JoinOptions": _settings.IntelliSense.JoinOptions = defaults.IntelliSense.JoinOptions; break;
+                case "Labs": _settings.Labs = defaults.Labs; break;
+                case "Schema Cache": _settings.Cache = defaults.Cache; break;
+                case "Formatting": _settings.Formatter = defaults.Formatter; break;
+                case "Snippets": _settings.Snippets = defaults.Snippets; break;
+                case "Code Analysis": _settings.CodeAnalysis = defaults.CodeAnalysis; break;
+                case "Refactoring": _settings.Refactoring = defaults.Refactoring; break;
+                case "History": _settings.History = defaults.History; break;
+                case "Tabs & UI": _settings.Tabs = defaults.Tabs; break;
+                case "Safety": _settings.Safety = defaults.Safety; break;
+                case "Grid": _settings.Grid = defaults.Grid; break;
+                case "Editor": _settings.EditorProductivity = defaults.EditorProductivity; break;
+                case "Execution": _settings.ExecutionProductivity = defaults.ExecutionProductivity; break;
+                case "Navigation": _settings.Navigation = defaults.Navigation; break;
+                case "AI Assistance": _settings.Ai = defaults.Ai; break;
+                default:
+                    throw new InvalidOperationException(
+                        $"Page '{pageName}' has no Reset case in SettingsWindow.ResetPageToDefaultsCore. " +
+                        "When you add a new page to _pageBuilders, also add a case here.");
             }
         }
 
