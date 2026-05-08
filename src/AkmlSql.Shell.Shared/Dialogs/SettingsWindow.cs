@@ -61,6 +61,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             ["Safety"] = new SafetyPage(),
             ["Execution"] = new ExecutionPage(),
             ["Editor"] = new EditorPage(),
+            ["Schema Cache"] = new SchemaCachePage(),
         };
         private readonly Dictionary<string, IPageControls> _pageControlsByKey = new();
 
@@ -116,14 +117,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
         private ComboBox? _cboKeywordCase;
 
         // Schema Cache
-        private CheckBox? _chkCacheAutoRefresh;
-        private CheckBox? _chkDetectDdl;
-        private CheckBox? _chkLazyLoadColumns;
-        private CheckBox? _chkPersistToDisk;
-        private Slider? _sldRefreshInterval;
-        private TextBlock? _lblRefreshIntervalValue;
-        private Slider? _sldMaxDatabases;
-        private TextBlock? _lblMaxDatabasesValue;
+        // Schema Cache controls migrated to Pages/SchemaCachePage.cs (Phase 2 B.11).
 
         // Formatting
         private CheckBox? _chkFmtEnabled;
@@ -1034,7 +1028,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             {
                 ("General",       "Miscellaneous › Main",         null),
                 ("IntelliSense",  "Suggestions › Behavior",       BuildIntelliSensePage),
-                ("Schema Cache",  "Suggestions › Database",       BuildSchemaCachePage),
+                ("Schema Cache",  "Suggestions › Database",       null),
                 ("Formatting",    "Format › Styles",              BuildFormattingPage),
                 ("Snippets",      "Snippets",                     null),
                 ("Code Analysis", "Code Analysis",                null),
@@ -1157,37 +1151,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
         // ═══════════════════════════════════════════════════════════════════════
         //  Schema Cache
         // ═══════════════════════════════════════════════════════════════════════
-        private UIElement BuildSchemaCachePage()
-        {
-            var panel = CreatePagePanel();
-
-            AddPageHeader(panel, "Schema Cache");
-
-            AddGroupHeader(panel, "Refresh Behavior");
-            _chkCacheAutoRefresh = AddToggle(panel, "Auto-refresh schema cache",
-                "Periodically check for schema changes in the background");
-
-            (_sldRefreshInterval, _lblRefreshIntervalValue) = AddSlider(panel,
-                "Refresh interval (seconds)", 30, 3600, 300,
-                "Time between background change-detection queries");
-
-            _chkDetectDdl = AddToggle(panel, "Detect DDL changes",
-                "Trigger immediate cache refresh when DDL statements are executed");
-
-            AddGroupSeparator(panel);
-            AddGroupHeader(panel, "Storage");
-
-            (_sldMaxDatabases, _lblMaxDatabasesValue) = AddSlider(panel,
-                "Max cached databases", 1, 50, 10,
-                "Number of database caches kept in memory before LRU eviction");
-
-            _chkLazyLoadColumns = AddToggle(panel, "Lazy-load column metadata",
-                "Load columns and foreign keys in background (Phase B)");
-            _chkPersistToDisk = AddToggle(panel, "Persist cache to disk",
-                "Save schema cache to disk for faster startup on reconnect");
-
-            return WrapInScrollViewer(panel);
-        }
+        // BuildSchemaCachePage migrated to Pages/SchemaCachePage.cs (Phase 2 B.11).
 
         // ═══════════════════════════════════════════════════════════════════════
         //  Formatting
@@ -2425,13 +2389,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
             SetCombo(_cboKeywordCase, (int)i.KeywordCase);
 
             // ── Schema Cache ─────────────────────────────────────────────
-            var c = _settings.Cache;
-            SetChecked(_chkCacheAutoRefresh, c.AutoRefresh);
-            SetChecked(_chkDetectDdl, c.DetectDdl);
-            SetChecked(_chkLazyLoadColumns, c.LazyLoadColumns);
-            SetChecked(_chkPersistToDisk, c.PersistToDisk);
-            SetSlider(_sldRefreshInterval, _lblRefreshIntervalValue, c.RefreshIntervalSeconds);
-            SetSlider(_sldMaxDatabases, _lblMaxDatabasesValue, c.MaxDatabases);
+            // ── Schema Cache (page-split: B.11) ─────────────────────────
+            if (_pageControlsByKey.TryGetValue("Schema Cache", out var cacheLoad))
+                cacheLoad.Load(_settings);
 
             // ── Formatting ───────────────────────────────────────────────
             var f = _settings.Formatter;
@@ -2574,12 +2534,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
             _settings.IntelliSense.KeywordCase = (KeywordCaseOption)GetComboIndex(_cboKeywordCase);
 
             // ── Schema Cache ─────────────────────────────────────────────
-            _settings.Cache.AutoRefresh = IsChecked(_chkCacheAutoRefresh);
-            _settings.Cache.DetectDdl = IsChecked(_chkDetectDdl);
-            _settings.Cache.LazyLoadColumns = IsChecked(_chkLazyLoadColumns);
-            _settings.Cache.PersistToDisk = IsChecked(_chkPersistToDisk);
-            _settings.Cache.RefreshIntervalSeconds = GetSliderInt(_sldRefreshInterval);
-            _settings.Cache.MaxDatabases = GetSliderInt(_sldMaxDatabases);
+            // ── Schema Cache (page-split: B.11) ─────────────────────────
+            if (_pageControlsByKey.TryGetValue("Schema Cache", out var cacheSave))
+                cacheSave.Save(_settings);
 
             // ── Formatting ───────────────────────────────────────────────
             _settings.Formatter.Enabled = IsChecked(_chkFmtEnabled);
