@@ -966,60 +966,53 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
         private void BuildPages()
         {
-            // Mapping: page key (used for navigation tag) → SQL Prompt-style display label.
-            // Pages migrated to Pages/*.cs (Phase 2 B.2+) have a null Builder — they're
-            // dispatched through _pageBuilders[key] instead.
-            var pages = new (string Key, string Display, Func<UIElement>? Builder)[]
+            // (Key, Display) for each page in navigation order. The key matches an
+            // IPageBuilder in _pageBuilders; Display is the breadcrumb shown in
+            // search results.
+            var pages = new (string Key, string Display)[]
             {
-                ("General",       "Miscellaneous › Main",         null),
-                ("IntelliSense",  "Suggestions › Behavior",       null),
-                ("Schema Cache",  "Suggestions › Database",       null),
-                ("Formatting",    "Format › Styles",              null),
-                ("Snippets",      "Snippets",                     null),
-                ("Code Analysis", "Code Analysis",                null),
-                ("Refactoring",   "Editor › Refactoring",         null),
-                ("History",       "Queries › History",            null),
-                ("Tabs & UI",     "Tabs › Color",                 null),
-                ("Safety",        "Queries › Execution Warnings", null),
-                ("AI Assistance", "AI Assistance",                null),
-                ("Grid",          "Queries › Query Results",      null),
-                ("Editor",        "Editor › Productivity",        null),
-                ("Execution",     "Queries › Execution",          null),
-                ("Navigation",    "Editor › Navigation",          null),
+                ("General",       "Miscellaneous › Main"),
+                ("IntelliSense",  "Suggestions › Behavior"),
+                ("Schema Cache",  "Suggestions › Database"),
+                ("Formatting",    "Format › Styles"),
+                ("Snippets",      "Snippets"),
+                ("Code Analysis", "Code Analysis"),
+                ("Refactoring",   "Editor › Refactoring"),
+                ("History",       "Queries › History"),
+                ("Tabs & UI",     "Tabs › Color"),
+                ("Safety",        "Queries › Execution Warnings"),
+                ("AI Assistance", "AI Assistance"),
+                ("Grid",          "Queries › Query Results"),
+                ("Editor",        "Editor › Productivity"),
+                ("Execution",     "Queries › Execution"),
+                ("Navigation",    "Editor › Navigation"),
             };
 
-            foreach (var (key, display, builder) in pages)
+            foreach (var (key, display) in pages)
             {
                 _currentPageKey = key;
                 _currentPageDisplay = display;
 
-                if (_pageBuilders.TryGetValue(key, out var pageBuilder))
-                {
-                    var hostPanel = CreatePagePanel();
-                    AddPageHeader(hostPanel, pageBuilder.Title);
-                    var ctx = new PageContext(_theme, _settings, new RowFactory(_theme), RegisterSearchEntry);
-                    var controls = pageBuilder.Build(hostPanel, ctx);
-                    _pageControlsByKey[key] = controls;
-                    _pages[key] = WrapInScrollViewer(hostPanel);
+                if (!_pageBuilders.TryGetValue(key, out var pageBuilder))
+                    continue;
 
-                    // Page-specific event hookups that the host owns:
-                    // theme switching closes the dialog and reopens it under the new theme.
-                    if (controls is GeneralControls gen)
-                        gen.Theme.SelectionChanged += OnThemeSelectionChanged;
+                var hostPanel = CreatePagePanel();
+                AddPageHeader(hostPanel, pageBuilder.Title);
+                var ctx = new PageContext(_theme, _settings, new RowFactory(_theme), RegisterSearchEntry);
+                var controls = pageBuilder.Build(hostPanel, ctx);
+                _pageControlsByKey[key] = controls;
+                _pages[key] = WrapInScrollViewer(hostPanel);
 
-                    // Tabs page: Add/Edit/Remove buttons drive the coloring-rule
-                    // editor dialog, which lives on SettingsWindow because it
-                    // pops a host-owned modal.
-                    if (controls is TabsControls tabs)
-                    {
-                        tabs.AddRuleButton.Click    += (_, _) => OnAddColoringRule();
-                        tabs.EditRuleButton.Click   += (_, _) => OnEditColoringRule();
-                        tabs.RemoveRuleButton.Click += (_, _) => OnRemoveColoringRule();
-                    }
-                }
-                else if (builder != null)
+                // Page-specific event hookups the host owns. Theme switching closes
+                // the dialog and reopens it under the new theme; coloring-rule CRUD
+                // pops a host-owned modal — both stay on SettingsWindow.
+                if (controls is GeneralControls gen)
+                    gen.Theme.SelectionChanged += OnThemeSelectionChanged;
+                if (controls is TabsControls tabs)
                 {
-                    _pages[key] = builder();
+                    tabs.AddRuleButton.Click    += (_, _) => OnAddColoringRule();
+                    tabs.EditRuleButton.Click   += (_, _) => OnEditColoringRule();
+                    tabs.RemoveRuleButton.Click += (_, _) => OnRemoveColoringRule();
                 }
             }
 
@@ -1125,12 +1118,10 @@ namespace AkmlSql.Shell.Shared.Dialogs
         //  UI Builder Helpers
         // ═══════════════════════════════════════════════════════════════════════
 
-        // Tracks the alternating zebra-stripe state per page (reset on each new panel).
-        private int _zebraIndex;
+        // Zebra striping moved to RowFactory.WrapZebraRow / ResetZebra (Phase 2 B.1+).
 
         private StackPanel CreatePagePanel()
         {
-            _zebraIndex = 0;
             return new StackPanel
             {
                 Margin = new Thickness(24, 18, 24, 24),
@@ -1194,494 +1185,8 @@ namespace AkmlSql.Shell.Shared.Dialogs
             });
         }
 
-        /// <summary>
-        /// Section header inside a page (bold, foreground primary). SQL Prompt style.
-        /// </summary>
-        private void AddGroupHeader(StackPanel panel, string text)
-        {
-            panel.Children.Add(new TextBlock
-            {
-                Text = text,
-                FontSize = 12,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = _theme.FgPrimary,
-                Margin = new Thickness(0, 8, 0, 6)
-            });
-        }
-
-        private void AddGroupSeparator(StackPanel panel)
-        {
-            panel.Children.Add(new Border
-            {
-                Height = 1,
-                Background = _theme.Sep,
-                Margin = new Thickness(0, 14, 0, 10)
-            });
-        }
-
-        /// <summary>
-        /// Wraps a setting row in a zebra-striped <see cref="Border"/>. Alternates between
-        /// transparent and <see cref="PageTheme.InputReadOnly"/> for readability,
-        /// matching the SQL Prompt Options dialog row style.
-        /// </summary>
-        private Border WrapZebraRow(UIElement content)
-        {
-            var bg = (_zebraIndex++ % 2 == 0) ? _theme.InputReadOnly : _theme.Transparent;
-            return new Border
-            {
-                Background = bg,
-                Padding = new Thickness(12, 8, 12, 8),
-                Margin = new Thickness(-12, 0, -12, 0),
-                Child = content
-            };
-        }
-
-        private CheckBox AddToggle(StackPanel panel, string label, string description)
-        {
-            var cb = new CheckBox
-            {
-                Foreground = _theme.FgPrimary,
-                FontSize = 13,
-                VerticalContentAlignment = VerticalAlignment.Center
-            };
-
-            // Build the content with label and description
-            var contentPanel = new StackPanel();
-            contentPanel.Children.Add(new TextBlock
-            {
-                Text = label,
-                Foreground = _theme.FgPrimary,
-                FontSize = 13
-            });
-            if (!string.IsNullOrEmpty(description))
-            {
-                contentPanel.Children.Add(new TextBlock
-                {
-                    Text = description,
-                    Foreground = _theme.FgSecondary,
-                    FontSize = 11,
-                    FontStyle = FontStyles.Italic,
-                    Margin = new Thickness(0, 2, 0, 0),
-                    TextWrapping = TextWrapping.Wrap
-                });
-            }
-
-            cb.Content = contentPanel;
-            var row = WrapZebraRow(cb);
-            panel.Children.Add(row);
-            RegisterSearchEntry(label, description, "Toggle", row);
-            return cb;
-        }
-
-        private (Slider slider, TextBlock valueLabel) AddSlider(
-            StackPanel panel, string label, double min, double max, double defaultValue,
-            string description, bool largeRange = false)
-        {
-            var container = new StackPanel { Margin = new Thickness(0, 0, 0, 12) };
-
-            // Label row with value display
-            var headerRow = new DockPanel { Margin = new Thickness(0, 0, 0, 4) };
-
-            var valueLabel = new TextBlock
-            {
-                Text = defaultValue.ToString(CultureInfo.InvariantCulture),
-                Foreground = _theme.FgAccent,
-                FontSize = 13,
-                FontWeight = FontWeights.SemiBold,
-                MinWidth = 60,
-                TextAlignment = TextAlignment.Right
-            };
-            DockPanel.SetDock(valueLabel, Dock.Right);
-            headerRow.Children.Add(valueLabel);
-
-            headerRow.Children.Add(new TextBlock
-            {
-                Text = label,
-                Foreground = _theme.FgPrimary,
-                FontSize = 13
-            });
-
-            container.Children.Add(headerRow);
-
-            // Slider
-            var slider = new Slider
-            {
-                Minimum = min,
-                Maximum = max,
-                Value = defaultValue,
-                IsSnapToTickEnabled = true,
-                TickFrequency = largeRange ? Math.Max(1, (max - min) / 100) : 1,
-                Height = 22,
-                Foreground = _theme.FgAccent
-            };
-
-            // Update value label on change
-            var valueLabelRef = valueLabel;
-            slider.ValueChanged += (s, e) =>
-            {
-                valueLabelRef.Text = ((int)e.NewValue).ToString(CultureInfo.InvariantCulture);
-            };
-
-            container.Children.Add(slider);
-
-            // Description
-            if (!string.IsNullOrEmpty(description))
-            {
-                container.Children.Add(new TextBlock
-                {
-                    Text = description,
-                    Foreground = _theme.FgSecondary,
-                    FontSize = 11,
-                    FontStyle = FontStyles.Italic,
-                    Margin = new Thickness(0, 2, 0, 0)
-                });
-            }
-
-            panel.Children.Add(container);
-            RegisterSearchEntry(label, description, "Slider", container);
-            return (slider, valueLabel);
-        }
-
-        private ComboBox AddDropdown(StackPanel panel, string label, string[] items, string description)
-        {
-            var container = new StackPanel { Margin = new Thickness(0, 0, 0, 12) };
-
-            container.Children.Add(new TextBlock
-            {
-                Text = label,
-                Foreground = _theme.FgPrimary,
-                FontSize = 13,
-                Margin = new Thickness(0, 0, 0, 4)
-            });
-
-            var combo = new ComboBox
-            {
-                Background = _theme.Input,
-                Foreground = _theme.FgPrimary,
-                BorderBrush = _theme.ComboBorder,
-                BorderThickness = new Thickness(1),
-                FontSize = 13,
-                Height = 28,
-                Padding = new Thickness(6, 4, 6, 4),
-                MaxWidth = 300,
-                HorizontalAlignment = HorizontalAlignment.Left,
-                FocusVisualStyle = FocusVisualStyles.HighStakes // FR-018 / O9 (theme dropdown is the canonical high-stakes ComboBox)
-            };
-
-            // Apply themed styling to dropdown items
-            StyleComboBox(combo);
-
-            foreach (var item in items)
-            {
-                // Do NOT set Foreground on the TextBlock — a local value has higher
-                // precedence than style triggers, which would prevent hover/selected
-                // triggers from changing the text color. Let it inherit from the
-                // ComboBoxItem via TextElement.Foreground set in ItemContainerStyle.
-                combo.Items.Add(new ComboBoxItem
-                {
-                    Content = new TextBlock { Text = item },
-                    Foreground = _theme.FgPrimary
-                });
-            }
-
-            if (combo.Items.Count > 0)
-                combo.SelectedIndex = 0;
-
-            container.Children.Add(combo);
-
-            if (!string.IsNullOrEmpty(description))
-            {
-                container.Children.Add(new TextBlock
-                {
-                    Text = description,
-                    Foreground = _theme.FgSecondary,
-                    FontSize = 11,
-                    FontStyle = FontStyles.Italic,
-                    Margin = new Thickness(0, 2, 0, 0)
-                });
-            }
-
-            panel.Children.Add(container);
-            RegisterSearchEntry(label, description, "Dropdown", container);
-            return combo;
-        }
-
-        /// <summary>
-        /// Applies themed styling to a ComboBox so the dropdown popup, items,
-        /// hover highlight, selected item, and the toggle button all match the active theme.
-        /// Uses system color overrides (reliable with the default Chrome template) plus a
-        /// Loaded handler that walks the visual tree to restyle the toggle button background.
-        /// </summary>
-        private void StyleComboBox(ComboBox combo)
-        {
-            combo.Background = _theme.Input;
-            combo.Foreground = _theme.FgPrimary;
-            combo.BorderBrush = _theme.ComboBorder;
-
-            // TextElement.Foreground propagates through the Chrome template's ContentPresenter
-            combo.SetValue(TextElement.ForegroundProperty, _theme.FgPrimary);
-
-            // Override system colors used by the default ComboBox Chrome template.
-            combo.Resources[SystemColors.WindowBrushKey] = _theme.Input;
-            combo.Resources[SystemColors.WindowTextBrushKey] = _theme.FgPrimary;
-            combo.Resources[SystemColors.HighlightBrushKey] = _theme.Selected;
-            combo.Resources[SystemColors.HighlightTextBrushKey] = _theme.SelectedText;
-            combo.Resources[SystemColors.ControlBrushKey] = _theme.Input;
-            combo.Resources[SystemColors.ControlTextBrushKey] = _theme.FgPrimary;
-            combo.Resources[SystemColors.InactiveSelectionHighlightBrushKey] = _theme.Selected;
-            combo.Resources[SystemColors.InactiveSelectionHighlightTextBrushKey] = _theme.SelectedText;
-            // ComboBox dropdown border color
-            combo.Resources[SystemColors.ActiveBorderBrushKey] = _theme.ComboBorder;
-            combo.Resources[SystemColors.InactiveBorderBrushKey] = _theme.ComboBorder;
-
-            // Walk the visual tree after layout to restyle the toggle button chrome
-            var theme = _theme;
-            combo.Loaded += (s, e) => ThemeComboBoxVisualTree((ComboBox)s!, theme);
-
-            // The Popup is lazy — it only enters the visual tree when the dropdown
-            // first opens, so Loaded can't theme it. Hook DropDownOpened to catch it.
-            combo.DropDownOpened += (s, e) => ThemeComboBoxPopup((ComboBox)s!, theme);
-
-            // Item container style (dropdown rows)
-            var itemStyle = new Style(typeof(ComboBoxItem));
-            itemStyle.Setters.Add(new Setter(Control.BackgroundProperty, _theme.Input));
-            itemStyle.Setters.Add(new Setter(Control.ForegroundProperty, _theme.FgPrimary));
-            itemStyle.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0)));
-            itemStyle.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(6, 4, 6, 4)));
-            itemStyle.Setters.Add(new Setter(TextElement.ForegroundProperty, _theme.FgPrimary));
-
-            var hoverTrigger = new Trigger { Property = ComboBoxItem.IsHighlightedProperty, Value = true };
-            hoverTrigger.Setters.Add(new Setter(Control.BackgroundProperty, _theme.Selected));
-            hoverTrigger.Setters.Add(new Setter(Control.ForegroundProperty, _theme.SelectedText));
-            hoverTrigger.Setters.Add(new Setter(TextElement.ForegroundProperty, _theme.SelectedText));
-            itemStyle.Triggers.Add(hoverTrigger);
-
-            var selectedTrigger = new Trigger { Property = ComboBoxItem.IsSelectedProperty, Value = true };
-            selectedTrigger.Setters.Add(new Setter(Control.BackgroundProperty, _theme.FgAccent));
-            selectedTrigger.Setters.Add(new Setter(Control.ForegroundProperty,
-                Freeze(new SolidColorBrush(Colors.White))));
-            selectedTrigger.Setters.Add(new Setter(TextElement.ForegroundProperty,
-                Freeze(new SolidColorBrush(Colors.White))));
-            itemStyle.Triggers.Add(selectedTrigger);
-
-            combo.ItemContainerStyle = itemStyle;
-        }
-
-        /// <summary>
-        /// After the ComboBox template is applied, walk the visual tree to restyle the
-        /// Chrome toggle button that ignores standard properties.
-        /// </summary>
-        private static void ThemeComboBoxVisualTree(ComboBox combo, PageTheme theme)
-        {
-            try
-            {
-                // Find the ToggleButton inside the ComboBox template
-                var toggleButton = FindChild<ToggleButton>(combo);
-                if (toggleButton != null)
-                {
-                    toggleButton.Background = theme.Input;
-                    toggleButton.BorderBrush = theme.ComboBorder;
-                    toggleButton.Foreground = theme.FgPrimary;
-                    toggleButton.SetValue(TextElement.ForegroundProperty, theme.FgPrimary);
-
-                    // Override system colors inside the toggle button too
-                    toggleButton.Resources[SystemColors.ControlBrushKey] = theme.Input;
-                    toggleButton.Resources[SystemColors.ControlTextBrushKey] = theme.FgPrimary;
-                    toggleButton.Resources[SystemColors.ControlLightBrushKey] = theme.Input;
-                    toggleButton.Resources[SystemColors.ControlDarkBrushKey] = theme.ComboBorder;
-
-                    // Theme the arrow Path if present
-                    var arrow = FindChild<System.Windows.Shapes.Path>(toggleButton);
-                    if (arrow != null)
-                    {
-                        arrow.Fill = theme.FgSecondary;
-                    }
-                }
-
-                // Theme the selected-item ContentPresenter (PART_ContentSite).
-                // VS/SSMS host implicit styles can override TextElement.Foreground at
-                // the ContentPresenter level, making the selected item text appear faded
-                // in dark theme. Setting it directly on the ContentPresenter wins.
-                var contentSite = FindChild<ContentPresenter>(combo);
-                if (contentSite != null)
-                {
-                    contentSite.SetValue(TextElement.ForegroundProperty, theme.FgPrimary);
-                }
-
-                // Also try to theme the popup if it's already in the tree
-                ThemeComboBoxPopup(combo, theme);
-            }
-            catch
-            {
-                // Non-fatal: worst case dropdown keeps system colors
-            }
-        }
-
-        /// <summary>
-        /// Themes the dropdown Popup of a ComboBox. Called from both <see cref="ThemeComboBoxVisualTree"/>
-        /// (if the popup is already in the tree) and from <c>DropDownOpened</c> (the first time the
-        /// user expands the dropdown, since the Popup is lazy and not in the visual tree at Loaded time).
-        /// Sets background, border, and <see cref="TextElement.ForegroundProperty"/> on the popup content
-        /// so that VS/SSMS theme inheritance doesn't override our text color.
-        /// </summary>
-        private static void ThemeComboBoxPopup(ComboBox combo, PageTheme theme)
-        {
-            try
-            {
-                var popup = FindChild<Popup>(combo);
-                if (popup?.Child is Border popupBorder)
-                {
-                    popupBorder.Background = theme.Input;
-                    popupBorder.BorderBrush = theme.ComboBorder;
-
-                    // Force text foreground on the popup content so that items in the
-                    // dropdown are readable even when the VS/SSMS host theme applies
-                    // its own inherited TextElement.Foreground to the Popup visual tree.
-                    popupBorder.SetValue(TextElement.ForegroundProperty, theme.FgPrimary);
-
-                    // Also set SystemColors on the popup border's resources — the Popup
-                    // is a separate HWND and doesn't inherit the ComboBox's resources.
-                    popupBorder.Resources[SystemColors.WindowBrushKey] = theme.Input;
-                    popupBorder.Resources[SystemColors.WindowTextBrushKey] = theme.FgPrimary;
-                    popupBorder.Resources[SystemColors.HighlightBrushKey] = theme.Selected;
-                    popupBorder.Resources[SystemColors.HighlightTextBrushKey] = theme.SelectedText;
-                    popupBorder.Resources[SystemColors.ControlBrushKey] = theme.Input;
-                    popupBorder.Resources[SystemColors.ControlTextBrushKey] = theme.FgPrimary;
-                }
-            }
-            catch
-            {
-                // Non-fatal
-            }
-        }
-
-        /// <summary>
-        /// Walks the visual tree depth-first to find the first child of type T.
-        /// </summary>
-        private static T? FindChild<T>(DependencyObject parent) where T : DependencyObject
-        {
-            int count = VisualTreeHelper.GetChildrenCount(parent);
-            for (int i = 0; i < count; i++)
-            {
-                var child = VisualTreeHelper.GetChild(parent, i);
-                if (child is T found) return found;
-                var result = FindChild<T>(child);
-                if (result != null) return result;
-            }
-            return null;
-        }
-
-        private TextBox AddTextInput(StackPanel panel, string label, string description,
-            bool isPassword = false)
-        {
-            var container = new StackPanel { Margin = new Thickness(0, 0, 0, 12) };
-
-            container.Children.Add(new TextBlock
-            {
-                Text = label,
-                Foreground = _theme.FgPrimary,
-                FontSize = 13,
-                Margin = new Thickness(0, 0, 0, 4)
-            });
-
-            var textBox = new TextBox
-            {
-                Background = _theme.Input,
-                Foreground = _theme.FgPrimary,
-                BorderBrush = _theme.ComboBorder,
-                BorderThickness = new Thickness(1),
-                CaretBrush = _theme.Caret,
-                FontSize = 13,
-                Height = 28,
-                Padding = new Thickness(6, 4, 6, 4),
-                MaxWidth = 500,
-                HorizontalAlignment = HorizontalAlignment.Left,
-                MinWidth = 300
-            };
-
-            // For password fields, we obscure by using a special character replacement
-            // (WPF PasswordBox cannot bind Text easily, so we use TextBox with masking hint)
-            if (isPassword)
-            {
-                textBox.Tag = "password";
-            }
-
-            container.Children.Add(textBox);
-
-            if (!string.IsNullOrEmpty(description))
-            {
-                container.Children.Add(new TextBlock
-                {
-                    Text = description,
-                    Foreground = _theme.FgSecondary,
-                    FontSize = 11,
-                    FontStyle = FontStyles.Italic,
-                    Margin = new Thickness(0, 2, 0, 0)
-                });
-            }
-
-            panel.Children.Add(container);
-            RegisterSearchEntry(label, description, "Text", container);
-            return textBox;
-        }
-
-        private void AddReadOnlyField(StackPanel panel, string label, string value)
-        {
-            var container = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
-
-            container.Children.Add(new TextBlock
-            {
-                Text = label,
-                Foreground = _theme.FgSecondary,
-                FontSize = 11,
-                Margin = new Thickness(0, 0, 0, 2)
-            });
-
-            var textBox = new TextBox
-            {
-                Text = value,
-                Background = _theme.InputReadOnly,
-                Foreground = _theme.FgSecondary,
-                BorderBrush = _theme.Border,
-                BorderThickness = new Thickness(1),
-                FontSize = 12,
-                IsReadOnly = true,
-                Height = 26,
-                Padding = new Thickness(6, 3, 6, 3),
-                MaxWidth = 500,
-                HorizontalAlignment = HorizontalAlignment.Left,
-                MinWidth = 300
-            };
-
-            container.Children.Add(textBox);
-            panel.Children.Add(container);
-            RegisterSearchEntry(label, value, "Info", container);
-        }
-
-        private void AddInfoRow(StackPanel panel, string label, string value)
-        {
-            var row = new DockPanel { Margin = new Thickness(0, 2, 0, 6) };
-
-            row.Children.Add(new TextBlock
-            {
-                Text = label + ":",
-                Foreground = _theme.FgSecondary,
-                FontSize = 12,
-                MinWidth = 120,
-                Margin = new Thickness(0, 0, 8, 0)
-            });
-
-            row.Children.Add(new TextBlock
-            {
-                Text = value,
-                Foreground = _theme.FgPrimary,
-                FontSize = 12,
-                TextWrapping = TextWrapping.Wrap
-            });
-
-            panel.Children.Add(row);
-            RegisterSearchEntry(label, value, "Info", row);
-        }
+        // Add* row helpers + ComboBox theming + zebra striping migrated to
+        // RowFactory in Pages/RowFactory.cs (Phase 2 B.1+, cleanup in B.17).
 
         private Button MakeButton(string text, double width)
         {
@@ -2201,11 +1706,6 @@ namespace AkmlSql.Shell.Shared.Dialogs
         //  Null-safe helpers
         // ═══════════════════════════════════════════════════════════════════════
 
-        private static void SetChecked(CheckBox? cb, bool value)
-        {
-            if (cb != null) cb.IsChecked = value;
-        }
-
         // ═══════════════════════════════════════════════════════════════════════
         //  Coloring Rules CRUD
         // ═══════════════════════════════════════════════════════════════════════
@@ -2367,31 +1867,10 @@ namespace AkmlSql.Shell.Shared.Dialogs
             return accepted;
         }
 
-        private static bool IsChecked(CheckBox? cb) => cb?.IsChecked == true;
-
-        private static void SetSlider(Slider? slider, TextBlock? label, double value)
-        {
-            if (slider == null) return;
-            var clamped = Math.Max(slider.Minimum, Math.Min(slider.Maximum, value));
-            slider.Value = clamped;
-            if (label != null) label.Text = ((int)clamped).ToString(CultureInfo.InvariantCulture);
-        }
-
-        private static int GetSliderInt(Slider? slider) => slider != null ? (int)slider.Value : 0;
-
-        private static void SetCombo(ComboBox? combo, int index)
-        {
-            if (combo != null && index >= 0 && index < combo.Items.Count)
-                combo.SelectedIndex = index;
-        }
-
-        private static int GetComboIndex(ComboBox? combo) => combo?.SelectedIndex ?? 0;
-
-        private static void SetText(TextBox? textBox, string? value)
-        {
-            if (textBox != null) textBox.Text = value ?? string.Empty;
-        }
-
-        private static string GetText(TextBox? textBox) => textBox?.Text?.Trim() ?? string.Empty;
+        // IsChecked / SetChecked / SetSlider / GetSliderInt / SetCombo /
+        // GetComboIndex / SetText / GetText helpers were used by the inline
+        // LoadSettingsToControls / SaveControlsToSettings blocks that have
+        // moved into per-page IPageControls implementations (B.2-B.16).
+        // Each page now reads/writes its own controls directly.
     }
 }
