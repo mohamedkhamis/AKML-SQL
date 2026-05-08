@@ -64,6 +64,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             ["Schema Cache"] = new SchemaCachePage(),
             ["History"] = new HistoryPage(),
             ["AI Assistance"] = new AiAssistancePage(),
+            ["Formatting"] = new FormattingPage(),
         };
         private readonly Dictionary<string, IPageControls> _pageControlsByKey = new();
 
@@ -122,14 +123,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
         // Schema Cache controls migrated to Pages/SchemaCachePage.cs (Phase 2 B.11).
 
         // Formatting
-        private CheckBox? _chkFmtEnabled;
-        private CheckBox? _chkFormatOnPaste;
-        private CheckBox? _chkFormatOnSave;
-        private CheckBox? _chkFormatOnDelimiter;
-        private CheckBox? _chkConfirmBulk;
-        private CheckBox? _chkCreateBackups;
-        private CheckBox? _chkRespectNoformat;
-        private CheckBox? _chkSemanticValidation;
+        // Formatting controls migrated to Pages/FormattingPage.cs (Phase 2 B.14).
 
         // Snippets
         // Snippets controls migrated to Pages/SnippetsPage.cs (Phase 2 B.2);
@@ -1004,7 +998,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 ("General",       "Miscellaneous › Main",         null),
                 ("IntelliSense",  "Suggestions › Behavior",       BuildIntelliSensePage),
                 ("Schema Cache",  "Suggestions › Database",       null),
-                ("Formatting",    "Format › Styles",              BuildFormattingPage),
+                ("Formatting",    "Format › Styles",              null),
                 ("Snippets",      "Snippets",                     null),
                 ("Code Analysis", "Code Analysis",                null),
                 ("Refactoring",   "Editor › Refactoring",         null),
@@ -1131,35 +1125,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
         // ═══════════════════════════════════════════════════════════════════════
         //  Formatting
         // ═══════════════════════════════════════════════════════════════════════
-        private UIElement BuildFormattingPage()
-        {
-            var panel = CreatePagePanel();
-
-            AddPageHeader(panel, "SQL Formatting");
-
-            AddGroupHeader(panel, "Triggers");
-            _chkFmtEnabled = AddToggle(panel, "Enable SQL formatter",
-                "Master switch for all formatting features");
-            _chkFormatOnPaste = AddToggle(panel, "Format on paste",
-                "Automatically format SQL when pasting from clipboard");
-            _chkFormatOnSave = AddToggle(panel, "Format on save",
-                "Automatically format the document when saving");
-            _chkFormatOnDelimiter = AddToggle(panel, "Format on delimiter",
-                "Format when typing GO or semicolon");
-
-            AddGroupSeparator(panel);
-            AddGroupHeader(panel, "Safety & Validation");
-            _chkConfirmBulk = AddToggle(panel, "Confirm before bulk format",
-                "Show a confirmation dialog before formatting multiple files");
-            _chkCreateBackups = AddToggle(panel, "Create backups before formatting",
-                "Save a backup copy of files before applying format changes");
-            _chkRespectNoformat = AddToggle(panel, "Respect --noformat regions",
-                "Skip formatting inside --noformat / --endnoformat blocks");
-            _chkSemanticValidation = AddToggle(panel, "Validate formatting preserves semantics",
-                "Re-parse formatted SQL to verify it is semantically equivalent");
-
-            return WrapInScrollViewer(panel);
-        }
+        // BuildFormattingPage migrated to Pages/FormattingPage.cs (Phase 2 B.14).
 
         // ═══════════════════════════════════════════════════════════════════════
         //  Snippets
@@ -2255,15 +2221,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 cacheLoad.Load(_settings);
 
             // ── Formatting ───────────────────────────────────────────────
-            var f = _settings.Formatter;
-            SetChecked(_chkFmtEnabled, f.Enabled);
-            SetChecked(_chkFormatOnPaste, f.FormatOnPaste);
-            SetChecked(_chkFormatOnSave, f.FormatOnSave);
-            SetChecked(_chkFormatOnDelimiter, f.FormatOnDelimiter);
-            SetChecked(_chkConfirmBulk, f.ConfirmBulkFormat);
-            SetChecked(_chkCreateBackups, f.CreateBackups);
-            SetChecked(_chkRespectNoformat, f.RespectNoformat);
-            SetChecked(_chkSemanticValidation, f.SemanticValidation);
+            // ── Formatting (page-split: B.14) ───────────────────────────
+            if (_pageControlsByKey.TryGetValue("Formatting", out var fmtLoad))
+                fmtLoad.Load(_settings);
 
             // ── Snippets (page-split: B.2) ──────────────────────────────
             if (_pageControlsByKey.TryGetValue("Snippets", out var snippetsLoad))
@@ -2359,14 +2319,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 cacheSave.Save(_settings);
 
             // ── Formatting ───────────────────────────────────────────────
-            _settings.Formatter.Enabled = IsChecked(_chkFmtEnabled);
-            _settings.Formatter.FormatOnPaste = IsChecked(_chkFormatOnPaste);
-            _settings.Formatter.FormatOnSave = IsChecked(_chkFormatOnSave);
-            _settings.Formatter.FormatOnDelimiter = IsChecked(_chkFormatOnDelimiter);
-            _settings.Formatter.ConfirmBulkFormat = IsChecked(_chkConfirmBulk);
-            _settings.Formatter.CreateBackups = IsChecked(_chkCreateBackups);
-            _settings.Formatter.RespectNoformat = IsChecked(_chkRespectNoformat);
-            _settings.Formatter.SemanticValidation = IsChecked(_chkSemanticValidation);
+            // ── Formatting (page-split: B.14) ───────────────────────────
+            if (_pageControlsByKey.TryGetValue("Formatting", out var fmtSave))
+                fmtSave.Save(_settings);
 
             // ── Snippets ─────────────────────────────────────────────────
             // ── Snippets (page-split: B.2) ──────────────────────────────

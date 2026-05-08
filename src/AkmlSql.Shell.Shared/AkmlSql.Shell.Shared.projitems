@@ -48,6 +48,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\SchemaCachePage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\HistoryPage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\AiAssistancePage.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\FormattingPage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)StatusBar\StatusBarManager.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Update\UpdateLauncher.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Update\UpdateNotifier.cs" />
