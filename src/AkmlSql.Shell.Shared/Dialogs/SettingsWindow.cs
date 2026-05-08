@@ -68,6 +68,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             ["Tabs & UI"] = new TabsPage(),
             ["IntelliSense"] = new IntelliSensePage(),
             ["SuggestionTypes"] = new SuggestionTypesPage(),
+            ["Qualification"] = new QualificationPage(),
         };
         private readonly Dictionary<string, IPageControls> _pageControlsByKey = new();
 
@@ -420,9 +421,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 ("Types of suggestion", "SuggestionTypes"),
                 ("Database", "Schema Cache"));
 
-            // "Inserted Code" group is reserved for Phase 2 (Qualification, INSERT, JOIN).
-            // Phase 1: empty group is hidden — do not add it yet, to avoid showing an
-            // empty parent node.
+            // Inserted Code group introduced in Phase 2 (C.2-C.4).
+            AddTreeGroup("Inserted Code", expanded: false,
+                ("Qualification & Brackets", "Qualification"));
 
             AddTreeGroup("Format", expanded: false,
                 ("Styles", "Formatting"));
@@ -977,6 +978,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 ("IntelliSense",  "Suggestions › Behavior"),
                 ("SuggestionTypes", "Suggestions › Types of suggestion"),
                 ("Schema Cache",  "Suggestions › Database"),
+                ("Qualification", "Inserted Code › Qualification & Brackets"),
                 ("Formatting",    "Format › Styles"),
                 ("Snippets",      "Snippets"),
                 ("Code Analysis", "Code Analysis"),
@@ -1514,6 +1516,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
                         break;
                     case "IntelliSense": _settings.IntelliSense = defaults.IntelliSense; break;
                     case "SuggestionTypes": _settings.IntelliSense.SuggestionTypes = defaults.IntelliSense.SuggestionTypes; break;
+                    case "Qualification": _settings.IntelliSense.Qualification = defaults.IntelliSense.Qualification; break;
                     case "Schema Cache": _settings.Cache = defaults.Cache; break;
                     case "Formatting": _settings.Formatter = defaults.Formatter; break;
                     case "Snippets": _settings.Snippets = defaults.Snippets; break;
