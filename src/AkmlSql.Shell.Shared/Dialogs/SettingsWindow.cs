@@ -63,6 +63,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             ["Editor"] = new EditorPage(),
             ["Schema Cache"] = new SchemaCachePage(),
             ["History"] = new HistoryPage(),
+            ["AI Assistance"] = new AiAssistancePage(),
         };
         private readonly Dictionary<string, IPageControls> _pageControlsByKey = new();
 
@@ -162,27 +163,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
         // Safety controls migrated to Pages/SafetyPage.cs (Phase 2 B.8).
 
         // AI
-        private CheckBox? _chkAiTextToSql;
-        private CheckBox? _chkAiExplain;
-        private CheckBox? _chkAiFix;
-        private CheckBox? _chkAiOptimize;
-        private CheckBox? _chkAiIndexSuggestions;
-        private CheckBox? _chkAiChatPanel;
-        private CheckBox? _chkAiInlineCompletion;
-        private CheckBox? _chkAiAutoFixOnError;
-        private ComboBox? _cboAiProvider;
-        private TextBox? _txtAiModel;
-        private TextBox? _txtAiApiKey;
-        private TextBox? _txtAiEndpoint;
-        private ComboBox? _cboAiPrivacyMode;
-        private Slider? _sldAiMaxTokens;
-        private TextBlock? _lblAiMaxTokensValue;
-        private Slider? _sldAiTemperature;
-        private TextBlock? _lblAiTemperatureValue;
-        private Slider? _sldAiTimeout;
-        private TextBlock? _lblAiTimeoutValue;
-        private Slider? _sldAiRetries;
-        private TextBlock? _lblAiRetriesValue;
+        // AI Assistance controls migrated to Pages/AiAssistancePage.cs (Phase 2 B.13).
 
         // Grid
         // Grid controls migrated to Pages/GridPage.cs (Phase 2 B.6).
@@ -1030,7 +1011,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 ("History",       "Queries › History",            null),
                 ("Tabs & UI",     "Tabs › Color",                 BuildTabsPage),
                 ("Safety",        "Queries › Execution Warnings", null),
-                ("AI Assistance", "AI Assistance",                BuildAiPage),
+                ("AI Assistance", "AI Assistance",                null),
                 ("Grid",          "Queries › Query Results",      null),
                 ("Editor",        "Editor › Productivity",        null),
                 ("Execution",     "Queries › Execution",          null),
@@ -1317,93 +1298,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
         // ═══════════════════════════════════════════════════════════════════════
         //  AI Assistance
         // ═══════════════════════════════════════════════════════════════════════
-        private UIElement BuildAiPage()
-        {
-            var panel = CreatePagePanel();
-
-            AddPageHeader(panel, "AI Assistance");
-
-            AddGroupHeader(panel, "Provider Configuration");
-            _cboAiProvider = AddDropdown(panel, "AI Provider",
-                new[] { "(None)", "Anthropic", "OpenAI", "Azure OpenAI", "Gemini", "Ollama", "LM Studio", "Custom" },
-                "Select the AI provider for SQL assistance features");
-            _txtAiModel = AddTextInput(panel, "Model",
-                "e.g. gpt-4o, claude-sonnet-4-20250514, gemini-pro");
-            _txtAiApiKey = AddTextInput(panel, "API Key",
-                "Your API key for the selected provider", true);
-
-            // Inline help: how to get API keys for each provider + security note
-            var helpBorder = new Border
-            {
-                BorderBrush = _theme.FgAccent,
-                BorderThickness = new Thickness(2, 0, 0, 0),
-                Padding = new Thickness(10, 8, 10, 8),
-                Margin = new Thickness(0, 0, 0, 10),
-                Background = _theme.Panel
-            };
-            helpBorder.Child = new TextBlock
-            {
-                Text =
-                    "How to get your API key:\n" +
-                    "  \u2022 Anthropic (Claude): console.anthropic.com \u2192 API Keys" +
-                    "  \u2014  example model: claude-sonnet-4-6\n" +
-                    "  \u2022 Google (Gemini): aistudio.google.com \u2192 Get API Key" +
-                    "  \u2014  example model: gemini-2.0-flash\n" +
-                    "  \u2022 OpenAI: platform.openai.com \u2192 API Keys" +
-                    "  \u2014  example model: gpt-4o\n\n" +
-                    "Keys are stored encrypted with Windows DPAPI and never written in plain text.",
-                Foreground = _theme.FgSecondary,
-                FontSize = 11,
-                TextWrapping = TextWrapping.Wrap,
-                LineHeight = 18
-            };
-            panel.Children.Add(helpBorder);
-
-            _txtAiEndpoint = AddTextInput(panel, "Endpoint URL",
-                "Custom endpoint (required for Azure OpenAI and custom providers)");
-
-            AddGroupSeparator(panel);
-            AddGroupHeader(panel, "Privacy & Data");
-            _cboAiPrivacyMode = AddDropdown(panel, "Privacy mode",
-                new[] { "Schema Only", "Full", "Anonymous", "Offline", "Disabled" },
-                "Controls what data is sent to the AI provider");
-
-            AddGroupSeparator(panel);
-            AddGroupHeader(panel, "Parameters");
-            (_sldAiMaxTokens, _lblAiMaxTokensValue) = AddSlider(panel,
-                "Max response tokens", 128, 128000, 4096,
-                "Maximum number of tokens in the AI response", true);
-            (_sldAiTemperature, _lblAiTemperatureValue) = AddSlider(panel,
-                "Temperature (x10)", 0, 20, 2,
-                "Sampling temperature: 0 = deterministic, 20 = creative");
-            (_sldAiTimeout, _lblAiTimeoutValue) = AddSlider(panel,
-                "Timeout (seconds)", 5, 300, 30,
-                "Request timeout for AI API calls");
-            (_sldAiRetries, _lblAiRetriesValue) = AddSlider(panel,
-                "Retries", 0, 10, 2,
-                "Number of automatic retries on transient failures");
-
-            AddGroupSeparator(panel);
-            AddGroupHeader(panel, "Features");
-            _chkAiTextToSql = AddToggle(panel, "Natural language to SQL",
-                "Generate SQL from plain English descriptions");
-            _chkAiExplain = AddToggle(panel, "Explain SQL",
-                "Get AI-powered explanations of SQL queries");
-            _chkAiFix = AddToggle(panel, "Fix errors",
-                "Suggest fixes when queries fail with errors");
-            _chkAiOptimize = AddToggle(panel, "Optimize queries",
-                "Get AI-powered query optimization suggestions");
-            _chkAiIndexSuggestions = AddToggle(panel, "Index suggestions",
-                "AI-powered index analysis and recommendations");
-            _chkAiChatPanel = AddToggle(panel, "Chat panel",
-                "Enable the AI chat side panel for interactive assistance");
-            _chkAiInlineCompletion = AddToggle(panel, "Inline ghost text",
-                "Show AI-powered inline completion suggestions as ghost text");
-            _chkAiAutoFixOnError = AddToggle(panel, "Auto-fix on error",
-                "Automatically suggest fixes when query execution fails");
-
-            return WrapInScrollViewer(panel);
-        }
+        // BuildAiPage migrated to Pages/AiAssistancePage.cs (Phase 2 B.13).
 
         // ═══════════════════════════════════════════════════════════════════════
         //  UI Builder Helpers
@@ -2409,46 +2304,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 sfLoad.Load(_settings);
 
             // ── AI Assistance ────────────────────────────────────────────
-            var ai = _settings.Ai;
-            var providerIdx = (ai.Provider?.ToLowerInvariant()) switch
-            {
-                "anthropic" => 1,
-                "openai" => 2,
-                "azureopenai" => 3,
-                "gemini" => 4,
-                "ollama" => 5,
-                "lmstudio" => 6,
-                "custom" => 7,
-                _ => 0
-            };
-            SetCombo(_cboAiProvider, providerIdx);
-            SetText(_txtAiModel, ai.Model);
-            SetText(_txtAiApiKey, ai.ApiKey);
-            SetText(_txtAiEndpoint, ai.Endpoint);
-
-            var privacyIdx = (ai.PrivacyMode?.ToLowerInvariant()) switch
-            {
-                "full" => 1,
-                "anonymous" => 2,
-                "offline" => 3,
-                "disabled" => 4,
-                _ => 0 // schemaOnly
-            };
-            SetCombo(_cboAiPrivacyMode, privacyIdx);
-
-            SetSlider(_sldAiMaxTokens, _lblAiMaxTokensValue, ai.MaxTokens);
-            SetSlider(_sldAiTemperature, _lblAiTemperatureValue, (int)(ai.Temperature * 10));
-            SetSlider(_sldAiTimeout, _lblAiTimeoutValue, ai.Timeout);
-            SetSlider(_sldAiRetries, _lblAiRetriesValue, ai.Retries);
-
-            SetChecked(_chkAiTextToSql, ai.TextToSql);
-            SetChecked(_chkAiExplain, ai.Explain);
-            SetChecked(_chkAiFix, ai.Fix);
-            SetChecked(_chkAiOptimize, ai.Optimize);
-            SetChecked(_chkAiIndexSuggestions, ai.IndexSuggestions);
-            SetChecked(_chkAiChatPanel, ai.ChatPanel);
-            SetChecked(_chkAiInlineCompletion, ai.InlineCompletion);
-            SetChecked(_chkAiAutoFixOnError, ai.AutoFixOnError);
+            // ── AI Assistance (page-split: B.13) ────────────────────────
+            if (_pageControlsByKey.TryGetValue("AI Assistance", out var aiLoad))
+                aiLoad.Load(_settings);
 
             // ── Grid ─────────────────────────────────────────────────────
             // ── Grid (page-split: B.6) ──────────────────────────────────
@@ -2547,43 +2405,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
             if (_pageControlsByKey.TryGetValue("Safety", out var sfSave))
                 sfSave.Save(_settings);
 
-            // ── AI Assistance ────────────────────────────────────────────
-            _settings.Ai.Provider = GetComboIndex(_cboAiProvider) switch
-            {
-                1 => "Anthropic",
-                2 => "OpenAI",
-                3 => "AzureOpenAI",
-                4 => "Gemini",
-                5 => "Ollama",
-                6 => "LMStudio",
-                7 => "Custom",
-                _ => ""
-            };
-            _settings.Ai.Model = GetText(_txtAiModel);
-            _settings.Ai.ApiKey = GetText(_txtAiApiKey);
-            _settings.Ai.Endpoint = GetText(_txtAiEndpoint);
-            _settings.Ai.PrivacyMode = GetComboIndex(_cboAiPrivacyMode) switch
-            {
-                1 => "full",
-                2 => "anonymous",
-                3 => "offline",
-                4 => "disabled",
-                _ => "schemaOnly"
-            };
-            _settings.Ai.MaxTokens = GetSliderInt(_sldAiMaxTokens);
-            _settings.Ai.Temperature = GetSliderInt(_sldAiTemperature) / 10.0;
-            _settings.Ai.Timeout = GetSliderInt(_sldAiTimeout);
-            _settings.Ai.Retries = GetSliderInt(_sldAiRetries);
-
-            _settings.Ai.Enabled = GetComboIndex(_cboAiProvider) > 0;
-            _settings.Ai.TextToSql = IsChecked(_chkAiTextToSql);
-            _settings.Ai.Explain = IsChecked(_chkAiExplain);
-            _settings.Ai.Fix = IsChecked(_chkAiFix);
-            _settings.Ai.Optimize = IsChecked(_chkAiOptimize);
-            _settings.Ai.IndexSuggestions = IsChecked(_chkAiIndexSuggestions);
-            _settings.Ai.ChatPanel = IsChecked(_chkAiChatPanel);
-            _settings.Ai.InlineCompletion = IsChecked(_chkAiInlineCompletion);
-            _settings.Ai.AutoFixOnError = IsChecked(_chkAiAutoFixOnError);
+            // ── AI Assistance (page-split: B.13) ────────────────────────
+            if (_pageControlsByKey.TryGetValue("AI Assistance", out var aiSave))
+                aiSave.Save(_settings);
 
             // ── Grid ─────────────────────────────────────────────────────
             // ── Grid (page-split: B.6) ──────────────────────────────────
