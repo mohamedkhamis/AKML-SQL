@@ -57,6 +57,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             ["Refactoring"] = new RefactoringPage(),
             ["Navigation"] = new NavigationPage(),
             ["Grid"] = new GridPage(),
+            ["General"] = new GeneralPage(),
         };
         private readonly Dictionary<string, IPageControls> _pageControlsByKey = new();
 
@@ -92,9 +93,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
         // ─── Control references (for Load / Save) ───────────────────────────
 
         // General
-        private CheckBox? _chkAutoUpdate;
-        private CheckBox? _chkTelemetry;
-        private ComboBox? _cboTheme;
+        // General controls migrated to Pages/GeneralPage.cs (Phase 2 B.7).
 
         // IntelliSense
         private CheckBox? _chkIsEnabled;
@@ -1045,7 +1044,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             // dispatched through _pageBuilders[key] instead.
             var pages = new (string Key, string Display, Func<UIElement>? Builder)[]
             {
-                ("General",       "Miscellaneous › Main",         BuildGeneralPage),
+                ("General",       "Miscellaneous › Main",         null),
                 ("IntelliSense",  "Suggestions › Behavior",       BuildIntelliSensePage),
                 ("Schema Cache",  "Suggestions › Database",       BuildSchemaCachePage),
                 ("Formatting",    "Format › Styles",              BuildFormattingPage),
@@ -1072,8 +1071,14 @@ namespace AkmlSql.Shell.Shared.Dialogs
                     var hostPanel = CreatePagePanel();
                     AddPageHeader(hostPanel, pageBuilder.Title);
                     var ctx = new PageContext(_theme, _settings, new RowFactory(_theme), RegisterSearchEntry);
-                    _pageControlsByKey[key] = pageBuilder.Build(hostPanel, ctx);
+                    var controls = pageBuilder.Build(hostPanel, ctx);
+                    _pageControlsByKey[key] = controls;
                     _pages[key] = WrapInScrollViewer(hostPanel);
+
+                    // Page-specific event hookups that the host owns:
+                    // theme switching closes the dialog and reopens it under the new theme.
+                    if (controls is GeneralControls gen)
+                        gen.Theme.SelectionChanged += OnThemeSelectionChanged;
                 }
                 else if (builder != null)
                 {
@@ -1107,36 +1112,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
         // ═══════════════════════════════════════════════════════════════════════
         //  General
         // ═══════════════════════════════════════════════════════════════════════
-        private UIElement BuildGeneralPage()
-        {
-            var panel = CreatePagePanel();
-
-            AddPageHeader(panel, "General Settings");
-
-            AddGroupHeader(panel, "Appearance");
-            _cboTheme = AddDropdown(panel, "Theme",
-                new[] { "Dark", "Light", "System" },
-                "UI color theme for AKML SQL dialogs");
-            _cboTheme.SelectionChanged += OnThemeSelectionChanged;
-
-            AddGroupSeparator(panel);
-            AddGroupHeader(panel, "Updates & Telemetry");
-            _chkAutoUpdate = AddToggle(panel, "Check for updates automatically",
-                "Checks for new versions every 24 hours on startup");
-            _chkTelemetry = AddToggle(panel, "Send anonymous usage telemetry",
-                "No personally identifiable information is collected");
-
-            AddGroupSeparator(panel);
-            AddGroupHeader(panel, "Paths");
-            AddReadOnlyField(panel, "Configuration file", Constants.ConfigFilePath);
-            AddReadOnlyField(panel, "Log directory", Constants.LogsPath);
-
-            AddGroupSeparator(panel);
-            AddGroupHeader(panel, "About");
-            AddInfoRow(panel, "Version", Constants.RuntimeVersion + " (" + Constants.BuildDate + ")");
-
-            return WrapInScrollViewer(panel);
-        }
+        // BuildGeneralPage migrated to Pages/GeneralPage.cs (Phase 2 B.7).
 
         // ═══════════════════════════════════════════════════════════════════════
         //  IntelliSense
@@ -2287,8 +2263,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
         private void OnThemeSelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (_cboTheme == null) return;
-            var idx = _cboTheme.SelectedIndex;
+            if (!_pageControlsByKey.TryGetValue("General", out var c) || c is not GeneralControls gen)
+                return;
+            var idx = gen.Theme.SelectedIndex;
 
             // Index 0 = Dark, Index 1 = Light, Index 2 = System (auto-detect from VS/SSMS)
             var requestedTheme = idx switch
@@ -2502,16 +2479,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
         private void LoadSettingsToControls()
         {
-            // ── General ──────────────────────────────────────────────────
-            SetChecked(_chkAutoUpdate, _settings.AutoUpdateEnabled);
-            SetChecked(_chkTelemetry, _settings.TelemetryEnabled);
-            var themeIdx = (_settings.Theme?.ToLowerInvariant()) switch
-            {
-                "light" => 1,
-                "system" => 2,
-                _ => 0 // "dark" or unset
-            };
-            SetCombo(_cboTheme, themeIdx);
+            // ── General (page-split: B.7) ───────────────────────────────
+            if (_pageControlsByKey.TryGetValue("General", out var genLoad))
+                genLoad.Load(_settings);
 
             // ── IntelliSense ─────────────────────────────────────────────
             var i = _settings.IntelliSense;
@@ -2671,15 +2641,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
         private void SaveControlsToSettings()
         {
-            // ── General ──────────────────────────────────────────────────
-            _settings.AutoUpdateEnabled = IsChecked(_chkAutoUpdate);
-            _settings.TelemetryEnabled = IsChecked(_chkTelemetry);
-            _settings.Theme = GetComboIndex(_cboTheme) switch
-            {
-                1 => "light",
-                2 => "system",
-                _ => "dark"
-            };
+            // ── General (page-split: B.7) ───────────────────────────────
+            if (_pageControlsByKey.TryGetValue("General", out var genSave))
+                genSave.Save(_settings);
 
             // ── IntelliSense ─────────────────────────────────────────────
             _settings.IntelliSense.Enabled = IsChecked(_chkIsEnabled);
