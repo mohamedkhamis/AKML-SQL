@@ -364,12 +364,16 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             hoverTrigger.Setters.Add(new Setter(TextElement.ForegroundProperty, _theme.SelectedText));
             itemStyle.Triggers.Add(hoverTrigger);
 
+            // Selected ComboBoxItem: accent background with on-accent text.
+            // SelectedText maps to ThemeTokens.TextOnAccent — the canonical
+            // token for "text on a coloured background", which is what we need
+            // here too. Using the token instead of a hardcoded Colors.White keeps
+            // the appearance consistent if a future theme uses a non-white
+            // on-accent foreground (e.g. high-contrast / blue-tinted variants).
             var selectedTrigger = new Trigger { Property = ComboBoxItem.IsSelectedProperty, Value = true };
             selectedTrigger.Setters.Add(new Setter(Control.BackgroundProperty, _theme.FgAccent));
-            selectedTrigger.Setters.Add(new Setter(Control.ForegroundProperty,
-                PageTheme.Freeze(new SolidColorBrush(Colors.White))));
-            selectedTrigger.Setters.Add(new Setter(TextElement.ForegroundProperty,
-                PageTheme.Freeze(new SolidColorBrush(Colors.White))));
+            selectedTrigger.Setters.Add(new Setter(Control.ForegroundProperty, _theme.SelectedText));
+            selectedTrigger.Setters.Add(new Setter(TextElement.ForegroundProperty, _theme.SelectedText));
             itemStyle.Triggers.Add(selectedTrigger);
 
             combo.ItemContainerStyle = itemStyle;
