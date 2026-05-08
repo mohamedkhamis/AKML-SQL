@@ -60,6 +60,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             ["General"] = new GeneralPage(),
             ["Safety"] = new SafetyPage(),
             ["Execution"] = new ExecutionPage(),
+            ["Editor"] = new EditorPage(),
         };
         private readonly Dictionary<string, IPageControls> _pageControlsByKey = new();
 
@@ -199,12 +200,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
         // Grid controls migrated to Pages/GridPage.cs (Phase 2 B.6).
 
         // Editor Productivity
-        private CheckBox? _chkEdHighlightOccurrences;
-        private CheckBox? _chkEdBracketMatching;
-        private CheckBox? _chkEdNamedRegions;
-        private CheckBox? _chkEdStickyScroll;
-        private CheckBox? _chkEdMinimap;
-        private CheckBox? _chkEdDocumentOutline;
+        // Editor controls migrated to Pages/EditorPage.cs (Phase 2 B.10).
 
         // Execution
         // Execution controls migrated to Pages/ExecutionPage.cs (Phase 2 B.9).
@@ -1048,7 +1044,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 ("Safety",        "Queries › Execution Warnings", null),
                 ("AI Assistance", "AI Assistance",                BuildAiPage),
                 ("Grid",          "Queries › Query Results",      null),
-                ("Editor",        "Editor › Productivity",        BuildEditorPage),
+                ("Editor",        "Editor › Productivity",        null),
                 ("Execution",     "Queries › Execution",          null),
                 ("Navigation",    "Editor › Navigation",          null),
             };
@@ -1376,26 +1372,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
         // ═══════════════════════════════════════════════════════════════════════
         //  Editor Productivity
         // ═══════════════════════════════════════════════════════════════════════
-        private UIElement BuildEditorPage()
-        {
-            var panel = CreatePagePanel();
-            AddPageHeader(panel, "Editor Productivity");
-
-            _chkEdHighlightOccurrences = AddToggle(panel, "Highlight occurrences",
-                "Highlight all occurrences of selected identifier");
-            _chkEdBracketMatching = AddToggle(panel, "Bracket matching",
-                "Highlight matching BEGIN/END and parenthesis pairs");
-            _chkEdNamedRegions = AddToggle(panel, "Named regions",
-                "Show named region markers in editor");
-            _chkEdStickyScroll = AddToggle(panel, "Sticky scroll",
-                "Pin parent scope headers while scrolling");
-            _chkEdMinimap = AddToggle(panel, "Code minimap",
-                "Show code minimap in editor margin");
-            _chkEdDocumentOutline = AddToggle(panel, "Document Outline",
-                "Enable Document Outline panel");
-
-            return WrapInScrollViewer(panel);
-        }
+        // BuildEditorPage migrated to Pages/EditorPage.cs (Phase 2 B.10).
 
         // ═══════════════════════════════════════════════════════════════════════
         //  Execution Productivity
@@ -2556,14 +2533,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
             if (_pageControlsByKey.TryGetValue("Grid", out var gridLoad))
                 gridLoad.Load(_settings);
 
-            // ── Editor Productivity ──────────────────────────────────────
-            var ep = _settings.EditorProductivity;
-            SetChecked(_chkEdHighlightOccurrences, ep.HighlightOccurrences);
-            SetChecked(_chkEdBracketMatching, ep.BracketMatching);
-            SetChecked(_chkEdNamedRegions, ep.NamedRegions);
-            SetChecked(_chkEdStickyScroll, ep.StickyScroll);
-            SetChecked(_chkEdMinimap, ep.Minimap);
-            SetChecked(_chkEdDocumentOutline, ep.DocumentOutline);
+            // ── Editor Productivity (page-split: B.10) ──────────────────
+            if (_pageControlsByKey.TryGetValue("Editor", out var edLoad))
+                edLoad.Load(_settings);
 
             // ── Execution ────────────────────────────────────────────────
             // ── Execution (page-split: B.9) ─────────────────────────────
@@ -2703,12 +2675,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 gridSave.Save(_settings);
 
             // ── Editor Productivity ──────────────────────────────────────
-            _settings.EditorProductivity.HighlightOccurrences = IsChecked(_chkEdHighlightOccurrences);
-            _settings.EditorProductivity.BracketMatching = IsChecked(_chkEdBracketMatching);
-            _settings.EditorProductivity.NamedRegions = IsChecked(_chkEdNamedRegions);
-            _settings.EditorProductivity.StickyScroll = IsChecked(_chkEdStickyScroll);
-            _settings.EditorProductivity.Minimap = IsChecked(_chkEdMinimap);
-            _settings.EditorProductivity.DocumentOutline = IsChecked(_chkEdDocumentOutline);
+            // ── Editor Productivity (page-split: B.10) ──────────────────
+            if (_pageControlsByKey.TryGetValue("Editor", out var edSave))
+                edSave.Save(_settings);
 
             // ── Execution ────────────────────────────────────────────────
             // ── Execution (page-split: B.9) ─────────────────────────────
