@@ -65,6 +65,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             ["History"] = new HistoryPage(),
             ["AI Assistance"] = new AiAssistancePage(),
             ["Formatting"] = new FormattingPage(),
+            ["Tabs & UI"] = new TabsPage(),
         };
         private readonly Dictionary<string, IPageControls> _pageControlsByKey = new();
 
@@ -139,19 +140,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
         // History controls migrated to Pages/HistoryPage.cs (Phase 2 B.12).
 
         // Tabs
-        private CheckBox? _chkTabColoringEnabled;
-        private CheckBox? _chkTabGradientColors;
-        private ListBox? _lstColoringRules;
-        private Button? _btnAddRule;
-        private Button? _btnEditRule;
-        private Button? _btnRemoveRule;
-        private CheckBox? _chkTabSessionRecovery;
-        private Slider? _sldTabAutoSaveInterval;
-        private TextBlock? _lblTabAutoSaveValue;
-        private Slider? _sldTabMaxClosedTabs;
-        private TextBlock? _lblTabMaxClosedTabsValue;
-        private TextBox? _txtTabCustomWindowTitle;
-        private ComboBox? _cboTabRestoreOnStartup;
+        // Tabs & UI controls migrated to Pages/TabsPage.cs (Phase 2 B.15).
 
         // Safety
         // Safety controls migrated to Pages/SafetyPage.cs (Phase 2 B.8).
@@ -1003,7 +992,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 ("Code Analysis", "Code Analysis",                null),
                 ("Refactoring",   "Editor › Refactoring",         null),
                 ("History",       "Queries › History",            null),
-                ("Tabs & UI",     "Tabs › Color",                 BuildTabsPage),
+                ("Tabs & UI",     "Tabs › Color",                 null),
                 ("Safety",        "Queries › Execution Warnings", null),
                 ("AI Assistance", "AI Assistance",                null),
                 ("Grid",          "Queries › Query Results",      null),
@@ -1030,6 +1019,16 @@ namespace AkmlSql.Shell.Shared.Dialogs
                     // theme switching closes the dialog and reopens it under the new theme.
                     if (controls is GeneralControls gen)
                         gen.Theme.SelectionChanged += OnThemeSelectionChanged;
+
+                    // Tabs page: Add/Edit/Remove buttons drive the coloring-rule
+                    // editor dialog, which lives on SettingsWindow because it
+                    // pops a host-owned modal.
+                    if (controls is TabsControls tabs)
+                    {
+                        tabs.AddRuleButton.Click    += (_, _) => OnAddColoringRule();
+                        tabs.EditRuleButton.Click   += (_, _) => OnEditColoringRule();
+                        tabs.RemoveRuleButton.Click += (_, _) => OnRemoveColoringRule();
+                    }
                 }
                 else if (builder != null)
                 {
@@ -1150,91 +1149,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
         // ═══════════════════════════════════════════════════════════════════════
         //  Tabs & UI
         // ═══════════════════════════════════════════════════════════════════════
-        private UIElement BuildTabsPage()
-        {
-            var panel = CreatePagePanel();
-
-            AddPageHeader(panel, "Tabs & UI");
-
-            AddGroupHeader(panel, "Tab Coloring");
-            _chkTabColoringEnabled = AddToggle(panel, "Enable environment-based tab coloring",
-                "Color tabs based on server name patterns (e.g. PROD=red, DEV=green)");
-            _chkTabGradientColors = AddToggle(panel, "Use gradient colors",
-                "Apply a vertical gradient to tab color bars (lighter at top, base color at bottom)");
-
-            // Environment Rules editor
-            var rulesLabel = new TextBlock
-            {
-                Text = "Environment Rules",
-                FontWeight = FontWeights.SemiBold,
-                FontSize = 13,
-                Margin = new Thickness(20, 16, 20, 4),
-            };
-            panel.Children.Add(rulesLabel);
-
-            var rulesDesc = new TextBlock
-            {
-                Text = "Define server name patterns to match environments. Rules are evaluated top-down; first match wins.",
-                FontSize = 12,
-                Opacity = 0.7,
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(20, 0, 20, 8),
-            };
-            panel.Children.Add(rulesDesc);
-
-            _lstColoringRules = new ListBox
-            {
-                Height = 120,
-                Margin = new Thickness(20, 4, 20, 4),
-                BorderThickness = new Thickness(1),
-                FontSize = 13,
-            };
-            panel.Children.Add(_lstColoringRules);
-
-            var buttonRow = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Margin = new Thickness(20, 4, 20, 4),
-                HorizontalAlignment = HorizontalAlignment.Left
-            };
-
-            _btnAddRule = new Button { Content = "Add...", Padding = new Thickness(12, 4, 12, 4), Margin = new Thickness(0, 0, 8, 0) };
-            _btnEditRule = new Button { Content = "Edit...", Padding = new Thickness(12, 4, 12, 4), Margin = new Thickness(0, 0, 8, 0) };
-            _btnRemoveRule = new Button { Content = "Remove", Padding = new Thickness(12, 4, 12, 4) };
-
-            _btnAddRule.Click += (s, e) => OnAddColoringRule();
-            _btnEditRule.Click += (s, e) => OnEditColoringRule();
-            _btnRemoveRule.Click += (s, e) => OnRemoveColoringRule();
-
-            buttonRow.Children.Add(_btnAddRule);
-            buttonRow.Children.Add(_btnEditRule);
-            buttonRow.Children.Add(_btnRemoveRule);
-            panel.Children.Add(buttonRow);
-
-            AddGroupSeparator(panel);
-            AddGroupHeader(panel, "Session Recovery");
-            _chkTabSessionRecovery = AddToggle(panel, "Enable session recovery",
-                "Save open documents and restore them on next startup");
-
-            (_sldTabAutoSaveInterval, _lblTabAutoSaveValue) = AddSlider(panel,
-                "Auto-save interval (seconds)", 30, 300, 60,
-                "How often to save document state for recovery");
-
-            _cboTabRestoreOnStartup = AddDropdown(panel, "Restore on startup",
-                new[] { "Prompt", "Always", "Never" },
-                "Behavior when opening the IDE after a previous session");
-
-            (_sldTabMaxClosedTabs, _lblTabMaxClosedTabsValue) = AddSlider(panel,
-                "Max closed tabs to remember", 1, 100, 20,
-                "Number of recently closed tabs available for Ctrl+Shift+T restore");
-
-            AddGroupSeparator(panel);
-            AddGroupHeader(panel, "Window Title");
-            _txtTabCustomWindowTitle = AddTextInput(panel, "Custom window title template",
-                "Use {server}, {database}, and other placeholders");
-
-            return WrapInScrollViewer(panel);
-        }
+        // BuildTabsPage migrated to Pages/TabsPage.cs (Phase 2 B.15).
 
         // ═══════════════════════════════════════════════════════════════════════
         //  Safety
@@ -2242,22 +2157,11 @@ namespace AkmlSql.Shell.Shared.Dialogs
             if (_pageControlsByKey.TryGetValue("History", out var histLoad))
                 histLoad.Load(_settings);
 
-            // ── Tabs & UI ────────────────────────────────────────────────
-            var t = _settings.Tabs;
-            SetChecked(_chkTabColoringEnabled, t.ColoringEnabled);
-            SetChecked(_chkTabGradientColors, t.GradientColors);
+            // ── Tabs & UI (page-split: B.15) ────────────────────────────
+            if (_pageControlsByKey.TryGetValue("Tabs & UI", out var tabsLoad))
+                tabsLoad.Load(_settings);
+            // Coloring rules list is rebuilt by the host (CRUD lives on SettingsWindow).
             PopulateColoringRulesList();
-            SetChecked(_chkTabSessionRecovery, t.SessionRecovery);
-            SetSlider(_sldTabAutoSaveInterval, _lblTabAutoSaveValue, t.AutoSaveInterval);
-            SetSlider(_sldTabMaxClosedTabs, _lblTabMaxClosedTabsValue, t.MaxClosedTabs);
-            SetText(_txtTabCustomWindowTitle, t.CustomWindowTitle);
-            var restoreIdx = t.RestoreOnStartup?.ToLowerInvariant() switch
-            {
-                "always" => 1,
-                "never" => 2,
-                _ => 0
-            };
-            SetCombo(_cboTabRestoreOnStartup, restoreIdx);
 
             // ── Safety (page-split: B.8) ────────────────────────────────
             if (_pageControlsByKey.TryGetValue("Safety", out var sfLoad))
@@ -2342,19 +2246,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
             if (_pageControlsByKey.TryGetValue("History", out var histSave))
                 histSave.Save(_settings);
 
-            // ── Tabs & UI ────────────────────────────────────────────────
-            _settings.Tabs.ColoringEnabled = IsChecked(_chkTabColoringEnabled);
-            _settings.Tabs.GradientColors = IsChecked(_chkTabGradientColors);
-            _settings.Tabs.SessionRecovery = IsChecked(_chkTabSessionRecovery);
-            _settings.Tabs.AutoSaveInterval = GetSliderInt(_sldTabAutoSaveInterval);
-            _settings.Tabs.MaxClosedTabs = GetSliderInt(_sldTabMaxClosedTabs);
-            _settings.Tabs.CustomWindowTitle = GetText(_txtTabCustomWindowTitle);
-            _settings.Tabs.RestoreOnStartup = GetComboIndex(_cboTabRestoreOnStartup) switch
-            {
-                1 => "always",
-                2 => "never",
-                _ => "prompt"
-            };
+            // ── Tabs & UI (page-split: B.15) ────────────────────────────
+            if (_pageControlsByKey.TryGetValue("Tabs & UI", out var tabsSave))
+                tabsSave.Save(_settings);
 
             // ── Safety (page-split: B.8) ────────────────────────────────
             if (_pageControlsByKey.TryGetValue("Safety", out var sfSave))
@@ -2398,14 +2292,19 @@ namespace AkmlSql.Shell.Shared.Dialogs
         //  Coloring Rules CRUD
         // ═══════════════════════════════════════════════════════════════════════
 
+        private ListBox? GetColoringRulesList()
+            => _pageControlsByKey.TryGetValue("Tabs & UI", out var c) && c is TabsControls tc
+                ? tc.ColoringRulesList
+                : null;
+
         private void PopulateColoringRulesList()
         {
-            if (_lstColoringRules == null) return;
-            _lstColoringRules.Items.Clear();
-
+            var list = GetColoringRulesList();
+            if (list == null) return;
+            list.Items.Clear();
             foreach (var rule in _settings.Tabs.ColoringRules)
             {
-                _lstColoringRules.Items.Add($"[{rule.Label}]  {rule.Pattern}  \u2192  {rule.Color}");
+                list.Items.Add($"[{rule.Label}]  {rule.Pattern}  \u2192  {rule.Color}");
             }
         }
 
@@ -2426,20 +2325,20 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
         private void OnEditColoringRule()
         {
-            var index = _lstColoringRules?.SelectedIndex ?? -1;
+            var index = GetColoringRulesList()?.SelectedIndex ?? -1;
             if (index < 0 || index >= _settings.Tabs.ColoringRules.Count) return;
 
             var rule = _settings.Tabs.ColoringRules[index];
             if (ShowRuleEditor(rule, "Edit Environment Rule"))
             {
                 PopulateColoringRulesList();
-                _lstColoringRules!.SelectedIndex = index;
+                GetColoringRulesList()!.SelectedIndex = index;
             }
         }
 
         private void OnRemoveColoringRule()
         {
-            var index = _lstColoringRules?.SelectedIndex ?? -1;
+            var index = GetColoringRulesList()?.SelectedIndex ?? -1;
             if (index < 0 || index >= _settings.Tabs.ColoringRules.Count) return;
 
             _settings.Tabs.ColoringRules.RemoveAt(index);
