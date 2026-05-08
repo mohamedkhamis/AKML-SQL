@@ -67,6 +67,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             ["Formatting"] = new FormattingPage(),
             ["Tabs & UI"] = new TabsPage(),
             ["IntelliSense"] = new IntelliSensePage(),
+            ["SuggestionTypes"] = new SuggestionTypesPage(),
         };
         private readonly Dictionary<string, IPageControls> _pageControlsByKey = new();
 
@@ -416,6 +417,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
             AddTreeGroup("Suggestions", expanded: true,
                 ("Behavior", "IntelliSense"),
+                ("Types of suggestion", "SuggestionTypes"),
                 ("Database", "Schema Cache"));
 
             // "Inserted Code" group is reserved for Phase 2 (Qualification, INSERT, JOIN).
@@ -973,6 +975,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             {
                 ("General",       "Miscellaneous › Main"),
                 ("IntelliSense",  "Suggestions › Behavior"),
+                ("SuggestionTypes", "Suggestions › Types of suggestion"),
                 ("Schema Cache",  "Suggestions › Database"),
                 ("Formatting",    "Format › Styles"),
                 ("Snippets",      "Snippets"),
@@ -1510,6 +1513,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
                         _settings.Theme = defaults.Theme;
                         break;
                     case "IntelliSense": _settings.IntelliSense = defaults.IntelliSense; break;
+                    case "SuggestionTypes": _settings.IntelliSense.SuggestionTypes = defaults.IntelliSense.SuggestionTypes; break;
                     case "Schema Cache": _settings.Cache = defaults.Cache; break;
                     case "Formatting": _settings.Formatter = defaults.Formatter; break;
                     case "Snippets": _settings.Snippets = defaults.Snippets; break;
