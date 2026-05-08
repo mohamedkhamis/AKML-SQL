@@ -56,6 +56,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             ["Code Analysis"] = new CodeAnalysisPage(),
             ["Refactoring"] = new RefactoringPage(),
             ["Navigation"] = new NavigationPage(),
+            ["Grid"] = new GridPage(),
         };
         private readonly Dictionary<string, IPageControls> _pageControlsByKey = new();
 
@@ -201,11 +202,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
         private TextBlock? _lblAiRetriesValue;
 
         // Grid
-        private CheckBox? _chkGridAggregates;
-        private CheckBox? _chkGridNullHighlight;
-        private CheckBox? _chkGridRowNumbers;
-        private CheckBox? _chkGridFreezeHeaders;
-        private CheckBox? _chkGridExcelLargeNumberAsText;
+        // Grid controls migrated to Pages/GridPage.cs (Phase 2 B.6).
 
         // Editor Productivity
         private CheckBox? _chkEdHighlightOccurrences;
@@ -1059,7 +1056,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 ("Tabs & UI",     "Tabs › Color",                 BuildTabsPage),
                 ("Safety",        "Queries › Execution Warnings", BuildSafetyPage),
                 ("AI Assistance", "AI Assistance",                BuildAiPage),
-                ("Grid",          "Queries › Query Results",      BuildGridPage),
+                ("Grid",          "Queries › Query Results",      null),
                 ("Editor",        "Editor › Productivity",        BuildEditorPage),
                 ("Execution",     "Queries › Execution",          BuildExecutionPage),
                 ("Navigation",    "Editor › Navigation",          null),
@@ -1434,27 +1431,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
         // ═══════════════════════════════════════════════════════════════════════
         //  Grid
         // ═══════════════════════════════════════════════════════════════════════
-        private UIElement BuildGridPage()
-        {
-            var panel = CreatePagePanel();
-            AddPageHeader(panel, "Results Grid");
-
-            _chkGridAggregates = AddToggle(panel, "Aggregate statistics",
-                "Show Sum, Avg, Count, Min, Max for selected cells");
-            _chkGridNullHighlight = AddToggle(panel, "Highlight NULL cells",
-                "Highlight NULL cells in results grid");
-            _chkGridRowNumbers = AddToggle(panel, "Row numbers",
-                "Show row numbers column");
-            _chkGridFreezeHeaders = AddToggle(panel, "Freeze headers",
-                "Freeze column headers while scrolling");
-
-            AddGroupSeparator(panel);
-            AddGroupHeader(panel, "Excel Export");
-            _chkGridExcelLargeNumberAsText = AddToggle(panel, "Save 15+ digit numbers as text",
-                "Numbers with 15 or more digits are saved as text to prevent Excel from rounding them");
-
-            return WrapInScrollViewer(panel);
-        }
+        // BuildGridPage migrated to Pages/GridPage.cs (Phase 2 B.6).
 
         // ═══════════════════════════════════════════════════════════════════════
         //  Editor Productivity
@@ -2663,12 +2640,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
             SetChecked(_chkAiAutoFixOnError, ai.AutoFixOnError);
 
             // ── Grid ─────────────────────────────────────────────────────
-            var gr = _settings.Grid;
-            SetChecked(_chkGridAggregates, gr.Aggregates);
-            SetChecked(_chkGridNullHighlight, gr.NullHighlight);
-            SetChecked(_chkGridRowNumbers, gr.RowNumbers);
-            SetChecked(_chkGridFreezeHeaders, gr.FreezeHeaders);
-            SetChecked(_chkGridExcelLargeNumberAsText, gr.ExcelLargeNumberAsText);
+            // ── Grid (page-split: B.6) ──────────────────────────────────
+            if (_pageControlsByKey.TryGetValue("Grid", out var gridLoad))
+                gridLoad.Load(_settings);
 
             // ── Editor Productivity ──────────────────────────────────────
             var ep = _settings.EditorProductivity;
@@ -2824,11 +2798,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
             _settings.Ai.AutoFixOnError = IsChecked(_chkAiAutoFixOnError);
 
             // ── Grid ─────────────────────────────────────────────────────
-            _settings.Grid.Aggregates = IsChecked(_chkGridAggregates);
-            _settings.Grid.NullHighlight = IsChecked(_chkGridNullHighlight);
-            _settings.Grid.RowNumbers = IsChecked(_chkGridRowNumbers);
-            _settings.Grid.FreezeHeaders = IsChecked(_chkGridFreezeHeaders);
-            _settings.Grid.ExcelLargeNumberAsText = IsChecked(_chkGridExcelLargeNumberAsText);
+            // ── Grid (page-split: B.6) ──────────────────────────────────
+            if (_pageControlsByKey.TryGetValue("Grid", out var gridSave))
+                gridSave.Save(_settings);
 
             // ── Editor Productivity ──────────────────────────────────────
             _settings.EditorProductivity.HighlightOccurrences = IsChecked(_chkEdHighlightOccurrences);
