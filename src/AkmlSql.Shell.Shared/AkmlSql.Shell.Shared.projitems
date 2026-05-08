@@ -43,6 +43,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\GridPage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\GeneralPage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\SafetyPage.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\ExecutionPage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)StatusBar\StatusBarManager.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Update\UpdateLauncher.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Update\UpdateNotifier.cs" />

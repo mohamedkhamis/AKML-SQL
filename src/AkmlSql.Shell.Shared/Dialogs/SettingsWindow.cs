@@ -59,6 +59,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             ["Grid"] = new GridPage(),
             ["General"] = new GeneralPage(),
             ["Safety"] = new SafetyPage(),
+            ["Execution"] = new ExecutionPage(),
         };
         private readonly Dictionary<string, IPageControls> _pageControlsByKey = new();
 
@@ -206,10 +207,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
         private CheckBox? _chkEdDocumentOutline;
 
         // Execution
-        private CheckBox? _chkExecShowTimer;
-        private CheckBox? _chkExecMultiDatabase;
-        private Slider? _sldExecNotificationThreshold;
-        private TextBlock? _lblExecNotificationValue;
+        // Execution controls migrated to Pages/ExecutionPage.cs (Phase 2 B.9).
 
         // Navigation
         // Navigation controls migrated to Pages/NavigationPage.cs (Phase 2 B.5).
@@ -1051,7 +1049,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 ("AI Assistance", "AI Assistance",                BuildAiPage),
                 ("Grid",          "Queries › Query Results",      null),
                 ("Editor",        "Editor › Productivity",        BuildEditorPage),
-                ("Execution",     "Queries › Execution",          BuildExecutionPage),
+                ("Execution",     "Queries › Execution",          null),
                 ("Navigation",    "Editor › Navigation",          null),
             };
 
@@ -1402,23 +1400,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
         // ═══════════════════════════════════════════════════════════════════════
         //  Execution Productivity
         // ═══════════════════════════════════════════════════════════════════════
-        private UIElement BuildExecutionPage()
-        {
-            var panel = CreatePagePanel();
-            AddPageHeader(panel, "Execution");
-
-            _chkExecShowTimer = AddToggle(panel, "Execution timer",
-                "Show execution timer in status bar");
-            _chkExecMultiDatabase = AddToggle(panel, "Multi-database execution",
-                "Enable multi-database execution mode");
-
-            AddGroupHeader(panel, "Notifications");
-            (_sldExecNotificationThreshold, _lblExecNotificationValue) = AddSlider(panel,
-                "Notification threshold", 5, 300, 30,
-                "Seconds before showing long-running query notification");
-
-            return WrapInScrollViewer(panel);
-        }
+        // BuildExecutionPage migrated to Pages/ExecutionPage.cs (Phase 2 B.9).
 
         // ═══════════════════════════════════════════════════════════════════════
         //  Navigation
@@ -2584,10 +2566,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
             SetChecked(_chkEdDocumentOutline, ep.DocumentOutline);
 
             // ── Execution ────────────────────────────────────────────────
-            var ex = _settings.ExecutionProductivity;
-            SetChecked(_chkExecShowTimer, ex.ShowExecutionTimer);
-            SetChecked(_chkExecMultiDatabase, ex.MultiDatabase);
-            SetSlider(_sldExecNotificationThreshold, _lblExecNotificationValue, ex.NotificationThreshold);
+            // ── Execution (page-split: B.9) ─────────────────────────────
+            if (_pageControlsByKey.TryGetValue("Execution", out var execLoad))
+                execLoad.Load(_settings);
 
             // ── Navigation ───────────────────────────────────────────────
             // ── Navigation (page-split: B.5) ────────────────────────────
@@ -2730,9 +2711,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
             _settings.EditorProductivity.DocumentOutline = IsChecked(_chkEdDocumentOutline);
 
             // ── Execution ────────────────────────────────────────────────
-            _settings.ExecutionProductivity.ShowExecutionTimer = IsChecked(_chkExecShowTimer);
-            _settings.ExecutionProductivity.MultiDatabase = IsChecked(_chkExecMultiDatabase);
-            _settings.ExecutionProductivity.NotificationThreshold = GetSliderInt(_sldExecNotificationThreshold);
+            // ── Execution (page-split: B.9) ─────────────────────────────
+            if (_pageControlsByKey.TryGetValue("Execution", out var execSave))
+                execSave.Save(_settings);
 
             // ── Navigation ───────────────────────────────────────────────
             // ── Navigation (page-split: B.5) ────────────────────────────
