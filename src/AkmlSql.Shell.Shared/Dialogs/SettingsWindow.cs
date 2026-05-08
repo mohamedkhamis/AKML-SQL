@@ -69,6 +69,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             ["IntelliSense"] = new IntelliSensePage(),
             ["SuggestionTypes"] = new SuggestionTypesPage(),
             ["Qualification"] = new QualificationPage(),
+            ["InsertOptions"] = new InsertStatementsPage(),
         };
         private readonly Dictionary<string, IPageControls> _pageControlsByKey = new();
 
@@ -423,7 +424,8 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
             // Inserted Code group introduced in Phase 2 (C.2-C.4).
             AddTreeGroup("Inserted Code", expanded: false,
-                ("Qualification & Brackets", "Qualification"));
+                ("Qualification & Brackets", "Qualification"),
+                ("INSERT statements", "InsertOptions"));
 
             AddTreeGroup("Format", expanded: false,
                 ("Styles", "Formatting"));
@@ -979,6 +981,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 ("SuggestionTypes", "Suggestions › Types of suggestion"),
                 ("Schema Cache",  "Suggestions › Database"),
                 ("Qualification", "Inserted Code › Qualification & Brackets"),
+                ("InsertOptions", "Inserted Code › INSERT statements"),
                 ("Formatting",    "Format › Styles"),
                 ("Snippets",      "Snippets"),
                 ("Code Analysis", "Code Analysis"),
@@ -1517,6 +1520,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
                     case "IntelliSense": _settings.IntelliSense = defaults.IntelliSense; break;
                     case "SuggestionTypes": _settings.IntelliSense.SuggestionTypes = defaults.IntelliSense.SuggestionTypes; break;
                     case "Qualification": _settings.IntelliSense.Qualification = defaults.IntelliSense.Qualification; break;
+                    case "InsertOptions": _settings.IntelliSense.InsertOptions = defaults.IntelliSense.InsertOptions; break;
                     case "Schema Cache": _settings.Cache = defaults.Cache; break;
                     case "Formatting": _settings.Formatter = defaults.Formatter; break;
                     case "Snippets": _settings.Snippets = defaults.Snippets; break;

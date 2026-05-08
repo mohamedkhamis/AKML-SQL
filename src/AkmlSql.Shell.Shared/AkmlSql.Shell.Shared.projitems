@@ -53,6 +53,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\IntelliSensePage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\SuggestionTypesPage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\QualificationPage.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\InsertStatementsPage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)StatusBar\StatusBarManager.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Update\UpdateLauncher.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Update\UpdateNotifier.cs" />
