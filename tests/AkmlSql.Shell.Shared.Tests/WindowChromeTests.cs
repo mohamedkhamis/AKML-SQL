@@ -234,6 +234,59 @@ namespace AkmlSql.Shell.Shared.Tests
             }
         }
 
+        /// <summary>
+        /// Companion to <see cref="ResetPageToDefaultsCore_HasCaseForEveryRegisteredPageKey"/>
+        /// — guards against the Phase 2 Block C bug where 5 newly-registered
+        /// pages (SuggestionTypes / Qualification / InsertOptions / JoinOptions
+        /// / Labs) had entries in <c>_pageBuilders</c> but were absent from
+        /// the hardcoded dispatch lists in <c>LoadSettingsToControls</c> /
+        /// <c>SaveControlsToSettings</c>. Their controls rendered but never
+        /// loaded from settings and silently discarded changes on OK.
+        ///
+        /// After the fix, both methods iterate <c>_pageControlsByKey.Values</c>
+        /// directly. This test asserts the postcondition that the two
+        /// dictionaries stay 1:1 after BuildPages — every registered IPageBuilder
+        /// must produce an IPageControls in <c>_pageControlsByKey</c>. A future
+        /// page that fails to land in the controls dict (e.g. a Build override
+        /// that returns null or skips registration) is caught here.
+        /// </summary>
+        [StaFact]
+        public void PageControls_RegisteredForEveryPageBuilder()
+        {
+            var settings = new AppSettings { Theme = "Light" };
+            var dialog = new SettingsWindow(settings);
+            // BuildWindowInner runs BuildPages which populates _pageControlsByKey.
+            _ = dialog.TestBuildWindowForRenderTest();
+
+            var pageBuildersField = typeof(SettingsWindow).GetField(
+                "_pageBuilders",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            var controlsField = typeof(SettingsWindow).GetField(
+                "_pageControlsByKey",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(pageBuildersField);
+            Assert.NotNull(controlsField);
+
+            var pageBuilders = (IDictionary)pageBuildersField!.GetValue(dialog)!;
+            var pageControls = (IDictionary)controlsField!.GetValue(dialog)!;
+
+            Assert.True(pageBuilders.Count > 0, "Expected at least one registered IPageBuilder");
+            Assert.Equal(pageBuilders.Count, pageControls.Count);
+
+            foreach (DictionaryEntry entry in pageBuilders)
+            {
+                var key = (string)entry.Key;
+                Assert.True(
+                    pageControls.Contains(key),
+                    $"_pageBuilders has '{key}' but _pageControlsByKey does not. " +
+                    "Either BuildPages skipped this builder or the IPageBuilder.Build " +
+                    "implementation did not register its IPageControls. " +
+                    "LoadSettingsToControls and SaveControlsToSettings iterate " +
+                    "_pageControlsByKey.Values, so a missing entry causes silent " +
+                    "data loss for the page.");
+            }
+        }
+
         // ─── Helpers (logical tree) ──────────────────────────────────────────
 
         /// <summary>

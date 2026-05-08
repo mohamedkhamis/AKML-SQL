@@ -1589,74 +1589,16 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
         private void LoadSettingsToControls()
         {
-            // ── General (page-split: B.7) ───────────────────────────────
-            if (_pageControlsByKey.TryGetValue("General", out var genLoad))
-                genLoad.Load(_settings);
+            // Single dispatch loop covers every registered IPageBuilder. Adding
+            // a new page to _pageBuilders automatically picks up Load coverage —
+            // there is no second list to keep in sync, which was the root cause
+            // of the C.1-C.5 silent-discard bug fixed in this commit.
+            foreach (var controls in _pageControlsByKey.Values)
+                controls.Load(_settings);
 
-            // ── IntelliSense (page-split: B.16) ─────────────────────────
-            if (_pageControlsByKey.TryGetValue("IntelliSense", out var isLoad))
-                isLoad.Load(_settings);
-
-            // ── Schema Cache ─────────────────────────────────────────────
-            // ── Schema Cache (page-split: B.11) ─────────────────────────
-            if (_pageControlsByKey.TryGetValue("Schema Cache", out var cacheLoad))
-                cacheLoad.Load(_settings);
-
-            // ── Formatting ───────────────────────────────────────────────
-            // ── Formatting (page-split: B.14) ───────────────────────────
-            if (_pageControlsByKey.TryGetValue("Formatting", out var fmtLoad))
-                fmtLoad.Load(_settings);
-
-            // ── Snippets (page-split: B.2) ──────────────────────────────
-            if (_pageControlsByKey.TryGetValue("Snippets", out var snippetsLoad))
-                snippetsLoad.Load(_settings);
-
-            // ── Code Analysis (page-split: B.3) ─────────────────────────
-            if (_pageControlsByKey.TryGetValue("Code Analysis", out var caLoad))
-                caLoad.Load(_settings);
-
-            // ── Refactoring (page-split: B.4) ───────────────────────────
-            if (_pageControlsByKey.TryGetValue("Refactoring", out var rfLoad))
-                rfLoad.Load(_settings);
-
-            // ── History ──────────────────────────────────────────────────
-            // ── History (page-split: B.12) ──────────────────────────────
-            if (_pageControlsByKey.TryGetValue("History", out var histLoad))
-                histLoad.Load(_settings);
-
-            // ── Tabs & UI (page-split: B.15) ────────────────────────────
-            if (_pageControlsByKey.TryGetValue("Tabs & UI", out var tabsLoad))
-                tabsLoad.Load(_settings);
-            // Coloring rules list is rebuilt by the host (CRUD lives on SettingsWindow).
+            // Coloring rules list is rebuilt by the host — CRUD lives on
+            // SettingsWindow, not on TabsControls.
             PopulateColoringRulesList();
-
-            // ── Safety (page-split: B.8) ────────────────────────────────
-            if (_pageControlsByKey.TryGetValue("Safety", out var sfLoad))
-                sfLoad.Load(_settings);
-
-            // ── AI Assistance ────────────────────────────────────────────
-            // ── AI Assistance (page-split: B.13) ────────────────────────
-            if (_pageControlsByKey.TryGetValue("AI Assistance", out var aiLoad))
-                aiLoad.Load(_settings);
-
-            // ── Grid ─────────────────────────────────────────────────────
-            // ── Grid (page-split: B.6) ──────────────────────────────────
-            if (_pageControlsByKey.TryGetValue("Grid", out var gridLoad))
-                gridLoad.Load(_settings);
-
-            // ── Editor Productivity (page-split: B.10) ──────────────────
-            if (_pageControlsByKey.TryGetValue("Editor", out var edLoad))
-                edLoad.Load(_settings);
-
-            // ── Execution ────────────────────────────────────────────────
-            // ── Execution (page-split: B.9) ─────────────────────────────
-            if (_pageControlsByKey.TryGetValue("Execution", out var execLoad))
-                execLoad.Load(_settings);
-
-            // ── Navigation ───────────────────────────────────────────────
-            // ── Navigation (page-split: B.5) ────────────────────────────
-            if (_pageControlsByKey.TryGetValue("Navigation", out var navLoad))
-                navLoad.Load(_settings);
         }
 
         // ═══════════════════════════════════════════════════════════════════════
@@ -1665,75 +1607,10 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
         private void SaveControlsToSettings()
         {
-            // ── General (page-split: B.7) ───────────────────────────────
-            if (_pageControlsByKey.TryGetValue("General", out var genSave))
-                genSave.Save(_settings);
-
-            // ── IntelliSense ─────────────────────────────────────────────
-            // ── IntelliSense (page-split: B.16) ─────────────────────────
-            if (_pageControlsByKey.TryGetValue("IntelliSense", out var isSave))
-                isSave.Save(_settings);
-
-            // ── Schema Cache ─────────────────────────────────────────────
-            // ── Schema Cache (page-split: B.11) ─────────────────────────
-            if (_pageControlsByKey.TryGetValue("Schema Cache", out var cacheSave))
-                cacheSave.Save(_settings);
-
-            // ── Formatting ───────────────────────────────────────────────
-            // ── Formatting (page-split: B.14) ───────────────────────────
-            if (_pageControlsByKey.TryGetValue("Formatting", out var fmtSave))
-                fmtSave.Save(_settings);
-
-            // ── Snippets ─────────────────────────────────────────────────
-            // ── Snippets (page-split: B.2) ──────────────────────────────
-            if (_pageControlsByKey.TryGetValue("Snippets", out var snippetsSave))
-                snippetsSave.Save(_settings);
-
-            // ── Code Analysis ────────────────────────────────────────────
-            // ── Code Analysis (page-split: B.3) ─────────────────────────
-            if (_pageControlsByKey.TryGetValue("Code Analysis", out var caSave))
-                caSave.Save(_settings);
-
-            // ── Refactoring (page-split: B.4) ───────────────────────────
-            if (_pageControlsByKey.TryGetValue("Refactoring", out var rfSave))
-                rfSave.Save(_settings);
-
-            // ── History ──────────────────────────────────────────────────
-            // ── History (page-split: B.12) ──────────────────────────────
-            if (_pageControlsByKey.TryGetValue("History", out var histSave))
-                histSave.Save(_settings);
-
-            // ── Tabs & UI (page-split: B.15) ────────────────────────────
-            if (_pageControlsByKey.TryGetValue("Tabs & UI", out var tabsSave))
-                tabsSave.Save(_settings);
-
-            // ── Safety (page-split: B.8) ────────────────────────────────
-            if (_pageControlsByKey.TryGetValue("Safety", out var sfSave))
-                sfSave.Save(_settings);
-
-            // ── AI Assistance (page-split: B.13) ────────────────────────
-            if (_pageControlsByKey.TryGetValue("AI Assistance", out var aiSave))
-                aiSave.Save(_settings);
-
-            // ── Grid ─────────────────────────────────────────────────────
-            // ── Grid (page-split: B.6) ──────────────────────────────────
-            if (_pageControlsByKey.TryGetValue("Grid", out var gridSave))
-                gridSave.Save(_settings);
-
-            // ── Editor Productivity ──────────────────────────────────────
-            // ── Editor Productivity (page-split: B.10) ──────────────────
-            if (_pageControlsByKey.TryGetValue("Editor", out var edSave))
-                edSave.Save(_settings);
-
-            // ── Execution ────────────────────────────────────────────────
-            // ── Execution (page-split: B.9) ─────────────────────────────
-            if (_pageControlsByKey.TryGetValue("Execution", out var execSave))
-                execSave.Save(_settings);
-
-            // ── Navigation ───────────────────────────────────────────────
-            // ── Navigation (page-split: B.5) ────────────────────────────
-            if (_pageControlsByKey.TryGetValue("Navigation", out var navSave))
-                navSave.Save(_settings);
+            // Symmetrical with LoadSettingsToControls — single dispatch loop
+            // covers every registered IPageBuilder.
+            foreach (var controls in _pageControlsByKey.Values)
+                controls.Save(_settings);
         }
 
         // ═══════════════════════════════════════════════════════════════════════
