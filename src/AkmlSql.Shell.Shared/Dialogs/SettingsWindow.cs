@@ -71,6 +71,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             ["Qualification"] = new QualificationPage(),
             ["InsertOptions"] = new InsertStatementsPage(),
             ["JoinOptions"] = new JoinCompletionPage(),
+            ["Labs"] = new LabsPage(),
         };
         private readonly Dictionary<string, IPageControls> _pageControlsByKey = new();
 
@@ -451,8 +452,8 @@ namespace AkmlSql.Shell.Shared.Dialogs
             AddTreeLeaf("AI Assistance", "AI Assistance");
 
             AddTreeGroup("Miscellaneous", expanded: false,
-                ("Main", "General"));
-            // "Labs" sub-leaf is added in Phase 2.
+                ("Main", "General"),
+                ("Labs", "Labs"));
 
             _navTree.SelectedItemChanged += OnNavSelectionChanged;
 
@@ -997,6 +998,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 ("Editor",        "Editor › Productivity"),
                 ("Execution",     "Queries › Execution"),
                 ("Navigation",    "Editor › Navigation"),
+                ("Labs",          "Miscellaneous › Labs"),
             };
 
             foreach (var (key, display) in pages)
@@ -1525,6 +1527,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
                     case "Qualification": _settings.IntelliSense.Qualification = defaults.IntelliSense.Qualification; break;
                     case "InsertOptions": _settings.IntelliSense.InsertOptions = defaults.IntelliSense.InsertOptions; break;
                     case "JoinOptions": _settings.IntelliSense.JoinOptions = defaults.IntelliSense.JoinOptions; break;
+                    case "Labs": _settings.Labs = defaults.Labs; break;
                     case "Schema Cache": _settings.Cache = defaults.Cache; break;
                     case "Formatting": _settings.Formatter = defaults.Formatter; break;
                     case "Snippets": _settings.Snippets = defaults.Snippets; break;
