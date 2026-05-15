@@ -249,10 +249,10 @@ description: "Tasks for SQL Prompt Visual Parity + Format / Upload Formatter gap
 
 **Independent Test**: Open AI window → chrome matches `06_ai_window.svg`; ghost text uses dimmed foreground; hover tooltip chrome matches object-definition box; schema-loading spinner matches the 12×12 ellipse pattern with 1100 ms rotation.
 
-- [ ] T094 [P] [US7] Audit `src/AkmlSql.Shell.Shared/Ai/AiToolWindow.xaml` for hardcoded chrome; migrate to `Chat.*`, `Surface.*`, `Text.*` tokens (`Chat.*` family already exists)
-- [ ] T095 [P] [US7] Verify ghost-text dimmed foreground in `src/AkmlSql.Shell.Shared/Ai/GhostTextAdornment.cs` uses `Text.Disabled` or `Text.Placeholder` token (not hardcoded grey)
-- [ ] T096 [P] [US7] Re-skin hover tooltip chrome in `src/AkmlSql.Shell.Shared/Editor/QuickInfoTooltip.xaml` to match the object-definition box token set
-- [ ] T097 [P] [US7] Audit `src/AkmlSql.Shell.Shared/Editor/SchemaProgress/SchemaProgressMargin.cs` spinner — confirm `Ellipse` + `StrokeDashArray { 10, 30 }` + 12×12 dimensions + 1100 ms `RotateTransform` per CLAUDE.md "Editor margin spinner pattern"; ensure stroke reads from `Editor.SpinnerStroke` token
+- [X] T094 [P] [US7] ~Audit AI tool window~ — **Already clean**: actual files are `AiChatToolWindow.cs` + `AiChatPanel.cs` (no `AiToolWindow.xaml` exists). Hex-literal scan returns 0 hits across both files. The `Chat.*` token family (introduced in spec 016) is the source of the bubble colours; `Surface.*` / `Text.*` token usage is already in place from earlier spec work.
+- [X] T095 [P] [US7] ~Verify ghost-text dimmed foreground~ — **Verified already correct**: `GhostTextAdornment.cs:196` reads `var ghostBrush = (Brush)ThemeRegistry.Instance.Resources[ThemeTokens.TextDisabled];` and assigns it as the foreground at line 203. Comment at line 192-193 documents the intent: "Foreground reads the current TextDisabled brush". Hex-literal scan returns 0 hits in the file.
+- [X] T096 [P] [US7] ~Re-skin hover tooltip~ — **N/A as written, but the equivalent surface is clean**: no `QuickInfoTooltip.xaml` exists. The hover surface is `Editor/QuickInfoSource.cs` (programmatic WPF). Hex-literal scan returns 0 hits. Tooltip chrome flows through the host's native QuickInfo presenter which is already theme-aware via VS's classification format service.
+- [X] T097 [P] [US7] ~Audit SchemaProgressMargin~ — **Already verified by spec 016 + this spec's T021 check**: spinner is an `Ellipse` with `StrokeDashArray { 10, 30 }`, 12×12 dimensions, 1100 ms `RotateTransform` per the CLAUDE.md "Editor margin spinner pattern". Stroke reads from `ThemeTokens.EditorSpinnerStroke` via `SetResourceReference` at line 85 (confirmed earlier in this spec when the file was scanned during T021 work).
 
 **Checkpoint**: User Story 7 functional. Every "all features" surface verified.
 
