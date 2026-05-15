@@ -35,8 +35,9 @@ namespace AkmlSql.Shell.Shared.Formatting
         private readonly FormatStylesEditorViewModel _viewModel;
         private ListBox? _styleList;
         private TreeView? _settingsTree;
-        private TextBlock? _rightTopPlaceholder;
-        private TextBlock? _previewPlaceholder;
+        private StackPanel? _settingControlsHost;
+        private TextBlock? _settingControlsEmpty;
+        private TextBox? _previewTextBox;
         private TextBlock? _statusText;
 
         public FormatStylesEditorWindow(FormatStylesEditorViewModel viewModel)
@@ -342,7 +343,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(5) }); // splitter
             panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(40, GridUnitType.Star) });
 
-            // Top: controls placeholder
+            // Top: dynamic controls area — built per-selection by RenderControlsForSetting
             var topBorder = new Border
             {
                 Margin = new Thickness(Spacing.Sm, Spacing.Md, Spacing.Md, Spacing.Sm),
@@ -353,18 +354,26 @@ namespace AkmlSql.Shell.Shared.Formatting
             topBorder.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.BorderDefault);
             topBorder.SetResourceReference(Panel.BackgroundProperty, ThemeTokens.SurfaceInput);
 
-            _rightTopPlaceholder = new TextBlock
+            var topScroll = new ScrollViewer
             {
-                Text = "Select a setting from the tree to view its controls.\n\n" +
-                       "(Tier 2b: type-driven controls — CheckBox / ComboBox / IntegerSpinner — " +
-                       "land in the follow-up commit. Unsupported settings render disabled with " +
-                       "the imported value visible per FR-023.)",
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            };
+            _settingControlsHost = new StackPanel
+            {
+                Orientation = Orientation.Vertical,
+            };
+            _settingControlsEmpty = new TextBlock
+            {
+                Text = "Select a setting from the tree to edit it.",
                 TextWrapping = TextWrapping.Wrap,
                 FontFamily = Typography.UiFont,
                 FontSize = Typography.Body,
             };
-            _rightTopPlaceholder.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
-            topBorder.Child = _rightTopPlaceholder;
+            _settingControlsEmpty.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+            _settingControlsHost.Children.Add(_settingControlsEmpty);
+            topScroll.Content = _settingControlsHost;
+            topBorder.Child = topScroll;
             Grid.SetRow(topBorder, 0);
             panel.Children.Add(topBorder);
 
@@ -381,28 +390,33 @@ namespace AkmlSql.Shell.Shared.Formatting
             Grid.SetRow(hSplitter, 1);
             panel.Children.Add(hSplitter);
 
-            // Bottom: preview placeholder
+            // Bottom: live preview — read-only mono text bound to PreviewText
             var bottomBorder = new Border
             {
                 Margin = new Thickness(Spacing.Sm, Spacing.Sm, Spacing.Md, Spacing.Md),
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(4),
-                Padding = new Thickness(Spacing.Md),
+                Padding = new Thickness(0),
             };
             bottomBorder.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.BorderDefault);
             bottomBorder.SetResourceReference(Panel.BackgroundProperty, ThemeTokens.EditorPopupBackground);
 
-            _previewPlaceholder = new TextBlock
+            _previewTextBox = new TextBox
             {
-                Text = "Live preview pane.\n\nTier 2b wires this to the FormatPreview IPC " +
-                       "(msg 12) with a 100 ms debounce; selecting a profile + tweaking a setting " +
-                       "re-formats a built-in 200-line sample within 250 ms p95 per SC-009.",
-                TextWrapping = TextWrapping.Wrap,
+                IsReadOnly = true,
+                AcceptsReturn = true,
+                TextWrapping = TextWrapping.NoWrap,
                 FontFamily = Typography.MonoFont,
                 FontSize = Typography.Body,
+                BorderThickness = new Thickness(0),
+                Background = System.Windows.Media.Brushes.Transparent,
+                Padding = new Thickness(Spacing.Md),
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+                Text = "// Live preview will appear after the schema loads and a profile is selected.",
             };
-            _previewPlaceholder.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
-            bottomBorder.Child = _previewPlaceholder;
+            _previewTextBox.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
+            bottomBorder.Child = _previewTextBox;
             Grid.SetRow(bottomBorder, 2);
             panel.Children.Add(bottomBorder);
 
@@ -543,22 +557,164 @@ namespace AkmlSql.Shell.Shared.Formatting
             return badge;
         }
 
+        /// <summary>
+        /// Tier 2b — renders type-appropriate controls for the selected setting in the
+        /// right-top panel. Bool → CheckBox; Int → numeric TextBox; Enum (string) → TextBox
+        /// (free-form, AllowedEnumValues populated as suggestions later). Settings with
+        /// <c>Status == "Unsupported"</c> render disabled per FR-023; their imported value
+        /// is still visible.
+        /// </summary>
         private void UpdateRightTopForSetting(FormatSettingNode setting)
         {
-            if (_rightTopPlaceholder == null) return;
+            if (_settingControlsHost == null) return;
 
-            var sqlPromptInfo = setting.SqlPromptKey != null
-                ? $"SQL Prompt key: {setting.SqlPromptKey}"
-                : "AKML-only (no SQL Prompt equivalent)";
+            _settingControlsHost.Children.Clear();
 
-            _rightTopPlaceholder.Text =
-                $"{setting.DisplayName}\n" +
-                $"ID: {setting.Id}\n" +
-                $"Type: {setting.Type}\n" +
-                $"Status: {setting.Status}\n" +
-                $"Default: {setting.DefaultJson}\n" +
-                $"{sqlPromptInfo}\n\n" +
-                "(Tier 2b: this placeholder is replaced by the type-appropriate editing control.)";
+            // Header — setting name + Unsupported badge (if applicable)
+            var headerStack = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Margin = new Thickness(0, 0, 0, Spacing.Sm),
+            };
+            var nameText = new TextBlock
+            {
+                Text = setting.DisplayName,
+                FontFamily = Typography.UiFont,
+                FontSize = Typography.BodyStrong,
+                FontWeight = Typography.WeightSemiBold,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            nameText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPrimary);
+            headerStack.Children.Add(nameText);
+            if (string.Equals(setting.Status, "Unsupported", StringComparison.OrdinalIgnoreCase))
+            {
+                headerStack.Children.Add(BuildUnsupportedBadge());
+            }
+            _settingControlsHost.Children.Add(headerStack);
+
+            // Metadata line — Type, ID, SQL Prompt key
+            var metaText = new TextBlock
+            {
+                Text = $"Type: {setting.Type}    ID: {setting.Id}    " +
+                       (setting.SqlPromptKey != null
+                           ? $"SQL Prompt: {setting.SqlPromptKey}"
+                           : "(AKML-only)"),
+                FontFamily = Typography.UiFont,
+                FontSize = Typography.Small,
+                Margin = new Thickness(0, 0, 0, Spacing.Md),
+                TextWrapping = TextWrapping.Wrap,
+            };
+            metaText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+            _settingControlsHost.Children.Add(metaText);
+
+            // Type-driven control
+            var isDisabled = string.Equals(setting.Status, "Unsupported", StringComparison.OrdinalIgnoreCase);
+            var currentValue = _viewModel.GetWorkingValue(setting.Id);
+            var control = BuildControlForSetting(setting, currentValue, isDisabled);
+            _settingControlsHost.Children.Add(control);
+        }
+
+        /// <summary>
+        /// Returns the type-appropriate WPF control for one setting. The control is wired
+        /// to <c>viewModel.SetWorkingValue</c> on change so the live preview refreshes
+        /// (debounced 100 ms via <c>QueuePreviewAsync</c>).
+        /// </summary>
+        private FrameworkElement BuildControlForSetting(FormatSettingNode setting, object? currentValue, bool isDisabled)
+        {
+            switch (setting.Type)
+            {
+                case "Bool":
+                {
+                    var initial = currentValue is bool b ? b : ParseBool(setting.DefaultJson);
+                    var checkBox = new CheckBox
+                    {
+                        Content = setting.DisplayName,
+                        IsChecked = initial,
+                        IsEnabled = !isDisabled,
+                        FontFamily = Typography.UiFont,
+                        FontSize = Typography.Body,
+                    };
+                    checkBox.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
+                    if (!isDisabled)
+                    {
+                        checkBox.Checked += (_, _) => _viewModel.SetWorkingValue(setting.Id, true);
+                        checkBox.Unchecked += (_, _) => _viewModel.SetWorkingValue(setting.Id, false);
+                    }
+                    return checkBox;
+                }
+                case "Int":
+                {
+                    var initial = currentValue?.ToString() ?? setting.DefaultJson.Trim('"');
+                    var textBox = new TextBox
+                    {
+                        Text = initial,
+                        Width = 100,
+                        HorizontalAlignment = HorizontalAlignment.Left,
+                        IsEnabled = !isDisabled,
+                        FontFamily = Typography.UiFont,
+                        FontSize = Typography.Body,
+                        Padding = new Thickness(Spacing.Sm, Spacing.Xs, Spacing.Sm, Spacing.Xs),
+                    };
+                    textBox.SetResourceReference(Control.BackgroundProperty, ThemeTokens.SurfaceInput);
+                    textBox.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
+                    textBox.SetResourceReference(Control.BorderBrushProperty, ThemeTokens.BorderDefault);
+                    if (!isDisabled)
+                    {
+                        textBox.TextChanged += (_, _) =>
+                        {
+                            if (int.TryParse(textBox.Text, out var n))
+                            {
+                                _viewModel.SetWorkingValue(setting.Id, n);
+                            }
+                        };
+                    }
+                    return textBox;
+                }
+                case "Enum":
+                {
+                    var initial = currentValue?.ToString() ?? setting.DefaultJson.Trim('"');
+                    // No AllowedEnumValues at this schema level yet — use a free-text TextBox,
+                    // but mark string fields visually with a non-numeric width so they look
+                    // different from Int controls.
+                    var textBox = new TextBox
+                    {
+                        Text = initial,
+                        Width = 240,
+                        HorizontalAlignment = HorizontalAlignment.Left,
+                        IsEnabled = !isDisabled,
+                        FontFamily = Typography.UiFont,
+                        FontSize = Typography.Body,
+                        Padding = new Thickness(Spacing.Sm, Spacing.Xs, Spacing.Sm, Spacing.Xs),
+                    };
+                    textBox.SetResourceReference(Control.BackgroundProperty, ThemeTokens.SurfaceInput);
+                    textBox.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
+                    textBox.SetResourceReference(Control.BorderBrushProperty, ThemeTokens.BorderDefault);
+                    if (!isDisabled)
+                    {
+                        textBox.TextChanged += (_, _) =>
+                        {
+                            _viewModel.SetWorkingValue(setting.Id, textBox.Text);
+                        };
+                    }
+                    return textBox;
+                }
+                default:
+                {
+                    var readonlyText = new TextBlock
+                    {
+                        Text = $"({setting.Type}) {currentValue ?? setting.DefaultJson}",
+                        FontFamily = Typography.MonoFont,
+                        FontSize = Typography.Body,
+                    };
+                    readonlyText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+                    return readonlyText;
+                }
+            }
+        }
+
+        private static bool ParseBool(string defaultJson)
+        {
+            return defaultJson.Trim().Equals("true", StringComparison.OrdinalIgnoreCase);
         }
 
         // -----------------------------------------------------------------
@@ -587,6 +743,21 @@ namespace AkmlSql.Shell.Shared.Formatting
             if (e.PropertyName == nameof(FormatStylesEditorViewModel.IsLoading) && _statusText != null)
             {
                 UpdateStatus(_viewModel.IsLoading ? "Loading…" : (_viewModel.LastError ?? $"{_viewModel.Profiles.Count} style(s)."));
+            }
+            else if (e.PropertyName == nameof(FormatStylesEditorViewModel.PreviewText) && _previewTextBox != null)
+            {
+                // Marshal to UI thread — preview refresh fires from a background Task.
+                if (!System.Windows.Application.Current.Dispatcher.CheckAccess())
+                {
+                    System.Windows.Application.Current.Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        _previewTextBox.Text = _viewModel.PreviewText;
+                    }));
+                }
+                else
+                {
+                    _previewTextBox.Text = _viewModel.PreviewText;
+                }
             }
         }
 

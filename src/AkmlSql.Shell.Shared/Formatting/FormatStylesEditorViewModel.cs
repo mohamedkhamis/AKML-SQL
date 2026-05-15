@@ -1,9 +1,11 @@
 #nullable enable
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using AkmlSql.Core.Ipc;
@@ -76,6 +78,170 @@ namespace AkmlSql.Shell.Shared.Formatting
             get => _selectedSettingId;
             set { _selectedSettingId = value; OnPropertyChanged(); }
         }
+
+        private string _previewText = string.Empty;
+        public string PreviewText
+        {
+            get => _previewText;
+            private set { _previewText = value; OnPropertyChanged(); }
+        }
+
+        // -----------------------------------------------------------------
+        // Tier 2b: working profile values + debounced preview pipeline
+        // -----------------------------------------------------------------
+
+        /// <summary>
+        /// User-edited values overlaying the schema defaults. Keys are setting IDs in
+        /// <c>"groupId.settingName"</c> form (e.g. <c>"casing.reservedKeywords"</c>); values
+        /// are the working setting value (<c>bool</c>, <c>int</c>, or <c>string</c>).
+        /// </summary>
+        private readonly Dictionary<string, object?> _workingValues = new(StringComparer.Ordinal);
+
+        /// <summary>The 200-line sample SQL the preview pane formats. Held on the view model
+        /// so it can be replaced by user-pasted SQL in a future commit (FR-025 / SC-009).</summary>
+        public string PreviewSample { get; set; } = DefaultSampleSql;
+
+        private CancellationTokenSource? _previewCts;
+        private int _previewSequence;
+
+        /// <summary>
+        /// Returns the working value for the setting, or <c>null</c> if the user hasn't
+        /// edited it (the schema default is the effective value).
+        /// </summary>
+        public object? GetWorkingValue(string settingId) =>
+            _workingValues.TryGetValue(settingId, out var v) ? v : null;
+
+        /// <summary>
+        /// Records a user edit and triggers a debounced preview refresh.
+        /// </summary>
+        public void SetWorkingValue(string settingId, object? value)
+        {
+            _workingValues[settingId] = value;
+            QueuePreviewAsync();
+        }
+
+        /// <summary>
+        /// Initialises <see cref="_workingValues"/> from the schema defaults so a "no edits"
+        /// preview matches the engine's default-profile output.
+        /// </summary>
+        private void SeedWorkingValuesFromSchema(string schemaJson)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(schemaJson);
+                if (!doc.RootElement.TryGetProperty("settings", out var settings)) return;
+
+                foreach (var s in settings.EnumerateArray())
+                {
+                    var id = s.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
+                    if (string.IsNullOrEmpty(id)) continue;
+
+                    if (s.TryGetProperty("default", out var defEl))
+                    {
+                        _workingValues[id!] = defEl.ValueKind switch
+                        {
+                            JsonValueKind.True or JsonValueKind.False => defEl.GetBoolean(),
+                            JsonValueKind.Number => defEl.TryGetInt32(out var i) ? (object)i : defEl.GetDouble(),
+                            JsonValueKind.String => defEl.GetString()!,
+                            _ => null,
+                        };
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "FormatStylesEditor: SeedWorkingValuesFromSchema failed");
+            }
+        }
+
+        /// <summary>
+        /// Builds a <c>FormattingProfile</c>-shaped JSON document from <see cref="_workingValues"/>.
+        /// Flat <c>"groupId.settingName"</c> keys become nested JSON paths.
+        /// </summary>
+        internal string BuildProfileJson()
+        {
+            var root = new JsonObject();
+            foreach (var kvp in _workingValues)
+            {
+                var key = kvp.Key;
+                var dotIdx = key.IndexOf('.');
+                if (dotIdx <= 0) continue;
+                var groupId = key.Substring(0, dotIdx);
+                var settingName = key.Substring(dotIdx + 1);
+
+                if (root[groupId] is not JsonObject groupNode)
+                {
+                    groupNode = new JsonObject();
+                    root[groupId] = groupNode;
+                }
+                groupNode[settingName] = ToJsonValue(kvp.Value);
+            }
+            return root.ToJsonString();
+        }
+
+        private static JsonNode? ToJsonValue(object? value) => value switch
+        {
+            null => null,
+            bool b => JsonValue.Create(b),
+            int i => JsonValue.Create(i),
+            long l => JsonValue.Create(l),
+            double d => JsonValue.Create(d),
+            string s => JsonValue.Create(s),
+            _ => JsonValue.Create(value.ToString()),
+        };
+
+        /// <summary>
+        /// Fire-and-forget request to refresh the preview. 100 ms debounce + supersession via
+        /// monotonic sequence ID per <c>contracts/ipc-format-preview-debounce.md</c>.
+        /// </summary>
+        public void QueuePreviewAsync()
+        {
+            _previewCts?.Cancel();
+            _previewCts = new CancellationTokenSource();
+            var token = _previewCts.Token;
+            var sequence = System.Threading.Interlocked.Increment(ref _previewSequence);
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(100, token).ConfigureAwait(false);
+                    if (token.IsCancellationRequested) return;
+                    if (sequence < _previewSequence) return; // superseded
+
+                    var client = EngineLifecycle.Manager?.Client;
+                    if (client == null || !client.IsConnected) return;
+
+                    var request = new FormatPreviewRequest
+                    {
+                        SessionId = "format-styles-editor",
+                        SampleText = PreviewSample,
+                        ProfileJson = BuildProfileJson(),
+                    };
+
+                    var response = await client.SendRequestAsync<FormatPreviewResponse, FormatPreviewRequest>(
+                        MessageTypes.FormatPreview,
+                        request,
+                        timeoutMs: 2000,
+                        token).ConfigureAwait(false);
+
+                    // Discard if a newer request has been queued while we waited
+                    if (sequence < _previewSequence) return;
+
+                    if (response != null && !string.IsNullOrEmpty(response.FormattedText))
+                    {
+                        PreviewText = response.FormattedText;
+                    }
+                }
+                catch (OperationCanceledException) { /* superseded — fine */ }
+                catch (Exception ex)
+                {
+                    Log.Debug(ex, "FormatStylesEditor: preview request failed");
+                }
+            }, token);
+        }
+
+        // -----------------------------------------------------------------
 
         /// <summary>
         /// Asynchronously loads profiles + schema. Safe to call multiple times — only one
@@ -174,10 +340,17 @@ namespace AkmlSql.Shell.Shared.Formatting
                     _cachedSchemaVersion = response.SchemaVersion;
                     _cachedSchemaJson = response.SchemaJson;
                     SchemaJson = response.SchemaJson;
+                    SeedWorkingValuesFromSchema(response.SchemaJson!);
+                    QueuePreviewAsync();
                 }
                 else if (!string.IsNullOrEmpty(response.ErrorMessage))
                 {
                     LastError = response.ErrorMessage;
+                }
+                else if (response.Cached && _cachedSchemaJson != null)
+                {
+                    SeedWorkingValuesFromSchema(_cachedSchemaJson);
+                    QueuePreviewAsync();
                 }
             }
             catch (Exception ex)
@@ -191,6 +364,27 @@ namespace AkmlSql.Shell.Shared.Formatting
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
+
+        // -----------------------------------------------------------------
+        // Default sample SQL (Tier 2b — small representative snippet exercising several
+        // setting groups so toggling controls produces visible differences in the preview).
+        // -----------------------------------------------------------------
+        private const string DefaultSampleSql = @"-- Sample SQL for the Format Styles editor preview
+SELECT TOP 10
+    o.OrderID,
+    c.CustomerName,
+    SUM(d.UnitPrice * d.Quantity) AS Total
+FROM Orders o
+INNER JOIN Customers c ON c.CustomerID = o.CustomerID
+INNER JOIN OrderDetails d ON d.OrderID = o.OrderID
+WHERE o.OrderDate >= '2025-01-01'
+    AND c.Country = 'USA'
+GROUP BY o.OrderID, c.CustomerName
+HAVING SUM(d.UnitPrice * d.Quantity) > 100
+ORDER BY Total DESC;
+
+INSERT INTO Audit (Action, Timestamp)
+VALUES ('SampleQuery', GETDATE());";
     }
 
     /// <summary>Lightweight DTO bound to the style list (left panel).</summary>
