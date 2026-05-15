@@ -261,6 +261,7 @@ The shell has three established WPF surfaces: tool-window controls, modal dialog
   - `src/AkmlSql.Shell.Shared/History/HistoryDiffWindow.cs` — minimal theme-aware `Window` with DTE owner
   - `src/AkmlSql.Shell.Shared/Safety/SafetyWarningDialog.cs` — multi-section modal dialog with cards, inline type-to-confirm, frozen brushes, extracted helper methods
   - `src/AkmlSql.Shell.Shared/Editor/SchemaProgress/SchemaProgressMargin.cs` — `IWpfTextViewMargin` with arc spinner (`Ellipse` + `StrokeDashArray { 10, 30 }` + rotating transform), fade-in/out animations, polling state machine
+  - `src/AkmlSql.Shell.Shared/Formatting/FormatStylesEditorWindow.cs` (spec 020) — three-column `GridSplitter` editor modal with `ListBox` style list + `TreeView` settings tree + dynamic type-driven controls panel + live preview `TextBox`; settings tree built from a schema fetched via IPC; programmatic WPF only (no XAML); pairs with `FormatStylesEditorViewModel.cs` (debounced live preview, `ConcurrentDictionary` working values, atomic preview-sample persistence)
 
 ### Editor margin spinner pattern
 
@@ -290,19 +291,27 @@ The `StrokeDashArray` sum (`10 + 30 = 40`) must be ≥ the ellipse perimeter (`2
 
 | File | Content |
 |------|---------|
-| [docs/architecture.md](docs/architecture.md) | Component map, startup sequence, data flows, design decisions |
-| [docs/ipc-api.md](docs/ipc-api.md) | All IPC message types, request/response schemas, frame format |
-| [docs/configuration.md](docs/configuration.md) | Full `config.json` schema, `.casettings`, logging |
-| [docs/deployment.md](docs/deployment.md) | Build commands, install paths, MEF cache clearing, troubleshooting |
-| [docs/analysis-rules.md](docs/analysis-rules.md) | All 120+ analysis rules with descriptions and severities |
-| [docs/formatting.md](docs/formatting.md) | Formatting pipeline stages, profile schema, all options |
-| [doc/progress.md](doc/progress.md) | Development log: issues, root causes, fixes, cache clearing procedures, Spec 014 Phase 3 status |
+| [doc/architecture.md](doc/architecture.md) | Component map, startup sequence, data flows, design decisions |
+| [doc/ipc-api.md](doc/ipc-api.md) | All IPC message types, request/response schemas, frame format |
+| [doc/configuration.md](doc/configuration.md) | Full `config.json` schema, `.casettings`, logging, persistence markers |
+| [doc/deployment.md](doc/deployment.md) | Build commands, install paths, MEF cache clearing, troubleshooting |
+| [doc/analysis-rules.md](doc/analysis-rules.md) | All 120+ analysis rules with descriptions and severities |
+| [doc/formatting.md](doc/formatting.md) | Formatting pipeline stages, profile schema, all options, SQL Prompt round-trip |
+| [doc/progress.md](doc/progress.md) | Development log through spec 020 — per-phase task tables, clarifications, deferred follow-ups |
+| [docs/wpf-theming.md](docs/wpf-theming.md) | WPF theme token system contributor guide (introduced in spec 016) |
 
 ## Progress and Troubleshooting
 
-See [doc/progress.md](doc/progress.md) for the full development progress log including all issues encountered, root causes, fixes applied, cache clearing procedures, and deployment instructions.
+See [doc/progress.md](doc/progress.md) for the full development progress log — issues, root causes, fixes, cache clearing procedures, and the per-spec progress tables (most recently spec 020 SQL Prompt visual parity).
 
-**Active branch**: `014-sql-prompt-parity`. Spec 014 Phase 1+2 and Phase 3/US1 are committed (`fba63d6`, `f337729`); Phase 3b (UI polish for `SafetyWarningDialog`, `SchemaProgressMargin`, and `ExecutionInterceptor` — detailed in the "Spec 014 Phase 3b" section of progress.md) is currently **uncommitted** in the working tree. Remaining user stories on this branch: US10 (AI shortcut bindings), US14 (Invalid Objects tool window), US19 (completion polish — `Ctrl+Shift+D` refresh, `Ctrl+Shift+P` toggle, custom commit keys, encrypted-object decryption), US20 (remaining gaps). See `specs/014-sql-prompt-parity/tasks.md` for the full task list.
+**Latest merged work**: spec 020 (SQL Prompt visual parity across all surfaces + `.sqlpromptstylev2` round-trip + Format Styles editor) merged to master via PR #235 on 2026-05-15. 77 of 106 spec-020 tasks complete; 29 deferred with rationale in `specs/020-sqlprompt-visual-parity/tasks.md`. Specs 015 → 019 (bug fixes, WPF theme refresh, Options dialog phases 1–2, phase-10 parity-closure design docs) merged together via PR #234.
+
+**Open follow-ups** (deferred from spec 020 — see `specs/020-sqlprompt-visual-parity/tasks.md` for the full list):
+
+- Formatter pipeline gap closures (T074–T084) — 11 layout rules against the 7-stage pipeline
+- Parity corpus + tests (T071–T073) — needs Redgate SQL Prompt install for golden generation
+- Format Styles editor menu wire + Options dialog re-skin (T044–T048, T059) — VSCT edits across 6 hosts
+- Manual product-running audits (T098–T100, T105) — DPI / a11y / screenshot review / quickstart end-to-end
 
 ## Git Rules (MANDATORY)
 
