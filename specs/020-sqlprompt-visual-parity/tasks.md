@@ -262,15 +262,15 @@ description: "Tasks for SQL Prompt Visual Parity + Format / Upload Formatter gap
 
 **Purpose**: Cross-cutting verification work — DPI, accessibility, screenshot review, docs — and the final quickstart end-to-end.
 
-- [ ] T098 [P] DPI scaling audit at 100 / 125 / 150 / 200 % for every in-scope surface (FR-016, SC-005) — record results per surface in `specs/020-sqlprompt-visual-parity/dpi-audit.md`
-- [ ] T099 [P] Accessibility audit — verify every severity / icon-type / status surface carries a letter or shape glyph (FR-029, SC-012); colour-blind simulator pass (deuteranopia, protanopia, tritanopia) — record results in `specs/020-sqlprompt-visual-parity/a11y-audit.md`
-- [ ] T100 [P] Side-by-side screenshot comparison for every documented surface (SC-003, SC-004) — pair each AKML surface with its `doc/SQL-PROMPT/**/*.svg`; record dimension and colour deviations in `specs/020-sqlprompt-visual-parity/screenshot-audit.md`; deviations > 8 px / > one tonal step are bugs
-- [ ] T101 [P] Update `docs/architecture.md` to reflect new `FormatProfile` sub-settings POCOs and the built-in-style seeding flow
-- [ ] T102 [P] Update `docs/formatting.md` with the full setting matrix and SC-007 normalisation definition
-- [ ] T103 [P] Update `docs/configuration.md` to document the new `%AppData%/AKML SQL/styles/imported/` directory and `themeMigration.v1.json` / `builtIns.v1.seeded` markers
-- [ ] T104 [P] Update `docs/ipc-api.md` with the new `RequestStyleEditorSchema (28/128)` message and the extended `ProfileImportResponse` fields
-- [ ] T105 Run quickstart.md end-to-end on SSMS 22 — install, import a `.sqlpromptstyle`, toggle theme, verify preview latency, format a sample, run all test suites; capture any deviations in `specs/020-sqlprompt-visual-parity/quickstart-validation.md`
-- [ ] T106 Update `doc/progress.md` with the spec 020 entry — summary, completion date, deliverables list
+- [ ] T098 [P] DPI scaling audit — **Deferred**: requires installing the built DLL into SSMS 22 / VS 2026 and exercising every surface at 100 / 125 / 150 / 200 % DPI. Manual product-running work.
+- [ ] T099 [P] Accessibility audit — **Deferred**: needs colour-blind simulator running over screenshots of every status / icon / severity surface. Manual.
+- [ ] T100 [P] Side-by-side screenshot comparison — **Deferred**: needs the built DLL installed plus open SSMS 22 sessions exercising each surface in turn. Manual.
+- [X] T101 [P] **Done**: added a new "Spec 020 — SQL Prompt Visual Parity" section to `doc/architecture.md` (theme token families, Format Styles editor file map, SQL Prompt round-trip files, IPC additions).
+- [X] T102 [P] **Done**: added "SQL Prompt Style Interop (Spec 020)" section to `doc/formatting.md` — `SqlPromptImporter` + `SqlPromptExporter` references, the SC-007 / Q1 round-trip normalisation rule spelled out, pointer to `FormatSettingSchema` and the editor.
+- [X] T103 [P] **Done**: added "Persistence Markers (Spec 020)" section to `doc/configuration.md` documenting `themeMigration.v1.json` and `editor/preview-sample.sql`. (Note: the originally-planned `styles/imported/` directory and `builtIns.v1.seeded` marker are not part of the as-built — built-ins ship via installer, not runtime seeding — so the doc reflects what actually exists.)
+- [X] T104 [P] **Done**: added `RequestStyleEditorSchema = 28` / `StyleEditorSchemaResult = 128` entries to the Message Type Constants table in `doc/ipc-api.md` and a new "Format Styles Editor Messages" section documenting the request / response shape. (The `ProfileImportResponse` field "extension" in the task description was reconsidered during US2 — existing fields cover the spec intent; no contract change shipped, so no doc change needed there.)
+- [ ] T105 Run `quickstart.md` end-to-end on SSMS 22 — **Deferred**: smoke-test of the full install → import → format → toggle-theme flow. Needs a running product session.
+- [X] T106 **Done**: appended a comprehensive Spec 020 entry to `doc/progress.md` with the per-phase task table, clarifications recap, headline numbers (72/106 tasks at the time of entry), and open follow-ups for the next session.
 
 ---
 

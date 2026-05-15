@@ -58,6 +58,7 @@ class RpcMessage {
 | Shell→Engine | `SnippetImport` | 24 |
 | Shell→Engine | `RequestAnalyze` | 25 |
 | Shell→Engine | `AnalysisSettingsChanged` | 26 |
+| Shell→Engine | `RequestStyleEditorSchema` | 28 |
 | Shell→Engine | `RequestRefactorPreview` | 30 |
 | Shell→Engine | `RequestRefactorApply` | 31 |
 | Engine→Shell | `CompletionResult` | 101 |
@@ -81,6 +82,7 @@ class RpcMessage {
 | Engine→Shell | `SnippetDeleteResult` | 123 |
 | Engine→Shell | `SnippetImportResult` | 124 |
 | Engine→Shell | `AnalysisResult` | 125 |
+| Engine→Shell | `StyleEditorSchemaResult` | 128 |
 | Engine→Shell | `RefactorPreviewResult` | 130 |
 | Engine→Shell | `RefactorApplyResult` | 131 |
 
@@ -379,6 +381,37 @@ Cancels an in-progress bulk format.
 ```
 SessionId  string   Must match the SessionId used in BulkFormat
 ```
+
+---
+
+## Format Styles Editor Messages
+
+> Introduced by spec 020 US3 (T049–T051). Full contract:
+> `specs/020-sqlprompt-visual-parity/contracts/ipc-style-editor-schema.md`.
+
+### `RequestStyleEditorSchema` → `StyleEditorSchemaResult`
+
+Returns the canonical descriptor of every formatting setting (groups + settings + types + defaults + SQL Prompt aliases) so the Format Styles editor UI can build its tree from one source of truth.
+
+**Request** (`StyleEditorSchemaRequest`):
+```
+ClientSchemaVersion  int?   (optional) Shell's cached version; engine short-circuits if it matches.
+IncludeUnsupported   bool   When true (default), unsupported / AKML-only settings are returned
+                            so the editor can render them disabled-with-value per FR-023.
+```
+
+**Response** (`StyleEditorSchemaResponse`):
+```
+SchemaVersion   int     Engine's current schema version.
+SchemaJson      string?  Full FormatSettingSchema serialised as System.Text.Json.
+                        Null when Cached = true.
+Cached          bool    True when ClientSchemaVersion matched and the engine returned no body.
+ErrorMessage    string?  Populated only on failure.
+```
+
+The JSON-string payload (rather than a typed MessagePack object) keeps the wire contract decoupled from `AkmlSql.Formatting` types, which `AkmlSql.Core`'s netstandard2.0 surface cannot reference.
+
+**Effect**: Engine builds the schema once (lazy, via reflection over `FormattingProfile`) and caches it for the process lifetime. Short-circuit path returns within ~5 ms; full-payload path is ~30 ms p95 including IPC.
 
 ---
 

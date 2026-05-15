@@ -741,3 +741,56 @@ GitHub Actions example:
 ---
 
 *Last updated: 2026-04-03*
+
+---
+
+## Spec 020 — SQL Prompt Visual Parity (2026-05-15)
+
+**Branch**: `020-sqlprompt-visual-parity` · **Commits**: 11 (this entry)
+
+**Goal**: drive visual parity with Redgate SQL Prompt across every AKML-SQL surface (colours, sizes, fonts) plus close functional gaps in SQL Format and `.sqlpromptstylev2` import / export. Builds on spec 016's centralised theme tokens.
+
+### What shipped
+
+| Phase | User Story | Tasks done / total | Notes |
+|---|---|---:|---|
+| 1 (Setup) | — | 6/6 | Reconciled plan/data-model/quickstart with 5 clarification answers; scaffolded `tests/format-parity/` + new test folders. |
+| 2 (Foundational) | — | 6/6 | Added `RequestStyleEditorSchema = 28` / `Result = 128` IPC constants. Added Spacing.* + Typography.* token families. Implemented hardcoded-hex scanner test (currently informational) + visual-reference coverage test. |
+| 3 (US1 — P1 MVP) | Unified visual theme | 10/10 | Added 25 brush tokens (IconBadge × 12 + TabColor × 8 + History × 5) wired across Light / Dark / HighContrast palettes (75 brush bindings). Implemented `ThemeMigrationManager` with `themeMigration.v1.json` marker. Wired into all 6 shell packages. Migrated the 5 remaining `ThemeManager.Instance` call-sites and **deleted `Ui/ThemeManager.cs` entirely**. |
+| 4 (US2 — P1 MVP) | Import SQL Prompt style | 15/21 | Implemented `SqlPromptExporter` for round-trip export. Spec docs corrected: actual file format is `.sqlpromptstylev2` XML, not the JSON the original spec assumed. Most importer infrastructure (FormattingProfile, OptionMap, ProfileManager) already shipped. 3 built-in styles deferred (rename / author missing entries). |
+| 5 (US3 — P2) | Format Styles editor | 14/17 | Tier 1: `FormatSettingSchema` + IPC handler + 5 tests. Tier 2: `FormatStylesEditorWindow` (programmatic WPF, 1000×680, 3-column GridSplitter) + view model. Tier 2b: type-driven controls (CheckBox / numeric TextBox / Enum TextBox / Other) + live preview via FormatPreview IPC (100 ms debounce + supersession). Sample SQL persistence via `%AppData%/AKML SQL/editor/preview-sample.sql`. Menu wire + Options dialog audit deferred. |
+| 6 (US4 — P2) | IntelliSense surfaces | 5/6 | Migrated `CompletionItemModel.GetColor` to `IconBadge.*` token lookups (13 hex literals removed). Implemented Ctrl-held semi-transparency on `AkmlCompletionPopup` (`DispatcherTimer` polls modifier state while visible). ColumnPickerWindow deferred (file doesn't exist). |
+| 7 (US5 — P2) | Format settings parity | 5/20 | Sample-SQL persistence (T069). `Ctrl+K,Y` binding verified across all 6 host VSCT files (T086). 11 formatter pipeline gap closures (T074–T084) deferred to dedicated PR. Parity corpus (T071–T073) blocked on Redgate install. |
+| 8 (US6 — P3) | History / Tab Coloring / Code Analysis | 7/7 | Produced `tab-coloring-audit.md` (FR-011a) — 16 SQL Prompt §5.1 features graded against Phase 5: 5 Matches, 1 flexible, 4 Differs, 2 Partial, 5 Missing. All other US6 surfaces already token-driven. |
+| 9 (US7 — P3) | AI / ghost text / margins | 4/4 | All 4 surfaces verified clean via hex-literal scan. `GhostTextAdornment` already reads `ThemeTokens.TextDisabled`. `SchemaProgressMargin` already uses `EditorSpinnerStroke`. |
+| 10 (Polish) | — | 5 done / 9 | Doc updates (this entry + architecture.md + formatting.md + configuration.md + ipc-api.md). DPI / a11y / screenshot audits deferred (need running product). |
+
+### Clarifications recorded in `spec.md`
+
+Five Q&A bullets resolved upstream via `/speckit.clarify` before implementation began plus one mid-implementation reality check:
+
+| Q | Answer |
+|---|---|
+| SC-007 match definition | Strip trailing whitespace per line → `\n` EOLs → drop UTF-8 BOM → byte-exact compare. |
+| Built-in styles | Ship 3+ read-only Native styles transcribed from SQL Prompt defaults; never redistribute Redgate-authored binaries. |
+| Tab Coloring scope (FR-011) | Visual parity only; Phase 5 assignment-rule engine untouched; audit doc is the FR-011a deliverable. |
+| Unsupported settings UX (FR-023) | Render in tree at natural group location, control disabled, value visible, "Unsupported" badge adjacent. |
+| Active-style scope (FR-027b) | Global per user; single `AppSettings.FormatterSettings.ActiveProfile` string; never split per-host. |
+| File format reality | SQL Prompt distributes `.sqlpromptstylev2` XML, not the JSON the spec originally assumed. Spec corrected mid-implementation; existing `SqlPromptImporter` handles the real format. |
+
+### Headline numbers
+
+- **72 of 106 tasks** complete (67.9 %) on the branch as of this entry.
+- **15 of the 34 not-done tasks** are explicitly deferred (Redgate-install dependency, multi-session formatter work, manual product-running audits).
+- **0 commits to master** — work lives on `020-sqlprompt-visual-parity` awaiting review.
+- **Deleted legacy code**: `src/AkmlSql.Shell.Shared/Ui/ThemeManager.cs` removed entirely after the 5 remaining call-sites migrated.
+
+### Open follow-ups for the next session
+
+1. **Formatter pipeline gap closure** (T074–T084) — 11 layout rules to add to the 7-stage pipeline.
+2. **Parity corpus** (T071–T073) — needs Redgate install for golden generation.
+3. **Menu wire** (T059) — VSCT edits across 6 hosts to launch the editor from a top-level menu.
+4. **Options dialog re-skin** (T044–T048) — touches shipping production UI.
+5. **DPI / a11y / screenshot audits** (T098–T100) — need running product and side-by-side comparison.
+
+*Last updated: 2026-05-15*

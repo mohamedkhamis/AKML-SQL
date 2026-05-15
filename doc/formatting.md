@@ -360,6 +360,25 @@ Controls which transformations are applied during Format Document / Format Actio
 
 ---
 
+## SQL Prompt Style Interop (Spec 020)
+
+`.sqlpromptstylev2` (Redgate SQL Prompt's distributed XML format) is supported for both import and export, allowing teams to standardise across SQL Prompt and AKML installs.
+
+**Import** — `SqlPromptImporter.Import(xmlContent)` in `src/AkmlSql.Formatting/Profiles/SqlPromptImporter.cs`. Handles both `<Options><Option Name= Value=>` and flat-element XML shapes. Returns a `SqlPromptImportResult` with the imported `FormattingProfile` plus `MappedCount` / `UnmappedCount` / `UnmappedOptions[]` so the editor can surface unsupported settings.
+
+**Export** — `SqlPromptExporter.Export(profile)` in `src/AkmlSql.Formatting/Profiles/SqlPromptExporter.cs`. Round-trip safe: every setting in `SqlPromptImporter.OptionMap` has a parallel inverse getter in `SqlPromptExporter.ReverseMap`. Settings AKML supports but SQL Prompt has no equivalent for are omitted from the export.
+
+**Round-trip test definition (SC-007 / Q1 clarification)**: for each `(input.sql × style.sqlpromptstylev2)` pair, AKML's formatted output is compared to SQL Prompt's golden output as follows:
+
+1. Strip trailing whitespace per line
+2. Normalise line endings to `\n` (LF)
+3. Drop UTF-8 BOM if present
+4. **Then require byte-exact equality**
+
+A pair passes iff the two normalised byte streams are equal. The corpus suite passes iff ≥ 95 % of pairs pass. See `tests/format-parity/README.md` for the corpus layout.
+
+**Format Settings Schema** — the canonical descriptor consumed by the Format Styles editor lives at `src/AkmlSql.Formatting/Profiles/FormatSettingSchema.cs`. Built by reflection over `FormattingProfile`'s 12 sub-category POCOs, exposed to the shell via the `RequestStyleEditorSchema` IPC (see `doc/ipc-api.md`).
+
 ## Format Actions (IPC)
 
 Format operations can target specific transformations using the `FormatActionType` enum:
