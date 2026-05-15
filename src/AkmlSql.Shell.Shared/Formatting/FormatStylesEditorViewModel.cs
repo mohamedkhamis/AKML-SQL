@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -95,8 +96,16 @@ namespace AkmlSql.Shell.Shared.Formatting
         /// User-edited values overlaying the schema defaults. Keys are setting IDs in
         /// <c>"groupId.settingName"</c> form (e.g. <c>"casing.reservedKeywords"</c>); values
         /// are the working setting value (<c>bool</c>, <c>int</c>, or <c>string</c>).
+        /// <para>
+        /// PR-235 review fix: <see cref="ConcurrentDictionary{TKey,TValue}"/> rather than plain
+        /// <c>Dictionary</c> because writes come from the UI thread (control change handlers
+        /// calling <see cref="SetWorkingValue"/>) while reads come from a background
+        /// <see cref="Task"/> inside <see cref="QueuePreviewAsync"/>
+        /// (<see cref="BuildProfileJson"/> enumerates the dict). Plain <c>Dictionary</c> is not
+        /// thread-safe under concurrent read/write and would race under rapid editing.
+        /// </para>
         /// </summary>
-        private readonly Dictionary<string, object?> _workingValues = new(StringComparer.Ordinal);
+        private readonly ConcurrentDictionary<string, object?> _workingValues = new(StringComparer.Ordinal);
 
         /// <summary>
         /// The sample SQL the preview pane formats. Spec 020 US5 (T069): persisted at

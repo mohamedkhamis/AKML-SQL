@@ -155,7 +155,11 @@ namespace AkmlSql.Shell.Shared.Ui.Theme
                 [ThemeTokens.HistoryClosedIcon]     = Solid(0xE7, 0x4C, 0x3C),
                 [ThemeTokens.HistoryStarActive]     = Solid(0xF3, 0x9C, 0x12),
                 [ThemeTokens.HistoryStarInactive]   = Solid(0xCC, 0xCC, 0xCC),
-                [ThemeTokens.HistoryMatchHighlight] = Solid(0xFF, 0xF8, 0xDC),
+                // Spec 020 PR-235 review fix: legacy ThemeManager.HistorySearchHighlight
+                // returned Color.FromArgb(0x4D, ...) — 30 % alpha so editor text behind the
+                // match remains readable. Preserving that alpha here against the
+                // doc-specified light-theme hex (#FFF8DC cream) to avoid obscuring text.
+                [ThemeTokens.HistoryMatchHighlight] = Solid(0x4D, 0xFF, 0xF8, 0xDC),
             };
             return new ThemePalette(ThemeVariant.Light, d);
         }
@@ -247,7 +251,10 @@ namespace AkmlSql.Shell.Shared.Ui.Theme
                 [ThemeTokens.HistoryClosedIcon]     = Solid(0xFF, 0x5C, 0x5C),
                 [ThemeTokens.HistoryStarActive]     = Solid(0xFB, 0xBF, 0x24),
                 [ThemeTokens.HistoryStarInactive]   = Solid(0x3A, 0x3F, 0x4E),
-                [ThemeTokens.HistoryMatchHighlight] = Solid(0xDA, 0xA5, 0x20),
+                // Spec 020 PR-235 review fix: 30 % alpha (0x4D) preserves the legacy
+                // ThemeManager.HistorySearchHighlight read-through behaviour. Dark-theme
+                // hex (#DAA520 gold) per doc/SQL-PROMPT/SQL-Prompt-History §16.2.
+                [ThemeTokens.HistoryMatchHighlight] = Solid(0x4D, 0xDA, 0xA5, 0x20),
             };
             return new ThemePalette(ThemeVariant.Dark, d);
         }
