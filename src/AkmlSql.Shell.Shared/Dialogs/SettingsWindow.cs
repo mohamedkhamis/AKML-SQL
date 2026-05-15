@@ -1357,10 +1357,12 @@ namespace AkmlSql.Shell.Shared.Dialogs
             var idx = gen.Theme.SelectedIndex;
 
             // Index 0 = Dark, Index 1 = Light, Index 2 = System (auto-detect from VS/SSMS)
+            // Spec 020 (US1 T021): replaced ThemeManager.DetectFromEnvironment() facade with the
+            // canonical HostThemeWatcher signal — same semantic, no legacy intermediary.
             var requestedTheme = idx switch
             {
                 0 => PageTheme.Dark,
-                2 => Ui.ThemeManager.DetectFromEnvironment() == Ui.VsThemeKind.Dark
+                2 => Ui.Theme.HostThemeWatcher.Instance.LastDetectedHostVariant == Ui.Theme.ThemeVariant.Dark
                     ? PageTheme.Dark : PageTheme.Light,
                 _ => PageTheme.Light
             };
@@ -1379,8 +1381,11 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 Log.Warning(ex, "SettingsWindow: Failed to save theme change");
             }
 
-            // Update ThemeManager so all AKML SQL UI picks up the new theme
-            Ui.ThemeManager.Instance.SetUserTheme(_settings.Theme);
+            // Spec 020 (US1 T021): replaced ThemeManager.Instance.SetUserTheme facade with the
+            // canonical ThemeRegistry.SetPreference call. Every chrome surface that uses
+            // SetResourceReference picks up the change automatically; surfaces that snapshot
+            // brushes at BuildUi-time (like this dialog) reopen after a theme change.
+            Ui.Theme.ThemeRegistry.Instance.SetPreference(_settings.Theme);
 
             // Signal that the window should be reopened with the new theme
             ThemeChangeRequested = true;

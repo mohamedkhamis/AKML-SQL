@@ -122,6 +122,44 @@ namespace AkmlSql.Shell.Shared.Ui.Theme
                 [ThemeTokens.ChatUserBubble]      = Solid(0xE5, 0xF1, 0xFB),
                 [ThemeTokens.ChatAssistantBubble] = Solid(0xF5, 0xF5, 0xF5),
                 [ThemeTokens.ChatSystemBubble]    = Solid(0xFF, 0xF8, 0xE1),
+
+                // Spec 020 — IconBadge (solid foreground colour per object type).
+                // Same hex values as Dark — these are saturated badge colours intended to
+                // read on both Light (#FFFFFF) and Dark (#252836) popup backgrounds.
+                // Source: doc/SQL-PROMPT/SQL-Prompt-Features/SQL_Prompt_Features_Core.md §1.2.
+                [ThemeTokens.IconBadgeTable]      = Solid(0xE5, 0xC0, 0x4B),  // Yellow
+                [ThemeTokens.IconBadgeView]       = Solid(0x56, 0xB6, 0xC2),  // Teal
+                [ThemeTokens.IconBadgeColumn]     = Solid(0x61, 0xAF, 0xEF),  // Blue
+                [ThemeTokens.IconBadgeStoredProc] = Solid(0xC6, 0x78, 0xDD),  // Purple
+                [ThemeTokens.IconBadgeFunction]   = Solid(0xD1, 0x9A, 0x66),  // Orange
+                [ThemeTokens.IconBadgeSnippet]    = Solid(0x3D, 0xD6, 0x8C),  // Green
+                [ThemeTokens.IconBadgeKeyword]    = Solid(0xAB, 0xB2, 0xBF),  // Gray
+                [ThemeTokens.IconBadgeDatabase]   = Solid(0xE0, 0x6C, 0x75),  // Red
+                [ThemeTokens.IconBadgeSchema]     = Solid(0x98, 0xC3, 0x79),  // Green2
+                [ThemeTokens.IconBadgeTrigger]    = Solid(0xBE, 0x50, 0x46),  // DarkRed
+                [ThemeTokens.IconBadgeIndex]      = Solid(0x7F, 0x84, 0x8E),  // DimGray
+                [ThemeTokens.IconBadgeSynonym]    = Solid(0x56, 0xB6, 0xC2),  // Teal2
+
+                // Spec 020 — TabColor swatches (environment-colour palette; same in both themes).
+                [ThemeTokens.TabColorRed]    = Solid(0xFF, 0x44, 0x44),
+                [ThemeTokens.TabColorAmber]  = Solid(0xFF, 0xB8, 0x00),
+                [ThemeTokens.TabColorGreen]  = Solid(0x44, 0xBB, 0x44),
+                [ThemeTokens.TabColorBlue]   = Solid(0x44, 0x88, 0xFF),
+                [ThemeTokens.TabColorTeal]   = Solid(0x00, 0xBC, 0xD4),
+                [ThemeTokens.TabColorPurple] = Solid(0x9B, 0x59, 0xB6),
+                [ThemeTokens.TabColorPink]   = Solid(0xE9, 0x1E, 0x63),
+                [ThemeTokens.TabColorGray]   = Solid(0x80, 0x8A, 0x99),
+
+                // Spec 020 — History (Light theme values from §16.2).
+                [ThemeTokens.HistoryOpenIcon]       = Solid(0x2E, 0xCC, 0x71),
+                [ThemeTokens.HistoryClosedIcon]     = Solid(0xE7, 0x4C, 0x3C),
+                [ThemeTokens.HistoryStarActive]     = Solid(0xF3, 0x9C, 0x12),
+                [ThemeTokens.HistoryStarInactive]   = Solid(0xCC, 0xCC, 0xCC),
+                // Spec 020 PR-235 review fix: legacy ThemeManager.HistorySearchHighlight
+                // returned Color.FromArgb(0x4D, ...) — 30 % alpha so editor text behind the
+                // match remains readable. Preserving that alpha here against the
+                // doc-specified light-theme hex (#FFF8DC cream) to avoid obscuring text.
+                [ThemeTokens.HistoryMatchHighlight] = Solid(0x4D, 0xFF, 0xF8, 0xDC),
             };
             return new ThemePalette(ThemeVariant.Light, d);
         }
@@ -181,6 +219,42 @@ namespace AkmlSql.Shell.Shared.Ui.Theme
                 [ThemeTokens.ChatUserBubble]      = Solid(0x1A, 0x3A, 0x5C),
                 [ThemeTokens.ChatAssistantBubble] = Solid(0x25, 0x28, 0x36),
                 [ThemeTokens.ChatSystemBubble]    = Solid(0x3A, 0x30, 0x00),
+
+                // Spec 020 — IconBadge (same hex as Light; documented in SQL_Prompt_Features_Core.md §1.2
+                // as Dark-theme values, but saturated enough for both. Badge background uses 20%-alpha
+                // overlay computed at render time so contrast adapts to host popup background.)
+                [ThemeTokens.IconBadgeTable]      = Solid(0xE5, 0xC0, 0x4B),
+                [ThemeTokens.IconBadgeView]       = Solid(0x56, 0xB6, 0xC2),
+                [ThemeTokens.IconBadgeColumn]     = Solid(0x61, 0xAF, 0xEF),
+                [ThemeTokens.IconBadgeStoredProc] = Solid(0xC6, 0x78, 0xDD),
+                [ThemeTokens.IconBadgeFunction]   = Solid(0xD1, 0x9A, 0x66),
+                [ThemeTokens.IconBadgeSnippet]    = Solid(0x3D, 0xD6, 0x8C),
+                [ThemeTokens.IconBadgeKeyword]    = Solid(0xAB, 0xB2, 0xBF),
+                [ThemeTokens.IconBadgeDatabase]   = Solid(0xE0, 0x6C, 0x75),
+                [ThemeTokens.IconBadgeSchema]     = Solid(0x98, 0xC3, 0x79),
+                [ThemeTokens.IconBadgeTrigger]    = Solid(0xBE, 0x50, 0x46),
+                [ThemeTokens.IconBadgeIndex]      = Solid(0x7F, 0x84, 0x8E),
+                [ThemeTokens.IconBadgeSynonym]    = Solid(0x56, 0xB6, 0xC2),
+
+                // Spec 020 — TabColor swatches (same in both themes).
+                [ThemeTokens.TabColorRed]    = Solid(0xFF, 0x44, 0x44),
+                [ThemeTokens.TabColorAmber]  = Solid(0xFF, 0xB8, 0x00),
+                [ThemeTokens.TabColorGreen]  = Solid(0x44, 0xBB, 0x44),
+                [ThemeTokens.TabColorBlue]   = Solid(0x44, 0x88, 0xFF),
+                [ThemeTokens.TabColorTeal]   = Solid(0x00, 0xBC, 0xD4),
+                [ThemeTokens.TabColorPurple] = Solid(0x9B, 0x59, 0xB6),
+                [ThemeTokens.TabColorPink]   = Solid(0xE9, 0x1E, 0x63),
+                [ThemeTokens.TabColorGray]   = Solid(0x80, 0x8A, 0x99),
+
+                // Spec 020 — History (Dark theme values from §16.2).
+                [ThemeTokens.HistoryOpenIcon]       = Solid(0x3D, 0xD6, 0x8C),
+                [ThemeTokens.HistoryClosedIcon]     = Solid(0xFF, 0x5C, 0x5C),
+                [ThemeTokens.HistoryStarActive]     = Solid(0xFB, 0xBF, 0x24),
+                [ThemeTokens.HistoryStarInactive]   = Solid(0x3A, 0x3F, 0x4E),
+                // Spec 020 PR-235 review fix: 30 % alpha (0x4D) preserves the legacy
+                // ThemeManager.HistorySearchHighlight read-through behaviour. Dark-theme
+                // hex (#DAA520 gold) per doc/SQL-PROMPT/SQL-Prompt-History §16.2.
+                [ThemeTokens.HistoryMatchHighlight] = Solid(0x4D, 0xDA, 0xA5, 0x20),
             };
             return new ThemePalette(ThemeVariant.Dark, d);
         }
@@ -253,6 +327,41 @@ namespace AkmlSql.Shell.Shared.Ui.Theme
                 [ThemeTokens.ChatUserBubble]      = window,
                 [ThemeTokens.ChatAssistantBubble] = control,
                 [ThemeTokens.ChatSystemBubble]    = info,
+
+                // Spec 020 — IconBadge under High Contrast: SystemColors.HotTrack for emphasis,
+                // GrayText for muted variants. Object type is still conveyed by the letter glyph
+                // (the badge is paired with a letter in the renderer, per FR-029).
+                [ThemeTokens.IconBadgeTable]      = hotTrack,
+                [ThemeTokens.IconBadgeView]       = hotTrack,
+                [ThemeTokens.IconBadgeColumn]     = hotTrack,
+                [ThemeTokens.IconBadgeStoredProc] = hotTrack,
+                [ThemeTokens.IconBadgeFunction]   = hotTrack,
+                [ThemeTokens.IconBadgeSnippet]    = hotTrack,
+                [ThemeTokens.IconBadgeKeyword]    = grayText,
+                [ThemeTokens.IconBadgeDatabase]   = hotTrack,
+                [ThemeTokens.IconBadgeSchema]     = hotTrack,
+                [ThemeTokens.IconBadgeTrigger]    = hotTrack,
+                [ThemeTokens.IconBadgeIndex]      = grayText,
+                [ThemeTokens.IconBadgeSynonym]    = hotTrack,
+
+                // Spec 020 — TabColor swatches under High Contrast: route to HotTrack for emphasis.
+                // Tab-coloring rules typically rely on label / shape glyph at this contrast level
+                // anyway, and the OS palette overrides anything we'd pick.
+                [ThemeTokens.TabColorRed]    = hotTrack,
+                [ThemeTokens.TabColorAmber]  = hotTrack,
+                [ThemeTokens.TabColorGreen]  = hotTrack,
+                [ThemeTokens.TabColorBlue]   = hotTrack,
+                [ThemeTokens.TabColorTeal]   = hotTrack,
+                [ThemeTokens.TabColorPurple] = hotTrack,
+                [ThemeTokens.TabColorPink]   = hotTrack,
+                [ThemeTokens.TabColorGray]   = grayText,
+
+                // Spec 020 — History under High Contrast.
+                [ThemeTokens.HistoryOpenIcon]       = hotTrack,
+                [ThemeTokens.HistoryClosedIcon]     = hotTrack,
+                [ThemeTokens.HistoryStarActive]     = hotTrack,
+                [ThemeTokens.HistoryStarInactive]   = grayText,
+                [ThemeTokens.HistoryMatchHighlight] = highlight,
             };
             return new ThemePalette(ThemeVariant.HighContrast, d);
         }

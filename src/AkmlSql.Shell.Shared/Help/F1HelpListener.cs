@@ -31,7 +31,30 @@ namespace AkmlSql.Shell.Shared.Help
         // ── Singleton ──────────────────────────────────────────────────────────
 
         /// <summary>The single shared listener instance for the running shell process.</summary>
-        public static F1HelpListener Default { get; } = new F1HelpListener();
+        public static F1HelpListener Default { get; } = CreateDefault();
+
+        // Auto-initialise Phase 10 (spec 019) registrations on first access so the
+        // central registrations file does not depend on each host package
+        // remembering to call into it. The local `instance` variable is passed
+        // explicitly to RegisterAll — reading Default here would observe the
+        // still-null backing field since this method runs inside Default's own
+        // type initializer (see F1HelpRegistrations.RegisterAll docstring).
+        private static F1HelpListener CreateDefault()
+        {
+            var instance = new F1HelpListener();
+            try
+            {
+                F1HelpRegistrations.RegisterAll(instance);
+            }
+            catch (Exception ex)
+            {
+                // Registrations must not poison the singleton. Log and continue —
+                // the registry stays empty for any surface whose registration
+                // threw, but the rest of the API remains usable.
+                Log.Warning(ex, "F1HelpListener: bulk registration via F1HelpRegistrations failed");
+            }
+            return instance;
+        }
 
         private F1HelpListener() { }
 

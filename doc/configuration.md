@@ -244,6 +244,17 @@ SELECT * FROM dbo.Orders  -- akml-disable-line PE001
 
 ---
 
+## Persistence Markers (Spec 020)
+
+Spec 020 (SQL Prompt visual parity) introduced two state files alongside `config.json`:
+
+| File | Purpose |
+|---|---|
+| `%AppData%/AKML SQL/themeMigration.v1.json` | First-launch marker written by `ThemeMigrationManager` (FR-030). Records `migratedAt` timestamp, whether `legacyColorOverrides` were detected in `config.json`, and the migration schema version. Idempotent — presence of the file short-circuits future runs. |
+| `%AppData%/AKML SQL/editor/preview-sample.sql` | User-pasted custom sample SQL for the Format Styles editor's live preview pane (T069). Atomic temp-file + rename writes. If absent, the editor falls back to its built-in `DefaultSampleSql` constant. |
+
+Both files are written defensively — failures are caught and logged at Debug level; they never block extension startup or editor interaction.
+
 ## Formatting Profiles (`.akmlstyle`)
 
 Profiles are stored in:

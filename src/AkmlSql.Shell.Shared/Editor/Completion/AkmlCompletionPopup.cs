@@ -143,6 +143,56 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             Child     = _root;
             Width     = DefaultPopupWidth;
             Focusable = false;
+
+            // Spec 020 US4 (T063) — Ctrl-held semi-transparency. Per SQL Prompt's UX, holding Ctrl
+            // while the popup is open makes it semi-transparent so the user can read the editor
+            // text behind it. The popup itself is not focusable, so we poll Keyboard.IsKeyDown
+            // (which reads the global modifier state) while the popup is visible. Polling is
+            // bounded to the popup's visible lifetime — no background work when hidden.
+            IsVisibleChanged += OnPopupIsVisibleChanged;
+        }
+
+        // -------------------------------------------------------------------
+        // T063 — Ctrl-held semi-transparency
+        // -------------------------------------------------------------------
+
+        private System.Windows.Threading.DispatcherTimer? _ctrlPollTimer;
+
+        private void OnPopupIsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
+        {
+            if ((bool)e.NewValue)
+            {
+                if (_ctrlPollTimer == null)
+                {
+                    _ctrlPollTimer = new System.Windows.Threading.DispatcherTimer(
+                        System.Windows.Threading.DispatcherPriority.Input)
+                    {
+                        Interval = TimeSpan.FromMilliseconds(50),
+                    };
+                    _ctrlPollTimer.Tick += OnCtrlPollTick;
+                }
+                _ctrlPollTimer.Start();
+            }
+            else
+            {
+                _ctrlPollTimer?.Stop();
+                Opacity = 1.0; // restore full opacity when hidden so the next Show starts clean
+            }
+        }
+
+        private void OnCtrlPollTick(object sender, EventArgs e)
+        {
+            // Use Keyboard.IsKeyDown so we read the live OS modifier state — the popup itself
+            // is non-focusable so KeyDown events don't reach it directly.
+            var ctrlHeld = Keyboard.IsKeyDown(Key.LeftCtrl) || Keyboard.IsKeyDown(Key.RightCtrl);
+            // Per spec FR-005 acceptance: hold Ctrl → semi-transparent (60% opaque) so editor text
+            // remains readable; release Ctrl → fully opaque. Never go below 40% so the popup
+            // doesn't disappear under accidental Ctrl-Alt combos etc.
+            var targetOpacity = ctrlHeld ? 0.6 : 1.0;
+            if (Math.Abs(Opacity - targetOpacity) > 0.001)
+            {
+                Opacity = targetOpacity;
+            }
         }
 
         /// <summary>Set the database name shown in footer.</summary>

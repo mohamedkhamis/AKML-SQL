@@ -58,6 +58,14 @@ public class PipeRpcServer
     private readonly AiRequestHandler _aiHandler;
     private readonly AiProviderTestHandler _aiProviderTestHandler = new();
 
+    // Phase 10 (spec 019) US14 FR-080 — hybrid dispatch table. Future
+    // MessageType integers register an IMessageHandler here in the constructor
+    // and DispatchAsync routes them via dictionary lookup *before* falling
+    // through to the existing 53-case switch. Existing switch cases are left
+    // unchanged to keep the test gate green; they can be migrated incrementally
+    // in later sessions if desired.
+    private readonly Dictionary<int, IMessageHandler> _pluggableHandlers = new();
+
     public PipeRpcServer(string pipeName)
     {
         _pipeName = pipeName;
@@ -100,6 +108,15 @@ public class PipeRpcServer
                 ServerName = server
             };
         });
+
+        // Phase 10 (spec 019) US14 FR-080 — register stub IMessageHandlers for
+        // the three spec-014-Phase-2-reserved MessageTypes. Real handlers land
+        // in US7 (FindUnusedVariables), US8 (FindInvalidObjects), US11
+        // (EncryptedObjectDecryption); replacing each stub registration with
+        // the real handler requires NO change to PipeRpcServer.cs.
+        _pluggableHandlers[MessageTypes.FindInvalidObjects] = new Stubs.FindInvalidObjectsHandlerStub();
+        _pluggableHandlers[MessageTypes.FindUnusedVariables] = new Stubs.FindUnusedVariablesHandlerStub();
+        _pluggableHandlers[MessageTypes.EncryptedObjectDecryption] = new Stubs.EncryptedObjectDecryptionHandlerStub();
 
         // History: initialize database and retention service
         var historyDb = new HistoryDatabase();
@@ -184,6 +201,20 @@ public class PipeRpcServer
     {
         try
         {
+            // Phase 10 (spec 019) US14 FR-080 — hybrid dispatch: consult the
+            // pluggable handler dictionary first. On miss, fall through to the
+            // existing switch. Future MessageType additions register a handler
+            // and require zero changes to this method.
+            //
+            // Routed through DispatchPluggableAsync (vs. .ContinueWith(t => t.Result))
+            // so a thrown exception inside a handler propagates as itself, not
+            // wrapped in AggregateException — the outer try/catch then sees the
+            // original exception type for accurate logging.
+            if (_pluggableHandlers.TryGetValue(message.MessageType, out var pluggable))
+            {
+                return DispatchPluggableAsync(pluggable, message, ct);
+            }
+
             switch (message.MessageType)
             {
                 case MessageTypes.ConnectionChanged:
@@ -483,6 +514,18 @@ public class PipeRpcServer
                     var profImpResp = _formatHandler.HandleProfileImport(profImpReq);
                     return Task.FromResult(CreateResponse(MessageTypes.ProfileImportResult, message.RequestId, profImpResp));
 
+                case MessageTypes.RequestStyleEditorSchema:
+                    // Spec 020 US3 (T050) — Format Styles editor schema descriptor.
+                    // See specs/020-sqlprompt-visual-parity/contracts/ipc-style-editor-schema.md
+                    if (message.Payload == null)
+                    {
+                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
+                    }
+
+                    var schemaReq = MessagePackSerializer.Deserialize<StyleEditorSchemaRequest>(message.Payload);
+                    var schemaResp = _formatHandler.HandleStyleEditorSchema(schemaReq);
+                    return Task.FromResult(CreateResponse(MessageTypes.StyleEditorSchemaResult, message.RequestId, schemaResp));
+
                 case MessageTypes.BulkFormat:
                     if (message.Payload == null)
                     {
@@ -640,42 +683,10 @@ public class PipeRpcServer
                 case MessageTypes.AiProviderTest:
                     return _aiProviderTestHandler.HandleAsync(message, ct);
 
-                // ── Spec 014 (SQL Prompt parity) — Phase 2 stubs ────────────────
-                // Real handlers land in the user-story phases (US14, US13, US19).
-                // The dispatch entries exist now so the IPC layer is wired end-to-end
-                // and the shell can be built against the new MessageType integers
-                // without referencing not-yet-existing classes.
-
-                case MessageTypes.FindInvalidObjects:
-                {
-                    var resp = new FindInvalidObjectsResponse
-                    {
-                        Status = 2, // Error
-                        ErrorMessage = "FindInvalidObjects not yet implemented (spec 014, US14)",
-                        IsFinalChunk = true
-                    };
-                    return Task.FromResult(CreateResponse(MessageTypes.FindInvalidObjectsResult, message.RequestId, resp));
-                }
-
-                case MessageTypes.FindUnusedVariables:
-                {
-                    var resp = new FindUnusedVariablesResponse
-                    {
-                        Status = 1, // ParseError used as a stand-in for "not implemented"
-                        ErrorMessage = "FindUnusedVariables not yet implemented (spec 014, US13)"
-                    };
-                    return Task.FromResult(CreateResponse(MessageTypes.FindUnusedVariablesResult, message.RequestId, resp));
-                }
-
-                case MessageTypes.EncryptedObjectDecryption:
-                {
-                    var resp = new EncryptedObjectDecryptionResponse
-                    {
-                        Status = 4, // Error
-                        ErrorMessage = "EncryptedObjectDecryption not yet implemented (spec 014, US19)"
-                    };
-                    return Task.FromResult(CreateResponse(MessageTypes.EncryptedObjectDecryptionResult, message.RequestId, resp));
-                }
+                // Spec 014 stubs (FindInvalidObjects / FindUnusedVariables /
+                // EncryptedObjectDecryption) migrated to IMessageHandler stubs
+                // registered in the constructor — see _pluggableHandlers above.
+                // Per Phase 10 (spec 019) US14 FR-080 hybrid dispatch.
 
                 case MessageTypes.Shutdown:
                     Log.Information("Shutdown requested by client.");
@@ -907,13 +918,28 @@ public class PipeRpcServer
         });
     }
 
-    private static RpcMessage CreateErrorResponse(string message, int requestId)
+    // Phase 10 (spec 019) US14 FR-080: hybrid pluggable dispatch wrapper.
+    // Routes the handler call through an awaited helper rather than
+    // .ContinueWith(t => t.Result) so a thrown exception inside the handler
+    // propagates as itself (not wrapped in AggregateException).
+    private static async Task<RpcMessage?> DispatchPluggableAsync(
+        IMessageHandler handler, RpcMessage message, CancellationToken ct)
+    {
+        return await handler.HandleAsync(message, ct).ConfigureAwait(false);
+    }
+
+    // Phase 10 (spec 019) US14 FR-080: these were `private` until the hybrid
+    // dispatch refactor introduced IMessageHandler implementations that need to
+    // emit standardised response/error envelopes. Kept `static` for stateless
+    // call sites and bumped to `internal` so handler classes in this assembly
+    // can call them without holding a PipeRpcServer reference.
+    internal static RpcMessage CreateErrorResponse(string message, int requestId)
     {
         var errorInfo = new ErrorInfo { Code = -1, Message = message };
         return CreateResponse(MessageTypes.Error, requestId, errorInfo);
     }
 
-    private static RpcMessage CreateResponse<T>(int messageType, int requestId, T payload)
+    internal static RpcMessage CreateResponse<T>(int messageType, int requestId, T payload)
     {
         return new RpcMessage
         {

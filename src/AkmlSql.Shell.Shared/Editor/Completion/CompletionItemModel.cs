@@ -1,11 +1,19 @@
 using System;
 using System.Windows.Media;
+using AkmlSql.Shell.Shared.Ui.Theme;
 
 namespace AkmlSql.Shell.Shared.Editor.Completion
 {
     /// <summary>
     /// Data model for a single completion item with SQL Prompt-style presentation.
     /// Maps Engine CompletionItem types to colors/letters matching Redgate SQL Prompt.
+    /// <para>
+    /// Spec 020 US4 (T062): icon colours now flow through <see cref="ThemeTokens.IconBadgeTable"/>
+    /// etc. via <see cref="ThemeRegistry"/>. Visually identical across Light / Dark (the IconBadge
+    /// palette uses the same hex in both variants so object-type recognition stays consistent),
+    /// but the lookup goes through the token system so SC-001 has zero hex-literal violations in
+    /// this file and any future palette tuning lands in one place.
+    /// </para>
     /// </summary>
     internal sealed class CompletionItemModel
     {
@@ -15,10 +23,11 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         public int ObjectType { get; set; }
         public int SortPriority { get; set; }
 
-        // Computed presentation properties
+        // Computed presentation properties — resolved fresh each access so theme switches
+        // pick up the new palette automatically without rebuilding the model.
         public string IconLetter => GetLetter(ObjectType);
-        public Color IconColor => GetColor(ObjectType);
-        public SolidColorBrush IconBrush => new SolidColorBrush(IconColor);
+        public Color IconColor => GetIconBrush(ObjectType).Color;
+        public SolidColorBrush IconBrush => GetIconBrush(ObjectType);
 
         /// <summary>
         /// Matches via prefix, substring, or CamelCase initials.
@@ -102,26 +111,38 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             return true;
         }
 
-        // SQL Prompt One Dark color scheme (from SQL_Prompt_Features_Core.md §1.2)
-        private static Color GetColor(int objectType)
+        // SQL Prompt One Dark color scheme (from SQL_Prompt_Features_Core.md §1.2). Spec 020 US4
+        // (T062): each case resolves to a brush from ThemeRegistry so the SC-001 hex scanner sees
+        // no literals here and runtime theme switches pick up the (currently theme-invariant)
+        // IconBadge palette automatically.
+        private static SolidColorBrush GetIconBrush(int objectType)
         {
-            switch (objectType)
+            var key = objectType switch
             {
-                case 0: return Color.FromRgb(0xE5, 0xC0, 0x4B);   // Table — Yellow #E5C04B
-                case 1: return Color.FromRgb(0x56, 0xB6, 0xC2);   // View — Teal #56B6C2
-                case 2: return Color.FromRgb(0x61, 0xAF, 0xEF);   // Column — Blue #61AFEF
-                case 3: return Color.FromRgb(0xAB, 0xB2, 0xBF);   // Keyword — Silver #ABB2BF
-                case 4: return Color.FromRgb(0x3D, 0xD6, 0x8C);   // Snippet — Green #3DD68C
-                case 5: return Color.FromRgb(0xD1, 0x9A, 0x66);   // Function — Orange #D19A66
-                case 6: return Color.FromRgb(0xC6, 0x78, 0xDD);   // Procedure — Purple #C678DD
-                case 7: return Color.FromRgb(0x98, 0xC3, 0x79);   // Schema — Green #98C379
-                case 8: return Color.FromRgb(0xE0, 0x6C, 0x75);   // Database — Red #E06C75
-                case 9: return Color.FromRgb(0x56, 0xB6, 0xC2);   // Variable — Teal #56B6C2
-                case 10: return Color.FromRgb(0x61, 0xAF, 0xEF);  // Alias — Blue #61AFEF
-                case 11: return Color.FromRgb(0xC6, 0x78, 0xDD);  // Parameter — Purple #C678DD
-                default: return Color.FromRgb(0xAB, 0xB2, 0xBF);  // Unknown — Silver #ABB2BF
-            }
+                0  => ThemeTokens.IconBadgeTable,        // T — Yellow
+                1  => ThemeTokens.IconBadgeView,         // V — Teal
+                2  => ThemeTokens.IconBadgeColumn,       // C — Blue
+                3  => ThemeTokens.IconBadgeKeyword,      // K — Silver/Gray
+                4  => ThemeTokens.IconBadgeSnippet,      // S — Green
+                5  => ThemeTokens.IconBadgeFunction,     // F — Orange
+                6  => ThemeTokens.IconBadgeStoredProc,   // P — Purple
+                7  => ThemeTokens.IconBadgeSchema,       // Sc — Green2
+                8  => ThemeTokens.IconBadgeDatabase,     // D — Red
+                9  => ThemeTokens.IconBadgeView,         // Variable — shares Teal with View
+                10 => ThemeTokens.IconBadgeColumn,       // Alias — shares Blue with Column
+                11 => ThemeTokens.IconBadgeStoredProc,   // Parameter — shares Purple with StoredProc
+                _  => ThemeTokens.IconBadgeKeyword,      // Unknown — Silver/Gray
+            };
+
+            // The brushes are pre-frozen by ThemePalette (SC-001 / FR-004); no per-call allocation.
+            // Defensive fallback if the registry isn't initialised (e.g. in a unit test): return a
+            // single fixed Keyword/Gray brush so the popup still renders.
+            return ThemeRegistry.Instance.Resources[key] as SolidColorBrush ?? _fallbackBrush;
         }
+
+        private static readonly SolidColorBrush _fallbackBrush = FreezeBrush(new SolidColorBrush(Color.FromRgb(0xAB, 0xB2, 0xBF)));
+
+        private static SolidColorBrush FreezeBrush(SolidColorBrush b) { b.Freeze(); return b; }
 
         /// <summary>Returns the badge background opacity (0.20 for most types, 0.15 for Keyword).</summary>
         public double IconBackgroundOpacity => ObjectType == 3 ? 0.15 : 0.20;

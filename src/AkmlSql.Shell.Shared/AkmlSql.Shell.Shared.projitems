@@ -23,6 +23,11 @@
     <Compile Include="$(MSBuildThisFileDirectory)Editor\SsmsConnectionDetector.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ExtensionAssemblyResolver.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Help\F1HelpListener.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Help\F1HelpRegistrations.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatRequestDispatcher.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatStylesEditorViewModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatStylesEditorWindow.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Tabs\SsmsConnectionContextResolver.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)PackageGuids.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\AboutCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\CheckUpdateCommand.cs" />
@@ -70,13 +75,13 @@
     <Compile Include="$(MSBuildThisFileDirectory)Editor\SignatureHelpSource.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\QuickInfoSource.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\RefreshCacheCommand.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Ui\ThemeManager.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\ThemeVariant.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\ThemeTokens.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\Typography.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\Spacing.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\ThemePalette.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\ThemeRegistry.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\ThemeMigrationManager.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\HostThemeWatcher.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\FocusVisualStyles.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\ThemeAwareWindow.cs" />

@@ -264,7 +264,54 @@ Silent mode flags:
 
 ---
 
-## 9. Key Design Decisions
+## 9. Spec 020 — SQL Prompt Visual Parity (Theme tokens, Format Styles editor)
+
+Spec 020 layered on the existing theme + formatting infrastructure rather than replacing it. The new surface area:
+
+### Theme token system (US1, builds on spec 016)
+
+`ThemeRegistry` was extended with 25 new brush tokens and 8 invariant scalar / typography tokens, all in `src/AkmlSql.Shell.Shared/Ui/Theme/`:
+
+| Family | Count | Source of truth for hex |
+|---|---:|---|
+| `IconBadge.*` (Table, View, Column, StoredProc, Function, Snippet, Keyword, Database, Schema, Trigger, Index, Synonym) | 12 | `doc/SQL-PROMPT/SQL-Prompt-Features/SQL_Prompt_Features_Core.md §1.2` |
+| `TabColor.*` (Red, Amber, Green, Blue, Teal, Purple, Pink, Gray) | 8 | EnvironmentMatcher default palette |
+| `History.*` (OpenIcon, ClosedIcon, StarActive, StarInactive, MatchHighlight) | 5 | `doc/SQL-PROMPT/SQL-Prompt-History/SQL_Prompt_SQL_History.md §16.2` |
+| `Spacing.*` (XS / S / M / L scalars in DIU) | 4 | Theme-invariant; delegates to existing `Spacing` static class |
+| `Typography.*` (Chrome, ChromeTitle, Editor, IconBadge composites) | 4 | Theme-invariant; delegates to existing `Typography` static class |
+
+`ThemeMigrationManager.cs` writes a one-time `themeMigration.v1.json` marker at first launch; on existing-customisation detection it surfaces a notice flag.
+
+### Format Styles editor (US3)
+
+A new modal `DialogWindow` in `src/AkmlSql.Shell.Shared/Formatting/`:
+
+| File | Role |
+|---|---|
+| `FormatStylesEditorWindow.cs` | Three-column shell: style list (left), settings tree (middle), controls + live preview (right). Programmatic WPF only (no XAML) per the `ProfileEditorDialog` pattern. |
+| `FormatStylesEditorViewModel.cs` | Loads profiles via `ProfileList` IPC, schema via `RequestStyleEditorSchema` IPC, holds `_workingValues` overlaying schema defaults. Debounced `QueuePreviewAsync` (100 ms) drives the live preview. |
+
+The editor is launched via `FormatStylesEditorWindow.Launch()`. Menu wiring (Options → Format → Styles → "Edit Formatting Styles…") is deferred to a follow-up session.
+
+### SQL Prompt round-trip (US2)
+
+`src/AkmlSql.Formatting/Profiles/`:
+
+| File | Direction |
+|---|---|
+| `SqlPromptImporter.cs` (pre-existing) | `.sqlpromptstylev2` XML → `FormattingProfile` |
+| `SqlPromptExporter.cs` (spec 020) | `FormattingProfile` → `.sqlpromptstylev2` XML |
+| `FormatSettingSchema.cs` (spec 020) | Reflection-discovered descriptor; powers the editor tree |
+
+### IPC additions
+
+| Message | Value | Purpose |
+|---|---|---|
+| `RequestStyleEditorSchema` / `StyleEditorSchemaResult` | 28 / 128 | Schema descriptor request — see `doc/ipc-api.md` |
+
+---
+
+## 10. Key Design Decisions
 
 | Decision | Rationale |
 |----------|-----------|

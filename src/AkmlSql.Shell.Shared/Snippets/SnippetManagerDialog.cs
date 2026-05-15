@@ -10,6 +10,7 @@ using System.Windows.Media;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Shell.Shared.Ui;
+using AkmlSql.Shell.Shared.Ui.Theme;
 using Microsoft.VisualStudio.PlatformUI;
 using Microsoft.Win32;
 
@@ -57,24 +58,18 @@ namespace AkmlSql.Shell.Shared.Snippets
 
         private void BuildUi()
         {
-            var theme = ThemeManager.Instance;
-
-            var bg = new SolidColorBrush(theme.Background);
-            var fg = new SolidColorBrush(theme.Foreground);
-            var border = new SolidColorBrush(theme.Border);
-            var highlight = new SolidColorBrush(theme.HighlightBackground);
-            var accent = new SolidColorBrush(theme.AccentColor);
-            var editorPanel = new SolidColorBrush(theme.EditorPanelBackground);
-            var placeholder = new SolidColorBrush(theme.PlaceholderText);
-            var splitter = new SolidColorBrush(theme.SplitterColor);
-            bg.Freeze();
-            fg.Freeze();
-            border.Freeze();
-            highlight.Freeze();
-            accent.Freeze();
-            editorPanel.Freeze();
-            placeholder.Freeze();
-            splitter.Freeze();
+            // Spec 020 (US1 T021): replaced legacy ThemeManager.Instance.<Color> reads with direct
+            // brush lookups from ThemeRegistry. Brushes are already frozen at palette-build time
+            // (ThemePalette), so the per-call allocation + Freeze() noise is no longer needed.
+            var res = ThemeRegistry.Instance.Resources;
+            var bg          = (SolidColorBrush)res[ThemeTokens.SurfaceCanvas];
+            var fg          = (SolidColorBrush)res[ThemeTokens.TextPrimary];
+            var border      = (SolidColorBrush)res[ThemeTokens.BorderDefault];
+            var highlight   = (SolidColorBrush)res[ThemeTokens.SurfaceHover];
+            var accent      = (SolidColorBrush)res[ThemeTokens.AccentPrimary];
+            var editorPanel = (SolidColorBrush)res[ThemeTokens.SurfaceElevated];
+            var placeholder = (SolidColorBrush)res[ThemeTokens.TextPlaceholder];
+            var splitter    = (SolidColorBrush)res[ThemeTokens.BorderSplitter];
 
             // ================================================================
             // MAIN GRID: 3 rows — content (Star), status bar (Auto), button bar (Auto)
@@ -379,13 +374,11 @@ namespace AkmlSql.Shell.Shared.Snippets
 
             _snippetList.Items.Clear();
 
-            var theme = ThemeManager.Instance;
-            var fg = new SolidColorBrush(theme.Foreground);
-            fg.Freeze();
-            var accent = new SolidColorBrush(theme.AccentColor);
-            accent.Freeze();
-            var placeholder = new SolidColorBrush(theme.PlaceholderText);
-            placeholder.Freeze();
+            // Spec 020 (US1 T021): direct token lookups; palette pre-freezes.
+            var res = ThemeRegistry.Instance.Resources;
+            var fg = (SolidColorBrush)res[ThemeTokens.TextPrimary];
+            var accent = (SolidColorBrush)res[ThemeTokens.AccentPrimary];
+            var placeholder = (SolidColorBrush)res[ThemeTokens.TextPlaceholder];
 
             // Group snippets by source
             string lastGroup = null;

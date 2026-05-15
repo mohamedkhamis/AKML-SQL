@@ -104,11 +104,20 @@ namespace AkmlSql.Core.Ipc
         // Shell → Engine (Wildcard Expansion)
         public const int WildcardExpansion = 27;
 
+        // Shell → Engine (Spec 020: Format Styles editor schema descriptor)
+        //   The editor UI requests the canonical FormatSettingSchema (groups + settings + types
+        //   + defaults + ranges) so it can build its tree from one source of truth.
+        //   See specs/020-sqlprompt-visual-parity/contracts/ipc-style-editor-schema.md
+        public const int RequestStyleEditorSchema = 28;
+
         // Engine → Shell (Code Analysis)
         public const int AnalysisResult = 125;
 
         // Engine → Shell (Wildcard Expansion)
         public const int WildcardExpansionResult = 127;
+
+        // Engine → Shell (Spec 020: Format Styles editor schema descriptor — pairs with RequestStyleEditorSchema=28)
+        public const int StyleEditorSchemaResult = 128;
 
         // Shell → Engine (Refactoring — heavyweight preview/apply)
         public const int RequestRefactorPreview = 30;
