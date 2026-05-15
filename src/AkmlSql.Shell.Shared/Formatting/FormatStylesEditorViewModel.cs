@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.IO;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -97,9 +98,77 @@ namespace AkmlSql.Shell.Shared.Formatting
         /// </summary>
         private readonly Dictionary<string, object?> _workingValues = new(StringComparer.Ordinal);
 
-        /// <summary>The 200-line sample SQL the preview pane formats. Held on the view model
-        /// so it can be replaced by user-pasted SQL in a future commit (FR-025 / SC-009).</summary>
-        public string PreviewSample { get; set; } = DefaultSampleSql;
+        /// <summary>
+        /// The sample SQL the preview pane formats. Spec 020 US5 (T069): persisted at
+        /// <c>%AppData%/AKML SQL/editor/preview-sample.sql</c> so user-pasted custom samples
+        /// survive editor close/reopen. Setting the property writes atomically (temp + rename).
+        /// On view-model construction, the persisted file is loaded if present; otherwise
+        /// <see cref="DefaultSampleSql"/> is used.
+        /// </summary>
+        public string PreviewSample
+        {
+            get => _previewSample;
+            set
+            {
+                if (string.Equals(_previewSample, value, StringComparison.Ordinal)) return;
+                _previewSample = value ?? string.Empty;
+                OnPropertyChanged();
+                TryPersistPreviewSample(_previewSample);
+                QueuePreviewAsync();
+            }
+        }
+        private string _previewSample = LoadPersistedSampleOrDefault();
+
+        private static string PreviewSamplePath
+        {
+            get
+            {
+                var dir = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "AKML SQL", "editor");
+                return Path.Combine(dir, "preview-sample.sql");
+            }
+        }
+
+        private static string LoadPersistedSampleOrDefault()
+        {
+            try
+            {
+                var path = PreviewSamplePath;
+                if (File.Exists(path))
+                {
+                    var text = File.ReadAllText(path);
+                    if (!string.IsNullOrWhiteSpace(text)) return text;
+                }
+            }
+            catch (Exception ex)
+            {
+                try { Log.Debug(ex, "FormatStylesEditor: failed to load persisted preview sample"); } catch { }
+            }
+            return DefaultSampleSql;
+        }
+
+        private static void TryPersistPreviewSample(string content)
+        {
+            try
+            {
+                var path = PreviewSamplePath;
+                var dir = Path.GetDirectoryName(path);
+                if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+
+                // Atomic write: temp + rename. .NET Framework 4.7.2 has no overwrite-aware File.Move
+                // on this code path, so delete the destination first if it exists.
+                var tempPath = path + ".tmp";
+                try { File.Delete(tempPath); } catch { }
+                File.WriteAllText(tempPath, content);
+                try { File.Delete(path); } catch { /* didn't exist */ }
+                File.Move(tempPath, path);
+            }
+            catch (Exception ex)
+            {
+                try { Log.Debug(ex, "FormatStylesEditor: failed to persist preview sample"); } catch { }
+            }
+        }
 
         private CancellationTokenSource? _previewCts;
         private int _previewSequence;

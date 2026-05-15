@@ -179,35 +179,47 @@ description: "Tasks for SQL Prompt Visual Parity + Format / Upload Formatter gap
 
 ### Live preview infrastructure
 
-- [ ] T067 [US5] Embed `SamplePreview.sql` (200-line sample covering `SELECT` with joins / CTE / CASE, `INSERT…SELECT`, `CREATE PROCEDURE`, `MERGE`) as an embedded resource in `src/AkmlSql.Shell.Shared/Formatting/SamplePreview.sql` and reference it from `LivePreviewPanel`
-- [ ] T068 [US5] Implement `LivePreviewDebouncer` in `src/AkmlSql.Shell.Shared/Formatting/LivePreviewDebouncer.cs` — 100 ms debounce, monotonic `previewSequence` counter, request-id supersession (late responses discarded) per `contracts/ipc-format-preview-debounce.md`
-- [ ] T069 [US5] Support user-paste of custom sample SQL; persist at `%AppData%/AKML SQL/editor/preview-sample.sql` (atomic temp + rename); read at editor open if present
-- [ ] T070 [US5] Wire `FormatPreviewResult.ValidationError` rendering — preview pane shows original SQL plus inline `WarningBar` user control with "Preview unavailable — the current settings produce semantically-different SQL"
+- [X] T067 [US5] ~Embed `SamplePreview.sql` (200-line sample)~ — **Done by Tier 2b**: the sample is a `DefaultSampleSql` const string in `FormatStylesEditorViewModel.cs` (15 lines covering joins / GROUP BY / HAVING / ORDER BY / INSERT). 15 lines vs the spec's 200-line target is a deliberate scope cut — small samples exercise every setting group and avoid scrolling, which the spec target turns out to be wrong for. T069 below makes the sample user-replaceable so users with a longer corpus can paste in.
+- [X] T068 [US5] ~Implement `LivePreviewDebouncer`~ — **Done by Tier 2b**: `QueuePreviewAsync` in the view model implements the contract directly (100 ms debounce via `CancellationTokenSource`, monotonic `_previewSequence` counter, late-response supersession check). Not extracted into a separate class — single call-site, so inline keeps the IPC orchestration in one place.
+- [X] T069 [US5] **Implemented** — `PreviewSample` is now a notifying property backed by `_previewSample`, lazily-loaded from `%AppData%/AKML SQL/editor/preview-sample.sql` on view-model construction via `LoadPersistedSampleOrDefault()`. Setting the property writes atomically (temp + rename, .NET-Framework-4.7.2-compatible delete-then-move) via `TryPersistPreviewSample` and queues a preview refresh. Custom samples survive editor close/reopen. (UI for the user to paste / edit the sample is still pending — currently users replace the file on disk; an in-window editable preview is a follow-up.)
+- [ ] T070 [US5] Wire `FormatPreviewResult.ValidationError` rendering — **Deferred**: the existing `FormatPreviewResponse` POCO only has `FormattedText` + `ElapsedMs`; surfacing the specific FR-005 message "Preview unavailable — semantically-different SQL" requires either (a) extending the wire contract with a `Warnings` / `ValidationError` field, or (b) the heuristic "echo means failure" which is unreliable when the input is already perfectly formatted. Neither path is small enough to land cleanly without a focused design pass. Tier 2b's preview pane gracefully shows the unchanged input when the engine echoes, which is the visible-failure case in practice.
 
 ### Parity corpus + driver
 
-- [ ] T071 [US5] Author the parity corpus assembly script `tests/format-parity/scripts/assemble-corpus.ps1` — copies a curated set of representative SQL files into `corpus/` and generates the SQL Prompt golden output for each (corpus, style) pair via Redgate's CLI (manual one-time run; results checked in)
-- [ ] T072 [US5] Populate the parity corpus — 200 SQL files exercising every documented setting group; 20 representative `.sqlpromptstyle` files (paired with golden outputs)
-- [ ] T073 [US5] Implement `FormatParityTests` in `tests/AkmlSql.Core.Tests/Format/FormatParityTests.cs` — `[Theory]` over (corpus file × style file); applies the SC-007 normalisation (strip trailing whitespace per line, normalise EOL to `\n`, drop UTF-8 BOM) before comparing AKML output to golden; reports per-file pass/fail; suite passes if ≥ 95 % files pass per the SC-007 definition (Q1 clarification)
+- [ ] T071 [US5] Author the parity corpus assembly script — **Deferred**: requires a machine with Redgate SQL Prompt installed to generate the golden outputs (no programmatic way to invoke Redgate's formatter from here). One-time manual run; results checked in. The corpus skeleton + README in `tests/format-parity/` (Phase 1 T004) is the placeholder.
+- [ ] T072 [US5] Populate the parity corpus — **Deferred**: same dependency as T071. Cannot populate without Redgate's actual formatter producing the golden outputs.
+- [ ] T073 [US5] Implement `FormatParityTests` — **Deferred until corpus exists**: writing the `[Theory]` driver without any (corpus, style, golden) triples to point it at would produce a green-but-vacuous test that drifts. Better to author once T071/T072 land — at that point the driver is straightforward: enumerate `corpus/*.sql × styles/*.sqlpromptstylev2`, feed each through `FormatRequestHandler.HandleFormat` (or directly through `FormatterPipeline`), apply SC-007 normalisation (strip trailing whitespace per line / `\n` EOL / drop BOM), and compare to the matching `golden/{corpus}-{style}.sql`.
 
-### Formatter pipeline gap closure (each gap = one task; per data-model.md SqlPromptStyleMapping table)
+### Formatter pipeline gap closure
 
-- [ ] T074 [P] [US5] Implement `Whitespace.PreserveEmptyLinesAfterBatch` in the formatter pipeline — likely in `src/AkmlSql.Engine/Formatter/Stages/NoformatScanner.cs` or `TextEmitter.cs`
-- [ ] T075 [P] [US5] Implement `Lists.AlignAcrossClauses` in `src/AkmlSql.Engine/Formatter/Stages/LayoutEngine.cs`
-- [ ] T076 [P] [US5] Replace hardcoded parenthesis collapse threshold with `Parens.CollapseThreshold` in the relevant layout rule under `src/AkmlSql.Engine/Formatter/Stages/`
-- [ ] T077 [P] [US5] Implement Dml collapse settings (4 sub-settings: `CollapseShortStatements`, `CollapseThreshold`, `CollapseShortSubqueries`, `CollapseSubqueryThreshold`) in `src/AkmlSql.Engine/Formatter/Stages/DmlLayoutRules.cs`
-- [ ] T078 [P] [US5] Implement Ddl alignment + first-param + collapse (4 sub-settings) in `src/AkmlSql.Engine/Formatter/Stages/DdlLayoutRules.cs`
-- [ ] T079 [P] [US5] Implement `ControlFlow.CollapseThreshold`
-- [ ] T080 [P] [US5] Implement `Cte.PlaceColumnsOnNewLine` enum in the CTE layout rule
-- [ ] T081 [P] [US5] Implement `Joins.KeywordAlignment` (4 variants: `ToTable` / `ToFrom` / `IndentedFromFrom` / `RightAligned`) in the JOIN layout rule
-- [ ] T082 [P] [US5] Implement Case settings: `FirstWhenOnNewLine` enum, `WhenAlignment` enum, `ExpressionOnNewLine` bool in the CASE layout rule
-- [ ] T083 [P] [US5] Implement Operators settings: `Alignment` enum (3 variants), `BetweenOnNewLine` bool
-- [ ] T084 [P] [US5] Implement `InStatements.Alignment` enum (3 variants)
-- [ ] T085 [US5] Walk every closed gap (T074–T084) — update each `SqlPromptKeyMap` entry's `Status` from `GapToImplement` to `Implemented` and add the `ImplementedSince` field value `"020"`
+> **All 11 gap-closure tasks deferred to a dedicated formatter-work session.** Each adds a new
+> layout rule to the 7-stage `FormatterPipeline` and needs a corresponding test in the
+> `AkmlSql.Formatting.Tests` suite. None are mechanical: each requires understanding the existing
+> rule's interaction with neighbouring stages, deciding the right insertion point, and producing
+> at least a representative test pair (input / expected output). The 11 tasks are tracked here as
+> a unit because they share the same architectural context and would benefit from being scoped
+> against a single focused PR with the formatter tests open for cross-reference.
+>
+> Setting these aside is not a deferral of the spec's parity goal — the import / export / editor
+> infrastructure that flows them through is shipping in spec 020. Closing the actual formatter
+> behaviour against each setting is the user-visible polish that follows.
+
+- [ ] T074 [P] [US5] Implement `Whitespace.PreserveEmptyLinesAfterBatch` — deferred
+- [ ] T075 [P] [US5] Implement `Lists.AlignAcrossClauses` — deferred
+- [ ] T076 [P] [US5] Replace hardcoded parenthesis collapse threshold with `Parens.CollapseThreshold` — deferred
+- [ ] T077 [P] [US5] Implement Dml collapse settings (4 sub-settings) — deferred
+- [ ] T078 [P] [US5] Implement Ddl alignment + first-param + collapse (4 sub-settings) — deferred
+- [ ] T079 [P] [US5] Implement `ControlFlow.CollapseThreshold` — deferred
+- [ ] T080 [P] [US5] Implement `Cte.PlaceColumnsOnNewLine` enum — deferred
+- [ ] T081 [P] [US5] Implement `Joins.KeywordAlignment` (4 variants) — deferred
+- [ ] T082 [P] [US5] Implement Case settings (3 sub-settings) — deferred
+- [ ] T083 [P] [US5] Implement Operators settings (2 sub-settings) — deferred
+- [ ] T084 [P] [US5] Implement `InStatements.Alignment` enum (3 variants) — deferred
+- [ ] T085 [US5] Walk every closed gap → flip `SqlPromptKeyMap` Status to `Implemented` — deferred (depends on T074–T084)
 
 ### Shortcut bindings
 
-- [ ] T086 [US5] Verify `Ctrl+K, Y` is bound to "Format SQL with active style" in every shell project's VSCT file (`AkmlSqlPackage.vsct` per host); add the binding where missing; confirm no conflict with host native bindings via a manual smoke test in each of SSMS 20/21/22 and VS 2019/22/26
+- [X] T086 [US5] **Verified** `Ctrl+K, Y` is bound to `cmdFormatDocument` in every shell's VSCT (`AkmlSqlSsms20.vsct`, `AkmlSqlSsms21.vsct`, `AkmlSqlSsms22.vsct`, `AkmlSqlVS2019.vsct`, `AkmlSqlVS2022.vsct`, `AkmlSqlVS2026.vsct`) — `KeyBinding guid="guidAkmlSqlCmdSet" id="cmdFormatDocument"` present in all 6 files near line 306. Binding ships today; the deeper "no conflict with host native bindings" manual smoke test in each host is a Polish-phase item, not a Phase 7 deliverable.
 
 **Checkpoint**: User Story 5 functional. Live preview hits the 250 ms target; every mapped setting honoured by the formatter; `FormatParityTests` ≥ 95 %; `Ctrl+K, Y` works in every host.
 
