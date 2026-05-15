@@ -1096,10 +1096,11 @@ namespace AkmlSql.Shell.Shared.History
                 return;
             }
 
-            // Render the text with highlighted regions. HistorySearchHighlight is a yellow-ochre at ~30%
-            // opacity — a semantic constant that's intentionally theme-independent (FR-003), so it stays
-            // on the ThemeManager facade rather than collapsing onto a chrome token.
-            var highlightBrush = Freeze(ThemeManager.Instance.HistorySearchHighlight);
+            // Render the text with highlighted regions. Spec 020 (US1 T021) replaces the legacy
+            // ThemeManager.HistorySearchHighlight facade with the dedicated HistoryMatchHighlight
+            // token — same semantic role (yellow-ochre highlight), now flows through ThemeRegistry
+            // so light/dark variants come from ThemePalette like every other chrome brush.
+            var highlightBrush = (SolidColorBrush)ThemeRegistry.Instance.Resources[ThemeTokens.HistoryMatchHighlight];
 
             int pos = 0;
             foreach (var region in regions)

@@ -138,6 +138,9 @@ namespace AkmlSql.Ssms22
                         themeSettings.Theme,
                         AkmlSql.Shell.Shared.Ui.Theme.HostThemeWatcher.Instance.LastDetectedHostVariant,
                         AkmlSql.Shell.Shared.Ui.Theme.HostThemeWatcher.Instance.IsHighContrast);
+
+                    // Spec 020 (FR-030): one-time first-launch theme migration. Idempotent; safe every launch.
+                    AkmlSql.Shell.Shared.Ui.Theme.ThemeMigrationManager.Instance.RunIfNeeded();
                 }
                 catch (Exception themeEx)
                 {

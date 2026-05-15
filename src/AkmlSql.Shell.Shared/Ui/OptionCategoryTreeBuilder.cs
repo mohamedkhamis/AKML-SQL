@@ -48,8 +48,10 @@ namespace AkmlSql.Shell.Shared.Ui
 
             tree.Items.Clear();
 
-            var theme = ThemeManager.Instance;
-            var foreground = new SolidColorBrush(theme.Foreground);
+            // Spec 020 (US1 T021): replaced legacy ThemeManager.Instance.Foreground with the
+            // ThemeTokens.TextPrimary brush sourced directly from the ThemeRegistry palette
+            // (already frozen at palette-build time; no per-call SolidColorBrush allocation).
+            var foreground = (SolidColorBrush)Theme.ThemeRegistry.Instance.Resources[Theme.ThemeTokens.TextPrimary];
 
             foreach (var group in Groups)
             {

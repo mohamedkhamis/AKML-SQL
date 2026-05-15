@@ -67,6 +67,7 @@ namespace AkmlSql.Shell.Shared.Ui.Theme
             _preference = NormalizePreference(preference);
             _hostDetected = initialHostVariant;
             _isHighContrast = isHighContrast;
+            SeedInvariantTokens();
             ResolveAndApply(raiseEvent: false);
             _initialized = true;
         }
@@ -179,7 +180,37 @@ namespace AkmlSql.Shell.Shared.Ui.Theme
                     Resources[kvp.Key] = kvp.Value;
                 }
             }
+            SeedInvariantTokens();
             Current = ThemeVariant.Light;
+        }
+
+        /// <summary>
+        /// Spec 020 (SQL Prompt visual parity): seeds non-brush tokens that are invariant across
+        /// themes — <c>Spacing.*</c> scalars (DIU) and <c>Typography.*</c> composites
+        /// (<see cref="TypographySpec"/>). Idempotent — re-seeding overwrites with identical values.
+        /// Called from both <see cref="Initialize"/> and <see cref="EnsureInitialized"/> so the
+        /// tokens are present regardless of which path populated the registry first.
+        /// <para>
+        /// Numeric and font values delegate to the existing <see cref="Spacing"/> and
+        /// <see cref="Typography"/> static classes (introduced by spec 016) so there's a single
+        /// source of truth for the actual values; the token keys here are the
+        /// <c>DynamicResource</c>-addressable façade over them, for XAML and category-aware lookup.
+        /// </para>
+        /// </summary>
+        private void SeedInvariantTokens()
+        {
+            // Spacing — boxed doubles in ResourceDictionary; consumers cast back to double.
+            Resources[ThemeTokens.SpacingXs] = Spacing.Xs;
+            Resources[ThemeTokens.SpacingS]  = Spacing.Sm;
+            Resources[ThemeTokens.SpacingM]  = Spacing.Md;
+            Resources[ThemeTokens.SpacingL]  = Spacing.Lg;
+
+            // Typography — frozen TypographySpec composites; FontFamily references resolved
+            // from the hoisted static fields on Typography (CLAUDE.md WPF convention).
+            Resources[ThemeTokens.TypographyChrome]      = new TypographySpec(Typography.UiFont,   12.0,           Typography.WeightRegular);
+            Resources[ThemeTokens.TypographyChromeTitle] = new TypographySpec(Typography.UiFont,   Typography.H4,  Typography.WeightSemiBold);
+            Resources[ThemeTokens.TypographyEditor]      = new TypographySpec(Typography.MonoFont, Typography.Body, Typography.WeightRegular);
+            Resources[ThemeTokens.TypographyIconBadge]   = new TypographySpec(Typography.UiFont,   9.0,            Typography.WeightSemiBold);
         }
     }
 }

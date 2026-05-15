@@ -116,7 +116,7 @@ public class CursorContextAnalyzer
                 tokenIndex = i;
                 if (i > 0)
                 {
-                    prevToken = tokens[i - 1];
+                    prevToken = SkipBackOverTrivia(tokens, i - 1);
                 }
 
                 break;
@@ -130,7 +130,7 @@ public class CursorContextAnalyzer
             tokenIndex = tokens.Count - 1;
             if (tokenIndex > 0)
             {
-                prevToken = tokens[tokenIndex - 1];
+                prevToken = SkipBackOverTrivia(tokens, tokenIndex - 1);
             }
         }
 
@@ -461,6 +461,21 @@ public class CursorContextAnalyzer
     private static bool IsWhitespaceOrComment(TSqlParserToken t)
     {
         return t.TokenType is TSqlTokenType.WhiteSpace or TSqlTokenType.SingleLineComment or TSqlTokenType.MultilineComment or TSqlTokenType.EndOfFile;
+    }
+
+    /// <summary>
+    /// Walks backward from <paramref name="startIndex"/> over whitespace and
+    /// comment tokens, returning the first "real" token (or null if the entire
+    /// run back to the beginning is trivia). Used to set <c>PrecedingToken</c>
+    /// to the meaningful token before the cursor — providers (ObjectProvider,
+    /// AliasProvider) need to see "what kind of thing came before me?" without
+    /// being misled by interior whitespace or newlines.
+    /// </summary>
+    private static TSqlParserToken? SkipBackOverTrivia(IList<TSqlParserToken> tokens, int startIndex)
+    {
+        int j = startIndex;
+        while (j >= 0 && IsWhitespaceOrComment(tokens[j])) j--;
+        return j >= 0 ? tokens[j] : null;
     }
 
     /// <summary>

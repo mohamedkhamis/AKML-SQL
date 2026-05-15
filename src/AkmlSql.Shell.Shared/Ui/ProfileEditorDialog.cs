@@ -48,13 +48,11 @@ namespace AkmlSql.Shell.Shared.Ui
 
         private void BuildUi()
         {
-            var theme = ThemeManager.Instance;
-            var bg = new SolidColorBrush(theme.Background);
-            var fg = new SolidColorBrush(theme.Foreground);
-            var border = new SolidColorBrush(theme.Border);
-            bg.Freeze();
-            fg.Freeze();
-            border.Freeze();
+            // Spec 020 (US1 T021): direct token lookups from ThemeRegistry; palette pre-freezes brushes.
+            var res = Theme.ThemeRegistry.Instance.Resources;
+            var bg     = (SolidColorBrush)res[Theme.ThemeTokens.SurfaceCanvas];
+            var fg     = (SolidColorBrush)res[Theme.ThemeTokens.TextPrimary];
+            var border = (SolidColorBrush)res[Theme.ThemeTokens.BorderDefault];
 
             // Main grid: 2 columns (left options, right preview) + 1 row for content + 1 row for buttons
             var mainGrid = new Grid { Background = bg };
@@ -283,9 +281,8 @@ namespace AkmlSql.Shell.Shared.Ui
             _categoryLabel.Content = category;
 
             var options = _viewModel.GetOptionsForCategory(category);
-            var theme = ThemeManager.Instance;
-            var fg = new SolidColorBrush(theme.Foreground);
-            fg.Freeze();
+            // Spec 020 (US1 T021): direct token lookup from ThemeRegistry; palette pre-freezes.
+            var fg = (SolidColorBrush)Theme.ThemeRegistry.Instance.Resources[Theme.ThemeTokens.TextPrimary];
 
             foreach (var opt in options)
             {
@@ -452,9 +449,8 @@ namespace AkmlSql.Shell.Shared.Ui
             _categoryLabel.Content = "Search Results";
 
             var results = _viewModel.SearchAllOptions(filter);
-            var theme = ThemeManager.Instance;
-            var fg = new SolidColorBrush(theme.Foreground);
-            fg.Freeze();
+            // Spec 020 (US1 T021): direct token lookup from ThemeRegistry; palette pre-freezes.
+            var fg = (SolidColorBrush)Theme.ThemeRegistry.Instance.Resources[Theme.ThemeTokens.TextPrimary];
 
             string lastCategory = null;
 

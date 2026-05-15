@@ -90,5 +90,34 @@ namespace AkmlSql.Shell.Shared
         public const int CmdBookmarkNext            = 0x0802;
         public const int CmdBookmarkPrev            = 0x0803;
         public const int CmdSplitTable              = 0x0804;
+
+        // Phase 10 — SQL Prompt Parity Closure (spec 019)
+        // See specs/019-phase10-parity-closure/contracts/commands.md for the full
+        // catalog including which existing commands (CmdCommandPalette, CmdToggleBrackets,
+        // CmdExtractToProc, CmdExecuteToCursor, CmdSafeRename, CmdAiChatPanel, CmdAiFix,
+        // CmdAiOptimize, CmdAiExplain, CmdAiIndexAnalysis) receive new chord bindings
+        // rather than new IDs. Reserved range 0x0916..0x093F.
+        public const int CmdColumnPickerOpen             = 0x0900;
+        public const int CmdTabWildcardExpand            = 0x0901;
+        public const int CmdShowCodeAnalysisIssues       = 0x0902;
+        public const int CmdLightbulbApplyFix            = 0x0903;
+        public const int CmdLightbulbDisableRule         = 0x0904;
+        public const int CmdTabColorAssignServer         = 0x0905;
+        public const int CmdTabColorAssignDatabase       = 0x0906;
+        public const int CmdTabColorAssignServerGroup    = 0x0907;
+        public const int CmdSummarizeScript              = 0x0908;
+        public const int CmdScriptAsAlter                = 0x0909;
+        public const int CmdSelectInObjectExplorer       = 0x090A;
+        public const int CmdFindUnusedVariables          = 0x090B;
+        public const int CmdBrowseOpenTabs               = 0x090C;
+        public const int CmdShowFindInvalidObjects       = 0x090D;
+        public const int CmdInlineStoredProcedure        = 0x090E;
+        public const int CmdSmartRename                  = 0x090F;
+        public const int CmdExecuteCurrentBatch          = 0x0910;
+        public const int CmdToggleSuggestions            = 0x0911;
+        public const int CmdCycleCategoryFilterForward   = 0x0912;
+        public const int CmdCycleCategoryFilterBackward  = 0x0913;
+        public const int CmdDisableFormattingForSelection = 0x0914;
+        public const int CmdAiManualGhostText            = 0x0915;
     }
 }
