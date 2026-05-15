@@ -25,6 +25,8 @@
     <Compile Include="$(MSBuildThisFileDirectory)Help\F1HelpListener.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Help\F1HelpRegistrations.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatRequestDispatcher.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatStylesEditorViewModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatStylesEditorWindow.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Tabs\SsmsConnectionContextResolver.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)PackageGuids.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\AboutCommand.cs" />
