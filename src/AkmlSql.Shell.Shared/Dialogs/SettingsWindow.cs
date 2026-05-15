@@ -324,6 +324,37 @@ namespace AkmlSql.Shell.Shared.Dialogs
         /// </summary>
         public bool ShowDialog()
         {
+            BuildWindowInner();
+            _window!.ShowDialog();
+            return _dialogResult;
+        }
+
+        /// <summary>
+        /// Test-only: build the dialog's visual tree without showing it. Used by
+        /// AkmlSql.Shell.Shared.Tests for chrome regression checks. Must NOT be
+        /// called from production code paths — this method exists solely to expose
+        /// the rendering seam to the test project.
+        /// No items are pre-selected so every TreeViewItem reflects its base (non-selected) style.
+        /// </summary>
+        public Window TestBuildWindowForRenderTest()
+        {
+            _window = CreateWindow();
+            LoadSettingsToControls();
+            // Intentionally do NOT select the first item — we want base (non-selected) style
+            // applied to all items so the chrome test can assert the unselected foreground.
+            _window.Measure(new System.Windows.Size(double.PositiveInfinity, double.PositiveInfinity));
+            _window.Arrange(new Rect(0, 0, _window.DesiredSize.Width, _window.DesiredSize.Height));
+            _window.UpdateLayout();
+            return _window!;
+        }
+
+        /// <summary>
+        /// Shared initialization: creates the window, populates controls, and selects the first
+        /// navigation item. Called by both <see cref="ShowDialog"/> and
+        /// <see cref="TestBuildWindowForRenderTest"/>.
+        /// </summary>
+        private void BuildWindowInner()
+        {
             _window = CreateWindow();
             LoadSettingsToControls();
 
@@ -334,9 +365,6 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 if (firstItem != null)
                     firstItem.IsSelected = true;
             }
-
-            _window.ShowDialog();
-            return _dialogResult;
         }
 
         /// <summary>Returns the (potentially modified) settings.</summary>
@@ -470,7 +498,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
         {
             var sidebar = new Border
             {
-                Width = 220,
+                Width = 240,  // wider to give long labels like "Execution Warnings" room
                 Background = _theme.Sidebar,
                 BorderBrush = _theme.Sep,
                 BorderThickness = new Thickness(0, 0, 1, 0),
@@ -516,8 +544,6 @@ namespace AkmlSql.Shell.Shared.Dialogs
             _navTree.Resources[SystemColors.HighlightTextBrushKey] = _theme.SelectedText;
             _navTree.Resources[SystemColors.InactiveSelectionHighlightBrushKey] = _theme.Selected;
             _navTree.Resources[SystemColors.InactiveSelectionHighlightTextBrushKey] = _theme.SelectedText;
-            _navTree.Resources[SystemColors.ControlBrushKey] = _theme.Selected;
-            _navTree.Resources[SystemColors.ControlTextBrushKey] = _theme.SelectedText;
 
             // Apply themed style to TreeViewItems
             var itemStyle = new Style(typeof(TreeViewItem));
@@ -537,7 +563,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
             mouseOverTrigger.Setters.Add(new Setter(Control.BackgroundProperty, _theme.TreeHover));
             itemStyle.Triggers.Add(mouseOverTrigger);
 
-            _navTree.ItemContainerStyle = itemStyle;
+            // Use implicit style by type so the style cascades to TreeViewItems at every depth.
+            // (TreeView.ItemContainerStyle only applies to direct children, breaking nested items.)
+            _navTree.Resources[typeof(TreeViewItem)] = itemStyle;
 
             // Build categories and pages
             BuildPages();
@@ -550,11 +578,17 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 ("Behavior", "IntelliSense"),
                 ("Database", "Schema Cache"));
 
-            AddTreeGroup("Inserted Code", expanded: false,
-                ("Refactoring", "Refactoring"));
+            // "Inserted Code" group is reserved for Phase 2 (Qualification, INSERT, JOIN).
+            // Phase 1: empty group is hidden — do not add it yet, to avoid showing an
+            // empty parent node.
 
             AddTreeGroup("Format", expanded: false,
                 ("Styles", "Formatting"));
+
+            AddTreeGroup("Editor", expanded: false,
+                ("Productivity", "Editor"),
+                ("Navigation", "Navigation"),
+                ("Refactoring", "Refactoring"));   // moved from "Inserted Code"
 
             AddTreeGroup("Queries", expanded: false,
                 ("History", "History"),
@@ -567,13 +601,11 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
             AddTreeLeaf("Code Analysis", "Code Analysis");
             AddTreeLeaf("Snippets", "Snippets");
-            AddTreeLeaf("Prompt AI", "AI Assistance");
+            AddTreeLeaf("AI Assistance", "AI Assistance");
 
-            AddTreeGroup("Editor", expanded: false,
-                ("Productivity", "Editor"),
-                ("Navigation", "Navigation"));
-
-            AddTreeLeaf("Miscellaneous", "General");
+            AddTreeGroup("Miscellaneous", expanded: false,
+                ("Main", "General"));
+            // "Labs" sub-leaf is added in Phase 2.
 
             _navTree.SelectedItemChanged += OnNavSelectionChanged;
 
@@ -1097,21 +1129,21 @@ namespace AkmlSql.Shell.Shared.Dialogs
             // Mapping: page key (used for navigation tag) → SQL Prompt-style display label
             var pages = new (string Key, string Display, Func<UIElement> Builder)[]
             {
-                ("General",       "Miscellaneous",       BuildGeneralPage),
-                ("IntelliSense",  "Suggestions › Behavior", BuildIntelliSensePage),
-                ("Schema Cache",  "Suggestions › Database", BuildSchemaCachePage),
-                ("Formatting",    "Format › Styles",     BuildFormattingPage),
-                ("Snippets",      "Snippets",            BuildSnippetsPage),
-                ("Code Analysis", "Code Analysis",       BuildCodeAnalysisPage),
-                ("Refactoring",   "Inserted Code › Refactoring", BuildRefactoringPage),
-                ("History",       "Queries › History",   BuildHistoryPage),
-                ("Tabs & UI",     "Tabs › Color",        BuildTabsPage),
+                ("General",       "Miscellaneous › Main",         BuildGeneralPage),
+                ("IntelliSense",  "Suggestions › Behavior",       BuildIntelliSensePage),
+                ("Schema Cache",  "Suggestions › Database",       BuildSchemaCachePage),
+                ("Formatting",    "Format › Styles",              BuildFormattingPage),
+                ("Snippets",      "Snippets",                     BuildSnippetsPage),
+                ("Code Analysis", "Code Analysis",                BuildCodeAnalysisPage),
+                ("Refactoring",   "Editor › Refactoring",         BuildRefactoringPage),
+                ("History",       "Queries › History",            BuildHistoryPage),
+                ("Tabs & UI",     "Tabs › Color",                 BuildTabsPage),
                 ("Safety",        "Queries › Execution Warnings", BuildSafetyPage),
-                ("AI Assistance", "Prompt AI",           BuildAiPage),
-                ("Grid",          "Queries › Query Results", BuildGridPage),
-                ("Editor",        "Editor › Productivity", BuildEditorPage),
-                ("Execution",     "Queries › Execution", BuildExecutionPage),
-                ("Navigation",    "Editor › Navigation", BuildNavigationPage),
+                ("AI Assistance", "AI Assistance",                BuildAiPage),
+                ("Grid",          "Queries › Query Results",      BuildGridPage),
+                ("Editor",        "Editor › Productivity",        BuildEditorPage),
+                ("Execution",     "Queries › Execution",          BuildExecutionPage),
+                ("Navigation",    "Editor › Navigation",          BuildNavigationPage),
             };
 
             foreach (var (key, display, builder) in pages)

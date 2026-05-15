@@ -18,5 +18,6 @@
     <Project Path="tests/AkmlSql.Engine.Tests/AkmlSql.Engine.Tests.csproj" />
     <Project Path="tests/AkmlSql.Formatting.Tests/AkmlSql.Formatting.Tests.csproj" />
     <Project Path="tests/AkmlSql.E2E.Tests/AkmlSql.E2E.Tests.csproj" />
+    <Project Path="tests/AkmlSql.Shell.Shared.Tests/AkmlSql.Shell.Shared.Tests.csproj" />
   </Folder>
 </Solution>
