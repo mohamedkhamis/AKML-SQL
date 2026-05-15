@@ -51,6 +51,9 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             // Subscribe to selection changes for QuickInfo debounce
             _adornment.Popup.SelectionChanged += OnCompletionSelectionChanged;
 
+            // Wildcard popup: double-click commits (same as Tab/Enter) — SQL Prompt parity.
+            _adornment.WildcardPopup.CommitRequested += CommitWildcardExpansion;
+
             // Timer that continuously suppresses native IntelliSense while our popup is open
             _suppressTimer = new System.Windows.Threading.DispatcherTimer
             {
@@ -1275,9 +1278,45 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         /// </summary>
         private void TriggerWildcardExpansion(int starPos, string qualifier)
         {
-            var docText = _textView.TextBuffer.CurrentSnapshot.GetText();
+            // SQL Prompt parity: when the user has highlighted a runnable
+            // sub-region of a malformed multi-statement script, treat the
+            // selection as the document so the engine's parser only sees the
+            // valid portion. The cursor offset is rebased to the selection
+            // start. If there's no selection, fall back to the full buffer.
+            string docText;
+            int effectiveOffset = starPos;
+            try
+            {
+                var selection = _textView.Selection;
+                if (selection != null && !selection.IsEmpty &&
+                    selection.SelectedSpans.Count > 0)
+                {
+                    var span = selection.SelectedSpans[0];
+                    if (starPos >= span.Start.Position && starPos <= span.End.Position)
+                    {
+                        docText = span.GetText();
+                        effectiveOffset = starPos - span.Start.Position;
+                    }
+                    else
+                    {
+                        docText = _textView.TextBuffer.CurrentSnapshot.GetText();
+                    }
+                }
+                else
+                {
+                    docText = _textView.TextBuffer.CurrentSnapshot.GetText();
+                }
+            }
+            catch
+            {
+                docText = _textView.TextBuffer.CurrentSnapshot.GetText();
+                effectiveOffset = starPos;
+            }
 
-            // Store position so CommitWildcardExpansion doesn't need to re-detect
+            // Store position so CommitWildcardExpansion doesn't need to re-detect.
+            // Note: _wildcardStarPos is the ABSOLUTE document offset (used for
+            // text-replacement on commit); effectiveOffset is what we send to the
+            // engine for parsing.
             _wildcardStarPos = starPos;
             _wildcardQualifier = qualifier ?? string.Empty;
             _wildcardPending = true;
@@ -1296,7 +1335,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                         new AkmlSql.Core.Ipc.Messages.WildcardExpansionRequest
                         {
                             SessionId = _sessionId,
-                            CursorOffset = starPos,
+                            CursorOffset = effectiveOffset,
                             DocumentText = docText,
                             Qualifier = qualifier
                         },

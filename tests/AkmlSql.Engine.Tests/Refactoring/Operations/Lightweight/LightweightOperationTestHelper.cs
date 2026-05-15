@@ -1,3 +1,4 @@
+using AkmlSql.Core.Config;
 using AkmlSql.Engine.Parser;
 using AkmlSql.Engine.Refactoring;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
@@ -21,8 +22,11 @@ internal static class LightweightOperationTestHelper
     /// <summary>
     /// Creates a RefactoringContext with the given SQL, a parsed AST and token stream.
     /// No schema cache. No selection.
+    /// Pass <paramref name="intelliSense"/> to inject explicit policy flags
+    /// (e.g. <c>InsertOptions.IncludeColumns = false</c>); when null, operations
+    /// fall back to <c>ConfigManager.Load()</c>.
     /// </summary>
-    public static RefactoringContext CreateContext(string sql)
+    public static RefactoringContext CreateContext(string sql, IntelliSenseSettings? intelliSense = null)
     {
         var script = ParserService.Parse(sql, out _)
                      ?? new TSqlScript();
@@ -36,7 +40,8 @@ internal static class LightweightOperationTestHelper
             SelectionStart  = 0,
             SelectionLength = 0,
             SessionId       = "test",
-            SchemaCache     = null
+            SchemaCache     = null,
+            IntelliSense    = intelliSense
         };
     }
 

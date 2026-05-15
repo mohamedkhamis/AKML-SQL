@@ -14,6 +14,7 @@ public class WildcardExpansionHandler
 {
     private readonly TsqlParserService _parserService;
     private readonly AliasResolver _aliasResolver = new();
+    private readonly CteResolver _cteResolver = new();
 
     public WildcardExpansionHandler(TsqlParserService parserService)
     {
@@ -35,6 +36,32 @@ public class WildcardExpansionHandler
         if (aliases.Count == 0)
         {
             return new WildcardExpansionResponse { Success = false, ErrorMessage = "No tables found in FROM clause" };
+        }
+
+        // Resolve CTE names → projected column lists. When the FROM clause references
+        // a CTE (WITH cte AS (SELECT a, b FROM t) SELECT * FROM cte), expanding `*`
+        // must produce the CTE's projected columns (a, b), NOT the underlying table's
+        // columns (which would mistakenly include columns the CTE didn't project).
+        var script = _parserService.ParseWithSuffix(documentText, out _);
+        var cteColumns = _cteResolver.ResolveCtes(script, cursorOffset);
+
+        // Recovery: if the full document failed to yield any CTEs but we DO have
+        // FROM-clause aliases (so the cursor is in a real FROM), parse only the
+        // text BEFORE the cursor. The prefix typically ends at "SELECT  *" which
+        // is incomplete on its own, but the WITH clause that precedes it is
+        // syntactically well-formed and CteResolver can extract its columns.
+        // This handles SQL Prompt parity for the common "broken stuff after the
+        // statement I'm working on" pattern.
+        if (cteColumns.Count == 0 && cursorOffset > 0 && cursorOffset <= documentText.Length)
+        {
+            var prefix = documentText.Substring(0, cursorOffset);
+            var prefixScript = _parserService.ParseWithSuffix(prefix, out _);
+            if (prefixScript != null)
+            {
+                // Position the cursor at end-of-prefix — all CTEs in the WITH
+                // clause are visible there because the cursor lies past their bodies.
+                cteColumns = _cteResolver.ResolveCtes(prefixScript, prefix.Length);
+            }
         }
 
         // Filter by qualifier if specified
@@ -70,6 +97,27 @@ public class WildcardExpansionHandler
             // Skip derived tables
             if (tableName.StartsWith("(derived:"))
                 continue;
+
+            // CTE: AliasResolver sees WITH cte AS (...) SELECT * FROM cte as a
+            // NamedTableReference {Schema=dbo, Table=cte}, so the alias arrives here
+            // looking like a real table. Check the CTE map first — if it matches,
+            // expand to the CTE's projected columns (no type info available).
+            if (cteColumns.TryGetValue(tableName, out var cteCols) && cteCols.Count > 0)
+            {
+                var cteWildcardColumns = cteCols.Select(name => new WildcardColumn
+                {
+                    ColumnName = name,
+                    TypeDisplay = "(CTE column)"
+                }).ToArray();
+
+                tableGroups.Add(new WildcardTableGroup
+                {
+                    TableName = tableName,
+                    Qualifier = aliasOrTable,
+                    Columns = cteWildcardColumns
+                });
+                continue;
+            }
 
             var dbObject = cache.FindObject(schemaName, tableName);
             if (dbObject == null)
@@ -120,16 +168,20 @@ public class WildcardExpansionHandler
     {
         var aliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-        // Try AST-based resolution first
+        // Use the scope-aware resolver: for SELECT * FROM Cte1, return only Cte1 —
+        // not the tables that Cte1's body references, nor sibling CTE bodies, nor
+        // unrelated subqueries. Wildcard expansion needs the cursor's immediate FROM
+        // scope, not every NamedTableReference in the statement.
         var script = _parserService.ParseWithSuffix(documentText, out _);
         if (script != null)
         {
-            var resolved = _aliasResolver.ResolveAliases(script, cursorOffset);
+            var resolved = _aliasResolver.ResolveAliasesInCursorScope(script, cursorOffset);
             foreach (var (alias, tableRef) in resolved)
                 aliases[alias] = tableRef.FullName;
         }
 
-        // Fallback to token-based if AST produced nothing
+        // Fallback to token-based if AST produced nothing (e.g. partial SQL that
+        // can't be parsed). Token-based extraction is already cursor-position-aware.
         if (aliases.Count == 0)
         {
             var tokens = _parserService.GetTokenStream(documentText);

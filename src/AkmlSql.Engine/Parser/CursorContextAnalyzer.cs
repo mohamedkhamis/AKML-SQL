@@ -64,6 +64,14 @@ public class CursorContext
     public string SessionId { get; set; } = string.Empty;
     public Dictionary<string, string> AvailableAliases { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, List<string>> AvailableCtes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// For each CTE in scope, the list of underlying tables referenced in the CTE
+    /// body's FROM/JOIN clauses. Used by JoinOnFkProvider to look up real FK
+    /// relationships between CTE pairs by walking through to their source tables.
+    /// </summary>
+    public Dictionary<string, List<(string Schema, string Table)>> AvailableCteSources { get; set; } =
+        new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, List<string>> AvailableTempTables { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, string> AvailableVariables { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }

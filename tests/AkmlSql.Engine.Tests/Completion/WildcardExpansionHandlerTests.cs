@@ -181,4 +181,128 @@ public class WildcardExpansionHandlerTests
         Assert.Single(result.Tables);
         Assert.Equal("Orders", result.Tables[0].TableName);
     }
+
+    [Fact]
+    public void Cte_SelectStarFromCte_ReturnsOnlyProjectedColumns()
+    {
+        // CTE projects 2 of Orders' 3 columns. Wildcard expansion of `SELECT *
+        // FROM cte1` must return only the projected columns, NOT all columns of
+        // the underlying Orders table.
+        var sql = "WITH cte1 AS (SELECT OrderId, CustomerName FROM Orders) SELECT * FROM cte1";
+        int starPos = sql.IndexOf("SELECT *", System.StringComparison.Ordinal) + "SELECT ".Length;
+        var result = _handler.Handle(sql, starPos, qualifier: null, _cache);
+
+        Assert.True(result.Success);
+        Assert.Single(result.Tables);
+        Assert.Equal("cte1", result.Tables[0].TableName);
+        Assert.Equal(2, result.Tables[0].Columns.Length);
+        Assert.Equal("OrderId", result.Tables[0].Columns[0].ColumnName);
+        Assert.Equal("CustomerName", result.Tables[0].Columns[1].ColumnName);
+    }
+
+    [Fact]
+    public void Cte_TwoCtes_SelectStarFromFirst_ReturnsOnlyFirstCteColumns()
+    {
+        // Two CTEs defined; SELECT * FROM cte1 must NOT leak cte2's columns or
+        // the underlying Orders/OrderDetails columns. Only cte1's projection.
+        var sql =
+            "WITH cte1 AS (SELECT OrderId, CustomerName FROM Orders), " +
+            "cte2 AS (SELECT DetailId, Quantity FROM OrderDetails) " +
+            "SELECT * FROM cte1";
+        int starPos = sql.LastIndexOf("SELECT *", System.StringComparison.Ordinal) + "SELECT ".Length;
+        var result = _handler.Handle(sql, starPos, qualifier: null, _cache);
+
+        Assert.True(result.Success);
+        Assert.Single(result.Tables);
+        Assert.Equal("cte1", result.Tables[0].TableName);
+        Assert.Equal(2, result.Tables[0].Columns.Length);
+        Assert.Equal("OrderId", result.Tables[0].Columns[0].ColumnName);
+        Assert.Equal("CustomerName", result.Tables[0].Columns[1].ColumnName);
+    }
+
+    [Fact]
+    public void Cte_UserExactRepro_MultiLineSingleCte_ReturnsCte1Projection()
+    {
+        // Exact format the user pastes — multi-line CTE with leading whitespace.
+        var sql =
+            "WITH Cte1 AS (\n" +
+            "SELECT  OrderId,\n" +
+            "        CustomerName\n" +
+            "FROM Orders\n" +
+            ")\n" +
+            "SELECT  *\n" +
+            "FROM Cte1";
+        int starPos = sql.IndexOf("SELECT  *", System.StringComparison.Ordinal) + "SELECT  ".Length;
+        var result = _handler.Handle(sql, starPos, qualifier: null, _cache);
+
+        // Diagnostic: dump what we got
+        if (!result.Success || result.Tables == null || result.Tables.Length == 0)
+        {
+            Assert.Fail($"Expected success with Cte1 group; got Success={result.Success}, " +
+                        $"ErrorMessage='{result.ErrorMessage}', Tables.Length={result.Tables?.Length ?? -1}");
+        }
+        var cte1Group = System.Linq.Enumerable.FirstOrDefault(
+            result.Tables, t => string.Equals(t.TableName, "Cte1", System.StringComparison.OrdinalIgnoreCase));
+        if (cte1Group == null)
+        {
+            var groupNames = string.Join(", ",
+                System.Linq.Enumerable.Select(result.Tables, t => t.TableName));
+            Assert.Fail($"No Cte1 group; got groups: [{groupNames}]");
+        }
+        Assert.Equal(2, cte1Group!.Columns.Length);
+    }
+
+    // SQL Prompt parity: when invalid content after the cursor breaks the full
+    // parse, the handler retries by parsing only the prefix up to the cursor.
+    // The prefix's WITH clause is syntactically self-contained even when what
+    // follows is broken, so CteResolver can extract the column projections from
+    // the prefix-parsed script.
+    [Fact]
+    public void Cte_UserMalformedSqlRepro_ReturnsCte1Projection()
+    {
+        // Verbatim repro of the user's reported SQL where they have an incomplete
+        // construct: a comma after FROM Cte1 followed by what looks like a second
+        // CTE definition but in the wrong place (CTE syntax doesn't work inside
+        // FROM). The parser's recovery may interpret "Cte2 AS (...)" as a derived
+        // table joined to Cte1; the cursor at the outer * must still expand to
+        // Cte1's projection only.
+        var sql =
+            "WITH Cte1 AS (SELECT OrderId, CustomerName FROM Orders)\n" +
+            "SELECT *\n" +
+            "FROM Cte1\n" +
+            ",\n" +
+            "Cte2 AS (SELECT DetailId, Quantity FROM OrderDetails)\n" +
+            "SELECT DetailId, Quantity FROM Cte2;";
+        int starPos = sql.IndexOf("SELECT *", System.StringComparison.Ordinal) + "SELECT ".Length;
+        var result = _handler.Handle(sql, starPos, qualifier: null, _cache);
+
+        Assert.True(result.Success);
+        Assert.NotNull(result.Tables);
+        // The Cte1 group must be present and must contain exactly the projected columns.
+        var cte1Group = System.Linq.Enumerable.FirstOrDefault(
+            result.Tables, t => string.Equals(t.TableName, "Cte1", System.StringComparison.OrdinalIgnoreCase));
+        Assert.NotNull(cte1Group);
+        Assert.Equal(2, cte1Group!.Columns.Length);
+        Assert.Equal("OrderId", cte1Group.Columns[0].ColumnName);
+        Assert.Equal("CustomerName", cte1Group.Columns[1].ColumnName);
+    }
+
+    [Fact]
+    public void Cte_TwoCtes_SelectStarFromSecond_ReturnsOnlySecondCteColumns()
+    {
+        // Same setup as above, but SELECT * FROM cte2 → only cte2's projection.
+        var sql =
+            "WITH cte1 AS (SELECT OrderId, CustomerName FROM Orders), " +
+            "cte2 AS (SELECT DetailId, Quantity FROM OrderDetails) " +
+            "SELECT * FROM cte2";
+        int starPos = sql.LastIndexOf("SELECT *", System.StringComparison.Ordinal) + "SELECT ".Length;
+        var result = _handler.Handle(sql, starPos, qualifier: null, _cache);
+
+        Assert.True(result.Success);
+        Assert.Single(result.Tables);
+        Assert.Equal("cte2", result.Tables[0].TableName);
+        Assert.Equal(2, result.Tables[0].Columns.Length);
+        Assert.Equal("DetailId", result.Tables[0].Columns[0].ColumnName);
+        Assert.Equal("Quantity", result.Tables[0].Columns[1].ColumnName);
+    }
 }

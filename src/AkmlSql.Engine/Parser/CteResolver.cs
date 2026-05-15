@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
+using ScriptDomTableReference = Microsoft.SqlServer.TransactSql.ScriptDom.TableReference;
 // ReSharper disable UnusedMember.Global
 
 namespace AkmlSql.Engine.Parser;
@@ -13,6 +14,89 @@ namespace AkmlSql.Engine.Parser;
 [SuppressMessage("ReSharper", "GrammarMistakeInComment")]
 public class CteResolver
 {
+    /// <summary>
+    /// Resolve CTEs visible at the cursor, returning each CTE's underlying source
+    /// tables (the tables referenced in the CTE body's FROM/JOIN clauses). Used by
+    /// <c>JoinOnFkProvider</c> to look up FK relationships between two CTEs by
+    /// walking through to the real tables they're built on.
+    /// </summary>
+    public Dictionary<string, List<(string Schema, string Table)>> ResolveCteSources(
+        TSqlScript? script, int cursorOffset)
+    {
+        var result = new Dictionary<string, List<(string, string)>>(StringComparer.OrdinalIgnoreCase);
+        if (script == null) return result;
+
+        foreach (var batch in script.Batches)
+        {
+            if (cursorOffset < batch.StartOffset ||
+                cursorOffset > batch.StartOffset + batch.FragmentLength)
+                continue;
+
+            var visitor = new CteVisitor();
+            batch.Accept(visitor);
+
+            foreach (var cte in visitor.Ctes)
+            {
+                var qe = cte.QueryExpression;
+                if (qe != null &&
+                    cursorOffset > qe.StartOffset &&
+                    cursorOffset <= qe.StartOffset + qe.FragmentLength)
+                    continue;
+
+                var sources = new List<(string, string)>();
+                CollectNamedTablesFromQuery(qe, sources);
+                result[cte.ExpressionName.Value] = sources;
+            }
+        }
+
+        return result;
+    }
+
+    private static void CollectNamedTablesFromQuery(
+        QueryExpression? qe, List<(string Schema, string Table)> sources)
+    {
+        if (qe is QuerySpecification qs && qs.FromClause != null)
+        {
+            foreach (var tref in qs.FromClause.TableReferences)
+                CollectNamedTablesFromTableRef(tref, sources);
+        }
+        else if (qe is BinaryQueryExpression bin)
+        {
+            CollectNamedTablesFromQuery(bin.FirstQueryExpression, sources);
+            CollectNamedTablesFromQuery(bin.SecondQueryExpression, sources);
+        }
+        else if (qe is QueryParenthesisExpression paren)
+        {
+            CollectNamedTablesFromQuery(paren.QueryExpression, sources);
+        }
+    }
+
+    private static void CollectNamedTablesFromTableRef(
+        ScriptDomTableReference tref, List<(string Schema, string Table)> sources)
+    {
+        switch (tref)
+        {
+            case NamedTableReference named:
+                var name = named.SchemaObject?.BaseIdentifier?.Value;
+                if (!string.IsNullOrEmpty(name))
+                {
+                    var schema = named.SchemaObject?.SchemaIdentifier?.Value ?? "dbo";
+                    sources.Add((schema, name!));
+                }
+                return;
+            case QualifiedJoin qj:
+                CollectNamedTablesFromTableRef(qj.FirstTableReference, sources);
+                CollectNamedTablesFromTableRef(qj.SecondTableReference, sources);
+                return;
+            case UnqualifiedJoin uj:
+                CollectNamedTablesFromTableRef(uj.FirstTableReference, sources);
+                CollectNamedTablesFromTableRef(uj.SecondTableReference, sources);
+                return;
+            // QueryDerivedTable and TVF — skip; their inner contents are not
+            // direct sources of the CTE projection.
+        }
+    }
+
     /// <summary>
     /// Resolve all CTEs visible at the given cursor offset.
     /// Returns a dictionary of CTE name → column names.

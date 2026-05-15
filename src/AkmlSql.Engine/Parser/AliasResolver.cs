@@ -1,4 +1,5 @@
 using Microsoft.SqlServer.TransactSql.ScriptDom;
+using ScriptDomTableReference = Microsoft.SqlServer.TransactSql.ScriptDom.TableReference;
 
 namespace AkmlSql.Engine.Parser;
 
@@ -62,6 +63,100 @@ public class AliasResolver
         }
 
         return aliases;
+    }
+
+    /// <summary>
+    /// Like <see cref="ResolveAliases"/>, but restricted to the FROM clause of the
+    /// QuerySpecification that immediately contains the cursor. Used by the wildcard
+    /// expansion handler so that <c>SELECT * FROM Cte1</c> sees only <c>Cte1</c> —
+    /// not the tables referenced inside <c>Cte1</c>'s own body, sibling CTE bodies,
+    /// or unrelated subqueries elsewhere in the same statement.
+    /// </summary>
+    public Dictionary<string, TableReference> ResolveAliasesInCursorScope(
+        TSqlScript? script, int cursorOffset)
+    {
+        var aliases = new Dictionary<string, TableReference>(StringComparer.OrdinalIgnoreCase);
+        if (script == null) return aliases;
+
+        // Find the smallest QuerySpecification whose extent contains the cursor.
+        var finder = new CursorScopeFinder(cursorOffset);
+        foreach (var batch in script.Batches)
+        {
+            if (cursorOffset < batch.StartOffset ||
+                cursorOffset > batch.StartOffset + batch.FragmentLength)
+                continue;
+            batch.Accept(finder);
+        }
+
+        var cursorSpec = finder.Result;
+        if (cursorSpec?.FromClause == null) return aliases;
+
+        // Walk only the immediate TableReferences of this FROM clause. Recurse into
+        // JoinTableReferences (joins are siblings at the same scope) but NOT into
+        // QueryDerivedTables — a derived table's inner FROM is a separate scope.
+        foreach (var tableRef in cursorSpec.FromClause.TableReferences)
+            CollectFromTableRef(tableRef, aliases);
+
+        return aliases;
+    }
+
+    private static void CollectFromTableRef(
+        ScriptDomTableReference tref, Dictionary<string, TableReference> aliases)
+    {
+        switch (tref)
+        {
+            case NamedTableReference named:
+            {
+                var tableName = named.SchemaObject?.BaseIdentifier?.Value;
+                if (tableName == null) return;
+                var schemaName = named.SchemaObject?.SchemaIdentifier?.Value ?? "dbo";
+                var alias = named.Alias?.Value;
+                var key = !string.IsNullOrEmpty(alias) ? alias! : tableName;
+                aliases[key] = new TableReference { SchemaName = schemaName, TableName = tableName };
+                return;
+            }
+            case QueryDerivedTable derived:
+            {
+                // Collect the alias only — do NOT walk into derived.QueryExpression.
+                var alias = derived.Alias?.Value;
+                if (!string.IsNullOrEmpty(alias))
+                    aliases[alias!] = new TableReference { SchemaName = string.Empty, TableName = $"(derived:{alias})" };
+                return;
+            }
+            case SchemaObjectFunctionTableReference tvf:
+            {
+                var name = tvf.SchemaObject?.BaseIdentifier?.Value;
+                if (name == null) return;
+                var schemaName = tvf.SchemaObject?.SchemaIdentifier?.Value ?? "dbo";
+                var alias = tvf.Alias?.Value;
+                var key = !string.IsNullOrEmpty(alias) ? alias! : name;
+                aliases[key] = new TableReference { SchemaName = schemaName, TableName = name };
+                return;
+            }
+            case JoinTableReference join:
+            {
+                CollectFromTableRef(join.FirstTableReference, aliases);
+                CollectFromTableRef(join.SecondTableReference, aliases);
+                return;
+            }
+        }
+    }
+
+    private class CursorScopeFinder : TSqlFragmentVisitor
+    {
+        private readonly int _cursor;
+        public QuerySpecification? Result { get; private set; }
+        public CursorScopeFinder(int cursor) => _cursor = cursor;
+
+        public override void Visit(QuerySpecification node)
+        {
+            if (_cursor >= node.StartOffset && _cursor <= node.StartOffset + node.FragmentLength)
+            {
+                // The default visitor walks children after Visit(). The deepest match
+                // wins because we keep overwriting on each match.
+                Result = node;
+            }
+        }
     }
 
     private class AliasVisitor : TSqlFragmentVisitor

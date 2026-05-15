@@ -42,10 +42,13 @@ public class ColumnProvider : ICompletionProvider
             return false;
         }
 
-        // ── Path 1: dot-qualified completion ("alias." / "table.") ──
+        // ── Path 1: dot-qualified completion ("alias." / "table." / "cte.") ──
         if (context.PrecedingDot && !string.IsNullOrEmpty(context.DotPrefix))
         {
             if (context.AvailableAliases.ContainsKey(context.DotPrefix))
+                return true;
+
+            if (context.AvailableCtes.ContainsKey(context.DotPrefix))
                 return true;
 
             if (cache.FindObject("dbo", context.DotPrefix) != null)
@@ -93,6 +96,31 @@ public class ColumnProvider : ICompletionProvider
 
         foreach (var (alias, fullTableName) in context.AvailableAliases)
         {
+            // CTE branch: if the alias resolves to a CTE in scope, yield its
+            // projected columns and skip the schema-cache lookup. The continue
+            // applies regardless of column count — a token-recovered CTE with
+            // no columns yields nothing, but we still avoid wrongly resolving
+            // the name to a same-named real table (or logging a confusing
+            // "table not in cache" warning).
+            if (context.AvailableCtes.TryGetValue(alias, out var cteCols))
+            {
+                foreach (var colName in cteCols)
+                {
+                    var displayText = multiTable ? $"{alias}.{colName}" : colName;
+                    if (!seenColumns.Add(displayText)) continue;
+                    yield return new CompletionItem
+                    {
+                        DisplayText   = displayText,
+                        InsertText    = displayText,
+                        ObjectType    = (int)CompletionObjectType.Column,
+                        SecondaryText = "(CTE column) • " + alias,
+                        SourceObject  = alias,
+                        SortPriority  = 30
+                    };
+                }
+                continue;
+            }
+
             var parts = fullTableName.Split('.');
             var schemaName = parts.Length >= 2 ? parts[0] : "dbo";
             var tableName = parts.Length >= 2 ? parts[1] : parts[0];
@@ -161,6 +189,30 @@ public class ColumnProvider : ICompletionProvider
     {
         string schemaName;
         string tableName;
+
+        // CTE branch: if the dot-prefix is a CTE name (e.g. "Cte1.|"), yield its
+        // projected columns and stop. CTEs aren't in the schema cache, so falling
+        // through to FindObject would either return nothing or — worse — return a
+        // real table that happens to share the CTE's name. We yield-break even if
+        // the column list is empty (token-based CTE fallback gives names without
+        // columns when the parser can't recover); silent no-result is correct
+        // there, schema-cache lookup is not.
+        if (context.AvailableCtes.TryGetValue(context.DotPrefix, out var cteCols))
+        {
+            foreach (var colName in cteCols)
+            {
+                yield return new CompletionItem
+                {
+                    DisplayText   = colName,
+                    InsertText    = colName,
+                    ObjectType    = (int)CompletionObjectType.Column,
+                    SecondaryText = "(CTE column)",
+                    SourceObject  = context.DotPrefix,
+                    SortPriority  = 30
+                };
+            }
+            yield break;
+        }
 
         if (context.AvailableAliases.TryGetValue(context.DotPrefix, out var fullTableName))
         {

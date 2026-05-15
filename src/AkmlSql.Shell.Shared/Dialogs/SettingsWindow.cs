@@ -13,6 +13,7 @@ using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using AkmlSql.Core.Config;
+using AkmlSql.Shell.Shared.Dialogs.Pages;
 using AkmlSql.Shell.Shared.Ui.Theme;
 using Serilog;
 using Constants = AkmlSql.Core.Constants;
@@ -29,95 +30,13 @@ namespace AkmlSql.Shell.Shared.Dialogs
     internal sealed class SettingsWindow
     {
         // ─── Theme brush set ────────────────────────────────────────────────
-        /// <summary>
-        /// Holds all frozen brushes for a single theme variant (Dark or Light).
-        /// </summary>
-        private sealed class ThemeBrushSet
-        {
-            public SolidColorBrush Main { get; }
-            public SolidColorBrush Sidebar { get; }
-            public SolidColorBrush Panel { get; }
-            public SolidColorBrush Input { get; }
-            public SolidColorBrush InputReadOnly { get; }
-            public SolidColorBrush Button { get; }
-            public SolidColorBrush ButtonHover { get; }
-            public SolidColorBrush Selected { get; }
-            public SolidColorBrush Border { get; }
-            public SolidColorBrush ComboBorder { get; }
-            public SolidColorBrush FgPrimary { get; }
-            public SolidColorBrush FgSecondary { get; }
-            public SolidColorBrush FgAccent { get; }
-            public SolidColorBrush FgWhite { get; }
-            public SolidColorBrush SelectedText { get; }
-            public SolidColorBrush Sep { get; }
-            public SolidColorBrush Transparent { get; }
-            public SolidColorBrush TreeHover { get; }
-            public SolidColorBrush Caret { get; }
-
-            private ThemeBrushSet(
-                Color main, Color sidebar, Color panel, Color input, Color inputReadOnly,
-                Color button, Color buttonHover, Color selected,
-                Color border, Color comboBorder,
-                Color fgPrimary, Color fgSecondary, Color fgAccent, Color fgWhite,
-                Color selectedText, Color sep, Color treeHover, Color caret)
-            {
-                Main = Freeze(new SolidColorBrush(main));
-                Sidebar = Freeze(new SolidColorBrush(sidebar));
-                Panel = Freeze(new SolidColorBrush(panel));
-                Input = Freeze(new SolidColorBrush(input));
-                InputReadOnly = Freeze(new SolidColorBrush(inputReadOnly));
-                Button = Freeze(new SolidColorBrush(button));
-                ButtonHover = Freeze(new SolidColorBrush(buttonHover));
-                Selected = Freeze(new SolidColorBrush(selected));
-                Border = Freeze(new SolidColorBrush(border));
-                ComboBorder = Freeze(new SolidColorBrush(comboBorder));
-                FgPrimary = Freeze(new SolidColorBrush(fgPrimary));
-                FgSecondary = Freeze(new SolidColorBrush(fgSecondary));
-                FgAccent = Freeze(new SolidColorBrush(fgAccent));
-                FgWhite = Freeze(new SolidColorBrush(fgWhite));
-                SelectedText = Freeze(new SolidColorBrush(selectedText));
-                Sep = Freeze(new SolidColorBrush(sep));
-                Transparent = Freeze(new SolidColorBrush(Colors.Transparent));
-                TreeHover = Freeze(new SolidColorBrush(treeHover));
-                Caret = Freeze(new SolidColorBrush(caret));
-            }
-
-            // ── Theme palettes derived from the central ThemePalette (single source of truth) ──
-            // Each ThemeBrushSet field maps to a semantic token from contracts/theme-tokens.md.
-            // Spec 016 T017: chrome literals removed; values now flow from AkmlSql.Shell.Shared.Ui.Theme.ThemePalette.
-            public static readonly ThemeBrushSet Dark = FromPalette(AkmlSql.Shell.Shared.Ui.Theme.ThemePalette.Dark);
-            public static readonly ThemeBrushSet Light = FromPalette(AkmlSql.Shell.Shared.Ui.Theme.ThemePalette.Light);
-
-            private static ThemeBrushSet FromPalette(AkmlSql.Shell.Shared.Ui.Theme.ThemePalette p)
-            {
-                Color C(string token) => ((SolidColorBrush)p.Brushes[token]).Color;
-                return new ThemeBrushSet(
-                    main:          C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.SurfaceCanvas),
-                    sidebar:       C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.SurfaceSidebar),
-                    panel:         C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.SurfacePanel),
-                    input:         C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.SurfaceInput),
-                    inputReadOnly: C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.SurfaceInputReadOnly),
-                    button:        C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.SurfaceElevated),
-                    buttonHover:   C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.SurfaceHover),
-                    selected:      C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.AccentPrimary),
-                    border:        C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.BorderDefault),
-                    comboBorder:   C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.BorderDefault),
-                    fgPrimary:     C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.TextPrimary),
-                    fgSecondary:   C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.TextSecondary),
-                    fgAccent:      C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.TextLink),
-                    fgWhite:       C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.TextPrimary),
-                    selectedText:  C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.TextOnAccent),
-                    sep:           C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.BorderSubtle),
-                    treeHover:     C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.SurfaceHover),
-                    caret:         C(AkmlSql.Shell.Shared.Ui.Theme.ThemeTokens.TextPrimary)
-                );
-            }
-        }
+        // PageTheme was lifted to Pages/PageTheme.cs (Phase 2 B.1) so per-page
+        // builders can consume it without depending on SettingsWindow internals.
 
         private static SolidColorBrush Freeze(SolidColorBrush b) { b.Freeze(); return b; }
 
         // ─── Active theme ───────────────────────────────────────────────────
-        private readonly ThemeBrushSet _theme;
+        private readonly PageTheme _theme;
 
         // ─── State ───────────────────────────────────────────────────────────
         private Window? _window;
@@ -125,6 +44,36 @@ namespace AkmlSql.Shell.Shared.Dialogs
         private ContentControl? _contentHost;
         private TreeView? _navTree;
         private readonly Dictionary<string, UIElement> _pages = new();
+
+        // ─── Page-split builders (Phase 2 B.2+) ──────────────────────────────
+        // Pages migrated to per-file IPageBuilder implementations. Keys not present
+        // here fall back to the legacy inline Build*Page method via the BuildPages
+        // dispatch loop. Cleanup of the legacy methods happens in B.17 once all
+        // 15 pages have moved.
+        private readonly Dictionary<string, IPageBuilder> _pageBuilders = new()
+        {
+            ["Snippets"] = new SnippetsPage(),
+            ["Code Analysis"] = new CodeAnalysisPage(),
+            ["Refactoring"] = new RefactoringPage(),
+            ["Navigation"] = new NavigationPage(),
+            ["Grid"] = new GridPage(),
+            ["General"] = new GeneralPage(),
+            ["Safety"] = new SafetyPage(),
+            ["Execution"] = new ExecutionPage(),
+            ["Editor"] = new EditorPage(),
+            ["Schema Cache"] = new SchemaCachePage(),
+            ["History"] = new HistoryPage(),
+            ["AI Assistance"] = new AiAssistancePage(),
+            ["Formatting"] = new FormattingPage(),
+            ["Tabs & UI"] = new TabsPage(),
+            ["IntelliSense"] = new IntelliSensePage(),
+            ["SuggestionTypes"] = new SuggestionTypesPage(),
+            ["Qualification"] = new QualificationPage(),
+            ["InsertOptions"] = new InsertStatementsPage(),
+            ["JoinOptions"] = new JoinCompletionPage(),
+            ["Labs"] = new LabsPage(),
+        };
+        private readonly Dictionary<string, IPageControls> _pageControlsByKey = new();
 
         // Track whether user confirmed via OK
         private bool _dialogResult;
@@ -158,154 +107,50 @@ namespace AkmlSql.Shell.Shared.Dialogs
         // ─── Control references (for Load / Save) ───────────────────────────
 
         // General
-        private CheckBox? _chkAutoUpdate;
-        private CheckBox? _chkTelemetry;
-        private ComboBox? _cboTheme;
+        // General controls migrated to Pages/GeneralPage.cs (Phase 2 B.7).
 
         // IntelliSense
-        private CheckBox? _chkIsEnabled;
-        private CheckBox? _chkAutoTrigger;
-        private CheckBox? _chkAfterDot;
-        private CheckBox? _chkFuzzyMatch;
-        private CheckBox? _chkShowDataTypes;
-        private CheckBox? _chkShowNullability;
-        private CheckBox? _chkShowPkFk;
-        private CheckBox? _chkAutoAlias;
-        private CheckBox? _chkJoinAssist;
-        private CheckBox? _chkDisableNativeIs;
-        private Slider? _sldTriggerDelay;
-        private TextBlock? _lblTriggerDelayValue;
-        private Slider? _sldMaxSuggestions;
-        private TextBlock? _lblMaxSuggestionsValue;
-        private ComboBox? _cboKeywordCase;
+        // IntelliSense controls migrated to Pages/IntelliSensePage.cs (Phase 2 B.16).
 
         // Schema Cache
-        private CheckBox? _chkCacheAutoRefresh;
-        private CheckBox? _chkDetectDdl;
-        private CheckBox? _chkLazyLoadColumns;
-        private CheckBox? _chkPersistToDisk;
-        private Slider? _sldRefreshInterval;
-        private TextBlock? _lblRefreshIntervalValue;
-        private Slider? _sldMaxDatabases;
-        private TextBlock? _lblMaxDatabasesValue;
+        // Schema Cache controls migrated to Pages/SchemaCachePage.cs (Phase 2 B.11).
 
         // Formatting
-        private CheckBox? _chkFmtEnabled;
-        private CheckBox? _chkFormatOnPaste;
-        private CheckBox? _chkFormatOnSave;
-        private CheckBox? _chkFormatOnDelimiter;
-        private CheckBox? _chkConfirmBulk;
-        private CheckBox? _chkCreateBackups;
-        private CheckBox? _chkRespectNoformat;
-        private CheckBox? _chkSemanticValidation;
+        // Formatting controls migrated to Pages/FormattingPage.cs (Phase 2 B.14).
 
         // Snippets
-        private CheckBox? _chkSnipEnabled;
-        private CheckBox? _chkSnipShowInCompletion;
-        private CheckBox? _chkSnipFormatOnExpand;
-        private CheckBox? _chkSnipContextFilter;
-        private CheckBox? _chkSnipTrackUsage;
-        private TextBox? _txtPersonalFolder;
-        private TextBox? _txtTeamFolder;
+        // Snippets controls migrated to Pages/SnippetsPage.cs (Phase 2 B.2);
+        // owned by the SnippetsControls record stored in _pageControlsByKey["Snippets"].
 
         // Code Analysis
-        private CheckBox? _chkAnalysisEnabled;
-        private CheckBox? _chkAnalysisRunOnType;
-        private CheckBox? _chkAnalysisRunOnSave;
-        private CheckBox? _chkAnalysisShowInErrorList;
+        // Code Analysis controls migrated to Pages/CodeAnalysisPage.cs (Phase 2 B.3).
 
         // Refactoring
-        private CheckBox? _chkRefPreviewBeforeApply;
-        private CheckBox? _chkRefCreateBackups;
-        private CheckBox? _chkRefFormatAfterRefactor;
-        private CheckBox? _chkRefIncludeCommentsInRename;
-        private CheckBox? _chkRefIncludeStringLiteralsInRename;
-        private ComboBox? _cboRefRenameScope;
+        // Refactoring controls migrated to Pages/RefactoringPage.cs (Phase 2 B.4).
 
         // History
-        private CheckBox? _chkHistEnabled;
-        private CheckBox? _chkHistEncryptAtRest;
-        private CheckBox? _chkHistRecordFailures;
-        private CheckBox? _chkHistDeduplication;
-        private Slider? _sldHistRetentionDays;
-        private TextBlock? _lblHistRetentionValue;
-        private Slider? _sldHistMaxEntries;
-        private TextBlock? _lblHistMaxEntriesValue;
+        // History controls migrated to Pages/HistoryPage.cs (Phase 2 B.12).
 
         // Tabs
-        private CheckBox? _chkTabColoringEnabled;
-        private CheckBox? _chkTabGradientColors;
-        private ListBox? _lstColoringRules;
-        private Button? _btnAddRule;
-        private Button? _btnEditRule;
-        private Button? _btnRemoveRule;
-        private CheckBox? _chkTabSessionRecovery;
-        private Slider? _sldTabAutoSaveInterval;
-        private TextBlock? _lblTabAutoSaveValue;
-        private Slider? _sldTabMaxClosedTabs;
-        private TextBlock? _lblTabMaxClosedTabsValue;
-        private TextBox? _txtTabCustomWindowTitle;
-        private ComboBox? _cboTabRestoreOnStartup;
+        // Tabs & UI controls migrated to Pages/TabsPage.cs (Phase 2 B.15).
 
         // Safety
-        private CheckBox? _chkSafetyProductionWarning;
-        private CheckBox? _chkSafetyDeleteWithoutWhere;
-        private CheckBox? _chkSafetyUpdateWithoutWhere;
-        private CheckBox? _chkSafetyDropConfirmation;
-        private CheckBox? _chkSafetyTruncateConfirmation;
-        private CheckBox? _chkSafetyTransactionReminder;
-        private Slider? _sldSafetyTransReminderInterval;
-        private TextBlock? _lblSafetyTransReminderValue;
+        // Safety controls migrated to Pages/SafetyPage.cs (Phase 2 B.8).
 
         // AI
-        private CheckBox? _chkAiTextToSql;
-        private CheckBox? _chkAiExplain;
-        private CheckBox? _chkAiFix;
-        private CheckBox? _chkAiOptimize;
-        private CheckBox? _chkAiIndexSuggestions;
-        private CheckBox? _chkAiChatPanel;
-        private CheckBox? _chkAiInlineCompletion;
-        private CheckBox? _chkAiAutoFixOnError;
-        private ComboBox? _cboAiProvider;
-        private TextBox? _txtAiModel;
-        private TextBox? _txtAiApiKey;
-        private TextBox? _txtAiEndpoint;
-        private ComboBox? _cboAiPrivacyMode;
-        private Slider? _sldAiMaxTokens;
-        private TextBlock? _lblAiMaxTokensValue;
-        private Slider? _sldAiTemperature;
-        private TextBlock? _lblAiTemperatureValue;
-        private Slider? _sldAiTimeout;
-        private TextBlock? _lblAiTimeoutValue;
-        private Slider? _sldAiRetries;
-        private TextBlock? _lblAiRetriesValue;
+        // AI Assistance controls migrated to Pages/AiAssistancePage.cs (Phase 2 B.13).
 
         // Grid
-        private CheckBox? _chkGridAggregates;
-        private CheckBox? _chkGridNullHighlight;
-        private CheckBox? _chkGridRowNumbers;
-        private CheckBox? _chkGridFreezeHeaders;
-        private CheckBox? _chkGridExcelLargeNumberAsText;
+        // Grid controls migrated to Pages/GridPage.cs (Phase 2 B.6).
 
         // Editor Productivity
-        private CheckBox? _chkEdHighlightOccurrences;
-        private CheckBox? _chkEdBracketMatching;
-        private CheckBox? _chkEdNamedRegions;
-        private CheckBox? _chkEdStickyScroll;
-        private CheckBox? _chkEdMinimap;
-        private CheckBox? _chkEdDocumentOutline;
+        // Editor controls migrated to Pages/EditorPage.cs (Phase 2 B.10).
 
         // Execution
-        private CheckBox? _chkExecShowTimer;
-        private CheckBox? _chkExecMultiDatabase;
-        private Slider? _sldExecNotificationThreshold;
-        private TextBlock? _lblExecNotificationValue;
+        // Execution controls migrated to Pages/ExecutionPage.cs (Phase 2 B.9).
 
         // Navigation
-        private CheckBox? _chkNavGoToDefinition;
-        private CheckBox? _chkNavPeekDefinition;
-        private CheckBox? _chkNavFindReferences;
-        private CheckBox? _chkNavObjectSearch;
+        // Navigation controls migrated to Pages/NavigationPage.cs (Phase 2 B.5).
 
         // ─── Public API ──────────────────────────────────────────────────────
 
@@ -315,7 +160,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
             // Pick theme based on settings (default: light, like SQL Prompt)
             var themeName = settings.Theme?.ToLowerInvariant() ?? "light";
-            _theme = themeName == "dark" ? ThemeBrushSet.Dark : ThemeBrushSet.Light;
+            _theme = themeName == "dark" ? PageTheme.Dark : PageTheme.Light;
         }
 
         /// <summary>
@@ -323,6 +168,37 @@ namespace AkmlSql.Shell.Shared.Dialogs
         /// Returns true if the user clicked OK/Apply, false if Cancel.
         /// </summary>
         public bool ShowDialog()
+        {
+            BuildWindowInner();
+            _window!.ShowDialog();
+            return _dialogResult;
+        }
+
+        /// <summary>
+        /// Test-only: build the dialog's visual tree without showing it. Used by
+        /// AkmlSql.Shell.Shared.Tests for chrome regression checks. Must NOT be
+        /// called from production code paths — this method exists solely to expose
+        /// the rendering seam to the test project.
+        /// No items are pre-selected so every TreeViewItem reflects its base (non-selected) style.
+        /// </summary>
+        public Window TestBuildWindowForRenderTest()
+        {
+            _window = CreateWindow();
+            LoadSettingsToControls();
+            // Intentionally do NOT select the first item — we want base (non-selected) style
+            // applied to all items so the chrome test can assert the unselected foreground.
+            _window.Measure(new System.Windows.Size(double.PositiveInfinity, double.PositiveInfinity));
+            _window.Arrange(new Rect(0, 0, _window.DesiredSize.Width, _window.DesiredSize.Height));
+            _window.UpdateLayout();
+            return _window!;
+        }
+
+        /// <summary>
+        /// Shared initialization: creates the window, populates controls, and selects the first
+        /// navigation item. Called by both <see cref="ShowDialog"/> and
+        /// <see cref="TestBuildWindowForRenderTest"/>.
+        /// </summary>
+        private void BuildWindowInner()
         {
             _window = CreateWindow();
             LoadSettingsToControls();
@@ -334,9 +210,6 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 if (firstItem != null)
                     firstItem.IsSelected = true;
             }
-
-            _window.ShowDialog();
-            return _dialogResult;
         }
 
         /// <summary>Returns the (potentially modified) settings.</summary>
@@ -470,7 +343,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
         {
             var sidebar = new Border
             {
-                Width = 220,
+                Width = 240,  // wider to give long labels like "Execution Warnings" room
                 Background = _theme.Sidebar,
                 BorderBrush = _theme.Sep,
                 BorderThickness = new Thickness(0, 0, 1, 0),
@@ -516,8 +389,6 @@ namespace AkmlSql.Shell.Shared.Dialogs
             _navTree.Resources[SystemColors.HighlightTextBrushKey] = _theme.SelectedText;
             _navTree.Resources[SystemColors.InactiveSelectionHighlightBrushKey] = _theme.Selected;
             _navTree.Resources[SystemColors.InactiveSelectionHighlightTextBrushKey] = _theme.SelectedText;
-            _navTree.Resources[SystemColors.ControlBrushKey] = _theme.Selected;
-            _navTree.Resources[SystemColors.ControlTextBrushKey] = _theme.SelectedText;
 
             // Apply themed style to TreeViewItems
             var itemStyle = new Style(typeof(TreeViewItem));
@@ -537,7 +408,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
             mouseOverTrigger.Setters.Add(new Setter(Control.BackgroundProperty, _theme.TreeHover));
             itemStyle.Triggers.Add(mouseOverTrigger);
 
-            _navTree.ItemContainerStyle = itemStyle;
+            // Use implicit style by type so the style cascades to TreeViewItems at every depth.
+            // (TreeView.ItemContainerStyle only applies to direct children, breaking nested items.)
+            _navTree.Resources[typeof(TreeViewItem)] = itemStyle;
 
             // Build categories and pages
             BuildPages();
@@ -548,13 +421,22 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
             AddTreeGroup("Suggestions", expanded: true,
                 ("Behavior", "IntelliSense"),
+                ("Types of suggestion", "SuggestionTypes"),
                 ("Database", "Schema Cache"));
 
+            // Inserted Code group introduced in Phase 2 (C.2-C.4).
             AddTreeGroup("Inserted Code", expanded: false,
-                ("Refactoring", "Refactoring"));
+                ("Qualification & Brackets", "Qualification"),
+                ("INSERT statements", "InsertOptions"),
+                ("JOIN completion", "JoinOptions"));
 
             AddTreeGroup("Format", expanded: false,
                 ("Styles", "Formatting"));
+
+            AddTreeGroup("Editor", expanded: false,
+                ("Productivity", "Editor"),
+                ("Navigation", "Navigation"),
+                ("Refactoring", "Refactoring"));   // moved from "Inserted Code"
 
             AddTreeGroup("Queries", expanded: false,
                 ("History", "History"),
@@ -567,13 +449,11 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
             AddTreeLeaf("Code Analysis", "Code Analysis");
             AddTreeLeaf("Snippets", "Snippets");
-            AddTreeLeaf("Prompt AI", "AI Assistance");
+            AddTreeLeaf("AI Assistance", "AI Assistance");
 
-            AddTreeGroup("Editor", expanded: false,
-                ("Productivity", "Editor"),
-                ("Navigation", "Navigation"));
-
-            AddTreeLeaf("Miscellaneous", "General");
+            AddTreeGroup("Miscellaneous", expanded: false,
+                ("Main", "General"),
+                ("Labs", "Labs"));
 
             _navTree.SelectedItemChanged += OnNavSelectionChanged;
 
@@ -1094,31 +974,59 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
         private void BuildPages()
         {
-            // Mapping: page key (used for navigation tag) → SQL Prompt-style display label
-            var pages = new (string Key, string Display, Func<UIElement> Builder)[]
+            // (Key, Display) for each page in navigation order. The key matches an
+            // IPageBuilder in _pageBuilders; Display is the breadcrumb shown in
+            // search results.
+            var pages = new (string Key, string Display)[]
             {
-                ("General",       "Miscellaneous",       BuildGeneralPage),
-                ("IntelliSense",  "Suggestions › Behavior", BuildIntelliSensePage),
-                ("Schema Cache",  "Suggestions › Database", BuildSchemaCachePage),
-                ("Formatting",    "Format › Styles",     BuildFormattingPage),
-                ("Snippets",      "Snippets",            BuildSnippetsPage),
-                ("Code Analysis", "Code Analysis",       BuildCodeAnalysisPage),
-                ("Refactoring",   "Inserted Code › Refactoring", BuildRefactoringPage),
-                ("History",       "Queries › History",   BuildHistoryPage),
-                ("Tabs & UI",     "Tabs › Color",        BuildTabsPage),
-                ("Safety",        "Queries › Execution Warnings", BuildSafetyPage),
-                ("AI Assistance", "Prompt AI",           BuildAiPage),
-                ("Grid",          "Queries › Query Results", BuildGridPage),
-                ("Editor",        "Editor › Productivity", BuildEditorPage),
-                ("Execution",     "Queries › Execution", BuildExecutionPage),
-                ("Navigation",    "Editor › Navigation", BuildNavigationPage),
+                ("General",       "Miscellaneous › Main"),
+                ("IntelliSense",  "Suggestions › Behavior"),
+                ("SuggestionTypes", "Suggestions › Types of suggestion"),
+                ("Schema Cache",  "Suggestions › Database"),
+                ("Qualification", "Inserted Code › Qualification & Brackets"),
+                ("InsertOptions", "Inserted Code › INSERT statements"),
+                ("JoinOptions",   "Inserted Code › JOIN completion"),
+                ("Formatting",    "Format › Styles"),
+                ("Snippets",      "Snippets"),
+                ("Code Analysis", "Code Analysis"),
+                ("Refactoring",   "Editor › Refactoring"),
+                ("History",       "Queries › History"),
+                ("Tabs & UI",     "Tabs › Color"),
+                ("Safety",        "Queries › Execution Warnings"),
+                ("AI Assistance", "AI Assistance"),
+                ("Grid",          "Queries › Query Results"),
+                ("Editor",        "Editor › Productivity"),
+                ("Execution",     "Queries › Execution"),
+                ("Navigation",    "Editor › Navigation"),
+                ("Labs",          "Miscellaneous › Labs"),
             };
 
-            foreach (var (key, display, builder) in pages)
+            foreach (var (key, display) in pages)
             {
                 _currentPageKey = key;
                 _currentPageDisplay = display;
-                _pages[key] = builder();
+
+                if (!_pageBuilders.TryGetValue(key, out var pageBuilder))
+                    continue;
+
+                var hostPanel = CreatePagePanel();
+                AddPageHeader(hostPanel, pageBuilder.Title);
+                var ctx = new PageContext(_theme, _settings, new RowFactory(_theme), RegisterSearchEntry);
+                var controls = pageBuilder.Build(hostPanel, ctx);
+                _pageControlsByKey[key] = controls;
+                _pages[key] = WrapInScrollViewer(hostPanel);
+
+                // Page-specific event hookups the host owns. Theme switching closes
+                // the dialog and reopens it under the new theme; coloring-rule CRUD
+                // pops a host-owned modal — both stay on SettingsWindow.
+                if (controls is GeneralControls gen)
+                    gen.Theme.SelectionChanged += OnThemeSelectionChanged;
+                if (controls is TabsControls tabs)
+                {
+                    tabs.AddRuleButton.Click    += (_, _) => OnAddColoringRule();
+                    tabs.EditRuleButton.Click   += (_, _) => OnEditColoringRule();
+                    tabs.RemoveRuleButton.Click += (_, _) => OnRemoveColoringRule();
+                }
             }
 
             _currentPageKey = string.Empty;
@@ -1147,591 +1055,86 @@ namespace AkmlSql.Shell.Shared.Dialogs
         // ═══════════════════════════════════════════════════════════════════════
         //  General
         // ═══════════════════════════════════════════════════════════════════════
-        private UIElement BuildGeneralPage()
-        {
-            var panel = CreatePagePanel();
-
-            AddPageHeader(panel, "General Settings");
-
-            AddGroupHeader(panel, "Appearance");
-            _cboTheme = AddDropdown(panel, "Theme",
-                new[] { "Dark", "Light", "System" },
-                "UI color theme for AKML SQL dialogs");
-            _cboTheme.SelectionChanged += OnThemeSelectionChanged;
-
-            AddGroupSeparator(panel);
-            AddGroupHeader(panel, "Updates & Telemetry");
-            _chkAutoUpdate = AddToggle(panel, "Check for updates automatically",
-                "Checks for new versions every 24 hours on startup");
-            _chkTelemetry = AddToggle(panel, "Send anonymous usage telemetry",
-                "No personally identifiable information is collected");
-
-            AddGroupSeparator(panel);
-            AddGroupHeader(panel, "Paths");
-            AddReadOnlyField(panel, "Configuration file", Constants.ConfigFilePath);
-            AddReadOnlyField(panel, "Log directory", Constants.LogsPath);
-
-            AddGroupSeparator(panel);
-            AddGroupHeader(panel, "About");
-            AddInfoRow(panel, "Version", Constants.RuntimeVersion + " (" + Constants.BuildDate + ")");
-
-            return WrapInScrollViewer(panel);
-        }
+        // BuildGeneralPage migrated to Pages/GeneralPage.cs (Phase 2 B.7).
 
         // ═══════════════════════════════════════════════════════════════════════
         //  IntelliSense
         // ═══════════════════════════════════════════════════════════════════════
-        private UIElement BuildIntelliSensePage()
-        {
-            var panel = CreatePagePanel();
-
-            AddPageHeader(panel, "IntelliSense");
-
-            AddGroupHeader(panel, "Core");
-            _chkIsEnabled = AddToggle(panel, "Enable IntelliSense",
-                "Master switch for all IntelliSense features");
-            _chkAutoTrigger = AddToggle(panel, "Auto-trigger completions while typing",
-                "Show completion list automatically without Ctrl+Space");
-            _chkAfterDot = AddToggle(panel, "Trigger after dot",
-                "Auto-complete after typing '.' for table.column references");
-            _chkFuzzyMatch = AddToggle(panel, "Enable fuzzy matching",
-                "Substring and approximate matching in addition to prefix");
-
-            AddGroupSeparator(panel);
-            AddGroupHeader(panel, "Display");
-
-            (_sldMaxSuggestions, _lblMaxSuggestionsValue) = AddSlider(panel,
-                "Maximum suggestions", 5, 200, 50,
-                "Maximum number of items shown in the completion list");
-            (_sldTriggerDelay, _lblTriggerDelayValue) = AddSlider(panel,
-                "Trigger delay (ms)", 0, 2000, 100,
-                "Debounce delay before showing completions");
-
-            _cboKeywordCase = AddDropdown(panel, "Keyword casing",
-                new[] { "UPPER", "lower", "PascalCase", "As-Is" },
-                "Casing applied to SQL keywords inserted by IntelliSense");
-
-            _chkShowDataTypes = AddToggle(panel, "Show column data types",
-                "Display data type information in completion details");
-            _chkShowNullability = AddToggle(panel, "Show nullability info",
-                "Show NOT NULL / NULL status in completion details");
-            _chkShowPkFk = AddToggle(panel, "Show PK/FK indicators",
-                "Show primary key and foreign key badges");
-
-            AddGroupSeparator(panel);
-            AddGroupHeader(panel, "Assistance");
-            _chkJoinAssist = AddToggle(panel, "JOIN clause assistance",
-                "Master switch for FK-assisted JOIN completion. When on: after typing 'JOIN', FK-related tables are suggested first with a full ON clause inserted; inside 'ON', ready-made FK equality predicates are suggested. Orthogonal to Tables Alias. Default: on.");
-            _chkAutoAlias = AddToggle(panel, "Tables Alias",
-                "When on, completion generates new aliases for inserted tables (e.g. 'Orders o ON o.CustomerId = c.Id'). When off, FK JOIN suggestions still fire but the target table is referenced by its bare name ('Orders ON Orders.CustomerId = c.Id'). Default: off.");
-            _chkDisableNativeIs = AddToggle(panel, "Disable native SSMS IntelliSense",
-                "Recommended to avoid conflicts with AKML SQL IntelliSense");
-
-            return WrapInScrollViewer(panel);
-        }
+        // BuildIntelliSensePage migrated to Pages/IntelliSensePage.cs (Phase 2 B.16).
 
         // ═══════════════════════════════════════════════════════════════════════
         //  Schema Cache
         // ═══════════════════════════════════════════════════════════════════════
-        private UIElement BuildSchemaCachePage()
-        {
-            var panel = CreatePagePanel();
-
-            AddPageHeader(panel, "Schema Cache");
-
-            AddGroupHeader(panel, "Refresh Behavior");
-            _chkCacheAutoRefresh = AddToggle(panel, "Auto-refresh schema cache",
-                "Periodically check for schema changes in the background");
-
-            (_sldRefreshInterval, _lblRefreshIntervalValue) = AddSlider(panel,
-                "Refresh interval (seconds)", 30, 3600, 300,
-                "Time between background change-detection queries");
-
-            _chkDetectDdl = AddToggle(panel, "Detect DDL changes",
-                "Trigger immediate cache refresh when DDL statements are executed");
-
-            AddGroupSeparator(panel);
-            AddGroupHeader(panel, "Storage");
-
-            (_sldMaxDatabases, _lblMaxDatabasesValue) = AddSlider(panel,
-                "Max cached databases", 1, 50, 10,
-                "Number of database caches kept in memory before LRU eviction");
-
-            _chkLazyLoadColumns = AddToggle(panel, "Lazy-load column metadata",
-                "Load columns and foreign keys in background (Phase B)");
-            _chkPersistToDisk = AddToggle(panel, "Persist cache to disk",
-                "Save schema cache to disk for faster startup on reconnect");
-
-            return WrapInScrollViewer(panel);
-        }
+        // BuildSchemaCachePage migrated to Pages/SchemaCachePage.cs (Phase 2 B.11).
 
         // ═══════════════════════════════════════════════════════════════════════
         //  Formatting
         // ═══════════════════════════════════════════════════════════════════════
-        private UIElement BuildFormattingPage()
-        {
-            var panel = CreatePagePanel();
-
-            AddPageHeader(panel, "SQL Formatting");
-
-            AddGroupHeader(panel, "Triggers");
-            _chkFmtEnabled = AddToggle(panel, "Enable SQL formatter",
-                "Master switch for all formatting features");
-            _chkFormatOnPaste = AddToggle(panel, "Format on paste",
-                "Automatically format SQL when pasting from clipboard");
-            _chkFormatOnSave = AddToggle(panel, "Format on save",
-                "Automatically format the document when saving");
-            _chkFormatOnDelimiter = AddToggle(panel, "Format on delimiter",
-                "Format when typing GO or semicolon");
-
-            AddGroupSeparator(panel);
-            AddGroupHeader(panel, "Safety & Validation");
-            _chkConfirmBulk = AddToggle(panel, "Confirm before bulk format",
-                "Show a confirmation dialog before formatting multiple files");
-            _chkCreateBackups = AddToggle(panel, "Create backups before formatting",
-                "Save a backup copy of files before applying format changes");
-            _chkRespectNoformat = AddToggle(panel, "Respect --noformat regions",
-                "Skip formatting inside --noformat / --endnoformat blocks");
-            _chkSemanticValidation = AddToggle(panel, "Validate formatting preserves semantics",
-                "Re-parse formatted SQL to verify it is semantically equivalent");
-
-            return WrapInScrollViewer(panel);
-        }
+        // BuildFormattingPage migrated to Pages/FormattingPage.cs (Phase 2 B.14).
 
         // ═══════════════════════════════════════════════════════════════════════
         //  Snippets
         // ═══════════════════════════════════════════════════════════════════════
-        private UIElement BuildSnippetsPage()
-        {
-            var panel = CreatePagePanel();
-
-            AddPageHeader(panel, "Snippets");
-
-            AddGroupHeader(panel, "Snippet Manager");
-            _chkSnipEnabled = AddToggle(panel, "Enable snippets",
-                "Master switch for the snippet engine");
-            _chkSnipShowInCompletion = AddToggle(panel, "Show in IntelliSense completions",
-                "Include snippets in the main completion list");
-            _chkSnipFormatOnExpand = AddToggle(panel, "Format after expansion",
-                "Apply SQL formatting after expanding a snippet");
-            _chkSnipContextFilter = AddToggle(panel, "Filter by SQL context",
-                "Only show snippets valid for the current SQL position");
-            _chkSnipTrackUsage = AddToggle(panel, "Track usage for ranking",
-                "Boost frequently-used snippets to the top of the list");
-
-            AddGroupSeparator(panel);
-            AddGroupHeader(panel, "Snippet Folders");
-            _txtPersonalFolder = AddTextInput(panel, "Personal folder",
-                "Path to personal .akmlsnippet files (leave empty for default)");
-            _txtTeamFolder = AddTextInput(panel, "Team folder",
-                "Shared folder for team snippet distribution");
-
-            return WrapInScrollViewer(panel);
-        }
+        // BuildSnippetsPage migrated to Pages/SnippetsPage.cs (Phase 2 B.2).
 
         // ═══════════════════════════════════════════════════════════════════════
         //  Code Analysis
         // ═══════════════════════════════════════════════════════════════════════
-        private UIElement BuildCodeAnalysisPage()
-        {
-            var panel = CreatePagePanel();
-
-            AddPageHeader(panel, "Code Analysis");
-
-            AddGroupHeader(panel, "Analysis Engine");
-            _chkAnalysisEnabled = AddToggle(panel, "Enable code analysis",
-                "Master switch for all 120+ analysis rules");
-            _chkAnalysisRunOnType = AddToggle(panel, "Analyze while typing",
-                "Run analysis rules in real-time as you type");
-            _chkAnalysisRunOnSave = AddToggle(panel, "Analyze on save",
-                "Run full analysis when the document is saved");
-            _chkAnalysisShowInErrorList = AddToggle(panel, "Show in Error List",
-                "Report analysis issues in the VS/SSMS Error List window");
-
-            AddGroupSeparator(panel);
-            AddInfoRow(panel, "Rules", "120+ rules across 8 categories (PE, BP, SE, ST, DE, DEP, EX, NM)");
-            AddInfoRow(panel, "Per-project config", ".casettings JSON file searched upward from file");
-            AddInfoRow(panel, "Inline suppression", "-- akml-disable RuleId / -- akml-enable RuleId");
-
-            return WrapInScrollViewer(panel);
-        }
+        // BuildCodeAnalysisPage migrated to Pages/CodeAnalysisPage.cs (Phase 2 B.3).
 
         // ═══════════════════════════════════════════════════════════════════════
         //  Refactoring
         // ═══════════════════════════════════════════════════════════════════════
-        private UIElement BuildRefactoringPage()
-        {
-            var panel = CreatePagePanel();
-
-            AddPageHeader(panel, "Refactoring");
-
-            AddGroupHeader(panel, "Preview & Safety");
-            _chkRefPreviewBeforeApply = AddToggle(panel, "Show preview before applying",
-                "Display a diff preview dialog before applying refactoring changes");
-            _chkRefCreateBackups = AddToggle(panel, "Create backups",
-                "Save a backup copy before applying refactoring changes");
-            _chkRefFormatAfterRefactor = AddToggle(panel, "Format after refactoring",
-                "Apply SQL formatting after a refactoring operation completes");
-
-            AddGroupSeparator(panel);
-            AddGroupHeader(panel, "Rename Options");
-            _chkRefIncludeCommentsInRename = AddToggle(panel, "Include comments in rename scope",
-                "Also rename occurrences found inside SQL comments");
-            _chkRefIncludeStringLiteralsInRename = AddToggle(panel, "Include string literals in rename scope",
-                "Also rename occurrences found inside string literals");
-            _cboRefRenameScope = AddDropdown(panel, "Rename scope",
-                new[] { "Current Script", "Project Directory" },
-                "Scope of the Safe Rename operation");
-
-            return WrapInScrollViewer(panel);
-        }
+        // BuildRefactoringPage migrated to Pages/RefactoringPage.cs (Phase 2 B.4).
 
         // ═══════════════════════════════════════════════════════════════════════
         //  History
         // ═══════════════════════════════════════════════════════════════════════
-        private UIElement BuildHistoryPage()
-        {
-            var panel = CreatePagePanel();
-
-            AddPageHeader(panel, "SQL History");
-
-            AddGroupHeader(panel, "Recording");
-            _chkHistEnabled = AddToggle(panel, "Enable SQL history recording",
-                "Record all executed SQL statements to a local database");
-            _chkHistRecordFailures = AddToggle(panel, "Record failed executions",
-                "Also record statements that resulted in errors");
-            _chkHistDeduplication = AddToggle(panel, "Enable deduplication",
-                "Avoid storing duplicate statements in quick succession");
-
-            AddGroupSeparator(panel);
-            AddGroupHeader(panel, "Storage");
-
-            (_sldHistRetentionDays, _lblHistRetentionValue) = AddSlider(panel,
-                "Retention (days)", 1, 3650, 90,
-                "Number of days to keep history entries before pruning");
-            (_sldHistMaxEntries, _lblHistMaxEntriesValue) = AddSlider(panel,
-                "Max entries", 1000, 1_000_000, 100_000,
-                "Maximum number of history entries stored", true);
-
-            _chkHistEncryptAtRest = AddToggle(panel, "Encrypt at rest",
-                "Encrypt stored SQL history using DPAPI + AES-256");
-
-            return WrapInScrollViewer(panel);
-        }
+        // BuildHistoryPage migrated to Pages/HistoryPage.cs (Phase 2 B.12).
 
         // ═══════════════════════════════════════════════════════════════════════
         //  Tabs & UI
         // ═══════════════════════════════════════════════════════════════════════
-        private UIElement BuildTabsPage()
-        {
-            var panel = CreatePagePanel();
-
-            AddPageHeader(panel, "Tabs & UI");
-
-            AddGroupHeader(panel, "Tab Coloring");
-            _chkTabColoringEnabled = AddToggle(panel, "Enable environment-based tab coloring",
-                "Color tabs based on server name patterns (e.g. PROD=red, DEV=green)");
-            _chkTabGradientColors = AddToggle(panel, "Use gradient colors",
-                "Apply a vertical gradient to tab color bars (lighter at top, base color at bottom)");
-
-            // Environment Rules editor
-            var rulesLabel = new TextBlock
-            {
-                Text = "Environment Rules",
-                FontWeight = FontWeights.SemiBold,
-                FontSize = 13,
-                Margin = new Thickness(20, 16, 20, 4),
-            };
-            panel.Children.Add(rulesLabel);
-
-            var rulesDesc = new TextBlock
-            {
-                Text = "Define server name patterns to match environments. Rules are evaluated top-down; first match wins.",
-                FontSize = 12,
-                Opacity = 0.7,
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(20, 0, 20, 8),
-            };
-            panel.Children.Add(rulesDesc);
-
-            _lstColoringRules = new ListBox
-            {
-                Height = 120,
-                Margin = new Thickness(20, 4, 20, 4),
-                BorderThickness = new Thickness(1),
-                FontSize = 13,
-            };
-            panel.Children.Add(_lstColoringRules);
-
-            var buttonRow = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Margin = new Thickness(20, 4, 20, 4),
-                HorizontalAlignment = HorizontalAlignment.Left
-            };
-
-            _btnAddRule = new Button { Content = "Add...", Padding = new Thickness(12, 4, 12, 4), Margin = new Thickness(0, 0, 8, 0) };
-            _btnEditRule = new Button { Content = "Edit...", Padding = new Thickness(12, 4, 12, 4), Margin = new Thickness(0, 0, 8, 0) };
-            _btnRemoveRule = new Button { Content = "Remove", Padding = new Thickness(12, 4, 12, 4) };
-
-            _btnAddRule.Click += (s, e) => OnAddColoringRule();
-            _btnEditRule.Click += (s, e) => OnEditColoringRule();
-            _btnRemoveRule.Click += (s, e) => OnRemoveColoringRule();
-
-            buttonRow.Children.Add(_btnAddRule);
-            buttonRow.Children.Add(_btnEditRule);
-            buttonRow.Children.Add(_btnRemoveRule);
-            panel.Children.Add(buttonRow);
-
-            AddGroupSeparator(panel);
-            AddGroupHeader(panel, "Session Recovery");
-            _chkTabSessionRecovery = AddToggle(panel, "Enable session recovery",
-                "Save open documents and restore them on next startup");
-
-            (_sldTabAutoSaveInterval, _lblTabAutoSaveValue) = AddSlider(panel,
-                "Auto-save interval (seconds)", 30, 300, 60,
-                "How often to save document state for recovery");
-
-            _cboTabRestoreOnStartup = AddDropdown(panel, "Restore on startup",
-                new[] { "Prompt", "Always", "Never" },
-                "Behavior when opening the IDE after a previous session");
-
-            (_sldTabMaxClosedTabs, _lblTabMaxClosedTabsValue) = AddSlider(panel,
-                "Max closed tabs to remember", 1, 100, 20,
-                "Number of recently closed tabs available for Ctrl+Shift+T restore");
-
-            AddGroupSeparator(panel);
-            AddGroupHeader(panel, "Window Title");
-            _txtTabCustomWindowTitle = AddTextInput(panel, "Custom window title template",
-                "Use {server}, {database}, and other placeholders");
-
-            return WrapInScrollViewer(panel);
-        }
+        // BuildTabsPage migrated to Pages/TabsPage.cs (Phase 2 B.15).
 
         // ═══════════════════════════════════════════════════════════════════════
         //  Safety
         // ═══════════════════════════════════════════════════════════════════════
-        private UIElement BuildSafetyPage()
-        {
-            var panel = CreatePagePanel();
-
-            AddPageHeader(panel, "Execution Safety");
-
-            AddGroupHeader(panel, "Warnings");
-            _chkSafetyProductionWarning = AddToggle(panel, "Production server warning",
-                "Show a warning banner when connected to production environments");
-            _chkSafetyDeleteWithoutWhere = AddToggle(panel, "DELETE without WHERE",
-                "Warn before executing DELETE statements with no WHERE clause");
-            _chkSafetyUpdateWithoutWhere = AddToggle(panel, "UPDATE without WHERE",
-                "Warn before executing UPDATE statements with no WHERE clause");
-            _chkSafetyDropConfirmation = AddToggle(panel, "DROP confirmation",
-                "Require confirmation before executing DROP statements");
-            _chkSafetyTruncateConfirmation = AddToggle(panel, "TRUNCATE confirmation",
-                "Require confirmation before executing TRUNCATE statements");
-
-            AddGroupSeparator(panel);
-            AddGroupHeader(panel, "Transaction Reminder");
-            _chkSafetyTransactionReminder = AddToggle(panel, "Enable transaction reminder",
-                "Periodically remind about open transactions on production servers");
-
-            (_sldSafetyTransReminderInterval, _lblSafetyTransReminderValue) = AddSlider(panel,
-                "Reminder interval (seconds)", 30, 3600, 300,
-                "Time between transaction reminder notifications");
-
-            return WrapInScrollViewer(panel);
-        }
+        // BuildSafetyPage migrated to Pages/SafetyPage.cs (Phase 2 B.8).
 
         // ═══════════════════════════════════════════════════════════════════════
         //  Grid
         // ═══════════════════════════════════════════════════════════════════════
-        private UIElement BuildGridPage()
-        {
-            var panel = CreatePagePanel();
-            AddPageHeader(panel, "Results Grid");
-
-            _chkGridAggregates = AddToggle(panel, "Aggregate statistics",
-                "Show Sum, Avg, Count, Min, Max for selected cells");
-            _chkGridNullHighlight = AddToggle(panel, "Highlight NULL cells",
-                "Highlight NULL cells in results grid");
-            _chkGridRowNumbers = AddToggle(panel, "Row numbers",
-                "Show row numbers column");
-            _chkGridFreezeHeaders = AddToggle(panel, "Freeze headers",
-                "Freeze column headers while scrolling");
-
-            AddGroupSeparator(panel);
-            AddGroupHeader(panel, "Excel Export");
-            _chkGridExcelLargeNumberAsText = AddToggle(panel, "Save 15+ digit numbers as text",
-                "Numbers with 15 or more digits are saved as text to prevent Excel from rounding them");
-
-            return WrapInScrollViewer(panel);
-        }
+        // BuildGridPage migrated to Pages/GridPage.cs (Phase 2 B.6).
 
         // ═══════════════════════════════════════════════════════════════════════
         //  Editor Productivity
         // ═══════════════════════════════════════════════════════════════════════
-        private UIElement BuildEditorPage()
-        {
-            var panel = CreatePagePanel();
-            AddPageHeader(panel, "Editor Productivity");
-
-            _chkEdHighlightOccurrences = AddToggle(panel, "Highlight occurrences",
-                "Highlight all occurrences of selected identifier");
-            _chkEdBracketMatching = AddToggle(panel, "Bracket matching",
-                "Highlight matching BEGIN/END and parenthesis pairs");
-            _chkEdNamedRegions = AddToggle(panel, "Named regions",
-                "Show named region markers in editor");
-            _chkEdStickyScroll = AddToggle(panel, "Sticky scroll",
-                "Pin parent scope headers while scrolling");
-            _chkEdMinimap = AddToggle(panel, "Code minimap",
-                "Show code minimap in editor margin");
-            _chkEdDocumentOutline = AddToggle(panel, "Document Outline",
-                "Enable Document Outline panel");
-
-            return WrapInScrollViewer(panel);
-        }
+        // BuildEditorPage migrated to Pages/EditorPage.cs (Phase 2 B.10).
 
         // ═══════════════════════════════════════════════════════════════════════
         //  Execution Productivity
         // ═══════════════════════════════════════════════════════════════════════
-        private UIElement BuildExecutionPage()
-        {
-            var panel = CreatePagePanel();
-            AddPageHeader(panel, "Execution");
-
-            _chkExecShowTimer = AddToggle(panel, "Execution timer",
-                "Show execution timer in status bar");
-            _chkExecMultiDatabase = AddToggle(panel, "Multi-database execution",
-                "Enable multi-database execution mode");
-
-            AddGroupHeader(panel, "Notifications");
-            (_sldExecNotificationThreshold, _lblExecNotificationValue) = AddSlider(panel,
-                "Notification threshold", 5, 300, 30,
-                "Seconds before showing long-running query notification");
-
-            return WrapInScrollViewer(panel);
-        }
+        // BuildExecutionPage migrated to Pages/ExecutionPage.cs (Phase 2 B.9).
 
         // ═══════════════════════════════════════════════════════════════════════
         //  Navigation
         // ═══════════════════════════════════════════════════════════════════════
-        private UIElement BuildNavigationPage()
-        {
-            var panel = CreatePagePanel();
-            AddPageHeader(panel, "Navigation");
-
-            _chkNavGoToDefinition = AddToggle(panel, "Go to Definition",
-                "Enable Go to Definition (F12)");
-            _chkNavPeekDefinition = AddToggle(panel, "Peek Definition",
-                "Enable Peek Definition (Alt+F12)");
-            _chkNavFindReferences = AddToggle(panel, "Find All References",
-                "Enable Find All References (Shift+F12)");
-            _chkNavObjectSearch = AddToggle(panel, "Object Search",
-                "Enable Object Search (Ctrl+T)");
-
-            return WrapInScrollViewer(panel);
-        }
+        // BuildNavigationPage migrated to Pages/NavigationPage.cs (Phase 2 B.5).
 
         // ═══════════════════════════════════════════════════════════════════════
         //  AI Assistance
         // ═══════════════════════════════════════════════════════════════════════
-        private UIElement BuildAiPage()
-        {
-            var panel = CreatePagePanel();
-
-            AddPageHeader(panel, "AI Assistance");
-
-            AddGroupHeader(panel, "Provider Configuration");
-            _cboAiProvider = AddDropdown(panel, "AI Provider",
-                new[] { "(None)", "Anthropic", "OpenAI", "Azure OpenAI", "Gemini", "Ollama", "LM Studio", "Custom" },
-                "Select the AI provider for SQL assistance features");
-            _txtAiModel = AddTextInput(panel, "Model",
-                "e.g. gpt-4o, claude-sonnet-4-20250514, gemini-pro");
-            _txtAiApiKey = AddTextInput(panel, "API Key",
-                "Your API key for the selected provider", true);
-
-            // Inline help: how to get API keys for each provider + security note
-            var helpBorder = new Border
-            {
-                BorderBrush = _theme.FgAccent,
-                BorderThickness = new Thickness(2, 0, 0, 0),
-                Padding = new Thickness(10, 8, 10, 8),
-                Margin = new Thickness(0, 0, 0, 10),
-                Background = _theme.Panel
-            };
-            helpBorder.Child = new TextBlock
-            {
-                Text =
-                    "How to get your API key:\n" +
-                    "  \u2022 Anthropic (Claude): console.anthropic.com \u2192 API Keys" +
-                    "  \u2014  example model: claude-sonnet-4-6\n" +
-                    "  \u2022 Google (Gemini): aistudio.google.com \u2192 Get API Key" +
-                    "  \u2014  example model: gemini-2.0-flash\n" +
-                    "  \u2022 OpenAI: platform.openai.com \u2192 API Keys" +
-                    "  \u2014  example model: gpt-4o\n\n" +
-                    "Keys are stored encrypted with Windows DPAPI and never written in plain text.",
-                Foreground = _theme.FgSecondary,
-                FontSize = 11,
-                TextWrapping = TextWrapping.Wrap,
-                LineHeight = 18
-            };
-            panel.Children.Add(helpBorder);
-
-            _txtAiEndpoint = AddTextInput(panel, "Endpoint URL",
-                "Custom endpoint (required for Azure OpenAI and custom providers)");
-
-            AddGroupSeparator(panel);
-            AddGroupHeader(panel, "Privacy & Data");
-            _cboAiPrivacyMode = AddDropdown(panel, "Privacy mode",
-                new[] { "Schema Only", "Full", "Anonymous", "Offline", "Disabled" },
-                "Controls what data is sent to the AI provider");
-
-            AddGroupSeparator(panel);
-            AddGroupHeader(panel, "Parameters");
-            (_sldAiMaxTokens, _lblAiMaxTokensValue) = AddSlider(panel,
-                "Max response tokens", 128, 128000, 4096,
-                "Maximum number of tokens in the AI response", true);
-            (_sldAiTemperature, _lblAiTemperatureValue) = AddSlider(panel,
-                "Temperature (x10)", 0, 20, 2,
-                "Sampling temperature: 0 = deterministic, 20 = creative");
-            (_sldAiTimeout, _lblAiTimeoutValue) = AddSlider(panel,
-                "Timeout (seconds)", 5, 300, 30,
-                "Request timeout for AI API calls");
-            (_sldAiRetries, _lblAiRetriesValue) = AddSlider(panel,
-                "Retries", 0, 10, 2,
-                "Number of automatic retries on transient failures");
-
-            AddGroupSeparator(panel);
-            AddGroupHeader(panel, "Features");
-            _chkAiTextToSql = AddToggle(panel, "Natural language to SQL",
-                "Generate SQL from plain English descriptions");
-            _chkAiExplain = AddToggle(panel, "Explain SQL",
-                "Get AI-powered explanations of SQL queries");
-            _chkAiFix = AddToggle(panel, "Fix errors",
-                "Suggest fixes when queries fail with errors");
-            _chkAiOptimize = AddToggle(panel, "Optimize queries",
-                "Get AI-powered query optimization suggestions");
-            _chkAiIndexSuggestions = AddToggle(panel, "Index suggestions",
-                "AI-powered index analysis and recommendations");
-            _chkAiChatPanel = AddToggle(panel, "Chat panel",
-                "Enable the AI chat side panel for interactive assistance");
-            _chkAiInlineCompletion = AddToggle(panel, "Inline ghost text",
-                "Show AI-powered inline completion suggestions as ghost text");
-            _chkAiAutoFixOnError = AddToggle(panel, "Auto-fix on error",
-                "Automatically suggest fixes when query execution fails");
-
-            return WrapInScrollViewer(panel);
-        }
+        // BuildAiPage migrated to Pages/AiAssistancePage.cs (Phase 2 B.13).
 
         // ═══════════════════════════════════════════════════════════════════════
         //  UI Builder Helpers
         // ═══════════════════════════════════════════════════════════════════════
 
-        // Tracks the alternating zebra-stripe state per page (reset on each new panel).
-        private int _zebraIndex;
+        // Zebra striping moved to RowFactory.WrapZebraRow / ResetZebra (Phase 2 B.1+).
 
         private StackPanel CreatePagePanel()
         {
-            _zebraIndex = 0;
             return new StackPanel
             {
                 Margin = new Thickness(24, 18, 24, 24),
@@ -1795,494 +1198,8 @@ namespace AkmlSql.Shell.Shared.Dialogs
             });
         }
 
-        /// <summary>
-        /// Section header inside a page (bold, foreground primary). SQL Prompt style.
-        /// </summary>
-        private void AddGroupHeader(StackPanel panel, string text)
-        {
-            panel.Children.Add(new TextBlock
-            {
-                Text = text,
-                FontSize = 12,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = _theme.FgPrimary,
-                Margin = new Thickness(0, 8, 0, 6)
-            });
-        }
-
-        private void AddGroupSeparator(StackPanel panel)
-        {
-            panel.Children.Add(new Border
-            {
-                Height = 1,
-                Background = _theme.Sep,
-                Margin = new Thickness(0, 14, 0, 10)
-            });
-        }
-
-        /// <summary>
-        /// Wraps a setting row in a zebra-striped <see cref="Border"/>. Alternates between
-        /// transparent and <see cref="ThemeBrushSet.InputReadOnly"/> for readability,
-        /// matching the SQL Prompt Options dialog row style.
-        /// </summary>
-        private Border WrapZebraRow(UIElement content)
-        {
-            var bg = (_zebraIndex++ % 2 == 0) ? _theme.InputReadOnly : _theme.Transparent;
-            return new Border
-            {
-                Background = bg,
-                Padding = new Thickness(12, 8, 12, 8),
-                Margin = new Thickness(-12, 0, -12, 0),
-                Child = content
-            };
-        }
-
-        private CheckBox AddToggle(StackPanel panel, string label, string description)
-        {
-            var cb = new CheckBox
-            {
-                Foreground = _theme.FgPrimary,
-                FontSize = 13,
-                VerticalContentAlignment = VerticalAlignment.Center
-            };
-
-            // Build the content with label and description
-            var contentPanel = new StackPanel();
-            contentPanel.Children.Add(new TextBlock
-            {
-                Text = label,
-                Foreground = _theme.FgPrimary,
-                FontSize = 13
-            });
-            if (!string.IsNullOrEmpty(description))
-            {
-                contentPanel.Children.Add(new TextBlock
-                {
-                    Text = description,
-                    Foreground = _theme.FgSecondary,
-                    FontSize = 11,
-                    FontStyle = FontStyles.Italic,
-                    Margin = new Thickness(0, 2, 0, 0),
-                    TextWrapping = TextWrapping.Wrap
-                });
-            }
-
-            cb.Content = contentPanel;
-            var row = WrapZebraRow(cb);
-            panel.Children.Add(row);
-            RegisterSearchEntry(label, description, "Toggle", row);
-            return cb;
-        }
-
-        private (Slider slider, TextBlock valueLabel) AddSlider(
-            StackPanel panel, string label, double min, double max, double defaultValue,
-            string description, bool largeRange = false)
-        {
-            var container = new StackPanel { Margin = new Thickness(0, 0, 0, 12) };
-
-            // Label row with value display
-            var headerRow = new DockPanel { Margin = new Thickness(0, 0, 0, 4) };
-
-            var valueLabel = new TextBlock
-            {
-                Text = defaultValue.ToString(CultureInfo.InvariantCulture),
-                Foreground = _theme.FgAccent,
-                FontSize = 13,
-                FontWeight = FontWeights.SemiBold,
-                MinWidth = 60,
-                TextAlignment = TextAlignment.Right
-            };
-            DockPanel.SetDock(valueLabel, Dock.Right);
-            headerRow.Children.Add(valueLabel);
-
-            headerRow.Children.Add(new TextBlock
-            {
-                Text = label,
-                Foreground = _theme.FgPrimary,
-                FontSize = 13
-            });
-
-            container.Children.Add(headerRow);
-
-            // Slider
-            var slider = new Slider
-            {
-                Minimum = min,
-                Maximum = max,
-                Value = defaultValue,
-                IsSnapToTickEnabled = true,
-                TickFrequency = largeRange ? Math.Max(1, (max - min) / 100) : 1,
-                Height = 22,
-                Foreground = _theme.FgAccent
-            };
-
-            // Update value label on change
-            var valueLabelRef = valueLabel;
-            slider.ValueChanged += (s, e) =>
-            {
-                valueLabelRef.Text = ((int)e.NewValue).ToString(CultureInfo.InvariantCulture);
-            };
-
-            container.Children.Add(slider);
-
-            // Description
-            if (!string.IsNullOrEmpty(description))
-            {
-                container.Children.Add(new TextBlock
-                {
-                    Text = description,
-                    Foreground = _theme.FgSecondary,
-                    FontSize = 11,
-                    FontStyle = FontStyles.Italic,
-                    Margin = new Thickness(0, 2, 0, 0)
-                });
-            }
-
-            panel.Children.Add(container);
-            RegisterSearchEntry(label, description, "Slider", container);
-            return (slider, valueLabel);
-        }
-
-        private ComboBox AddDropdown(StackPanel panel, string label, string[] items, string description)
-        {
-            var container = new StackPanel { Margin = new Thickness(0, 0, 0, 12) };
-
-            container.Children.Add(new TextBlock
-            {
-                Text = label,
-                Foreground = _theme.FgPrimary,
-                FontSize = 13,
-                Margin = new Thickness(0, 0, 0, 4)
-            });
-
-            var combo = new ComboBox
-            {
-                Background = _theme.Input,
-                Foreground = _theme.FgPrimary,
-                BorderBrush = _theme.ComboBorder,
-                BorderThickness = new Thickness(1),
-                FontSize = 13,
-                Height = 28,
-                Padding = new Thickness(6, 4, 6, 4),
-                MaxWidth = 300,
-                HorizontalAlignment = HorizontalAlignment.Left,
-                FocusVisualStyle = FocusVisualStyles.HighStakes // FR-018 / O9 (theme dropdown is the canonical high-stakes ComboBox)
-            };
-
-            // Apply themed styling to dropdown items
-            StyleComboBox(combo);
-
-            foreach (var item in items)
-            {
-                // Do NOT set Foreground on the TextBlock — a local value has higher
-                // precedence than style triggers, which would prevent hover/selected
-                // triggers from changing the text color. Let it inherit from the
-                // ComboBoxItem via TextElement.Foreground set in ItemContainerStyle.
-                combo.Items.Add(new ComboBoxItem
-                {
-                    Content = new TextBlock { Text = item },
-                    Foreground = _theme.FgPrimary
-                });
-            }
-
-            if (combo.Items.Count > 0)
-                combo.SelectedIndex = 0;
-
-            container.Children.Add(combo);
-
-            if (!string.IsNullOrEmpty(description))
-            {
-                container.Children.Add(new TextBlock
-                {
-                    Text = description,
-                    Foreground = _theme.FgSecondary,
-                    FontSize = 11,
-                    FontStyle = FontStyles.Italic,
-                    Margin = new Thickness(0, 2, 0, 0)
-                });
-            }
-
-            panel.Children.Add(container);
-            RegisterSearchEntry(label, description, "Dropdown", container);
-            return combo;
-        }
-
-        /// <summary>
-        /// Applies themed styling to a ComboBox so the dropdown popup, items,
-        /// hover highlight, selected item, and the toggle button all match the active theme.
-        /// Uses system color overrides (reliable with the default Chrome template) plus a
-        /// Loaded handler that walks the visual tree to restyle the toggle button background.
-        /// </summary>
-        private void StyleComboBox(ComboBox combo)
-        {
-            combo.Background = _theme.Input;
-            combo.Foreground = _theme.FgPrimary;
-            combo.BorderBrush = _theme.ComboBorder;
-
-            // TextElement.Foreground propagates through the Chrome template's ContentPresenter
-            combo.SetValue(TextElement.ForegroundProperty, _theme.FgPrimary);
-
-            // Override system colors used by the default ComboBox Chrome template.
-            combo.Resources[SystemColors.WindowBrushKey] = _theme.Input;
-            combo.Resources[SystemColors.WindowTextBrushKey] = _theme.FgPrimary;
-            combo.Resources[SystemColors.HighlightBrushKey] = _theme.Selected;
-            combo.Resources[SystemColors.HighlightTextBrushKey] = _theme.SelectedText;
-            combo.Resources[SystemColors.ControlBrushKey] = _theme.Input;
-            combo.Resources[SystemColors.ControlTextBrushKey] = _theme.FgPrimary;
-            combo.Resources[SystemColors.InactiveSelectionHighlightBrushKey] = _theme.Selected;
-            combo.Resources[SystemColors.InactiveSelectionHighlightTextBrushKey] = _theme.SelectedText;
-            // ComboBox dropdown border color
-            combo.Resources[SystemColors.ActiveBorderBrushKey] = _theme.ComboBorder;
-            combo.Resources[SystemColors.InactiveBorderBrushKey] = _theme.ComboBorder;
-
-            // Walk the visual tree after layout to restyle the toggle button chrome
-            var theme = _theme;
-            combo.Loaded += (s, e) => ThemeComboBoxVisualTree((ComboBox)s!, theme);
-
-            // The Popup is lazy — it only enters the visual tree when the dropdown
-            // first opens, so Loaded can't theme it. Hook DropDownOpened to catch it.
-            combo.DropDownOpened += (s, e) => ThemeComboBoxPopup((ComboBox)s!, theme);
-
-            // Item container style (dropdown rows)
-            var itemStyle = new Style(typeof(ComboBoxItem));
-            itemStyle.Setters.Add(new Setter(Control.BackgroundProperty, _theme.Input));
-            itemStyle.Setters.Add(new Setter(Control.ForegroundProperty, _theme.FgPrimary));
-            itemStyle.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0)));
-            itemStyle.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(6, 4, 6, 4)));
-            itemStyle.Setters.Add(new Setter(TextElement.ForegroundProperty, _theme.FgPrimary));
-
-            var hoverTrigger = new Trigger { Property = ComboBoxItem.IsHighlightedProperty, Value = true };
-            hoverTrigger.Setters.Add(new Setter(Control.BackgroundProperty, _theme.Selected));
-            hoverTrigger.Setters.Add(new Setter(Control.ForegroundProperty, _theme.SelectedText));
-            hoverTrigger.Setters.Add(new Setter(TextElement.ForegroundProperty, _theme.SelectedText));
-            itemStyle.Triggers.Add(hoverTrigger);
-
-            var selectedTrigger = new Trigger { Property = ComboBoxItem.IsSelectedProperty, Value = true };
-            selectedTrigger.Setters.Add(new Setter(Control.BackgroundProperty, _theme.FgAccent));
-            selectedTrigger.Setters.Add(new Setter(Control.ForegroundProperty,
-                Freeze(new SolidColorBrush(Colors.White))));
-            selectedTrigger.Setters.Add(new Setter(TextElement.ForegroundProperty,
-                Freeze(new SolidColorBrush(Colors.White))));
-            itemStyle.Triggers.Add(selectedTrigger);
-
-            combo.ItemContainerStyle = itemStyle;
-        }
-
-        /// <summary>
-        /// After the ComboBox template is applied, walk the visual tree to restyle the
-        /// Chrome toggle button that ignores standard properties.
-        /// </summary>
-        private static void ThemeComboBoxVisualTree(ComboBox combo, ThemeBrushSet theme)
-        {
-            try
-            {
-                // Find the ToggleButton inside the ComboBox template
-                var toggleButton = FindChild<ToggleButton>(combo);
-                if (toggleButton != null)
-                {
-                    toggleButton.Background = theme.Input;
-                    toggleButton.BorderBrush = theme.ComboBorder;
-                    toggleButton.Foreground = theme.FgPrimary;
-                    toggleButton.SetValue(TextElement.ForegroundProperty, theme.FgPrimary);
-
-                    // Override system colors inside the toggle button too
-                    toggleButton.Resources[SystemColors.ControlBrushKey] = theme.Input;
-                    toggleButton.Resources[SystemColors.ControlTextBrushKey] = theme.FgPrimary;
-                    toggleButton.Resources[SystemColors.ControlLightBrushKey] = theme.Input;
-                    toggleButton.Resources[SystemColors.ControlDarkBrushKey] = theme.ComboBorder;
-
-                    // Theme the arrow Path if present
-                    var arrow = FindChild<System.Windows.Shapes.Path>(toggleButton);
-                    if (arrow != null)
-                    {
-                        arrow.Fill = theme.FgSecondary;
-                    }
-                }
-
-                // Theme the selected-item ContentPresenter (PART_ContentSite).
-                // VS/SSMS host implicit styles can override TextElement.Foreground at
-                // the ContentPresenter level, making the selected item text appear faded
-                // in dark theme. Setting it directly on the ContentPresenter wins.
-                var contentSite = FindChild<ContentPresenter>(combo);
-                if (contentSite != null)
-                {
-                    contentSite.SetValue(TextElement.ForegroundProperty, theme.FgPrimary);
-                }
-
-                // Also try to theme the popup if it's already in the tree
-                ThemeComboBoxPopup(combo, theme);
-            }
-            catch
-            {
-                // Non-fatal: worst case dropdown keeps system colors
-            }
-        }
-
-        /// <summary>
-        /// Themes the dropdown Popup of a ComboBox. Called from both <see cref="ThemeComboBoxVisualTree"/>
-        /// (if the popup is already in the tree) and from <c>DropDownOpened</c> (the first time the
-        /// user expands the dropdown, since the Popup is lazy and not in the visual tree at Loaded time).
-        /// Sets background, border, and <see cref="TextElement.ForegroundProperty"/> on the popup content
-        /// so that VS/SSMS theme inheritance doesn't override our text color.
-        /// </summary>
-        private static void ThemeComboBoxPopup(ComboBox combo, ThemeBrushSet theme)
-        {
-            try
-            {
-                var popup = FindChild<Popup>(combo);
-                if (popup?.Child is Border popupBorder)
-                {
-                    popupBorder.Background = theme.Input;
-                    popupBorder.BorderBrush = theme.ComboBorder;
-
-                    // Force text foreground on the popup content so that items in the
-                    // dropdown are readable even when the VS/SSMS host theme applies
-                    // its own inherited TextElement.Foreground to the Popup visual tree.
-                    popupBorder.SetValue(TextElement.ForegroundProperty, theme.FgPrimary);
-
-                    // Also set SystemColors on the popup border's resources — the Popup
-                    // is a separate HWND and doesn't inherit the ComboBox's resources.
-                    popupBorder.Resources[SystemColors.WindowBrushKey] = theme.Input;
-                    popupBorder.Resources[SystemColors.WindowTextBrushKey] = theme.FgPrimary;
-                    popupBorder.Resources[SystemColors.HighlightBrushKey] = theme.Selected;
-                    popupBorder.Resources[SystemColors.HighlightTextBrushKey] = theme.SelectedText;
-                    popupBorder.Resources[SystemColors.ControlBrushKey] = theme.Input;
-                    popupBorder.Resources[SystemColors.ControlTextBrushKey] = theme.FgPrimary;
-                }
-            }
-            catch
-            {
-                // Non-fatal
-            }
-        }
-
-        /// <summary>
-        /// Walks the visual tree depth-first to find the first child of type T.
-        /// </summary>
-        private static T? FindChild<T>(DependencyObject parent) where T : DependencyObject
-        {
-            int count = VisualTreeHelper.GetChildrenCount(parent);
-            for (int i = 0; i < count; i++)
-            {
-                var child = VisualTreeHelper.GetChild(parent, i);
-                if (child is T found) return found;
-                var result = FindChild<T>(child);
-                if (result != null) return result;
-            }
-            return null;
-        }
-
-        private TextBox AddTextInput(StackPanel panel, string label, string description,
-            bool isPassword = false)
-        {
-            var container = new StackPanel { Margin = new Thickness(0, 0, 0, 12) };
-
-            container.Children.Add(new TextBlock
-            {
-                Text = label,
-                Foreground = _theme.FgPrimary,
-                FontSize = 13,
-                Margin = new Thickness(0, 0, 0, 4)
-            });
-
-            var textBox = new TextBox
-            {
-                Background = _theme.Input,
-                Foreground = _theme.FgPrimary,
-                BorderBrush = _theme.ComboBorder,
-                BorderThickness = new Thickness(1),
-                CaretBrush = _theme.Caret,
-                FontSize = 13,
-                Height = 28,
-                Padding = new Thickness(6, 4, 6, 4),
-                MaxWidth = 500,
-                HorizontalAlignment = HorizontalAlignment.Left,
-                MinWidth = 300
-            };
-
-            // For password fields, we obscure by using a special character replacement
-            // (WPF PasswordBox cannot bind Text easily, so we use TextBox with masking hint)
-            if (isPassword)
-            {
-                textBox.Tag = "password";
-            }
-
-            container.Children.Add(textBox);
-
-            if (!string.IsNullOrEmpty(description))
-            {
-                container.Children.Add(new TextBlock
-                {
-                    Text = description,
-                    Foreground = _theme.FgSecondary,
-                    FontSize = 11,
-                    FontStyle = FontStyles.Italic,
-                    Margin = new Thickness(0, 2, 0, 0)
-                });
-            }
-
-            panel.Children.Add(container);
-            RegisterSearchEntry(label, description, "Text", container);
-            return textBox;
-        }
-
-        private void AddReadOnlyField(StackPanel panel, string label, string value)
-        {
-            var container = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
-
-            container.Children.Add(new TextBlock
-            {
-                Text = label,
-                Foreground = _theme.FgSecondary,
-                FontSize = 11,
-                Margin = new Thickness(0, 0, 0, 2)
-            });
-
-            var textBox = new TextBox
-            {
-                Text = value,
-                Background = _theme.InputReadOnly,
-                Foreground = _theme.FgSecondary,
-                BorderBrush = _theme.Border,
-                BorderThickness = new Thickness(1),
-                FontSize = 12,
-                IsReadOnly = true,
-                Height = 26,
-                Padding = new Thickness(6, 3, 6, 3),
-                MaxWidth = 500,
-                HorizontalAlignment = HorizontalAlignment.Left,
-                MinWidth = 300
-            };
-
-            container.Children.Add(textBox);
-            panel.Children.Add(container);
-            RegisterSearchEntry(label, value, "Info", container);
-        }
-
-        private void AddInfoRow(StackPanel panel, string label, string value)
-        {
-            var row = new DockPanel { Margin = new Thickness(0, 2, 0, 6) };
-
-            row.Children.Add(new TextBlock
-            {
-                Text = label + ":",
-                Foreground = _theme.FgSecondary,
-                FontSize = 12,
-                MinWidth = 120,
-                Margin = new Thickness(0, 0, 8, 0)
-            });
-
-            row.Children.Add(new TextBlock
-            {
-                Text = value,
-                Foreground = _theme.FgPrimary,
-                FontSize = 12,
-                TextWrapping = TextWrapping.Wrap
-            });
-
-            panel.Children.Add(row);
-            RegisterSearchEntry(label, value, "Info", row);
-        }
+        // Add* row helpers + ComboBox theming + zebra striping migrated to
+        // RowFactory in Pages/RowFactory.cs (Phase 2 B.1+, cleanup in B.17).
 
         private Button MakeButton(string text, double width)
         {
@@ -2435,16 +1352,17 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
         private void OnThemeSelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (_cboTheme == null) return;
-            var idx = _cboTheme.SelectedIndex;
+            if (!_pageControlsByKey.TryGetValue("General", out var c) || c is not GeneralControls gen)
+                return;
+            var idx = gen.Theme.SelectedIndex;
 
             // Index 0 = Dark, Index 1 = Light, Index 2 = System (auto-detect from VS/SSMS)
             var requestedTheme = idx switch
             {
-                0 => ThemeBrushSet.Dark,
+                0 => PageTheme.Dark,
                 2 => Ui.ThemeManager.DetectFromEnvironment() == Ui.VsThemeKind.Dark
-                    ? ThemeBrushSet.Dark : ThemeBrushSet.Light,
-                _ => ThemeBrushSet.Light
+                    ? PageTheme.Dark : PageTheme.Light,
+                _ => PageTheme.Light
             };
 
             if (_theme == requestedTheme)
@@ -2596,34 +1514,55 @@ namespace AkmlSql.Shell.Shared.Dialogs
                     Constants.ProductName, MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
                     return;
 
-                var defaults = new AppSettings();
-                switch (pageName)
-                {
-                    case "General":
-                        _settings.AutoUpdateEnabled = defaults.AutoUpdateEnabled;
-                        _settings.TelemetryEnabled = defaults.TelemetryEnabled;
-                        _settings.Theme = defaults.Theme;
-                        break;
-                    case "IntelliSense": _settings.IntelliSense = defaults.IntelliSense; break;
-                    case "Schema Cache": _settings.Cache = defaults.Cache; break;
-                    case "Formatting": _settings.Formatter = defaults.Formatter; break;
-                    case "Snippets": _settings.Snippets = defaults.Snippets; break;
-                    case "Code Analysis": _settings.CodeAnalysis = defaults.CodeAnalysis; break;
-                    case "Refactoring": _settings.Refactoring = defaults.Refactoring; break;
-                    case "History": _settings.History = defaults.History; break;
-                    case "Tabs & UI": _settings.Tabs = defaults.Tabs; break;
-                    case "Safety": _settings.Safety = defaults.Safety; break;
-                    case "Grid": _settings.Grid = defaults.Grid; break;
-                    case "Editor": _settings.EditorProductivity = defaults.EditorProductivity; break;
-                    case "Execution": _settings.ExecutionProductivity = defaults.ExecutionProductivity; break;
-                    case "Navigation": _settings.Navigation = defaults.Navigation; break;
-                    case "AI Assistance": _settings.Ai = defaults.Ai; break;
-                }
+                ResetPageToDefaultsCore(pageName);
                 LoadSettingsToControls();
             }
             catch (Exception ex)
             {
                 Log.Warning(ex, "SettingsWindow: Reset page failed");
+            }
+        }
+
+        /// <summary>
+        /// Mutates <c>_settings</c> back to defaults for the named page. Extracted
+        /// from <see cref="OnResetThisPageClick"/> so tests can exercise every page
+        /// key without spawning the confirmation MessageBox. Throws when a page
+        /// key has no Reset case — the missing-case bug becomes a loud failure
+        /// (Phase 2 C.6 regression test).
+        /// </summary>
+        internal void ResetPageToDefaultsCore(string pageName)
+        {
+            var defaults = new AppSettings();
+            switch (pageName)
+            {
+                case "General":
+                    _settings.AutoUpdateEnabled = defaults.AutoUpdateEnabled;
+                    _settings.TelemetryEnabled = defaults.TelemetryEnabled;
+                    _settings.Theme = defaults.Theme;
+                    break;
+                case "IntelliSense": _settings.IntelliSense = defaults.IntelliSense; break;
+                case "SuggestionTypes": _settings.IntelliSense.SuggestionTypes = defaults.IntelliSense.SuggestionTypes; break;
+                case "Qualification": _settings.IntelliSense.Qualification = defaults.IntelliSense.Qualification; break;
+                case "InsertOptions": _settings.IntelliSense.InsertOptions = defaults.IntelliSense.InsertOptions; break;
+                case "JoinOptions": _settings.IntelliSense.JoinOptions = defaults.IntelliSense.JoinOptions; break;
+                case "Labs": _settings.Labs = defaults.Labs; break;
+                case "Schema Cache": _settings.Cache = defaults.Cache; break;
+                case "Formatting": _settings.Formatter = defaults.Formatter; break;
+                case "Snippets": _settings.Snippets = defaults.Snippets; break;
+                case "Code Analysis": _settings.CodeAnalysis = defaults.CodeAnalysis; break;
+                case "Refactoring": _settings.Refactoring = defaults.Refactoring; break;
+                case "History": _settings.History = defaults.History; break;
+                case "Tabs & UI": _settings.Tabs = defaults.Tabs; break;
+                case "Safety": _settings.Safety = defaults.Safety; break;
+                case "Grid": _settings.Grid = defaults.Grid; break;
+                case "Editor": _settings.EditorProductivity = defaults.EditorProductivity; break;
+                case "Execution": _settings.ExecutionProductivity = defaults.ExecutionProductivity; break;
+                case "Navigation": _settings.Navigation = defaults.Navigation; break;
+                case "AI Assistance": _settings.Ai = defaults.Ai; break;
+                default:
+                    throw new InvalidOperationException(
+                        $"Page '{pageName}' has no Reset case in SettingsWindow.ResetPageToDefaultsCore. " +
+                        "When you add a new page to _pageBuilders, also add a case here.");
             }
         }
 
@@ -2650,186 +1589,16 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
         private void LoadSettingsToControls()
         {
-            // ── General ──────────────────────────────────────────────────
-            SetChecked(_chkAutoUpdate, _settings.AutoUpdateEnabled);
-            SetChecked(_chkTelemetry, _settings.TelemetryEnabled);
-            var themeIdx = (_settings.Theme?.ToLowerInvariant()) switch
-            {
-                "light" => 1,
-                "system" => 2,
-                _ => 0 // "dark" or unset
-            };
-            SetCombo(_cboTheme, themeIdx);
+            // Single dispatch loop covers every registered IPageBuilder. Adding
+            // a new page to _pageBuilders automatically picks up Load coverage —
+            // there is no second list to keep in sync, which was the root cause
+            // of the C.1-C.5 silent-discard bug fixed in this commit.
+            foreach (var controls in _pageControlsByKey.Values)
+                controls.Load(_settings);
 
-            // ── IntelliSense ─────────────────────────────────────────────
-            var i = _settings.IntelliSense;
-            SetChecked(_chkIsEnabled, i.Enabled);
-            SetChecked(_chkAutoTrigger, i.AutoTrigger);
-            SetChecked(_chkAfterDot, i.AfterDot);
-            SetChecked(_chkFuzzyMatch, i.FuzzyMatch);
-            SetChecked(_chkShowDataTypes, i.ShowDataTypes);
-            SetChecked(_chkShowNullability, i.ShowNullability);
-            SetChecked(_chkShowPkFk, i.ShowPkFk);
-            SetChecked(_chkAutoAlias, i.AutoAlias);
-            SetChecked(_chkJoinAssist, i.JoinAssist);
-            SetChecked(_chkDisableNativeIs, i.DisableNativeIntelliSense);
-            SetSlider(_sldTriggerDelay, _lblTriggerDelayValue, i.TriggerDelayMs);
-            SetSlider(_sldMaxSuggestions, _lblMaxSuggestionsValue, i.MaxSuggestions);
-            SetCombo(_cboKeywordCase, (int)i.KeywordCase);
-
-            // ── Schema Cache ─────────────────────────────────────────────
-            var c = _settings.Cache;
-            SetChecked(_chkCacheAutoRefresh, c.AutoRefresh);
-            SetChecked(_chkDetectDdl, c.DetectDdl);
-            SetChecked(_chkLazyLoadColumns, c.LazyLoadColumns);
-            SetChecked(_chkPersistToDisk, c.PersistToDisk);
-            SetSlider(_sldRefreshInterval, _lblRefreshIntervalValue, c.RefreshIntervalSeconds);
-            SetSlider(_sldMaxDatabases, _lblMaxDatabasesValue, c.MaxDatabases);
-
-            // ── Formatting ───────────────────────────────────────────────
-            var f = _settings.Formatter;
-            SetChecked(_chkFmtEnabled, f.Enabled);
-            SetChecked(_chkFormatOnPaste, f.FormatOnPaste);
-            SetChecked(_chkFormatOnSave, f.FormatOnSave);
-            SetChecked(_chkFormatOnDelimiter, f.FormatOnDelimiter);
-            SetChecked(_chkConfirmBulk, f.ConfirmBulkFormat);
-            SetChecked(_chkCreateBackups, f.CreateBackups);
-            SetChecked(_chkRespectNoformat, f.RespectNoformat);
-            SetChecked(_chkSemanticValidation, f.SemanticValidation);
-
-            // ── Snippets ─────────────────────────────────────────────────
-            var s = _settings.Snippets;
-            SetChecked(_chkSnipEnabled, s.Enabled);
-            SetChecked(_chkSnipShowInCompletion, s.ShowInCompletion);
-            SetChecked(_chkSnipFormatOnExpand, s.FormatOnExpand);
-            SetChecked(_chkSnipContextFilter, s.ContextFilter);
-            SetChecked(_chkSnipTrackUsage, s.TrackUsage);
-            SetText(_txtPersonalFolder, s.PersonalFolder);
-            SetText(_txtTeamFolder, s.TeamFolder);
-
-            // ── Code Analysis ────────────────────────────────────────────
-            var ca = _settings.CodeAnalysis;
-            SetChecked(_chkAnalysisEnabled, ca.Enabled);
-            SetChecked(_chkAnalysisRunOnType, ca.RunOnType);
-            SetChecked(_chkAnalysisRunOnSave, ca.RunOnSave);
-            SetChecked(_chkAnalysisShowInErrorList, ca.ShowInErrorList);
-
-            // ── Refactoring ──────────────────────────────────────────────
-            var rf = _settings.Refactoring;
-            SetChecked(_chkRefPreviewBeforeApply, rf.PreviewBeforeApply);
-            SetChecked(_chkRefCreateBackups, rf.CreateBackups);
-            SetChecked(_chkRefFormatAfterRefactor, rf.FormatAfterRefactor);
-            SetChecked(_chkRefIncludeCommentsInRename, rf.IncludeCommentsInRename);
-            SetChecked(_chkRefIncludeStringLiteralsInRename, rf.IncludeStringLiteralsInRename);
-            SetCombo(_cboRefRenameScope, rf.RenameScope == "projectDirectory" ? 1 : 0);
-
-            // ── History ──────────────────────────────────────────────────
-            var h = _settings.History;
-            SetChecked(_chkHistEnabled, h.Enabled);
-            SetChecked(_chkHistRecordFailures, h.RecordFailures);
-            SetChecked(_chkHistDeduplication, h.Deduplication);
-            SetChecked(_chkHistEncryptAtRest, h.EncryptAtRest);
-            SetSlider(_sldHistRetentionDays, _lblHistRetentionValue, h.RetentionDays);
-            SetSlider(_sldHistMaxEntries, _lblHistMaxEntriesValue, h.MaxEntries);
-
-            // ── Tabs & UI ────────────────────────────────────────────────
-            var t = _settings.Tabs;
-            SetChecked(_chkTabColoringEnabled, t.ColoringEnabled);
-            SetChecked(_chkTabGradientColors, t.GradientColors);
+            // Coloring rules list is rebuilt by the host — CRUD lives on
+            // SettingsWindow, not on TabsControls.
             PopulateColoringRulesList();
-            SetChecked(_chkTabSessionRecovery, t.SessionRecovery);
-            SetSlider(_sldTabAutoSaveInterval, _lblTabAutoSaveValue, t.AutoSaveInterval);
-            SetSlider(_sldTabMaxClosedTabs, _lblTabMaxClosedTabsValue, t.MaxClosedTabs);
-            SetText(_txtTabCustomWindowTitle, t.CustomWindowTitle);
-            var restoreIdx = t.RestoreOnStartup?.ToLowerInvariant() switch
-            {
-                "always" => 1,
-                "never" => 2,
-                _ => 0
-            };
-            SetCombo(_cboTabRestoreOnStartup, restoreIdx);
-
-            // ── Safety ───────────────────────────────────────────────────
-            var sf = _settings.Safety;
-            SetChecked(_chkSafetyProductionWarning, sf.ProductionWarning);
-            SetChecked(_chkSafetyDeleteWithoutWhere, sf.DeleteWithoutWhere);
-            SetChecked(_chkSafetyUpdateWithoutWhere, sf.UpdateWithoutWhere);
-            SetChecked(_chkSafetyDropConfirmation, sf.DropConfirmation);
-            SetChecked(_chkSafetyTruncateConfirmation, sf.TruncateConfirmation);
-            SetChecked(_chkSafetyTransactionReminder, sf.TransactionReminder);
-            SetSlider(_sldSafetyTransReminderInterval, _lblSafetyTransReminderValue, sf.TransactionReminderInterval);
-
-            // ── AI Assistance ────────────────────────────────────────────
-            var ai = _settings.Ai;
-            var providerIdx = (ai.Provider?.ToLowerInvariant()) switch
-            {
-                "anthropic" => 1,
-                "openai" => 2,
-                "azureopenai" => 3,
-                "gemini" => 4,
-                "ollama" => 5,
-                "lmstudio" => 6,
-                "custom" => 7,
-                _ => 0
-            };
-            SetCombo(_cboAiProvider, providerIdx);
-            SetText(_txtAiModel, ai.Model);
-            SetText(_txtAiApiKey, ai.ApiKey);
-            SetText(_txtAiEndpoint, ai.Endpoint);
-
-            var privacyIdx = (ai.PrivacyMode?.ToLowerInvariant()) switch
-            {
-                "full" => 1,
-                "anonymous" => 2,
-                "offline" => 3,
-                "disabled" => 4,
-                _ => 0 // schemaOnly
-            };
-            SetCombo(_cboAiPrivacyMode, privacyIdx);
-
-            SetSlider(_sldAiMaxTokens, _lblAiMaxTokensValue, ai.MaxTokens);
-            SetSlider(_sldAiTemperature, _lblAiTemperatureValue, (int)(ai.Temperature * 10));
-            SetSlider(_sldAiTimeout, _lblAiTimeoutValue, ai.Timeout);
-            SetSlider(_sldAiRetries, _lblAiRetriesValue, ai.Retries);
-
-            SetChecked(_chkAiTextToSql, ai.TextToSql);
-            SetChecked(_chkAiExplain, ai.Explain);
-            SetChecked(_chkAiFix, ai.Fix);
-            SetChecked(_chkAiOptimize, ai.Optimize);
-            SetChecked(_chkAiIndexSuggestions, ai.IndexSuggestions);
-            SetChecked(_chkAiChatPanel, ai.ChatPanel);
-            SetChecked(_chkAiInlineCompletion, ai.InlineCompletion);
-            SetChecked(_chkAiAutoFixOnError, ai.AutoFixOnError);
-
-            // ── Grid ─────────────────────────────────────────────────────
-            var gr = _settings.Grid;
-            SetChecked(_chkGridAggregates, gr.Aggregates);
-            SetChecked(_chkGridNullHighlight, gr.NullHighlight);
-            SetChecked(_chkGridRowNumbers, gr.RowNumbers);
-            SetChecked(_chkGridFreezeHeaders, gr.FreezeHeaders);
-            SetChecked(_chkGridExcelLargeNumberAsText, gr.ExcelLargeNumberAsText);
-
-            // ── Editor Productivity ──────────────────────────────────────
-            var ep = _settings.EditorProductivity;
-            SetChecked(_chkEdHighlightOccurrences, ep.HighlightOccurrences);
-            SetChecked(_chkEdBracketMatching, ep.BracketMatching);
-            SetChecked(_chkEdNamedRegions, ep.NamedRegions);
-            SetChecked(_chkEdStickyScroll, ep.StickyScroll);
-            SetChecked(_chkEdMinimap, ep.Minimap);
-            SetChecked(_chkEdDocumentOutline, ep.DocumentOutline);
-
-            // ── Execution ────────────────────────────────────────────────
-            var ex = _settings.ExecutionProductivity;
-            SetChecked(_chkExecShowTimer, ex.ShowExecutionTimer);
-            SetChecked(_chkExecMultiDatabase, ex.MultiDatabase);
-            SetSlider(_sldExecNotificationThreshold, _lblExecNotificationValue, ex.NotificationThreshold);
-
-            // ── Navigation ───────────────────────────────────────────────
-            var nav = _settings.Navigation;
-            SetChecked(_chkNavGoToDefinition, nav.GoToDefinition);
-            SetChecked(_chkNavPeekDefinition, nav.PeekDefinition);
-            SetChecked(_chkNavFindReferences, nav.FindReferences);
-            SetChecked(_chkNavObjectSearch, nav.ObjectSearch);
         }
 
         // ═══════════════════════════════════════════════════════════════════════
@@ -2838,190 +1607,33 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
         private void SaveControlsToSettings()
         {
-            // ── General ──────────────────────────────────────────────────
-            _settings.AutoUpdateEnabled = IsChecked(_chkAutoUpdate);
-            _settings.TelemetryEnabled = IsChecked(_chkTelemetry);
-            _settings.Theme = GetComboIndex(_cboTheme) switch
-            {
-                1 => "light",
-                2 => "system",
-                _ => "dark"
-            };
-
-            // ── IntelliSense ─────────────────────────────────────────────
-            _settings.IntelliSense.Enabled = IsChecked(_chkIsEnabled);
-            _settings.IntelliSense.AutoTrigger = IsChecked(_chkAutoTrigger);
-            _settings.IntelliSense.AfterDot = IsChecked(_chkAfterDot);
-            _settings.IntelliSense.FuzzyMatch = IsChecked(_chkFuzzyMatch);
-            _settings.IntelliSense.ShowDataTypes = IsChecked(_chkShowDataTypes);
-            _settings.IntelliSense.ShowNullability = IsChecked(_chkShowNullability);
-            _settings.IntelliSense.ShowPkFk = IsChecked(_chkShowPkFk);
-            _settings.IntelliSense.AutoAlias = IsChecked(_chkAutoAlias);
-            _settings.IntelliSense.JoinAssist = IsChecked(_chkJoinAssist);
-            _settings.IntelliSense.DisableNativeIntelliSense = IsChecked(_chkDisableNativeIs);
-            _settings.IntelliSense.TriggerDelayMs = GetSliderInt(_sldTriggerDelay);
-            _settings.IntelliSense.MaxSuggestions = GetSliderInt(_sldMaxSuggestions);
-            _settings.IntelliSense.KeywordCase = (KeywordCaseOption)GetComboIndex(_cboKeywordCase);
-
-            // ── Schema Cache ─────────────────────────────────────────────
-            _settings.Cache.AutoRefresh = IsChecked(_chkCacheAutoRefresh);
-            _settings.Cache.DetectDdl = IsChecked(_chkDetectDdl);
-            _settings.Cache.LazyLoadColumns = IsChecked(_chkLazyLoadColumns);
-            _settings.Cache.PersistToDisk = IsChecked(_chkPersistToDisk);
-            _settings.Cache.RefreshIntervalSeconds = GetSliderInt(_sldRefreshInterval);
-            _settings.Cache.MaxDatabases = GetSliderInt(_sldMaxDatabases);
-
-            // ── Formatting ───────────────────────────────────────────────
-            _settings.Formatter.Enabled = IsChecked(_chkFmtEnabled);
-            _settings.Formatter.FormatOnPaste = IsChecked(_chkFormatOnPaste);
-            _settings.Formatter.FormatOnSave = IsChecked(_chkFormatOnSave);
-            _settings.Formatter.FormatOnDelimiter = IsChecked(_chkFormatOnDelimiter);
-            _settings.Formatter.ConfirmBulkFormat = IsChecked(_chkConfirmBulk);
-            _settings.Formatter.CreateBackups = IsChecked(_chkCreateBackups);
-            _settings.Formatter.RespectNoformat = IsChecked(_chkRespectNoformat);
-            _settings.Formatter.SemanticValidation = IsChecked(_chkSemanticValidation);
-
-            // ── Snippets ─────────────────────────────────────────────────
-            _settings.Snippets.Enabled = IsChecked(_chkSnipEnabled);
-            _settings.Snippets.ShowInCompletion = IsChecked(_chkSnipShowInCompletion);
-            _settings.Snippets.FormatOnExpand = IsChecked(_chkSnipFormatOnExpand);
-            _settings.Snippets.ContextFilter = IsChecked(_chkSnipContextFilter);
-            _settings.Snippets.TrackUsage = IsChecked(_chkSnipTrackUsage);
-            _settings.Snippets.PersonalFolder = GetText(_txtPersonalFolder);
-            _settings.Snippets.TeamFolder = GetText(_txtTeamFolder);
-
-            // ── Code Analysis ────────────────────────────────────────────
-            _settings.CodeAnalysis.Enabled = IsChecked(_chkAnalysisEnabled);
-            _settings.CodeAnalysis.RunOnType = IsChecked(_chkAnalysisRunOnType);
-            _settings.CodeAnalysis.RunOnSave = IsChecked(_chkAnalysisRunOnSave);
-            _settings.CodeAnalysis.ShowInErrorList = IsChecked(_chkAnalysisShowInErrorList);
-
-            // ── Refactoring ──────────────────────────────────────────────
-            _settings.Refactoring.PreviewBeforeApply = IsChecked(_chkRefPreviewBeforeApply);
-            _settings.Refactoring.CreateBackups = IsChecked(_chkRefCreateBackups);
-            _settings.Refactoring.FormatAfterRefactor = IsChecked(_chkRefFormatAfterRefactor);
-            _settings.Refactoring.IncludeCommentsInRename = IsChecked(_chkRefIncludeCommentsInRename);
-            _settings.Refactoring.IncludeStringLiteralsInRename = IsChecked(_chkRefIncludeStringLiteralsInRename);
-            _settings.Refactoring.RenameScope = GetComboIndex(_cboRefRenameScope) == 1
-                ? "projectDirectory" : "currentScript";
-
-            // ── History ──────────────────────────────────────────────────
-            _settings.History.Enabled = IsChecked(_chkHistEnabled);
-            _settings.History.RecordFailures = IsChecked(_chkHistRecordFailures);
-            _settings.History.Deduplication = IsChecked(_chkHistDeduplication);
-            _settings.History.EncryptAtRest = IsChecked(_chkHistEncryptAtRest);
-            _settings.History.RetentionDays = GetSliderInt(_sldHistRetentionDays);
-            _settings.History.MaxEntries = GetSliderInt(_sldHistMaxEntries);
-
-            // ── Tabs & UI ────────────────────────────────────────────────
-            _settings.Tabs.ColoringEnabled = IsChecked(_chkTabColoringEnabled);
-            _settings.Tabs.GradientColors = IsChecked(_chkTabGradientColors);
-            _settings.Tabs.SessionRecovery = IsChecked(_chkTabSessionRecovery);
-            _settings.Tabs.AutoSaveInterval = GetSliderInt(_sldTabAutoSaveInterval);
-            _settings.Tabs.MaxClosedTabs = GetSliderInt(_sldTabMaxClosedTabs);
-            _settings.Tabs.CustomWindowTitle = GetText(_txtTabCustomWindowTitle);
-            _settings.Tabs.RestoreOnStartup = GetComboIndex(_cboTabRestoreOnStartup) switch
-            {
-                1 => "always",
-                2 => "never",
-                _ => "prompt"
-            };
-
-            // ── Safety ───────────────────────────────────────────────────
-            _settings.Safety.ProductionWarning = IsChecked(_chkSafetyProductionWarning);
-            _settings.Safety.DeleteWithoutWhere = IsChecked(_chkSafetyDeleteWithoutWhere);
-            _settings.Safety.UpdateWithoutWhere = IsChecked(_chkSafetyUpdateWithoutWhere);
-            _settings.Safety.DropConfirmation = IsChecked(_chkSafetyDropConfirmation);
-            _settings.Safety.TruncateConfirmation = IsChecked(_chkSafetyTruncateConfirmation);
-            _settings.Safety.TransactionReminder = IsChecked(_chkSafetyTransactionReminder);
-            _settings.Safety.TransactionReminderInterval = GetSliderInt(_sldSafetyTransReminderInterval);
-
-            // ── AI Assistance ────────────────────────────────────────────
-            _settings.Ai.Provider = GetComboIndex(_cboAiProvider) switch
-            {
-                1 => "Anthropic",
-                2 => "OpenAI",
-                3 => "AzureOpenAI",
-                4 => "Gemini",
-                5 => "Ollama",
-                6 => "LMStudio",
-                7 => "Custom",
-                _ => ""
-            };
-            _settings.Ai.Model = GetText(_txtAiModel);
-            _settings.Ai.ApiKey = GetText(_txtAiApiKey);
-            _settings.Ai.Endpoint = GetText(_txtAiEndpoint);
-            _settings.Ai.PrivacyMode = GetComboIndex(_cboAiPrivacyMode) switch
-            {
-                1 => "full",
-                2 => "anonymous",
-                3 => "offline",
-                4 => "disabled",
-                _ => "schemaOnly"
-            };
-            _settings.Ai.MaxTokens = GetSliderInt(_sldAiMaxTokens);
-            _settings.Ai.Temperature = GetSliderInt(_sldAiTemperature) / 10.0;
-            _settings.Ai.Timeout = GetSliderInt(_sldAiTimeout);
-            _settings.Ai.Retries = GetSliderInt(_sldAiRetries);
-
-            _settings.Ai.Enabled = GetComboIndex(_cboAiProvider) > 0;
-            _settings.Ai.TextToSql = IsChecked(_chkAiTextToSql);
-            _settings.Ai.Explain = IsChecked(_chkAiExplain);
-            _settings.Ai.Fix = IsChecked(_chkAiFix);
-            _settings.Ai.Optimize = IsChecked(_chkAiOptimize);
-            _settings.Ai.IndexSuggestions = IsChecked(_chkAiIndexSuggestions);
-            _settings.Ai.ChatPanel = IsChecked(_chkAiChatPanel);
-            _settings.Ai.InlineCompletion = IsChecked(_chkAiInlineCompletion);
-            _settings.Ai.AutoFixOnError = IsChecked(_chkAiAutoFixOnError);
-
-            // ── Grid ─────────────────────────────────────────────────────
-            _settings.Grid.Aggregates = IsChecked(_chkGridAggregates);
-            _settings.Grid.NullHighlight = IsChecked(_chkGridNullHighlight);
-            _settings.Grid.RowNumbers = IsChecked(_chkGridRowNumbers);
-            _settings.Grid.FreezeHeaders = IsChecked(_chkGridFreezeHeaders);
-            _settings.Grid.ExcelLargeNumberAsText = IsChecked(_chkGridExcelLargeNumberAsText);
-
-            // ── Editor Productivity ──────────────────────────────────────
-            _settings.EditorProductivity.HighlightOccurrences = IsChecked(_chkEdHighlightOccurrences);
-            _settings.EditorProductivity.BracketMatching = IsChecked(_chkEdBracketMatching);
-            _settings.EditorProductivity.NamedRegions = IsChecked(_chkEdNamedRegions);
-            _settings.EditorProductivity.StickyScroll = IsChecked(_chkEdStickyScroll);
-            _settings.EditorProductivity.Minimap = IsChecked(_chkEdMinimap);
-            _settings.EditorProductivity.DocumentOutline = IsChecked(_chkEdDocumentOutline);
-
-            // ── Execution ────────────────────────────────────────────────
-            _settings.ExecutionProductivity.ShowExecutionTimer = IsChecked(_chkExecShowTimer);
-            _settings.ExecutionProductivity.MultiDatabase = IsChecked(_chkExecMultiDatabase);
-            _settings.ExecutionProductivity.NotificationThreshold = GetSliderInt(_sldExecNotificationThreshold);
-
-            // ── Navigation ───────────────────────────────────────────────
-            _settings.Navigation.GoToDefinition = IsChecked(_chkNavGoToDefinition);
-            _settings.Navigation.PeekDefinition = IsChecked(_chkNavPeekDefinition);
-            _settings.Navigation.FindReferences = IsChecked(_chkNavFindReferences);
-            _settings.Navigation.ObjectSearch = IsChecked(_chkNavObjectSearch);
+            // Symmetrical with LoadSettingsToControls — single dispatch loop
+            // covers every registered IPageBuilder.
+            foreach (var controls in _pageControlsByKey.Values)
+                controls.Save(_settings);
         }
 
         // ═══════════════════════════════════════════════════════════════════════
         //  Null-safe helpers
         // ═══════════════════════════════════════════════════════════════════════
 
-        private static void SetChecked(CheckBox? cb, bool value)
-        {
-            if (cb != null) cb.IsChecked = value;
-        }
-
         // ═══════════════════════════════════════════════════════════════════════
         //  Coloring Rules CRUD
         // ═══════════════════════════════════════════════════════════════════════
 
+        private ListBox? GetColoringRulesList()
+            => _pageControlsByKey.TryGetValue("Tabs & UI", out var c) && c is TabsControls tc
+                ? tc.ColoringRulesList
+                : null;
+
         private void PopulateColoringRulesList()
         {
-            if (_lstColoringRules == null) return;
-            _lstColoringRules.Items.Clear();
-
+            var list = GetColoringRulesList();
+            if (list == null) return;
+            list.Items.Clear();
             foreach (var rule in _settings.Tabs.ColoringRules)
             {
-                _lstColoringRules.Items.Add($"[{rule.Label}]  {rule.Pattern}  \u2192  {rule.Color}");
+                list.Items.Add($"[{rule.Label}]  {rule.Pattern}  \u2192  {rule.Color}");
             }
         }
 
@@ -3042,20 +1654,20 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
         private void OnEditColoringRule()
         {
-            var index = _lstColoringRules?.SelectedIndex ?? -1;
+            var index = GetColoringRulesList()?.SelectedIndex ?? -1;
             if (index < 0 || index >= _settings.Tabs.ColoringRules.Count) return;
 
             var rule = _settings.Tabs.ColoringRules[index];
             if (ShowRuleEditor(rule, "Edit Environment Rule"))
             {
                 PopulateColoringRulesList();
-                _lstColoringRules!.SelectedIndex = index;
+                GetColoringRulesList()!.SelectedIndex = index;
             }
         }
 
         private void OnRemoveColoringRule()
         {
-            var index = _lstColoringRules?.SelectedIndex ?? -1;
+            var index = GetColoringRulesList()?.SelectedIndex ?? -1;
             if (index < 0 || index >= _settings.Tabs.ColoringRules.Count) return;
 
             _settings.Tabs.ColoringRules.RemoveAt(index);
@@ -3166,31 +1778,10 @@ namespace AkmlSql.Shell.Shared.Dialogs
             return accepted;
         }
 
-        private static bool IsChecked(CheckBox? cb) => cb?.IsChecked == true;
-
-        private static void SetSlider(Slider? slider, TextBlock? label, double value)
-        {
-            if (slider == null) return;
-            var clamped = Math.Max(slider.Minimum, Math.Min(slider.Maximum, value));
-            slider.Value = clamped;
-            if (label != null) label.Text = ((int)clamped).ToString(CultureInfo.InvariantCulture);
-        }
-
-        private static int GetSliderInt(Slider? slider) => slider != null ? (int)slider.Value : 0;
-
-        private static void SetCombo(ComboBox? combo, int index)
-        {
-            if (combo != null && index >= 0 && index < combo.Items.Count)
-                combo.SelectedIndex = index;
-        }
-
-        private static int GetComboIndex(ComboBox? combo) => combo?.SelectedIndex ?? 0;
-
-        private static void SetText(TextBox? textBox, string? value)
-        {
-            if (textBox != null) textBox.Text = value ?? string.Empty;
-        }
-
-        private static string GetText(TextBox? textBox) => textBox?.Text?.Trim() ?? string.Empty;
+        // IsChecked / SetChecked / SetSlider / GetSliderInt / SetCombo /
+        // GetComboIndex / SetText / GetText helpers were used by the inline
+        // LoadSettingsToControls / SaveControlsToSettings blocks that have
+        // moved into per-page IPageControls implementations (B.2-B.16).
+        // Each page now reads/writes its own controls directly.
     }
 }

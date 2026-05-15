@@ -26,6 +26,13 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         private readonly TextBlock _footer;
         private bool _isOpen;
 
+        /// <summary>
+        /// Raised when the user double-clicks a row. The controller subscribes to
+        /// this and treats it the same as Tab/Enter — commit the checked columns
+        /// and dismiss the popup. Matches Redgate SQL Prompt behavior.
+        /// </summary>
+        public event Action? CommitRequested;
+
         private readonly List<ColumnRow> _columnRows = new List<ColumnRow>();
         private int _selectedIndex = -1;
 
@@ -57,7 +64,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             {
                 FontSize = Typography.Small,
                 Padding  = new Thickness(Spacing.Sm, 3, Spacing.Sm, 3),
-                Text     = "Space: toggle | Tab/Enter: expand | Esc: cancel"
+                Text     = "Space: toggle | Tab/Enter or double-click: expand | Esc: cancel"
             };
             _footer.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
             _footer.SetResourceReference(TextBlock.BackgroundProperty, ThemeTokens.SurfaceCanvas);
@@ -305,12 +312,36 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             grid.Children.Add(nameText);
             grid.Children.Add(typeText);
 
-            return new Border
+            var rowVisual = new Border
             {
                 Child      = grid,
                 Background = Brushes.Transparent,   // theme-independent placeholder; selected state replaces this
                 Padding    = new Thickness(0)
             };
+
+            // Mouse interaction (SQL Prompt parity):
+            //   • Single click on a row → select that row (so subsequent Space toggles
+            //     the checkbox the user just clicked, and the highlight follows the
+            //     mouse without requiring keyboard navigation).
+            //   • Double click on a row → commit the popup (same as Tab/Enter), so
+            //     users who prefer mouse can insert columns without touching the
+            //     keyboard.
+            rowVisual.MouseLeftButtonDown += (sender, e) =>
+            {
+                int idx = _columnRows.IndexOf(row);
+                if (idx >= 0 && idx != _selectedIndex)
+                {
+                    _selectedIndex = idx;
+                    UpdateSelection();
+                }
+                if (e.ClickCount == 2)
+                {
+                    CommitRequested?.Invoke();
+                    e.Handled = true;
+                }
+            };
+
+            return rowVisual;
         }
 
         private void UpdateRowVisual(ColumnRow row)
@@ -354,7 +385,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         {
             int total = _columnRows.Count;
             int checkedCount = _columnRows.Count(r => r.IsChecked);
-            _footer.Text = string.Format("{0}/{1} columns selected | Space: toggle | Tab: expand", checkedCount, total);
+            _footer.Text = string.Format("{0}/{1} columns selected | Space: toggle | Tab/Enter or double-click: expand", checkedCount, total);
         }
 
         private static SolidColorBrush FrozenBrush(Color color)
