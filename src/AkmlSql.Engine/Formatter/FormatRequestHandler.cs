@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text;
+using System.Text.Json;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Engine.Refactoring;
 using AkmlSql.Engine.Refactoring.Operations;
@@ -315,6 +316,67 @@ public class FormatRequestHandler(ProfileManager profileManager)
         {
             Log.Information("Cancelling bulk format session {SessionId}", request.SessionId);
             cts.Cancel();
+        }
+    }
+
+    /// <summary>
+    /// Spec 020 US3 (T049) — returns the canonical Format Settings Schema so the Format Styles
+    /// editor can build its tree from one source of truth. The schema is built once at startup
+    /// (lazy via <see cref="FormatSettingSchema.Default"/>) and cached for the life of the process.
+    /// Short-circuits with <see cref="StyleEditorSchemaResponse.Cached"/> = true when the shell's
+    /// <c>ClientSchemaVersion</c> matches.
+    /// </summary>
+    public StyleEditorSchemaResponse HandleStyleEditorSchema(StyleEditorSchemaRequest request)
+    {
+        try
+        {
+            var schema = FormatSettingSchema.Default;
+
+            // Short-circuit: shell's cache is current
+            if (request.ClientSchemaVersion.HasValue && request.ClientSchemaVersion.Value == schema.SchemaVersion)
+            {
+                return new StyleEditorSchemaResponse
+                {
+                    SchemaVersion = schema.SchemaVersion,
+                    SchemaJson = null,
+                    Cached = true,
+                };
+            }
+
+            // Optionally filter unsupported entries
+            var payload = schema;
+            if (!request.IncludeUnsupported)
+            {
+                payload = new FormatSettingSchema
+                {
+                    SchemaVersion = schema.SchemaVersion,
+                    Groups = [..schema.Groups],
+                    Settings = [..schema.Settings.Where(s => s.Status != "Unsupported")],
+                };
+            }
+
+            var json = JsonSerializer.Serialize(payload, new JsonSerializerOptions
+            {
+                WriteIndented = false,
+                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+            });
+
+            return new StyleEditorSchemaResponse
+            {
+                SchemaVersion = schema.SchemaVersion,
+                SchemaJson = json,
+                Cached = false,
+            };
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Style editor schema request failed");
+            return new StyleEditorSchemaResponse
+            {
+                SchemaVersion = 0,
+                ErrorMessage = ex.Message,
+                Cached = false,
+            };
         }
     }
 

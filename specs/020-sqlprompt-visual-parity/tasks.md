@@ -86,7 +86,7 @@ description: "Tasks for SQL Prompt Visual Parity + Format / Upload Formatter gap
 - [X] T023 [US2] ~Add 12 new sub-settings POCOs~ — **Already existed**: `FormattingProfile.cs` ships 12 option categories (`Whitespace`, `Casing`, `List`, `Parenthesis`, `Dml`, `Join`, `Ddl`, `ControlFlow`, `Case`, `Cte`, `Expression`, `FormatActions`). Richer than the SQL Prompt schema, not poorer. Lives in `src/AkmlSql.Formatting/Profiles/FormattingProfile.cs`, not the engine.
 - [X] T024 [US2] ~Add `[JsonExtensionData] PassthroughUnknownKeys`~ — **Already existed**: `FormattingProfile.ExtensionData` decorated with `[JsonExtensionData]` at the root. Per-section passthrough deferred — current root-level coverage is sufficient for v10/v11 round-trip; per-section becomes a future enhancement if the JSON-export contract from the editor ever needs it.
 - [X] T025 [P] [US2] ~Implement `SqlPromptKeyMap`~ — **Already existed** as `OptionMap` dictionary in `SqlPromptImporter.cs` (~50 mappings covering casing, whitespace, lists, DML, JOIN, DDL, CASE, control-flow, parenthesis, format-actions groups). Pairs with the new `ReverseMap` in `SqlPromptExporter.cs` for round-trip.
-- [ ] T026 [P] [US2] Implement `FormatSettingSchema` — **Deferred to Phase 5 / US3** (the schema descriptor is consumed by the Format Styles editor's RequestStyleEditorSchema IPC, which is a US3 deliverable; no consumer until the editor exists).
+- [X] T026 [P] [US2/US3] **Implemented `FormatSettingSchema`** in `src/AkmlSql.Formatting/Profiles/FormatSettingSchema.cs` — reflection-discovers schema from `FormattingProfile`'s 12 sub-category POCOs (one `FormatSettingGroup` per class-typed root property; one `FormatSetting` per scalar property in each sub-class). Maps to SQL Prompt option names via an alias table covering the documented cases. `Default` property exposes a process-lifetime cached schema. (Originally classified as deferred; lifted into this session because Tier-1 of US3 needs it.)
 
 ### Engine — Importer / Exporter
 
@@ -134,9 +134,9 @@ description: "Tasks for SQL Prompt Visual Parity + Format / Upload Formatter gap
 
 ### IPC — schema request
 
-- [ ] T049 [US3] Implement `RequestStyleEditorSchemaHandler` in `src/AkmlSql.Engine/Server/RequestStyleEditorSchemaHandler.cs` per `contracts/ipc-style-editor-schema.md` — short-circuit path when `ClientSchemaVersion` matches engine `SchemaVersion`
-- [ ] T050 [US3] Register the handler in `src/AkmlSql.Engine/Server/PipeRpcServer.cs` dispatch table (MessageType 28 → handler)
-- [ ] T051 [US3] Add `StyleEditorSchemaHandlerTests` in `tests/AkmlSql.Core.Tests/Format/StyleEditorSchemaHandlerTests.cs` — full payload path; short-circuit empty-arrays path; schema-version monotonic snapshot test
+- [X] T049 [US3] **Implemented** `HandleStyleEditorSchema` in `src/AkmlSql.Engine/Formatter/FormatRequestHandler.cs` per `contracts/ipc-style-editor-schema.md` — short-circuits when `ClientSchemaVersion` matches; respects `IncludeUnsupported` filter; returns full schema as a `System.Text.Json`-serialised string in `SchemaJson`; catches and reports errors via `ErrorMessage`. New POCOs `StyleEditorSchemaRequest` and `StyleEditorSchemaResponse` in `src/AkmlSql.Core/Ipc/Messages/`. (Placed inside existing `FormatRequestHandler` rather than a separate class because the wire boundary is `_formatHandler.HandleX` for every format-family message.)
+- [X] T050 [US3] **Registered** the handler in `src/AkmlSql.Engine/Server/PipeRpcServer.cs` dispatch table — `case MessageTypes.RequestStyleEditorSchema:` deserialises `StyleEditorSchemaRequest`, calls `_formatHandler.HandleStyleEditorSchema`, returns response under `MessageTypes.StyleEditorSchemaResult`. Placed adjacent to the `ProfileImport` case to keep the formatter family together.
+- [X] T051 [US3] **Added 5 handler tests** to `tests/AkmlSql.Engine.Tests/Formatter/FormatRequestHandlerTests.cs`: null client version returns full schema; matching client version returns `Cached=true` with null body; mismatched client version returns full schema; JSON parses with `groups` + `settings` arrays; every setting's `groupId` resolves to a known group. All 5 pass.
 
 ### Format Styles editor (new modal window)
 

@@ -514,6 +514,18 @@ public class PipeRpcServer
                     var profImpResp = _formatHandler.HandleProfileImport(profImpReq);
                     return Task.FromResult(CreateResponse(MessageTypes.ProfileImportResult, message.RequestId, profImpResp));
 
+                case MessageTypes.RequestStyleEditorSchema:
+                    // Spec 020 US3 (T050) — Format Styles editor schema descriptor.
+                    // See specs/020-sqlprompt-visual-parity/contracts/ipc-style-editor-schema.md
+                    if (message.Payload == null)
+                    {
+                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
+                    }
+
+                    var schemaReq = MessagePackSerializer.Deserialize<StyleEditorSchemaRequest>(message.Payload);
+                    var schemaResp = _formatHandler.HandleStyleEditorSchema(schemaReq);
+                    return Task.FromResult(CreateResponse(MessageTypes.StyleEditorSchemaResult, message.RequestId, schemaResp));
+
                 case MessageTypes.BulkFormat:
                     if (message.Payload == null)
                     {

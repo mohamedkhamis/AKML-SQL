@@ -174,4 +174,87 @@ public class FormatRequestHandlerTests : IDisposable
 
         Assert.Contains(response.Profiles, p => p.Name == "TestProfile");
     }
+
+    // ── HandleStyleEditorSchema (Spec 020 US3 T049) ──────────────────────
+
+    [Fact]
+    public void HandleStyleEditorSchema_NullClientVersion_ReturnsFullSchema()
+    {
+        var response = _handler.HandleStyleEditorSchema(new StyleEditorSchemaRequest
+        {
+            ClientSchemaVersion = null,
+            IncludeUnsupported = true,
+        });
+
+        Assert.True(response.SchemaVersion > 0, "SchemaVersion should be positive");
+        Assert.False(response.Cached);
+        Assert.NotNull(response.SchemaJson);
+        Assert.NotEqual(string.Empty, response.SchemaJson);
+        Assert.Null(response.ErrorMessage);
+    }
+
+    [Fact]
+    public void HandleStyleEditorSchema_MatchingClientVersion_ReturnsCachedNoBody()
+    {
+        // First call: get the current version
+        var first = _handler.HandleStyleEditorSchema(new StyleEditorSchemaRequest());
+        var version = first.SchemaVersion;
+
+        // Second call with matching version
+        var response = _handler.HandleStyleEditorSchema(new StyleEditorSchemaRequest
+        {
+            ClientSchemaVersion = version,
+        });
+
+        Assert.Equal(version, response.SchemaVersion);
+        Assert.True(response.Cached, "Should short-circuit when ClientSchemaVersion matches");
+        Assert.Null(response.SchemaJson);
+    }
+
+    [Fact]
+    public void HandleStyleEditorSchema_MismatchedClientVersion_ReturnsFullSchema()
+    {
+        var response = _handler.HandleStyleEditorSchema(new StyleEditorSchemaRequest
+        {
+            ClientSchemaVersion = 999_999, // certainly not the current version
+        });
+
+        Assert.False(response.Cached);
+        Assert.NotNull(response.SchemaJson);
+    }
+
+    [Fact]
+    public void HandleStyleEditorSchema_SchemaJsonContainsGroupsAndSettings()
+    {
+        var response = _handler.HandleStyleEditorSchema(new StyleEditorSchemaRequest());
+
+        Assert.NotNull(response.SchemaJson);
+        using var doc = System.Text.Json.JsonDocument.Parse(response.SchemaJson!);
+        var root = doc.RootElement;
+
+        Assert.True(root.TryGetProperty("schemaVersion", out _));
+        Assert.True(root.TryGetProperty("groups", out var groups));
+        Assert.True(root.TryGetProperty("settings", out var settings));
+        Assert.True(groups.GetArrayLength() > 0, "Expected at least one group");
+        Assert.True(settings.GetArrayLength() > 0, "Expected at least one setting");
+    }
+
+    [Fact]
+    public void HandleStyleEditorSchema_EverySettingResolvesToAGroup()
+    {
+        var response = _handler.HandleStyleEditorSchema(new StyleEditorSchemaRequest());
+
+        using var doc = System.Text.Json.JsonDocument.Parse(response.SchemaJson!);
+        var groupIds = doc.RootElement.GetProperty("groups")
+            .EnumerateArray()
+            .Select(g => g.GetProperty("id").GetString())
+            .ToHashSet();
+
+        foreach (var setting in doc.RootElement.GetProperty("settings").EnumerateArray())
+        {
+            var groupId = setting.GetProperty("groupId").GetString();
+            Assert.True(groupId != null && groupIds.Contains(groupId),
+                $"Setting '{setting.GetProperty("id").GetString()}' references unknown groupId '{groupId}'");
+        }
+    }
 }
