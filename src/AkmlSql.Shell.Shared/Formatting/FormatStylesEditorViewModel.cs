@@ -180,6 +180,7 @@ namespace AkmlSql.Shell.Shared.Formatting
         }
 
         private CancellationTokenSource? _previewCts;
+        private readonly object _previewCtsLock = new();
         private int _previewSequence;
 
         /// <summary>
@@ -274,10 +275,24 @@ namespace AkmlSql.Shell.Shared.Formatting
         /// </summary>
         public void QueuePreviewAsync()
         {
-            _previewCts?.Cancel();
-            _previewCts = new CancellationTokenSource();
-            var token = _previewCts.Token;
-            var sequence = System.Threading.Interlocked.Increment(ref _previewSequence);
+            CancellationToken token;
+            int sequence;
+
+            // PR-235 re-review fix: QueuePreviewAsync is called from BOTH the UI thread
+            // (SetWorkingValue / PreviewSample setter) and a background Task
+            // (LoadSchemaAsync continuation fires QueuePreviewAsync after seeding). Without
+            // this lock, two callers could simultaneously read _previewCts, both call Cancel
+            // on the same instance, both assign new instances — leaking one CTS and leaving
+            // _previewCts holding a token whose request the other caller has already started.
+            // The lock guarantees atomic Cancel-then-Replace-then-read-Token + sequence-bump.
+            lock (_previewCtsLock)
+            {
+                _previewCts?.Cancel();
+                _previewCts?.Dispose();
+                _previewCts = new CancellationTokenSource();
+                token = _previewCts.Token;
+                sequence = System.Threading.Interlocked.Increment(ref _previewSequence);
+            }
 
             _ = Task.Run(async () =>
             {
