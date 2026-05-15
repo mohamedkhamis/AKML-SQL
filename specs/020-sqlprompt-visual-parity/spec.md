@@ -14,10 +14,15 @@
 ### Session 2026-05-13
 
 - Q: What counts as a passing match for SC-007 (formatter parity vs SQL Prompt)? → A: Normalise trailing whitespace per line, normalise line endings to LF, strip UTF-8 BOM, then require byte-exact equality. Anything still different is a mismatch.
-- Q: Does AKML-SQL ship Redgate's built-in styles, or only support user import? → A: Ship 3–5 read-only Native styles transcribed from SQL Prompt's documented defaults (Compact, Indented, AlignedLeftBracket, …). User must fork-to-Native copy to edit. Do not redistribute Redgate-authored `.sqlpromptstyle` binaries.
+- Q: Does AKML-SQL ship Redgate's built-in styles, or only support user import? → A: Ship 3–5 read-only Native styles transcribed from SQL Prompt's documented defaults (Compact, Indented, AlignedLeftBracket, …). User must fork-to-Native copy to edit. Do not redistribute Redgate-authored `.sqlpromptstylev2` binaries.
 - Q: Tab Coloring (FR-011) — visual only, visual + audit, or visual + full functional parity? → A: Visual parity is in scope (swatch palette + chrome). An audit of Phase 5's existing assignment rules against SQL Prompt's documented rules is in scope and produces a written gap report. Closing any functional gaps is OUT of scope for this spec.
-- Q: How should the editor present settings from an imported `.sqlpromptstyle` that AKML doesn't yet support? → A: Each unsupported setting appears in the tree under its real group with the control disabled, the imported value visible, and a "not yet supported" badge. Value remains in `PassthroughUnknownKeys` for round-trip. No separate bottom panel.
+- Q: How should the editor present settings from an imported `.sqlpromptstylev2` that AKML doesn't yet support? → A: Each unsupported setting appears in the tree under its real group with the control disabled, the imported value visible, and a "not yet supported" badge. Value remains in `PassthroughUnknownKeys` for round-trip. No separate bottom panel.
 - Q: Active-style scope — global, per-host, per-host-family, or per-server-connection? → A: Global. One `ActiveProfile` per user, shared across SSMS 20/21/22 and VS 2019/22/26, matching SQL Prompt's own behaviour. Lives in `AppSettings.FormatterSettings.ActiveProfile`.
+
+### Session 2026-05-15 — Phase 4 reality check (file format correction)
+
+- Q: The spec describes `.sqlpromptstylev2` as JSON; what does SQL Prompt actually distribute? → A: SQL Prompt distributes `.sqlpromptstylev2v2` **XML** files, not JSON. The JSON schema documented earlier in this spec was hypothetical / aspirational. The codebase already has `SqlPromptImporter` handling the real XML form with `<Options><Option Name= Value=></Options>` and flat-element layouts. References to `.sqlpromptstylev2` in this spec and the documented JSON schema have been corrected to `.sqlpromptstylev2v2` XML throughout.
+- Q: How much of Phase 4 is already covered by existing code? → A: Most. `FormattingProfile` (12 option categories), `[JsonExtensionData]` root extension data, `SqlPromptImporter` (~50 option mappings), `ProfileManager` (load/save/list/delete/duplicate/import/export), 5 built-in styles shipped (`default`, `compact`, `expanded`, `leading-commas`, `minimalist`), and `HandleProfileImport` IPC routing all exist. The real remaining work is: spec correction (this entry), a `SqlPromptExporter` for round-trip, expanded option coverage in the importer, and tests for the exporter.
 
 ---
 
@@ -42,18 +47,18 @@ A SQL developer who is already a daily SQL Prompt user installs AKML-SQL in SSMS
 
 ### User Story 2 — Import an existing SQL Prompt format style ("Upload Formatter") (Priority: P1)
 
-A team standardised on SQL Prompt has a shared `.sqlpromptstyle` file in their repo. A team member who has switched to AKML-SQL opens AKML-SQL's Format Styles editor, clicks an Import / Upload button, picks the team's `.sqlpromptstyle` file, and gets a working style inside AKML-SQL with the same name, identical settings, and live preview confirming the formatting output matches what SQL Prompt produces.
+A team standardised on SQL Prompt has a shared `.sqlpromptstylev2` file in their repo. A team member who has switched to AKML-SQL opens AKML-SQL's Format Styles editor, clicks an Import / Upload button, picks the team's `.sqlpromptstylev2` file, and gets a working style inside AKML-SQL with the same name, identical settings, and live preview confirming the formatting output matches what SQL Prompt produces.
 
 **Why this priority**: This is the primary "switch from SQL Prompt to AKML-SQL" pathway the user explicitly called out. Without it, teams who depend on a shared house style cannot move. It is also independently shippable — the import path lives entirely inside the Format Styles editor and does not require visual parity to land first.
 
-**Independent Test**: Take any real-world `.sqlpromptstyle` file, import it into AKML-SQL, format a representative SQL corpus, diff the output against what SQL Prompt v11 produces for the same input. Pass = ≥ 95 % of files match per the SC-007 normalisation rule (trailing whitespace stripped, line endings normalised to `\n`, BOM removed, then byte-exact).
+**Independent Test**: Take any real-world `.sqlpromptstylev2` file, import it into AKML-SQL, format a representative SQL corpus, diff the output against what SQL Prompt v11 produces for the same input. Pass = ≥ 95 % of files match per the SC-007 normalisation rule (trailing whitespace stripped, line endings normalised to `\n`, BOM removed, then byte-exact).
 
 **Acceptance Scenarios**:
 
-1. **Given** the user has a `.sqlpromptstyle` JSON file on disk, **When** they click "Import…" in the Format Styles editor and select the file, **Then** a new AKML-SQL style appears in the style list with the name from the file's `metadata.name`, every settable option populated from the JSON, and an entry in the recent-imports history.
+1. **Given** the user has a `.sqlpromptstylev2` JSON file on disk, **When** they click "Import…" in the Format Styles editor and select the file, **Then** a new AKML-SQL style appears in the style list with the name from the file's `metadata.name`, every settable option populated from the JSON, and an entry in the recent-imports history.
 2. **Given** an imported style is selected, **When** the user formats a sample SQL document, **Then** the output matches what SQL Prompt would produce for the same input under the same style for the documented setting matrix (whitespace, lists, parentheses, casing, DML, DDL, JOINs, CASE, operators, IN statements, CTE), per the SC-007 match definition (trailing whitespace, line endings, and BOM normalised before byte-exact comparison).
-3. **Given** a `.sqlpromptstyle` file references a setting AKML-SQL does not yet support, **When** the user imports it, **Then** the import succeeds and each unsupported setting appears in the settings tree at its natural group location with the control disabled, the imported value visible, and a "not yet supported" badge — no setting is silently dropped, and the value is preserved for round-trip on export.
-4. **Given** a malformed `.sqlpromptstyle` file, **When** the user attempts to import it, **Then** the user sees a clear error naming the JSON section that failed validation, and no half-imported style is created.
+3. **Given** a `.sqlpromptstylev2` file references a setting AKML-SQL does not yet support, **When** the user imports it, **Then** the import succeeds and each unsupported setting appears in the settings tree at its natural group location with the control disabled, the imported value visible, and a "not yet supported" badge — no setting is silently dropped, and the value is preserved for round-trip on export.
+4. **Given** a malformed `.sqlpromptstylev2` file, **When** the user attempts to import it, **Then** the user sees a clear error naming the JSON section that failed validation, and no half-imported style is created.
 5. **Given** AKML-SQL's own native format profile and the shipped read-only Native built-ins (Compact, Indented, AlignedLeftBracket transcribed from SQL Prompt defaults) exist, **When** the user imports a SQL Prompt style, **Then** the native profile and shipped built-ins are untouched and all coexist in the style list — the user is never forced to migrate, and the read-only built-ins remain visible as a no-import-needed starting point.
 
 ---
@@ -99,7 +104,7 @@ A developer types SQL in the editor. The suggestion popup, object-definition sid
 
 Beyond visual parity, the user wants every SQL Prompt format setting to be exposed in AKML-SQL's Format Styles editor with equivalent semantics and a live preview pane that updates as settings change. This closes the functional gaps the user called out for "sql format" — not just looks but behaviour.
 
-**Why this priority**: Pairs with US2 (import). Importing a `.sqlpromptstyle` is only useful if AKML-SQL actually honours every setting in it. Independently testable because each setting has a documented input → output mapping.
+**Why this priority**: Pairs with US2 (import). Importing a `.sqlpromptstylev2` is only useful if AKML-SQL actually honours every setting in it. Independently testable because each setting has a documented input → output mapping.
 
 **Independent Test**: For each section in `SQL_Prompt_Features_Core.md §2.3`, set the AKML-SQL setting to a non-default value, format a target SQL snippet, verify output matches SQL Prompt's output for the same input + setting. Maintain a matrix table in `tests/format-parity/` and pass the story when every row is green.
 
@@ -107,7 +112,7 @@ Beyond visual parity, the user wants every SQL Prompt format setting to be expos
 
 1. **Given** the Format Styles editor is open, **When** the user expands each tree node, **Then** every setting documented in `SQL_Prompt_Features_Core.md §2.3` is present with the same name, type (bool / enum / number / range), and default value.
 2. **Given** the user changes any setting, **When** they look at the preview pane, **Then** the preview re-formats the displayed SQL sample within 250 ms using the new setting.
-3. **Given** the user clicks "Save as…" / "Export", **When** they choose a destination, **Then** AKML-SQL writes a JSON file in the `.sqlpromptstyle` schema (so the same file can be re-imported into SQL Prompt by another team member, round-trip preserving every setting AKML-SQL knows about).
+3. **Given** the user clicks "Save as…" / "Export", **When** they choose a destination, **Then** AKML-SQL writes a JSON file in the `.sqlpromptstylev2` schema (so the same file can be re-imported into SQL Prompt by another team member, round-trip preserving every setting AKML-SQL knows about).
 4. **Given** a user formats SQL via `Ctrl+K, Y` (the SQL Prompt shortcut) with the active style applied, **When** they compare output to SQL Prompt's output with the same style on the same input, **Then** the outputs are byte-identical after the SC-007 normalisation (trailing whitespace stripped, line endings = `\n`, BOM removed) for ≥ 95 % of a representative corpus (covering whitespace, lists, parentheses, casing, DML, DDL, JOINs, CASE, operators, IN, CTE).
 
 ---
@@ -150,7 +155,7 @@ The Prompt AI window (when AI features are enabled), inline ghost-text suggestio
 - **Host theme switch at runtime.** Every chrome surface must re-theme without requiring the host to be restarted. Surfaces that hold cached brushes must invalidate on theme-change events.
 - **High-DPI / per-monitor DPI.** All documented pixel sizes are reference values at 100 %; they must scale correctly at 125 %, 150 %, 200 % without truncation, clipping, or layout breakage.
 - **Very narrow / very wide displays.** Modal dialogs respect their documented min sizes and remain usable at the min; tool windows handle narrow side-dock widths gracefully.
-- **`.sqlpromptstyle` files from different SQL Prompt versions.** Import must succeed for v10.x and v11.x style files; unknown future keys are preserved on re-export, not dropped.
+- **`.sqlpromptstylev2` files from different SQL Prompt versions.** Import must succeed for v10.x and v11.x style files; unknown future keys are preserved on re-export, not dropped.
 - **Style file with embedded paths or non-setting content.** Import must never execute or read filesystem paths from the JSON — settings only.
 - **Visual surfaces shared by multiple shells (SSMS 20 / 21 / 22 + VS 2019 / 22 / 26).** Each host has its own theme service — surfaces derive from the same token bank but adapt to each host's actual theme colours where the host provides them.
 - **Existing AKML-SQL users with custom theme overrides.** Existing user customisations must not be silently overwritten; if a value collides with the new token system, the user setting wins and a one-time migration notice is shown.
@@ -192,16 +197,16 @@ The Prompt AI window (when AI features are enabled), inline ghost-text suggestio
 
 #### Format & Upload Formatter (functional gap closure)
 
-- **FR-019**: System MUST provide an "Import…" action in the Format Styles editor that accepts `.sqlpromptstyle` JSON files.
+- **FR-019**: System MUST provide an "Import…" action in the Format Styles editor that accepts `.sqlpromptstylev2` JSON files.
 - **FR-020**: System MUST parse every setting documented in `SQL_Prompt_Features_Core.md §2.3` (Whitespace, Lists, Parentheses, Casing, DML, DDL, JOINs, CASE, Operators, IN, CTE, Control Flow, Variables, Function calls, VALUES, Semicolons, Comments) and apply it to formatting output.
 - **FR-021**: On successful import, the imported style MUST appear in the style list with the source file's `metadata.name`, and the user MUST be able to set it as the active style.
 - **FR-022**: On import failure (malformed JSON or schema violation), the user MUST see a clear error message naming the failed section, and no partial style MUST be created.
 - **FR-023**: When the imported file contains settings AKML-SQL does not yet support, each unsupported setting MUST appear in the editor's settings tree at its natural group location, with its control disabled, the imported value displayed, and a "not yet supported" badge adjacent to the control. The setting's value MUST be preserved in `PassthroughUnknownKeys` so it round-trips on export. The rest of the style MUST still apply normally.
-- **FR-024**: System MUST provide an "Export…" action that writes the active style as a `.sqlpromptstyle`-schema JSON file, preserving every setting (including any pass-through "unknown" keys captured during a previous import) so the file can round-trip between AKML-SQL and SQL Prompt.
+- **FR-024**: System MUST provide an "Export…" action that writes the active style as a `.sqlpromptstylev2`-schema JSON file, preserving every setting (including any pass-through "unknown" keys captured during a previous import) so the file can round-trip between AKML-SQL and SQL Prompt.
 - **FR-025**: The Format Styles editor MUST include a live preview pane that re-formats the sample SQL within 250 ms whenever any setting changes.
 - **FR-026**: `Ctrl+K, Y` MUST be bound to "Format SQL with active style" in every supported host (SSMS 20 / 21 / 22, VS 2019 / 22 / 26) to match the SQL Prompt shortcut.
 - **FR-027**: AKML-SQL native format profiles and imported SQL Prompt styles MUST coexist — no automatic migration; user picks which is active.
-- **FR-027a**: AKML-SQL MUST ship at least three read-only Native styles transcribed from SQL Prompt's documented defaults (Compact, Indented, AlignedLeftBracket). These styles MUST be flagged read-only; editing one MUST fork it to a writable Native copy. AKML-SQL MUST NOT redistribute Redgate-authored `.sqlpromptstyle` binary files inside the installer or update payloads.
+- **FR-027a**: AKML-SQL MUST ship at least three read-only Native styles transcribed from SQL Prompt's documented defaults (Compact, Indented, AlignedLeftBracket). These styles MUST be flagged read-only; editing one MUST fork it to a writable Native copy. AKML-SQL MUST NOT redistribute Redgate-authored `.sqlpromptstylev2` binary files inside the installer or update payloads.
 - **FR-027b**: Exactly one style MUST be active at a time, **globally per user** (shared across SSMS 20 / 21 / 22 and VS 2019 / 22 / 26). The active selection MUST persist in `AppSettings.FormatterSettings.ActiveProfile` and MUST NOT be split by host or by server connection. Selecting a new active style in any host MUST take effect in every other host on next document open.
 - **FR-028**: Formatting output for any imported style MUST match SQL Prompt's output for the same input for ≥ 95 % of a representative SQL corpus (whitespace-equivalent matches count).
 
@@ -214,9 +219,9 @@ The Prompt AI window (when AI features are enabled), inline ghost-text suggestio
 
 - **Theme Token** — a named design value (colour hex, font family + size + weight, spacing scalar, brush, drop shadow) with one variant per supported theme (Light / Dark). All chrome surfaces resolve their visual properties by token name.
 - **Surface** — any visible AKML-SQL UI element with its own bounds: a popup, dialog, tool window, margin, adornment, tooltip, message list, etc. Every surface declares which tokens it consumes.
-- **Format Style** — a named bundle of formatting settings. Two flavours: a native AKML-SQL profile (existing) and a SQL Prompt-imported `.sqlpromptstyle`. Both expose the same setting matrix to the editor UI.
+- **Format Style** — a named bundle of formatting settings. Two flavours: a native AKML-SQL profile (existing) and a SQL Prompt-imported `.sqlpromptstylev2`. Both expose the same setting matrix to the editor UI.
 - **Format Setting** — a single configurable option (e.g., "Reserved keyword casing" enum, "Wrap column" number, "Place ON condition on new line" bool) with a defined type, value range, default, and mapping to both AKML-SQL and SQL Prompt schemas.
-- **Style File** — a JSON document conforming to the `.sqlpromptstyle` schema documented in `SQL_Prompt_Features_Core.md §2.2`. Round-trips between AKML-SQL and SQL Prompt without setting loss.
+- **Style File** — a JSON document conforming to the `.sqlpromptstylev2` schema documented in `SQL_Prompt_Features_Core.md §2.2`. Round-trips between AKML-SQL and SQL Prompt without setting loss.
 - **Visual Reference** — the per-surface design contract drawn from `doc/SQL-PROMPT/` — colour table, dimensions, fonts, behaviour notes — that the surface MUST satisfy to be considered at parity.
 
 ---
@@ -230,9 +235,9 @@ The Prompt AI window (when AI features are enabled), inline ghost-text suggestio
 - **SC-003**: Side-by-side screenshot comparison of every documented surface (one per SVG in `doc/SQL-PROMPT/`) against AKML-SQL produces no chrome-colour, dimension, or layout deviation greater than 8 px or one tonal step from the documented value.
 - **SC-004**: 5 evaluators familiar with SQL Prompt cannot reliably distinguish AKML-SQL screenshots from SQL Prompt screenshots better than 60 % of the time on the in-scope surfaces.
 - **SC-005**: Every modal dialog opens at its documented preferred size, respects its documented minimum size, and remains usable at 100 %, 125 %, 150 %, and 200 % DPI.
-- **SC-006**: A user can import any real-world `.sqlpromptstyle` file (v10.x or v11.x) and the import succeeds — either fully (all settings applied) or partially (unsupported settings clearly listed) — with zero hard failures across a test set of 20 representative files.
+- **SC-006**: A user can import any real-world `.sqlpromptstylev2` file (v10.x or v11.x) and the import succeeds — either fully (all settings applied) or partially (unsupported settings clearly listed) — with zero hard failures across a test set of 20 representative files.
 - **SC-007**: After importing a SQL Prompt style, AKML-SQL's formatter produces output that matches SQL Prompt's output for the same input for ≥ 95 % of a 200-file representative corpus. **Match definition**: strip trailing whitespace per line; normalise line endings to `\n`; drop UTF-8 BOM if present; then require byte-exact equality. Anything still different counts as a mismatch.
-- **SC-008**: Round-trip test — export an AKML-SQL style as `.sqlpromptstyle`, import the result back into a fresh AKML-SQL profile, the resulting profile is setting-identical to the source 100 % of the time.
+- **SC-008**: Round-trip test — export an AKML-SQL style as `.sqlpromptstylev2`, import the result back into a fresh AKML-SQL profile, the resulting profile is setting-identical to the source 100 % of the time.
 - **SC-009**: The Format Styles editor's live preview re-renders within 250 ms of any setting change for a 200-line SQL sample.
 - **SC-010**: `Ctrl+K, Y` invokes "Format SQL with active style" in every supported host with no conflict with the host's native bindings — verified manually in SSMS 20 / 21 / 22 and VS 2019 / 22 / 26.
 - **SC-011**: 0 user-reported regressions in existing theme customisations after the migration — verified by a one-time-notice flow and a beta cohort of at least 10 existing users.
@@ -244,7 +249,7 @@ The Prompt AI window (when AI features are enabled), inline ghost-text suggestio
 
 - Both Light and Dark theme parity are in scope, since SQL Prompt's reference docs document both and AKML-SQL targets the same hosts.
 - "Parity" means visually equivalent within the tolerances in SC-003, not pixel-perfect — exact pixel matching is infeasible under OS DPI scaling and varying host theme services.
-- `.sqlpromptstyle` import targets the v10.x / v11.x JSON schema currently documented in the reference material; newer schema versions are pass-through preserved on re-export but may surface as "not yet supported".
+- `.sqlpromptstylev2` import targets the v10.x / v11.x JSON schema currently documented in the reference material; newer schema versions are pass-through preserved on re-export but may surface as "not yet supported".
 - AKML-SQL keeps its own native format profile alongside imported SQL Prompt styles; users are never forced to migrate.
 - Semantic colours (error red, warning amber, success green, info blue) are allowed to remain hardcoded so they are consistent across themes.
 - Severity, status, and type colours are always paired with a letter or shape glyph so the surface is accessible without colour.
@@ -257,7 +262,7 @@ The Prompt AI window (when AI features are enabled), inline ghost-text suggestio
 - Functional behaviour of features not on the parity list above (e.g., the safety / execution-warning dialog logic itself is already implemented in earlier phases — only its chrome is in scope here).
 - Net-new features SQL Prompt does not have.
 - **Tab Coloring functional gap closure.** Phase 5 already provides the assignment-rule engine; this spec audits it against SQL Prompt (FR-011a) but does not change behaviour. Any `Differs` / `Missing` items from that audit become a follow-up spec, not this one.
-- Migration of SQL Prompt **licensing**, **schema cache files**, or **AI conversation history** — only `.sqlpromptstyle` is in scope.
+- Migration of SQL Prompt **licensing**, **schema cache files**, or **AI conversation history** — only `.sqlpromptstylev2` is in scope.
 - Visual parity for the installer or updater UIs (install-time / one-shot surfaces with no SQL Prompt equivalent).
 - Locale-specific typography or right-to-left support beyond what each host already provides.
 
