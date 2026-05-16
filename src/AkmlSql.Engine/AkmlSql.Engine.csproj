@@ -45,6 +45,7 @@
   <ItemGroup>
     <ProjectReference Include="..\AkmlSql.Core\AkmlSql.Core.csproj" />
     <ProjectReference Include="..\AkmlSql.Formatting\AkmlSql.Formatting.csproj" />
+    <ProjectReference Include="..\AkmlSql.IntelliSense\AkmlSql.IntelliSense.csproj" />
   </ItemGroup>
 
   <ItemGroup>

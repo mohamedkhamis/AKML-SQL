@@ -68,9 +68,12 @@ public class CompletionEngine
     {
         _parserService = parserService;
 
-        // Register built-in providers (order matters for routing priority)
+        // Register built-in providers (order matters for routing priority).
+        // Spec 021 T101: DatabaseProvider lives in AkmlSql.Engine (it has a SqlClient
+        // dependency for prefetching the database list, which cannot run in WASM).
+        // The engine registers it externally via RegisterProvider after construction.
+        // The web edition simply doesn't register it -- USE-keyword completion falls through.
         RegisterProvider(new SmartGroupByProvider());
-        RegisterProvider(new DatabaseProvider());
         RegisterProvider(new ColumnProvider());
         RegisterProvider(_objectProvider);
         RegisterProvider(new KeywordProvider());

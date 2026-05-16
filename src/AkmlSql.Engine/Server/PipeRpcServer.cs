@@ -77,6 +77,12 @@ public partial class PipeRpcServer
     {
         _pipeName = pipeName;
         _completionEngine = new CompletionEngine(_parserService);
+        // Spec 021 T101: DatabaseProvider stays in AkmlSql.Engine because of its
+        // SqlClient dependency. Register it on the engine instance here so the named-pipe
+        // path still provides USE-keyword database-list completion. The web edition's
+        // CompletionEngine instance does NOT register DatabaseProvider; it relies on the
+        // bridge for live schema (M3+) or the IndexedDB cache (M5+) instead.
+        _completionEngine.RegisterProvider(new Completion.Providers.DatabaseProvider());
         _wildcardHandler = new WildcardExpansionHandler(_parserService);
         _formatHandler = new FormatRequestHandler(ProfileManager.CreateDefault());
         _analysisEngine = new AnalysisEngine(_parserService, new RuleRegistry(), _caSettingsLoader);
