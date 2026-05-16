@@ -215,5 +215,10 @@ namespace AkmlSql.Core.Ipc
         public const int FindInvalidObjectsResult = 190;
         public const int FindUnusedVariablesResult = 191;
         public const int EncryptedObjectDecryptionResult = 192;
+
+        // Spec 021 (web edition) M3 — WebSocket bridge handshake.
+        // See specs/021-web-edition/contracts/rpc-handshake.md.
+        public const int HandshakeRequest = 200;
+        public const int HandshakeResponse = 201;
     }
 }
