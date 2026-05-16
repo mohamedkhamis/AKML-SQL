@@ -25,15 +25,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\AkmlSql.Analysis\AkmlSql.Analysis.csproj" />
     <ProjectReference Include="..\AkmlSql.Core\AkmlSql.Core.csproj" />
     <ProjectReference Include="..\AkmlSql.Formatting\AkmlSql.Formatting.csproj" />
     <ProjectReference Include="..\AkmlSql.IntelliSense\AkmlSql.IntelliSense.csproj" />
     <ProjectReference Include="..\AkmlSql.Web.Shared\AkmlSql.Web.Shared.csproj" />
     <!--
-      AkmlSql.Analyzer is NOT referenced. It is the CLI executable (OutputType=Exe) and
-      pulls AkmlSql.Engine transitively, which drags OpenAI, ClosedXML, OpenXml and SqlClient
-      into the WASM bundle. The actual analysis library extraction lands as follow-up F1
-      (analogous to spec 021 T100 IntelliSense extraction completed in this branch).
+      AkmlSql.Analyzer (the CLI executable) is NOT referenced. The analysis logic the web
+      edition needs lives in AkmlSql.Analysis (extracted as follow-up F1 from the engine).
     -->
   </ItemGroup>
 

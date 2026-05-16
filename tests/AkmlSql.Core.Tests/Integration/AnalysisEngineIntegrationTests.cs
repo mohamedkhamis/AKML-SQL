@@ -39,6 +39,14 @@ public class AnalysisEngineIntegrationTests
     private async Task<CodeAnalysisResponse> AnalyzeAsync(
         string sql, string sessionId = "test-session")
     {
+        // Spec 021 F1: API refactored to take (serverVersion, DatabaseCache?) directly.
+        // The test resolves them from the in-test SessionManager + SchemaCacheManager.
+        var session = _sessionManager.GetSession(sessionId);
+        var schemaCache = session != null
+            ? _schemaCacheManager.GetOrCreateCache(session.SessionId, session.DatabaseName)
+            : null;
+        var serverVersion = session?.ServerVersion ?? 0;
+
         return await _engine.AnalyzeAsync(
             new CodeAnalysisRequest
             {
@@ -47,8 +55,8 @@ public class AnalysisEngineIntegrationTests
                 DocumentText = sql,
                 DocumentVersion = 1
             },
-            _sessionManager,
-            _schemaCacheManager,
+            serverVersion,
+            schemaCache,
             _globalSettings,
             CancellationToken.None);
     }
@@ -236,8 +244,8 @@ public class AnalysisEngineIntegrationTests
                     DocumentText = "SELECT 1",
                     DocumentVersion = 1
                 },
-                _sessionManager,
-                _schemaCacheManager,
+                0,        // serverVersion not needed for cancellation test
+                null,     // schemaCache not needed
                 _globalSettings,
                 cts.Token));
     }
@@ -256,8 +264,8 @@ public class AnalysisEngineIntegrationTests
                 DocumentText = "DELETE FROM dbo.Orders",
                 DocumentVersion = 1
             },
-            _sessionManager,
-            _schemaCacheManager,
+            0,                // serverVersion irrelevant: settings.Enabled=false short-circuits
+            null,             // schemaCache also irrelevant
             disabledSettings,
             CancellationToken.None);
 

@@ -39,7 +39,18 @@ namespace AkmlSql.Engine.Handlers.Analysis
             if (ctx == null) throw new ArgumentNullException(nameof(ctx));
 
             var settings = _settingsProvider();
-            return _engine.AnalyzeAsync(request, ctx.Sessions, ctx.SchemaCache, settings.CodeAnalysis, ct);
+
+            // Spec 021 F1: AnalysisEngine no longer takes SessionManager / SchemaCacheManager
+            // (those live in AkmlSql.Engine and the extracted AkmlSql.Analysis library cannot
+            // depend on them). Resolve the session here and pass the int serverVersion +
+            // DatabaseCache? schemaCache pair directly.
+            var session = ctx.Sessions.GetSession(request.SessionId);
+            var schemaCache = session != null
+                ? ctx.SchemaCache.GetOrCreateCache(session.SessionId, session.DatabaseName)
+                : null;
+            var serverVersion = session?.ServerVersion ?? 0;
+
+            return _engine.AnalyzeAsync(request, serverVersion, schemaCache, settings.CodeAnalysis, ct);
         }
     }
 

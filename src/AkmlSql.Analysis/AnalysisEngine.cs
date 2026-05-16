@@ -4,7 +4,6 @@ using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Engine.Parser;
 using AkmlSql.Engine.Schema;
-using AkmlSql.Engine.Server;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 using Serilog;
 
@@ -32,10 +31,23 @@ public class AnalysisEngine(TsqlParserService parser, RuleRegistry registry, CaS
     /// Uses batch-level result caching (keyed by SHA-256 hash) to skip unchanged batches.
     /// Rules run in parallel bounded by an internal semaphore (max 8 concurrent rules).
     /// </summary>
+    /// <param name="serverVersion">
+    /// The SQL Server major version (e.g. 16 for SQL Server 2022). Pass 0 to leave the
+    /// parser's current setting untouched. The caller is responsible for resolving the
+    /// session's server version (the engine's named-pipe path looks it up from
+    /// <c>SessionManager</c>; the Blazor WASM web edition will pass a value from its
+    /// browser-side session record).
+    /// </param>
+    /// <param name="schemaCache">
+    /// The schema cache for the current session. Pass <see langword="null"/> to disable
+    /// rules that require schema (<see cref="IAnalysisRule.RequiresSchema"/>). The named-pipe
+    /// path looks this up from <c>SchemaCacheManager</c>; the web edition will source it
+    /// from its IndexedDB-backed cache once T107 lands.
+    /// </param>
     public async Task<CodeAnalysisResponse> AnalyzeAsync(
         CodeAnalysisRequest request,
-        SessionManager sessionManager,
-        SchemaCacheManager schemaCacheManager,
+        int serverVersion,
+        DatabaseCache? schemaCache,
         CodeAnalysisSettings globalSettings,
         CancellationToken ct)
     {
@@ -51,14 +63,10 @@ public class AnalysisEngine(TsqlParserService parser, RuleRegistry registry, CaS
             };
         }
 
-        var session    = sessionManager.GetSession(request.SessionId);
-        var schemaCache = session != null
-            ? schemaCacheManager.GetOrCreateCache(session.SessionId, session.DatabaseName)
-            : null;
-
-        // Ensure parser is using the correct server version for this session
-        if (session != null)
-            parser.SetServerVersion(session.ServerVersion);
+        // Ensure parser is using the correct server version for this session.
+        // 0 = caller did not resolve; leave whatever was last set in place.
+        if (serverVersion > 0)
+            parser.SetServerVersion(serverVersion);
 
         // Parse full document once
         var script = parser.Parse(request.DocumentText, out var errors);
