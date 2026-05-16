@@ -1,0 +1,95 @@
+﻿/*
+  AKML SQL -- web edition theme variant: Light
+  AUTO-GENERATED from docs/theme-tokens.json by scripts/generate-theme-css.ps1.
+  Do not edit by hand. Run the script to regenerate after editing the JSON.
+*/
+:root {
+    /* Surface */
+    --akml-surface-canvas: #f0f0f0;
+    --akml-surface-panel: #ffffff;
+    --akml-surface-elevated: #ffffff;
+    --akml-surface-sidebar: #ffffff;
+    --akml-surface-input: #ffffff;
+    --akml-surface-inputreadonly: #f8f8f8;
+    --akml-surface-hover: #f0f0f0;
+    --akml-surface-selection: rgba(0, 120, 212, 0.122);
+    --akml-surface-selectionstrong: #0078d4;
+    /* Text */
+    --akml-text-primary: #1e1e1e;
+    --akml-text-secondary: #555555;
+    --akml-text-disabled: #a0a0a0;
+    --akml-text-placeholder: #a0a0a0;
+    --akml-text-link: #0078d4;
+    --akml-text-onaccent: #ffffff;
+    --akml-text-ondanger: #ffffff;
+    /* Border */
+    --akml-border-default: #cccccc;
+    --akml-border-strong: #999999;
+    --akml-border-subtle: #eaeaea;
+    --akml-border-focus: #0078d4;
+    --akml-border-splitter: #cccccc;
+    /* Accent */
+    --akml-accent-primary: #0078d4;
+    --akml-accent-primaryhover: #106ebe;
+    --akml-accent-primarypressed: #005a9e;
+    /* Status */
+    --akml-status-success: #2ecc71;
+    --akml-status-warning: #f39c12;
+    --akml-status-danger: #e74c3c;
+    --akml-status-info: #0078d4;
+    /* Editor */
+    --akml-editor-marginbackground: #fbfbfb;
+    --akml-editor-spinnerstroke: #0078d4;
+    --akml-editor-popupbackground: #ffffff;
+    --akml-editor-popupborder: #cccccc;
+    /* Chat */
+    --akml-chat-userbubble: #e5f1fb;
+    --akml-chat-assistantbubble: #f5f5f5;
+    --akml-chat-systembubble: #fff8e1;
+    /* IconBadge */
+    --akml-iconbadge-table: #e5c04b;
+    --akml-iconbadge-view: #56b6c2;
+    --akml-iconbadge-column: #61afef;
+    --akml-iconbadge-storedproc: #c678dd;
+    --akml-iconbadge-function: #d19a66;
+    --akml-iconbadge-snippet: #3dd68c;
+    --akml-iconbadge-keyword: #abb2bf;
+    --akml-iconbadge-database: #e06c75;
+    --akml-iconbadge-schema: #98c379;
+    --akml-iconbadge-trigger: #be5046;
+    --akml-iconbadge-index: #7f848e;
+    --akml-iconbadge-synonym: #56b6c2;
+    /* TabColor */
+    --akml-tabcolor-red: #ff4444;
+    --akml-tabcolor-amber: #ffb800;
+    --akml-tabcolor-green: #44bb44;
+    --akml-tabcolor-blue: #4488ff;
+    --akml-tabcolor-teal: #00bcd4;
+    --akml-tabcolor-purple: #9b59b6;
+    --akml-tabcolor-pink: #e91e63;
+    --akml-tabcolor-gray: #808a99;
+    /* History */
+    --akml-history-openicon: #2ecc71;
+    --akml-history-closedicon: #e74c3c;
+    --akml-history-star-active: #f39c12;
+    --akml-history-star-inactive: #cccccc;
+    --akml-history-matchhighlight: rgba(255, 248, 220, 0.302);
+    /* Spacing (theme-invariant scalars in DIU) */
+    --akml-scalar-spacing-xs: 4px;
+    --akml-scalar-spacing-s: 8px;
+    --akml-scalar-spacing-m: 12px;
+    --akml-scalar-spacing-l: 16px;
+    /* Typography (theme-invariant; split into family/size/weight) */
+    --akml-type-chrome-family: "Segoe UI";
+    --akml-type-chrome-size: 12px;
+    --akml-type-chrome-weight: 400;
+    --akml-type-chrometitle-family: "Segoe UI";
+    --akml-type-chrometitle-size: 14px;
+    --akml-type-chrometitle-weight: 600;
+    --akml-type-editor-family: Consolas;
+    --akml-type-editor-size: 12px;
+    --akml-type-editor-weight: 400;
+    --akml-type-iconbadge-family: "Segoe UI";
+    --akml-type-iconbadge-size: 9px;
+    --akml-type-iconbadge-weight: 600;
+}

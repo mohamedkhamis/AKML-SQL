@@ -1,0 +1,32 @@
+@*
+    Spec 021 T029 — main layout wrapper for the web edition. Consumes theme tokens
+    via CSS variables emitted by scripts/generate-theme-css.ps1 (T004).
+    Real page slots for Editor / Settings / About land in M2 (T031 onwards).
+*@
+@inherits LayoutComponentBase
+
+<div class="akml-app">
+    <NavMenu />
+    <main class="akml-main">
+        @Body
+    </main>
+    <StatusBar />
+</div>
+
+<style>
+    /* Layout-only styling — colours/fonts come from theme tokens (CSS variables). */
+    .akml-app {
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        height: 100vh;
+        background-color: var(--akml-surface-canvas);
+        color: var(--akml-text-primary);
+        font-family: var(--akml-type-chrome-family);
+        font-size: var(--akml-type-chrome-size);
+        font-weight: var(--akml-type-chrome-weight);
+    }
+    .akml-main {
+        overflow: auto;
+        padding: var(--akml-scalar-spacing-m);
+    }
+</style>

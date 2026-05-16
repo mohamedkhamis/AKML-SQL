@@ -1,0 +1,50 @@
+@*
+    Spec 021 T029 — top navigation. Real route links land alongside the page
+    components in M2 (T031 / T039 / T045 onwards).
+*@
+<nav class="akml-nav">
+    <span class="akml-brand">AKML SQL</span>
+    <span class="akml-tagline">web edition</span>
+    <span class="akml-spacer"></span>
+    <a class="akml-nav-link" href="/">Editor</a>
+    <a class="akml-nav-link akml-disabled" title="Lands at T034 (Settings page)">Settings</a>
+    <a class="akml-nav-link akml-disabled" title="Lands at T049 (Diagnostics page)">Diagnostics</a>
+</nav>
+
+<style>
+    .akml-nav {
+        display: flex;
+        align-items: center;
+        gap: var(--akml-scalar-spacing-m);
+        padding: var(--akml-scalar-spacing-s) var(--akml-scalar-spacing-m);
+        background-color: var(--akml-surface-panel);
+        border-bottom: 1px solid var(--akml-border-default);
+        font-family: var(--akml-type-chrome-family);
+        font-size: var(--akml-type-chrome-size);
+    }
+    .akml-brand {
+        font-family: var(--akml-type-chrometitle-family);
+        font-size: var(--akml-type-chrometitle-size);
+        font-weight: var(--akml-type-chrometitle-weight);
+        color: var(--akml-accent-primary);
+    }
+    .akml-tagline {
+        color: var(--akml-text-secondary);
+    }
+    .akml-spacer {
+        flex: 1 1 auto;
+    }
+    .akml-nav-link {
+        color: var(--akml-text-primary);
+        text-decoration: none;
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s);
+        border-radius: 3px;
+    }
+    .akml-nav-link:hover {
+        background-color: var(--akml-surface-hover);
+    }
+    .akml-disabled {
+        color: var(--akml-text-disabled);
+        pointer-events: none;
+    }
+</style>

@@ -1,0 +1,14 @@
+@*
+    Root component for AkmlSql.Web. Spec 021 T028 / T029 — wired with MainLayout
+    as the default layout. Editor and Settings pages fill in at T033 onwards in M2.
+*@
+<Router AppAssembly="@typeof(App).Assembly">
+    <Found Context="routeData">
+        <RouteView RouteData="@routeData" DefaultLayout="@typeof(Shared.MainLayout)" />
+    </Found>
+    <NotFound>
+        <LayoutView Layout="@typeof(Shared.MainLayout)">
+            <p>Page not found.</p>
+        </LayoutView>
+    </NotFound>
+</Router>

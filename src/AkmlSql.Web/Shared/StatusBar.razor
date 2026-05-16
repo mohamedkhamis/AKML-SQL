@@ -1,0 +1,39 @@
+@*
+    Spec 021 T029 — footer status bar. Bridge state ("Live" / "Cached" / "Offline"
+    / "Disconnected") and engine-version display land at T075 in Phase 4 (M3).
+*@
+<div class="akml-status">
+    <span class="akml-status-pill akml-status-info">Skeleton</span>
+    <span class="akml-status-text">M0 + M1 scaffold — formatter / analyser surfaces land in M2</span>
+    <span class="akml-status-spacer"></span>
+    <span class="akml-status-text">v1.0.0</span>
+</div>
+
+<style>
+    .akml-status {
+        display: flex;
+        align-items: center;
+        gap: var(--akml-scalar-spacing-s);
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-m);
+        background-color: var(--akml-surface-panel);
+        border-top: 1px solid var(--akml-border-default);
+        color: var(--akml-text-secondary);
+        font-family: var(--akml-type-chrome-family);
+        font-size: var(--akml-type-chrome-size);
+    }
+    .akml-status-pill {
+        padding: 1px var(--akml-scalar-spacing-xs);
+        border-radius: 2px;
+        color: var(--akml-text-onaccent);
+        font-size: 11px;
+    }
+    .akml-status-info {
+        background-color: var(--akml-status-info);
+    }
+    .akml-status-text {
+        flex: 0 0 auto;
+    }
+    .akml-status-spacer {
+        flex: 1 1 auto;
+    }
+</style>

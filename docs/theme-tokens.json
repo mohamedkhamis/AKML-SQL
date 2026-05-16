@@ -1,0 +1,99 @@
+{
+  "$schema": "./theme-tokens.schema.json",
+  "version": 1,
+  "description": "Single source of truth for AKML SQL theme tokens. Consumed by the WPF ThemeRegistry (spec 016) and by scripts/generate-theme-css.ps1 which emits CSS custom-property files for the web edition (spec 021). Hex values mirror src/AkmlSql.Shell.Shared/Ui/Theme/ThemePalette.cs. High-contrast values map to CSS system colors (forced-colors keywords) since the WPF surface delegates HC to Windows SystemColors at runtime.",
+  "groups": {
+    "Surface": {
+      "Akml.Brush.Surface.Canvas":          { "light": "#F0F0F0",   "dark": "#2D2D3B",   "highContrast": "Canvas" },
+      "Akml.Brush.Surface.Panel":           { "light": "#FFFFFF",   "dark": "#1E1E2E",   "highContrast": "Canvas" },
+      "Akml.Brush.Surface.Elevated":        { "light": "#FFFFFF",   "dark": "#252836",   "highContrast": "Canvas" },
+      "Akml.Brush.Surface.Sidebar":         { "light": "#FFFFFF",   "dark": "#1E1E2E",   "highContrast": "ButtonFace" },
+      "Akml.Brush.Surface.Input":           { "light": "#FFFFFF",   "dark": "#2D2D3B",   "highContrast": "Field" },
+      "Akml.Brush.Surface.InputReadOnly":   { "light": "#F8F8F8",   "dark": "#252836",   "highContrast": "ButtonFace" },
+      "Akml.Brush.Surface.Hover":           { "light": "#F0F0F0",   "dark": "#252836",   "highContrast": "Highlight" },
+      "Akml.Brush.Surface.Selection":       { "light": "#1F0078D4", "dark": "#260078D4", "highContrast": "Highlight" },
+      "Akml.Brush.Surface.SelectionStrong": { "light": "#0078D4",   "dark": "#0078D4",   "highContrast": "Highlight" }
+    },
+    "Text": {
+      "Akml.Brush.Text.Primary":     { "light": "#1E1E1E", "dark": "#D4D4D4", "highContrast": "CanvasText" },
+      "Akml.Brush.Text.Secondary":   { "light": "#555555", "dark": "#8892A8", "highContrast": "GrayText" },
+      "Akml.Brush.Text.Disabled":    { "light": "#A0A0A0", "dark": "#5C6370", "highContrast": "GrayText" },
+      "Akml.Brush.Text.Placeholder": { "light": "#A0A0A0", "dark": "#6E6E6E", "highContrast": "GrayText" },
+      "Akml.Brush.Text.Link":        { "light": "#0078D4", "dark": "#4F8CFF", "highContrast": "LinkText" },
+      "Akml.Brush.Text.OnAccent":    { "light": "#FFFFFF", "dark": "#FFFFFF", "highContrast": "HighlightText" },
+      "Akml.Brush.Text.OnDanger":    { "light": "#FFFFFF", "dark": "#FFFFFF", "highContrast": "HighlightText" }
+    },
+    "Border": {
+      "Akml.Brush.Border.Default":  { "light": "#CCCCCC", "dark": "#3A3F4E", "highContrast": "ButtonText" },
+      "Akml.Brush.Border.Strong":   { "light": "#999999", "dark": "#5C6370", "highContrast": "ButtonText" },
+      "Akml.Brush.Border.Subtle":   { "light": "#EAEAEA", "dark": "#2A2D3A", "highContrast": "GrayText" },
+      "Akml.Brush.Border.Focus":    { "light": "#0078D4", "dark": "#4F8CFF", "highContrast": "LinkText" },
+      "Akml.Brush.Border.Splitter": { "light": "#CCCCCC", "dark": "#3A3F4E", "highContrast": "GrayText" }
+    },
+    "Accent": {
+      "Akml.Brush.Accent.Primary":        { "light": "#0078D4", "dark": "#0078D4", "highContrast": "Highlight" },
+      "Akml.Brush.Accent.PrimaryHover":   { "light": "#106EBE", "dark": "#1A8CDC", "highContrast": "Highlight" },
+      "Akml.Brush.Accent.PrimaryPressed": { "light": "#005A9E", "dark": "#0066B5", "highContrast": "Highlight" }
+    },
+    "Status": {
+      "Akml.Brush.Status.Success": { "light": "#2ECC71", "dark": "#3DD68C", "highContrast": "Highlight" },
+      "Akml.Brush.Status.Warning": { "light": "#F39C12", "dark": "#FBBF24", "highContrast": "Highlight" },
+      "Akml.Brush.Status.Danger":  { "light": "#E74C3C", "dark": "#FF5C5C", "highContrast": "Highlight" },
+      "Akml.Brush.Status.Info":    { "light": "#0078D4", "dark": "#4F8CFF", "highContrast": "LinkText" }
+    },
+    "Editor": {
+      "Akml.Brush.Editor.MarginBackground": { "light": "#FBFBFB", "dark": "#252526", "highContrast": "ButtonFace" },
+      "Akml.Brush.Editor.SpinnerStroke":    { "light": "#0078D4", "dark": "#4F8CFF", "highContrast": "LinkText" },
+      "Akml.Brush.Editor.PopupBackground":  { "light": "#FFFFFF", "dark": "#252526", "highContrast": "Canvas" },
+      "Akml.Brush.Editor.PopupBorder":      { "light": "#CCCCCC", "dark": "#3A3F4E", "highContrast": "ButtonText" }
+    },
+    "Chat": {
+      "Akml.Brush.Chat.UserBubble":      { "light": "#E5F1FB", "dark": "#1A3A5C", "highContrast": "Canvas" },
+      "Akml.Brush.Chat.AssistantBubble": { "light": "#F5F5F5", "dark": "#252836", "highContrast": "ButtonFace" },
+      "Akml.Brush.Chat.SystemBubble":    { "light": "#FFF8E1", "dark": "#3A3000", "highContrast": "Canvas" }
+    },
+    "IconBadge": {
+      "Akml.Brush.IconBadge.Table":       { "light": "#E5C04B", "dark": "#E5C04B", "highContrast": "LinkText",  "letter": "T" },
+      "Akml.Brush.IconBadge.View":        { "light": "#56B6C2", "dark": "#56B6C2", "highContrast": "LinkText",  "letter": "V" },
+      "Akml.Brush.IconBadge.Column":      { "light": "#61AFEF", "dark": "#61AFEF", "highContrast": "LinkText",  "letter": "C" },
+      "Akml.Brush.IconBadge.StoredProc":  { "light": "#C678DD", "dark": "#C678DD", "highContrast": "LinkText",  "letter": "P" },
+      "Akml.Brush.IconBadge.Function":    { "light": "#D19A66", "dark": "#D19A66", "highContrast": "LinkText",  "letter": "F" },
+      "Akml.Brush.IconBadge.Snippet":     { "light": "#3DD68C", "dark": "#3DD68C", "highContrast": "LinkText",  "letter": "S" },
+      "Akml.Brush.IconBadge.Keyword":     { "light": "#ABB2BF", "dark": "#ABB2BF", "highContrast": "GrayText",  "letter": "K" },
+      "Akml.Brush.IconBadge.Database":    { "light": "#E06C75", "dark": "#E06C75", "highContrast": "LinkText",  "letter": "D" },
+      "Akml.Brush.IconBadge.Schema":      { "light": "#98C379", "dark": "#98C379", "highContrast": "LinkText",  "letter": "Sc" },
+      "Akml.Brush.IconBadge.Trigger":     { "light": "#BE5046", "dark": "#BE5046", "highContrast": "LinkText",  "letter": "Tr" },
+      "Akml.Brush.IconBadge.Index":       { "light": "#7F848E", "dark": "#7F848E", "highContrast": "GrayText",  "letter": "Ix" },
+      "Akml.Brush.IconBadge.Synonym":     { "light": "#56B6C2", "dark": "#56B6C2", "highContrast": "LinkText",  "letter": "Sy" }
+    },
+    "TabColor": {
+      "Akml.Brush.TabColor.Red":    { "light": "#FF4444", "dark": "#FF4444", "highContrast": "LinkText" },
+      "Akml.Brush.TabColor.Amber":  { "light": "#FFB800", "dark": "#FFB800", "highContrast": "LinkText" },
+      "Akml.Brush.TabColor.Green":  { "light": "#44BB44", "dark": "#44BB44", "highContrast": "LinkText" },
+      "Akml.Brush.TabColor.Blue":   { "light": "#4488FF", "dark": "#4488FF", "highContrast": "LinkText" },
+      "Akml.Brush.TabColor.Teal":   { "light": "#00BCD4", "dark": "#00BCD4", "highContrast": "LinkText" },
+      "Akml.Brush.TabColor.Purple": { "light": "#9B59B6", "dark": "#9B59B6", "highContrast": "LinkText" },
+      "Akml.Brush.TabColor.Pink":   { "light": "#E91E63", "dark": "#E91E63", "highContrast": "LinkText" },
+      "Akml.Brush.TabColor.Gray":   { "light": "#808A99", "dark": "#808A99", "highContrast": "GrayText" }
+    },
+    "History": {
+      "Akml.Brush.History.OpenIcon":       { "light": "#2ECC71",   "dark": "#3DD68C",   "highContrast": "LinkText" },
+      "Akml.Brush.History.ClosedIcon":     { "light": "#E74C3C",   "dark": "#FF5C5C",   "highContrast": "LinkText" },
+      "Akml.Brush.History.Star.Active":    { "light": "#F39C12",   "dark": "#FBBF24",   "highContrast": "LinkText" },
+      "Akml.Brush.History.Star.Inactive":  { "light": "#CCCCCC",   "dark": "#3A3F4E",   "highContrast": "GrayText" },
+      "Akml.Brush.History.MatchHighlight": { "light": "#4DFFF8DC", "dark": "#4DDAA520", "highContrast": "Highlight" }
+    }
+  },
+  "spacing": {
+    "Akml.Scalar.Spacing.XS": 4,
+    "Akml.Scalar.Spacing.S":  8,
+    "Akml.Scalar.Spacing.M":  12,
+    "Akml.Scalar.Spacing.L":  16
+  },
+  "typography": {
+    "Akml.Type.Chrome":      { "family": "Segoe UI", "size": 12, "weight": "Normal" },
+    "Akml.Type.ChromeTitle": { "family": "Segoe UI", "size": 14, "weight": "SemiBold" },
+    "Akml.Type.Editor":      { "family": "Consolas", "size": 12, "weight": "Normal" },
+    "Akml.Type.IconBadge":   { "family": "Segoe UI", "size": 9,  "weight": "SemiBold" }
+  }
+}

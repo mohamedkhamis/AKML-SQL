@@ -1,0 +1,95 @@
+﻿/*
+  AKML SQL -- web edition theme variant: HighContrast
+  AUTO-GENERATED from docs/theme-tokens.json by scripts/generate-theme-css.ps1.
+  Do not edit by hand. Run the script to regenerate after editing the JSON.
+*/
+:root {
+    /* Surface */
+    --akml-surface-canvas: Canvas;
+    --akml-surface-panel: Canvas;
+    --akml-surface-elevated: Canvas;
+    --akml-surface-sidebar: ButtonFace;
+    --akml-surface-input: Field;
+    --akml-surface-inputreadonly: ButtonFace;
+    --akml-surface-hover: Highlight;
+    --akml-surface-selection: Highlight;
+    --akml-surface-selectionstrong: Highlight;
+    /* Text */
+    --akml-text-primary: CanvasText;
+    --akml-text-secondary: GrayText;
+    --akml-text-disabled: GrayText;
+    --akml-text-placeholder: GrayText;
+    --akml-text-link: LinkText;
+    --akml-text-onaccent: HighlightText;
+    --akml-text-ondanger: HighlightText;
+    /* Border */
+    --akml-border-default: ButtonText;
+    --akml-border-strong: ButtonText;
+    --akml-border-subtle: GrayText;
+    --akml-border-focus: LinkText;
+    --akml-border-splitter: GrayText;
+    /* Accent */
+    --akml-accent-primary: Highlight;
+    --akml-accent-primaryhover: Highlight;
+    --akml-accent-primarypressed: Highlight;
+    /* Status */
+    --akml-status-success: Highlight;
+    --akml-status-warning: Highlight;
+    --akml-status-danger: Highlight;
+    --akml-status-info: LinkText;
+    /* Editor */
+    --akml-editor-marginbackground: ButtonFace;
+    --akml-editor-spinnerstroke: LinkText;
+    --akml-editor-popupbackground: Canvas;
+    --akml-editor-popupborder: ButtonText;
+    /* Chat */
+    --akml-chat-userbubble: Canvas;
+    --akml-chat-assistantbubble: ButtonFace;
+    --akml-chat-systembubble: Canvas;
+    /* IconBadge */
+    --akml-iconbadge-table: LinkText;
+    --akml-iconbadge-view: LinkText;
+    --akml-iconbadge-column: LinkText;
+    --akml-iconbadge-storedproc: LinkText;
+    --akml-iconbadge-function: LinkText;
+    --akml-iconbadge-snippet: LinkText;
+    --akml-iconbadge-keyword: GrayText;
+    --akml-iconbadge-database: LinkText;
+    --akml-iconbadge-schema: LinkText;
+    --akml-iconbadge-trigger: LinkText;
+    --akml-iconbadge-index: GrayText;
+    --akml-iconbadge-synonym: LinkText;
+    /* TabColor */
+    --akml-tabcolor-red: LinkText;
+    --akml-tabcolor-amber: LinkText;
+    --akml-tabcolor-green: LinkText;
+    --akml-tabcolor-blue: LinkText;
+    --akml-tabcolor-teal: LinkText;
+    --akml-tabcolor-purple: LinkText;
+    --akml-tabcolor-pink: LinkText;
+    --akml-tabcolor-gray: GrayText;
+    /* History */
+    --akml-history-openicon: LinkText;
+    --akml-history-closedicon: LinkText;
+    --akml-history-star-active: LinkText;
+    --akml-history-star-inactive: GrayText;
+    --akml-history-matchhighlight: Highlight;
+    /* Spacing (theme-invariant scalars in DIU) */
+    --akml-scalar-spacing-xs: 4px;
+    --akml-scalar-spacing-s: 8px;
+    --akml-scalar-spacing-m: 12px;
+    --akml-scalar-spacing-l: 16px;
+    /* Typography (theme-invariant; split into family/size/weight) */
+    --akml-type-chrome-family: "Segoe UI";
+    --akml-type-chrome-size: 12px;
+    --akml-type-chrome-weight: 400;
+    --akml-type-chrometitle-family: "Segoe UI";
+    --akml-type-chrometitle-size: 14px;
+    --akml-type-chrometitle-weight: 600;
+    --akml-type-editor-family: Consolas;
+    --akml-type-editor-size: 12px;
+    --akml-type-editor-weight: 400;
+    --akml-type-iconbadge-family: "Segoe UI";
+    --akml-type-iconbadge-size: 9px;
+    --akml-type-iconbadge-weight: 600;
+}
