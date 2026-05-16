@@ -49,9 +49,9 @@ namespace AkmlSql.Engine
 
         /// <summary>
         /// The set of capabilities the current engine build advertises. M3 baseline includes
-        /// the always-available capabilities. Future tasks add to this list:
+        /// the always-available capabilities; <see cref="SchemaCacheV1"/> joined the list when
+        /// T104 (SchemaIdentify) shipped. Future tasks add to this list:
         /// <list type="bullet">
-        ///   <item><see cref="SchemaCacheV1"/> when T104 (SchemaIdentify) lands.</item>
         ///   <item><see cref="SnippetsWrite"/> when T115 wires snippet save/delete.</item>
         ///   <item><see cref="RefactoringHeavy"/> when T117 wires heavy refactorings.</item>
         ///   <item><see cref="DiagnosticsEngineLogTailV1"/> when the engine log tail handler ships.</item>
@@ -62,6 +62,7 @@ namespace AkmlSql.Engine
             CoreFormatV1,
             CoreAnalysisV1,
             SchemaV2,
+            SchemaCacheV1,
         };
 
         /// <summary>

@@ -220,5 +220,11 @@ namespace AkmlSql.Core.Ipc
         // See specs/021-web-edition/contracts/rpc-handshake.md.
         public const int HandshakeRequest = 200;
         public const int HandshakeResponse = 201;
+
+        // Spec 021 (web edition) M5 — schema-cache identity protocol.
+        // Browser asks the engine for the canonical (server, database) pair used as the
+        // IndexedDB cache key. See specs/021-web-edition/contracts/schema-cache-shape.md.
+        public const int SchemaIdentifyRequest = 202;
+        public const int SchemaIdentifyResponse = 203;
     }
 }

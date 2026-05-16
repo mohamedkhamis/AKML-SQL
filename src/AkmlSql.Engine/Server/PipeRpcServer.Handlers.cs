@@ -141,6 +141,24 @@ public partial class PipeRpcServer
             new TypedHandlerAdapter<SchemaStatusRequest, SchemaStatusResponse>(
                 new Handlers.Schema.SchemaStatusHandler(), _rpcContext);
 
+        // Spec 021 (web edition) -- M5 task T104. SchemaIdentify resolves the canonical
+        // (server, database) cache key. The identity-resolver callback parses the session's
+        // connection-string Data Source as a stable-enough identity for the initial wiring;
+        // a follow-up task swaps in the real "SELECT @@SERVERNAME" query once the engine has
+        // shared connection-pooling infrastructure for ad-hoc queries against live sessions.
+        _pluggableHandlers[MessageTypes.SchemaIdentifyRequest] =
+            new TypedHandlerAdapter<SchemaIdentifyRequest, SchemaIdentifyResponse>(
+                new Handlers.Schema.SchemaIdentifyHandler(
+                    databaseLookup: sid => _sessionManager.GetSession(sid)?.DatabaseName,
+                    identityResolver: sid =>
+                    {
+                        var session = _sessionManager.GetSession(sid);
+                        if (session == null || !session.IsConnected) return null;
+                        return Handlers.Schema.SchemaIdentifyHandlerSupport
+                            .ParseServerFromConnectionString(session.ConnectionString);
+                    }),
+                _rpcContext);
+
         // Spec 021 (web edition) -- M0.3 task T018. Control / lifecycle handlers.
         _pluggableHandlers[MessageTypes.DocumentChanged] =
             new TypedHandlerAdapter<DocumentChange, DocumentChange>(
