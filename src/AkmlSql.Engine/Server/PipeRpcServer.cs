@@ -66,6 +66,14 @@ public partial class PipeRpcServer
     // in later sessions if desired.
     private readonly Dictionary<int, IMessageHandler> _pluggableHandlers = new();
 
+    /// <summary>
+    /// Spec 021 (web edition) -- M0 task T023. Test-only accessor (visible via
+    /// <c>InternalsVisibleTo</c>) returning the set of message-type integer codes wired
+    /// in <see cref="RegisterPluggableHandlers"/>. Used by the registration-coverage
+    /// matrix test to assert every shell-to-engine code is dispatchable.
+    /// </summary>
+    internal IReadOnlyCollection<int> RegisteredMessageTypeCodes => _pluggableHandlers.Keys;
+
     // Spec 021 (web edition) — M0.2. RpcContext carried alongside the legacy fields so the
     // migrated typed handlers (registered via TypedHandlerAdapter into _pluggableHandlers) see
     // the same settings / sessions / schema cache the legacy switch consults. Assigned by
