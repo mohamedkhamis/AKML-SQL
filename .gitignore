@@ -64,3 +64,6 @@ desktop.ini
 /doc/SQL-Prompt-History
 /doc/SQL-Prompt-Option
 /doc/SQL-PROMPT
+
+# Claude Code local settings (per-user / per-machine permissions; not for sharing).
+.claude/settings.local.json
