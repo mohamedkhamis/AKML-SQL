@@ -44,7 +44,11 @@ public sealed class AiRequestHandler : IDisposable
         ArgumentNullException.ThrowIfNull(schemaCacheManager);
         ArgumentNullException.ThrowIfNull(parserService);
 
-        _schemaContextBuilder = new SchemaContextBuilder(schemaCacheManager);
+        // Spec 021 T121: SchemaContextBuilder no longer takes SchemaCacheManager directly
+        // (the type lives in AkmlSql.Engine; AkmlSql.AI cannot reference it). Pass a lookup
+        // delegate that captures the manager.
+        _schemaContextBuilder = new SchemaContextBuilder(
+            (connectionString, databaseName) => schemaCacheManager.GetCache(connectionString, databaseName));
         _privacyTransformer = new PrivacyTransformer(parserService);
         _parserService = parserService;
 

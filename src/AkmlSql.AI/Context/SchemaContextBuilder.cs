@@ -15,10 +15,21 @@ namespace AkmlSql.Engine.Ai.Context;
 ///   <item>Level 3: Add PK columns list, indexes, FK relationships</item>
 ///   <item>Level 4: Add Description from extended properties</item>
 /// </list>
+/// <para>
+/// Spec 021 T121: refactored to take a <c>cacheLookup</c> delegate rather than the engine-only
+/// <c>SchemaCacheManager</c>. The engine wires <c>(cs, db) => schemaCacheManager.GetCache(cs, db)</c>;
+/// the web edition (M6) wires its IndexedDB cache lookup. Decouples this assembly from
+/// AkmlSql.Engine and lets it run in WASM.
+/// </para>
 /// </summary>
-public class SchemaContextBuilder(SchemaCacheManager schemaCacheManager)
+public class SchemaContextBuilder
 {
-    private readonly SchemaCacheManager _schemaCacheManager = schemaCacheManager ?? throw new ArgumentNullException(nameof(schemaCacheManager));
+    private readonly Func<string, string, DatabaseCache?> _cacheLookup;
+
+    public SchemaContextBuilder(Func<string, string, DatabaseCache?> cacheLookup)
+    {
+        _cacheLookup = cacheLookup ?? throw new ArgumentNullException(nameof(cacheLookup));
+    }
 
     /// <summary>
     /// Builds a <see cref="SchemaContext"/> for the given session, optionally filtering objects by prompt relevance.
@@ -55,7 +66,7 @@ public class SchemaContextBuilder(SchemaCacheManager schemaCacheManager)
             return Task.FromResult(context);
         }
 
-        var dbCache = _schemaCacheManager.GetCache(connectionString, databaseName);
+        var dbCache = _cacheLookup(connectionString, databaseName);
         if (dbCache == null)
         {
             Log.Debug("SchemaContextBuilder: no cache found for {Database}", databaseName);

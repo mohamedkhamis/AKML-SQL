@@ -1,6 +1,5 @@
 using System.ClientModel;
 using AkmlSql.Core.Config;
-using AkmlSql.Engine.Ai.Security;
 using Anthropic.SDK;
 using Microsoft.Extensions.AI;
 using OllamaSharp;
@@ -13,13 +12,28 @@ namespace AkmlSql.Engine.Ai.Providers;
 /// Factory that creates an <see cref="IChatClient"/> from <see cref="AiSettings"/> configuration.
 /// <para>
 /// Provider selection is driven by <see cref="AiSettings.Provider"/>. API keys are decrypted
-/// via <see cref="CredentialManager"/> before being passed to the underlying SDK.
+/// via the pluggable <see cref="KeyDecryptor"/> hook before being passed to the underlying SDK.
 /// Supports: Anthropic, OpenAI, Azure OpenAI, Google Gemini, Ollama, LM Studio, and custom
 /// OpenAI-compatible endpoints.
 /// </para>
 /// </summary>
 public static class AiProviderFactory
 {
+    /// <summary>
+    /// Spec 021 T121: pluggable hook for decrypting/unwrapping the API key BEFORE it is
+    /// passed to a provider SDK. The default is identity (assumes the caller has already
+    /// supplied a plaintext key).
+    /// <para>
+    /// The engine sets this at startup to call
+    /// <c>AkmlSql.Engine.Ai.Security.CredentialManager.Decrypt</c> (Windows DPAPI). The web
+    /// edition's own <c>AiKeyVault</c> (M6, T125) unwraps via browser Web Crypto BEFORE
+    /// calling the factory, so it leaves the hook at the default. This keeps this assembly
+    /// free of any platform-specific crypto and consumable from WASM.
+    /// </para>
+    /// </summary>
+    public static Func<string?, string> KeyDecryptor { get; set; } =
+        encrypted => encrypted ?? string.Empty;
+
     /// <summary>
     /// Creates an <see cref="IChatClient"/> for the primary provider configured in <paramref name="settings"/>.
     /// </summary>
@@ -206,7 +220,7 @@ public static class AiProviderFactory
     }
 
     /// <summary>
-    /// Decrypts an API key using <see cref="CredentialManager"/>.
+    /// Decrypts/unwraps an API key via the <see cref="KeyDecryptor"/> hook.
     /// Returns an empty string for null/empty input (supports local providers that need no key).
     /// </summary>
     private static string DecryptApiKey(string? encryptedKey)
@@ -214,7 +228,7 @@ public static class AiProviderFactory
         if (string.IsNullOrEmpty(encryptedKey))
             return string.Empty;
 
-        return CredentialManager.Decrypt(encryptedKey);
+        return KeyDecryptor(encryptedKey);
     }
 
     /// <summary>

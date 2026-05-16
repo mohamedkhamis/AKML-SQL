@@ -25,6 +25,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\AkmlSql.AI\AkmlSql.AI.csproj" />
     <ProjectReference Include="..\AkmlSql.Analysis\AkmlSql.Analysis.csproj" />
     <ProjectReference Include="..\AkmlSql.Core\AkmlSql.Core.csproj" />
     <ProjectReference Include="..\AkmlSql.Formatting\AkmlSql.Formatting.csproj" />
@@ -32,7 +33,10 @@
     <ProjectReference Include="..\AkmlSql.Web.Shared\AkmlSql.Web.Shared.csproj" />
     <!--
       AkmlSql.Analyzer (the CLI executable) is NOT referenced. The analysis logic the web
-      edition needs lives in AkmlSql.Analysis (extracted as follow-up F1 from the engine).
+      edition needs lives in AkmlSql.Analysis (F1 extraction). AI prompt + provider code
+      lives in AkmlSql.AI (T121-T124 extraction). Engine-side AiRequestHandler stays in
+      AkmlSql.Engine because of its IPC dispatch role; the web edition will call providers
+      directly through AkmlSql.AI's AiProviderFactory in M6 (T125+).
     -->
   </ItemGroup>
 

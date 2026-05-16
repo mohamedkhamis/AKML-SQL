@@ -36,6 +36,13 @@ public class Program
         LoggerFactory.Initialize();
         Log.Information("AkmlSql.Engine starting. Pipe={Pipe}, ParentPid={ParentPid}", pipeName, parentPid);
 
+        // Spec 021 T121: wire the AkmlSql.AI provider factory's KeyDecryptor hook to the
+        // Windows-only DPAPI CredentialManager so the named-pipe path keeps the previous
+        // behaviour exactly. The web edition leaves the hook at its default identity
+        // (Web Crypto unwraps the key before calling).
+        Ai.Providers.AiProviderFactory.KeyDecryptor =
+            encryptedKey => Ai.Security.CredentialManager.Decrypt(encryptedKey!);
+
         var cts = new CancellationTokenSource();
         var token = cts.Token;
 
