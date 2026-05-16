@@ -26,7 +26,7 @@ namespace AkmlSql.Engine.Server.Stubs
                 IsFinalChunk = true,
             };
             return Task.FromResult<RpcMessage?>(
-                PipeRpcServer.CreateResponse(
+                RpcResponseFactory.CreateResponse(
                     MessageTypes.FindInvalidObjectsResult,
                     message.RequestId,
                     resp));

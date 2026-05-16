@@ -20,7 +20,7 @@ namespace AkmlSql.Engine.Server.Stubs
                 ErrorMessage = "FindUnusedVariables not yet implemented (spec 019 US7 — pending)",
             };
             return Task.FromResult<RpcMessage?>(
-                PipeRpcServer.CreateResponse(
+                RpcResponseFactory.CreateResponse(
                     MessageTypes.FindUnusedVariablesResult,
                     message.RequestId,
                     resp));

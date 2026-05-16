@@ -1,10 +1,35 @@
 # AKML SQL — IPC API Reference
 
-All communication between the shell extension and the engine uses a named pipe with MessagePack-framed `RpcMessage` envelopes. This document describes every message type, its direction, request payload, and response payload.
+All communication between the shell extension and the engine uses MessagePack-framed `RpcMessage` envelopes. The named pipe is the **default** transport (used by all SSMS/VS shell extensions today); spec 021 (web edition) introduced an `IRpcTransport` abstraction so the same handlers also serve in-process and (future M3) WebSocket transports. This document describes every message type, its direction, request payload, and response payload.
 
 ---
 
-## Transport Layer
+## Transport Plurality (spec 021 M0)
+
+The engine supports three transports, all of which carry the same `RpcMessage` envelope and the same message-type integer codes:
+
+| Transport | Class | Wire | Consumers |
+|-----------|-------|------|-----------|
+| **Named pipe** (default) | `Server/PipeRpcServer` | `[length][CRC][MessagePack(RpcMessage)]` over `\\.\pipe\akmlsql-engine-{SID}-{PID}` | SSMS 20/21/22, VS 2019/22/26 (today's IDE plugins) |
+| **In-process** | `Transports/InProcessTransport` | Method calls; no serialisation | Blazor WASM running engine logic in the browser tab (spec 021 M2+); engine unit tests |
+| **WebSocket** (M3, future) | `Transports/WebSocketTransport` | One WebSocket binary message = one `RpcMessage` MessagePack payload | Browser ↔ engine bridge (spec 021 M3+) |
+
+All three transports raise a `RequestReceived` event carrying the inbound `RpcMessage`; the per-process `RpcRouter` resolves the message-type integer code to an `IRpcRequestHandler<TRequest, TResponse>` and dispatches. **Wire format and message-type integer codes are unchanged** from the original (pre-M0) named-pipe contract, so existing shell extensions need zero updates.
+
+Routing details inside the engine (post-M0):
+
+1. Inbound frame arrives at a transport.
+2. Transport raises `RequestReceived` with the decoded `RpcMessage`.
+3. `RpcRouter.RouteAsync(msg, ctx, ct)` looks up the message type in `_pluggableHandlers` (a `Dictionary<int, IMessageHandler>` populated at engine start by `PipeRpcServer.RegisterPluggableHandlers()`).
+4. The matching `TypedHandlerAdapter<TRequest, TResponse>` (for typed handlers) or `DelegatingMessageHandler` (for `RpcMessage`-typed bridges, e.g. AI) is invoked.
+5. The handler returns a `TResponse`; the adapter serialises and returns the response `RpcMessage`, or `null` for notifications.
+6. The transport writes the response back over the same channel.
+
+The original 53-case `switch` inside `DispatchAsync` is empty — every dispatch flows through `_pluggableHandlers`.
+
+---
+
+## Transport Layer — Named Pipe
 
 ```
 Pipe name:    akmlsql-engine-{user-SID}-{shell-PID}

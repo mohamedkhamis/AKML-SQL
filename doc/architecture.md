@@ -311,6 +311,65 @@ The editor is launched via `FormatStylesEditorWindow.Launch()`. Menu wiring (Opt
 
 ---
 
+## 9b. Spec 021 — M0 Transport Abstraction
+
+Spec 021 (web edition) introduced an `IRpcTransport` + `IRpcRequestHandler<TRequest, TResponse>` abstraction so the same engine handlers can serve named pipes (IDE plugins, today), in-process calls (Blazor WASM running engine logic in the browser tab; engine unit tests with zero serialisation), and WebSocket (future browser ↔ engine, M3+) without per-transport handler duplication.
+
+**Wire format and message-type integer codes are unchanged** — existing SSMS/VS shell extensions need zero updates after the M0 refactor.
+
+### New types (under `src/AkmlSql.Engine/`)
+
+| Type | Path | Role |
+|------|------|------|
+| `IRpcTransport` | `Transports/IRpcTransport.cs` | Frame I/O + lifecycle. One impl per medium. |
+| `InProcessTransport` | `Transports/InProcessTransport.cs` | Method-call dispatch, no serialisation. |
+| `IRpcRequestHandler<TRequest, TResponse>` | `Transports/IRpcRequestHandler.cs` | One impl per message-type integer code. Two opt-in DIM properties: `AllowsEmptyPayload` (for messages with no payload, e.g. `ProfileList`) and `SwallowCancellation` (for handlers where OCE → null response is preferable to tearing down the pipe loop, e.g. `AnalysisHandler`). |
+| `RpcRouter` | `RpcRouter.cs` | Per-process router: registers typed handlers, resolves `MessageType`, deserialises payload, dispatches. |
+| `RpcContext` | `RpcContext.cs` | Per-request shared state: `Settings`, `Sessions`, `SchemaCache`, `Logger`, and (for `ConnectionChanged` only) `ParserService` + `SchemaMetadata`. |
+| `TypedHandlerAdapter<TRequest, TResponse>` | `Server/TypedHandlerAdapter.cs` | Bridges new typed handlers to the legacy `IMessageHandler` dict used by `PipeRpcServer._pluggableHandlers`. Honours `AllowsEmptyPayload` and `SwallowCancellation`. |
+| `DelegatingMessageHandler` | `Server/DelegatingMessageHandler.cs` | Lightweight `IMessageHandler` capturing a `Func<RpcMessage, CancellationToken, Task<RpcMessage?>>`. Used by handlers whose existing surface is `RpcMessage`-typed and doesn't need typed deserialisation (AI, History, Navigation, Productivity, etc.). |
+
+### Handler folders
+
+All ~50 dispatch handlers now live under `src/AkmlSql.Engine/Handlers/` grouped by category:
+
+```
+Handlers/
+├── Completion/         CompletionHandler, WildcardExpansionHandler, SignatureHelpHandler, QuickInfoHandler
+├── Formatting/         FormattingHandlers (9 typed wrappers) + BulkFormatHandlers (2)
+├── Analysis/           AnalysisHandler (+ SwallowCancellation=true), AnalysisSettingsChangedHandler
+├── Snippets/           5 handlers (Expand/List/Save/Delete/Import)
+├── Refactoring/        RefactorPreviewHandler, RefactorApplyHandler (both SwallowCancellation=true)
+├── Schema/             SchemaRefreshHandler, SchemaStatusHandler
+├── Control/            DocumentChangedHandler, PingHandler, ShutdownHandler, ConnectionChangedHandler
+└── Ai/                 AiMessageHandler bridge (used by 8 AI message types)
+```
+
+### `PipeRpcServer` after M0 (= spec 021 T020)
+
+`PipeRpcServer` is now a `partial class` split across two files:
+
+| File | LOC | Role |
+|------|-----|------|
+| `Server/PipeRpcServer.cs` | ~340 | Named-pipe lifecycle (`RunAsync`, `HandleClientAsync`), frame read/write, `DispatchAsync` (which is now just a `_pluggableHandlers` lookup + default), engine-field initialisation, and the per-request `LookupSession` / `CreatePipeSecurity` helpers. |
+| `Server/PipeRpcServer.Handlers.cs` | ~242 | The `RegisterPluggableHandlers()` method — every message type is wired here. |
+
+The original 53-case `switch` in `DispatchAsync` is empty. All dispatch flows through `_pluggableHandlers` (a `Dictionary<int, IMessageHandler>`).
+
+Three helpers that used to live on `PipeRpcServer` were extracted to separate files:
+
+- **`RpcResponseFactory`** (`src/AkmlSql.Engine/RpcResponseFactory.cs`) — `CreateResponse<T>` and `CreateErrorResponse`. Standalone static class, no `PipeRpcServer` dependency.
+- **`SchemaRefreshService`** (`src/AkmlSql.Engine/Schema/SchemaRefreshService.cs`) — handles the manual `Ctrl+Shift+D` schema refresh. Wired into `SchemaRefreshHandler` via its `Refresh(RefreshRequest)` method.
+- **`FindFunctionAtCursor`** — folded into `SignatureHelpHandler` as a private static helper (its only consumer).
+
+The strict M0 PRD target of ≤150 LOC for the named-pipe transport is **not** met (sits at ~340 LOC); the remaining ~200 LOC are engine-field declarations, the constructor's history-DB init, the pipe accept loop, and the outer dispatch try/catch — all of which legitimately belong on the transport. The rename `PipeRpcServer` → `NamedPipeTransport` remains a Phase 2 follow-up.
+
+### Existing IDE-plugin path is byte-for-byte compatible
+
+The shell extensions (SSMS 20/21/22, VS 2019/22/26) send the same MessagePack frames over the same named pipe with the same ACL. No shell code was modified. The frame format `[length][CRC][MessagePack(RpcMessage)]` is unchanged.
+
+---
+
 ## 10. Key Design Decisions
 
 | Decision | Rationale |
@@ -325,3 +384,5 @@ The editor is launched via `FormatStylesEditorWindow.Launch()`. Menu wiring (Opt
 | CHECKSUM_AGG for change detection | Single scalar query vs full re-read |
 | ProfileMetadata.SkipValidation | Allows test pipelines to bypass semantic round-trip |
 | EnableIdempotencyCheck flag | Allows bulk operations to skip the expensive second parse pass |
+| Spec 021 M0 `IRpcTransport` abstraction | Same engine handlers serve named-pipe (IDE plugins) + in-process (Blazor WASM) + future WebSocket transports without per-transport duplication. Wire format unchanged for backward compat. |
+| Two opt-in DIM properties on `IRpcRequestHandler<,>` (`AllowsEmptyPayload`, `SwallowCancellation`) | Lets specific handlers (ProfileList, AnalysisSettingsChanged; AnalysisHandler, RefactorPreview/Apply) opt out of default error-on-null-payload and OCE-propagation behaviour without polluting the contract for the common case. |
