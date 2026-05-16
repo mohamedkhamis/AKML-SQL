@@ -183,7 +183,7 @@ description: "Tasks for AKML SQL — Local Web Edition (M0–M6)"
 
 - [ ] T078 [P] [US2] Add `tests/AkmlSql.Web.E2E.Tests/UserStory2Tests.cs`: spec.md US2 Acceptance Scenarios 1–4 over a real local engine instance and a fake DB harness
 - [ ] T079 [US2] Add `tests/AkmlSql.E2E.Tests/BridgeHandshakeTests.cs`: end-to-end WSS pair + reconnect + revocation flow
-- [ ] T080 [US2] Update `doc/architecture.md` with the bridge architecture (transports, handshake, capabilities); update `doc/ipc-api.md` § Handshake
+- [X] T080 [US2] Update `doc/architecture.md` with the bridge architecture (transports, handshake, capabilities); update `doc/ipc-api.md` § Handshake *(landed. `doc/architecture.md` gained §9d (M3 WebSocket bridge: `WebSocketTransport`, `HandshakeHandler`, `PairingService`, `BearerTokenStore`, `Capabilities` table). `doc/ipc-api.md` gained the new "Spec 021 — Web Edition Bridge Messages" section documenting MessageTypes 200/201 with full request/response shapes, the 5 `HandshakeStatus` values, and the capability advertisement table.)*
 
 **Checkpoint**: US2 demoable — a paired browser shows live database object names, signature help with real parameters, goto-definition opens the object body; unpair / engine-off cleanly falls back to US1.
 
@@ -278,7 +278,7 @@ description: "Tasks for AKML SQL — Local Web Edition (M0–M6)"
 
 ### M5.6 — Docs
 
-- [ ] T119 [P] [US4] Update `doc/architecture.md` § Schema cache + § IntelliSense library extraction; update `doc/ipc-api.md` with the `SchemaIdentify` and capability additions
+- [X] T119 [P] [US4] Update `doc/architecture.md` § Schema cache + § IntelliSense library extraction; update `doc/ipc-api.md` with the `SchemaIdentify` and capability additions *(landed. `doc/architecture.md` §9c documents the IntelliSense / Analysis / AI library trilogy (paths, what moved, what stayed, the decoupling refactors); §9e covers the M5 schema-cache identity resolution path (handshake vs SchemaIdentify, the callback-pure handler shape, the connection-string Data Source parser). `doc/ipc-api.md` documents MessageTypes 202/203 with full request/response shapes.)*
 - [ ] T120 [US4] Write `doc/WEB/quickstart-m5.md` (section 4 of quickstart.md)
 
 **Checkpoint**: US4 demoable — work against DB with engine, stop engine, keep working; completions still flow; reconnect silently restores Live; snippets and refactorings work in the appropriate modes.

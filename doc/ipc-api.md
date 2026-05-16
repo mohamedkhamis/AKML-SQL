@@ -110,6 +110,12 @@ class RpcMessage {
 | Engine→Shell | `StyleEditorSchemaResult` | 128 |
 | Engine→Shell | `RefactorPreviewResult` | 130 |
 | Engine→Shell | `RefactorApplyResult` | 131 |
+| Shell→Engine | `HandshakeRequest` | 200 |
+| Engine→Shell | `HandshakeResponse` | 201 |
+| Shell→Engine | `SchemaIdentifyRequest` | 202 |
+| Engine→Shell | `SchemaIdentifyResponse` | 203 |
+
+Note: codes 200–203 are part of the spec 021 web-edition bridge. They carry over named-pipe transports unchanged, but their primary purpose is the browser ↔ engine WebSocket bridge introduced in M3.
 
 ---
 
@@ -710,3 +716,65 @@ Engine replies:
     Payload: MessagePack({ Items: [...] })
   }
 ```
+
+---
+
+## Spec 021 — Web Edition Bridge Messages
+
+Spec 021 (web edition) adds two message-type pairs the browser uses on the WebSocket bridge. Both pairs are MessagePack-typed like everything else and are also transport-agnostic — they work over named pipes too, but the IDE plugins do not currently send them.
+
+### Handshake (200 / 201) — `contracts/rpc-handshake.md`
+
+First MessagePack frame on every freshly opened WebSocket. Validates the protocol-version range, optional pairing PIN or bearer token, and returns the engine's advertised capability list.
+
+```
+HandshakeRequest (Shell→Engine, type 200)
+    PairingPin           string?    One-time PIN for first-time LAN pairing. Mutually exclusive with BearerToken.
+    BearerToken          string?    Long-lived bearer token from a prior successful pairing.
+    WebVersion           string     Web-edition version (semver).
+    ProtocolVersionMax   int        Highest protocol version the client supports.
+    ProtocolVersionMin   int        Lowest protocol version the client supports.
+    BrowserLabel         string?    Human-readable identifier of the browser (shown in the engine's Pairing UI).
+
+HandshakeResponse (Engine→Shell, type 201)
+    Status                     string    One of: "ok" | "pin_invalid" | "pin_required" | "protocol_mismatch" | "server_busy".
+    EngineVersion              string    Engine semver.
+    ChosenProtocolVersion      int       Always within the intersection of client min/max and engine min/max.
+    EngineCapabilities         string[]  Stable capability identifiers (see "Capabilities" below).
+    NewBearerToken             string?   Set ONLY on a successful PairingPin handshake. The browser stores it (wrapped) and uses it on future connections.
+    ServerCanonicalIdentity    string?   The engine's canonical identity for any SQL Server currently selected by this session — used as the schema-cache key. Null if engine has no DB connection.
+    ErrorMessage               string?   Human-readable detail on error; null on success.
+```
+
+#### Capabilities (current advertised list)
+
+The engine advertises a list of stable capability identifiers in `EngineCapabilities`. The browser tracks them and renders an inline "feature requires engine ≥ X" notice (NOT a full-page blocker) when a feature's required capability is missing.
+
+| ID | Constant | Meaning |
+|----|----------|---------|
+| `core.format.v1` | `Capabilities.CoreFormatV1` | Formatter pipeline available (always present). |
+| `core.analysis.v1` | `Capabilities.CoreAnalysisV1` | Analyser rules available (always present). |
+| `schema.v2` | `Capabilities.SchemaV2` | Live schema and IntelliSense (M3). |
+| `schema.cache.v1` | `Capabilities.SchemaCacheV1` | Schema-cache identity protocol — engine reports `ServerCanonicalIdentity` and serves `SchemaIdentifyRequest` (M5). |
+| `snippets.write` (planned) | `Capabilities.SnippetsWrite` | Snippet save/delete via the bridge. Added when T115 lands. |
+| `refactoring.heavy` (planned) | `Capabilities.RefactoringHeavy` | Heavyweight schema-aware refactorings. Added when T117 lands. |
+| `ai.text-to-sql.v1` (reserved) | `Capabilities.AiTextToSqlV1` | AI Text-to-SQL via the bridge. AI invocation in the web edition normally goes direct-to-provider (FR-030); this capability covers any engine-hosted helpers a future M6 design adds. |
+| `diagnostics.engine-log-tail.v1` (planned) | `Capabilities.DiagnosticsEngineLogTailV1` | Engine log-tail request used by the diagnostics export bundle. |
+
+### SchemaIdentify (202 / 203) — `contracts/schema-cache-shape.md`
+
+Used by the browser to resolve the canonical `(serverCanonicalIdentity, databaseName)` pair that keys its IndexedDB schema cache. The pair is stable across host-string variations: two distinct DNS aliases pointing at the same SQL Server resolve to the same identity, so they share one cache entry.
+
+```
+SchemaIdentifyRequest (Shell→Engine, type 202)
+    SessionId                  string    The session whose connection we are identifying.
+
+SchemaIdentifyResponse (Engine→Shell, type 203)
+    SessionId                  string    Echoed from the request.
+    ServerCanonicalIdentity    string    Stable identifier for the SQL Server instance (resolved from @@SERVERNAME → SERVERPROPERTY('ServerName')). Empty when no live connection.
+    DatabaseName               string    Current database name on the session. Empty when no live connection.
+    HasConnection              bool      True only when the engine successfully resolved an identity. Browser MUST NOT cache against a response where this is false.
+    ErrorMessage               string?   Human-readable detail when HasConnection is false (e.g. "Engine has no live connection for this session.").
+```
+
+The handshake's `ServerCanonicalIdentity` covers the single-DB case (engine has exactly one connection); `SchemaIdentify` covers the multi-session case where the browser needs to resolve identity per `SessionId`.

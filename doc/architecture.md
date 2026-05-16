@@ -370,6 +370,55 @@ The shell extensions (SSMS 20/21/22, VS 2019/22/26) send the same MessagePack fr
 
 ---
 
+## 9c. Spec 021 — Library extraction (IntelliSense / Analysis / AI)
+
+To let Blazor WASM run the formatter, analyser, IntelliSense, and AI prompt building **in the browser tab** (without an engine), three previously engine-internal subsystems were extracted into standalone `net10.0` libraries:
+
+| Library | Path | Source moved from | Notes |
+|---------|------|-------------------|-------|
+| `AkmlSql.IntelliSense` | `src/AkmlSql.IntelliSense/` | `src/AkmlSql.Engine/{Completion,Parser,Schema/{DatabaseCache,Models}}` | 32 files. Namespaces preserved (`AkmlSql.Engine.Completion.*`) so engine call sites need zero updates. `DatabaseProvider` stayed in the engine because it depends on SqlClient; `CompletionEngine` no longer hard-codes `RegisterProvider(new DatabaseProvider())` — the engine registers it externally on startup. |
+| `AkmlSql.Analysis` | `src/AkmlSql.Analysis/` | `src/AkmlSql.Engine/{Analysis,Rules}` | 141 files including the 130+ rule classes. `AnalysisEngine.AnalyzeAsync` was refactored to take `(int serverVersion, DatabaseCache? schemaCache)` directly instead of `SessionManager + SchemaCacheManager`, so the library has no engine dependency. Callers resolve session/cache themselves. |
+| `AkmlSql.AI` | `src/AkmlSql.AI/` | `src/AkmlSql.Engine/Ai/{Prompts,Context,Privacy,Providers,Streaming}` | 18 files. `AiRequestHandler` + `AiProviderTestHandler` + `Security/CredentialManager` stayed in the engine. Two decoupling refactors: `AiProviderFactory.KeyDecryptor` is a pluggable static `Func<string?, string>` delegate (engine wires `CredentialManager.Decrypt` at startup; web edition leaves the default identity since Web Crypto unwraps the key BEFORE calling the factory); `SchemaContextBuilder` takes a `Func<string, string, DatabaseCache?> cacheLookup` callback instead of `SchemaCacheManager`. |
+
+Each library has a minimal smoke-test project under `tests/AkmlSql.{IntelliSense,Analysis,AI}.Tests/` that proves the surface is reachable from a project that references **only** the new library — no transitive engine dependency. Full functional coverage stays in `tests/AkmlSql.Engine.Tests/` via the transitive reference.
+
+---
+
+## 9d. Spec 021 — M3 WebSocket bridge
+
+The web edition's browser tab talks to a local engine over a WebSocket. The bridge is **localhost-only by default** (`HttpListener` bound to `127.0.0.1`); LAN mode requires an installer-generated self-signed TLS cert and the explicit "Network exposure: LAN" installer choice.
+
+| Component | Path | Role |
+|-----------|------|------|
+| `WebSocketTransport` | `src/AkmlSql.Engine/Transports/WebSocketTransport.cs` | `HttpListener` + `System.Net.WebSockets.WebSocket`. One WebSocket binary message = one `RpcMessage` MessagePack payload. Refuses non-loopback binding unless `TlsCertPath` is set. |
+| `HandshakeHandler` | `src/AkmlSql.Engine/Handlers/Handshake/HandshakeHandler.cs` | First-frame dispatch (`MessageTypes.HandshakeRequest` = 200). Protocol-version overlap check; pairing PIN / bearer-token validation; capability advertisement. Parameterless ctor accepts any localhost inbound; full ctor takes callbacks for `pairingRequired`, `pinValidator`, `bearerValidator`, `bearerMinter`, and `serverCanonicalIdentityProvider`. |
+| `PairingService` | `src/AkmlSql.Engine/Pairing/PairingService.cs` | 6-digit numeric PIN, 24-hour TTL, 5-attempts-per-minute sliding-window rate limit, constant-time compare. Emits a `PinChanged` event for the (deferred) tray-UI surface. |
+| `BearerTokenStore` | `src/AkmlSql.Engine/Pairing/BearerTokenStore.cs` | SHA-256 hashes at rest only — raw tokens never touch disk. Atomic temp-file-plus-rename persistence. |
+| `Capabilities` | `src/AkmlSql.Engine/Capabilities.cs` | Defines the stable capability identifiers (e.g. `core.format.v1`, `schema.cache.v1`) and the engine's currently-advertised list. The web client gates per-feature UI on the list — missing capability renders an inline notice, not a full-page blocker. |
+
+Wire details (request/response shapes, status strings, capability table) are in [doc/ipc-api.md § Spec 021 — Web Edition Bridge Messages](ipc-api.md#spec-021--web-edition-bridge-messages).
+
+---
+
+## 9e. Spec 021 — M5 schema-cache identity
+
+The web edition's offline IntelliSense uses an IndexedDB schema cache keyed by the composite pair `(serverCanonicalIdentity, databaseName)`. The pair is stable across host-string variations: two distinct DNS aliases pointing at the same SQL Server resolve to the same identity, so they share one cache entry (clarification 3 in spec.md).
+
+The browser resolves the pair via two paths:
+
+1. **Handshake response** — `HandshakeResponse.ServerCanonicalIdentity` covers the single-DB case (engine has exactly one connection at handshake time).
+2. **SchemaIdentify request** (`MessageTypes.SchemaIdentifyRequest` = 202) — covers the multi-session case where the browser asks per `SessionId`.
+
+The handler (`Handlers/Schema/SchemaIdentifyHandler`) is callback-pure (`Func<string, string?> databaseLookup`, `Func<string, string?> identityResolver`) so it unit-tests without a live SQL connection. Resolver exceptions are captured into the response's `ErrorMessage` rather than crashing the bridge.
+
+Production wiring in `PipeRpcServer.Handlers.cs` plugs `SessionManager` for `databaseLookup` and `SchemaIdentifyHandlerSupport.ParseServerFromConnectionString` (extracts `Data Source` / `Server` / `Address` from the SqlClient-style connection string) for the initial `identityResolver`. Swapping in the real `SELECT @@SERVERNAME` query is a follow-up — the handler surface does not change.
+
+The `schema.cache.v1` capability is advertised in `Capabilities.Current` to signal availability.
+
+Contract details (IndexedDB layout, change-detection polling, eviction policy, online/offline matrix) live in `specs/021-web-edition/contracts/schema-cache-shape.md`.
+
+---
+
 ## 10. Key Design Decisions
 
 | Decision | Rationale |
