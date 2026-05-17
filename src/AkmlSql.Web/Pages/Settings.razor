@@ -51,6 +51,15 @@
         <ConnectionPickerComponent />
     </section>
 
+    <section class="akml-settings-section">
+        <h3>Schema cache</h3>
+        <p class="akml-settings-help">
+            The browser caches schema metadata per (server, database) so IntelliSense
+            keeps working when the engine is unreachable. Manage cached entries on the
+            <a href="/settings/schema-cache">schema-cache settings page</a>.
+        </p>
+    </section>
+
     @if (!string.IsNullOrEmpty(_status))
     {
         <p class="akml-settings-status">@_status</p>

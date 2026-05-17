@@ -23,6 +23,8 @@ const STORES = [
     'pairingTokens',
     // Spec 021 M3/M6 -- non-extractable wrap key handle.
     'keyMaterial',
+    // Spec 021 M5 -- snippets persisted browser-side.
+    'snippets',
 ];
 
 let _dbPromise = null;

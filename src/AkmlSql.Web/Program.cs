@@ -58,4 +58,16 @@ builder.Services.AddSingleton<ISignatureHelpService, SignatureHelpService>();
 builder.Services.AddSingleton<IQuickInfoService, QuickInfoService>();
 builder.Services.AddSingleton<IGotoDefinitionService, GotoDefinitionService>();
 
+// M5 schema-cache + snippet + refactoring services.
+//   ISchemaCacheStore     T107 -- IndexedDB persistence with composite (server, db) key.
+//   ISchemaSync           T108 -- 30 s polling timer with 5 min idle suspend.
+//   ISchemaCacheEvictor   T110 -- LRU eviction on QuotaExceededError.
+//   ISnippetStore         T114 -- built-in + user snippets persisted to IndexedDB.
+//   IRefactoringService   T117 -- lightweight local + heavyweight via bridge.
+builder.Services.AddSingleton<ISchemaCacheStore, SchemaCacheStore>();
+builder.Services.AddSingleton<ISchemaSync, SchemaSync>();
+builder.Services.AddSingleton<ISchemaCacheEvictor, SchemaCacheEvictor>();
+builder.Services.AddSingleton<ISnippetStore, SnippetStore>();
+builder.Services.AddSingleton<IRefactoringService, RefactoringService>();
+
 await builder.Build().RunAsync();

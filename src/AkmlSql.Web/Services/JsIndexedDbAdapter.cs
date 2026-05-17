@@ -98,4 +98,7 @@ public static class StoreNames
 
     // Spec 021 M3/M6 -- non-extractable wrap-key handle.
     public const string KeyMaterial = "keyMaterial";
+
+    // Spec 021 M5 -- snippets persisted browser-side.
+    public const string Snippets = "snippets";
 }
