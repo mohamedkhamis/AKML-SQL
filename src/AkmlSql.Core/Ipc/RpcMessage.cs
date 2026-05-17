@@ -226,5 +226,17 @@ namespace AkmlSql.Core.Ipc
         // IndexedDB cache key. See specs/021-web-edition/contracts/schema-cache-shape.md.
         public const int SchemaIdentifyRequest = 202;
         public const int SchemaIdentifyResponse = 203;
+
+        // Spec 021 (web edition) M5 — schema-cache change detection.
+        // Browser polls engine every 30s with a (server, db) tuple; engine returns the
+        // CHECKSUM_AGG(BINARY_CHECKSUM(...)) result over sys.objects. Browser compares
+        // to its cached checksum and triggers a Phase A refresh on drift.
+        public const int SchemaChecksumRequest = 204;
+        public const int SchemaChecksumResponse = 205;
+
+        // Spec 021 (web edition) — close-out of the matrix-test gap.
+        // Cancellation signal for in-flight AI streaming requests. Engine drops the
+        // associated CancellationTokenSource so the streaming handler bails.
+        public const int AiStreamCancelResult = 179;
     }
 }

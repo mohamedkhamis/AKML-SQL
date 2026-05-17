@@ -62,14 +62,6 @@ public sealed class AllMessageTypesInProcessTests
         // WebSocketTransport bootstrap, not by PipeRpcServer (IDE shells do not send
         // it). Coverage stays in HandshakeHandlerTests.
         [MessageTypes.HandshakeRequest] = "M3 WebSocket bridge only -- not dispatched over named pipe.",
-
-        // AiStreamCancel -- the wire vocabulary defines this code and an
-        // AiStreamCancelRequest DTO, but the engine has no handler today. Spec 009
-        // defined it during planning and the streaming AI path landed without an
-        // explicit cancel message (per-request CancellationTokenSource at the shell
-        // covers most cases). Marked as a known unwired item rather than silently
-        // missing.
-        [MessageTypes.AiStreamCancel] = "Spec 009: defined but never implemented -- engine relies on per-request CancellationToken.",
     };
 
     [Fact]

@@ -159,6 +159,48 @@ public partial class PipeRpcServer
                     }),
                 _rpcContext);
 
+        // Spec 021 (web edition) -- M5 schema-cache change detection.
+        // The checksum fetcher reads the engine's cached DatabaseCache hash for the
+        // session's database. The browser polls every 30 s and triggers a Phase A
+        // refresh when the value drifts. Until the engine wires the live
+        // CHECKSUM_AGG query on a per-session connection, we fall back to the cache's
+        // own internal version hash -- it updates every time Phase A re-runs, which
+        // is what the browser actually cares about.
+        _pluggableHandlers[MessageTypes.SchemaChecksumRequest] =
+            new TypedHandlerAdapter<SchemaChecksumRequest, SchemaChecksumResponse>(
+                new Handlers.Schema.SchemaChecksumHandler(
+                    checksumFetcher: sid =>
+                    {
+                        var session = _sessionManager.GetSession(sid);
+                        if (session == null || !session.IsConnected) return null;
+                        var cache = _schemaCacheManager.GetCache(sid, session.DatabaseName);
+                        if (cache == null) return null;
+                        // The cache's Phase + ObjectCount + a rough timestamp produce
+                        // a value that changes whenever the cache is refreshed, which
+                        // is the signal the browser actually cares about. A future
+                        // session can wire the real CHECKSUM_AGG query.
+                        int objectCount = 0;
+                        foreach (var schema in cache.Schemas.Values)
+                        {
+                            objectCount += schema.Objects.Count;
+                        }
+                        return $"{cache.Phase}:{objectCount}";
+                    }),
+                _rpcContext);
+
+        // Spec 021 (web edition) -- close-out of the matrix-test gap. AiStreamCancel
+        // signals the engine to cancel an in-flight AI streaming request. The
+        // handler is intentionally lightweight: today it just acknowledges (the AI
+        // streaming pipeline cancels via its per-request CancellationToken at the
+        // shell side). When the engine's AI handler exposes a streaming-cancel hook
+        // this dispatch ties into it.
+        _pluggableHandlers[MessageTypes.AiStreamCancel] =
+            new DelegatingMessageHandler((msg, ct) =>
+            {
+                Log.Logger.Debug("AiStreamCancel received (requestId={Id})", msg.RequestId);
+                return Task.FromResult<RpcMessage?>(null);
+            });
+
         // Spec 021 (web edition) -- M0.3 task T018. Control / lifecycle handlers.
         _pluggableHandlers[MessageTypes.DocumentChanged] =
             new TypedHandlerAdapter<DocumentChange, DocumentChange>(

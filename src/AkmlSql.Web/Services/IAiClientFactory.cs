@@ -44,6 +44,20 @@ public sealed class AiChatRequest
     public string UserPrompt { get; set; } = string.Empty;
     public int? MaxTokens { get; set; }
     public double? Temperature { get; set; }
+
+    /// <summary>
+    /// Optional multi-turn history -- ordered oldest-first. When present the
+    /// provider sees: <c>System -&gt; History[0..n] -&gt; UserPrompt</c>. Used by
+    /// the AiChatPanel for conversational mode. Empty for single-shot Explain /
+    /// Fix / Optimize / TextToSql calls.
+    /// </summary>
+    public AiChatMessage[] History { get; set; } = Array.Empty<AiChatMessage>();
+}
+
+public sealed class AiChatMessage
+{
+    public string Role { get; set; } = "user";   // "user" | "assistant"
+    public string Content { get; set; } = string.Empty;
 }
 
 /// <summary>
@@ -135,15 +149,20 @@ internal sealed class AiClientFactory : IAiClientFactory
         using var unwrapped = await _vault.UnwrapForCallAsync(providerId).ConfigureAwait(false);
         var apiKey = unwrapped.Value;
 
-        // Build the OpenAI-compatible chat-completion body.
+        // Build the OpenAI-compatible chat-completion body. With History present we
+        // interleave: system -> history (oldest first) -> userPrompt.
+        var messages = new System.Collections.Generic.List<object>(2 + request.History.Length);
+        messages.Add(new { role = "system", content = request.SystemPrompt });
+        foreach (var m in request.History)
+        {
+            messages.Add(new { role = m.Role, content = m.Content });
+        }
+        messages.Add(new { role = "user", content = request.UserPrompt });
+
         var body = new
         {
             model = config.Model,
-            messages = new[]
-            {
-                new { role = "system", content = request.SystemPrompt },
-                new { role = "user", content = request.UserPrompt },
-            },
+            messages = messages.ToArray(),
             max_tokens = request.MaxTokens,
             temperature = request.Temperature,
         };
