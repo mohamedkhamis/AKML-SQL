@@ -3,7 +3,9 @@
     via CSS variables emitted by scripts/generate-theme-css.ps1 (T004).
     Real page slots for Editor / Settings / About land in M2 (T031 onwards).
 *@
+@using AkmlSql.Web.Services
 @inherits LayoutComponentBase
+@inject IThemeService Theme
 
 <div class="akml-app">
     <NavMenu />
@@ -29,4 +31,21 @@
         overflow: auto;
         padding: var(--akml-scalar-spacing-m);
     }
+
+    /* Global tweaks. Theme CSS files are auto-generated -- editing them is forbidden,
+       so cross-cutting rules live here instead. Inline style blocks are global
+       (CSS isolation only applies to .razor.css companion files). */
+    a { color: var(--akml-text-link); text-decoration: none; }
+    a:hover { color: var(--akml-accent-primaryhover); text-decoration: underline; }
+    input[type="radio"], input[type="checkbox"] { accent-color: var(--akml-accent-primary); }
 </style>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        // Pull the persisted theme override before any page reads Theme.Current.
+        // ThemeService.InitializeAsync is idempotent (Task is cached), so pages that
+        // also await it (Editor, Settings) share this Task instead of racing.
+        await Theme.InitializeAsync();
+    }
+}

@@ -80,7 +80,7 @@ builder.Services.AddSingleton<IRefactoringService, RefactoringService>();
 //   IAiPromptService  T129 -- prompt builders from AkmlSql.AI + chat fetch.
 builder.Services.AddSingleton<IAiKeyVault, AiKeyVault>();
 builder.Services.AddSingleton<IAiPreference, AiPreference>();
-builder.Services.AddScoped(sp => new System.Net.Http.HttpClient
+builder.Services.AddSingleton(sp => new System.Net.Http.HttpClient
 {
     BaseAddress = new Uri(builder.HostEnvironment.BaseAddress),
 });

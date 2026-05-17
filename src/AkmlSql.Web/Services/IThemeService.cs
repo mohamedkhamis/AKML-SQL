@@ -81,7 +81,15 @@ internal sealed class ThemeService : IThemeService
     public ThemeMode Current { get; private set; } = ThemeMode.System;
     public event Action? Changed;
 
-    public async Task InitializeAsync()
+    // Cached so multiple callers (MainLayout + Settings page + Editor page) all share
+    // one IndexedDB read. The first caller wins; subsequent awaits resolve immediately
+    // once the initial read completes. Critical for the Settings page binding race --
+    // it must await the same Task before reading Current.
+    private Task? _initTask;
+
+    public Task InitializeAsync() => _initTask ??= InitializeCoreAsync();
+
+    private async Task InitializeCoreAsync()
     {
         var stored = await _store.GetAsync(StoreNames.ThemePreference, PreferenceKey).ConfigureAwait(false);
         if (!string.IsNullOrEmpty(stored))

@@ -7,6 +7,7 @@
 *@
 @using AkmlSql.Web.Services
 @using AkmlSql.Web.Shared
+@implements IDisposable
 @inject IThemeService Theme
 @inject IAnalysisSettingsStore AnalysisSettings
 @inject IEditorSessionStore SessionStore
@@ -100,14 +101,28 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Await theme init before the radios bind to Theme.Current; otherwise a
+        // hard-refresh on /settings would render the radios with the default
+        // "System" value and never re-render when the persisted Dark/Light/HC
+        // override loads from IndexedDB. ThemeService.InitializeAsync is
+        // idempotent (Task is cached), so MainLayout's parallel call is fine.
+        await Theme.InitializeAsync();
+        Theme.Changed += OnThemeChanged;
         _settings = await AnalysisSettings.GetAsync();
     }
+
+    private void OnThemeChanged() => InvokeAsync(StateHasChanged);
 
     private async Task SetTheme(ThemeMode mode)
     {
         await Theme.SetAsync(mode);
         _status = $"Theme set to {mode}.";
         StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        Theme.Changed -= OnThemeChanged;
     }
 
     private async Task ToggleEnabled(ChangeEventArgs e)
