@@ -33,7 +33,9 @@
         <ul class="akml-problems-list">
             @foreach (var issue in _filtered)
             {
-                <li class="akml-problems-row akml-severity-@SeverityClass(issue.Severity)" @onclick="@(() => JumpAsync(issue))">
+                <li class="akml-problems-row akml-severity-@SeverityClass(issue.Severity)"
+                    title="@($"{issue.RuleId} — {issue.Message} (line {issue.Line})")"
+                    @onclick="@(() => JumpAsync(issue))">
                     <span class="akml-problems-rule">@issue.RuleId</span>
                     <span class="akml-problems-message">@issue.Message</span>
                     <span class="akml-problems-location">L@(issue.Line)</span>

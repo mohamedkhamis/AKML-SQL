@@ -27,10 +27,15 @@
     }
     else if (_snapshots.Count == 0)
     {
-        <p class="akml-schema-cache-empty">
-            No cached databases yet. The cache fills as you use IntelliSense against a
-            paired engine.
-        </p>
+        <div class="akml-schema-cache-empty">
+            <p>No cached databases yet.</p>
+            <p>
+                The cache fills as you use IntelliSense against a paired engine.
+                Open <a href="/settings">Settings → Engine connections</a> to pair one,
+                or keep using the editor offline — formatter and analyser don't need
+                the cache.
+            </p>
+        </div>
     }
     else
     {
