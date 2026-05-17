@@ -70,4 +70,19 @@ builder.Services.AddSingleton<ISchemaCacheEvictor, SchemaCacheEvictor>();
 builder.Services.AddSingleton<ISnippetStore, SnippetStore>();
 builder.Services.AddSingleton<IRefactoringService, RefactoringService>();
 
+// M6 AI in the browser. Direct-to-provider with allow-listed origins;
+// API keys wrapped at rest via Web Crypto.
+//   IAiKeyVault       T125 -- wrap/unwrap user API keys, aad bound to providerId.
+//   IAiPreference     T126 -- active providerId singleton.
+//   IAiClientFactory  T128 -- per-provider HTTP client with origin allow-list.
+//   IAiPromptService  T129 -- prompt builders from AkmlSql.AI + chat fetch.
+builder.Services.AddSingleton<IAiKeyVault, AiKeyVault>();
+builder.Services.AddSingleton<IAiPreference, AiPreference>();
+builder.Services.AddScoped(sp => new System.Net.Http.HttpClient
+{
+    BaseAddress = new Uri(builder.HostEnvironment.BaseAddress),
+});
+builder.Services.AddSingleton<IAiClientFactory, AiClientFactory>();
+builder.Services.AddSingleton<IAiPromptService, AiPromptService>();
+
 await builder.Build().RunAsync();

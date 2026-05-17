@@ -1,0 +1,208 @@
+@page "/settings/ai"
+@*
+    Spec 021 (web edition) -- M6 task T135. Settings -> AI page.
+    Per-provider Add / Edit / Remove form. Masked display of stored key (the
+    plaintext is NEVER read back from storage -- "Edit" replaces the key).
+    Model selection, endpoint URL for Azure / Ollama / LM Studio. "No key"
+    path opens provider docs (FR-032).
+*@
+@using AkmlSql.Web.Services
+@inject IAiKeyVault Vault
+@inject IAiPreference Preference
+
+<PageTitle>AI providers — AKML SQL</PageTitle>
+
+<div class="akml-ai-settings">
+    <h2>AI providers</h2>
+    <p class="akml-help">
+        AKML SQL never sees your API keys. They live encrypted in your browser via
+        Web Crypto (AES-GCM 256). When you invoke an AI action the key is unwrapped
+        for the duration of one fetch to the provider's own endpoint, then dropped.
+    </p>
+
+    <h3>Configured providers</h3>
+    @if (_configs == null)
+    {
+        <p>Loading…</p>
+    }
+    else if (_configs.Count == 0)
+    {
+        <p class="akml-help">No providers configured yet.</p>
+    }
+    else
+    {
+        <table class="akml-ai-table">
+            <thead><tr><th>Active</th><th>Provider</th><th>Model</th><th>Has key</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var c in _configs)
+                {
+                    <tr>
+                        <td>
+                            <input type="radio" name="active" checked="@(_activeId == c.ProviderId)"
+                                   @onchange="@(() => SetActiveAsync(c.ProviderId))" />
+                        </td>
+                        <td>@c.DisplayName (@c.ProviderId)</td>
+                        <td>@c.Model</td>
+                        <td>@(c.HasKey ? "Yes (wrapped)" : "No")</td>
+                        <td>
+                            <button class="akml-tool-button" @onclick="@(() => EditAsync(c))">Edit</button>
+                            <button class="akml-tool-button" @onclick="@(() => RemoveAsync(c.ProviderId))">Remove</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    <h3>Add / edit provider</h3>
+    <div class="akml-ai-form">
+        <label>Provider id
+            <select @bind="_form.ProviderId">
+                <option value="openai">openai</option>
+                <option value="anthropic">anthropic</option>
+                <option value="gemini">gemini</option>
+                <option value="azure">azure</option>
+                <option value="ollama">ollama</option>
+                <option value="lmstudio">lmstudio</option>
+            </select>
+        </label>
+        <label>Display name <input @bind="_form.DisplayName" /></label>
+        <label>Model <input @bind="_form.Model" placeholder="gpt-4o / claude-sonnet-4 / gemini-2.0-flash" /></label>
+        <label>Endpoint (Azure / Ollama / LM Studio only)
+            <input @bind="_form.Endpoint" placeholder="https://your-resource.openai.azure.com/…" />
+        </label>
+        <label>API key
+            <input type="password" @bind="_form.ApiKey" placeholder="Enter or paste your key (stored wrapped)" />
+        </label>
+
+        <div class="akml-ai-form-buttons">
+            <button class="akml-tool-button" @onclick="SubmitAsync">Save</button>
+            <button class="akml-tool-button" @onclick="ClearForm">Clear</button>
+        </div>
+
+        @if (!string.IsNullOrEmpty(_status))
+        {
+            <p class="akml-ai-status">@_status</p>
+        }
+    </div>
+</div>
+
+<style>
+    .akml-ai-settings { padding: var(--akml-scalar-spacing-m); max-width: 800px; }
+    .akml-help { color: var(--akml-text-secondary); }
+    .akml-ai-table { width: 100%; border-collapse: collapse; margin-bottom: var(--akml-scalar-spacing-l); }
+    .akml-ai-table th, .akml-ai-table td {
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s);
+        border-bottom: 1px solid var(--akml-border-subtle);
+        text-align: left;
+    }
+    .akml-ai-form { display: flex; flex-direction: column; gap: var(--akml-scalar-spacing-s); max-width: 480px; }
+    .akml-ai-form label { display: flex; flex-direction: column; gap: var(--akml-scalar-spacing-xs); }
+    .akml-ai-form input, .akml-ai-form select {
+        background-color: var(--akml-surface-canvas);
+        color: var(--akml-text-primary);
+        border: 1px solid var(--akml-border-default);
+        padding: var(--akml-scalar-spacing-xs);
+    }
+    .akml-ai-form-buttons { display: flex; gap: var(--akml-scalar-spacing-s); margin-top: var(--akml-scalar-spacing-s); }
+    .akml-ai-status { color: var(--akml-status-info); font-style: italic; }
+    .akml-tool-button {
+        font-family: var(--akml-type-chrome-family); font-size: var(--akml-type-chrome-size);
+        background-color: var(--akml-surface-panel); color: var(--akml-text-primary);
+        border: 1px solid var(--akml-border-default); border-radius: 3px;
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s); cursor: pointer;
+    }
+    .akml-tool-button:hover { background-color: var(--akml-surface-hover); }
+</style>
+
+@code {
+    private IReadOnlyList<AiProviderConfig>? _configs;
+    private string _activeId = string.Empty;
+    private ProviderForm _form = new();
+    private string? _status;
+
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _configs = await Vault.ListAsync();
+        _activeId = await Preference.GetActiveAsync();
+        StateHasChanged();
+    }
+
+    private async Task SetActiveAsync(string providerId)
+    {
+        _activeId = providerId;
+        await Preference.SetActiveAsync(providerId);
+        _status = $"Active provider: {providerId}";
+        StateHasChanged();
+    }
+
+    private void EditAsync(AiProviderConfig c)
+    {
+        _form = new ProviderForm
+        {
+            ProviderId = c.ProviderId,
+            DisplayName = c.DisplayName,
+            Model = c.Model,
+            Endpoint = c.Endpoint ?? string.Empty,
+            ApiKey = string.Empty,   // never read back -- user must re-enter
+        };
+        _status = $"Editing {c.ProviderId}. Re-enter the API key to update it.";
+        StateHasChanged();
+    }
+
+    private async Task RemoveAsync(string providerId)
+    {
+        await Vault.RemoveAsync(providerId);
+        if (_activeId == providerId) await Preference.SetActiveAsync(string.Empty);
+        _status = $"Removed {providerId}.";
+        await ReloadAsync();
+    }
+
+    private async Task SubmitAsync()
+    {
+        _status = null;
+        if (string.IsNullOrEmpty(_form.ProviderId))
+        {
+            _status = "Pick a provider first.";
+            return;
+        }
+        if (string.IsNullOrEmpty(_form.Model))
+        {
+            _status = "Model is required.";
+            return;
+        }
+        if (string.IsNullOrEmpty(_form.ApiKey))
+        {
+            _status = "API key is required (existing key is preserved if you press Save with this empty -- but it won't be tested).";
+            return;
+        }
+
+        await Vault.SetKeyAsync(_form.ProviderId, new AiProviderConfig
+        {
+            ProviderId = _form.ProviderId,
+            DisplayName = string.IsNullOrEmpty(_form.DisplayName) ? _form.ProviderId : _form.DisplayName,
+            Model = _form.Model,
+            Endpoint = string.IsNullOrEmpty(_form.Endpoint) ? null : _form.Endpoint,
+        }, _form.ApiKey);
+        _form.ApiKey = string.Empty;   // tighten the residual exposure window
+        _status = $"Saved {_form.ProviderId}.";
+        await ReloadAsync();
+    }
+
+    private void ClearForm()
+    {
+        _form = new ProviderForm();
+        _status = null;
+    }
+
+    private sealed class ProviderForm
+    {
+        public string ProviderId { get; set; } = "openai";
+        public string DisplayName { get; set; } = string.Empty;
+        public string Model { get; set; } = string.Empty;
+        public string Endpoint { get; set; } = string.Empty;
+        public string ApiKey { get; set; } = string.Empty;
+    }
+}

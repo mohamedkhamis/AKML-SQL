@@ -60,6 +60,15 @@
         </p>
     </section>
 
+    <section class="akml-settings-section">
+        <h3>AI providers</h3>
+        <p class="akml-settings-help">
+            Manage AI providers (OpenAI, Anthropic, Gemini, Azure, Ollama, LM Studio)
+            on the <a href="/settings/ai">AI providers page</a>. Keys are wrapped at
+            rest with Web Crypto; AKML SQL never sees them.
+        </p>
+    </section>
+
     @if (!string.IsNullOrEmpty(_status))
     {
         <p class="akml-settings-status">@_status</p>
