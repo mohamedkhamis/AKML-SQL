@@ -1,0 +1,96 @@
+@*
+    Spec 021 (web edition) -- M2 task T032. CodeMirror 6 editor wrapper.
+    Hosts the editor inside a stable DOM div; lifecycle managed by akml-editor.js.
+    The Blazor side exposes SetText/GetText/SetSelection/GotoLine + OnTextChanged event.
+*@
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<div @ref="_host" id="@HostId" class="akml-editor"></div>
+
+<style>
+    .akml-editor {
+        height: 100%;
+        min-height: 320px;
+        background-color: var(--akml-surface-editor);
+        font-family: var(--akml-type-editor-family);
+        font-size: var(--akml-type-editor-size);
+    }
+    .akml-editor .cm-editor { height: 100%; }
+    .akml-editor .cm-scroller { font-family: inherit; font-size: inherit; }
+</style>
+
+@code {
+    [Parameter] public string InitialText { get; set; } = string.Empty;
+
+    /// <summary>Raised whenever the editor's text changes. Debounced by CodeMirror.</summary>
+    [Parameter] public EventCallback<string> OnTextChanged { get; set; }
+
+    private string HostId { get; } = $"akml-editor-{Guid.NewGuid():N}";
+    private ElementReference _host;
+    private IJSObjectReference? _module;
+    private DotNetObjectReference<EditorComponent>? _selfRef;
+    private bool _initialised;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _initialised) return;
+        _initialised = true;
+
+        _module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/akml-editor.js");
+        _selfRef = DotNetObjectReference.Create(this);
+        await _module.InvokeVoidAsync("create", HostId, InitialText, _selfRef);
+    }
+
+    /// <summary>
+    /// JS-invokable callback wired from akml-editor.js update listener. Marshalled as a
+    /// non-blocking invoke so the editor doesn't block on the C# debounce path.
+    /// </summary>
+    [JSInvokable]
+    public Task OnTextChangedFromJs(string text)
+    {
+        return OnTextChanged.InvokeAsync(text);
+    }
+
+    public async Task<string> GetTextAsync()
+    {
+        if (_module == null) return InitialText;
+        return await _module.InvokeAsync<string>("getText", HostId);
+    }
+
+    public async Task SetTextAsync(string text)
+    {
+        if (_module == null) { InitialText = text; return; }
+        await _module.InvokeVoidAsync("setText", HostId, text);
+    }
+
+    public async Task SetSelectionAsync(int anchor, int head)
+    {
+        if (_module == null) return;
+        await _module.InvokeVoidAsync("setSelection", HostId, anchor, head);
+    }
+
+    public async Task GotoLineAsync(int lineNumber)
+    {
+        if (_module == null) return;
+        await _module.InvokeVoidAsync("gotoLine", HostId, lineNumber);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            if (_module != null)
+            {
+                await _module.InvokeVoidAsync("dispose", HostId);
+                await _module.DisposeAsync();
+            }
+        }
+        catch (JSDisconnectedException) { /* browser tab closing -- ignore */ }
+        finally
+        {
+            _selfRef?.Dispose();
+        }
+    }
+}

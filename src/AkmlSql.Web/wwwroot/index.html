@@ -5,7 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AKML SQL — Web edition</title>
     <base href="/" />
-    <link rel="stylesheet" href="css/themes/light.css" />
+    <!--
+        Theme CSS is loaded dynamically by wwwroot/js/akml-theme.js so the chosen mode
+        (system / light / dark / high-contrast) takes effect before Blazor renders. We
+        keep light.css inlined as the boot default to avoid a flash of unstyled content
+        on first paint -- akml-theme.js replaces it on startup.
+    -->
+    <link id="akml-theme-css" rel="stylesheet" href="css/themes/light.css" />
+    <script type="module">
+        import { apply } from './js/akml-theme.js';
+        // Apply 'system' immediately so the page picks the right mode before Blazor
+        // boots. The Blazor ThemeService re-applies later with the user's stored
+        // preference (if any) once IndexedDB is reachable.
+        apply('system');
+    </script>
 </head>
 <body>
     <div id="app">Loading AKML SQL…</div>

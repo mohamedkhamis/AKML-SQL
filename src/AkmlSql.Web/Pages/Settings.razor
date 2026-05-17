@@ -1,0 +1,109 @@
+@page "/settings"
+@*
+    Spec 021 (web edition) -- M2 stub. The full Settings page surface (theme override,
+    analyser settings, profile management, schema-cache management) lands across the M5
+    Settings pages (T111 schema cache, T135 AI) and T046 (analyser auto-run toggle).
+    M2 ships theme + analyser + reset session in a single page.
+*@
+@using AkmlSql.Web.Services
+@inject IThemeService Theme
+@inject IAnalysisSettingsStore AnalysisSettings
+@inject IEditorSessionStore SessionStore
+
+<PageTitle>Settings — AKML SQL</PageTitle>
+
+<div class="akml-settings">
+    <h2>Settings</h2>
+
+    <section class="akml-settings-section">
+        <h3>Theme</h3>
+        <p class="akml-settings-help">
+            Follow the operating system, or pin a specific mode. Choosing "System" reacts
+            to OS theme changes in real time.
+        </p>
+        <label class="akml-radio"><input type="radio" name="theme" checked="@(Theme.Current == ThemeMode.System)" @onchange="() => SetTheme(ThemeMode.System)" /> System</label>
+        <label class="akml-radio"><input type="radio" name="theme" checked="@(Theme.Current == ThemeMode.Light)" @onchange="() => SetTheme(ThemeMode.Light)" /> Light</label>
+        <label class="akml-radio"><input type="radio" name="theme" checked="@(Theme.Current == ThemeMode.Dark)" @onchange="() => SetTheme(ThemeMode.Dark)" /> Dark</label>
+        <label class="akml-radio"><input type="radio" name="theme" checked="@(Theme.Current == ThemeMode.HighContrast)" @onchange="() => SetTheme(ThemeMode.HighContrast)" /> High contrast</label>
+    </section>
+
+    <section class="akml-settings-section">
+        <h3>Analyser</h3>
+        <label class="akml-checkbox">
+            <input type="checkbox" checked="@_settings.Enabled" @onchange="ToggleEnabled" /> Enable analyser
+        </label>
+        <label class="akml-checkbox">
+            <input type="checkbox" checked="@_settings.AutoAnalyseOnFormat" @onchange="ToggleAutoAnalyse" /> Re-analyse after every format
+        </label>
+    </section>
+
+    <section class="akml-settings-section">
+        <h3>Editor</h3>
+        <button class="akml-tool-button" @onclick="ResetSessionAsync">Reset editor session</button>
+        <p class="akml-settings-help">
+            Clears the persisted document text + caret + active profile. Built-in and
+            user profiles are not touched.
+        </p>
+    </section>
+
+    @if (!string.IsNullOrEmpty(_status))
+    {
+        <p class="akml-settings-status">@_status</p>
+    }
+</div>
+
+<style>
+    .akml-settings { padding: var(--akml-scalar-spacing-m); max-width: 720px; }
+    .akml-settings-section { margin-bottom: var(--akml-scalar-spacing-l); }
+    .akml-settings-help { color: var(--akml-text-secondary); font-size: 13px; }
+    .akml-radio, .akml-checkbox {
+        display: block;
+        margin-bottom: var(--akml-scalar-spacing-xs);
+        color: var(--akml-text-primary);
+    }
+    .akml-tool-button {
+        font-family: var(--akml-type-chrome-family); font-size: var(--akml-type-chrome-size);
+        background-color: var(--akml-surface-panel); color: var(--akml-text-primary);
+        border: 1px solid var(--akml-border-default); border-radius: 3px;
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s); cursor: pointer;
+    }
+    .akml-tool-button:hover { background-color: var(--akml-surface-hover); }
+    .akml-settings-status { color: var(--akml-status-info); font-style: italic; }
+</style>
+
+@code {
+    private WebAnalysisSettings _settings = new();
+    private string? _status;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _settings = await AnalysisSettings.GetAsync();
+    }
+
+    private async Task SetTheme(ThemeMode mode)
+    {
+        await Theme.SetAsync(mode);
+        _status = $"Theme set to {mode}.";
+        StateHasChanged();
+    }
+
+    private async Task ToggleEnabled(ChangeEventArgs e)
+    {
+        _settings.Enabled = (bool)(e.Value ?? false);
+        await AnalysisSettings.SetAsync(_settings);
+        _status = "Analyser settings saved.";
+    }
+
+    private async Task ToggleAutoAnalyse(ChangeEventArgs e)
+    {
+        _settings.AutoAnalyseOnFormat = (bool)(e.Value ?? false);
+        await AnalysisSettings.SetAsync(_settings);
+        _status = "Analyser settings saved.";
+    }
+
+    private async Task ResetSessionAsync()
+    {
+        await SessionStore.ClearAsync();
+        _status = "Editor session cleared. Reload the page to start fresh.";
+    }
+}

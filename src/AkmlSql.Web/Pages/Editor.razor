@@ -1,0 +1,279 @@
+@page "/"
+@page "/editor"
+@*
+    Spec 021 (web edition) -- M2 task T033, T040, T046. The main editor page.
+    Wires:
+      * EditorComponent (CodeMirror)
+      * ProfilePickerComponent (top nav)
+      * ProblemsListComponent (right side panel)
+      * Formatter and analyser services (in-process)
+      * Editor session persistence (debounced)
+      * Keybindings: Ctrl+K Ctrl+F (Format), Ctrl+K Ctrl+L (Analyse), Ctrl+S (Save as .sql)
+*@
+@using AkmlSql.Core.Ipc.Messages
+@using AkmlSql.Formatting.Profiles
+@using AkmlSql.Web.Services
+@using AkmlSql.Web.Shared
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
+@inject IFormatterService Formatter
+@inject IAnalyserService Analyser
+@inject IProfileStore ProfileStore
+@inject IAnalysisSettingsStore AnalysisSettings
+@inject IEditorSessionStore SessionStore
+@inject IDiagnosticsRingBuffer Diagnostics
+@inject IThemeService Theme
+@inject IJSRuntime JS
+
+<PageTitle>AKML SQL — Web edition</PageTitle>
+
+<div class="akml-editor-page" @onkeydown="OnKeyDownAsync" tabindex="-1">
+    <div class="akml-editor-toolbar">
+        <ProfilePickerComponent OnProfileChanged="OnProfileChangedAsync" />
+        <button class="akml-tool-button" @onclick="FormatAsync" title="Ctrl+K, Ctrl+F">Format</button>
+        <button class="akml-tool-button" @onclick="AnalyseAsync" title="Ctrl+K, Ctrl+L">Analyse</button>
+        <button class="akml-tool-button" @onclick="SaveAsync" title="Ctrl+S">Save</button>
+        <span class="akml-editor-spacer"></span>
+        @if (!string.IsNullOrEmpty(_status))
+        {
+            <span class="akml-editor-status">@_status</span>
+        }
+    </div>
+    <div class="akml-editor-grid">
+        <EditorComponent @ref="_editor" InitialText="@_initialText" OnTextChanged="OnTextChangedAsync" />
+        <ProblemsListComponent Findings="@_findings" OnJumpToIssue="OnJumpToIssueAsync" />
+    </div>
+</div>
+
+<style>
+    .akml-editor-page {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        outline: none;
+    }
+    .akml-editor-toolbar {
+        display: flex;
+        align-items: center;
+        gap: var(--akml-scalar-spacing-s);
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s);
+        background-color: var(--akml-surface-panel);
+        border-bottom: 1px solid var(--akml-border-default);
+    }
+    .akml-editor-spacer { flex: 1 1 auto; }
+    .akml-editor-status {
+        color: var(--akml-text-secondary);
+        font-size: var(--akml-type-chrome-size);
+    }
+    .akml-tool-button {
+        font-family: var(--akml-type-chrome-family);
+        font-size: var(--akml-type-chrome-size);
+        background-color: var(--akml-surface-panel);
+        color: var(--akml-text-primary);
+        border: 1px solid var(--akml-border-default);
+        border-radius: 3px;
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s);
+        cursor: pointer;
+    }
+    .akml-tool-button:hover { background-color: var(--akml-surface-hover); }
+    .akml-editor-grid {
+        flex: 1 1 auto;
+        display: grid;
+        grid-template-columns: 1fr 320px;
+        min-height: 0;
+    }
+</style>
+
+@code {
+    private EditorComponent? _editor;
+    private string _initialText = string.Empty;
+    private string _currentText = string.Empty;
+    private CodeAnalysisResponse? _findings;
+    private FormattingProfile? _activeProfile;
+    private string? _status;
+    private bool _waitingForChord;
+    private DateTime _chordExpiresAt;
+    private CancellationTokenSource? _analyseCts;
+    private bool _autoAnalyseOnFormat = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // T034: apply the persisted theme as soon as we have services. The shim is wired
+        // for "system" already (index.html runs apply('system') inline), so this is an
+        // upgrade only when the user has stored a non-system preference.
+        await Theme.InitializeAsync();
+
+        // T051: restore the last editor session.
+        var restored = await SessionStore.RestoreAsync();
+        if (restored != null)
+        {
+            _initialText = restored.DocumentText;
+            _currentText = restored.DocumentText;
+        }
+
+        // T038: load the active profile.
+        var activeId = await ProfileStore.GetActiveIdAsync();
+        var active = await ProfileStore.GetAsync(activeId);
+        _activeProfile = active?.Profile;
+
+        // T044: load analyser settings.
+        var settings = await AnalysisSettings.GetAsync();
+        _autoAnalyseOnFormat = settings.AutoAnalyseOnFormat;
+
+        // T048: restore the diagnostics ring buffer.
+        await Diagnostics.RestoreAsync();
+        Diagnostics.Log(DiagnosticLevel.Info, "editor", "Editor page mounted.");
+    }
+
+    private async Task OnTextChangedAsync(string newText)
+    {
+        _currentText = newText;
+        // T051 debounced save (the store applies its own 500 ms debounce).
+        await SessionStore.SaveAsync(new EditorSessionRecord
+        {
+            DocumentText = newText,
+            CursorOffset = 0,
+            ActiveProfileId = await ProfileStore.GetActiveIdAsync(),
+        });
+    }
+
+    private async Task OnProfileChangedAsync(ProfileRecord record)
+    {
+        _activeProfile = record.Profile;
+        _status = $"Profile changed to '{record.Name}'.";
+        StateHasChanged();
+        await Task.CompletedTask;
+    }
+
+    private async Task FormatAsync()
+    {
+        try
+        {
+            var result = Formatter.Format(_currentText, _activeProfile);
+            if (result.Success && _editor != null)
+            {
+                await _editor.SetTextAsync(result.FormattedText);
+                _currentText = result.FormattedText;
+                _status = result.WasModified ? "Formatted." : "Already canonical.";
+                Diagnostics.Log(DiagnosticLevel.Info, "formatter", _status);
+                if (_autoAnalyseOnFormat)
+                {
+                    await AnalyseAsync();
+                }
+            }
+            else
+            {
+                _status = $"Format failed: {string.Join("; ", result.Diagnostics.Select(d => d.Message))}";
+                Diagnostics.Log(DiagnosticLevel.Warn, "formatter", _status);
+            }
+        }
+        catch (DocumentTooLargeException ex)
+        {
+            _status = ex.Message;
+            Diagnostics.Log(DiagnosticLevel.Error, "formatter", _status);
+        }
+        catch (Exception ex)
+        {
+            _status = $"Format crashed: {ex.Message}";
+            Diagnostics.Log(DiagnosticLevel.Error, "formatter", _status, new { Exception = ex.GetType().Name });
+        }
+        StateHasChanged();
+    }
+
+    private async Task AnalyseAsync()
+    {
+        _analyseCts?.Cancel();
+        _analyseCts = new CancellationTokenSource();
+        try
+        {
+            _findings = await Analyser.AnalyseAsync(_currentText, null, _analyseCts.Token);
+            var issueCount = _findings.Issues?.Length ?? 0;
+            _status = issueCount == 0 ? "No problems." : $"{issueCount} problem(s) found.";
+            Diagnostics.Log(DiagnosticLevel.Info, "analyser", _status);
+        }
+        catch (OperationCanceledException)
+        {
+            // Superseded by a newer request.
+        }
+        catch (DocumentTooLargeException ex)
+        {
+            _status = ex.Message;
+            Diagnostics.Log(DiagnosticLevel.Error, "analyser", _status);
+        }
+        catch (Exception ex)
+        {
+            _status = $"Analyse crashed: {ex.Message}";
+            Diagnostics.Log(DiagnosticLevel.Error, "analyser", _status, new { Exception = ex.GetType().Name });
+        }
+        StateHasChanged();
+    }
+
+    private async Task SaveAsync()
+    {
+        // Push the document text to a Blob URL and trigger a download. The JS helper is
+        // tiny enough that we inline-call eval to avoid another module file -- this is
+        // the single user-facing download in M2.
+        try
+        {
+            await JS.InvokeVoidAsync("eval",
+                "(function(text){"
+                + "const blob = new Blob([text], { type: 'application/sql' });"
+                + "const url = URL.createObjectURL(blob);"
+                + "const a = document.createElement('a');"
+                + "a.href = url;"
+                + "a.download = 'akml-sql.sql';"
+                + "document.body.appendChild(a);"
+                + "a.click();"
+                + "a.remove();"
+                + "setTimeout(() => URL.revokeObjectURL(url), 1500);"
+                + "})(arguments[1]);", _currentText);
+            _status = "Saved.";
+        }
+        catch (Exception ex)
+        {
+            _status = $"Save failed: {ex.Message}";
+            Diagnostics.Log(DiagnosticLevel.Error, "editor", _status);
+        }
+        StateHasChanged();
+    }
+
+    private async Task OnJumpToIssueAsync(ProblemsListComponent.IssueLocation loc)
+    {
+        if (_editor != null) await _editor.GotoLineAsync(loc.Line);
+    }
+
+    private async Task OnKeyDownAsync(KeyboardEventArgs e)
+    {
+        // Chord state machine: first Ctrl+K starts the chord; second key within 1.5 s
+        // completes it. Pressing any other key cancels.
+        if (e.CtrlKey && e.Key == "k")
+        {
+            _waitingForChord = true;
+            _chordExpiresAt = DateTime.UtcNow.AddMilliseconds(1500);
+            return;
+        }
+
+        if (_waitingForChord)
+        {
+            _waitingForChord = false;
+            if (DateTime.UtcNow > _chordExpiresAt) return;
+
+            if (e.CtrlKey && e.Key == "f") { await FormatAsync(); return; }
+            if (e.CtrlKey && e.Key == "l") { await AnalyseAsync(); return; }
+        }
+
+        // Ctrl+S — save.
+        if (e.CtrlKey && e.Key == "s")
+        {
+            await SaveAsync();
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _analyseCts?.Cancel();
+        _analyseCts?.Dispose();
+        await SessionStore.FlushAsync();
+        await Diagnostics.FlushAsync();
+    }
+}
