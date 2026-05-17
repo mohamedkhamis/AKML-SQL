@@ -55,36 +55,50 @@
     }
 
     <h3>Add / edit provider</h3>
-    <div class="akml-ai-form">
-        <label>Provider id
+    <form class="akml-ai-form" @onsubmit="SubmitAsync" @onsubmit:preventDefault="true">
+        <label>Provider
             <select @bind="_form.ProviderId">
-                <option value="openai">openai</option>
-                <option value="anthropic">anthropic</option>
-                <option value="gemini">gemini</option>
-                <option value="azure">azure</option>
-                <option value="ollama">ollama</option>
-                <option value="lmstudio">lmstudio</option>
+                @foreach (var (id, label) in ProviderLabels)
+                {
+                    <option value="@id">@label</option>
+                }
             </select>
         </label>
-        <label>Display name <input @bind="_form.DisplayName" /></label>
-        <label>Model <input @bind="_form.Model" placeholder="gpt-4o / claude-sonnet-4 / gemini-2.0-flash" /></label>
-        <label>Endpoint (Azure / Ollama / LM Studio only)
-            <input @bind="_form.Endpoint" placeholder="https://your-resource.openai.azure.com/…" />
+        <label>Display name <input @bind="_form.DisplayName" placeholder="@DefaultDisplayName(_form.ProviderId)" /></label>
+        <label>Model <input @bind="_form.Model" placeholder="@ModelPlaceholder(_form.ProviderId)" /></label>
+        <label>Endpoint
+            <input @bind="_form.Endpoint"
+                   disabled="@(!RequiresEndpoint(_form.ProviderId))"
+                   placeholder="@EndpointPlaceholder(_form.ProviderId)" />
+            @if (!RequiresEndpoint(_form.ProviderId))
+            {
+                <span class="akml-ai-form-hint">Endpoint is only required for Azure / Ollama / LM Studio.</span>
+            }
         </label>
         <label>API key
-            <input type="password" @bind="_form.ApiKey" placeholder="Enter or paste your key (stored wrapped)" />
+            <input type="password" @bind="_form.ApiKey" autocomplete="new-password"
+                   placeholder="Enter or paste your key (stored wrapped)" />
         </label>
 
         <div class="akml-ai-form-buttons">
-            <button class="akml-tool-button" @onclick="SubmitAsync">Save</button>
-            <button class="akml-tool-button" @onclick="ClearForm">Clear</button>
+            <button type="submit" class="akml-tool-button">Save</button>
+            <button type="button" class="akml-tool-button" @onclick="ClearForm">Clear</button>
         </div>
 
+        @if (_errors.Count > 0)
+        {
+            <ul class="akml-ai-errors">
+                @foreach (var err in _errors)
+                {
+                    <li>@err</li>
+                }
+            </ul>
+        }
         @if (!string.IsNullOrEmpty(_status))
         {
             <p class="akml-ai-status">@_status</p>
         }
-    </div>
+    </form>
 </div>
 
 <style>
@@ -105,7 +119,11 @@
         padding: var(--akml-scalar-spacing-xs);
     }
     .akml-ai-form-buttons { display: flex; gap: var(--akml-scalar-spacing-s); margin-top: var(--akml-scalar-spacing-s); }
+    .akml-ai-form-hint { color: var(--akml-text-secondary); font-size: 11px; font-style: italic; }
+    .akml-ai-form input:disabled { background-color: var(--akml-surface-inputreadonly); color: var(--akml-text-disabled); }
     .akml-ai-status { color: var(--akml-status-info); font-style: italic; }
+    .akml-ai-errors { color: var(--akml-status-danger); padding-left: var(--akml-scalar-spacing-l); margin: var(--akml-scalar-spacing-xs) 0 0 0; }
+    .akml-ai-errors li { margin-bottom: 2px; }
     .akml-tool-button {
         font-family: var(--akml-type-chrome-family); font-size: var(--akml-type-chrome-size);
         background-color: var(--akml-surface-panel); color: var(--akml-text-primary);
@@ -120,6 +138,42 @@
     private string _activeId = string.Empty;
     private ProviderForm _form = new();
     private string? _status;
+    private List<string> _errors = new();
+
+    // Display names + per-provider hints live in code so the markup stays declarative.
+    private static readonly (string Id, string Label)[] ProviderLabels =
+    {
+        ("openai",    "OpenAI"),
+        ("anthropic", "Anthropic"),
+        ("gemini",    "Google Gemini"),
+        ("azure",     "Azure OpenAI"),
+        ("ollama",    "Ollama (local)"),
+        ("lmstudio",  "LM Studio (local)"),
+    };
+
+    private static string DefaultDisplayName(string id) =>
+        ProviderLabels.FirstOrDefault(p => p.Id == id).Label ?? id;
+
+    private static string ModelPlaceholder(string id) => id switch
+    {
+        "openai"    => "gpt-4o",
+        "anthropic" => "claude-sonnet-4",
+        "gemini"    => "gemini-2.0-flash",
+        "azure"     => "gpt-4o (your deployment name)",
+        "ollama"    => "llama3.1:8b",
+        "lmstudio"  => "lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF",
+        _ => string.Empty,
+    };
+
+    private static bool RequiresEndpoint(string id) => id is "azure" or "ollama" or "lmstudio";
+
+    private static string EndpointPlaceholder(string id) => id switch
+    {
+        "azure"    => "https://your-resource.openai.azure.com/",
+        "ollama"   => "http://localhost:11434",
+        "lmstudio" => "http://localhost:1234/v1",
+        _ => "—",
+    };
 
     protected override async Task OnInitializedAsync() => await ReloadAsync();
 
@@ -163,37 +217,42 @@
     private async Task SubmitAsync()
     {
         _status = null;
+        _errors = new List<string>();
+
         if (string.IsNullOrEmpty(_form.ProviderId))
         {
-            _status = "Pick a provider first.";
-            return;
+            _errors.Add("Provider is required.");
         }
         if (string.IsNullOrEmpty(_form.Model))
         {
-            _status = "Model is required.";
-            return;
+            _errors.Add("Model is required.");
         }
         if (string.IsNullOrEmpty(_form.ApiKey))
         {
-            _status = "API key is required (existing key is preserved if you press Save with this empty -- but it won't be tested).";
-            return;
+            _errors.Add("API key is required.");
         }
+        if (RequiresEndpoint(_form.ProviderId) && string.IsNullOrEmpty(_form.Endpoint))
+        {
+            _errors.Add($"Endpoint is required for {DefaultDisplayName(_form.ProviderId)}.");
+        }
+        if (_errors.Count > 0) return;
 
         await Vault.SetKeyAsync(_form.ProviderId, new AiProviderConfig
         {
             ProviderId = _form.ProviderId,
-            DisplayName = string.IsNullOrEmpty(_form.DisplayName) ? _form.ProviderId : _form.DisplayName,
+            DisplayName = string.IsNullOrEmpty(_form.DisplayName) ? DefaultDisplayName(_form.ProviderId) : _form.DisplayName,
             Model = _form.Model,
             Endpoint = string.IsNullOrEmpty(_form.Endpoint) ? null : _form.Endpoint,
         }, _form.ApiKey);
         _form.ApiKey = string.Empty;   // tighten the residual exposure window
-        _status = $"Saved {_form.ProviderId}.";
+        _status = $"Saved {DefaultDisplayName(_form.ProviderId)}.";
         await ReloadAsync();
     }
 
     private void ClearForm()
     {
         _form = new ProviderForm();
+        _errors.Clear();
         _status = null;
     }
 
