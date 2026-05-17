@@ -18,6 +18,11 @@ const STORES = [
     'themePreference',
     'schemaEntries',
     'aiKeys',
+    // Spec 021 M3 -- browser-side bridge state.
+    'connections',
+    'pairingTokens',
+    // Spec 021 M3/M6 -- non-extractable wrap key handle.
+    'keyMaterial',
 ];
 
 let _dbPromise = null;

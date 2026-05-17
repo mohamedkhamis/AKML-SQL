@@ -6,6 +6,7 @@
     M2 ships theme + analyser + reset session in a single page.
 *@
 @using AkmlSql.Web.Services
+@using AkmlSql.Web.Shared
 @inject IThemeService Theme
 @inject IAnalysisSettingsStore AnalysisSettings
 @inject IEditorSessionStore SessionStore
@@ -44,6 +45,10 @@
             Clears the persisted document text + caret + active profile. Built-in and
             user profiles are not touched.
         </p>
+    </section>
+
+    <section class="akml-settings-section">
+        <ConnectionPickerComponent />
     </section>
 
     @if (!string.IsNullOrEmpty(_status))

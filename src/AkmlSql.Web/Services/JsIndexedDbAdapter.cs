@@ -91,4 +91,11 @@ public static class StoreNames
     // Reserved for M5 / M6 (not used in M2 but listed here so the JS shim knows about them).
     public const string SchemaEntries = "schemaEntries";
     public const string AiKeys = "aiKeys";
+
+    // Spec 021 M3 -- bridge state.
+    public const string Connections = "connections";
+    public const string PairingTokens = "pairingTokens";
+
+    // Spec 021 M3/M6 -- non-extractable wrap-key handle.
+    public const string KeyMaterial = "keyMaterial";
 }
