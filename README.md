@@ -102,6 +102,23 @@ Full build gotchas (VSPackage.resx, vsixmanifest schema differences, MEF cache c
 | [CLAUDE.md](CLAUDE.md) | Project conventions, build gotchas, WPF UI rules, code conventions |
 | [specs/](specs/) | `/speckit` feature specifications (one folder per spec) |
 | [doc/SQL-PROMPT/](doc/SQL-PROMPT/) | Canonical Redgate SQL Prompt visual contract — design tables, hex codes, SVG mockups |
+| [doc/WEB/](doc/WEB/) | Spec 021 web edition — milestone PRDs, quickstart guides per milestone, AI-key wrapping contract |
+
+## Web edition (spec 021)
+
+A Blazor WASM web edition that ships alongside the IDE plugins. Browse to a local
+URL, format / analyse SQL entirely in the browser, optionally pair with a local
+engine for live IntelliSense, optionally bring your own AI key for Text-to-SQL /
+Explain / Fix / Optimize.
+
+| Surface | Detail |
+|---------|--------|
+| Editor + format + analyse | CodeMirror 6 + the same `FormatterPipeline` + `AnalysisEngine` the IDE plugins run -- in-process inside the WASM. |
+| Bridge | WebSocket between browser and the local engine, MessagePack frames, capability-gated. PIN pairing on first LAN connect; bearer tokens wrapped at rest with Web Crypto. |
+| Schema cache | IndexedDB store keyed by `(serverCanonicalIdentity, database)`. LRU eviction. Two DNS aliases of the same SQL Server share one entry. |
+| AI | Direct fetch from the browser to OpenAI / Anthropic / Gemini / Azure / Ollama / LM Studio. Per-provider origin allow-list refuses non-listed fetches at the factory layer. API keys wrapped with non-extractable AES-GCM 256. |
+
+See [doc/WEB/00-INDEX.md](doc/WEB/00-INDEX.md) for the full spec 021 documentation set, including per-milestone quickstart guides at [quickstart-m2.md](doc/WEB/quickstart-m2.md), [quickstart-m4.md](doc/WEB/quickstart-m4.md), [quickstart-m5.md](doc/WEB/quickstart-m5.md), and [quickstart-m6.md](doc/WEB/quickstart-m6.md).
 
 ## Status
 
@@ -112,6 +129,7 @@ Full build gotchas (VSPackage.resx, vsixmanifest schema differences, MEF cache c
 | 017 / 018 — Options dialog phases 1 + 2 | Merged to master |
 | 019 — Phase 10 parity-closure design docs | Merged to master |
 | 020 — SQL Prompt visual parity | Merged to master (77 / 106 tasks; 29 deferred) |
+| 021 — Web edition | On `021-web-edition` branch (111 / 150 tasks; 39 deferred — Playwright, IIS integration, manual audits) |
 
 Deferred from spec 020 — see `specs/020-sqlprompt-visual-parity/tasks.md` for the full list:
 
