@@ -9,9 +9,12 @@
 @using System.IO.Compression
 @using System.Text
 @using System.Text.Json
+@using AkmlSql.Core.Ipc
+@using AkmlSql.Core.Ipc.Messages
 @using AkmlSql.Web.Services
 @using Microsoft.JSInterop
 @inject IDiagnosticsRingBuffer Ring
+@inject IEngineBridge Bridge
 @inject IJSRuntime JS
 
 <PageTitle>Diagnostics — AKML SQL</PageTitle>
@@ -131,15 +134,50 @@
 
     private async Task ExportBundleAsync()
     {
-        // Build a ZIP entirely in memory. Two entries: diagnostics.json + manifest.json.
-        // The M3 follow-up (T077) appends engine.log when the bridge is reachable.
+        // Build a ZIP entirely in memory. Two-or-three entries: diagnostics.json +
+        // manifest.json + (optionally) engine.log when the bridge is reachable AND
+        // the engine advertises diagnostics.engine-log-tail.v1.
         var entries = _snapshot ?? Array.Empty<DiagnosticEntry>();
+
+        // T077 -- engine.log tail. Best-effort: if the bridge is down or the
+        // capability is absent, we skip the engine portion (matches the M2
+        // behaviour where the engine doesn't exist yet).
+        string? engineLogText = null;
+        string? engineLogSource = null;
+        bool engineLogTruncated = false;
+        bool bridgeReachable = Bridge.State == BridgeState.Open;
+        bool engineLogCapability = bridgeReachable &&
+            Array.IndexOf(Bridge.EngineCapabilities, "diagnostics.engine-log-tail.v1") >= 0;
+
+        if (engineLogCapability)
+        {
+            try
+            {
+                var response = await Bridge.SendAsync<EngineLogTailRequest, EngineLogTailResponse>(
+                    MessageTypes.EngineLogTailRequest,
+                    new EngineLogTailRequest { MaxBytes = 256 * 1024 },
+                    CancellationToken.None);
+                engineLogText = response.LogText;
+                engineLogSource = response.SourcePath;
+                engineLogTruncated = response.Truncated;
+            }
+            catch (Exception ex)
+            {
+                Ring.Log(DiagnosticLevel.Warn, "diagnostics",
+                    $"engine.log tail failed: {ex.Message}");
+            }
+        }
+
         var manifest = new
         {
             schema = 1,
             generatedAt = DateTimeOffset.UtcNow,
             entryCount = entries.Count,
-            bridgeReachable = false,
+            bridgeReachable = bridgeReachable,
+            engineVersion = Bridge.EngineVersion,
+            engineLogIncluded = engineLogText != null,
+            engineLogSource = engineLogSource,
+            engineLogTruncated = engineLogTruncated,
             webVersion = "1.0.0",
         };
 
@@ -148,6 +186,10 @@
         {
             await WriteZipEntryAsync(zip, "diagnostics.json", JsonSerializer.Serialize(entries));
             await WriteZipEntryAsync(zip, "manifest.json", JsonSerializer.Serialize(manifest));
+            if (engineLogText != null)
+            {
+                await WriteZipEntryAsync(zip, "engine.log", engineLogText);
+            }
         }
         ms.Position = 0;
         var bytes = ms.ToArray();

@@ -63,6 +63,8 @@ namespace AkmlSql.Engine
             CoreAnalysisV1,
             SchemaV2,
             SchemaCacheV1,
+            DiagnosticsEngineLogTailV1,
+            SnippetsWrite,
         };
 
         /// <summary>

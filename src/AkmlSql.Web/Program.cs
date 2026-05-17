@@ -67,7 +67,9 @@ builder.Services.AddSingleton<IGotoDefinitionService, GotoDefinitionService>();
 builder.Services.AddSingleton<ISchemaCacheStore, SchemaCacheStore>();
 builder.Services.AddSingleton<ISchemaSync, SchemaSync>();
 builder.Services.AddSingleton<ISchemaCacheEvictor, SchemaCacheEvictor>();
-builder.Services.AddSingleton<ISnippetStore, SnippetStore>();
+builder.Services.AddSingleton<ISnippetStore>(sp => new SnippetStore(
+    sp.GetRequiredService<IIndexedDbAdapter>(),
+    sp.GetRequiredService<IEngineBridge>()));
 builder.Services.AddSingleton<IRefactoringService, RefactoringService>();
 
 // M6 AI in the browser. Direct-to-provider with allow-listed origins;

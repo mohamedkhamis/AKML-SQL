@@ -201,6 +201,13 @@ public partial class PipeRpcServer
                 return Task.FromResult<RpcMessage?>(null);
             });
 
+        // Spec 021 (web edition) -- diagnostics export extension. Browser
+        // requests the tail of engine.log to append to its diagnostics ZIP.
+        // Capability-gated client-side on `diagnostics.engine-log-tail.v1`.
+        _pluggableHandlers[MessageTypes.EngineLogTailRequest] =
+            new TypedHandlerAdapter<EngineLogTailRequest, EngineLogTailResponse>(
+                new Handlers.Diagnostics.EngineLogTailHandler(), _rpcContext);
+
         // Spec 021 (web edition) -- M0.3 task T018. Control / lifecycle handlers.
         _pluggableHandlers[MessageTypes.DocumentChanged] =
             new TypedHandlerAdapter<DocumentChange, DocumentChange>(

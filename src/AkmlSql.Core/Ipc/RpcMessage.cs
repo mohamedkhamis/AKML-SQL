@@ -238,5 +238,12 @@ namespace AkmlSql.Core.Ipc
         // Cancellation signal for in-flight AI streaming requests. Engine drops the
         // associated CancellationTokenSource so the streaming handler bails.
         public const int AiStreamCancelResult = 179;
+
+        // Spec 021 (web edition) — M2 diagnostics export extension.
+        // Browser asks the engine for the last N KB of engine.log to append to its
+        // diagnostics ZIP (FR-005a). Capability-gated on
+        // `diagnostics.engine-log-tail.v1`.
+        public const int EngineLogTailRequest = 206;
+        public const int EngineLogTailResponse = 207;
     }
 }

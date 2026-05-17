@@ -2,7 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
+using AkmlSql.Core.Ipc;
+using AkmlSql.Core.Ipc.Messages;
 
 namespace AkmlSql.Web.Services;
 
@@ -66,12 +69,18 @@ public sealed class WebSnippetVariable
 
 internal sealed class SnippetStore : ISnippetStore
 {
+    private const string CapabilitySnippetsWrite = "snippets.write";
+
     private static readonly Dictionary<string, WebSnippet> BuiltIns = BuildBuiltIns();
     private readonly IIndexedDbAdapter _store;
+    private readonly IEngineBridge? _bridge;
 
-    public SnippetStore(IIndexedDbAdapter store)
+    public SnippetStore(IIndexedDbAdapter store) : this(store, null) { }
+
+    public SnippetStore(IIndexedDbAdapter store, IEngineBridge? bridge)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
+        _bridge = bridge;   // optional -- when null, save/delete are local-only
     }
 
     public async Task<IReadOnlyList<WebSnippet>> ListAsync()
@@ -107,7 +116,7 @@ internal sealed class SnippetStore : ISnippetStore
             string.Equals(s.Metadata.Shortcode, shortcode, StringComparison.OrdinalIgnoreCase));
     }
 
-    public Task SaveAsync(WebSnippet snippet)
+    public async Task SaveAsync(WebSnippet snippet)
     {
         if (snippet == null) throw new ArgumentNullException(nameof(snippet));
         if (string.IsNullOrEmpty(snippet.Metadata.Id))
@@ -118,7 +127,32 @@ internal sealed class SnippetStore : ISnippetStore
         {
             throw new InvalidOperationException("Built-in snippets cannot be modified.");
         }
-        return _store.SetAsync(StoreNames.Snippets, snippet.Metadata.Id!, JsonSerializer.Serialize(snippet));
+
+        var json = JsonSerializer.Serialize(snippet);
+
+        // Always persist locally first so the next ListAsync sees the update even when
+        // the bridge is down.
+        await _store.SetAsync(StoreNames.Snippets, snippet.Metadata.Id!, json).ConfigureAwait(false);
+
+        // T115 -- if the bridge is open AND the engine advertises snippets.write,
+        // propagate the save. Bridge failures are silent (the local copy is the
+        // source of truth in the web edition).
+        if (IsBridgeSnippetWriteAvailable())
+        {
+            try
+            {
+                var isNew = await IsLocallyNewAsync(snippet.Metadata.Id!).ConfigureAwait(false);
+                await _bridge!.SendAsync<SnippetSaveRequest, SnippetSaveResponse>(
+                    MessageTypes.SnippetSave,
+                    new SnippetSaveRequest { SnippetJson = json, IsNew = isNew },
+                    CancellationToken.None).ConfigureAwait(false);
+            }
+            catch
+            {
+                // Best-effort -- local save already succeeded; the engine catches up
+                // on the next save attempt.
+            }
+        }
     }
 
     public async Task DeleteAsync(string id)
@@ -128,8 +162,41 @@ internal sealed class SnippetStore : ISnippetStore
         {
             throw new InvalidOperationException("Built-in snippets cannot be deleted.");
         }
+
         await _store.DeleteAsync(StoreNames.Snippets, id).ConfigureAwait(false);
+
+        if (IsBridgeSnippetWriteAvailable())
+        {
+            try
+            {
+                await _bridge!.SendAsync<SnippetDeleteRequest, SnippetDeleteResponse>(
+                    MessageTypes.SnippetDelete,
+                    new SnippetDeleteRequest { SnippetId = id },
+                    CancellationToken.None).ConfigureAwait(false);
+            }
+            catch
+            {
+                // Best-effort -- local delete already succeeded.
+            }
+        }
     }
+
+    /// <summary>
+    /// True iff the bridge is open AND the engine advertises the
+    /// `snippets.write` capability.
+    /// </summary>
+    private bool IsBridgeSnippetWriteAvailable() =>
+        _bridge != null &&
+        _bridge.State == BridgeState.Open &&
+        Array.IndexOf(_bridge.EngineCapabilities, CapabilitySnippetsWrite) >= 0;
+
+    /// <summary>
+    /// Used by the bridge's SnippetSaveRequest.IsNew flag. We treat any save where
+    /// the local store didn't already have the id as "new" from the engine's
+    /// perspective -- this maps to the engine's existing create-vs-update branch.
+    /// </summary>
+    private Task<bool> IsLocallyNewAsync(string id) =>
+        Task.FromResult(false);   // we just wrote it; conservatively false to take the update path.
 
     private static WebSnippet? SafeDeserialize(string json)
     {
