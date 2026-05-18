@@ -88,6 +88,42 @@ public sealed class SchemaSyncTests
     }
 
     /// <summary>
+    /// T109 follow-up Issue 2b: StartAsync should fire an immediate first poll
+    /// instead of waiting the full 30 s polling interval. On a fresh connect the
+    /// user starts typing right away — we don't want IntelliSense empty for the
+    /// first 30 s while the loop sleeps.
+    /// </summary>
+    [Fact]
+    public async Task StartAsync_fires_an_immediate_initial_poll()
+    {
+        // Closed bridge: PollOnceAsync should still execute and call TouchAsync
+        // on the cache; the LastUsedAt timestamp moves.
+        var (sync, _, cache) = Build();
+        await cache.SetAsync(new SchemaSnapshot
+        {
+            ServerCanonicalIdentity = "s", DatabaseName = "db", Checksum = "x",
+        });
+        var beforeUsedAt = (await cache.GetAsync("s", "db"))!.LastUsedAt;
+        await Task.Delay(5);
+
+        await sync.StartAsync("session-1", "s", "db");
+
+        // The initial poll is fire-and-forget; give it a moment to settle.
+        for (int i = 0; i < 20; i++)
+        {
+            var after = (await cache.GetAsync("s", "db"))!;
+            if (after.LastUsedAt > beforeUsedAt) break;
+            await Task.Delay(10);
+        }
+
+        var final = await cache.GetAsync("s", "db");
+        Assert.NotNull(final);
+        Assert.True(final!.LastUsedAt > beforeUsedAt,
+            "Initial poll never ran — LastUsedAt should have moved forward by now.");
+        await sync.StopAsync();
+    }
+
+    /// <summary>
     /// T109 wire-up test: on checksum drift the sync fetches Phase A through the
     /// open bridge and persists the returned bytes into <c>SchemaSnapshot.PhaseA</c>.
     /// Catches regressions where the message-type ids or DTO field names drift

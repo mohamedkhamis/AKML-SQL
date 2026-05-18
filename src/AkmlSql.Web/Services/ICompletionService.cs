@@ -65,39 +65,41 @@ internal sealed class CompletionService : ICompletionService
 
     private async Task<CompletionResponse> BuildFromCacheAsync()
     {
+        // Keywords are ALWAYS available offline — they don't depend on any cache.
+        // When no schema snapshot is present (fresh browser, never paired with an
+        // engine, OR paired but the engine has no SQL session yet), the user still
+        // gets SQL keywords. This makes "type WHERE then space" produce a useful
+        // popup instead of nothing. Schemas / objects / columns layer on top
+        // whenever a snapshot is available.
+        var items = new List<CompletionItem>();
+        AppendKeywords(items);
+
         // Pick the most-recently-used snapshot. The store sorts ascending; the user's
         // active session collapses to the LAST entry. Multi-server scenarios would
         // need an explicit active-session pointer; deferred for T109.
         var snapshots = await _cache!.ListAsync().ConfigureAwait(false);
         var active = snapshots.Count > 0 ? snapshots[snapshots.Count - 1] : null;
-        if (active?.PhaseA == null || active.PhaseA.Length == 0)
+        if (active?.PhaseA != null && active.PhaseA.Length > 0)
         {
-            return new CompletionResponse();
-        }
+            SchemaPhasePayload? payloadA = null;
+            try { payloadA = MessagePackSerializer.Deserialize<SchemaPhasePayload>(active.PhaseA); }
+            catch (MessagePackSerializationException) { /* keywords only */ }
 
-        SchemaPhasePayload payloadA;
-        try
-        {
-            payloadA = MessagePackSerializer.Deserialize<SchemaPhasePayload>(active.PhaseA);
-        }
-        catch (MessagePackSerializationException)
-        {
-            return new CompletionResponse();
-        }
+            // Phase B is optional; if present, it overrides Phase A's view (it's a
+            // superset). The column items only appear when Phase B is cached.
+            SchemaPhasePayload? payloadB = null;
+            if (active.PhaseB != null && active.PhaseB.Length > 0)
+            {
+                try { payloadB = MessagePackSerializer.Deserialize<SchemaPhasePayload>(active.PhaseB); }
+                catch (MessagePackSerializationException) { /* fall through with Phase A only */ }
+            }
 
-        // Phase B is optional; if present, it overrides Phase A's view (it's a
-        // superset). The column items only appear when Phase B is cached.
-        SchemaPhasePayload? payloadB = null;
-        if (active.PhaseB != null && active.PhaseB.Length > 0)
-        {
-            try { payloadB = MessagePackSerializer.Deserialize<SchemaPhasePayload>(active.PhaseB); }
-            catch (MessagePackSerializationException) { /* fall through with Phase A only */ }
+            if (payloadA != null || payloadB != null)
+            {
+                AppendSchemaSurface(items, payloadB ?? payloadA!);
+                if (payloadB != null) AppendColumns(items, payloadB);
+            }
         }
-
-        var items = new List<CompletionItem>();
-        AppendKeywords(items);
-        AppendSchemaSurface(items, payloadB ?? payloadA);
-        if (payloadB != null) AppendColumns(items, payloadB);
 
         return new CompletionResponse
         {

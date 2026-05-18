@@ -23,6 +23,42 @@ by CI.
   same surface have always worked offline (they're pure in-browser code);
   this screenshot just adds the IntelliSense piece that landed at T109.
 
+- **post-keyword-trigger-AND.png** — Same offline session as
+  `cache-fallback-completion.png`. The user types
+  `SELECT * FROM Customers WHERE Id = 1 AND ` with a TRAILING SPACE. CM's
+  built-in `activateOnTyping` doesn't fire on whitespace, so this would
+  previously have left the popup closed; the user had to press Ctrl+Space
+  to surface suggestions. The fix adds an `updateListener` that detects a
+  doc-change ending in a non-identifier char preceded by an SQL trigger
+  keyword (WHERE, AND, OR, FROM, JOIN, ON, SET, HAVING, SELECT, GROUP BY,
+  ORDER BY, BY, WHEN, THEN, ELSE, IN) and calls
+  `cm.autocomplete.startCompletion(view)` manually. The screenshot shows
+  the popup auto-opened with the alphabetic head of the 50-item candidate
+  list (keywords + cached schemas + cached objects); a DOM inspection
+  during the verification confirmed `dbo`, `dbo.Customers`, `dbo.Orders`,
+  `dbo.Products`, `sales`, `sales.Invoices` were all present alongside
+  the keywords.
+
+- **post-keyword-trigger-AND-narrowed.png** — Continuing from the previous
+  screenshot, the user types `Cust`. CM's `validFor: /^[\w]*$/` keeps the
+  source from being re-invoked while the prefix stays valid, and CM's
+  built-in fuzzy filter narrows the list to `dbo.Customers` (with class
+  glyph + `dbo` detail row). This proves the full flow — post-keyword
+  trigger → empty-prefix popup → CM-side filtering as the user types —
+  works without any further network round-trips.
+
+- **post-keyword-trigger-no-cache.png** — The realistic first-use state:
+  bridge `Disconnected`, IndexedDB schema-entries store **empty** (never
+  paired with an engine, or paired but engine has no active SQL session
+  yet). The user types `where columnA = 'A' and ` (lowercase, trailing
+  space — the exact pattern from the bug report). Popup auto-opens with
+  the alphabetic head of the SQL keyword list (ALTER, AND, AS, BEGIN,
+  BETWEEN, CASE, CREATE, …). Previous behaviour: empty popup → user
+  thought autocomplete was broken. Now: keywords are always present
+  offline regardless of cache state, and schema/object items layer on
+  top once a snapshot exists. DOM inspection during verification
+  confirmed 50 keyword items in the list.
+
 ## What's still pending
 
 - **Format / Analyse offline screenshot** — Already demonstrated by the

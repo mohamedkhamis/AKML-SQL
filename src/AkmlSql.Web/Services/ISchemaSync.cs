@@ -49,6 +49,7 @@ internal sealed class SchemaSync : ISchemaSync
 
     private CancellationTokenSource? _cts;
     private Task? _loop;
+    private Task? _initialPoll;
     private DateTimeOffset _lastEditorActivity = DateTimeOffset.UtcNow;
     private string? _sessionId;
     private string? _server;
@@ -72,6 +73,24 @@ internal sealed class SchemaSync : ISchemaSync
         _database = databaseName;
         _cts = new CancellationTokenSource();
         _lastEditorActivity = DateTimeOffset.UtcNow;
+
+        // T109 follow-up Issue 2b: fire an immediate first poll instead of waiting
+        // the full 30-second cadence. On a fresh connect the cached snapshot is
+        // empty, so the user would otherwise type SQL for 30 s with no IntelliSense
+        // before the first checksum + Phase A round-trip even starts. The
+        // background loop then takes over for the steady-state cadence. Tracked
+        // so StopAsync can await it for a clean teardown.
+        _initialPoll = Task.Run(async () =>
+        {
+            try { await PollOnceAsync(_cts!.Token).ConfigureAwait(false); }
+            catch (OperationCanceledException) { /* StopAsync raced -- expected */ }
+            catch (Exception ex)
+            {
+                _diagnostics.Log(DiagnosticLevel.Warn, "schema-sync",
+                    $"Initial poll failed for {_server}/{_database}: {ex.Message}");
+            }
+        });
+
         _loop = Task.Run(() => RunLoopAsync(_cts.Token));
         _diagnostics.Log(DiagnosticLevel.Info, "schema-sync",
             $"Started polling for {_server}/{_database}.");
@@ -84,9 +103,12 @@ internal sealed class SchemaSync : ISchemaSync
         _cts.Cancel();
         try { if (_loop != null) await _loop.ConfigureAwait(false); }
         catch { /* swallow */ }
+        try { if (_initialPoll != null) await _initialPoll.ConfigureAwait(false); }
+        catch { /* swallow */ }
         _cts.Dispose();
         _cts = null;
         _loop = null;
+        _initialPoll = null;
         _sessionId = null;
         _server = null;
         _database = null;

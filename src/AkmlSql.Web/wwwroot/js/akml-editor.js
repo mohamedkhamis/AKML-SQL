@@ -55,6 +55,29 @@ export async function create(hostElementId, initialText, dotNetRef) {
             const text = update.state.doc.toString();
             // Fire-and-forget; the C# side debounces.
             dotNetRef.invokeMethodAsync('OnTextChangedFromJs', text);
+
+            // T109 follow-up Issue 1: when the user types a space (or any
+            // non-identifier char) immediately after a trigger keyword, CM's
+            // activateOnTyping doesn't fire because the typed char isn't a word
+            // char. Detect that case and manually open the popup so the user
+            // doesn't have to press Ctrl+Space after "WHERE ", "AND ", etc.
+            try {
+                let typedNonWord = false;
+                update.changes.iterChanges((_fromA, _toA, _fromB, _toB, inserted) => {
+                    const ins = inserted.toString();
+                    if (ins.length > 0 && /[\s.,()=<>!+\-*/]/.test(ins[ins.length - 1])) {
+                        typedNonWord = true;
+                    }
+                });
+                if (typedNonWord) {
+                    const pos = update.state.selection.main.head;
+                    const line = update.state.doc.lineAt(pos);
+                    const lineUpToCaret = line.text.slice(0, pos - line.from);
+                    if (POST_KEYWORD_TRIGGER.test(lineUpToCaret)) {
+                        cm.autocomplete.startCompletion(update.view);
+                    }
+                }
+            } catch { /* never let trigger detection break the editor */ }
         }
     });
 
@@ -62,25 +85,50 @@ export async function create(hostElementId, initialText, dotNetRef) {
     // on the .NET side so the popup is fed by the bridge (online) or the cached
     // schema snapshot (offline). Returns null when the .NET side gives an empty
     // list -- CM hides the popup automatically in that case.
+    //
+    // Trigger contexts (each independently opens the popup):
+    //   1. Caret sits on or right after an identifier (CM's "typing" flow):
+    //      replace text starts at the word boundary, CM fuzzy-filters by prefix.
+    //   2. Caret is right after whitespace following an SQL keyword that
+    //      grammatically expects an expression next (WHERE / AND / OR / FROM /
+    //      JOIN / ON / SET / HAVING / SELECT / GROUP BY / ORDER BY): show the
+    //      full candidate list anchored at the caret, no replacement range.
+    //      This is the case the user reported -- typing "... AND " (trailing
+    //      space) should suggest columns / tables without forcing Ctrl+Space.
+    //   3. context.explicit === true (Ctrl+Space) overrides everything.
+    const POST_KEYWORD_TRIGGER = /\b(?:where|and|or|from|join|on|set|having|select|group\s+by|order\s+by|by|when|then|else|in)\s+$/i;
+
     const completionSource = async (context) => {
         if (!dotNetRef) return null;
+
         const word = context.matchBefore(/[\w]+/);
-        if (!word) return null;
-        // Don't open on every cursor twitch; only when the user typed something
-        // OR explicitly invoked (Ctrl+Space). CM's `explicit` flag tells us which.
-        if (word.from === word.to && !context.explicit) return null;
+        const wordValid = word && (word.from !== word.to || context.explicit);
+
+        // Detect "after a trigger keyword + whitespace" by looking at the line text
+        // leading up to the caret. Cheaper than scanning the whole document.
+        let postKeyword = false;
+        if (!wordValid) {
+            const lineUpToCaret = context.state.doc.lineAt(context.pos)
+                .text.slice(0, context.pos - context.state.doc.lineAt(context.pos).from);
+            postKeyword = POST_KEYWORD_TRIGGER.test(lineUpToCaret);
+        }
+
+        if (!wordValid && !postKeyword && !context.explicit) return null;
+
         try {
             const items = await dotNetRef.invokeMethodAsync('RequestCompletionsFromJs', context.pos);
             if (!items || items.length === 0) return null;
             return {
-                from: word.from,
+                from: wordValid ? word.from : context.pos,
                 options: items.map(i => ({
                     label: i.label,
                     apply: i.insertText,
                     type: i.type || 'text',
                     detail: i.detail || undefined,
                 })),
-                // CM does its own fuzzy filter against the prefix at `from`.
+                // CM does its own fuzzy filter against the prefix at `from`. The
+                // empty-prefix case (post-keyword trigger) re-invokes the source
+                // as soon as the user types a non-word char, which is what we want.
                 validFor: /^[\w]*$/,
             };
         } catch {

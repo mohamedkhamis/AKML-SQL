@@ -11,9 +11,11 @@
 *@
 @using AkmlSql.Web.Services
 @using AkmlSql.Core.Ipc.Messages
+@using AkmlSql.Core.Ipc
 @inject IConnectionStore Connections
 @inject IPairingTokenVault Vault
 @inject IEngineBridge Bridge
+@inject ISchemaSync SchemaSync
 @inject IDiagnosticsRingBuffer Diagnostics
 
 <div class="akml-connections">
@@ -186,6 +188,12 @@
             await Connections.AddAsync(connection);
             await Connections.SetActiveIdAsync(connection.Id);
 
+            // T109 follow-up Issue 2: after handshake, ask the engine which
+            // (server, database) its current session is on, and if it has one,
+            // start the SchemaSync polling loop so Phase A/B blobs flow into the
+            // browser cache.
+            await TryStartSchemaSyncAsync(connection.Id);
+
             _showAdd = false;
             await ReloadAsync();
         }
@@ -214,6 +222,7 @@
                 c.LastKnownEngineVersion = response.EngineVersion;
                 c.LastKnownCapabilities = response.EngineCapabilities;
                 await Connections.UpdateAsync(c);
+                await TryStartSchemaSyncAsync(c.Id);
                 await ReloadAsync();
             }
             else
@@ -226,6 +235,57 @@
             _lastError = ex.Message;
         }
         StateHasChanged();
+    }
+
+    /// <summary>
+    /// T109 follow-up Issue 2: post-handshake schema initialisation.
+    ///
+    /// Sends <see cref="SchemaIdentifyRequest"/> to resolve the canonical (server, db)
+    /// pair the engine sees on this session, then starts <see cref="ISchemaSync"/>
+    /// which immediately fires its first poll (no 30 s wait). The sync's
+    /// PollOnceAsync detects checksum drift versus the cached snapshot (initially:
+    /// "" vs the engine's current checksum), fetches Phase A synchronously, and
+    /// fire-and-forgets Phase B.
+    ///
+    /// <para>Known limitation: today the engine only has an active session when a
+    /// <see cref="MessageTypes.ConnectionChanged"/> message has populated it. The
+    /// web edition doesn't yet have UI for "connect to SQL Server" — that lives on
+    /// the shell extension. Until the browser grows that affordance, SchemaIdentify
+    /// returns HasConnection = false here and we log the reason. The architectural
+    /// piece is in place so the moment a connect-to-SQL UI lands, IntelliSense
+    /// starts flowing automatically.</para>
+    /// </summary>
+    private async Task TryStartSchemaSyncAsync(string connectionId)
+    {
+        // Reset any previous sync before starting a new one — we may be switching
+        // engines mid-session.
+        await SchemaSync.StopAsync();
+
+        SchemaIdentifyResponse identify;
+        try
+        {
+            identify = await Bridge.SendAsync<SchemaIdentifyRequest, SchemaIdentifyResponse>(
+                MessageTypes.SchemaIdentifyRequest,
+                new SchemaIdentifyRequest { SessionId = connectionId },
+                CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            Diagnostics.Log(DiagnosticLevel.Warn, "connections",
+                $"SchemaIdentify failed: {ex.Message}");
+            return;
+        }
+
+        if (!identify.HasConnection)
+        {
+            Diagnostics.Log(DiagnosticLevel.Info, "connections",
+                $"Engine has no active SQL session yet — schema fallback stays empty. {identify.ErrorMessage}");
+            return;
+        }
+
+        await SchemaSync.StartAsync(connectionId, identify.ServerCanonicalIdentity, identify.DatabaseName);
+        Diagnostics.Log(DiagnosticLevel.Info, "connections",
+            $"Schema sync started for {identify.ServerCanonicalIdentity}/{identify.DatabaseName}.");
     }
 
     private async Task RemoveAsync(EngineConnection c)

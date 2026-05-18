@@ -77,15 +77,24 @@ public sealed class CompletionServiceOfflineTests
     }
 
     [Fact]
-    public async Task With_no_cache_entry_returns_empty()
+    public async Task With_no_cache_entry_returns_keywords_only()
     {
+        // T109 follow-up: keywords are always available offline regardless of
+        // whether a schema snapshot is cached. The user types `WHERE foo = 1 AND `
+        // before they've ever paired with an engine — they should still see SQL
+        // keyword suggestions; schemas / objects layer on top once the cache fills.
         var store = new SchemaCacheStore(new InMemoryIndexedDbAdapter());
         var service = new CompletionService(ClosedBridge(), store);
 
         var response = await service.CompleteAsync(new CompletionRequest(), CancellationToken.None);
 
         Assert.NotNull(response);
-        Assert.Empty(response.Items);
+        Assert.NotEmpty(response.Items);
+        Assert.All(response.Items, i =>
+            Assert.Equal((int)CompletionObjectType.Keyword, i.ObjectType));
+        Assert.Contains(response.Items, i => i.DisplayText == "SELECT");
+        Assert.Contains(response.Items, i => i.DisplayText == "WHERE");
+        Assert.Contains(response.Items, i => i.DisplayText == "AND");
     }
 
     [Fact]
