@@ -51,6 +51,12 @@ namespace AkmlSql.Core.Ipc.Messages
 
         /// <summary>Empty in Phase A payloads.</summary>
         [Key(3)] public SchemaPhaseColumn[] Columns { get; set; } = System.Array.Empty<SchemaPhaseColumn>();
+
+        /// <summary>Procedure / function parameter list. Empty for tables / views and in Phase A payloads.</summary>
+        [Key(4)] public SchemaPhaseParameter[] Parameters { get; set; } = System.Array.Empty<SchemaPhaseParameter>();
+
+        /// <summary>MS_Description extended property, if any. Used as the QuickInfo description.</summary>
+        [Key(5)] public string? Description { get; set; }
     }
 
     [MessagePackObject]
@@ -60,6 +66,16 @@ namespace AkmlSql.Core.Ipc.Messages
         [Key(1)] public string TypeName { get; set; } = string.Empty;
         [Key(2)] public bool IsNullable { get; set; }
         [Key(3)] public bool IsPrimaryKey { get; set; }
+        [Key(4)] public string? Description { get; set; }
+    }
+
+    [MessagePackObject]
+    public sealed class SchemaPhaseParameter
+    {
+        [Key(0)] public string Name { get; set; } = string.Empty;
+        [Key(1)] public string TypeName { get; set; } = string.Empty;
+        [Key(2)] public bool IsOutput { get; set; }
+        [Key(3)] public bool HasDefault { get; set; }
     }
 
     [MessagePackObject]

@@ -63,6 +63,10 @@ namespace AkmlSql.Engine.Handlers.Schema
                             Columns = includeColumns
                                 ? o.Columns.Select(MapColumn).ToArray()
                                 : System.Array.Empty<SchemaPhaseColumn>(),
+                            Parameters = includeColumns
+                                ? o.Parameters.Select(MapParameter).ToArray()
+                                : System.Array.Empty<SchemaPhaseParameter>(),
+                            Description = includeColumns ? o.Description : null,
                         })
                         .ToArray(),
                 })
@@ -88,6 +92,15 @@ namespace AkmlSql.Engine.Handlers.Schema
             TypeName = c.TypeName,
             IsNullable = c.IsNullable,
             IsPrimaryKey = c.IsPrimaryKey,
+            Description = c.Description,
+        };
+
+        private static SchemaPhaseParameter MapParameter(Parameter p) => new()
+        {
+            Name = p.ParameterName,
+            TypeName = p.TypeName,
+            IsOutput = p.IsOutput,
+            HasDefault = p.HasDefault,
         };
 
         private static SchemaPhaseForeignKey MapForeignKey(ForeignKey fk) => new()
