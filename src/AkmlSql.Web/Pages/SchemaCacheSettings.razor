@@ -19,6 +19,10 @@
         {
             <button class="akml-tool-button" @onclick="ClearAllAsync">Clear all</button>
         }
+        @if (_lastRefreshedAt != null)
+        {
+            <span class="akml-schema-cache-refreshed">Last refreshed: @_lastRefreshedAt.Value.ToString("HH:mm:ss")</span>
+        }
     </div>
 
     @if (_snapshots == null)
@@ -75,6 +79,7 @@
 <style>
     .akml-schema-cache { padding: var(--akml-scalar-spacing-m); max-width: 960px; }
     .akml-schema-cache-header { display: flex; align-items: center; gap: var(--akml-scalar-spacing-s); margin-bottom: var(--akml-scalar-spacing-s); }
+    .akml-schema-cache-refreshed { color: var(--akml-text-secondary); font-style: italic; margin-left: var(--akml-scalar-spacing-s); }
     .akml-schema-cache-empty { color: var(--akml-text-secondary); font-style: italic; }
     .akml-schema-cache-table { width: 100%; border-collapse: collapse; font-family: var(--akml-type-chrome-family); font-size: var(--akml-type-chrome-size); }
     .akml-schema-cache-table th, .akml-schema-cache-table td {
@@ -97,6 +102,7 @@
     private IReadOnlyList<SchemaSnapshot>? _snapshots;
     private readonly Dictionary<string, long> _sizes = new();
     private string? _status;
+    private DateTime? _lastRefreshedAt;
 
     protected override async Task OnInitializedAsync() => await RefreshAsync();
 
@@ -108,6 +114,7 @@
         {
             _sizes[entry.CompositeKey] = await Cache.EstimatedSizeAsync(entry.ServerCanonicalIdentity, entry.DatabaseName);
         }
+        _lastRefreshedAt = DateTime.Now;
         _status = null;
         StateHasChanged();
     }

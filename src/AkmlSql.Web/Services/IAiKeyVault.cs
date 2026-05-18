@@ -99,21 +99,37 @@ internal sealed class AiKeyVault : IAiKeyVault
     public async Task SetKeyAsync(string providerId, AiProviderConfig config, string apiKeyPlain)
     {
         if (string.IsNullOrEmpty(providerId)) throw new ArgumentException("providerId is required.", nameof(providerId));
-        if (string.IsNullOrEmpty(apiKeyPlain)) throw new ArgumentException("apiKeyPlain is required.", nameof(apiKeyPlain));
-
-        var aad = AadFor(providerId);
-        var wrapped = await _crypto.WrapAsync(apiKeyPlain, aad).ConfigureAwait(false);
 
         config.ProviderId = providerId;
-        config.HasKey = true;
 
-        var record = new PersistedConfig
+        PersistedConfig record;
+        if (string.IsNullOrEmpty(apiKeyPlain))
         {
-            Config = config,
-            Ciphertext = Convert.ToBase64String(wrapped.Ciphertext),
-            Iv = Convert.ToBase64String(wrapped.Iv),
-            Aad = Convert.ToBase64String(wrapped.Aad),
-        };
+            // Local providers (Ollama, LM Studio) don't use an API key. Persist the
+            // config without wrapping anything; HasKey stays false.
+            config.HasKey = false;
+            record = new PersistedConfig
+            {
+                Config = config,
+                Ciphertext = string.Empty,
+                Iv = string.Empty,
+                Aad = string.Empty,
+            };
+        }
+        else
+        {
+            var aad = AadFor(providerId);
+            var wrapped = await _crypto.WrapAsync(apiKeyPlain, aad).ConfigureAwait(false);
+            config.HasKey = true;
+            record = new PersistedConfig
+            {
+                Config = config,
+                Ciphertext = Convert.ToBase64String(wrapped.Ciphertext),
+                Iv = Convert.ToBase64String(wrapped.Iv),
+                Aad = Convert.ToBase64String(wrapped.Aad),
+            };
+        }
+
         await _store.SetAsync(StoreNames.AiKeys, providerId, JsonSerializer.Serialize(record))
             .ConfigureAwait(false);
     }

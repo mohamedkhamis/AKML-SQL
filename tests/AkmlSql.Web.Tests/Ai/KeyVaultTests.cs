@@ -117,13 +117,31 @@ public sealed class KeyVaultTests
     }
 
     [Fact]
-    public async Task SetKeyAsync_rejects_empty_provider_or_key()
+    public async Task SetKeyAsync_rejects_empty_provider()
     {
         var (vault, _) = Build();
         await Assert.ThrowsAsync<ArgumentException>(() =>
             vault.SetKeyAsync("", new AiProviderConfig(), "x"));
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            vault.SetKeyAsync("openai", new AiProviderConfig(), ""));
+    }
+
+    [Fact]
+    public async Task SetKeyAsync_accepts_empty_key_for_local_providers()
+    {
+        // Local providers (Ollama, LM Studio) don't authenticate with a key. The
+        // vault should persist the config with HasKey=false rather than throw —
+        // per-provider gating is the UI's job, not the vault's.
+        var (vault, _) = Build();
+        await vault.SetKeyAsync("ollama", new AiProviderConfig
+        {
+            DisplayName = "Ollama (local)",
+            Model = "llama3.1:8b",
+            Endpoint = "http://localhost:11434",
+        }, string.Empty);
+
+        var config = await vault.GetConfigAsync("ollama");
+        Assert.NotNull(config);
+        Assert.False(config!.HasKey);
+        Assert.Equal("llama3.1:8b", config.Model);
     }
 
     [Fact]

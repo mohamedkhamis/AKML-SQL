@@ -73,4 +73,10 @@ desktop.ini
 .playwright-mcp/
 /walk-*.png
 /fix-*.png
+/editor-*.png
+/settings-*.png
+/aiproviders-*.png
+/schema-*.png
+/diagnostics-*.png
+/verify-*.png
 /editor-after-fix.png

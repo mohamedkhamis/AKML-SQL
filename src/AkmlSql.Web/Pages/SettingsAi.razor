@@ -75,10 +75,17 @@
                 <span class="akml-ai-form-hint">Endpoint is only required for Azure / Ollama / LM Studio.</span>
             }
         </label>
-        <label>API key
-            <input type="password" @bind="_form.ApiKey" autocomplete="new-password"
-                   placeholder="Enter or paste your key (stored wrapped)" />
-        </label>
+        @if (RequiresApiKey(_form.ProviderId))
+        {
+            <label>API key
+                <input type="password" @bind="_form.ApiKey" autocomplete="new-password"
+                       placeholder="Enter or paste your key (stored wrapped)" />
+            </label>
+        }
+        else
+        {
+            <p class="akml-ai-form-hint">@DefaultDisplayName(_form.ProviderId) runs locally and doesn't use an API key.</p>
+        }
 
         <div class="akml-ai-form-buttons">
             <button type="submit" class="akml-tool-button">Save</button>
@@ -156,10 +163,10 @@
 
     private static string ModelPlaceholder(string id) => id switch
     {
-        "openai"    => "gpt-4o",
-        "anthropic" => "claude-sonnet-4",
-        "gemini"    => "gemini-2.0-flash",
-        "azure"     => "gpt-4o (your deployment name)",
+        "openai"    => "gpt-4.1",
+        "anthropic" => "claude-sonnet-4-6",
+        "gemini"    => "gemini-2.5-flash",
+        "azure"     => "gpt-4.1 (your deployment name)",
         "ollama"    => "llama3.1:8b",
         "lmstudio"  => "lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF",
         _ => string.Empty,
@@ -167,12 +174,15 @@
 
     private static bool RequiresEndpoint(string id) => id is "azure" or "ollama" or "lmstudio";
 
+    // Local providers (Ollama, LM Studio) authenticate by network reachability, not a key.
+    private static bool RequiresApiKey(string id) => id is not ("ollama" or "lmstudio");
+
     private static string EndpointPlaceholder(string id) => id switch
     {
         "azure"    => "https://your-resource.openai.azure.com/",
         "ollama"   => "http://localhost:11434",
         "lmstudio" => "http://localhost:1234/v1",
-        _ => "—",
+        _ => string.Empty,
     };
 
     protected override async Task OnInitializedAsync() => await ReloadAsync();
@@ -227,7 +237,7 @@
         {
             _errors.Add("Model is required.");
         }
-        if (string.IsNullOrEmpty(_form.ApiKey))
+        if (RequiresApiKey(_form.ProviderId) && string.IsNullOrEmpty(_form.ApiKey))
         {
             _errors.Add("API key is required.");
         }

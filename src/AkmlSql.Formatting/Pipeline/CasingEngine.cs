@@ -166,6 +166,7 @@ public class CasingEngine
             TSqlTokenType.Join or TSqlTokenType.Inner or TSqlTokenType.Outer or
             TSqlTokenType.Left or TSqlTokenType.Right or TSqlTokenType.Cross or TSqlTokenType.Full or
             TSqlTokenType.On or TSqlTokenType.By or TSqlTokenType.Having or
+            TSqlTokenType.Order or TSqlTokenType.Group or
             TSqlTokenType.Union or TSqlTokenType.Except or TSqlTokenType.Intersect or
             TSqlTokenType.Top or TSqlTokenType.Distinct or
             TSqlTokenType.Asc or TSqlTokenType.Desc or

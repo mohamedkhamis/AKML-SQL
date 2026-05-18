@@ -13,6 +13,7 @@
 @using AkmlSql.Core.Ipc.Messages
 @using AkmlSql.Web.Services
 @using Microsoft.JSInterop
+@implements IAsyncDisposable
 @inject IDiagnosticsRingBuffer Ring
 @inject IEngineBridge Bridge
 @inject IJSRuntime JS
@@ -49,11 +50,29 @@
             <tbody>
                 @foreach (var e in _filtered)
                 {
+                    var isLong = (e.Message?.Length ?? 0) > MessagePreviewLimit
+                                 || (e.Message?.Contains('\n') ?? false);
+                    var expanded = _expanded.Contains(e);
                     <tr class="akml-level-@e.Level.ToString().ToLowerInvariant()">
                         <td>@e.Timestamp.ToString("HH:mm:ss.fff")</td>
                         <td>@e.Level</td>
                         <td>@e.Source</td>
-                        <td>@e.Message</td>
+                        <td>
+                            @if (isLong && !expanded)
+                            {
+                                <span class="akml-diag-message-preview">@TruncateForPreview(e.Message)</span>
+                                <button class="akml-diag-expand" @onclick="@(() => Expand(e))">Show full</button>
+                            }
+                            else if (isLong)
+                            {
+                                <pre class="akml-diag-message-full">@e.Message</pre>
+                                <button class="akml-diag-expand" @onclick="@(() => Collapse(e))">Collapse</button>
+                            }
+                            else
+                            {
+                                @e.Message
+                            }
+                        </td>
                     </tr>
                 }
             </tbody>
@@ -74,6 +93,10 @@
     .akml-level-warn td { color: var(--akml-status-warning); }
     .akml-level-info td { color: var(--akml-text-primary); }
     .akml-level-trace td { color: var(--akml-text-secondary); }
+    .akml-diag-message-preview { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 80ch; display: inline-block; vertical-align: middle; }
+    .akml-diag-message-full { margin: 0; padding: var(--akml-scalar-spacing-xs) 0; white-space: pre-wrap; word-break: break-word; font-family: var(--akml-type-editor-family); font-size: 11px; }
+    .akml-diag-expand { margin-left: var(--akml-scalar-spacing-s); padding: 0 var(--akml-scalar-spacing-xs); background: transparent; border: 1px solid var(--akml-border-default); border-radius: 3px; color: var(--akml-text-link); cursor: pointer; font-size: 11px; }
+    .akml-diag-expand:hover { background-color: var(--akml-surface-hover); }
     .akml-tool-button {
         font-family: var(--akml-type-chrome-family); font-size: var(--akml-type-chrome-size);
         background-color: var(--akml-surface-panel); color: var(--akml-text-primary);
@@ -87,6 +110,23 @@
     private IReadOnlyList<DiagnosticEntry>? _snapshot;
     private List<DiagnosticEntry> _filtered = new();
     private bool _showTrace, _showInfo = true, _showWarn = true, _showError = true;
+    private IJSObjectReference? _downloadModule;
+    private readonly HashSet<DiagnosticEntry> _expanded = new();
+    private const int MessagePreviewLimit = 160;
+
+    private void Expand(DiagnosticEntry e) { _expanded.Add(e); }
+    private void Collapse(DiagnosticEntry e) { _expanded.Remove(e); }
+
+    private static string TruncateForPreview(string? message)
+    {
+        if (string.IsNullOrEmpty(message)) return string.Empty;
+        var firstLine = message.IndexOf('\n') is var nl && nl > 0
+            ? message.Substring(0, nl)
+            : message;
+        return firstLine.Length > MessagePreviewLimit
+            ? firstLine.Substring(0, MessagePreviewLimit) + "…"
+            : firstLine + (message.Contains('\n') ? " …" : string.Empty);
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -194,22 +234,22 @@
         ms.Position = 0;
         var bytes = ms.ToArray();
 
-        // Hand off to a tiny JS helper to spawn the download.
-        await JS.InvokeVoidAsync("eval",
-            "(function(b64){"
-            + "const bin = atob(b64);"
-            + "const buf = new Uint8Array(bin.length);"
-            + "for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);"
-            + "const blob = new Blob([buf], { type: 'application/zip' });"
-            + "const url = URL.createObjectURL(blob);"
-            + "const a = document.createElement('a');"
-            + "a.href = url;"
-            + "a.download = 'akmlsql-diagnostics.zip';"
-            + "document.body.appendChild(a);"
-            + "a.click();"
-            + "a.remove();"
-            + "setTimeout(() => URL.revokeObjectURL(url), 1500);"
-            + "})(arguments[1]);", Convert.ToBase64String(bytes));
+        _downloadModule ??= await JS.InvokeAsync<IJSObjectReference>(
+            "import", "./js/akml-download.js");
+        await _downloadModule.InvokeVoidAsync(
+            "downloadBase64",
+            "akmlsql-diagnostics.zip",
+            "application/zip",
+            Convert.ToBase64String(bytes));
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_downloadModule != null)
+        {
+            try { await _downloadModule.DisposeAsync(); }
+            catch (JSDisconnectedException) { /* tab closing */ }
+        }
     }
 
     private static async Task WriteZipEntryAsync(ZipArchive zip, string name, string text)

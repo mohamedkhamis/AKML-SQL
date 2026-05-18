@@ -95,6 +95,7 @@
     private DateTime _chordExpiresAt;
     private CancellationTokenSource? _analyseCts;
     private bool _autoAnalyseOnFormat = true;
+    private IJSObjectReference? _downloadModule;
 
     protected override async Task OnInitializedAsync()
     {
@@ -188,8 +189,12 @@
         {
             _findings = await Analyser.AnalyseAsync(_currentText, null, _analyseCts.Token);
             var issueCount = _findings.Issues?.Length ?? 0;
-            _status = issueCount == 0 ? "No problems." : $"{issueCount} problem(s) found.";
-            Diagnostics.Log(DiagnosticLevel.Info, "analyser", _status);
+            // Problem count is shown in the Problems panel header; only surface a
+            // toolbar status for the "no problems" case so the user sees confirmation
+            // that the analyser actually ran.
+            _status = issueCount == 0 ? "No problems." : null;
+            Diagnostics.Log(DiagnosticLevel.Info, "analyser",
+                issueCount == 0 ? "No problems." : $"{issueCount} problem(s) found.");
         }
         catch (OperationCanceledException)
         {
@@ -210,23 +215,16 @@
 
     private async Task SaveAsync()
     {
-        // Push the document text to a Blob URL and trigger a download. The JS helper is
-        // tiny enough that we inline-call eval to avoid another module file -- this is
-        // the single user-facing download in M2.
         try
         {
-            await JS.InvokeVoidAsync("eval",
-                "(function(text){"
-                + "const blob = new Blob([text], { type: 'application/sql' });"
-                + "const url = URL.createObjectURL(blob);"
-                + "const a = document.createElement('a');"
-                + "a.href = url;"
-                + "a.download = 'akml-sql.sql';"
-                + "document.body.appendChild(a);"
-                + "a.click();"
-                + "a.remove();"
-                + "setTimeout(() => URL.revokeObjectURL(url), 1500);"
-                + "})(arguments[1]);", _currentText);
+            _downloadModule ??= await JS.InvokeAsync<IJSObjectReference>(
+                "import", "./js/akml-download.js");
+            var bytes = System.Text.Encoding.UTF8.GetBytes(_currentText);
+            await _downloadModule.InvokeVoidAsync(
+                "downloadBase64",
+                "akml-sql.sql",
+                "application/sql",
+                Convert.ToBase64String(bytes));
             _status = "Saved.";
         }
         catch (Exception ex)
@@ -275,5 +273,10 @@
         _analyseCts?.Dispose();
         await SessionStore.FlushAsync();
         await Diagnostics.FlushAsync();
+        if (_downloadModule != null)
+        {
+            try { await _downloadModule.DisposeAsync(); }
+            catch (JSDisconnectedException) { /* tab closing */ }
+        }
     }
 }
