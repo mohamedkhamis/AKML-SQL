@@ -58,6 +58,37 @@ export async function create(hostElementId, initialText, dotNetRef) {
         }
     });
 
+    // T109 follow-up: route CodeMirror's autocomplete through ICompletionService
+    // on the .NET side so the popup is fed by the bridge (online) or the cached
+    // schema snapshot (offline). Returns null when the .NET side gives an empty
+    // list -- CM hides the popup automatically in that case.
+    const completionSource = async (context) => {
+        if (!dotNetRef) return null;
+        const word = context.matchBefore(/[\w]+/);
+        if (!word) return null;
+        // Don't open on every cursor twitch; only when the user typed something
+        // OR explicitly invoked (Ctrl+Space). CM's `explicit` flag tells us which.
+        if (word.from === word.to && !context.explicit) return null;
+        try {
+            const items = await dotNetRef.invokeMethodAsync('RequestCompletionsFromJs', context.pos);
+            if (!items || items.length === 0) return null;
+            return {
+                from: word.from,
+                options: items.map(i => ({
+                    label: i.label,
+                    apply: i.insertText,
+                    type: i.type || 'text',
+                    detail: i.detail || undefined,
+                })),
+                // CM does its own fuzzy filter against the prefix at `from`.
+                validFor: /^[\w]*$/,
+            };
+        } catch {
+            // Never let a .NET interop crash kill the popup.
+            return null;
+        }
+    };
+
     const state = cm.state.EditorState.create({
         doc: initialText ?? '',
         extensions: [
@@ -73,7 +104,11 @@ export async function create(hostElementId, initialText, dotNetRef) {
             // Without this the SQL grammar parses but renders as plain text.
             // fallback:true is needed because we don't pair a CM6 editor theme yet.
             cm.language.syntaxHighlighting(cm.language.defaultHighlightStyle, { fallback: true }),
-            cm.autocomplete.autocompletion(),
+            cm.autocomplete.autocompletion({
+                override: [completionSource],
+                activateOnTyping: true,
+                maxRenderedOptions: 50,
+            }),
             cm.lint.lintGutter(),
             updateListener,
         ],

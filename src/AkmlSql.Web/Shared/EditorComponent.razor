@@ -1,11 +1,17 @@
 @*
-    Spec 021 (web edition) -- M2 task T032. CodeMirror 6 editor wrapper.
-    Hosts the editor inside a stable DOM div; lifecycle managed by akml-editor.js.
-    The Blazor side exposes SetText/GetText/SetSelection/GotoLine + OnTextChanged event.
+    Spec 021 (web edition) -- M2 task T032 + M5 task T109 follow-up. CodeMirror 6
+    editor wrapper. Hosts the editor inside a stable DOM div; lifecycle managed by
+    akml-editor.js. The Blazor side exposes SetText/GetText/SetSelection/GotoLine +
+    OnTextChanged event, AND a JS-invokable completion bridge so the editor's
+    autocomplete popup is fed by our ICompletionService (which routes to the engine
+    when online and falls back to the cached IndexedDB snapshot when offline).
 *@
+@using AkmlSql.Core.Ipc.Messages
+@using AkmlSql.Web.Services
 @using Microsoft.JSInterop
 @implements IAsyncDisposable
 @inject IJSRuntime JS
+@inject ICompletionService Completion
 
 <div @ref="_host" id="@HostId" class="akml-editor"></div>
 
@@ -51,6 +57,67 @@
     public Task OnTextChangedFromJs(string text)
     {
         return OnTextChanged.InvokeAsync(text);
+    }
+
+    /// <summary>
+    /// JS-invokable completion source called by CodeMirror's autocompletion. Returns
+    /// an array of plain objects shaped for the JS side: { label, insertText, type,
+    /// detail }. The .NET side dispatches to <see cref="ICompletionService"/> which
+    /// routes to the engine when online or to the cached SchemaSnapshot when offline.
+    /// </summary>
+    [JSInvokable]
+    public async Task<CompletionItemDto[]> RequestCompletionsFromJs(int cursorOffset)
+    {
+        try
+        {
+            var request = new CompletionRequest
+            {
+                SessionId = string.Empty,   // SessionId is the engine-side identifier;
+                                            // the offline path doesn't use it and the
+                                            // online path will get it from the bridge.
+                CursorOffset = cursorOffset,
+                TriggerKind = 0,
+            };
+            var response = await Completion.CompleteAsync(request, CancellationToken.None);
+            if (response.Items == null || response.Items.Length == 0) return System.Array.Empty<CompletionItemDto>();
+
+            return response.Items.Select(i => new CompletionItemDto
+            {
+                Label = string.IsNullOrEmpty(i.DisplayText) ? i.InsertText : i.DisplayText,
+                InsertText = string.IsNullOrEmpty(i.InsertText) ? i.DisplayText : i.InsertText,
+                Type = ToCmType(i.ObjectType),
+                Detail = i.SecondaryText,
+            }).ToArray();
+        }
+        catch
+        {
+            // Never bubble through the JS interop boundary -- the popup just stays empty.
+            return System.Array.Empty<CompletionItemDto>();
+        }
+    }
+
+    private static string ToCmType(int objectType) => objectType switch
+    {
+        (int)CompletionObjectType.Table     => "class",
+        (int)CompletionObjectType.View      => "class",
+        (int)CompletionObjectType.Column    => "property",
+        (int)CompletionObjectType.Keyword   => "keyword",
+        (int)CompletionObjectType.Snippet   => "text",
+        (int)CompletionObjectType.Function  => "function",
+        (int)CompletionObjectType.Procedure => "function",
+        (int)CompletionObjectType.Schema    => "namespace",
+        (int)CompletionObjectType.Database  => "namespace",
+        (int)CompletionObjectType.Variable  => "variable",
+        (int)CompletionObjectType.Parameter => "variable",
+        _ => "text",
+    };
+
+    public sealed class CompletionItemDto
+    {
+        public string Label { get; set; } = string.Empty;
+        public string InsertText { get; set; } = string.Empty;
+        public string Type { get; set; } = "text";
+        public string? Detail { get; set; }
     }
 
     public async Task<string> GetTextAsync()
