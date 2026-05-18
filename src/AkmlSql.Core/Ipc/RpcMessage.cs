@@ -245,5 +245,17 @@ namespace AkmlSql.Core.Ipc
         // `diagnostics.engine-log-tail.v1`.
         public const int EngineLogTailRequest = 206;
         public const int EngineLogTailResponse = 207;
+
+        // Spec 021 (web edition) — M5 task T109. Cache-backed completion fallback.
+        // Browser fetches per-phase snapshots of the engine's DatabaseCache so it
+        // can serve IntelliSense from IndexedDB while the bridge is unreachable.
+        // Phase A carries schemas + object names (light, sub-500 ms target). Phase B
+        // adds columns + foreign keys. Both responses ship the MessagePack-serialised
+        // SchemaPhasePayload in a byte[] field rather than a base64 string — the IPC
+        // wire is already binary MessagePack so base64 would only add overhead.
+        public const int SchemaPhaseARequest = 208;
+        public const int SchemaPhaseAResponse = 209;
+        public const int SchemaPhaseBRequest = 210;
+        public const int SchemaPhaseBResponse = 211;
     }
 }

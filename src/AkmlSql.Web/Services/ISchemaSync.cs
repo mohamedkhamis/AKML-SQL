@@ -160,11 +160,87 @@ internal sealed class SchemaSync : ISchemaSync
                 existing.Checksum = response.Checksum;
                 await _cache.SetAsync(existing).ConfigureAwait(false);
             }
+            // T109: fetch a fresh Phase A snapshot synchronously so the next
+            // completion has data to fall back on, then fire-and-forget Phase B
+            // so column-aware completions become available in the background.
+            await FetchPhaseAAsync(ct).ConfigureAwait(false);
+            _ = Task.Run(() => FetchPhaseBAsync(CancellationToken.None));
+
             ChecksumDrifted?.Invoke(new ChecksumDriftNotice(_server!, _database!, response.Checksum));
         }
         else
         {
             await _cache.TouchAsync(_server!, _database!).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>T109: fetch and persist a Phase A blob via the bridge. No-op when the
+    /// bridge is closed or the engine reports no cache; either way the existing
+    /// snapshot is left intact (we never overwrite real bytes with empty bytes).</summary>
+    internal async Task FetchPhaseAAsync(CancellationToken ct)
+    {
+        if (_bridge.State != BridgeState.Open || _sessionId == null) return;
+        try
+        {
+            var response = await _bridge.SendAsync<SchemaPhaseARequest, SchemaPhaseAResponse>(
+                MessageTypes.SchemaPhaseARequest,
+                new SchemaPhaseARequest { SessionId = _sessionId!, DatabaseName = _database! },
+                ct).ConfigureAwait(false);
+
+            if (!response.HasConnection || response.PhaseA == null || response.PhaseA.Length == 0)
+            {
+                _diagnostics.Log(DiagnosticLevel.Trace, "schema-sync",
+                    $"Phase A unavailable for {_server}/{_database}: {response.ErrorMessage}");
+                return;
+            }
+
+            var snap = await _cache.GetAsync(_server!, _database!).ConfigureAwait(false)
+                       ?? new SchemaSnapshot { ServerCanonicalIdentity = _server!, DatabaseName = _database! };
+            snap.PhaseA = response.PhaseA;
+            if (!string.IsNullOrEmpty(response.Checksum)) snap.Checksum = response.Checksum;
+            snap.FetchedAt = DateTimeOffset.UtcNow;
+            await _cache.SetAsync(snap).ConfigureAwait(false);
+            _diagnostics.Log(DiagnosticLevel.Info, "schema-sync",
+                $"Phase A fetched for {_server}/{_database} ({response.PhaseA.Length} bytes).");
+        }
+        catch (Exception ex)
+        {
+            _diagnostics.Log(DiagnosticLevel.Warn, "schema-sync",
+                $"Phase A fetch failed for {_server}/{_database}: {ex.Message}");
+        }
+    }
+
+    /// <summary>T109: background Phase B fetch + persist. Same null-overwrite guard.</summary>
+    internal async Task FetchPhaseBAsync(CancellationToken ct)
+    {
+        if (_bridge.State != BridgeState.Open || _sessionId == null) return;
+        try
+        {
+            var response = await _bridge.SendAsync<SchemaPhaseBRequest, SchemaPhaseBResponse>(
+                MessageTypes.SchemaPhaseBRequest,
+                new SchemaPhaseBRequest { SessionId = _sessionId!, DatabaseName = _database! },
+                ct).ConfigureAwait(false);
+
+            if (!response.HasConnection || response.PhaseB == null || response.PhaseB.Length == 0)
+            {
+                _diagnostics.Log(DiagnosticLevel.Trace, "schema-sync",
+                    $"Phase B unavailable for {_server}/{_database}: {response.ErrorMessage}");
+                return;
+            }
+
+            var snap = await _cache.GetAsync(_server!, _database!).ConfigureAwait(false)
+                       ?? new SchemaSnapshot { ServerCanonicalIdentity = _server!, DatabaseName = _database! };
+            snap.PhaseB = response.PhaseB;
+            if (!string.IsNullOrEmpty(response.Checksum)) snap.Checksum = response.Checksum;
+            snap.FetchedAt = DateTimeOffset.UtcNow;
+            await _cache.SetAsync(snap).ConfigureAwait(false);
+            _diagnostics.Log(DiagnosticLevel.Info, "schema-sync",
+                $"Phase B fetched for {_server}/{_database} ({response.PhaseB.Length} bytes).");
+        }
+        catch (Exception ex)
+        {
+            _diagnostics.Log(DiagnosticLevel.Warn, "schema-sync",
+                $"Phase B fetch failed for {_server}/{_database}: {ex.Message}");
         }
     }
 

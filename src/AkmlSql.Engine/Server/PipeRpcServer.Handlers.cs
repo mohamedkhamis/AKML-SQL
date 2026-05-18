@@ -188,6 +188,48 @@ public partial class PipeRpcServer
                     }),
                 _rpcContext);
 
+        // Spec 021 (web edition) -- M5 task T109. Phase A / Phase B snapshot
+        // handlers. Same callback-pure shape as SchemaChecksum + SchemaIdentify; the
+        // lookup callback pulls the live DatabaseCache out of SchemaCacheManager and
+        // hands it to SchemaPhaseSerializer. The browser stores the returned bytes
+        // verbatim in IndexedDB so it can serve completion offline (FR-016).
+        _pluggableHandlers[MessageTypes.SchemaPhaseARequest] =
+            new TypedHandlerAdapter<SchemaPhaseARequest, SchemaPhaseAResponse>(
+                new Handlers.Schema.SchemaPhaseAHandler(
+                    phaseLookup: (sid, db) =>
+                    {
+                        var session = _sessionManager.GetSession(sid);
+                        if (session == null || !session.IsConnected) return (null, null);
+                        var cache = _schemaCacheManager.GetCache(sid, db);
+                        if (cache == null || cache.Phase == AkmlSql.Engine.Schema.PopulationPhase.NotLoaded)
+                            return (null, null);
+                        var bytes = Handlers.Schema.SchemaPhaseSerializer.SerializePhaseA(cache, db);
+                        var checksum = Handlers.Schema.SchemaPhaseSerializer.ComputeChecksum(cache);
+                        return (bytes, checksum);
+                    }),
+                _rpcContext);
+
+        _pluggableHandlers[MessageTypes.SchemaPhaseBRequest] =
+            new TypedHandlerAdapter<SchemaPhaseBRequest, SchemaPhaseBResponse>(
+                new Handlers.Schema.SchemaPhaseBHandler(
+                    phaseLookup: (sid, db) =>
+                    {
+                        var session = _sessionManager.GetSession(sid);
+                        if (session == null || !session.IsConnected) return (null, null);
+                        var cache = _schemaCacheManager.GetCache(sid, db);
+                        // Phase B requires the cache to have actually reached the
+                        // Phase B level; before that the columns/FKs aren't loaded
+                        // and the response would be a Phase-A view with no extra value.
+                        if (cache == null ||
+                            cache.Phase == AkmlSql.Engine.Schema.PopulationPhase.NotLoaded ||
+                            cache.Phase == AkmlSql.Engine.Schema.PopulationPhase.PhaseA)
+                            return (null, null);
+                        var bytes = Handlers.Schema.SchemaPhaseSerializer.SerializePhaseB(cache, db);
+                        var checksum = Handlers.Schema.SchemaPhaseSerializer.ComputeChecksum(cache);
+                        return (bytes, checksum);
+                    }),
+                _rpcContext);
+
         // Spec 021 (web edition) -- close-out of the matrix-test gap. AiStreamCancel
         // signals the engine to cancel an in-flight AI streaming request. The
         // handler is intentionally lightweight: today it just acknowledges (the AI
