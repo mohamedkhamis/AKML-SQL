@@ -35,6 +35,22 @@ public class ColumnProvider : ICompletionProvider
         ClauseType.AlterTableColumn
     ];
 
+    /// <summary>
+    /// Clauses where SQL Server rejects with "Msg 209: Ambiguous column name" when
+    /// a `SELECT col, *` form makes a bare reference unresolvable. In these clauses
+    /// the column provider emits BOTH the bare column AND the `table.column`
+    /// qualified form even in single-table queries so the user can pick the
+    /// disambiguated variant. WHERE / SELECT-list / JOIN ON / UPDATE SET stay
+    /// bare-only in single-table queries because the engine resolves them without
+    /// ambiguity issues.
+    /// </summary>
+    private static readonly HashSet<ClauseType> AmbiguityProneClauses =
+    [
+        ClauseType.OrderBy,
+        ClauseType.GroupBy,
+        ClauseType.Having
+    ];
+
     public bool CanHandle(CursorContext context, DatabaseCache? cache)
     {
         if (cache == null)
@@ -152,31 +168,58 @@ public class ColumnProvider : ICompletionProvider
             {
                 // Qualify with alias when multiple tables are in scope so the user
                 // can disambiguate. Single-table queries get plain column names.
-                var displayText = multiTable
-                    ? $"{alias}.{column.ColumnName}"
-                    : column.ColumnName;
-                var insertText = displayText;
-
-                // Avoid duplicate identical entries when the same alias resolves twice
-                if (!seenColumns.Add(displayText))
-                {
-                    continue;
-                }
+                var bareDisplay = column.ColumnName;
+                var qualifiedDisplay = $"{alias}.{column.ColumnName}";
 
                 int priority;
                 if (column.IsPrimaryKey) priority = 10;
                 else if (fkColumnNames.Contains(column.ColumnName)) priority = 20;
                 else priority = 30;
 
-                yield return new CompletionItem
+                // Bare form: the default. In single-table queries that's the only
+                // thing the user normally wants. In multi-table queries we skip it
+                // (qualified is mandatory) — the existing `multiTable` branch.
+                if (!multiTable)
                 {
-                    DisplayText = displayText,
-                    InsertText = insertText,
-                    ObjectType = (int)CompletionObjectType.Column,
-                    SecondaryText = FormatSecondaryText(column) + " • " + tableName,
-                    SourceObject = dbObject.FullName,
-                    SortPriority = priority
-                };
+                    if (seenColumns.Add(bareDisplay))
+                    {
+                        yield return new CompletionItem
+                        {
+                            DisplayText = bareDisplay,
+                            InsertText = bareDisplay,
+                            ObjectType = (int)CompletionObjectType.Column,
+                            SecondaryText = FormatSecondaryText(column) + " • " + tableName,
+                            SourceObject = dbObject.FullName,
+                            SortPriority = priority
+                        };
+                    }
+                }
+
+                // Qualified `alias.column` form: emit when the surrounding clause
+                // is ambiguity-prone (ORDER BY / GROUP BY / HAVING) so the user can
+                // pick the disambiguated variant after `SELECT col, *`, OR when
+                // multiTable is true (the previous behaviour where every clause
+                // qualifies). In WHERE / SELECT-list / JOIN ON / UpdateSet
+                // single-table contexts the bare form stays the only suggestion to
+                // avoid duplicate-noise; SQL Server resolves those without
+                // ambiguity errors.
+                bool emitQualified = multiTable ||
+                    AmbiguityProneClauses.Contains(context.ClauseType);
+
+                if (emitQualified && seenColumns.Add(qualifiedDisplay))
+                {
+                    yield return new CompletionItem
+                    {
+                        DisplayText = qualifiedDisplay,
+                        InsertText = qualifiedDisplay,
+                        ObjectType = (int)CompletionObjectType.Column,
+                        SecondaryText = FormatSecondaryText(column) + " • " + tableName,
+                        SourceObject = dbObject.FullName,
+                        // Qualified items rank slightly lower than bare so that in
+                        // single-table queries the bare form stays the default.
+                        SortPriority = priority + 5
+                    };
+                }
             }
         }
     }

@@ -153,6 +153,73 @@ public class ColumnProviderTests
         Assert.Contains("Price", columns);
     }
 
+    // ── User-reported bug: ORDER BY after SELECT col,* needs the qualified form
+    //    so the user can disambiguate. SQL Server rejects bare references in this
+    //    case with "Msg 209: Ambiguous column name". The provider now emits BOTH
+    //    forms even in single-table queries when the cursor is in an
+    //    ambiguity-prone clause (ORDER BY / GROUP BY / HAVING).
+    [Fact]
+    public void OrderBy_SingleTable_OffersTableQualifiedColumns_ForAmbiguityResolution()
+    {
+        var cache = BuildCache(
+            ("martyrs", new[] { "id", "name", "created_at", "updated_at" }));
+
+        var response = RunCompletion(
+            "SELECT created_at,*\nFROM martyrs\nORDER BY |",
+            cache);
+
+        var columns = response.Items
+            .Where(i => i.ObjectType == (int)CompletionObjectType.Column)
+            .Select(i => i.DisplayText)
+            .ToList();
+
+        // Both forms must be present so the user can pick the one that resolves
+        // the ambiguity.
+        Assert.Contains("created_at", columns);
+        Assert.Contains("martyrs.created_at", columns);
+        Assert.Contains("name", columns);
+        Assert.Contains("martyrs.name", columns);
+    }
+
+    [Fact]
+    public void GroupBy_SingleTable_OffersTableQualifiedColumns()
+    {
+        var cache = BuildCache(("orders", new[] { "id", "status", "amount" }));
+
+        var response = RunCompletion(
+            "SELECT status, COUNT(*) FROM orders GROUP BY |",
+            cache);
+
+        var columns = response.Items
+            .Where(i => i.ObjectType == (int)CompletionObjectType.Column)
+            .Select(i => i.DisplayText)
+            .ToList();
+
+        Assert.Contains("status", columns);
+        Assert.Contains("orders.status", columns);
+    }
+
+    // Regression guard: the qualified form must NOT appear in WHERE single-table
+    // queries — that would clutter the popup with duplicate suggestions for the
+    // common case. SQL Server resolves WHERE references without ambiguity errors.
+    [Fact]
+    public void Where_SingleTable_DoesNot_DuplicateWithQualifiedForm()
+    {
+        var cache = BuildCache(("Customers", new[] { "Id", "Name" }));
+
+        var response = RunCompletion("SELECT * FROM Customers WHERE |", cache);
+
+        var columns = response.Items
+            .Where(i => i.ObjectType == (int)CompletionObjectType.Column)
+            .Select(i => i.DisplayText)
+            .ToList();
+
+        Assert.Contains("Id", columns);
+        Assert.Contains("Name", columns);
+        Assert.DoesNotContain("Customers.Id", columns);
+        Assert.DoesNotContain("Customers.Name", columns);
+    }
+
     // ── Dot-qualified path (existing behavior) ──
 
     [Fact]
