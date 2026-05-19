@@ -89,7 +89,11 @@ namespace AkmlSql.Engine
                 // T035 -- process pending SQL Prompt import before starting the RPC server.
                 ProcessPendingImports();
 
-                var server = new PipeRpcServer(pipeName);
+                // Spec 022 (M0 closure) -- P2 / US2. Single composition root builds services,
+                // context, router, and the history retention service. The transport just owns
+                // pipe lifecycle + frame I/O now.
+                var composition = EngineComposition.Build();
+                var server = new PipeRpcServer(pipeName, composition.Context, composition.Router);
                 await server.RunAsync(token);
             }
             catch (OperationCanceledException)

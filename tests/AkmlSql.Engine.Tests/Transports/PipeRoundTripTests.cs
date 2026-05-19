@@ -31,7 +31,10 @@ public sealed class PipeRoundTripTests
     {
         var pipeName = UniquePipeName();
         using var serverCts = new CancellationTokenSource();
-        var server = new PipeRpcServer(pipeName);
+        // Spec 022 (M0 closure) -- P2 / US2. Transport now takes (pipeName, ctx, router)
+        // produced by EngineComposition.Build() instead of constructing services itself.
+        var composition = EngineComposition.Build();
+        var server = new PipeRpcServer(pipeName, composition.Context, composition.Router);
 
         // Start the server. It blocks on WaitForConnectionAsync; cancel via serverCts when done.
         var serverTask = Task.Run(() => server.RunAsync(serverCts.Token));

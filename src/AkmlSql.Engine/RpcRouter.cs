@@ -44,6 +44,28 @@ namespace AkmlSql.Engine
 
         public bool IsRegistered(int requestMessageType) => _adapters.ContainsKey(requestMessageType);
 
+        /// <summary>
+        /// Spec 022 (M0 closure) -- P2 / US2. Register a raw-envelope handler that processes the
+        /// inbound <see cref="RpcMessage"/> directly and produces the full response envelope. Used
+        /// for delegating handlers (session save/restore/delete, history, productivity, navigation,
+        /// the AI bridge, AiStreamCancel, the spec-014 stubs) that already package their own
+        /// response envelopes and do not benefit from the typed <see cref="Register{TReq,TResp}"/>
+        /// path's MessagePack deserialise/serialise loop.
+        ///
+        /// <para>Throws <see cref="InvalidOperationException"/> if a handler -- typed or raw -- is
+        /// already registered for <paramref name="messageType"/>. Same semantics as
+        /// <see cref="Register{TReq,TResp}"/>.</para>
+        /// </summary>
+        public void RegisterRaw(int messageType, Func<RpcMessage, CancellationToken, Task<RpcMessage?>> handler)
+        {
+            if (handler == null) throw new ArgumentNullException(nameof(handler));
+            if (!_adapters.TryAdd(messageType, new RawHandlerAdapter(handler)))
+            {
+                throw new InvalidOperationException(
+                    $"RpcRouter: a handler for MessageType {messageType} is already registered.");
+            }
+        }
+
         /// <summary>The set of message-type codes currently registered with this router.</summary>
         public IReadOnlyCollection<int> RegisteredMessageTypes => (IReadOnlyCollection<int>)_adapters.Keys;
 
@@ -127,6 +149,21 @@ namespace AkmlSql.Engine
         private interface IHandlerAdapter
         {
             Task<RpcMessage?> RouteAsync(RpcMessage msg, RpcContext ctx, CancellationToken ct);
+        }
+
+        /// <summary>
+        /// Spec 022 (M0 closure) -- P2 / US2. Raw-envelope handler adapter. Bypasses the
+        /// MessagePack deserialise / serialise loop; the registered function processes the
+        /// inbound <see cref="RpcMessage"/> and returns the response (or <see langword="null"/>
+        /// for notification-only handlers) directly.
+        /// </summary>
+        private sealed class RawHandlerAdapter : IHandlerAdapter
+        {
+            private readonly Func<RpcMessage, CancellationToken, Task<RpcMessage?>> _handler;
+            public RawHandlerAdapter(Func<RpcMessage, CancellationToken, Task<RpcMessage?>> handler)
+                => _handler = handler;
+            public Task<RpcMessage?> RouteAsync(RpcMessage msg, RpcContext ctx, CancellationToken ct)
+                => _handler(msg, ct);
         }
 
         private sealed class TypedHandlerAdapter<TReq, TResp> : IHandlerAdapter

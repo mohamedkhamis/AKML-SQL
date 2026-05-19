@@ -14,14 +14,18 @@ using Xunit;
 namespace AkmlSql.Engine.Tests.InProcess;
 
 /// <summary>
-/// Spec 021 (web edition) -- M0 task T023. Two complementary coverage tests:
+/// Spec 021 (web edition) -- M0 task T023. Spec 022 (M0 closure) -- P2 / US2: matrix
+/// now reads from <see cref="RpcRouter.RegisteredMessageTypes"/> via
+/// <see cref="EngineComposition.Build"/> rather than the old transport-side accessor.
+///
+/// Two complementary coverage tests:
 ///
 /// 1. <see cref="Every_shell_to_engine_message_type_has_a_registered_handler"/> -- a
-///    registration matrix. Constructs a real <see cref="PipeRpcServer"/>, walks every
+///    registration matrix. Builds the composition root, walks every
 ///    public-static integer constant on <see cref="MessageTypes"/>, partitions by
 ///    direction (shell-to-engine vs engine-to-shell using a name-suffix heuristic plus
 ///    an explicit override list), and asserts every shell-to-engine code is present in
-///    <see cref="PipeRpcServer.RegisteredMessageTypeCodes"/>. This is the regression
+///    <see cref="RpcRouter.RegisteredMessageTypes"/>. This is the regression
 ///    gate: a new <see cref="MessageTypes"/> constant without a registered handler now
 ///    fails CI.
 ///
@@ -67,12 +71,11 @@ public sealed class AllMessageTypesInProcessTests
     [Fact]
     public void Every_shell_to_engine_message_type_has_a_registered_handler()
     {
-        // We construct a PipeRpcServer with a unique-but-never-bound pipe name so the
-        // ctor's RegisterPluggableHandlers() runs without touching the filesystem in a
-        // way the test can't clean up. (PipeRpcServer.RunAsync would open the pipe; we
-        // never call it here.)
-        var server = new PipeRpcServer($"akmlsql-test-{Guid.NewGuid():N}");
-        var registered = new HashSet<int>(server.RegisteredMessageTypeCodes);
+        // Spec 022 (M0 closure) -- P2 / US2. Source of truth is the router built by
+        // EngineComposition.Build(); the old transport-side RegisteredMessageTypeCodes
+        // accessor is gone now.
+        var composition = EngineComposition.Build();
+        var registered = new HashSet<int>(composition.Router.RegisteredMessageTypes);
 
         var (shellToEngine, _) = PartitionMessageTypes();
 
@@ -87,7 +90,7 @@ public sealed class AllMessageTypesInProcessTests
         Assert.True(
             missing.Count == 0,
             $"Shell-to-engine MessageTypes without a registered handler: {string.Join(", ", missing)}. " +
-            "Either register the handler in PipeRpcServer.Handlers.cs or add the code to " +
+            "Either register the handler in EngineHandlerRegistry.RegisterAllHandlers or add the code to " +
             $"{nameof(ExpectedUnwired)} with a reason.");
     }
 
@@ -96,8 +99,8 @@ public sealed class AllMessageTypesInProcessTests
     {
         // The flip side of the matrix: response/result codes must NOT appear in the
         // handler dict -- those are the codes the engine emits, not consumes.
-        var server = new PipeRpcServer($"akmlsql-test-{Guid.NewGuid():N}");
-        var registered = new HashSet<int>(server.RegisteredMessageTypeCodes);
+        var composition = EngineComposition.Build();
+        var registered = new HashSet<int>(composition.Router.RegisteredMessageTypes);
 
         var (_, engineToShell) = PartitionMessageTypes();
 
