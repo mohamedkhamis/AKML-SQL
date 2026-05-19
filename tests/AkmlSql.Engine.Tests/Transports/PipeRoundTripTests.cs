@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Engine.Server;
+using AkmlSql.Engine.Transports;
 using MessagePack;
 using Xunit;
 
@@ -12,7 +13,7 @@ namespace AkmlSql.Engine.Tests.Transports;
 
 /// <summary>
 /// Spec 021 (web edition) -- M0.6 task T024. End-to-end integration test that exercises
-/// the real named-pipe path through <see cref="PipeRpcServer"/>. Confirms that the post-M0
+/// the real named-pipe path through <see cref="NamedPipeTransport"/>. Confirms that the post-M0
 /// dispatch (every message type now flows through <c>_pluggableHandlers</c> rather than the
 /// old 53-case switch) still produces correct frames on the wire.
 ///
@@ -24,7 +25,7 @@ public sealed class PipeRoundTripTests
     private static string UniquePipeName() => $"akmlsql-test-{Guid.NewGuid():N}";
 
     /// <summary>
-    /// Spin up a PipeRpcServer, connect a client, send <paramref name="request"/>, read the
+    /// Spin up a NamedPipeTransport, connect a client, send <paramref name="request"/>, read the
     /// response frame, and return it. The server task is cancelled when the test is done.
     /// </summary>
     private static async Task<RpcMessage?> RoundTripAsync(RpcMessage request, TimeSpan? timeout = null)
@@ -34,7 +35,7 @@ public sealed class PipeRoundTripTests
         // Spec 022 (M0 closure) -- P2 / US2. Transport now takes (pipeName, ctx, router)
         // produced by EngineComposition.Build() instead of constructing services itself.
         var composition = EngineComposition.Build();
-        var server = new PipeRpcServer(pipeName, composition.Context, composition.Router);
+        var server = new NamedPipeTransport(pipeName, composition.Context, composition.Router);
 
         // Start the server. It blocks on WaitForConnectionAsync; cancel via serverCts when done.
         var serverTask = Task.Run(() => server.RunAsync(serverCts.Token));

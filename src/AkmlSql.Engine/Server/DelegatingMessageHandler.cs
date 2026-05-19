@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
 using AkmlSql.Core.Ipc;
@@ -9,7 +9,7 @@ namespace AkmlSql.Engine.Server
     /// Spec 021 (web edition) -- M0.3 / M0.4. General-purpose <see cref="IMessageHandler"/>
     /// adapter for cases where the legacy switch already delegated to a handler-class method
     /// with the shape <c>Task&lt;RpcMessage?&gt; Handle(RpcMessage, CancellationToken)</c>.
-    /// Captures one such method as a delegate so PipeRpcServer can register it into
+    /// Captures one such method as a delegate so NamedPipeTransport can register it into
     /// <c>_pluggableHandlers</c> without writing a dedicated wrapper class per message type.
     ///
     /// Used by:

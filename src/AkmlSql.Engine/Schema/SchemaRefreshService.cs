@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -11,7 +11,7 @@ namespace AkmlSql.Engine.Schema
     /// <summary>
     /// Spec 021 (web edition) -- M0.6 task T020 finishing. Service-class form of the
     /// schema-refresh logic that previously lived as a private method on
-    /// <c>PipeRpcServer</c>. Lifted out so the named-pipe transport file stays focused
+    /// <c>NamedPipeTransport</c>. Lifted out so the named-pipe transport file stays focused
     /// on lifecycle + dispatch.
     ///
     /// Behaviour preserved bit-for-bit:

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
 using AkmlSql.Core.Ipc;
@@ -10,7 +10,7 @@ namespace AkmlSql.Engine.Handlers.Formatting
 {
     // Spec 021 (web edition) -- M0.3 task T013. Nine typed handlers that delegate to the
     // existing FormatRequestHandler. Each replaces a corresponding inline case from
-    // PipeRpcServer's switch and is registered into _pluggableHandlers via TypedHandlerAdapter.
+    // NamedPipeTransport's switch and is registered into _pluggableHandlers via TypedHandlerAdapter.
     //
     // BulkFormat / BulkFormatCancel are deliberately NOT migrated here. BulkFormat uses a
     // streaming multi-response dispatch (BulkFormatDispatchAsync) that does not fit the

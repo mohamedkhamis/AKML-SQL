@@ -1,4 +1,4 @@
-using AkmlSql.Core.Ipc;
+﻿using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Engine.Ai;
 using AkmlSql.Engine.Analysis;
@@ -29,7 +29,7 @@ namespace AkmlSql.Engine;
 /// so the host can start it after the router is wired (the retention loop touches disk and is
 /// best deferred to post-construction).
 ///
-/// <para>Lifted out of the partial-class <c>PipeRpcServer.Handlers.cs</c> so the transport file
+/// <para>Lifted out of the partial-class <c>NamedPipeTransport.Handlers.cs</c> so the transport file
 /// stays focused on frame I/O and lifecycle. All three transports (named-pipe, in-process,
 /// WebSocket) consume the same composition output via <see cref="EngineComposition.Build"/>.</para>
 /// </summary>
@@ -118,7 +118,7 @@ internal static class EngineHandlerRegistry
         });
 
         // LookupSession helper used by AI / Navigation / CRUD / ScriptAs handlers.
-        // Moved here from PipeRpcServer per advisor's guidance -- keeps the transport file
+        // Moved here from NamedPipeTransport per advisor's guidance -- keeps the transport file
         // focused on its own concerns; the closures below capture it directly.
         Func<string, (string? ConnectionString, string? DatabaseName)> lookupSession = sessionId =>
         {

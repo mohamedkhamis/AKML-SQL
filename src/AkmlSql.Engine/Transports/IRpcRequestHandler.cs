@@ -1,4 +1,4 @@
-using System.Threading;
+﻿using System.Threading;
 using System.Threading.Tasks;
 
 namespace AkmlSql.Engine.Transports
@@ -50,7 +50,7 @@ namespace AkmlSql.Engine.Transports
         /// do NOT want the cancellation to tear down the pipe accept loop.
         ///
         /// When <c>false</c> (default), <see cref="OperationCanceledException"/> propagates
-        /// up to <c>PipeRpcServer.DispatchAsync</c>'s outer catch, matching the prior
+        /// up to <c>NamedPipeTransport.DispatchAsync</c>'s outer catch, matching the prior
         /// behaviour of inline cases that did NOT explicitly catch cancellation.
         /// </summary>
         bool SwallowCancellation => false;

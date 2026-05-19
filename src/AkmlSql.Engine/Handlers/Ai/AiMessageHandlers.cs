@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
 using AkmlSql.Core.Ipc;
@@ -20,7 +20,7 @@ namespace AkmlSql.Engine.Handlers.Ai
     //      in AiRequestHandler. The remaining work is moving the switch-case dispatch into
     //      thin per-message-type handlers.
     //
-    // Each handler below is therefore a one-line bridge between PipeRpcServer's
+    // Each handler below is therefore a one-line bridge between NamedPipeTransport's
     // _pluggableHandlers dictionary and the existing AiRequestHandler methods. This drops
     // 8 cases out of the switch while preserving exact behaviour.
 
@@ -29,7 +29,7 @@ namespace AkmlSql.Engine.Handlers.Ai
     /// <summary>
     /// Generic AI handler bridge -- captures one of AiRequestHandler's HandleXxxAsync
     /// methods as a delegate. Used to register a thin IMessageHandler in
-    /// PipeRpcServer._pluggableHandlers without writing 8 separate classes.
+    /// NamedPipeTransport._pluggableHandlers without writing 8 separate classes.
     /// </summary>
     internal sealed class AiMessageHandler : IMessageHandler
     {

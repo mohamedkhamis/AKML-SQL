@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
 using AkmlSql.Core.Config;
@@ -56,7 +56,7 @@ namespace AkmlSql.Engine.Handlers.Analysis
 
     /// <summary>
     /// Notification (ResponseMessageType = 0). Invalidates caches the engine maintains for
-    /// analysis settings. Wired via callbacks provided by <see cref="PipeRpcServer"/>.
+    /// analysis settings. Wired via callbacks provided by <see cref="NamedPipeTransport"/>.
     /// </summary>
     public sealed class AnalysisSettingsChangedHandler
         : IRpcRequestHandler<AnalysisSettingsChangedRequest, AnalysisSettingsChangedRequest>

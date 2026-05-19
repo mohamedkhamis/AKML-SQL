@@ -1,4 +1,4 @@
-using AkmlSql.Core.Config;
+﻿using AkmlSql.Core.Config;
 using AkmlSql.Engine.Parser;
 using AkmlSql.Engine.Schema;
 using AkmlSql.Engine.Server;
@@ -11,7 +11,7 @@ namespace AkmlSql.Engine
     /// Spec 022 (M0 closure) -- P1: sole owner of the cached <see cref="AppSettings"/> after this
     /// closure. Per-process shared state passed to every <see cref="Transports.IRpcRequestHandler{TReq,TResp}"/>
     /// invocation by <see cref="RpcRouter"/>. Replaces the per-transport <c>_cachedSettings</c> field
-    /// that previously lived on <c>PipeRpcServer</c> so the same handlers serve every transport with
+    /// that previously lived on <c>NamedPipeTransport</c> so the same handlers serve every transport with
     /// one cache surface.
     ///
     /// Access pattern: callers go through <see cref="EnsureSettings"/> (idempotent lazy load) and

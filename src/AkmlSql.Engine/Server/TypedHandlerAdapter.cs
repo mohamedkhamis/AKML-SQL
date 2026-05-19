@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
 using AkmlSql.Core.Ipc;
@@ -11,12 +11,12 @@ namespace AkmlSql.Engine.Server
     /// Spec 021 (web edition) — M0.2 bridge.
     /// Adapts an <see cref="IRpcRequestHandler{TRequest,TResponse}"/> (the new spec-021 generic
     /// abstraction) into the existing <see cref="IMessageHandler"/> shape consumed by
-    /// <see cref="PipeRpcServer._pluggableHandlers"/>. Lets us migrate one handler at a time from
+    /// <see cref="NamedPipeTransport._pluggableHandlers"/>. Lets us migrate one handler at a time from
     /// the switch into the new generic type without first replacing the named-pipe dispatch loop.
     ///
     /// Lifecycle: the adapter captures an <see cref="RpcContext"/> by reference at construction
     /// time. The context fields (especially <c>Settings</c>) are mutable and the host
-    /// (<see cref="PipeRpcServer"/>) refreshes them on <c>AnalysisSettingsChanged</c>; the
+    /// (<see cref="NamedPipeTransport"/>) refreshes them on <c>AnalysisSettingsChanged</c>; the
     /// adapter sees the latest values on every request because it dereferences the context per
     /// call.
     /// </summary>

@@ -5,7 +5,7 @@ using AkmlSql.Core.Ipc;
 using Serilog;
 #pragma warning disable CA1416 // Windows-only API surface (named pipes, ACL).
 
-namespace AkmlSql.Engine.Server;
+namespace AkmlSql.Engine.Transports;
 
 /// <summary>
 /// Named-pipe transport. Spec 022 (M0 closure) -- P2 / US2: trimmed to frame I/O + pipe
@@ -13,13 +13,13 @@ namespace AkmlSql.Engine.Server;
 /// <see cref="EngineComposition"/> + <see cref="EngineHandlerRegistry"/>. Dispatch routes via
 /// <see cref="RpcRouter.RouteAsync"/>.
 /// </summary>
-public sealed class PipeRpcServer
+public sealed class NamedPipeTransport
 {
     private readonly string _pipeName;
     private readonly RpcContext _ctx;
     private readonly RpcRouter _router;
 
-    public PipeRpcServer(string pipeName, RpcContext ctx, RpcRouter router)
+    public NamedPipeTransport(string pipeName, RpcContext ctx, RpcRouter router)
     {
         _pipeName = pipeName;
         _ctx = ctx;

@@ -63,7 +63,7 @@ public sealed class AllMessageTypesInProcessTests
     private static readonly Dictionary<int, string> ExpectedUnwired = new()
     {
         // HandshakeRequest -- spec 021 M3. HandshakeHandler is constructed by the
-        // WebSocketTransport bootstrap, not by PipeRpcServer (IDE shells do not send
+        // WebSocketTransport bootstrap, not by NamedPipeTransport (IDE shells do not send
         // it). Coverage stays in HandshakeHandlerTests.
         [MessageTypes.HandshakeRequest] = "M3 WebSocket bridge only -- not dispatched over named pipe.",
     };
@@ -142,7 +142,7 @@ public sealed class AllMessageTypesInProcessTests
         // InProcessTransport for each one and assert the response carries the expected
         // ResponseMessageType (or null for notification-style handlers).
         var router = new RpcRouter();
-        var registered = router.RegisterAllInAssembly(typeof(PipeRpcServer).Assembly);
+        var registered = router.RegisterAllInAssembly(typeof(NamedPipeTransport).Assembly);
         Assert.True(registered > 0,
             "RegisterAllInAssembly found no parameterless typed handlers in the engine assembly.");
 

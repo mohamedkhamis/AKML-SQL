@@ -1,4 +1,4 @@
-using AkmlSql.Core.Ipc.Messages;
+﻿using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Engine.Parser;
 using AkmlSql.Engine.Schema;
 
@@ -193,7 +193,7 @@ public class DatabaseProvider : ICompletionProvider
 /// <summary>
 /// Lightweight bridge that lets providers access session connection metadata
 /// without creating a circular dependency on the Server namespace. Populated
-/// by <c>PipeRpcServer</c> at construction time.
+/// by <c>NamedPipeTransport</c> at construction time.
 /// </summary>
 public static class SessionTrackerBridge
 {

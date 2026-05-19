@@ -1,11 +1,11 @@
-using System;
+﻿using System;
 
 namespace AkmlSql.Engine.Transports
 {
     /// <summary>
     /// Spec 021 (web edition) -- M3 task T057. Configuration for the engine's WebSocket
     /// transport. Loaded from <c>%AppData%/AKML SQL Web/config.json</c> by the engine host
-    /// (the named-pipe transport's options live on the existing `PipeRpcServer`; this is a
+    /// (the named-pipe transport's options live on the existing `NamedPipeTransport`; this is a
     /// parallel set for the new transport).
     ///
     /// Two intended modes:

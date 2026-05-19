@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
 using AkmlSql.Core.Ipc;
@@ -17,7 +17,7 @@ namespace AkmlSql.Engine.Handlers.Schema
     /// <c>Func&lt;sessionId, databaseName, (byte[]?, string?)&gt;</c> that returns the
     /// serialised payload bytes plus the cache checksum, or <c>(null, null)</c> when
     /// no cache exists for the session. Production wiring in
-    /// <c>PipeRpcServer.Handlers.cs</c> plugs the live <c>SchemaCacheManager</c>;
+    /// <c>NamedPipeTransport.Handlers.cs</c> plugs the live <c>SchemaCacheManager</c>;
     /// tests pass a stub.
     /// </para>
     ///
