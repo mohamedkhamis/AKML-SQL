@@ -1,0 +1,54 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>AkmlSql.AI</RootNamespace>
+    <AssemblyName>AkmlSql.AI</AssemblyName>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <!--
+      Spec 021 tasks T121-T124. Shared AI library consumed by both the engine
+      (AkmlSql.Engine, named-pipe transport, M0+) and the Blazor WASM web edition
+      (AkmlSql.Web, M6). Mirrors the AkmlSql.IntelliSense (T100-T103) and
+      AkmlSql.Analysis (F1) extractions.
+
+      Types KEEP their original namespaces (AkmlSql.Engine.Ai.*) so engine call
+      sites do not need a sweeping using-directive update. Only the assembly
+      boundary changes.
+
+      DPAPI decoupling: AiProviderFactory previously called
+      CredentialManager.Decrypt (Windows-only DPAPI) inline. The factory now
+      exposes a KeyDecryptor hook that defaults to identity. The engine sets it
+      at startup to call CredentialManager.Decrypt. The web edition leaves the
+      default (its AiKeyVault unwraps via Web Crypto BEFORE calling the
+      factory). This keeps AkmlSql.AI free of any platform-specific crypto.
+
+      What is NOT in this library:
+        - AiRequestHandler / AiProviderTestHandler (engine-side IPC dispatchers,
+          take RpcMessage and use SchemaCacheManager).
+        - Security/CredentialManager.cs (DPAPI is Windows-only, cannot run in
+          WASM; the web edition has its own AiKeyVault planned at T125 using
+          browser Web Crypto API).
+    -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.AI" Version="10.4.1" />
+    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.4.1" />
+    <PackageReference Include="Anthropic.SDK" Version="5.10.0" />
+    <PackageReference Include="OllamaSharp" Version="5.4.25" />
+    <PackageReference Include="Mscc.GenerativeAI" Version="3.1.0" />
+    <PackageReference Include="Microsoft.ML.Tokenizers" Version="2.0.0" />
+    <PackageReference Include="Microsoft.ML.Tokenizers.Data.Cl100kBase" Version="2.0.0" />
+    <PackageReference Include="Microsoft.SqlServer.TransactSql.ScriptDom" Version="170.*" />
+    <PackageReference Include="Serilog" Version="4.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AkmlSql.Core\AkmlSql.Core.csproj" />
+    <ProjectReference Include="..\AkmlSql.IntelliSense\AkmlSql.IntelliSense.csproj" />
+  </ItemGroup>
+
+</Project>

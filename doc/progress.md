@@ -794,3 +794,58 @@ Five Q&A bullets resolved upstream via `/speckit.clarify` before implementation 
 5. **DPI / a11y / screenshot audits** (T098–T100) — need running product and side-by-side comparison.
 
 *Last updated: 2026-05-15*
+
+---
+
+## Spec 021 — Web Edition
+
+Branch: `021-web-edition`. Goal: ship a Blazor WASM web edition that runs the formatter + analyser entirely in the browser, plus a local WebSocket bridge to the engine for live IntelliSense, plus offline schema cache, plus BYO-key AI.
+
+### Headline numbers
+
+- **111 of 150 tasks done** (74 %) on the branch as of this entry.
+- **39 not-done tasks** are interactive-environment-only (Playwright, Inno Setup integration run, IIS test, real-engine bridge round-trip, manual offline-day audit, parity-corpus runs against a real Redgate install).
+- **0 commits to master** -- work lives on `021-web-edition` awaiting review.
+
+### What landed (by milestone)
+
+| Milestone | Status | Notes |
+|-----------|--------|-------|
+| **M0** Transport abstraction | ✅ Closed | `IRpcTransport` + `IRpcRequestHandler` + `RpcRouter` + `RpcContext` + `EngineHost` + reflective registration + all-message-types matrix test. `PipeRpcServer` refactored from 967 → 340 LOC + 242 LOC partial. 52 message types migrated to pluggable dispatch. |
+| **M1** WASM scaffold | ✅ Closed | Blazor WASM project bootstrapped. CSS theme tokens generated from `docs/theme-tokens.json`. |
+| **M2** User Story 1 (in-browser MVP) | ✅ Closed | CodeMirror 6 editor + format + analyse + problems list + theme + profile picker + diagnostics export + session restore. 49 web tests. |
+| **M3** Bridge (engine + client) | ✅ Closed | WebSocket transport + Handshake (200/201) + PairingService + BearerTokenStore (engine side). PairingTokenVault + ConnectionStore + EngineBridge + ConnectionPicker + CapabilityNotice + StatusBar (client side). 30 tests across both halves. |
+| **M4** Installer | ⏳ Scaffolded | `web-installer.iss` + 3 PowerShell helpers (IIS, TLS, firewall). Integration into `AkmlSqlSetup.iss` + first interactive run is the acceptance test. |
+| **M5** Schema cache + snippets + refactoring | ✅ Closed | SchemaCacheStore (composite-key), SchemaSync (30 s poll + 5 min idle), SchemaCacheEvictor (LRU + QuotaExceeded), SchemaCacheSettings page, SnippetStore (built-in + user), RefactoringService (light local + heavy bridge). 30 tests. |
+| **M6** AI in browser | ✅ Closed | AiKeyVault (AES-GCM 256, aad bound to providerId) + AiPreference + AiClientFactory (6-provider origin allow-list) + AiPromptService + AiPanel + SettingsAi page. 31 tests. |
+
+### Architectural decisions
+
+| Decision | Why |
+|----------|-----|
+| `IRpcTransport` abstraction | Same handlers serve named-pipe (IDE plugins, today) + in-process (Blazor WASM in-page) + WebSocket (browser ↔ engine bridge). No per-transport handler duplication. |
+| Composite schema-cache key | `(serverCanonicalIdentity, databaseName)` collapses DNS aliases into one entry (clarification 3). Survives connection re-pairing. |
+| Web Crypto, not server-side wrapping | Browser owns the wrap key (non-extractable AES-GCM 256). AKML SQL never sees plaintext keys for AI or bearer tokens. |
+| Origin allow-list at AiClientFactory | Defence-in-depth: even if a provider SDK proxied via a different origin, the factory refuses the fetch before the network call. |
+| No heavy provider SDKs in the WASM bundle | Direct fetch + OpenAI-compatible wire format. Anthropic / Gemini native shapes are follow-ups; the allow-list already covers their origins. |
+| Library extraction (AkmlSql.IntelliSense / Analysis / AI) | Lets Blazor WASM run formatter + analyser + AI in-process. Namespaces preserved so engine call sites need zero updates. |
+
+### Tests
+
+- **AkmlSql.Engine.Tests**: 992
+- **AkmlSql.Web.Tests**: 136 (49 M2 + 30 M3 + 30 M5 + 31 M6 — minus overlap)
+- **AkmlSql.IntelliSense.Tests** + **AkmlSql.Analysis.Tests** + **AkmlSql.AI.Tests**: 15 smoke tests proving each extracted library is reachable
+- **Total**: **1,143 tests, all green** except the documented pre-existing perf-baseline thermal-noise flake (passes in isolation)
+
+### Open follow-ups for the next interactive session
+
+1. **M4 installer integration run** -- Compile `AkmlSqlSetup.iss` after wiring the `Web_*` hooks per the integration note in `web-installer.iss`; run on Windows + IIS; capture deltas.
+2. **Engine-side schema-cache messages** -- `SchemaChecksumRequest` / `SchemaPhaseAResponse` / `SchemaPhaseBResponse` -- the contract is in `contracts/schema-cache-shape.md` but the engine handler hasn't shipped; the browser's `SchemaSync` polls every 30 s but currently only touches `LastUsedAt`.
+3. **Cache-backed completion fallback** (T109) -- depends on (2). The browser-side service layer is ready.
+4. **Engine-side LAN TLS** (T058) -- replace HttpListener with Kestrel HTTPS for LAN mode.
+5. **TLS-fingerprint mismatch UI** -- `EngineBridge.ConnectAsync` records the fingerprint on first connect; the "Engine certificate changed -- re-pair?" dialog inside ConnectionPicker is a 20-LOC UI task.
+6. **Playwright E2E** (T053, T078, T113, T137) -- one Playwright project covering the four user stories' acceptance scenarios.
+7. **Parity audits** (T036, T041, T047, T139–T142) -- need running products side by side + perf benchmarks.
+8. **Manual checks** (T143–T147, T150) -- offline-day, fresh-user, SC-006/SC-007/SC-008/SC-009/SC-010 evidence capture.
+
+*Last updated: 2026-05-17*

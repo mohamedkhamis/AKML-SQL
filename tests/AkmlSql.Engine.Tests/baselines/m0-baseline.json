@@ -1,0 +1,19 @@
+{
+  "captureDate": "2026-05-16T00:46:47.9275073Z",
+  "machine": "MOHAMED-KHAMIS",
+  "dotNetVersion": "10.0.8",
+  "completionRequest": {
+    "p50Ms": 0.36744166666666667,
+    "p99Ms": 0.7605368333333333,
+    "measureIterations": 50,
+    "warmupIterations": 10,
+    "corpusOffsetsPerIteration": 6
+  },
+  "formatRequest": {
+    "p50Ms": 0.8438,
+    "p99Ms": 1.4002179999999997,
+    "measureIterations": 50,
+    "warmupIterations": 10,
+    "corpusOffsetsPerIteration": 1
+  }
+}

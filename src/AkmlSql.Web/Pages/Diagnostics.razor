@@ -1,0 +1,262 @@
+@page "/diagnostics"
+@*
+    Spec 021 (web edition) -- M2 task T049. Diagnostics page:
+      * List recent ring-buffer entries (newest first)
+      * Filter by level
+      * Export-bundle button -- downloads a ZIP containing diagnostics.json plus a
+        manifest. The M3 follow-up appends engine.log when bridge is reachable.
+*@
+@using System.IO.Compression
+@using System.Text
+@using System.Text.Json
+@using AkmlSql.Core.Ipc
+@using AkmlSql.Core.Ipc.Messages
+@using AkmlSql.Web.Services
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
+@inject IDiagnosticsRingBuffer Ring
+@inject IEngineBridge Bridge
+@inject IJSRuntime JS
+
+<PageTitle>Diagnostics — AKML SQL</PageTitle>
+
+<div class="akml-diag">
+    <div class="akml-diag-header">
+        <h2>Diagnostics</h2>
+        <span class="akml-diag-count">@(_snapshot?.Count ?? 0) entries</span>
+        <span class="akml-diag-spacer"></span>
+        <button class="akml-tool-button" @onclick="ExportBundleAsync">Export diagnostics</button>
+        <button class="akml-tool-button" @onclick="ClearAsync">Clear</button>
+        <button class="akml-tool-button" @onclick="RefreshAsync">Refresh</button>
+    </div>
+
+    <div class="akml-diag-filters">
+        <label><input type="checkbox" checked="@_showTrace" @onchange="ToggleTrace" /> Trace</label>
+        <label><input type="checkbox" checked="@_showInfo" @onchange="ToggleInfo" /> Info</label>
+        <label><input type="checkbox" checked="@_showWarn" @onchange="ToggleWarn" /> Warn</label>
+        <label><input type="checkbox" checked="@_showError" @onchange="ToggleError" /> Error</label>
+    </div>
+
+    @if (_snapshot == null || _filtered.Count == 0)
+    {
+        <p class="akml-diag-empty">No diagnostics in the current filter.</p>
+    }
+    else
+    {
+        <table class="akml-diag-table">
+            <thead>
+                <tr><th>Time</th><th>Level</th><th>Source</th><th>Message</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var e in _filtered)
+                {
+                    var isLong = (e.Message?.Length ?? 0) > MessagePreviewLimit
+                                 || (e.Message?.Contains('\n') ?? false);
+                    var expanded = _expanded.Contains(e);
+                    <tr class="akml-level-@e.Level.ToString().ToLowerInvariant()">
+                        <td>@e.Timestamp.ToString("HH:mm:ss.fff")</td>
+                        <td>@e.Level</td>
+                        <td>@e.Source</td>
+                        <td>
+                            @if (isLong && !expanded)
+                            {
+                                <span class="akml-diag-message-preview">@TruncateForPreview(e.Message)</span>
+                                <button class="akml-diag-expand" @onclick="@(() => Expand(e))">Show full</button>
+                            }
+                            else if (isLong)
+                            {
+                                <pre class="akml-diag-message-full">@e.Message</pre>
+                                <button class="akml-diag-expand" @onclick="@(() => Collapse(e))">Collapse</button>
+                            }
+                            else
+                            {
+                                @e.Message
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+<style>
+    .akml-diag { padding: var(--akml-scalar-spacing-m); }
+    .akml-diag-header { display: flex; align-items: center; gap: var(--akml-scalar-spacing-s); margin-bottom: var(--akml-scalar-spacing-s); }
+    .akml-diag-count { color: var(--akml-text-secondary); }
+    .akml-diag-spacer { flex: 1 1 auto; }
+    .akml-diag-filters { display: flex; gap: var(--akml-scalar-spacing-m); margin-bottom: var(--akml-scalar-spacing-s); color: var(--akml-text-secondary); }
+    .akml-diag-empty { color: var(--akml-text-secondary); font-style: italic; }
+    .akml-diag-table { width: 100%; border-collapse: collapse; font-family: var(--akml-type-editor-family); font-size: 12px; }
+    .akml-diag-table th, .akml-diag-table td { padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s); text-align: left; border-bottom: 1px solid var(--akml-border-subtle); }
+    .akml-level-error td { color: var(--akml-status-danger); }
+    .akml-level-warn td { color: var(--akml-status-warning); }
+    .akml-level-info td { color: var(--akml-text-primary); }
+    .akml-level-trace td { color: var(--akml-text-secondary); }
+    .akml-diag-message-preview { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 80ch; display: inline-block; vertical-align: middle; }
+    .akml-diag-message-full { margin: 0; padding: var(--akml-scalar-spacing-xs) 0; white-space: pre-wrap; word-break: break-word; font-family: var(--akml-type-editor-family); font-size: 11px; }
+    .akml-diag-expand { margin-left: var(--akml-scalar-spacing-s); padding: 0 var(--akml-scalar-spacing-xs); background: transparent; border: 1px solid var(--akml-border-default); border-radius: 3px; color: var(--akml-text-link); cursor: pointer; font-size: 11px; }
+    .akml-diag-expand:hover { background-color: var(--akml-surface-hover); }
+    .akml-tool-button {
+        font-family: var(--akml-type-chrome-family); font-size: var(--akml-type-chrome-size);
+        background-color: var(--akml-surface-panel); color: var(--akml-text-primary);
+        border: 1px solid var(--akml-border-default); border-radius: 3px;
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s); cursor: pointer;
+    }
+    .akml-tool-button:hover { background-color: var(--akml-surface-hover); }
+</style>
+
+@code {
+    private IReadOnlyList<DiagnosticEntry>? _snapshot;
+    private List<DiagnosticEntry> _filtered = new();
+    private bool _showTrace, _showInfo = true, _showWarn = true, _showError = true;
+    private IJSObjectReference? _downloadModule;
+    private readonly HashSet<DiagnosticEntry> _expanded = new();
+    private const int MessagePreviewLimit = 160;
+
+    private void Expand(DiagnosticEntry e) { _expanded.Add(e); }
+    private void Collapse(DiagnosticEntry e) { _expanded.Remove(e); }
+
+    private static string TruncateForPreview(string? message)
+    {
+        if (string.IsNullOrEmpty(message)) return string.Empty;
+        var firstLine = message.IndexOf('\n') is var nl && nl > 0
+            ? message.Substring(0, nl)
+            : message;
+        return firstLine.Length > MessagePreviewLimit
+            ? firstLine.Substring(0, MessagePreviewLimit) + "…"
+            : firstLine + (message.Contains('\n') ? " …" : string.Empty);
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Ring.RestoreAsync();
+        RefreshSnapshot();
+    }
+
+    private async Task RefreshAsync() { await Task.Yield(); RefreshSnapshot(); }
+    private async Task ClearAsync()
+    {
+        Ring.Clear();
+        await Ring.FlushAsync();
+        RefreshSnapshot();
+    }
+
+    private void RefreshSnapshot()
+    {
+        _snapshot = Ring.Snapshot();
+        Recompute();
+        StateHasChanged();
+    }
+
+    private void Recompute()
+    {
+        if (_snapshot == null) { _filtered.Clear(); return; }
+        _filtered = _snapshot
+            .Where(e => MatchesFilter(e.Level))
+            .OrderByDescending(e => e.Timestamp)
+            .ToList();
+    }
+
+    private bool MatchesFilter(DiagnosticLevel level) => level switch
+    {
+        DiagnosticLevel.Trace => _showTrace,
+        DiagnosticLevel.Info => _showInfo,
+        DiagnosticLevel.Warn => _showWarn,
+        DiagnosticLevel.Error => _showError,
+        _ => true,
+    };
+
+    private void ToggleTrace() { _showTrace = !_showTrace; Recompute(); }
+    private void ToggleInfo() { _showInfo = !_showInfo; Recompute(); }
+    private void ToggleWarn() { _showWarn = !_showWarn; Recompute(); }
+    private void ToggleError() { _showError = !_showError; Recompute(); }
+
+    private async Task ExportBundleAsync()
+    {
+        // Build a ZIP entirely in memory. Two-or-three entries: diagnostics.json +
+        // manifest.json + (optionally) engine.log when the bridge is reachable AND
+        // the engine advertises diagnostics.engine-log-tail.v1.
+        var entries = _snapshot ?? Array.Empty<DiagnosticEntry>();
+
+        // T077 -- engine.log tail. Best-effort: if the bridge is down or the
+        // capability is absent, we skip the engine portion (matches the M2
+        // behaviour where the engine doesn't exist yet).
+        string? engineLogText = null;
+        string? engineLogSource = null;
+        bool engineLogTruncated = false;
+        bool bridgeReachable = Bridge.State == BridgeState.Open;
+        bool engineLogCapability = bridgeReachable &&
+            Array.IndexOf(Bridge.EngineCapabilities, "diagnostics.engine-log-tail.v1") >= 0;
+
+        if (engineLogCapability)
+        {
+            try
+            {
+                var response = await Bridge.SendAsync<EngineLogTailRequest, EngineLogTailResponse>(
+                    MessageTypes.EngineLogTailRequest,
+                    new EngineLogTailRequest { MaxBytes = 256 * 1024 },
+                    CancellationToken.None);
+                engineLogText = response.LogText;
+                engineLogSource = response.SourcePath;
+                engineLogTruncated = response.Truncated;
+            }
+            catch (Exception ex)
+            {
+                Ring.Log(DiagnosticLevel.Warn, "diagnostics",
+                    $"engine.log tail failed: {ex.Message}");
+            }
+        }
+
+        var manifest = new
+        {
+            schema = 1,
+            generatedAt = DateTimeOffset.UtcNow,
+            entryCount = entries.Count,
+            bridgeReachable = bridgeReachable,
+            engineVersion = Bridge.EngineVersion,
+            engineLogIncluded = engineLogText != null,
+            engineLogSource = engineLogSource,
+            engineLogTruncated = engineLogTruncated,
+            webVersion = "1.0.0",
+        };
+
+        using var ms = new MemoryStream();
+        using (var zip = new ZipArchive(ms, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            await WriteZipEntryAsync(zip, "diagnostics.json", JsonSerializer.Serialize(entries));
+            await WriteZipEntryAsync(zip, "manifest.json", JsonSerializer.Serialize(manifest));
+            if (engineLogText != null)
+            {
+                await WriteZipEntryAsync(zip, "engine.log", engineLogText);
+            }
+        }
+        ms.Position = 0;
+        var bytes = ms.ToArray();
+
+        _downloadModule ??= await JS.InvokeAsync<IJSObjectReference>(
+            "import", "./js/akml-download.js");
+        await _downloadModule.InvokeVoidAsync(
+            "downloadBase64",
+            "akmlsql-diagnostics.zip",
+            "application/zip",
+            Convert.ToBase64String(bytes));
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_downloadModule != null)
+        {
+            try { await _downloadModule.DisposeAsync(); }
+            catch (JSDisconnectedException) { /* tab closing */ }
+        }
+    }
+
+    private static async Task WriteZipEntryAsync(ZipArchive zip, string name, string text)
+    {
+        var entry = zip.CreateEntry(name, CompressionLevel.Optimal);
+        await using var s = entry.Open();
+        await using var sw = new StreamWriter(s, new UTF8Encoding(false));
+        await sw.WriteAsync(text);
+    }
+}

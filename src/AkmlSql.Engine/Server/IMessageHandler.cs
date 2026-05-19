@@ -18,10 +18,10 @@ namespace AkmlSql.Engine.Server
     /// without a high-risk rewrite of the existing 53-case switch.
     /// </para>
     /// <para>
-    /// Implementations may use the internal-static helpers
-    /// <see cref="PipeRpcServer.CreateResponse{T}(int, int, T)"/> and
-    /// <see cref="PipeRpcServer.CreateErrorResponse(string, int)"/> to emit
-    /// standardised response envelopes.
+    /// Implementations may use the static helpers
+    /// <see cref="AkmlSql.Engine.RpcResponseFactory.CreateResponse{T}(int, int, T)"/> and
+    /// <see cref="AkmlSql.Engine.RpcResponseFactory.CreateErrorResponse(string, int)"/> to
+    /// emit standardised response envelopes.
     /// </para>
     /// </summary>
     internal interface IMessageHandler

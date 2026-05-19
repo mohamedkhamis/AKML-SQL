@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>AkmlSql.Web</RootNamespace>
+    <AssemblyName>AkmlSql.Web</AssemblyName>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ServiceWorkerAssetsManifest>service-worker-assets.js</ServiceWorkerAssetsManifest>
+    <BlazorEnableTimeZoneSupport>false</BlazorEnableTimeZoneSupport>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.*" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.*" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Spec 021 M2 T041: expose internal Services types (FormatterService etc.) to bUnit tests. -->
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>AkmlSql.Web.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AkmlSql.AI\AkmlSql.AI.csproj" />
+    <ProjectReference Include="..\AkmlSql.Analysis\AkmlSql.Analysis.csproj" />
+    <ProjectReference Include="..\AkmlSql.Core\AkmlSql.Core.csproj" />
+    <ProjectReference Include="..\AkmlSql.Formatting\AkmlSql.Formatting.csproj" />
+    <ProjectReference Include="..\AkmlSql.IntelliSense\AkmlSql.IntelliSense.csproj" />
+    <ProjectReference Include="..\AkmlSql.Web.Shared\AkmlSql.Web.Shared.csproj" />
+    <!--
+      AkmlSql.Analyzer (the CLI executable) is NOT referenced. The analysis logic the web
+      edition needs lives in AkmlSql.Analysis (F1 extraction). AI prompt + provider code
+      lives in AkmlSql.AI (T121-T124 extraction). Engine-side AiRequestHandler stays in
+      AkmlSql.Engine because of its IPC dispatch role; the web edition will call providers
+      directly through AkmlSql.AI's AiProviderFactory in M6 (T125+).
+    -->
+  </ItemGroup>
+
+</Project>

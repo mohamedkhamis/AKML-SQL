@@ -20,7 +20,7 @@ namespace AkmlSql.Engine.Server.Stubs
                 ErrorMessage = "EncryptedObjectDecryption not yet implemented (spec 019 US11 — pending)",
             };
             return Task.FromResult<RpcMessage?>(
-                PipeRpcServer.CreateResponse(
+                RpcResponseFactory.CreateResponse(
                     MessageTypes.EncryptedObjectDecryptionResult,
                     message.RequestId,
                     resp));

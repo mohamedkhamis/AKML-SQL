@@ -1,0 +1,146 @@
+@page "/settings/schema-cache"
+@*
+    Spec 021 (web edition) -- M5 task T111. Lists every cached database snapshot with
+    its size + last-used timestamp, with Clear-one / Clear-all actions per FR-028.
+    Re-fetching a cleared snapshot happens on the next IntelliSense request -- the
+    bridge re-issues Phase A automatically (no manual refresh button needed).
+*@
+@using AkmlSql.Web.Services
+@inject ISchemaCacheStore Cache
+@inject IDiagnosticsRingBuffer Diagnostics
+
+<PageTitle>Schema cache — AKML SQL</PageTitle>
+
+<div class="akml-schema-cache">
+    <div class="akml-schema-cache-header">
+        <h2>Schema cache</h2>
+        <button class="akml-tool-button" @onclick="RefreshAsync">Refresh</button>
+        @if (_snapshots != null && _snapshots.Count > 0)
+        {
+            <button class="akml-tool-button" @onclick="ClearAllAsync">Clear all</button>
+        }
+        @if (_lastRefreshedAt != null)
+        {
+            <span class="akml-schema-cache-refreshed">Last refreshed: @_lastRefreshedAt.Value.ToString("HH:mm:ss")</span>
+        }
+    </div>
+
+    @if (_snapshots == null)
+    {
+        <p>Loading…</p>
+    }
+    else if (_snapshots.Count == 0)
+    {
+        <div class="akml-schema-cache-empty">
+            <p>No cached databases yet.</p>
+            <p>
+                The cache fills as you use IntelliSense against a paired engine.
+                Open <a href="/settings">Settings → Engine connections</a> to pair one,
+                or keep using the editor offline — formatter and analyser don't need
+                the cache.
+            </p>
+        </div>
+    }
+    else
+    {
+        <table class="akml-schema-cache-table">
+            <thead>
+                <tr>
+                    <th>Server</th>
+                    <th>Database</th>
+                    <th>Last used</th>
+                    <th>Size</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var entry in _snapshots.OrderByDescending(s => s.LastUsedAt))
+                {
+                    <tr>
+                        <td>@entry.ServerCanonicalIdentity</td>
+                        <td>@entry.DatabaseName</td>
+                        <td>@entry.LastUsedAt.ToString("yyyy-MM-dd HH:mm")</td>
+                        <td>@FormatBytes(_sizes.GetValueOrDefault(entry.CompositeKey))</td>
+                        <td>
+                            <button class="akml-tool-button" @onclick="@(() => ClearOneAsync(entry))">Clear</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    @if (!string.IsNullOrEmpty(_status))
+    {
+        <p class="akml-schema-cache-status">@_status</p>
+    }
+</div>
+
+<style>
+    .akml-schema-cache { padding: var(--akml-scalar-spacing-m); max-width: 960px; }
+    .akml-schema-cache-header { display: flex; align-items: center; gap: var(--akml-scalar-spacing-s); margin-bottom: var(--akml-scalar-spacing-s); }
+    .akml-schema-cache-refreshed { color: var(--akml-text-secondary); font-style: italic; margin-left: var(--akml-scalar-spacing-s); }
+    .akml-schema-cache-empty { color: var(--akml-text-secondary); font-style: italic; }
+    .akml-schema-cache-table { width: 100%; border-collapse: collapse; font-family: var(--akml-type-chrome-family); font-size: var(--akml-type-chrome-size); }
+    .akml-schema-cache-table th, .akml-schema-cache-table td {
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s);
+        text-align: left;
+        border-bottom: 1px solid var(--akml-border-subtle);
+    }
+    .akml-schema-cache-table th { color: var(--akml-text-secondary); font-weight: bold; }
+    .akml-schema-cache-status { color: var(--akml-status-info); font-style: italic; margin-top: var(--akml-scalar-spacing-m); }
+    .akml-tool-button {
+        font-family: var(--akml-type-chrome-family); font-size: var(--akml-type-chrome-size);
+        background-color: var(--akml-surface-panel); color: var(--akml-text-primary);
+        border: 1px solid var(--akml-border-default); border-radius: 3px;
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s); cursor: pointer;
+    }
+    .akml-tool-button:hover { background-color: var(--akml-surface-hover); }
+</style>
+
+@code {
+    private IReadOnlyList<SchemaSnapshot>? _snapshots;
+    private readonly Dictionary<string, long> _sizes = new();
+    private string? _status;
+    private DateTime? _lastRefreshedAt;
+
+    protected override async Task OnInitializedAsync() => await RefreshAsync();
+
+    private async Task RefreshAsync()
+    {
+        _snapshots = await Cache.ListAsync();
+        _sizes.Clear();
+        foreach (var entry in _snapshots)
+        {
+            _sizes[entry.CompositeKey] = await Cache.EstimatedSizeAsync(entry.ServerCanonicalIdentity, entry.DatabaseName);
+        }
+        _lastRefreshedAt = DateTime.Now;
+        _status = null;
+        StateHasChanged();
+    }
+
+    private async Task ClearOneAsync(SchemaSnapshot entry)
+    {
+        await Cache.RemoveAsync(entry.ServerCanonicalIdentity, entry.DatabaseName);
+        Diagnostics.Log(DiagnosticLevel.Info, "schema-cache",
+            $"User cleared {entry.ServerCanonicalIdentity}/{entry.DatabaseName}");
+        _status = $"Cleared {entry.DatabaseName}.";
+        await RefreshAsync();
+    }
+
+    private async Task ClearAllAsync()
+    {
+        await Cache.ClearAllAsync();
+        Diagnostics.Log(DiagnosticLevel.Info, "schema-cache", "User cleared the entire schema cache.");
+        _status = "Cleared all cached schemas.";
+        await RefreshAsync();
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        if (bytes <= 0) return "—";
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
+        return $"{bytes / (1024.0 * 1024.0):F1} MB";
+    }
+}

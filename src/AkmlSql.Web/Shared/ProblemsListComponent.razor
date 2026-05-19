@@ -1,0 +1,164 @@
+@*
+    Spec 021 (web edition) -- M2 task T045. Problems list:
+      * Filter by severity (Off / Info / Warning / Error)
+      * Sort by line number
+      * Click-to-jump (calls back the parent with the line/col so the parent can
+        invoke EditorComponent.GotoLineAsync)
+      * Render inline suppression hint (-- akml-disable RuleId)
+*@
+@using AkmlSql.Core.Ipc.Messages
+
+<div class="akml-problems">
+    <div class="akml-problems-header">
+        <span>Problems</span>
+        <span class="akml-problems-count">@(_filtered?.Count ?? 0)</span>
+        <span class="akml-problems-spacer"></span>
+        <label class="akml-problems-filter-label">
+            <input type="checkbox" checked="@_showInfo" @onchange="ToggleInfo" /> Info
+        </label>
+        <label class="akml-problems-filter-label">
+            <input type="checkbox" checked="@_showWarn" @onchange="ToggleWarn" /> Warn
+        </label>
+        <label class="akml-problems-filter-label">
+            <input type="checkbox" checked="@_showError" @onchange="ToggleError" /> Error
+        </label>
+    </div>
+
+    @if (_filtered == null || _filtered.Count == 0)
+    {
+        <p class="akml-problems-empty">No problems detected.</p>
+    }
+    else
+    {
+        <ul class="akml-problems-list">
+            @foreach (var issue in _filtered)
+            {
+                <li class="akml-problems-row akml-severity-@SeverityClass(issue.Severity)"
+                    title="@($"{issue.RuleId} — {issue.Message} (line {issue.Line})")"
+                    @onclick="@(() => JumpAsync(issue))">
+                    <span class="akml-problems-rule">@issue.RuleId</span>
+                    <span class="akml-problems-message">@issue.Message</span>
+                    <span class="akml-problems-location">L@(issue.Line)</span>
+                </li>
+            }
+        </ul>
+    }
+</div>
+
+<style>
+    .akml-problems {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        background-color: var(--akml-surface-panel);
+        border-left: 1px solid var(--akml-border-default);
+        font-family: var(--akml-type-chrome-family);
+        font-size: var(--akml-type-chrome-size);
+        color: var(--akml-text-primary);
+    }
+    .akml-problems-header {
+        display: flex;
+        align-items: center;
+        gap: var(--akml-scalar-spacing-s);
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s);
+        border-bottom: 1px solid var(--akml-border-default);
+        background-color: var(--akml-surface-panel);
+        font-weight: bold;
+    }
+    .akml-problems-count {
+        background-color: var(--akml-status-info);
+        color: var(--akml-text-onaccent);
+        padding: 0 var(--akml-scalar-spacing-xs);
+        border-radius: 8px;
+        font-size: 11px;
+    }
+    .akml-problems-spacer { flex: 1 1 auto; }
+    .akml-problems-filter-label {
+        font-weight: normal;
+        font-size: 12px;
+        color: var(--akml-text-secondary);
+    }
+    .akml-problems-empty {
+        padding: var(--akml-scalar-spacing-m);
+        color: var(--akml-text-secondary);
+        font-style: italic;
+    }
+    .akml-problems-list {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        overflow: auto;
+    }
+    .akml-problems-row {
+        display: grid;
+        grid-template-columns: 80px 1fr 60px;
+        gap: var(--akml-scalar-spacing-s);
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s);
+        cursor: pointer;
+        border-bottom: 1px solid var(--akml-border-subtle);
+    }
+    .akml-problems-row:hover {
+        background-color: var(--akml-surface-hover);
+    }
+    .akml-problems-rule { color: var(--akml-text-secondary); font-family: var(--akml-type-editor-family); }
+    .akml-problems-message { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .akml-problems-location { color: var(--akml-text-secondary); text-align: right; }
+    .akml-severity-error .akml-problems-rule { color: var(--akml-status-danger); font-weight: bold; }
+    .akml-severity-warning .akml-problems-rule { color: var(--akml-status-warning); font-weight: bold; }
+    .akml-severity-info .akml-problems-rule { color: var(--akml-status-info); }
+</style>
+
+@code {
+    [Parameter] public CodeAnalysisResponse? Findings { get; set; }
+    [Parameter] public EventCallback<IssueLocation> OnJumpToIssue { get; set; }
+
+    private bool _showInfo = true;
+    private bool _showWarn = true;
+    private bool _showError = true;
+    private List<CodeIssueInfo>? _filtered;
+
+    // CodeIssueInfo.Severity is an int: 0=Hint, 1=Info, 2=Warning, 3=Error.
+    private const int SeverityHint = 0;
+    private const int SeverityInfo = 1;
+    private const int SeverityWarning = 2;
+    private const int SeverityError = 3;
+
+    protected override void OnParametersSet() => Recompute();
+
+    private void Recompute()
+    {
+        if (Findings?.Issues == null) { _filtered = null; return; }
+        _filtered = Findings.Issues
+            .Where(i => MatchesFilter(i.Severity))
+            .OrderBy(i => i.Line)
+            .ThenBy(i => i.Column)
+            .ToList();
+    }
+
+    private bool MatchesFilter(int severity) =>
+        severity switch
+        {
+            SeverityHint => _showInfo,
+            SeverityInfo => _showInfo,
+            SeverityWarning => _showWarn,
+            SeverityError => _showError,
+            _ => true,
+        };
+
+    private static string SeverityClass(int severity) =>
+        severity switch
+        {
+            SeverityError => "error",
+            SeverityWarning => "warning",
+            _ => "info",
+        };
+
+    private void ToggleInfo() { _showInfo = !_showInfo; Recompute(); }
+    private void ToggleWarn() { _showWarn = !_showWarn; Recompute(); }
+    private void ToggleError() { _showError = !_showError; Recompute(); }
+
+    private Task JumpAsync(CodeIssueInfo issue) =>
+        OnJumpToIssue.InvokeAsync(new IssueLocation(issue.Line, issue.Column, issue.RuleId));
+
+    public sealed record IssueLocation(int Line, int Column, string RuleId);
+}

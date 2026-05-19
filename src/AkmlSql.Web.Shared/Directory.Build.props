@@ -1,0 +1,17 @@
+<Project>
+
+  <!--
+    Layered on top of src/Directory.Build.props.
+
+    Spec 021 T002. AkmlSql.Web.Shared targets netstandard2.0 so it can be referenced from
+    both the .NET 10 Blazor WASM app and any future netstandard2.0 consumer. It must NOT
+    inherit the .NET-Framework-shell langversion defaults from elsewhere.
+  -->
+
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+</Project>

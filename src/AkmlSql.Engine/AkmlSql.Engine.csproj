@@ -43,8 +43,18 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\AkmlSql.AI\AkmlSql.AI.csproj" />
+    <ProjectReference Include="..\AkmlSql.Analysis\AkmlSql.Analysis.csproj" />
     <ProjectReference Include="..\AkmlSql.Core\AkmlSql.Core.csproj" />
     <ProjectReference Include="..\AkmlSql.Formatting\AkmlSql.Formatting.csproj" />
+    <ProjectReference Include="..\AkmlSql.IntelliSense\AkmlSql.IntelliSense.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Spec 021 M0.2 T012: expose internal types (TypedHandlerAdapter) to the engine tests. -->
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>AkmlSql.Engine.Tests</_Parameter1>
+    </AssemblyAttribute>
   </ItemGroup>
 
 </Project>

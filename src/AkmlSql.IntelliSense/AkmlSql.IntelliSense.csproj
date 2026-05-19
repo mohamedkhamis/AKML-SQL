@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>AkmlSql.IntelliSense</RootNamespace>
+    <AssemblyName>AkmlSql.IntelliSense</AssemblyName>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <!--
+      Spec 021 task T100. Shared IntelliSense library consumed by both the engine
+      (AkmlSql.Engine, net10.0) and the Blazor WASM web edition (AkmlSql.Web, net10.0).
+      Originally planned as netstandard2.0 but the moved code uses C# 9+ records,
+      System.Index/Range slicing, KeyValuePair deconstruction, and source-generated
+      regex (features that require polyfill cascades on netstandard2.0). Targeting
+      net10.0 directly is simpler and lossless given both consumers are net10.
+
+      Types keep their original namespaces (AkmlSql.Engine.Completion.*,
+      AkmlSql.Engine.Parser.*, AkmlSql.Engine.Schema.Models.*) so engine call sites
+      do not need a sweeping using-directive update. Only the assembly boundary
+      changes. DatabaseProvider (SqlClient-dependent) and WildcardExpansionHandler
+      (engine-side message handler) stay in AkmlSql.Engine.
+    -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SqlServer.TransactSql.ScriptDom" Version="170.*" />
+    <PackageReference Include="Serilog" Version="4.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AkmlSql.Core\AkmlSql.Core.csproj" />
+  </ItemGroup>
+
+</Project>

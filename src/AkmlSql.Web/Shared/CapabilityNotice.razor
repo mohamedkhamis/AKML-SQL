@@ -1,0 +1,96 @@
+@*
+    Spec 021 (web edition) -- M3 task T076 (FR-017a). Renders an inline "feature
+    requires engine X" notice when a required capability is missing from the bridge's
+    advertised list. Per clarification 5: missing capability -> inline notice, NOT a
+    full-page blocker.
+
+    Usage:
+        <CapabilityNotice RequiredCapability="snippets.write">
+            <p>Save / delete snippets via the engine.</p>
+        </CapabilityNotice>
+
+    If the capability is present, the @ChildContent renders. Otherwise the inline
+    notice renders in its place.
+*@
+@using AkmlSql.Web.Services
+@implements IDisposable
+@inject IEngineBridge Bridge
+
+@if (_isAvailable)
+{
+    @ChildContent
+}
+else
+{
+    <div class="akml-capability-notice">
+        <span class="akml-capability-notice-icon">i</span>
+        <span class="akml-capability-notice-text">
+            This feature requires engine capability <code>@RequiredCapability</code>,
+            which the paired engine does not advertise. Update the engine to use it.
+        </span>
+    </div>
+}
+
+<style>
+    .akml-capability-notice {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--akml-scalar-spacing-s);
+        padding: var(--akml-scalar-spacing-s);
+        background-color: var(--akml-surface-panel);
+        border: 1px solid var(--akml-border-default);
+        border-radius: 4px;
+        color: var(--akml-text-secondary);
+    }
+    .akml-capability-notice-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 16px; height: 16px;
+        background-color: var(--akml-status-info);
+        color: var(--akml-text-onaccent);
+        border-radius: 50%;
+        font-size: 11px;
+        font-weight: bold;
+    }
+    .akml-capability-notice code {
+        font-family: var(--akml-type-editor-family);
+        color: var(--akml-text-primary);
+    }
+</style>
+
+@code {
+    [Parameter] public string RequiredCapability { get; set; } = string.Empty;
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private bool _isAvailable;
+
+    protected override void OnInitialized()
+    {
+        Refresh();
+        Bridge.StateChanged += OnBridgeStateChanged;
+    }
+
+    private void OnBridgeStateChanged(BridgeState _)
+    {
+        InvokeAsync(() =>
+        {
+            Refresh();
+            StateHasChanged();
+        });
+    }
+
+    protected override void OnParametersSet() => Refresh();
+
+    private void Refresh()
+    {
+        _isAvailable = !string.IsNullOrEmpty(RequiredCapability)
+            && Bridge.EngineCapabilities != null
+            && System.Array.IndexOf(Bridge.EngineCapabilities, RequiredCapability) >= 0;
+    }
+
+    public void Dispose()
+    {
+        Bridge.StateChanged -= OnBridgeStateChanged;
+    }
+}

@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>AkmlSql.Analysis</RootNamespace>
+    <AssemblyName>AkmlSql.Analysis</AssemblyName>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <!--
+      Spec 021 follow-up F1. Shared analysis library consumed by both the engine
+      (AkmlSql.Engine, named-pipe transport) and the Blazor WASM web edition
+      (AkmlSql.Web). Mirrors the AkmlSql.IntelliSense extraction (T100-T103).
+
+      Target framework is net10.0 not netstandard2.0 because the analyser rules
+      use C# 9+ features (records, pattern matching, source-generated regex)
+      and both consumers are already net10.
+
+      Namespaces kept stable (AkmlSql.Engine.Analysis.*) so engine call sites
+      do not need a sweeping using-directive update. Only the assembly boundary
+      changes.
+
+      Dependency note: AnalysisEngine.AnalyzeAsync was refactored to drop the
+      SessionManager + SchemaCacheManager parameters (those types live in
+      AkmlSql.Engine and would create a circular dependency). The signature now
+      accepts a resolved (serverVersion, DatabaseCache?) pair from the caller.
+    -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SqlServer.TransactSql.ScriptDom" Version="170.*" />
+    <PackageReference Include="Serilog" Version="4.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AkmlSql.Core\AkmlSql.Core.csproj" />
+    <ProjectReference Include="..\AkmlSql.IntelliSense\AkmlSql.IntelliSense.csproj" />
+  </ItemGroup>
+
+</Project>

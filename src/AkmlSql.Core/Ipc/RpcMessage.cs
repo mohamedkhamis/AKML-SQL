@@ -215,5 +215,47 @@ namespace AkmlSql.Core.Ipc
         public const int FindInvalidObjectsResult = 190;
         public const int FindUnusedVariablesResult = 191;
         public const int EncryptedObjectDecryptionResult = 192;
+
+        // Spec 021 (web edition) M3 — WebSocket bridge handshake.
+        // See specs/021-web-edition/contracts/rpc-handshake.md.
+        public const int HandshakeRequest = 200;
+        public const int HandshakeResponse = 201;
+
+        // Spec 021 (web edition) M5 — schema-cache identity protocol.
+        // Browser asks the engine for the canonical (server, database) pair used as the
+        // IndexedDB cache key. See specs/021-web-edition/contracts/schema-cache-shape.md.
+        public const int SchemaIdentifyRequest = 202;
+        public const int SchemaIdentifyResponse = 203;
+
+        // Spec 021 (web edition) M5 — schema-cache change detection.
+        // Browser polls engine every 30s with a (server, db) tuple; engine returns the
+        // CHECKSUM_AGG(BINARY_CHECKSUM(...)) result over sys.objects. Browser compares
+        // to its cached checksum and triggers a Phase A refresh on drift.
+        public const int SchemaChecksumRequest = 204;
+        public const int SchemaChecksumResponse = 205;
+
+        // Spec 021 (web edition) — close-out of the matrix-test gap.
+        // Cancellation signal for in-flight AI streaming requests. Engine drops the
+        // associated CancellationTokenSource so the streaming handler bails.
+        public const int AiStreamCancelResult = 179;
+
+        // Spec 021 (web edition) — M2 diagnostics export extension.
+        // Browser asks the engine for the last N KB of engine.log to append to its
+        // diagnostics ZIP (FR-005a). Capability-gated on
+        // `diagnostics.engine-log-tail.v1`.
+        public const int EngineLogTailRequest = 206;
+        public const int EngineLogTailResponse = 207;
+
+        // Spec 021 (web edition) — M5 task T109. Cache-backed completion fallback.
+        // Browser fetches per-phase snapshots of the engine's DatabaseCache so it
+        // can serve IntelliSense from IndexedDB while the bridge is unreachable.
+        // Phase A carries schemas + object names (light, sub-500 ms target). Phase B
+        // adds columns + foreign keys. Both responses ship the MessagePack-serialised
+        // SchemaPhasePayload in a byte[] field rather than a base64 string — the IPC
+        // wire is already binary MessagePack so base64 would only add overhead.
+        public const int SchemaPhaseARequest = 208;
+        public const int SchemaPhaseAResponse = 209;
+        public const int SchemaPhaseBRequest = 210;
+        public const int SchemaPhaseBResponse = 211;
     }
 }

@@ -106,6 +106,14 @@ if ($InstallerOnly) {
 
 $TotalSw = [System.Diagnostics.Stopwatch]::StartNew()
 
+# --- Spec 021 (web edition) pre-build gates ---
+# Theme CSS must be in sync with docs/theme-tokens.json so the WPF surface and the
+# web edition cannot drift apart visually. Fails the build on drift.
+Invoke-Build "Gate: theme CSS drift check" {
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass `
+        -File "$Root\scripts\generate-theme-css.ps1" -CheckOnly
+}
+
 # --- .NET projects ---
 Invoke-Build "Core library" {
     dotnet build "$Root\src\AkmlSql.Core\AkmlSql.Core.csproj" -c $Configuration -p:Version=$Version -v quiet --nologo
@@ -151,6 +159,10 @@ if (-not $SkipTests) {
     }
     Invoke-Build "Tests: Formatting" {
         dotnet test "$Root\tests\AkmlSql.Formatting.Tests\AkmlSql.Formatting.Tests.csproj" -c $Configuration -p:Version=$Version -v quiet --nologo
+    }
+    # Spec 021 (web edition) — bUnit component tests
+    Invoke-Build "Tests: Web (bUnit)" {
+        dotnet test "$Root\tests\AkmlSql.Web.Tests\AkmlSql.Web.Tests.csproj" -c $Configuration -p:Version=$Version -v quiet --nologo
     }
 }
 

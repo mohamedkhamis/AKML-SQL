@@ -12,12 +12,22 @@
     <Project Path="src/AkmlSql.Formatting/AkmlSql.Formatting.csproj" />
     <Project Path="src/AkmlSql.Formatter/AkmlSql.Formatter.csproj" />
     <Project Path="src/AkmlSql.Analyzer/AkmlSql.Analyzer.csproj" />
+    <Project Path="src/AkmlSql.AI/AkmlSql.AI.csproj" />
+    <Project Path="src/AkmlSql.Analysis/AkmlSql.Analysis.csproj" />
+    <Project Path="src/AkmlSql.IntelliSense/AkmlSql.IntelliSense.csproj" />
+    <Project Path="src/AkmlSql.Web/AkmlSql.Web.csproj" />
+    <Project Path="src/AkmlSql.Web.Shared/AkmlSql.Web.Shared.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/AkmlSql.Core.Tests/AkmlSql.Core.Tests.csproj" />
     <Project Path="tests/AkmlSql.Engine.Tests/AkmlSql.Engine.Tests.csproj" />
     <Project Path="tests/AkmlSql.Formatting.Tests/AkmlSql.Formatting.Tests.csproj" />
     <Project Path="tests/AkmlSql.E2E.Tests/AkmlSql.E2E.Tests.csproj" />
+    <Project Path="tests/AkmlSql.AI.Tests/AkmlSql.AI.Tests.csproj" />
+    <Project Path="tests/AkmlSql.Analysis.Tests/AkmlSql.Analysis.Tests.csproj" />
+    <Project Path="tests/AkmlSql.IntelliSense.Tests/AkmlSql.IntelliSense.Tests.csproj" />
     <Project Path="tests/AkmlSql.Shell.Shared.Tests/AkmlSql.Shell.Shared.Tests.csproj" />
+    <Project Path="tests/AkmlSql.Web.Tests/AkmlSql.Web.Tests.csproj" />
+    <Project Path="tests/AkmlSql.Web.E2E.Tests/AkmlSql.Web.E2E.Tests.csproj" />
   </Folder>
 </Solution>

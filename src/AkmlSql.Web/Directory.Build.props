@@ -1,0 +1,28 @@
+<Project>
+
+  <!--
+    Layered on top of src/Directory.Build.props.
+
+    Spec 021 T002. The parent props injects the date-based <Version>; this file holds
+    web-tier defaults that must not bleed into the .NET Framework 4.7.2 shell projects
+    sitting elsewhere under src/.
+
+    Notes:
+    * LangVersion is also set per-csproj — repeated here so any future Web sub-projects
+      created under this directory get the right default.
+    * UseAppHost=false is irrelevant for a Blazor WASM target (browser host), but spelled
+      out explicitly to silence any host-bundling SDK warnings inherited from the parent.
+    * The Sdk.Web HTTP pipeline (UseLaunchSettings, AspNetCoreHostingModel, etc.) is not
+      activated by Sdk.BlazorWebAssembly; we add no-op overrides for clarity if a future
+      contributor adds a hosted variant.
+  -->
+
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseAppHost>false</UseAppHost>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+</Project>

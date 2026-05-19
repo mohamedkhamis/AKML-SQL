@@ -1,0 +1,216 @@
+@*
+    Spec 021 (web edition) -- M6 task T132. Free-form conversational AI panel.
+    Message history is in-memory only (no persistence per the spec). Each turn
+    sends the full conversation (system prompt + every previous turn + the new
+    user message) to the active provider via IAiClientFactory.
+*@
+@using System.Collections.Generic
+@using AkmlSql.Web.Services
+@inject IAiClientFactory Client
+@inject IAiPreference Preference
+@inject IDiagnosticsRingBuffer Diagnostics
+
+<div class="akml-chat">
+    <div class="akml-chat-header">
+        <h3>AI chat</h3>
+        @if (!_hasProvider)
+        {
+            <span class="akml-chat-no-provider">
+                No AI provider configured. <a href="/settings/ai">Add one in Settings</a>.
+            </span>
+        }
+        else if (_history.Count > 0)
+        {
+            <button class="akml-tool-button" @onclick="ClearAsync">Clear</button>
+        }
+    </div>
+
+    @if (_hasProvider)
+    {
+        <div class="akml-chat-log">
+            @if (_history.Count == 0)
+            {
+                <p class="akml-chat-empty">
+                    Multi-turn chat. Type a question below. The conversation is in-memory
+                    only -- nothing is persisted to IndexedDB or sent anywhere except your
+                    chosen provider.
+                </p>
+            }
+            else
+            {
+                @foreach (var turn in _history)
+                {
+                    <div class="akml-chat-turn akml-chat-role-@turn.Role">
+                        <div class="akml-chat-role-label">@(turn.Role == "user" ? "You" : "Assistant")</div>
+                        <pre class="akml-chat-turn-text">@turn.Content</pre>
+                    </div>
+                }
+            }
+            @if (_busy)
+            {
+                <p class="akml-chat-thinking">Thinking…</p>
+            }
+            @if (!string.IsNullOrEmpty(_lastError))
+            {
+                <p class="akml-chat-error">@_lastError</p>
+            }
+        </div>
+
+        <div class="akml-chat-composer">
+            <textarea class="akml-chat-input" @bind="_pending" placeholder="Ask anything about your SQL..." rows="3"
+                      @onkeydown="OnKeyDown" disabled="@_busy"></textarea>
+            <button class="akml-tool-button" @onclick="SendAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_pending))">
+                Send
+            </button>
+        </div>
+    }
+</div>
+
+<style>
+    .akml-chat { display: flex; flex-direction: column; height: 100%; padding: var(--akml-scalar-spacing-m); }
+    .akml-chat-header { display: flex; align-items: center; gap: var(--akml-scalar-spacing-s); margin-bottom: var(--akml-scalar-spacing-s); }
+    .akml-chat-no-provider { color: var(--akml-status-warning); }
+    .akml-chat-log {
+        flex: 1 1 auto;
+        overflow-y: auto;
+        background-color: var(--akml-surface-canvas);
+        border: 1px solid var(--akml-border-default);
+        border-radius: 4px;
+        padding: var(--akml-scalar-spacing-s);
+        min-height: 240px;
+    }
+    .akml-chat-empty { color: var(--akml-text-secondary); font-style: italic; }
+    .akml-chat-turn { margin-bottom: var(--akml-scalar-spacing-m); }
+    .akml-chat-role-label {
+        font-weight: bold;
+        font-size: 12px;
+        color: var(--akml-text-secondary);
+        margin-bottom: var(--akml-scalar-spacing-xs);
+    }
+    .akml-chat-role-user .akml-chat-role-label { color: var(--akml-accent-primary); }
+    .akml-chat-turn-text {
+        font-family: var(--akml-type-editor-family);
+        font-size: var(--akml-type-editor-size);
+        white-space: pre-wrap;
+        margin: 0;
+        color: var(--akml-text-primary);
+    }
+    .akml-chat-thinking { color: var(--akml-text-secondary); font-style: italic; }
+    .akml-chat-error { color: var(--akml-status-danger); }
+    .akml-chat-composer {
+        display: flex;
+        gap: var(--akml-scalar-spacing-s);
+        margin-top: var(--akml-scalar-spacing-s);
+    }
+    .akml-chat-input {
+        flex: 1 1 auto;
+        font-family: var(--akml-type-editor-family);
+        font-size: var(--akml-type-editor-size);
+        background-color: var(--akml-surface-canvas);
+        color: var(--akml-text-primary);
+        border: 1px solid var(--akml-border-default);
+        padding: var(--akml-scalar-spacing-xs);
+        resize: vertical;
+    }
+    .akml-tool-button {
+        font-family: var(--akml-type-chrome-family); font-size: var(--akml-type-chrome-size);
+        background-color: var(--akml-surface-panel); color: var(--akml-text-primary);
+        border: 1px solid var(--akml-border-default); border-radius: 3px;
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s); cursor: pointer;
+    }
+    .akml-tool-button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .akml-tool-button:hover:not(:disabled) { background-color: var(--akml-surface-hover); }
+</style>
+
+@code {
+    private const string SystemPrompt =
+        "You are a SQL Server expert assisting an experienced developer through " +
+        "AKML SQL. Be concise. When you give SQL, use canonical T-SQL formatting. " +
+        "When you're unsure of the schema, ask before guessing.";
+
+    private bool _hasProvider;
+    private bool _busy;
+    private string _pending = string.Empty;
+    private string? _lastError;
+    private readonly List<AiChatMessage> _history = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var active = await Preference.GetActiveAsync();
+        _hasProvider = !string.IsNullOrEmpty(active);
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        // Ctrl+Enter sends. Plain Enter inserts a newline (default textarea
+        // behaviour).
+        if (e.CtrlKey && e.Key == "Enter")
+        {
+            await SendAsync();
+        }
+    }
+
+    private async Task SendAsync()
+    {
+        if (_busy || string.IsNullOrWhiteSpace(_pending)) return;
+
+        var userMessage = _pending.Trim();
+        _pending = string.Empty;
+        _lastError = null;
+        _busy = true;
+
+        // Push the user turn into the log right away so the UI feels responsive.
+        _history.Add(new AiChatMessage { Role = "user", Content = userMessage });
+        StateHasChanged();
+
+        try
+        {
+            var providerId = await Preference.GetActiveAsync();
+            var request = new AiChatRequest
+            {
+                SystemPrompt = SystemPrompt,
+                UserPrompt = userMessage,
+                History = BuildHistorySnapshot(),
+            };
+            var response = await Client.SendAsync(providerId, request, CancellationToken.None);
+            _history.Add(new AiChatMessage { Role = "assistant", Content = response });
+            Diagnostics.Log(DiagnosticLevel.Info, "ai-chat", $"Turn {_history.Count / 2} ({response.Length} chars).");
+        }
+        catch (UnauthorizedOriginException ex)
+        {
+            _lastError = ex.Message;
+            Diagnostics.Log(DiagnosticLevel.Error, "ai-chat", ex.Message);
+        }
+        catch (Exception ex)
+        {
+            _lastError = "Chat call failed: " + ex.Message;
+            Diagnostics.Log(DiagnosticLevel.Error, "ai-chat", _lastError);
+        }
+        finally
+        {
+            _busy = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Build the History array to send: every PREVIOUS turn (we exclude the
+    /// just-added user turn -- it becomes the UserPrompt). The provider sees
+    /// system -> history -> userPrompt in chronological order.
+    /// </summary>
+    private AiChatMessage[] BuildHistorySnapshot()
+    {
+        if (_history.Count <= 1) return Array.Empty<AiChatMessage>();
+        var prior = new AiChatMessage[_history.Count - 1];
+        for (int i = 0; i < prior.Length; i++) prior[i] = _history[i];
+        return prior;
+    }
+
+    private Task ClearAsync()
+    {
+        _history.Clear();
+        _lastError = null;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+}

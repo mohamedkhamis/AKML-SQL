@@ -1,0 +1,171 @@
+@*
+    Spec 021 (web edition) -- M6 task T131. AI panel hosts the four primary actions
+    (Text-to-SQL, Explain, Fix, Optimize). Results render to a side pane with
+    Accept (insert into editor) / Discard.
+
+    The "Index Analysis" action lands as a follow-up once the engine-side
+    index-analysis context builder ships to the web library.
+*@
+@using AkmlSql.Web.Services
+@inject IAiPromptService Prompts
+@inject IAiPreference Preference
+@inject IDiagnosticsRingBuffer Diagnostics
+
+<div class="akml-ai-panel">
+    <div class="akml-ai-header">
+        <h3>AI assistance</h3>
+        @if (!_hasProvider)
+        {
+            <span class="akml-ai-no-provider">
+                No AI provider configured. <a href="/settings/ai">Add one in Settings</a>.
+            </span>
+        }
+    </div>
+
+    @if (_hasProvider)
+    {
+        <div class="akml-ai-buttons">
+            <button class="akml-tool-button" @onclick="RunExplainAsync" disabled="@_busy">Explain</button>
+            <button class="akml-tool-button" @onclick="RunFixAsync" disabled="@_busy">Fix</button>
+            <button class="akml-tool-button" @onclick="RunOptimizeAsync" disabled="@_busy">Optimize</button>
+            <button class="akml-tool-button" @onclick="RunTextToSqlAsync" disabled="@_busy">NL → SQL</button>
+        </div>
+
+        @if (_busy)
+        {
+            <p class="akml-ai-status">Calling AI provider…</p>
+        }
+
+        @if (!string.IsNullOrEmpty(_lastError))
+        {
+            <p class="akml-ai-error">@_lastError</p>
+        }
+
+        @if (!string.IsNullOrEmpty(_lastResult))
+        {
+            <div class="akml-ai-result">
+                <h4>Result</h4>
+                <pre>@_lastResult</pre>
+                <div class="akml-ai-result-buttons">
+                    <button class="akml-tool-button" @onclick="AcceptResult">Accept (copy)</button>
+                    <button class="akml-tool-button" @onclick="DiscardResult">Discard</button>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+<style>
+    .akml-ai-panel { padding: var(--akml-scalar-spacing-m); }
+    .akml-ai-header { display: flex; align-items: center; gap: var(--akml-scalar-spacing-s); margin-bottom: var(--akml-scalar-spacing-s); }
+    .akml-ai-no-provider { color: var(--akml-status-warning); }
+    .akml-ai-buttons { display: flex; gap: var(--akml-scalar-spacing-s); flex-wrap: wrap; }
+    .akml-ai-status { color: var(--akml-text-secondary); font-style: italic; }
+    .akml-ai-error { color: var(--akml-status-danger); }
+    .akml-ai-result {
+        margin-top: var(--akml-scalar-spacing-m);
+        padding: var(--akml-scalar-spacing-s);
+        background-color: var(--akml-surface-panel);
+        border: 1px solid var(--akml-border-default);
+        border-radius: 4px;
+    }
+    .akml-ai-result pre {
+        font-family: var(--akml-type-editor-family);
+        font-size: var(--akml-type-editor-size);
+        white-space: pre-wrap;
+        margin: 0;
+    }
+    .akml-ai-result-buttons { display: flex; gap: var(--akml-scalar-spacing-s); margin-top: var(--akml-scalar-spacing-s); }
+    .akml-tool-button {
+        font-family: var(--akml-type-chrome-family); font-size: var(--akml-type-chrome-size);
+        background-color: var(--akml-surface-panel); color: var(--akml-text-primary);
+        border: 1px solid var(--akml-border-default); border-radius: 3px;
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s); cursor: pointer;
+    }
+    .akml-tool-button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .akml-tool-button:hover:not(:disabled) { background-color: var(--akml-surface-hover); }
+</style>
+
+@code {
+    /// <summary>Text the parent (Editor.razor) hands in -- usually the editor selection.</summary>
+    [Parameter] public string SelectedSql { get; set; } = string.Empty;
+    /// <summary>Schema text from the cached snapshot. Empty when no cache or no connection.</summary>
+    [Parameter] public string SchemaText { get; set; } = string.Empty;
+    /// <summary>Raised when the user clicks Accept -- the parent inserts the text into the editor.</summary>
+    [Parameter] public EventCallback<string> OnAcceptResult { get; set; }
+
+    private bool _hasProvider;
+    private bool _busy;
+    private string? _lastResult;
+    private string? _lastError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var active = await Preference.GetActiveAsync();
+        _hasProvider = !string.IsNullOrEmpty(active);
+    }
+
+    private async Task RunExplainAsync() => await RunAsync(ct => Prompts.ExplainAsync(SchemaText, SelectedSql, ct), "Explain");
+
+    private async Task RunFixAsync() => await RunAsync(
+        ct => Prompts.FixAsync(SchemaText, SelectedSql, errorMessage: "(no error)", errorNumber: 0, ct), "Fix");
+
+    private async Task RunOptimizeAsync() => await RunAsync(ct => Prompts.OptimizeAsync(SchemaText, SelectedSql, ct), "Optimize");
+
+    private async Task RunTextToSqlAsync() => await RunAsync(
+        ct => Prompts.TextToSqlAsync(SchemaText, SelectedSql, ct), "NL → SQL");
+
+    private async Task RunAsync(Func<CancellationToken, Task<string>> action, string label)
+    {
+        _busy = true;
+        _lastError = null;
+        _lastResult = null;
+        StateHasChanged();
+        try
+        {
+            var result = await action(default);
+            _lastResult = result;
+            Diagnostics.Log(DiagnosticLevel.Info, "ai", $"{label} completed ({result.Length} chars).");
+        }
+        catch (UnauthorizedOriginException ex)
+        {
+            _lastError = ex.Message;
+            Diagnostics.Log(DiagnosticLevel.Error, "ai", ex.Message);
+        }
+        catch (Exception ex)
+        {
+            _lastError = MapErrorToMessage(ex);
+            Diagnostics.Log(DiagnosticLevel.Error, "ai", _lastError, new { Exception = ex.GetType().Name });
+        }
+        finally
+        {
+            _busy = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task AcceptResult()
+    {
+        if (!string.IsNullOrEmpty(_lastResult))
+        {
+            await OnAcceptResult.InvokeAsync(_lastResult);
+        }
+    }
+
+    private void DiscardResult() { _lastResult = null; }
+
+    /// <summary>
+    /// FR-033 error mapping: surface user-readable messages for common provider
+    /// failures. Detailed shape (per-provider docs links) lands at T136.
+    /// </summary>
+    private static string MapErrorToMessage(Exception ex)
+    {
+        var msg = ex.Message;
+        if (msg.Contains("401")) return "Key invalid -- check the API key in Settings -> AI.";
+        if (msg.Contains("429")) return "Rate limited by the provider. Try again in a moment.";
+        if (msg.Contains("404")) return "Provider endpoint not found. Verify the endpoint URL in Settings.";
+        if (msg.Contains("content policy") || msg.Contains("safety")) return "The provider refused this prompt due to its content policy.";
+        if (ex is System.Net.Http.HttpRequestException) return "Provider unreachable. Check your network.";
+        return $"AI call failed: {msg}";
+    }
+}

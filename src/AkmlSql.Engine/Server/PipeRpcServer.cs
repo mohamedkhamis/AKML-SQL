@@ -29,7 +29,7 @@ using Serilog;
 namespace AkmlSql.Engine.Server;
 
 [SuppressMessage("ReSharper", "UnusedParameter.Local")]
-public class PipeRpcServer
+public partial class PipeRpcServer
 {
     private readonly string _pipeName;
     private Core.Config.AppSettings? _cachedSettings;
@@ -66,10 +66,31 @@ public class PipeRpcServer
     // in later sessions if desired.
     private readonly Dictionary<int, IMessageHandler> _pluggableHandlers = new();
 
+    /// <summary>
+    /// Spec 021 (web edition) -- M0 task T023. Test-only accessor (visible via
+    /// <c>InternalsVisibleTo</c>) returning the set of message-type integer codes wired
+    /// in <see cref="RegisterPluggableHandlers"/>. Used by the registration-coverage
+    /// matrix test to assert every shell-to-engine code is dispatchable.
+    /// </summary>
+    internal IReadOnlyCollection<int> RegisteredMessageTypeCodes => _pluggableHandlers.Keys;
+
+    // Spec 021 (web edition) — M0.2. RpcContext carried alongside the legacy fields so the
+    // migrated typed handlers (registered via TypedHandlerAdapter into _pluggableHandlers) see
+    // the same settings / sessions / schema cache the legacy switch consults. Assigned by
+    // RegisterPluggableHandlers in the partial file PipeRpcServer.Handlers.cs (cannot be
+    // readonly because partial-class methods are not considered "in the constructor" by C#).
+    private RpcContext _rpcContext = null!;
+
     public PipeRpcServer(string pipeName)
     {
         _pipeName = pipeName;
         _completionEngine = new CompletionEngine(_parserService);
+        // Spec 021 T101: DatabaseProvider stays in AkmlSql.Engine because of its
+        // SqlClient dependency. Register it on the engine instance here so the named-pipe
+        // path still provides USE-keyword database-list completion. The web edition's
+        // CompletionEngine instance does NOT register DatabaseProvider; it relies on the
+        // bridge for live schema (M3+) or the IndexedDB cache (M5+) instead.
+        _completionEngine.RegisterProvider(new Completion.Providers.DatabaseProvider());
         _wildcardHandler = new WildcardExpansionHandler(_parserService);
         _formatHandler = new FormatRequestHandler(ProfileManager.CreateDefault());
         _analysisEngine = new AnalysisEngine(_parserService, new RuleRegistry(), _caSettingsLoader);
@@ -109,14 +130,12 @@ public class PipeRpcServer
             };
         });
 
-        // Phase 10 (spec 019) US14 FR-080 — register stub IMessageHandlers for
-        // the three spec-014-Phase-2-reserved MessageTypes. Real handlers land
-        // in US7 (FindUnusedVariables), US8 (FindInvalidObjects), US11
-        // (EncryptedObjectDecryption); replacing each stub registration with
-        // the real handler requires NO change to PipeRpcServer.cs.
-        _pluggableHandlers[MessageTypes.FindInvalidObjects] = new Stubs.FindInvalidObjectsHandlerStub();
-        _pluggableHandlers[MessageTypes.FindUnusedVariables] = new Stubs.FindUnusedVariablesHandlerStub();
-        _pluggableHandlers[MessageTypes.EncryptedObjectDecryption] = new Stubs.EncryptedObjectDecryptionHandlerStub();
+        // Spec 021 (web edition) -- M0.4 task T020 final step. All ~50 message types are
+        // registered through this single call; the implementation lives in the partial file
+        // PipeRpcServer.Handlers.cs so the transport file stays focused on frame I/O.
+        RegisterPluggableHandlers();
+
+        // (Original handler-registration block moved to PipeRpcServer.Handlers.cs.)
 
         // History: initialize database and retention service
         var historyDb = new HistoryDatabase();
@@ -217,480 +236,57 @@ public class PipeRpcServer
 
             switch (message.MessageType)
             {
-                case MessageTypes.ConnectionChanged:
-                    if (message.Payload == null)
-                    {
-                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
-                    }
+                // case MessageTypes.ConnectionChanged: migrated to Handlers/Control/ConnectionChangedHandler.cs (spec 021 T020 wave 3).
 
-                    var connInfo = MessagePackSerializer.Deserialize<ConnectionInfo>(message.Payload);
-                    _sessionManager.UpdateSession(connInfo);
-                    _parserService.SetServerVersion(connInfo.ServerVersion);
-                    // Invalidate any cached database list for this session — a new
-                    // connection may be to a different server and we must not leak
-                    // the previous server's databases into USE-completion.
-                    Completion.Providers.DatabaseProvider.InvalidateSession(connInfo.SessionId);
+                // case MessageTypes.DocumentChanged: migrated to Handlers/Control/ (spec 021 T018).
 
-                    // Look up (or create) the schema cache for this session+database so we
-                    // can consult PermissionDenied BEFORE scheduling any SQL round-trip.
-                    // If a prior Phase A already hit 4060/18456/…, every subsequent
-                    // ConnectionChanged against the same session:db would otherwise
-                    // re-run Phase A, re-fire SchedulePrefetch, and re-log the warning.
-                    var schemaCache = _schemaCacheManager.GetOrCreateCache(
-                        connInfo.SessionId, connInfo.DatabaseName);
+                // case MessageTypes.RequestCompletion: migrated to Handlers/Completion/CompletionHandler.cs
+                // via TypedHandlerAdapter registered in _pluggableHandlers (spec 021 T011).
+                // The hybrid dispatch at the top of this method picks it up before this switch
+                // is consulted, so reaching this point for RequestCompletion is unreachable.
 
-                    // Warm the database-list cache in the background so the first
-                    // USE-completion keystroke finds it already populated and does
-                    // not have to block on a SQL round trip. Skip when the cache is
-                    // marked permission-denied — the prefetch would fail the same way.
-                    if (!schemaCache.PermissionDenied)
-                    {
-                        var s = _sessionManager.GetSession(connInfo.SessionId);
-                        if (s != null && !string.IsNullOrEmpty(s.ConnectionString))
-                        {
-                            Completion.Providers.DatabaseProvider.SchedulePrefetch(
-                                connInfo.SessionId, s.ConnectionString);
-                        }
-                    }
+                // case MessageTypes.WildcardExpansion, RequestSignatureHelp, RequestQuickInfo:
+                // migrated to Handlers/Completion/ (spec 021 T020 wave 2).
 
-                    Log.Information("Connection changed: session={Session} db={Db} permissionDenied={Denied} — {ConnDesc}",
-                        connInfo.SessionId, connInfo.DatabaseName, schemaCache.PermissionDenied,
-                        Schema.ConnectionDiagnostics.Describe(connInfo.ConnectionString));
+                // case MessageTypes.SchemaRefreshRequest, SchemaStatusRequest, Ping:
+                // migrated to Handlers/Schema/ and Handlers/Control/ (spec 021 T017, T018).
 
-                    // Fire-and-forget: populate schema cache Phase A
-                    _ = Task.Run(async () =>
-                    {
-                        try
-                        {
-                            if (schemaCache.PermissionDenied)
-                            {
-                                // Terminal state — a previous Phase A confirmed the current
-                                // identity can't open this DB. Quiet noop until the user
-                                // reconnects (which creates a fresh cache via new sessionId).
-                                return;
-                            }
+                // case MessageTypes.FormatDocument, FormatSelection, FormatPreview, FormatAction,
+                // ProfileList, ProfileSave, ProfileDelete, ProfileImport, RequestStyleEditorSchema:
+                // migrated to Handlers/Formatting/FormattingHandlers.cs and registered via
+                // TypedHandlerAdapter in _pluggableHandlers (spec 021 T013). The hybrid dispatch
+                // at the top of this method picks them up before the switch is consulted.
 
-                            if (schemaCache.Phase == PopulationPhase.NotLoaded)
-                            {
-                                Log.Information("Starting Phase A schema population for {Db}", connInfo.DatabaseName);
-                                await _schemaMetadataService.PopulatePhaseAAsync(
-                                    schemaCache, connInfo.ConnectionString, CancellationToken.None);
-                                _schemaCacheManager.EvictLru();
+                // case MessageTypes.BulkFormat, BulkFormatCancel: migrated to Handlers/Formatting/BulkFormatHandlers.cs (spec 021 T020 wave 3).
 
-                                // Phase B: load columns, FKs, parameters in background
-                                // Required for JOIN completions and column suggestions.
-                                // Skip if Phase A ended up permission-denied (terminal).
-                                if (schemaCache.Phase == PopulationPhase.PhaseA
-                                    && !schemaCache.PermissionDenied)
-                                {
-                                    Log.Information("Starting Phase B for {Db}", connInfo.DatabaseName);
-                                    await _schemaMetadataService.PopulatePhaseBAsync(
-                                        schemaCache, connInfo.ConnectionString, CancellationToken.None);
-                                }
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            Log.Error(ex, "Background Phase A population failed for {Db}", connInfo.DatabaseName);
-                        }
-                    });
-                    return Task.FromResult<RpcMessage?>(null); // notification, no response
+                // case MessageTypes.SnippetExpand, SnippetList, SnippetSave, SnippetDelete, SnippetImport:
+                // migrated to Handlers/Snippets/SnippetHandlers.cs (spec 021 T015).
 
-                case MessageTypes.DocumentChanged:
-                    if (message.Payload == null)
-                    {
-                        return Task.FromResult<RpcMessage?>(CreateErrorResponse("Payload required", message.RequestId));
-                    }
+                // case MessageTypes.RequestAnalyze, AnalysisSettingsChanged:
+                // migrated to Handlers/Analysis/AnalysisHandlers.cs and registered via
+                // TypedHandlerAdapter in _pluggableHandlers (spec 021 T014).
 
-                    var docChange = MessagePackSerializer.Deserialize<DocumentChange>(message.Payload);
-                    _sessionManager.UpdateDocument(docChange);
-                    return Task.FromResult<RpcMessage?>(null);
+                // case MessageTypes.RequestRefactorPreview, RequestRefactorApply:
+                // migrated to Handlers/Refactoring/RefactoringHandlers.cs (spec 021 T016).
 
-                case MessageTypes.RequestCompletion:
-                    if (message.Payload == null)
-                    {
-                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
-                    }
+                // 14 delegating cases (SessionSave/Restore/Delete, SafetyCheck, History x3,
+                // StatementBoundary, DocumentOutline, GetObjectDefinition, FindReferences,
+                // ObjectSearch, CrudGeneration, ScriptAs, GridExport) migrated to
+                // DelegatingMessageHandler entries in _pluggableHandlers (spec 021 T020 wave 1).
 
-                    var compReq = MessagePackSerializer.Deserialize<CompletionRequest>(message.Payload);
-                    var session = _sessionManager.GetSession(compReq.SessionId);
-                    var documentText = session?.DocumentText ?? string.Empty;
-                    var dbCache = session != null
-                        ? _schemaCacheManager.GetCache(compReq.SessionId, session.DatabaseName)
-                        : null;
-                    // Push current IntelliSense settings into the engine before each request
-                    // so toggles in the Settings dialog take effect immediately (cache is
-                    // invalidated on AnalysisSettingsChanged).
-                    _cachedSettings ??= Core.Config.ConfigManager.Load();
-                    _completionEngine.TableAliasEnabled = _cachedSettings.IntelliSense.AutoAlias;
-                    _completionEngine.JoinAssistEnabled = _cachedSettings.IntelliSense.JoinAssist;
-                    _completionEngine.IncludeKeywords = _cachedSettings.IntelliSense.SuggestionTypes.IncludeKeywords;
-                    _completionEngine.IncludeSystemObjects = _cachedSettings.IntelliSense.SuggestionTypes.IncludeSystemObjects;
-                    _completionEngine.SchemaQualifyMode = _cachedSettings.IntelliSense.Qualification.SchemaMode;
-                    _completionEngine.MatchByColumnName = _cachedSettings.IntelliSense.JoinOptions.MatchByColumnName;
-                    var compResp = _completionEngine.GetCompletions(documentText, compReq.CursorOffset, dbCache, compReq.SessionId);
-                    return Task.FromResult(CreateResponse(MessageTypes.CompletionResult, message.RequestId, compResp));
-
-                case MessageTypes.WildcardExpansion:
-                    if (message.Payload == null)
-                    {
-                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
-                    }
-
-                    var wcReq = MessagePackSerializer.Deserialize<WildcardExpansionRequest>(message.Payload);
-                    var wcSession = _sessionManager.GetSession(wcReq.SessionId);
-                    var wcCache = wcSession != null
-                        ? _schemaCacheManager.GetCache(wcReq.SessionId, wcSession.DatabaseName)
-                        : null;
-                    var wcResp = _wildcardHandler.Handle(
-                        wcReq.DocumentText, wcReq.CursorOffset, wcReq.Qualifier, wcCache);
-                    return Task.FromResult(CreateResponse(MessageTypes.WildcardExpansionResult, message.RequestId, wcResp));
-
-                case MessageTypes.RequestSignatureHelp:
-                    if (message.Payload == null)
-                    {
-                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
-                    }
-
-                    var sigReq = MessagePackSerializer.Deserialize<SignatureRequest>(message.Payload);
-                    var sigSession = _sessionManager.GetSession(sigReq.SessionId);
-                    var sigText = sigSession?.DocumentText ?? string.Empty;
-                    var sigCache = sigSession != null
-                        ? _schemaCacheManager.GetCache(sigReq.SessionId, sigSession.DatabaseName)
-                        : null;
-                    // Extract function name and parameter index from the document text at cursor
-                    var sigTokens = _parserService.GetTokenStream(sigText);
-                    var (funcName, parenOffset) = FindFunctionAtCursor(sigTokens, sigReq.CursorOffset);
-                    var paramIdx = parenOffset >= 0
-                        ? SignatureProvider.CountCommasBeforeCursor(sigTokens, sigReq.CursorOffset, parenOffset)
-                        : 0;
-                    var sigResp = _signatureProvider.GetSignature(funcName, paramIdx, sigCache);
-                    return Task.FromResult(CreateResponse(MessageTypes.SignatureHelpResult, message.RequestId, sigResp));
-
-                case MessageTypes.RequestQuickInfo:
-                    if (message.Payload == null)
-                    {
-                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
-                    }
-
-                    var qiReq = MessagePackSerializer.Deserialize<QuickInfoRequest>(message.Payload);
-                    var qiSession = _sessionManager.GetSession(qiReq.SessionId);
-                    var qiText = qiSession?.DocumentText ?? string.Empty;
-                    var qiCache = qiSession != null
-                        ? _schemaCacheManager.GetCache(qiReq.SessionId, qiSession.DatabaseName)
-                        : null;
-                    var qiResp = _quickInfoProvider.GetQuickInfo(qiText, qiReq.CursorOffset, qiCache, _parserService);
-                    return Task.FromResult(CreateResponse(MessageTypes.QuickInfoResult, message.RequestId, qiResp));
-
-                case MessageTypes.SchemaRefreshRequest:
-                    if (message.Payload == null)
-                    {
-                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
-                    }
-
-                    // Fire-and-forget: the shell sends this via SendNotificationAsync
-                    // (RequestId = 0), so any response we build here would be dropped by
-                    // the client's read loop. Mirror the ConnectionChanged handler's
-                    // pattern — return null and let the background task do the work.
-                    HandleSchemaRefreshRequest(MessagePackSerializer.Deserialize<RefreshRequest>(message.Payload));
-                    return Task.FromResult<RpcMessage?>(null);
-
-                case MessageTypes.SchemaStatusRequest:
-                    if (message.Payload == null)
-                    {
-                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
-                    }
-                    {
-                        var statusReq = MessagePackSerializer.Deserialize<SchemaStatusRequest>(message.Payload);
-                        var statusSession = !string.IsNullOrEmpty(statusReq.SessionId)
-                            ? _sessionManager.GetSession(statusReq.SessionId) : null;
-                        var statusResp = new SchemaStatusResponse();
-                        if (statusSession != null && !string.IsNullOrEmpty(statusSession.DatabaseName))
-                        {
-                            statusResp.DatabaseName = statusSession.DatabaseName;
-                            var statCache = _schemaCacheManager.GetCache(statusReq.SessionId, statusSession.DatabaseName);
-                            if (statCache != null)
-                            {
-                                statusResp.Exists = true;
-                                statusResp.Phase = (int)statCache.Phase;
-                                int objCount = 0;
-                                int colsLoaded = 0;
-                                foreach (var schema in statCache.Schemas.Values)
-                                {
-                                    foreach (var obj in schema.Objects)
-                                    {
-                                        objCount++;
-                                        if (obj.ColumnsLoaded) colsLoaded++;
-                                    }
-                                }
-                                statusResp.ObjectCount = objCount;
-                                statusResp.ColumnsLoadedCount = colsLoaded;
-                            }
-                        }
-                        return Task.FromResult(CreateResponse(MessageTypes.SchemaStatusResponse, message.RequestId, statusResp));
-                    }
-
-                case MessageTypes.Ping:
-                    var status = new EngineStatusInfo
-                    {
-                        MemoryUsageMb = (int)(GC.GetTotalMemory(false) / (1024 * 1024)),
-                        CachedDatabases = _schemaCacheManager.CacheCount,
-                        ActiveSessions = _sessionManager.SessionCount,
-                        UptimeSeconds = 0
-                    };
-                    return Task.FromResult(CreateResponse(MessageTypes.Pong, message.RequestId, status));
-
-                case MessageTypes.FormatDocument:
-                    if (message.Payload == null)
-                    {
-                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
-                    }
-
-                    var fmtReq = MessagePackSerializer.Deserialize<FormatRequest>(message.Payload);
-                    var fmtResp = _formatHandler.HandleFormat(fmtReq);
-                    return Task.FromResult(CreateResponse(MessageTypes.FormatDocumentResult, message.RequestId, fmtResp));
-
-                case MessageTypes.FormatSelection:
-                    if (message.Payload == null)
-                    {
-                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
-                    }
-
-                    var fmtSelReq = MessagePackSerializer.Deserialize<FormatSelectionRequest>(message.Payload);
-                    var fmtSelResp = _formatHandler.HandleFormatSelection(fmtSelReq);
-                    return Task.FromResult(CreateResponse(MessageTypes.FormatSelectionResult, message.RequestId, fmtSelResp));
-
-                case MessageTypes.FormatPreview:
-                    if (message.Payload == null)
-                    {
-                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
-                    }
-
-                    var fmtPrevReq = MessagePackSerializer.Deserialize<FormatPreviewRequest>(message.Payload);
-                    var fmtPrevResp = _formatHandler.HandleFormatPreview(fmtPrevReq);
-                    return Task.FromResult(CreateResponse(MessageTypes.FormatPreviewResult, message.RequestId, fmtPrevResp));
-
-                case MessageTypes.FormatAction:
-                    if (message.Payload == null)
-                    {
-                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
-                    }
-
-                    var fmtActReq = MessagePackSerializer.Deserialize<FormatActionRequest>(message.Payload);
-                    var fmtActResp = _formatHandler.HandleFormatAction(fmtActReq);
-                    return Task.FromResult(CreateResponse(MessageTypes.FormatActionResult, message.RequestId, fmtActResp));
-
-                case MessageTypes.ProfileList:
-                    var profListResp = _formatHandler.HandleProfileList();
-                    return Task.FromResult(CreateResponse(MessageTypes.ProfileListResult, message.RequestId, profListResp));
-
-                case MessageTypes.ProfileSave:
-                    if (message.Payload == null)
-                    {
-                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
-                    }
-
-                    var profSaveReq = MessagePackSerializer.Deserialize<ProfileSaveRequest>(message.Payload);
-                    var profSaveResp = _formatHandler.HandleProfileSave(profSaveReq);
-                    return Task.FromResult(CreateResponse(MessageTypes.ProfileSaveResult, message.RequestId, profSaveResp));
-
-                case MessageTypes.ProfileDelete:
-                    if (message.Payload == null)
-                    {
-                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
-                    }
-
-                    var profDelReq = MessagePackSerializer.Deserialize<ProfileDeleteRequest>(message.Payload);
-                    var profDelResp = _formatHandler.HandleProfileDelete(profDelReq);
-                    return Task.FromResult(CreateResponse(MessageTypes.ProfileDeleteResult, message.RequestId, profDelResp));
-
-                case MessageTypes.ProfileImport:
-                    if (message.Payload == null)
-                    {
-                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
-                    }
-
-                    var profImpReq = MessagePackSerializer.Deserialize<ProfileImportRequest>(message.Payload);
-                    var profImpResp = _formatHandler.HandleProfileImport(profImpReq);
-                    return Task.FromResult(CreateResponse(MessageTypes.ProfileImportResult, message.RequestId, profImpResp));
-
-                case MessageTypes.RequestStyleEditorSchema:
-                    // Spec 020 US3 (T050) — Format Styles editor schema descriptor.
-                    // See specs/020-sqlprompt-visual-parity/contracts/ipc-style-editor-schema.md
-                    if (message.Payload == null)
-                    {
-                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
-                    }
-
-                    var schemaReq = MessagePackSerializer.Deserialize<StyleEditorSchemaRequest>(message.Payload);
-                    var schemaResp = _formatHandler.HandleStyleEditorSchema(schemaReq);
-                    return Task.FromResult(CreateResponse(MessageTypes.StyleEditorSchemaResult, message.RequestId, schemaResp));
-
-                case MessageTypes.BulkFormat:
-                    if (message.Payload == null)
-                    {
-                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
-                    }
-
-                    var bulkReq = MessagePackSerializer.Deserialize<BulkFormatRequest>(message.Payload);
-                    return BulkFormatDispatchAsync(bulkReq, message.RequestId);
-
-                case MessageTypes.BulkFormatCancel:
-                    if (message.Payload == null)
-                    {
-                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
-                    }
-
-                    var bulkCancelReq = MessagePackSerializer.Deserialize<BulkFormatCancelRequest>(message.Payload);
-                    _formatHandler.HandleBulkFormatCancel(bulkCancelReq);
-                    return Task.FromResult<RpcMessage?>(null); // notification, no response
-
-                case MessageTypes.SnippetExpand:
-                    if (message.Payload == null)
-                    {
-                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
-                    }
-
-                    var snipExpandReq = MessagePackSerializer.Deserialize<SnippetExpandRequest>(message.Payload);
-                    var snipSession = _sessionManager.GetSession(snipExpandReq.SessionId);
-                    var snipExpandResp = _snippetHandler.HandleExpand(
-                        snipExpandReq, snipSession?.DatabaseName);
-                    return Task.FromResult(CreateResponse(MessageTypes.SnippetExpandResult, message.RequestId, snipExpandResp));
-
-                case MessageTypes.SnippetList:
-                    if (message.Payload == null)
-                    {
-                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
-                    }
-
-                    var snipListReq = MessagePackSerializer.Deserialize<SnippetListRequest>(message.Payload);
-                    var snipListResp = _snippetHandler.HandleList(snipListReq);
-                    return Task.FromResult(CreateResponse(MessageTypes.SnippetListResult, message.RequestId, snipListResp));
-
-                case MessageTypes.SnippetSave:
-                    if (message.Payload == null)
-                    {
-                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
-                    }
-
-                    var snipSaveReq = MessagePackSerializer.Deserialize<SnippetSaveRequest>(message.Payload);
-                    var snipSaveResp = _snippetHandler.HandleSave(snipSaveReq);
-                    return Task.FromResult(CreateResponse(MessageTypes.SnippetSaveResult, message.RequestId, snipSaveResp));
-
-                case MessageTypes.SnippetDelete:
-                    if (message.Payload == null)
-                    {
-                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
-                    }
-
-                    var snipDelReq = MessagePackSerializer.Deserialize<SnippetDeleteRequest>(message.Payload);
-                    var snipDelResp = _snippetHandler.HandleDelete(snipDelReq);
-                    return Task.FromResult(CreateResponse(MessageTypes.SnippetDeleteResult, message.RequestId, snipDelResp));
-
-                case MessageTypes.SnippetImport:
-                    if (message.Payload == null)
-                    {
-                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
-                    }
-
-                    var snipImpReq = MessagePackSerializer.Deserialize<SnippetImportRequest>(message.Payload);
-                    var snipImpResp = _snippetHandler.HandleImport(snipImpReq);
-                    return Task.FromResult(CreateResponse(MessageTypes.SnippetImportResult, message.RequestId, snipImpResp));
-
-                case MessageTypes.RequestAnalyze:
-                    if (message.Payload == null)
-                    {
-                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
-                    }
-
-                    var analyzeReq = MessagePackSerializer.Deserialize<CodeAnalysisRequest>(message.Payload);
-                    return AnalyzeAsync(analyzeReq, message.RequestId, ct);
-
-                case MessageTypes.AnalysisSettingsChanged:
-                    _caSettingsLoader.InvalidateCache();
-                    _cachedSettings = null; // Invalidate cached AppSettings
-                    _aiHandler.RefreshSettings();
-                    return Task.FromResult<RpcMessage?>(null);
-
-                case MessageTypes.RequestRefactorPreview:
-                    if (message.Payload == null)
-                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
-                    var rfPrevReq = MessagePackSerializer.Deserialize<RefactorPreviewRequest>(message.Payload);
-                    return RefactorPreviewAsync(rfPrevReq, message.RequestId, ct);
-
-                case MessageTypes.RequestRefactorApply:
-                    if (message.Payload == null)
-                        return Task.FromResult(CreateErrorResponse("Payload required", message.RequestId));
-                    var rfApplyReq = MessagePackSerializer.Deserialize<RefactorApplyRequest>(message.Payload);
-                    return RefactorApplyAsync(rfApplyReq, message.RequestId, ct);
-
-                case MessageTypes.SessionSave:
-                case MessageTypes.SessionRestore:
-                case MessageTypes.SessionDelete:
-                    return _sessionRequestHandler.HandleAsync(message, message.MessageType);
-
-                case MessageTypes.SafetyCheck:
-                    return _safetyCheckHandler.HandleAsync(message);
-
-                case MessageTypes.HistoryRecord:
-                    return _historyHandler.HandleRecordAsync(message);
-
-                case MessageTypes.HistorySearch:
-                    return _historyHandler.HandleSearchAsync(message);
-
-                case MessageTypes.HistoryAction:
-                    return _historyHandler.HandleActionAsync(message);
-
-                case MessageTypes.StatementBoundary:
-                    return _productivityHandler.HandleStatementBoundaryAsync(message);
-
-                case MessageTypes.DocumentOutline:
-                    return _productivityHandler.HandleDocumentOutlineAsync(message);
-
-                case MessageTypes.GetObjectDefinition:
-                    return _navigationHandler.HandleGetObjectDefinitionAsync(message, LookupSession, ct);
-
-                case MessageTypes.FindReferences:
-                    return _navigationHandler.HandleFindReferencesAsync(message, LookupSession, ct);
-
-                case MessageTypes.ObjectSearch:
-                    return _navigationHandler.HandleObjectSearchAsync(message, LookupSession, ct);
-
-                case MessageTypes.CrudGeneration:
-                    return _crudGenerationHandler.HandleAsync(message, LookupSession, ct);
-
-                case MessageTypes.ScriptAs:
-                    return _scriptAsHandler.HandleAsync(message, LookupSession, ct);
-
-                case MessageTypes.GridExport:
-                    return _gridExportService.HandleAsync(message);
-
-                // Phase 9: AI Assistance
-                case MessageTypes.AiTextToSql:
-                    return _aiHandler.HandleTextToSqlAsync(message, LookupSession, ct);
-                case MessageTypes.AiExplain:
-                    return _aiHandler.HandleExplainAsync(message, LookupSession, ct);
-                case MessageTypes.AiFix:
-                    return _aiHandler.HandleFixAsync(message, LookupSession, ct);
-                case MessageTypes.AiOptimize:
-                    return _aiHandler.HandleOptimizeAsync(message, LookupSession, ct);
-                case MessageTypes.AiIndexAnalysis:
-                    return _aiHandler.HandleIndexAnalysisAsync(message, LookupSession, ct);
-                case MessageTypes.AiChat:
-                    return _aiHandler.HandleChatAsync(message, LookupSession, ct);
-                case MessageTypes.AiGhostText:
-                    return _aiHandler.HandleGhostTextAsync(message, LookupSession, ct);
-                case MessageTypes.AiProviderTest:
-                    return _aiProviderTestHandler.HandleAsync(message, ct);
+                // Phase 9: AI Assistance -- 8 message types (AiTextToSql, AiExplain, AiFix,
+                // AiOptimize, AiIndexAnalysis, AiChat, AiGhostText, AiProviderTest) migrated to
+                // Handlers/Ai/AiMessageHandlers.cs and registered via the AiMessageHandler
+                // bridge in _pluggableHandlers (spec 021 T019).
 
                 // Spec 014 stubs (FindInvalidObjects / FindUnusedVariables /
                 // EncryptedObjectDecryption) migrated to IMessageHandler stubs
                 // registered in the constructor — see _pluggableHandlers above.
                 // Per Phase 10 (spec 019) US14 FR-080 hybrid dispatch.
 
-                case MessageTypes.Shutdown:
-                    Log.Information("Shutdown requested by client.");
-                    throw new OperationCanceledException("Shutdown requested");
+                // case MessageTypes.Shutdown: migrated to Handlers/Control/ShutdownHandler (spec 021 T018).
+                // The migrated handler still throws OperationCanceledException to tear down the
+                // pipe loop; the outer OCE catch below re-throws so RunAsync exits as before.
 
                 default:
                     Log.Warning("Unknown message type: {Type}", message.MessageType);
@@ -704,123 +300,14 @@ public class PipeRpcServer
         catch (Exception ex)
         {
             Log.Error(ex, "Error dispatching message type {Type}", message.MessageType);
-            var errorInfo = new ErrorInfo { Code = -1, Message = ex.Message };
-            return Task.FromResult(CreateResponse(MessageTypes.Error, message.RequestId, errorInfo));
+            return Task.FromResult<RpcMessage?>(RpcResponseFactory.CreateErrorResponse(ex.Message, message.RequestId));
         }
     }
 
-    /// <summary>
-    /// Walks backwards from cursorOffset to find the function name before the nearest '('.
-    /// Returns (functionName, openParenOffset) or ("", -1) if not found.
-    /// </summary>
-    private static (string FunctionName, int ParenOffset) FindFunctionAtCursor(
-        IList<Microsoft.SqlServer.TransactSql.ScriptDom.TSqlParserToken> tokens, int cursorOffset)
-    {
-        // Find the nearest open paren before cursor at the current nesting level
-        int depth = 0;
-        int parenTokenIndex = -1;
-        for (int i = tokens.Count - 1; i >= 0; i--)
-        {
-            var t = tokens[i];
-            if (t.Offset >= cursorOffset)
-            {
-                continue;
-            }
 
-            if (t.TokenType == Microsoft.SqlServer.TransactSql.ScriptDom.TSqlTokenType.RightParenthesis)
-            {
-                depth++;
-            }
-            else if (t.TokenType == Microsoft.SqlServer.TransactSql.ScriptDom.TSqlTokenType.LeftParenthesis)
-            {
-                if (depth == 0)
-                {
-                    parenTokenIndex = i;
-                    break;
-                }
-                depth--;
-            }
-        }
-
-        if (parenTokenIndex <= 0)
-        {
-            return (string.Empty, -1);
-        }
-
-        // Walk back from paren to find the identifier (function name)
-        for (int i = parenTokenIndex - 1; i >= 0; i--)
-        {
-            var t = tokens[i];
-            if (t.TokenType == Microsoft.SqlServer.TransactSql.ScriptDom.TSqlTokenType.WhiteSpace)
-            {
-                continue;
-            }
-
-            if (t.TokenType is Microsoft.SqlServer.TransactSql.ScriptDom.TSqlTokenType.Identifier or Microsoft.SqlServer.TransactSql.ScriptDom.TSqlTokenType.QuotedIdentifier)
-            {
-                return (t.Text.Trim('[', ']', '"'), tokens[parenTokenIndex].Offset);
-            }
-            // Could be a keyword-function like CONVERT, CAST
-            return (t.Text, tokens[parenTokenIndex].Offset);
-        }
-
-        return (string.Empty, -1);
-    }
-
-    private async Task<RpcMessage?> BulkFormatDispatchAsync(BulkFormatRequest req, int requestId)
-    {
-        var bulkResp = await _formatHandler.HandleBulkFormatAsync(req);
-        return CreateResponse(MessageTypes.BulkFormatResult, requestId, bulkResp);
-    }
-
-    private async Task<RpcMessage?> RefactorPreviewAsync(RefactorPreviewRequest req, int requestId, CancellationToken ct)
-    {
-        try
-        {
-            var response = await _refactoringEngine.PreviewAsync(req, _sessionManager, ct);
-            return CreateResponse(MessageTypes.RefactorPreviewResult, requestId, response);
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "RefactorPreview failed");
-            return CreateErrorResponse("Refactor preview failed: " + ex.Message, requestId);
-        }
-    }
-
-    private async Task<RpcMessage?> RefactorApplyAsync(RefactorApplyRequest req, int requestId, CancellationToken ct)
-    {
-        try
-        {
-            var response = await _refactoringEngine.ApplyAsync(req, ct);
-            return CreateResponse(MessageTypes.RefactorApplyResult, requestId, response);
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "RefactorApply failed");
-            return CreateErrorResponse("Refactor apply failed: " + ex.Message, requestId);
-        }
-    }
-
-    private async Task<RpcMessage?> AnalyzeAsync(CodeAnalysisRequest req, int requestId, CancellationToken ct)
-    {
-        try
-        {
-            _cachedSettings ??= Core.Config.ConfigManager.Load();
-            var globalSettings = _cachedSettings.CodeAnalysis;
-            var response = await _analysisEngine.AnalyzeAsync(
-                req, _sessionManager, _schemaCacheManager, globalSettings, ct);
-            return CreateResponse(MessageTypes.AnalysisResult, requestId, response);
-        }
-        catch (OperationCanceledException)
-        {
-            return null;
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "Analysis failed for session {Session}", req.SessionId);
-            return CreateErrorResponse("Analysis failed: " + ex.Message, requestId);
-        }
-    }
+    // The former BulkFormatDispatchAsync, RefactorPreviewAsync, RefactorApplyAsync, and
+    // AnalyzeAsync private methods have all been migrated to typed handlers under
+    // Handlers/{Formatting, Refactoring, Analysis}/ (spec 021 T013/T014/T016/T020).
 
     /// <summary>
     /// Session lookup delegate passed to NavigationRequestHandler.
@@ -834,89 +321,6 @@ public class PipeRpcServer
         return (session.ConnectionString, session.DatabaseName);
     }
 
-    /// <summary>
-    /// Handles a manual <c>Ctrl+Shift+D</c> schema refresh for the given session.
-    /// Fire-and-forget — no response is sent to the shell. Guards against racing
-    /// an in-flight <c>ConnectionChanged</c> populate: if Phase A or Phase B is
-    /// already running, marks the cache stale for next time and returns instead
-    /// of clearing concurrent-dictionary entries under an active writer.
-    /// </summary>
-    private void HandleSchemaRefreshRequest(RefreshRequest req)
-    {
-        var session = !string.IsNullOrEmpty(req.SessionId)
-            ? _sessionManager.GetSession(req.SessionId) : null;
-
-        if (session == null)
-        {
-            Log.Warning("SchemaRefreshRequest: session='{Session}' not found — nothing to refresh", req.SessionId);
-            return;
-        }
-        if (string.IsNullOrEmpty(session.ConnectionString))
-        {
-            Log.Warning(
-                "SchemaRefreshRequest: session='{Session}' has no connection string (disconnected or SQL auth not engine-usable) — nothing to refresh",
-                req.SessionId);
-            return;
-        }
-
-        var cache = _schemaCacheManager.GetCache(req.SessionId, session.DatabaseName);
-        if (cache != null && cache.Phase == PopulationPhase.PhaseA)
-        {
-            // PhaseA means "Phase A complete, Phase B may or may not still be running".
-            // We can't safely Clear() while Phase B is mid-flight (race with GetOrAdd
-            // in the background task). Mark stale and bail; the in-flight populate
-            // will pick up the staleness when it finishes, or the user can retry
-            // once loading settles.
-            //
-            // PhaseB and Complete BOTH mean "fully loaded, no background populate
-            // running" — those are safe to clear and re-run. (Earlier code rejected
-            // PhaseB too, which made Ctrl+Shift+D a no-op once the cache was loaded.)
-            cache.IsStale = true;
-            Log.Information(
-                "SchemaRefreshRequest: populate already in progress for session={Session} db={Db} (phase={Phase}) — marked stale, skipping concurrent reset",
-                req.SessionId, session.DatabaseName, cache.Phase);
-            return;
-        }
-
-        int priorCount = 0;
-        if (cache != null)
-        {
-            priorCount = cache.Schemas.Values.Sum(s => s.Objects.Count);
-
-            // PopulatePhaseAAsync uses GetOrAdd + List.Add, so skipping the clear
-            // would duplicate every object on a second invocation. Phase B rebuilds
-            // the FK list and index, so clear that too.
-            cache.Schemas.Clear();
-            cache.ForeignKeys.Clear();
-            cache.Phase = PopulationPhase.NotLoaded;
-            cache.IsStale = false;
-            Log.Information(
-                "SchemaRefreshRequest: cache cleared for session={Session} db={Db} (previously {Count} objects) — re-running Phase A + Phase B",
-                req.SessionId, session.DatabaseName, priorCount);
-        }
-
-        var ctxSession = session;
-        var ctxSessionId = req.SessionId;
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                var c = _schemaCacheManager.GetOrCreateCache(ctxSessionId, ctxSession.DatabaseName);
-                await _schemaMetadataService.PopulatePhaseAAsync(
-                    c, ctxSession.ConnectionString, CancellationToken.None);
-                _schemaCacheManager.EvictLru();
-                if (c.Phase == PopulationPhase.PhaseA)
-                {
-                    await _schemaMetadataService.PopulatePhaseBAsync(
-                        c, ctxSession.ConnectionString, CancellationToken.None);
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "Manual schema refresh: background populate failed for session={Session}", ctxSessionId);
-            }
-        });
-    }
 
     // Phase 10 (spec 019) US14 FR-080: hybrid pluggable dispatch wrapper.
     // Routes the handler call through an awaited helper rather than
@@ -928,26 +332,9 @@ public class PipeRpcServer
         return await handler.HandleAsync(message, ct).ConfigureAwait(false);
     }
 
-    // Phase 10 (spec 019) US14 FR-080: these were `private` until the hybrid
-    // dispatch refactor introduced IMessageHandler implementations that need to
-    // emit standardised response/error envelopes. Kept `static` for stateless
-    // call sites and bumped to `internal` so handler classes in this assembly
-    // can call them without holding a PipeRpcServer reference.
-    internal static RpcMessage CreateErrorResponse(string message, int requestId)
-    {
-        var errorInfo = new ErrorInfo { Code = -1, Message = message };
-        return CreateResponse(MessageTypes.Error, requestId, errorInfo);
-    }
-
-    internal static RpcMessage CreateResponse<T>(int messageType, int requestId, T payload)
-    {
-        return new RpcMessage
-        {
-            MessageType = messageType,
-            RequestId = requestId,
-            Payload = MessagePackSerializer.Serialize(payload)
-        };
-    }
+    // Spec 021 (web edition) T020 finishing: the response factories moved to
+    // AkmlSql.Engine.RpcResponseFactory. Handlers + adapters call those statics directly;
+    // PipeRpcServer no longer carries them.
 
     private static PipeSecurity CreatePipeSecurity()
     {

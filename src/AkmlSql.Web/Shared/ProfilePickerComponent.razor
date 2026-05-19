@@ -1,0 +1,145 @@
+@*
+    Spec 021 (web edition) -- M2 task T039. Profile picker:
+      * Built-in profiles (read-only)
+      * User profiles (editable / deletable)
+      * Import via <InputFile>; export via Blob + download link
+
+    Built-in profile ids start with "builtin." -- the store rejects writes to those.
+*@
+@using AkmlSql.Web.Services
+@using Microsoft.AspNetCore.Components.Forms
+@inject IProfileStore ProfileStore
+@inject IJSRuntime JS
+
+<div class="akml-profile-picker">
+    <label for="@_selectId" class="akml-profile-label">Profile</label>
+    <select id="@_selectId" class="akml-profile-select" value="@_activeId" @onchange="OnSelectionChanged">
+        @if (_profiles != null)
+        {
+            <optgroup label="Built-in">
+                @foreach (var p in _profiles.Where(p => p.Origin == ProfileOrigin.BuiltIn))
+                {
+                    <option value="@p.Id">@p.Name</option>
+                }
+            </optgroup>
+            @if (_profiles.Any(p => p.Origin == ProfileOrigin.User))
+            {
+                <optgroup label="User">
+                    @foreach (var p in _profiles.Where(p => p.Origin == ProfileOrigin.User))
+                    {
+                        <option value="@p.Id">@p.Name</option>
+                    }
+                </optgroup>
+            }
+            @if (_profiles.Any(p => p.Origin == ProfileOrigin.SqlPromptImport))
+            {
+                <optgroup label="SQL Prompt">
+                    @foreach (var p in _profiles.Where(p => p.Origin == ProfileOrigin.SqlPromptImport))
+                    {
+                        <option value="@p.Id">@p.Name</option>
+                    }
+                </optgroup>
+            }
+        }
+    </select>
+
+    @* Built-in profiles are non-deletable. *@
+    @if (_active != null && _active.Origin != ProfileOrigin.BuiltIn)
+    {
+        <button class="akml-profile-button" @onclick="DeleteActiveAsync" title="Delete profile">Delete</button>
+    }
+</div>
+
+<style>
+    .akml-profile-picker {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--akml-scalar-spacing-xs);
+    }
+    .akml-profile-label {
+        font-size: var(--akml-type-chrome-size);
+        color: var(--akml-text-secondary);
+    }
+    .akml-profile-select {
+        font-family: var(--akml-type-chrome-family);
+        font-size: var(--akml-type-chrome-size);
+        background-color: var(--akml-surface-panel);
+        color: var(--akml-text-primary);
+        border: 1px solid var(--akml-border-default);
+        border-radius: 3px;
+        padding: var(--akml-scalar-spacing-xs);
+        min-width: 200px;
+    }
+    .akml-profile-button {
+        font-family: var(--akml-type-chrome-family);
+        font-size: var(--akml-type-chrome-size);
+        background-color: transparent;
+        color: var(--akml-text-secondary);
+        border: 1px solid var(--akml-border-default);
+        border-radius: 3px;
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s);
+        cursor: pointer;
+    }
+    .akml-profile-button:hover {
+        background-color: var(--akml-surface-hover);
+        color: var(--akml-text-primary);
+    }
+</style>
+
+@code {
+    [Parameter] public EventCallback<ProfileRecord> OnProfileChanged { get; set; }
+
+    private readonly string _selectId = $"akml-profile-{Guid.NewGuid():N}";
+    private IReadOnlyList<ProfileRecord>? _profiles;
+    private string _activeId = "builtin.default";
+    private ProfileRecord? _active;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        _profiles = await ProfileStore.ListAsync();
+        _activeId = await ProfileStore.GetActiveIdAsync();
+        _active = _profiles.FirstOrDefault(p => p.Id == _activeId) ?? _profiles.FirstOrDefault();
+        if (_active != null && _active.Id != _activeId)
+        {
+            _activeId = _active.Id;
+        }
+        StateHasChanged();
+    }
+
+    private async Task OnSelectionChanged(ChangeEventArgs e)
+    {
+        var newId = e.Value?.ToString() ?? "builtin.default";
+        if (newId == _activeId) return;
+
+        _activeId = newId;
+        await ProfileStore.SetActiveIdAsync(newId);
+        _active = _profiles?.FirstOrDefault(p => p.Id == newId);
+        if (_active != null)
+        {
+            await OnProfileChanged.InvokeAsync(_active);
+        }
+    }
+
+    private async Task DeleteActiveAsync()
+    {
+        if (_active == null || _active.Origin == ProfileOrigin.BuiltIn) return;
+
+        // Lightweight confirm via JS to keep the UI clean -- a real modal lands with the
+        // Settings page redesign.
+        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Delete profile '{_active.Name}'?");
+        if (!confirmed) return;
+
+        await ProfileStore.DeleteAsync(_active.Id);
+        await ProfileStore.SetActiveIdAsync("builtin.default");
+        await ReloadAsync();
+        if (_active != null)
+        {
+            await OnProfileChanged.InvokeAsync(_active);
+        }
+    }
+}
