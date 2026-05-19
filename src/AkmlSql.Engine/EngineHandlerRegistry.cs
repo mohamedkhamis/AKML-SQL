@@ -68,8 +68,13 @@ internal static class EngineHandlerRegistry
         var navigationHandler = new NavigationRequestHandler(schemaCache);
         var crudHandler = new CrudGenerationHandler(schemaCache);
         var scriptAsHandler = new ScriptAsHandler(schemaCache);
-        var aiHandler = new AiRequestHandler(schemaCache, parser);
         var aiProviderTestHandler = new AiProviderTestHandler();
+
+        // Spec 022 (M0 closure) -- P3 / US3 (complete). AiPipelineServices is the sole shared
+        // collaborator surface for the seven AiHandlerBase-derived subclasses. It reads settings
+        // fresh per call via ctx.EnsureSettings().Ai so the AnalysisSettingsChanged invalidation
+        // propagates without an explicit AI refresh hook (FR-013). AiRequestHandler is deleted.
+        var aiServices = AiPipelineServices.Build(schemaCache, parser, () => ctx.EnsureSettings().Ai);
         var sessionRequestHandler = new SessionRequestHandler();
         var gridExportService = new GridExportService();
 
@@ -163,8 +168,11 @@ internal static class EngineHandlerRegistry
         router.Register(new Handlers.Analysis.AnalysisSettingsChangedHandler(() =>
         {
             caSettingsLoader.InvalidateCache();
+            // Spec 022 (M0 closure) -- P3 / US3. ctx.InvalidateSettings() is the only refresh
+            // hook now; the seven typed AI handlers read settings fresh on every call via
+            // Services.SettingsProvider() -> ctx.EnsureSettings().Ai, so the explicit
+            // aiHandler.RefreshSettings() call (and the AiRequestHandler class itself) is gone.
             ctx.InvalidateSettings();
-            aiHandler.RefreshSettings();
         }));
 
         // === Snippets (5 typed) ===
@@ -241,14 +249,17 @@ internal static class EngineHandlerRegistry
         router.Register(new Handlers.Control.ShutdownHandler());
         router.Register(new Handlers.Control.ConnectionChangedHandler());
 
-        // === AI bridge (8 raw -- AiRequestHandler.Handle*Async + AiProviderTestHandler) ===
-        router.RegisterRaw(MessageTypes.AiTextToSql, (msg, ct) => aiHandler.HandleTextToSqlAsync(msg, lookupSession, ct));
-        router.RegisterRaw(MessageTypes.AiExplain, (msg, ct) => aiHandler.HandleExplainAsync(msg, lookupSession, ct));
-        router.RegisterRaw(MessageTypes.AiFix, (msg, ct) => aiHandler.HandleFixAsync(msg, lookupSession, ct));
-        router.RegisterRaw(MessageTypes.AiOptimize, (msg, ct) => aiHandler.HandleOptimizeAsync(msg, lookupSession, ct));
-        router.RegisterRaw(MessageTypes.AiIndexAnalysis, (msg, ct) => aiHandler.HandleIndexAnalysisAsync(msg, lookupSession, ct));
-        router.RegisterRaw(MessageTypes.AiChat, (msg, ct) => aiHandler.HandleChatAsync(msg, lookupSession, ct));
-        router.RegisterRaw(MessageTypes.AiGhostText, (msg, ct) => aiHandler.HandleGhostTextAsync(msg, lookupSession, ct));
+        // === AI handlers (7 typed via AiHandlerBase subclasses + 1 raw bridge for AiProviderTest) ===
+        // Spec 022 P3/US3 complete: all seven user-facing AI messages route through typed
+        // AiHandlerBase subclasses. AiProviderTest stays raw -- it's the developer-tool
+        // provider-health-check handler, not a user-facing AI message.
+        router.Register(new Handlers.Ai.AiTextToSqlHandler(aiServices));
+        router.Register(new Handlers.Ai.AiExplainHandler(aiServices));
+        router.Register(new Handlers.Ai.AiFixHandler(aiServices));
+        router.Register(new Handlers.Ai.AiOptimizeHandler(aiServices));
+        router.Register(new Handlers.Ai.AiIndexAnalysisHandler(aiServices));
+        router.Register(new Handlers.Ai.AiChatHandler(aiServices));
+        router.Register(new Handlers.Ai.AiGhostTextHandler(aiServices));
         router.RegisterRaw(MessageTypes.AiProviderTest, (msg, ct) => aiProviderTestHandler.HandleAsync(msg, ct));
 
         // AiStreamCancel is a notification-only signal -- ack and drop. The streaming pipeline

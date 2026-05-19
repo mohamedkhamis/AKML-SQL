@@ -174,11 +174,36 @@ namespace AkmlSql.Engine
             public async Task<RpcMessage?> RouteAsync(RpcMessage msg, RpcContext ctx, CancellationToken ct)
             {
                 var payload = msg.Payload ?? Array.Empty<byte>();
-                var request = payload.Length == 0
-                    ? default!
-                    : MessagePackSerializer.Deserialize<TReq>(payload, cancellationToken: ct);
+                TReq request;
+                if (payload.Length == 0)
+                {
+                    // Spec 022 (M0 closure) -- P3 / US3. Mirror the legacy Server/TypedHandlerAdapter
+                    // behaviour: when the handler doesn't opt into empty payloads, reject the request
+                    // with a typed error envelope instead of passing default(TReq) into a handler
+                    // that would then crash on a null dereference.
+                    if (!_handler.AllowsEmptyPayload)
+                    {
+                        return RpcResponseFactory.CreateErrorResponse("Payload required", msg.RequestId);
+                    }
+                    request = default!;
+                }
+                else
+                {
+                    request = MessagePackSerializer.Deserialize<TReq>(payload, cancellationToken: ct);
+                }
 
-                var response = await _handler.HandleAsync(request, ctx, ct).ConfigureAwait(false);
+                TResp response;
+                try
+                {
+                    response = await _handler.HandleAsync(request, ctx, ct).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (_handler.SwallowCancellation)
+                {
+                    // Spec 022 (M0 closure) -- P3 / US3. Refactoring handlers + AI ghost-text rely
+                    // on SwallowCancellation to convert a superseded request into "no response"
+                    // rather than tearing down the transport accept loop.
+                    return null;
+                }
 
                 if (_handler.ResponseMessageType == 0)
                 {
