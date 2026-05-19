@@ -50,37 +50,6 @@ export async function create(hostElementId, initialText, dotNetRef) {
 
     const cm = await loadCm();
 
-    const updateListener = cm.view.EditorView.updateListener.of((update) => {
-        if (update.docChanged && dotNetRef) {
-            const text = update.state.doc.toString();
-            // Fire-and-forget; the C# side debounces.
-            dotNetRef.invokeMethodAsync('OnTextChangedFromJs', text);
-
-            // T109 follow-up Issue 1: when the user types a space (or any
-            // non-identifier char) immediately after a trigger keyword, CM's
-            // activateOnTyping doesn't fire because the typed char isn't a word
-            // char. Detect that case and manually open the popup so the user
-            // doesn't have to press Ctrl+Space after "WHERE ", "AND ", etc.
-            try {
-                let typedNonWord = false;
-                update.changes.iterChanges((_fromA, _toA, _fromB, _toB, inserted) => {
-                    const ins = inserted.toString();
-                    if (ins.length > 0 && /[\s.,()=<>!+\-*/]/.test(ins[ins.length - 1])) {
-                        typedNonWord = true;
-                    }
-                });
-                if (typedNonWord) {
-                    const pos = update.state.selection.main.head;
-                    const line = update.state.doc.lineAt(pos);
-                    const lineUpToCaret = line.text.slice(0, pos - line.from);
-                    if (POST_KEYWORD_TRIGGER.test(lineUpToCaret)) {
-                        cm.autocomplete.startCompletion(update.view);
-                    }
-                }
-            } catch { /* never let trigger detection break the editor */ }
-        }
-    });
-
     // T109 follow-up: route CodeMirror's autocomplete through ICompletionService
     // on the .NET side so the popup is fed by the bridge (online) or the cached
     // schema snapshot (offline). Returns null when the .NET side gives an empty
@@ -96,7 +65,58 @@ export async function create(hostElementId, initialText, dotNetRef) {
     //      This is the case the user reported -- typing "... AND " (trailing
     //      space) should suggest columns / tables without forcing Ctrl+Space.
     //   3. context.explicit === true (Ctrl+Space) overrides everything.
-    const POST_KEYWORD_TRIGGER = /\b(?:where|and|or|from|join|on|set|having|select|group\s+by|order\s+by|by|when|then|else|in)\s+$/i;
+    //
+    // PR #236 review: regex hoisted above updateListener (was previously below
+    // the listener and worked only because the closure binding resolved at
+    // first-firing time — a code smell that would break if the listener could
+    // fire synchronously during view construction).
+    // `in` intentionally omitted: typing "WHERE x IN " almost always wants a
+    // subquery / value list, not a column name; the false-positive popup was
+    // more noise than help.
+    const POST_KEYWORD_TRIGGER = /\b(?:where|and|or|from|join|on|set|having|select|group\s+by|order\s+by|by|when|then|else)\s+$/i;
+
+    const updateListener = cm.view.EditorView.updateListener.of((update) => {
+        if (!update.docChanged || !dotNetRef) return;
+
+        const text = update.state.doc.toString();
+        // Fire-and-forget; the C# side debounces.
+        dotNetRef.invokeMethodAsync('OnTextChangedFromJs', text);
+
+        // PR #236 review: only consider user-typed transactions for the
+        // post-keyword trigger. Programmatic dispatches (Format → setText,
+        // refactoring previews, etc.) shouldn't pop the autocomplete just
+        // because the formatted SQL happens to end with "WHERE foo = 1 AND ".
+        // CM transactions carry a userEvent annotation when they originate
+        // from user input ("input.type" / "input.paste" / "delete.*").
+        const userTyped = update.transactions.some(t => {
+            const ev = t.annotation(cm.state.Transaction.userEvent);
+            return typeof ev === 'string' && ev.startsWith('input.');
+        });
+        if (!userTyped) return;
+
+        // T109 follow-up Issue 1: when the user types a space (or any
+        // non-identifier char) immediately after a trigger keyword, CM's
+        // activateOnTyping doesn't fire because the typed char isn't a word
+        // char. Detect that case and manually open the popup so the user
+        // doesn't have to press Ctrl+Space after "WHERE ", "AND ", etc.
+        try {
+            let typedNonWord = false;
+            update.changes.iterChanges((_fromA, _toA, _fromB, _toB, inserted) => {
+                const ins = inserted.toString();
+                if (ins.length > 0 && /[\s.,()=<>!+\-*/]/.test(ins[ins.length - 1])) {
+                    typedNonWord = true;
+                }
+            });
+            if (typedNonWord) {
+                const pos = update.state.selection.main.head;
+                const line = update.state.doc.lineAt(pos);
+                const lineUpToCaret = line.text.slice(0, pos - line.from);
+                if (POST_KEYWORD_TRIGGER.test(lineUpToCaret)) {
+                    cm.autocomplete.startCompletion(update.view);
+                }
+            }
+        } catch { /* never let trigger detection break the editor */ }
+    });
 
     const completionSource = async (context) => {
         if (!dotNetRef) return null;

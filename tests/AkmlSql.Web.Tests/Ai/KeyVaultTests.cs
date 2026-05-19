@@ -145,6 +145,26 @@ public sealed class KeyVaultTests
     }
 
     [Fact]
+    public async Task UnwrapForCallAsync_throws_clear_error_for_no_key_provider()
+    {
+        // PR #236 follow-up: when a config is persisted with HasKey=false (Ollama /
+        // LM Studio), UnwrapForCallAsync used to bubble the Web Crypto OperationError
+        // from attempting to decrypt empty ciphertext. The defence-in-depth guard
+        // now surfaces a clear contract violation instead.
+        var (vault, _) = Build();
+        await vault.SetKeyAsync("ollama", new AiProviderConfig
+        {
+            DisplayName = "Ollama (local)",
+            Model = "llama3.1:8b",
+        }, string.Empty);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            vault.UnwrapForCallAsync("ollama"));
+        Assert.Contains("no API key", ex.Message);
+        Assert.Contains("HasKey", ex.Message);
+    }
+
+    [Fact]
     public void UnwrappedKey_Dispose_clears_the_buffer()
     {
         var k = new UnwrappedKey("plain-value");

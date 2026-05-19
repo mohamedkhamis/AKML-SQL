@@ -254,6 +254,17 @@
     /// returns HasConnection = false here and we log the reason. The architectural
     /// piece is in place so the moment a connect-to-SQL UI lands, IntelliSense
     /// starts flowing automatically.</para>
+    ///
+    /// <para><b>TODO (PR #236 review):</b> we pass <paramref name="connectionId"/>
+    /// (a browser-minted GUID from <c>EngineConnection.Id</c>) as the engine's
+    /// <c>SessionId</c>. The engine's existing handlers look it up in
+    /// <c>SessionManager.GetSession(sessionId)</c>, which only contains sessions
+    /// the shell extension registered via <c>ConnectionChanged</c>. Until the
+    /// browser sends <c>ConnectionChanged</c> too — OR the engine starts assigning
+    /// a session id at handshake and echoing it back to the browser — this id will
+    /// never match a real engine session, and SchemaIdentify will always report
+    /// HasConnection=false. When the connect-to-SQL UI lands, decide which side
+    /// owns the session-id source of truth before wiring more bridge calls.</para>
     /// </summary>
     private async Task TryStartSchemaSyncAsync(string connectionId)
     {

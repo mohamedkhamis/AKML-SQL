@@ -170,6 +170,19 @@ internal sealed class AiKeyVault : IAiKeyVault
         var record = SafeDeserialize(raw!)
             ?? throw new InvalidOperationException($"AI key record for '{providerId}' is corrupt.");
 
+        // Defence-in-depth: local providers (Ollama / LM Studio) persist a config
+        // with HasKey=false and empty ciphertext/iv/aad. Calling
+        // _crypto.UnwrapAsync on those would throw a low-level Web Crypto
+        // OperationError that doesn't tell the caller what's actually wrong.
+        // Surface a clear contract violation instead — the caller should have
+        // checked HasKey first.
+        if (record.Config == null || !record.Config.HasKey ||
+            string.IsNullOrEmpty(record.Ciphertext))
+        {
+            throw new InvalidOperationException(
+                $"Provider '{providerId}' has no API key — check HasKey before calling Unwrap.");
+        }
+
         var wrapped = new WrappedSecret
         {
             Ciphertext = Convert.FromBase64String(record.Ciphertext),
