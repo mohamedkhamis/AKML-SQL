@@ -28,6 +28,7 @@ public sealed class AnalysisHandlersTests
         Sessions = new SessionManager(),
         SchemaCache = new SchemaCacheManager(),
         Logger = Log.Logger,
+        SettingsLoader = () => new AppSettings(),
     };
 
     private static AnalysisEngine CreateAnalysisEngine() =>

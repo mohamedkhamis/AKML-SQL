@@ -30,24 +30,22 @@ public partial class PipeRpcServer
         // typed CompletionHandler under Handlers/Completion/. The legacy switch case at
         // case MessageTypes.RequestCompletion has been removed; the pluggable dispatch path
         // routes the message through TypedHandlerAdapter -> CompletionHandler.HandleAsync.
+        // Spec 022 (M0 closure) -- P1 / US1. RpcContext is the sole owner of the cached
+        // AppSettings now; SettingsLoader wires the on-disk read; EnsureSettings/InvalidateSettings
+        // replace the old transport-side cache field + the public Settings property.
         _rpcContext = new RpcContext
         {
-            Settings = _cachedSettings,
             Sessions = _sessionManager,
             SchemaCache = _schemaCacheManager,
             Logger = Log.Logger,
             ParserService = _parserService,
             SchemaMetadata = _schemaMetadataService,
+            SettingsLoader = Core.Config.ConfigManager.Load,
         };
 
         var completionHandler = new Handlers.Completion.CompletionHandler(
             _completionEngine,
-            () =>
-            {
-                _cachedSettings ??= Core.Config.ConfigManager.Load();
-                _rpcContext.Settings = _cachedSettings;
-                return _cachedSettings;
-            });
+            () => _rpcContext.EnsureSettings());
         _pluggableHandlers[MessageTypes.RequestCompletion] =
             new TypedHandlerAdapter<CompletionRequest, CompletionResponse>(completionHandler, _rpcContext);
 
@@ -84,22 +82,18 @@ public partial class PipeRpcServer
                 new Handlers.Formatting.StyleEditorSchemaHandler(_formatHandler), _rpcContext);
 
         // Spec 021 (web edition) -- M0.3 task T014. RequestAnalyze + AnalysisSettingsChanged.
+        // Spec 022 (M0 closure) -- P1 / US1. Settings reads route through _rpcContext.EnsureSettings();
+        // AnalysisSettingsChanged drops the cache via _rpcContext.InvalidateSettings().
         var analysisHandler = new Handlers.Analysis.AnalysisHandler(
             _analysisEngine,
-            () =>
-            {
-                _cachedSettings ??= Core.Config.ConfigManager.Load();
-                _rpcContext.Settings = _cachedSettings;
-                return _cachedSettings;
-            });
+            () => _rpcContext.EnsureSettings());
         _pluggableHandlers[MessageTypes.RequestAnalyze] =
             new TypedHandlerAdapter<CodeAnalysisRequest, CodeAnalysisResponse>(analysisHandler, _rpcContext);
 
         var analysisSettingsChangedHandler = new Handlers.Analysis.AnalysisSettingsChangedHandler(() =>
         {
             _caSettingsLoader.InvalidateCache();
-            _cachedSettings = null;
-            _rpcContext.Settings = null;
+            _rpcContext.InvalidateSettings();
             _aiHandler.RefreshSettings();
         });
         _pluggableHandlers[MessageTypes.AnalysisSettingsChanged] =

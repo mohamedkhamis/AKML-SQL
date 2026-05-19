@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Engine;
@@ -26,6 +27,7 @@ public sealed class HandshakeHandlerTests
         Sessions = new SessionManager(),
         SchemaCache = new SchemaCacheManager(),
         Logger = Log.Logger,
+        SettingsLoader = () => new AppSettings(),
     };
 
     private static HandshakeRequest MakeRequest(

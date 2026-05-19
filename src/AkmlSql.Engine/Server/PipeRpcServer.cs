@@ -32,7 +32,6 @@ namespace AkmlSql.Engine.Server;
 public partial class PipeRpcServer
 {
     private readonly string _pipeName;
-    private Core.Config.AppSettings? _cachedSettings;
     private readonly SessionManager _sessionManager = new();
     private readonly TsqlParserService _parserService = new();
     private readonly CompletionEngine _completionEngine;

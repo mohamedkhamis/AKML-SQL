@@ -148,6 +148,7 @@ public sealed class AllMessageTypesInProcessTests
             Sessions = new SessionManager(),
             SchemaCache = new AkmlSql.Engine.Schema.SchemaCacheManager(),
             Logger = Serilog.Log.Logger,
+            SettingsLoader = () => new AkmlSql.Core.Config.AppSettings(),
         };
 
         await using var transport = new InProcessTransport();
