@@ -168,6 +168,7 @@ internal sealed class CompletionService : ICompletionService
             {
                 foreach (var col in obj.Columns)
                 {
+                    // Bare column form — what the user types in a single-table query.
                     items.Add(new CompletionItem
                     {
                         DisplayText = col.Name,
@@ -176,6 +177,22 @@ internal sealed class CompletionService : ICompletionService
                         SecondaryText = col.TypeName,
                         SourceObject = $"{obj.SchemaName}.{obj.ObjectName}",
                         SortPriority = 20,
+                    });
+                    // Qualified `table.column` form — what the user needs in ORDER BY /
+                    // GROUP BY / WHERE after `SELECT *,col` so the engine doesn't reject
+                    // with "Ambiguous column name". CM's fuzzy filter naturally surfaces
+                    // the qualified item the moment the user types the table prefix
+                    // (e.g. "martyrs.cr" → `martyrs.created_at`); the bare item is the
+                    // first hit for short prefixes ("cr" → both `created_at` and
+                    // `martyrs.created_at`, with `created_at` ranked higher by length).
+                    items.Add(new CompletionItem
+                    {
+                        DisplayText = $"{obj.ObjectName}.{col.Name}",
+                        InsertText = $"{obj.ObjectName}.{col.Name}",
+                        ObjectType = (int)CompletionObjectType.Column,
+                        SecondaryText = col.TypeName,
+                        SourceObject = $"{obj.SchemaName}.{obj.ObjectName}",
+                        SortPriority = 25,   // slightly lower than bare so bare wins on tie
                     });
                 }
             }

@@ -47,6 +47,23 @@ by CI.
   trigger → empty-prefix popup → CM-side filtering as the user types —
   works without any further network round-trips.
 
+- **order-by-qualified-columns.png** — User typed:
+  ```
+  SELECT created_at,*
+  FROM martyrs
+  ORDER BY ma
+  ```
+  Against the un-fixed version of the engine this would produce
+  `Msg 209: Ambiguous column name 'created_at'` because the SELECT pulls
+  `created_at` both explicitly and via `*`. The popup now shows the
+  table-qualified forms `martyrs.created_at`, `martyrs.id`, `martyrs.name`,
+  `martyrs.updated_at` alongside `dbo.martyrs` itself — picking
+  `martyrs.created_at` produces a disambiguated `ORDER BY` clause. The fix
+  emits every column twice: bare `col.Name` (works in single-table queries)
+  AND `obj.ObjectName.col.Name` (disambiguates SELECT-* / multi-table /
+  GROUP BY / ORDER BY contexts). CM's fuzzy filter naturally promotes
+  whichever form matches what the user is typing.
+
 - **post-keyword-trigger-no-cache.png** — The realistic first-use state:
   bridge `Disconnected`, IndexedDB schema-entries store **empty** (never
   paired with an engine, or paired but engine has no active SQL session

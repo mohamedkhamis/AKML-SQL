@@ -128,8 +128,12 @@ public sealed class CompletionServiceOfflineTests
     }
 
     [Fact]
-    public async Task Phase_B_columns_are_included_when_cached()
+    public async Task Phase_B_columns_are_included_when_cached_in_both_bare_and_qualified_forms()
     {
+        // After "SELECT created_at, * FROM martyrs ORDER BY created_at" the engine
+        // rejects with "Ambiguous column name". The offline path emits BOTH `Name`
+        // (bare) and `Customers.Name` (table-qualified) so the user can pick the
+        // disambiguated form when their query has SELECT * + an ORDER BY / GROUP BY.
         var store = new SchemaCacheStore(new InMemoryIndexedDbAdapter());
         await store.SetAsync(new SchemaSnapshot
         {
@@ -149,6 +153,10 @@ public sealed class CompletionServiceOfflineTests
         Assert.Contains("Id", columns);
         Assert.Contains("Name", columns);
         Assert.Contains("Email", columns);
+        // Table-qualified forms for the same columns.
+        Assert.Contains("Customers.Id", columns);
+        Assert.Contains("Customers.Name", columns);
+        Assert.Contains("Customers.Email", columns);
     }
 
     [Fact]
