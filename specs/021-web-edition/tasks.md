@@ -446,3 +446,16 @@ After Phase 2 closes:
 - Wire format and message-type integer codes are **frozen** in M0; never change them downstream.
 - Commit per task or per logical group; checkpoints at the end of each phase are the natural release boundaries.
 - Avoid: cross-story dependencies that break independent testability; "while we're in here" scope creep on the M0 refactor (two-week budget is hard); modifying any file under `src/AkmlSql.Shell.Shared/` in M0 (zero blast radius is a hard M0 success metric).
+
+---
+
+## M0 Closure (spec 022, 2026-05-20)
+
+The four M0 PRD success metrics that were deferred when M0 merged (PR #236, 2026-05-15) have now landed via spec 022 (`specs/022-m0-engine-closure/`):
+
+- [X] **Settings cache single-owned** — `_cachedSettings` moved off the named-pipe transport onto `RpcContext`; access is `EnsureSettings()` / `InvalidateSettings()` only (closes the T009 tail).
+- [X] **Named-pipe transport file ≤ 150 LOC** — `PipeRpcServer` renamed to `Transports/NamedPipeTransport.cs` (116 LOC); service construction and handler registration extracted to `EngineComposition` + `EngineHandlerRegistry` (closes the T020 tail).
+- [X] **One focused class per AI message type** — the 1896-LOC `AiRequestHandler` monolith replaced by `AiHandlerBase` + 7 per-message handlers + `AiPipelineServices` (733 LOC across 8 files; reverses the T019 dispatch-lift-only judgement).
+- [X] **Performance gate at 5 %** — the regression threshold tightened from 25 % to 5 % (`PerformanceBaselineTests.cs`), backed by a 320-statement corpus and a third `BulkFormat` workload so every measured p50 stays heavy enough for a 5 % gate to mean something (closes the T025 tail).
+
+See `specs/022-m0-engine-closure/` (spec, plan, tasks, contracts) and the closure plan `docs/superpowers/plans/2026-05-19-m0-engine-transport-closure.md`.
