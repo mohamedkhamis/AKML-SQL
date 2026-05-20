@@ -47,4 +47,27 @@ public class RpcContextTests
         Assert.Equal(2, loadCount);
         Assert.NotSame(first, second);
     }
+
+    [Fact]
+    public async Task EnsureSettings_never_returns_null_under_concurrent_invalidation()
+    {
+        // Spec 022 edge case: a concurrent InvalidateSettings() must never make EnsureSettings()
+        // return null. Guards the lock-free fast path reading the field into a local.
+        var ctx = NewContext(() => new AppSettings());
+        using var stop = new CancellationTokenSource();
+        var invalidator = Task.Run(() =>
+        {
+            while (!stop.IsCancellationRequested) ctx.InvalidateSettings();
+        });
+        try
+        {
+            for (int i = 0; i < 200_000; i++)
+                Assert.NotNull(ctx.EnsureSettings());
+        }
+        finally
+        {
+            stop.Cancel();
+            await invalidator;
+        }
+    }
 }

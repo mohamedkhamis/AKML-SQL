@@ -24,9 +24,10 @@ public sealed class EngineComposition
     public required HistoryRetentionService HistoryRetention { get; init; }
 
     /// <summary>
-    /// Build every engine service, the shared <see cref="RpcContext"/>, an <see cref="RpcRouter"/>
-    /// with every <see cref="Core.Ipc.MessageTypes"/> registered, and the
-    /// <see cref="HistoryRetentionService"/> (the host starts it after <see cref="Build"/> returns).
+    /// Build every engine service, the shared <see cref="RpcContext"/>, and an <see cref="RpcRouter"/>
+    /// with every <see cref="Core.Ipc.MessageTypes"/> registered. <see cref="EngineHandlerRegistry"/>
+    /// also starts the history-retention background loop (when history is enabled); the built
+    /// <see cref="HistoryRetentionService"/> is exposed on <see cref="HistoryRetention"/> as a handle.
     /// </summary>
     public static EngineComposition Build()
     {

@@ -21,11 +21,10 @@ namespace AkmlSql.Engine
     /// call <see cref="RunAsync"/> directly without re-implementing the boilerplate.
     ///
     /// <para>
-    /// Reflective handler discovery (T021) lives on <see cref="RpcRouter.RegisterAllInAssembly"/>.
-    /// <see cref="NamedPipeTransport"/> still owns explicit registration via
-    /// <c>RegisterPluggableHandlers()</c> because most handlers have constructor dependencies
-    /// on engine-internal services; the reflective path is provided for the dependency-free
-    /// subset that future in-process consumers may want one-line registration for.
+    /// Service construction and handler registration live in <see cref="EngineComposition"/> +
+    /// <c>EngineHandlerRegistry</c> (spec 022 closure); <see cref="NamedPipeTransport"/> is now
+    /// pure frame I/O. <see cref="RpcRouter.RegisterAllInAssembly"/> offers an additional
+    /// reflective path for the dependency-free handler subset (used by in-process tests).
     /// </para>
     /// </summary>
     public static class EngineHost

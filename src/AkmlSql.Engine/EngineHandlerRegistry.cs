@@ -25,11 +25,11 @@ namespace AkmlSql.Engine;
 /// <summary>
 /// Spec 022 (M0 closure) -- P2 / US2. Composition root for shell-to-engine handlers.
 /// Builds every engine service, registers every <see cref="Core.Ipc.MessageTypes"/> with the
-/// supplied <see cref="RpcRouter"/>, and returns the <see cref="HistoryRetentionService"/>
-/// so the host can start it after the router is wired (the retention loop touches disk and is
-/// best deferred to post-construction).
+/// supplied <see cref="RpcRouter"/>, and -- when history is enabled -- starts the
+/// <see cref="HistoryRetentionService"/> on a background task. The retention service is also
+/// returned so callers can hold a handle to it.
 ///
-/// <para>Lifted out of the partial-class <c>NamedPipeTransport.Handlers.cs</c> so the transport file
+/// <para>Lifted out of the partial-class <c>PipeRpcServer.Handlers.cs</c> so the transport file
 /// stays focused on frame I/O and lifecycle. All three transports (named-pipe, in-process,
 /// WebSocket) consume the same composition output via <see cref="EngineComposition.Build"/>.</para>
 /// </summary>

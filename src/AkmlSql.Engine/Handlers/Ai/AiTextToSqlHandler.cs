@@ -66,7 +66,6 @@ public sealed class AiTextToSqlHandler : AiHandlerBase<AiTextToSqlRequest, AiTex
         if (transformation.IdentifierMap.Count > 0 || transformation.LiteralMap.Count > 0)
             generatedSql = PrivacyTransformer.DeTransform(generatedSql, transformation);
         generatedSql = AiPipelineServices.StripCodeFences(generatedSql);
-        Services.Parser.Parse(generatedSql, out _);
         var validationAnnotations = Services.ValidateGeneratedSql(generatedSql, schemaContext);
 
         var tokensUsed = aiResponse.Usage != null

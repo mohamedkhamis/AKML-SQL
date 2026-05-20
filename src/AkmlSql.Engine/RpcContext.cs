@@ -48,7 +48,11 @@ namespace AkmlSql.Engine
         /// </summary>
         public AppSettings EnsureSettings()
         {
-            if (_cachedSettings != null) return _cachedSettings;
+            // Read into a local: the lock-free fast path must not re-read the field, or a
+            // concurrent InvalidateSettings() interleaving between the null check and the
+            // return could yield null from this non-nullable method (spec 022 edge case).
+            var cached = _cachedSettings;
+            if (cached != null) return cached;
             lock (_settingsLock)
             {
                 return _cachedSettings ??= SettingsLoader();
