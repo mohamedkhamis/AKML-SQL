@@ -1,4 +1,4 @@
-﻿using AkmlSql.Core.Ipc.Messages;
+using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Engine.Parser;
 using AkmlSql.Engine.Schema;
 

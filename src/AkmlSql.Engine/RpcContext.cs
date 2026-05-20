@@ -1,4 +1,4 @@
-﻿using AkmlSql.Core.Config;
+using AkmlSql.Core.Config;
 using AkmlSql.Engine.Parser;
 using AkmlSql.Engine.Schema;
 using AkmlSql.Engine.Server;

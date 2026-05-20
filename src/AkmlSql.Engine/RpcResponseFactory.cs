@@ -1,4 +1,4 @@
-﻿using AkmlSql.Core.Ipc;
+using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using MessagePack;
 

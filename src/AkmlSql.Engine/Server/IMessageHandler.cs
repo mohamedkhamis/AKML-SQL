@@ -1,21 +1,18 @@
-﻿using System.Threading;
+using System.Threading;
 using System.Threading.Tasks;
 using AkmlSql.Core.Ipc;
 
 namespace AkmlSql.Engine.Server
 {
     /// <summary>
-    /// Phase 10 (spec 019) / US14 FR-080 — hybrid dispatch contract: every
-    /// MessageType registered via <see cref="NamedPipeTransport"/>'s pluggable
-    /// dictionary implements this interface and returns a fully-formed response
-    /// envelope (or <c>null</c> for notifications).
+    /// Raw-envelope handler contract: an implementation handles one inbound
+    /// <see cref="RpcMessage"/> and returns the fully-formed response envelope (or
+    /// <c>null</c> for notifications). Introduced in Phase 10 (spec 019) / US14 FR-080.
     /// <para>
-    /// The hybrid pattern: <see cref="NamedPipeTransport.DispatchAsync"/> consults
-    /// the pluggable dictionary first; on miss, it falls through to the
-    /// existing switch dispatch. New MessageType integers introduced by future
-    /// specs register a handler via the dictionary and require <b>zero</b>
-    /// changes to <c>NamedPipeTransport.cs</c>, satisfying FR-080's invariant
-    /// without a high-risk rewrite of the existing 53-case switch.
+    /// After the spec 022 M0 closure, dispatch flows through <c>RpcRouter</c>: raw handlers are
+    /// registered via <c>RpcRouter.RegisterRaw</c> and the engine's pre-M0 53-case switch is gone.
+    /// <see cref="IMessageHandler"/> remains the shape used by the spec-014 stub handlers and by
+    /// <see cref="TypedHandlerAdapter{TRequest,TResponse}"/>.
     /// </para>
     /// <para>
     /// Implementations may use the static helpers

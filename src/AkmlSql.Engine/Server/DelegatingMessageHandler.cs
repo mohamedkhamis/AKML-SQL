@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using AkmlSql.Core.Ipc;
@@ -6,20 +6,16 @@ using AkmlSql.Core.Ipc;
 namespace AkmlSql.Engine.Server
 {
     /// <summary>
-    /// Spec 021 (web edition) -- M0.3 / M0.4. General-purpose <see cref="IMessageHandler"/>
-    /// adapter for cases where the legacy switch already delegated to a handler-class method
-    /// with the shape <c>Task&lt;RpcMessage?&gt; Handle(RpcMessage, CancellationToken)</c>.
-    /// Captures one such method as a delegate so NamedPipeTransport can register it into
-    /// <c>_pluggableHandlers</c> without writing a dedicated wrapper class per message type.
-    ///
-    /// Used by:
-    ///   * AI handlers (T019) -- 8 message types via <c>_aiHandler.Handle*Async</c>.
-    ///   * Session / History / Safety / Navigation / Productivity / CRUD / ScriptAs / Grid
-    ///     export (T020 wave 1) -- 14 message types via the corresponding handler classes.
-    ///
-    /// Handlers that need typed (TRequest, TResponse) deserialisation and the new
-    /// <see cref="AkmlSql.Engine.Transports.IRpcRequestHandler{TRequest,TResponse}"/> contract
-    /// keep going through <see cref="TypedHandlerAdapter{TRequest,TResponse}"/> instead.
+    /// General-purpose <see cref="IMessageHandler"/> adapter that wraps a
+    /// <c>Func&lt;RpcMessage, CancellationToken, Task&lt;RpcMessage?&gt;&gt;</c> delegate.
+    /// Introduced in spec 021 (web edition) M0.3 / M0.4 so raw-envelope handlers could be
+    /// registered without a dedicated wrapper class per message type.
+    /// <para>
+    /// After the spec 022 M0 closure, raw handlers register directly via <c>RpcRouter.RegisterRaw</c>
+    /// (which accepts the same delegate shape), so this adapter is no longer wired into the
+    /// dispatch path. It is retained as a standalone <see cref="IMessageHandler"/> implementation;
+    /// <see cref="TypedHandlerAdapter{TRequest,TResponse}"/> remains the path for typed handlers.
+    /// </para>
     /// </summary>
     internal sealed class DelegatingMessageHandler : IMessageHandler
     {
