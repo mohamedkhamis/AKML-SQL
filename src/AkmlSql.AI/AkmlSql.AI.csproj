@@ -44,6 +44,13 @@
     <PackageReference Include="Microsoft.ML.Tokenizers.Data.Cl100kBase" Version="2.0.0" />
     <PackageReference Include="Microsoft.SqlServer.TransactSql.ScriptDom" Version="170.*" />
     <PackageReference Include="Serilog" Version="4.*" />
+
+    <!-- Security pin (GHSA-73j8-2gch-69rq): the AI SDK packages above pull
+         Microsoft.Bcl.Memory 9.0.4 transitively, which has a high-severity
+         Base64Url out-of-bounds-read DoS. This direct reference overrides it
+         with the patched 9.0.14 and clears NU1903 here and in dependent
+         projects (AkmlSql.Web). -->
+    <PackageReference Include="Microsoft.Bcl.Memory" Version="9.0.14" />
   </ItemGroup>
 
   <ItemGroup>

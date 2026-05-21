@@ -44,7 +44,7 @@ behind it.
 | 3 | What is the compressed WASM bundle size? | **PASS** | `_framework/*.br` (Brotli) total = **4.83 MB** (5,062,660 bytes) — relinked Release publish. Reference ≤ 25 MB — ~5× under. |
 | 4 | What is the cold-load time? | **PASS** | First-visit (true cold) time-to-interactive = **936 ms**; in-process reload median = 420 ms. Reference ≤ 8 s — ~8.5× under. See §2. |
 | 5 | Does AOT justify its build-time / size cost? | **No** — not for M2's default | AOT Parse & Format of the 50-line proc is ~1.7× faster (9.59 ms vs 16.29 ms interpreted), but AOT ~2.4× the compressed bundle (11.51 MB vs 4.83 MB) and the publish takes ~13.5 min (vs ~1 min). At tens-of-ms operations the speed-up is imperceptible; the size/build cost is not. See §2. |
-| 6 | Do trim warnings exist? | **PASS** | `dotnet publish -c Release -p:TrimmerSingleWarn=false` — IL trimming ran (`partial`); **zero `IL2xxx` trim warnings**. The 4 build warnings are all `NU1903` (a transitive package-vulnerability advisory), unrelated to trimming. See §5. |
+| 6 | Do trim warnings exist? | **PASS** | `dotnet publish -c Release -p:TrimmerSingleWarn=false` — IL trimming ran (`partial`); **zero `IL2xxx` trim warnings**. The 4 build warnings were all `NU1903` (a transitive package-vulnerability advisory, unrelated to trimming — since fixed, see §5). |
 | 7 | Are there missing-API runtime errors? | **PASS** | None. SELECT, multi-statement batch, ≥ 50-line stored procedure, CTE, window functions and MERGE all parse / format / analyse in WASM with no runtime exception; the analyser discovered **130 / 130** rules (§4). |
 
 ---
@@ -198,11 +198,13 @@ detail.
 |-------------------|-------|-------------|
 | (none) | **0** | No action required — the trimmer reported no warnings against any assembly, including `AkmlSql.Analysis` (the `RuleRegistry` reflection scan) and `ScriptDom`. |
 
-The publish log carries 4 warnings total, **all** `NU1903` — *"Package
+The publish log carried 4 warnings total, **all** `NU1903` — *"Package
 'Microsoft.Bcl.Memory' 9.0.4 has a known high severity vulnerability"* — a transitive
 NuGet package-vulnerability advisory reached via `AkmlSql.AI`. It is a pre-existing
-dependency-hygiene item, **not** a trim warning and not introduced by this spike;
-recorded here for completeness and recommended as a separate dependency-bump follow-up.
+dependency-hygiene item, **not** a trim warning and not introduced by this spike.
+**Fixed in this PR** (review follow-up): `AkmlSql.AI` now pins `Microsoft.Bcl.Memory`
+to the patched **9.0.14** (GHSA-73j8-2gch-69rq, a Base64Url out-of-bounds-read DoS),
+which clears NU1903 — a Release publish now reports zero build warnings.
 
 **Relinking note.** The spike's first Release publish logged *"Publishing without
 optimizations … recommend `wasm-tools` workload"* even though a `wasm-tools` workload

@@ -1,6 +1,5 @@
 using Microsoft.Playwright;
 using Xunit;
-using Xunit.Abstractions;
 
 namespace AkmlSql.Web.E2E.Tests;
 
@@ -14,28 +13,22 @@ namespace AkmlSql.Web.E2E.Tests;
 /// root of a served Release publish, then:
 ///   dotnet test tests/AkmlSql.Web.E2E.Tests/AkmlSql.Web.E2E.Tests.csproj --filter "SpikePageTests"
 ///
-/// When AKML_SPIKE_BASE_URL is unset the test is a documented no-op: the existing E2E
-/// project ships no self-hosting harness (see PostKeywordTriggerTests), and the spike
-/// deliberately does not add one. Requires the Playwright browser binaries -- install
-/// once with the generated `playwright.ps1 install chromium` script in the build output.
+/// When AKML_SPIKE_BASE_URL is unset the test reports as **Skipped** (via
+/// [SkippableFact] / Skip.If) -- not a false pass: the existing E2E project ships no
+/// self-hosting harness (see PostKeywordTriggerTests), and the spike deliberately does
+/// not add one. Requires the Playwright browser binaries -- install once with the
+/// generated `playwright.ps1 install chromium` script in the build output.
 /// </summary>
 public sealed class SpikePageTests
 {
-    private readonly ITestOutputHelper _output;
-
-    public SpikePageTests(ITestOutputHelper output) => _output = output;
-
-    [Fact]
+    [SkippableFact]
     public async Task Spike_page_runs_the_corpus_with_no_uncaught_exception()
     {
         var baseUrl = Environment.GetEnvironmentVariable("AKML_SPIKE_BASE_URL");
-        if (string.IsNullOrWhiteSpace(baseUrl))
-        {
-            _output.WriteLine(
-                "SKIPPED: set AKML_SPIKE_BASE_URL (e.g. http://localhost:5000) to a served "
-                + "AkmlSql.Web instance to run this test. See quickstart.md §8.");
-            return;
-        }
+        Skip.If(
+            string.IsNullOrWhiteSpace(baseUrl),
+            "AKML_SPIKE_BASE_URL is not set -- point it at a served AkmlSql.Web instance "
+            + "to run this test. See quickstart.md §8.");
 
         using var playwright = await Playwright.CreateAsync();
         await using var browser = await playwright.Chromium.LaunchAsync();
@@ -47,7 +40,7 @@ public sealed class SpikePageTests
         page.PageError += (_, error) => pageErrors.Add(error);
 
         await page.GotoAsync(
-            $"{baseUrl.TrimEnd('/')}/spike",
+            $"{baseUrl!.TrimEnd('/')}/spike",
             new PageGotoOptions { WaitUntil = WaitUntilState.NetworkIdle });
 
         // The "Run all corpus" button renders once the WASM app is interactive.
