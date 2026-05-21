@@ -1,0 +1,65 @@
+[
+  {
+    "id": "00-simple",
+    "displayName": "00 — Simple SELECT (messy)",
+    "description": "A deliberately messy single-table SELECT. The formatter cleanly re-cases and re-lays-out this item and the full pipeline (including semantic validation) passes — it shows visible formatting work in the browser.",
+    "construct": "Select",
+    "sqlPath": "spike-corpus/00-simple.sql",
+    "expectedFormattedPath": "spike-corpus/00-simple.expected.sql",
+    "expectedAnalysisPath": "spike-corpus/00-simple.expected.json"
+  },
+  {
+    "id": "01-select",
+    "displayName": "01 — SELECT with JOIN",
+    "description": "A ~10-line SELECT with an INNER JOIN, a WHERE filter and ORDER BY.",
+    "construct": "Select",
+    "sqlPath": "spike-corpus/01-select.sql",
+    "expectedFormattedPath": "spike-corpus/01-select.expected.sql",
+    "expectedAnalysisPath": "spike-corpus/01-select.expected.json"
+  },
+  {
+    "id": "02-batch",
+    "displayName": "02 — Multi-statement batch",
+    "description": "A multi-statement batch (DECLARE/SET, INSERT, UPDATE, SELECT) with GO separators.",
+    "construct": "Batch",
+    "sqlPath": "spike-corpus/02-batch.sql",
+    "expectedFormattedPath": "spike-corpus/02-batch.expected.sql",
+    "expectedAnalysisPath": "spike-corpus/02-batch.expected.json"
+  },
+  {
+    "id": "03-stored-proc",
+    "displayName": "03 — Stored procedure (> 50 lines)",
+    "description": "A CREATE PROCEDURE over 50 lines with parameters, IF/ELSE control flow, a transaction and TRY/CATCH.",
+    "construct": "StoredProc",
+    "sqlPath": "spike-corpus/03-stored-proc.sql",
+    "expectedFormattedPath": "spike-corpus/03-stored-proc.expected.sql",
+    "expectedAnalysisPath": "spike-corpus/03-stored-proc.expected.json"
+  },
+  {
+    "id": "04-cte",
+    "displayName": "04 — Common table expressions",
+    "description": "Two CTEs, one of them a recursive CTE walking an employee/manager hierarchy.",
+    "construct": "Cte",
+    "sqlPath": "spike-corpus/04-cte.sql",
+    "expectedFormattedPath": "spike-corpus/04-cte.expected.sql",
+    "expectedAnalysisPath": "spike-corpus/04-cte.expected.json"
+  },
+  {
+    "id": "05-window",
+    "displayName": "05 — Window functions",
+    "description": "ROW_NUMBER, SUM() OVER with an explicit frame, and LAG, each with PARTITION BY / ORDER BY.",
+    "construct": "Window",
+    "sqlPath": "spike-corpus/05-window.sql",
+    "expectedFormattedPath": "spike-corpus/05-window.expected.sql",
+    "expectedAnalysisPath": "spike-corpus/05-window.expected.json"
+  },
+  {
+    "id": "06-merge",
+    "displayName": "06 — MERGE statement",
+    "description": "A MERGE upsert with WHEN MATCHED and WHEN NOT MATCHED BY TARGET / BY SOURCE clauses.",
+    "construct": "Merge",
+    "sqlPath": "spike-corpus/06-merge.sql",
+    "expectedFormattedPath": "spike-corpus/06-merge.expected.sql",
+    "expectedAnalysisPath": "spike-corpus/06-merge.expected.json"
+  }
+]

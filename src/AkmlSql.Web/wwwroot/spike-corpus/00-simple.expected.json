@@ -1,0 +1,30 @@
+[
+  {
+    "RuleId": "ST001",
+    "Severity": 0,
+    "Line": 1,
+    "Column": 1,
+    "Message": "SQL keyword \u0027select\u0027 is not uppercase \u2014 use consistent ALL_CAPS keywords"
+  },
+  {
+    "RuleId": "ST001",
+    "Severity": 0,
+    "Line": 1,
+    "Column": 20,
+    "Message": "SQL keyword \u0027from\u0027 is not uppercase \u2014 use consistent ALL_CAPS keywords"
+  },
+  {
+    "RuleId": "ST001",
+    "Severity": 0,
+    "Line": 1,
+    "Column": 35,
+    "Message": "SQL keyword \u0027where\u0027 is not uppercase \u2014 use consistent ALL_CAPS keywords"
+  },
+  {
+    "RuleId": "ST004",
+    "Severity": 1,
+    "Line": 1,
+    "Column": 1,
+    "Message": "Statement is not terminated with a semicolon \u2014 add \u0027;\u0027 for clarity and future compatibility"
+  }
+]

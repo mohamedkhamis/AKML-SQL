@@ -79,7 +79,7 @@ T006 (engine perf baseline capture) and T025 (post-refactor regression check) re
 | # | Item | Why blocking |
 |---|------|--------------|
 | **F1** | **Extract `AkmlSql.Analysis` library** (analogous to M5 `AkmlSql.IntelliSense` extraction). Move analyser engine, `RuleRegistry`, `AnalysisContext`, `CaSettingsLoader`, and all 120+ rule classes from `AkmlSql.Engine/Analysis/` into a new `netstandard2.0` library `AkmlSql.Analysis`. Have `AkmlSql.Engine` reference it; have `AkmlSql.Web` reference it. | T043 / T045 / T047 (M2 analyser surface) cannot ship until this is done. |
-| F2 | Run the actual in-browser M2.1 editor spike (Monaco vs CodeMirror 6) | T031 / T032 (Editor choice + EditorComponent) gates on it. |
+| F2 | Run the actual in-browser M2.1 editor spike (Monaco vs CodeMirror 6) | T031 / T032 (Editor choice + EditorComponent) gates on it. **Runtime-viability + cold-load half: CLOSED by spec 023 — see [docs/m1-wasm-decision.md](../../docs/m1-wasm-decision.md) (clean pass; ScriptDom + formatter + analyser proven in WASM). Editor-choice half settled separately — M2 ships CodeMirror 6.** |
 | F3 | Run T006 perf baseline against the existing `PipeRpcServer` corpus | T011 onwards (handler migration) gates on it. |
 | F4 | Decide bundle-size budget for the M2 ship | T054 audit needs a concrete target. |
 | F5 | `e_sqlite3.a` NativeFileReference warning | Cosmetic for now; ensure no code path in `AkmlSql.Web` triggers a SQLite call (it shouldn't — `AkmlSql.Core` doesn't expose SQLite directly). |
@@ -113,6 +113,6 @@ Per the M0 success metric ("zero behavioural change to the SSMS and VS shell ext
 - [x] Bundle size measured and recorded (45 MB uncompressed before lazy-loading).
 - [x] M0 transport abstraction exercised by ≥ 4 unit tests.
 - [x] Architectural finding (Analyzer CLI vs analysis library) recorded with a concrete follow-up (F1).
-- [ ] In-browser cold-load timing for the WASM bundle — **deferred (F2)**.
-- [ ] M2.1 editor decision based on measurement — **deferred (F2)**.
+- [x] In-browser cold-load timing for the WASM bundle — **closed by spec 023**, see [docs/m1-wasm-decision.md](../../docs/m1-wasm-decision.md).
+- [x] M2.1 editor decision based on measurement — **settled separately**: M2 ships CodeMirror 6 (see the F2 row in §6).
 - [ ] Engine perf baseline captured — **deferred (F3)**.

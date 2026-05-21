@@ -1,0 +1,184 @@
+[
+  {
+    "RuleId": "BP012",
+    "Severity": 1,
+    "Line": 12,
+    "Column": 21,
+    "Message": "Hard-coded date literal \u00272025-01-01\u0027 \u2014 consider using a parameter or variable for maintainability"
+  },
+  {
+    "RuleId": "NM006",
+    "Severity": 1,
+    "Line": 11,
+    "Column": 6,
+    "Message": "Single-letter alias \u0027s\u0027 is not descriptive \u2014 use a meaningful alias"
+  },
+  {
+    "RuleId": "ST001",
+    "Severity": 0,
+    "Line": 3,
+    "Column": 1,
+    "Message": "SQL keyword \u0027select\u0027 is not uppercase \u2014 use consistent ALL_CAPS keywords"
+  },
+  {
+    "RuleId": "ST001",
+    "Severity": 0,
+    "Line": 6,
+    "Column": 37,
+    "Message": "SQL keyword \u0027by\u0027 is not uppercase \u2014 use consistent ALL_CAPS keywords"
+  },
+  {
+    "RuleId": "ST001",
+    "Severity": 0,
+    "Line": 6,
+    "Column": 56,
+    "Message": "SQL keyword \u0027order\u0027 is not uppercase \u2014 use consistent ALL_CAPS keywords"
+  },
+  {
+    "RuleId": "ST001",
+    "Severity": 0,
+    "Line": 6,
+    "Column": 62,
+    "Message": "SQL keyword \u0027by\u0027 is not uppercase \u2014 use consistent ALL_CAPS keywords"
+  },
+  {
+    "RuleId": "ST001",
+    "Severity": 0,
+    "Line": 6,
+    "Column": 77,
+    "Message": "SQL keyword \u0027as\u0027 is not uppercase \u2014 use consistent ALL_CAPS keywords"
+  },
+  {
+    "RuleId": "ST001",
+    "Severity": 0,
+    "Line": 7,
+    "Column": 38,
+    "Message": "SQL keyword \u0027by\u0027 is not uppercase \u2014 use consistent ALL_CAPS keywords"
+  },
+  {
+    "RuleId": "ST001",
+    "Severity": 0,
+    "Line": 7,
+    "Column": 57,
+    "Message": "SQL keyword \u0027order\u0027 is not uppercase \u2014 use consistent ALL_CAPS keywords"
+  },
+  {
+    "RuleId": "ST001",
+    "Severity": 0,
+    "Line": 7,
+    "Column": 63,
+    "Message": "SQL keyword \u0027by\u0027 is not uppercase \u2014 use consistent ALL_CAPS keywords"
+  },
+  {
+    "RuleId": "ST001",
+    "Severity": 0,
+    "Line": 8,
+    "Column": 17,
+    "Message": "SQL keyword \u0027between\u0027 is not uppercase \u2014 use consistent ALL_CAPS keywords"
+  },
+  {
+    "RuleId": "ST001",
+    "Severity": 0,
+    "Line": 8,
+    "Column": 45,
+    "Message": "SQL keyword \u0027and\u0027 is not uppercase \u2014 use consistent ALL_CAPS keywords"
+  },
+  {
+    "RuleId": "ST001",
+    "Severity": 0,
+    "Line": 8,
+    "Column": 62,
+    "Message": "SQL keyword \u0027as\u0027 is not uppercase \u2014 use consistent ALL_CAPS keywords"
+  },
+  {
+    "RuleId": "ST001",
+    "Severity": 0,
+    "Line": 9,
+    "Column": 44,
+    "Message": "SQL keyword \u0027by\u0027 is not uppercase \u2014 use consistent ALL_CAPS keywords"
+  },
+  {
+    "RuleId": "ST001",
+    "Severity": 0,
+    "Line": 9,
+    "Column": 63,
+    "Message": "SQL keyword \u0027order\u0027 is not uppercase \u2014 use consistent ALL_CAPS keywords"
+  },
+  {
+    "RuleId": "ST001",
+    "Severity": 0,
+    "Line": 9,
+    "Column": 69,
+    "Message": "SQL keyword \u0027by\u0027 is not uppercase \u2014 use consistent ALL_CAPS keywords"
+  },
+  {
+    "RuleId": "ST001",
+    "Severity": 0,
+    "Line": 9,
+    "Column": 84,
+    "Message": "SQL keyword \u0027as\u0027 is not uppercase \u2014 use consistent ALL_CAPS keywords"
+  },
+  {
+    "RuleId": "ST001",
+    "Severity": 0,
+    "Line": 10,
+    "Column": 55,
+    "Message": "SQL keyword \u0027by\u0027 is not uppercase \u2014 use consistent ALL_CAPS keywords"
+  },
+  {
+    "RuleId": "ST001",
+    "Severity": 0,
+    "Line": 10,
+    "Column": 74,
+    "Message": "SQL keyword \u0027order\u0027 is not uppercase \u2014 use consistent ALL_CAPS keywords"
+  },
+  {
+    "RuleId": "ST001",
+    "Severity": 0,
+    "Line": 10,
+    "Column": 80,
+    "Message": "SQL keyword \u0027by\u0027 is not uppercase \u2014 use consistent ALL_CAPS keywords"
+  },
+  {
+    "RuleId": "ST001",
+    "Severity": 0,
+    "Line": 10,
+    "Column": 95,
+    "Message": "SQL keyword \u0027as\u0027 is not uppercase \u2014 use consistent ALL_CAPS keywords"
+  },
+  {
+    "RuleId": "ST001",
+    "Severity": 0,
+    "Line": 11,
+    "Column": 1,
+    "Message": "SQL keyword \u0027from\u0027 is not uppercase \u2014 use consistent ALL_CAPS keywords"
+  },
+  {
+    "RuleId": "ST001",
+    "Severity": 0,
+    "Line": 11,
+    "Column": 16,
+    "Message": "SQL keyword \u0027as\u0027 is not uppercase \u2014 use consistent ALL_CAPS keywords"
+  },
+  {
+    "RuleId": "ST001",
+    "Severity": 0,
+    "Line": 12,
+    "Column": 1,
+    "Message": "SQL keyword \u0027where\u0027 is not uppercase \u2014 use consistent ALL_CAPS keywords"
+  },
+  {
+    "RuleId": "ST001",
+    "Severity": 0,
+    "Line": 13,
+    "Column": 1,
+    "Message": "SQL keyword \u0027order\u0027 is not uppercase \u2014 use consistent ALL_CAPS keywords"
+  },
+  {
+    "RuleId": "ST001",
+    "Severity": 0,
+    "Line": 13,
+    "Column": 7,
+    "Message": "SQL keyword \u0027by\u0027 is not uppercase \u2014 use consistent ALL_CAPS keywords"
+  }
+]
