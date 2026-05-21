@@ -488,11 +488,16 @@
         StateHasChanged();
         await Task.Yield();   // let the busy state paint before the synchronous work
 
-        (_formatOutcome, _formatResult) = TimedFormat(_sqlInput);
-
-        _running = false;
-        _busyLabel = null;
-        StateHasChanged();
+        try
+        {
+            (_formatOutcome, _formatResult) = TimedFormat(_sqlInput);
+        }
+        finally
+        {
+            _running = false;
+            _busyLabel = null;
+            StateHasChanged();
+        }
     }
 
     private async Task AnalyseAsync()
@@ -504,11 +509,16 @@
         StateHasChanged();
         await Task.Yield();
 
-        (_analyseOutcome, _analyseResponse) = await TimedAnalyseAsync(_sqlInput);
-
-        _running = false;
-        _busyLabel = null;
-        StateHasChanged();
+        try
+        {
+            (_analyseOutcome, _analyseResponse) = await TimedAnalyseAsync(_sqlInput);
+        }
+        finally
+        {
+            _running = false;
+            _busyLabel = null;
+            StateHasChanged();
+        }
     }
 
     private async Task RunAllCorpusAsync()
@@ -520,19 +530,24 @@
         _analyseOutcome = null;
         StateHasChanged();
 
-        foreach (var item in _corpus)
+        try
         {
-            _busyLabel = $"Running corpus — {item.DisplayName}…";
-            StateHasChanged();
-            await Task.Yield();   // keep the UI responsive between items
+            foreach (var item in _corpus)
+            {
+                _busyLabel = $"Running corpus — {item.DisplayName}…";
+                StateHasChanged();
+                await Task.Yield();   // keep the UI responsive between items
 
-            _corpusResults.Add(await RunCorpusItemAsync(item));
+                _corpusResults.Add(await RunCorpusItemAsync(item));
+                StateHasChanged();
+            }
+        }
+        finally
+        {
+            _running = false;
+            _busyLabel = null;
             StateHasChanged();
         }
-
-        _running = false;
-        _busyLabel = null;
-        StateHasChanged();
     }
 
     private async Task<SpikeRunResult> RunCorpusItemAsync(SpikeCorpusItem item)

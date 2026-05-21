@@ -21,10 +21,10 @@ Expected: `0 Error(s)`. This confirms compile-time viability is still intact (it
 ## 2 — Generate the golden comparison files
 
 ```bash
-dotnet test tests/AkmlSql.Web.Tests/AkmlSql.Web.Tests.csproj --filter "SpikeCorpusGoldenTests" -c Release
+AKML_REGEN_GOLDEN=1 dotnet test tests/AkmlSql.Web.Tests/AkmlSql.Web.Tests.csproj --filter "SpikeCorpusGoldenTests" -c Release
 ```
 
-Expected: `src/AkmlSql.Web/wwwroot/spike-corpus/` now contains `*.expected.sql` and `*.expected.json` next to each `*.sql`. These are produced by desktop .NET running the same `AkmlSql.Formatting` / `AkmlSql.Analysis` libraries the spike runs in WASM — so any later mismatch in the browser is a pure runtime finding.
+Expected: `src/AkmlSql.Web/wwwroot/spike-corpus/` now contains `*.expected.sql` and `*.expected.json` next to each `*.sql`. These are produced by desktop .NET running the same `AkmlSql.Formatting` / `AkmlSql.Analysis` libraries the spike runs in WASM — so any later mismatch in the browser is a pure runtime finding. The generator is opt-in: the `AKML_REGEN_GOLDEN` environment variable gates the write, so a plain `dotnet test` (without it) never mutates the committed golden files.
 
 ## 3 — Run the spike in a browser (the core of the gate)
 

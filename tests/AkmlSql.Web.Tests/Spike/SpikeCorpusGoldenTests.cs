@@ -16,14 +16,19 @@ namespace AkmlSql.Web.Tests.Spike;
 /// these golden files; the ONLY variable between golden and spike output is the runtime
 /// (desktop CoreCLR vs. browser WASM), so any mismatch is a pure WASM-runtime finding.
 ///
-/// Opt-in: tagged [Trait("Category","SpikeGenerator")] so CI can exclude it -- it writes
-/// into the source tree. Run it explicitly to (re)generate the golden files:
-///   dotnet test tests/AkmlSql.Web.Tests/AkmlSql.Web.Tests.csproj --filter "Category=SpikeGenerator" --logger "console;verbosity=detailed"
+/// Opt-in -- this test WRITES into the source tree, so it is gated on the
+/// <c>AKML_REGEN_GOLDEN</c> environment variable: without it the test is a no-op, so a
+/// plain <c>dotnet test</c> never mutates the committed golden files. To (re)generate:
+///   AKML_REGEN_GOLDEN=1 dotnet test tests/AkmlSql.Web.Tests/AkmlSql.Web.Tests.csproj
+///     --filter "Category=SpikeGenerator" --logger "console;verbosity=detailed"
+/// The [Trait("Category","SpikeGenerator")] tag additionally lets CI exclude it by filter.
 ///
 /// See contracts/measurement-protocol.md M6 and research.md Decision 4.
 /// </summary>
 public sealed class SpikeCorpusGoldenTests
 {
+    private const string RegenEnvVar = "AKML_REGEN_GOLDEN";
+
     private readonly ITestOutputHelper _output;
 
     public SpikeCorpusGoldenTests(ITestOutputHelper output) => _output = output;
@@ -32,6 +37,17 @@ public sealed class SpikeCorpusGoldenTests
     [Trait("Category", "SpikeGenerator")]
     public async Task Generate_golden_files_for_the_spike_corpus()
     {
+        // Opt-in guard: this test writes into the source tree. Without AKML_REGEN_GOLDEN
+        // it is a no-op so a plain `dotnet test` never mutates the committed golden files.
+        if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable(RegenEnvVar)))
+        {
+            _output.WriteLine(
+                $"SKIPPED: golden-file generation is opt-in. Set {RegenEnvVar}=1 to "
+                + "(re)generate the spike-corpus/*.expected.* files. This guard keeps a "
+                + "plain `dotnet test` from writing into the source tree.");
+            return;
+        }
+
         var corpusDir = LocateCorpusDirectory();
         var manifestPath = Path.Combine(corpusDir, "corpus.json");
         Assert.True(File.Exists(manifestPath), $"corpus.json not found at {manifestPath}");
