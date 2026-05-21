@@ -16,7 +16,7 @@ namespace AkmlSql.Engine.Handlers.Refactoring
     // The prior inline RefactorPreviewAsync/RefactorApplyAsync caught all Exception types
     // (including OCE) and converted them to an Error response. We slightly tighten that:
     // OCE now produces no response (matches Analysis handler's behaviour); other exceptions
-    // bubble to PipeRpcServer.DispatchAsync's outer catch which writes an Error frame.
+    // bubble to NamedPipeTransport.DispatchAsync's outer catch which writes an Error frame.
 
     public sealed class RefactorPreviewHandler : IRpcRequestHandler<RefactorPreviewRequest, RefactorPreviewResponse>
     {

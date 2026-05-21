@@ -44,6 +44,28 @@ namespace AkmlSql.Engine
 
         public bool IsRegistered(int requestMessageType) => _adapters.ContainsKey(requestMessageType);
 
+        /// <summary>
+        /// Spec 022 (M0 closure) -- P2 / US2. Register a raw-envelope handler that processes the
+        /// inbound <see cref="RpcMessage"/> directly and produces the full response envelope. Used
+        /// for delegating handlers (session save/restore/delete, history, productivity, navigation,
+        /// the AI bridge, AiStreamCancel, the spec-014 stubs) that already package their own
+        /// response envelopes and do not benefit from the typed <see cref="Register{TReq,TResp}"/>
+        /// path's MessagePack deserialise/serialise loop.
+        ///
+        /// <para>Throws <see cref="InvalidOperationException"/> if a handler -- typed or raw -- is
+        /// already registered for <paramref name="messageType"/>. Same semantics as
+        /// <see cref="Register{TReq,TResp}"/>.</para>
+        /// </summary>
+        public void RegisterRaw(int messageType, Func<RpcMessage, CancellationToken, Task<RpcMessage?>> handler)
+        {
+            if (handler == null) throw new ArgumentNullException(nameof(handler));
+            if (!_adapters.TryAdd(messageType, new RawHandlerAdapter(handler)))
+            {
+                throw new InvalidOperationException(
+                    $"RpcRouter: a handler for MessageType {messageType} is already registered.");
+            }
+        }
+
         /// <summary>The set of message-type codes currently registered with this router.</summary>
         public IReadOnlyCollection<int> RegisteredMessageTypes => (IReadOnlyCollection<int>)_adapters.Keys;
 
@@ -129,6 +151,21 @@ namespace AkmlSql.Engine
             Task<RpcMessage?> RouteAsync(RpcMessage msg, RpcContext ctx, CancellationToken ct);
         }
 
+        /// <summary>
+        /// Spec 022 (M0 closure) -- P2 / US2. Raw-envelope handler adapter. Bypasses the
+        /// MessagePack deserialise / serialise loop; the registered function processes the
+        /// inbound <see cref="RpcMessage"/> and returns the response (or <see langword="null"/>
+        /// for notification-only handlers) directly.
+        /// </summary>
+        private sealed class RawHandlerAdapter : IHandlerAdapter
+        {
+            private readonly Func<RpcMessage, CancellationToken, Task<RpcMessage?>> _handler;
+            public RawHandlerAdapter(Func<RpcMessage, CancellationToken, Task<RpcMessage?>> handler)
+                => _handler = handler;
+            public Task<RpcMessage?> RouteAsync(RpcMessage msg, RpcContext ctx, CancellationToken ct)
+                => _handler(msg, ct);
+        }
+
         private sealed class TypedHandlerAdapter<TReq, TResp> : IHandlerAdapter
         {
             private readonly IRpcRequestHandler<TReq, TResp> _handler;
@@ -137,11 +174,36 @@ namespace AkmlSql.Engine
             public async Task<RpcMessage?> RouteAsync(RpcMessage msg, RpcContext ctx, CancellationToken ct)
             {
                 var payload = msg.Payload ?? Array.Empty<byte>();
-                var request = payload.Length == 0
-                    ? default!
-                    : MessagePackSerializer.Deserialize<TReq>(payload, cancellationToken: ct);
+                TReq request;
+                if (payload.Length == 0)
+                {
+                    // Spec 022 (M0 closure) -- P3 / US3. Mirror the legacy Server/TypedHandlerAdapter
+                    // behaviour: when the handler doesn't opt into empty payloads, reject the request
+                    // with a typed error envelope instead of passing default(TReq) into a handler
+                    // that would then crash on a null dereference.
+                    if (!_handler.AllowsEmptyPayload)
+                    {
+                        return RpcResponseFactory.CreateErrorResponse("Payload required", msg.RequestId);
+                    }
+                    request = default!;
+                }
+                else
+                {
+                    request = MessagePackSerializer.Deserialize<TReq>(payload, cancellationToken: ct);
+                }
 
-                var response = await _handler.HandleAsync(request, ctx, ct).ConfigureAwait(false);
+                TResp response;
+                try
+                {
+                    response = await _handler.HandleAsync(request, ctx, ct).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (_handler.SwallowCancellation)
+                {
+                    // Spec 022 (M0 closure) -- P3 / US3. Refactoring handlers + AI ghost-text rely
+                    // on SwallowCancellation to convert a superseded request into "no response"
+                    // rather than tearing down the transport accept loop.
+                    return null;
+                }
 
                 if (_handler.ResponseMessageType == 0)
                 {

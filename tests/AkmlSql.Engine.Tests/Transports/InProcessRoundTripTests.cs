@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Engine;
 using AkmlSql.Engine.Schema;
@@ -72,6 +73,7 @@ public sealed class InProcessRoundTripTests
             Sessions = new SessionManager(),
             SchemaCache = new SchemaCacheManager(),
             Logger = Log.Logger,
+            SettingsLoader = () => new AppSettings(),
         };
     }
 

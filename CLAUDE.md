@@ -135,7 +135,7 @@ See [docs/ipc-api.md](docs/ipc-api.md) for all 30+ message types.
 
 | Component | Class | Responsibility |
 |-----------|-------|---------------|
-| IPC server | `PipeRpcServer` | Receives frames, dispatches to handlers |
+| IPC server | `NamedPipeTransport` | Receives frames, routes them via `RpcRouter` to handlers |
 | Session tracking | `SessionManager` | Holds active editor document text (10 MB limit per doc) |
 | Parser | `TsqlParserService` | Thread-safe `TSql170Parser` wrapper |
 | IntelliSense | `CompletionEngine` | Merges keywords + schema + snippets + functions |
@@ -215,7 +215,7 @@ See [docs/analysis-rules.md](docs/analysis-rules.md) for all rules.
 | Named pipe + SID ACL | Local-only IPC; no network exposure; per-shell-process pipe |
 | `FK index` in `DatabaseCache` | `RebuildFkIndex()` builds `"schema.table"` → list dict for O(1) vs O(N) scan |
 | `LoggerFactory` reads config JSON directly | Avoids circular dependency — ConfigManager calls `Log.Error` before logger exists |
-| `_cachedSettings` in `PipeRpcServer` | Avoids per-request `ConfigManager.Load()` disk read; invalidated on `AnalysisSettingsChanged` |
+| `_cachedSettings` in `RpcContext` | Avoids per-request `ConfigManager.Load()` disk read; `EnsureSettings()` caches it, `InvalidateSettings()` drops it on `AnalysisSettingsChanged` |
 | `SemanticValidator` accepts pre-parsed AST | Avoids re-parsing original SQL in stage 6 (only formatted SQL is parsed) |
 | SSMS 20 uses Schema 2010 vsixmanifest | SSMS 20 is a VS 2017 IsolatedShell — must use `<Vsix>` root, not `<PackageManifest>` |
 | `EnableIdempotencyCheck` in `ProfileMetadata` | Lets bulk operations skip the expensive second parse pass |

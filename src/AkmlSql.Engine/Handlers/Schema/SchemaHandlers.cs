@@ -9,9 +9,9 @@ namespace AkmlSql.Engine.Handlers.Schema
 {
     // Spec 021 (web edition) -- M0.3 task T017. Two typed handlers for schema operations:
     //   * SchemaRefreshHandler  -- notification (no response). Invokes a host-supplied
-    //                              callback that drives PipeRpcServer.HandleSchemaRefreshRequest.
+    //                              callback that drives NamedPipeTransport.HandleSchemaRefreshRequest.
     //                              The callback model keeps the substantial helper method in
-    //                              PipeRpcServer for now; a future task may move the helper
+    //                              NamedPipeTransport for now; a future task may move the helper
     //                              onto a dedicated SchemaRefreshService.
     //   * SchemaStatusHandler   -- synchronous query against the schema cache.
 

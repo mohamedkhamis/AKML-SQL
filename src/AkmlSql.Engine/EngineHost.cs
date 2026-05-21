@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using AkmlSql.Core.Logging;
 using AkmlSql.Engine.Server;
+using AkmlSql.Engine.Transports;
 using AkmlSql.Formatting.Profiles;
 using Serilog;
 
@@ -14,17 +15,16 @@ namespace AkmlSql.Engine
     /// <summary>
     /// Spec 021 (web edition) -- M0 task T022. Engine bootstrap facade. Consolidates the
     /// startup sequence (logger init, AI key-decryptor wiring, parent-process monitoring,
-    /// pending-import processing, PipeRpcServer construction + run, shutdown) into one
+    /// pending-import processing, NamedPipeTransport construction + run, shutdown) into one
     /// reusable entry point. <c>Program.Main</c> parses CLI args and hands off to
     /// <see cref="RunAsync"/>; other consumers (tests, the future web-mode launcher) can
     /// call <see cref="RunAsync"/> directly without re-implementing the boilerplate.
     ///
     /// <para>
-    /// Reflective handler discovery (T021) lives on <see cref="RpcRouter.RegisterAllInAssembly"/>.
-    /// <see cref="PipeRpcServer"/> still owns explicit registration via
-    /// <c>RegisterPluggableHandlers()</c> because most handlers have constructor dependencies
-    /// on engine-internal services; the reflective path is provided for the dependency-free
-    /// subset that future in-process consumers may want one-line registration for.
+    /// Service construction and handler registration live in <see cref="EngineComposition"/> +
+    /// <c>EngineHandlerRegistry</c> (spec 022 closure); <see cref="NamedPipeTransport"/> is now
+    /// pure frame I/O. <see cref="RpcRouter.RegisterAllInAssembly"/> offers an additional
+    /// reflective path for the dependency-free handler subset (used by in-process tests).
     /// </para>
     /// </summary>
     public static class EngineHost
@@ -89,8 +89,20 @@ namespace AkmlSql.Engine
                 // T035 -- process pending SQL Prompt import before starting the RPC server.
                 ProcessPendingImports();
 
-                var server = new PipeRpcServer(pipeName);
-                await server.RunAsync(token);
+                // Spec 022 (M0 closure). The composition root builds services, context and
+                // router; the transport (T027) implements IRpcTransport -- it owns only pipe
+                // lifecycle + frame I/O and forwards each decoded message to the router via the
+                // RequestReceived event.
+                var composition = EngineComposition.Build();
+                await using var transport = new NamedPipeTransport(pipeName);
+                transport.RequestReceived += async (msg, ct) =>
+                {
+                    var response = await composition.Router.RouteAsync(msg, composition.Context, ct);
+                    if (response == null && !composition.Router.IsRegistered(msg.MessageType))
+                        Log.Warning("Unknown message type: {Type}", msg.MessageType);
+                    return response;
+                };
+                await transport.RunAsync(token);
             }
             catch (OperationCanceledException)
             {

@@ -313,7 +313,7 @@ The editor is launched via `FormatStylesEditorWindow.Launch()`. Menu wiring (Opt
 
 ## 9b. Spec 021 — M0 Transport Abstraction
 
-Spec 021 (web edition) introduced an `IRpcTransport` + `IRpcRequestHandler<TRequest, TResponse>` abstraction so the same engine handlers can serve named pipes (IDE plugins, today), in-process calls (Blazor WASM running engine logic in the browser tab; engine unit tests with zero serialisation), and WebSocket (future browser ↔ engine, M3+) without per-transport handler duplication.
+Spec 021 (web edition) introduced an `IRpcTransport` + `IRpcRequestHandler<TRequest, TResponse>` abstraction so the same engine handlers can serve named pipes (IDE plugins, today), in-process calls (Blazor WASM running engine logic in the browser tab; engine unit tests with zero serialisation), and WebSocket (future browser ↔ engine, M3+) without per-transport handler duplication. The spec 022 closure finished the deferred polish: a single composition root, the named-pipe transport trimmed to a reference-shape file, and the cached settings single-owned by `RpcContext`.
 
 **Wire format and message-type integer codes are unchanged** — existing SSMS/VS shell extensions need zero updates after the M0 refactor.
 
@@ -322,12 +322,14 @@ Spec 021 (web edition) introduced an `IRpcTransport` + `IRpcRequestHandler<TRequ
 | Type | Path | Role |
 |------|------|------|
 | `IRpcTransport` | `Transports/IRpcTransport.cs` | Frame I/O + lifecycle. One impl per medium. |
-| `InProcessTransport` | `Transports/InProcessTransport.cs` | Method-call dispatch, no serialisation. |
+| `NamedPipeTransport` | `Transports/NamedPipeTransport.cs` | Named-pipe accept loop, pipe ACL, framed read/write; implements `IRpcTransport`, raising `RequestReceived` for each decoded `RpcMessage`. 147 LOC — the M0 reference shape. |
+| `InProcessTransport` | `Transports/InProcessTransport.cs` | Method-call dispatch, no serialisation. Used by Blazor WASM and engine unit tests. |
+| `WebSocketTransport` | `Transports/WebSocketTransport.cs` | Localhost-by-default WebSocket bridge — see § 9d. |
 | `IRpcRequestHandler<TRequest, TResponse>` | `Transports/IRpcRequestHandler.cs` | One impl per message-type integer code. Two opt-in DIM properties: `AllowsEmptyPayload` (for messages with no payload, e.g. `ProfileList`) and `SwallowCancellation` (for handlers where OCE → null response is preferable to tearing down the pipe loop, e.g. `AnalysisHandler`). |
-| `RpcRouter` | `RpcRouter.cs` | Per-process router: registers typed handlers, resolves `MessageType`, deserialises payload, dispatches. |
-| `RpcContext` | `RpcContext.cs` | Per-request shared state: `Settings`, `Sessions`, `SchemaCache`, `Logger`, and (for `ConnectionChanged` only) `ParserService` + `SchemaMetadata`. |
-| `TypedHandlerAdapter<TRequest, TResponse>` | `Server/TypedHandlerAdapter.cs` | Bridges new typed handlers to the legacy `IMessageHandler` dict used by `PipeRpcServer._pluggableHandlers`. Honours `AllowsEmptyPayload` and `SwallowCancellation`. |
-| `DelegatingMessageHandler` | `Server/DelegatingMessageHandler.cs` | Lightweight `IMessageHandler` capturing a `Func<RpcMessage, CancellationToken, Task<RpcMessage?>>`. Used by handlers whose existing surface is `RpcMessage`-typed and doesn't need typed deserialisation (AI, History, Navigation, Productivity, etc.). |
+| `RpcRouter` | `RpcRouter.cs` | Per-process dispatch surface. `Register<,>(handler)` wires a typed handler; `RegisterRaw(code, func)` wires a delegating handler that consumes/produces a raw `RpcMessage` itself. Resolves the message-type code, deserialises the payload, dispatches. Replaces the pre-closure `_pluggableHandlers` dictionary. |
+| `RpcContext` | `RpcContext.cs` | Per-process shared state passed to every handler: `Sessions`, `SchemaCache`, `Logger`, `ParserService`, `SchemaMetadata`, and — after the spec 022 closure — the **sole** owner of the cached `AppSettings`. Handlers read settings through `EnsureSettings()` (idempotent lazy load); the `AnalysisSettingsChanged` handler drops the cache via `InvalidateSettings()`. No transport holds a settings field. |
+| `EngineComposition` | `EngineComposition.cs` | The single composition root — see below. |
+| `EngineHandlerRegistry` | `EngineHandlerRegistry.cs` | Static handler-registration surface — see below. |
 
 ### Handler folders
 
@@ -342,31 +344,31 @@ Handlers/
 ├── Refactoring/        RefactorPreviewHandler, RefactorApplyHandler (both SwallowCancellation=true)
 ├── Schema/             SchemaRefreshHandler, SchemaStatusHandler
 ├── Control/            DocumentChangedHandler, PingHandler, ShutdownHandler, ConnectionChangedHandler
-└── Ai/                 AiMessageHandler bridge (used by 8 AI message types)
+└── Ai/                 AiHandlerBase + 7 per-message handlers (TextToSql, Explain, Fix, Optimize, IndexAnalysis, Chat, GhostText)
 ```
 
-### `PipeRpcServer` after M0 (= spec 021 T020)
+### `NamedPipeTransport` and the composition root (spec 022 closure)
 
-`PipeRpcServer` is now a `partial class` split across two files:
+The named-pipe transport is `src/AkmlSql.Engine/Transports/NamedPipeTransport.cs` — **147 LOC**, within the M0 PRD's ≤ 150-LOC reference-shape target. It implements `IRpcTransport` (T027) like the in-process and WebSocket transports, owning only named-pipe concerns: the pipe ACL (`CreatePipeSecurity`), the accept loop (`RunAsync` / `HandleClientAsync`), framed read/write, and the dispatch hand-off — each decoded `RpcMessage` is raised via the `RequestReceived` event, with the composition root wiring `RpcRouter.RouteAsync` as the subscriber. No service-construction or handler-registration code lives in the transport.
 
-| File | LOC | Role |
-|------|-----|------|
-| `Server/PipeRpcServer.cs` | ~340 | Named-pipe lifecycle (`RunAsync`, `HandleClientAsync`), frame read/write, `DispatchAsync` (which is now just a `_pluggableHandlers` lookup + default), engine-field initialisation, and the per-request `LookupSession` / `CreatePipeSecurity` helpers. |
-| `Server/PipeRpcServer.Handlers.cs` | ~242 | The `RegisterPluggableHandlers()` method — every message type is wired here. |
+Service construction and handler registration moved to two new files:
 
-The original 53-case `switch` in `DispatchAsync` is empty. All dispatch flows through `_pluggableHandlers` (a `Dictionary<int, IMessageHandler>`).
+- **`EngineComposition`** (`src/AkmlSql.Engine/EngineComposition.cs`) — the single composition root. `EngineComposition.Build()` constructs the `RpcContext`, an `RpcRouter` with every handler registered, and the `HistoryRetentionService`, and returns the three. `EngineHost` calls `Build()` once at startup and hands `Context` + `Router` to `new NamedPipeTransport(...)`; the in-process and (future) WebSocket transports consume the same `Build()` output — no transport replicates wiring.
+- **`EngineHandlerRegistry`** (`src/AkmlSql.Engine/EngineHandlerRegistry.cs`) — a static class whose `RegisterAllHandlers(router, ctx)` is the one place every message type is wired: typed handlers via `RpcRouter.Register<,>`, delegating handlers (session, history, navigation, productivity, …) via `RpcRouter.RegisterRaw`.
 
-Three helpers that used to live on `PipeRpcServer` were extracted to separate files:
+The pre-closure `_pluggableHandlers` dictionary and the `PipeRpcServer` partial-class pair (`PipeRpcServer.cs` + `PipeRpcServer.Handlers.cs`) are gone — `RpcRouter` is the single dispatch surface.
 
-- **`RpcResponseFactory`** (`src/AkmlSql.Engine/RpcResponseFactory.cs`) — `CreateResponse<T>` and `CreateErrorResponse`. Standalone static class, no `PipeRpcServer` dependency.
-- **`SchemaRefreshService`** (`src/AkmlSql.Engine/Schema/SchemaRefreshService.cs`) — handles the manual `Ctrl+Shift+D` schema refresh. Wired into `SchemaRefreshHandler` via its `Refresh(RefreshRequest)` method.
-- **`FindFunctionAtCursor`** — folded into `SignatureHelpHandler` as a private static helper (its only consumer).
+Three helpers extracted during M0 stay extracted:
 
-The strict M0 PRD target of ≤150 LOC for the named-pipe transport is **not** met (sits at ~340 LOC); the remaining ~200 LOC are engine-field declarations, the constructor's history-DB init, the pipe accept loop, and the outer dispatch try/catch — all of which legitimately belong on the transport. The rename `PipeRpcServer` → `NamedPipeTransport` remains a Phase 2 follow-up.
+- **`RpcResponseFactory`** (`src/AkmlSql.Engine/RpcResponseFactory.cs`) — `CreateResponse<T>` and `CreateErrorResponse`. Standalone static class.
+- **`SchemaRefreshService`** (`src/AkmlSql.Engine/Schema/SchemaRefreshService.cs`) — handles the manual `Ctrl+Shift+D` schema refresh; wired into `SchemaRefreshHandler`.
+- **`FindFunctionAtCursor`** — folded into `SignatureHelpHandler` as a private static helper.
 
 ### Existing IDE-plugin path is byte-for-byte compatible
 
 The shell extensions (SSMS 20/21/22, VS 2019/22/26) send the same MessagePack frames over the same named pipe with the same ACL. No shell code was modified. The frame format `[length][CRC][MessagePack(RpcMessage)]` is unchanged.
+
+> **M0 closure (spec 022, 2026-05-20).** The four M0 PRD success metrics deferred when M0 merged (PR #236) — `NamedPipeTransport` ≤ 150 LOC, the `_cachedSettings` field moved onto `RpcContext`, `AiHandlerBase` + 7 per-message subclasses, and the perf-regression gate at 5 % — all landed via spec 022. See `specs/022-m0-engine-closure/` and the closure plan `docs/superpowers/plans/2026-05-19-m0-engine-transport-closure.md`.
 
 ---
 
@@ -411,7 +413,7 @@ The browser resolves the pair via two paths:
 
 The handler (`Handlers/Schema/SchemaIdentifyHandler`) is callback-pure (`Func<string, string?> databaseLookup`, `Func<string, string?> identityResolver`) so it unit-tests without a live SQL connection. Resolver exceptions are captured into the response's `ErrorMessage` rather than crashing the bridge.
 
-Production wiring in `PipeRpcServer.Handlers.cs` plugs `SessionManager` for `databaseLookup` and `SchemaIdentifyHandlerSupport.ParseServerFromConnectionString` (extracts `Data Source` / `Server` / `Address` from the SqlClient-style connection string) for the initial `identityResolver`. Swapping in the real `SELECT @@SERVERNAME` query is a follow-up — the handler surface does not change.
+Production wiring in `EngineHandlerRegistry` plugs `SessionManager` for `databaseLookup` and `SchemaIdentifyHandlerSupport.ParseServerFromConnectionString` (extracts `Data Source` / `Server` / `Address` from the SqlClient-style connection string) for the initial `identityResolver`. Swapping in the real `SELECT @@SERVERNAME` query is a follow-up — the handler surface does not change.
 
 The `schema.cache.v1` capability is advertised in `Capabilities.Current` to signal availability.
 

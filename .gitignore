@@ -39,6 +39,10 @@ artifacts/
 *.scc
 *.DotSettings.user
 
+# Per-machine performance baseline — recaptured locally per developer/CI machine
+# (spec 022 US4). Never shared: sub-millisecond timings differ across hardware.
+tests/AkmlSql.Engine.Tests/baselines/
+
 # Inno Setup
 src/AkmlSql.Installer/Output/
 src/AkmlSql.Installer/generated/

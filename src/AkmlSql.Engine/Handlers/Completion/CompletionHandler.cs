@@ -11,7 +11,7 @@ namespace AkmlSql.Engine.Handlers.Completion
 {
     /// <summary>
     /// Spec 021 (web edition) — M0.2 task T011. First migration of an inline switch case from
-    /// <c>PipeRpcServer</c> into the new <see cref="IRpcRequestHandler{TRequest,TResponse}"/>
+    /// <c>NamedPipeTransport</c> into the new <see cref="IRpcRequestHandler{TRequest,TResponse}"/>
     /// abstraction. Other handlers follow at T013 onwards.
     ///
     /// Behavioural parity is the contract here: this handler must produce a byte-identical
@@ -55,7 +55,7 @@ namespace AkmlSql.Engine.Handlers.Completion
                 ? ctx.SchemaCache.GetCache(request.SessionId, session.DatabaseName)
                 : null;
 
-            // Mirror PipeRpcServer behaviour: push IntelliSense settings onto the engine before
+            // Mirror NamedPipeTransport behaviour: push IntelliSense settings onto the engine before
             // each request so toggles in the Settings dialog take effect immediately.
             // NOTE: the engine has mutable per-instance settings — concurrent requests on a
             // shared engine instance can race on these writes. The named-pipe transport

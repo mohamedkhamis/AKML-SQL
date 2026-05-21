@@ -14,8 +14,8 @@ namespace AkmlSql.Engine.Handlers.Completion
     /// <summary>
     /// Spec 021 (web edition) -- M0.4 wave 2 task T020. Wraps the existing
     /// <see cref="SignatureProvider"/> + a private token-walking helper (previously on
-    /// <c>PipeRpcServer</c>) as a typed handler. The helper was folded into this class as
-    /// part of the T020 finishing step that shrunk PipeRpcServer.
+    /// <c>NamedPipeTransport</c>) as a typed handler. The helper was folded into this class as
+    /// part of the T020 finishing step that shrunk NamedPipeTransport.
     /// </summary>
     public sealed class SignatureHelpHandler : IRpcRequestHandler<SignatureRequest, SignatureResponse>
     {

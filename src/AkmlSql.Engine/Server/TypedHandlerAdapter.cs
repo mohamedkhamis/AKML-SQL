@@ -8,17 +8,22 @@ using MessagePack;
 namespace AkmlSql.Engine.Server
 {
     /// <summary>
-    /// Spec 021 (web edition) — M0.2 bridge.
-    /// Adapts an <see cref="IRpcRequestHandler{TRequest,TResponse}"/> (the new spec-021 generic
-    /// abstraction) into the existing <see cref="IMessageHandler"/> shape consumed by
-    /// <see cref="PipeRpcServer._pluggableHandlers"/>. Lets us migrate one handler at a time from
-    /// the switch into the new generic type without first replacing the named-pipe dispatch loop.
-    ///
+    /// Adapts an <see cref="IRpcRequestHandler{TRequest,TResponse}"/> into the
+    /// <see cref="IMessageHandler"/> raw-envelope shape: deserialises the request payload,
+    /// invokes the handler, and serialises the typed response.
+    /// <para>
+    /// Spec 021 (web edition) M0.2 introduced this as the bridge that let handlers migrate to the
+    /// generic abstraction one at a time. After the spec 022 M0 closure, production dispatch runs
+    /// through <c>RpcRouter</c> (which carries its own equivalent typed adapter); this class is
+    /// retained for the engine handler tests, which exercise each handler through the
+    /// <see cref="IMessageHandler"/> shape.
+    /// </para>
+    /// <para>
     /// Lifecycle: the adapter captures an <see cref="RpcContext"/> by reference at construction
-    /// time. The context fields (especially <c>Settings</c>) are mutable and the host
-    /// (<see cref="PipeRpcServer"/>) refreshes them on <c>AnalysisSettingsChanged</c>; the
-    /// adapter sees the latest values on every request because it dereferences the context per
-    /// call.
+    /// time and dereferences it per call, so a handler always observes the context's current
+    /// settings (<see cref="RpcContext"/> is the sole owner of the cached <c>AppSettings</c>
+    /// after the closure).
+    /// </para>
     /// </summary>
     internal sealed class TypedHandlerAdapter<TRequest, TResponse> : IMessageHandler
     {

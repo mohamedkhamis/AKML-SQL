@@ -27,12 +27,13 @@ public sealed class CompletionHandlerTests
 {
     private static RpcContext CreateContext(AppSettings? settings = null)
     {
+        var captured = settings ?? new AppSettings();
         return new RpcContext
         {
-            Settings = settings ?? new AppSettings(),
             Sessions = new SessionManager(),
             SchemaCache = new SchemaCacheManager(),
             Logger = Log.Logger,
+            SettingsLoader = () => captured,
         };
     }
 

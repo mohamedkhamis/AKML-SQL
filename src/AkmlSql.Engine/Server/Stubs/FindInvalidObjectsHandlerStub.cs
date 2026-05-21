@@ -9,7 +9,7 @@ namespace AkmlSql.Engine.Server.Stubs
     /// Returns a "not yet implemented" error envelope until the real handler
     /// lands in US8 (Phase 10 / US8 — Find Invalid Objects across the database).
     /// <para>
-    /// Registered into <see cref="PipeRpcServer"/>'s pluggable handler dictionary
+    /// Registered into <see cref="NamedPipeTransport"/>'s pluggable handler dictionary
     /// during construction (T008). Migrating the inline stub-case off the
     /// 53-case switch demonstrates the hybrid dispatch pattern works without
     /// touching any of the other 50 cases.

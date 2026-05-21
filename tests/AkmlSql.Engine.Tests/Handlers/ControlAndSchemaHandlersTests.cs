@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Engine;
@@ -27,6 +28,7 @@ public sealed class ControlAndSchemaHandlersTests
         Sessions = new SessionManager(),
         SchemaCache = new SchemaCacheManager(),
         Logger = Log.Logger,
+        SettingsLoader = () => new AppSettings(),
     };
 
     [Fact]
@@ -66,7 +68,7 @@ public sealed class ControlAndSchemaHandlersTests
     public async Task ShutdownHandler_via_adapter_propagates_OCE_to_tear_down_pipe_loop()
     {
         // Default SwallowCancellation=false means the adapter re-throws OCE, which matches
-        // the previous inline behaviour that caused PipeRpcServer's outer catch + RunAsync
+        // the previous inline behaviour that caused NamedPipeTransport's outer catch + RunAsync
         // to exit.
         var handler = new ShutdownHandler();
         var iface = (IRpcRequestHandler<EngineStatusInfo, EngineStatusInfo>)handler;

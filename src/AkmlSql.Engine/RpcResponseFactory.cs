@@ -8,9 +8,9 @@ namespace AkmlSql.Engine
     /// Spec 021 (web edition) -- M0.6 task T020 finishing step. Stateless factory for
     /// the two canonical <see cref="RpcMessage"/> envelopes used across the engine:
     /// the typed-response envelope and the standardised <c>Error</c> envelope. Previously
-    /// lived as internal static helpers on <c>PipeRpcServer</c>; moved to its own class so
+    /// lived as internal static helpers on <c>NamedPipeTransport</c>; moved to its own class so
     /// (a) the named-pipe transport file stays focused on lifecycle + dispatch, and
-    /// (b) future non-named-pipe transports do not have to depend on PipeRpcServer.
+    /// (b) future non-named-pipe transports do not have to depend on NamedPipeTransport.
     /// </summary>
     public static class RpcResponseFactory
     {

@@ -10,7 +10,7 @@ The engine supports three transports, all of which carry the same `RpcMessage` e
 
 | Transport | Class | Wire | Consumers |
 |-----------|-------|------|-----------|
-| **Named pipe** (default) | `Server/PipeRpcServer` | `[length][CRC][MessagePack(RpcMessage)]` over `\\.\pipe\akmlsql-engine-{SID}-{PID}` | SSMS 20/21/22, VS 2019/22/26 (today's IDE plugins) |
+| **Named pipe** (default) | `Transports/NamedPipeTransport` | `[length][CRC][MessagePack(RpcMessage)]` over `\\.\pipe\akmlsql-engine-{SID}-{PID}` | SSMS 20/21/22, VS 2019/22/26 (today's IDE plugins) |
 | **In-process** | `Transports/InProcessTransport` | Method calls; no serialisation | Blazor WASM running engine logic in the browser tab (spec 021 M2+); engine unit tests |
 | **WebSocket** (M3, future) | `Transports/WebSocketTransport` | One WebSocket binary message = one `RpcMessage` MessagePack payload | Browser ↔ engine bridge (spec 021 M3+) |
 
@@ -20,12 +20,12 @@ Routing details inside the engine (post-M0):
 
 1. Inbound frame arrives at a transport.
 2. Transport raises `RequestReceived` with the decoded `RpcMessage`.
-3. `RpcRouter.RouteAsync(msg, ctx, ct)` looks up the message type in `_pluggableHandlers` (a `Dictionary<int, IMessageHandler>` populated at engine start by `PipeRpcServer.RegisterPluggableHandlers()`).
-4. The matching `TypedHandlerAdapter<TRequest, TResponse>` (for typed handlers) or `DelegatingMessageHandler` (for `RpcMessage`-typed bridges, e.g. AI) is invoked.
-5. The handler returns a `TResponse`; the adapter serialises and returns the response `RpcMessage`, or `null` for notifications.
+3. `RpcRouter.RouteAsync(msg, ctx, ct)` resolves the message-type integer code against the router's registered handlers — the registry is populated at engine start by `EngineHandlerRegistry.RegisterAllHandlers()`, called from `EngineComposition.Build()`.
+4. Typed handlers (`IRpcRequestHandler<TRequest, TResponse>`, registered via `RpcRouter.Register`) receive the deserialised request; delegating handlers (registered via `RpcRouter.RegisterRaw`, e.g. AI, history, navigation) receive the raw `RpcMessage` and produce the response envelope themselves.
+5. A typed handler returns a `TResponse` that the router serialises into the response `RpcMessage`; a delegating handler returns the `RpcMessage` directly. Notifications return `null`.
 6. The transport writes the response back over the same channel.
 
-The original 53-case `switch` inside `DispatchAsync` is empty — every dispatch flows through `_pluggableHandlers`.
+Every dispatch flows through the `RpcRouter`; the pre-M0 53-case `switch` is gone entirely.
 
 ---
 
