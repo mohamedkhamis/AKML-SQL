@@ -1,0 +1,714 @@
+@page "/spike"
+@*
+    Spec 023 (M1 -- ScriptDom-in-WASM Runtime Spike) -- T012-T015 (US1), T019-T021 (US2).
+
+    A diagnostic harness, NOT an M2 feature. It parses, formats and analyses T-SQL
+    entirely inside the Blazor WebAssembly runtime to prove ScriptDom + the formatter
+    pipeline + the reflection-discovered analyser actually execute in the browser.
+
+    Additive: auto-routed by the existing <Router>; reuses the already-registered
+    IFormatterService / IAnalyserService / HttpClient. No engine, IPC or WebSocket
+    call; no M2 surface touched. See specs/023-m1-wasm-spike/contracts/spike-page.md.
+*@
+@using System.Diagnostics
+@using System.Net.Http.Json
+@using AkmlSql.Core.Ipc.Messages
+@using AkmlSql.Engine.Analysis
+@using AkmlSql.Formatting.Pipeline
+@using AkmlSql.Web.Services
+@using Microsoft.AspNetCore.Components.Forms
+@inject IFormatterService Formatter
+@inject IAnalyserService Analyser
+@inject HttpClient Http
+@inject IJSRuntime JS
+
+<PageTitle>WASM Spike — AKML SQL</PageTitle>
+
+<div class="spike">
+    <header class="spike-head">
+        <h2>M1 — ScriptDom-in-WASM Runtime Spike</h2>
+        <p class="spike-sub">
+            Diagnostic surface (spec 023). Parses, formats and analyses T-SQL entirely in the
+            browser WebAssembly runtime — no engine process, no network beyond static assets.
+            Reached by URL only; not linked from the nav menu.
+        </p>
+    </header>
+
+    @* ---- Environment / runtime probe (T015, T020) ---- *@
+    <section class="spike-card">
+        <h3>Runtime probe</h3>
+        <dl class="spike-kv">
+            <dt>Analyser rules discovered</dt>
+            <dd>
+                @if (_rulesDiscoveredError is null)
+                {
+                    <span class="@(_rulesDiscovered >= RuleBaseline ? "ok" : "warn")">
+                        @_rulesDiscovered / @RuleBaseline
+                    </span>
+                    <span class="spike-muted"> (via a directly-constructed RuleRegistry — reflection scan)</span>
+                }
+                else
+                {
+                    <span class="bad">RuleRegistry construction threw</span>
+                }
+            </dd>
+            <dt>Stopwatch.Frequency</dt>
+            <dd>@(_timerFreq == 0 ? "(measuring…)" : $"{_timerFreq:N0} ticks/sec")</dd>
+            <dt>Timer effective resolution</dt>
+            <dd>
+                @(_timerFreq == 0
+                    ? "(measuring…)"
+                    : $"{_timerResolutionUs:F2} µs  (smallest non-zero delta: {_timerSmallestTicks:N0} ticks)")
+            </dd>
+            <dt>Time to first render</dt>
+            <dd>
+                @(_firstRenderMs is { } ms
+                    ? $"{ms:F0} ms  (performance.now since navigation start; localhost)"
+                    : "(measuring…)")
+                <span class="spike-muted"> — marked as <code>akml-spike-ready</code> for cold-load capture.</span>
+            </dd>
+        </dl>
+        @if (_rulesDiscoveredError is not null)
+        {
+            <pre class="spike-exc-trace">@_rulesDiscoveredError</pre>
+        }
+        @if (_timerNote is not null)
+        {
+            <p class="spike-muted">@_timerNote</p>
+        }
+    </section>
+
+    @* ---- Input (T012) ---- *@
+    <section class="spike-card">
+        <h3>Input</h3>
+        <textarea class="spike-input" spellcheck="false" rows="10"
+                  @bind="_sqlInput" @bind:event="oninput"
+                  placeholder="Paste or type T-SQL here…"></textarea>
+        <div class="spike-input-row">
+            <label>
+                Corpus:
+                <select @onchange="OnCorpusSelected" value="@(_selectedCorpusId ?? string.Empty)" disabled="@_running">
+                    <option value="">— pick a corpus item —</option>
+                    @if (_corpus is not null)
+                    {
+                        @foreach (var item in _corpus)
+                        {
+                            <option value="@item.Id">@item.DisplayName</option>
+                        }
+                    }
+                </select>
+            </label>
+            <label>
+                Load .sql:
+                <InputFile OnChange="OnFileSelected" accept=".sql" />
+            </label>
+        </div>
+        @if (_corpusLoadError is not null)
+        {
+            <p class="bad">Could not load spike-corpus/corpus.json — corpus features disabled.</p>
+        }
+        @if (_statusMessage is not null)
+        {
+            <p class="spike-muted">@_statusMessage</p>
+        }
+    </section>
+
+    @* ---- Actions ---- *@
+    <div class="spike-actions">
+        <button id="spike-parse-format" class="spike-btn primary" @onclick="ParseAndFormatAsync" disabled="@_running">Parse &amp; Format</button>
+        <button id="spike-analyse" class="spike-btn" @onclick="AnalyseAsync" disabled="@_running">Analyse</button>
+        <button id="spike-run-corpus" class="spike-btn" @onclick="RunAllCorpusAsync" disabled="@(_running || _corpus is null)">Run all corpus</button>
+        @if (_busyLabel is not null)
+        {
+            <span class="spike-busy">@_busyLabel</span>
+        }
+    </div>
+
+    @* ---- Single-run: Parse & Format (T013, T014) ---- *@
+    @if (_formatOutcome is not null)
+    {
+        <section class="spike-card">
+            <h3>Parse &amp; Format @(_lastRunLabel is null ? "" : $"— {_lastRunLabel}")</h3>
+            @if (_formatOutcome.Success)
+            {
+                <p class="ok">
+                    ✓ Completed — averaged @_formatOutcome.ElapsedMs.ToString("F3") ms
+                    over @FormatTimingIterations runs (after one warm-up pass).
+                </p>
+                @if (_formatResult is not null)
+                {
+                    <p class="spike-muted">
+                        pipeline Success=@_formatResult.Success ·
+                        WasModified=@_formatResult.WasModified ·
+                        ValidationPassed=@_formatResult.ValidationPassed ·
+                        pipeline-reported ElapsedMs=@_formatResult.ElapsedMs ·
+                        diagnostics=@_formatResult.Diagnostics.Length
+                    </p>
+                    @if (!_formatResult.Success)
+                    {
+                        <p class="warn">
+                            ⚠ The formatter pipeline reported Success=false — typically a parser error
+                            (the output below is the original, unchanged input).
+                        </p>
+                    }
+                    @if (_formatResult.Diagnostics.Length > 0)
+                    {
+                        <ul class="spike-diag">
+                            @foreach (var d in _formatResult.Diagnostics)
+                            {
+                                <li class="@DiagClass(d.Severity)">
+                                    [@d.Severity] @d.Message @(d.Line >= 0 ? $"(line {d.Line})" : "")
+                                </li>
+                            }
+                        </ul>
+                    }
+                    <pre class="spike-output">@_formatResult.FormattedText</pre>
+                }
+            }
+            else
+            {
+                @RenderException(_formatOutcome)
+            }
+        </section>
+    }
+
+    @* ---- Single-run: Analyse (T019, T020) ---- *@
+    @if (_analyseOutcome is not null)
+    {
+        <section class="spike-card">
+            <h3>Analyse @(_lastRunLabel is null ? "" : $"— {_lastRunLabel}")</h3>
+            @if (_analyseOutcome.Success)
+            {
+                <p class="ok">
+                    ✓ Completed — @_analyseOutcome.ElapsedMs.ToString("F3") ms (single-shot;
+                    the analysis engine's batch cache serves identical re-runs).
+                </p>
+                <p class="spike-muted">
+                    @(_analyseResponse?.Issues.Length ?? 0) finding(s) ·
+                    rules discovered @_rulesDiscovered / @RuleBaseline
+                </p>
+                @if (_analyseResponse is { Issues.Length: > 0 })
+                {
+                    <table class="spike-table">
+                        <thead>
+                            <tr><th>Rule</th><th>Severity</th><th>Message</th><th>Line:Col</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var issue in _analyseResponse.Issues)
+                            {
+                                <tr>
+                                    <td>@issue.RuleId</td>
+                                    <td>@SeverityLabel(issue.Severity)</td>
+                                    <td>@issue.Message</td>
+                                    <td>@issue.Line:@issue.Column</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                else
+                {
+                    <p class="spike-muted">No findings for this input.</p>
+                }
+            }
+            else
+            {
+                @RenderException(_analyseOutcome)
+            }
+        </section>
+    }
+
+    @* ---- Corpus run (T021) ---- *@
+    @if (_corpusResults.Count > 0)
+    {
+        <section class="spike-card">
+            <h3>Corpus run — @_corpusResults.Count item(s)</h3>
+            <table class="spike-table" id="spike-corpus-table">
+                <thead>
+                    <tr>
+                        <th>Item</th>
+                        <th>Parse &amp; Format</th>
+                        <th>Analyse</th>
+                        <th>Findings</th>
+                        <th>Format vs golden</th>
+                        <th>Analysis vs golden</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in _corpusResults)
+                    {
+                        <tr>
+                            <td>@r.DisplayName</td>
+                            <td>@RenderOutcomeCell(r.ParseAndFormat)</td>
+                            <td>@RenderOutcomeCell(r.Analyse)</td>
+                            <td>@(r.Analyse is { Success: true } ? r.Findings.Count.ToString() : "—")</td>
+                            <td>@RenderGoldenCell(r.FormattedMatchesGolden)</td>
+                            <td>@RenderGoldenCell(r.AnalysisMatchesGolden)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            @{
+                var failures = _corpusResults
+                    .SelectMany(r => new[] { r.ParseAndFormat, r.Analyse })
+                    .Where(o => o is { Success: false })
+                    .ToList();
+            }
+            @if (failures.Count > 0)
+            {
+                <h4 class="bad">Recorded failures (@failures.Count)</h4>
+                @foreach (var o in failures)
+                {
+                    @RenderException(o!)
+                }
+            }
+            else
+            {
+                <p class="ok" id="spike-corpus-summary">✓ No silent failure — every corpus operation produced output or a recorded result.</p>
+            }
+        </section>
+    }
+</div>
+
+<style>
+    .spike { padding: var(--akml-scalar-spacing-m, 16px); max-width: 1100px; }
+    .spike-head h2 { margin: 0 0 4px; }
+    .spike-sub { color: var(--akml-text-secondary, #888); margin: 0 0 12px; max-width: 70ch; }
+    .spike-card {
+        border: 1px solid var(--akml-border-default, #444);
+        background: var(--akml-surface-panel, #1e1e1e);
+        border-radius: 4px; padding: 12px; margin-bottom: 12px;
+    }
+    .spike-card h3 { margin: 0 0 8px; font-size: 14px; }
+    .spike-card h4 { margin: 12px 0 6px; font-size: 13px; }
+    .spike-kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0; }
+    .spike-kv dt { color: var(--akml-text-secondary, #888); }
+    .spike-kv dd { margin: 0; }
+    .spike-input {
+        width: 100%; box-sizing: border-box; resize: vertical;
+        font-family: var(--akml-type-editor-family, Consolas, monospace); font-size: 13px;
+        background: var(--akml-surface-editor, #161616); color: var(--akml-text-primary, #ddd);
+        border: 1px solid var(--akml-border-default, #444); border-radius: 3px; padding: 6px;
+    }
+    .spike-input-row { display: flex; gap: 24px; margin-top: 8px; flex-wrap: wrap; align-items: center; }
+    .spike-input-row label { color: var(--akml-text-secondary, #888); }
+    .spike-actions { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+    .spike-btn {
+        font-family: var(--akml-type-chrome-family, "Segoe UI"), sans-serif;
+        background: var(--akml-surface-panel, #2a2a2a); color: var(--akml-text-primary, #ddd);
+        border: 1px solid var(--akml-border-default, #444); border-radius: 3px;
+        padding: 6px 14px; cursor: pointer;
+    }
+    .spike-btn:hover:not(:disabled) { background: var(--akml-surface-hover, #333); }
+    .spike-btn:disabled { opacity: 0.5; cursor: default; }
+    .spike-btn.primary { border-color: var(--akml-accent, #3b82f6); }
+    .spike-busy { color: var(--akml-text-secondary, #888); font-style: italic; }
+    .spike-output, .spike-exc-trace {
+        background: var(--akml-surface-editor, #161616); color: var(--akml-text-primary, #ddd);
+        border: 1px solid var(--akml-border-subtle, #333); border-radius: 3px;
+        padding: 8px; overflow: auto; white-space: pre-wrap; word-break: break-word;
+        font-family: var(--akml-type-editor-family, Consolas, monospace); font-size: 12px;
+        max-height: 480px;
+    }
+    .spike-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .spike-table th, .spike-table td {
+        padding: 4px 8px; text-align: left;
+        border-bottom: 1px solid var(--akml-border-subtle, #333); vertical-align: top;
+    }
+    .spike-table th { color: var(--akml-text-secondary, #888); }
+    .spike-diag { margin: 6px 0; padding-left: 20px; font-size: 12px; }
+    .spike-exc {
+        border: 1px solid #c0392b; border-radius: 3px; padding: 8px; margin: 6px 0;
+        background: rgba(192, 57, 43, 0.08);
+    }
+    .spike-exc-head { font-weight: 600; color: #e74c3c; }
+    .spike-exc-msg { margin: 4px 0; color: var(--akml-text-primary, #ddd); }
+    .spike-muted { color: var(--akml-text-secondary, #888); font-size: 12px; }
+    .ok { color: #2ecc71; }
+    .warn, .sev-warning { color: #e0a000; }
+    .bad, .sev-error { color: #e74c3c; }
+    .sev-info { color: var(--akml-text-secondary, #888); }
+</style>
+
+@code {
+    // --- constants ---
+    private const int FormatTimingIterations = 10;
+    private const int RuleBaseline = 130;   // desktop-discovered rule count (research.md Decision 10)
+    private const string DefaultSampleSql =
+        "select   a, b, c   from dbo.Foo   where a > 1";
+
+    // --- input state ---
+    private string _sqlInput = DefaultSampleSql;
+    private SpikeCorpusItem[]? _corpus;
+    private string? _corpusLoadError;
+    private string? _selectedCorpusId;
+    private string? _statusMessage;
+
+    // --- runtime probe state (T015, T020) ---
+    private int _rulesDiscovered;
+    private string? _rulesDiscoveredError;
+    private long _timerFreq;
+    private long _timerSmallestTicks;
+    private double _timerResolutionUs;
+    private double? _firstRenderMs;
+    private string? _timerNote;
+
+    // --- single-run state ---
+    private OperationOutcome? _formatOutcome;
+    private FormatResult? _formatResult;
+    private OperationOutcome? _analyseOutcome;
+    private CodeAnalysisResponse? _analyseResponse;
+    private string? _lastRunLabel;
+
+    // --- corpus-run state ---
+    private readonly List<SpikeRunResult> _corpusResults = new();
+
+    // --- busy state ---
+    private bool _running;
+    private string? _busyLabel;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Rule-discovery count: construct RuleRegistry directly (research.md Decision 10).
+        // Wrapped so a trimming-induced reflection failure is a recorded finding, not a page crash.
+        try
+        {
+            _rulesDiscovered = new RuleRegistry().AllRules.Count;
+        }
+        catch (Exception ex)
+        {
+            _rulesDiscoveredError = ex.ToString();
+        }
+
+        // Corpus manifest. GetFromJsonAsync uses the System.Text.Json Web defaults
+        // (camelCase, case-insensitive) which match spike-corpus/corpus.json.
+        try
+        {
+            _corpus = await Http.GetFromJsonAsync<SpikeCorpusItem[]>("spike-corpus/corpus.json");
+        }
+        catch (Exception ex)
+        {
+            _corpusLoadError = ex.ToString();
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        // Timer microbench (research.md Decision 5; measurement-protocol.md M5).
+        RunTimerProbe();
+
+        // Cold-load capture (measurement-protocol.md M2). The mark lets an external
+        // driver read time-to-interactive via performance.measure; performance.now()
+        // gives the same figure in-page.
+        try
+        {
+            await JS.InvokeVoidAsync("performance.mark", "akml-spike-ready");
+            _firstRenderMs = await JS.InvokeAsync<double>("performance.now");
+        }
+        catch (Exception ex)
+        {
+            _timerNote = $"performance API unavailable: {ex.Message}";
+        }
+
+        StateHasChanged();
+    }
+
+    private void RunTimerProbe()
+    {
+        _timerFreq = Stopwatch.Frequency;
+        var smallest = long.MaxValue;
+        for (var i = 0; i < 2000; i++)
+        {
+            var a = Stopwatch.GetTimestamp();
+            var b = Stopwatch.GetTimestamp();
+            var delta = b - a;
+            if (delta > 0 && delta < smallest) smallest = delta;
+        }
+        _timerSmallestTicks = smallest == long.MaxValue ? 0 : smallest;
+        _timerResolutionUs = _timerFreq > 0 ? _timerSmallestTicks * 1_000_000.0 / _timerFreq : 0;
+    }
+
+    private async Task OnCorpusSelected(ChangeEventArgs e)
+    {
+        var id = e.Value?.ToString();
+        _selectedCorpusId = string.IsNullOrEmpty(id) ? null : id;
+        _statusMessage = null;
+        if (_selectedCorpusId is null || _corpus is null) return;
+
+        var item = _corpus.FirstOrDefault(c => c.Id == _selectedCorpusId);
+        if (item is null) return;
+        try
+        {
+            _sqlInput = await Http.GetStringAsync(item.SqlPath);
+            _statusMessage = $"Loaded corpus item '{item.DisplayName}'.";
+        }
+        catch (Exception ex)
+        {
+            _statusMessage = $"Could not fetch {item.SqlPath}: {ex.GetType().Name} — {ex.Message}";
+        }
+    }
+
+    // Oversized-file edge case (spec Edge Case "Oversized .sql file"): guard the 10 MB
+    // document limit BEFORE reading, so the limit message renders instead of the tab freezing.
+    private async Task OnFileSelected(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        _statusMessage = null;
+        _selectedCorpusId = null;
+
+        if (file.Size > DocumentSizeLimit.MaxDocumentSizeChars)
+        {
+            _statusMessage =
+                $"File '{file.Name}' is {file.Size:N0} bytes — over the "
+                + $"{DocumentSizeLimit.MaxDocumentSizeChars:N0}-char (10 MB) document limit. Not loaded.";
+            return;
+        }
+
+        try
+        {
+            await using var stream = file.OpenReadStream(DocumentSizeLimit.MaxDocumentSizeChars);
+            using var reader = new StreamReader(stream);
+            _sqlInput = await reader.ReadToEndAsync();
+            _statusMessage = $"Loaded '{file.Name}' ({file.Size:N0} bytes).";
+        }
+        catch (Exception ex)
+        {
+            _statusMessage = $"Could not load '{file.Name}': {ex.GetType().Name} — {ex.Message}";
+        }
+    }
+
+    private async Task ParseAndFormatAsync()
+    {
+        _running = true;
+        _busyLabel = "Parsing & formatting…";
+        _corpusResults.Clear();
+        _lastRunLabel = _selectedCorpusId ?? "pasted input";
+        StateHasChanged();
+        await Task.Yield();   // let the busy state paint before the synchronous work
+
+        try
+        {
+            (_formatOutcome, _formatResult) = TimedFormat(_sqlInput);
+        }
+        finally
+        {
+            _running = false;
+            _busyLabel = null;
+            StateHasChanged();
+        }
+    }
+
+    private async Task AnalyseAsync()
+    {
+        _running = true;
+        _busyLabel = "Analysing…";
+        _corpusResults.Clear();
+        _lastRunLabel = _selectedCorpusId ?? "pasted input";
+        StateHasChanged();
+        await Task.Yield();
+
+        try
+        {
+            (_analyseOutcome, _analyseResponse) = await TimedAnalyseAsync(_sqlInput);
+        }
+        finally
+        {
+            _running = false;
+            _busyLabel = null;
+            StateHasChanged();
+        }
+    }
+
+    private async Task RunAllCorpusAsync()
+    {
+        if (_corpus is null) return;
+        _running = true;
+        _corpusResults.Clear();
+        _formatOutcome = null;
+        _analyseOutcome = null;
+        StateHasChanged();
+
+        try
+        {
+            foreach (var item in _corpus)
+            {
+                _busyLabel = $"Running corpus — {item.DisplayName}…";
+                StateHasChanged();
+                await Task.Yield();   // keep the UI responsive between items
+
+                _corpusResults.Add(await RunCorpusItemAsync(item));
+                StateHasChanged();
+            }
+        }
+        finally
+        {
+            _running = false;
+            _busyLabel = null;
+            StateHasChanged();
+        }
+    }
+
+    private async Task<SpikeRunResult> RunCorpusItemAsync(SpikeCorpusItem item)
+    {
+        string sql;
+        try
+        {
+            sql = await Http.GetStringAsync(item.SqlPath);
+        }
+        catch (Exception ex)
+        {
+            return new SpikeRunResult
+            {
+                InputId = item.Id,
+                DisplayName = item.DisplayName,
+                ParseAndFormat = OperationOutcome.Fail("FetchSql", ex),
+            };
+        }
+
+        var (formatOutcome, formatResult) = TimedFormat(sql);
+        var (analyseOutcome, analyseResponse) = await TimedAnalyseAsync(sql);
+
+        bool? formatMatch = null;
+        bool? analysisMatch = null;
+
+        if (formatOutcome.Success && formatResult is not null)
+        {
+            var golden = await TryFetchTextAsync(item.ExpectedFormattedPath);
+            if (golden is not null)
+            {
+                formatMatch = SpikeGolden.Normalize(golden)
+                    == SpikeGolden.Normalize(formatResult.FormattedText);
+            }
+        }
+
+        if (analyseOutcome.Success && analyseResponse is not null)
+        {
+            var golden = await TryFetchTextAsync(item.ExpectedAnalysisPath);
+            if (golden is not null)
+            {
+                analysisMatch = SpikeGolden.Normalize(golden)
+                    == SpikeGolden.Normalize(SpikeGolden.FindingsToJson(analyseResponse.Issues));
+            }
+        }
+
+        return new SpikeRunResult
+        {
+            InputId = item.Id,
+            DisplayName = item.DisplayName,
+            ParseAndFormat = formatOutcome,
+            Analyse = analyseOutcome,
+            FormattedOutput = formatResult?.FormattedText,
+            Findings = analyseResponse?.Issues ?? Array.Empty<CodeIssueInfo>(),
+            RulesDiscovered = _rulesDiscovered,
+            FormattedMatchesGolden = formatMatch,
+            AnalysisMatchesGolden = analysisMatch,
+        };
+    }
+
+    // Parse & Format timing: one warm-up pass, then average over N runs (research.md Decision 5).
+    private (OperationOutcome, FormatResult?) TimedFormat(string sql)
+    {
+        try
+        {
+            var result = Formatter.Format(sql);   // warm-up
+            var sw = Stopwatch.StartNew();
+            for (var i = 0; i < FormatTimingIterations; i++)
+            {
+                result = Formatter.Format(sql);
+            }
+            sw.Stop();
+            var avgMs = sw.Elapsed.TotalMilliseconds / FormatTimingIterations;
+            return (OperationOutcome.Ok("ParseAndFormat", avgMs), result);
+        }
+        catch (Exception ex)
+        {
+            return (OperationOutcome.Fail("ParseAndFormat", ex), null);
+        }
+    }
+
+    // Analyse timing: single-shot. The analysis engine caches results per batch hash,
+    // so averaging would measure cache hits, not real work.
+    private async Task<(OperationOutcome, CodeAnalysisResponse?)> TimedAnalyseAsync(string sql)
+    {
+        try
+        {
+            var sw = Stopwatch.StartNew();
+            var response = await Analyser.AnalyseAsync(sql);
+            sw.Stop();
+            return (OperationOutcome.Ok("Analyse", sw.Elapsed.TotalMilliseconds), response);
+        }
+        catch (Exception ex)
+        {
+            return (OperationOutcome.Fail("Analyse", ex), null);
+        }
+    }
+
+    private async Task<string?> TryFetchTextAsync(string path)
+    {
+        try
+        {
+            using var response = await Http.GetAsync(path);
+            return response.IsSuccessStatusCode
+                ? await response.Content.ReadAsStringAsync()
+                : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string SeverityLabel(int severity) => severity switch
+    {
+        0 => "Hint",
+        1 => "Info",
+        2 => "Warning",
+        3 => "Error",
+        _ => $"({severity})",
+    };
+
+    private static string DiagClass(DiagnosticSeverity severity) => severity switch
+    {
+        DiagnosticSeverity.Error => "sev-error",
+        DiagnosticSeverity.Warning => "sev-warning",
+        _ => "sev-info",
+    };
+
+    private RenderFragment RenderException(OperationOutcome o) => @<div class="spike-exc">
+        <div class="spike-exc-head">✗ @o.Operation threw @o.ErrorType</div>
+        <div class="spike-exc-msg">@o.ErrorMessage</div>
+        <pre class="spike-exc-trace">@o.ErrorDetail</pre>
+    </div>;
+
+    private RenderFragment RenderOutcomeCell(OperationOutcome? o) => @<text>
+        @if (o is null)
+        {
+            <span class="spike-muted">—</span>
+        }
+        else if (o.Success)
+        {
+            <span class="ok">✓ @o.ElapsedMs.ToString("F2") ms</span>
+        }
+        else
+        {
+            <span class="bad">✗ @o.ErrorType</span>
+        }
+    </text>;
+
+    private RenderFragment RenderGoldenCell(bool? match) => @<text>
+        @if (match is null)
+        {
+            <span class="spike-muted">— (no golden file)</span>
+        }
+        else if (match.Value)
+        {
+            <span class="ok">✓ match</span>
+        }
+        else
+        {
+            <span class="bad">✗ differs</span>
+        }
+    </text>;
+}
