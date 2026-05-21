@@ -322,7 +322,7 @@ Spec 021 (web edition) introduced an `IRpcTransport` + `IRpcRequestHandler<TRequ
 | Type | Path | Role |
 |------|------|------|
 | `IRpcTransport` | `Transports/IRpcTransport.cs` | Frame I/O + lifecycle. One impl per medium. |
-| `NamedPipeTransport` | `Transports/NamedPipeTransport.cs` | Named-pipe accept loop, pipe ACL, framed read/write; routes every decoded `RpcMessage` through the shared `RpcRouter`. 116 LOC — the M0 reference shape. |
+| `NamedPipeTransport` | `Transports/NamedPipeTransport.cs` | Named-pipe accept loop, pipe ACL, framed read/write; implements `IRpcTransport`, raising `RequestReceived` for each decoded `RpcMessage`. 147 LOC — the M0 reference shape. |
 | `InProcessTransport` | `Transports/InProcessTransport.cs` | Method-call dispatch, no serialisation. Used by Blazor WASM and engine unit tests. |
 | `WebSocketTransport` | `Transports/WebSocketTransport.cs` | Localhost-by-default WebSocket bridge — see § 9d. |
 | `IRpcRequestHandler<TRequest, TResponse>` | `Transports/IRpcRequestHandler.cs` | One impl per message-type integer code. Two opt-in DIM properties: `AllowsEmptyPayload` (for messages with no payload, e.g. `ProfileList`) and `SwallowCancellation` (for handlers where OCE → null response is preferable to tearing down the pipe loop, e.g. `AnalysisHandler`). |
@@ -349,7 +349,7 @@ Handlers/
 
 ### `NamedPipeTransport` and the composition root (spec 022 closure)
 
-The named-pipe transport is `src/AkmlSql.Engine/Transports/NamedPipeTransport.cs` — **116 LOC**, meeting the M0 PRD's ≤ 150-LOC reference-shape target. It owns only named-pipe concerns: the pipe ACL (`CreatePipeSecurity`), the accept loop (`RunAsync` / `HandleClientAsync`), framed read/write, and the dispatch hand-off — every decoded `RpcMessage` is routed through `RpcRouter.RouteAsync`. No service-construction or handler-registration code lives in the transport.
+The named-pipe transport is `src/AkmlSql.Engine/Transports/NamedPipeTransport.cs` — **147 LOC**, within the M0 PRD's ≤ 150-LOC reference-shape target. It implements `IRpcTransport` (T027) like the in-process and WebSocket transports, owning only named-pipe concerns: the pipe ACL (`CreatePipeSecurity`), the accept loop (`RunAsync` / `HandleClientAsync`), framed read/write, and the dispatch hand-off — each decoded `RpcMessage` is raised via the `RequestReceived` event, with the composition root wiring `RpcRouter.RouteAsync` as the subscriber. No service-construction or handler-registration code lives in the transport.
 
 Service construction and handler registration moved to two new files:
 

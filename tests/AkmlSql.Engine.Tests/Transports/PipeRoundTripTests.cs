@@ -13,9 +13,9 @@ namespace AkmlSql.Engine.Tests.Transports;
 
 /// <summary>
 /// Spec 021 (web edition) -- M0.6 task T024. End-to-end integration test that exercises
-/// the real named-pipe path through <see cref="NamedPipeTransport"/>. Confirms that the post-M0
-/// dispatch (every message type now flows through <c>_pluggableHandlers</c> rather than the
-/// old 53-case switch) still produces correct frames on the wire.
+/// the real named-pipe path through <see cref="NamedPipeTransport"/>. Confirms that dispatch
+/// through the transport's RequestReceived event into <c>RpcRouter</c> still produces correct
+/// frames on the wire.
 ///
 /// Coverage: representative subset (Ping, ProfileList, Shutdown) -- one synchronous
 /// request/response, one no-payload notification-style request, one OCE-throwing handler.
@@ -32,10 +32,12 @@ public sealed class PipeRoundTripTests
     {
         var pipeName = UniquePipeName();
         using var serverCts = new CancellationTokenSource();
-        // Spec 022 (M0 closure) -- P2 / US2. Transport now takes (pipeName, ctx, router)
-        // produced by EngineComposition.Build() instead of constructing services itself.
+        // Spec 022 T027. NamedPipeTransport implements IRpcTransport: it owns frame I/O and
+        // raises RequestReceived; the caller wires RpcRouter (from EngineComposition.Build())
+        // as the subscriber, exactly as EngineHost does.
         var composition = EngineComposition.Build();
-        var server = new NamedPipeTransport(pipeName, composition.Context, composition.Router);
+        var server = new NamedPipeTransport(pipeName);
+        server.RequestReceived += (msg, ct) => composition.Router.RouteAsync(msg, composition.Context, ct);
 
         // Start the server. It blocks on WaitForConnectionAsync; cancel via serverCts when done.
         var serverTask = Task.Run(() => server.RunAsync(serverCts.Token));
@@ -107,8 +109,8 @@ public sealed class PipeRoundTripTests
     [Fact]
     public async Task Unknown_MessageType_returns_no_response()
     {
-        // An unmapped MessageType falls through the (now-empty) switch to the default
-        // branch which returns null. The client sees the stream eventually close.
+        // An unmapped MessageType has no registered handler; RpcRouter.RouteAsync returns null,
+        // so the transport writes no response frame. The client sees the stream eventually close.
         var unknown = new RpcMessage
         {
             MessageType = 99999,

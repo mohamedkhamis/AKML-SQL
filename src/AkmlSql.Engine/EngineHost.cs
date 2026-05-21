@@ -89,12 +89,20 @@ namespace AkmlSql.Engine
                 // T035 -- process pending SQL Prompt import before starting the RPC server.
                 ProcessPendingImports();
 
-                // Spec 022 (M0 closure) -- P2 / US2. Single composition root builds services,
-                // context, router, and the history retention service. The transport just owns
-                // pipe lifecycle + frame I/O now.
+                // Spec 022 (M0 closure). The composition root builds services, context and
+                // router; the transport (T027) implements IRpcTransport -- it owns only pipe
+                // lifecycle + frame I/O and forwards each decoded message to the router via the
+                // RequestReceived event.
                 var composition = EngineComposition.Build();
-                var server = new NamedPipeTransport(pipeName, composition.Context, composition.Router);
-                await server.RunAsync(token);
+                await using var transport = new NamedPipeTransport(pipeName);
+                transport.RequestReceived += async (msg, ct) =>
+                {
+                    var response = await composition.Router.RouteAsync(msg, composition.Context, ct);
+                    if (response == null && !composition.Router.IsRegistered(msg.MessageType))
+                        Log.Warning("Unknown message type: {Type}", msg.MessageType);
+                    return response;
+                };
+                await transport.RunAsync(token);
             }
             catch (OperationCanceledException)
             {

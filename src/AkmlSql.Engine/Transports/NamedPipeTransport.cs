@@ -8,24 +8,38 @@ using Serilog;
 namespace AkmlSql.Engine.Transports;
 
 /// <summary>
-/// Named-pipe transport. Spec 022 (M0 closure) -- P2 / US2: trimmed to frame I/O + pipe
-/// lifecycle only. Service construction and handler registration live in
-/// <see cref="EngineComposition"/> + <see cref="EngineHandlerRegistry"/>. Dispatch routes via
-/// <see cref="RpcRouter.RouteAsync"/>.
+/// Named-pipe transport (spec 022 M0 closure). Owns the pipe ACL, accept loop and framed
+/// read/write only -- no service construction or handler registration. T027: implements
+/// <see cref="IRpcTransport"/> like the in-process and WebSocket transports; each decoded
+/// <see cref="RpcMessage"/> is forwarded to the <see cref="RequestReceived"/> subscriber
+/// (the host wires <see cref="RpcRouter.RouteAsync"/>).
 /// </summary>
-public sealed class NamedPipeTransport
+public sealed class NamedPipeTransport : IRpcTransport
 {
     private readonly string _pipeName;
-    private readonly RpcContext _ctx;
-    private readonly RpcRouter _router;
+    private CancellationTokenSource? _acceptCts;
+    private Task? _acceptLoop;
+    private bool _disposed;
 
-    public NamedPipeTransport(string pipeName, RpcContext ctx, RpcRouter router)
+    public NamedPipeTransport(string pipeName) => _pipeName = pipeName;
+
+    /// <inheritdoc />
+    public event Func<RpcMessage, CancellationToken, Task<RpcMessage?>>? RequestReceived;
+
+    /// <inheritdoc />
+    public Task StartAsync(CancellationToken ct)
     {
-        _pipeName = pipeName;
-        _ctx = ctx;
-        _router = router;
+        if (_disposed) throw new ObjectDisposedException(nameof(NamedPipeTransport));
+        if (_acceptLoop != null) throw new InvalidOperationException("NamedPipeTransport already started.");
+        _acceptCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        _acceptLoop = Task.Run(() => RunAsync(_acceptCts.Token));
+        return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Runs the accept loop, blocking until <paramref name="ct"/> is cancelled. The direct
+    /// entry point for <c>EngineHost</c>; <see cref="StartAsync"/> wraps it on a background task.
+    /// </summary>
     public async Task RunAsync(CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)
@@ -81,14 +95,17 @@ public sealed class NamedPipeTransport
 
     private async Task<RpcMessage?> DispatchAsync(RpcMessage message, CancellationToken ct)
     {
+        var handler = RequestReceived;
+        if (handler == null)
+        {
+            Log.Error("NamedPipeTransport: no RequestReceived subscriber; dropping message type {Type}",
+                message.MessageType);
+            return RpcResponseFactory.CreateErrorResponse("Engine transport not wired.", message.RequestId);
+        }
+
         try
         {
-            var response = await _router.RouteAsync(message, _ctx, ct).ConfigureAwait(false);
-            if (response == null && !_router.IsRegistered(message.MessageType))
-            {
-                Log.Warning("Unknown message type: {Type}", message.MessageType);
-            }
-            return response;
+            return await handler(message, ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -112,5 +129,19 @@ public sealed class NamedPipeTransport
             new SecurityIdentifier(WellKnownSidType.NetworkSid, null),
             PipeAccessRights.FullControl, AccessControlType.Deny));
         return security;
+    }
+
+    /// <inheritdoc />
+    public async ValueTask DisposeAsync()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        try { _acceptCts?.Cancel(); } catch { /* ignore */ }
+        if (_acceptLoop != null)
+        {
+            try { await _acceptLoop.ConfigureAwait(false); }
+            catch { /* swallow accept-loop shutdown errors (incl. OCE) */ }
+        }
+        _acceptCts?.Dispose();
     }
 }
