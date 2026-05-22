@@ -2,8 +2,8 @@
   "metadata": {
     "id": "00000000-0000-0000-0000-000000000003",
     "schemaVersion": 1,
-    "name": "Expanded",
-    "description": "Maximum readability with generous vertical spacing, one item per line, and empty lines before joins.",
+    "name": "Indented",
+    "description": "SQL Prompt 'Indented' style — maximum readability with generous vertical spacing, one item per line, and empty lines before joins.",
     "author": "AKML SQL",
     "version": "1.0.0",
     "basedOn": "Default",
