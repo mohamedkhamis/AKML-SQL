@@ -174,6 +174,28 @@ public class SqlPromptImporterTests
         Assert.Equal(3, result.MappedCount);
     }
 
+    // ── Parenthesis collapse (T076) ───────────────────────────────────────
+
+    [Fact]
+    public void Import_ParenthesisCollapseSettings_MapToProfile()
+    {
+        // CollapseShort defaults to true and CollapseThreshold to 40 — use non-default
+        // values so the assertions prove the import actually applied them.
+        const string xml = """
+            <SqlPromptStyle>
+              <Options>
+                <Option Name="CollapseShortParenthesisContents" Value="false" />
+                <Option Name="CollapseParenthesesShorterThan" Value="55" />
+              </Options>
+            </SqlPromptStyle>
+            """;
+
+        var result = SqlPromptImporter.Import(xml);
+
+        Assert.False(result.Profile.Parenthesis.CollapseShort);
+        Assert.Equal(55, result.Profile.Parenthesis.CollapseThreshold);
+    }
+
     // ── Invalid XML ───────────────────────────────────────────────────────
 
     [Fact]

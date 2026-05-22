@@ -171,6 +171,35 @@ public class SqlPromptExporterTests
         Assert.Equal(first.Profile.Join.OnNewLine,          second.Profile.Join.OnNewLine);
     }
 
+    // ── Parenthesis collapse (T076) ───────────────────────────────────────
+
+    [Fact]
+    public void Export_ParenthesisCollapseSettings_EmittedCorrectly()
+    {
+        var profile = new FormattingProfile { Parenthesis = { CollapseShort = true, CollapseThreshold = 72 } };
+
+        var doc = XDocument.Parse(SqlPromptExporter.Export(profile).Xml);
+        var options = doc.Descendants("Option").ToDictionary(
+            e => e.Attribute("Name")!.Value,
+            e => e.Attribute("Value")!.Value,
+            StringComparer.OrdinalIgnoreCase);
+
+        Assert.Equal("true", options["CollapseShortParenthesisContents"]);
+        Assert.Equal("72",   options["CollapseParenthesesShorterThan"]);
+    }
+
+    [Fact]
+    public void RoundTrip_ParenthesisCollapse_PreservesSettings()
+    {
+        var profile = new FormattingProfile { Parenthesis = { CollapseShort = false, CollapseThreshold = 95 } };
+
+        var xml = SqlPromptExporter.Export(profile).Xml;
+        var reimported = SqlPromptImporter.Import(xml);
+
+        Assert.False(reimported.Profile.Parenthesis.CollapseShort);
+        Assert.Equal(95, reimported.Profile.Parenthesis.CollapseThreshold);
+    }
+
     // ── Coverage / metadata ───────────────────────────────────────────────
 
     [Fact]

@@ -118,6 +118,8 @@ public static class SqlPromptExporter
         ["OpenParenOnSameLine"] = p => Bool(p.Parenthesis.OpenOnSameLine),
         ["CloseParenOnNewLine"] = p => Bool(p.Parenthesis.CloseOnNewLine.Equals("true", StringComparison.OrdinalIgnoreCase)),
         ["IndentParenContents"] = p => Bool(p.Parenthesis.IndentContents),
+        ["CollapseShortParenthesisContents"] = p => Bool(p.Parenthesis.CollapseShort),
+        ["CollapseParenthesesShorterThan"] = p => p.Parenthesis.CollapseThreshold.ToString(),
 
         // ----- Format Actions -----
         ["InsertSemicolons"]   = p => Bool(p.FormatActions.InsertSemicolons),

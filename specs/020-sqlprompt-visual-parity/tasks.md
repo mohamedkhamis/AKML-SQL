@@ -206,7 +206,7 @@ description: "Tasks for SQL Prompt Visual Parity + Format / Upload Formatter gap
 
 - [X] T074 [P] [US5] Implement `Whitespace.PreserveEmptyLinesAfterBatch`
 - [ ] T075 [P] [US5] Implement `Lists.AlignAcrossClauses` — deferred
-- [ ] T076 [P] [US5] Replace hardcoded parenthesis collapse threshold with `Parens.CollapseThreshold` — deferred
+- [X] T076 [P] [US5] Map `Parens.CollapseShort` / `Parens.CollapseThreshold` through the SQL Prompt importer & exporter (the layout rule already honoured the threshold)
 - [ ] T077 [P] [US5] Implement Dml collapse settings (4 sub-settings) — deferred
 - [ ] T078 [P] [US5] Implement Ddl alignment + first-param + collapse (4 sub-settings) — deferred
 - [ ] T079 [P] [US5] Implement `ControlFlow.CollapseThreshold` — deferred

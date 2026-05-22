@@ -92,6 +92,8 @@ public static class SqlPromptImporter
         ["OpenParenOnSameLine"] = (p, v) => p.Parenthesis.OpenOnSameLine = ToBool(v),
         ["CloseParenOnNewLine"] = (p, v) => p.Parenthesis.CloseOnNewLine = ToBool(v) ? "true" : "false",
         ["IndentParenContents"] = (p, v) => p.Parenthesis.IndentContents = ToBool(v),
+        ["CollapseShortParenthesisContents"] = (p, v) => p.Parenthesis.CollapseShort = ToBool(v),
+        ["CollapseParenthesesShorterThan"] = (p, v) => { if (int.TryParse(v, out var n)) p.Parenthesis.CollapseThreshold = n; },
 
         // ----- Format Actions -----
         ["InsertSemicolons"] = (p, v) => p.FormatActions.InsertSemicolons = ToBool(v),
