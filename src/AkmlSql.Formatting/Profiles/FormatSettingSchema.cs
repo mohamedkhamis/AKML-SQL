@@ -19,9 +19,10 @@ namespace AkmlSql.Formatting.Profiles;
 ///
 /// <para>
 /// SQL Prompt mapping (the <see cref="FormatSetting.SqlPromptKey"/> field) is resolved by
-/// looking up whether <see cref="SqlPromptImporter"/>'s <c>OptionMap</c> mentions the AKML
-/// property's name — best-effort, never guaranteed. Settings without a SQL Prompt equivalent
-/// have a null <c>SqlPromptKey</c>.
+/// <see cref="LookupSqlPromptKey"/>: an explicit per-setting map (<see cref="ExplicitKeyMap"/>)
+/// is consulted first, then — as a best-effort, never-guaranteed fallback — a heuristic over
+/// <see cref="SqlPromptImporter"/>'s <c>OptionMap</c> keys. Settings without a SQL Prompt
+/// equivalent have a null <c>SqlPromptKey</c>.
 /// </para>
 /// </summary>
 public class FormatSettingSchema

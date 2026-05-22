@@ -259,6 +259,36 @@ public class SqlPromptExporterTests
         Assert.Equal(88, reimported.Profile.Ddl.CollapseThreshold);
     }
 
+    [Theory]
+    [InlineData("always", "Always")]
+    [InlineData("never", "Never")]
+    [InlineData("auto", "IfLongerThanWrap")]
+    public void Export_FirstParameterOnNewLine_EmitsSqlPromptEnumName(string akmlValue, string expectedXmlToken)
+    {
+        var profile = new FormattingProfile { Ddl = { FirstParameterOnNewLine = akmlValue } };
+
+        var doc = XDocument.Parse(SqlPromptExporter.Export(profile).Xml);
+        var opt = doc.Descendants("Option")
+            .FirstOrDefault(e => string.Equals(e.Attribute("Name")?.Value, "PlaceFirstProcedureParameterOnNewLine", StringComparison.OrdinalIgnoreCase));
+
+        Assert.NotNull(opt);
+        Assert.Equal(expectedXmlToken, opt!.Attribute("Value")?.Value);
+    }
+
+    [Theory]
+    [InlineData("always")]
+    [InlineData("never")]
+    [InlineData("auto")]
+    public void RoundTrip_FirstParameterOnNewLine_PreservesValue(string akmlValue)
+    {
+        var profile = new FormattingProfile { Ddl = { FirstParameterOnNewLine = akmlValue } };
+
+        var xml = SqlPromptExporter.Export(profile).Xml;
+        var reimported = SqlPromptImporter.Import(xml);
+
+        Assert.Equal(akmlValue, reimported.Profile.Ddl.FirstParameterOnNewLine);
+    }
+
     // ── Control flow collapse (T079) ──────────────────────────────────────
 
     [Fact]
@@ -291,15 +321,34 @@ public class SqlPromptExporterTests
 
     // ── Join keyword alignment (T081) ─────────────────────────────────────
 
-    [Fact]
-    public void RoundTrip_AlignJoinKeyword_PreservesValue()
+    [Theory]
+    [InlineData("right", "RightAligned")]
+    [InlineData("left", "ToTable")]
+    [InlineData("none", "None")]
+    public void Export_AlignJoinKeyword_EmitsSqlPromptEnumName(string akmlValue, string expectedXmlToken)
     {
-        var profile = new FormattingProfile { Join = { AlignJoinKeyword = "none" } };
+        var profile = new FormattingProfile { Join = { AlignJoinKeyword = akmlValue } };
+
+        var doc = XDocument.Parse(SqlPromptExporter.Export(profile).Xml);
+        var opt = doc.Descendants("Option")
+            .FirstOrDefault(e => string.Equals(e.Attribute("Name")?.Value, "AlignJoinKeyword", StringComparison.OrdinalIgnoreCase));
+
+        Assert.NotNull(opt);
+        Assert.Equal(expectedXmlToken, opt!.Attribute("Value")?.Value);
+    }
+
+    [Theory]
+    [InlineData("right")]
+    [InlineData("left")]
+    [InlineData("none")]
+    public void RoundTrip_AlignJoinKeyword_PreservesValue(string akmlValue)
+    {
+        var profile = new FormattingProfile { Join = { AlignJoinKeyword = akmlValue } };
 
         var xml = SqlPromptExporter.Export(profile).Xml;
         var reimported = SqlPromptImporter.Import(xml);
 
-        Assert.Equal("none", reimported.Profile.Join.AlignJoinKeyword);
+        Assert.Equal(akmlValue, reimported.Profile.Join.AlignJoinKeyword);
     }
 
     // ── Coverage / metadata ───────────────────────────────────────────────

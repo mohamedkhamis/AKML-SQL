@@ -101,14 +101,24 @@ public static class SqlPromptExporter
         ["IndentJoin"]         = p => Bool(p.Join.IndentJoin),
         ["OnConditionNewLine"] = p => Bool(p.Join.OnConditionNewLine),
         ["EmptyLineBeforeJoin"] = p => Bool(p.Join.EmptyLineBeforeJoin),
-        ["AlignJoinKeyword"] = p => p.Join.AlignJoinKeyword,
+        ["AlignJoinKeyword"] = p => p.Join.AlignJoinKeyword.Trim().ToLowerInvariant() switch
+        {
+            "left" => "ToTable",
+            "none" => "None",
+            _ => "RightAligned",   // "right" + AKML default — emit SQL Prompt's enum token, not the AKML value
+        },
 
         // ----- DDL -----
         ["AlignDataTypes"]   = p => Bool(p.Ddl.AlignDataTypes),
         ["AlignConstraints"] = p => Bool(p.Ddl.AlignConstraints),
         ["AsOnNewLine"]      = p => Bool(p.Ddl.AsOnNewLine),
         ["BeginOnNewLine"]   = p => Bool(p.Ddl.BeginOnNewLine),
-        ["PlaceFirstProcedureParameterOnNewLine"] = p => p.Ddl.FirstParameterOnNewLine,
+        ["PlaceFirstProcedureParameterOnNewLine"] = p => p.Ddl.FirstParameterOnNewLine.Trim().ToLowerInvariant() switch
+        {
+            "always" => "Always",
+            "never" => "Never",
+            _ => "IfLongerThanWrap",   // "auto" + AKML default — emit SQL Prompt's enum token, not the AKML value
+        },
         ["DdlCollapseShortStatements"] = p => Bool(p.Ddl.CollapseShortDdl),
         ["DdlCollapseStatementsShorterThan"] = p => p.Ddl.CollapseThreshold.ToString(),
 
