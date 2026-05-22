@@ -241,6 +241,24 @@ public class SqlPromptExporterTests
         Assert.Equal(130, reimported.Profile.Dml.SubqueryCollapseThreshold);
     }
 
+    // ── DDL settings (T078) ───────────────────────────────────────────────
+
+    [Fact]
+    public void RoundTrip_DdlSettings_PreservesValues()
+    {
+        var profile = new FormattingProfile
+        {
+            Ddl = { FirstParameterOnNewLine = "never", CollapseShortDdl = false, CollapseThreshold = 88 }
+        };
+
+        var xml = SqlPromptExporter.Export(profile).Xml;
+        var reimported = SqlPromptImporter.Import(xml);
+
+        Assert.Equal("never", reimported.Profile.Ddl.FirstParameterOnNewLine);
+        Assert.False(reimported.Profile.Ddl.CollapseShortDdl);
+        Assert.Equal(88, reimported.Profile.Ddl.CollapseThreshold);
+    }
+
     // ── Coverage / metadata ───────────────────────────────────────────────
 
     [Fact]

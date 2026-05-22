@@ -80,6 +80,14 @@ public static class SqlPromptImporter
         ["AlignConstraints"] = (p, v) => p.Ddl.AlignConstraints = ToBool(v),
         ["AsOnNewLine"] = (p, v) => p.Ddl.AsOnNewLine = ToBool(v),
         ["BeginOnNewLine"] = (p, v) => p.Ddl.BeginOnNewLine = ToBool(v),
+        ["PlaceFirstProcedureParameterOnNewLine"] = (p, v) => p.Ddl.FirstParameterOnNewLine = v.Trim().ToLowerInvariant() switch
+        {
+            "always" or "true" => "always",
+            "never" or "false" => "never",
+            _ => "auto",
+        },
+        ["DdlCollapseShortStatements"] = (p, v) => p.Ddl.CollapseShortDdl = ToBool(v),
+        ["DdlCollapseStatementsShorterThan"] = (p, v) => { if (int.TryParse(v, out var n)) p.Ddl.CollapseThreshold = n; },
 
         // ----- Control Flow -----
         ["IfBeginOnNewLine"] = (p, v) => p.ControlFlow.BeginOnNewLine = ToBool(v),

@@ -106,6 +106,9 @@ public static class SqlPromptExporter
         ["AlignConstraints"] = p => Bool(p.Ddl.AlignConstraints),
         ["AsOnNewLine"]      = p => Bool(p.Ddl.AsOnNewLine),
         ["BeginOnNewLine"]   = p => Bool(p.Ddl.BeginOnNewLine),
+        ["PlaceFirstProcedureParameterOnNewLine"] = p => p.Ddl.FirstParameterOnNewLine,
+        ["DdlCollapseShortStatements"] = p => Bool(p.Ddl.CollapseShortDdl),
+        ["DdlCollapseStatementsShorterThan"] = p => p.Ddl.CollapseThreshold.ToString(),
 
         // ----- Control Flow -----
         ["IfBeginOnNewLine"]      = p => Bool(p.ControlFlow.BeginOnNewLine),

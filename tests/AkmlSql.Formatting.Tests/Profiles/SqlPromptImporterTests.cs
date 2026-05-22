@@ -222,6 +222,28 @@ public class SqlPromptImporterTests
         Assert.Equal(120, result.Profile.Dml.SubqueryCollapseThreshold);
     }
 
+    // ── DDL settings (T078) ───────────────────────────────────────────────
+
+    [Fact]
+    public void Import_DdlSettings_MapToProfile()
+    {
+        const string xml = """
+            <SqlPromptStyle>
+              <Options>
+                <Option Name="PlaceFirstProcedureParameterOnNewLine" Value="always" />
+                <Option Name="DdlCollapseShortStatements" Value="false" />
+                <Option Name="DdlCollapseStatementsShorterThan" Value="75" />
+              </Options>
+            </SqlPromptStyle>
+            """;
+
+        var result = SqlPromptImporter.Import(xml);
+
+        Assert.Equal("always", result.Profile.Ddl.FirstParameterOnNewLine);
+        Assert.False(result.Profile.Ddl.CollapseShortDdl);
+        Assert.Equal(75, result.Profile.Ddl.CollapseThreshold);
+    }
+
     // ── Invalid XML ───────────────────────────────────────────────────────
 
     [Fact]
