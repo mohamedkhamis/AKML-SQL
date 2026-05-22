@@ -196,6 +196,32 @@ public class SqlPromptImporterTests
         Assert.Equal(55, result.Profile.Parenthesis.CollapseThreshold);
     }
 
+    // ── DML collapse (T077) ───────────────────────────────────────────────
+
+    [Fact]
+    public void Import_DmlCollapseSettings_MapToProfile()
+    {
+        // Defaults: CollapseShortStatements/Subqueries true; CollapseThreshold 80;
+        // SubqueryCollapseThreshold 60 — use non-default values to prove the import applied.
+        const string xml = """
+            <SqlPromptStyle>
+              <Options>
+                <Option Name="DmlCollapseShortStatements" Value="false" />
+                <Option Name="DmlCollapseStatementsShorterThan" Value="100" />
+                <Option Name="DmlCollapseShortSubqueries" Value="false" />
+                <Option Name="DmlCollapseSubqueriesShorterThan" Value="120" />
+              </Options>
+            </SqlPromptStyle>
+            """;
+
+        var result = SqlPromptImporter.Import(xml);
+
+        Assert.False(result.Profile.Dml.CollapseShortStatements);
+        Assert.Equal(100, result.Profile.Dml.CollapseThreshold);
+        Assert.False(result.Profile.Dml.CollapseShortSubqueries);
+        Assert.Equal(120, result.Profile.Dml.SubqueryCollapseThreshold);
+    }
+
     // ── Invalid XML ───────────────────────────────────────────────────────
 
     [Fact]

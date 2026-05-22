@@ -90,6 +90,10 @@ public static class SqlPromptExporter
         ["ANDORNewLine"]     = p => p.Dml.AndOrNewLine.Equals("before", StringComparison.OrdinalIgnoreCase) ? "before" : "after",
         ["SetOnNewLine"]     = p => Bool(p.Dml.SetOnNewLine),
         ["ValuesOnNewLine"]  = p => Bool(p.Dml.ValuesOnNewLine),
+        ["DmlCollapseShortStatements"] = p => Bool(p.Dml.CollapseShortStatements),
+        ["DmlCollapseStatementsShorterThan"] = p => p.Dml.CollapseThreshold.ToString(),
+        ["DmlCollapseShortSubqueries"] = p => Bool(p.Dml.CollapseShortSubqueries),
+        ["DmlCollapseSubqueriesShorterThan"] = p => p.Dml.SubqueryCollapseThreshold.ToString(),
 
         // ----- JOIN -----
         ["JoinOnNewLine"]      = p => Bool(p.Join.OnNewLine),

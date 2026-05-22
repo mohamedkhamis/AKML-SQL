@@ -64,6 +64,10 @@ public static class SqlPromptImporter
         ["ANDORNewLine"] = (p, v) => p.Dml.AndOrNewLine = v.Contains("before", StringComparison.OrdinalIgnoreCase) ? "before" : "after",
         ["SetOnNewLine"] = (p, v) => p.Dml.SetOnNewLine = ToBool(v),
         ["ValuesOnNewLine"] = (p, v) => p.Dml.ValuesOnNewLine = ToBool(v),
+        ["DmlCollapseShortStatements"] = (p, v) => p.Dml.CollapseShortStatements = ToBool(v),
+        ["DmlCollapseStatementsShorterThan"] = (p, v) => { if (int.TryParse(v, out var n)) p.Dml.CollapseThreshold = n; },
+        ["DmlCollapseShortSubqueries"] = (p, v) => p.Dml.CollapseShortSubqueries = ToBool(v),
+        ["DmlCollapseSubqueriesShorterThan"] = (p, v) => { if (int.TryParse(v, out var n)) p.Dml.SubqueryCollapseThreshold = n; },
 
         // ----- JOIN -----
         ["JoinOnNewLine"] = (p, v) => p.Join.OnNewLine = ToBool(v),

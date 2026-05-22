@@ -200,6 +200,47 @@ public class SqlPromptExporterTests
         Assert.Equal(95, reimported.Profile.Parenthesis.CollapseThreshold);
     }
 
+    // ── DML collapse (T077) ───────────────────────────────────────────────
+
+    [Fact]
+    public void Export_DmlCollapseSettings_EmittedCorrectly()
+    {
+        var profile = new FormattingProfile
+        {
+            Dml = { CollapseShortStatements = true, CollapseThreshold = 90,
+                    CollapseShortSubqueries = true, SubqueryCollapseThreshold = 70 }
+        };
+
+        var doc = XDocument.Parse(SqlPromptExporter.Export(profile).Xml);
+        var options = doc.Descendants("Option").ToDictionary(
+            e => e.Attribute("Name")!.Value,
+            e => e.Attribute("Value")!.Value,
+            StringComparer.OrdinalIgnoreCase);
+
+        Assert.Equal("true", options["DmlCollapseShortStatements"]);
+        Assert.Equal("90",   options["DmlCollapseStatementsShorterThan"]);
+        Assert.Equal("true", options["DmlCollapseShortSubqueries"]);
+        Assert.Equal("70",   options["DmlCollapseSubqueriesShorterThan"]);
+    }
+
+    [Fact]
+    public void RoundTrip_DmlCollapse_PreservesSettings()
+    {
+        var profile = new FormattingProfile
+        {
+            Dml = { CollapseShortStatements = false, CollapseThreshold = 110,
+                    CollapseShortSubqueries = false, SubqueryCollapseThreshold = 130 }
+        };
+
+        var xml = SqlPromptExporter.Export(profile).Xml;
+        var reimported = SqlPromptImporter.Import(xml);
+
+        Assert.False(reimported.Profile.Dml.CollapseShortStatements);
+        Assert.Equal(110, reimported.Profile.Dml.CollapseThreshold);
+        Assert.False(reimported.Profile.Dml.CollapseShortSubqueries);
+        Assert.Equal(130, reimported.Profile.Dml.SubqueryCollapseThreshold);
+    }
+
     // ── Coverage / metadata ───────────────────────────────────────────────
 
     [Fact]
