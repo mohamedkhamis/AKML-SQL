@@ -244,6 +244,26 @@ public class SqlPromptImporterTests
         Assert.Equal(75, result.Profile.Ddl.CollapseThreshold);
     }
 
+    // ── Control flow collapse (T079) ──────────────────────────────────────
+
+    [Fact]
+    public void Import_ControlFlowCollapseSettings_MapToProfile()
+    {
+        const string xml = """
+            <SqlPromptStyle>
+              <Options>
+                <Option Name="ControlFlowCollapseShortIfElse" Value="false" />
+                <Option Name="ControlFlowCollapseStatementsShorterThan" Value="140" />
+              </Options>
+            </SqlPromptStyle>
+            """;
+
+        var result = SqlPromptImporter.Import(xml);
+
+        Assert.False(result.Profile.ControlFlow.CollapseShortIfElse);
+        Assert.Equal(140, result.Profile.ControlFlow.CollapseThreshold);
+    }
+
     // ── Invalid XML ───────────────────────────────────────────────────────
 
     [Fact]

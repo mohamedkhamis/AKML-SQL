@@ -209,7 +209,7 @@ description: "Tasks for SQL Prompt Visual Parity + Format / Upload Formatter gap
 - [X] T076 [P] [US5] Map `Parens.CollapseShort` / `Parens.CollapseThreshold` through the SQL Prompt importer & exporter (the layout rule already honoured the threshold)
 - [X] T077 [P] [US5] Round-trip the 4 Dml collapse settings through the SQL Prompt importer & exporter (the layout already honoured them)
 - [X] T078 [P] [US5] Round-trip the Ddl first-param + collapse settings through the SQL Prompt importer & exporter (AlignDataTypes already mapped; layout already honoured all 4)
-- [ ] T079 [P] [US5] Implement `ControlFlow.CollapseThreshold` — deferred
+- [X] T079 [P] [US5] Round-trip `ControlFlow.CollapseShortIfElse` / `CollapseThreshold` through the SQL Prompt importer & exporter (layout already honoured them)
 - [ ] T080 [P] [US5] Implement `Cte.PlaceColumnsOnNewLine` enum — deferred
 - [ ] T081 [P] [US5] Implement `Joins.KeywordAlignment` (4 variants) — deferred
 - [ ] T082 [P] [US5] Implement Case settings (3 sub-settings) — deferred

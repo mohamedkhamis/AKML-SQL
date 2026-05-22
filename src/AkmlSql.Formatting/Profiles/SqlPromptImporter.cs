@@ -93,6 +93,8 @@ public static class SqlPromptImporter
         ["IfBeginOnNewLine"] = (p, v) => p.ControlFlow.BeginOnNewLine = ToBool(v),
         ["ElseOnNewLine"] = (p, v) => p.ControlFlow.ElseOnNewLine = ToBool(v),
         ["IndentBetweenBeginEnd"] = (p, v) => p.ControlFlow.IndentBetweenBeginEnd = ToBool(v),
+        ["ControlFlowCollapseShortIfElse"] = (p, v) => p.ControlFlow.CollapseShortIfElse = ToBool(v),
+        ["ControlFlowCollapseStatementsShorterThan"] = (p, v) => { if (int.TryParse(v, out var n)) p.ControlFlow.CollapseThreshold = n; },
 
         // ----- CASE -----
         ["WhenOnNewLine"] = (p, v) => p.Case.WhenOnNewLine = ToBool(v),

@@ -114,6 +114,8 @@ public static class SqlPromptExporter
         ["IfBeginOnNewLine"]      = p => Bool(p.ControlFlow.BeginOnNewLine),
         ["ElseOnNewLine"]         = p => Bool(p.ControlFlow.ElseOnNewLine),
         ["IndentBetweenBeginEnd"] = p => Bool(p.ControlFlow.IndentBetweenBeginEnd),
+        ["ControlFlowCollapseShortIfElse"] = p => Bool(p.ControlFlow.CollapseShortIfElse),
+        ["ControlFlowCollapseStatementsShorterThan"] = p => p.ControlFlow.CollapseThreshold.ToString(),
 
         // ----- CASE -----
         ["WhenOnNewLine"]    = p => Bool(p.Case.WhenOnNewLine),

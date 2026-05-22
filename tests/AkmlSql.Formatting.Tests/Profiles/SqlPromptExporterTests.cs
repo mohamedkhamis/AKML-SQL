@@ -259,6 +259,23 @@ public class SqlPromptExporterTests
         Assert.Equal(88, reimported.Profile.Ddl.CollapseThreshold);
     }
 
+    // ── Control flow collapse (T079) ──────────────────────────────────────
+
+    [Fact]
+    public void RoundTrip_ControlFlowCollapse_PreservesSettings()
+    {
+        var profile = new FormattingProfile
+        {
+            ControlFlow = { CollapseShortIfElse = false, CollapseThreshold = 150 }
+        };
+
+        var xml = SqlPromptExporter.Export(profile).Xml;
+        var reimported = SqlPromptImporter.Import(xml);
+
+        Assert.False(reimported.Profile.ControlFlow.CollapseShortIfElse);
+        Assert.Equal(150, reimported.Profile.ControlFlow.CollapseThreshold);
+    }
+
     // ── Coverage / metadata ───────────────────────────────────────────────
 
     [Fact]
