@@ -53,6 +53,7 @@ public static class SqlPromptImporter
         ["AlignAliases"] = (p, v) => p.List.AlignAliases = ToBool(v),
         ["OneItemPerLine"] = (p, v) => p.List.OneItemPerLine = ToBool(v),
         ["IndentListItems"] = (p, v) => p.List.IndentListItems = ToBool(v),
+        ["AlignItemsAcrossClauses"] = (p, v) => p.List.AlignItemsAcrossClauses = ToBool(v),
 
         // ----- DML -----
         ["SelectOnNewLine"] = (p, v) => p.Dml.SelectItemsOnNewLine = ToBool(v),

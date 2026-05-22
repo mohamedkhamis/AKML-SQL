@@ -79,6 +79,7 @@ public static class SqlPromptExporter
         ["AlignAliases"]    = p => Bool(p.List.AlignAliases),
         ["OneItemPerLine"]  = p => Bool(p.List.OneItemPerLine),
         ["IndentListItems"] = p => Bool(p.List.IndentListItems),
+        ["AlignItemsAcrossClauses"] = p => Bool(p.List.AlignItemsAcrossClauses),
 
         // ----- DML -----
         ["SelectOnNewLine"]  = p => Bool(p.Dml.SelectItemsOnNewLine),

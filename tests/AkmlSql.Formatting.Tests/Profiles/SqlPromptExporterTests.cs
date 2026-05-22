@@ -276,6 +276,19 @@ public class SqlPromptExporterTests
         Assert.Equal(150, reimported.Profile.ControlFlow.CollapseThreshold);
     }
 
+    // ── List alignment (T075) ─────────────────────────────────────────────
+
+    [Fact]
+    public void RoundTrip_AlignItemsAcrossClauses_PreservesValue()
+    {
+        var profile = new FormattingProfile { List = { AlignItemsAcrossClauses = false } };
+
+        var xml = SqlPromptExporter.Export(profile).Xml;
+        var reimported = SqlPromptImporter.Import(xml);
+
+        Assert.False(reimported.Profile.List.AlignItemsAcrossClauses);
+    }
+
     // ── Coverage / metadata ───────────────────────────────────────────────
 
     [Fact]

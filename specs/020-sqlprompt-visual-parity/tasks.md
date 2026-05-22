@@ -205,7 +205,7 @@ description: "Tasks for SQL Prompt Visual Parity + Format / Upload Formatter gap
 > behaviour against each setting is the user-visible polish that follows.
 
 - [X] T074 [P] [US5] Implement `Whitespace.PreserveEmptyLinesAfterBatch`
-- [ ] T075 [P] [US5] Implement `Lists.AlignAcrossClauses` — deferred
+- [X] T075 [P] [US5] Round-trip `Lists.AlignItemsAcrossClauses` through the SQL Prompt importer & exporter (layout already honoured it)
 - [X] T076 [P] [US5] Map `Parens.CollapseShort` / `Parens.CollapseThreshold` through the SQL Prompt importer & exporter (the layout rule already honoured the threshold)
 - [X] T077 [P] [US5] Round-trip the 4 Dml collapse settings through the SQL Prompt importer & exporter (the layout already honoured them)
 - [X] T078 [P] [US5] Round-trip the Ddl first-param + collapse settings through the SQL Prompt importer & exporter (AlignDataTypes already mapped; layout already honoured all 4)

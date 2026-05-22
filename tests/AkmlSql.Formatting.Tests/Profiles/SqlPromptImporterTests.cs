@@ -264,6 +264,24 @@ public class SqlPromptImporterTests
         Assert.Equal(140, result.Profile.ControlFlow.CollapseThreshold);
     }
 
+    // ── List alignment (T075) ─────────────────────────────────────────────
+
+    [Fact]
+    public void Import_AlignItemsAcrossClauses_MapsToProfile()
+    {
+        const string xml = """
+            <SqlPromptStyle>
+              <Options>
+                <Option Name="AlignItemsAcrossClauses" Value="false" />
+              </Options>
+            </SqlPromptStyle>
+            """;
+
+        var result = SqlPromptImporter.Import(xml);
+
+        Assert.False(result.Profile.List.AlignItemsAcrossClauses);
+    }
+
     // ── Invalid XML ───────────────────────────────────────────────────────
 
     [Fact]
