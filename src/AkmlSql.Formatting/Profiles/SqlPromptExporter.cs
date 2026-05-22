@@ -66,6 +66,7 @@ public static class SqlPromptExporter
         ["LineBreakAfterComma"]         = p => Bool(p.Whitespace.LineBreakAfterComma),
         ["EmptyLinesBetweenStatements"] = p => p.Whitespace.EmptyLineBetweenStatements.ToString(),
         ["LineBreakAfterSemicolon"]     = p => Bool(p.Whitespace.LineBreakAfterSemicolon),
+        ["PreserveEmptyLinesAfterBatch"] = p => Bool(p.Whitespace.PreserveEmptyLinesAfterBatch),
 
         // ----- Casing -----
         ["KeywordCasing"]    = p => p.Casing.ReservedKeywords,

@@ -142,6 +142,7 @@ Controls line breaks, indentation, and spacing.
 | `emptyLineBetweenStatements` | int | 1 | Blank lines inserted between top-level statements |
 | `emptyLineBeforeGO` | bool | true | Blank line before `GO` batch separator |
 | `emptyLineAfterGO` | bool | true | Blank line after `GO` |
+| `preserveEmptyLinesAfterBatch` | bool | false | Keep the author's existing blank line (or none) after `GO`, skipping the `emptyLineAfterGO` normalisation |
 | `preserveEmptyLines` | bool | true | Keep existing blank lines (up to `maxConsecutiveEmptyLines`) |
 | `maxConsecutiveEmptyLines` | int | 2 | Cap on consecutive blank lines |
 | `trailingWhitespace` | `"remove"` \| `"preserve"` | `"remove"` | Trailing spaces on each line |

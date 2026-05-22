@@ -204,7 +204,7 @@ description: "Tasks for SQL Prompt Visual Parity + Format / Upload Formatter gap
 > infrastructure that flows them through is shipping in spec 020. Closing the actual formatter
 > behaviour against each setting is the user-visible polish that follows.
 
-- [ ] T074 [P] [US5] Implement `Whitespace.PreserveEmptyLinesAfterBatch` — deferred
+- [X] T074 [P] [US5] Implement `Whitespace.PreserveEmptyLinesAfterBatch`
 - [ ] T075 [P] [US5] Implement `Lists.AlignAcrossClauses` — deferred
 - [ ] T076 [P] [US5] Replace hardcoded parenthesis collapse threshold with `Parens.CollapseThreshold` — deferred
 - [ ] T077 [P] [US5] Implement Dml collapse settings (4 sub-settings) — deferred

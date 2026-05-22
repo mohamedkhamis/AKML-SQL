@@ -40,6 +40,7 @@ public static class SqlPromptImporter
         ["LineBreakAfterComma"] = (p, v) => p.Whitespace.LineBreakAfterComma = ToBool(v),
         ["EmptyLinesBetweenStatements"] = (p, v) => { if (int.TryParse(v, out var n)) p.Whitespace.EmptyLineBetweenStatements = n; },
         ["LineBreakAfterSemicolon"] = (p, v) => p.Whitespace.LineBreakAfterSemicolon = ToBool(v),
+        ["PreserveEmptyLinesAfterBatch"] = (p, v) => p.Whitespace.PreserveEmptyLinesAfterBatch = ToBool(v),
 
         // ----- Casing -----
         ["KeywordCasing"] = (p, v) => p.Casing.ReservedKeywords = MapCasing(v),

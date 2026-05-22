@@ -91,6 +91,9 @@ public class WhitespaceOptions
     [JsonPropertyName("emptyLineAfterGO")]
     public bool EmptyLineAfterGo { get; set; } = true;
 
+    [JsonPropertyName("preserveEmptyLinesAfterBatch")]
+    public bool PreserveEmptyLinesAfterBatch { get; set; }
+
     [JsonPropertyName("preserveEmptyLines")]
     public bool PreserveEmptyLines { get; set; } = true;
 
