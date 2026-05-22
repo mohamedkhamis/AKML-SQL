@@ -282,6 +282,25 @@ public class SqlPromptImporterTests
         Assert.False(result.Profile.List.AlignItemsAcrossClauses);
     }
 
+    // ── Join keyword alignment (T081) ─────────────────────────────────────
+
+    [Fact]
+    public void Import_AlignJoinKeyword_MapsAndNormalises()
+    {
+        const string xml = """
+            <SqlPromptStyle>
+              <Options>
+                <Option Name="AlignJoinKeyword" Value="ToTable" />
+              </Options>
+            </SqlPromptStyle>
+            """;
+
+        var result = SqlPromptImporter.Import(xml);
+
+        // SQL Prompt's "ToTable" variant normalises to the AKML "left" alignment.
+        Assert.Equal("left", result.Profile.Join.AlignJoinKeyword);
+    }
+
     // ── Invalid XML ───────────────────────────────────────────────────────
 
     [Fact]

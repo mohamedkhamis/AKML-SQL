@@ -211,7 +211,7 @@ description: "Tasks for SQL Prompt Visual Parity + Format / Upload Formatter gap
 - [X] T078 [P] [US5] Round-trip the Ddl first-param + collapse settings through the SQL Prompt importer & exporter (AlignDataTypes already mapped; layout already honoured all 4)
 - [X] T079 [P] [US5] Round-trip `ControlFlow.CollapseShortIfElse` / `CollapseThreshold` through the SQL Prompt importer & exporter (layout already honoured them)
 - [ ] T080 [P] [US5] Implement `Cte.PlaceColumnsOnNewLine` enum — deferred
-- [ ] T081 [P] [US5] Implement `Joins.KeywordAlignment` (4 variants) — deferred
+- [X] T081 [P] [US5] Round-trip `Joins.AlignJoinKeyword` through the SQL Prompt importer & exporter (layout honours none/right/left; SQL Prompt variants normalised on import)
 - [ ] T082 [P] [US5] Implement Case settings (3 sub-settings) — deferred
 - [ ] T083 [P] [US5] Implement Operators settings (2 sub-settings) — deferred
 - [ ] T084 [P] [US5] Implement `InStatements.Alignment` enum (3 variants) — deferred

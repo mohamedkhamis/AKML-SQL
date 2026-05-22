@@ -75,6 +75,12 @@ public static class SqlPromptImporter
         ["IndentJoin"] = (p, v) => p.Join.IndentJoin = ToBool(v),
         ["OnConditionNewLine"] = (p, v) => p.Join.OnConditionNewLine = ToBool(v),
         ["EmptyLineBeforeJoin"] = (p, v) => p.Join.EmptyLineBeforeJoin = ToBool(v),
+        ["AlignJoinKeyword"] = (p, v) => p.Join.AlignJoinKeyword = v.Trim().ToLowerInvariant() switch
+        {
+            "right" or "rightaligned" => "right",
+            "none" => "none",
+            _ => "left",   // "left", "totable", "tofrom", "indentedfromfrom"
+        },
 
         // ----- DDL -----
         ["AlignDataTypes"] = (p, v) => p.Ddl.AlignDataTypes = ToBool(v),

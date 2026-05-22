@@ -289,6 +289,19 @@ public class SqlPromptExporterTests
         Assert.False(reimported.Profile.List.AlignItemsAcrossClauses);
     }
 
+    // ── Join keyword alignment (T081) ─────────────────────────────────────
+
+    [Fact]
+    public void RoundTrip_AlignJoinKeyword_PreservesValue()
+    {
+        var profile = new FormattingProfile { Join = { AlignJoinKeyword = "none" } };
+
+        var xml = SqlPromptExporter.Export(profile).Xml;
+        var reimported = SqlPromptImporter.Import(xml);
+
+        Assert.Equal("none", reimported.Profile.Join.AlignJoinKeyword);
+    }
+
     // ── Coverage / metadata ───────────────────────────────────────────────
 
     [Fact]

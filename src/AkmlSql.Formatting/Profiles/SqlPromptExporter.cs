@@ -101,6 +101,7 @@ public static class SqlPromptExporter
         ["IndentJoin"]         = p => Bool(p.Join.IndentJoin),
         ["OnConditionNewLine"] = p => Bool(p.Join.OnConditionNewLine),
         ["EmptyLineBeforeJoin"] = p => Bool(p.Join.EmptyLineBeforeJoin),
+        ["AlignJoinKeyword"] = p => p.Join.AlignJoinKeyword,
 
         // ----- DDL -----
         ["AlignDataTypes"]   = p => Bool(p.Ddl.AlignDataTypes),
