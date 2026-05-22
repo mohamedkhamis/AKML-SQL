@@ -171,6 +171,186 @@ public class SqlPromptExporterTests
         Assert.Equal(first.Profile.Join.OnNewLine,          second.Profile.Join.OnNewLine);
     }
 
+    // ── Parenthesis collapse (T076) ───────────────────────────────────────
+
+    [Fact]
+    public void Export_ParenthesisCollapseSettings_EmittedCorrectly()
+    {
+        var profile = new FormattingProfile { Parenthesis = { CollapseShort = true, CollapseThreshold = 72 } };
+
+        var doc = XDocument.Parse(SqlPromptExporter.Export(profile).Xml);
+        var options = doc.Descendants("Option").ToDictionary(
+            e => e.Attribute("Name")!.Value,
+            e => e.Attribute("Value")!.Value,
+            StringComparer.OrdinalIgnoreCase);
+
+        Assert.Equal("true", options["CollapseShortParenthesisContents"]);
+        Assert.Equal("72",   options["CollapseParenthesesShorterThan"]);
+    }
+
+    [Fact]
+    public void RoundTrip_ParenthesisCollapse_PreservesSettings()
+    {
+        var profile = new FormattingProfile { Parenthesis = { CollapseShort = false, CollapseThreshold = 95 } };
+
+        var xml = SqlPromptExporter.Export(profile).Xml;
+        var reimported = SqlPromptImporter.Import(xml);
+
+        Assert.False(reimported.Profile.Parenthesis.CollapseShort);
+        Assert.Equal(95, reimported.Profile.Parenthesis.CollapseThreshold);
+    }
+
+    // ── DML collapse (T077) ───────────────────────────────────────────────
+
+    [Fact]
+    public void Export_DmlCollapseSettings_EmittedCorrectly()
+    {
+        var profile = new FormattingProfile
+        {
+            Dml = { CollapseShortStatements = true, CollapseThreshold = 90,
+                    CollapseShortSubqueries = true, SubqueryCollapseThreshold = 70 }
+        };
+
+        var doc = XDocument.Parse(SqlPromptExporter.Export(profile).Xml);
+        var options = doc.Descendants("Option").ToDictionary(
+            e => e.Attribute("Name")!.Value,
+            e => e.Attribute("Value")!.Value,
+            StringComparer.OrdinalIgnoreCase);
+
+        Assert.Equal("true", options["DmlCollapseShortStatements"]);
+        Assert.Equal("90",   options["DmlCollapseStatementsShorterThan"]);
+        Assert.Equal("true", options["DmlCollapseShortSubqueries"]);
+        Assert.Equal("70",   options["DmlCollapseSubqueriesShorterThan"]);
+    }
+
+    [Fact]
+    public void RoundTrip_DmlCollapse_PreservesSettings()
+    {
+        var profile = new FormattingProfile
+        {
+            Dml = { CollapseShortStatements = false, CollapseThreshold = 110,
+                    CollapseShortSubqueries = false, SubqueryCollapseThreshold = 130 }
+        };
+
+        var xml = SqlPromptExporter.Export(profile).Xml;
+        var reimported = SqlPromptImporter.Import(xml);
+
+        Assert.False(reimported.Profile.Dml.CollapseShortStatements);
+        Assert.Equal(110, reimported.Profile.Dml.CollapseThreshold);
+        Assert.False(reimported.Profile.Dml.CollapseShortSubqueries);
+        Assert.Equal(130, reimported.Profile.Dml.SubqueryCollapseThreshold);
+    }
+
+    // ── DDL settings (T078) ───────────────────────────────────────────────
+
+    [Fact]
+    public void RoundTrip_DdlSettings_PreservesValues()
+    {
+        var profile = new FormattingProfile
+        {
+            Ddl = { FirstParameterOnNewLine = "never", CollapseShortDdl = false, CollapseThreshold = 88 }
+        };
+
+        var xml = SqlPromptExporter.Export(profile).Xml;
+        var reimported = SqlPromptImporter.Import(xml);
+
+        Assert.Equal("never", reimported.Profile.Ddl.FirstParameterOnNewLine);
+        Assert.False(reimported.Profile.Ddl.CollapseShortDdl);
+        Assert.Equal(88, reimported.Profile.Ddl.CollapseThreshold);
+    }
+
+    [Theory]
+    [InlineData("always", "Always")]
+    [InlineData("never", "Never")]
+    [InlineData("auto", "IfLongerThanWrap")]
+    public void Export_FirstParameterOnNewLine_EmitsSqlPromptEnumName(string akmlValue, string expectedXmlToken)
+    {
+        var profile = new FormattingProfile { Ddl = { FirstParameterOnNewLine = akmlValue } };
+
+        var doc = XDocument.Parse(SqlPromptExporter.Export(profile).Xml);
+        var opt = doc.Descendants("Option")
+            .FirstOrDefault(e => string.Equals(e.Attribute("Name")?.Value, "PlaceFirstProcedureParameterOnNewLine", StringComparison.OrdinalIgnoreCase));
+
+        Assert.NotNull(opt);
+        Assert.Equal(expectedXmlToken, opt!.Attribute("Value")?.Value);
+    }
+
+    [Theory]
+    [InlineData("always")]
+    [InlineData("never")]
+    [InlineData("auto")]
+    public void RoundTrip_FirstParameterOnNewLine_PreservesValue(string akmlValue)
+    {
+        var profile = new FormattingProfile { Ddl = { FirstParameterOnNewLine = akmlValue } };
+
+        var xml = SqlPromptExporter.Export(profile).Xml;
+        var reimported = SqlPromptImporter.Import(xml);
+
+        Assert.Equal(akmlValue, reimported.Profile.Ddl.FirstParameterOnNewLine);
+    }
+
+    // ── Control flow collapse (T079) ──────────────────────────────────────
+
+    [Fact]
+    public void RoundTrip_ControlFlowCollapse_PreservesSettings()
+    {
+        var profile = new FormattingProfile
+        {
+            ControlFlow = { CollapseShortIfElse = false, CollapseThreshold = 150 }
+        };
+
+        var xml = SqlPromptExporter.Export(profile).Xml;
+        var reimported = SqlPromptImporter.Import(xml);
+
+        Assert.False(reimported.Profile.ControlFlow.CollapseShortIfElse);
+        Assert.Equal(150, reimported.Profile.ControlFlow.CollapseThreshold);
+    }
+
+    // ── List alignment (T075) ─────────────────────────────────────────────
+
+    [Fact]
+    public void RoundTrip_AlignItemsAcrossClauses_PreservesValue()
+    {
+        var profile = new FormattingProfile { List = { AlignItemsAcrossClauses = false } };
+
+        var xml = SqlPromptExporter.Export(profile).Xml;
+        var reimported = SqlPromptImporter.Import(xml);
+
+        Assert.False(reimported.Profile.List.AlignItemsAcrossClauses);
+    }
+
+    // ── Join keyword alignment (T081) ─────────────────────────────────────
+
+    [Theory]
+    [InlineData("right", "RightAligned")]
+    [InlineData("left", "ToTable")]
+    [InlineData("none", "None")]
+    public void Export_AlignJoinKeyword_EmitsSqlPromptEnumName(string akmlValue, string expectedXmlToken)
+    {
+        var profile = new FormattingProfile { Join = { AlignJoinKeyword = akmlValue } };
+
+        var doc = XDocument.Parse(SqlPromptExporter.Export(profile).Xml);
+        var opt = doc.Descendants("Option")
+            .FirstOrDefault(e => string.Equals(e.Attribute("Name")?.Value, "AlignJoinKeyword", StringComparison.OrdinalIgnoreCase));
+
+        Assert.NotNull(opt);
+        Assert.Equal(expectedXmlToken, opt!.Attribute("Value")?.Value);
+    }
+
+    [Theory]
+    [InlineData("right")]
+    [InlineData("left")]
+    [InlineData("none")]
+    public void RoundTrip_AlignJoinKeyword_PreservesValue(string akmlValue)
+    {
+        var profile = new FormattingProfile { Join = { AlignJoinKeyword = akmlValue } };
+
+        var xml = SqlPromptExporter.Export(profile).Xml;
+        var reimported = SqlPromptImporter.Import(xml);
+
+        Assert.Equal(akmlValue, reimported.Profile.Join.AlignJoinKeyword);
+    }
+
     // ── Coverage / metadata ───────────────────────────────────────────────
 
     [Fact]

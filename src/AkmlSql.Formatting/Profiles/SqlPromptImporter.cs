@@ -40,6 +40,7 @@ public static class SqlPromptImporter
         ["LineBreakAfterComma"] = (p, v) => p.Whitespace.LineBreakAfterComma = ToBool(v),
         ["EmptyLinesBetweenStatements"] = (p, v) => { if (int.TryParse(v, out var n)) p.Whitespace.EmptyLineBetweenStatements = n; },
         ["LineBreakAfterSemicolon"] = (p, v) => p.Whitespace.LineBreakAfterSemicolon = ToBool(v),
+        ["PreserveEmptyLinesAfterBatch"] = (p, v) => p.Whitespace.PreserveEmptyLinesAfterBatch = ToBool(v),
 
         // ----- Casing -----
         ["KeywordCasing"] = (p, v) => p.Casing.ReservedKeywords = MapCasing(v),
@@ -52,6 +53,7 @@ public static class SqlPromptImporter
         ["AlignAliases"] = (p, v) => p.List.AlignAliases = ToBool(v),
         ["OneItemPerLine"] = (p, v) => p.List.OneItemPerLine = ToBool(v),
         ["IndentListItems"] = (p, v) => p.List.IndentListItems = ToBool(v),
+        ["AlignItemsAcrossClauses"] = (p, v) => p.List.AlignItemsAcrossClauses = ToBool(v),
 
         // ----- DML -----
         ["SelectOnNewLine"] = (p, v) => p.Dml.SelectItemsOnNewLine = ToBool(v),
@@ -63,23 +65,45 @@ public static class SqlPromptImporter
         ["ANDORNewLine"] = (p, v) => p.Dml.AndOrNewLine = v.Contains("before", StringComparison.OrdinalIgnoreCase) ? "before" : "after",
         ["SetOnNewLine"] = (p, v) => p.Dml.SetOnNewLine = ToBool(v),
         ["ValuesOnNewLine"] = (p, v) => p.Dml.ValuesOnNewLine = ToBool(v),
+        ["DmlCollapseShortStatements"] = (p, v) => p.Dml.CollapseShortStatements = ToBool(v),
+        ["DmlCollapseStatementsShorterThan"] = (p, v) => { if (int.TryParse(v, out var n)) p.Dml.CollapseThreshold = n; },
+        ["DmlCollapseShortSubqueries"] = (p, v) => p.Dml.CollapseShortSubqueries = ToBool(v),
+        ["DmlCollapseSubqueriesShorterThan"] = (p, v) => { if (int.TryParse(v, out var n)) p.Dml.SubqueryCollapseThreshold = n; },
 
         // ----- JOIN -----
         ["JoinOnNewLine"] = (p, v) => p.Join.OnNewLine = ToBool(v),
         ["IndentJoin"] = (p, v) => p.Join.IndentJoin = ToBool(v),
         ["OnConditionNewLine"] = (p, v) => p.Join.OnConditionNewLine = ToBool(v),
         ["EmptyLineBeforeJoin"] = (p, v) => p.Join.EmptyLineBeforeJoin = ToBool(v),
+        ["AlignJoinKeyword"] = (p, v) => p.Join.AlignJoinKeyword = v.Trim().ToLowerInvariant() switch
+        {
+            "right" or "rightaligned" => "right",
+            "none" => "none",
+            "left" or "totable" or "tofrom" or "indentedfromfrom" => "left",
+            _ => "right",   // unrecognised — fall back to the AKML default
+        },
 
         // ----- DDL -----
         ["AlignDataTypes"] = (p, v) => p.Ddl.AlignDataTypes = ToBool(v),
         ["AlignConstraints"] = (p, v) => p.Ddl.AlignConstraints = ToBool(v),
         ["AsOnNewLine"] = (p, v) => p.Ddl.AsOnNewLine = ToBool(v),
         ["BeginOnNewLine"] = (p, v) => p.Ddl.BeginOnNewLine = ToBool(v),
+        ["PlaceFirstProcedureParameterOnNewLine"] = (p, v) => p.Ddl.FirstParameterOnNewLine = v.Trim().ToLowerInvariant() switch
+        {
+            "always" or "true" => "always",
+            "never" or "false" => "never",
+            "auto" or "iflongerthanwrap" => "auto",   // SQL Prompt "IfLongerThanWrap" ~= AKML "auto"
+            _ => "auto",                              // unrecognised — fall back to the AKML default
+        },
+        ["DdlCollapseShortStatements"] = (p, v) => p.Ddl.CollapseShortDdl = ToBool(v),
+        ["DdlCollapseStatementsShorterThan"] = (p, v) => { if (int.TryParse(v, out var n)) p.Ddl.CollapseThreshold = n; },
 
         // ----- Control Flow -----
         ["IfBeginOnNewLine"] = (p, v) => p.ControlFlow.BeginOnNewLine = ToBool(v),
         ["ElseOnNewLine"] = (p, v) => p.ControlFlow.ElseOnNewLine = ToBool(v),
         ["IndentBetweenBeginEnd"] = (p, v) => p.ControlFlow.IndentBetweenBeginEnd = ToBool(v),
+        ["ControlFlowCollapseShortIfElse"] = (p, v) => p.ControlFlow.CollapseShortIfElse = ToBool(v),
+        ["ControlFlowCollapseStatementsShorterThan"] = (p, v) => { if (int.TryParse(v, out var n)) p.ControlFlow.CollapseThreshold = n; },
 
         // ----- CASE -----
         ["WhenOnNewLine"] = (p, v) => p.Case.WhenOnNewLine = ToBool(v),
@@ -91,6 +115,8 @@ public static class SqlPromptImporter
         ["OpenParenOnSameLine"] = (p, v) => p.Parenthesis.OpenOnSameLine = ToBool(v),
         ["CloseParenOnNewLine"] = (p, v) => p.Parenthesis.CloseOnNewLine = ToBool(v) ? "true" : "false",
         ["IndentParenContents"] = (p, v) => p.Parenthesis.IndentContents = ToBool(v),
+        ["CollapseShortParenthesisContents"] = (p, v) => p.Parenthesis.CollapseShort = ToBool(v),
+        ["CollapseParenthesesShorterThan"] = (p, v) => { if (int.TryParse(v, out var n)) p.Parenthesis.CollapseThreshold = n; },
 
         // ----- Format Actions -----
         ["InsertSemicolons"] = (p, v) => p.FormatActions.InsertSemicolons = ToBool(v),

@@ -99,8 +99,8 @@ description: "Tasks for SQL Prompt Visual Parity + Format / Upload Formatter gap
 ### Engine — Built-in styles & active-style scope
 
 - [X] T032 [P] [US2] ~Transcribe "Compact" style~ — **Already shipped**: `src/AkmlSql.Formatting/Profiles/BuiltIn/compact.akmlstyle`.
-- [ ] T033 [P] [US2] ~Transcribe "Indented" style~ — **Deferred / decision needed**: AKML ships `expanded.akmlstyle` which corresponds to SQL Prompt's "Indented" style in spirit but not name. Spec-vs-reality reconciliation: either rename `expanded` → `Indented` to match SQL Prompt nomenclature, or keep `expanded` and document the mapping. Lower priority than the missing exporter; defer to a small spec follow-up.
-- [ ] T034 [P] [US2] ~Transcribe "AlignedLeftBracket" style~ — **Deferred**: not present in the shipped built-ins. Likely covered by `leading-commas.akmlstyle` for the "leading commas" variant; the exact "AlignedLeftBracket" style would need a new `.akmlstyle` file authored against the SQL Prompt docs. Same priority as T033.
+- [X] T033 [P] [US2] Transcribe "Indented" style — renamed `src/AkmlSql.Formatting/Profiles/BuiltIn/expanded.akmlstyle` → `indented.akmlstyle` with `metadata.name` flipped from "Expanded" → "Indented" and description updated to reference SQL Prompt's "Indented" style. The existing layout/casing settings (one item per line, line breaks before clauses, empty lines before joins) already match SQL Prompt's "Indented" semantics — only the naming required reconciliation. No code references the old name (`ProfileManager` loads by `metadata.name`, scanning the directory).
+- [X] T034 [P] [US2] Transcribe "AlignedLeftBracket" style — authored `src/AkmlSql.Formatting/Profiles/BuiltIn/aligned-left-bracket.akmlstyle` (GUID `-6`, `metadata.name` "AlignedLeftBracket"). Built from `leading-commas.akmlstyle` as the structural base; the parenthesis section is changed for left-aligned-bracket semantics — `openOnSameLine = false` and `closeOnNewLine = "true"` so the opening and closing parentheses sit on their own lines aligned with the containing clause, with contents indented from there. `join.alignJoinKeyword` set to "left" and `ddl.firstParameterOnNewLine` set to "always" to match the leading-bracket aesthetic. The description flags this as AKML's best-effort interpretation — Redgate's reference XML isn't checked into the repo, so users can refine for exact parity with their SQL Prompt install.
 - [X] T035 [US2] ~Implement `BuiltInStyleSeeder`~ — **Equivalent already exists**: `ProfileManager.CreateDefault()` points to `<assemblyDir>/profiles/` for built-ins; the installer ships the 5 built-in `.akmlstyle` files there. No runtime seeder needed.
 - [X] T036 [US2] ~Wire `BuiltInStyleSeeder` into engine startup~ — **N/A** because of T035; built-ins are installer-shipped, not runtime-seeded.
 - [X] T037 [US2] `FormatterSettings.ActiveProfile` is **already a single global string** in `src/AkmlSql.Core/Config/AppSettings.cs` (verified by grep). XML-doc comment per FR-027b is a small follow-up if traceability is needed.
@@ -110,9 +110,9 @@ description: "Tasks for SQL Prompt Visual Parity + Format / Upload Formatter gap
 
 - [X] T039 [P] [US2] ~Implement `SqlPromptStyleImporterTests`~ — **Already existed** as `tests/AkmlSql.Formatting.Tests/Profiles/SqlPromptImporterTests.cs` (10 tests: valid XML, KeywordCasing mapping, both XML shapes, mapped/unmapped counts, ToBool variants, profile name preservation, multi-option, invalid-XML no-throw).
 - [X] T040 [P] [US2] **Implemented `SqlPromptExporterTests`** in `tests/AkmlSql.Formatting.Tests/Profiles/SqlPromptExporterTests.cs` — 13 tests: default-profile non-empty output, valid-XML root, Option-Name-Value shape, TabSize emit, InsertTabs both directions, CommaPosition both directions, **Import→Export preservation**, **full Import→Export→Import identity**, `KnownOptionCount`, null-profile throws, `ExportToFile` atomic write + round-trip. All 13 pass.
-- [ ] T041 [P] [US2] Implement `SqlPromptKeyMapTests` — **Deferred**: rather than a separate test suite, the parity is enforced by the round-trip exporter tests (`RoundTrip_ImportExportImport_ProducesIdenticalSettings`). A dedicated suite verifying every `OptionMap` entry has a `ReverseMap` inverse would catch drift over time; small follow-up.
+- [X] T041 [P] [US2] **Implemented `SqlPromptKeyMapTests`** in `tests/AkmlSql.Formatting.Tests/Profiles/SqlPromptKeyMapTests.cs` (2 tests: `OptionMapAndReverseMapHaveSameKeys` and `OptionMapAndReverseMapAreNonEmpty`). Drift-guard verifying every `SqlPromptImporter.OptionMap` key has a matching `SqlPromptExporter.ReverseMap` entry (and vice versa) — catches silent round-trip breakage if a future change adds an import binding without the export inverse, or vice versa. Per-value enum normalisation stays covered by the round-trip and XML-token tests in `SqlPromptExporterTests`.
 - [X] T042 [US2] ~`BuiltInStyleSeederTests`~ — **N/A**: no separate seeder (installer-shipped files), so no seeder behaviour to test. The existing `ProfileManagerTests.cs` covers built-in load / shadow / no-overwrite behaviour.
-- [ ] T043 [US2] Implement `ActiveProfileScopeTests` — **Low priority**: `ActiveProfile` is a single string field — there is no per-host mechanism to drift toward and so nothing to regression-test. The XML doc on `AppSettings.FormatterSettings.ActiveProfile` is the documentation guard; a runtime test would be a tautology over a single string.
+- [X] T043 [US2] **Implemented `ActiveProfileScopeTests`** in `tests/AkmlSql.Core.Tests/Config/ActiveProfileScopeTests.cs` (3 tests). Pins structural invariants for FR-027b: `FormatterSettings.ActiveProfile` is a single `string` property; no plural / per-host sibling form exists (`ActiveProfiles`, `ActiveProfilePerHost`, `ActiveProfileByHost`, `HostActiveProfiles`); default value is non-empty (so `ProfileManager.Load` doesn't throw). A runtime mutation test would be tautological (correctly noted in the original deferral), but the structural invariants catch silent design drift toward per-host scope — the real risk the spec wanted guarded.
 
 **Checkpoint**: User Story 2 functional. A SQL Prompt user can import their team's `.sqlpromptstyle`, the three built-ins are visible read-only, the imported style round-trips losslessly via the IPC layer, and the active selection is global across hosts.
 
@@ -204,14 +204,14 @@ description: "Tasks for SQL Prompt Visual Parity + Format / Upload Formatter gap
 > infrastructure that flows them through is shipping in spec 020. Closing the actual formatter
 > behaviour against each setting is the user-visible polish that follows.
 
-- [ ] T074 [P] [US5] Implement `Whitespace.PreserveEmptyLinesAfterBatch` — deferred
-- [ ] T075 [P] [US5] Implement `Lists.AlignAcrossClauses` — deferred
-- [ ] T076 [P] [US5] Replace hardcoded parenthesis collapse threshold with `Parens.CollapseThreshold` — deferred
-- [ ] T077 [P] [US5] Implement Dml collapse settings (4 sub-settings) — deferred
-- [ ] T078 [P] [US5] Implement Ddl alignment + first-param + collapse (4 sub-settings) — deferred
-- [ ] T079 [P] [US5] Implement `ControlFlow.CollapseThreshold` — deferred
+- [X] T074 [P] [US5] Implement `Whitespace.PreserveEmptyLinesAfterBatch`
+- [X] T075 [P] [US5] Round-trip `Lists.AlignItemsAcrossClauses` through the SQL Prompt importer & exporter (layout already honoured it)
+- [X] T076 [P] [US5] Map `Parens.CollapseShort` / `Parens.CollapseThreshold` through the SQL Prompt importer & exporter (the layout rule already honoured the threshold)
+- [X] T077 [P] [US5] Round-trip the 4 Dml collapse settings through the SQL Prompt importer & exporter (the layout already honoured them)
+- [X] T078 [P] [US5] Round-trip the Ddl first-param + collapse settings through the SQL Prompt importer & exporter (AlignDataTypes already mapped; layout already honoured all 4)
+- [X] T079 [P] [US5] Round-trip `ControlFlow.CollapseShortIfElse` / `CollapseThreshold` through the SQL Prompt importer & exporter (layout already honoured them)
 - [ ] T080 [P] [US5] Implement `Cte.PlaceColumnsOnNewLine` enum — deferred
-- [ ] T081 [P] [US5] Implement `Joins.KeywordAlignment` (4 variants) — deferred
+- [X] T081 [P] [US5] Round-trip `Joins.AlignJoinKeyword` through the SQL Prompt importer & exporter (layout honours none/right/left; SQL Prompt variants normalised on import)
 - [ ] T082 [P] [US5] Implement Case settings (3 sub-settings) — deferred
 - [ ] T083 [P] [US5] Implement Operators settings (2 sub-settings) — deferred
 - [ ] T084 [P] [US5] Implement `InStatements.Alignment` enum (3 variants) — deferred

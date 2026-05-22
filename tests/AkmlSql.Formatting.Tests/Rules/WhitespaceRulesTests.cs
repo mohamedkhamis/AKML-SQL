@@ -300,6 +300,109 @@ public class WhitespaceRulesTests
         Assert.Equal(BreakType.NewLine, nodes[1].PrecedingBreak);
     }
 
+    // ── PreserveEmptyLinesAfterBatch (T074) ───────────────────────────────
+
+    [Fact]
+    public void Apply_PreserveEmptyLinesAfterBatch_True_KeepsAuthorBlankLineAfterGo()
+    {
+        // EmptyLineAfterGo=false would normally reduce the blank line; PreserveEmptyLinesAfterBatch
+        // keeps the author's existing blank line after GO.
+        var profile = new FormattingProfile
+        {
+            Whitespace =
+            {
+                EmptyLineAfterGo = false,
+                PreserveEmptyLinesAfterBatch = true,
+            }
+        };
+
+        var nodes = new List<LayoutNode>
+        {
+            Node("GO", TSqlTokenType.Go),
+            Node("SELECT 2", TSqlTokenType.Select, BreakType.EmptyLine)
+        };
+
+        _rules.Apply(nodes, profile);
+
+        Assert.Equal(BreakType.EmptyLine, nodes[1].PrecedingBreak);
+    }
+
+    [Fact]
+    public void Apply_PreserveEmptyLinesAfterBatch_True_KeepsNoBlankLineAfterGo()
+    {
+        // EmptyLineAfterGo=true would normally promote to a blank line; PreserveEmptyLinesAfterBatch
+        // keeps the author's "no blank line" after GO.
+        var profile = new FormattingProfile
+        {
+            Whitespace =
+            {
+                EmptyLineAfterGo = true,
+                PreserveEmptyLinesAfterBatch = true,
+            }
+        };
+
+        var nodes = new List<LayoutNode>
+        {
+            Node("GO", TSqlTokenType.Go),
+            Node("SELECT 2", TSqlTokenType.Select, BreakType.NewLine)
+        };
+
+        _rules.Apply(nodes, profile);
+
+        Assert.Equal(BreakType.NewLine, nodes[1].PrecedingBreak);
+    }
+
+    [Fact]
+    public void Apply_PreserveEmptyLinesAfterBatch_False_StillNormalisesViaEmptyLineAfterGo()
+    {
+        // Default (false): the EmptyLineAfterGo normalisation is unchanged — regression guard.
+        var profile = new FormattingProfile
+        {
+            Whitespace =
+            {
+                EmptyLineAfterGo = true,
+                PreserveEmptyLinesAfterBatch = false,
+            }
+        };
+
+        var nodes = new List<LayoutNode>
+        {
+            Node("GO", TSqlTokenType.Go),
+            Node("SELECT 2", TSqlTokenType.Select, BreakType.NewLine)
+        };
+
+        _rules.Apply(nodes, profile);
+
+        Assert.Equal(BreakType.EmptyLine, nodes[1].PrecedingBreak);
+    }
+
+    [Fact]
+    public void Apply_PreserveEmptyLinesAfterBatch_True_SurvivesPreserveEmptyLinesFalse()
+    {
+        // Even with PreserveEmptyLines=false stripping non-structural blank lines, the
+        // after-GO blank line is treated as structural and kept.
+        var profile = new FormattingProfile
+        {
+            Whitespace =
+            {
+                EmptyLineAfterGo = false,
+                PreserveEmptyLines = false,
+                PreserveEmptyLinesAfterBatch = true,
+            }
+        };
+
+        var nodes = new List<LayoutNode>
+        {
+            Node("SELECT 1", TSqlTokenType.Select),
+            Node("GO", TSqlTokenType.Go, BreakType.NewLine),
+            Node("SELECT 2", TSqlTokenType.Select, BreakType.EmptyLine)
+        };
+
+        _rules.Apply(nodes, profile);
+
+        Assert.Equal(BreakType.EmptyLine, nodes[2].PrecedingBreak);
+    }
+
     // ── MaxConsecutiveEmptyLines ──────────────────────────────────────────
 
     [Fact]

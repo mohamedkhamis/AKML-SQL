@@ -7,7 +7,8 @@ namespace AkmlSql.Formatting.Rules;
 /// <summary>
 /// Applies all whitespace rules to layout nodes: tabStyle, tabSize, indentStyle, maxLineWidth,
 /// lineBreakBeforeClause, lineBreakAfterClause, lineBreakBeforeComma, lineBreakAfterComma,
-/// emptyLineBetweenStatements, emptyLineBeforeGO, emptyLineAfterGO, preserveEmptyLines,
+/// emptyLineBetweenStatements, emptyLineBeforeGO, emptyLineAfterGO,
+/// preserveEmptyLinesAfterBatch, preserveEmptyLines,
 /// maxConsecutiveEmptyLines, trailingWhitespace, finalNewline, spaceAfterComma,
 /// spaceAroundOperators, spaceAroundBooleanOperators, spaceInsideParentheses,
 /// spaceBeforeParentheses, lineBreakAfterSemicolon.
@@ -79,8 +80,10 @@ public class WhitespaceRules : IRuleSet
         if (node.TokenType == TSqlTokenType.Go && ws.EmptyLineBeforeGo)
             return true;
 
-        // Empty line after GO (previous token is GO)
-        if (index > 0 && nodes[index - 1].TokenType == TSqlTokenType.Go && ws.EmptyLineAfterGo)
+        // Empty line after GO (previous token is GO). PreserveEmptyLinesAfterBatch keeps the
+        // author's existing blank line here even when EmptyLineAfterGo would not force one.
+        if (index > 0 && nodes[index - 1].TokenType == TSqlTokenType.Go
+            && (ws.EmptyLineAfterGo || ws.PreserveEmptyLinesAfterBatch))
             return true;
 
         // Empty line between statements (heuristic: node starts a new statement keyword)
@@ -114,8 +117,10 @@ public class WhitespaceRules : IRuleSet
                 }
             }
 
-            // Empty line after GO
-            if (i > 0 && nodes[i - 1].TokenType == TSqlTokenType.Go)
+            // Empty line after GO. When PreserveEmptyLinesAfterBatch is set the author's
+            // existing blank line (or lack of one) after the batch separator is kept as-is
+            // and the EmptyLineAfterGo normalisation is skipped (spec 020 T074).
+            if (i > 0 && nodes[i - 1].TokenType == TSqlTokenType.Go && !ws.PreserveEmptyLinesAfterBatch)
             {
                 if (ws.EmptyLineAfterGo && node.PrecedingBreak == BreakType.NewLine)
                 {

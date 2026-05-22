@@ -174,6 +174,133 @@ public class SqlPromptImporterTests
         Assert.Equal(3, result.MappedCount);
     }
 
+    // ── Parenthesis collapse (T076) ───────────────────────────────────────
+
+    [Fact]
+    public void Import_ParenthesisCollapseSettings_MapToProfile()
+    {
+        // CollapseShort defaults to true and CollapseThreshold to 40 — use non-default
+        // values so the assertions prove the import actually applied them.
+        const string xml = """
+            <SqlPromptStyle>
+              <Options>
+                <Option Name="CollapseShortParenthesisContents" Value="false" />
+                <Option Name="CollapseParenthesesShorterThan" Value="55" />
+              </Options>
+            </SqlPromptStyle>
+            """;
+
+        var result = SqlPromptImporter.Import(xml);
+
+        Assert.False(result.Profile.Parenthesis.CollapseShort);
+        Assert.Equal(55, result.Profile.Parenthesis.CollapseThreshold);
+    }
+
+    // ── DML collapse (T077) ───────────────────────────────────────────────
+
+    [Fact]
+    public void Import_DmlCollapseSettings_MapToProfile()
+    {
+        // Defaults: CollapseShortStatements/Subqueries true; CollapseThreshold 80;
+        // SubqueryCollapseThreshold 60 — use non-default values to prove the import applied.
+        const string xml = """
+            <SqlPromptStyle>
+              <Options>
+                <Option Name="DmlCollapseShortStatements" Value="false" />
+                <Option Name="DmlCollapseStatementsShorterThan" Value="100" />
+                <Option Name="DmlCollapseShortSubqueries" Value="false" />
+                <Option Name="DmlCollapseSubqueriesShorterThan" Value="120" />
+              </Options>
+            </SqlPromptStyle>
+            """;
+
+        var result = SqlPromptImporter.Import(xml);
+
+        Assert.False(result.Profile.Dml.CollapseShortStatements);
+        Assert.Equal(100, result.Profile.Dml.CollapseThreshold);
+        Assert.False(result.Profile.Dml.CollapseShortSubqueries);
+        Assert.Equal(120, result.Profile.Dml.SubqueryCollapseThreshold);
+    }
+
+    // ── DDL settings (T078) ───────────────────────────────────────────────
+
+    [Fact]
+    public void Import_DdlSettings_MapToProfile()
+    {
+        const string xml = """
+            <SqlPromptStyle>
+              <Options>
+                <Option Name="PlaceFirstProcedureParameterOnNewLine" Value="always" />
+                <Option Name="DdlCollapseShortStatements" Value="false" />
+                <Option Name="DdlCollapseStatementsShorterThan" Value="75" />
+              </Options>
+            </SqlPromptStyle>
+            """;
+
+        var result = SqlPromptImporter.Import(xml);
+
+        Assert.Equal("always", result.Profile.Ddl.FirstParameterOnNewLine);
+        Assert.False(result.Profile.Ddl.CollapseShortDdl);
+        Assert.Equal(75, result.Profile.Ddl.CollapseThreshold);
+    }
+
+    // ── Control flow collapse (T079) ──────────────────────────────────────
+
+    [Fact]
+    public void Import_ControlFlowCollapseSettings_MapToProfile()
+    {
+        const string xml = """
+            <SqlPromptStyle>
+              <Options>
+                <Option Name="ControlFlowCollapseShortIfElse" Value="false" />
+                <Option Name="ControlFlowCollapseStatementsShorterThan" Value="140" />
+              </Options>
+            </SqlPromptStyle>
+            """;
+
+        var result = SqlPromptImporter.Import(xml);
+
+        Assert.False(result.Profile.ControlFlow.CollapseShortIfElse);
+        Assert.Equal(140, result.Profile.ControlFlow.CollapseThreshold);
+    }
+
+    // ── List alignment (T075) ─────────────────────────────────────────────
+
+    [Fact]
+    public void Import_AlignItemsAcrossClauses_MapsToProfile()
+    {
+        const string xml = """
+            <SqlPromptStyle>
+              <Options>
+                <Option Name="AlignItemsAcrossClauses" Value="false" />
+              </Options>
+            </SqlPromptStyle>
+            """;
+
+        var result = SqlPromptImporter.Import(xml);
+
+        Assert.False(result.Profile.List.AlignItemsAcrossClauses);
+    }
+
+    // ── Join keyword alignment (T081) ─────────────────────────────────────
+
+    [Fact]
+    public void Import_AlignJoinKeyword_MapsAndNormalises()
+    {
+        const string xml = """
+            <SqlPromptStyle>
+              <Options>
+                <Option Name="AlignJoinKeyword" Value="ToTable" />
+              </Options>
+            </SqlPromptStyle>
+            """;
+
+        var result = SqlPromptImporter.Import(xml);
+
+        // SQL Prompt's "ToTable" variant normalises to the AKML "left" alignment.
+        Assert.Equal("left", result.Profile.Join.AlignJoinKeyword);
+    }
+
     // ── Invalid XML ───────────────────────────────────────────────────────
 
     [Fact]

@@ -66,6 +66,7 @@ public static class SqlPromptExporter
         ["LineBreakAfterComma"]         = p => Bool(p.Whitespace.LineBreakAfterComma),
         ["EmptyLinesBetweenStatements"] = p => p.Whitespace.EmptyLineBetweenStatements.ToString(),
         ["LineBreakAfterSemicolon"]     = p => Bool(p.Whitespace.LineBreakAfterSemicolon),
+        ["PreserveEmptyLinesAfterBatch"] = p => Bool(p.Whitespace.PreserveEmptyLinesAfterBatch),
 
         // ----- Casing -----
         ["KeywordCasing"]    = p => p.Casing.ReservedKeywords,
@@ -78,6 +79,7 @@ public static class SqlPromptExporter
         ["AlignAliases"]    = p => Bool(p.List.AlignAliases),
         ["OneItemPerLine"]  = p => Bool(p.List.OneItemPerLine),
         ["IndentListItems"] = p => Bool(p.List.IndentListItems),
+        ["AlignItemsAcrossClauses"] = p => Bool(p.List.AlignItemsAcrossClauses),
 
         // ----- DML -----
         ["SelectOnNewLine"]  = p => Bool(p.Dml.SelectItemsOnNewLine),
@@ -89,23 +91,43 @@ public static class SqlPromptExporter
         ["ANDORNewLine"]     = p => p.Dml.AndOrNewLine.Equals("before", StringComparison.OrdinalIgnoreCase) ? "before" : "after",
         ["SetOnNewLine"]     = p => Bool(p.Dml.SetOnNewLine),
         ["ValuesOnNewLine"]  = p => Bool(p.Dml.ValuesOnNewLine),
+        ["DmlCollapseShortStatements"] = p => Bool(p.Dml.CollapseShortStatements),
+        ["DmlCollapseStatementsShorterThan"] = p => p.Dml.CollapseThreshold.ToString(),
+        ["DmlCollapseShortSubqueries"] = p => Bool(p.Dml.CollapseShortSubqueries),
+        ["DmlCollapseSubqueriesShorterThan"] = p => p.Dml.SubqueryCollapseThreshold.ToString(),
 
         // ----- JOIN -----
         ["JoinOnNewLine"]      = p => Bool(p.Join.OnNewLine),
         ["IndentJoin"]         = p => Bool(p.Join.IndentJoin),
         ["OnConditionNewLine"] = p => Bool(p.Join.OnConditionNewLine),
         ["EmptyLineBeforeJoin"] = p => Bool(p.Join.EmptyLineBeforeJoin),
+        ["AlignJoinKeyword"] = p => p.Join.AlignJoinKeyword.Trim().ToLowerInvariant() switch
+        {
+            "left" => "ToTable",
+            "none" => "None",
+            _ => "RightAligned",   // "right" + AKML default — emit SQL Prompt's enum token, not the AKML value
+        },
 
         // ----- DDL -----
         ["AlignDataTypes"]   = p => Bool(p.Ddl.AlignDataTypes),
         ["AlignConstraints"] = p => Bool(p.Ddl.AlignConstraints),
         ["AsOnNewLine"]      = p => Bool(p.Ddl.AsOnNewLine),
         ["BeginOnNewLine"]   = p => Bool(p.Ddl.BeginOnNewLine),
+        ["PlaceFirstProcedureParameterOnNewLine"] = p => p.Ddl.FirstParameterOnNewLine.Trim().ToLowerInvariant() switch
+        {
+            "always" => "Always",
+            "never" => "Never",
+            _ => "IfLongerThanWrap",   // "auto" + AKML default — emit SQL Prompt's enum token, not the AKML value
+        },
+        ["DdlCollapseShortStatements"] = p => Bool(p.Ddl.CollapseShortDdl),
+        ["DdlCollapseStatementsShorterThan"] = p => p.Ddl.CollapseThreshold.ToString(),
 
         // ----- Control Flow -----
         ["IfBeginOnNewLine"]      = p => Bool(p.ControlFlow.BeginOnNewLine),
         ["ElseOnNewLine"]         = p => Bool(p.ControlFlow.ElseOnNewLine),
         ["IndentBetweenBeginEnd"] = p => Bool(p.ControlFlow.IndentBetweenBeginEnd),
+        ["ControlFlowCollapseShortIfElse"] = p => Bool(p.ControlFlow.CollapseShortIfElse),
+        ["ControlFlowCollapseStatementsShorterThan"] = p => p.ControlFlow.CollapseThreshold.ToString(),
 
         // ----- CASE -----
         ["WhenOnNewLine"]    = p => Bool(p.Case.WhenOnNewLine),
@@ -117,6 +139,8 @@ public static class SqlPromptExporter
         ["OpenParenOnSameLine"] = p => Bool(p.Parenthesis.OpenOnSameLine),
         ["CloseParenOnNewLine"] = p => Bool(p.Parenthesis.CloseOnNewLine.Equals("true", StringComparison.OrdinalIgnoreCase)),
         ["IndentParenContents"] = p => Bool(p.Parenthesis.IndentContents),
+        ["CollapseShortParenthesisContents"] = p => Bool(p.Parenthesis.CollapseShort),
+        ["CollapseParenthesesShorterThan"] = p => p.Parenthesis.CollapseThreshold.ToString(),
 
         // ----- Format Actions -----
         ["InsertSemicolons"]   = p => Bool(p.FormatActions.InsertSemicolons),

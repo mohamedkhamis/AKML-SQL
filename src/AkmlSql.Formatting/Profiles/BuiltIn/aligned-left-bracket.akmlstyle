@@ -1,9 +1,9 @@
 {
   "metadata": {
-    "id": "00000000-0000-0000-0000-000000000003",
+    "id": "00000000-0000-0000-0000-000000000006",
     "schemaVersion": 1,
-    "name": "Expanded",
-    "description": "Maximum readability with generous vertical spacing, one item per line, and empty lines before joins.",
+    "name": "AlignedLeftBracket",
+    "description": "AKML's interpretation of SQL Prompt's 'AlignedLeftBracket' built-in style. Leading commas with opening and closing parentheses on their own lines, aligned with the containing clause and contents indented from there. Refine to match your team's Redgate setup if exact parity is required.",
     "author": "AKML SQL",
     "version": "1.0.0",
     "basedOn": "Default",
@@ -16,9 +16,9 @@
     "maxLineWidth": 120,
     "lineBreakBeforeClause": true,
     "lineBreakAfterClause": false,
-    "lineBreakBeforeComma": false,
-    "lineBreakAfterComma": true,
-    "emptyLineBetweenStatements": 2,
+    "lineBreakBeforeComma": true,
+    "lineBreakAfterComma": false,
+    "emptyLineBetweenStatements": 1,
     "emptyLineBeforeGO": true,
     "emptyLineAfterGO": true,
     "preserveEmptyLines": true,
@@ -45,7 +45,7 @@
     "applyOnTyping": true
   },
   "list": {
-    "commaPosition": "trailing",
+    "commaPosition": "leading",
     "alignItemsAcrossClauses": true,
     "alignAliases": true,
     "oneItemPerLine": true,
@@ -57,8 +57,8 @@
     "spaceAfterListComma": true
   },
   "parenthesis": {
-    "openOnSameLine": true,
-    "closeOnNewLine": "false",
+    "openOnSameLine": false,
+    "closeOnNewLine": "true",
     "collapseShort": true,
     "collapseThreshold": 40,
     "indentContents": true,
@@ -96,8 +96,8 @@
     "onConditionNewLine": true,
     "onConditionIndent": "indent",
     "multipleOnConditions": "newLine",
-    "emptyLineBeforeJoin": true,
-    "alignJoinKeyword": "right",
+    "emptyLineBeforeJoin": false,
+    "alignJoinKeyword": "left",
     "joinTypeStyle": "explicit",
     "crossApplyNewLine": true
   },
@@ -108,7 +108,7 @@
     "constraintsOnNewLine": false,
     "inlineConstraintStyle": "sameLine",
     "tableConstraintsSeparate": true,
-    "firstParameterOnNewLine": "auto",
+    "firstParameterOnNewLine": "always",
     "parameterAlignment": "aligned",
     "alignParameterDataTypes": true,
     "alignParameterDefaults": true,
