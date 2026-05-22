@@ -79,7 +79,8 @@ public static class SqlPromptImporter
         {
             "right" or "rightaligned" => "right",
             "none" => "none",
-            _ => "left",   // "left", "totable", "tofrom", "indentedfromfrom"
+            "left" or "totable" or "tofrom" or "indentedfromfrom" => "left",
+            _ => "right",   // unrecognised — fall back to the AKML default
         },
 
         // ----- DDL -----
@@ -91,7 +92,8 @@ public static class SqlPromptImporter
         {
             "always" or "true" => "always",
             "never" or "false" => "never",
-            _ => "auto",
+            "auto" or "iflongerthanwrap" => "auto",   // SQL Prompt "IfLongerThanWrap" ~= AKML "auto"
+            _ => "auto",                              // unrecognised — fall back to the AKML default
         },
         ["DdlCollapseShortStatements"] = (p, v) => p.Ddl.CollapseShortDdl = ToBool(v),
         ["DdlCollapseStatementsShorterThan"] = (p, v) => { if (int.TryParse(v, out var n)) p.Ddl.CollapseThreshold = n; },

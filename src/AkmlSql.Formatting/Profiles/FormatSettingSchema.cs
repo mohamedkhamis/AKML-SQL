@@ -91,7 +91,7 @@ public class FormatSettingSchema
 
                 var type = ClassifyType(settingProp.PropertyType);
                 var defaultValue = TryGetDefault(categoryInstance, settingProp);
-                var sqlPromptKey = LookupSqlPromptKey(settingProp.Name);
+                var sqlPromptKey = LookupSqlPromptKey(settingId, settingProp.Name);
 
                 schema.Settings.Add(new FormatSetting
                 {
@@ -114,12 +114,39 @@ public class FormatSettingSchema
     // -------------------------------------------------------------------
 
     /// <summary>
-    /// Returns the SQL Prompt option name (from <see cref="SqlPromptImporter"/>) that maps to
-    /// the given AKML property, or null if none is known. Best-effort heuristic match against
-    /// the importer's OptionMap keys.
+    /// Explicit settingId -> SQL Prompt importer key, for settings whose importer key
+    /// deliberately differs from the AKML property name (notably the "collapseThreshold"
+    /// name shared across six categories, which a property-name heuristic cannot resolve).
+    /// Checked first so the Format Styles editor reports an accurate Implemented status.
+    /// Spec 020 — PR #239 review follow-up; the full authoritative table is the deferred
+    /// SqlPromptKeyMap (T085).
     /// </summary>
-    private static string? LookupSqlPromptKey(string akmlPropertyName)
+    private static readonly Dictionary<string, string> ExplicitKeyMap = new(StringComparer.OrdinalIgnoreCase)
     {
+        ["parenthesis.collapseShort"]       = "CollapseShortParenthesisContents",
+        ["parenthesis.collapseThreshold"]   = "CollapseParenthesesShorterThan",
+        ["dml.collapseShortStatements"]     = "DmlCollapseShortStatements",
+        ["dml.collapseThreshold"]           = "DmlCollapseStatementsShorterThan",
+        ["dml.collapseShortSubqueries"]     = "DmlCollapseShortSubqueries",
+        ["dml.subqueryCollapseThreshold"]   = "DmlCollapseSubqueriesShorterThan",
+        ["ddl.firstParameterOnNewLine"]     = "PlaceFirstProcedureParameterOnNewLine",
+        ["ddl.collapseShortDDL"]            = "DdlCollapseShortStatements",
+        ["ddl.collapseThreshold"]           = "DdlCollapseStatementsShorterThan",
+        ["controlFlow.collapseShortIfElse"] = "ControlFlowCollapseShortIfElse",
+        ["controlFlow.collapseThreshold"]   = "ControlFlowCollapseStatementsShorterThan",
+    };
+
+    /// <summary>
+    /// Returns the SQL Prompt option name (from <see cref="SqlPromptImporter"/>) that maps to
+    /// the given AKML setting, or null if none is known. Resolves via the explicit
+    /// <see cref="ExplicitKeyMap"/> first, then a best-effort heuristic on the property name.
+    /// </summary>
+    private static string? LookupSqlPromptKey(string settingId, string akmlPropertyName)
+    {
+        // 0. Explicit per-setting map — importer keys that differ from the property name.
+        if (ExplicitKeyMap.TryGetValue(settingId, out var explicitKey))
+            return explicitKey;
+
         // The importer's map keys are stylised SQL Prompt option names (e.g. "KeywordCasing");
         // AKML property names are PascalCase (e.g. "ReservedKeywords"). Try a few heuristics.
         var keys = SqlPromptImporterReflectionHelper.GetOptionMapKeys();
