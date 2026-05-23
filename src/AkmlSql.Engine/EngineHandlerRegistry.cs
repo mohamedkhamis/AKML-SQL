@@ -147,7 +147,7 @@ internal static class EngineHandlerRegistry
         router.Register(new Handlers.Completion.SignatureHelpHandler(parser, signatureProvider));
         router.Register(new Handlers.Completion.QuickInfoHandler(parser, quickInfoProvider));
 
-        // === Formatting (9 typed) ===
+        // === Formatting (10 typed) ===
         router.Register(new Handlers.Formatting.FormatDocumentHandler(formatHandler));
         router.Register(new Handlers.Formatting.FormatSelectionHandler(formatHandler));
         router.Register(new Handlers.Formatting.FormatPreviewHandler(formatHandler));
@@ -156,6 +156,7 @@ internal static class EngineHandlerRegistry
         router.Register(new Handlers.Formatting.ProfileSaveHandler(formatHandler));
         router.Register(new Handlers.Formatting.ProfileDeleteHandler(formatHandler));
         router.Register(new Handlers.Formatting.ProfileImportHandler(formatHandler));
+        router.Register(new Handlers.Formatting.ProfileExportSqlPromptHandler(formatHandler));
         router.Register(new Handlers.Formatting.StyleEditorSchemaHandler(formatHandler));
 
         // === Bulk Formatting (2 typed) ===

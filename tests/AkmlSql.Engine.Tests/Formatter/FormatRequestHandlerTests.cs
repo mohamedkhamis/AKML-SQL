@@ -257,4 +257,111 @@ public class FormatRequestHandlerTests : IDisposable
                 $"Setting '{setting.GetProperty("id").GetString()}' references unknown groupId '{groupId}'");
         }
     }
+
+    // ── HandleProfileExportSqlPrompt (T031) ──────────────────────────────────
+
+    [Fact]
+    public void HandleProfileExportSqlPrompt_SavedProfile_WritesXmlFile()
+    {
+        var profile = new FormattingProfile { Casing = { ReservedKeywords = "UPPERCASE" } };
+        profile.Metadata.Name = "ExportTest";
+        _profileManager.Save(profile);
+
+        var dest = Path.Combine(_customDir, "exported.sqlpromptstylev2");
+        var response = _handler.HandleProfileExportSqlPrompt(new ProfileExportSqlPromptRequest
+        {
+            Name = "ExportTest",
+            DestinationPath = dest,
+        });
+
+        Assert.True(response.Success, response.ErrorMessage);
+        Assert.True(response.WrittenCount > 0);
+        Assert.True(File.Exists(dest));
+
+        var xml = File.ReadAllText(dest);
+        Assert.Contains("<SqlPromptStyle>", xml);
+        Assert.Contains("KeywordCasing", xml);
+        Assert.Contains("UPPERCASE", xml);
+    }
+
+    [Fact]
+    public void HandleProfileExportSqlPrompt_RoundTrips_PreservesSettings()
+    {
+        var profile = new FormattingProfile
+        {
+            Casing = { ReservedKeywords = "lowercase" },
+            Whitespace = { TabSize = 2 },
+            Join = { AlignJoinKeyword = "none" },
+        };
+        profile.Metadata.Name = "RoundTripExport";
+        _profileManager.Save(profile);
+
+        var dest = Path.Combine(_customDir, "roundtrip.sqlpromptstylev2");
+        var exportResponse = _handler.HandleProfileExportSqlPrompt(new ProfileExportSqlPromptRequest
+        {
+            Name = "RoundTripExport",
+            DestinationPath = dest,
+        });
+        Assert.True(exportResponse.Success);
+
+        var reimported = SqlPromptImporter.ImportFromFile(dest);
+        Assert.Equal("lowercase", reimported.Profile.Casing.ReservedKeywords);
+        Assert.Equal(2, reimported.Profile.Whitespace.TabSize);
+        Assert.Equal("none", reimported.Profile.Join.AlignJoinKeyword);
+    }
+
+    [Fact]
+    public void HandleProfileExportSqlPrompt_UnknownProfile_ReturnsFailure()
+    {
+        var dest = Path.Combine(_customDir, "wont-be-written.sqlpromptstylev2");
+        var response = _handler.HandleProfileExportSqlPrompt(new ProfileExportSqlPromptRequest
+        {
+            Name = "DoesNotExist",
+            DestinationPath = dest,
+        });
+
+        Assert.False(response.Success);
+        Assert.False(string.IsNullOrEmpty(response.ErrorMessage));
+        Assert.False(File.Exists(dest));
+    }
+
+    [Fact]
+    public void HandleProfileExportSqlPrompt_EmptyDestination_ReturnsFailure()
+    {
+        var response = _handler.HandleProfileExportSqlPrompt(new ProfileExportSqlPromptRequest
+        {
+            Name = "Anything",
+            DestinationPath = "",
+        });
+
+        Assert.False(response.Success);
+        Assert.Contains("DestinationPath", response.ErrorMessage);
+    }
+
+    [Fact]
+    public void HandleProfileExportSqlPrompt_RelativeDestination_ReturnsFailure()
+    {
+        var response = _handler.HandleProfileExportSqlPrompt(new ProfileExportSqlPromptRequest
+        {
+            Name = "Anything",
+            DestinationPath = @"relative\path.sqlpromptstylev2",
+        });
+
+        Assert.False(response.Success);
+        Assert.Contains("absolute", response.ErrorMessage);
+    }
+
+    [Fact]
+    public void HandleProfileExportSqlPrompt_PathTraversal_ReturnsFailure()
+    {
+        var dest = Path.Combine(_customDir, "subdir", "..", "escape.sqlpromptstylev2");
+        var response = _handler.HandleProfileExportSqlPrompt(new ProfileExportSqlPromptRequest
+        {
+            Name = "Anything",
+            DestinationPath = dest,
+        });
+
+        Assert.False(response.Success);
+        Assert.Contains("canonical", response.ErrorMessage);
+    }
 }

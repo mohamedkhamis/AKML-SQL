@@ -441,6 +441,51 @@ public class FormatRequestHandler(ProfileManager profileManager)
         }
     }
 
+    /// <summary>
+    /// Spec 020 T031 — Format Styles editor "Export to SQL Prompt" handler. Loads the named
+    /// profile and writes it as a <c>.sqlpromptstylev2</c> XML file at the requested absolute
+    /// path via <see cref="SqlPromptExporter.ExportToFile"/> (atomic write — temp + rename).
+    /// Pairs with <see cref="ProfileImportResponse"/>'s import path as the inverse direction.
+    /// </summary>
+    public ProfileExportSqlPromptResponse HandleProfileExportSqlPrompt(ProfileExportSqlPromptRequest request)
+    {
+        try
+        {
+            // Path validation (same envelope as HandleBulkFormatAsync — CLAUDE.md security policy:
+            // absolute path, canonical form check to reject traversal sequences like foo\..\secret).
+            if (string.IsNullOrWhiteSpace(request.DestinationPath))
+                throw new ArgumentException("DestinationPath must not be empty.");
+            if (!Path.IsPathFullyQualified(request.DestinationPath))
+                throw new ArgumentException($"DestinationPath must be absolute: '{request.DestinationPath}'");
+            var normalized = request.DestinationPath.Replace('/', Path.DirectorySeparatorChar);
+            var canonical = Path.GetFullPath(normalized);
+            if (!string.Equals(canonical, normalized, StringComparison.OrdinalIgnoreCase))
+                throw new ArgumentException($"DestinationPath is not canonical (possible path traversal): '{request.DestinationPath}'");
+
+            // Load via the same ProfileManager the rest of the handler uses — built-in or custom.
+            var profile = profileManager.Load(request.Name);
+
+            // Library entrypoint: atomic write (temp + rename) + auto-creates destination dir.
+            var result = SqlPromptExporter.ExportToFile(profile, request.DestinationPath);
+
+            return new ProfileExportSqlPromptResponse
+            {
+                Success = true,
+                WrittenCount = result.WrittenCount,
+            };
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Profile export to SQL Prompt failed (name={Name}, dest={Dest})",
+                request.Name, request.DestinationPath);
+            return new ProfileExportSqlPromptResponse
+            {
+                Success = false,
+                ErrorMessage = ex.Message,
+            };
+        }
+    }
+
     private FormattingProfile LoadProfile(string? profileName)
     {
         if (string.IsNullOrEmpty(profileName))
