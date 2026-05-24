@@ -79,7 +79,12 @@ public static class SqlPromptImporter
         {
             "right" or "rightaligned" => "right",
             "none" => "none",
-            "left" or "totable" or "tofrom" or "indentedfromfrom" => "left",
+            // Phase B closure — keep "IndentedFromFrom" as its own AKML enum value rather than
+            // collapsing into "left", so round-trip is lossless. Layout falls back to "left"
+            // semantics until the layout sub-engine learns the variant (documented in
+            // ControlFlowRules.cs ApplyOperatorRules `<remarks>`-style note).
+            "indentedfromfrom" => "indentedFromFrom",
+            "left" or "totable" or "tofrom" => "left",
             _ => "right",   // unrecognised — fall back to the AKML default
         },
 
@@ -110,6 +115,142 @@ public static class SqlPromptImporter
         ["ThenOnNewLine"] = (p, v) => p.Case.ThenOnNewLine = ToBool(v),
         ["CaseElseOnNewLine"] = (p, v) => p.Case.ElseOnNewLine = ToBool(v),
         ["EndOnNewLine"] = (p, v) => p.Case.EndOnNewLine = ToBool(v),
+        // T082 — SQL Prompt CASE additions
+        ["PlaceFirstWhenOnNewLine"] = (p, v) => p.Case.FirstWhenOnNewLine = v.Trim().ToLowerInvariant() switch
+        {
+            "always" or "true" => "always",
+            "never" or "false" => "never",
+            _ => "auto",                              // "auto" / "iflongerthanwrap" / anything else
+        },
+        ["WhenAlignment"] = (p, v) => p.Case.WhenAlignment = v.Trim().ToLowerInvariant() switch
+        {
+            "tofirstitem" => "toFirstItem",
+            "indentedfromcase" or "indented" => "indentedFromCase",
+            _ => "toCase",                            // "tocase" / default / unrecognised
+        },
+        ["PlaceCaseExpressionOnNewLine"] = (p, v) => p.Case.ExpressionOnNewLine = ToBool(v),
+
+        // ----- CTE additions (T080) -----
+        ["PlaceCteColumnsOnNewLine"] = (p, v) => p.Cte.PlaceColumnsOnNewLine = v.Trim().ToLowerInvariant() switch
+        {
+            "always" or "true" => "always",
+            "never" or "false" => "never",
+            _ => "ifLongerThanWrap",
+        },
+
+        // ----- Operators (T083) -----
+        ["OperatorsAlignment"] = (p, v) => p.Operators.Alignment = v.Trim().ToLowerInvariant() switch
+        {
+            "indentedfromstatement" or "indented" => "indentedFromStatement",
+            "rightaligned" or "right" => "rightAligned",
+            _ => "inlineWithStatement",
+        },
+        ["PlaceBetweenKeywordOnNewLine"] = (p, v) => p.Operators.BetweenOnNewLine = ToBool(v),
+
+        // ----- IN Statements (T084) -----
+        ["InStatementsAlignment"] = (p, v) => p.InStatements.Alignment = v.Trim().ToLowerInvariant() switch
+        {
+            "wrapped" => "wrapped",
+            "rightaligned" or "right" => "rightAligned",
+            _ => "stacked",
+        },
+
+        // ===== Phase B closure — full SQL Prompt feature parity =====
+
+        // ----- Whitespace additions -----
+        ["TabBehavior"] = (p, v) => p.Whitespace.TabStyle = v.Trim().ToLowerInvariant() switch
+        {
+            "tabsonly" or "tabs" => "tabs",
+            "tabswherepossible" => "tabsWhenPossible",
+            _ => "spaces",                          // "spacesonly" / "spaces" / default
+        },
+        ["BlankLinesBeforeGo"] = (p, v) => { if (int.TryParse(v, out var n)) p.Whitespace.BlankLinesBeforeGoCount = n; },
+
+        // ----- Lists addition -----
+        ["PlaceSubsequentItemsOnNewLines"] = (p, v) => p.List.PlaceSubsequentItemsOnNewLines = v.Trim().ToLowerInvariant() switch
+        {
+            "never" => "never",
+            "iflongerthanwrap" or "iflonger" => "ifLongerThanWrap",
+            _ => "always",                          // "always" / default
+        },
+
+        // ----- DML additions -----
+        ["RightAlignClauses"] = (p, v) => p.Dml.RightAlignClauses = ToBool(v),
+        ["ClauseIndentation"] = (p, v) => p.Dml.ClauseIndentation = v.Trim().ToLowerInvariant() switch
+        {
+            "indented" => "indented",
+            "rightaligned" or "rightalignedtostatement" => "rightAligned",
+            _ => "none",
+        },
+        ["InsertColumnListFormat"] = (p, v) => p.Dml.InsertColumnListFormat = v.Trim().ToLowerInvariant() switch
+        {
+            "compact" => "compact",
+            "iflongerthanwrap" or "iflonger" => "ifLongerThanWrap",
+            _ => "onePerLine",                      // "oneperline" / default
+        },
+        ["ValuesFormat"] = (p, v) => p.Dml.ValuesFormat = v.Trim().ToLowerInvariant() switch
+        {
+            "compact" => "compact",
+            "iflongerthanwrap" or "iflonger" => "ifLongerThanWrap",
+            _ => "onePerLine",
+        },
+
+        // ----- DDL addition -----
+        ["ConstraintColumnsOnNewLine"] = (p, v) => p.Ddl.ConstraintColumnsOnNewLine = v.Trim().ToLowerInvariant() switch
+        {
+            "always" or "true" => "always",
+            "never" or "false" => "never",
+            _ => "ifLongerOrMultipleColumns",
+        },
+
+        // ----- JOIN additions -----
+        // Note: AlignJoinKeyword is already mapped above; add the 4th SQL Prompt variant "IndentedFromFrom".
+        // Override the earlier binding by re-keying with a broader switch.
+        ["OnConditionIndentMode"] = (p, v) => p.Join.OnConditionIndentMode = v.Trim().ToLowerInvariant() switch
+        {
+            "totable" => "toTable",
+            "indentedfromtable" => "indentedFromTable",
+            _ => "indentedFromJoin",                // "indentedfromjoin" / default
+        },
+
+        // ----- CASE additions -----
+        ["CaseEndAlignment"] = (p, v) => p.Case.EndAlignment = v.Trim().ToLowerInvariant() switch
+        {
+            "indented" => "indented",
+            _ => "toCase",
+        },
+
+        // ----- CTE additions -----
+        ["CtePlaceAsOnNewLine"] = (p, v) => p.Cte.AsOnNewLine = ToBool(v),
+
+        // ----- Operators additions -----
+        ["PlaceAndBetweenBetweenOnNewLine"] = (p, v) => p.Operators.AndBetweenOnNewLine = ToBool(v),
+
+        // ----- IN Statements addition -----
+        ["InStatementsPlaceItemsOnNewLine"] = (p, v) => p.InStatements.PlaceItemsOnNewLine = v.Trim().ToLowerInvariant() switch
+        {
+            "always" or "true" => "always",
+            "never" or "false" => "never",
+            _ => "ifLongerThanWrap",
+        },
+
+        // ----- Function Calls (new) -----
+        ["FunctionCallsPlaceParametersOnNewLine"] = (p, v) => p.FunctionCalls.PlaceParametersOnNewLine = v.Trim().ToLowerInvariant() switch
+        {
+            "always" or "true" => "always",
+            "never" or "false" => "never",
+            _ => "ifLongerThanWrap",
+        },
+        ["IndentFunctionParameters"] = (p, v) => p.FunctionCalls.IndentParameters = ToBool(v),
+
+        // ----- Comments (new) -----
+        ["MultilineCommentFormatting"] = (p, v) => p.Comments.MultilineFormatting = v.Trim().ToLowerInvariant() switch
+        {
+            "normaliseindent" or "normalizeindent" => "normaliseIndent",
+            "joinshortlines" => "joinShortLines",
+            _ => "preserve",
+        },
+        ["RecognizeCommonCommentPatterns"] = (p, v) => p.Comments.RecognizeCommonPatterns = ToBool(v),
 
         // ----- Parenthesis -----
         ["OpenParenOnSameLine"] = (p, v) => p.Parenthesis.OpenOnSameLine = ToBool(v),

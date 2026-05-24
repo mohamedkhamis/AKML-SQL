@@ -88,6 +88,17 @@ namespace AkmlSql.Shell.Shared.Formatting
             private set { _previewText = value; OnPropertyChanged(); }
         }
 
+        /// <summary>
+        /// Spec 020 T070 — non-null when the engine's stage-6 SemanticValidator rejected the
+        /// formatted output. The view renders an inline warning bar above the preview pane.
+        /// </summary>
+        private string? _previewValidationError;
+        public string? PreviewValidationError
+        {
+            get => _previewValidationError;
+            private set { _previewValidationError = value; OnPropertyChanged(); }
+        }
+
         // -----------------------------------------------------------------
         // Tier 2b: working profile values + debounced preview pipeline
         // -----------------------------------------------------------------
@@ -324,6 +335,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                     if (response != null && !string.IsNullOrEmpty(response.FormattedText))
                     {
                         PreviewText = response.FormattedText;
+                        PreviewValidationError = response.ValidationError;
                     }
                 }
                 catch (OperationCanceledException) { /* superseded — fine */ }

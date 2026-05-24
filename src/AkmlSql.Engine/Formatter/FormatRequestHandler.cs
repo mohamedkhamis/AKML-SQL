@@ -86,16 +86,33 @@ public class FormatRequestHandler(ProfileManager profileManager)
             var profile = ProfileSerializer.Deserialize(request.ProfileJson);
             var result = _pipeline.Format(request.SampleText, profile);
 
+            // Spec 020 T070 — surface stage-6 (SemanticValidator) failure to the editor so it
+            // can render the "Preview unavailable — semantically-different SQL" warning bar.
+            // Pipeline behaviour: validation failure returns the original SQL unchanged, sets
+            // ValidationPassed=false, and adds an Error-severity diagnostic.
+            string? validationError = null;
+            if (!result.ValidationPassed)
+            {
+                var diag = Array.Find(result.Diagnostics, d => d.Severity == DiagnosticSeverity.Error);
+                validationError = diag?.Message
+                    ?? "Preview unavailable — the current settings produce semantically-different SQL.";
+            }
+
             return new FormatPreviewResponse
             {
                 FormattedText = result.FormattedText,
-                ElapsedMs = result.ElapsedMs
+                ElapsedMs = result.ElapsedMs,
+                ValidationError = validationError,
             };
         }
         catch (Exception ex)
         {
             Log.Error(ex, "Format preview request failed");
-            return new FormatPreviewResponse { FormattedText = request.SampleText };
+            return new FormatPreviewResponse
+            {
+                FormattedText = request.SampleText,
+                ValidationError = $"Preview failed: {ex.Message}",
+            };
         }
     }
 

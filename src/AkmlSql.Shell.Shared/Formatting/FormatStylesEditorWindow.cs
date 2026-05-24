@@ -38,7 +38,15 @@ namespace AkmlSql.Shell.Shared.Formatting
         private StackPanel? _settingControlsHost;
         private TextBlock? _settingControlsEmpty;
         private TextBox? _previewTextBox;
+        private Border? _previewWarningBar;
+        private TextBlock? _previewWarningText;
         private TextBlock? _statusText;
+
+        private static System.Windows.Media.SolidColorBrush Freeze(System.Windows.Media.SolidColorBrush b)
+        {
+            b.Freeze();
+            return b;
+        }
 
         public FormatStylesEditorWindow(FormatStylesEditorViewModel viewModel)
         {
@@ -390,7 +398,9 @@ namespace AkmlSql.Shell.Shared.Formatting
             Grid.SetRow(hSplitter, 1);
             panel.Children.Add(hSplitter);
 
-            // Bottom: live preview — read-only mono text bound to PreviewText
+            // Bottom: live preview — read-only mono text bound to PreviewText, with an
+            // optional warning bar above it (T070: shown when stage-6 SemanticValidator
+            // rejects the formatted output for the current settings).
             var bottomBorder = new Border
             {
                 Margin = new Thickness(Spacing.Sm, Spacing.Sm, Spacing.Md, Spacing.Md),
@@ -400,6 +410,32 @@ namespace AkmlSql.Shell.Shared.Formatting
             };
             bottomBorder.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.BorderDefault);
             bottomBorder.SetResourceReference(Panel.BackgroundProperty, ThemeTokens.EditorPopupBackground);
+
+            var bottomStack = new Grid();
+            bottomStack.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            bottomStack.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+            _previewWarningBar = new Border
+            {
+                Padding = new Thickness(Spacing.Md, Spacing.Sm, Spacing.Md, Spacing.Sm),
+                Visibility = Visibility.Collapsed,
+                BorderThickness = new Thickness(0, 0, 0, 1),
+            };
+            // Amber/yellow is a semantic colour per CLAUDE.md's allow-list — same in both themes.
+            _previewWarningBar.Background = Freeze(new System.Windows.Media.SolidColorBrush(
+                System.Windows.Media.Color.FromArgb(0x40, 0xFB, 0xBF, 0x24)));
+            _previewWarningBar.BorderBrush = Freeze(new System.Windows.Media.SolidColorBrush(
+                System.Windows.Media.Color.FromArgb(0xFF, 0xFB, 0xBF, 0x24)));
+            _previewWarningText = new TextBlock
+            {
+                TextWrapping = TextWrapping.Wrap,
+                FontFamily = Typography.UiFont,
+                FontSize = Typography.Body,
+            };
+            _previewWarningText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPrimary);
+            _previewWarningBar.Child = _previewWarningText;
+            Grid.SetRow(_previewWarningBar, 0);
+            bottomStack.Children.Add(_previewWarningBar);
 
             _previewTextBox = new TextBox
             {
@@ -416,7 +452,10 @@ namespace AkmlSql.Shell.Shared.Formatting
                 Text = "// Live preview will appear after the schema loads and a profile is selected.",
             };
             _previewTextBox.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
-            bottomBorder.Child = _previewTextBox;
+            Grid.SetRow(_previewTextBox, 1);
+            bottomStack.Children.Add(_previewTextBox);
+
+            bottomBorder.Child = bottomStack;
             Grid.SetRow(bottomBorder, 2);
             panel.Children.Add(bottomBorder);
 
@@ -758,6 +797,34 @@ namespace AkmlSql.Shell.Shared.Formatting
                 {
                     _previewTextBox.Text = _viewModel.PreviewText;
                 }
+            }
+            else if (e.PropertyName == nameof(FormatStylesEditorViewModel.PreviewValidationError))
+            {
+                // T070 — toggle the warning bar above the preview pane.
+                if (!System.Windows.Application.Current.Dispatcher.CheckAccess())
+                {
+                    System.Windows.Application.Current.Dispatcher.BeginInvoke(new Action(UpdatePreviewWarningBar));
+                }
+                else
+                {
+                    UpdatePreviewWarningBar();
+                }
+            }
+        }
+
+        private void UpdatePreviewWarningBar()
+        {
+            if (_previewWarningBar == null || _previewWarningText == null) return;
+            var msg = _viewModel.PreviewValidationError;
+            if (string.IsNullOrEmpty(msg))
+            {
+                _previewWarningBar.Visibility = Visibility.Collapsed;
+                _previewWarningText.Text = string.Empty;
+            }
+            else
+            {
+                _previewWarningText.Text = msg;
+                _previewWarningBar.Visibility = Visibility.Visible;
             }
         }
 

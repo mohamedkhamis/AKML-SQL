@@ -56,6 +56,7 @@ namespace AkmlSql.Ssms20
                     AboutCommand.Initialize(this, commandService);
                     CheckUpdateCommand.Initialize(this, commandService);
                     OptionsCommand.Initialize(this, commandService);
+                    FormatStylesCommand.Initialize(this, commandService);
                     SendFeedbackCommand.Initialize(this, commandService);
                     ViewLogsCommand.Initialize(this, commandService);
                     RefreshCacheCommand.Initialize(this, commandService);

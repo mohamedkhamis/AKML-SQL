@@ -45,6 +45,18 @@ public class FormattingProfile
     [JsonPropertyName("expression")]
     public ExpressionOptions Expression { get; set; } = new();
 
+    [JsonPropertyName("operators")]
+    public OperatorsOptions Operators { get; set; } = new();
+
+    [JsonPropertyName("inStatements")]
+    public InStatementsOptions InStatements { get; set; } = new();
+
+    [JsonPropertyName("functionCalls")]
+    public FunctionCallsOptions FunctionCalls { get; set; } = new();
+
+    [JsonPropertyName("comments")]
+    public CommentsOptions Comments { get; set; } = new();
+
     [JsonPropertyName("formatActions")]
     public FormatActionConfig FormatActions { get; set; } = new();
 
@@ -93,6 +105,16 @@ public class WhitespaceOptions
 
     [JsonPropertyName("preserveEmptyLinesAfterBatch")]
     public bool PreserveEmptyLinesAfterBatch { get; set; }
+
+    /// <summary>
+    /// Spec 020 Phase B closure — SQL Prompt <c>Whitespace.BlankLinesBeforeGo</c> (0–5).
+    /// Counts the blank lines inserted before the <c>GO</c> batch separator. Pairs with the
+    /// pre-existing <see cref="EmptyLineBeforeGo"/> boolean (kept for back-compat — when
+    /// <see cref="EmptyLineBeforeGo"/> is true and <see cref="BlankLinesBeforeGoCount"/> is 0,
+    /// the boolean wins and a single blank line is inserted; non-zero count overrides).
+    /// </summary>
+    [JsonPropertyName("blankLinesBeforeGoCount")]
+    public int BlankLinesBeforeGoCount { get; set; }
 
     [JsonPropertyName("preserveEmptyLines")]
     public bool PreserveEmptyLines { get; set; } = true;
@@ -189,6 +211,18 @@ public class ListOptions
 
     [JsonPropertyName("spaceAfterListComma")]
     public bool SpaceAfterListComma { get; set; } = true;
+
+    /// <summary>
+    /// Spec 020 Phase B closure — SQL Prompt <c>Lists.PlaceSubsequentItemsOnNewLines</c>:
+    /// "always" (default — match the legacy <see cref="OneItemPerLine"/> = true behaviour),
+    /// "never" (force every list inline regardless of width),
+    /// "ifLongerThanWrap" (break only when the rendered list would exceed
+    /// <see cref="WhitespaceOptions.MaxLineWidth"/>). Distinct from
+    /// <see cref="CollapseShortLists"/> + <see cref="CollapseThreshold"/> which control
+    /// the inverse decision for *short* lists; this controls the global wrap rule.
+    /// </summary>
+    [JsonPropertyName("placeSubsequentItemsOnNewLines")]
+    public string PlaceSubsequentItemsOnNewLines { get; set; } = "always";
 }
 
 public class ParenthesisOptions
@@ -285,6 +319,48 @@ public class DmlOptions
 
     [JsonPropertyName("subqueryCollapseThreshold")]
     public int SubqueryCollapseThreshold { get; set; } = 60;
+
+    /// <summary>
+    /// Spec 020 Phase B closure — SQL Prompt <c>Dml.RightAlignClauses</c>. When true, the
+    /// clause keywords (SELECT / FROM / WHERE / GROUP BY / HAVING / ORDER BY) are
+    /// right-justified to a common column rather than left-aligned. Pairs with
+    /// <see cref="ClauseIndentation"/>.
+    /// </summary>
+    [JsonPropertyName("rightAlignClauses")]
+    public bool RightAlignClauses { get; set; }
+
+    /// <summary>
+    /// Spec 020 Phase B closure — SQL Prompt <c>Dml.ClauseIndentation</c>:
+    /// "none" (default — clauses at column 0), "indented" (clauses indented one level
+    /// from the surrounding statement), "rightAligned" (clauses right-aligned to the
+    /// widest clause keyword). Broader than the existing <see cref="AndOrIndent"/>
+    /// which only controls boolean-operator indent inside WHERE.
+    /// </summary>
+    [JsonPropertyName("clauseIndentation")]
+    public string ClauseIndentation { get; set; } = "none";
+
+    /// <summary>
+    /// Spec 020 Phase B closure — SQL Prompt <c>Dml.InsertColumnListFormat</c>:
+    /// "onePerLine" (default — one column per line),
+    /// "compact" (multiple columns per line, packed),
+    /// "ifLongerThanWrap" (break only when the list would exceed
+    /// <see cref="WhitespaceOptions.MaxLineWidth"/>). Distinct from
+    /// <see cref="ListOptions.PlaceSubsequentItemsOnNewLines"/> which applies globally;
+    /// this overrides specifically for <c>INSERT INTO t (...)</c> column lists.
+    /// </summary>
+    [JsonPropertyName("insertColumnListFormat")]
+    public string InsertColumnListFormat { get; set; } = "onePerLine";
+
+    /// <summary>
+    /// Spec 020 Phase B closure — SQL Prompt <c>Dml.ValuesFormat</c>:
+    /// "onePerLine" (default — one VALUES tuple per line),
+    /// "compact" (tuples inline up to wrap),
+    /// "ifLongerThanWrap" (break only when needed). Replaces the boolean
+    /// <see cref="ValuesOnNewLine"/> as the more expressive control; the boolean is
+    /// kept for back-compat (true ≡ "onePerLine", false ≡ "compact").
+    /// </summary>
+    [JsonPropertyName("valuesFormat")]
+    public string ValuesFormat { get; set; } = "onePerLine";
 }
 
 public class JoinOptions
@@ -315,6 +391,17 @@ public class JoinOptions
 
     [JsonPropertyName("crossApplyNewLine")]
     public bool CrossApplyNewLine { get; set; } = true;
+
+    /// <summary>
+    /// Spec 020 Phase B closure — extends <see cref="OnConditionIndent"/> from a free-form
+    /// string into the canonical SQL Prompt enum: "indentedFromJoin" (default — current
+    /// "indent" behaviour), "toTable" (align ON to the joined table column),
+    /// "indentedFromTable" (indent one level from the joined table column).
+    /// The legacy <see cref="OnConditionIndent"/> string is kept and continues to drive
+    /// layout when set to "indent"; this new field takes precedence when non-default.
+    /// </summary>
+    [JsonPropertyName("onConditionIndentMode")]
+    public string OnConditionIndentMode { get; set; } = "indentedFromJoin";
 }
 
 public class DdlOptions
@@ -360,6 +447,15 @@ public class DdlOptions
 
     [JsonPropertyName("collapseThreshold")]
     public int CollapseThreshold { get; set; } = 60;
+
+    /// <summary>
+    /// Spec 020 Phase B closure — SQL Prompt <c>Ddl.ConstraintColumnsOnNewLine</c>:
+    /// "always", "never", "ifLongerOrMultipleColumns" (default — break only when there
+    /// are multiple columns or the list would exceed wrap width). Controls how PRIMARY KEY
+    /// / FOREIGN KEY / UNIQUE constraint column lists are placed.
+    /// </summary>
+    [JsonPropertyName("constraintColumnsOnNewLine")]
+    public string ConstraintColumnsOnNewLine { get; set; } = "ifLongerOrMultipleColumns";
 }
 
 public class ControlFlowOptions
@@ -414,6 +510,41 @@ public class CaseOptions
 
     [JsonPropertyName("collapseThreshold")]
     public int CollapseThreshold { get; set; } = 60;
+
+    /// <summary>
+    /// Spec 020 T082 — SQL Prompt <c>caseExpressions.placeFirstWhenOnNewLine</c>:
+    /// "auto" (default — honour <see cref="WhenOnNewLine"/> for the first WHEN),
+    /// "always" (force first WHEN on a new line regardless),
+    /// "never" (keep first WHEN inline with the CASE expression).
+    /// </summary>
+    [JsonPropertyName("firstWhenOnNewLine")]
+    public string FirstWhenOnNewLine { get; set; } = "auto";
+
+    /// <summary>
+    /// Spec 020 T082 — SQL Prompt <c>caseExpressions.whenAlignment</c>:
+    /// "toCase" (default — align WHEN with the CASE keyword),
+    /// "toFirstItem" (align with the first WHEN's expression text),
+    /// "indentedFromCase" (indent one level from CASE).
+    /// </summary>
+    [JsonPropertyName("whenAlignment")]
+    public string WhenAlignment { get; set; } = "toCase";
+
+    /// <summary>
+    /// Spec 020 T082 — SQL Prompt <c>caseExpressions.placeExpressionOnNewLine</c>:
+    /// when true, the simple-CASE expression goes on its own line below CASE.
+    /// </summary>
+    [JsonPropertyName("expressionOnNewLine")]
+    public bool ExpressionOnNewLine { get; set; }
+
+    /// <summary>
+    /// Spec 020 Phase B closure — SQL Prompt <c>caseExpressions.endAlignment</c>:
+    /// "toCase" (default — align END under the CASE keyword),
+    /// "indented" (indent END one level from CASE).
+    /// More expressive than the legacy bool <see cref="EndOnNewLine"/> which only
+    /// decides whether END gets its own line — this decides where it aligns.
+    /// </summary>
+    [JsonPropertyName("endAlignment")]
+    public string EndAlignment { get; set; } = "toCase";
 }
 
 public class CteOptions
@@ -429,6 +560,22 @@ public class CteOptions
 
     [JsonPropertyName("emptyLineBetweenCtes")]
     public bool EmptyLineBetweenCtes { get; set; } = true;
+
+    /// <summary>
+    /// Spec 020 T080 — SQL Prompt <c>cte.placeColumnsOnNewLine</c> (enum):
+    /// "ifLongerThanWrap" (default — wrap onto a new line only when the column list
+    /// exceeds the max line width), "always" (always place the column list on its own
+    /// line), "never" (always keep inline with the CTE name).
+    /// </summary>
+    [JsonPropertyName("placeColumnsOnNewLine")]
+    public string PlaceColumnsOnNewLine { get; set; } = "ifLongerThanWrap";
+
+    /// <summary>
+    /// Spec 020 Phase B closure — SQL Prompt <c>cte.placeAsOnNewLine</c>:
+    /// when true, the <c>AS</c> keyword that introduces a CTE body goes on its own line.
+    /// </summary>
+    [JsonPropertyName("asOnNewLine")]
+    public bool AsOnNewLine { get; set; }
 }
 
 public class ExpressionOptions
@@ -447,6 +594,117 @@ public class ExpressionOptions
 
     [JsonPropertyName("existsSubqueryIndent")]
     public string ExistsSubqueryIndent { get; set; } = "indent";
+}
+
+/// <summary>
+/// Spec 020 T083 — SQL Prompt operator placement settings. Distinct from
+/// <see cref="ExpressionOptions"/>: this group controls visual alignment of boolean
+/// operators (AND / OR / BETWEEN) within a WHERE / ON / HAVING clause, while
+/// <c>ExpressionOptions.BooleanOperatorNewLine</c> controls the line-break direction.
+/// </summary>
+public class OperatorsOptions
+{
+    /// <summary>
+    /// SQL Prompt <c>operators.alignment</c> (enum):
+    /// "inlineWithStatement" (default — keep operators inline with the clause keyword),
+    /// "indentedFromStatement" (indent one level past the clause keyword),
+    /// "rightAligned" (right-align operators to a common column).
+    /// </summary>
+    [JsonPropertyName("alignment")]
+    public string Alignment { get; set; } = "inlineWithStatement";
+
+    /// <summary>
+    /// SQL Prompt <c>operators.placeBetweenKeywordOnNewLine</c>:
+    /// when true, the <c>BETWEEN</c> keyword goes on its own line.
+    /// </summary>
+    [JsonPropertyName("betweenOnNewLine")]
+    public bool BetweenOnNewLine { get; set; }
+
+    /// <summary>
+    /// Spec 020 Phase B closure — SQL Prompt <c>operators.placeAndBetweenBetweenOnNewLine</c>.
+    /// When true, the <c>AND</c> that pairs with a <c>BETWEEN</c> (i.e. the AND in
+    /// <c>BETWEEN x AND y</c>) gets its own line. Pairs with the existing
+    /// <see cref="ExpressionOptions.BetweenOnOneLine"/> — when <c>BetweenOnOneLine</c> is
+    /// true it wins (no break), regardless of this flag.
+    /// </summary>
+    [JsonPropertyName("andBetweenOnNewLine")]
+    public bool AndBetweenOnNewLine { get; set; }
+}
+
+/// <summary>
+/// Spec 020 T084 — SQL Prompt <c>inStatements</c>-group settings. Controls visual
+/// alignment of items inside an <c>IN (…)</c> list when expanded to multiple lines.
+/// Pairs with <see cref="ExpressionOptions.InListStyle"/> + <c>InListThreshold</c>
+/// (which decide WHEN to expand) — this group controls HOW the expanded form lines up.
+/// </summary>
+public class InStatementsOptions
+{
+    /// <summary>
+    /// SQL Prompt <c>inStatements.alignment</c> (enum):
+    /// "stacked" (default — each item on its own line, indented from the opening paren),
+    /// "wrapped" (multiple items per line up to <c>maxLineWidth</c>),
+    /// "rightAligned" (right-align each item to a common column).
+    /// </summary>
+    [JsonPropertyName("alignment")]
+    public string Alignment { get; set; } = "stacked";
+
+    /// <summary>
+    /// Spec 020 Phase B closure — SQL Prompt <c>inStatements.placeItemsOnNewLine</c>:
+    /// "always" (force every IN list multi-line),
+    /// "never" (force inline),
+    /// "ifLongerThanWrap" (default — break only when the rendered list would exceed
+    /// <see cref="WhitespaceOptions.MaxLineWidth"/>). Companion to the existing
+    /// <see cref="ExpressionOptions.InListStyle"/>; this is the canonical SQL Prompt name.
+    /// </summary>
+    [JsonPropertyName("placeItemsOnNewLine")]
+    public string PlaceItemsOnNewLine { get; set; } = "ifLongerThanWrap";
+}
+
+/// <summary>
+/// Spec 020 Phase B closure — SQL Prompt <c>FunctionCalls</c> group.
+/// Controls how a function invocation's parameter list is wrapped and indented.
+/// Distinct from <see cref="DdlOptions.FirstParameterOnNewLine"/> (which controls
+/// procedure DDL signature parameters) — this controls call-site formatting.
+/// </summary>
+public class FunctionCallsOptions
+{
+    /// <summary>
+    /// SQL Prompt <c>functionCalls.placeParametersOnNewLine</c>:
+    /// "always", "never", "ifLongerThanWrap" (default).
+    /// </summary>
+    [JsonPropertyName("placeParametersOnNewLine")]
+    public string PlaceParametersOnNewLine { get; set; } = "ifLongerThanWrap";
+
+    /// <summary>
+    /// SQL Prompt <c>functionCalls.indentParameters</c>: when the parameter list is broken
+    /// onto multiple lines, indent the parameters one level past the opening paren.
+    /// </summary>
+    [JsonPropertyName("indentParameters")]
+    public bool IndentParameters { get; set; } = true;
+}
+
+/// <summary>
+/// Spec 020 Phase B closure — SQL Prompt <c>Comments</c> group.
+/// Controls how the formatter touches comments — line / block / recognised-pattern.
+/// </summary>
+public class CommentsOptions
+{
+    /// <summary>
+    /// SQL Prompt <c>comments.multilineFormatting</c>:
+    /// "preserve" (default — leave block comments exactly as the user wrote them),
+    /// "normaliseIndent" (re-indent the comment body to the surrounding context),
+    /// "joinShortLines" (collapse short multi-line comments to one line where possible).
+    /// </summary>
+    [JsonPropertyName("multilineFormatting")]
+    public string MultilineFormatting { get; set; } = "preserve";
+
+    /// <summary>
+    /// SQL Prompt <c>comments.recognizeCommonPatterns</c>: when true, the formatter
+    /// detects header / banner / TODO-style comments and leaves their internal layout intact
+    /// even when other formatting passes would otherwise reflow them.
+    /// </summary>
+    [JsonPropertyName("recognizeCommonPatterns")]
+    public bool RecognizeCommonPatterns { get; set; } = true;
 }
 
 public class FormatActionConfig

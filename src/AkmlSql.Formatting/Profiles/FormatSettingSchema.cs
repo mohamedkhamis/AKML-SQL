@@ -135,6 +135,35 @@ public class FormatSettingSchema
         ["ddl.collapseThreshold"]           = "DdlCollapseStatementsShorterThan",
         ["controlFlow.collapseShortIfElse"] = "ControlFlowCollapseShortIfElse",
         ["controlFlow.collapseThreshold"]   = "ControlFlowCollapseStatementsShorterThan",
+        // T080 — CTE additions
+        ["cte.placeColumnsOnNewLine"]       = "PlaceCteColumnsOnNewLine",
+        // T082 — CASE additions
+        ["case.firstWhenOnNewLine"]         = "PlaceFirstWhenOnNewLine",
+        ["case.whenAlignment"]              = "WhenAlignment",
+        ["case.expressionOnNewLine"]        = "PlaceCaseExpressionOnNewLine",
+        // T083 — Operators
+        ["operators.alignment"]             = "OperatorsAlignment",
+        ["operators.betweenOnNewLine"]      = "PlaceBetweenKeywordOnNewLine",
+        // T084 — IN Statements
+        ["inStatements.alignment"]          = "InStatementsAlignment",
+        // Phase B closure — full SQL Prompt feature parity
+        ["whitespace.blankLinesBeforeGoCount"] = "BlankLinesBeforeGo",
+        ["whitespace.tabStyle"]             = "TabBehavior",
+        ["list.placeSubsequentItemsOnNewLines"] = "PlaceSubsequentItemsOnNewLines",
+        ["dml.rightAlignClauses"]           = "RightAlignClauses",
+        ["dml.clauseIndentation"]           = "ClauseIndentation",
+        ["dml.insertColumnListFormat"]      = "InsertColumnListFormat",
+        ["dml.valuesFormat"]                = "ValuesFormat",
+        ["ddl.constraintColumnsOnNewLine"]  = "ConstraintColumnsOnNewLine",
+        ["join.onConditionIndentMode"]      = "OnConditionIndentMode",
+        ["case.endAlignment"]               = "CaseEndAlignment",
+        ["cte.asOnNewLine"]                 = "CtePlaceAsOnNewLine",
+        ["operators.andBetweenOnNewLine"]   = "PlaceAndBetweenBetweenOnNewLine",
+        ["inStatements.placeItemsOnNewLine"] = "InStatementsPlaceItemsOnNewLine",
+        ["functionCalls.placeParametersOnNewLine"] = "FunctionCallsPlaceParametersOnNewLine",
+        ["functionCalls.indentParameters"]  = "IndentFunctionParameters",
+        ["comments.multilineFormatting"]    = "MultilineCommentFormatting",
+        ["comments.recognizeCommonPatterns"] = "RecognizeCommonCommentPatterns",
     };
 
     /// <summary>

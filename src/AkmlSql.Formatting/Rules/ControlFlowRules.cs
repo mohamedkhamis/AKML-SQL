@@ -26,8 +26,15 @@ public class ControlFlowRules : IRuleSet
         ApplyTryCatchRules(nodes, profile.ControlFlow);
         ApplyBeginEndRules(nodes, profile.ControlFlow);
         ApplyCaseRules(nodes, profile.Case);
-        ApplyCteRules(nodes, profile.Cte);
+        ApplyCteRules(nodes, profile.Cte, profile.Whitespace);
         ApplyExpressionRules(nodes, profile.Expression);
+        // Spec 020 T083 / T084 — operator alignment + BETWEEN + IN-list alignment
+        ApplyOperatorRules(nodes, profile.Operators, profile.Expression);
+        ApplyInStatementsAlignment(nodes, profile.InStatements);
+        // Phase B closure — additional layout passes for newly-mapped SQL Prompt settings
+        ApplyCteAsOnNewLine(nodes, profile.Cte);
+        ApplyCaseEndAlignment(nodes, profile.Case);
+        ApplyFunctionCallParameters(nodes, profile.FunctionCalls, profile.Whitespace);
     }
 
     // -----------------------------------------------------------------------
@@ -378,28 +385,69 @@ public class ControlFlowRules : IRuleSet
 
                 int caseIndent = nodes[caseStart].IndentLevel;
 
+                // T082 — Determine WHEN indent strategy from the new WhenAlignment enum,
+                // falling back to legacy IndentWhen / toCase behaviour.
+                int whenIndent = ResolveWhenIndent(caseOpts, caseIndent);
+
+                // T082 — `ExpressionOnNewLine`: for simple CASE (`CASE expr WHEN ...`), put
+                // any tokens between CASE and the first WHEN on their own line so the expression
+                // sits below the CASE keyword.
+                if (caseOpts.ExpressionOnNewLine)
+                {
+                    int firstWhen = FindFirstWhen(nodes, caseStart, caseEnd);
+                    // Only apply if there's at least one token between CASE and the first WHEN
+                    if (firstWhen > caseStart + 1)
+                    {
+                        var exprTok = nodes[caseStart + 1];
+                        if (!exprTok.IsInNoformatRegion && exprTok.PrecedingBreak == BreakType.None)
+                        {
+                            exprTok.PrecedingBreak = BreakType.NewLine;
+                            exprTok.IndentLevel = caseIndent + 1;
+                            exprTok.PrecedingSpaces = 0;
+                        }
+                    }
+                }
+
+                bool sawFirstWhen = false;
+
                 // Apply formatting within CASE...END
                 for (int j = caseStart + 1; j < caseEnd; j++)
                 {
                     if (nodes[j].IsInNoformatRegion)
                         continue;
 
-                    // WHEN on new line
-                    if (nodes[j].TokenType == TSqlTokenType.When && caseOpts.WhenOnNewLine)
+                    // WHEN on new line — honour T082 FirstWhenOnNewLine override for the first WHEN.
+                    if (nodes[j].TokenType == TSqlTokenType.When)
                     {
-                        if (nodes[j].PrecedingBreak == BreakType.None)
+                        bool isFirstWhen = !sawFirstWhen;
+                        sawFirstWhen = true;
+
+                        bool placeOnNewLine = caseOpts.WhenOnNewLine;
+                        if (isFirstWhen)
                         {
-                            nodes[j].PrecedingBreak = BreakType.NewLine;
-                            nodes[j].PrecedingSpaces = 0;
+                            var first = (caseOpts.FirstWhenOnNewLine ?? "auto").Trim().ToLowerInvariant();
+                            placeOnNewLine = first switch
+                            {
+                                "always" => true,
+                                "never" => false,
+                                _ => placeOnNewLine,    // auto / default — inherit WhenOnNewLine
+                            };
                         }
 
-                        if (caseOpts.IndentWhen)
+                        if (placeOnNewLine)
                         {
-                            nodes[j].IndentLevel = caseIndent + 1;
+                            if (nodes[j].PrecedingBreak == BreakType.None)
+                            {
+                                nodes[j].PrecedingBreak = BreakType.NewLine;
+                                nodes[j].PrecedingSpaces = 0;
+                            }
+                            nodes[j].IndentLevel = whenIndent;
                         }
-                        else
+                        else if (isFirstWhen && nodes[j].PrecedingBreak != BreakType.None)
                         {
-                            nodes[j].IndentLevel = caseIndent;
+                            // FirstWhenOnNewLine = "never": force inline with CASE expression.
+                            nodes[j].PrecedingBreak = BreakType.None;
+                            nodes[j].PrecedingSpaces = 1;
                         }
                     }
 
@@ -411,7 +459,7 @@ public class ControlFlowRules : IRuleSet
                             if (nodes[j].PrecedingBreak == BreakType.None)
                             {
                                 nodes[j].PrecedingBreak = BreakType.NewLine;
-                                nodes[j].IndentLevel = caseIndent + 2;
+                                nodes[j].IndentLevel = whenIndent + 1;
                                 nodes[j].PrecedingSpaces = 0;
                             }
                         }
@@ -423,7 +471,7 @@ public class ControlFlowRules : IRuleSet
                         if (nodes[j].PrecedingBreak == BreakType.None)
                         {
                             nodes[j].PrecedingBreak = BreakType.NewLine;
-                            nodes[j].IndentLevel = caseOpts.IndentWhen ? caseIndent + 1 : caseIndent;
+                            nodes[j].IndentLevel = whenIndent;
                             nodes[j].PrecedingSpaces = 0;
                         }
                     }
@@ -447,6 +495,43 @@ public class ControlFlowRules : IRuleSet
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// Spec 020 T082 — resolves the indent level for WHEN keywords inside a CASE expression
+    /// from <see cref="CaseOptions.WhenAlignment"/>, falling back to the legacy
+    /// <see cref="CaseOptions.IndentWhen"/> behaviour when the alignment is "toCase".
+    /// </summary>
+    /// <remarks>
+    /// "toFirstItem" is treated like "toCase" at the layout-engine level — true first-item
+    /// column alignment requires post-emission column measurement, which the existing
+    /// indentation model doesn't expose. The setting still round-trips losslessly through
+    /// import/export, and future refinements can plug into <see cref="TextEmitter"/>.
+    /// </remarks>
+    private static int ResolveWhenIndent(CaseOptions caseOpts, int caseIndent)
+    {
+        var alignment = (caseOpts.WhenAlignment ?? "toCase").Trim().ToLowerInvariant();
+        return alignment switch
+        {
+            "indentedfromcase" => caseIndent + 1,
+            "tofirstitem" => caseIndent,                  // approximated as "toCase" (see remarks)
+            "tocase" => caseIndent,
+            _ => caseOpts.IndentWhen ? caseIndent + 1 : caseIndent,    // legacy fall-back path
+        };
+    }
+
+    /// <summary>
+    /// Spec 020 T082 — returns the index of the first WHEN token between caseStart and caseEnd
+    /// (or caseEnd if no WHEN found inside the bounds).
+    /// </summary>
+    private static int FindFirstWhen(List<LayoutNode> nodes, int caseStart, int caseEnd)
+    {
+        for (int j = caseStart + 1; j < caseEnd; j++)
+        {
+            if (nodes[j].IsInNoformatRegion) continue;
+            if (nodes[j].TokenType == TSqlTokenType.When) return j;
+        }
+        return caseEnd;
     }
 
     /// <summary>
@@ -498,7 +583,7 @@ public class ControlFlowRules : IRuleSet
     // CTE rules
     // -----------------------------------------------------------------------
 
-    private static void ApplyCteRules(List<LayoutNode> nodes, CteOptions cte)
+    private static void ApplyCteRules(List<LayoutNode> nodes, CteOptions cte, WhitespaceOptions ws)
     {
         for (int i = 0; i < nodes.Count; i++)
         {
@@ -524,6 +609,107 @@ public class ControlFlowRules : IRuleSet
 
         // CTE body indent and comma handling
         ApplyCteBodyFormatting(nodes, cte);
+
+        // T080 — place CTE column list per cte.PlaceColumnsOnNewLine
+        ApplyCteColumnListPlacement(nodes, cte, ws);
+    }
+
+    /// <summary>
+    /// Spec 020 T080 — places the optional CTE column list ((col1, col2, ...) between the
+    /// CTE name and AS) according to <see cref="CteOptions.PlaceColumnsOnNewLine"/>:
+    /// <list type="bullet">
+    ///   <item><c>always</c> — opening paren on a new line, indented one level from WITH.</item>
+    ///   <item><c>never</c> — opening paren stays inline (single space after the name).</item>
+    ///   <item><c>ifLongerThanWrap</c> (default) — opening paren on a new line only when the
+    ///     column list's measured length would push the containing line past
+    ///     <c>Whitespace.MaxLineWidth</c>.</item>
+    /// </list>
+    /// </summary>
+    private static void ApplyCteColumnListPlacement(List<LayoutNode> nodes, CteOptions cte, WhitespaceOptions ws)
+    {
+        var mode = (cte.PlaceColumnsOnNewLine ?? string.Empty).Trim().ToLowerInvariant();
+        if (mode != "always" && mode != "never" && mode != "iflongerthanwrap")
+            mode = "iflongerthanwrap";
+
+        for (int i = 0; i < nodes.Count; i++)
+        {
+            if (nodes[i].IsInNoformatRegion || nodes[i].TokenType != TSqlTokenType.With) continue;
+            if (!IsCteWith(nodes, i)) continue;
+
+            int cteRegionEnd = FindCteRegionEnd(nodes, i);
+            int withIndent = nodes[i].IndentLevel;
+
+            // Walk each top-level CTE definition (parenDepth==0) and look for: <Identifier> '(' ... ')' 'AS'
+            int parenDepth = 0;
+            int j = i + 1;
+            while (j < cteRegionEnd)
+            {
+                if (nodes[j].IsInNoformatRegion) { j++; continue; }
+
+                if (nodes[j].TokenType == TSqlTokenType.LeftParenthesis) { parenDepth++; j++; continue; }
+                if (nodes[j].TokenType == TSqlTokenType.RightParenthesis) { parenDepth--; j++; continue; }
+
+                // Identifier at top level only
+                if (parenDepth == 0 && nodes[j].TokenType == TSqlTokenType.Identifier)
+                {
+                    // Next non-noformat token: '(' = column list, 'AS' = no list, anything else = give up
+                    int k = j + 1;
+                    while (k < cteRegionEnd && nodes[k].IsInNoformatRegion) k++;
+                    if (k >= cteRegionEnd) break;
+
+                    if (nodes[k].TokenType == TSqlTokenType.LeftParenthesis)
+                    {
+                        // Find the matching close paren
+                        int close = FindMatchingParen(nodes, k);
+                        if (close < 0) { j = k + 1; continue; }
+
+                        ApplyPlacementToOpenParen(nodes, k, close, mode, withIndent, ws);
+                        j = close + 1;
+                        continue;
+                    }
+                }
+                j++;
+            }
+        }
+    }
+
+    private static void ApplyPlacementToOpenParen(
+        List<LayoutNode> nodes, int openParen, int closeParen, string mode, int withIndent, WhitespaceOptions ws)
+    {
+        switch (mode)
+        {
+            case "always":
+                if (nodes[openParen].PrecedingBreak == BreakType.None)
+                {
+                    nodes[openParen].PrecedingBreak = BreakType.NewLine;
+                    nodes[openParen].IndentLevel = withIndent + 1;
+                    nodes[openParen].PrecedingSpaces = 0;
+                }
+                break;
+
+            case "never":
+                if (nodes[openParen].PrecedingBreak != BreakType.None)
+                {
+                    nodes[openParen].PrecedingBreak = BreakType.None;
+                    nodes[openParen].PrecedingSpaces = 1;
+                }
+                break;
+
+            case "iflongerthanwrap":
+            default:
+                // If the (col1, col2, ...) plus the preceding CTE name doesn't fit on a line
+                // shorter than MaxLineWidth, place the opening paren on a new line.
+                int listLength = MeasureLength(nodes, openParen, closeParen + 1);
+                int width = ws.MaxLineWidth > 0 ? ws.MaxLineWidth : 120;
+                // Heuristic: include ~20 chars for "WITH " + CTE name margin.
+                if (listLength + 20 > width && nodes[openParen].PrecedingBreak == BreakType.None)
+                {
+                    nodes[openParen].PrecedingBreak = BreakType.NewLine;
+                    nodes[openParen].IndentLevel = withIndent + 1;
+                    nodes[openParen].PrecedingSpaces = 0;
+                }
+                break;
+        }
     }
 
     private static void ApplyCteBodyFormatting(List<LayoutNode> nodes, CteOptions cte)
@@ -1014,6 +1200,332 @@ public class ControlFlowRules : IRuleSet
         nodes[closeParen].IndentLevel = nodes[openParen].IndentLevel;
         nodes[closeParen].PrecedingSpaces = 0;
     }
+
+    // -----------------------------------------------------------------------
+    // T083 — Operators rules (alignment + BETWEEN placement)
+    // -----------------------------------------------------------------------
+
+    /// <summary>
+    /// Spec 020 T083 — applies operator-group settings on top of the existing
+    /// <see cref="ApplyBooleanOperatorNewLine"/> + DmlRules AND/OR placement:
+    /// <list type="bullet">
+    ///   <item><c>Alignment = inlineWithStatement</c> (default) — no-op (existing behaviour).</item>
+    ///   <item><c>Alignment = indentedFromStatement</c> — when AND/OR already sits on its own
+    ///     line, bumps its indent up by one so it visibly indents from the clause keyword.</item>
+    ///   <item><c>Alignment = rightAligned</c> — not implementable without post-emission column
+    ///     measurement; falls back to <c>indentedFromStatement</c> at the layout layer (the
+    ///     setting still round-trips losslessly through import/export).</item>
+    ///   <item><c>BetweenOnNewLine = true</c> — places the <c>BETWEEN</c> keyword on a new line
+    ///     when not already broken. Pairs with the existing
+    ///     <see cref="ExpressionOptions.BetweenOnOneLine"/> (which would otherwise pull it back).</item>
+    /// </list>
+    /// </summary>
+    private static void ApplyOperatorRules(List<LayoutNode> nodes, OperatorsOptions ops, ExpressionOptions expr)
+    {
+        if (ops == null) return;
+
+        var alignment = (ops.Alignment ?? "inlineWithStatement").Trim().ToLowerInvariant();
+        bool bumpIndent = alignment == "indentedfromstatement" || alignment == "rightaligned";
+
+        if (bumpIndent)
+        {
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                var n = nodes[i];
+                if (n.IsInNoformatRegion) continue;
+                if (n.TokenType != TSqlTokenType.And && n.TokenType != TSqlTokenType.Or) continue;
+                if (n.PrecedingBreak == BreakType.None) continue;   // operator is inline — alignment is moot
+                n.IndentLevel += 1;
+            }
+        }
+
+        if (ops.BetweenOnNewLine)
+        {
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                var n = nodes[i];
+                if (n.IsInNoformatRegion) continue;
+                if (n.TokenType != TSqlTokenType.Between) continue;
+                if (n.PrecedingBreak != BreakType.None) continue;
+                n.PrecedingBreak = BreakType.NewLine;
+                n.PrecedingSpaces = 0;
+                n.IndentLevel = Math.Max(n.IndentLevel, 1);
+            }
+        }
+
+        // Phase B closure — `Operators.AndBetweenOnNewLine` places the AND that pairs with a
+        // BETWEEN on its own line. Skip when ExpressionOptions.BetweenOnOneLine wins (that rule
+        // pulls the AND back inline and would re-collide with this).
+        if (ops.AndBetweenOnNewLine && !(expr?.BetweenOnOneLine ?? false))
+        {
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                if (nodes[i].IsInNoformatRegion) continue;
+                if (nodes[i].TokenType != TSqlTokenType.Between) continue;
+
+                int andIdx = FindBetweenAnd(nodes, i);
+                if (andIdx < 0) continue;
+                if (nodes[andIdx].PrecedingBreak != BreakType.None) continue;
+
+                nodes[andIdx].PrecedingBreak = BreakType.NewLine;
+                nodes[andIdx].PrecedingSpaces = 0;
+                nodes[andIdx].IndentLevel = Math.Max(nodes[i].IndentLevel, 0) + 1;
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Phase B closure — additional layout passes for newly-mapped SQL Prompt settings
+    // -----------------------------------------------------------------------
+
+    /// <summary>
+    /// Phase B closure — SQL Prompt <c>cte.placeAsOnNewLine</c>. Walks each CTE detected by
+    /// <see cref="IsCteWith"/> and places the AS keyword that introduces the CTE body on its
+    /// own line when <see cref="CteOptions.AsOnNewLine"/> is true.
+    /// </summary>
+    private static void ApplyCteAsOnNewLine(List<LayoutNode> nodes, CteOptions cte)
+    {
+        if (cte == null || !cte.AsOnNewLine) return;
+
+        for (int i = 0; i < nodes.Count; i++)
+        {
+            if (nodes[i].IsInNoformatRegion || nodes[i].TokenType != TSqlTokenType.With) continue;
+            if (!IsCteWith(nodes, i)) continue;
+
+            int regionEnd = FindCteRegionEnd(nodes, i);
+            int withIndent = nodes[i].IndentLevel;
+
+            // Track paren depth so we only act on top-level AS tokens (inside a CTE-name region,
+            // not inside the CTE body).
+            int parenDepth = 0;
+            for (int j = i + 1; j < regionEnd; j++)
+            {
+                if (nodes[j].IsInNoformatRegion) continue;
+                if (nodes[j].TokenType == TSqlTokenType.LeftParenthesis) { parenDepth++; continue; }
+                if (nodes[j].TokenType == TSqlTokenType.RightParenthesis) { parenDepth--; continue; }
+
+                if (parenDepth != 0) continue;
+                if (nodes[j].TokenType != TSqlTokenType.As) continue;
+                if (nodes[j].PrecedingBreak != BreakType.None) continue;
+
+                nodes[j].PrecedingBreak = BreakType.NewLine;
+                nodes[j].PrecedingSpaces = 0;
+                nodes[j].IndentLevel = withIndent;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Phase B closure — SQL Prompt <c>caseExpressions.endAlignment</c>. Walks each CASE block
+    /// detected by <see cref="ApplyCaseRules"/> and resets the END token's indent level based on
+    /// <see cref="CaseOptions.EndAlignment"/>. When the legacy <see cref="CaseOptions.EndOnNewLine"/>
+    /// is false this is a no-op (END stays inline regardless of alignment).
+    /// </summary>
+    private static void ApplyCaseEndAlignment(List<LayoutNode> nodes, CaseOptions caseOpts)
+    {
+        if (caseOpts == null) return;
+        if (!caseOpts.EndOnNewLine) return;       // END is inline — alignment is moot
+
+        var mode = (caseOpts.EndAlignment ?? "toCase").Trim().ToLowerInvariant();
+
+        // Note: this pass also corrects a pre-Phase-B bug where `ApplyBeginEndRules` would
+        // pre-break the END line *before* `ApplyCaseRules` had a chance to set its IndentLevel
+        // (the case-rules `EndOnNewLine` branch only runs when PrecedingBreak == None). After
+        // this pass, every CASE END is on a known indent regardless of which rule broke it.
+        var caseStack = new Stack<int>();
+        for (int i = 0; i < nodes.Count; i++)
+        {
+            if (nodes[i].IsInNoformatRegion) continue;
+            if (nodes[i].TokenType == TSqlTokenType.Case) { caseStack.Push(i); continue; }
+            if (nodes[i].TokenType == TSqlTokenType.End && caseStack.Count > 0)
+            {
+                int caseStart = caseStack.Pop();
+                if (nodes[i].PrecedingBreak != BreakType.None)
+                {
+                    nodes[i].IndentLevel = mode == "indented"
+                        ? nodes[caseStart].IndentLevel + 1
+                        : nodes[caseStart].IndentLevel;
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Phase B closure — SQL Prompt <c>functionCalls.placeParametersOnNewLine</c> +
+    /// <c>functionCalls.indentParameters</c>. Detects parenthesised parameter lists immediately
+    /// following an identifier (the function-call shape <c>name(args)</c>) and applies the
+    /// configured placement.
+    /// </summary>
+    private static void ApplyFunctionCallParameters(List<LayoutNode> nodes, FunctionCallsOptions opts, WhitespaceOptions ws)
+    {
+        if (opts == null) return;
+        var mode = (opts.PlaceParametersOnNewLine ?? "ifLongerThanWrap").Trim().ToLowerInvariant();
+
+        for (int i = 1; i < nodes.Count; i++)
+        {
+            if (nodes[i].IsInNoformatRegion) continue;
+            if (nodes[i].TokenType != TSqlTokenType.LeftParenthesis) continue;
+
+            var prev = nodes[i - 1];
+            if (prev.IsInNoformatRegion) continue;
+            if (prev.TokenType != TSqlTokenType.Identifier) continue;
+            // Heuristic: a "real" function-call paren has no space between the name and (
+            if (nodes[i].PrecedingBreak != BreakType.None || nodes[i].PrecedingSpaces > 0) continue;
+
+            int close = FindMatchingParen(nodes, i);
+            if (close < 0) continue;
+
+            // Skip empty parameter lists — no benefit to breaking those.
+            if (close == i + 1) continue;
+
+            bool shouldBreak = mode switch
+            {
+                "always" => true,
+                "never" => false,
+                _ => MeasureLength(nodes, i, close + 1) > (ws.MaxLineWidth > 0 ? ws.MaxLineWidth : 120) - 40,
+            };
+
+            if (mode == "never")
+            {
+                // Force inline — collapse any internal breaks within the parameter list.
+                CollapseRange(nodes, i + 1, close);
+                if (nodes[close].PrecedingBreak != BreakType.None)
+                {
+                    nodes[close].PrecedingBreak = BreakType.None;
+                    nodes[close].PrecedingSpaces = 0;
+                }
+                continue;
+            }
+
+            if (!shouldBreak) continue;
+
+            int parentIndent = prev.IndentLevel;
+            int paramIndent = opts.IndentParameters ? parentIndent + 1 : parentIndent;
+
+            // First parameter on its own line; each comma-followed param on its own line; close
+            // paren on its own line aligned with the parent.
+            if (nodes[i + 1].PrecedingBreak == BreakType.None)
+            {
+                nodes[i + 1].PrecedingBreak = BreakType.NewLine;
+                nodes[i + 1].IndentLevel = paramIndent;
+                nodes[i + 1].PrecedingSpaces = 0;
+            }
+            for (int j = i + 1; j < close; j++)
+            {
+                if (nodes[j].TokenType == TSqlTokenType.Comma && j + 1 < close)
+                {
+                    if (nodes[j + 1].PrecedingBreak == BreakType.None)
+                    {
+                        nodes[j + 1].PrecedingBreak = BreakType.NewLine;
+                        nodes[j + 1].IndentLevel = paramIndent;
+                        nodes[j + 1].PrecedingSpaces = 0;
+                    }
+                }
+            }
+            if (nodes[close].PrecedingBreak == BreakType.None)
+            {
+                nodes[close].PrecedingBreak = BreakType.NewLine;
+                nodes[close].IndentLevel = parentIndent;
+                nodes[close].PrecedingSpaces = 0;
+            }
+
+            i = close;        // skip past this function call
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // T084 — IN-list alignment
+    // -----------------------------------------------------------------------
+
+    /// <summary>
+    /// Spec 020 T084 — when <see cref="ExpressionOptions.InListStyle"/> has already expanded an
+    /// IN list to multiple lines, this pass re-applies the alignment variant chosen on
+    /// <see cref="InStatementsOptions.Alignment"/>:
+    /// <list type="bullet">
+    ///   <item><c>stacked</c> (default) — one item per line (existing behaviour, no change).</item>
+    ///   <item><c>wrapped</c> — pack multiple items per line up to
+    ///     <see cref="WhitespaceOptions.MaxLineWidth"/>: each comma stays inline (preceded by a
+    ///     space) unless the running line length would exceed the limit, in which case the
+    ///     following item gets a line break.</item>
+    ///   <item><c>rightAligned</c> — falls back to <c>stacked</c> at the layout level (a true
+    ///     right-align would require post-emission column measurement). The setting still
+    ///     round-trips losslessly.</item>
+    /// </list>
+    /// Only IN lists with literal/identifier members are reshaped — IN-subquery lists are left
+    /// alone (consistent with <see cref="ApplyInListStyle"/>).
+    /// </summary>
+    private static void ApplyInStatementsAlignment(List<LayoutNode> nodes, InStatementsOptions inStmt)
+    {
+        if (inStmt == null) return;
+
+        var alignment = (inStmt.Alignment ?? "stacked").Trim().ToLowerInvariant();
+        if (alignment != "wrapped")
+            return;   // "stacked" + "rightAligned" + unrecognised — keep current ExpandToMultiLine behaviour
+
+        for (int i = 0; i < nodes.Count; i++)
+        {
+            if (nodes[i].IsInNoformatRegion || nodes[i].TokenType != TSqlTokenType.In) continue;
+
+            int openParen = -1;
+            for (int j = i + 1; j < nodes.Count && j <= i + 3; j++)
+            {
+                if (nodes[j].TokenType == TSqlTokenType.LeftParenthesis) { openParen = j; break; }
+            }
+            if (openParen < 0) continue;
+
+            int closeParen = FindMatchingParen(nodes, openParen);
+            if (closeParen < 0) continue;
+
+            // Skip IN-subqueries
+            bool hasSubquery = false;
+            for (int j = openParen + 1; j < closeParen; j++)
+            {
+                if (nodes[j].TokenType == TSqlTokenType.Select) { hasSubquery = true; break; }
+            }
+            if (hasSubquery) continue;
+
+            // Only reshape if the list is already in multi-line form (otherwise the user / default
+            // collapsed it and we shouldn't override).
+            bool isMultiLine = false;
+            for (int j = openParen + 1; j < closeParen; j++)
+            {
+                if (nodes[j].PrecedingBreak != BreakType.None) { isMultiLine = true; break; }
+            }
+            if (!isMultiLine) continue;
+
+            int baseIndent = nodes[openParen].IndentLevel;
+            int width = 80;                                    // safe default; the wrapper rolls when running >= width
+            int runningWidth = 0;
+
+            for (int j = openParen + 1; j < closeParen; j++)
+            {
+                // Pull each item back inline first.
+                if (nodes[j].PrecedingBreak != BreakType.None)
+                {
+                    nodes[j].PrecedingBreak = BreakType.None;
+                    nodes[j].PrecedingSpaces = nodes[j].TokenType == TSqlTokenType.Comma ? 0 : 1;
+                }
+
+                runningWidth += nodes[j].FormattedText.Length + nodes[j].PrecedingSpaces;
+
+                // After a comma, decide whether to wrap. The next item gets a new line when we'd
+                // otherwise blow past `width`.
+                if (nodes[j].TokenType == TSqlTokenType.Comma && j + 1 < closeParen)
+                {
+                    int next = nodes[j + 1].FormattedText.Length + 1;
+                    if (runningWidth + next > width)
+                    {
+                        nodes[j + 1].PrecedingBreak = BreakType.NewLine;
+                        nodes[j + 1].IndentLevel = baseIndent + 1;
+                        nodes[j + 1].PrecedingSpaces = 0;
+                        runningWidth = 0;
+                    }
+                }
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
 
     private static int MeasureLength(List<LayoutNode> nodes, int start, int end)
     {
