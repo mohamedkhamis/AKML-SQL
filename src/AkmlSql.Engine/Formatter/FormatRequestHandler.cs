@@ -86,16 +86,33 @@ public class FormatRequestHandler(ProfileManager profileManager)
             var profile = ProfileSerializer.Deserialize(request.ProfileJson);
             var result = _pipeline.Format(request.SampleText, profile);
 
+            // Spec 020 T070 — surface stage-6 (SemanticValidator) failure to the editor so it
+            // can render the "Preview unavailable — semantically-different SQL" warning bar.
+            // Pipeline behaviour: validation failure returns the original SQL unchanged, sets
+            // ValidationPassed=false, and adds an Error-severity diagnostic.
+            string? validationError = null;
+            if (!result.ValidationPassed)
+            {
+                var diag = Array.Find(result.Diagnostics, d => d.Severity == DiagnosticSeverity.Error);
+                validationError = diag?.Message
+                    ?? "Preview unavailable — the current settings produce semantically-different SQL.";
+            }
+
             return new FormatPreviewResponse
             {
                 FormattedText = result.FormattedText,
-                ElapsedMs = result.ElapsedMs
+                ElapsedMs = result.ElapsedMs,
+                ValidationError = validationError,
             };
         }
         catch (Exception ex)
         {
             Log.Error(ex, "Format preview request failed");
-            return new FormatPreviewResponse { FormattedText = request.SampleText };
+            return new FormatPreviewResponse
+            {
+                FormattedText = request.SampleText,
+                ValidationError = $"Preview failed: {ex.Message}",
+            };
         }
     }
 
@@ -437,6 +454,51 @@ public class FormatRequestHandler(ProfileManager profileManager)
             {
                 Success = false,
                 ErrorMessage = ex.Message
+            };
+        }
+    }
+
+    /// <summary>
+    /// Spec 020 T031 — Format Styles editor "Export to SQL Prompt" handler. Loads the named
+    /// profile and writes it as a <c>.sqlpromptstylev2</c> XML file at the requested absolute
+    /// path via <see cref="SqlPromptExporter.ExportToFile"/> (atomic write — temp + rename).
+    /// Pairs with <see cref="ProfileImportResponse"/>'s import path as the inverse direction.
+    /// </summary>
+    public ProfileExportSqlPromptResponse HandleProfileExportSqlPrompt(ProfileExportSqlPromptRequest request)
+    {
+        try
+        {
+            // Path validation (same envelope as HandleBulkFormatAsync — CLAUDE.md security policy:
+            // absolute path, canonical form check to reject traversal sequences like foo\..\secret).
+            if (string.IsNullOrWhiteSpace(request.DestinationPath))
+                throw new ArgumentException("DestinationPath must not be empty.");
+            if (!Path.IsPathFullyQualified(request.DestinationPath))
+                throw new ArgumentException($"DestinationPath must be absolute: '{request.DestinationPath}'");
+            var normalized = request.DestinationPath.Replace('/', Path.DirectorySeparatorChar);
+            var canonical = Path.GetFullPath(normalized);
+            if (!string.Equals(canonical, normalized, StringComparison.OrdinalIgnoreCase))
+                throw new ArgumentException($"DestinationPath is not canonical (possible path traversal): '{request.DestinationPath}'");
+
+            // Load via the same ProfileManager the rest of the handler uses — built-in or custom.
+            var profile = profileManager.Load(request.Name);
+
+            // Library entrypoint: atomic write (temp + rename) + auto-creates destination dir.
+            var result = SqlPromptExporter.ExportToFile(profile, request.DestinationPath);
+
+            return new ProfileExportSqlPromptResponse
+            {
+                Success = true,
+                WrittenCount = result.WrittenCount,
+            };
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Profile export to SQL Prompt failed (name={Name}, dest={Dest})",
+                request.Name, request.DestinationPath);
+            return new ProfileExportSqlPromptResponse
+            {
+                Success = false,
+                ErrorMessage = ex.Message,
             };
         }
     }

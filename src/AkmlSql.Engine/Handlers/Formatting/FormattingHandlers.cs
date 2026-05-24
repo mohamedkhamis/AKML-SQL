@@ -104,6 +104,22 @@ namespace AkmlSql.Engine.Handlers.Formatting
             => Task.FromResult(_inner.HandleProfileImport(request));
     }
 
+    /// <summary>
+    /// Spec 020 T031 — Format Styles editor "Export to SQL Prompt" handler. Routes
+    /// <see cref="MessageTypes.ProfileExportSqlPrompt"/> (29) to
+    /// <see cref="FormatRequestHandler.HandleProfileExportSqlPrompt"/> and responds on
+    /// <see cref="MessageTypes.ProfileExportSqlPromptResult"/> (129).
+    /// </summary>
+    public sealed class ProfileExportSqlPromptHandler : IRpcRequestHandler<ProfileExportSqlPromptRequest, ProfileExportSqlPromptResponse>
+    {
+        private readonly FormatRequestHandler _inner;
+        public ProfileExportSqlPromptHandler(FormatRequestHandler inner) => _inner = inner ?? throw new ArgumentNullException(nameof(inner));
+        public int RequestMessageType => MessageTypes.ProfileExportSqlPrompt;
+        public int ResponseMessageType => MessageTypes.ProfileExportSqlPromptResult;
+        public Task<ProfileExportSqlPromptResponse> HandleAsync(ProfileExportSqlPromptRequest request, RpcContext ctx, CancellationToken ct)
+            => Task.FromResult(_inner.HandleProfileExportSqlPrompt(request));
+    }
+
     public sealed class StyleEditorSchemaHandler : IRpcRequestHandler<StyleEditorSchemaRequest, StyleEditorSchemaResponse>
     {
         private readonly FormatRequestHandler _inner;

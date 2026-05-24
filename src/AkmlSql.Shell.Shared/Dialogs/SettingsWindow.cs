@@ -418,6 +418,23 @@ namespace AkmlSql.Shell.Shared.Dialogs
             // ── SQL Prompt-style hierarchical tree ──
             // Source: doc/SQL-PROMPT/SQL-Prompt-Option/SQL_Prompt_Options_Dialog.md §1.2
             // Parent nodes have no Tag (not selectable as a page); leaves carry the page key.
+            //
+            // ── Spec 020 T044 audit (vs SQL Prompt §1.2) ──
+            // No missing pages — AKML's tree is a superset of SQL Prompt's documented hierarchy:
+            //   Suggestions ▸ Behavior / Types of suggestion / Database   → present (IntelliSense, SuggestionTypes, Schema Cache)
+            //   Inserted Code ▸ Qualification / INSERT / JOIN             → present (Qualification, InsertOptions, JoinOptions)
+            //   Format ▸ Styles                                            → present (Formatting)
+            //   Queries ▸ History / Execution Warnings / Query Results     → present (History, Safety, Grid)
+            //   Tabs ▸ Color                                               → present (Tabs & UI)
+            //   Code Analysis, Snippets                                    → present (leaves)
+            //   Prompt AI                                                  → present as "AI Assistance" (naming deviation; same scope)
+            //   Miscellaneous ▸ Main / Labs                                → present (General, Labs)
+            // AKML-only additions (deviations, not gaps):
+            //   Editor group ▸ Productivity / Navigation / Refactoring     → AKML-specific editor surfaces
+            //   Queries ▸ Execution                                        → AKML-specific execution-environment settings
+            // Note: T045 ("add missing Options pages") is superseded — the pages it lists
+            // (Queries ▸ Execution Warnings, Query Results, Miscellaneous ▸ Labs) were authored
+            // in earlier specs and are already wired to GridPage / SafetyPage / LabsPage / GeneralPage.
 
             AddTreeGroup("Suggestions", expanded: true,
                 ("Behavior", "IntelliSense"),

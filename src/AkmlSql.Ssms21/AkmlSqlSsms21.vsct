@@ -46,6 +46,12 @@
           <ButtonText>Options</ButtonText>
         </Strings>
       </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="cmdFormatStyles" priority="0x0301" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Strings>
+          <ButtonText>Format Styles...</ButtonText>
+        </Strings>
+      </Button>
       <Button guid="guidAkmlSqlCmdSet" id="cmdSendFeedback" priority="0x0400" type="Button">
         <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
         <Strings>
@@ -378,6 +384,8 @@
       <IDSymbol name="cmdAbout" value="0x0100" />
       <IDSymbol name="cmdCheckUpdate" value="0x0101" />
       <IDSymbol name="cmdOptions" value="0x0102" />
+      <!-- Spec 020 US3 T059 — Format Styles editor launcher -->
+      <IDSymbol name="cmdFormatStyles" value="0x0916" />
       <IDSymbol name="cmdSendFeedback" value="0x0103" />
       <IDSymbol name="cmdViewLogs" value="0x0104" />
       <IDSymbol name="cmdRefreshCache" value="0x0105" />

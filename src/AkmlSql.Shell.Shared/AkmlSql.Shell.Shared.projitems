@@ -32,6 +32,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Commands\AboutCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\CheckUpdateCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\OptionsCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\FormatStylesCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\SendFeedbackCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\ViewLogsCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\AboutDialog.cs" />

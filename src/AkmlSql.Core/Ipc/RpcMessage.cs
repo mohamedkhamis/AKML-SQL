@@ -110,6 +110,11 @@ namespace AkmlSql.Core.Ipc
         //   See specs/020-sqlprompt-visual-parity/contracts/ipc-style-editor-schema.md
         public const int RequestStyleEditorSchema = 28;
 
+        // Shell → Engine (Spec 020 T031: Format Styles editor "Export to SQL Prompt" button)
+        //   Asks the engine to write the named profile as a .sqlpromptstylev2 XML file at the
+        //   given absolute path via SqlPromptExporter.ExportToFile. Pairs with response 129.
+        public const int ProfileExportSqlPrompt = 29;
+
         // Engine → Shell (Code Analysis)
         public const int AnalysisResult = 125;
 
@@ -118,6 +123,9 @@ namespace AkmlSql.Core.Ipc
 
         // Engine → Shell (Spec 020: Format Styles editor schema descriptor — pairs with RequestStyleEditorSchema=28)
         public const int StyleEditorSchemaResult = 128;
+
+        // Engine → Shell (Spec 020 T031: ProfileExportSqlPrompt result — pairs with request 29)
+        public const int ProfileExportSqlPromptResult = 129;
 
         // Shell → Engine (Refactoring — heavyweight preview/apply)
         public const int RequestRefactorPreview = 30;

@@ -32,7 +32,11 @@ public class SnippetLoader
         var results = new List<(Snippet, SnippetSourceType, string?)>();
         if (!Directory.Exists(directoryPath))
         {
-            Log.Warning("Snippet directory does not exist: {Path}", directoryPath);
+            // Expected on fresh install: the personal folder is created on first
+            // SaveSnippet, and the built-in folder is only present when the installer
+            // ships a snippet pack. Log at Information so it's still visible for
+            // diagnostics without looking like a defect.
+            Log.Information("Snippet directory not present ({Source}): {Path}", sourceType, directoryPath);
             return results;
         }
 

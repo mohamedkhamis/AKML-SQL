@@ -119,5 +119,9 @@ namespace AkmlSql.Shell.Shared
         public const int CmdCycleCategoryFilterBackward  = 0x0913;
         public const int CmdDisableFormattingForSelection = 0x0914;
         public const int CmdAiManualGhostText            = 0x0915;
+
+        // Spec 020 US3 T059 — Format Styles editor launcher (takes the next free slot;
+        // spec 019's reservation note above is tightened from 0x0916..0x093F to 0x0917..0x093F).
+        public const int CmdFormatStyles                 = 0x0916;
     }
 }
