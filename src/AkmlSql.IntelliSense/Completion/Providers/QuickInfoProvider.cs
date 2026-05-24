@@ -115,6 +115,13 @@ public class QuickInfoProvider
 
     /// <summary>
     /// T066: Find the token at or immediately before the given offset.
+    /// <para>
+    /// <see cref="TSqlParserToken.Text"/> is <c>null</c> for <see cref="TSqlTokenType.EndOfFile"/>
+    /// (and conceivably other synthesised tokens), so we skip those to avoid a
+    /// <see cref="NullReferenceException"/> on <c>t.Text.Length</c>. The rest of the codebase
+    /// follows the same pattern -- see <c>AstAnnotator</c>, <c>LayoutEngine</c>,
+    /// <c>CursorContextAnalyzer</c>, <c>TokenBasedCteExtractor</c>.
+    /// </para>
     /// </summary>
     private static (TSqlParserToken? Token, int Index) FindTokenAtOffset(
         IList<TSqlParserToken> tokens, int cursorOffset)
@@ -122,6 +129,10 @@ public class QuickInfoProvider
         for (int i = 0; i < tokens.Count; i++)
         {
             var t = tokens[i];
+            if (t.TokenType == TSqlTokenType.EndOfFile || t.Text == null)
+            {
+                continue;
+            }
             if (cursorOffset >= t.Offset && cursorOffset <= t.Offset + t.Text.Length)
             {
                 return (t, i);
