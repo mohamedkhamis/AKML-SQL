@@ -7,7 +7,7 @@ namespace AkmlSql.Core.Tests.Config
     /// <summary>
     /// Spec 020 T043 / FR-027b — structural drift-guard pinning that
     /// <see cref="FormatterSettings.ActiveProfile"/> stays a single global string,
-    /// shared across SSMS 20/21/22 + VS 2019/22/26.
+    /// shared across SSMS 22 + VS 2026.
     ///
     /// <para>
     /// A runtime test that mutates and reads back the value would be tautological —

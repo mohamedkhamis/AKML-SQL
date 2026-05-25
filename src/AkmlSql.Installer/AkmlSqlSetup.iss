@@ -240,7 +240,7 @@ begin
         begin
           SourcePath := SqlPromptDir + '\' + FindRec.Name;
           DestPath := StagingDir + '\' + FindRec.Name;
-          if FileCopy(SourcePath, DestPath, False) then
+          if CopyFile(SourcePath, DestPath, False) then
           begin
             if FileList <> '' then
               FileList := FileList + ',';
@@ -264,7 +264,7 @@ begin
         begin
           SourcePath := SqlPromptDir + '\' + FindRec.Name;
           DestPath := StagingDir + '\' + FindRec.Name;
-          if FileCopy(SourcePath, DestPath, False) then
+          if CopyFile(SourcePath, DestPath, False) then
           begin
             if FileList <> '' then
               FileList := FileList + ',';
@@ -290,7 +290,7 @@ begin
           begin
             SourcePath := SqlPromptDir + '\Styles\' + FindRec.Name;
             DestPath := StagingDir + '\' + FindRec.Name;
-            if FileCopy(SourcePath, DestPath, False) then
+            if CopyFile(SourcePath, DestPath, False) then
             begin
               if FileList <> '' then
                 FileList := FileList + ',';
@@ -313,7 +313,7 @@ begin
           begin
             SourcePath := SqlPromptDir + '\Styles\' + FindRec.Name;
             DestPath := StagingDir + '\' + FindRec.Name;
-            if FileCopy(SourcePath, DestPath, False) then
+            if CopyFile(SourcePath, DestPath, False) then
             begin
               if FileList <> '' then
                 FileList := FileList + ',';

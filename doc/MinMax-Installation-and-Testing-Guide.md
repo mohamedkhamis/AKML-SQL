@@ -241,29 +241,17 @@ SSMS 22 uses VS SDK 17.14.x and requires:
 - Auto-load context is `{B7B07F42-6013-4C67-A504-C771CBC7625A}` (UICONTEXT_SSMS)
 - Menu placed under Tools via `CommandPlacement` to `IDG_VS_TOOLS_EXT_TOOLS`
 
-**Build outputs:**
-- SSMS 21: `src/AkmlSql.Ssms21/bin/Release/net472/`
-- SSMS 22: `src/AkmlSql.Ssms22/bin/Release/net472/`
+**Build output:** `src/AkmlSql.Ssms22/bin/Release/net472/`
 
-### 5.5 VS 2019 Specific Notes
+### 5.4 VS 2026 Specific Notes
 
-VS 2019 uses VS SDK 16.0.208 and platform x86:
-- Shell assembly version `16.0.0.0`
-- Auto-load context `{e8fbc700-a1bd-11d0-a67c-00a0c9110051}` (ShellInitialized)
-
-**Build output:** `src/AkmlSql.VS2019/bin/Release/net472/`
-
-### 5.6 VS 2022/2026 Specific Notes
-
-VS 2022 and 2026 use VS SDK 17.14.x and platform x64:
+VS 2026 uses VS SDK 17.14.x and platform x64:
 - Shell assembly version `17.0.0.0`
 - Auto-load context `{e8fbc700-a1bd-11d0-a67c-00a0c9110051}` (ShellInitialized)
 
-**Build outputs:**
-- VS 2022: `src/AkmlSql.VS2022/bin/Release/net472/`
-- VS 2026: `src/AkmlSql.VS2026/bin/Release/net472/`
+**Build output:** `src/AkmlSql.VS2026/bin/Release/net472/`
 
-### 5.7 Shared Components (AkmlSql.Shell.Shared)
+### 5.5 Shared Components (AkmlSql.Shell.Shared)
 
 The `AkmlSql.Shell.Shared` project is a shared project (.projitems) — it is NOT built directly. Instead, it is imported into each shell project at compile time. Source files are compiled against each target's VS SDK version.
 

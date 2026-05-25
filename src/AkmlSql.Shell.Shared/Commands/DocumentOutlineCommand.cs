@@ -101,7 +101,7 @@ namespace AkmlSql.Shell.Shared.Commands
                 }
 
                 // Get the managed ITextBuffer — try direct cast first, then adapter factory
-                // (direct cast works in VS2022+; adapter factory handles SSMS and older hosts)
+                // (direct cast works in VS; adapter factory handles SSMS)
                 ITextBuffer? managedBuffer = vsBuffer as ITextBuffer;
                 if (managedBuffer == null)
                 {

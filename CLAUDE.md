@@ -200,7 +200,6 @@ See [docs/analysis-rules.md](docs/analysis-rules.md) for all rules.
 | `LoggerFactory` reads config JSON directly | Avoids circular dependency — ConfigManager calls `Log.Error` before logger exists |
 | `_cachedSettings` in `RpcContext` | Avoids per-request `ConfigManager.Load()` disk read; `EnsureSettings()` caches it, `InvalidateSettings()` drops it on `AnalysisSettingsChanged` |
 | `SemanticValidator` accepts pre-parsed AST | Avoids re-parsing original SQL in stage 6 (only formatted SQL is parsed) |
-| SSMS 20 uses Schema 2010 vsixmanifest | SSMS 20 is a VS 2017 IsolatedShell — must use `<Vsix>` root, not `<PackageManifest>` |
 | `EnableIdempotencyCheck` in `ProfileMetadata` | Lets bulk operations skip the expensive second parse pass |
 
 ## Code Conventions
