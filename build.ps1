@@ -3,8 +3,8 @@
 .SYNOPSIS
     AKML-SQL full build script. Builds all projects and produces the installer EXE.
 .DESCRIPTION
-    Builds Core, Formatting, Engine, Updater, Formatter CLI, all 6 shell extensions,
-    runs tests, and compiles the Inno Setup installer.
+    Builds Core, Formatting, Engine, Updater, Formatter CLI, the SSMS 22 and
+    VS 2026 shell extensions, runs tests, and compiles the Inno Setup installer.
 .PARAMETER SkipTests
     Skip running unit tests.
 .PARAMETER SkipShell
@@ -141,11 +141,7 @@ Invoke-Build "Analyzer CLI (publish)" {
 
 # --- Shell extensions (MSBuild, one at a time) ---
 if (-not $SkipShell) {
-    Build-Shell "src\AkmlSql.Ssms20\AkmlSql.Ssms20.csproj"
-    Build-Shell "src\AkmlSql.Ssms21\AkmlSql.Ssms21.csproj"
     Build-Shell "src\AkmlSql.Ssms22\AkmlSql.Ssms22.csproj"
-    Build-Shell "src\AkmlSql.VS2019\AkmlSql.VS2019.csproj"
-    Build-Shell "src\AkmlSql.VS2022\AkmlSql.VS2022.csproj"
     Build-Shell "src\AkmlSql.VS2026\AkmlSql.VS2026.csproj"
 }
 

@@ -1,6 +1,6 @@
 ; ============================================================================
 ; AKML SQL Installer
-; Wizard-based Windows EXE installer for SSMS 20/21/22 and VS 2019/2022/2026
+; Wizard-based Windows EXE installer for SSMS 22 and VS 2026
 ; Built with Inno Setup 7
 ; ============================================================================
 ;
@@ -11,8 +11,8 @@
 ;   AKMLSQLSetup.exe /VERYSILENT /ACCEPTEULA
 ;     Install to all detected targets with no UI.
 ;
-;   AKMLSQLSetup.exe /VERYSILENT /ACCEPTEULA /TARGETS=ssms22,vs2022
-;     Install only to SSMS 22 and VS 2022.
+;   AKMLSQLSetup.exe /VERYSILENT /ACCEPTEULA /TARGETS=ssms22
+;     Install only to SSMS 22.
 ;
 ;   AKMLSQLSetup.exe /VERYSILENT /ACCEPTEULA /LOG="C:\Logs\install.log"
 ;     Install with verbose logging. /LOG is a native Inno Setup flag that
@@ -31,7 +31,7 @@
 ; Flags:
 ;   /VERYSILENT       No UI, no progress dialog
 ;   /ACCEPTEULA       Accept the EULA (required for silent mode)
-;   /TARGETS=...      Comma-separated target list: ssms20,ssms21,ssms22,vs2019,vs2022,vs2026
+;   /TARGETS=...      Comma-separated target list: ssms22,vs2026
 ;   /LOG[=file]       Write detailed install log (native Inno Setup feature)
 ;   /NOUPDATE         Disable built-in auto-update check
 ;   /TELEMETRY        Enable anonymous usage telemetry (off by default)
@@ -42,7 +42,6 @@
 ; TODO T096: On uninstall, restore native SSMS IntelliSense if AKML SQL disabled it.
 ;   Read %AppData%/AKML SQL/config.json, check DisabledNativeIntelliSense flag,
 ;   and if true, set EnableIntelliSense=1 in the SSMS registry keys:
-;     HKCU\Software\Microsoft\SQL Server Management Studio\20.0\Settings\IntelliSense
 ;     HKCU\Software\Microsoft\SQL Server Management Studio\22.0\Settings\IntelliSense
 ;     HKCU\Software\Microsoft\SSMS\22.0\Settings\IntelliSense
 ;
@@ -145,30 +144,10 @@ Source: "..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\*"; DestDir: "{ap
 Source: "..\AkmlSql.Analyzer\bin\Release\net10.0\win-x64\publish\AkmlSql.Analyzer.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
 
-; SSMS 20 (x86) extension files — all DLLs from build output plus pkgdef and manifest
-Source: "..\AkmlSql.Ssms20\bin\Release\net472\*.dll"; DestDir: "{code:GetSSMS20ExtDir}"; Check: CheckSSMS20; Flags: ignoreversion
-Source: "..\AkmlSql.Ssms20\AkmlSql.Ssms20.pkgdef"; DestDir: "{code:GetSSMS20ExtDir}"; Check: CheckSSMS20; Flags: ignoreversion
-Source: "generated\AkmlSql.Ssms20\extension.vsixmanifest"; DestDir: "{code:GetSSMS20ExtDir}"; DestName: "extension.vsixmanifest"; Check: CheckSSMS20; Flags: ignoreversion
-
-; SSMS 21 (x64) extension files
-Source: "..\AkmlSql.Ssms21\bin\Release\net472\*.dll"; DestDir: "{code:GetSSMS21ExtDir}"; Check: CheckSSMS21; Flags: ignoreversion
-Source: "..\AkmlSql.Ssms21\AkmlSql.Ssms21.pkgdef"; DestDir: "{code:GetSSMS21ExtDir}"; Check: CheckSSMS21; Flags: ignoreversion
-Source: "generated\AkmlSql.Ssms21\extension.vsixmanifest"; DestDir: "{code:GetSSMS21ExtDir}"; DestName: "extension.vsixmanifest"; Check: CheckSSMS21; Flags: ignoreversion
-
-; SSMS 22 (x64) extension files
+; SSMS 22 (x64) extension files — all DLLs from build output plus pkgdef and manifest
 Source: "..\AkmlSql.Ssms22\bin\Release\net472\*.dll"; DestDir: "{code:GetSSMS22ExtDir}"; Check: CheckSSMS22; Flags: ignoreversion
 Source: "..\AkmlSql.Ssms22\AkmlSql.Ssms22.pkgdef"; DestDir: "{code:GetSSMS22ExtDir}"; Check: CheckSSMS22; Flags: ignoreversion
 Source: "generated\AkmlSql.Ssms22\extension.vsixmanifest"; DestDir: "{code:GetSSMS22ExtDir}"; DestName: "extension.vsixmanifest"; Check: CheckSSMS22; Flags: ignoreversion
-
-; VS 2019 (x86) extension files
-Source: "..\AkmlSql.VS2019\bin\Release\net472\*.dll"; DestDir: "{code:GetVS2019ExtDir}"; Check: CheckVS2019; Flags: ignoreversion
-Source: "..\AkmlSql.VS2019\AkmlSql.VS2019.pkgdef"; DestDir: "{code:GetVS2019ExtDir}"; Check: CheckVS2019; Flags: ignoreversion
-Source: "generated\AkmlSql.VS2019\extension.vsixmanifest"; DestDir: "{code:GetVS2019ExtDir}"; DestName: "extension.vsixmanifest"; Check: CheckVS2019; Flags: ignoreversion
-
-; VS 2022 (x64) extension files
-Source: "..\AkmlSql.VS2022\bin\Release\net472\*.dll"; DestDir: "{code:GetVS2022ExtDir}"; Check: CheckVS2022; Flags: ignoreversion
-Source: "..\AkmlSql.VS2022\AkmlSql.VS2022.pkgdef"; DestDir: "{code:GetVS2022ExtDir}"; Check: CheckVS2022; Flags: ignoreversion
-Source: "generated\AkmlSql.VS2022\extension.vsixmanifest"; DestDir: "{code:GetVS2022ExtDir}"; DestName: "extension.vsixmanifest"; Check: CheckVS2022; Flags: ignoreversion
 
 ; VS 2026 (x64) extension files
 Source: "..\AkmlSql.VS2026\bin\Release\net472\*.dll"; DestDir: "{code:GetVS2026ExtDir}"; Check: CheckVS2026; Flags: ignoreversion
@@ -184,11 +163,7 @@ Name: "importsqlprompt"; Description: "Import formatting styles from &SQL Prompt
 
 [UninstallDelete]
 ; Clean up extension directories for selected targets only
-Type: filesandordirs; Name: "{code:GetSSMS20ExtDir}"; Check: CheckSSMS20
-Type: filesandordirs; Name: "{code:GetSSMS21ExtDir}"; Check: CheckSSMS21
 Type: filesandordirs; Name: "{code:GetSSMS22ExtDir}"; Check: CheckSSMS22
-Type: filesandordirs; Name: "{code:GetVS2019ExtDir}"; Check: CheckVS2019
-Type: filesandordirs; Name: "{code:GetVS2022ExtDir}"; Check: CheckVS2022
 Type: filesandordirs; Name: "{code:GetVS2026ExtDir}"; Check: CheckVS2026
 
 #include "environment-scanner.iss"

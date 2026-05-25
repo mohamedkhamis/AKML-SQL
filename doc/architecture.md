@@ -4,7 +4,7 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│  HOST IDEs  (SSMS 20/21/22 · VS 2019/2022/2026)                        │
+│  HOST IDEs  (SSMS 22 · VS 2026)                                        │
 │                                                                          │
 │  ┌──────────────────────────────────────────────────────────────────┐   │
 │  │  Shell Extension  (.NET Framework 4.7.2 VSIX)                    │   │
@@ -18,12 +18,8 @@
 │  │  ├── Update/          Update launcher & result reader             │   │
 │  │  └── Ipc/             PipeRpcClient + EngineProcessManager        │   │
 │  │                                                                  │   │
-│  │  Compiled six times against different VS SDK versions:           │   │
-│  │    AkmlSql.Ssms20   (VS SDK 15.9.3, x86)                        │   │
-│  │    AkmlSql.Ssms21   (VS SDK 17.14, x64)                         │   │
+│  │  Compiled twice against each host's VS SDK:                      │   │
 │  │    AkmlSql.Ssms22   (VS SDK 17.14, x64)                         │   │
-│  │    AkmlSql.VS2019   (VS SDK 16.0, x86)                          │   │
-│  │    AkmlSql.VS2022   (VS SDK 17.14, x64)                         │   │
 │  │    AkmlSql.VS2026   (VS SDK 17.14, x64)                         │   │
 │  └──────────────────────────────────────────────────────────────────┘   │
 │                │ Named Pipe (owner-SID ACL, MessagePack frames)          │
@@ -366,7 +362,7 @@ Three helpers extracted during M0 stay extracted:
 
 ### Existing IDE-plugin path is byte-for-byte compatible
 
-The shell extensions (SSMS 20/21/22, VS 2019/22/26) send the same MessagePack frames over the same named pipe with the same ACL. No shell code was modified. The frame format `[length][CRC][MessagePack(RpcMessage)]` is unchanged.
+The shell extensions (SSMS 22, VS 2026) send the same MessagePack frames over the same named pipe with the same ACL. No shell code was modified. The frame format `[length][CRC][MessagePack(RpcMessage)]` is unchanged.
 
 > **M0 closure (spec 022, 2026-05-20).** The four M0 PRD success metrics deferred when M0 merged (PR #236) — `NamedPipeTransport` ≤ 150 LOC, the `_cachedSettings` field moved onto `RpcContext`, `AiHandlerBase` + 7 per-message subclasses, and the perf-regression gate at 5 % — all landed via spec 022. See `specs/022-m0-engine-closure/` and the closure plan `docs/superpowers/plans/2026-05-19-m0-engine-transport-closure.md`.
 

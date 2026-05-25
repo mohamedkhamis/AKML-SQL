@@ -1,6 +1,6 @@
 # AKML SQL
 
-AI-powered SQL development assistance for SQL Server Management Studio and Visual Studio. AKML SQL replicates and extends the Redgate SQL Prompt feature set, runs across 6 host targets (SSMS 20 / 21 / 22, VS 2019 / 22 / 26), and ships a self-contained `.NET 10` engine for IntelliSense, formatting, refactoring, and static analysis.
+AI-powered SQL development assistance for SQL Server Management Studio and Visual Studio. AKML SQL replicates and extends the Redgate SQL Prompt feature set, runs in SSMS 22 and Visual Studio 2026, and ships a self-contained `.NET 10` engine for IntelliSense, formatting, refactoring, and static analysis.
 
 **Author**: Mohamed Khamis · **License**: MIT · **Version**: 1.0.0
 
@@ -30,12 +30,8 @@ src/
   AkmlSql.Engine/                      # Out-of-process IntelliSense / format / analysis engine (.NET 10, win-x64, trimmed)
   AkmlSql.Formatting/                  # Formatter pipeline + profile system (.NET 10)
   AkmlSql.Analyzer/                    # CLI SQL static analyzer (.NET 10)
-  AkmlSql.Shell.Shared/                # Shared project (.projitems) for all 6 shell extensions
-  AkmlSql.Ssms20/                      # SSMS 20 extension (net472, x86, VS SDK 15.9.3)
-  AkmlSql.Ssms21/                      # SSMS 21 extension (net472, x64, VS SDK 17.14.x)
+  AkmlSql.Shell.Shared/                # Shared project (.projitems) for the shell extensions
   AkmlSql.Ssms22/                      # SSMS 22 extension (net472, x64, VS SDK 17.14.x)
-  AkmlSql.VS2019/                      # VS 2019 extension (net472, x86, VS SDK 16.0.208)
-  AkmlSql.VS2022/                      # VS 2022 extension (net472, x64, VS SDK 17.14.x)
   AkmlSql.VS2026/                      # VS 2026 extension (net472, x64, VS SDK 17.14.x)
   AkmlSql.Updater/                     # Self-contained updater (.NET 10, win-x64, trimmed)
   AkmlSql.Installer/                   # Inno Setup 7 installer scripts
