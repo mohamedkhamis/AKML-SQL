@@ -378,17 +378,36 @@ end;
 
 // --- Silent Mode Validation ---
 
-function InitializeSetup: Boolean;
+// Returns True if the named command-line param was passed either as a
+// flag (/Name) or as a key=value (/Name=anything). {param:Name|} on its
+// own returns '' for the flag-only form, which would reject the documented
+// `/VERYSILENT /ACCEPTEULA` invocation.
+function CmdLineParamExists(const Name: String): Boolean;
 var
-  AcceptEula: String;
+  I: Integer;
+  Param, Target: String;
+begin
+  Result := False;
+  Target := '/' + UpperCase(Name);
+  for I := 1 to ParamCount do
+  begin
+    Param := UpperCase(ParamStr(I));
+    if (Param = Target) or (Pos(Target + '=', Param) = 1) then
+    begin
+      Result := True;
+      Exit;
+    end;
+  end;
+end;
+
+function InitializeSetup: Boolean;
 begin
   Result := True;
 
-  // Check /VERYSILENT requires /ACCEPTEULA
+  // Check /VERYSILENT requires /ACCEPTEULA (flag or key=value form)
   if WizardSilent then
   begin
-    AcceptEula := ExpandConstant('{param:ACCEPTEULA|}');
-    if AcceptEula = '' then
+    if not CmdLineParamExists('ACCEPTEULA') then
     begin
       Log('ERROR: /VERYSILENT requires /ACCEPTEULA. Aborting.');
       MsgBox('/VERYSILENT requires /ACCEPTEULA to be specified.', mbError, MB_OK);
