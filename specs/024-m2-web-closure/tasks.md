@@ -75,10 +75,10 @@ description: "Task list for M2 — Web Edition Formatter & Analyser MVP Closure"
 
 **Independent Test**: `dotnet test tests/AkmlSql.Web.Tests/AkmlSql.Web.Tests.csproj --filter "FullyQualifiedName~FormatterServiceTests"` exits 0; every (script × profile) pair is either byte-identical to the baseline or recorded as `ACCEPTED_WITH_REASON` in `ParityDispositionsRegistry.cs` with a non-null `reasonLink`.
 
-- [ ] T019 [US2] Extend `tests/AkmlSql.Web.Tests/Format/FormatterServiceTests.cs` with a new `[Theory]` driver `Formatter_MatchesIdeBaseline_AcrossCorpusAndProfiles` that iterates `ParityCorpusLoader.Pairs()` and asserts `FormatterService.Format(script, profile).FormattedText == baseline.expected.sql` byte-exact for each pair (after the LF normalisation rule from `contracts/parity-baseline-format.md`); on mismatch, emit a `ParityTestRecord` per `data-model.md` Entity 3 with a unified diff and either fail the test or skip via `ParityDispositionsRegistry` lookup
-- [ ] T020 [US2] Run the new theory: `dotnet test tests/AkmlSql.Web.Tests/AkmlSql.Web.Tests.csproj --filter "FullyQualifiedName~FormatterServiceTests"`; collect the divergences list
+- [X] T019 [US2] Extend `tests/AkmlSql.Web.Tests/Format/FormatterServiceTests.cs` with a new `[Theory]` driver `Formatter_MatchesIdeBaseline_AcrossCorpusAndProfiles` that iterates `ParityCorpusLoader.Pairs()` and asserts `FormatterService.Format(script, profile).FormattedText == baseline.expected.sql` byte-exact for each pair (after the LF normalisation rule from `contracts/parity-baseline-format.md`); on mismatch, emit a `ParityTestRecord` per `data-model.md` Entity 3 with a unified diff and either fail the test or skip via `ParityDispositionsRegistry` lookup
+- [X] T020 [US2] Run the new theory: `dotnet test tests/AkmlSql.Web.Tests/AkmlSql.Web.Tests.csproj --filter "FullyQualifiedName~FormatterServiceTests"`; collect the divergences list
 - [ ] T021 [US2] Triage every divergence — for **true regressions**, file a follow-up in `doc/progress.md` and either fix the formatter or accept the divergence as a known limitation; for **already-documented limitations**, add an entry to `ParityDispositionsRegistry.cs` with `reasonLink` pointing at the corresponding `specs/020-sqlprompt-visual-parity/tasks.md` task ID
-- [ ] T022 [US2] Re-run T020 until green; commit the updated `ParityDispositionsRegistry.cs` alongside the test changes
+- [X] T022 [US2] Re-run T020 until green; commit the updated `ParityDispositionsRegistry.cs` alongside the test changes
 
 **Checkpoint**: Formatter parity green over ≥ 20 scripts × 3 profiles. Spec 021 T041 can be flipped (deferred to Polish).
 
@@ -90,9 +90,9 @@ description: "Task list for M2 — Web Edition Formatter & Analyser MVP Closure"
 
 **Independent Test**: `dotnet test ... --filter "FullyQualifiedName~AnalyserServiceTests"` exits 0; every script's web edition findings list (sorted by `(line, column, ruleId)`) equals the baseline JSON's `findings` array along all five attributes, or every divergence has an `ACCEPTED_WITH_REASON` entry in the registry.
 
-- [ ] T023 [US3] Extend `tests/AkmlSql.Web.Tests/Analyse/AnalyserServiceTests.cs` with `Analyser_MatchesIdeBaseline_AcrossCorpus` `[Theory]` that iterates the corpus, runs `AnalyserService.AnalyseAsync(script)`, normalises the output to the same sort order as `baseline.expected.json.findings`, and asserts equality across `RuleId / Severity / Message / Line / Column`; emit `ParityTestRecord`s on mismatch with the offending finding object embedded
-- [ ] T024 [US3] Run the new theory: `dotnet test ... --filter "FullyQualifiedName~AnalyserServiceTests"`; triage divergences via `ParityDispositionsRegistry` (same registry as US2; analyser entries use the optional `ruleId` field of the registry key)
-- [ ] T025 [US3] Re-run T024 until green; commit registry updates
+- [X] T023 [US3] Extend `tests/AkmlSql.Web.Tests/Analyse/AnalyserServiceTests.cs` with `Analyser_MatchesIdeBaseline_AcrossCorpus` `[Theory]` that iterates the corpus, runs `AnalyserService.AnalyseAsync(script)`, normalises the output to the same sort order as `baseline.expected.json.findings`, and asserts equality across `RuleId / Severity / Message / Line / Column`; emit `ParityTestRecord`s on mismatch with the offending finding object embedded
+- [X] T024 [US3] Run the new theory: `dotnet test ... --filter "FullyQualifiedName~AnalyserServiceTests"`; triage divergences via `ParityDispositionsRegistry` (same registry as US2; analyser entries use the optional `ruleId` field of the registry key)
+- [X] T025 [US3] Re-run T024 until green; commit registry updates
 
 **Checkpoint**: Analyser parity green. Spec 021 T047 can be flipped (Polish).
 
@@ -122,11 +122,11 @@ description: "Task list for M2 — Web Edition Formatter & Analyser MVP Closure"
 
 **Independent Test**: Opening `M2-BUNDLE-SIZE.md` shows every required section per `contracts/bundle-measurement-protocol.md`; the verdict line is `WITHIN_TARGET` (with headroom) or `OVER_TARGET` (with applied lazy-loading plan).
 
-- [ ] T033 [US5] Verify host environment per `contracts/bundle-measurement-protocol.md` Step 1 — capture OS version, `dotnet --version` output, `dotnet workload list` excerpt (must show `wasm-tools` or `wasm-tools-net10`), and `git rev-parse HEAD`; record into the `M2-BUNDLE-SIZE.md` header + §1
-- [ ] T034 [US5] Run the Release publish: `dotnet publish src/AkmlSql.Web/AkmlSql.Web.csproj -c Release -nologo`; record the exact command and exit code 0 into `M2-BUNDLE-SIZE.md` §2; abort the audit if exit code != 0
-- [ ] T035 [US5] Run the Brotli-active verification PowerShell from `contracts/bundle-measurement-protocol.md` Step 3 against `src/AkmlSql.Web/bin/Release/net10.0/publish/wwwroot/_framework`; record `Brotli confirmed active: yes` in §3 only if the script exits cleanly; abort the audit otherwise
-- [ ] T036 [US5] Sum the compressed total: `(Get-ChildItem $framework -Recurse -Filter *.br | Measure-Object -Property Length -Sum).Sum / 1MB`; record the total + a sorted per-asset breakdown (descending by size) + top-5 assets called out in `M2-BUNDLE-SIZE.md` §3 / §4
-- [ ] T037 [US5] Write the verdict line in §5: compare the compressed total against the M1 decision document's target (`docs/m1-wasm-decision.md`); if `WITHIN_TARGET`, record headroom in MB and next-checkpoint trigger ("M3 must re-measure before merge"); if `OVER_TARGET`, identify the largest asset and write a lazy-loading plan
+- [X] T033 [US5] Verify host environment per `contracts/bundle-measurement-protocol.md` Step 1 — capture OS version, `dotnet --version` output, `dotnet workload list` excerpt (must show `wasm-tools` or `wasm-tools-net10`), and `git rev-parse HEAD`; record into the `M2-BUNDLE-SIZE.md` header + §1
+- [X] T034 [US5] Run the Release publish: `dotnet publish src/AkmlSql.Web/AkmlSql.Web.csproj -c Release -nologo`; record the exact command and exit code 0 into `M2-BUNDLE-SIZE.md` §2; abort the audit if exit code != 0
+- [X] T035 [US5] Run the Brotli-active verification PowerShell from `contracts/bundle-measurement-protocol.md` Step 3 against `src/AkmlSql.Web/bin/Release/net10.0/publish/wwwroot/_framework`; record `Brotli confirmed active: yes` in §3 only if the script exits cleanly; abort the audit otherwise
+- [X] T036 [US5] Sum the compressed total: `(Get-ChildItem $framework -Recurse -Filter *.br | Measure-Object -Property Length -Sum).Sum / 1MB`; record the total + a sorted per-asset breakdown (descending by size) + top-5 assets called out in `M2-BUNDLE-SIZE.md` §3 / §4
+- [X] T037 [US5] Write the verdict line in §5: compare the compressed total against the M1 decision document's target (`docs/m1-wasm-decision.md`); if `WITHIN_TARGET`, record headroom in MB and next-checkpoint trigger ("M3 must re-measure before merge"); if `OVER_TARGET`, identify the largest asset and write a lazy-loading plan
 - [ ] T038 [US5] If T037's verdict is `OVER_TARGET`: apply the lazy-loading plan to `src/AkmlSql.Web/` (move the offending asset to lazy-load), re-run T034 → T036 → T037 until the verdict is `WITHIN_TARGET`; only then commit the audit document
 
 **Checkpoint**: `M2-BUNDLE-SIZE.md` exists with a green verdict; spec 021 T054 can be flipped (Polish).
@@ -138,12 +138,12 @@ description: "Task list for M2 — Web Edition Formatter & Analyser MVP Closure"
 **Purpose**: Flip the spec 021 deferred-task checkboxes from `[ ]` to `[X]`, remove their deferral notes, and run the final closure verification.
 
 - [ ] T039 [P] In `specs/021-web-edition/tasks.md`, flip T036 from `[ ]` to `[X]` and replace the deferral note with a one-line "Closed by spec 024 — see `specs/024-m2-web-closure/` and `specs/021-web-edition/M2-THEME-PARITY-AUDIT.md`"
-- [ ] T040 [P] Same flip for T041 in `specs/021-web-edition/tasks.md` — note points at the extended `tests/AkmlSql.Web.Tests/Format/FormatterServiceTests.cs` + the populated `tests/format-parity/baselines/`
-- [ ] T041 [P] Same flip for T047 in `specs/021-web-edition/tasks.md` — note points at the extended `tests/AkmlSql.Web.Tests/Analyse/AnalyserServiceTests.cs`
+- [X] T040 [P] Same flip for T041 in `specs/021-web-edition/tasks.md` — note points at the extended `tests/AkmlSql.Web.Tests/Format/FormatterServiceTests.cs` + the populated `tests/format-parity/baselines/`
+- [X] T041 [P] Same flip for T047 in `specs/021-web-edition/tasks.md` — note points at the extended `tests/AkmlSql.Web.Tests/Analyse/AnalyserServiceTests.cs`
 - [ ] T042 [P] Same flip for T053 in `specs/021-web-edition/tasks.md` — note points at `tests/AkmlSql.Web.E2E.Tests/UserStory1Tests.cs`
-- [ ] T043 [P] Same flip for T054 in `specs/021-web-edition/tasks.md` — note points at `specs/021-web-edition/M2-BUNDLE-SIZE.md`
+- [X] T043 [P] Same flip for T054 in `specs/021-web-edition/tasks.md` — note points at `specs/021-web-edition/M2-BUNDLE-SIZE.md`
 - [ ] T044 Run the closure verification block from `specs/024-m2-web-closure/quickstart.md` "Closure verification (end-to-end)" — confirm all five `[ ] → [X]` flips, confirm the four expected artefacts exist, run `dotnet test` over Formatter + Analyser + Playwright filters and observe green
-- [ ] T045 [P] Append a Spec 024 entry to `doc/progress.md` per the existing per-spec section pattern — record the 5 user stories, the 5 closed deferred tasks, the bundle measurement, the headline-flow timing, and any `ACCEPTED_WITH_REASON` divergences with their `reasonLink`s
+- [X] T045 [P] Append a Spec 024 entry to `doc/progress.md` per the existing per-spec section pattern — record the 5 user stories, the 5 closed deferred tasks, the bundle measurement, the headline-flow timing, and any `ACCEPTED_WITH_REASON` divergences with their `reasonLink`s
 
 **Checkpoint**: M2 milestone closed. PR-ready. All spec 021 Phase 3 deferred tasks marked `[X]`.
 

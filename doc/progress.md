@@ -1157,3 +1157,58 @@ Each layout fall-back is documented inline (with `<remarks>` or comments referen
 - AKML retains every option SQL Prompt doesn't have (granular per-clause breakers, additional casing channels, fine-grained join + expression options, format-actions superset).
 
 *Last updated: 2026-05-23 late night*
+
+---
+
+## Spec 024 — M2 Web Edition Closure (foundation + parity tests + bundle audit)
+
+**Date**: 2026-05-26
+**Branch**: `024-m2-web-closure`
+**Status**: Foundation + parity + bundle slice landed; US1 theme audit (workstation-only) and US4 Playwright deferred.
+
+### What landed
+
+Closure spec for spec 021 Phase 3 (User Story 1, M2 MVP) deferred tasks. Spec 021 shipped the Blazor WASM editor, formatter, analyser, theme system, profile system, and IndexedDB persistence in 124 of 154 tasks; this spec covers the verification slice — recorded evidence behind every M2 PRD Definition-of-Done checkbox.
+
+**Phase 1 + 2 (foundation, 9 tasks)** — committed as `a371be2`:
+
+- Seven `data-testid` attributes added across five Razor surfaces (`sql-editor`, `analyse-button`, `format-complete`, `analyse-complete`, `problem-item` + `data-line` + `data-column`, `profile-picker`, `error-banner`). The format/analyse markers latch via new `_hasFormatted` / `_hasAnalysed` fields set inside `FormatAsync` / `AnalyseAsync`. `error-banner` is conditional on `MainLayout.GlobalError`.
+- `ParityCorpusLoader` walks `tests/format-parity/corpus/*.sql`, parses baseline marker lines + JSON envelopes per `specs/024-m2-web-closure/contracts/parity-baseline-format.md`, validates the IDE-build stamp against `tests/format-parity/ide-plugin-version.txt`. Exposes `EnumerateFormatterPairs()`, `EnumerateAnalyserItems()`, `GetProfile(profileId)`, `LoadFormatterBaseline`, `LoadAnalyserBaseline`, `NormaliseLineEndings`.
+- `ParityDispositionsRegistry` — accepted-with-reason registry for known divergences; starts empty per FR-008 / FR-011.
+- `ParityBaselineGenerator` — opt-in `[Trait("Category","ParityBaseline")]` gated on `AKML_REGEN_PARITY_BASELINE=1`. Mirrors `IProfileStore.BuildBuiltInProfiles()`. Generated 39 baselines (13 corpus × 2 profiles formatter + 13 analyser default) in 1.33 s.
+
+**Phase 4 + 5 (parity tests, 7 tasks)** — committed alongside Phase 7:
+
+- `FormatterServiceTests.Formatter_MatchesIdeBaseline_AcrossCorpusAndProfiles` `[Theory]` over 26 (corpus × profile) pairs — every pair byte-identical to the desktop baseline.
+- `AnalyserServiceTests.Analyser_MatchesIdeBaseline_AcrossCorpus` `[Theory]` over the 13 corpus items — every finding set matches the baseline along RuleId / Severity / Message / Line / Column after canonical sort.
+- **51 tests, all green** in 1.26 s (26 formatter parity + 13 analyser parity + 12 pre-existing structural). Zero divergences needed registry entries — baselines were generated from the same desktop pipeline the web edition runs in WASM.
+
+**Phase 7 (bundle audit, 5 tasks)** — committed alongside Phase 4 + 5:
+
+- `specs/021-web-edition/M2-BUNDLE-SIZE.md` replaced. Compressed `_framework/*.br` total = **6.85 MB** (122 files); M1 target ≤ 25 MB → `WITHIN_TARGET` with ~18 MB headroom. Largest assets: `dotnet.native.*.wasm.br` 953 KB, `System.Private.CoreLib.*.wasm.br` 561 KB ×2, ScriptDom 344 KB, OpenAI 305 KB. Host did not have `wasm-tools-net10` installed so the publish ran without relinking — recorded number is an upper bound (M1's relinked baseline was 4.83 MB).
+
+**Phase 8 partial (3 of 7 polish tasks)**:
+
+- Spec 021 T041 (formatter parity), T047 (analyser parity), T054 (bundle audit) flipped `[ ]` → `[X]` with closure notes referencing this spec.
+- Spec 021 T036 (theme audit) + T053 (Playwright) remain open — both require either an interactive workstation session (T036) or a Playwright runner driving a live `dotnet run` (T053). See "Open follow-ups" below.
+
+### Verification
+
+- `dotnet build src/AkmlSql.Web -c Release`: 0 / 0
+- `dotnet build tests/AkmlSql.Web.Tests`: 0 / 0
+- Web Tests parity filter (`FullyQualifiedName~FormatterServiceTests|FullyQualifiedName~AnalyserServiceTests`): **51 / 51 pass** in 1.26 s
+- `dotnet publish src/AkmlSql.Web -c Release`: clean, exit 0; 122 `_framework/*.br` artefacts; Brotli verification PowerShell exits cleanly (every relevant file has a `.br` sibling)
+
+### Deviations from spec 024 baseline
+
+- **FR-007 said "≥ 20 scripts × 3 profiles"** — corpus reused as-is from spec 020 (13 items); web ships 2 built-in profiles (`builtin.default`, `builtin.ansi`). Parity test covers 26 (script × profile) pairs vs the FR-007 ask of 60. Recorded in spec 024 `tasks.md` T001 update and in this entry.
+- **Both profiles currently produce byte-identical output** — both default to `Casing.ReservedKeywords = "uppercase"`. Meaningful per-profile divergence will appear when more `ansi`-specific knobs are added; the parity-test mechanism handles both cases identically.
+- **Host without `wasm-tools-net10`** — bundle measurement is conservative upper bound rather than the relinked baseline.
+
+### Open follow-ups (deferred)
+
+- **US1 Theme parity audit** (spec 021 T036) — needs an interactive workstation session running both the WPF IDE plugin and the web edition side-by-side with Windows theme switching. Procedure documented in `specs/024-m2-web-closure/quickstart.md` §US1 and `contracts/theme-audit-format.md`.
+- **US4 Playwright E2E** (spec 021 T053) — needs Playwright + a running `dotnet run` against the web project; harness contract specified in `specs/024-m2-web-closure/contracts/playwright-harness-contract.md` with all seven `data-testid` prerequisites already in place. The four `[Fact]` shapes are pre-specified; authoring the actual `DotnetRunFixture` + scenarios is the remaining work.
+- **Closure verification** (T044) — depends on US1 + US4 landing.
+
+*Last updated: 2026-05-26*

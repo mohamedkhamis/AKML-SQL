@@ -1,4 +1,5 @@
 using System.Text.Json;
+using AkmlSql.Formatting.Profiles;
 
 namespace AkmlSql.Web.Tests.Parity;
 
@@ -17,6 +18,41 @@ public static class ParityCorpusLoader
 {
     /// <summary>Profile ids the parity tests cover. Matches IProfileStore's built-ins.</summary>
     public static readonly string[] ProfileIds = { "default", "ansi" };
+
+    /// <summary>
+    /// Constructs the FormattingProfile the web edition would resolve for the given id.
+    /// Mirrors IProfileStore.BuildBuiltInProfiles() so the parity test, the baseline
+    /// generator, and the runtime resolve the same profile object.
+    /// </summary>
+    public static FormattingProfile GetProfile(string profileId)
+    {
+        switch (profileId)
+        {
+            case "default":
+            {
+                var p = new FormattingProfile();
+                p.Metadata.Name = "AKML Default";
+                return p;
+            }
+            case "ansi":
+            {
+                var p = new FormattingProfile();
+                p.Metadata.Name = "ANSI-compact";
+                p.Casing.ReservedKeywords = "uppercase";
+                return p;
+            }
+            default:
+                throw new ArgumentException($"Unknown profile id '{profileId}'. Expected one of: {string.Join(", ", ProfileIds)}", nameof(profileId));
+        }
+    }
+
+    /// <summary>Normalise text to LF endings + trailing newline per parity-baseline-format.md.</summary>
+    public static string NormaliseLineEndings(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return string.Empty;
+        var lf = text.Replace("\r\n", "\n").Replace('\r', '\n');
+        return lf.EndsWith('\n') ? lf : lf + "\n";
+    }
 
     /// <summary>The IDE-plugin build version every baseline file must match.</summary>
     public static string CurrentIdePluginVersion => _lazyVersion.Value;

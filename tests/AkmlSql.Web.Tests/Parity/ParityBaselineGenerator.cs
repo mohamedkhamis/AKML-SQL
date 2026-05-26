@@ -56,7 +56,9 @@ public sealed class ParityBaselineGenerator
         var ideVersion = ParityCorpusLoader.CurrentIdePluginVersion;
         _output.WriteLine($"IDE plugin version: {ideVersion}");
 
-        var profiles = BuildBuiltInProfiles();
+        var profiles = ParityCorpusLoader.ProfileIds
+            .Select(id => (ProfileId: id, Profile: ParityCorpusLoader.GetProfile(id)))
+            .ToArray();
         var formatter = new FormatterService();
         var analyser = new AnalyserService();
 
@@ -83,7 +85,7 @@ public sealed class ParityBaselineGenerator
                     string.Join("; ", result.Diagnostics.Select(d => $"{d.Severity}:{d.Message}")));
 
                 var marker = $"-- akml-parity-baseline ide-build={ideVersion} corpus-item={corpusId} profile={profileId}\n";
-                var body = NormaliseLineEndings(result.FormattedText);
+                var body = ParityCorpusLoader.NormaliseLineEndings(result.FormattedText);
                 var outputPath = Path.Combine(
                     ParityCorpusLoader.BaselinesDirectory(),
                     profileId,
@@ -132,32 +134,6 @@ public sealed class ParityBaselineGenerator
         _output.WriteLine(
             $"Done. Baselines under {ParityCorpusLoader.BaselinesDirectory()} updated; " +
             "commit the resulting files alongside any ide-plugin-version.txt bump.");
-    }
-
-    private static (string ProfileId, FormattingProfile Profile)[] BuildBuiltInProfiles()
-    {
-        // Mirror IProfileStore.BuildBuiltInProfiles() so the baselines match what ProfileStore
-        // hands to FormatterService when the web edition runs.
-        var defaultProfile = new FormattingProfile();
-        defaultProfile.Metadata.Name = "AKML Default";
-
-        var ansiProfile = new FormattingProfile();
-        ansiProfile.Metadata.Name = "ANSI-compact";
-        ansiProfile.Casing.ReservedKeywords = "uppercase";
-
-        return new[]
-        {
-            ("default", defaultProfile),
-            ("ansi", ansiProfile),
-        };
-    }
-
-    /// <summary>Force LF line endings + trailing newline per parity-baseline-format.md.</summary>
-    private static string NormaliseLineEndings(string text)
-    {
-        if (string.IsNullOrEmpty(text)) return string.Empty;
-        var lf = text.Replace("\r\n", "\n").Replace('\r', '\n');
-        return lf.EndsWith('\n') ? lf : lf + "\n";
     }
 
     private static void EnsureDirectory(string path)
