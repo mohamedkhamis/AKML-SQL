@@ -43,6 +43,6 @@ The five user stories map 1:1 to spec 021's five deferred Phase 3 tasks:
 |------------|---------------|--------------------------------------|
 | US1 (P1) — Theme parity audit | T036 | Needs interactive workstation session |
 | US2 (P2) — Formatter parity tests | T041 | Needs parity corpus from spec 020 |
-| US3 (P2) — Analyser parity tests | T047 | Needs IDE-plugin baseline |
+| US3 (P2) — Analyser parity tests | T047 | Needs desktop baseline |
 | US4 (P3) — Playwright US1 E2E | T053 | Needs Playwright + running `dotnet run` |
 | US5 (P4) — Bundle-size audit | T054 | Needs Release publish on Windows with Brotli |

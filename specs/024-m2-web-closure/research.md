@@ -28,9 +28,9 @@ This document records the five technical decisions the closure spec depends on. 
 
 ## Decision 2 — Parity-corpus baseline format
 
-**Decision**: For each script in `tests/format-parity/corpus/*.sql`, generate two siblings: `<script-id>.expected.sql` (the formatted IDE-plugin output) and `<script-id>.expected.json` (the IDE-plugin findings list, sorted by line/column). One pair per format profile; analyser baselines use the default profile only. Baselines live under `tests/format-parity/baselines/<profile>/`.
+**Decision**: For each script in `tests/format-parity/corpus/*.sql`, generate two siblings: `<script-id>.expected.sql` (the formatted output (same in-process pipeline as the web edition)) and `<script-id>.expected.json` (the analyser findings list (same in-process pipeline as the web edition), sorted by line/column). One pair per format profile; analyser baselines use the default profile only. Baselines live under `tests/format-parity/baselines/<profile>/`.
 
-Each baseline file embeds the IDE-plugin build version as a leading comment / JSON property so the parity test can refuse to compare against a mismatched build (Edge Case "IDE-plugin baseline drift").
+Each baseline file embeds the baseline revision as a leading comment / JSON property so the parity test can refuse to compare against a mismatched build (Edge Case "Baseline-revision drift").
 
 **Rationale**:
 
@@ -50,7 +50,7 @@ Each baseline file embeds the IDE-plugin build version as a leading comment / JS
 
 ## Decision 3 — Parity-baseline generator: opt-in xUnit `[Trait]`
 
-**Decision**: A new `ParityBaselineGenerator` test class under `tests/AkmlSql.Web.Tests/Parity/` carries `[Trait("Category", "ParityBaseline")]`, excluded from default `dotnet test` runs by the existing `--filter` convention. Running `dotnet test ... --filter "Category=ParityBaseline"` regenerates every baseline in place. The generator embeds the IDE-plugin build version into each emitted file.
+**Decision**: A new `ParityBaselineGenerator` test class under `tests/AkmlSql.Web.Tests/Parity/` carries `[Trait("Category", "ParityBaseline")]`, excluded from default `dotnet test` runs by the existing `--filter` convention. Running `dotnet test ... --filter "Category=ParityBaseline"` regenerates every baseline in place. The generator embeds the baseline revision into each emitted file.
 
 **Rationale**:
 

@@ -1,4 +1,4 @@
--- akml-parity-baseline ide-build=1.26.0526.0000 corpus-item=09-between-operators profile=ansi
+-- akml-parity-baseline revision=1.26.0526.0000 corpus-item=09-between-operators profile=ansi
 select
     orderid, total
 from orders

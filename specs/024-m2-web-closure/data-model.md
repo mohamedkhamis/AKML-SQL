@@ -39,7 +39,7 @@ Reused from `tests/format-parity/` (spec-020 corpus). For the closure, each item
 | `construct` | enum | `SELECT`, `Batch`, `StoredProcedure`, `CTE`, `WindowFunction`, `MERGE`, `DDL`, `CommentHeavy`, etc. |
 | `baselines.<profile>` | `BaselineFile` | One per supported profile (default / compact / expanded for FR-007) |
 
-Each `BaselineFile` carries an IDE-plugin build-version stamp (Decision 2 / Edge Case "IDE-plugin baseline drift") and:
+Each `BaselineFile` carries an baseline-revision stamp (Decision 2 / Edge Case "Baseline-revision drift") and:
 
 - For formatter baselines (`*.expected.sql`): the formatted SQL, byte-exact.
 - For analyser baselines (`*.expected.json`): a JSON array of findings sorted by `(line, column, ruleId)`. Each finding has `RuleId`, `Severity`, `Message`, `Line`, `Column`.

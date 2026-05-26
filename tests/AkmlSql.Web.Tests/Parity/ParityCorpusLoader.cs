@@ -6,8 +6,14 @@ namespace AkmlSql.Web.Tests.Parity;
 /// <summary>
 /// Spec 024 T005 — walks <c>tests/format-parity/corpus/*.sql</c>, reads the matching
 /// <c>baselines/&lt;profile&gt;/&lt;id&gt;.expected.sql</c> + <c>baselines/default/&lt;id&gt;.expected.json</c>
-/// produced by <see cref="ParityBaselineGenerator"/>, and validates the IDE-plugin
-/// build version stamped in each baseline against <c>tests/format-parity/ide-plugin-version.txt</c>.
+/// produced by <see cref="ParityBaselineGenerator"/>, and validates the baseline-revision
+/// stamp in each baseline against <c>tests/format-parity/baseline-revision.txt</c>.
+///
+/// The stamp catches drift between the on-disk baseline and the current desktop pipeline —
+/// i.e. <em>WASM-runtime-vs-desktop</em> divergence. It is NOT a cross-product IDE-plugin
+/// version (the IDE plugin's formatter / analyser output never enters this loop — the
+/// baseline generator and the parity test both run the same <see cref="AkmlSql.Formatting.Pipeline.FormatterPipeline"/>
+/// and <see cref="AkmlSql.Analysis.AnalysisEngine"/> code paths the web edition runs).
 ///
 /// The web edition ships TWO built-in profiles (<c>builtin.default</c> + <c>builtin.ansi</c>);
 /// the loader's <see cref="ProfileIds"/> reflects that. FR-007's "≥ 3 profiles" is therefore
@@ -54,19 +60,21 @@ public static class ParityCorpusLoader
         return lf.EndsWith('\n') ? lf : lf + "\n";
     }
 
-    /// <summary>The IDE-plugin build version every baseline file must match.</summary>
-    public static string CurrentIdePluginVersion => _lazyVersion.Value;
+    /// <summary>The baseline revision every baseline file must match. Stored in
+    /// <c>tests/format-parity/baseline-revision.txt</c>; bumped each time the
+    /// baseline generator runs against a meaningful pipeline change.</summary>
+    public static string CurrentBaselineRevision => _lazyRevision.Value;
 
-    private static readonly Lazy<string> _lazyVersion = new(() =>
+    private static readonly Lazy<string> _lazyRevision = new(() =>
     {
-        var versionFile = Path.Combine(RepoRoot(), "tests", "format-parity", "ide-plugin-version.txt");
-        if (!File.Exists(versionFile))
+        var revisionFile = Path.Combine(RepoRoot(), "tests", "format-parity", "baseline-revision.txt");
+        if (!File.Exists(revisionFile))
         {
             throw new FileNotFoundException(
-                $"IDE-plugin version file missing: {versionFile}. " +
-                "Run the ParityBaselineGenerator with AKML_REGEN_PARITY_BASELINE=1 to (re)produce baselines + this version stamp.");
+                $"Baseline-revision file missing: {revisionFile}. " +
+                "Run the ParityBaselineGenerator with AKML_REGEN_PARITY_BASELINE=1 to (re)produce baselines + this revision stamp.");
         }
-        return File.ReadAllText(versionFile).Trim();
+        return File.ReadAllText(revisionFile).Trim();
     });
 
     /// <summary>Enumerates every corpus item × profile pair the parity tests should cover.</summary>
@@ -113,7 +121,7 @@ public static class ParityCorpusLoader
 
     /// <summary>
     /// Loads a formatter baseline: strips the marker line per
-    /// <c>contracts/parity-baseline-format.md</c>, validates the IDE-build stamp, and returns the formatted body.
+    /// <c>contracts/parity-baseline-format.md</c>, validates the baseline-revision stamp, and returns the formatted body.
     /// Throws if the file is missing or the stamp does not match.
     /// </summary>
     public static string LoadFormatterBaseline(string corpusId, string profileId)
@@ -134,7 +142,7 @@ public static class ParityCorpusLoader
         }
         var markerLine = raw[..firstNewline].TrimEnd('\r');
 
-        var expectedMarker = $"-- akml-parity-baseline ide-build={CurrentIdePluginVersion} corpus-item={corpusId} profile={profileId}";
+        var expectedMarker = $"-- akml-parity-baseline revision={CurrentBaselineRevision} corpus-item={corpusId} profile={profileId}";
         if (markerLine != expectedMarker)
         {
             throw new InvalidDataException(
@@ -149,7 +157,7 @@ public static class ParityCorpusLoader
 
     /// <summary>
     /// Loads an analyser baseline: parses the <c>akmlParityBaseline</c> + <c>findings</c> envelope per
-    /// <c>contracts/parity-baseline-format.md</c>, validates the IDE-build stamp, and returns the sorted findings.
+    /// <c>contracts/parity-baseline-format.md</c>, validates the baseline-revision stamp, and returns the sorted findings.
     /// </summary>
     public static ParityFinding[] LoadAnalyserBaseline(string corpusId)
     {
@@ -166,12 +174,12 @@ public static class ParityCorpusLoader
             new JsonSerializerOptions(JsonSerializerDefaults.Web))
             ?? throw new InvalidDataException($"Baseline {path} did not deserialise");
 
-        if (doc.AkmlParityBaseline is null || doc.AkmlParityBaseline.IdeBuild != CurrentIdePluginVersion)
+        if (doc.AkmlParityBaseline is null || doc.AkmlParityBaseline.Revision != CurrentBaselineRevision)
         {
             throw new InvalidDataException(
-                $"Baseline IDE-build mismatch in {path}.\n" +
-                $"  Expected: {CurrentIdePluginVersion}\n" +
-                $"  Actual:   {doc.AkmlParityBaseline?.IdeBuild ?? "(missing)"}\n" +
+                $"Baseline-revision mismatch in {path}.\n" +
+                $"  Expected: {CurrentBaselineRevision}\n" +
+                $"  Actual:   {doc.AkmlParityBaseline?.Revision ?? "(missing)"}\n" +
                 "Regenerate baselines: AKML_REGEN_PARITY_BASELINE=1 dotnet test --filter \"Category=ParityBaseline\"");
         }
 
@@ -207,7 +215,7 @@ public static class ParityCorpusLoader
 
     private sealed class ParityBaselineHeader
     {
-        public string IdeBuild { get; set; } = string.Empty;
+        public string Revision { get; set; } = string.Empty;
         public string CorpusItem { get; set; } = string.Empty;
         public string Profile { get; set; } = string.Empty;
     }

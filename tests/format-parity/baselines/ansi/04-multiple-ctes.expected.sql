@@ -1,4 +1,4 @@
--- akml-parity-baseline ide-build=1.26.0526.0000 corpus-item=04-multiple-ctes profile=ansi
+-- akml-parity-baseline revision=1.26.0526.0000 corpus-item=04-multiple-ctes profile=ansi
 with active_customers as (
     select customerid, customername from customers where status = 'Active'
 ),

@@ -1,4 +1,4 @@
--- akml-parity-baseline ide-build=1.26.0526.0000 corpus-item=03-cte-with-columns profile=ansi
+-- akml-parity-baseline revision=1.26.0526.0000 corpus-item=03-cte-with-columns profile=ansi
 with monthly_sales (year_num, month_num, region, total_amount) as (
     select year(orderdate), month(orderdate), region, sum(amount)
     from orders

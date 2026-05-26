@@ -1,6 +1,6 @@
 {
   "akmlParityBaseline": {
-    "ideBuild": "1.26.0526.0000",
+    "revision": "1.26.0526.0000",
     "corpusItem": "11-stored-procedure",
     "profile": "default"
   },

@@ -65,9 +65,9 @@ A maintainer can run the web edition's analyser and the IDE plugin's analyser ag
 
 **Acceptance Scenarios**:
 
-1. **Given** the parity corpus is available with IDE-plugin baseline findings already recorded, **When** the web edition's analyser runs the corpus, **Then** every finding is identical to the IDE baseline along all five attributes (rule id, severity, message, line, column).
+1. **Given** the parity corpus is available with desktop baseline findings already recorded, **When** the web edition's analyser runs the corpus, **Then** every finding is identical to the IDE baseline along all five attributes (rule id, severity, message, line, column).
 2. **Given** a finding diverges in any attribute, **When** the test records the divergence, **Then** the script id, the rule id, both finding objects, and a disposition (resolved / accepted-with-reason) are captured.
-3. **Given** the IDE-plugin baseline does not yet exist, **When** the corpus is loaded, **Then** the test produces an actionable error pointing at the baseline-generator procedure rather than silently passing.
+3. **Given** the desktop baseline does not yet exist, **When** the corpus is loaded, **Then** the test produces an actionable error pointing at the baseline-generator procedure rather than silently passing.
 4. **Given** the analyser parity test is part of the standard `dotnet test` run, **When** a regression is introduced in analysis logic or rule discovery, **Then** the test fails on CI with the offending script + rule named.
 
 ---
@@ -109,7 +109,7 @@ A maintainer planning M3 / M4 work can read an actual measured number for the M2
 
 - **Audit screenshot variance from OS-level font rendering or DPI scaling**: capture the host's DPI and font-smoothing setting alongside each screenshot pair; treat any sub-pixel variance attributable to DPI as accepted-with-reason rather than a closeable delta.
 - **Parity-corpus script that triggers a known formatter limitation already accepted in spec 020**: the parity test treats spec-020-documented limitations as accepted-with-reason rather than failing; the disposition links back to the spec-020 tasks.md entry.
-- **IDE-plugin baseline drift mid-test-run** (someone updates the IDE plugin between baseline capture and web-side comparison): the test embeds the IDE-plugin build version into the baseline file and refuses to compare against a mismatched build.
+- **Baseline-revision drift mid-test-run** (someone updates the IDE plugin between baseline capture and web-side comparison): the test embeds the baseline revision into the baseline file and refuses to compare against a mismatched build.
 - **Playwright test runs against a stale `dotnet run` after a code change** without seeing the change: the test harness builds the project before launching the browser and aborts if the build is dirty.
 - **Bundle measurement on a machine without Brotli compression in the toolchain**: the bundle-size audit explicitly notes the compression status and the document is invalid until the measurement is captured from a build with Brotli active.
 - **Audit captures more than five visible gaps**: the spec mandates closing only the top five; remaining gaps must be filed as named follow-ups (with the audit document linking them) rather than silently deferred.
@@ -140,7 +140,7 @@ A maintainer planning M3 / M4 work can read an actual measured number for the M2
 - **FR-010**: A parity test MUST exist that runs the web edition analyser against every script in the corpus and asserts the finding set matches the IDE plugin baseline along five attributes: rule id, severity, message, line, column.
 - **FR-011**: Any finding-set divergence MUST be recorded with the script id, the offending finding(s), and a disposition (resolved / accepted-with-reason).
 - **FR-012**: The parity test MUST live under `tests/AkmlSql.Web.Tests/Analyse/AnalyserServiceTests.cs` (extending the existing class) and run as part of the standard `dotnet test` invocation.
-- **FR-013**: If the IDE-plugin baseline is missing or stale, the parity test MUST fail with an actionable error pointing at the baseline-generator procedure rather than silently passing.
+- **FR-013**: If the desktop baseline is missing or stale, the parity test MUST fail with an actionable error pointing at the baseline-generator procedure rather than silently passing.
 
 #### Browser end-to-end
 
@@ -160,7 +160,7 @@ A maintainer planning M3 / M4 work can read an actual measured number for the M2
 ### Key Entities *(include if feature involves data)*
 
 - **Theme parity audit document** (`M2-THEME-PARITY-AUDIT.md`): paired screenshots × three themes, a deltas table, a list of closed deltas, a list of accepted-with-reason deltas, host environment metadata.
-- **Parity corpus item**: a SQL script under `tests/format-parity/corpus/`, paired with one or more profiles and an IDE-plugin baseline output file. Reused across FR-006 and FR-010.
+- **Parity corpus item**: a SQL script under `tests/format-parity/corpus/`, paired with one or more profiles and an desktop baseline output file. Reused across FR-006 and FR-010.
 - **Parity test record**: per (corpus item × profile) pair, the web edition output, the IDE baseline output, a diff (if any), and a disposition.
 - **Browser test scenario**: one of the four M2 PRD User Story 1 acceptance scenarios, encoded as a browser-driver script with timing assertions.
 - **Bundle-size audit record** (`M2-BUNDLE-SIZE.md`): the compressed total, the per-asset breakdown, the host metadata, the verdict against the M1 target, and (if over) the lazy-loading plan.
@@ -185,7 +185,7 @@ A maintainer planning M3 / M4 work can read an actual measured number for the M2
 ## Assumptions
 
 - The format-parity corpus from spec 020 has either landed in `tests/format-parity/corpus/` or its creation is bundled into FR-006/FR-010 work; the corpus is the shared source for both parity tests.
-- The IDE plugin used to produce the baseline outputs is the version on the same `master` commit as the web edition under test; baseline drift is captured by embedding the IDE plugin version in each baseline file.
+- The IDE plugin used to produce the baseline outputs is the version on the same `master` commit as the web edition under test; baseline drift is captured by embedding the baseline revision in each baseline file.
 - The maintainer running the theme parity audit has access to a Windows workstation that can run both the IDE plugin and the web edition at the same time, and can drive both at the same OS theme.
 - The bundle-size measurement happens on a Windows host with the full .NET SDK and WebAssembly tooling — the same environment that produces release artifacts — so trimming and Brotli compression match production behaviour.
 - The Playwright tests can be run from the developer's machine; CI integration is a nice-to-have but not a blocker for this spec's completion (CI wiring is a follow-up).

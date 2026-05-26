@@ -1,4 +1,4 @@
--- akml-parity-baseline ide-build=1.26.0526.0000 corpus-item=10-ddl-create-table profile=default
+-- akml-parity-baseline revision=1.26.0526.0000 corpus-item=10-ddl-create-table profile=default
 create table dbo.orders (
 orderid int identity(1, 1) not null primary key,
 customerid int not null,

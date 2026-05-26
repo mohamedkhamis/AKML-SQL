@@ -1,4 +1,4 @@
--- akml-parity-baseline ide-build=1.26.0526.0000 corpus-item=02-multi-join profile=ansi
+-- akml-parity-baseline revision=1.26.0526.0000 corpus-item=02-multi-join profile=ansi
 select o.orderid, c.customername, sum(d.unitprice * d.quantity) as total
 from orders o
 inner join customers c on c.customerid = o.customerid

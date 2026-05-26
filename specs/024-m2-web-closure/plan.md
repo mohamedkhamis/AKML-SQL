@@ -22,7 +22,7 @@ The closure is a verification slice. No code in `src/AkmlSql.Web/` is rewritten;
 
 - Shipped M2 code paths must remain unchanged except for the CSS edits the theme audit identifies as top-5 closures (spec 024 Overview).
 - Parity test divergences must be **explicit findings with dispositions**, never silently accepted (FR-008, FR-011).
-- The IDE-plugin baselines and the web edition runs must be on the same `master` commit; baseline drift handled by embedding the IDE-plugin build version into each baseline file (Edge Case "IDE-plugin baseline drift").
+- The desktop baselines and the web edition runs must be on the same `master` commit; baseline drift handled by embedding the baseline revision into each baseline file (Edge Case "Baseline-revision drift").
 - The Playwright harness must build the project before launching the browser to prevent stale-build false positives (Edge Case "Playwright test runs against a stale `dotnet run`").
 - Bundle-size measurement is invalid unless Brotli compression is active during the publish (Edge Case "Bundle measurement on a machine without Brotli").
 

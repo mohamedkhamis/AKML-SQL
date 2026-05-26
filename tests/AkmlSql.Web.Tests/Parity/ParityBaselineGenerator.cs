@@ -53,8 +53,8 @@ public sealed class ParityBaselineGenerator
             return;
         }
 
-        var ideVersion = ParityCorpusLoader.CurrentIdePluginVersion;
-        _output.WriteLine($"IDE plugin version: {ideVersion}");
+        var revision = ParityCorpusLoader.CurrentBaselineRevision;
+        _output.WriteLine($"Baseline revision: {revision}");
 
         var profiles = ParityCorpusLoader.ProfileIds
             .Select(id => (ProfileId: id, Profile: ParityCorpusLoader.GetProfile(id)))
@@ -84,7 +84,7 @@ public sealed class ParityBaselineGenerator
                     $"Formatter failed for corpus '{corpusId}' profile '{profileId}': " +
                     string.Join("; ", result.Diagnostics.Select(d => $"{d.Severity}:{d.Message}")));
 
-                var marker = $"-- akml-parity-baseline ide-build={ideVersion} corpus-item={corpusId} profile={profileId}\n";
+                var marker = $"-- akml-parity-baseline revision={revision} corpus-item={corpusId} profile={profileId}\n";
                 var body = ParityCorpusLoader.NormaliseLineEndings(result.FormattedText);
                 var outputPath = Path.Combine(
                     ParityCorpusLoader.BaselinesDirectory(),
@@ -100,7 +100,7 @@ public sealed class ParityBaselineGenerator
             {
                 akmlParityBaseline = new
                 {
-                    ideBuild = ideVersion,
+                    revision,
                     corpusItem = corpusId,
                     profile = "default",
                 },

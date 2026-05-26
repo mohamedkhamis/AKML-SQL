@@ -47,10 +47,10 @@ How to run each of the five user stories end-to-end. Each section is self-contai
 
 **Goal**: a `dotnet test` run produces a PASS verdict over `tests/format-parity/corpus/*.sql × 3 profiles` for the formatter and `× 1 default profile` for the analyser.
 
-1. **Generate the IDE-plugin baselines (one-time).**
+1. **Generate the desktop baselines (one-time).**
     - In an SSMS 22 session with the AKML SQL extension active, run a "Format Document" + "Run Analysis" pass on each script in `tests/format-parity/corpus/`. (Or, equivalently, invoke the desktop golden generator the same way spec 023 T017 did its corpus.)
     - Write the outputs as `tests/format-parity/baselines/<profile>/<script-id>.expected.sql` and `tests/format-parity/baselines/default/<script-id>.expected.json` per the [parity-baseline-format.md](./contracts/parity-baseline-format.md) contract.
-    - Record the IDE-plugin build version in `tests/format-parity/ide-plugin-version.txt`.
+    - Record the baseline revision in `tests/format-parity/baseline-revision.txt`.
 
 2. **Run the opt-in regenerator (later changes).**
 
@@ -59,7 +59,7 @@ How to run each of the five user stories end-to-end. Each section is self-contai
      --filter "Category=ParityBaseline"
    ```
 
-    This regenerates every baseline against the current IDE plugin. Run it whenever the IDE plugin updates and commit the resulting changes alongside the bump.
+    This regenerates every baseline against the current desktop pipeline. Run it whenever the IDE plugin updates and commit the resulting changes alongside the bump.
 
 3. **Run the parity test.**
 

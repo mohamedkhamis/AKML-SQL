@@ -1,4 +1,4 @@
--- akml-parity-baseline ide-build=1.26.0526.0000 corpus-item=08-in-list-long profile=default
+-- akml-parity-baseline revision=1.26.0526.0000 corpus-item=08-in-list-long profile=default
 SELECT
     productid, productname
 FROM products
