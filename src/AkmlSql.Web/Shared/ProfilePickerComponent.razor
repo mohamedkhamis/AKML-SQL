@@ -13,7 +13,7 @@
 
 <div class="akml-profile-picker">
     <label for="@_selectId" class="akml-profile-label">Profile</label>
-    <select id="@_selectId" class="akml-profile-select" value="@_activeId" @onchange="OnSelectionChanged">
+    <select id="@_selectId" class="akml-profile-select" data-testid="profile-picker" value="@_activeId" @onchange="OnSelectionChanged">
         @if (_profiles != null)
         {
             <optgroup label="Built-in">

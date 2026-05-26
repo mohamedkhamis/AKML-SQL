@@ -1,0 +1,191 @@
+{
+  "akmlParityBaseline": {
+    "ideBuild": "1.26.0526.0000",
+    "corpusItem": "12-merge-statement",
+    "profile": "default"
+  },
+  "findings": [
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'merge' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'into' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 7
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'as' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 28
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'using' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 2,
+      "column": 1
+    },
+    {
+      "ruleId": "NM006",
+      "severity": "Info",
+      "message": "Single-letter alias 's' is not descriptive — use a meaningful alias",
+      "line": 2,
+      "column": 7
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'as' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 2,
+      "column": 23
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'on' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 2,
+      "column": 28
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'when' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 3,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'matched' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 3,
+      "column": 6
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'and' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 3,
+      "column": 14
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'then' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 3,
+      "column": 37
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'update' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 3,
+      "column": 42
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'set' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 3,
+      "column": 49
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'when' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 4,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'not' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 4,
+      "column": 6
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'matched' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 4,
+      "column": 10
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'by' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 4,
+      "column": 18
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'then' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 4,
+      "column": 28
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'insert' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 4,
+      "column": 33
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'values' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 4,
+      "column": 61
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'when' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 5,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'not' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 5,
+      "column": 6
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'matched' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 5,
+      "column": 10
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'by' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 5,
+      "column": 18
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'then' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 5,
+      "column": 28
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'delete' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 5,
+      "column": 33
+    }
+  ]
+}

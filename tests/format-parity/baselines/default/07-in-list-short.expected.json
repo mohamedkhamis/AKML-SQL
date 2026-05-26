@@ -1,0 +1,51 @@
+{
+  "akmlParityBaseline": {
+    "ideBuild": "1.26.0526.0000",
+    "corpusItem": "07-in-list-short",
+    "profile": "default"
+  },
+  "findings": [
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'select' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'from' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 10
+    },
+    {
+      "ruleId": "PE002",
+      "severity": "Warning",
+      "message": "Object 'orders' has no schema prefix — use 'dbo.orders' to avoid schema resolution overhead",
+      "line": 1,
+      "column": 15
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'where' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 22
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'in' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 35
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'and' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 69
+    }
+  ]
+}

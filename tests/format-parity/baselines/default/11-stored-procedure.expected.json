@@ -1,0 +1,275 @@
+{
+  "akmlParityBaseline": {
+    "ideBuild": "1.26.0526.0000",
+    "corpusItem": "11-stored-procedure",
+    "profile": "default"
+  },
+  "findings": [
+    {
+      "ruleId": "BP008",
+      "severity": "Info",
+      "message": "Stored procedure should end with an explicit RETURN statement",
+      "line": 1,
+      "column": 1
+    },
+    {
+      "ruleId": "PE009",
+      "severity": "Warning",
+      "message": "Stored procedure is missing SET NOCOUNT ON at the beginning",
+      "line": 1,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'create' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'procedure' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 8
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'null' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 79
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'null' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 105
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'as' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 2,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'begin' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 3,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'set' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 4,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'on' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 4,
+      "column": 13
+    },
+    {
+      "ruleId": "BP015",
+      "severity": "Info",
+      "message": "Single-statement IF body should use BEGIN/END for clarity and to prevent errors when adding statements",
+      "line": 5,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'if' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 5,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'is' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 5,
+      "column": 15
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'null' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 5,
+      "column": 18
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'set' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 5,
+      "column": 23
+    },
+    {
+      "ruleId": "BP012",
+      "severity": "Info",
+      "message": "Hard-coded date literal '1900-01-01' — consider using a parameter or variable for maintainability",
+      "line": 5,
+      "column": 40
+    },
+    {
+      "ruleId": "BP015",
+      "severity": "Info",
+      "message": "Single-statement IF body should use BEGIN/END for clarity and to prevent errors when adding statements",
+      "line": 6,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'if' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 6,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'is' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 6,
+      "column": 13
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'null' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 6,
+      "column": 16
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'set' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 6,
+      "column": 21
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'select' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 7,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'from' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 8,
+      "column": 1
+    },
+    {
+      "ruleId": "NM006",
+      "severity": "Info",
+      "message": "Single-letter alias 'o' is not descriptive — use a meaningful alias",
+      "line": 8,
+      "column": 6
+    },
+    {
+      "ruleId": "PE002",
+      "severity": "Warning",
+      "message": "Object 'orders' has no schema prefix — use 'dbo.orders' to avoid schema resolution overhead",
+      "line": 8,
+      "column": 6
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'inner' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 9,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'join' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 9,
+      "column": 7
+    },
+    {
+      "ruleId": "NM006",
+      "severity": "Info",
+      "message": "Single-letter alias 'c' is not descriptive — use a meaningful alias",
+      "line": 9,
+      "column": 12
+    },
+    {
+      "ruleId": "PE002",
+      "severity": "Warning",
+      "message": "Object 'customers' has no schema prefix — use 'dbo.customers' to avoid schema resolution overhead",
+      "line": 9,
+      "column": 12
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'on' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 9,
+      "column": 24
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'where' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 10,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'and' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 11,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'between' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 11,
+      "column": 17
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'and' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 11,
+      "column": 36
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'order' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 12,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'by' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 12,
+      "column": 7
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'desc' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 12,
+      "column": 22
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'end' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 13,
+      "column": 1
+    }
+  ]
+}

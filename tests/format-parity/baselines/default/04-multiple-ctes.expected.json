@@ -1,0 +1,177 @@
+{
+  "akmlParityBaseline": {
+    "ideBuild": "1.26.0526.0000",
+    "corpusItem": "04-multiple-ctes",
+    "profile": "default"
+  },
+  "findings": [
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'with' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'as' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 23
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'select' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 2,
+      "column": 5
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'from' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 2,
+      "column": 37
+    },
+    {
+      "ruleId": "PE002",
+      "severity": "Warning",
+      "message": "Object 'customers' has no schema prefix — use 'dbo.customers' to avoid schema resolution overhead",
+      "line": 2,
+      "column": 42
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'where' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 2,
+      "column": 52
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'as' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 4,
+      "column": 15
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'select' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 5,
+      "column": 5
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'from' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 5,
+      "column": 39
+    },
+    {
+      "ruleId": "PE002",
+      "severity": "Warning",
+      "message": "Object 'orders' has no schema prefix — use 'dbo.orders' to avoid schema resolution overhead",
+      "line": 5,
+      "column": 44
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'where' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 5,
+      "column": 51
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'select' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 7,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'as' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 7,
+      "column": 41
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'as' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 7,
+      "column": 70
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'from' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 8,
+      "column": 1
+    },
+    {
+      "ruleId": "NM006",
+      "severity": "Info",
+      "message": "Single-letter alias 'c' is not descriptive — use a meaningful alias",
+      "line": 8,
+      "column": 6
+    },
+    {
+      "ruleId": "PE002",
+      "severity": "Warning",
+      "message": "Object 'active_customers' has no schema prefix — use 'dbo.active_customers' to avoid schema resolution overhead",
+      "line": 8,
+      "column": 6
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'left' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 9,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'join' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 9,
+      "column": 6
+    },
+    {
+      "ruleId": "NM006",
+      "severity": "Info",
+      "message": "Single-letter alias 'o' is not descriptive — use a meaningful alias",
+      "line": 9,
+      "column": 11
+    },
+    {
+      "ruleId": "PE002",
+      "severity": "Warning",
+      "message": "Object 'recent_orders' has no schema prefix — use 'dbo.recent_orders' to avoid schema resolution overhead",
+      "line": 9,
+      "column": 11
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'on' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 9,
+      "column": 27
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'group' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 10,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'by' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 10,
+      "column": 7
+    }
+  ]
+}

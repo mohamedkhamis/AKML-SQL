@@ -9,6 +9,12 @@
 
 <div class="akml-app">
     <NavMenu />
+    @* Spec 024 T004: error-banner contract. Rendered only when an error surfaces;
+       Playwright tests assert this element is absent from the DOM in the happy path. *@
+    @if (!string.IsNullOrEmpty(GlobalError))
+    {
+        <div data-testid="error-banner" role="alert" class="akml-error-banner">@GlobalError</div>
+    }
     <main class="akml-main">
         @Body
     </main>
@@ -41,6 +47,11 @@
 </style>
 
 @code {
+    /// <summary>Spec 024 T004: surfaces a top-level error banner with the
+    /// <c>error-banner</c> testid when set. Reserved for catch-all error rendering
+    /// the Playwright suite asserts against. Currently always null in the happy path.</summary>
+    public static string? GlobalError { get; set; }
+
     protected override async Task OnInitializedAsync()
     {
         // Pull the persisted theme override before any page reads Theme.Current.

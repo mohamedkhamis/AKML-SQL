@@ -1,0 +1,179 @@
+# Quickstart: M2 Web Edition Closure
+
+**Branch**: `024-m2-web-closure` | **Date**: 2026-05-26 | **Spec**: [spec.md](./spec.md)
+
+How to run each of the five user stories end-to-end. Each section is self-contained: a maintainer can complete US1 without US2–US5, etc.
+
+---
+
+## Prerequisites (one-time setup)
+
+- Windows 11 workstation with the full .NET SDK (`dotnet --version` returns the same SDK that built spec 023 — e.g. `11.0.100-preview.4.26230.115`)
+- `wasm-tools` (or `wasm-tools-net10`) workload installed: `dotnet workload list`
+- `Microsoft.Playwright` browser binaries: `pwsh tests/AkmlSql.Web.E2E.Tests/bin/Release/net10.0/playwright.ps1 install` after first build
+- The WPF IDE plugin built and installed (for US1, US2, US3 baselines): the latest `AKMLSQLSetup.exe` from PR #241 or its successor, with SSMS 22 closed during install
+- The spec-020 parity corpus present at `tests/format-parity/corpus/` (already checked in per spec 020)
+
+---
+
+## US1 — Theme parity audit (≈ 45 min)
+
+**Goal**: produce `specs/021-web-edition/M2-THEME-PARITY-AUDIT.md` with 6 paired screenshots, a deltas table, top-5 CSS closures, and a pass verdict.
+
+1. **Boot both surfaces side-by-side.**
+    - SSMS 22 open with `tests/format-parity/corpus/03-stored-proc.sql` loaded in a query window.
+    - `dotnet run --project src/AkmlSql.Web -c Release` in a separate terminal; open the served URL in Chromium with the same `03-stored-proc.sql` pasted.
+
+2. **Capture the three theme pairs.** For each of Light, Dark, HighContrast (switch via Windows Settings → Personalization → Colors):
+    - Win+Left for SSMS, Win+Right for Chromium.
+    - Capture **editor region only** (exclude OS title bar) using Snipping Tool.
+    - Save as `specs/021-web-edition/screenshots/<theme>-wpf.png` and `<theme>-web.png`.
+
+3. **Diff the pairs.** Open each pair side-by-side; record every visible delta into the audit document's §3 table per the [theme-audit-format.md](./contracts/theme-audit-format.md) contract.
+
+4. **Close the top-5 deltas.** For each closure, edit the appropriate file under `src/AkmlSql.Web/wwwroot/css/`; record the `before`/`after` snippet in §4.
+
+5. **File the rest.** For each delta beyond the top-5, record it in §5 with a name and rationale for deferral.
+
+6. **Verify.** Re-capture the affected pairs to confirm the closures landed. Mark the audit `AUDIT PASSES` in §7.
+
+7. **Flip spec 021 T036.** Change the checkbox from `[ ]` to `[X]` and remove the deferral note.
+
+**Done when**: `M2-THEME-PARITY-AUDIT.md` exists with the full schema; spec 021 T036 is checked.
+
+---
+
+## US2 + US3 — Formatter + Analyser parity (≈ 60 min, runs unattended afterwards)
+
+**Goal**: a `dotnet test` run produces a PASS verdict over `tests/format-parity/corpus/*.sql × 3 profiles` for the formatter and `× 1 default profile` for the analyser.
+
+1. **Generate the IDE-plugin baselines (one-time).**
+    - In an SSMS 22 session with the AKML SQL extension active, run a "Format Document" + "Run Analysis" pass on each script in `tests/format-parity/corpus/`. (Or, equivalently, invoke the desktop golden generator the same way spec 023 T017 did its corpus.)
+    - Write the outputs as `tests/format-parity/baselines/<profile>/<script-id>.expected.sql` and `tests/format-parity/baselines/default/<script-id>.expected.json` per the [parity-baseline-format.md](./contracts/parity-baseline-format.md) contract.
+    - Record the IDE-plugin build version in `tests/format-parity/ide-plugin-version.txt`.
+
+2. **Run the opt-in regenerator (later changes).**
+
+   ```powershell
+   dotnet test tests/AkmlSql.Web.Tests/AkmlSql.Web.Tests.csproj `
+     --filter "Category=ParityBaseline"
+   ```
+
+    This regenerates every baseline against the current IDE plugin. Run it whenever the IDE plugin updates and commit the resulting changes alongside the bump.
+
+3. **Run the parity test.**
+
+   ```powershell
+   dotnet test tests/AkmlSql.Web.Tests/AkmlSql.Web.Tests.csproj `
+     --filter "FullyQualifiedName~FormatterServiceTests|FullyQualifiedName~AnalyserServiceTests"
+   ```
+
+    Expect PASS over every (script × profile) pair. On failure, the test output names the offending pair and embeds a unified diff.
+
+4. **Handle divergences.**
+    - **True regression**: fix the formatter / analyser; re-run.
+    - **Accepted-with-reason**: add the disposition to `ParityDispositionsRegistry.cs` with a `reasonLink` pointing at a spec-020 tasks.md entry or equivalent. The test re-runs green.
+
+5. **Flip spec 021 T041 and T047.** Both checkboxes from `[ ]` to `[X]`.
+
+**Done when**: the parity test passes on a clean `dotnet test` run; spec 021 T041 + T047 are checked.
+
+---
+
+## US4 — Playwright User Story 1 E2E (≈ 30 min)
+
+**Goal**: a `dotnet test` run of `tests/AkmlSql.Web.E2E.Tests/` exercises four scenarios in a real Chromium browser, all pass, and the headline flow is recorded as ≤ 5 s.
+
+1. **Verify the `data-testid` contract.** The [playwright-harness-contract.md](./contracts/playwright-harness-contract.md) lists seven required `data-testid` attributes. If any is missing in the M2 DOM (`Editor.razor`, `ProblemsListComponent.razor`, `ProfilePickerComponent.razor`), add it as the first task; this is the only `src/` exception this closure permits beyond the US1 CSS edits.
+
+2. **Install Playwright browsers** (one-time):
+
+   ```powershell
+   pwsh tests/AkmlSql.Web.E2E.Tests/bin/Release/net10.0/playwright.ps1 install chromium
+   ```
+
+3. **Run the suite.**
+
+   ```powershell
+   dotnet test tests/AkmlSql.Web.E2E.Tests/AkmlSql.Web.E2E.Tests.csproj `
+     --filter "FullyQualifiedName~UserStory1Tests"
+   ```
+
+    The shared `DotnetRunFixture` builds → launches → readiness-probes → drives → tears down. Watch the test output for the four scenario names; all four must pass.
+
+4. **Record the headline flow.** Scenario 1's output line `Headline flow took X.XXs` goes into the M2 PRD's success-metric record. Track the trend over time.
+
+5. **Flip spec 021 T053.** Change the checkbox.
+
+**Done when**: `UserStory1Tests` all green; spec 021 T053 is checked.
+
+---
+
+## US5 — Bundle-size audit (≈ 15 min on a clean workstation)
+
+**Goal**: produce `specs/021-web-edition/M2-BUNDLE-SIZE.md` with the compressed `_framework/*.br` total, host metadata, and a verdict against the M1 target.
+
+1. **Verify the host** per the [bundle-measurement-protocol.md](./contracts/bundle-measurement-protocol.md) Step 1.
+
+2. **Publish.**
+
+   ```powershell
+   dotnet publish src/AkmlSql.Web/AkmlSql.Web.csproj -c Release -nologo
+   ```
+
+   Exit code must be 0.
+
+3. **Verify Brotli.**
+
+   ```powershell
+   $framework = 'src/AkmlSql.Web/bin/Release/net10.0/publish/wwwroot/_framework'
+   $missing = Get-ChildItem $framework -Recurse -Include *.dll, *.wasm, *.dat, *.js, *.pdb |
+       Where-Object { -not (Test-Path "$($_.FullName).br") }
+   if ($missing) { throw "Brotli sibling missing for: $($missing -join ', ')" }
+   ```
+
+   No exception → record `Brotli confirmed active: yes` in the audit.
+
+4. **Sum the compressed total.**
+
+   ```powershell
+   $total = (Get-ChildItem $framework -Recurse -Filter *.br | Measure-Object -Property Length -Sum).Sum
+   '{0:N2} MB' -f ($total / 1MB)
+   ```
+
+5. **Write the audit.** Fill every section of `M2-BUNDLE-SIZE.md` per the bundle-measurement-protocol.md contract:
+    - Header (date, capturer, commit, build version)
+    - §1 host environment
+    - §2 publish command + exit code
+    - §3 per-asset breakdown (sorted descending, top-5 called out)
+    - §4 compressed total
+    - §5 verdict (`WITHIN_TARGET` with headroom, OR `OVER_TARGET` with applied lazy-loading plan)
+
+6. **If `OVER_TARGET`, apply the lazy-loading plan first** before committing the audit — the committed verdict must reflect a state that's within target.
+
+7. **Flip spec 021 T054.** Change the checkbox.
+
+**Done when**: `M2-BUNDLE-SIZE.md` exists with the full schema and a green verdict; spec 021 T054 is checked.
+
+---
+
+## Closure verification (end-to-end)
+
+After all five stories are done, verify the closure is complete:
+
+```powershell
+# 1. All five deferred tasks in spec 021 Phase 3 are now [X]
+grep -c "^- \[ \] T036\|^- \[ \] T041\|^- \[ \] T047\|^- \[ \] T053\|^- \[ \] T054" specs/021-web-edition/tasks.md
+# Expected output: 0
+
+# 2. The four expected new artefacts exist
+test -f specs/021-web-edition/M2-THEME-PARITY-AUDIT.md
+test -f specs/021-web-edition/M2-BUNDLE-SIZE.md
+test -d tests/format-parity/baselines
+test -f tests/AkmlSql.Web.E2E.Tests/UserStory1Tests.cs
+
+# 3. The standard test run is green
+dotnet test --filter "FullyQualifiedName~FormatterServiceTests|FullyQualifiedName~AnalyserServiceTests|FullyQualifiedName~UserStory1Tests"
+```
+
+When all three checks pass, the M2 PRD's Definition of Done has recorded evidence behind every checkbox (SC-007). Commit, push, open a PR; merge closes the M2 milestone.

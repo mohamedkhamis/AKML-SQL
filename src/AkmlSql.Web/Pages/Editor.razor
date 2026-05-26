@@ -31,7 +31,7 @@
     <div class="akml-editor-toolbar">
         <ProfilePickerComponent OnProfileChanged="OnProfileChangedAsync" />
         <button class="akml-tool-button" @onclick="FormatAsync" title="Ctrl+K, Ctrl+F">Format</button>
-        <button class="akml-tool-button" @onclick="AnalyseAsync" title="Ctrl+K, Ctrl+L">Analyse</button>
+        <button class="akml-tool-button" data-testid="analyse-button" @onclick="AnalyseAsync" title="Ctrl+K, Ctrl+L">Analyse</button>
         <button class="akml-tool-button" @onclick="SaveAsync" title="Ctrl+S">Save</button>
         <span class="akml-editor-spacer"></span>
         @if (!string.IsNullOrEmpty(_status))
@@ -43,6 +43,11 @@
         <EditorComponent @ref="_editor" InitialText="@_initialText" OnTextChanged="OnTextChangedAsync" />
         <ProblemsListComponent Findings="@_findings" OnJumpToIssue="OnJumpToIssueAsync" />
     </div>
+    @* Spec 024 T004: completion markers for Playwright. _hasFormatted / _hasAnalysed
+       latch to true on the first successful Format / Analyse and stay true. The Playwright
+       suite uses `WaitForSelectorAsync(..., State = Attached)` to detect them. *@
+    @if (_hasFormatted) { <span data-testid="format-complete" hidden></span> }
+    @if (_hasAnalysed) { <span data-testid="analyse-complete" hidden></span> }
 </div>
 
 <style>
@@ -96,6 +101,12 @@
     private CancellationTokenSource? _analyseCts;
     private bool _autoAnalyseOnFormat = true;
     private IJSObjectReference? _downloadModule;
+    // Spec 024 T004: latch to true after the first successful Format / Analyse so the
+    // Playwright suite's WaitForSelectorAsync("[data-testid='format-complete']") + analyse
+    // siblings can detect completion. The pattern is per-document-load (Playwright
+    // contexts isolate state); a fresh page load resets these to false.
+    private bool _hasFormatted;
+    private bool _hasAnalysed;
 
     protected override async Task OnInitializedAsync()
     {
@@ -156,6 +167,7 @@
                 await _editor.SetTextAsync(result.FormattedText);
                 _currentText = result.FormattedText;
                 _status = result.WasModified ? "Formatted." : "Already canonical.";
+                _hasFormatted = true;
                 Diagnostics.Log(DiagnosticLevel.Info, "formatter", _status);
                 if (_autoAnalyseOnFormat)
                 {
@@ -188,6 +200,7 @@
         try
         {
             _findings = await Analyser.AnalyseAsync(_currentText, null, _analyseCts.Token);
+            _hasAnalysed = true;
             var issueCount = _findings.Issues?.Length ?? 0;
             // Problem count is shown in the Problems panel header; only surface a
             // toolbar status for the "no problems" case so the user sees confirmation
