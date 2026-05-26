@@ -51,7 +51,7 @@
 
   <!-- Compile Shell.Shared sources directly into the test assembly via the shared projitems.
        Import is at top level (not inside ItemGroup) — this is the canonical MSBuild shared-project pattern.
-       See src/AkmlSql.VS2022/AkmlSql.VS2022.csproj for the reference implementation. -->
+       See src/AkmlSql.VS2026/AkmlSql.VS2026.csproj for the reference implementation. -->
   <Import Project="..\..\src\AkmlSql.Shell.Shared\AkmlSql.Shell.Shared.projitems" Label="Shared" />
 
 </Project>

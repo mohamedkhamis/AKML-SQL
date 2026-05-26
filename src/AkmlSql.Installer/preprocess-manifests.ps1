@@ -1,9 +1,10 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Resolve $version$ tokens in the 6 source.extension.vsixmanifest files and
-    write the resolved copies to src/AkmlSql.Installer/generated/<Target>/
-    extension.vsixmanifest — consumed by AkmlSqlSetup.iss [Files] entries.
+    Resolve $version$ tokens in the source.extension.vsixmanifest files for the
+    supported hosts (SSMS 22, VS 2026) and write the resolved copies to
+    src/AkmlSql.Installer/generated/<Target>/extension.vsixmanifest — consumed
+    by AkmlSqlSetup.iss [Files] entries.
 
 .DESCRIPTION
     Called from AkmlSqlSetup.iss via `#expr Exec` so installer compilation
@@ -26,8 +27,7 @@ $InstallerDir = $PSScriptRoot                        # …/src/AkmlSql.Installer
 $SrcRoot      = Split-Path -Parent $InstallerDir     # …/src
 
 $targets = @(
-    'AkmlSql.Ssms20', 'AkmlSql.Ssms21', 'AkmlSql.Ssms22',
-    'AkmlSql.VS2019', 'AkmlSql.VS2022', 'AkmlSql.VS2026'
+    'AkmlSql.Ssms22', 'AkmlSql.VS2026'
 )
 
 foreach ($t in $targets) {

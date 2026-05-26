@@ -21,7 +21,7 @@ Shell projects must be built individually with MSBuild to avoid VSCT `.cto` cros
 MSBUILD="/c/Program Files/Microsoft Visual Studio/2022/Enterprise/MSBuild/Current/Bin/MSBuild.exe"
 
 # Restore and build each target separately
-for TARGET in Ssms20 Ssms21 Ssms22 VS2019 VS2022 VS2026; do
+for TARGET in Ssms22 VS2026; do
   "$MSBUILD" "src/AkmlSql.$TARGET/AkmlSql.$TARGET.csproj" \
     -t:Restore -p:Configuration=Release -v:quiet
   "$MSBUILD" "src/AkmlSql.$TARGET/AkmlSql.$TARGET.csproj" \
@@ -69,11 +69,7 @@ Output: `src/AkmlSql.Installer/Output/AKMLSQLSetup.exe`
 
 | Target | Extension Directory |
 |--------|---------------------|
-| SSMS 20 | `%CommonProgramFiles(x86)%\Microsoft SQL Server\150\Tools\Binn\ManagementStudio\Extensions\AkmlSql\` |
-| SSMS 21 | `<SSMS21Root>\Common7\IDE\Extensions\AkmlSql\` |
 | SSMS 22 | `C:\Program Files\Microsoft SQL Server Management Studio 22\Release\Common7\IDE\Extensions\AkmlSql\` |
-| VS 2019 | `%LocalAppData%\Microsoft\VisualStudio\16.0_*\Extensions\AkmlSql\` |
-| VS 2022 | `%LocalAppData%\Microsoft\VisualStudio\17.0_*\Extensions\AkmlSql\` |
 | VS 2026 | `%LocalAppData%\Microsoft\VisualStudio\18.0_*\Extensions\AkmlSql\` |
 
 > **SSMS 22 note**: The extension lives under the `Release/` subdirectory, not the root.
@@ -86,11 +82,7 @@ After installing, updating, or changing extension files, clear the MEF/component
 
 | Target | MEF Cache Path |
 |--------|---------------|
-| SSMS 20 | `%LocalAppData%\Microsoft\SQL Server Management Studio\20.0_IsoShell\ComponentModelCache\` |
-| SSMS 21 | `%LocalAppData%\Microsoft\SSMS\21.0_*\ComponentModelCache\` |
 | SSMS 22 | `%LocalAppData%\Microsoft\SSMS\22.0_*\ComponentModelCache\` |
-| VS 2019 | `%LocalAppData%\Microsoft\VisualStudio\16.0_*\ComponentModelCache\` |
-| VS 2022 | `%LocalAppData%\Microsoft\VisualStudio\17.0_*\ComponentModelCache\` |
 | VS 2026 | `%LocalAppData%\Microsoft\VisualStudio\18.0_*\ComponentModelCache\` |
 
 ```powershell
@@ -180,9 +172,8 @@ The uninstaller removes extension files and MEF caches but leaves user data (con
 
 | Target | Activity Log |
 |--------|-------------|
-| SSMS 20 | `%AppData%\Microsoft\SQL Server Management Studio\20.0_IsoShell\ActivityLog.xml` |
 | SSMS 22 | `%AppData%\Microsoft\SSMS\22.0_*\ActivityLog.xml` |
-| VS 2022 | `%AppData%\Microsoft\VisualStudio\17.0_*\ActivityLog.xml` |
+| VS 2026 | `%AppData%\Microsoft\VisualStudio\18.0_*\ActivityLog.xml` |
 
 To enable VS/SSMS activity logging, launch with `/log`:
 
@@ -231,7 +222,6 @@ AKML SQL writes its own rolling logs to `%AppData%\AKML SQL\logs\`. Set `logMini
 | `CodeTaskFactory` error | Built with `dotnet build` | Use MSBuild directly |
 | Wrong assembly version | Stale NuGet/obj cache | Delete `obj/` and `bin/` then restore |
 | CTO file missing | Built via solution | Build each project individually |
-| `Shell.15.0.0.0` not found | Wrong VS SDK version for SSMS 20 | Verify VSSDK.BuildTools 15.* is restored |
 
 ---
 
@@ -239,9 +229,5 @@ AKML SQL writes its own rolling logs to `%AppData%\AKML SQL\logs\`. Set `logMini
 
 | Target | VS SDK | VSSDK.BuildTools | Platform | Shell Version |
 |--------|--------|-----------------|----------|--------------|
-| SSMS 20 | 15.9.3 | 15.* | x86 | 15.0.0.0 |
-| SSMS 21 | 17.14.* | 17.* | x64 | 17.0.0.0 |
 | SSMS 22 | 17.14.* | 17.* | x64 | 17.0.0.0 |
-| VS 2019 | 16.0.208 | 16.* | x86 | 16.0.0.0 |
-| VS 2022 | 17.14.* | 17.* | x64 | 17.0.0.0 |
 | VS 2026 | 17.14.* | 17.* | x64 | 17.0.0.0 |

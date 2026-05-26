@@ -313,7 +313,7 @@ namespace AkmlSql.Core.Config
     /// <summary>Records an IDE target that AKML SQL has been deployed to.</summary>
     public class InstalledTarget
     {
-        /// <summary>IDE type identifier (e.g. <c>"SSMS20"</c>, <c>"VS2022"</c>).</summary>
+        /// <summary>IDE type identifier (e.g. <c>"SSMS22"</c>, <c>"VS2026"</c>).</summary>
         public string IdeType { get; set; } = string.Empty;
         /// <summary>IDE version string.</summary>
         public string Version { get; set; } = string.Empty;

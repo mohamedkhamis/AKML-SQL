@@ -23,8 +23,8 @@
     Skip Inno Setup compilation (build DLLs only)
 
 .PARAMETER Targets
-    Comma-separated list of shell targets to build. Default: all
-    Valid values: Ssms20, Ssms21, Ssms22, VS2019, VS2022, VS2026
+    Comma-separated list of shell targets to build. Default: all supported
+    Valid values: Ssms22, VS2026
 
 .EXAMPLE
     .\Build-Release.ps1
@@ -35,8 +35,8 @@
     # Build everything but skip tests
 
 .EXAMPLE
-    .\Build-Release.ps1 -Targets Ssms22,VS2022
-    # Build only SSMS 22 and VS 2022 targets
+    .\Build-Release.ps1 -Targets Ssms22
+    # Build only the SSMS 22 target
 
 .EXAMPLE
     .\Build-Release.ps1 -SkipInstaller
@@ -125,8 +125,8 @@ $buildVersion = '1.{0}.{1}.{2}' -f `
     $buildTime.ToString('MMdd'), `
     $buildTime.ToString('HHmm')
 
-# All shell targets
-$allTargets = @('Ssms20', 'Ssms21', 'Ssms22', 'VS2019', 'VS2022', 'VS2026')
+# All supported shell targets
+$allTargets = @('Ssms22', 'VS2026')
 if ($Targets -and $Targets.Count -gt 0) {
     $buildTargets = $Targets
 } else {
@@ -216,7 +216,9 @@ foreach ($target in $buildTargets) {
     Write-Host "  Building AkmlSql.$target..." -NoNewline
 
     $output = & $msbuild $csproj -t:Build -p:Configuration=$Configuration -v:quiet 2>&1
-    $buildErrors = $output | Select-String ': error '
+    # Match real MSBuild error codes (e.g. ": error CS0579:") and skip the
+    # literal word "Error" inside warning text like NU1900 vulnerability fetch.
+    $buildErrors = $output | Select-String ': error [A-Z]+\d+: '
 
     if ($LASTEXITCODE -ne 0 -or $buildErrors) {
         Write-Fail " FAILED"
@@ -237,6 +239,11 @@ foreach ($target in $buildTargets) {
 
 Write-Step "Step 4/7: Publishing .NET 10 projects"
 
+# Drain any lingering MSBuild/VBCSCompiler workers from prior runs so they don't
+# hold file handles that race with real-time AV scans on the freshly-copied
+# obj/Release/.../singlefilehost.exe.
+dotnet build-server shutdown 2>&1 | Out-Null
+
 $publishProjects = @(
     @{ Name = 'AkmlSql.Engine';    Rid = 'win-x64'; Desc = 'Engine (out-of-process IntelliSense)' }
     @{ Name = 'AkmlSql.Updater';   Rid = 'win-x64'; Desc = 'Self-contained updater' }
@@ -252,14 +259,33 @@ foreach ($proj in $publishProjects) {
     }
 
     Write-Host "  Publishing $($proj.Desc)..." -NoNewline
-    $output = dotnet publish $csproj -c $Configuration -r $proj.Rid --verbosity quiet 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        Write-Fail " FAILED"
-        $output | Select-String 'error' | ForEach-Object { Write-Host "    $_" -ForegroundColor Red }
-        $script:errors += "Publish failed for $($proj.Name)"
-    } else {
+
+    # Retry up to 3 times — real-time AV (e.g. Bitdefender) holds transient
+    # read-locks on the freshly-copied obj/.../singlefilehost.exe that defeat
+    # the SDK's in-process RetryUtil.RetryOnIOError. A coarse process-relaunch
+    # gives the AV scan queue time to drain.
+    $attempt = 0
+    $maxAttempts = 3
+    while ($true) {
+        $attempt++
+        $output = dotnet publish $csproj -c $Configuration -r $proj.Rid --verbosity quiet 2>&1
+        if ($LASTEXITCODE -eq 0) { break }
+        if ($attempt -ge $maxAttempts) {
+            Write-Fail " FAILED (after $maxAttempts attempts)"
+            $output | Select-String 'error' | ForEach-Object { Write-Host "    $_" -ForegroundColor Red }
+            $script:errors += "Publish failed for $($proj.Name)"
+            break
+        }
+        Write-Host " retry $attempt..." -NoNewline -ForegroundColor Yellow
+        Start-Sleep -Seconds 2
+    }
+    if ($LASTEXITCODE -eq 0) {
         Write-Host " OK" -ForegroundColor Green
     }
+
+    # Let AV finish scanning this project's output before the next publish
+    # touches the same obj/.../win-x64 copy path.
+    Start-Sleep -Milliseconds 750
 }
 
 # ─────────────────────────────────────────────────────────────────────────────

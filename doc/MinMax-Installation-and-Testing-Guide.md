@@ -50,11 +50,7 @@
 
 | Software | Purpose |
 |---|---|
-| **SSMS 20** (SQL Server Management Studio) | Testing SSMS 20 extension |
-| **SSMS 21** | Testing SSMS 21 extension |
-| **SSMS 22** | Testing SSMS 22 extension |
-| **Visual Studio 2019** | Testing VS 2019 extension |
-| **Visual Studio 2022** | Testing VS 2022 extension |
+| **SSMS 22** (SQL Server Management Studio) | Testing SSMS 22 extension |
 | **Visual Studio 2026** | Testing VS 2026 extension |
 | **SQL Server 2016–2025** | Testing IntelliSense against real databases |
 | **AdventureWorks** sample database | Standard test database |
@@ -84,12 +80,8 @@ AKML-SQL/
 ├── CLAUDE.md                          # Development guidelines
 ├── src/
 │   ├── AkmlSql.Core/                  # Shared business logic (netstandard2.0 + net10.0)
-│   ├── AkmlSql.Shell.Shared/          # Shared project (.projitems) for all shell extensions
-│   ├── AkmlSql.Ssms20/                # SSMS 20 extension (net472, x86)
-│   ├── AkmlSql.Ssms21/                # SSMS 21 extension (net472, x64)
+│   ├── AkmlSql.Shell.Shared/          # Shared project (.projitems) for the shell extensions
 │   ├── AkmlSql.Ssms22/                # SSMS 22 extension (net472, x64)
-│   ├── AkmlSql.VS2019/                # VS 2019 extension (net472, x86)
-│   ├── AkmlSql.VS2022/                # VS 2022 extension (net472, x64)
 │   ├── AkmlSql.VS2026/                # VS 2026 extension (net472, x64)
 │   ├── AkmlSql.Engine/                # IntelliSense engine (net10.0, out-of-proc)
 │   ├── AkmlSql.Formatting/            # SQL formatting library (net10.0)
@@ -113,11 +105,7 @@ AkmlSql.Core
 
 AkmlSql.Shell.Shared
     └── AkmlSql.Core
-    └── AkmlSql.Ssms20 (net472, x86)
-    └── AkmlSql.Ssms21 (net472, x64)
     └── AkmlSql.Ssms22 (net472, x64)
-    └── AkmlSql.VS2019 (net472, x86)
-    └── AkmlSql.VS2022 (net472, x64)
     └── AkmlSql.VS2026 (net472, x64)
 
 AkmlSql.Formatting
@@ -219,18 +207,14 @@ dotnet build src/AkmlSql.Formatting/AkmlSql.Formatting.csproj -c Release
 
 ### 5.1 Overview
 
-Shell extensions are built for 6 different IDE versions:
+Shell extensions are built for 2 IDE versions:
 
 | Project | Target | Platform | VS SDK |
 |---|---|---|---|
-| `AkmlSql.Ssms20` | SSMS 20 | x86 | 15.9.3 |
-| `AkmlSql.Ssms21` | SSMS 21 | x64 | 17.14.x |
 | `AkmlSql.Ssms22` | SSMS 22 | x64 | 17.14.x |
-| `AkmlSql.VS2019` | VS 2019 | x86 | 16.0.208 |
-| `AkmlSql.VS2022` | VS 2022 | x64 | 17.14.x |
 | `AkmlSql.VS2026` | VS 2026 | x64 | 17.14.x |
 
-All shell projects import `AkmlSql.Shell.Shared` (.projitems) and depend on `AkmlSql.Core`.
+Both shell projects import `AkmlSql.Shell.Shared` (.projitems) and depend on `AkmlSql.Core`.
 
 ### 5.2 Build Each Shell Project Individually
 
@@ -239,66 +223,35 @@ All shell projects import `AkmlSql.Shell.Shared` (.projitems) and depend on `Akm
 ```bash
 # Run for each project
 "$MSBUILD" "src/AkmlSql.Ssms22/AkmlSql.Ssms22.csproj" -t:Restore -p:Configuration=Release -v:quiet
-"$MSBUILD" "src/AkmlSql.Ssms21/AkmlSql.Ssms21.csproj" -t:Restore -p:Configuration=Release -v:quiet
-"$MSBUILD" "src/AkmlSql.Ssms20/AkmlSql.Ssms20.csproj" -t:Restore -p:Configuration=Release -v:quiet
-"$MSBUILD" "src/AkmlSql.VS2022/AkmlSql.VS2022.csproj" -t:Restore -p:Configuration=Release -v:quiet
 "$MSBUILD" "src/AkmlSql.VS2026/AkmlSql.VS2026.csproj" -t:Restore -p:Configuration=Release -v:quiet
-"$MSBUILD" "src/AkmlSql.VS2019/AkmlSql.VS2019.csproj" -t:Restore -p:Configuration=Release -v:quiet
 ```
 
 **Step 2: Build each project**
 
 ```bash
 # Always build individually — never via solution file
-"$MSBUILD" "src/AkmlSql.Ssms20/AkmlSql.Ssms20.csproj" -t:Build -p:Configuration=Release -v:minimal
-"$MSBUILD" "src/AkmlSql.Ssms21/AkmlSql.Ssms21.csproj" -t:Build -p:Configuration=Release -v:minimal
 "$MSBUILD" "src/AkmlSql.Ssms22/AkmlSql.Ssms22.csproj" -t:Build -p:Configuration=Release -v:minimal
-"$MSBUILD" "src/AkmlSql.VS2019/AkmlSql.VS2019.csproj" -t:Build -p:Configuration=Release -v:minimal
-"$MSBUILD" "src/AkmlSql.VS2022/AkmlSql.VS2022.csproj" -t:Build -p:Configuration=Release -v:minimal
 "$MSBUILD" "src/AkmlSql.VS2026/AkmlSql.VS2026.csproj" -t:Build -p:Configuration=Release -v:minimal
 ```
 
-### 5.3 SSMS 20 Specific Notes
+### 5.3 SSMS 22 Specific Notes
 
-SSMS 20 uses a different VS SDK (15.9.3) and requires:
-- Shell assembly version `15.0.0.0` (not 16.0.0.0)
-- Schema 2010 `<Vsix>` vsixmanifest (not Schema 2011)
-- Synchronous `Package` class (not `AsyncPackage`)
-- `AllowsBackgroundLoad=dword:00000000` in pkgdef
-
-**Build output for SSMS 20:**
-`src/AkmlSql.Ssms20/bin/Release/net472/`
-
-### 5.4 SSMS 21/22 Specific Notes
-
-SSMS 21 and 22 share the same VS SDK (17.14.x) but:
+SSMS 22 uses VS SDK 17.14.x and requires:
 - Extension path is under `Release/` subdirectory
 - Auto-load context is `{B7B07F42-6013-4C67-A504-C771CBC7625A}` (UICONTEXT_SSMS)
 - Menu placed under Tools via `CommandPlacement` to `IDG_VS_TOOLS_EXT_TOOLS`
 
-**Build outputs:**
-- SSMS 21: `src/AkmlSql.Ssms21/bin/Release/net472/`
-- SSMS 22: `src/AkmlSql.Ssms22/bin/Release/net472/`
+**Build output:** `src/AkmlSql.Ssms22/bin/Release/net472/`
 
-### 5.5 VS 2019 Specific Notes
+### 5.4 VS 2026 Specific Notes
 
-VS 2019 uses VS SDK 16.0.208 and platform x86:
-- Shell assembly version `16.0.0.0`
-- Auto-load context `{e8fbc700-a1bd-11d0-a67c-00a0c9110051}` (ShellInitialized)
-
-**Build output:** `src/AkmlSql.VS2019/bin/Release/net472/`
-
-### 5.6 VS 2022/2026 Specific Notes
-
-VS 2022 and 2026 use VS SDK 17.14.x and platform x64:
+VS 2026 uses VS SDK 17.14.x and platform x64:
 - Shell assembly version `17.0.0.0`
 - Auto-load context `{e8fbc700-a1bd-11d0-a67c-00a0c9110051}` (ShellInitialized)
 
-**Build outputs:**
-- VS 2022: `src/AkmlSql.VS2022/bin/Release/net472/`
-- VS 2026: `src/AkmlSql.VS2026/bin/Release/net472/`
+**Build output:** `src/AkmlSql.VS2026/bin/Release/net472/`
 
-### 5.7 Shared Components (AkmlSql.Shell.Shared)
+### 5.5 Shared Components (AkmlSql.Shell.Shared)
 
 The `AkmlSql.Shell.Shared` project is a shared project (.projitems) — it is NOT built directly. Instead, it is imported into each shell project at compile time. Source files are compiled against each target's VS SDK version.
 

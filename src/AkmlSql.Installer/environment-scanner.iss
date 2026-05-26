@@ -1,6 +1,6 @@
 ; ============================================================================
 ; AKML SQL - Environment Scanner
-; Detects SSMS 20/21/22 and Visual Studio 2019/2022/2026 installations
+; Detects SSMS 22 and Visual Studio 2026 installations
 ; Uses vswhere.exe for reliable detection with filesystem fallbacks
 ; ============================================================================
 
@@ -109,22 +109,6 @@ begin
           Line + '\Common7\IDE\Extensions\AkmlSql', True, '');
     end
 
-    // Detect VS 2019 (x86)
-    else if Pos('\2019\', Line) > 0 then
-    begin
-      if (Pos('BuildTools', Line) = 0) and DirExists(Line + '\Common7\IDE') then
-        AddTarget('VS 2019', '2019', 'x86', Line,
-          Line + '\Common7\IDE\Extensions\AkmlSql', True, '');
-    end
-
-    // Detect VS 2022 (x64)
-    else if Pos('\2022\', Line) > 0 then
-    begin
-      if (Pos('BuildTools', Line) = 0) and DirExists(Line + '\Common7\IDE') then
-        AddTarget('VS 2022', '2022', 'x64', Line,
-          Line + '\Common7\IDE\Extensions\AkmlSql', True, '');
-    end
-
     // Detect VS 2026 (x64) — uses folder name \18\ or \2026\
     else if (Pos('\18\', Line) > 0) or (Pos('\2026\', Line) > 0) then
     begin
@@ -137,57 +121,7 @@ begin
   DeleteFile(TmpFile);
 end;
 
-// --- SSMS Detection (filesystem fallback) ---
-
-procedure DetectSSMS20;
-var
-  InstallPath: String;
-begin
-  if TargetAlreadyAdded('20') then Exit;
-
-  // Strategy 1: Registry
-  if RegQueryStringValue(HKLM, 'SOFTWARE\WOW6432Node\Microsoft\Microsoft SQL Server Management Studio 20',
-      'SSMSInstallRoot', InstallPath) then
-  begin
-    if DirExists(InstallPath) then
-    begin
-      AddTarget('SSMS 20', '20', 'x86', InstallPath,
-        InstallPath + '\Common7\IDE\Extensions\AkmlSql', True, '');
-      Exit;
-    end;
-  end;
-
-  // Strategy 2: File system fallback
-  InstallPath := ExpandConstant('{pf32}') + '\Microsoft SQL Server Management Studio 20';
-  if FileExists(InstallPath + '\Common7\IDE\Ssms.exe') then
-    AddTarget('SSMS 20', '20', 'x86', InstallPath,
-      InstallPath + '\Common7\IDE\Extensions\AkmlSql', True, '');
-end;
-
-procedure DetectSSMS21;
-var
-  InstallPath: String;
-begin
-  if TargetAlreadyAdded('21') then Exit;
-
-  if RegQueryStringValue(HKLM, 'SOFTWARE\Microsoft\Microsoft SQL Server Management Studio 21',
-      'SSMSInstallRoot', InstallPath) then
-  begin
-    if DirExists(InstallPath) then
-    begin
-      AddTarget('SSMS 21', '21', 'x64', InstallPath,
-        InstallPath + '\Common7\IDE\Extensions\AkmlSql', True, '');
-      Exit;
-    end;
-  end;
-
-  InstallPath := ExpandConstant('{pf}') + '\Microsoft SQL Server Management Studio 21';
-  if FileExists(InstallPath + '\Common7\IDE\Ssms.exe') or
-     FileExists(InstallPath + '\Common7\IDE\SSMS.exe') or
-     FileExists(InstallPath + '\Release\Common7\IDE\SSMS.exe') then
-    AddTarget('SSMS 21', '21', 'x64', InstallPath,
-      InstallPath + '\Common7\IDE\Extensions\AkmlSql', True, '');
-end;
+// --- SSMS 22 Detection (filesystem fallback) ---
 
 procedure DetectSSMS22;
 var
@@ -220,50 +154,12 @@ begin
   end;
 end;
 
-// --- Visual Studio Detection (filesystem fallback) ---
+// --- VS 2026 Detection (filesystem fallback) ---
 
 procedure DetectVisualStudioFallback;
 var
   VSPath: String;
 begin
-  // VS 2019 fallback
-  if not TargetAlreadyAdded('2019') then
-  begin
-    VSPath := '';
-    if DirExists(ExpandConstant('{pf32}') + '\Microsoft Visual Studio\2019\Enterprise') then
-      VSPath := ExpandConstant('{pf32}') + '\Microsoft Visual Studio\2019\Enterprise'
-    else if DirExists(ExpandConstant('{pf32}') + '\Microsoft Visual Studio\2019\Professional') then
-      VSPath := ExpandConstant('{pf32}') + '\Microsoft Visual Studio\2019\Professional'
-    else if DirExists(ExpandConstant('{pf32}') + '\Microsoft Visual Studio\2019\Community') then
-      VSPath := ExpandConstant('{pf32}') + '\Microsoft Visual Studio\2019\Community'
-    else if DirExists(ExpandConstant('{pf}') + '\Microsoft Visual Studio\2019\Enterprise') then
-      VSPath := ExpandConstant('{pf}') + '\Microsoft Visual Studio\2019\Enterprise'
-    else if DirExists(ExpandConstant('{pf}') + '\Microsoft Visual Studio\2019\Professional') then
-      VSPath := ExpandConstant('{pf}') + '\Microsoft Visual Studio\2019\Professional'
-    else if DirExists(ExpandConstant('{pf}') + '\Microsoft Visual Studio\2019\Community') then
-      VSPath := ExpandConstant('{pf}') + '\Microsoft Visual Studio\2019\Community';
-
-    if VSPath <> '' then
-      AddTarget('VS 2019', '2019', 'x86', VSPath,
-        VSPath + '\Common7\IDE\Extensions\AkmlSql', True, '');
-  end;
-
-  // VS 2022 fallback
-  if not TargetAlreadyAdded('2022') then
-  begin
-    VSPath := '';
-    if DirExists(ExpandConstant('{pf}') + '\Microsoft Visual Studio\2022\Enterprise') then
-      VSPath := ExpandConstant('{pf}') + '\Microsoft Visual Studio\2022\Enterprise'
-    else if DirExists(ExpandConstant('{pf}') + '\Microsoft Visual Studio\2022\Professional') then
-      VSPath := ExpandConstant('{pf}') + '\Microsoft Visual Studio\2022\Professional'
-    else if DirExists(ExpandConstant('{pf}') + '\Microsoft Visual Studio\2022\Community') then
-      VSPath := ExpandConstant('{pf}') + '\Microsoft Visual Studio\2022\Community';
-
-    if VSPath <> '' then
-      AddTarget('VS 2022', '2022', 'x64', VSPath,
-        VSPath + '\Common7\IDE\Extensions\AkmlSql', True, '');
-  end;
-
   // VS 2026 fallback — can be under \2026\ or \18\
   if not TargetAlreadyAdded('2026') then
   begin
@@ -342,8 +238,6 @@ begin
   // Primary: vswhere-based detection (finds VS and SSMS 22)
   DetectViaVSWhere;
   // Fallback: filesystem detection for anything vswhere missed
-  DetectSSMS20;
-  DetectSSMS21;
   DetectSSMS22;
   DetectVisualStudioFallback;
   CheckRunningIDEs;
@@ -421,18 +315,10 @@ end;
 
 // --- Check functions for [Files] section ---
 
-function CheckSSMS20: Boolean; begin Result := IsTargetSelected('20'); end;
-function CheckSSMS21: Boolean; begin Result := IsTargetSelected('21'); end;
 function CheckSSMS22: Boolean; begin Result := IsTargetSelected('22'); end;
-function CheckVS2019: Boolean; begin Result := IsTargetSelected('2019'); end;
-function CheckVS2022: Boolean; begin Result := IsTargetSelected('2022'); end;
 function CheckVS2026: Boolean; begin Result := IsTargetSelected('2026'); end;
 
-function GetSSMS20ExtDir(Param: String): String; begin Result := GetTargetExtPath('20'); end;
-function GetSSMS21ExtDir(Param: String): String; begin Result := GetTargetExtPath('21'); end;
 function GetSSMS22ExtDir(Param: String): String; begin Result := GetTargetExtPath('22'); end;
-function GetVS2019ExtDir(Param: String): String; begin Result := GetTargetExtPath('2019'); end;
-function GetVS2022ExtDir(Param: String): String; begin Result := GetTargetExtPath('2022'); end;
 function GetVS2026ExtDir(Param: String): String; begin Result := GetTargetExtPath('2026'); end;
 
 // --- Silent Mode /TARGETS Parsing ---
@@ -451,25 +337,9 @@ begin
     Targets[I].IsSelected := False;
 
   // Select only specified targets
-  if Pos('ssms20', LowerCase(TargetsParam)) > 0 then
-    for I := 0 to TargetCount - 1 do
-      if Targets[I].Version = '20' then Targets[I].IsSelected := True;
-
-  if Pos('ssms21', LowerCase(TargetsParam)) > 0 then
-    for I := 0 to TargetCount - 1 do
-      if Targets[I].Version = '21' then Targets[I].IsSelected := True;
-
   if Pos('ssms22', LowerCase(TargetsParam)) > 0 then
     for I := 0 to TargetCount - 1 do
       if Targets[I].Version = '22' then Targets[I].IsSelected := True;
-
-  if Pos('vs2019', LowerCase(TargetsParam)) > 0 then
-    for I := 0 to TargetCount - 1 do
-      if Targets[I].Version = '2019' then Targets[I].IsSelected := True;
-
-  if Pos('vs2022', LowerCase(TargetsParam)) > 0 then
-    for I := 0 to TargetCount - 1 do
-      if Targets[I].Version = '2022' then Targets[I].IsSelected := True;
 
   if Pos('vs2026', LowerCase(TargetsParam)) > 0 then
     for I := 0 to TargetCount - 1 do

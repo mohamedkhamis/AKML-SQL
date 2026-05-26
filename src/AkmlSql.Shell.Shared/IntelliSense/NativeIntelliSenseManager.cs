@@ -21,11 +21,9 @@ namespace AkmlSql.Shell.Shared.IntelliSense
 
         private NativeIntelliSenseManager() { }
 
-        /// <summary>Registry paths for SSMS 20, 21, and 22 IntelliSense settings.</summary>
+        /// <summary>Registry paths for SSMS 22 IntelliSense settings.</summary>
         private static readonly string[] IntelliSenseRegistryPaths =
         [
-            @"Software\Microsoft\SQL Server Management Studio\20.0\Settings\IntelliSense",
-            @"Software\Microsoft\SQL Server Management Studio\21.0\Settings\IntelliSense",
             @"Software\Microsoft\SQL Server Management Studio\22.0\Settings\IntelliSense",
             @"Software\Microsoft\SSMS\22.0\Settings\IntelliSense"
         ];
