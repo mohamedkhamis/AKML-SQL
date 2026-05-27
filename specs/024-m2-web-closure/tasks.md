@@ -10,7 +10,7 @@ description: "Task list for M2 — Web Edition Formatter & Analyser MVP Closure"
 
 **Tests**: This closure spec **is** verification work — every user story produces tests, audit documents, or measured numbers as its deliverable. There is no separate "tests" section; the work itself is the testing. No TDD ordering applies because we are not adding application code that needs failing tests to drive it (the application is already shipped via spec 021).
 
-**Organization**: Tasks are grouped by user story so each story can land independently. US1 (theme audit) is entirely independent of US2–US5; US2 + US3 share the parity-baseline infrastructure from the Foundational phase; US4 (Playwright) needs `data-testid` attributes added to existing components; US5 (bundle audit) is entirely independent.
+**Organization**: Tasks are grouped by user story so each story can land independently. US1 (theme audit) is entirely independent of US2–US6; US2 + US3 share the parity-baseline infrastructure from the Foundational phase; US4 (Playwright) needs `data-testid` attributes added to existing components; US5 (bundle audit) is entirely independent. US6 (file-I/O UI affordances) is the only user story that adds new application code — three UI edits in two existing components plus tests — and is independent of US1–US5 except for sharing the Playwright `data-testid` contract (T004) with US4.
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -133,7 +133,44 @@ description: "Task list for M2 — Web Edition Formatter & Analyser MVP Closure"
 
 ---
 
-## Phase 8: Polish & cross-cutting concerns
+## Phase 8: User Story 6 — File-I/O UI affordances (Priority: P2)
+
+**Goal**: wire the three M2 PRD §5 feature-scope rows (`Open .sql`, `Import .akmlstyle / .sqlpromptstylev2`, `Export current profile`) into the UI — they currently ship with backend code but no clickable affordance. The work is small (two component edits, one service method, ~50 LOC each) but it closes the four feature-scope rows the PRD marked **Yes** for M2.
+
+**Independent Test**: in a Chromium session against `dotnet run --project src/AkmlSql.Web -c Release`, the user can (a) click Open in the editor toolbar → pick a `.sql` file → see its contents in the editor; (b) click Import in the profile picker → pick an `.akmlstyle` → see it appear under **User**; (c) click Import → pick a `.sqlpromptstylev2` → see it appear under **SQL Prompt**; (d) with a non-built-in profile active, click Export → choose `.akmlstyle` or `.sqlpromptstylev2` → see a download triggered. bUnit tests under `tests/AkmlSql.Web.Tests/` cover the happy path and the rejection paths (oversize file / malformed file / built-in-export-blocked) on the standard `dotnet test` invocation.
+
+### Service layer
+
+- [ ] T046 [US6] In `src/AkmlSql.Web/Services/IProfileStore.cs`, extend the interface with two methods: `Task<ProfileRecord> ImportFromStreamAsync(string filename, Stream content)` — dispatches on `Path.GetExtension(filename)`: `.akmlstyle` calls `ProfileSerializer.Deserialize`, `.sqlpromptstylev2` calls `SqlPromptImporter.Import`; generates a kebab-case `Id` from the filename stem; resolves `Origin` from the extension; persists via the existing `SaveAsync` path. Throws `InvalidOperationException` on unknown extension and `JsonException`/`XmlException` on malformed content. Update `class ProfileStore` to implement both methods and verify project references to `AkmlSql.Analysis` (for `SqlPromptImporter`) and `AkmlSql.Formatting` (for `ProfileSerializer` / `SqlPromptExporter`) are present in `src/AkmlSql.Web/AkmlSql.Web.csproj`
+- [ ] T047 [P] [US6] In the same `IProfileStore` interface, add `Task<(string Filename, byte[] Bytes)> ExportAsync(string id, ProfileExportFormat format)` — for built-in ids returns null/throws; for `ProfileExportFormat.AkmlStyle` calls `ProfileSerializer.Serialize(profile)`; for `ProfileExportFormat.SqlPromptStyleV2` calls `SqlPromptExporter.ExportToString(profile)`; filename is `<sanitised-name>.<ext>` with reserved-character stripping per FR-026
+- [ ] T048 [P] [US6] Add `public enum ProfileExportFormat { AkmlStyle, SqlPromptStyleV2 }` adjacent to the `ProfileOrigin` enum in `src/AkmlSql.Web/Services/IProfileStore.cs`
+
+### Editor: Open file affordance
+
+- [ ] T049 [US6] In `src/AkmlSql.Web/Pages/Editor.razor`, add an Open button + `<InputFile accept=".sql" OnChange="OnOpenFileAsync" data-testid="open-file" />` to the toolbar (left of Format). Handler reads via `e.File.OpenReadStream(DocumentSizeLimit.MaxDocumentBytes)` (the existing `DocumentSizeLimit` constant) → `StreamReader.ReadToEndAsync()` → `_editor.SetTextAsync(text)` → resets `_findings`, `_hasAnalysed = false`, sets `_status = $"Opened {e.File.Name}"`. Wrap in try/catch — on `IOException` (oversize) set `_status` to a non-blocking error message and leave the editor untouched. Use `<InputFile>` not `<input type="file">` per Blazor convention
+
+### Profile picker: Import + Export affordances
+
+- [ ] T050 [US6] In `src/AkmlSql.Web/Shared/ProfilePickerComponent.razor`, add an `<InputFile accept=".akmlstyle,.sqlpromptstylev2" OnChange="OnImportAsync" data-testid="import-profile" />` and a labelled "Import" button next to the Delete button. Handler calls `ProfileStore.ImportFromStreamAsync(e.File.Name, e.File.OpenReadStream(MaxImportBytes))` (cap at 1 MB per spec 020 conventions); on success calls `await ReloadAsync()`, sets `_activeId = imported.Id`, invokes `OnProfileChanged`. On `JsonException` / `XmlException` / `InvalidOperationException`, surfaces a one-line error via the existing JS `confirm`-style helper or a status `<span>` (no full modal — the Settings page redesign owns that)
+- [ ] T051 [US6] In the same component, add an Export `<button data-testid="export-profile">Export</button>` that opens a small inline format-chooser (two buttons: `.akmlstyle` / `.sqlpromptstylev2`). When the active profile's `Origin == BuiltIn`, the Export button is rendered `disabled` with a `title` tooltip "Built-in profiles are read-only". Click handler calls `var (filename, bytes) = await ProfileStore.ExportAsync(_activeId, format);` then invokes `await JS.InvokeVoidAsync("akmlDownload.saveFile", filename, bytes)` against the existing `wwwroot/js/akml-download.js`
+- [ ] T052 [P] [US6] Verify `wwwroot/js/akml-download.js` exposes a `saveFile(filename, bytes)` function; if it doesn't, add one — `function saveFile(filename, bytes) { const blob = new Blob([bytes], { type: 'application/octet-stream' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); }`. Export the function under `window.akmlDownload = window.akmlDownload || {}; window.akmlDownload.saveFile = saveFile;`
+
+### Tests
+
+- [ ] T053 [P] [US6] Add `tests/AkmlSql.Web.Tests/Services/ProfileStoreImportExportTests.cs` covering: (a) `.akmlstyle` round-trip — generate a `FormattingProfile`, `Serialize` → stream → `ImportFromStreamAsync` → assert `Origin == User` and the deserialised profile matches; (b) `.sqlpromptstylev2` import — feed a known-good fixture from `tests/format-parity/fixtures/` or inline it; assert `Origin == SqlPromptImport` and at least one mapped option (e.g. `Casing.ReservedKeywords`) reflects the XML; (c) `ExportAsync` for `AkmlStyle` and `SqlPromptStyleV2` against a user profile → assert filename + bytes parse back via `ProfileSerializer.Deserialize` / `SqlPromptImporter.Import` (round-trip); (d) `ExportAsync` for a built-in id throws `InvalidOperationException`; (e) malformed content throws the matching exception type
+- [ ] T054 [P] [US6] Add `tests/AkmlSql.Web.Tests/Pages/EditorOpenFileTests.cs` (bUnit) covering: (a) clicking the Open button and dispatching an `InputFileChangeEventArgs` with a known SQL string replaces the editor text and clears findings; (b) a stream larger than `DocumentSizeLimit.MaxDocumentBytes` is rejected, the prior text remains, and `_status` carries the rejection message
+- [ ] T055 [P] [US6] Add `tests/AkmlSql.Web.Tests/Shared/ProfilePickerImportExportTests.cs` (bUnit) covering: (a) import surfaces a new option in the matching `<optgroup>` and becomes the active selection; (b) export against a built-in profile renders the Export button `disabled`; (c) export against a user profile invokes `akmlDownload.saveFile` (use a stub `IJSRuntime` to capture the call); (d) the per-profile-origin option-group layout (`Built-in` / `User` / `SQL Prompt`) renders in the canonical order
+
+### Wiring
+
+- [ ] T056 [US6] Run `dotnet test tests/AkmlSql.Web.Tests/AkmlSql.Web.Tests.csproj --filter "FullyQualifiedName~ProfileStoreImportExportTests|FullyQualifiedName~EditorOpenFileTests|FullyQualifiedName~ProfilePickerImportExportTests"`; expect every test green. Then run the full `dotnet test` invocation; expect no regression in the existing 51 parity tests. Build `AkmlSql.Web` Release (`dotnet build -c Release`) and confirm 0 warnings / 0 errors
+- [ ] T057 [US6] Update `doc/WEB/quickstart-m2.md` — add three bulleted entries under the user-facing usage section: "Click the editor's Open button to load a `.sql` file from disk", "Click the profile picker's Import button to load an `.akmlstyle` or `.sqlpromptstylev2`", "Click Export against a user / SQL-Prompt profile to download it as either format"
+
+**Checkpoint**: every M2 PRD §5 feature-scope row marked **Yes** has a clickable UI affordance behind it; the new tests are part of the standard `dotnet test` run; the Release build is green. No spec-021 task flip needed — the missing M2 PRD §5 rows were never tracked as spec-021 tasks (they were rolled into T039 / T040 / T045 of spec 021 but the UI was never wired).
+
+---
+
+## Phase 9: Polish & cross-cutting concerns
 
 **Purpose**: Flip the spec 021 deferred-task checkboxes from `[ ]` to `[X]`, remove their deferral notes, and run the final closure verification.
 
@@ -142,7 +179,7 @@ description: "Task list for M2 — Web Edition Formatter & Analyser MVP Closure"
 - [X] T041 [P] Same flip for T047 in `specs/021-web-edition/tasks.md` — note points at the extended `tests/AkmlSql.Web.Tests/Analyse/AnalyserServiceTests.cs`
 - [ ] T042 [P] Same flip for T053 in `specs/021-web-edition/tasks.md` — note points at `tests/AkmlSql.Web.E2E.Tests/UserStory1Tests.cs`
 - [X] T043 [P] Same flip for T054 in `specs/021-web-edition/tasks.md` — note points at `specs/021-web-edition/M2-BUNDLE-SIZE.md`
-- [ ] T044 Run the closure verification block from `specs/024-m2-web-closure/quickstart.md` "Closure verification (end-to-end)" — confirm all five `[ ] → [X]` flips, confirm the four expected artefacts exist, run `dotnet test` over Formatter + Analyser + Playwright filters and observe green
+- [ ] T044 Run the closure verification block from `specs/024-m2-web-closure/quickstart.md` "Closure verification (end-to-end)" — confirm all five `[ ] → [X]` flips, confirm the four expected artefacts exist, run `dotnet test` over Formatter + Analyser + Playwright + new `ProfileStoreImportExportTests` / `EditorOpenFileTests` / `ProfilePickerImportExportTests` filters and observe green; manually click-through US6's four affordances (Open `.sql`, Import `.akmlstyle`, Import `.sqlpromptstylev2`, Export current profile) in a Chromium session against `dotnet run -c Release` per `quickstart.md` §US6
 - [X] T045 [P] Append a Spec 024 entry to `doc/progress.md` per the existing per-spec section pattern — record the 5 user stories, the 5 closed deferred tasks, the bundle measurement, the headline-flow timing, and any `ACCEPTED_WITH_REASON` divergences with their `reasonLink`s
 
 **Checkpoint**: M2 milestone closed. PR-ready. All spec 021 Phase 3 deferred tasks marked `[X]`.
@@ -155,8 +192,8 @@ description: "Task list for M2 — Web Edition Formatter & Analyser MVP Closure"
 
 - **Phase 1 (Setup)**: No prior dependencies; T001 is sequential (it creates dirs), T002 + T003 are [P].
 - **Phase 2 (Foundational)**: Depends on Phase 1. Within Phase 2: T004 + T005 + T006 are [P] (different files); T007 depends on the corpus existing (already does per spec 020); T008 + T009 are sequential (T009 reads what T007 + T008 produce).
-- **Phase 3 (US1)**, **Phase 4 (US2)**, **Phase 5 (US3)**, **Phase 6 (US4)**, **Phase 7 (US5)**: All start after Phase 2 completes. **US1 is fully independent** of the others — does not touch any test code. **US2 + US3** share `ParityCorpusLoader` + `ParityDispositionsRegistry` from Phase 2 but operate on different test classes, so they run in parallel. **US4** depends on T004's `data-testid` additions (Phase 2). **US5** is entirely independent.
-- **Phase 8 (Polish)**: Depends on every user story having flipped its corresponding spec-021 task. T039–T043 are [P] (different lines in the same file — git rebase / merge handles this, but file-level sequential is safer if running by hand).
+- **Phase 3 (US1)**, **Phase 4 (US2)**, **Phase 5 (US3)**, **Phase 6 (US4)**, **Phase 7 (US5)**, **Phase 8 (US6)**: All start after Phase 2 completes. **US1 is fully independent** of the others — does not touch any test code. **US2 + US3** share `ParityCorpusLoader` + `ParityDispositionsRegistry` from Phase 2 but operate on different test classes, so they run in parallel. **US4** depends on T004's `data-testid` additions (Phase 2). **US5** is entirely independent. **US6** adds the only new application code in this spec (Editor.razor open button, ProfilePickerComponent.razor import/export buttons, ProfileStore extension methods); it depends on T004 for the `data-testid` contract but otherwise has no file overlap with US1–US5.
+- **Phase 9 (Polish)**: Depends on every user story (US1–US5) having flipped its corresponding spec-021 task; US6 has no spec-021 task flip — its closure is the M2 PRD §5 feature-scope rows. T039–T043 are [P] (different lines in the same file — git rebase / merge handles this, but file-level sequential is safer if running by hand).
 
 ### Within each user story
 
@@ -165,10 +202,11 @@ description: "Task list for M2 — Web Edition Formatter & Analyser MVP Closure"
 - **US3**: Same shape — T023 → T024 → T025.
 - **US4**: T026 + T027 + T028 are [P] (three files). T029 depends on all three. T030 + T031 + T032 are sequential.
 - **US5**: T033 → T034 → T035 → T036 → T037 → T038 is strictly sequential — each step's success is a precondition for the next.
+- **US6**: T046 → T047 → T048 are sequential (interface + enum land first); T049 / T050 / T051 / T052 are [P] (different files: Editor.razor + ProfilePickerComponent.razor + akml-download.js); T053 / T054 / T055 are [P] (three new test classes); T056 + T057 are sequential at the end.
 
 ### Parallel opportunities
 
-After Phase 2 completes, **all five user stories can run in parallel** if there are five engineers / sessions. Realistic single-engineer order: US1 (most user-visible, fastest to spot drift) → US2 + US3 (back-to-back, share the corpus loader) → US4 (highest cycle time per scenario debug) → US5 (lowest blocking risk, but unlocks M3).
+After Phase 2 completes, **all six user stories can run in parallel** if there are six engineers / sessions. Realistic single-engineer order: US1 (most user-visible, fastest to spot drift) → US6 (small focused product UI work, unblocks PRD §5 closure) → US2 + US3 (back-to-back, share the corpus loader) → US4 (highest cycle time per scenario debug) → US5 (lowest blocking risk, but unlocks M3).
 
 ---
 
@@ -181,10 +219,11 @@ If only one user story ships, ship US1. It is the most user-visible M2 acceptanc
 ### Incremental delivery
 
 1. MVP (above) → ship the theme parity audit.
-2. Add US2 + US3 (in parallel) → ship the parity test green light. Now the parity guarantee is recorded, not just claimed.
-3. Add US4 → ship the Playwright safety net. Future regressions in the editor / format / analyse flow are caught on CI.
-4. Add US5 → ship the bundle baseline. M3 has a regression target.
-5. Polish phase → commit the spec 021 flips and the progress.md entry. PR.
+2. Add US6 → ship the missing PRD §5 file-I/O affordances. Closes the four "Yes" feature-scope rows the M2 code shipped without UI.
+3. Add US2 + US3 (in parallel) → ship the parity test green light. Now the parity guarantee is recorded, not just claimed.
+4. Add US4 → ship the Playwright safety net. Future regressions in the editor / format / analyse flow are caught on CI.
+5. Add US5 → ship the bundle baseline. M3 has a regression target.
+6. Polish phase → commit the spec 021 flips and the progress.md entry. PR.
 
 ### Parallel team strategy
 
@@ -194,8 +233,9 @@ Once Phase 2 completes:
 - Engineer B: US2 + US3 — back-to-back, both modify the parity test classes + registry.
 - Engineer C: US4 — Playwright harness + four scenarios.
 - Engineer D: US5 — bundle-size audit on a separate Windows host with Brotli toolchain.
+- Engineer E: US6 — file-I/O UI affordances; touches Editor.razor + ProfilePickerComponent.razor + IProfileStore + three new test classes.
 
-US1 ↔ US2/US3 ↔ US4 ↔ US5 have no file overlap (with one tiny exception: the registry from Phase 2's T006 is written by US2 and US3, but they touch different keys of the same dictionary — coordinate via PR review).
+US1 ↔ US2/US3 ↔ US4 ↔ US5 ↔ US6 have no file overlap (with two tiny exceptions: the registry from Phase 2's T006 is written by US2 and US3, but they touch different keys of the same dictionary; the `data-testid` contract is extended by US6's T049 / T050 / T051 — additive only, no clashes with T004 — coordinate via PR review).
 
 ---
 
@@ -203,6 +243,6 @@ US1 ↔ US2/US3 ↔ US4 ↔ US5 have no file overlap (with one tiny exception: t
 
 - [P] tasks = different files, no dependencies on incomplete tasks in the same phase.
 - Every [US*] task is independently testable per the spec's `Independent Test` block for that story.
-- The closure spec discipline (no new application surfaces; no new test framework; no spec-021 surfaces touched beyond placeholders + deferred-task notes) holds across every task. The single intentional exception is T004 — seven `data-testid` attribute additions, justified as the Playwright contract's prerequisite.
+- The closure spec discipline (no new application surfaces; no new test framework; no spec-021 surfaces touched beyond placeholders + deferred-task notes) holds across US1–US5. **US6 is the intentional, scoped exception**: it adds three UI affordances and one service-layer method to close the M2 PRD §5 feature-scope rows that shipped without UI wiring. The spec-021 service surfaces (`ProfileSerializer`, `SqlPromptImporter`, `SqlPromptExporter`, `DocumentSizeLimit`) are reused, not replaced; only `IProfileStore` gains two new methods and one enum. T004's `data-testid` additions and US6's `data-testid="open-file"` / `data-testid="import-profile"` / `data-testid="export-profile"` are the only attribute-surface changes to existing components.
 - Per project rules in `CLAUDE.md`: never commit / push / run `git add` without explicit user approval. This task list assumes the user approves commits between phases or at the user's discretion.
 - The closure verification block in `quickstart.md` (run at T044) is the single source of truth for "M2 PRD Definition of Done is closed against recorded evidence."

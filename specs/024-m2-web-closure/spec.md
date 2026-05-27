@@ -11,11 +11,14 @@
 
 The M2 PRD asks for a browser-based SQL formatter and analyser at parity with the IDE plugin: same formatted output, same analysis findings, the same look and feel across Light / Dark / HighContrast themes, all within a defined bundle-size budget.
 
-Spec 021 Phase 3 (User Story 1) landed the bulk of that work — `Editor.razor`, `EditorComponent`, `FormatterService`, `AnalyserService`, `ProfileStore`, `AnalysisSettingsStore`, `ThemeService`, `ProblemsListComponent`, the diagnostics ring buffer, editor-session persistence, and the M2 quickstart doc are all on `master` and exercised by ~50 bUnit and service tests. The M2 PRD's Definition of Done is **structurally complete**.
+Spec 021 Phase 3 (User Story 1) landed the bulk of that work — `Editor.razor`, `EditorComponent`, `FormatterService`, `AnalyserService`, `ProfileStore`, `AnalysisSettingsStore`, `ThemeService`, `ProblemsListComponent`, the diagnostics ring buffer, editor-session persistence, and the M2 quickstart doc are all on `master` and exercised by ~50 bUnit and service tests. The M2 PRD's Definition of Done is **structurally complete in services and bundle**.
 
-What is **not** done is the **verification slice**: the five Phase 3 tasks deferred because they each need either an interactive workstation session (running the IDE plugin and the web edition side-by-side), a Release `dotnet publish` on a Windows host with the full SDK (so trimming + Brotli compression run for a real bundle measurement), a Playwright runner against `dotnet run`, or a parity corpus that did not exist when M2 code landed. Without those five items the M2 quality bar is **stated but not demonstrated**.
+What is **not** done splits into two slices:
 
-This specification covers exactly the unmet verification work — five user stories, one per deferred task — leaving every shipped M2 surface untouched. It is a **closure spec**, structured the same way spec 023 closed M1.
+1. The **verification slice** — five Phase 3 tasks deferred because they each need either an interactive workstation session (running the IDE plugin and the web edition side-by-side), a Release `dotnet publish` on a Windows host with the full SDK (so trimming + Brotli compression run for a real bundle measurement), a Playwright runner against `dotnet run`, or a parity corpus that did not exist when M2 code landed. Without those five items the M2 quality bar is **stated but not demonstrated**.
+2. The **product UI slice** — three PRD §5 feature-scope rows (`Open .sql file via <InputFile>`, `Import .akmlstyle`, `Import .sqlpromptstylev2`, `Export current profile`) are marked **Yes** in the PRD but ship with backend code only and **no UI wiring**. `SqlPromptImporter` / `SqlPromptExporter` / `ProfileSerializer` exist in `src/AkmlSql.Analysis` and `src/AkmlSql.Formatting`; `ProfileOrigin.SqlPromptImport` is rendered in the picker option-groups; the production `Editor.razor` has Save but no Open; and `ProfilePickerComponent.razor`'s comment promises `<InputFile>` + Blob+download but the component renders only a `<select>` + a Delete button. A user cannot open a SQL file from disk, cannot import a profile they crafted in the IDE, and cannot export the active profile back out.
+
+This specification covers exactly the unmet verification work **and** the missing UI affordances — six user stories — leaving every shipped service surface and the bundle-budget result untouched. It is a **closure spec**, structured the same way spec 023 closed M1.
 
 ---
 
@@ -105,6 +108,24 @@ A maintainer planning M3 / M4 work can read an actual measured number for the M2
 
 ---
 
+### User Story 6 — Wire the missing M2 PRD file-I/O affordances into the UI (Priority: P2)
+
+A user who runs the web edition for the first time can open a `.sql` file from disk via a file picker in the editor toolbar, import an `.akmlstyle` profile or a `.sqlpromptstylev2` profile via the profile-picker's Import affordance, and download the active profile to disk as either format via an Export affordance — without using DevTools, the browser address bar, or the diagnostic `/spike` page.
+
+**Why this priority**: These are M2 PRD §5 feature-scope rows marked **Yes** that ship with backend code but no UI today. The backend pipeline (`SqlPromptImporter`, `SqlPromptExporter`, `ProfileSerializer`) is built and tested at the IDE layer; the missing piece is the WASM-side `<InputFile>` element, the file-extension dispatcher, the IndexedDB save path for an imported profile, and the Blob+download exporter. Without these affordances, the PRD's "Import `.akmlstyle` — Yes / Import `.sqlpromptstylev2` — Yes / Export current profile — Yes / Open `.sql` file — Yes" lines remain promises the user can't act on, even though every prerequisite already lives on disk. This story is P2 (same as US2/US3) because it is product UI — not verification — and the parity tests it enables (a user-imported `.sqlpromptstylev2` running through the web formatter) cannot run without it.
+
+**Independent Test**: Open the web edition in a Chromium browser; click the editor toolbar's Open button → choose a `.sql` file → confirm the editor's text replaces; click the profile picker's Import button → choose an `.akmlstyle` file → confirm it appears under the **User** option-group; click Import again → choose a `.sqlpromptstylev2` file → confirm it appears under the **SQL Prompt** option-group; click the Export button while a user profile is active → confirm a download is offered with the chosen extension. No spec-021 service code is modified.
+
+**Acceptance Scenarios**:
+
+1. **Given** the user has a 100-line `.sql` file on their disk and the web edition open, **When** the user clicks the editor toolbar's Open button and selects the file, **Then** the editor replaces its current text with the file's contents (subject to the 10 MB per-document size limit already enforced by `DocumentSizeLimit`), the analysis findings reset, and the toolbar status reflects the file name.
+2. **Given** the user exported an `.akmlstyle` profile from the IDE plugin, **When** they click the profile picker's Import button and select that file, **Then** the profile is persisted via `IProfileStore.SaveAsync` with `ProfileOrigin.User`, appears in the **User** option-group, and is selectable as the active profile; re-formatting uses its settings.
+3. **Given** the user exported a `.sqlpromptstylev2` style from SQL Prompt or the IDE plugin, **When** they click Import and select that file, **Then** the file is routed through `SqlPromptImporter.Import(...)`, persisted with `ProfileOrigin.SqlPromptImport`, appears in the **SQL Prompt** option-group, and is selectable as the active profile.
+4. **Given** a user or SQL-Prompt-origin profile is currently active, **When** the user clicks Export and chooses a format (`.akmlstyle` or `.sqlpromptstylev2`), **Then** a download is triggered via the existing `akml-download.js` interop with a sensible filename (e.g. `<profile-name>.akmlstyle`) and the file round-trips through the IDE plugin without warnings.
+5. **Given** the active profile is built-in (`builtin.default` / `builtin.ansi`), **When** the user opens the profile picker, **Then** the Export button is disabled (or hidden) because built-in profiles are not user content; the affordance reappears the moment a user/SQL-Prompt profile becomes active.
+
+---
+
 ### Edge Cases
 
 - **Audit screenshot variance from OS-level font rendering or DPI scaling**: capture the host's DPI and font-smoothing setting alongside each screenshot pair; treat any sub-pixel variance attributable to DPI as accepted-with-reason rather than a closeable delta.
@@ -113,6 +134,10 @@ A maintainer planning M3 / M4 work can read an actual measured number for the M2
 - **Playwright test runs against a stale `dotnet run` after a code change** without seeing the change: the test harness builds the project before launching the browser and aborts if the build is dirty.
 - **Bundle measurement on a machine without Brotli compression in the toolchain**: the bundle-size audit explicitly notes the compression status and the document is invalid until the measurement is captured from a build with Brotli active.
 - **Audit captures more than five visible gaps**: the spec mandates closing only the top five; remaining gaps must be filed as named follow-ups (with the audit document linking them) rather than silently deferred.
+- **User opens a `.sql` file larger than 10 MB**: the editor refuses the load via the existing `DocumentSizeLimit` guard and surfaces a non-blocking status message; the prior editor contents stay intact.
+- **User imports an `.akmlstyle` or `.sqlpromptstylev2` whose deserialisation throws**: the import path catches the exception, leaves the active profile unchanged, surfaces an error in the toolbar status, and does not write a corrupt entry to IndexedDB.
+- **`.sqlpromptstylev2` contains an option `SqlPromptImporter` does not map**: the existing FR-023 affordance from spec 020 (logs the unmapped option, continues import) applies unchanged; the imported profile is usable for every option that did map.
+- **User exports while a built-in profile is active**: the Export affordance is disabled because built-ins are read-only IP — users should not be able to "export" them as if they were customisations.
 
 ---
 
@@ -157,6 +182,15 @@ A maintainer planning M3 / M4 work can read an actual measured number for the M2
 - **FR-021**: If the measurement is over target, the audit MUST identify the largest single asset and record a lazy-loading plan; the plan MUST be applied before the audit is marked complete.
 - **FR-022**: The audit MUST record the headroom for M3 — the difference between the current measurement and the next-milestone budget — so M3's growth can be tracked.
 
+#### File-I/O UI affordances
+
+- **FR-023**: The editor toolbar in `src/AkmlSql.Web/Pages/Editor.razor` MUST expose an Open affordance that uses `<InputFile accept=".sql">` to read a single file's text and replace the editor's content; the read MUST honour the existing `DocumentSizeLimit` 10 MB ceiling and MUST surface a non-blocking status message on rejection without clobbering the prior content.
+- **FR-024**: `ProfilePickerComponent.razor` MUST expose an Import affordance backed by `<InputFile accept=".akmlstyle,.sqlpromptstylev2">`; the handler MUST dispatch on file extension — `.akmlstyle` → `ProfileSerializer.Deserialize` → save with `ProfileOrigin.User`; `.sqlpromptstylev2` → `SqlPromptImporter.Import` → save with `ProfileOrigin.SqlPromptImport` — and persist the result via `IProfileStore.SaveAsync` so the new profile appears in the matching option-group on the next list refresh.
+- **FR-025**: Imported profiles MUST appear in the correct option-group (`User` or `SQL Prompt`), MUST be selectable as the active profile immediately, and MUST be deletable via the existing Delete button; the built-in profiles MUST remain non-deletable.
+- **FR-026**: `ProfilePickerComponent.razor` MUST expose an Export affordance that — when the active profile is non-built-in — triggers a download via the existing `akml-download.js` JS interop; the user MUST be able to choose between `.akmlstyle` (via `ProfileSerializer.Serialize`) and `.sqlpromptstylev2` (via `SqlPromptExporter.ExportToString`); the filename MUST default to `<profile-name>.<extension>` with reserved-character sanitisation.
+- **FR-027**: The Export affordance MUST be disabled or hidden when the active profile's `Origin == BuiltIn`; user-visible state MUST reflect the change within one render cycle of the active-profile selection.
+- **FR-028**: Every file-I/O path (open, import, export) MUST be exercised by a bUnit test under `tests/AkmlSql.Web.Tests/` that covers the happy path **and** the error path (oversize file, malformed XML / JSON, built-in-profile-export-blocked); the tests MUST run as part of the standard `dotnet test` invocation.
+
 ### Key Entities *(include if feature involves data)*
 
 - **Theme parity audit document** (`M2-THEME-PARITY-AUDIT.md`): paired screenshots × three themes, a deltas table, a list of closed deltas, a list of accepted-with-reason deltas, host environment metadata.
@@ -164,6 +198,7 @@ A maintainer planning M3 / M4 work can read an actual measured number for the M2
 - **Parity test record**: per (corpus item × profile) pair, the web edition output, the IDE baseline output, a diff (if any), and a disposition.
 - **Browser test scenario**: one of the four M2 PRD User Story 1 acceptance scenarios, encoded as a browser-driver script with timing assertions.
 - **Bundle-size audit record** (`M2-BUNDLE-SIZE.md`): the compressed total, the per-asset breakdown, the host metadata, the verdict against the M1 target, and (if over) the lazy-loading plan.
+- **Imported profile record**: a `ProfileRecord` created by the import handler — `Id` (generated, kebab-cased from filename), `Name` (from the file's metadata or filename stem), `Origin` (`User` for `.akmlstyle`, `SqlPromptImport` for `.sqlpromptstylev2`), `Profile` (the deserialised `FormattingProfile`). Persisted in IndexedDB via `IProfileStore.SaveAsync`.
 
 ---
 
@@ -179,6 +214,7 @@ A maintainer planning M3 / M4 work can read an actual measured number for the M2
 - **SC-006**: All five of spec 021's deferred Phase 3 tasks (T036, T041, T047, T053, T054) can be marked complete with their deferral notes removed; their checkboxes flip from `[ ]` to `[X]`.
 - **SC-007**: After this spec lands, the M2 PRD's Definition of Done has every checkbox closed against recorded evidence rather than against shipped code alone.
 - **SC-008**: The web edition's M3 work can use the M2 bundle-size measurement as a regression baseline; M3 cannot start without an M2 number in `M2-BUNDLE-SIZE.md`.
+- **SC-009**: A first-time user can — in a single Chromium session against the published web edition, without DevTools — open a `.sql` file from disk, import an `.akmlstyle` profile they exported from the IDE plugin, import a `.sqlpromptstylev2` style, select the imported profile as active, and export the active profile back to disk in either format. Every M2 PRD §5 feature-scope row marked **Yes** has a clickable UI affordance behind it.
 
 ---
 
@@ -198,3 +234,5 @@ A maintainer planning M3 / M4 work can read an actual measured number for the M2
 - **Spec 020** — the format-parity corpus's lineage; if FR-006/FR-010's corpus extends spec 020's, the spec-020 limitations are inherited as accepted-with-reason dispositions.
 - **M1 decision document** (`docs/m1-wasm-decision.md`) — the source of the bundle-size target FR-020 compares against.
 - **IDE plugin baseline** — the formatter and analyser outputs from the WPF surface must be captured before FR-006 and FR-010 can compare; the baseline-generator procedure is part of those FRs.
+- **Existing backend pipeline for US6** — `src/AkmlSql.Analysis/SqlPromptImporter.cs`, `src/AkmlSql.Formatting/Profiles/SqlPromptExporter.cs`, and `src/AkmlSql.Formatting/Profiles/ProfileSerializer.cs` are the pre-existing IDE-layer round-trip pipeline US6 wires into the WASM UI. No new parser/serializer is introduced; the spec-020 FR-023 unmapped-option behaviour applies unchanged.
+- **Existing JS interop for US6 download** — `src/AkmlSql.Web/wwwroot/js/akml-download.js` is the existing Blob+download helper FR-026 calls; no new JS module is introduced.

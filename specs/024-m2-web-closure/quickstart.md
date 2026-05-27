@@ -157,23 +157,75 @@ How to run each of the five user stories end-to-end. Each section is self-contai
 
 ---
 
+## US6 — File-I/O UI affordances (≈ 90 min)
+
+**Goal**: wire the M2 PRD §5 feature-scope rows (`Open .sql`, `Import .akmlstyle / .sqlpromptstylev2`, `Export current profile`) into the UI so a Chromium user can click them. No DevTools, no `/spike` page.
+
+1. **Land the service-layer extensions.**
+    - Edit `src/AkmlSql.Web/Services/IProfileStore.cs`: add `ImportFromStreamAsync(filename, content)` + `ExportAsync(id, format)` to the interface; implement on `ProfileStore`; add `enum ProfileExportFormat { AkmlStyle, SqlPromptStyleV2 }`. Verify `src/AkmlSql.Web/AkmlSql.Web.csproj` references `AkmlSql.Analysis` and `AkmlSql.Formatting`.
+
+2. **Wire the Open button into the editor.**
+    - Edit `src/AkmlSql.Web/Pages/Editor.razor`: add `<InputFile accept=".sql" OnChange="OnOpenFileAsync" data-testid="open-file" />` to the toolbar; handler reads via `e.File.OpenReadStream(DocumentSizeLimit.MaxDocumentBytes)`, calls `_editor.SetTextAsync`, resets findings, sets `_status`.
+
+3. **Wire Import + Export into the profile picker.**
+    - Edit `src/AkmlSql.Web/Shared/ProfilePickerComponent.razor`: add `<InputFile accept=".akmlstyle,.sqlpromptstylev2" data-testid="import-profile" />` + `<button data-testid="export-profile">Export`. Import calls `ProfileStore.ImportFromStreamAsync`. Export against a built-in profile renders the button `disabled`; against a user profile, opens an inline format-chooser and calls `JS.InvokeVoidAsync("akmlDownload.saveFile", filename, bytes)`.
+    - Verify `wwwroot/js/akml-download.js` exposes `akmlDownload.saveFile(filename, bytes)`; if not, add the Blob+download helper per the contract.
+
+4. **Add the bUnit tests.**
+    - `tests/AkmlSql.Web.Tests/Services/ProfileStoreImportExportTests.cs` — `.akmlstyle` round-trip, `.sqlpromptstylev2` import, export against built-in vs user, malformed-content rejection.
+    - `tests/AkmlSql.Web.Tests/Pages/EditorOpenFileTests.cs` — happy path + oversize-file rejection.
+    - `tests/AkmlSql.Web.Tests/Shared/ProfilePickerImportExportTests.cs` — import surfaces in matching option-group; export blocked for built-ins; export against user invokes `akmlDownload.saveFile`.
+
+5. **Run the new tests + full suite.**
+
+   ```powershell
+   dotnet test tests/AkmlSql.Web.Tests/AkmlSql.Web.Tests.csproj `
+     --filter "FullyQualifiedName~ProfileStoreImportExportTests|FullyQualifiedName~EditorOpenFileTests|FullyQualifiedName~ProfilePickerImportExportTests"
+   ```
+
+    Expect green. Then run `dotnet test` without filter to confirm no regression in the existing 51 parity tests.
+
+6. **Manual click-through.**
+    - `dotnet run --project src/AkmlSql.Web -c Release`; open Chromium.
+    - Click Open → pick `tests/format-parity/corpus/03-stored-proc.sql` → confirm the editor replaces.
+    - Click profile-picker Import → pick a known `.akmlstyle` from `%AppData%/AKML SQL/profiles/` → confirm it appears under **User**.
+    - Click Import → pick a `.sqlpromptstylev2` exported from SQL Prompt → confirm it appears under **SQL Prompt**.
+    - Select the imported user profile → click Export → choose `.akmlstyle` → confirm a download is offered.
+    - Switch the active profile back to `builtin.default` → confirm Export is `disabled`.
+
+7. **Update quickstart.md user-facing usage section.** Per tasks.md T057, add the three bulleted entries to `doc/WEB/quickstart-m2.md`.
+
+**Done when**: the three new bUnit test classes pass; manual click-through completes all five steps; `doc/WEB/quickstart-m2.md` documents the new affordances. No spec-021 task flip — US6 closes M2 PRD §5 feature-scope rows, not a tracked spec-021 task.
+
+---
+
 ## Closure verification (end-to-end)
 
-After all five stories are done, verify the closure is complete:
+After all six stories are done, verify the closure is complete:
 
 ```powershell
 # 1. All five deferred tasks in spec 021 Phase 3 are now [X]
 grep -c "^- \[ \] T036\|^- \[ \] T041\|^- \[ \] T047\|^- \[ \] T053\|^- \[ \] T054" specs/021-web-edition/tasks.md
 # Expected output: 0
 
-# 2. The four expected new artefacts exist
+# 2. The four audit / verification artefacts exist
 test -f specs/021-web-edition/M2-THEME-PARITY-AUDIT.md
 test -f specs/021-web-edition/M2-BUNDLE-SIZE.md
 test -d tests/format-parity/baselines
 test -f tests/AkmlSql.Web.E2E.Tests/UserStory1Tests.cs
 
-# 3. The standard test run is green
-dotnet test --filter "FullyQualifiedName~FormatterServiceTests|FullyQualifiedName~AnalyserServiceTests|FullyQualifiedName~UserStory1Tests"
+# 3. The three US6 test classes exist
+test -f tests/AkmlSql.Web.Tests/Services/ProfileStoreImportExportTests.cs
+test -f tests/AkmlSql.Web.Tests/Pages/EditorOpenFileTests.cs
+test -f tests/AkmlSql.Web.Tests/Shared/ProfilePickerImportExportTests.cs
+
+# 4. The US6 UI affordances have the expected data-testid attributes
+grep -q 'data-testid="open-file"' src/AkmlSql.Web/Pages/Editor.razor
+grep -q 'data-testid="import-profile"' src/AkmlSql.Web/Shared/ProfilePickerComponent.razor
+grep -q 'data-testid="export-profile"' src/AkmlSql.Web/Shared/ProfilePickerComponent.razor
+
+# 5. The standard test run is green across verification + US6
+dotnet test --filter "FullyQualifiedName~FormatterServiceTests|FullyQualifiedName~AnalyserServiceTests|FullyQualifiedName~UserStory1Tests|FullyQualifiedName~ProfileStoreImportExportTests|FullyQualifiedName~EditorOpenFileTests|FullyQualifiedName~ProfilePickerImportExportTests"
 ```
 
-When all three checks pass, the M2 PRD's Definition of Done has recorded evidence behind every checkbox (SC-007). Commit, push, open a PR; merge closes the M2 milestone.
+When all five checks pass, the M2 PRD's Definition of Done has recorded evidence behind every checkbox (SC-007) **and** every PRD §5 feature-scope row marked **Yes** has a clickable UI affordance behind it (SC-009). Commit, push, open a PR; merge closes the M2 milestone.
