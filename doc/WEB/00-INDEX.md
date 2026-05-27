@@ -89,6 +89,20 @@ The browser and the engine are independent of the SSMS/VS plugins — separate `
 
 Each PRD follows the same template: executive summary, why now, current state, proposed architecture, milestones, risks, success metrics, out of scope, open questions, definition of done.
 
+## Operator quickstarts
+
+Hands-on walkthroughs covering the engineer-or-operator flows for each shipped milestone:
+
+| File | Covers |
+|------|--------|
+| [`quickstart-m2.md`](quickstart-m2.md) | M2 — in-browser format + analyse (no engine; offline) |
+| [`quickstart-m3.md`](quickstart-m3.md) | M3 — pair from a second LAN machine over `wss://`; localhost demo also covered |
+| [`quickstart-m4.md`](quickstart-m4.md) | M4 — installer details: IIS site, TLS cert, firewall rule |
+| [`quickstart-m5.md`](quickstart-m5.md) | M5 — IndexedDB schema cache + offline IntelliSense |
+| [`quickstart-m6.md`](quickstart-m6.md) | M6 — AI assistance from the browser |
+
+Security reference: [`doc/m3-security.md`](../m3-security.md) — threat model, on-disk artefacts, plaintext-on-LAN refusal contract for the M3 bridge.
+
 ---
 
 ## Plugin install timing — answer to "when should the user install the plugin?"

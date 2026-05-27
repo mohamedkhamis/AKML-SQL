@@ -206,6 +206,22 @@ export function setText(hostElementId, newText) {
     });
 }
 
+/**
+ * Spec 025 (M3 bridge closure) US4 — insert text at the current caret. Used by
+ * SchemaTreeComponent's click-to-insert: clicking [dbo].[Customer] drops that
+ * literal at the caret as-typed; CodeMirror's standard Ctrl+Z undoes it.
+ */
+export function insertAtCaret(hostElementId, text) {
+    const inst = _instances.get(hostElementId);
+    if (!inst || typeof text !== 'string' || text.length === 0) return;
+    const head = inst.view.state.selection.main.head;
+    inst.view.dispatch({
+        changes: { from: head, insert: text },
+        selection: { anchor: head + text.length },
+    });
+    inst.view.focus();
+}
+
 /** Select the given (1-based) line and scroll it into view. */
 export function gotoLine(hostElementId, lineNumber1Based) {
     const inst = _instances.get(hostElementId);

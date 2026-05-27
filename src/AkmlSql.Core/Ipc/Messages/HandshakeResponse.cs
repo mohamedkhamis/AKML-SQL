@@ -38,6 +38,18 @@ namespace AkmlSql.Core.Ipc.Messages
 
         /// <summary>Human-readable detail on error; null on success.</summary>
         [Key(6)] public string? ErrorMessage { get; set; }
+
+        /// <summary>
+        /// Spec 025 (M3 bridge closure) FR-006. SHA-1 hex thumbprint of the server's TLS
+        /// certificate, populated only when the bound transport is non-loopback. The browser
+        /// uses this to pin the cert on first connect and log a diagnostic warning when
+        /// a subsequent connect observes a different value (e.g., after an installer re-run
+        /// regenerated the cert). User-facing fingerprint-mismatch dialog is a deferred
+        /// follow-up; this field is the closure-spec diagnostic surface. Older engines
+        /// (pre-spec-025) omit this field — MessagePack returns null and the browser
+        /// records nothing, preserving the existing localhost-only behaviour.
+        /// </summary>
+        [Key(7)] public string? ServerTlsThumbprint { get; set; }
     }
 
     /// <summary>

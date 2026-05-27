@@ -116,12 +116,91 @@ namespace AkmlSql.Core.Config
         public LabsSettings Labs { get; set; } = new();
 
         /// <summary>
+        /// Spec 025 (M3 bridge closure) FR-027: WebSocket-bridge transport composition.
+        /// When <see cref="BridgeOptions.Enabled"/> is <c>true</c>, the engine host starts
+        /// a <c>WebSocketTransport</c> alongside the existing <c>NamedPipeTransport</c>;
+        /// both share the same <c>RpcRouter</c> so SSMS plugin and web edition serve
+        /// identical handler chains. When the section is absent or disabled, only the
+        /// named pipe runs (IDE-plugin-only behaviour unchanged).
+        /// </summary>
+        [JsonPropertyName("bridge")]
+        public BridgeOptions Bridge { get; set; } = new();
+
+        /// <summary>
         /// Minimum log level for the rolling file sink.
         /// Valid values: Verbose, Debug, Information, Warning, Error, Fatal.
         /// Defaults to Debug.
         /// </summary>
         [JsonPropertyName("logMinimumLevel")]
         public string LogMinimumLevel { get; set; } = "Debug";
+    }
+
+    /// <summary>
+    /// Spec 025 (M3 bridge closure) FR-027: configuration for the engine's WebSocket
+    /// bridge. When <see cref="Enabled"/> is <c>true</c>, the engine host composes a
+    /// <c>WebSocketTransport</c> from this section alongside the existing named-pipe
+    /// transport — both share the same <c>RpcRouter</c> so the SSMS plugin and the web
+    /// edition serve identical handler chains. Field shapes mirror
+    /// <c>WebSocketTransportOptions</c> in <c>AkmlSql.Engine.Transports</c>.
+    /// </summary>
+    public class BridgeOptions
+    {
+        /// <summary>
+        /// Master switch. When <c>false</c> (the default), the engine runs the named-pipe
+        /// transport only — byte-for-byte identical to the IDE-plugin-only deployment.
+        /// </summary>
+        [JsonPropertyName("enabled")]
+        public bool Enabled { get; set; }
+
+        /// <summary>
+        /// IP address to bind. <c>"127.0.0.1"</c> for localhost mode (no TLS required);
+        /// <c>"0.0.0.0"</c> for LAN mode (TLS REQUIRED — see <see cref="TlsCertPath"/>).
+        /// </summary>
+        [JsonPropertyName("bindAddress")]
+        public string BindAddress { get; set; } = "127.0.0.1";
+
+        /// <summary>TCP port. Default <c>47291</c>.</summary>
+        [JsonPropertyName("port")]
+        public int Port { get; set; } = 47291;
+
+        /// <summary>
+        /// Absolute path to the LAN-mode self-signed TLS certificate. Accepts either:
+        /// <list type="bullet">
+        ///   <item><c>.cer</c> — the installer default at
+        ///         <c>%ProgramData%/AKML SQL Web/certs/bridge.cer</c>. The installer's
+        ///         <c>web-tls-setup.ps1</c> generates only this public-part file
+        ///         because the LocalMachine\My private key is NonExportable.</item>
+        ///   <item><c>.pfx</c> — user-supplied path with embedded private key.</item>
+        /// </list>
+        /// Only the thumbprint is read; the private key is held by the LocalMachine
+        /// cert store referenced via the netsh sslcert binding. Required when
+        /// <see cref="BindAddress"/> is non-loopback.
+        /// </summary>
+        [JsonPropertyName("tlsCertPath")]
+        public string TlsCertPath { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Environment-variable name carrying the PFX password. Kept out of
+        /// <c>config.json</c> so the password is never on disk in plain.
+        /// </summary>
+        [JsonPropertyName("tlsCertPasswordRef")]
+        public string? TlsCertPasswordRef { get; set; }
+
+        /// <summary>
+        /// Absolute path to the bearer-token store. Default
+        /// <c>%CommonAppData%/AKML SQL Web/tokens.json</c>.
+        /// </summary>
+        [JsonPropertyName("tokenStorePath")]
+        public string TokenStorePath { get; set; } = string.Empty;
+
+        /// <summary>Bearer-token TTL in days. Default <c>90</c>.</summary>
+        [JsonPropertyName("tokenTtlDays")]
+        public int TokenTtlDays { get; set; } = 90;
+
+        /// <summary>True if the bind address is a loopback IP.</summary>
+        [JsonIgnore]
+        public bool IsLoopback =>
+            BindAddress == "127.0.0.1" || BindAddress == "::1" || BindAddress == "localhost";
     }
 
     /// <summary>

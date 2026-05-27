@@ -17,6 +17,10 @@
        from the DOM today — `Assert.Empty(Page.GetByTestId("error-banner")...)` is
        satisfied by absence. When a real error path lands, it adds the conditional
        <div data-testid="error-banner"> here. *@
+    @* Spec 025 follow-on: TLS fingerprint mismatch banner. Conditional render only —
+       absent from the DOM when no drift has been seen, identical absence semantics to
+       the spec 024 error-banner contract. *@
+    <TlsFingerprintMismatchBanner />
     <main class="akml-main">
         @Body
     </main>

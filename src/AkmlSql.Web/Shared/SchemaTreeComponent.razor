@@ -1,0 +1,378 @@
+@*
+    Spec 025 (M3 bridge closure) US4 — schema object tree.
+    Contract reference: specs/025-m3-bridge-closure/contracts/schema-tree-contract.md.
+
+    Reads SchemaSnapshot bytes from ISchemaCacheStore (never sends IPC). Renders
+    Database → Schema → Object-Kind → Object → Column. Click on Object inserts the
+    bracketed qualifier into the editor via the OnObjectClicked EventCallback.
+    Stale-indicator badge shows when bridge != Open. Virtualises children > 200.
+*@
+@using System.Collections.Generic
+@using AkmlSql.Core.Ipc.Messages
+@using AkmlSql.Web.Services
+@using MessagePack
+@implements IDisposable
+@inject ISchemaCacheStore Cache
+@inject IEngineBridge Bridge
+@inject ISchemaSync Sync
+
+<div class="akml-schema-tree" data-testid="schema-tree">
+    <div class="akml-schema-tree-header">
+        <span>Schema</span>
+        @if (_serverIdentity != null && _databaseName != null)
+        {
+            <span class="akml-schema-tree-target" title="@_serverIdentity">@_databaseName</span>
+        }
+        <span class="akml-schema-tree-spacer"></span>
+    </div>
+
+    @if (_showStaleBadge)
+    {
+        <div class="akml-schema-tree-stale" data-testid="schema-tree-stale">
+            Stale — @FormatRelative(_fetchedAt)
+        </div>
+    }
+
+    @if (_payload == null)
+    {
+        <p class="akml-schema-tree-empty">Schema not yet loaded — waiting for engine.</p>
+    }
+    else
+    {
+        <ul class="akml-schema-tree-list" data-testid="schema-tree-root">
+            <li class="akml-schema-tree-node akml-schema-tree-db">
+                <span class="akml-schema-tree-expand"
+                      @onclick="@(() => Toggle(DbPath))">@(IsExpanded(DbPath) ? "▼" : "▶")</span>
+                <span class="akml-schema-tree-label">Database "@_databaseName"</span>
+            </li>
+            @if (IsExpanded(DbPath))
+            {
+                @foreach (var schema in _payload.Schemas ?? Array.Empty<SchemaPhaseSchema>())
+                {
+                    var schemaPath = DbPath + "/" + schema.Name;
+                    <li class="akml-schema-tree-node akml-schema-tree-schema">
+                        <span class="akml-schema-tree-expand"
+                              @onclick="@(() => Toggle(schemaPath))">@(IsExpanded(schemaPath) ? "▼" : "▶")</span>
+                        <span class="akml-schema-tree-label">Schema "@schema.Name"</span>
+                    </li>
+                    @if (IsExpanded(schemaPath))
+                    {
+                        @foreach (var kind in EnumerateKinds(schema))
+                        {
+                            var kindPath = schemaPath + "/" + kind.Label;
+                            <li class="akml-schema-tree-node akml-schema-tree-kind">
+                                <span class="akml-schema-tree-expand"
+                                      @onclick="@(() => Toggle(kindPath))">@(IsExpanded(kindPath) ? "▼" : "▶")</span>
+                                <span class="akml-schema-tree-label">@kind.Label (@kind.Objects.Count)</span>
+                            </li>
+                            @if (IsExpanded(kindPath))
+                            {
+                                if (kind.Objects.Count > VirtualizeThreshold)
+                                {
+                                    <li class="akml-schema-tree-virtual" data-testid="schema-tree-virtualized">
+                                        <Virtualize Items="@kind.Objects" Context="obj" ItemSize="24">
+                                            @RenderObject(obj, kindPath + "/" + obj.ObjectName, schema.Name)
+                                        </Virtualize>
+                                    </li>
+                                }
+                                else
+                                {
+                                    @foreach (var obj in kind.Objects)
+                                    {
+                                        var objPath = kindPath + "/" + obj.ObjectName;
+                                        @RenderObject(obj, objPath, schema.Name)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        </ul>
+    }
+</div>
+
+<style>
+    .akml-schema-tree {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        background-color: var(--akml-surface-panel);
+        border-left: 1px solid var(--akml-border-default);
+        font-family: var(--akml-type-chrome-family);
+        font-size: var(--akml-type-chrome-size);
+        color: var(--akml-text-primary);
+        overflow-y: auto;
+    }
+    .akml-schema-tree-header {
+        display: flex;
+        align-items: center;
+        gap: var(--akml-scalar-spacing-s);
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s);
+        border-bottom: 1px solid var(--akml-border-default);
+        font-weight: bold;
+    }
+    .akml-schema-tree-target {
+        font-weight: normal;
+        color: var(--akml-text-secondary);
+        font-size: 11px;
+    }
+    .akml-schema-tree-spacer { flex: 1 1 auto; }
+    .akml-schema-tree-stale {
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s);
+        background-color: var(--akml-status-warning);
+        color: var(--akml-text-onaccent);
+        font-size: 11px;
+    }
+    .akml-schema-tree-empty {
+        padding: var(--akml-scalar-spacing-s);
+        color: var(--akml-text-secondary);
+        font-style: italic;
+    }
+    .akml-schema-tree-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+    }
+    .akml-schema-tree-node {
+        display: flex;
+        align-items: center;
+        gap: var(--akml-scalar-spacing-xs);
+        padding: 2px var(--akml-scalar-spacing-s);
+        height: 24px;
+        white-space: nowrap;
+        cursor: default;
+    }
+    .akml-schema-tree-node:hover { background-color: var(--akml-surface-hover); }
+    .akml-schema-tree-expand {
+        cursor: pointer;
+        color: var(--akml-text-secondary);
+        font-size: 10px;
+        width: 12px;
+        text-align: center;
+    }
+    .akml-schema-tree-label { flex: 1 1 auto; }
+    .akml-schema-tree-schema { padding-left: 16px; }
+    .akml-schema-tree-kind { padding-left: 32px; }
+    .akml-schema-tree-object {
+        padding-left: 48px;
+        cursor: pointer;
+        color: var(--akml-accent);
+    }
+    .akml-schema-tree-object:hover { text-decoration: underline; }
+    .akml-schema-tree-column { padding-left: 64px; color: var(--akml-text-secondary); }
+    .akml-schema-tree-virtual { padding: 0; }
+</style>
+
+@code {
+    /// <summary>Spec 021 schema-cache key — the engine's canonical server identity.</summary>
+    [Parameter, EditorRequired] public string? ServerCanonicalIdentity { get; set; }
+    [Parameter, EditorRequired] public string? DatabaseName { get; set; }
+
+    /// <summary>Raised when the user clicks an Object node. Payload is the qualified
+    /// identifier "[schema].[name]"; subscribers insert it at the editor caret.</summary>
+    [Parameter] public EventCallback<string> OnObjectClicked { get; set; }
+
+    private const int VirtualizeThreshold = 200;
+
+    private string? _serverIdentity;
+    private string? _databaseName;
+    private SchemaPhasePayload? _payload;
+    private DateTimeOffset _fetchedAt;
+    private readonly HashSet<string> _expanded = new();
+    private bool _showStaleBadge;
+    private BridgeState _bridgeState;
+    private string DbPath => _databaseName ?? string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _serverIdentity = ServerCanonicalIdentity;
+        _databaseName = DatabaseName;
+        _bridgeState = Bridge.State;
+        Bridge.StateChanged += OnBridgeStateChanged;
+        Sync.ChecksumDrifted += OnChecksumDrifted;
+        await LoadSnapshotAsync();
+        UpdateStaleBadge();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_serverIdentity != ServerCanonicalIdentity || _databaseName != DatabaseName)
+        {
+            _serverIdentity = ServerCanonicalIdentity;
+            _databaseName = DatabaseName;
+            await LoadSnapshotAsync();
+            UpdateStaleBadge();
+        }
+    }
+
+    private async Task LoadSnapshotAsync()
+    {
+        if (string.IsNullOrEmpty(_serverIdentity) || string.IsNullOrEmpty(_databaseName))
+        {
+            _payload = null;
+            return;
+        }
+        var snapshot = await Cache.GetAsync(_serverIdentity!, _databaseName!);
+        if (snapshot == null)
+        {
+            _payload = null;
+            return;
+        }
+        // Phase B preferred (carries columns); fall back to Phase A.
+        var bytes = snapshot.PhaseB ?? snapshot.PhaseA;
+        _payload = bytes == null || bytes.Length == 0 ? null : SafeDeserialize(bytes);
+        _fetchedAt = snapshot.FetchedAt;
+    }
+
+    private static SchemaPhasePayload? SafeDeserialize(byte[] bytes)
+    {
+        try { return MessagePackSerializer.Deserialize<SchemaPhasePayload>(bytes); }
+        catch (MessagePackSerializationException) { return null; }
+    }
+
+    private void OnBridgeStateChanged(BridgeState newState) =>
+        InvokeAsync(() =>
+        {
+            _bridgeState = newState;
+            UpdateStaleBadge();
+            StateHasChanged();
+        });
+
+    private async void OnChecksumDrifted(ChecksumDriftNotice notice)
+    {
+        if (!string.Equals(notice.ServerCanonicalIdentity, _serverIdentity, StringComparison.Ordinal)) return;
+        if (!string.Equals(notice.DatabaseName, _databaseName, StringComparison.Ordinal)) return;
+        await InvokeAsync(async () =>
+        {
+            await LoadSnapshotAsync();
+            UpdateStaleBadge();
+            StateHasChanged();
+        });
+    }
+
+    private void UpdateStaleBadge() =>
+        _showStaleBadge = _payload != null && _bridgeState != BridgeState.Open && _bridgeState != BridgeState.Connecting;
+
+    private void Toggle(string path)
+    {
+        if (!_expanded.Add(path)) _expanded.Remove(path);
+    }
+
+    internal bool IsExpanded(string path) => _expanded.Contains(path);
+
+    /// <summary>Test helper: pre-expand a path before render. bUnit tests call this on
+    /// the component instance to drive `ChecksumDriftRefreshesTreePreservesExpansion`.</summary>
+    internal void ExpandForTest(string path) => _expanded.Add(path);
+
+    /// <summary>The contract groups objects under fixed kind headers — Tables / Views /
+    /// Stored Procedures / Functions. ObjectType maps to DbObjectType (see
+    /// SchemaPhasePayload doc-comment). Kinds with zero objects are still rendered so
+    /// the user sees the full taxonomy even on sparse schemas.</summary>
+    private static IEnumerable<KindGroup> EnumerateKinds(SchemaPhaseSchema schema)
+    {
+        var byKind = new Dictionary<string, List<SchemaPhaseObject>>(StringComparer.Ordinal)
+        {
+            ["Tables"] = new(),
+            ["Views"] = new(),
+            ["Stored Procedures"] = new(),
+            ["Functions"] = new(),
+        };
+        foreach (var obj in schema.Objects ?? Array.Empty<SchemaPhaseObject>())
+        {
+            switch ((DbObjectType)obj.ObjectType)
+            {
+                case DbObjectType.Table: byKind["Tables"].Add(obj); break;
+                case DbObjectType.View: byKind["Views"].Add(obj); break;
+                case DbObjectType.Procedure: byKind["Stored Procedures"].Add(obj); break;
+                case DbObjectType.ScalarFunction:
+                case DbObjectType.TableFunction:
+                case DbObjectType.InlineFunction:
+                    byKind["Functions"].Add(obj); break;
+                default: break;
+            }
+        }
+        foreach (var (label, objs) in byKind)
+        {
+            yield return new KindGroup(label, objs);
+        }
+    }
+
+    /// <summary>The contract talks about ObjectType enum codes; the value maps to
+    /// engine's DbObjectType: 0=Table, 1=View, 2=Procedure, 3/4/5=Functions.
+    /// Duplicated here to avoid taking a project reference on AkmlSql.IntelliSense
+    /// (the engine project) from the browser build, which would drag in Sql parser
+    /// dependencies we don't need in WASM.</summary>
+    private enum DbObjectType { Table = 0, View = 1, Procedure = 2, ScalarFunction = 3, TableFunction = 4, InlineFunction = 5, Synonym = 6, Sequence = 7 }
+
+    private record KindGroup(string Label, List<SchemaPhaseObject> Objects);
+
+    private RenderFragment RenderObject(SchemaPhaseObject obj, string objPath, string schemaName) => builder =>
+    {
+        var qualifier = $"[{schemaName}].[{obj.ObjectName}]";
+        var hasColumns = obj.Columns is { Length: > 0 };
+        builder.OpenElement(0, "li");
+        builder.AddAttribute(1, "class", "akml-schema-tree-node akml-schema-tree-object");
+        builder.AddAttribute(2, "data-testid", "schema-tree-object");
+        builder.AddAttribute(3, "data-qualifier", qualifier);
+        builder.AddAttribute(4, "title", obj.Description ?? qualifier);
+        builder.AddAttribute(5, "onclick",
+            Microsoft.AspNetCore.Components.EventCallback.Factory.Create(this, () => OnObjectClick(qualifier, objPath, hasColumns)));
+
+        builder.OpenElement(6, "span");
+        builder.AddAttribute(7, "class", "akml-schema-tree-expand");
+        builder.AddContent(8, hasColumns ? (IsExpanded(objPath) ? "▼" : "▶") : " ");
+        builder.CloseElement();
+
+        builder.OpenElement(9, "span");
+        builder.AddAttribute(10, "class", "akml-schema-tree-label");
+        builder.AddContent(11, qualifier);
+        builder.CloseElement();
+        builder.CloseElement();
+
+        if (hasColumns && IsExpanded(objPath))
+        {
+            foreach (var col in obj.Columns)
+            {
+                builder.OpenElement(12, "li");
+                builder.AddAttribute(13, "class", "akml-schema-tree-node akml-schema-tree-column");
+                builder.AddAttribute(14, "data-testid", "schema-tree-column");
+                builder.OpenElement(15, "span");
+                builder.AddAttribute(16, "class", "akml-schema-tree-label");
+                builder.AddContent(17, $"{col.Name}  ({col.TypeName})");
+                builder.CloseElement();
+                builder.CloseElement();
+            }
+        }
+    };
+
+    private async Task OnObjectClick(string qualifier, string objPath, bool hasColumns)
+    {
+        if (OnObjectClicked.HasDelegate)
+        {
+            await OnObjectClicked.InvokeAsync(qualifier);
+        }
+        if (hasColumns)
+        {
+            // Object click both inserts the qualifier AND toggles its column expansion —
+            // matches the SSMS Object Explorer feel.
+            Toggle(objPath);
+        }
+    }
+
+    private static string FormatRelative(DateTimeOffset fetchedAt)
+    {
+        var age = DateTimeOffset.UtcNow - fetchedAt;
+        if (age < TimeSpan.FromSeconds(60)) return "just now";
+        if (age < TimeSpan.FromHours(1)) return $"{(int)age.TotalMinutes} minutes ago";
+        if (age < TimeSpan.FromHours(24)) return $"{(int)age.TotalHours} hours ago";
+        if (age < TimeSpan.FromHours(48)) return "yesterday";
+        return fetchedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
+    }
+
+    public void Dispose()
+    {
+        Bridge.StateChanged -= OnBridgeStateChanged;
+        Sync.ChecksumDrifted -= OnChecksumDrifted;
+    }
+}

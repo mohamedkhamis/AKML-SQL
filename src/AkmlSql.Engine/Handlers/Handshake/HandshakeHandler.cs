@@ -109,6 +109,11 @@ namespace AkmlSql.Engine.Handlers.Handshake
                         EngineCapabilities = Capabilities.Current.ToArray(),
                         NewBearerToken = minted,
                         ServerCanonicalIdentity = _serverCanonicalIdentityProvider(),
+                        // Spec 025 (M3 bridge closure) FR-006: publish the LAN-mode cert
+                        // thumbprint so the browser can pin it on first connect and warn
+                        // on drift. Null on localhost transports -- WebSocketTransport
+                        // does not populate the static when bound to loopback.
+                        ServerTlsThumbprint = Transports.WebSocketTransport.LanTlsThumbprint,
                     });
                 }
 
@@ -134,6 +139,11 @@ namespace AkmlSql.Engine.Handlers.Handshake
                         ChosenProtocolVersion = chosen,
                         EngineCapabilities = Capabilities.Current.ToArray(),
                         ServerCanonicalIdentity = _serverCanonicalIdentityProvider(),
+                        // Spec 025 (M3 bridge closure) FR-006: publish the LAN-mode cert
+                        // thumbprint so the browser can pin it on first connect and warn
+                        // on drift. Null on localhost transports -- WebSocketTransport
+                        // does not populate the static when bound to loopback.
+                        ServerTlsThumbprint = Transports.WebSocketTransport.LanTlsThumbprint,
                     });
                 }
 

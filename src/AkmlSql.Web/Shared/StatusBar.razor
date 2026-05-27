@@ -49,11 +49,17 @@
 
 @code {
     private BridgeState _state = BridgeState.Disconnected;
+    // Spec 025 US3: countdown plumbing.
+    private DateTimeOffset? _nextRetryAt;
+    private System.Threading.Timer? _countdownTimer;
 
     protected override void OnInitialized()
     {
         _state = Bridge.State;
         Bridge.StateChanged += OnStateChanged;
+        Bridge.RetryScheduled += OnRetryScheduled;
+        _countdownTimer = new System.Threading.Timer(_ => TickCountdown(), null,
+            System.Threading.Timeout.Infinite, System.Threading.Timeout.Infinite);
     }
 
     private void OnStateChanged(BridgeState newState)
@@ -61,9 +67,29 @@
         InvokeAsync(() =>
         {
             _state = newState;
+            if (_state != BridgeState.Reconnecting) _nextRetryAt = null;
             StateHasChanged();
         });
     }
+
+    private void OnRetryScheduled(DateTimeOffset? nextRetryAt)
+    {
+        InvokeAsync(() =>
+        {
+            _nextRetryAt = nextRetryAt;
+            if (nextRetryAt != null)
+            {
+                _countdownTimer?.Change(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+            }
+            else
+            {
+                _countdownTimer?.Change(System.Threading.Timeout.Infinite, System.Threading.Timeout.Infinite);
+            }
+            StateHasChanged();
+        });
+    }
+
+    private void TickCountdown() => InvokeAsync(StateHasChanged);
 
     private string PillLabel => _state switch
     {
@@ -82,13 +108,24 @@
         BridgeState.Disconnected => "Offline — formatter / analyser run in-browser only.",
         BridgeState.Connecting => "Handshaking with engine…",
         BridgeState.Open => "Live IntelliSense available.",
-        BridgeState.Reconnecting => "Connection dropped — retrying.",
+        BridgeState.Reconnecting => ReconnectingText(),
         BridgeState.Failed => "Handshake failed. Check engine pairing.",
         _ => "",
     };
 
+    private string ReconnectingText()
+    {
+        // Spec 025 US3 contract: "Reconnecting · next try in 4s" / "Reconnecting · trying now…"
+        if (_nextRetryAt == null) return "Reconnecting · trying now…";
+        var remaining = _nextRetryAt.Value - DateTimeOffset.UtcNow;
+        var seconds = Math.Max(0, (int)Math.Ceiling(remaining.TotalSeconds));
+        return $"Reconnecting · next try in {seconds}s";
+    }
+
     public void Dispose()
     {
         Bridge.StateChanged -= OnStateChanged;
+        Bridge.RetryScheduled -= OnRetryScheduled;
+        _countdownTimer?.Dispose();
     }
 }
