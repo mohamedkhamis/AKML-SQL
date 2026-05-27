@@ -24,6 +24,7 @@
 @inject IDiagnosticsRingBuffer Diagnostics
 @inject IThemeService Theme
 @inject IJSRuntime JS
+@inject IConnectionStore Connections
 
 <PageTitle>Editor — AKML SQL</PageTitle>
 
@@ -39,8 +40,14 @@
             <span class="akml-editor-status">@_status</span>
         }
     </div>
-    <div class="akml-editor-grid">
+    <div class="akml-editor-grid @(_showSchemaTree ? "with-schema" : "no-schema")">
         <EditorComponent @ref="_editor" InitialText="@_initialText" OnTextChanged="OnTextChangedAsync" />
+        @if (_showSchemaTree)
+        {
+            <SchemaTreeComponent ServerCanonicalIdentity="@_activeServerIdentity"
+                                 DatabaseName="@_activeDatabaseName"
+                                 OnObjectClicked="OnSchemaObjectClickedAsync" />
+        }
         <ProblemsListComponent Findings="@_findings" OnJumpToIssue="OnJumpToIssueAsync" />
     </div>
     @* Spec 024 T004: completion markers for Playwright. `_hasFormatted` / `_hasAnalysed`
@@ -89,9 +96,13 @@
     .akml-editor-grid {
         flex: 1 1 auto;
         display: grid;
-        grid-template-columns: 1fr 320px;
         min-height: 0;
     }
+    /* Spec 025 US4: 3-column grid when an active connection feeds a schema tree.
+       No-schema fallback restores the original 2-column layout so users without a
+       paired engine never see a blank sidebar column. */
+    .akml-editor-grid.with-schema { grid-template-columns: 1fr 240px 320px; }
+    .akml-editor-grid.no-schema { grid-template-columns: 1fr 320px; }
 </style>
 
 @code {
@@ -114,6 +125,11 @@
     private bool _hasAnalysed;
     private int _formatVersion;
     private int _analyseVersion;
+    // Spec 025 US4 — schema tree wiring. The active connection's server identity +
+    // database name drive the cache lookup; both refresh on OnInitializedAsync.
+    private string? _activeServerIdentity;
+    private string? _activeDatabaseName;
+    private bool _showSchemaTree => !string.IsNullOrEmpty(_activeServerIdentity) && !string.IsNullOrEmpty(_activeDatabaseName);
 
     protected override async Task OnInitializedAsync()
     {
@@ -142,6 +158,21 @@
         // T048: restore the diagnostics ring buffer.
         await Diagnostics.RestoreAsync();
         Diagnostics.Log(DiagnosticLevel.Info, "editor", "Editor page mounted.");
+
+        // Spec 025 US4: load the active connection so the schema tree has a target. The
+        // database name comes from spec 021's connection record (currently fixed at the
+        // host's default database; per-connection db picker is a follow-up). Server
+        // identity = "host:port" — matches the engine's canonical identity format.
+        var schemaConnId = await Connections.GetActiveIdAsync();
+        if (!string.IsNullOrEmpty(schemaConnId))
+        {
+            var schemaConn = await Connections.GetAsync(schemaConnId);
+            if (schemaConn != null)
+            {
+                _activeServerIdentity = $"{schemaConn.Host}:{schemaConn.Port}";
+                _activeDatabaseName = "master";   // placeholder until per-connection db picker lands.
+            }
+        }
     }
 
     private async Task OnTextChangedAsync(string newText)
@@ -260,6 +291,13 @@
     private async Task OnJumpToIssueAsync(ProblemsListComponent.IssueLocation loc)
     {
         if (_editor != null) await _editor.GotoLineAsync(loc.Line);
+    }
+
+    /// <summary>Spec 025 US4 — schema tree's click-to-insert callback. Drops the
+    /// bracketed qualifier at the caret; CodeMirror's standard Ctrl+Z undoes it.</summary>
+    private async Task OnSchemaObjectClickedAsync(string qualifiedName)
+    {
+        if (_editor != null) await _editor.InsertAtCaretAsync(qualifiedName);
     }
 
     private async Task OnKeyDownAsync(KeyboardEventArgs e)

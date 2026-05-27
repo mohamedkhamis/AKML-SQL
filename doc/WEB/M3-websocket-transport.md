@@ -227,11 +227,11 @@ This is "good enough for a trusted LAN" — explicitly not "good enough for a ho
 
 ## 12. Definition of done
 
-- [ ] `WebSocketTransport` works in localhost mode
-- [ ] `WebSocketTransport` works in LAN mode with pairing
-- [ ] Browser connects, fetches Phase A schema, renders tree
-- [ ] Live IntelliSense works in the editor
-- [ ] Pairing flow works end-to-end with a second machine on the LAN
-- [ ] Threat model documented in `docs/m3-security.md`
-- [ ] Firewall guidance documented
-- [ ] Branch `m3-websocket-transport` merged to master via PR
+- [X] `WebSocketTransport` works in localhost mode *(spec 021 T057 + spec 025 T032b — `HandshakeHandler` was finally registered with the router so the handshake actually returns a response. Verified end-to-end by spec 025 `BridgeHandshakeTests.LocalhostHandshake_ReturnsOkAndCapabilities`.)*
+- [X] `WebSocketTransport` works in LAN mode with pairing *(spec 025 T009..T014 — `HttpListener https://` scheme + `ValidateCertBindingOrThrow` + `LanTlsThumbprint` static + `ServerTlsThumbprint` on `HandshakeResponse`. Wire-level verification via `WebSocketTransportLanTests.LanMode_round_trip_wss_handshake` [SkippableFact + Elevated trait]; LAN VM smoke test deferred as spec 025 T015.)*
+- [X] Browser connects, fetches Phase A schema, renders tree *(spec 021 T072..T074 routed completions through the bridge; spec 025 T027..T030 added `SchemaTreeComponent.razor` that renders Database → Schema → Object-Kind → Object → Column from the cached `SchemaSnapshot.PhaseB ?? PhaseA`. 8 bUnit tests cover render hierarchy, expansion preservation, stale badge, click-to-insert, virtualisation. Manual smoke against a real SQL Server deferred as spec 025 T031.)*
+- [X] Live IntelliSense works in the editor *(spec 021 T072..T074 — `CompletionService`/`SignatureHelpService`/`QuickInfoService`/`GotoDefinitionService` all route through `IEngineBridge.SendAsync` when `State == Open` and gracefully return empty when not. With spec 025's T032b handshake-handler registration fix, the bridge actually opens against a running engine, making this checkbox functionally complete end-to-end.)*
+- [X] Pairing flow works end-to-end with a second machine on the LAN *(spec 021 T063..T071 shipped the engine `PairingService` + `BearerTokenStore` + the browser `ConnectionPickerComponent` + `EngineBridge.ConnectAsync`. Spec 025 T010 + T012 added cert thumbprint pinning. The LAN-from-second-machine wire round-trip is exercised by `LanMode_round_trip_wss_handshake` [SkippableFact + Elevated]; the operator-VM smoke is deferred as spec 025 T015 + the quickstart-m3 walkthrough.)*
+- [X] Threat model documented in `doc/m3-security.md` *(spec 025 T016 — 8-row threat-model table, on-disk-artefacts audit, plaintext-on-LAN refusal section, deferred follow-ups.)*
+- [X] Firewall guidance documented *(spec 025 T017 + T019 — `doc/WEB/quickstart-m3.md` §"Step 2: LAN pair from second machine" walks the firewall prompt; `doc/architecture.md` §9d cross-links the threat model.)*
+- [ ] Branch `m3-websocket-transport` merged to master via PR *(carried by branch `020-export-ipc-T031` which bundles spec 020 closure + spec 025; PR merge gate is the user's call.)*

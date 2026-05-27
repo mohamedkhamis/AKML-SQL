@@ -144,6 +144,15 @@
         await _module.InvokeVoidAsync("gotoLine", HostId, lineNumber);
     }
 
+    /// <summary>Spec 025 (M3 closure) US4 — insert <paramref name="text"/> at the caret.
+    /// SchemaTreeComponent calls this via the parent page so clicking [dbo].[Customer]
+    /// drops the qualifier where the user is typing.</summary>
+    public async Task InsertAtCaretAsync(string text)
+    {
+        if (_module == null) return;
+        await _module.InvokeVoidAsync("insertAtCaret", HostId, text);
+    }
+
     public async ValueTask DisposeAsync()
     {
         try

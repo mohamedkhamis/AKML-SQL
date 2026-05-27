@@ -4,6 +4,8 @@ using System.IO;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using AkmlSql.Core.Config;
+using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Logging;
 using AkmlSql.Engine.Server;
 using AkmlSql.Engine.Transports;
@@ -94,15 +96,43 @@ namespace AkmlSql.Engine
                 // lifecycle + frame I/O and forwards each decoded message to the router via the
                 // RequestReceived event.
                 var composition = EngineComposition.Build();
-                await using var transport = new NamedPipeTransport(pipeName);
-                transport.RequestReceived += async (msg, ct) =>
+
+                async Task<RpcMessage?> RouteAsync(RpcMessage msg, CancellationToken ct)
                 {
                     var response = await composition.Router.RouteAsync(msg, composition.Context, ct);
                     if (response == null && !composition.Router.IsRegistered(msg.MessageType))
                         Log.Warning("Unknown message type: {Type}", msg.MessageType);
                     return response;
-                };
-                await transport.RunAsync(token);
+                }
+
+                await using var transport = new NamedPipeTransport(pipeName);
+                transport.RequestReceived += RouteAsync;
+
+                // Spec 025 (M3 closure) FR-027: when config.Bridge.Enabled, compose a
+                // WebSocketTransport alongside the named pipe. Both share the same router,
+                // so SSMS plugin (pipe) and web edition (WebSocket) serve identical
+                // handler chains. When Bridge is absent or disabled, the engine behaves
+                // exactly like the IDE-plugin-only deployment.
+                var settings = ConfigManager.Load();
+                var wsTransport = BuildWebSocketTransport(settings.Bridge);
+                if (wsTransport != null)
+                {
+                    wsTransport.RequestReceived += RouteAsync;
+                    await wsTransport.StartAsync(token).ConfigureAwait(false);
+                    Log.Information("Bridge enabled: WebSocketTransport composed alongside named pipe.");
+                }
+
+                try
+                {
+                    await transport.RunAsync(token);
+                }
+                finally
+                {
+                    if (wsTransport != null)
+                    {
+                        await wsTransport.DisposeAsync().ConfigureAwait(false);
+                    }
+                }
             }
             catch (OperationCanceledException)
             {
@@ -119,6 +149,32 @@ namespace AkmlSql.Engine
             }
 
             return 0;
+        }
+
+        /// <summary>
+        /// Spec 025 (M3 closure) FR-027: builds the optional <see cref="WebSocketTransport"/>
+        /// composed alongside the named pipe. Returns <c>null</c> when the bridge is disabled
+        /// or the config section is absent — preserving IDE-plugin-only behaviour. Exposed
+        /// <c>internal</c> for <c>EngineHostTests</c>.
+        /// </summary>
+        internal static WebSocketTransport? BuildWebSocketTransport(BridgeOptions bridge)
+        {
+            if (bridge == null || !bridge.Enabled)
+            {
+                return null;
+            }
+
+            var options = new WebSocketTransportOptions
+            {
+                BindAddress = bridge.BindAddress,
+                Port = bridge.Port,
+                TlsCertPath = bridge.TlsCertPath,
+                TlsCertPasswordRef = bridge.TlsCertPasswordRef,
+                TokenStorePath = bridge.TokenStorePath,
+                TokenTtl = TimeSpan.FromDays(bridge.TokenTtlDays),
+                RequirePairingToken = !bridge.IsLoopback,
+            };
+            return new WebSocketTransport(options);
         }
 
         /// <summary>

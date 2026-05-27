@@ -396,6 +396,14 @@ The web edition's browser tab talks to a local engine over a WebSocket. The brid
 
 Wire details (request/response shapes, status strings, capability table) are in [doc/ipc-api.md § Spec 021 — Web Edition Bridge Messages](ipc-api.md#spec-021--web-edition-bridge-messages).
 
+**Engine-host composition (spec 025 FR-027)**: both `NamedPipeTransport` and `WebSocketTransport` are started concurrently when `config.Bridge.Enabled == true`; both share the same `RpcRouter` so the SSMS plugin and the web edition serve identical handler chains. When the bridge section is absent or disabled, only the named pipe runs — IDE-plugin-only deployments are byte-for-byte unchanged.
+
+**LAN-mode TLS plumbing (spec 025 FR-001..FR-006)**: non-loopback bindings switch to `https://` prefixes and consume the installer-bound cert (`netsh http add sslcert ipport=…`). The transport's startup-time `ValidateCertBindingOrThrow` asserts PFX existence + thumbprint match against the active netsh binding before opening the listener; mismatch throws with both thumbprints in the message. The validated thumbprint flows into every `HandshakeResponse.ServerTlsThumbprint` so the browser can pin it on first connect and log a `Warn` diagnostic on drift.
+
+**Threat model**: see [m3-security.md](m3-security.md) for the LAN-mode threat table, on-disk artefact audit, and the list of deferred follow-ups.
+
+**Reconnect, schema tree, and E2E (spec 025 US3–US5)**: `EngineBridge` runs an exponential-backoff reconnect loop (500 ms / 2× / 30 s cap / ±100 ms jitter) that replays the stored bearer on every retry and exits to `Failed` on a `PinRequired` response (the bearer was revoked) — the browser-side counterpart to the engine's `BearerTokenStore.RevokeByHash`. A `SchemaTreeComponent` renders the cached `SchemaSnapshot` (Database → Schema → Object-Kind → Object → Column) with click-to-insert into the editor, refreshed on `ISchemaSync.ChecksumDrifted`. A real-engine E2E harness (`tests/AkmlSql.E2E.Tests/Harness/EngineLaunchFixture.cs`) covers wire-level handshake / restart / backoff via `BridgeHandshakeTests` under the opt-in `[Trait("Category","BridgeE2E")]`; the harness builds the engine, redirects AppData via `AKML_APP_DATA_ROOT`, and probes WebSocket readiness on a per-test free port. **Handshake registration fix**: spec 025 also wired `HandshakeHandler` into `EngineHandlerRegistry` — the handler existed since spec 021 T060 but was never registered with the router, so any WebSocket inbound that depended on it (every browser handshake) silently timed out. The named-pipe transport doesn't run handshakes, which is why the bug stayed latent until the first end-to-end E2E test fired.
+
 ---
 
 ## 9e. Spec 021 — M5 schema-cache identity

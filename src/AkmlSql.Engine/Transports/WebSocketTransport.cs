@@ -1,7 +1,11 @@
 using System;
+using System.Diagnostics;
+using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Net.WebSockets;
+using System.Security.Cryptography.X509Certificates;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using AkmlSql.Core.Ipc;
@@ -62,8 +66,20 @@ namespace AkmlSql.Engine.Transports
 
             // HttpListener uses URI prefix notation; "+" binds all interfaces, but we
             // honour the configured BindAddress for clarity. Loopback uses 127.0.0.1.
+            //
+            // Spec 025 (M3 bridge closure) FR-001..FR-004: non-loopback bindings use
+            // `https://` so WinHTTP terminates TLS via the cert the installer already
+            // bound with `netsh http add sslcert ipport=<addr>:<port> certhash=<thumb>`
+            // (spec 021 T088 -- web-tls-setup.ps1). Loopback path stays `http://` --
+            // it does not need TLS and the existing engine tests rely on that.
             var host = _options.IsLoopback ? "127.0.0.1" : _options.BindAddress;
-            var prefix = $"http://{host}:{_options.Port}/";
+            var scheme = _options.IsLoopback ? "http" : "https";
+            var prefix = $"{scheme}://{host}:{_options.Port}/";
+
+            if (!_options.IsLoopback)
+            {
+                ValidateCertBindingOrThrow(_options.TlsCertPath, _options.Port);
+            }
 
             _listener = new HttpListener();
             _listener.Prefixes.Add(prefix);
@@ -248,6 +264,131 @@ namespace AkmlSql.Engine.Transports
                 WebSocketMessageType.Binary,
                 endOfMessage: true,
                 cancellationToken: ct).ConfigureAwait(false);
+        }
+
+        // ----- LAN-mode cert binding validation -----------------------------
+        // Spec 025 (M3 bridge closure) FR-002 + Research Decision 5: before opening
+        // the HTTPS listener, verify the configured PFX exists on disk and its
+        // thumbprint matches the active `netsh http show sslcert ipport=<port>`
+        // binding. Mismatch throws with both thumbprints in the message so the
+        // operator can diagnose without re-running the installer.
+
+        /// <summary>
+        /// Spec 025 (M3 bridge closure) FR-006. SHA-1 hex thumbprint of the LAN-mode
+        /// TLS certificate the transport is currently serving. Set by
+        /// <see cref="ValidateCertBindingOrThrow"/> when a non-loopback transport starts;
+        /// null on localhost-only deployments. <see cref="HandshakeHandler"/> reads it and
+        /// publishes it on every <c>HandshakeResponse</c> so the browser can pin / detect drift.
+        /// </summary>
+        public static string? LanTlsThumbprint { get; private set; }
+
+        internal static void ValidateCertBindingOrThrow(string? pfxPath, int port)
+        {
+            if (string.IsNullOrWhiteSpace(pfxPath))
+            {
+                throw new InvalidOperationException(
+                    $"WebSocketTransport: TlsCertPath is empty for a non-loopback binding on port {port}. " +
+                    "Spec 021 FR-013a forbids plaintext WebSocket over LAN. Set TlsCertPath in config.json " +
+                    "or bind to 127.0.0.1 for localhost-only mode.");
+            }
+
+            if (!File.Exists(pfxPath))
+            {
+                throw new InvalidOperationException(
+                    $"WebSocketTransport: TlsCertPath does not exist on disk: '{pfxPath}'. " +
+                    "Re-run AKMLSQLSetup.exe or check `%ProgramData%/AKML SQL Web/certs/bridge.pfx`.");
+            }
+
+            string pfxThumb;
+            try
+            {
+                // The installer's web-tls-setup.ps1 emits `bridge.cer` (public part
+                // only) because the LocalMachine\My private key is NonExportable --
+                // no PFX file is written in production. We accept either:
+                //   * CER (the installer's default) via LoadCertificateFromFile
+                //   * PFX (user-supplied path) via LoadPkcs12FromFile
+                // We only need the thumbprint to compare against the netsh binding,
+                // so the private key is not required.
+                var raw = File.ReadAllBytes(pfxPath);
+                X509Certificate2 cert;
+                try
+                {
+                    cert = X509CertificateLoader.LoadCertificate(raw);
+                }
+                catch
+                {
+                    cert = X509CertificateLoader.LoadPkcs12(
+                        raw, password: null, X509KeyStorageFlags.EphemeralKeySet);
+                }
+                using (cert)
+                {
+                    pfxThumb = cert.Thumbprint;
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(
+                    $"WebSocketTransport: failed to load certificate at '{pfxPath}': {ex.Message}. " +
+                    "TlsCertPath accepts either a `.cer` (the installer default) or a `.pfx`. " +
+                    "Check the file is a valid certificate and the engine user has read access.", ex);
+            }
+
+            string? netshThumb = ReadNetshThumbprint(port);
+            if (string.IsNullOrEmpty(netshThumb))
+            {
+                throw new InvalidOperationException(
+                    $"WebSocketTransport: no netsh http sslcert binding found for port {port}. " +
+                    "Run `web-tls-setup.ps1` or re-run AKMLSQLSetup.exe to bind the cert.");
+            }
+
+            if (!string.Equals(pfxThumb, netshThumb, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "WebSocketTransport: PFX thumbprint mismatch with netsh binding. " +
+                    $"PFX ('{pfxPath}') reports {pfxThumb}; netsh binding for 0.0.0.0:{port} " +
+                    $"reports {netshThumb}. Re-run `web-tls-setup.ps1` or update TlsCertPath.");
+            }
+
+            // Publish the validated thumbprint so HandshakeHandler can include it in
+            // the response per FR-006. The static is set once at LAN startup and never
+            // mutated thereafter -- thread-safe by virtue of being write-once.
+            LanTlsThumbprint = pfxThumb;
+        }
+
+        /// <summary>
+        /// Reads the bound cert thumbprint from `netsh http show sslcert ipport=0.0.0.0:&lt;port&gt;`.
+        /// Returns null when no binding exists. Locale-dependent on the English label
+        /// "Certificate Hash" -- see `contracts/lan-https-binding-contract.md` §"Locale-dependency note".
+        /// </summary>
+        private static string? ReadNetshThumbprint(int port)
+        {
+            try
+            {
+                var psi = new ProcessStartInfo
+                {
+                    FileName = "netsh.exe",
+                    Arguments = $"http show sslcert ipport=0.0.0.0:{port}",
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                };
+                using var p = Process.Start(psi);
+                if (p == null) return null;
+                var stdout = p.StandardOutput.ReadToEnd();
+                p.WaitForExit(5000);
+                if (p.ExitCode != 0) return null;
+
+                // `Certificate Hash    : <40-hex>` (English Windows). The regex below
+                // tolerates extra whitespace and case variation in the label.
+                var match = Regex.Match(stdout, @"Certificate\s+Hash\s*:\s*([0-9A-Fa-f]{40})",
+                    RegexOptions.IgnoreCase);
+                return match.Success ? match.Groups[1].Value : null;
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         public async ValueTask DisposeAsync()

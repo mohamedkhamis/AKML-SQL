@@ -46,6 +46,11 @@ Source: "..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\*"; \
 Source: "web-iis-setup.ps1"; DestDir: "{tmp}"; Flags: deleteafterinstall; Components: web\iis
 Source: "web-tls-setup.ps1"; DestDir: "{tmp}"; Flags: deleteafterinstall; Components: web
 Source: "web-firewall.ps1"; DestDir: "{tmp}"; Flags: deleteafterinstall; Components: web
+; Spec 025 (M3 bridge closure) T008 -- writes the Bridge section into the
+; engine config so EngineHost.RunAsync starts a WebSocketTransport alongside
+; the named pipe (FR-027). Invoked from Web_PostInstall after the engine
+; service is registered.
+Source: "web-config-bridge.ps1"; DestDir: "{tmp}"; Flags: deleteafterinstall; Components: web
 
 [Run]
 ; T084 IIS site provisioning. Skipped when "Don't host" was selected.
@@ -239,8 +244,24 @@ var
     summaryPath: String;
     summary: TStringList;
     appdata: String;
+    bridgeMode: String;
+    bridgeArgs: String;
+    bridgeResult: Integer;
 begin
     if not WizardIsComponentSelected('web') then Exit;
+
+    { Spec 025 (M3 bridge closure) T008 / FR-027 -- write the Bridge section
+      into the engine config.json so EngineHost.RunAsync starts a
+      WebSocketTransport alongside the named pipe. Idempotent on re-run. }
+    if IsLanExposed() then
+        bridgeMode := 'Lan'
+    else
+        bridgeMode := 'Localhost';
+    bridgeArgs := '-NoProfile -ExecutionPolicy Bypass -File "' +
+        ExpandConstant('{tmp}\web-config-bridge.ps1') +
+        '" -Port ' + IntToStr(WebPort) +
+        ' -Mode ' + bridgeMode;
+    Exec('powershell.exe', bridgeArgs, '', SW_HIDE, ewWaitUntilTerminated, bridgeResult);
 
     { T092 -- capture the engine-generated pairing PIN from the engine log.
       The engine writes the PIN to %CommonAppData%\AKML SQL Web\pairing-pin.txt

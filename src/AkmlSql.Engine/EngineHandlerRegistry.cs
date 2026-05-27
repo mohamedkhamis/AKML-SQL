@@ -250,6 +250,13 @@ internal static class EngineHandlerRegistry
         router.Register(new Handlers.Control.ShutdownHandler());
         router.Register(new Handlers.Control.ConnectionChangedHandler());
 
+        // === WebSocket bridge handshake (spec 025 US5 wire-up) ===
+        // The HandshakeHandler exists from spec 021 T060 but was never registered with the
+        // engine router — the named-pipe transport doesn't need it, but the WebSocket
+        // transport requires it as the first frame on every connection. Localhost auto-accept
+        // (line 160-168 of HandshakeHandler) keeps the spec-021 NO_AUTH semantics intact.
+        router.Register(new Handlers.Handshake.HandshakeHandler());
+
         // === AI handlers (7 typed via AiHandlerBase subclasses + 1 raw bridge for AiProviderTest) ===
         // Spec 022 P3/US3 complete: all seven user-facing AI messages route through typed
         // AiHandlerBase subclasses. AiProviderTest stays raw -- it's the developer-tool

@@ -36,15 +36,42 @@ namespace AkmlSql.Core
         public const long LogMaxFileSize = 5 * 1024 * 1024; // 5 MB
         public const int UpdateCheckIntervalHours = 24;
 
-        public static string AppDataPath =>
-            System.IO.Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                AppDataFolderName);
+        /// <summary>
+        /// Roaming AppData root for AKML SQL. In production this is
+        /// <c>%AppData%\AKML SQL</c>; the environment variable
+        /// <c>AKML_APP_DATA_ROOT</c> overrides the parent folder for test
+        /// fixtures (spec 025 US5 — <c>EngineLaunchFixture</c> uses this to
+        /// redirect the engine's config + token store into a per-test temp
+        /// directory because <c>Environment.GetFolderPath</c> on Windows
+        /// does not honour the OS-level <c>APPDATA</c> env var).
+        /// </summary>
+        public static string AppDataPath
+        {
+            get
+            {
+                var overrideRoot = Environment.GetEnvironmentVariable("AKML_APP_DATA_ROOT");
+                var root = string.IsNullOrEmpty(overrideRoot)
+                    ? Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData)
+                    : overrideRoot!;
+                return System.IO.Path.Combine(root, AppDataFolderName);
+            }
+        }
 
-        public static string LocalAppDataPath =>
-            System.IO.Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                AppDataFolderName);
+        /// <summary>
+        /// Local AppData root. <c>AKML_APP_DATA_ROOT</c> redirects this too —
+        /// keeps roaming + local under one temp tree for tests.
+        /// </summary>
+        public static string LocalAppDataPath
+        {
+            get
+            {
+                var overrideRoot = Environment.GetEnvironmentVariable("AKML_APP_DATA_ROOT");
+                var root = string.IsNullOrEmpty(overrideRoot)
+                    ? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)
+                    : overrideRoot!;
+                return System.IO.Path.Combine(root, AppDataFolderName);
+            }
+        }
 
         public static string ConfigFilePath =>
             System.IO.Path.Combine(AppDataPath, ConfigFileName);
