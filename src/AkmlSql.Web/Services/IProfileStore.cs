@@ -133,16 +133,45 @@ internal sealed class ProfileStore : IProfileStore
 
     // ── Built-in profiles ────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Single source of truth for built-in profile construction. Both the runtime
+    /// (<see cref="BuildBuiltInProfiles"/>) and the spec-024 parity test harness
+    /// (<c>ParityCorpusLoader.GetProfile</c>) call this so a tweak in either default
+    /// profile cannot drift between production behaviour and the parity baseline.
+    /// <paramref name="shortId"/> is the unqualified id (<c>"default"</c> / <c>"ansi"</c>),
+    /// not the <c>"builtin.*"</c> form.
+    /// </summary>
+    internal static FormattingProfile CreateBuiltInProfile(string shortId)
+    {
+        switch (shortId)
+        {
+            case "default":
+            {
+                var p = new FormattingProfile();
+                p.Metadata.Name = "AKML Default";
+                return p;
+            }
+            case "ansi":
+            {
+                var p = new FormattingProfile();
+                p.Metadata.Name = "ANSI-compact";
+                p.Casing.ReservedKeywords = "uppercase";
+                return p;
+            }
+            default:
+                throw new ArgumentException(
+                    $"Unknown built-in profile short id '{shortId}'. Expected 'default' or 'ansi'.",
+                    nameof(shortId));
+        }
+    }
+
     private static Dictionary<string, ProfileRecord> BuildBuiltInProfiles()
     {
         // We synthesise the built-ins programmatically rather than shipping JSON resources
         // so the web-edition bundle does not need MSBuild EmbeddedResource gymnastics.
         // Future tasks can swap this for a resource-loader if the profile zoo grows.
-        var defaultProfile = new FormattingProfile();
-        defaultProfile.Metadata.Name = "AKML Default";
-        var ansiProfile = new FormattingProfile();
-        ansiProfile.Metadata.Name = "ANSI-compact";
-        ansiProfile.Casing.ReservedKeywords = "uppercase";
+        var defaultProfile = CreateBuiltInProfile("default");
+        var ansiProfile = CreateBuiltInProfile("ansi");
 
         return new Dictionary<string, ProfileRecord>(StringComparer.Ordinal)
         {

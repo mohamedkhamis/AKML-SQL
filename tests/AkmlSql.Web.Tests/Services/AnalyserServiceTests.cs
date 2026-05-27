@@ -100,7 +100,7 @@ public sealed class AnalyserServiceTests
             .ThenBy(i => i.RuleId, StringComparer.Ordinal)
             .Select(i => new ParityCorpusLoader.ParityFinding(
                 i.RuleId,
-                SeverityName(i.Severity),
+                ParityCorpusLoader.SeverityName(i.Severity),
                 i.Message,
                 i.Line,
                 i.Column))
@@ -152,13 +152,4 @@ public sealed class AnalyserServiceTests
 
     private static string Describe(ParityCorpusLoader.ParityFinding? f) =>
         f is null ? "(none)" : $"{f.RuleId} {f.Severity} L{f.Line}:C{f.Column} — {f.Message}";
-
-    private static string SeverityName(int severity) =>
-        severity switch
-        {
-            3 => "Error",
-            2 => "Warning",
-            1 => "Info",
-            _ => "Hint",
-        };
 }

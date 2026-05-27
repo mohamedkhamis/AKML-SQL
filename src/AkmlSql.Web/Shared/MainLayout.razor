@@ -9,10 +9,12 @@
 
 <div class="akml-app">
     <NavMenu />
-    @* Spec 024 T004: error-banner contract. The `data-testid="error-banner"` selector
-       is reserved for the future global-error surface (an `IErrorBroker` service or
-       cascading parameter). It is intentionally absent from the DOM today — the
-       Playwright contract `Assert.Empty(Page.GetByTestId("error-banner")...)` is
+    @* Spec 024 T004: error-banner contract — see
+       `specs/024-m2-web-closure/contracts/playwright-harness-contract.md`
+       §"data-testid contract" (the `error-banner` row, asserted empty in every
+       scenario). The selector is reserved for the future global-error surface (an
+       `IErrorBroker` service or cascading parameter). It is intentionally absent
+       from the DOM today — `Assert.Empty(Page.GetByTestId("error-banner")...)` is
        satisfied by absence. When a real error path lands, it adds the conditional
        <div data-testid="error-banner"> here. *@
     <main class="akml-main">

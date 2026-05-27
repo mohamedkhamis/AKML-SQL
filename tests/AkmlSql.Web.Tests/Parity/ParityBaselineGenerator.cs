@@ -111,7 +111,7 @@ public sealed class ParityBaselineGenerator
                     .Select(i => new
                     {
                         ruleId = i.RuleId,
-                        severity = SeverityName(i.Severity),
+                        severity = ParityCorpusLoader.SeverityName(i.Severity),
                         message = i.Message,
                         line = i.Line,
                         column = i.Column,
@@ -140,13 +140,4 @@ public sealed class ParityBaselineGenerator
     {
         if (!Directory.Exists(path)) Directory.CreateDirectory(path);
     }
-
-    private static string SeverityName(int severity) =>
-        severity switch
-        {
-            3 => "Error",
-            2 => "Warning",
-            1 => "Info",
-            _ => "Hint",
-        };
 }

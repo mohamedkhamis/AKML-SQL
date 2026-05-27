@@ -80,6 +80,8 @@ description: "Task list for M2 — Web Edition Formatter & Analyser MVP Closure"
 - [ ] T021 [US2] Triage every divergence — for **true regressions**, file a follow-up in `doc/progress.md` and either fix the formatter or accept the divergence as a known limitation; for **already-documented limitations**, add an entry to `ParityDispositionsRegistry.cs` with `reasonLink` pointing at the corresponding `specs/020-sqlprompt-visual-parity/tasks.md` task ID
 - [X] T022 [US2] Re-run T020 until green; commit the updated `ParityDispositionsRegistry.cs` alongside the test changes
 
+**Deviation note (T019/T020 follow-up, 2026-05-28)**: The 26 formatter pairs split 13 / 13 across `default` and `ansi`. Today both profiles produce byte-identical output because the only `ansi` divergence currently encoded in `ProfileStore.CreateBuiltInProfile("ansi")` (`Casing.ReservedKeywords = "uppercase"`) is also the default. The `baselines/ansi/` directory is therefore pre-positioned — when a meaningful per-profile knob diverges, the regenerator overwrites those 13 files and the test surface picks it up without any structural change. Until then, the duplicate baselines are intentional, not a bug.
+
 **Checkpoint**: Formatter parity green over ≥ 20 scripts × 3 profiles. Spec 021 T041 can be flipped (deferred to Polish).
 
 ---

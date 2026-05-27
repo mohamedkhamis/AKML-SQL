@@ -1,5 +1,6 @@
 using System.Text.Json;
 using AkmlSql.Formatting.Profiles;
+using AkmlSql.Web.Services;
 
 namespace AkmlSql.Web.Tests.Parity;
 
@@ -22,35 +23,32 @@ namespace AkmlSql.Web.Tests.Parity;
 /// </summary>
 public static class ParityCorpusLoader
 {
-    /// <summary>Profile ids the parity tests cover. Matches IProfileStore's built-ins.</summary>
-    public static readonly string[] ProfileIds = { "default", "ansi" };
+    /// <summary>Profile ids the parity tests cover. Matches IProfileStore's built-ins
+    /// (stripped of the <c>"builtin."</c> prefix because they are used as baseline
+    /// directory names: <c>baselines/default/</c>, <c>baselines/ansi/</c>).</summary>
+    public static IReadOnlyList<string> ProfileIds { get; } = new[] { "default", "ansi" };
 
     /// <summary>
-    /// Constructs the FormattingProfile the web edition would resolve for the given id.
-    /// Mirrors IProfileStore.BuildBuiltInProfiles() so the parity test, the baseline
-    /// generator, and the runtime resolve the same profile object.
+    /// Returns the FormattingProfile the web edition resolves for the given short id.
+    /// Delegates to <see cref="ProfileStore.CreateBuiltInProfile"/> — the canonical
+    /// production builder — so a tweak to a default-profile knob cannot drift between
+    /// the runtime and the parity baseline.
     /// </summary>
-    public static FormattingProfile GetProfile(string profileId)
-    {
-        switch (profileId)
+    public static FormattingProfile GetProfile(string profileId) =>
+        ProfileStore.CreateBuiltInProfile(profileId);
+
+    /// <summary>Single source of truth for the int-severity → string mapping the parity
+    /// baselines store. Mirrors <c>CodeIssueInfo.Severity</c>'s documented encoding
+    /// (<c>0=Hint, 1=Info, 2=Warning, 3=Error</c>). Used by both the baseline generator
+    /// and the parity test, so a future encoding change touches one site.</summary>
+    public static string SeverityName(int severity) =>
+        severity switch
         {
-            case "default":
-            {
-                var p = new FormattingProfile();
-                p.Metadata.Name = "AKML Default";
-                return p;
-            }
-            case "ansi":
-            {
-                var p = new FormattingProfile();
-                p.Metadata.Name = "ANSI-compact";
-                p.Casing.ReservedKeywords = "uppercase";
-                return p;
-            }
-            default:
-                throw new ArgumentException($"Unknown profile id '{profileId}'. Expected one of: {string.Join(", ", ProfileIds)}", nameof(profileId));
-        }
-    }
+            3 => "Error",
+            2 => "Warning",
+            1 => "Info",
+            _ => "Hint",
+        };
 
     /// <summary>Normalise text to LF endings + trailing newline per parity-baseline-format.md.</summary>
     public static string NormaliseLineEndings(string text)

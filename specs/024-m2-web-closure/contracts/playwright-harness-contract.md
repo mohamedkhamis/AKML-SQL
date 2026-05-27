@@ -149,14 +149,26 @@ The four scenarios depend on these stable selectors. The spec-021 `Editor.razor`
 | `data-testid` | Surface |
 |---------------|---------|
 | `sql-editor` | The CodeMirror-backed `EditorComponent` textarea (or its accessible role) |
-| `format-complete` | Element that appears in the DOM after `FormatAsync` resolves |
+| `format-complete` | Element that appears in the DOM after `FormatAsync` resolves; carries `data-version` (see below) |
 | `analyse-button` | The toolbar Analyse button |
-| `analyse-complete` | Element that appears after `AnalyseAsync` resolves |
+| `analyse-complete` | Element that appears after `AnalyseAsync` resolves; carries `data-version` (see below) |
 | `problem-item` | A row in `ProblemsListComponent`; carries `data-line` and `data-column` attributes |
 | `error-banner` | The catch-all error surface; the four scenarios assert this is empty |
 | `profile-picker` | The `<select>` in `ProfilePickerComponent` |
 
 If any of these `data-testid`s is missing in the M2 code, the harness adds them as part of US4 (small, scoped edits — exception to the "no service / no component" constraint, justified in spec 024 Constitution Check as the Playwright contract's prerequisite).
+
+### Edge-trigger via `data-version`
+
+`format-complete` and `analyse-complete` latch once attached and stay attached for the page session (the `_hasFormatted` / `_hasAnalysed` flags are never reset). Each successful Format / Analyse increments a `data-version` integer on the marker. The first-time-attach pattern works as-is (`WaitForSelectorAsync` returns on attach), but a test that triggers a *repeat* operation in the same session (e.g. Scenario 4: format → switch profile → format again) must wait on the version attribute changing, not on re-attach — the marker never detaches:
+
+```csharp
+var initial = await Page.Locator("[data-testid='format-complete']").GetAttributeAsync("data-version");
+// trigger the second Format
+await Page.WaitForFunctionAsync(
+    "(prev) => document.querySelector('[data-testid=\"format-complete\"]')?.getAttribute('data-version') !== prev",
+    initial);
+```
 
 ---
 
