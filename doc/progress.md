@@ -1293,4 +1293,26 @@ Closure spec for the M3 PRD (`doc/WEB/M3-websocket-transport.md`). Spec 021 ship
 - **T031 (paired-bridge schema-tree smoke)** — manual; the 8 SchemaTreeComponentTests cover every code path.
 - **T034 (Playwright UserStory2Tests)** — deferred along with the UI iteration loop; the wire-level scenarios live in `BridgeHandshakeTests`.
 
-*Last updated: 2026-05-27*
+### Spec 025 follow-on (2026-05-28)
+
+Three deferred items revisited; two land, one + manual smokes stay out:
+
+- **TLS fingerprint mismatch warning banner** (closed). `IEngineBridge.FingerprintMismatchDetected` sibling event + `Shared/TlsFingerprintMismatchBanner.razor` mounted in `MainLayout`. Non-blocking warning with redacted Last12 thumbprints + Dismiss button; multiple drifts queue. Bridge still auto-trusts the new value in-memory (matches the original non-blocking-warning design). 5 bUnit tests in `TlsFingerprintMismatchBannerTests.cs` cover absent-by-default / appears-on-drift / redaction shape / dismiss / queue-behind. Commit `cc2d4ae`.
+- **Playwright UserStory2Tests scaffold** (spec 025 T034). `tests/AkmlSql.Web.E2E.Tests/UserStory2Tests.cs` with 4 `[Fact(Skip=…)]` methods carrying the full Playwright pseudocode for `LocalhostPair_FirstConnect_ReachesOpen`, `LocalhostPair_Reload_PreservesBearer`, `RevocationFails_RetryRespectsPinRequired`, `EngineKill_ReconnectRestoresLive`. Skip lifts when an interactive session iterates selectors against the running app (the advisor flagged blind Playwright as high-risk; this captures the shape without asserting selectors blind).
+- **In-flight WebSocket revocation** (carried forward, NOT landed). `BearerTokenStore` + `PairingService` are only instantiated in tests today — the engine's production composition wires the localhost-auto-accept HandshakeHandler ctor, never the LAN-mode pairing flow. Building active socket closure on revoke would require wiring the full pairing infrastructure into `EngineComposition` (new IPC handler for revoke, per-connection bearer-hash tracking on `WebSocketTransport`, composition-root callback wiring) — well beyond closure-spec discipline. Stays deferred to whenever LAN-mode pairing gets composed end-to-end.
+
+### Perf baseline drift — investigation finding
+
+`PerformanceBaselineTests.Capture_or_compare_M0_baseline` reported `CompletionRequest.p50` regressed 43.4 ms → 53.9 ms (+24%, allowed 5%) on 2026-05-27. Previous session showed +19.4%; the trend is real and continuing. Investigation:
+
+| Question | Answer |
+|---|---|
+| When was the baseline captured? | 2026-05-23 (per `m0-baseline.json` `captureDate`), on machine `MOHAMED-KHAMIS`. |
+| What commits since touch the perf hot path? | Exactly one: `5f692b9` (2026-05-24) — but it touched `src/AkmlSql.IntelliSense/Completion/Providers/QuickInfoProvider.cs` (EOF null guard) + `src/AkmlSql.Engine/Snippets/SnippetLoader.cs` (log demote). **Neither is on the `CompletionRequest` path.** `CompletionEngine.GetCompletions` is unchanged since the baseline. |
+| Does spec 025 touch the completion path? | No. `git diff --stat HEAD~2 HEAD` shows zero edits under `src/AkmlSql.Engine/Completion/`, `src/AkmlSql.IntelliSense/Completion/CompletionEngine*`, or `src/AkmlSql.Core/Schema/`. |
+| Is the test running in-process with no bridge? | Yes. `PerformanceBaselineTests` instantiates engine services directly via `EngineComposition.Build()` and calls `CompletionEngine.GetCompletions` synchronously. No IPC, no WebSocket. |
+| **Conclusion** | The drift is operational, not a code regression. Likely sources: machine load (background scans / processes / thermal), .NET JIT tier-promotion timing variability across runs, or accumulated dev-tooling state since 2026-05-23. The 5% gate is genuinely tight for a developer's loaded machine; the test's own docstring explicitly says re-run with `AKML_UPDATE_BASELINE=1` when intentional. |
+
+**Recommendation**: re-run `AKML_UPDATE_BASELINE=1 dotnet test --filter "FullyQualifiedName~PerformanceBaselineTests"` on a quiet machine to recapture. The baseline file is git-ignored (`.gitignore:44`) per-developer state by design — not a CI gate.
+
+*Last updated: 2026-05-28*
