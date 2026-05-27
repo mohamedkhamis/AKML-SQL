@@ -214,7 +214,7 @@ A Playwright suite under `tests/AkmlSql.Web.E2E.Tests/` exercises User Story 2 a
 
 The PRD's open questions §11 and the "deferred follow-up" notes in spec 021 Phase 4 leave the following items un-addressed by this closure spec. They are listed so the next M3-touching session can find them:
 
-1. **TLS fingerprint mismatch dialog** — FR-005 records the fingerprint change to diagnostics; the user-facing modal that lets a user re-trust the new cert is unbuilt.
+1. ~~**TLS fingerprint mismatch dialog**~~ **CLOSED 2026-05-28** (post-PR follow-on). `IEngineBridge.FingerprintMismatchDetected` event + `TlsFingerprintMismatchBanner.razor` mounted in `MainLayout` surfaces the drift as a non-blocking warning banner with redacted Last12 thumbprints + a Dismiss button; multiple drifts queue. The bridge still auto-trusts the new value in-memory (matches the original non-blocking-warning design); the banner is informational. 5 bUnit tests in `TlsFingerprintMismatchBannerTests.cs` cover absent-by-default, appears-on-drift, redaction shape, dismiss, and queue-behind. The full security-gate variant (block until "Trust new" / "Disconnect") remains a possible future spec but the warning channel is now live.
 2. **Engine-side tray pairing pane** (spec 021 T065) — Revoke / Revoke all / Regenerate PIN actions in a Windows WPF tray context. Defers to a session with an interactive Windows desktop.
 3. **In-flight WebSocket revocation** (spec 021 T066-partial) — drop open sockets the moment `BearerTokenStore.RevokeByHash` runs; the next handshake already rejects revoked bearers, so the gap is only the in-flight grace window.
 4. **Multi-engine connections from a single browser** — PRD §10 explicitly defers this. The browser still holds one active connection at a time.

@@ -1,0 +1,112 @@
+@*
+    Spec 025 follow-on (TLS fingerprint UI dialog — previously deferred §Out of Scope).
+    Non-blocking warning banner: appears at the top of the app shell when the bridge
+    detects a fingerprint drift on a paired connection. The bridge still auto-trusts the
+    new value (matches the original design); this banner surfaces the drift so the user
+    can choose to investigate (e.g. confirm with the engine host's operator that the cert
+    was deliberately regenerated). Multiple drifts queue; the user dismisses one at a
+    time.
+*@
+@using AkmlSql.Web.Services
+@implements IDisposable
+@inject IEngineBridge Bridge
+
+@if (_current != null)
+{
+    <div class="akml-tls-banner" data-testid="tls-fingerprint-banner" role="alert">
+        <div class="akml-tls-banner-content">
+            <strong>TLS fingerprint changed</strong> for connection
+            "<span class="akml-tls-banner-conn">@_current.ConnectionName</span>" —
+            new fingerprint <code data-testid="tls-banner-new">@Last12(_current.NewThumbprint)</code>
+            (was <code data-testid="tls-banner-old">@Last12(_current.OldThumbprint)</code>).
+            Expected after a deliberate cert regeneration on the engine host; otherwise
+            verify with the operator before continuing to use this connection.
+            @if (_pending.Count > 0)
+            {
+                <span class="akml-tls-banner-more">(@_pending.Count more pending)</span>
+            }
+        </div>
+        <button type="button"
+                class="akml-tls-banner-dismiss"
+                data-testid="tls-banner-dismiss"
+                @onclick="Dismiss">Dismiss</button>
+    </div>
+}
+
+<style>
+    .akml-tls-banner {
+        display: flex;
+        align-items: center;
+        gap: var(--akml-scalar-spacing-s);
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-m);
+        background-color: var(--akml-status-warning);
+        color: var(--akml-text-onaccent);
+        border-bottom: 1px solid var(--akml-border-default);
+        font-family: var(--akml-type-chrome-family);
+        font-size: var(--akml-type-chrome-size);
+    }
+    .akml-tls-banner-content { flex: 1 1 auto; }
+    .akml-tls-banner-conn { font-weight: bold; }
+    .akml-tls-banner-more { opacity: 0.85; margin-left: var(--akml-scalar-spacing-xs); }
+    .akml-tls-banner code {
+        background-color: rgba(0,0,0,0.18);
+        padding: 0 4px;
+        border-radius: 2px;
+        font-family: var(--akml-type-editor-family);
+    }
+    .akml-tls-banner-dismiss {
+        background-color: transparent;
+        color: var(--akml-text-onaccent);
+        border: 1px solid var(--akml-text-onaccent);
+        border-radius: 3px;
+        padding: 2px var(--akml-scalar-spacing-s);
+        cursor: pointer;
+        font-family: inherit;
+        font-size: inherit;
+    }
+    .akml-tls-banner-dismiss:hover { background-color: rgba(255,255,255,0.15); }
+</style>
+
+@code {
+    private TlsFingerprintMismatch? _current;
+    private readonly Queue<TlsFingerprintMismatch> _pending = new();
+
+    protected override void OnInitialized()
+    {
+        Bridge.FingerprintMismatchDetected += OnMismatch;
+    }
+
+    private void OnMismatch(TlsFingerprintMismatch mismatch)
+    {
+        InvokeAsync(() =>
+        {
+            if (_current == null)
+            {
+                _current = mismatch;
+            }
+            else
+            {
+                _pending.Enqueue(mismatch);
+            }
+            StateHasChanged();
+        });
+    }
+
+    private void Dismiss()
+    {
+        _current = _pending.Count > 0 ? _pending.Dequeue() : null;
+        StateHasChanged();
+    }
+
+    /// <summary>Redacts a thumbprint to its last 12 chars for display. Matches the
+    /// EngineBridge.Last12() helper used in the diagnostic log so banner + log show
+    /// the same redacted form. Test-visible so bUnit can drive the redaction check.</summary>
+    internal static string Last12(string? thumb) =>
+        string.IsNullOrEmpty(thumb) ? "<empty>" :
+        thumb.Length <= 12 ? thumb : "…" + thumb.Substring(thumb.Length - 12);
+
+    public void Dispose()
+    {
+        Bridge.FingerprintMismatchDetected -= OnMismatch;
+    }
+}

@@ -34,6 +34,18 @@ public interface IEngineBridge : IAsyncDisposable
     /// </summary>
     event Action<DateTimeOffset?>? RetryScheduled;
 
+    /// <summary>
+    /// Spec 025 follow-on (TLS fingerprint UI dialog — previously a deferred §Out of
+    /// Scope item). Raised when a handshake response carries a <c>ServerTlsThumbprint</c>
+    /// that differs from the pinned value on the same connection. The bridge still
+    /// auto-trusts the new value in-memory (matches the original non-blocking-warning
+    /// design); subscribers surface a banner so the user can review the drift. Args:
+    /// connection name + old thumbprint + new thumbprint (both raw — UI is expected
+    /// to redact to <c>Last12()</c>). The bridge fires this event before logging the
+    /// Warn diagnostic, so subscribers and logs see the same drift event.
+    /// </summary>
+    event Action<TlsFingerprintMismatch>? FingerprintMismatchDetected;
+
     /// <summary>Capabilities the engine advertised on the most recent handshake. Empty when disconnected.</summary>
     string[] EngineCapabilities { get; }
 
@@ -67,6 +79,11 @@ public interface IEngineBridge : IAsyncDisposable
 }
 
 public enum BridgeState { Disconnected, Connecting, Open, Reconnecting, Failed }
+
+/// <summary>
+/// Spec 025 follow-on. Carries the data a TLS-fingerprint-drift UI needs.
+/// </summary>
+public sealed record TlsFingerprintMismatch(string ConnectionName, string OldThumbprint, string NewThumbprint);
 
 internal sealed class EngineBridge : IEngineBridge
 {
@@ -147,6 +164,7 @@ internal sealed class EngineBridge : IEngineBridge
     }
     public event Action<BridgeState>? StateChanged;
     public event Action<DateTimeOffset?>? RetryScheduled;
+    public event Action<TlsFingerprintMismatch>? FingerprintMismatchDetected;
 
     public string[] EngineCapabilities { get; private set; } = Array.Empty<string>();
     public string? EngineVersion { get; private set; }
@@ -225,11 +243,24 @@ internal sealed class EngineBridge : IEngineBridge
             }
             else if (!string.Equals(connection.TlsFingerprint, response.ServerTlsThumbprint, StringComparison.OrdinalIgnoreCase))
             {
+                // Spec 025 follow-on: fire the event BEFORE the log so subscribers and
+                // log readers see the same single drift, and so the UI banner can surface
+                // it (in addition to the Warn diagnostic for headless / log-only audits).
+                var mismatch = new TlsFingerprintMismatch(
+                    ConnectionName: connection.Name,
+                    OldThumbprint: connection.TlsFingerprint ?? string.Empty,
+                    NewThumbprint: response.ServerTlsThumbprint!);
+                try { FingerprintMismatchDetected?.Invoke(mismatch); }
+                catch (Exception ex)
+                {
+                    _diagnostics.Log(DiagnosticLevel.Warn, "bridge",
+                        $"FingerprintMismatchDetected subscriber threw: {ex.Message}");
+                }
                 _diagnostics.Log(DiagnosticLevel.Warn, "bridge",
                     $"TLS fingerprint for connection '{connection.Name}' changed from {Last12(connection.TlsFingerprint)} " +
                     $"to {Last12(response.ServerTlsThumbprint)}. " +
                     "This is expected after a cert regeneration on the engine host. " +
-                    "The user-facing mismatch dialog is a deferred follow-up (spec 025 §Out of Scope).");
+                    "The user-facing TlsFingerprintMismatchBanner now surfaces the drift in the UI.");
                 connection.TlsFingerprint = response.ServerTlsThumbprint;
             }
         }

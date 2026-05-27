@@ -299,6 +299,7 @@ internal sealed class FakeEngineBridge : IEngineBridge
 
     public event Action<BridgeState>? StateChanged;
     public event Action<DateTimeOffset?>? RetryScheduled;
+    public event Action<TlsFingerprintMismatch>? FingerprintMismatchDetected;
 
     public void SetState(BridgeState newState)
     {
@@ -315,6 +316,11 @@ internal sealed class FakeEngineBridge : IEngineBridge
 
     public Task DisconnectAsync() => Task.CompletedTask;
     public ValueTask DisposeAsync() => default;
+
+    /// <summary>Test helper for the spec-025 follow-on TLS-banner tests — fires the
+    /// production-event shape so the banner subscriber wakes up exactly like it would
+    /// from a real bridge mismatch detection.</summary>
+    public void FireMismatch(TlsFingerprintMismatch m) => FingerprintMismatchDetected?.Invoke(m);
 
     // Suppress unused-event-warning while keeping the contract.
     private void _suppressUnused() { RetryScheduled?.Invoke(null); }
