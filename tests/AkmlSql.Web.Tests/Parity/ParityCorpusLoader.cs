@@ -1,0 +1,220 @@
+using System.Text.Json;
+using AkmlSql.Formatting.Profiles;
+using AkmlSql.Web.Services;
+
+namespace AkmlSql.Web.Tests.Parity;
+
+/// <summary>
+/// Spec 024 T005 — walks <c>tests/format-parity/corpus/*.sql</c>, reads the matching
+/// <c>baselines/&lt;profile&gt;/&lt;id&gt;.expected.sql</c> + <c>baselines/default/&lt;id&gt;.expected.json</c>
+/// produced by <see cref="ParityBaselineGenerator"/>, and validates the baseline-revision
+/// stamp in each baseline against <c>tests/format-parity/baseline-revision.txt</c>.
+///
+/// The stamp catches drift between the on-disk baseline and the current desktop pipeline —
+/// i.e. <em>WASM-runtime-vs-desktop</em> divergence. It is NOT a cross-product IDE-plugin
+/// version (the IDE plugin's formatter / analyser output never enters this loop — the
+/// baseline generator and the parity test both run the same <see cref="AkmlSql.Formatting.Pipeline.FormatterPipeline"/>
+/// and <see cref="AkmlSql.Analysis.AnalysisEngine"/> code paths the web edition runs).
+///
+/// The web edition ships TWO built-in profiles (<c>builtin.default</c> + <c>builtin.ansi</c>);
+/// the loader's <see cref="ProfileIds"/> reflects that. FR-007's "≥ 3 profiles" is therefore
+/// implemented as ≥ 2 (the actual profile zoo) — recorded as a deviation in
+/// <c>specs/024-m2-web-closure/tasks.md</c>.
+/// </summary>
+public static class ParityCorpusLoader
+{
+    /// <summary>Profile ids the parity tests cover. Matches IProfileStore's built-ins
+    /// (stripped of the <c>"builtin."</c> prefix because they are used as baseline
+    /// directory names: <c>baselines/default/</c>, <c>baselines/ansi/</c>).</summary>
+    public static IReadOnlyList<string> ProfileIds { get; } = new[] { "default", "ansi" };
+
+    /// <summary>
+    /// Returns the FormattingProfile the web edition resolves for the given short id.
+    /// Delegates to <see cref="ProfileStore.CreateBuiltInProfile"/> — the canonical
+    /// production builder — so a tweak to a default-profile knob cannot drift between
+    /// the runtime and the parity baseline.
+    /// </summary>
+    public static FormattingProfile GetProfile(string profileId) =>
+        ProfileStore.CreateBuiltInProfile(profileId);
+
+    /// <summary>Single source of truth for the int-severity → string mapping the parity
+    /// baselines store. Mirrors <c>CodeIssueInfo.Severity</c>'s documented encoding
+    /// (<c>0=Hint, 1=Info, 2=Warning, 3=Error</c>). Used by both the baseline generator
+    /// and the parity test, so a future encoding change touches one site.</summary>
+    public static string SeverityName(int severity) =>
+        severity switch
+        {
+            3 => "Error",
+            2 => "Warning",
+            1 => "Info",
+            _ => "Hint",
+        };
+
+    /// <summary>Normalise text to LF endings + trailing newline per parity-baseline-format.md.</summary>
+    public static string NormaliseLineEndings(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return string.Empty;
+        var lf = text.Replace("\r\n", "\n").Replace('\r', '\n');
+        return lf.EndsWith('\n') ? lf : lf + "\n";
+    }
+
+    /// <summary>The baseline revision every baseline file must match. Stored in
+    /// <c>tests/format-parity/baseline-revision.txt</c>; bumped each time the
+    /// baseline generator runs against a meaningful pipeline change.</summary>
+    public static string CurrentBaselineRevision => _lazyRevision.Value;
+
+    private static readonly Lazy<string> _lazyRevision = new(() =>
+    {
+        var revisionFile = Path.Combine(RepoRoot(), "tests", "format-parity", "baseline-revision.txt");
+        if (!File.Exists(revisionFile))
+        {
+            throw new FileNotFoundException(
+                $"Baseline-revision file missing: {revisionFile}. " +
+                "Run the ParityBaselineGenerator with AKML_REGEN_PARITY_BASELINE=1 to (re)produce baselines + this revision stamp.");
+        }
+        return File.ReadAllText(revisionFile).Trim();
+    });
+
+    /// <summary>Enumerates every corpus item × profile pair the parity tests should cover.</summary>
+    public static IEnumerable<(string CorpusId, string ProfileId)> EnumerateFormatterPairs()
+    {
+        foreach (var (id, _) in EnumerateCorpus())
+        {
+            foreach (var profile in ProfileIds)
+            {
+                yield return (id, profile);
+            }
+        }
+    }
+
+    /// <summary>Enumerates every corpus item for the analyser parity test (analyser is profile-independent).</summary>
+    public static IEnumerable<string> EnumerateAnalyserItems()
+    {
+        foreach (var (id, _) in EnumerateCorpus())
+        {
+            yield return id;
+        }
+    }
+
+    /// <summary>Yields <c>(corpusId, absoluteSqlPath)</c> for every <c>tests/format-parity/corpus/*.sql</c>.</summary>
+    public static IEnumerable<(string Id, string SqlPath)> EnumerateCorpus()
+    {
+        var corpusDir = CorpusDirectory();
+        foreach (var sqlPath in Directory.EnumerateFiles(corpusDir, "*.sql").OrderBy(p => p, StringComparer.Ordinal))
+        {
+            yield return (Path.GetFileNameWithoutExtension(sqlPath), sqlPath);
+        }
+    }
+
+    /// <summary>Reads the corpus .sql input for the given id.</summary>
+    public static string LoadInputSql(string corpusId)
+    {
+        var path = Path.Combine(CorpusDirectory(), corpusId + ".sql");
+        if (!File.Exists(path))
+        {
+            throw new FileNotFoundException($"Corpus input missing: {path}");
+        }
+        return File.ReadAllText(path);
+    }
+
+    /// <summary>
+    /// Loads a formatter baseline: strips the marker line per
+    /// <c>contracts/parity-baseline-format.md</c>, validates the baseline-revision stamp, and returns the formatted body.
+    /// Throws if the file is missing or the stamp does not match.
+    /// </summary>
+    public static string LoadFormatterBaseline(string corpusId, string profileId)
+    {
+        var path = Path.Combine(BaselinesDirectory(), profileId, corpusId + ".expected.sql");
+        if (!File.Exists(path))
+        {
+            throw new FileNotFoundException(
+                $"Formatter baseline missing: {path}. " +
+                "Run AKML_REGEN_PARITY_BASELINE=1 dotnet test --filter \"Category=ParityBaseline\" to produce it.");
+        }
+
+        var raw = File.ReadAllText(path);
+        var firstNewline = raw.IndexOf('\n');
+        if (firstNewline < 0)
+        {
+            throw new InvalidDataException($"Baseline {path} has no marker line");
+        }
+        var markerLine = raw[..firstNewline].TrimEnd('\r');
+
+        var expectedMarker = $"-- akml-parity-baseline revision={CurrentBaselineRevision} corpus-item={corpusId} profile={profileId}";
+        if (markerLine != expectedMarker)
+        {
+            throw new InvalidDataException(
+                $"Baseline marker mismatch in {path}.\n" +
+                $"  Expected: {expectedMarker}\n" +
+                $"  Actual:   {markerLine}\n" +
+                "Regenerate baselines: AKML_REGEN_PARITY_BASELINE=1 dotnet test --filter \"Category=ParityBaseline\"");
+        }
+
+        return raw[(firstNewline + 1)..];
+    }
+
+    /// <summary>
+    /// Loads an analyser baseline: parses the <c>akmlParityBaseline</c> + <c>findings</c> envelope per
+    /// <c>contracts/parity-baseline-format.md</c>, validates the baseline-revision stamp, and returns the sorted findings.
+    /// </summary>
+    public static ParityFinding[] LoadAnalyserBaseline(string corpusId)
+    {
+        var path = Path.Combine(BaselinesDirectory(), "default", corpusId + ".expected.json");
+        if (!File.Exists(path))
+        {
+            throw new FileNotFoundException(
+                $"Analyser baseline missing: {path}. " +
+                "Run AKML_REGEN_PARITY_BASELINE=1 dotnet test --filter \"Category=ParityBaseline\" to produce it.");
+        }
+
+        var doc = JsonSerializer.Deserialize<ParityBaselineEnvelope>(
+            File.ReadAllText(path),
+            new JsonSerializerOptions(JsonSerializerDefaults.Web))
+            ?? throw new InvalidDataException($"Baseline {path} did not deserialise");
+
+        if (doc.AkmlParityBaseline is null || doc.AkmlParityBaseline.Revision != CurrentBaselineRevision)
+        {
+            throw new InvalidDataException(
+                $"Baseline-revision mismatch in {path}.\n" +
+                $"  Expected: {CurrentBaselineRevision}\n" +
+                $"  Actual:   {doc.AkmlParityBaseline?.Revision ?? "(missing)"}\n" +
+                "Regenerate baselines: AKML_REGEN_PARITY_BASELINE=1 dotnet test --filter \"Category=ParityBaseline\"");
+        }
+
+        return doc.Findings ?? Array.Empty<ParityFinding>();
+    }
+
+    internal static string CorpusDirectory() => Path.Combine(RepoRoot(), "tests", "format-parity", "corpus");
+
+    internal static string BaselinesDirectory() => Path.Combine(RepoRoot(), "tests", "format-parity", "baselines");
+
+    /// <summary>Walks up from the test output directory to the repo root marked by AKML-SQL.slnx.</summary>
+    internal static string RepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "AKML-SQL.slnx")))
+        {
+            dir = dir.Parent;
+        }
+        if (dir is null)
+        {
+            throw new InvalidOperationException("Repo root (AKML-SQL.slnx) not found above test output dir");
+        }
+        return dir.FullName;
+    }
+
+    public sealed record ParityFinding(string RuleId, string Severity, string Message, int Line, int Column);
+
+    private sealed class ParityBaselineEnvelope
+    {
+        public ParityBaselineHeader? AkmlParityBaseline { get; set; }
+        public ParityFinding[]? Findings { get; set; }
+    }
+
+    private sealed class ParityBaselineHeader
+    {
+        public string Revision { get; set; } = string.Empty;
+        public string CorpusItem { get; set; } = string.Empty;
+        public string Profile { get; set; } = string.Empty;
+    }
+}

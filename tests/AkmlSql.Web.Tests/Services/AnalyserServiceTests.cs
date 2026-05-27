@@ -1,6 +1,8 @@
 using System.Threading;
 using AkmlSql.Web.Services;
+using AkmlSql.Web.Tests.Parity;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace AkmlSql.Web.Tests.Services;
 
@@ -12,6 +14,10 @@ namespace AkmlSql.Web.Tests.Services;
 /// </summary>
 public sealed class AnalyserServiceTests
 {
+    private readonly ITestOutputHelper _output;
+
+    public AnalyserServiceTests(ITestOutputHelper output) => _output = output;
+
     private static IAnalyserService CreateService() => new AnalyserService();
 
     [Fact]
@@ -71,4 +77,79 @@ public sealed class AnalyserServiceTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
             () => service.AnalyseAsync("SELECT 1;", null, cts.Token));
     }
+
+    /// <summary>
+    /// Spec 024 T023 / US3 — parity driver. For every corpus item, run the web edition's
+    /// analyser against the same input the <see cref="ParityBaselineGenerator"/> consumed
+    /// and assert the finding set matches the on-disk baseline along all five attributes
+    /// (RuleId / Severity / Message / Line / Column), after sorting both to the canonical
+    /// order specified in contracts/parity-baseline-format.md. Per-rule divergences
+    /// registered in <see cref="ParityDispositionsRegistry"/> are accepted.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(AnalyserParityItems))]
+    public async Task Analyser_MatchesIdeBaseline_AcrossCorpus(string corpusId)
+    {
+        var sql = ParityCorpusLoader.LoadInputSql(corpusId);
+        var service = new AnalyserService();
+        var response = await service.AnalyseAsync(sql);
+
+        var actual = response.Issues
+            .OrderBy(i => i.Line)
+            .ThenBy(i => i.Column)
+            .ThenBy(i => i.RuleId, StringComparer.Ordinal)
+            .Select(i => new ParityCorpusLoader.ParityFinding(
+                i.RuleId,
+                ParityCorpusLoader.SeverityName(i.Severity),
+                i.Message,
+                i.Line,
+                i.Column))
+            .ToArray();
+
+        var expected = ParityCorpusLoader.LoadAnalyserBaseline(corpusId);
+
+        // Walk both lists in lock-step. Any drift reports the first divergence
+        // with full context — easier to triage than a single big "lists differ".
+        var max = Math.Max(actual.Length, expected.Length);
+        var failures = new List<string>();
+        for (var i = 0; i < max; i++)
+        {
+            var e = i < expected.Length ? expected[i] : null;
+            var a = i < actual.Length ? actual[i] : null;
+            if (FindingsEqual(e, a)) continue;
+
+            var reason = ParityDispositionsRegistry.AcceptedReason(corpusId, "default", e?.RuleId ?? a?.RuleId);
+            if (reason is not null)
+            {
+                _output.WriteLine($"ACCEPTED_WITH_REASON ({corpusId}, default, {e?.RuleId ?? a?.RuleId}) — {reason}");
+                continue;
+            }
+            failures.Add(
+                $"#{i}: expected={Describe(e)}\n      actual  ={Describe(a)}");
+        }
+
+        if (failures.Count == 0) return;
+
+        Assert.Fail(
+            $"Analyser parity divergence for ({corpusId}). Either fix the analyser or " +
+            "register the offending rule in ParityDispositionsRegistry with a ReasonLink." +
+            $"\n\n=== {failures.Count} mismatch(es) ===\n" +
+            string.Join("\n\n", failures));
+    }
+
+    public static IEnumerable<object[]> AnalyserParityItems() =>
+        ParityCorpusLoader.EnumerateAnalyserItems().Select(id => new object[] { id });
+
+    private static bool FindingsEqual(ParityCorpusLoader.ParityFinding? a, ParityCorpusLoader.ParityFinding? b)
+    {
+        if (a is null || b is null) return a is null && b is null;
+        return a.RuleId == b.RuleId
+            && a.Severity == b.Severity
+            && a.Message == b.Message
+            && a.Line == b.Line
+            && a.Column == b.Column;
+    }
+
+    private static string Describe(ParityCorpusLoader.ParityFinding? f) =>
+        f is null ? "(none)" : $"{f.RuleId} {f.Severity} L{f.Line}:C{f.Column} — {f.Message}";
 }

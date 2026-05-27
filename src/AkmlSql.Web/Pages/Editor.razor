@@ -31,7 +31,7 @@
     <div class="akml-editor-toolbar">
         <ProfilePickerComponent OnProfileChanged="OnProfileChangedAsync" />
         <button class="akml-tool-button" @onclick="FormatAsync" title="Ctrl+K, Ctrl+F">Format</button>
-        <button class="akml-tool-button" @onclick="AnalyseAsync" title="Ctrl+K, Ctrl+L">Analyse</button>
+        <button class="akml-tool-button" data-testid="analyse-button" @onclick="AnalyseAsync" title="Ctrl+K, Ctrl+L">Analyse</button>
         <button class="akml-tool-button" @onclick="SaveAsync" title="Ctrl+S">Save</button>
         <span class="akml-editor-spacer"></span>
         @if (!string.IsNullOrEmpty(_status))
@@ -43,6 +43,16 @@
         <EditorComponent @ref="_editor" InitialText="@_initialText" OnTextChanged="OnTextChangedAsync" />
         <ProblemsListComponent Findings="@_findings" OnJumpToIssue="OnJumpToIssueAsync" />
     </div>
+    @* Spec 024 T004: completion markers for Playwright. `_hasFormatted` / `_hasAnalysed`
+       latch to true on the first successful Format / Analyse; `_formatVersion` /
+       `_analyseVersion` increment per success so a test can detect a *repeat* operation
+       (e.g. Scenario 4 in `specs/024-m2-web-closure/contracts/playwright-harness-contract.md`,
+       which reformats after a profile switch). The simple attached-only pattern still
+       works: `await Page.WaitForSelectorAsync("[data-testid='format-complete']")`.
+       Edge-trigger pattern for repeats: capture `data-version` before the action and
+       wait for it to change. *@
+    @if (_hasFormatted) { <span data-testid="format-complete" data-version="@_formatVersion" hidden></span> }
+    @if (_hasAnalysed) { <span data-testid="analyse-complete" data-version="@_analyseVersion" hidden></span> }
 </div>
 
 <style>
@@ -96,6 +106,14 @@
     private CancellationTokenSource? _analyseCts;
     private bool _autoAnalyseOnFormat = true;
     private IJSObjectReference? _downloadModule;
+    // Spec 024 T004: completion markers for the Playwright suite. The `_has*` flags
+    // attach the data-testid span; the `_*Version` counters increment per success so
+    // a repeat-operation test (Scenario 4 in playwright-harness-contract.md) can wait
+    // for the version attribute to change rather than for re-attach.
+    private bool _hasFormatted;
+    private bool _hasAnalysed;
+    private int _formatVersion;
+    private int _analyseVersion;
 
     protected override async Task OnInitializedAsync()
     {
@@ -156,6 +174,8 @@
                 await _editor.SetTextAsync(result.FormattedText);
                 _currentText = result.FormattedText;
                 _status = result.WasModified ? "Formatted." : "Already canonical.";
+                _hasFormatted = true;
+                _formatVersion++;
                 Diagnostics.Log(DiagnosticLevel.Info, "formatter", _status);
                 if (_autoAnalyseOnFormat)
                 {
@@ -188,6 +208,8 @@
         try
         {
             _findings = await Analyser.AnalyseAsync(_currentText, null, _analyseCts.Token);
+            _hasAnalysed = true;
+            _analyseVersion++;
             var issueCount = _findings.Issues?.Length ?? 0;
             // Problem count is shown in the Problems panel header; only surface a
             // toolbar status for the "no problems" case so the user sees confirmation

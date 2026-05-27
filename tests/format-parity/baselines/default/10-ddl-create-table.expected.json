@@ -1,0 +1,100 @@
+{
+  "akmlParityBaseline": {
+    "revision": "1.26.0526.0000",
+    "corpusItem": "10-ddl-create-table",
+    "profile": "default"
+  },
+  "findings": [
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'create' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'table' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 8
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'not' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 2,
+      "column": 28
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'null' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 2,
+      "column": 32
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'not' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 3,
+      "column": 16
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'null' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 3,
+      "column": 20
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'not' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 4,
+      "column": 20
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'null' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 4,
+      "column": 24
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'not' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 5,
+      "column": 22
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'null' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 5,
+      "column": 26
+    },
+    {
+      "ruleId": "NM001",
+      "severity": "Warning",
+      "message": "'status' is a T-SQL reserved word used as an identifier — rename it or use square bracket escaping",
+      "line": 6,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'not' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 6,
+      "column": 20
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'null' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 6,
+      "column": 24
+    }
+  ]
+}

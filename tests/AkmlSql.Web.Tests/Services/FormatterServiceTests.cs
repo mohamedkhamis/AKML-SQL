@@ -1,8 +1,10 @@
 using AkmlSql.Formatting.Pipeline;
 using AkmlSql.Formatting.Profiles;
 using AkmlSql.Web.Services;
+using AkmlSql.Web.Tests.Parity;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace AkmlSql.Web.Tests.Services;
 
@@ -15,6 +17,10 @@ namespace AkmlSql.Web.Tests.Services;
 /// </summary>
 public sealed class FormatterServiceTests
 {
+    private readonly ITestOutputHelper _output;
+
+    public FormatterServiceTests(ITestOutputHelper output) => _output = output;
+
     private static IFormatterService CreateService()
     {
         var services = new ServiceCollection();
@@ -99,5 +105,71 @@ public sealed class FormatterServiceTests
         var result = service.Format(null!);
         Assert.NotNull(result);
         Assert.NotNull(result.FormattedText);
+    }
+
+    /// <summary>
+    /// Spec 024 T019 / US2 — parity driver. For every (corpus item × built-in profile)
+    /// pair, run the web edition's formatter against the same input the
+    /// <see cref="ParityBaselineGenerator"/> consumed and assert the formatted output
+    /// matches the on-disk baseline byte-exact (after LF normalisation per
+    /// contracts/parity-baseline-format.md). True regressions fail the test;
+    /// divergences registered in <see cref="ParityDispositionsRegistry"/> are accepted.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(FormatterParityPairs))]
+    public void Formatter_MatchesIdeBaseline_AcrossCorpusAndProfiles(string corpusId, string profileId)
+    {
+        var sql = ParityCorpusLoader.LoadInputSql(corpusId);
+        var profile = ParityCorpusLoader.GetProfile(profileId);
+
+        var service = new FormatterService();
+        var result = service.Format(sql, profile);
+
+        Assert.True(
+            result.Success,
+            $"Formatter failed for ({corpusId}, {profileId}): " +
+            string.Join("; ", result.Diagnostics.Select(d => $"{d.Severity}:{d.Message}")));
+
+        var actual = ParityCorpusLoader.NormaliseLineEndings(result.FormattedText);
+        var expected = ParityCorpusLoader.LoadFormatterBaseline(corpusId, profileId);
+
+        if (actual == expected) return;
+
+        var disposition = ParityDispositionsRegistry.AcceptedReason(corpusId, profileId);
+        if (disposition is not null)
+        {
+            _output.WriteLine(
+                $"ACCEPTED_WITH_REASON ({corpusId}, {profileId}) — {disposition}");
+            return;
+        }
+
+        // Real regression: produce a useful diff message.
+        var diff = BuildDiff(expected, actual);
+        Assert.Fail(
+            $"Formatter parity divergence for ({corpusId}, {profileId}). " +
+            "Either fix the formatter or register the divergence in " +
+            "ParityDispositionsRegistry with a ReasonLink to a spec-020 tasks.md " +
+            $"entry.\n\n=== DIFF (expected → actual) ===\n{diff}");
+    }
+
+    public static IEnumerable<object[]> FormatterParityPairs() =>
+        ParityCorpusLoader.EnumerateFormatterPairs()
+            .Select(p => new object[] { p.CorpusId, p.ProfileId });
+
+    private static string BuildDiff(string expected, string actual)
+    {
+        var expectedLines = expected.Split('\n');
+        var actualLines = actual.Split('\n');
+        var sb = new System.Text.StringBuilder();
+        var max = Math.Max(expectedLines.Length, actualLines.Length);
+        for (var i = 0; i < max; i++)
+        {
+            var e = i < expectedLines.Length ? expectedLines[i] : "<EOF>";
+            var a = i < actualLines.Length ? actualLines[i] : "<EOF>";
+            if (e == a) continue;
+            sb.AppendLine($"L{i + 1,4}  -: {e}");
+            sb.AppendLine($"      +: {a}");
+        }
+        return sb.Length == 0 ? "(no line-level differences — trailing whitespace or BOM?)" : sb.ToString();
     }
 }
