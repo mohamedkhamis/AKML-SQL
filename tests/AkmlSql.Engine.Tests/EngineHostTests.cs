@@ -1,11 +1,16 @@
 using System;
+using System.IO;
 using System.Net.WebSockets;
 using System.Threading;
 using System.Threading.Tasks;
 using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc;
+using AkmlSql.Core.Ipc.Messages;
+using AkmlSql.Engine.Schema;
+using AkmlSql.Engine.Server;
 using AkmlSql.Engine.Transports;
 using MessagePack;
+using Serilog;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests;
@@ -155,4 +160,96 @@ public sealed class EngineHostTests
         Assert.Equal(101, response.MessageType);
         Assert.Equal(1, response.RequestId);
     }
+
+    // --- Spec 026 (M4 closure) FR-013a..e / SC-010: LAN auth composition matrix ---
+
+    /// <summary>
+    /// FR-013c / FR-013d / SC-010: in LAN mode the composed handshake handler refuses a wrong PIN
+    /// (<see cref="HandshakeStatus.PinInvalid"/>, no bearer), accepts the right PIN
+    /// (<see cref="HandshakeStatus.Ok"/> + a minted bearer), and the PIN is single-use (a second
+    /// handshake with the same PIN is refused).
+    /// </summary>
+    [Fact]
+    public async Task BuildBridgeAuth_lan_enforces_pin_single_use()
+    {
+        var tokenPath = Path.Combine(Path.GetTempPath(), $"akml-tokens-{Guid.NewGuid():N}.json");
+        try
+        {
+            var bridge = new BridgeOptions
+            {
+                Enabled = true,
+                BindAddress = "0.0.0.0",
+                Port = 47291,
+                TokenStorePath = tokenPath,
+                TokenTtlDays = 90,
+            };
+
+            var auth = EngineHost.BuildBridgeAuth(bridge);
+            Assert.NotNull(auth.Pairing);           // LAN mode constructs a live pairing service
+            var ctx = MinimalContext();
+            var validPin = auth.Pairing!.CurrentPin;
+            var wrongPin = validPin == "000000" ? "111111" : "000000";
+
+            // Wrong PIN -> PinInvalid, no bearer.
+            var wrong = await auth.Handshake.HandleAsync(MakeHandshake(pin: wrongPin), ctx, default);
+            Assert.Equal(HandshakeStatus.PinInvalid, wrong.Status);
+            Assert.True(string.IsNullOrEmpty(wrong.NewBearerToken));
+
+            // Correct PIN -> Ok + minted bearer.
+            var ok = await auth.Handshake.HandleAsync(MakeHandshake(pin: validPin), ctx, default);
+            Assert.Equal(HandshakeStatus.Ok, ok.Status);
+            Assert.False(string.IsNullOrEmpty(ok.NewBearerToken));
+
+            // Single-use: the same PIN again is refused.
+            var reuse = await auth.Handshake.HandleAsync(MakeHandshake(pin: validPin), ctx, default);
+            Assert.Equal(HandshakeStatus.PinInvalid, reuse.Status);
+        }
+        finally
+        {
+            if (File.Exists(tokenPath)) File.Delete(tokenPath);
+        }
+    }
+
+    /// <summary>
+    /// FR-013b: a loopback bridge keeps the parameterless auto-accept handler — a no-PIN handshake
+    /// returns <see cref="HandshakeStatus.Ok"/> and no pairing service is constructed.
+    /// </summary>
+    [Fact]
+    public async Task BuildBridgeAuth_loopback_auto_accepts_no_pin()
+    {
+        var bridge = new BridgeOptions { Enabled = true, BindAddress = "127.0.0.1", Port = 47291 };
+
+        var auth = EngineHost.BuildBridgeAuth(bridge);
+
+        Assert.Null(auth.Pairing);                  // no pairing service in loopback mode
+        var ok = await auth.Handshake.HandleAsync(MakeHandshake(pin: null), MinimalContext(), default);
+        Assert.Equal(HandshakeStatus.Ok, ok.Status);
+    }
+
+    /// <summary>
+    /// FR-013b: a disabled or absent bridge composes no pairing service (parameterless handler),
+    /// so the named-pipe / IDE-plugin path is untouched.
+    /// </summary>
+    [Fact]
+    public void BuildBridgeAuth_disabled_or_absent_has_no_pairing_service()
+    {
+        Assert.Null(EngineHost.BuildBridgeAuth(null).Pairing);
+        Assert.Null(EngineHost.BuildBridgeAuth(new BridgeOptions { Enabled = false }).Pairing);
+    }
+
+    private static HandshakeRequest MakeHandshake(string? pin) => new()
+    {
+        PairingPin = pin,
+        BrowserLabel = "test",
+        ProtocolVersionMin = 1,
+        ProtocolVersionMax = 1000,
+    };
+
+    private static RpcContext MinimalContext() => new()
+    {
+        Sessions = new SessionManager(),
+        SchemaCache = new SchemaCacheManager(),
+        Logger = Log.Logger,
+        SettingsLoader = () => new AppSettings(),
+    };
 }

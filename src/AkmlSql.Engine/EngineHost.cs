@@ -91,11 +91,32 @@ namespace AkmlSql.Engine
                 // T035 -- process pending SQL Prompt import before starting the RPC server.
                 ProcessPendingImports();
 
+                // Spec 026 (M4 closure) FR-013a: load settings up front so the bridge-auth
+                // composition can enforce the pairing PIN in LAN mode. ConfigManager.Load() is
+                // idempotent -- the WebSocket transport below reuses the same settings instance.
+                var settings = ConfigManager.Load();
+                var bridgeAuth = BuildBridgeAuth(settings.Bridge);
+
                 // Spec 022 (M0 closure). The composition root builds services, context and
                 // router; the transport (T027) implements IRpcTransport -- it owns only pipe
                 // lifecycle + frame I/O and forwards each decoded message to the router via the
-                // RequestReceived event.
-                var composition = EngineComposition.Build();
+                // RequestReceived event. Spec 026 FR-013a: the LAN-mode handshake handler (wired
+                // to a live PairingService + BearerTokenStore) is supplied here; loopback / no-bridge
+                // passes null and the registry falls back to the parameterless auto-accept handler.
+                var composition = EngineComposition.Build(bridgeAuth.Handshake);
+
+                // Spec 026 (M4 closure) FR-008: in LAN mode, persist the minted PIN to
+                // %CommonAppData%/AKML SQL Web/pairing-pin.txt so the installer's Web_PostInstall
+                // can surface it in INSTALL-SUMMARY.txt. The one-shot publish captures the initial
+                // PIN (minted inside the PairingService ctor, before this subscription attaches).
+                if (bridgeAuth.Pairing != null)
+                {
+                    var pinFile = new Pairing.PairingPinFile(Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                        "AKML SQL Web", "pairing-pin.txt"));
+                    bridgeAuth.Pairing.PinChanged += (_, pin) => pinFile.Publish(pin);
+                    pinFile.Publish(bridgeAuth.Pairing.CurrentPin);
+                }
 
                 async Task<RpcMessage?> RouteAsync(RpcMessage msg, CancellationToken ct)
                 {
@@ -113,7 +134,6 @@ namespace AkmlSql.Engine
                 // so SSMS plugin (pipe) and web edition (WebSocket) serve identical
                 // handler chains. When Bridge is absent or disabled, the engine behaves
                 // exactly like the IDE-plugin-only deployment.
-                var settings = ConfigManager.Load();
                 var wsTransport = BuildWebSocketTransport(settings.Bridge);
                 if (wsTransport != null)
                 {
@@ -175,6 +195,61 @@ namespace AkmlSql.Engine
                 RequirePairingToken = !bridge.IsLoopback,
             };
             return new WebSocketTransport(options);
+        }
+
+        /// <summary>
+        /// Spec 026 (M4 closure) FR-013a / FR-013b. Builds the bridge handshake handler:
+        /// LAN mode enforces the pairing PIN; loopback / disabled / absent auto-accepts.
+        /// Exposed <c>internal</c> for <c>EngineHostTests</c>.
+        /// </summary>
+        /// <remarks>
+        /// LAN mode (bridge enabled + non-loopback) constructs a live <see cref="Pairing.PairingService"/>
+        /// + <see cref="Pairing.BearerTokenStore"/> and wires the full
+        /// <see cref="Handlers.Handshake.HandshakeHandler"/> constructor (FR-013a). The
+        /// <c>pinValidator</c> keys <see cref="Pairing.PairingService"/>'s per-source rate limit on the
+        /// transport-published remote IP (<see cref="Pairing.BridgeSourceIp"/>). Loopback / disabled /
+        /// absent returns the parameterless auto-accept handler (FR-013b) with a null
+        /// <see cref="BridgeAuth.Pairing"/>, so no PIN file is written and localhost needs no PIN.
+        /// </remarks>
+        internal static BridgeAuth BuildBridgeAuth(Core.Config.BridgeOptions? bridge)
+        {
+            if (bridge == null || !bridge.Enabled || bridge.IsLoopback)
+            {
+                return new BridgeAuth { Handshake = new Handlers.Handshake.HandshakeHandler() };
+            }
+
+            var tokenStorePath = string.IsNullOrWhiteSpace(bridge.TokenStorePath)
+                ? Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                    "AKML SQL Web", "tokens.json")
+                : bridge.TokenStorePath;
+            var ttlDays = bridge.TokenTtlDays > 0 ? bridge.TokenTtlDays : 90;
+
+            var pairing = new Pairing.PairingService();
+            var tokens = new Pairing.BearerTokenStore(tokenStorePath, TimeSpan.FromDays(ttlDays));
+
+            var handshake = new Handlers.Handshake.HandshakeHandler(
+                pairingRequired: () => true,
+                pinValidator: pin => pairing.ValidatePin(
+                    Pairing.BridgeSourceIp.Current?.ToString() ?? "ws", pin) == Pairing.PinAttemptResult.Valid,
+                bearerValidator: token => tokens.Validate(token),
+                bearerMinter: label => tokens.Mint(label),
+                serverCanonicalIdentityProvider: () => null);
+
+            return new BridgeAuth { Handshake = handshake, Pairing = pairing, Tokens = tokens };
+        }
+
+        /// <summary>
+        /// Spec 026 (M4 closure). The bridge's handshake handler plus the live pairing services it
+        /// was wired to (both null in loopback / no-bridge mode). <c>EngineHost</c> uses
+        /// <see cref="Pairing"/> to wire the PIN-file writer; <c>EngineHostTests</c> reads
+        /// <c>Pairing.CurrentPin</c> to drive the auth-composition matrix.
+        /// </summary>
+        internal sealed class BridgeAuth
+        {
+            public required Handlers.Handshake.HandshakeHandler Handshake { get; init; }
+            public Pairing.PairingService? Pairing { get; init; }
+            public Pairing.BearerTokenStore? Tokens { get; init; }
         }
 
         /// <summary>

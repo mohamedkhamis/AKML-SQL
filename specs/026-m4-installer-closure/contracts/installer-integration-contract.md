@@ -54,4 +54,4 @@ When flags are present, `Web_Skip` returns true for the corresponding wizard pag
 
 ## C4 — Success page URL form
 
-`Web_PostInstall` builds the `URL:` line per E5: `http://localhost[:IisPort]/` (omit `:80`) for localhost, `https://<hostname>[:IisPort]/` for LAN. This is the dedicated-`AkmlSqlWeb`-site URL form (not the PRD's `/akmlsql` application path — see spec Assumptions).
+`Web_PostInstall` builds the `URL:` line per E5: `http://localhost[:IisPort]/` (omit `:80`) for localhost, `http://<hostname>[:IisPort]/` for LAN. The IIS bundle is served over HTTP in both modes; only the engine bridge uses TLS (`wss` on the bridge port) — see spec §Out of Scope item 3. This is the dedicated-`AkmlSqlWeb`-site URL form (not the PRD's `/akmlsql` application path — see spec Assumptions).

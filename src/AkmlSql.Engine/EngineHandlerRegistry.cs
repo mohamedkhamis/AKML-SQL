@@ -35,7 +35,8 @@ namespace AkmlSql.Engine;
 /// </summary>
 internal static class EngineHandlerRegistry
 {
-    public static HistoryRetentionService RegisterAllHandlers(RpcRouter router, RpcContext ctx)
+    public static HistoryRetentionService RegisterAllHandlers(
+        RpcRouter router, RpcContext ctx, Handlers.Handshake.HandshakeHandler? handshakeHandler = null)
     {
         // === Services scoped to this method; handlers capture by closure. ===
         var sessions = ctx.Sessions;
@@ -250,12 +251,14 @@ internal static class EngineHandlerRegistry
         router.Register(new Handlers.Control.ShutdownHandler());
         router.Register(new Handlers.Control.ConnectionChangedHandler());
 
-        // === WebSocket bridge handshake (spec 025 US5 wire-up) ===
-        // The HandshakeHandler exists from spec 021 T060 but was never registered with the
-        // engine router — the named-pipe transport doesn't need it, but the WebSocket
-        // transport requires it as the first frame on every connection. Localhost auto-accept
-        // (line 160-168 of HandshakeHandler) keeps the spec-021 NO_AUTH semantics intact.
-        router.Register(new Handlers.Handshake.HandshakeHandler());
+        // === WebSocket bridge handshake (spec 025 US5 wire-up; spec 026 M4 closure auth) ===
+        // The HandshakeHandler exists from spec 021 T060. The named-pipe transport doesn't need
+        // it, but the WebSocket transport requires it as the first frame on every connection.
+        // Spec 026 FR-013a/FR-013b: in LAN mode the host supplies a HandshakeHandler wired
+        // (full ctor) to a live PairingService + BearerTokenStore so the PIN is enforced. When
+        // null (loopback / named-pipe / no bridge), fall back to the parameterless auto-accept
+        // handler — the spec-021 NO_AUTH localhost semantics stay intact.
+        router.Register(handshakeHandler ?? new Handlers.Handshake.HandshakeHandler());
 
         // === AI handlers (7 typed via AiHandlerBase subclasses + 1 raw bridge for AiProviderTest) ===
         // Spec 022 P3/US3 complete: all seven user-facing AI messages route through typed

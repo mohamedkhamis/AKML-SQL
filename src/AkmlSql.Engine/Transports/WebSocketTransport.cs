@@ -9,6 +9,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using AkmlSql.Core.Ipc;
+using AkmlSql.Engine.Pairing;
 using MessagePack;
 using Serilog;
 
@@ -163,7 +164,15 @@ namespace AkmlSql.Engine.Transports
             }
 
             using var ws = wsContext.WebSocket;
-            await ServeAsync(ws, ct).ConfigureAwait(false);
+
+            // Spec 026 (M4 closure) FR-013a: publish this connection's remote IP as a
+            // per-connection ambient so the handshake's pinValidator uses the real source
+            // as PairingService's rate-limit bucket key. The scope restores the previous
+            // value on connection end so values never leak across connections.
+            using (BridgeSourceIp.Set(context.Request.RemoteEndPoint?.Address))
+            {
+                await ServeAsync(ws, ct).ConfigureAwait(false);
+            }
         }
 
         private async Task ServeAsync(WebSocket socket, CancellationToken ct)

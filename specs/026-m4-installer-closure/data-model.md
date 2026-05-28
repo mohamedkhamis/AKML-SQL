@@ -90,7 +90,7 @@ The generated `%CommonAppData%\AKML SQL Web\INSTALL-SUMMARY.txt` (and the matchi
 
 | Line | Localhost mode | LAN mode |
 |------|----------------|----------|
-| `URL:` | `http://localhost[:IisPort]/` (port omitted when 80) | `https://<hostname>[:IisPort]/` |
+| `URL:` | `http://localhost[:IisPort]/` (port omitted when 80) | `http://<hostname>[:IisPort]/` (IIS bundle is HTTP; only the bridge is `wss`/TLS) |
 | Pairing PIN | *(omitted — loopback needs no PIN)* | `Pairing PIN: <6-digit>` or the "not yet generated" fallback |
 | TLS thumbprint | *(omitted)* | `TLS thumb: <SHA-1 hex>` + "How to trust" steps |
 | Service status | warning line only if `AkmlSqlWebEngine` not `Running` within 10 s (FR-007a) | same |

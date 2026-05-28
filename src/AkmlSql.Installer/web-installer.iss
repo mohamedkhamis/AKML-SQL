@@ -1,42 +1,46 @@
-; Spec 021 (web edition) -- M4 installer additions.
+; Spec 021 (web edition) -- M4 installer additions.  Spec 026 (M4 closure) -- two-port split.
 ;
-; Included by AkmlSqlSetup.iss; adds the Web-edition component group, the
-; install steps (engine binary, web bundle, AppData config, IIS site, TLS cert,
-; firewall rule, Windows service for the engine), and the silent-install flags.
+; Included by AkmlSqlSetup.iss (via `#include "web-installer.iss"` placed BEFORE the main
+; [Code] section so the Web_* hook procedures are declared ahead of the event handlers that
+; call them). Adds the Web-edition component group, the install steps (engine binary, web
+; bundle, AppData config, IIS site, TLS cert, firewall rule, Windows service for the engine),
+; and the Web_* hook procedures the main installer invokes.
 ;
-; Cross-references: contracts/installer-component.md + spec.md FR-018..FR-023.
+; Cross-references: contracts/installer-integration-contract.md + spec.md FR-001..FR-007 + FR-003a.
 ;
 ; ─── Status ─────────────────────────────────────────────────────────────────
-; This file is INSTALLER SCAFFOLDING. It compiles under Inno Setup 7 (Pascal
-; Script). It has NOT been exercised end-to-end yet -- doing so requires a
-; Windows host with IIS, Inno Setup 7 installed, and admin rights. The first
-; interactive run is the acceptance test for T081-T099; deltas land in this
-; file plus the three PowerShell helpers it invokes.
+; Spec 026: the integration (#include + 5 hook calls + a new ShouldSkipPage) is now wired into
+; AkmlSqlSetup.iss, and the single port input is split into an IIS port (default 80) and a bridge
+; port (default 47291) -- they must differ (HTTP.SYS cannot share one port between IIS and the
+; engine's HttpListener). NOT YET COMPILE-VERIFIED in this environment: a full ISCC compile needs
+; the entire product built (shell VSIXes via VS MSBuild + engine/updater/analyzer publishes + the
+; web bundle). The first interactive install on a Windows host with IIS + Inno Setup 7 + admin is
+; the acceptance test (spec 026 T041) and the verification gate for SC-001..SC-003.
+;
+; DEFERRED to a later spec-026 turn (additive to this file's Web_* procedures): the IIS-not-installed
+; three-path dialog (US3 / FR-014..FR-020), the silent-install flags (US4 / FR-021..FR-026), the
+; Administrators+SYSTEM ACL on the CommonAppData dir + the 30 s pairing-pin.txt poll + the
+; service-start check (US2-installer / FR-007a, FR-010, FR-011).
 ;
 ; ─── Files this script depends on ──────────────────────────────────────────
-;   web-iis-setup.ps1     -- IIS site provisioning + MIME + CSP
-;   web-tls-setup.ps1     -- self-signed cert + netsh sslcert + thumbprint capture
-;   web-firewall.ps1      -- firewall inbound rule
-;
-; All three live alongside this file under src/AkmlSql.Installer/ and are
-; bundled into the installer payload via [Files] entries in AkmlSqlSetup.iss.
+;   web-iis-setup.ps1     -- IIS site provisioning + MIME + CSP   (receives the IIS port)
+;   web-tls-setup.ps1     -- self-signed cert + netsh sslcert      (receives the bridge port)
+;   web-firewall.ps1      -- firewall inbound rule                 (receives the bridge port)
+;   web-config-bridge.ps1 -- writes the engine config bridge section (receives the bridge port)
 
 [Types]
-; The existing AkmlSqlSetup.iss already defines Full / Compact / Custom.
-; We don't redefine here.
+; The existing AkmlSqlSetup.iss already defines Full / Compact / Custom. Not redefined here.
 
 [Components]
-; T081 -- web-edition component group, independent of the plugin group.
+; FR-001 -- web-edition component group, independent of the plugin group.
 Name: "web"; Description: "Web edition (browser-based AKML SQL)"; Types: full; Flags: disablenouninstallwarning
 Name: "web\iis"; Description: "Host on local IIS (recommended)"; Types: full
 Name: "web\service"; Description: "Install Windows service for the engine"; Types: full
 
 [Files]
-; T082 -- copy the web bundle to ProgramFiles. The bundle is pre-built by
-; `dotnet publish src/AkmlSql.Web -c Release` and lands under
-; src/AkmlSql.Web/bin/Release/net10.0/publish/wwwroot/.
-;
-; Recursive copy preserves the _framework/ subtree containing the WASM + DLLs.
+; FR-007 -- copy the web bundle to ProgramFiles. Built by
+; `dotnet publish src/AkmlSql.Web -c Release`; lands under
+; src/AkmlSql.Web/bin/Release/net10.0/publish/wwwroot/. Recursive copy preserves _framework/.
 Source: "..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\*"; \
     DestDir: "{app}\Web"; \
     Flags: ignoreversion recursesubdirs createallsubdirs; \
@@ -46,38 +50,35 @@ Source: "..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\*"; \
 Source: "web-iis-setup.ps1"; DestDir: "{tmp}"; Flags: deleteafterinstall; Components: web\iis
 Source: "web-tls-setup.ps1"; DestDir: "{tmp}"; Flags: deleteafterinstall; Components: web
 Source: "web-firewall.ps1"; DestDir: "{tmp}"; Flags: deleteafterinstall; Components: web
-; Spec 025 (M3 bridge closure) T008 -- writes the Bridge section into the
-; engine config so EngineHost.RunAsync starts a WebSocketTransport alongside
-; the named pipe (FR-027). Invoked from Web_PostInstall after the engine
-; service is registered.
 Source: "web-config-bridge.ps1"; DestDir: "{tmp}"; Flags: deleteafterinstall; Components: web
 
 [Run]
-; T084 IIS site provisioning. Skipped when "Don't host" was selected.
-; The script handles the appcmd.exe calls; we pass the chosen port via -Port.
+; FR-004 -- web-iis-setup.ps1 receives the IIS port (the static-bundle site).
+; Skipped when "Don't host" was selected (only runs for the web\iis component).
 Filename: "powershell.exe"; \
-    Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{tmp}\web-iis-setup.ps1"" -Port {code:GetWebPort} -PhysicalPath ""{app}\Web"""; \
+    Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{tmp}\web-iis-setup.ps1"" -Port {code:GetIisPort} -PhysicalPath ""{app}\Web"""; \
     StatusMsg: "Provisioning IIS site for AKML SQL Web..."; \
     Components: web\iis; \
     Flags: runhidden
 
-; T087 LAN-mode cert generation + netsh sslcert bind. Skipped on localhost-only.
+; FR-004 -- web-tls-setup.ps1 receives the BRIDGE port (the cert is bound to the engine's
+; WebSocket listener, not the IIS site). LAN mode only.
 Filename: "powershell.exe"; \
-    Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{tmp}\web-tls-setup.ps1"" -Port {code:GetWebPort} -PfxPath ""{commonappdata}\AKML SQL Web\certs\bridge.pfx"""; \
+    Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{tmp}\web-tls-setup.ps1"" -Port {code:GetBridgePort} -PfxPath ""{commonappdata}\AKML SQL Web\certs\bridge.pfx"""; \
     StatusMsg: "Generating self-signed TLS certificate..."; \
     Check: IsLanExposed; \
     Components: web; \
     Flags: runhidden
 
-; T089 Firewall rule. Only opened when LAN mode is chosen.
+; FR-004 -- web-firewall.ps1 receives the BRIDGE port. LAN mode only.
 Filename: "powershell.exe"; \
-    Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{tmp}\web-firewall.ps1"" -Port {code:GetWebPort} -Action Add"; \
+    Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{tmp}\web-firewall.ps1"" -Port {code:GetBridgePort} -Action Add"; \
     StatusMsg: "Adding Windows Firewall rule..."; \
     Check: IsLanExposed; \
     Components: web; \
     Flags: runhidden
 
-; T091 Windows service for the engine. Uses sc.exe to create AkmlSqlWebEngine.
+; Windows service for the engine. Uses sc.exe to create AkmlSqlWebEngine.
 Filename: "sc.exe"; \
     Parameters: "create AkmlSqlWebEngine binPath= ""\""{app}\Engine\AkmlSql.Engine.exe\"" --config \""{userappdata}\AKML SQL Web\config.json\"""" start= auto DisplayName= ""AKML SQL Web Engine"""; \
     StatusMsg: "Installing AKML SQL Web Engine service..."; \
@@ -91,58 +92,39 @@ Filename: "sc.exe"; \
     Flags: runhidden
 
 [UninstallRun]
-; T095 -- uninstall path. Reverse the install order: stop service, remove
-; firewall rule, delete netsh sslcert binding, remove IIS site, delete files.
-; %AppData%/AKML SQL/ (the IDE-plugin state) is NEVER touched (SC-007).
+; Reverse the install order: stop service, remove firewall rule, delete netsh sslcert binding,
+; remove IIS site, delete files. %AppData%/AKML SQL/ (IDE-plugin state) is NEVER touched (SC-007).
 Filename: "sc.exe"; Parameters: "stop AkmlSqlWebEngine"; Flags: runhidden; Components: web\service
 Filename: "sc.exe"; Parameters: "delete AkmlSqlWebEngine"; Flags: runhidden; Components: web\service
 
 Filename: "powershell.exe"; \
-    Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{tmp}\web-firewall.ps1"" -Port {code:GetWebPort} -Action Remove"; \
+    Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{tmp}\web-firewall.ps1"" -Port {code:GetBridgePort} -Action Remove"; \
     Flags: runhidden; Components: web
 
-; Note: cert + IIS site removal is done in the [Code] section CurUninstallStepChanged
-; so we can inspect the install-summary file to find the cert thumbprint.
+; Note: cert + IIS site removal is done in Web_Uninstall (CurUninstallStepChanged / usUninstall)
+; so we can inspect the install-summary file for the cert thumbprint.
 
 [Code]
-{ ─── Integration note ──────────────────────────────────────────────────────
-  Pascal Script forbids declaring the same procedure twice. AkmlSqlSetup.iss
-  already defines InitializeWizard / CurStepChanged / CurUninstallStepChanged
-  / NextButtonClick / ShouldSkipPage. Rather than redefining them here, this
-  file exposes named hook procedures (Web_Init / Web_NextButton / Web_Skip /
-  Web_PostInstall / Web_Uninstall) and the parent installer calls them at the
-  right point in each event.
+{ ─── Integration ───────────────────────────────────────────────────────────
+  AkmlSqlSetup.iss includes this file BEFORE its main [Code] section and calls the named hooks
+  from its event handlers: Web_Init() in InitializeWizard; Web_NextButton(CurPageID) in
+  NextButtonClick; Web_Skip(PageID) in the (newly created) ShouldSkipPage; Web_PostInstall() in
+  CurStepChanged(ssPostInstall); Web_Uninstall() in CurUninstallStepChanged(usUninstall).
+  Pascal Script forbids declaring a procedure twice, so this file owns NONE of those event
+  procedures -- only the Web_* hooks. }
 
-  To integrate:
-    1. Add `#include "web-installer.iss"` at the bottom of AkmlSqlSetup.iss
-       (before the existing [Code] section closes).
-    2. In AkmlSqlSetup.iss's InitializeWizard, add a call to Web_Init().
-    3. In NextButtonClick, after the existing logic add:
-         if not Web_NextButton(CurPageID) then begin Result := False; Exit; end;
-    4. In ShouldSkipPage, after the existing logic add:
-         if Web_Skip(PageID) then begin Result := True; Exit; end;
-    5. In CurStepChanged, on ssPostInstall, add `Web_PostInstall();`.
-    6. In CurUninstallStepChanged, on usUninstall, add `Web_Uninstall();`.
-
-  This file SHIPS as design-level scaffolding for the M4 implementer. The
-  first interactive install on a Windows host with IIS + Inno Setup 7 is the
-  acceptance test for T081-T099.
-─────────────────────────────────────────────────────────────────────────── }
-
-{ ─── State carried across pages ───────────────────────────────────────── }
+{ ─── State carried across pages ───────────────────────────────────────────── }
 
 var
     WebHostPage: TInputOptionWizardPage;
     WebNetworkPage: TInputOptionWizardPage;
-    WebPortPage: TInputQueryWizardPage;
+    WebIisPortPage: TInputQueryWizardPage;       { FR-003: IIS site port (default 80) }
+    WebBridgePortPage: TInputQueryWizardPage;     { FR-003: engine bridge port (default 47291) }
     InstallSummaryPage: TOutputMsgWizardPage;
-    WebPort: Integer;
+    WebIisPort: Integer;
+    WebBridgePort: Integer;
     PairingPin: String;
     TlsThumbprint: String;
-
-{ T081 -- component-selection page lands via the [Components] section. The
-  three radio-group choices (Host on IIS / Don't host; Localhost / LAN) and
-  the port input live on their own wizard pages we create below. }
 
 procedure Web_Init();
 begin
@@ -168,75 +150,133 @@ begin
     WebNetworkPage.Add('LAN exposed -- other machines on my network can browse');
     WebNetworkPage.SelectedValueIndex := 0;
 
-    { Port input }
-    WebPortPage := CreateInputQueryPage(
+    { FR-003: IIS site port (where the browser opens the app). Default 80. }
+    WebIisPortPage := CreateInputQueryPage(
         WebNetworkPage.ID,
-        'Engine bridge port',
-        'Pick a TCP port for the engine bridge.',
-        'The bridge serves WebSocket frames on this port. Must be 1024..65535. Default 47291.');
-    WebPortPage.Add('Port:', False);
-    WebPortPage.Values[0] := '47291';
+        'IIS site port',
+        'Pick the TCP port the IIS site serves the web bundle on.',
+        'This is the port you browse to (e.g. http://localhost/ for port 80). Use 80 or 1024..65535. Must differ from the bridge port.');
+    WebIisPortPage.Add('IIS port:', False);
+    WebIisPortPage.Values[0] := '80';
 
-    { Install-summary page (shown on the post-install success path) }
+    { FR-003: engine bridge port (the WebSocket transport). Default 47291. Must differ from IIS. }
+    WebBridgePortPage := CreateInputQueryPage(
+        WebIisPortPage.ID,
+        'Engine bridge port',
+        'Pick a TCP port for the engine bridge (WebSocket).',
+        'The engine serves WebSocket frames on this port. Must be 1024..65535 and differ from the IIS port. Default 47291.');
+    WebBridgePortPage.Add('Bridge port:', False);
+    WebBridgePortPage.Values[0] := '47291';
+
+    { Install-summary page (shown on the post-install success path). }
     InstallSummaryPage := CreateOutputMsgPage(
         wpInstalling,
         'Install summary',
         'AKML SQL Web is ready.',
         'The pairing PIN + TLS thumbprint + browser URL are below. They are also written to "%CommonAppData%\AKML SQL Web\INSTALL-SUMMARY.txt".');
+
+    { Seed the port globals with the page defaults so a silent / skipped flow still has values. }
+    WebIisPort := 80;
+    WebBridgePort := 47291;
 end;
 
-function GetWebPort(Param: String): String;
+function GetIisPort(Param: String): String;
 begin
-    Result := IntToStr(WebPort);
+    Result := IntToStr(WebIisPort);
+end;
+
+function GetBridgePort(Param: String): String;
+begin
+    Result := IntToStr(WebBridgePort);
+end;
+
+function IsWebSelected(): Boolean;
+begin
+    Result := WizardIsComponentSelected('web');
 end;
 
 function IsLanExposed(): Boolean;
 begin
-    Result := (WebNetworkPage.SelectedValueIndex = 1);
+    Result := IsWebSelected() and (WebNetworkPage.SelectedValueIndex = 1);
 end;
 
+{ FR-003 + FR-003a: validate the IIS and bridge ports as the user leaves their pages. Returns
+  False to block Next (range / equal-port errors); a bridge-port-in-use hit only WARNS. }
 function Web_NextButton(CurPageID: Integer): Boolean;
 var
     portStr: String;
     portInt: Integer;
+    resultCode: Integer;
 begin
     Result := True;
 
-    { T083 -- port validation. }
-    if CurPageID = WebPortPage.ID then
+    { IIS port: 80 or 1024..65535. }
+    if CurPageID = WebIisPortPage.ID then
     begin
-        portStr := Trim(WebPortPage.Values[0]);
-        portInt := StrToIntDef(portStr, 0);
-        if (portInt < 1024) or (portInt > 65535) then
+        portStr := Trim(WebIisPortPage.Values[0]);
+        portInt := StrToIntDef(portStr, -1);
+        if (portInt <> 80) and ((portInt < 1024) or (portInt > 65535)) then
         begin
-            MsgBox('Port must be between 1024 and 65535.', mbError, MB_OK);
+            MsgBox('IIS port must be 80 or in the range 1024..65535.', mbError, MB_OK);
             Result := False;
             Exit;
         end;
-        WebPort := portInt;
+        WebIisPort := portInt;
+    end;
+
+    { Bridge port: 1024..65535, and MUST differ from the IIS port (FR-003). }
+    if CurPageID = WebBridgePortPage.ID then
+    begin
+        portStr := Trim(WebBridgePortPage.Values[0]);
+        portInt := StrToIntDef(portStr, -1);
+        if (portInt < 1024) or (portInt > 65535) then
+        begin
+            MsgBox('Bridge port must be between 1024 and 65535.', mbError, MB_OK);
+            Result := False;
+            Exit;
+        end;
+        if portInt = WebIisPort then
+        begin
+            MsgBox('IIS port and Bridge port must differ.' + #13#10 +
+                   'IIS serves the web files; the engine bridge serves WebSocket frames -- ' +
+                   'they cannot share one TCP port.', mbError, MB_OK);
+            Result := False;
+            Exit;
+        end;
+        WebBridgePort := portInt;
+
+        { FR-003a: non-blocking warning if the bridge port is already in use. Degrades to
+          no-warning when PowerShell / Test-NetConnection is unavailable. }
+        if Exec('powershell.exe',
+            '-NoProfile -ExecutionPolicy Bypass -Command "if ((Test-NetConnection -ComputerName 127.0.0.1 -Port ' +
+            IntToStr(portInt) + ' -InformationLevel Quiet -WarningAction SilentlyContinue)) { exit 9 } else { exit 0 }"',
+            '', SW_HIDE, ewWaitUntilTerminated, resultCode) then
+        begin
+            if resultCode = 9 then
+                MsgBox('Port ' + IntToStr(portInt) + ' appears to be in use already.' + #13#10 +
+                       'You can continue (the engine will report a bind error if it really is taken) ' +
+                       'or go back and pick another port.', mbInformation, MB_OK);
+        end;
     end;
 end;
 
+{ FR-006: hide the web-edition pages when the web component is unticked. Also skip the hosting
+  page when only web\service was selected (no web\iis). }
 function Web_Skip(PageID: Integer): Boolean;
 begin
     Result := False;
-    { Skip web-edition pages when the user hasn't selected the web component. }
-    if not WizardIsComponentSelected('web') then
+
+    if not IsWebSelected() then
     begin
-        if (PageID = WebHostPage.ID) or (PageID = WebNetworkPage.ID) or (PageID = WebPortPage.ID) then
-        begin
+        if (PageID = WebHostPage.ID) or (PageID = WebNetworkPage.ID) or
+           (PageID = WebIisPortPage.ID) or (PageID = WebBridgePortPage.ID) then
             Result := True;
-        end;
+        Exit;
     end;
 
-    { Skip the host-choice page when only "web\service" was selected without "web\iis". }
-    if PageID = WebHostPage.ID then
-    begin
-        if WizardIsComponentSelected('web') and not WizardIsComponentSelected('web\iis') then
-        begin
-            Result := True;
-        end;
-    end;
+    { Web selected but IIS hosting not chosen -> the hosting page is moot. }
+    if (PageID = WebHostPage.ID) and not WizardIsComponentSelected('web\iis') then
+        Result := True;
 end;
 
 procedure Web_PostInstall();
@@ -247,53 +287,56 @@ var
     bridgeMode: String;
     bridgeArgs: String;
     bridgeResult: Integer;
+    iisPortSuffix: String;
 begin
-    if not WizardIsComponentSelected('web') then Exit;
+    if not IsWebSelected() then Exit;
 
-    { Spec 025 (M3 bridge closure) T008 / FR-027 -- write the Bridge section
-      into the engine config.json so EngineHost.RunAsync starts a
-      WebSocketTransport alongside the named pipe. Idempotent on re-run. }
+    { Spec 025 (M3 bridge closure) T008 / FR-027 -- write the Bridge section into the engine
+      config.json so EngineHost.RunAsync starts a WebSocketTransport alongside the named pipe.
+      Receives the BRIDGE port (not the IIS port). Idempotent on re-run. }
     if IsLanExposed() then
         bridgeMode := 'Lan'
     else
         bridgeMode := 'Localhost';
     bridgeArgs := '-NoProfile -ExecutionPolicy Bypass -File "' +
         ExpandConstant('{tmp}\web-config-bridge.ps1') +
-        '" -Port ' + IntToStr(WebPort) +
+        '" -Port ' + IntToStr(WebBridgePort) +
         ' -Mode ' + bridgeMode;
     Exec('powershell.exe', bridgeArgs, '', SW_HIDE, ewWaitUntilTerminated, bridgeResult);
 
-    { T092 -- capture the engine-generated pairing PIN from the engine log.
-      The engine writes the PIN to %CommonAppData%\AKML SQL Web\pairing-pin.txt
-      on first start; we read it here and bake it into the install summary. }
+    { Capture the engine-generated pairing PIN. The engine writes it to
+      %CommonAppData%\AKML SQL Web\pairing-pin.txt on first start (spec 026 FR-008). }
     appdata := ExpandConstant('{commonappdata}\AKML SQL Web');
     if FileExists(appdata + '\pairing-pin.txt') then
     begin
         if LoadStringFromFile(appdata + '\pairing-pin.txt', PairingPin) then
-        begin
             PairingPin := Trim(PairingPin);
-        end;
     end;
 
     { Read the cert thumbprint web-tls-setup.ps1 wrote. }
     if FileExists(appdata + '\certs\thumbprint.txt') then
     begin
         if LoadStringFromFile(appdata + '\certs\thumbprint.txt', TlsThumbprint) then
-        begin
             TlsThumbprint := Trim(TlsThumbprint);
-        end;
     end;
 
-    { T093 -- write INSTALL-SUMMARY.txt with the URL + PIN + thumbprint. }
+    { FR-005 (reconciled): the IIS bundle is served over HTTP in both modes (localhost and LAN) --
+      only the engine bridge uses TLS (wss on the bridge port); see spec 026 Out-of-scope #3. The
+      URL line shows the IIS port, omitting ':80'. The separate 'Bridge port' line notes wss/TLS. }
+    if WebIisPort = 80 then
+        iisPortSuffix := ''
+    else
+        iisPortSuffix := ':' + IntToStr(WebIisPort);
+
     summary := TStringList.Create;
     try
         summary.Add('AKML SQL Web -- install summary');
         summary.Add('=================================');
         summary.Add('');
-        summary.Add('URL:         http://localhost:' + IntToStr(WebPort) + '/');
         if IsLanExposed() then
         begin
-            summary.Add('LAN URL:     https://' + GetComputerNameString() + ':' + IntToStr(WebPort) + '/');
+            summary.Add('URL:         http://' + GetComputerNameString() + iisPortSuffix + '/');
+            summary.Add('Bridge port: ' + IntToStr(WebBridgePort) + ' (wss, TLS)');
             summary.Add('Pairing PIN: ' + PairingPin);
             summary.Add('TLS thumb:   ' + TlsThumbprint);
             summary.Add('');
@@ -303,7 +346,16 @@ begin
         end
         else
         begin
+            summary.Add('URL:         http://localhost' + iisPortSuffix + '/');
+            summary.Add('Bridge port: ' + IntToStr(WebBridgePort) + ' (localhost only)');
             summary.Add('Localhost only -- no LAN access. No pairing PIN required.');
+        end;
+        if not WizardIsComponentSelected('web\iis') then
+        begin
+            summary.Add('');
+            summary.Add('Host it yourself: the web files are at  ' + ExpandConstant('{app}\Web'));
+            summary.Add('  Quick local server:  cd "' + ExpandConstant('{app}\Web') + '" && python -m http.server 8080');
+            summary.Add('  Then browse to:      http://localhost:8080/');
         end;
         summaryPath := appdata + '\INSTALL-SUMMARY.txt';
         summary.SaveToFile(summaryPath);
@@ -319,37 +371,31 @@ var
 begin
     appdata := ExpandConstant('{commonappdata}\AKML SQL Web');
 
-    { Remove the netsh sslcert binding using the stored thumbprint. }
+    { Remove the netsh sslcert binding on the BRIDGE port. }
     if FileExists(appdata + '\certs\thumbprint.txt') then
-    begin
-        { Exec netsh http delete sslcert ipport=0.0.0.0:<port> }
-        Exec('netsh.exe', 'http delete sslcert ipport=0.0.0.0:' + IntToStr(WebPort), '', SW_HIDE, ewWaitUntilTerminated, resultCode);
-    end;
+        Exec('netsh.exe', 'http delete sslcert ipport=0.0.0.0:' + IntToStr(WebBridgePort),
+             '', SW_HIDE, ewWaitUntilTerminated, resultCode);
 
     { Remove the IIS site if installed. }
     Exec('powershell.exe',
          '-NoProfile -ExecutionPolicy Bypass -Command "Import-Module WebAdministration; Remove-WebSite -Name AkmlSqlWeb -ErrorAction SilentlyContinue"',
          '', SW_HIDE, ewWaitUntilTerminated, resultCode);
 
-    { T095 -- ask before deleting %AppData%/AKML SQL Web/. }
+    { Ask before deleting %AppData%/AKML SQL Web/. }
     if MsgBox('Delete user data at "%AppData%\AKML SQL Web"? ' +
               '(Keeps your AI keys + connection records if you say No.)',
               mbConfirmation, MB_YESNO) = IDYES then
-    begin
         DelTree(ExpandConstant('{userappdata}\AKML SQL Web'), True, True, True);
-    end;
 
     { Never touch %AppData%/AKML SQL/ -- that's IDE plugin state (SC-007). }
 end;
 
-{ Helper -- inno setup's built-in GetComputerNameFromRegistry is too specific. }
+{ Helper -- the computer name for the LAN URL. }
 function GetComputerNameString(): String;
 var
     name: String;
 begin
     if not RegQueryStringValue(HKLM, 'SYSTEM\CurrentControlSet\Control\ComputerName\ComputerName', 'ComputerName', name) then
-    begin
         name := 'localhost';
-    end;
     Result := name;
 end;
