@@ -427,6 +427,15 @@ begin
     end;
   end;
 
+  // Spec 026 (M4 closure) US4 (FR-021..FR-024) + US3 silent (FR-019): parse + validate the
+  // web silent-install flags (/WEB_HOST, /WEB_EXPOSURE, /WEB_PORT, /BRIDGE_PORT). No-op when no
+  // web flags are passed; aborts (non-zero exit + logged reason) on an invalid combination.
+  if not Web_ValidateSilentFlags() then
+  begin
+    Result := False;
+    Exit;
+  end;
+
   // In silent mode, scan environment first then apply target selections
   if WizardSilent then
   begin

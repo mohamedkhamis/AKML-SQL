@@ -125,6 +125,9 @@ var
     WebBridgePort: Integer;
     PairingPin: String;
     TlsThumbprint: String;
+    WebSilentActive: Boolean;     { US4: a /WEB_HOST / /WEB_EXPOSURE / /WEB_PORT / /BRIDGE_PORT flag was passed }
+    WebSilentLan: Boolean;        { US4: /WEB_EXPOSURE=LAN }
+    WebSilentDontHost: Boolean;   { US4: /WEB_HOST=NONE }
 
 procedure Web_Init();
 begin
@@ -175,9 +178,13 @@ begin
         'AKML SQL Web is ready.',
         'The pairing PIN + TLS thumbprint + browser URL are below. They are also written to "%CommonAppData%\AKML SQL Web\INSTALL-SUMMARY.txt".');
 
-    { Seed the port globals with the page defaults so a silent / skipped flow still has values. }
-    WebIisPort := 80;
-    WebBridgePort := 47291;
+    { Seed the port globals with the page defaults UNLESS the silent flags already set them
+      (Web_ValidateSilentFlags runs in InitializeSetup, before this). }
+    if not WebSilentActive then
+    begin
+        WebIisPort := 80;
+        WebBridgePort := 47291;
+    end;
 end;
 
 function GetIisPort(Param: String): String;
@@ -195,9 +202,79 @@ begin
     Result := WizardIsComponentSelected('web');
 end;
 
+{ US3 / FR-014: canonical IIS-installed check (PRD §4.2). Stronger than the PowerShell-side
+  Get-Module check -- the registry key + appcmd.exe presence is the definitive signal. }
+function IsIisInstalled(): Boolean;
+begin
+    Result := RegKeyExists(HKLM, 'SOFTWARE\Microsoft\InetStp')
+          and FileExists(ExpandConstant('{sys}\inetsrv\appcmd.exe'));
+end;
+
+{ US4 / FR-021..FR-024 + US3 silent / FR-019. Parse the web silent-install flags into the module
+  globals and validate. Returns False (abort the install) on an invalid combination. No-op
+  (returns True, leaves WebSilentActive false) when no web flags are present -- interactive and
+  plugin-only installs are unaffected. Called from AkmlSqlSetup.iss InitializeSetup. }
+function Web_ValidateSilentFlags(): Boolean;
+var
+    host, exposure, portStr, bridgeStr: String;
+    iisPort, bridgePort: Integer;
+begin
+    Result := True;
+    host := Uppercase(Trim(ExpandConstant('{param:WEB_HOST|}')));
+    exposure := Uppercase(Trim(ExpandConstant('{param:WEB_EXPOSURE|}')));
+    portStr := Trim(ExpandConstant('{param:WEB_PORT|}'));
+    bridgeStr := Trim(ExpandConstant('{param:BRIDGE_PORT|}'));
+
+    if (host = '') and (exposure = '') and (portStr = '') and (bridgeStr = '') then
+        Exit;   { no web flags -> nothing to do }
+
+    WebSilentActive := True;
+    WebSilentLan := (exposure = 'LAN');
+    WebSilentDontHost := (host = 'NONE');
+
+    { FR-023: NONE + LAN is invalid -- LAN exposure needs a hosting endpoint. }
+    if WebSilentDontHost and WebSilentLan then
+    begin
+        Log('ERROR: /WEB_HOST=NONE with /WEB_EXPOSURE=LAN is invalid -- LAN exposure requires a hosting mode (use /WEB_HOST=IIS).');
+        Result := False; Exit;
+    end;
+
+    if portStr = '' then iisPort := 80 else iisPort := StrToIntDef(portStr, -1);
+    if bridgeStr = '' then bridgePort := 47291 else bridgePort := StrToIntDef(bridgeStr, -1);
+
+    if (iisPort <> 80) and ((iisPort < 1024) or (iisPort > 65535)) then
+    begin
+        Log('ERROR: /WEB_PORT must be 80 or in the range 1024..65535.');
+        Result := False; Exit;
+    end;
+    if (bridgePort < 1024) or (bridgePort > 65535) then
+    begin
+        Log('ERROR: /BRIDGE_PORT must be in the range 1024..65535.');
+        Result := False; Exit;
+    end;
+    { FR-024: ports must differ. }
+    if iisPort = bridgePort then
+    begin
+        Log('ERROR: IIS port and Bridge port must differ.');
+        Result := False; Exit;
+    end;
+    WebIisPort := iisPort;
+    WebBridgePort := bridgePort;
+
+    { FR-019: silent + Host on IIS + IIS missing -> abort (no dialog in silent mode). }
+    if WizardSilent and (not WebSilentDontHost) and (not IsIisInstalled()) then
+    begin
+        Log('ERROR: IIS not installed -- pass /WEB_HOST=NONE to skip IIS provisioning.');
+        Result := False; Exit;
+    end;
+end;
+
 function IsLanExposed(): Boolean;
 begin
-    Result := IsWebSelected() and (WebNetworkPage.SelectedValueIndex = 1);
+    if WebSilentActive then
+        Result := WebSilentLan
+    else
+        Result := IsWebSelected() and (WebNetworkPage.SelectedValueIndex = 1);
 end;
 
 { FR-003 + FR-003a: validate the IIS and bridge ports as the user leaves their pages. Returns
@@ -207,8 +284,48 @@ var
     portStr: String;
     portInt: Integer;
     resultCode: Integer;
+    dismResult: Integer;
 begin
     Result := True;
+
+    { US3 / FR-015..FR-018: when leaving the Hosting page with "Host on IIS" selected and IIS is
+      absent, offer the three-path dialog. Yes = enable IIS now (dism); No = switch to Don't host;
+      Cancel = cancel the installer. }
+    if (CurPageID = WebHostPage.ID) and (WebHostPage.SelectedValueIndex = 0) and not IsIisInstalled() then
+    begin
+        case MsgBox(
+            'IIS is required to host the web edition, but it is not installed on this machine.' + #13#10 + #13#10 +
+            'Yes' + #9 + '= Enable IIS now (runs dism; may take up to a minute)' + #13#10 +
+            'No' + #9 + '= Switch to "Don''t host" (lay the files down; serve them yourself)' + #13#10 +
+            'Cancel' + #9 + '= Cancel the installation',
+            mbConfirmation, MB_YESNOCANCEL) of
+          IDYES:
+            begin
+                { FR-016: best-effort wait notice, then the synchronous dism call. }
+                WizardForm.StatusLabel.Caption := 'Enabling IIS... this can take up to a minute.';
+                WizardForm.Repaint;
+                Exec('dism.exe',
+                    '/online /enable-feature /featurename:IIS-WebServerRole /All /Quiet /NoRestart',
+                    '', SW_HIDE, ewWaitUntilTerminated, dismResult);
+                if not IsIisInstalled() then
+                begin
+                    MsgBox('IIS could not be enabled automatically (dism exit ' + IntToStr(dismResult) + ').' + #13#10 +
+                           'Enable "Internet Information Services" via Windows Features, then re-run -- ' +
+                           'or go Back and choose "Don''t host".', mbError, MB_OK);
+                    Result := False;   { stay on the page }
+                    Exit;
+                end;
+            end;
+          IDNO:
+            WebHostPage.SelectedValueIndex := 1;   { FR-017: switch to "Don't host" }
+          IDCANCEL:
+            begin
+                WizardForm.Close();   { FR-018: cancel the installer }
+                Result := False;
+                Exit;
+            end;
+        end;
+    end;
 
     { IIS port: 80 or 1024..65535. }
     if CurPageID = WebIisPortPage.ID then
@@ -288,6 +405,11 @@ var
     bridgeArgs: String;
     bridgeResult: Integer;
     iisPortSuffix: String;
+    pollTries: Integer;
+    svcTries: Integer;
+    aclResult: Integer;
+    resultCode: Integer;
+    serviceRunning: Boolean;
 begin
     if not IsWebSelected() then Exit;
 
@@ -307,10 +429,31 @@ begin
     { Capture the engine-generated pairing PIN. The engine writes it to
       %CommonAppData%\AKML SQL Web\pairing-pin.txt on first start (spec 026 FR-008). }
     appdata := ExpandConstant('{commonappdata}\AKML SQL Web');
-    if FileExists(appdata + '\pairing-pin.txt') then
+
+    { T021 / FR-010: lock the shared-state dir to Administrators + SYSTEM only (no standard-user
+      read -- a leaked PIN allows local operator impersonation). SIDs (not names) keep this
+      locale-independent: S-1-5-32-544 = Administrators, S-1-5-18 = SYSTEM. Best-effort. }
+    ForceDirectories(appdata);
+    Exec('icacls.exe',
+        '"' + appdata + '" /inheritance:r /grant:r "*S-1-5-32-544:(OI)(CI)F" /grant:r "*S-1-5-18:(OI)(CI)F"',
+        '', SW_HIDE, ewWaitUntilTerminated, aclResult);
+
+    { T022 / FR-011: poll for the engine-written pairing PIN (LAN mode only) for up to 30 s. }
+    PairingPin := '';
+    if IsLanExposed() then
     begin
-        if LoadStringFromFile(appdata + '\pairing-pin.txt', PairingPin) then
-            PairingPin := Trim(PairingPin);
+        pollTries := 0;
+        while (pollTries < 30) and (PairingPin = '') do
+        begin
+            if FileExists(appdata + '\pairing-pin.txt') then
+                if LoadStringFromFile(appdata + '\pairing-pin.txt', PairingPin) then
+                    PairingPin := Trim(PairingPin);
+            if PairingPin = '' then
+            begin
+                Sleep(1000);
+                pollTries := pollTries + 1;
+            end;
+        end;
     end;
 
     { Read the cert thumbprint web-tls-setup.ps1 wrote. }
@@ -318,6 +461,29 @@ begin
     begin
         if LoadStringFromFile(appdata + '\certs\thumbprint.txt', TlsThumbprint) then
             TlsThumbprint := Trim(TlsThumbprint);
+    end;
+
+    { FR-007a: confirm the engine service reached Running within ~10 s (when the service
+      component was installed). The summary flags a non-running service; the install is not failed. }
+    serviceRunning := True;
+    if WizardIsComponentSelected('web\service') then
+    begin
+        serviceRunning := False;
+        svcTries := 0;
+        while (svcTries < 10) and (not serviceRunning) do
+        begin
+            if Exec('powershell.exe',
+                '-NoProfile -ExecutionPolicy Bypass -Command "if ((Get-Service AkmlSqlWebEngine -ErrorAction SilentlyContinue).Status -eq ''Running'') { exit 0 } else { exit 1 }"',
+                '', SW_HIDE, ewWaitUntilTerminated, resultCode) then
+            begin
+                if resultCode = 0 then serviceRunning := True;
+            end;
+            if not serviceRunning then
+            begin
+                Sleep(1000);
+                svcTries := svcTries + 1;
+            end;
+        end;
     end;
 
     { FR-005 (reconciled): the IIS bundle is served over HTTP in both modes (localhost and LAN) --
@@ -337,7 +503,10 @@ begin
         begin
             summary.Add('URL:         http://' + GetComputerNameString() + iisPortSuffix + '/');
             summary.Add('Bridge port: ' + IntToStr(WebBridgePort) + ' (wss, TLS)');
-            summary.Add('Pairing PIN: ' + PairingPin);
+            if PairingPin <> '' then
+                summary.Add('Pairing PIN: ' + PairingPin)
+            else
+                summary.Add('Pairing PIN: not yet generated -- start the AkmlSqlWebEngine service, then re-read this file.');
             summary.Add('TLS thumb:   ' + TlsThumbprint);
             summary.Add('');
             summary.Add('To trust the certificate on a different machine:');
@@ -349,6 +518,13 @@ begin
             summary.Add('URL:         http://localhost' + iisPortSuffix + '/');
             summary.Add('Bridge port: ' + IntToStr(WebBridgePort) + ' (localhost only)');
             summary.Add('Localhost only -- no LAN access. No pairing PIN required.');
+        end;
+        { FR-007a: flag a service that did not start. }
+        if not serviceRunning then
+        begin
+            summary.Add('');
+            summary.Add('WARNING: the AkmlSqlWebEngine service did not reach Running within 10s.');
+            summary.Add('  Check Event Viewer + ' + appdata + '\install.log, then run: sc start AkmlSqlWebEngine');
         end;
         if not WizardIsComponentSelected('web\iis') then
         begin

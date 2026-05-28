@@ -139,12 +139,12 @@ description: "Tasks for M4 — Installer (IIS Deployment Option) Closure"
 
 **Depends on**: US1 + US2 + US3 + US4 (the suite drives a silent install — US4 — and asserts the end states US1/US2/US3 produce).
 
-- [ ] T034 [US5] Create `tests/AkmlSql.Installer.Tests/AkmlSql.Installer.Tests.csproj` (`net10.0`, refs `xunit` + `Microsoft.NET.Test.Sdk` + `Xunit.SkippableFact`) and register it in `AKML-SQL.slnx` (FR-027; contract `installer-smoke-suite-contract.md` C1)
-- [ ] T035 [US5] Add `tests/AkmlSql.Installer.Tests/InstallerSmokeFixture.cs` (`IAsyncLifetime`): locate the prebuilt `Output/AKMLSQLSetup.exe` (fail clearly if absent), capture the pre-install plugin-config hash, run a silent LAN install on two free ports, read `INSTALL-SUMMARY.txt`, silent-uninstall on dispose; expose `IsAdministrator()` + `IsIisInstalled()` for the skip gate (FR-029, FR-032; contract C3)
-- [ ] T036 [P] [US5] Add `tests/AkmlSql.Installer.Tests/IisProvisioningTests.cs` ([Trait("Category","InstallerSmoke")], `Skip.IfNot` gated): assert the `AkmlSqlWeb` site is bound on the IIS port, the five MIME types are registered, and the CSP header is present on a `HEAD` to `http://localhost:<IisPort>/` (FR-030 a–c)
-- [ ] T037 [P] [US5] Add `tests/AkmlSql.Installer.Tests/LanTlsTests.cs` ([Trait], gated): assert `netsh http show sslcert ipport=0.0.0.0:<BridgePort>` thumbprint matches `INSTALL-SUMMARY.txt` and the firewall rule "AKML SQL Web Engine" exists (FR-030 d–e)
-- [ ] T038 [P] [US5] Add `tests/AkmlSql.Installer.Tests/ReRunAndUninstallTests.cs` ([Trait], gated): assert `INSTALL-SUMMARY.txt` is non-empty with a `URL:` line, run an install → uninstall → re-install cycle, and assert `Get-FileHash %AppData%\AKML SQL\config.json` is identical pre-install / post-install / post-uninstall (FR-030 f–g, FR-031, SC-007)
-- [ ] T039 [US5] Verify the trait gating: plain `dotnet test` runs none of the smoke tests; `--filter Category=InstallerSmoke` runs them; a non-admin/non-IIS host reports Skipped (not Failed) (FR-028, SC-006)
+- [X] T034 [US5] Create `tests/AkmlSql.Installer.Tests/AkmlSql.Installer.Tests.csproj` (`net10.0`, refs `xunit` + `Microsoft.NET.Test.Sdk` + `Xunit.SkippableFact`) and register it in `AKML-SQL.slnx` (FR-027; contract `installer-smoke-suite-contract.md` C1)
+- [X] T035 [US5] Add `tests/AkmlSql.Installer.Tests/InstallerSmokeFixture.cs` (`IAsyncLifetime`): locate the prebuilt `Output/AKMLSQLSetup.exe` (fail clearly if absent), capture the pre-install plugin-config hash, run a silent LAN install on two free ports, read `INSTALL-SUMMARY.txt`, silent-uninstall on dispose; expose `IsAdministrator()` + `IsIisInstalled()` for the skip gate (FR-029, FR-032; contract C3)
+- [X] T036 [P] [US5] Add `tests/AkmlSql.Installer.Tests/IisProvisioningTests.cs` ([Trait("Category","InstallerSmoke")], `Skip.IfNot` gated): assert the `AkmlSqlWeb` site is bound on the IIS port, the five MIME types are registered, and the CSP header is present on a `HEAD` to `http://localhost:<IisPort>/` (FR-030 a–c)
+- [X] T037 [P] [US5] Add `tests/AkmlSql.Installer.Tests/LanTlsTests.cs` ([Trait], gated): assert `netsh http show sslcert ipport=0.0.0.0:<BridgePort>` thumbprint matches `INSTALL-SUMMARY.txt` and the firewall rule "AKML SQL Web Engine" exists (FR-030 d–e)
+- [X] T038 [P] [US5] Add `tests/AkmlSql.Installer.Tests/ReRunAndUninstallTests.cs` ([Trait], gated): assert `INSTALL-SUMMARY.txt` is non-empty with a `URL:` line, run an install → uninstall → re-install cycle, and assert `Get-FileHash %AppData%\AKML SQL\config.json` is identical pre-install / post-install / post-uninstall (FR-030 f–g, FR-031, SC-007)
+- [X] T039 [US5] Verify the trait gating: plain `dotnet test` runs none of the smoke tests; `--filter Category=InstallerSmoke` runs them; a non-admin/non-IIS host reports Skipped (not Failed) (FR-028, SC-006) — verified here: `dotnet test` on the project reports 7 Skipped (non-admin). SC-006 (assertions executing green) requires an admin+IIS host (T041-adjacent).
 
 **Checkpoint**: a one-command pre-merge installer gate exists for IIS+admin hosts.
 
@@ -158,7 +158,7 @@ description: "Tasks for M4 — Installer (IIS Deployment Option) Closure"
 
 **Depends on**: US1–US5 (documents the shipped behaviour); FR-035 gates SC-001/SC-002/SC-003.
 
-- [ ] T040 [US6] Add a "Web edition" section to `doc/deployment.md` with subsections Prerequisites, Component selection (the four pages), Localhost mode, LAN mode, Don't host (host-it-yourself + Python `http.server`), Silent install (flag matrix + one happy + one failure example), Uninstall, Troubleshooting (IIS missing / port collision / admin-rights / service-fails-to-start) (FR-033)
+- [X] T040 [US6] Add a "Web edition" section to `doc/deployment.md` with subsections Prerequisites, Component selection (the four pages), Localhost mode, LAN mode, Don't host (host-it-yourself + Python `http.server`), Silent install (flag matrix + one happy + one failure example), Uninstall, Troubleshooting (IIS missing / port collision / admin-rights / service-fails-to-start) (FR-033)
 - [ ] T041 [US6] Run the first interactive integration run on a real Windows host (Inno Setup 7 + IIS + admin); record `specs/026-m4-installer-closure/INSTALL-RUN-NOTES.md` with Windows/IIS/Inno versions, per-phase wall-clock, wizard screenshots, and observed deltas (FR-035; gates SC-001, SC-002, SC-003)
 - [ ] T042 [US6] File the observed deltas from T041 as spec-026 follow-up tasks; once integration has landed and the run is recorded, remove the "ships as scaffolding" banner from `doc/WEB/quickstart-m4.md` (FR-034)
 
