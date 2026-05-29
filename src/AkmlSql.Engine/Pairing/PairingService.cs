@@ -31,6 +31,17 @@ namespace AkmlSql.Engine.Pairing
         /// <summary>Rolling window for the rate limiter.</summary>
         public static readonly TimeSpan RateLimitWindow = TimeSpan.FromMinutes(1);
 
+        /// <summary>
+        /// Spec 026 (M4 closure) L1: global brute-force circuit-breaker. The per-source limit alone
+        /// lets an attacker with N LAN source IPs make 5*N attempts/min; this caps total FAILED
+        /// attempts across ALL sources. Once hit, pairing is frozen (every attempt -&gt; RateLimited)
+        /// until the window clears or an operator calls <see cref="RegeneratePin"/>.
+        /// </summary>
+        public const int GlobalRateLimitMaxFailures = 100;
+
+        /// <summary>Rolling window for the global circuit-breaker.</summary>
+        public static readonly TimeSpan GlobalRateLimitWindow = TimeSpan.FromMinutes(15);
+
         private readonly object _lock = new();
         private readonly Func<DateTimeOffset> _clock;
         private readonly TimeSpan _pinTtl;
@@ -41,6 +52,10 @@ namespace AkmlSql.Engine.Pairing
 
         private readonly ConcurrentDictionary<string, AttemptHistory> _attempts =
             new(StringComparer.Ordinal);
+
+        // Spec 026 (M4 closure) L1: global failed-attempt history (across all sources).
+        private readonly object _globalLock = new();
+        private readonly AttemptHistory _globalFailures = new();
 
         /// <summary>Fires whenever a new PIN is minted (engine startup, regenerate, refresh after consume).</summary>
         public event EventHandler<string>? PinChanged;
@@ -65,6 +80,12 @@ namespace AkmlSql.Engine.Pairing
                 _currentPin = pin;
                 _currentPinExpiresAt = _clock() + _pinTtl;
                 _currentPinConsumed = false;
+            }
+            // Spec 026 (M4 closure) L1: a fresh PIN clears the global brute-force freeze (operator
+            // intervention / a successful pairing means we are no longer mid-attack).
+            lock (_globalLock)
+            {
+                _globalFailures.Clear();
             }
             Log.Information("PairingService: PIN regenerated (expires {ExpiresAt:O})", _currentPinExpiresAt);
             PinChanged?.Invoke(this, pin);
@@ -118,25 +139,60 @@ namespace AkmlSql.Engine.Pairing
                 history.Add(now);
             }
 
+            // Spec 026 (M4 closure) L1: global circuit-breaker -- freeze ALL pairing once too many
+            // failures accrue in the window, regardless of how many source IPs the attacker spreads
+            // across. Cleared by RegeneratePin (operator action) or when the window rolls.
+            lock (_globalLock)
+            {
+                _globalFailures.PruneOlderThan(now - GlobalRateLimitWindow);
+                if (_globalFailures.Count >= GlobalRateLimitMaxFailures)
+                {
+                    Log.Warning(
+                        "PairingService: GLOBAL rate limit reached ({Count} failed attempts in window); " +
+                        "pairing frozen until the window clears or the PIN is regenerated",
+                        _globalFailures.Count);
+                    return PinAttemptResult.RateLimited;
+                }
+            }
+
             // PIN compare (constant-time).
+            bool wrongPin = false;
+            PinAttemptResult result;
             lock (_lock)
             {
                 if (_currentPinConsumed)
                 {
-                    return PinAttemptResult.Invalid;
+                    result = PinAttemptResult.Invalid;
                 }
-                if (now > _currentPinExpiresAt)
+                else if (now > _currentPinExpiresAt)
                 {
-                    return PinAttemptResult.Expired;
+                    result = PinAttemptResult.Expired;
                 }
-                if (!ConstantTimeEqualsAscii(candidatePin, _currentPin))
+                else if (!ConstantTimeEqualsAscii(candidatePin, _currentPin))
                 {
-                    return PinAttemptResult.Invalid;
+                    result = PinAttemptResult.Invalid;
+                    wrongPin = true;
                 }
-                _currentPinConsumed = true;
-                Log.Information("PairingService: PIN consumed (single-use) by {Source}", sourceId);
-                return PinAttemptResult.Valid;
+                else
+                {
+                    _currentPinConsumed = true;
+                    Log.Information("PairingService: PIN consumed (single-use) by {Source}", sourceId);
+                    result = PinAttemptResult.Valid;
+                }
             }
+
+            // Record a wrong-PIN guess against the global circuit-breaker (outside _lock to avoid
+            // nested locking). Expired / already-consumed attempts are not brute-force signals.
+            if (wrongPin)
+            {
+                lock (_globalLock)
+                {
+                    _globalFailures.PruneOlderThan(now - GlobalRateLimitWindow);
+                    _globalFailures.Add(now);
+                }
+            }
+
+            return result;
         }
 
         // -------- Helpers ---------------------------------------------------
@@ -177,6 +233,7 @@ namespace AkmlSql.Engine.Pairing
             {
                 while (_times.Count > 0 && _times.Peek() < threshold) _times.Dequeue();
             }
+            public void Clear() => _times.Clear();
         }
     }
 

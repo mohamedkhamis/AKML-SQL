@@ -70,6 +70,37 @@ internal static class InstallerSmokeEnv
     public static (int ExitCode, string Output) RunPowerShell(string command) =>
         RunProcess("powershell.exe", "-NoProfile -ExecutionPolicy Bypass -Command \"" + command + "\"");
 
+    /// <summary>
+    /// Spec 026 (M4 closure) M5: poll the named Windows service until it reports Running, up to
+    /// <paramref name="timeoutSeconds"/>. Installer exit 0 alone does NOT mean the engine service
+    /// came up (the install treats a non-running service as a non-fatal warning), so the smoke suite
+    /// must verify the runtime outcome separately.
+    /// </summary>
+    public static bool WaitForServiceRunning(string serviceName, int timeoutSeconds = 20)
+    {
+        for (var i = 0; i < timeoutSeconds; i++)
+        {
+            var (exit, _) = RunPowerShell(
+                "if ((Get-Service " + serviceName + " -ErrorAction SilentlyContinue).Status -eq 'Running') " +
+                "{ exit 0 } else { exit 1 }");
+            if (exit == 0) return true;
+            System.Threading.Thread.Sleep(1000);
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Spec 026 (M4 closure) M5: best-effort teardown of the web-edition service + IIS site, so a
+    /// partially-provisioned machine (install that returned 0 but left a broken service) is not
+    /// leaked to the next test run. Safe to call when nothing was installed.
+    /// </summary>
+    public static void BestEffortCleanup()
+    {
+        RunProcess("sc.exe", "stop AkmlSqlWebEngine");
+        RunProcess("sc.exe", "delete AkmlSqlWebEngine");
+        RunPowerShell("Import-Module WebAdministration; Remove-WebSite -Name AkmlSqlWeb -ErrorAction SilentlyContinue");
+    }
+
     /// <summary>Pick a free TCP port, optionally avoiding <paramref name="exclude"/>.</summary>
     public static int GetFreePort(int exclude = 0)
     {

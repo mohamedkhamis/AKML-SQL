@@ -329,7 +329,17 @@ namespace AkmlSql.Engine
                 pinValidator: pin => pairing.ValidatePin(
                     Pairing.BridgeSourceIp.Current?.ToString() ?? "ws", pin) == Pairing.PinAttemptResult.Valid,
                 bearerValidator: token => tokens.Validate(token),
-                bearerMinter: label => tokens.Mint(label),
+                // Spec 026 (M4 closure) L2: the handshake handler only calls bearerMinter after a
+                // valid PIN (which PairingService consumes single-use). Mint the bearer, then
+                // immediately regenerate the PIN so a second machine can still pair -- otherwise the
+                // PIN is dead for the rest of the process lifetime and an installer re-run surfaces a
+                // consumed PIN. RegeneratePin re-fires PinChanged, refreshing pairing-pin.txt.
+                bearerMinter: label =>
+                {
+                    var token = tokens.Mint(label);
+                    pairing.RegeneratePin();
+                    return token;
+                },
                 serverCanonicalIdentityProvider: () => null);
 
             return new BridgeAuth { Handshake = handshake, Pairing = pairing, Tokens = tokens };

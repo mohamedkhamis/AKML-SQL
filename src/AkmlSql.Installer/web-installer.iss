@@ -9,18 +9,18 @@
 ; Cross-references: contracts/installer-integration-contract.md + spec.md FR-001..FR-007 + FR-003a.
 ;
 ; ─── Status ─────────────────────────────────────────────────────────────────
-; Spec 026: the integration (#include + 5 hook calls + a new ShouldSkipPage) is now wired into
-; AkmlSqlSetup.iss, and the single port input is split into an IIS port (default 80) and a bridge
-; port (default 47291) -- they must differ (HTTP.SYS cannot share one port between IIS and the
-; engine's HttpListener). NOT YET COMPILE-VERIFIED in this environment: a full ISCC compile needs
-; the entire product built (shell VSIXes via VS MSBuild + engine/updater/analyzer publishes + the
-; web bundle). The first interactive install on a Windows host with IIS + Inno Setup 7 + admin is
-; the acceptance test (spec 026 T041) and the verification gate for SC-001..SC-003.
+; Spec 026: the integration (#include + hook calls + ShouldSkipPage) is wired into AkmlSqlSetup.iss,
+; and the single port input is split into an IIS port (default 80) and a bridge port (default 47291)
+; -- they must differ (HTTP.SYS cannot share one port between IIS and the engine's HttpListener).
+; COMPILE-VERIFIED: ISCC compiles AkmlSqlSetup.iss (with this include) cleanly. The first interactive
+; install on a Windows host with IIS + Inno Setup 7 + admin is the RUNTIME acceptance test (spec 026
+; T041) and the verification gate for SC-001..SC-003.
 ;
-; DEFERRED to a later spec-026 turn (additive to this file's Web_* procedures): the IIS-not-installed
-; three-path dialog (US3 / FR-014..FR-020), the silent-install flags (US4 / FR-021..FR-026), the
-; Administrators+SYSTEM ACL on the CommonAppData dir + the 30 s pairing-pin.txt poll + the
-; service-start check (US2-installer / FR-007a, FR-010, FR-011).
+; IMPLEMENTED (spec 026 US2-installer / US3 / US4): the IIS-not-installed three-path dialog
+; (FR-014..FR-020), the silent-install flags (FR-021..FR-026), the Administrators+SYSTEM ACL on the
+; CommonAppData dir + the 30 s pairing-pin.txt poll + the service-start check (FR-007a, FR-010,
+; FR-011), plus uninstall cleanup of the sslcert binding / web-state dir / registry marker.
+; GENUINELY REMAINING: full FR-025 rollback verification on a real elevated install.
 ;
 ; ─── Files this script depends on ──────────────────────────────────────────
 ;   web-iis-setup.ps1     -- IIS site provisioning + MIME + CSP   (receives the IIS port)
@@ -29,7 +29,13 @@
 ;   web-config-bridge.ps1 -- writes the engine config bridge section (receives the bridge port)
 
 [Types]
-; The existing AkmlSqlSetup.iss already defines Full / Compact / Custom. Not redefined here.
+; Spec 026 (M4 closure) L7: no explicit types are defined here OR in AkmlSqlSetup.iss, so ISCC
+; auto-generates the default Full / Compact / Custom. The web components below carry `Types: full`,
+; so the Web edition is SELECTED BY DEFAULT (opt-out) under the default Full type. A user who wants
+; the IDE plugins only must untick it -- Web_Skip and Web_PostInstall both gate on IsWebSelected, so
+; unticking is fully honoured (no IIS site / service / firewall changes). To make it opt-IN instead
+; (matching US1's "tick the Web edition" wording), define an explicit [Types] with a Custom default
+; and drop `Types: full` from the web components.
 
 [Components]
 ; FR-001 -- web-edition component group, independent of the plugin group.
@@ -56,7 +62,7 @@ Source: "web-config-bridge.ps1"; DestDir: "{tmp}"; Flags: deleteafterinstall; Co
 ; FR-004 -- web-iis-setup.ps1 receives the IIS port (the static-bundle site).
 ; Skipped when "Don't host" was selected (only runs for the web\iis component).
 Filename: "powershell.exe"; \
-    Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{tmp}\web-iis-setup.ps1"" -Port {code:GetIisPort} -PhysicalPath ""{app}\Web"""; \
+    Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{tmp}\web-iis-setup.ps1"" -Port {code:GetIisPort} -PhysicalPath ""{app}\Web"" -Mode {code:GetBridgeMode}"; \
     StatusMsg: "Provisioning IIS site for AKML SQL Web..."; \
     Components: web\iis; \
     Flags: runhidden
@@ -276,10 +282,24 @@ end;
 
 function IsLanExposed(): Boolean;
 begin
-    if WebSilentActive then
+    { Spec 026 (M4 closure) L4: only let the flag-derived exposure win in a genuinely silent install
+      (WizardSilent). Previously any single web flag (e.g. /WEB_PORT) set WebSilentActive and made an
+      otherwise-interactive run ignore the LAN/localhost choice on WebNetworkPage. }
+    if WizardSilent then
         Result := WebSilentLan
     else
         Result := IsWebSelected() and (WebNetworkPage.SelectedValueIndex = 1);
+end;
+
+{ Spec 026 (M4 closure) M6: the bridge exposure mode as a string, passed to web-iis-setup.ps1 so it
+  can widen the CSP connect-src for LAN installs. Declared after IsLanExposed (Inno Pascal has no
+  forward references). }
+function GetBridgeMode(Param: String): String;
+begin
+    if IsLanExposed() then
+        Result := 'Lan'
+    else
+        Result := 'Localhost';
 end;
 
 { FR-003 + FR-003a: validate the IIS and bridge ports as the user leaves their pages. Returns
@@ -390,8 +410,12 @@ begin
 
     if not IsWebSelected() then
     begin
+        { Spec 026 (M4 closure) M4 / FR-006: also skip the install-summary page for plugin-only
+          installs -- otherwise a user who unticked the Web edition still sees an "AKML SQL Web is
+          ready" page describing a PIN / URL / thumbprint that were never produced. }
         if (PageID = WebHostPage.ID) or (PageID = WebNetworkPage.ID) or
-           (PageID = WebIisPortPage.ID) or (PageID = WebBridgePortPage.ID) then
+           (PageID = WebIisPortPage.ID) or (PageID = WebBridgePortPage.ID) or
+           (PageID = InstallSummaryPage.ID) then
             Result := True;
         Exit;
     end;
@@ -419,6 +443,11 @@ var
     rawText: AnsiString;   { LoadStringFromFile requires a var AnsiString in Unicode Inno Setup }
 begin
     if not IsWebSelected() then Exit;
+
+    { Spec 026 (M4 closure) M3: persist the bridge port machine-wide so Web_Uninstall (a separate
+      process that never runs the setup wizard) can delete the netsh sslcert binding on the REAL
+      port. Without this WebBridgePort is 0 at uninstall and the binding leaks. }
+    RegWriteDWordValue(HKLM, 'Software\AKML SQL\Web', 'BridgePort', WebBridgePort);
 
     { Spec 025 (M3 bridge closure) T008 / FR-027 -- write the Bridge section into the engine
       config.json so EngineHost.RunAsync starts a WebSocketTransport alongside the named pipe.
@@ -563,6 +592,11 @@ begin
         end;
         summaryPath := appdata + '\INSTALL-SUMMARY.txt';
         summary.SaveToFile(summaryPath);
+
+        { Spec 026 (M4 closure) M4 / FR-005: mirror the summary onto the wizard success page. The
+          page was created promising "the pairing PIN + TLS thumbprint + browser URL are below" but
+          its body was never populated -- now it shows the same content written to the file. }
+        InstallSummaryPage.MsgLabel.Caption := summary.Text;
     finally
         summary.Free;
     end;
@@ -572,12 +606,20 @@ procedure Web_Uninstall();
 var
     appdata: String;
     resultCode: Integer;
+    bridgePort: Cardinal;
 begin
     appdata := ExpandConstant('{commonappdata}\AKML SQL Web');
 
-    { Remove the netsh sslcert binding on the BRIDGE port. }
+    { Spec 026 (M4 closure) M3: read the bridge port persisted at install. The uninstaller never
+      runs the wizard, so the WebBridgePort global is 0 here -- using it would delete the sslcert
+      binding on port 0 and leak the real one. Fall back to the default if the value is missing. }
+    if not RegQueryDWordValue(HKLM, 'Software\AKML SQL\Web', 'BridgePort', bridgePort) then
+        bridgePort := 47291;
+
+    { Remove the netsh sslcert binding on the REAL bridge port (LAN installs only). Done before the
+      DelTree below so certs\thumbprint.txt still exists as the LAN-install marker. }
     if FileExists(appdata + '\certs\thumbprint.txt') then
-        Exec('netsh.exe', 'http delete sslcert ipport=0.0.0.0:' + IntToStr(WebBridgePort),
+        Exec('netsh.exe', 'http delete sslcert ipport=0.0.0.0:' + IntToStr(bridgePort),
              '', SW_HIDE, ewWaitUntilTerminated, resultCode);
 
     { Remove the IIS site if installed. }
@@ -585,11 +627,17 @@ begin
          '-NoProfile -ExecutionPolicy Bypass -Command "Import-Module WebAdministration; Remove-WebSite -Name AkmlSqlWeb -ErrorAction SilentlyContinue"',
          '', SW_HIDE, ewWaitUntilTerminated, resultCode);
 
-    { Ask before deleting %AppData%/AKML SQL Web/. }
-    if MsgBox('Delete user data at "%AppData%\AKML SQL Web"? ' +
-              '(Keeps your AI keys + connection records if you say No.)',
+    { Spec 026 (M4 closure) M3: the web-edition state (PIN, tokens, certs, config, summary) lives
+      under CommonAppData\AKML SQL Web -- the previous code deleted UserAppData\AKML SQL Web, which
+      is empty, leaving the real secrets (incl. pairing-pin.txt + tokens.json) on disk. Ask, then
+      delete the CORRECT directory. }
+    if MsgBox('Delete AKML SQL Web data at "' + appdata + '"?' + #13#10 +
+              '(This includes the pairing PIN, bearer tokens, TLS cert, and config.)',
               mbConfirmation, MB_YESNO) = IDYES then
-        DelTree(ExpandConstant('{userappdata}\AKML SQL Web'), True, True, True);
+        DelTree(appdata, True, True, True);
+
+    { Clean up the persisted bridge-port marker. }
+    RegDeleteKeyIncludingSubkeys(HKLM, 'Software\AKML SQL\Web');
 
     { Never touch %AppData%/AKML SQL/ -- that's IDE plugin state (SC-007). }
 end;

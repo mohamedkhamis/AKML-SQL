@@ -22,6 +22,15 @@ public sealed class InstallerSmokeFixture : IAsyncLifetime
     public int IisPort { get; private set; }
     public int BridgePort { get; private set; }
     public bool Installed { get; private set; }
+
+    /// <summary>
+    /// Spec 026 (M4 closure) M5: true only when the AkmlSqlWebEngine service actually reached
+    /// Running after the install. The installer returns exit 0 even when the service fails to start
+    /// (it only writes a warning), so <see cref="Installed"/> alone is insufficient — provisioning
+    /// tests assert this to avoid passing on a half-provisioned machine.
+    /// </summary>
+    public bool ServiceRunning { get; private set; }
+
     public int InstallExitCode { get; private set; } = -1;
     public string SummaryText { get; private set; } = string.Empty;
     public string? PreInstallPluginHash { get; private set; }
@@ -52,6 +61,9 @@ public sealed class InstallerSmokeFixture : IAsyncLifetime
         var (exit, _) = InstallerSmokeEnv.RunProcess(exe, args);
         InstallExitCode = exit;
         Installed = exit == 0;
+        // M5: exit 0 != healthy. Verify the engine service actually reached Running.
+        if (Installed)
+            ServiceRunning = InstallerSmokeEnv.WaitForServiceRunning("AkmlSqlWebEngine");
         SummaryText = InstallerSmokeEnv.ReadSummaryOrEmpty();
         return Task.CompletedTask;
     }
@@ -60,6 +72,10 @@ public sealed class InstallerSmokeFixture : IAsyncLifetime
     {
         if (Installed && File.Exists(InstallerSmokeEnv.UninstallerExe))
             InstallerSmokeEnv.RunProcess(InstallerSmokeEnv.UninstallerExe, "/VERYSILENT /SUPPRESSMSGBOXES");
+        // M5: even if the uninstaller was absent or the install half-failed, never leak the service /
+        // IIS site to the next run.
+        if (InstallerSmokeEnv.CanRun)
+            InstallerSmokeEnv.BestEffortCleanup();
         PostUninstallPluginHash = InstallerSmokeEnv.HashFileOrNull(InstallerSmokeEnv.PluginConfig);
         return Task.CompletedTask;
     }

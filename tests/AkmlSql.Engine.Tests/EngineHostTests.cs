@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Net.WebSockets;
 using System.Threading;
 using System.Threading.Tasks;
@@ -360,6 +361,43 @@ public sealed class EngineHostTests
     {
         Assert.Null(EngineHost.BuildBridgeAuth(null).Pairing);
         Assert.Null(EngineHost.BuildBridgeAuth(new BridgeOptions { Enabled = false }).Pairing);
+    }
+
+    /// <summary>
+    /// Spec 026 (M4 closure) L8 / lan-auth-composition-contract C4(4): the LAN composition must
+    /// register the SAME full non-handshake handler set on one router as the loopback composition
+    /// (no regression to the spec-025 dual-transport composition). Previously only the loopback
+    /// composition's handler set was asserted.
+    /// </summary>
+    [Fact]
+    public void Lan_and_loopback_compositions_register_the_same_router_handlers()
+    {
+        var tokenPath = Path.Combine(Path.GetTempPath(), $"akml-tokens-{Guid.NewGuid():N}.json");
+        try
+        {
+            var loopback = EngineComposition.Build();   // no LAN handshake supplied
+            var lanAuth = EngineHost.BuildBridgeAuth(new BridgeOptions
+            {
+                Enabled = true,
+                BindAddress = "0.0.0.0",
+                Port = 47291,
+                TokenStorePath = tokenPath,
+            });
+            var lan = EngineComposition.Build(lanAuth.Handshake);
+
+            // Both register the handshake handler...
+            Assert.True(lan.Router.IsRegistered(MessageTypes.HandshakeRequest));
+            Assert.True(loopback.Router.IsRegistered(MessageTypes.HandshakeRequest));
+
+            // ...and the identical full set of message types (handshake + every non-handshake handler).
+            Assert.Equal(
+                loopback.Router.RegisteredMessageTypes.OrderBy(t => t),
+                lan.Router.RegisteredMessageTypes.OrderBy(t => t));
+        }
+        finally
+        {
+            if (File.Exists(tokenPath)) File.Delete(tokenPath);
+        }
     }
 
     private static HandshakeRequest MakeHandshake(string? pin) => new()

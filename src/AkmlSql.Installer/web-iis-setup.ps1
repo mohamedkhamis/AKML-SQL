@@ -23,7 +23,10 @@
 #>
 param(
     [Parameter(Mandatory = $true)] [int] $Port,
-    [Parameter(Mandatory = $true)] [string] $PhysicalPath
+    [Parameter(Mandatory = $true)] [string] $PhysicalPath,
+    # Spec 026 (M4 closure) M6: 'Lan' widens the CSP connect-src so the browser may open the
+    # cross-host bridge socket (wss://<machineA>:<bridgePort>); 'Localhost' keeps the tight list.
+    [ValidateSet('Localhost', 'Lan')] [string] $Mode = 'Localhost'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -95,18 +98,24 @@ try {
     }
     Log "Configured $($mimes.Count) MIME types"
 
-    # CSP header per contracts/ai-key-wrapping.md "Threat model". The connect-src
-    # list contains the AI provider allow-list + ws://localhost:* for the
-    # bridge. The installer doesn't know the user's chosen bridge port at this
-    # layer (the bridge runs as a separate service, this is the WASM bundle's
-    # CSP), so we use a permissive ws://localhost:* + the AI allow-list.
+    # CSP header per contracts/ai-key-wrapping.md "Threat model". connect-src lists the AI provider
+    # allow-list + the bridge sockets. Spec 026 (M4 closure) M6: in LAN mode the browser on a SECOND
+    # machine loads the bundle from http://<machineA>/ and must open wss://<machineA>:<bridgePort> --
+    # a host that is neither localhost nor 127.0.0.1, which the localhost-only list forbids (so the
+    # bridge connection was blocked and LAN pairing/US2 could never start). For LAN installs we add
+    # the `wss:` scheme-source so any TLS WebSocket host is permitted (the bridge still requires the
+    # pairing PIN/bearer + a pinned cert, so this is not a meaningful CSP relaxation). Localhost
+    # installs keep the tight host-locked list.
+    $bridgeConnectSrc = "ws://127.0.0.1:* wss://127.0.0.1:* ws://localhost:* wss://localhost:* "
+    if ($Mode -eq 'Lan') {
+        $bridgeConnectSrc += "wss: "
+    }
     $csp = "default-src 'self'; " +
            "script-src 'self' 'wasm-unsafe-eval' https://esm.sh; " +
            "style-src 'self' 'unsafe-inline'; " +
            "img-src 'self' data:; " +
            "connect-src 'self' " +
-               "ws://127.0.0.1:* wss://127.0.0.1:* " +
-               "ws://localhost:* wss://localhost:* " +
+               $bridgeConnectSrc +
                "https://api.openai.com https://api.anthropic.com " +
                "https://generativelanguage.googleapis.com https://*.openai.azure.com " +
                "http://localhost:11434 http://127.0.0.1:11434 " +
