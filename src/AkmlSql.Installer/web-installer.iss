@@ -410,6 +410,7 @@ var
     aclResult: Integer;
     resultCode: Integer;
     serviceRunning: Boolean;
+    rawText: AnsiString;   { LoadStringFromFile requires a var AnsiString in Unicode Inno Setup }
 begin
     if not IsWebSelected() then Exit;
 
@@ -446,8 +447,8 @@ begin
         while (pollTries < 30) and (PairingPin = '') do
         begin
             if FileExists(appdata + '\pairing-pin.txt') then
-                if LoadStringFromFile(appdata + '\pairing-pin.txt', PairingPin) then
-                    PairingPin := Trim(PairingPin);
+                if LoadStringFromFile(appdata + '\pairing-pin.txt', rawText) then
+                    PairingPin := Trim(String(rawText));
             if PairingPin = '' then
             begin
                 Sleep(1000);
@@ -459,8 +460,8 @@ begin
     { Read the cert thumbprint web-tls-setup.ps1 wrote. }
     if FileExists(appdata + '\certs\thumbprint.txt') then
     begin
-        if LoadStringFromFile(appdata + '\certs\thumbprint.txt', TlsThumbprint) then
-            TlsThumbprint := Trim(TlsThumbprint);
+        if LoadStringFromFile(appdata + '\certs\thumbprint.txt', rawText) then
+            TlsThumbprint := Trim(String(rawText));
     end;
 
     { FR-007a: confirm the engine service reached Running within ~10 s (when the service
@@ -566,12 +567,6 @@ begin
     { Never touch %AppData%/AKML SQL/ -- that's IDE plugin state (SC-007). }
 end;
 
-{ Helper -- the computer name for the LAN URL. }
-function GetComputerNameString(): String;
-var
-    name: String;
-begin
-    if not RegQueryStringValue(HKLM, 'SYSTEM\CurrentControlSet\Control\ComputerName\ComputerName', 'ComputerName', name) then
-        name := 'localhost';
-    Result := name;
-end;
+{ Note: the LAN URL uses Inno Setup's built-in GetComputerNameString (no custom helper -- a
+  custom GetComputerNameString would collide with the built-in, and Inno Pascal Script has no
+  forward references, so a differently-named helper would have to precede Web_PostInstall). }

@@ -30,7 +30,7 @@ description: "Tasks for M4 — Installer (IIS Deployment Option) Closure"
 
 **Purpose**: Produce the artefacts the installer bundles and confirm the toolchain. The Web bundle MUST exist before ISCC compiles the post-`#include` installer (the `[Files]` wildcard errors if the publish output is absent).
 
-- [ ] T001 [P] Publish the Web bundle: `dotnet publish src/AkmlSql.Web -c Release`; confirm `src/AkmlSql.Web/bin/Release/net10.0/publish/wwwroot/_framework/` exists (so the `[Files]` copy in `web-installer.iss` has content)
+- [X] T001 [P] Publish the Web bundle: `dotnet publish src/AkmlSql.Web -c Release`; confirm `src/AkmlSql.Web/bin/Release/net10.0/publish/wwwroot/_framework/` exists (so the `[Files]` copy in `web-installer.iss` has content)
 - [ ] T002 [P] Publish the engine: `dotnet publish src/AkmlSql.Engine -c Release -r win-x64`; confirm `AkmlSql.Engine.exe`
 - [ ] T003 [P] Baseline compile the CURRENT installer: `& "C:\Program Files\Inno Setup 7\ISCC.exe" src/AkmlSql.Installer/AkmlSqlSetup.iss`; confirm `Output/AKMLSQLSetup.exe` is produced (pre-change baseline — the current `.iss` does NOT reference the web bundle, so this works without T001)
 
