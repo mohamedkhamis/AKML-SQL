@@ -168,10 +168,16 @@ Type: filesandordirs; Name: "{code:GetVS2026ExtDir}"; Check: CheckVS2026
 
 #include "environment-scanner.iss"
 
-; Spec 026 (M4 closure) FR-001: bring in the Web-edition component group, install/uninstall
-; steps, and the Web_* hook procedures. Included BEFORE the main [Code] section (mirroring
-; environment-scanner.iss above) so the Web_* functions are declared ahead of the main event
-; handlers that call them (Web_Init / Web_NextButton / Web_Skip / Web_PostInstall / Web_Uninstall).
+[UninstallDelete]
+; Spec 026 (M4 closure) FR-001: bring in the Web-edition installer (the component group, [Files],
+; [Run]/[UninstallRun] steps, and the Web_* hook procedures). environment-scanner.iss (above) ends
+; in [Code]; the [UninstallDelete] header immediately above re-opens an ini-section context (a
+; section header at column 1 is recognised even inside [Code]; it adds no entries), so these ;
+; comments AND web-installer.iss's own leading ; comments parse as ini comments, not Pascal.
+; web-installer.iss's [Code] procedures still land before the main [Code] event handlers below --
+; Inno Pascal has no forward references, so the hooks (Web_Init / Web_NextButton / Web_Skip /
+; Web_PostInstall / Web_Uninstall / Web_ValidateSilentFlags) must be declared before the
+; InitializeWizard / NextButtonClick / ShouldSkipPage / CurStepChanged / etc. that call them.
 #include "web-installer.iss"
 
 [Code]

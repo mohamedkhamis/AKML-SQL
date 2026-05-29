@@ -22,9 +22,11 @@
     it to %ProgramData%\AKML SQL Web\certs\bridge.pfx); ignored for Localhost.
 
 .PARAMETER ConfigPath
-    Absolute path to the engine config.json. Defaults to
-    %AppData%\AKML SQL\config.json (the path Constants.ConfigFilePath resolves
-    to for the engine process).
+    Absolute path to the engine config.json the AkmlSqlWebEngine service reads.
+    The installer always passes %CommonAppData%\AKML SQL Web\config.json. When
+    omitted it defaults to that same web-edition path -- NEVER the per-user
+    IDE-plugin config (%AppData%\AKML SQL\config.json) -- so this script can never
+    mutate IDE-plugin state (spec 026 M4 closure C3 / FR-006 / SC-007).
 
 .NOTES
     Writes atomically: temp file + rename. Mirrors ConfigManager.Save in
@@ -50,7 +52,9 @@ function Log {
 
 try {
     if ([string]::IsNullOrEmpty($ConfigPath)) {
-        $ConfigPath = Join-Path $env:APPDATA 'AKML SQL\config.json'
+        # Spec 026 (M4 closure) C3 defense-in-depth: default to the web-edition config, NOT the
+        # per-user IDE-plugin config, so a caller that forgets -ConfigPath cannot clobber IDE state.
+        $ConfigPath = Join-Path $env:ProgramData 'AKML SQL Web\config.json'
     }
     $configDir = Split-Path -Parent $ConfigPath
     New-Item -ItemType Directory -Force -Path $configDir | Out-Null

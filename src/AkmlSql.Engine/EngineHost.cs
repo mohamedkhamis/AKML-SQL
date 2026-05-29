@@ -172,6 +172,102 @@ namespace AkmlSql.Engine
         }
 
         /// <summary>
+        /// Spec 026 (M4 closure) C2. Web-edition entry point used by the <c>AkmlSqlWebEngine</c>
+        /// Windows service (<c>Program.Main --web --config &lt;path&gt;</c>). Runs ONLY the WebSocket
+        /// bridge — no named pipe, no parent-process monitoring — against the config at
+        /// <paramref name="configPath"/> (the installer points the service at
+        /// <c>%CommonAppData%\AKML SQL Web\config.json</c>, which is also where
+        /// <c>web-config-bridge.ps1</c> writes the bridge section, so they agree).
+        ///
+        /// <para>Returns 0 on clean shutdown; 2 on crash OR when the config has no enabled bridge —
+        /// a misconfigured service must FAIL (so the SCM shows it stopped) rather than run idle but
+        /// apparently healthy.</para>
+        /// </summary>
+        public static async Task<int> RunWebAsync(string? configPath, CancellationToken externalToken = default)
+        {
+            LoggerFactory.Initialize();
+            Log.Information("AkmlSql.Engine starting in WEB mode. Config={Config}",
+                string.IsNullOrWhiteSpace(configPath) ? "(default)" : configPath);
+
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(externalToken);
+            var token = cts.Token;
+
+            WebSocketTransport? wsTransport = null;
+            try
+            {
+                // C2/C3: read the web-edition config explicitly. ConfigManager.Load(path) never
+                // falls back to (or creates) the per-user IDE-plugin config.
+                var settings = ConfigManager.Load(configPath!);
+
+                // FR-013a guard (LAN without cert) throws here and is caught below -> exit 2.
+                wsTransport = BuildWebSocketTransport(settings.Bridge);
+                if (wsTransport == null)
+                {
+                    Log.Fatal(
+                        "Web mode requires an enabled Bridge section in the engine config ({Config}); " +
+                        "none found. Engine exiting so the service reports failure.",
+                        string.IsNullOrWhiteSpace(configPath) ? "default user config" : configPath);
+                    return 2;
+                }
+
+                var bridgeAuth = BuildBridgeAuth(settings.Bridge);
+                var composition = EngineComposition.Build(bridgeAuth.Handshake);
+
+                // FR-008: persist the minted PIN so the installer's Web_PostInstall can surface it
+                // (identical wiring to RunAsync's LAN path).
+                if (bridgeAuth.Pairing != null)
+                {
+                    var pinFile = new Pairing.PairingPinFile(Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                        "AKML SQL Web", "pairing-pin.txt"));
+                    bridgeAuth.Pairing.PinChanged += (_, pin) => pinFile.Publish(pin);
+                    pinFile.Publish(bridgeAuth.Pairing.CurrentPin);
+                }
+
+                async Task<RpcMessage?> RouteAsync(RpcMessage msg, CancellationToken ct)
+                {
+                    var response = await composition.Router.RouteAsync(msg, composition.Context, ct);
+                    if (response == null && !composition.Router.IsRegistered(msg.MessageType))
+                        Log.Warning("Unknown message type: {Type}", msg.MessageType);
+                    return response;
+                }
+
+                wsTransport.RequestReceived += RouteAsync;
+                await wsTransport.StartAsync(token).ConfigureAwait(false);
+                Log.Information("Web edition bridge listening. Awaiting connections.");
+
+                // Run until the service is stopped / cancelled.
+                try
+                {
+                    await Task.Delay(Timeout.Infinite, token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    // graceful shutdown
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                Log.Information("Engine (web mode) shutdown requested.");
+            }
+            catch (Exception ex)
+            {
+                Log.Fatal(ex, "Engine (web mode) crashed.");
+                return 2;
+            }
+            finally
+            {
+                if (wsTransport != null)
+                {
+                    await wsTransport.DisposeAsync().ConfigureAwait(false);
+                }
+                LoggerFactory.Shutdown();
+            }
+
+            return 0;
+        }
+
+        /// <summary>
         /// Spec 025 (M3 closure) FR-027: builds the optional <see cref="WebSocketTransport"/>
         /// composed alongside the named pipe. Returns <c>null</c> when the bridge is disabled
         /// or the config section is absent — preserving IDE-plugin-only behaviour. Exposed

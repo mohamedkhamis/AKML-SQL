@@ -40,8 +40,10 @@ namespace AkmlSql.Engine.Pairing
             if (string.IsNullOrEmpty(pin)) return;
             try
             {
+                // Spec 026 (M4 closure) M1: create the shared-state dir hardened (Admins+SYSTEM only)
+                // if we are its creator, so the PIN is never written under a world-readable ACL.
                 var dir = Path.GetDirectoryName(_path);
-                if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+                if (!string.IsNullOrEmpty(dir)) SecureDirectory.EnsureSecured(dir);
 
                 var tmp = _path + ".tmp";
                 File.WriteAllText(tmp, pin, Utf8NoBom);

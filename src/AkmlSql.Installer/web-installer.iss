@@ -79,17 +79,22 @@ Filename: "powershell.exe"; \
     Flags: runhidden
 
 ; Windows service for the engine. Uses sc.exe to create AkmlSqlWebEngine.
+; Spec 026 (M4 closure) C2/C3: launch in web mode (--web; the engine's web host reports
+; SERVICE_RUNNING to the SCM) and read the web-edition config under {commonappdata} (machine-wide,
+; readable by the LocalSystem service account) -- NOT {userappdata}\...\AKML SQL\config.json (the
+; per-user IDE-plugin config). web-config-bridge.ps1 writes the bridge section to this same path.
 Filename: "sc.exe"; \
-    Parameters: "create AkmlSqlWebEngine binPath= ""\""{app}\Engine\AkmlSql.Engine.exe\"" --config \""{userappdata}\AKML SQL Web\config.json\"""" start= auto DisplayName= ""AKML SQL Web Engine"""; \
+    Parameters: "create AkmlSqlWebEngine binPath= ""\""{app}\Engine\AkmlSql.Engine.exe\"" --web --config \""{commonappdata}\AKML SQL Web\config.json\"""" start= auto DisplayName= ""AKML SQL Web Engine"""; \
     StatusMsg: "Installing AKML SQL Web Engine service..."; \
     Components: web\service; \
     Flags: runhidden
 
-Filename: "sc.exe"; \
-    Parameters: "start AkmlSqlWebEngine"; \
-    StatusMsg: "Starting AKML SQL Web Engine service..."; \
-    Components: web\service; \
-    Flags: runhidden
+; Spec 026 (M4 closure) C2/C3 ordering fix: the service is NOT started here. Starting it from
+; [Run] would launch the engine BEFORE web-config-bridge.ps1 writes config.json (that runs later in
+; Web_PostInstall / ssPostInstall) -- the engine would find no enabled bridge and exit, so the
+; bridge never came up on first install. `sc start` now runs in Web_PostInstall, after the config is
+; written AND the shared-state dir is ACL-locked (so pairing-pin.txt is never world-readable). The
+; service is still created with start= auto above, so it also auto-starts on subsequent boots.
 
 [UninstallRun]
 ; Reverse the install order: stop service, remove firewall rule, delete netsh sslcert binding,
@@ -408,6 +413,7 @@ var
     pollTries: Integer;
     svcTries: Integer;
     aclResult: Integer;
+    aclOk: Boolean;
     resultCode: Integer;
     serviceRunning: Boolean;
     rawText: AnsiString;   { LoadStringFromFile requires a var AnsiString in Unicode Inno Setup }
@@ -421,10 +427,15 @@ begin
         bridgeMode := 'Lan'
     else
         bridgeMode := 'Localhost';
+    { Spec 026 (M4 closure) C3: write the bridge section to the WEB-edition config under
+      CommonAppData\AKML SQL Web\config.json -- the exact file the AkmlSqlWebEngine service
+      reads (see the sc.exe binPath above). Passing -ConfigPath explicitly keeps the per-user
+      IDE-plugin config (AppData\AKML SQL\config.json) byte-for-byte untouched (FR-006/SC-007). }
     bridgeArgs := '-NoProfile -ExecutionPolicy Bypass -File "' +
         ExpandConstant('{tmp}\web-config-bridge.ps1') +
         '" -Port ' + IntToStr(WebBridgePort) +
-        ' -Mode ' + bridgeMode;
+        ' -Mode ' + bridgeMode +
+        ' -ConfigPath "' + ExpandConstant('{commonappdata}\AKML SQL Web\config.json') + '"';
     Exec('powershell.exe', bridgeArgs, '', SW_HIDE, ewWaitUntilTerminated, bridgeResult);
 
     { Capture the engine-generated pairing PIN. The engine writes it to
@@ -435,9 +446,16 @@ begin
       read -- a leaked PIN allows local operator impersonation). SIDs (not names) keep this
       locale-independent: S-1-5-32-544 = Administrators, S-1-5-18 = SYSTEM. Best-effort. }
     ForceDirectories(appdata);
-    Exec('icacls.exe',
+    aclOk := Exec('icacls.exe',
         '"' + appdata + '" /inheritance:r /grant:r "*S-1-5-32-544:(OI)(CI)F" /grant:r "*S-1-5-18:(OI)(CI)F"',
-        '', SW_HIDE, ewWaitUntilTerminated, aclResult);
+        '', SW_HIDE, ewWaitUntilTerminated, aclResult) and (aclResult = 0);
+
+    { Spec 026 (M4 closure) C2/C3 ordering fix: start the service ONLY NOW -- after the config
+      (web-config-bridge.ps1 above) is written and the shared-state dir is locked down. The engine
+      then reads an enabled bridge config and writes pairing-pin.txt into the already-hardened dir.
+      (Moved here from [Run]; the service was created with start= auto so boots still auto-start it.) }
+    if WizardIsComponentSelected('web\service') then
+        Exec('sc.exe', 'start AkmlSqlWebEngine', '', SW_HIDE, ewWaitUntilTerminated, resultCode);
 
     { T022 / FR-011: poll for the engine-written pairing PIN (LAN mode only) for up to 30 s. }
     PairingPin := '';
@@ -526,6 +544,15 @@ begin
             summary.Add('');
             summary.Add('WARNING: the AkmlSqlWebEngine service did not reach Running within 10s.');
             summary.Add('  Check Event Viewer + ' + appdata + '\install.log, then run: sc start AkmlSqlWebEngine');
+        end;
+        { Spec 026 (M4 closure) M1: flag a failed ACL lockdown -- the PIN / token store may be
+          standard-user readable until the operator hardens the directory manually. }
+        if not aclOk then
+        begin
+            summary.Add('');
+            summary.Add('WARNING: could not lock down ' + appdata + ' (icacls exit ' + IntToStr(aclResult) + ').');
+            summary.Add('  The pairing PIN / token store may be readable by standard users on this host. Re-run:');
+            summary.Add('  icacls "' + appdata + '" /inheritance:r /grant:r *S-1-5-32-544:(OI)(CI)F /grant:r *S-1-5-18:(OI)(CI)F');
         end;
         if not WizardIsComponentSelected('web\iis') then
         begin

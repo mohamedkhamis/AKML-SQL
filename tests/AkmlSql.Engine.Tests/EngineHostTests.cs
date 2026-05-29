@@ -161,6 +161,131 @@ public sealed class EngineHostTests
         Assert.Equal(1, response.RequestId);
     }
 
+    /// <summary>
+    /// Spec 026 (M4 closure) C1 / H1 / FR-013c / SC-010: when the transport requires pairing
+    /// (LAN mode), a connection that sends a non-handshake RPC BEFORE completing a successful
+    /// handshake is rejected with an <see cref="MessageTypes.Error"/> envelope and the router never
+    /// sees the frame; after an Ok handshake the same RPC is routed normally. Runs on loopback with
+    /// <see cref="WebSocketTransportOptions.RequirePairingToken"/> forced true so the gate is
+    /// exercised without TLS/admin (the ctor only demands a cert for a non-loopback BindAddress).
+    /// This is the negative test the original bypass slipped through for lack of.
+    /// </summary>
+    [Fact]
+    public async Task LanGate_rejects_rpc_before_handshake_then_allows_after_ok()
+    {
+        var port = 53400 + Random.Shared.Next(0, 1000);
+        await using var ws = new WebSocketTransport(new WebSocketTransportOptions
+        {
+            BindAddress = "127.0.0.1",
+            Port = port,
+            RequirePairingToken = true,   // gate active; loopback => the ctor needs no TLS cert
+        });
+
+        var routed = new System.Collections.Concurrent.ConcurrentBag<int>();
+        ws.RequestReceived += (msg, _) =>
+        {
+            routed.Add(msg.MessageType);
+            if (msg.MessageType == MessageTypes.HandshakeRequest)
+            {
+                return Task.FromResult<RpcMessage?>(new RpcMessage
+                {
+                    MessageType = MessageTypes.HandshakeResponse,
+                    RequestId = msg.RequestId,
+                    Payload = MessagePackSerializer.Serialize(
+                        new HandshakeResponse { Status = HandshakeStatus.Ok }),
+                });
+            }
+            return Task.FromResult<RpcMessage?>(new RpcMessage
+            {
+                MessageType = msg.MessageType + 1,
+                RequestId = msg.RequestId,
+                Payload = msg.Payload,
+            });
+        };
+
+        await ws.StartAsync(CancellationToken.None);
+        using var client = new ClientWebSocket();
+        await client.ConnectAsync(new Uri($"ws://127.0.0.1:{port}/"), CancellationToken.None);
+
+        // 1. Pre-handshake data RPC -> rejected with an Error envelope; the handler never sees it.
+        var pre = await SendReceiveAsync(client,
+            new RpcMessage { MessageType = 100, RequestId = 1, Payload = new byte[] { 1 } });
+        Assert.Equal(MessageTypes.Error, pre.MessageType);
+        Assert.DoesNotContain(100, routed);
+
+        // 2. Complete the handshake -> Ok flips the per-connection gate open.
+        var hs = await SendReceiveAsync(client, new RpcMessage
+        {
+            MessageType = MessageTypes.HandshakeRequest,
+            RequestId = 2,
+            Payload = MessagePackSerializer.Serialize(new HandshakeRequest()),
+        });
+        Assert.Equal(MessageTypes.HandshakeResponse, hs.MessageType);
+
+        // 3. The same data RPC, now authenticated -> routed and answered.
+        var post = await SendReceiveAsync(client,
+            new RpcMessage { MessageType = 100, RequestId = 3, Payload = new byte[] { 1, 2, 3 } });
+        Assert.Equal(101, post.MessageType);
+        Assert.Equal(3, post.RequestId);
+        Assert.Contains(100, routed);
+    }
+
+    /// <summary>
+    /// Spec 026 (M4 closure) C1: control case — a loopback transport with
+    /// <see cref="WebSocketTransportOptions.RequirePairingToken"/> false (the localhost default)
+    /// must NOT gate: a non-handshake RPC sent as the first frame is routed immediately. Guards
+    /// against the gate regressing IDE-plugin / localhost behaviour.
+    /// </summary>
+    [Fact]
+    public async Task LoopbackTransport_does_not_gate_when_pairing_not_required()
+    {
+        var port = 53600 + Random.Shared.Next(0, 1000);
+        await using var ws = new WebSocketTransport(new WebSocketTransportOptions
+        {
+            BindAddress = "127.0.0.1",
+            Port = port,
+            RequirePairingToken = false,
+        });
+
+        ws.RequestReceived += (msg, _) => Task.FromResult<RpcMessage?>(new RpcMessage
+        {
+            MessageType = msg.MessageType + 1,
+            RequestId = msg.RequestId,
+            Payload = msg.Payload,
+        });
+
+        await ws.StartAsync(CancellationToken.None);
+        using var client = new ClientWebSocket();
+        await client.ConnectAsync(new Uri($"ws://127.0.0.1:{port}/"), CancellationToken.None);
+
+        var resp = await SendReceiveAsync(client,
+            new RpcMessage { MessageType = 100, RequestId = 7, Payload = new byte[] { 9 } });
+
+        Assert.Equal(101, resp.MessageType);
+        Assert.Equal(7, resp.RequestId);
+    }
+
+    /// <summary>Sends one MessagePack RpcMessage frame and reads the single response frame.</summary>
+    private static async Task<RpcMessage> SendReceiveAsync(ClientWebSocket client, RpcMessage request)
+    {
+        var payload = MessagePackSerializer.Serialize(request);
+        await client.SendAsync(new ArraySegment<byte>(payload),
+            WebSocketMessageType.Binary, true, CancellationToken.None);
+
+        using var ms = new System.IO.MemoryStream();
+        var buffer = new byte[4096];
+        WebSocketReceiveResult result;
+        do
+        {
+            result = await client.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
+            if (result.MessageType == WebSocketMessageType.Close) break;
+            ms.Write(buffer, 0, result.Count);
+        }
+        while (!result.EndOfMessage);
+
+        return MessagePackSerializer.Deserialize<RpcMessage>(ms.ToArray());
+    }
+
     // --- Spec 026 (M4 closure) FR-013a..e / SC-010: LAN auth composition matrix ---
 
     /// <summary>
