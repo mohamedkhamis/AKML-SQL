@@ -165,8 +165,10 @@ namespace AkmlSql.Engine.Pairing
         {
             try
             {
+                // Spec 026 (M4 closure) M1: create the shared-state dir hardened (Admins+SYSTEM only)
+                // if we are its creator. EnsureSecured no-ops when the dir already exists.
                 var dir = Path.GetDirectoryName(_path);
-                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
+                SecureDirectory.EnsureSecured(dir);
 
                 var tmp = _path + ".tmp";
                 var snapshot = _entries.Values.ToArray();

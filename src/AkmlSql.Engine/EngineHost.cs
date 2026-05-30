@@ -91,11 +91,32 @@ namespace AkmlSql.Engine
                 // T035 -- process pending SQL Prompt import before starting the RPC server.
                 ProcessPendingImports();
 
+                // Spec 026 (M4 closure) FR-013a: load settings up front so the bridge-auth
+                // composition can enforce the pairing PIN in LAN mode. ConfigManager.Load() is
+                // idempotent -- the WebSocket transport below reuses the same settings instance.
+                var settings = ConfigManager.Load();
+                var bridgeAuth = BuildBridgeAuth(settings.Bridge);
+
                 // Spec 022 (M0 closure). The composition root builds services, context and
                 // router; the transport (T027) implements IRpcTransport -- it owns only pipe
                 // lifecycle + frame I/O and forwards each decoded message to the router via the
-                // RequestReceived event.
-                var composition = EngineComposition.Build();
+                // RequestReceived event. Spec 026 FR-013a: the LAN-mode handshake handler (wired
+                // to a live PairingService + BearerTokenStore) is supplied here; loopback / no-bridge
+                // passes null and the registry falls back to the parameterless auto-accept handler.
+                var composition = EngineComposition.Build(bridgeAuth.Handshake);
+
+                // Spec 026 (M4 closure) FR-008: in LAN mode, persist the minted PIN to
+                // %CommonAppData%/AKML SQL Web/pairing-pin.txt so the installer's Web_PostInstall
+                // can surface it in INSTALL-SUMMARY.txt. The one-shot publish captures the initial
+                // PIN (minted inside the PairingService ctor, before this subscription attaches).
+                if (bridgeAuth.Pairing != null)
+                {
+                    var pinFile = new Pairing.PairingPinFile(Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                        "AKML SQL Web", "pairing-pin.txt"));
+                    bridgeAuth.Pairing.PinChanged += (_, pin) => pinFile.Publish(pin);
+                    pinFile.Publish(bridgeAuth.Pairing.CurrentPin);
+                }
 
                 async Task<RpcMessage?> RouteAsync(RpcMessage msg, CancellationToken ct)
                 {
@@ -113,7 +134,6 @@ namespace AkmlSql.Engine
                 // so SSMS plugin (pipe) and web edition (WebSocket) serve identical
                 // handler chains. When Bridge is absent or disabled, the engine behaves
                 // exactly like the IDE-plugin-only deployment.
-                var settings = ConfigManager.Load();
                 var wsTransport = BuildWebSocketTransport(settings.Bridge);
                 if (wsTransport != null)
                 {
@@ -152,6 +172,102 @@ namespace AkmlSql.Engine
         }
 
         /// <summary>
+        /// Spec 026 (M4 closure) C2. Web-edition entry point used by the <c>AkmlSqlWebEngine</c>
+        /// Windows service (<c>Program.Main --web --config &lt;path&gt;</c>). Runs ONLY the WebSocket
+        /// bridge — no named pipe, no parent-process monitoring — against the config at
+        /// <paramref name="configPath"/> (the installer points the service at
+        /// <c>%CommonAppData%\AKML SQL Web\config.json</c>, which is also where
+        /// <c>web-config-bridge.ps1</c> writes the bridge section, so they agree).
+        ///
+        /// <para>Returns 0 on clean shutdown; 2 on crash OR when the config has no enabled bridge —
+        /// a misconfigured service must FAIL (so the SCM shows it stopped) rather than run idle but
+        /// apparently healthy.</para>
+        /// </summary>
+        public static async Task<int> RunWebAsync(string? configPath, CancellationToken externalToken = default)
+        {
+            LoggerFactory.Initialize();
+            Log.Information("AkmlSql.Engine starting in WEB mode. Config={Config}",
+                string.IsNullOrWhiteSpace(configPath) ? "(default)" : configPath);
+
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(externalToken);
+            var token = cts.Token;
+
+            WebSocketTransport? wsTransport = null;
+            try
+            {
+                // C2/C3: read the web-edition config explicitly. ConfigManager.Load(path) never
+                // falls back to (or creates) the per-user IDE-plugin config.
+                var settings = ConfigManager.Load(configPath!);
+
+                // FR-013a guard (LAN without cert) throws here and is caught below -> exit 2.
+                wsTransport = BuildWebSocketTransport(settings.Bridge);
+                if (wsTransport == null)
+                {
+                    Log.Fatal(
+                        "Web mode requires an enabled Bridge section in the engine config ({Config}); " +
+                        "none found. Engine exiting so the service reports failure.",
+                        string.IsNullOrWhiteSpace(configPath) ? "default user config" : configPath);
+                    return 2;
+                }
+
+                var bridgeAuth = BuildBridgeAuth(settings.Bridge);
+                var composition = EngineComposition.Build(bridgeAuth.Handshake);
+
+                // FR-008: persist the minted PIN so the installer's Web_PostInstall can surface it
+                // (identical wiring to RunAsync's LAN path).
+                if (bridgeAuth.Pairing != null)
+                {
+                    var pinFile = new Pairing.PairingPinFile(Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                        "AKML SQL Web", "pairing-pin.txt"));
+                    bridgeAuth.Pairing.PinChanged += (_, pin) => pinFile.Publish(pin);
+                    pinFile.Publish(bridgeAuth.Pairing.CurrentPin);
+                }
+
+                async Task<RpcMessage?> RouteAsync(RpcMessage msg, CancellationToken ct)
+                {
+                    var response = await composition.Router.RouteAsync(msg, composition.Context, ct);
+                    if (response == null && !composition.Router.IsRegistered(msg.MessageType))
+                        Log.Warning("Unknown message type: {Type}", msg.MessageType);
+                    return response;
+                }
+
+                wsTransport.RequestReceived += RouteAsync;
+                await wsTransport.StartAsync(token).ConfigureAwait(false);
+                Log.Information("Web edition bridge listening. Awaiting connections.");
+
+                // Run until the service is stopped / cancelled.
+                try
+                {
+                    await Task.Delay(Timeout.Infinite, token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    // graceful shutdown
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                Log.Information("Engine (web mode) shutdown requested.");
+            }
+            catch (Exception ex)
+            {
+                Log.Fatal(ex, "Engine (web mode) crashed.");
+                return 2;
+            }
+            finally
+            {
+                if (wsTransport != null)
+                {
+                    await wsTransport.DisposeAsync().ConfigureAwait(false);
+                }
+                LoggerFactory.Shutdown();
+            }
+
+            return 0;
+        }
+
+        /// <summary>
         /// Spec 025 (M3 closure) FR-027: builds the optional <see cref="WebSocketTransport"/>
         /// composed alongside the named pipe. Returns <c>null</c> when the bridge is disabled
         /// or the config section is absent — preserving IDE-plugin-only behaviour. Exposed
@@ -175,6 +291,71 @@ namespace AkmlSql.Engine
                 RequirePairingToken = !bridge.IsLoopback,
             };
             return new WebSocketTransport(options);
+        }
+
+        /// <summary>
+        /// Spec 026 (M4 closure) FR-013a / FR-013b. Builds the bridge handshake handler:
+        /// LAN mode enforces the pairing PIN; loopback / disabled / absent auto-accepts.
+        /// Exposed <c>internal</c> for <c>EngineHostTests</c>.
+        /// </summary>
+        /// <remarks>
+        /// LAN mode (bridge enabled + non-loopback) constructs a live <see cref="Pairing.PairingService"/>
+        /// + <see cref="Pairing.BearerTokenStore"/> and wires the full
+        /// <see cref="Handlers.Handshake.HandshakeHandler"/> constructor (FR-013a). The
+        /// <c>pinValidator</c> keys <see cref="Pairing.PairingService"/>'s per-source rate limit on the
+        /// transport-published remote IP (<see cref="Pairing.BridgeSourceIp"/>). Loopback / disabled /
+        /// absent returns the parameterless auto-accept handler (FR-013b) with a null
+        /// <see cref="BridgeAuth.Pairing"/>, so no PIN file is written and localhost needs no PIN.
+        /// </remarks>
+        internal static BridgeAuth BuildBridgeAuth(Core.Config.BridgeOptions? bridge)
+        {
+            if (bridge == null || !bridge.Enabled || bridge.IsLoopback)
+            {
+                return new BridgeAuth { Handshake = new Handlers.Handshake.HandshakeHandler() };
+            }
+
+            var tokenStorePath = string.IsNullOrWhiteSpace(bridge.TokenStorePath)
+                ? Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                    "AKML SQL Web", "tokens.json")
+                : bridge.TokenStorePath;
+            var ttlDays = bridge.TokenTtlDays > 0 ? bridge.TokenTtlDays : 90;
+
+            var pairing = new Pairing.PairingService();
+            var tokens = new Pairing.BearerTokenStore(tokenStorePath, TimeSpan.FromDays(ttlDays));
+
+            var handshake = new Handlers.Handshake.HandshakeHandler(
+                pairingRequired: () => true,
+                pinValidator: pin => pairing.ValidatePin(
+                    Pairing.BridgeSourceIp.Current?.ToString() ?? "ws", pin) == Pairing.PinAttemptResult.Valid,
+                bearerValidator: token => tokens.Validate(token),
+                // Spec 026 (M4 closure) L2: the handshake handler only calls bearerMinter after a
+                // valid PIN (which PairingService consumes single-use). Mint the bearer, then
+                // immediately regenerate the PIN so a second machine can still pair -- otherwise the
+                // PIN is dead for the rest of the process lifetime and an installer re-run surfaces a
+                // consumed PIN. RegeneratePin re-fires PinChanged, refreshing pairing-pin.txt.
+                bearerMinter: label =>
+                {
+                    var token = tokens.Mint(label);
+                    pairing.RegeneratePin();
+                    return token;
+                },
+                serverCanonicalIdentityProvider: () => null);
+
+            return new BridgeAuth { Handshake = handshake, Pairing = pairing, Tokens = tokens };
+        }
+
+        /// <summary>
+        /// Spec 026 (M4 closure). The bridge's handshake handler plus the live pairing services it
+        /// was wired to (both null in loopback / no-bridge mode). <c>EngineHost</c> uses
+        /// <see cref="Pairing"/> to wire the PIN-file writer; <c>EngineHostTests</c> reads
+        /// <c>Pairing.CurrentPin</c> to drive the auth-composition matrix.
+        /// </summary>
+        internal sealed class BridgeAuth
+        {
+            public required Handlers.Handshake.HandshakeHandler Handshake { get; init; }
+            public Pairing.PairingService? Pairing { get; init; }
+            public Pairing.BearerTokenStore? Tokens { get; init; }
         }
 
         /// <summary>

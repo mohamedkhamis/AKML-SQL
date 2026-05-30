@@ -110,6 +110,29 @@ public sealed class PairingServiceTests
     }
 
     [Fact]
+    public void Global_circuit_breaker_freezes_after_many_failures_across_distinct_sources()
+    {
+        var (svc, _, _) = CreateWithClock();
+
+        // Spread failures across distinct sources so the PER-source 5/min limit never trips, but the
+        // GLOBAL cap does -- this is the multi-IP brute-force the per-source limit alone misses.
+        var frozen = false;
+        for (var i = 0; i < PairingService.GlobalRateLimitMaxFailures + 5; i++)
+        {
+            var r = svc.ValidatePin($"10.0.{i / 256}.{i % 256}", "000000");
+            if (r == PinAttemptResult.RateLimited) { frozen = true; break; }
+        }
+        Assert.True(frozen, "Global circuit-breaker should freeze pairing after the global failure cap.");
+
+        // While frozen, even the correct PIN from a brand-new source is refused.
+        Assert.Equal(PinAttemptResult.RateLimited, svc.ValidatePin("10.99.99.99", svc.CurrentPin));
+
+        // Operator regenerates -> the freeze clears and pairing works again.
+        var fresh = svc.RegeneratePin();
+        Assert.Equal(PinAttemptResult.Valid, svc.ValidatePin("10.88.88.88", fresh));
+    }
+
+    [Fact]
     public void RegeneratePin_resets_the_consumed_flag()
     {
         var (svc, _, _) = CreateWithClock();

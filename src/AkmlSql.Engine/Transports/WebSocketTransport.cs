@@ -9,6 +9,8 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using AkmlSql.Core.Ipc;
+using AkmlSql.Core.Ipc.Messages;
+using AkmlSql.Engine.Pairing;
 using MessagePack;
 using Serilog;
 
@@ -163,11 +165,29 @@ namespace AkmlSql.Engine.Transports
             }
 
             using var ws = wsContext.WebSocket;
-            await ServeAsync(ws, ct).ConfigureAwait(false);
+
+            // Spec 026 (M4 closure) FR-013a: publish this connection's remote IP as a
+            // per-connection ambient so the handshake's pinValidator uses the real source
+            // as PairingService's rate-limit bucket key. The scope restores the previous
+            // value on connection end so values never leak across connections.
+            using (BridgeSourceIp.Set(context.Request.RemoteEndPoint?.Address))
+            {
+                await ServeAsync(ws, ct).ConfigureAwait(false);
+            }
         }
 
         private async Task ServeAsync(WebSocket socket, CancellationToken ct)
         {
+            // Spec 026 (M4 closure) C1 / FR-013c / SC-010: per-connection authentication gate.
+            // When the transport requires pairing (LAN mode -- RequirePairingToken is forced true
+            // for any non-loopback binding, see EngineHost.BuildWebSocketTransport), a connection
+            // may send ONLY a HandshakeRequest until it completes a successful (Status == Ok)
+            // handshake. Every other message before that is rejected WITHOUT being dispatched to the
+            // router, so the PIN/bearer handshake is a hard precondition for every data-plane RPC --
+            // not an advisory message an attacker can skip. Loopback / named-pipe deployments leave
+            // RequirePairingToken false, so the gate opens immediately and their behaviour is unchanged.
+            var authenticated = !_options.RequirePairingToken;
+
             while (socket.State == WebSocketState.Open && !ct.IsCancellationRequested)
             {
                 RpcMessage? request;
@@ -185,6 +205,27 @@ namespace AkmlSql.Engine.Transports
 
                 if (request == null) break;   // peer closed
 
+                // Auth gate: refuse any non-handshake frame until this connection is authenticated.
+                // The frame is never handed to the router, so unauthenticated callers cannot reach
+                // formatting / schema / AI / session handlers.
+                if (!authenticated && request.MessageType != MessageTypes.HandshakeRequest)
+                {
+                    Log.Warning(
+                        "WebSocketTransport: rejected pre-handshake MessageType={Type} from unauthenticated connection",
+                        request.MessageType);
+                    try
+                    {
+                        await WriteMessageAsync(
+                            socket,
+                            RpcResponseFactory.CreateErrorResponse(
+                                "Authentication required: complete the pairing handshake before sending requests.",
+                                request.RequestId),
+                            ct).ConfigureAwait(false);
+                    }
+                    catch (WebSocketException) { break; }
+                    continue;
+                }
+
                 RpcMessage? response = null;
                 var handler = RequestReceived;
                 if (handler != null)
@@ -199,6 +240,18 @@ namespace AkmlSql.Engine.Transports
                         Log.Error(ex, "WebSocketTransport: handler failed for MessageType={Type}", request.MessageType);
                         response = RpcResponseFactory.CreateErrorResponse(ex.Message, request.RequestId);
                     }
+                }
+
+                // Open the gate ONLY on a genuine, successful handshake response. The MessageType
+                // check is load-bearing: HandshakeResponse.Status defaults to "ok", so an error
+                // envelope (or any other response) blindly deserialised as a HandshakeResponse would
+                // otherwise read as authenticated and re-open the bypass this fix closes.
+                if (!authenticated &&
+                    request.MessageType == MessageTypes.HandshakeRequest &&
+                    response != null &&
+                    response.MessageType == MessageTypes.HandshakeResponse)
+                {
+                    authenticated = TryReadHandshakeOk(response);
                 }
 
                 if (response != null)
@@ -219,6 +272,29 @@ namespace AkmlSql.Engine.Transports
                         .ConfigureAwait(false);
                 }
                 catch { /* best effort */ }
+            }
+        }
+
+        /// <summary>
+        /// Spec 026 (M4 closure) C1. Returns true only when <paramref name="response"/>'s payload
+        /// deserialises to a <see cref="HandshakeResponse"/> whose <c>Status</c> is
+        /// <see cref="HandshakeStatus.Ok"/>. Any deserialise failure or non-Ok status returns false
+        /// (fail-closed). Callers MUST already have verified the envelope MessageType is
+        /// <see cref="MessageTypes.HandshakeResponse"/> before trusting the result.
+        /// </summary>
+        private static bool TryReadHandshakeOk(RpcMessage response)
+        {
+            try
+            {
+                var payload = response.Payload;
+                if (payload == null || payload.Length == 0) return false;
+                var hs = MessagePackSerializer.Deserialize<HandshakeResponse>(payload);
+                return hs != null && hs.Status == HandshakeStatus.Ok;
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "WebSocketTransport: could not read handshake response status; treating as unauthenticated");
+                return false;
             }
         }
 

@@ -168,6 +168,89 @@ The uninstaller removes extension files and MEF caches but leaves user data (con
 
 ---
 
+## Web edition
+
+The installer can also deploy the **web edition** — the browser-based AKML SQL served from local IIS, talking to the same engine binary over a WebSocket bridge. The web edition installs **independently** of the IDE plugins (pick plugins only, web only, or both) and keeps its own state under `%AppData%\AKML SQL Web\` — it never touches the IDE-plugin state at `%AppData%\AKML SQL\`.
+
+> New in this release. The component is exercised end-to-end by the spec-026 first-interactive-run checklist; the flow below is the operator reference.
+
+### Prerequisites
+
+- Administrative rights (the installer already requires elevation).
+- Windows 10 / 11 (or Windows Server with the Web Server role).
+- **IIS** for the recommended "Host on local IIS" path. If IIS is absent, the installer offers to enable it (`dism /online /enable-feature /featurename:IIS-WebServerRole`), or you can choose "Don't host" and serve the files yourself.
+
+### Component selection
+
+Ticking **Web edition** adds four wizard pages:
+
+| Page | Choices | Default |
+|------|---------|---------|
+| Hosting | Host on local IIS / Don't host | Host on local IIS |
+| Network exposure | Localhost only / LAN exposed | Localhost only |
+| IIS site port | the port you browse to | `80` |
+| Engine bridge port | the WebSocket transport port | `47291` |
+
+The two ports **must differ** — IIS serves the static bundle and the engine's WebSocket bridge is a separate listener; they cannot share a TCP port. The IIS-served bundle is plain **HTTP**; only the **bridge** uses TLS (`wss`) in LAN mode.
+
+### Localhost mode
+
+Browse to `http://localhost/` (or `http://localhost:<IISPort>/` if you changed the port). The engine bridge binds `127.0.0.1` and auto-accepts the loopback connection — no pairing PIN required.
+
+### LAN mode
+
+For pairing a browser on another machine:
+
+1. The installer generates a self-signed TLS cert, binds it to the bridge port (`netsh http add sslcert`), and opens a firewall rule ("AKML SQL Web Engine").
+2. The engine **enforces** a 6-digit pairing PIN at the handshake (wrong PIN → refused; correct PIN → a bearer token is minted and reused on later reconnects).
+3. The install summary at `%CommonAppData%\AKML SQL Web\INSTALL-SUMMARY.txt` shows the browse URL, the bridge port, the **pairing PIN**, and the TLS thumbprint.
+4. On the second machine: browse to the printed URL, open **Add connection**, enter the host + bridge port + PIN. To trust the cert, import `%ProgramData%\AKML SQL Web\certs\bridge.cer` into **Local Machine → Trusted Root Certification Authorities**.
+
+### Don't host (serve it yourself)
+
+Choosing **Don't host** still lays the bundle down at `%ProgramFiles%\AKML SQL\Web\` and installs the engine service; only the IIS site is skipped. Serve the files with any static host, e.g.:
+
+```
+cd "C:\Program Files\AKML SQL\Web"
+python -m http.server 8080
+```
+
+Then browse to `http://localhost:8080/`.
+
+### Silent install
+
+Component selection uses the native `/COMPONENTS` flag; the web sub-options use dedicated flags:
+
+```
+AKMLSQLSetup.exe /VERYSILENT /ACCEPTEULA ^
+  /COMPONENTS="web,web\iis,web\service" ^
+  /WEB_HOST=IIS /WEB_EXPOSURE=LOCALHOST /WEB_PORT=80 /BRIDGE_PORT=47291
+```
+
+| Flag | Values | Meaning |
+|------|--------|---------|
+| `/WEB_HOST` | `IIS` \| `NONE` | host on IIS, or lay files down only |
+| `/WEB_EXPOSURE` | `LOCALHOST` \| `LAN` | bridge binding + LAN cert/firewall |
+| `/WEB_PORT` | `<int>` | IIS site port |
+| `/BRIDGE_PORT` | `<int>` | engine bridge port |
+
+Invalid combinations abort before any state is created: `/WEB_HOST=NONE /WEB_EXPOSURE=LAN` (LAN exposure needs a hosting mode) and `/WEB_PORT == /BRIDGE_PORT` (ports must differ).
+
+### Uninstall
+
+The web edition's uninstall stops + deletes the `AkmlSqlWebEngine` service, removes the firewall rule, deletes the `netsh` sslcert binding, removes the `AkmlSqlWeb` IIS site, deletes `%ProgramFiles%\AKML SQL\Web\`, and **prompts** before deleting `%AppData%\AKML SQL Web\` (your wrapped AI keys + connection records). `%AppData%\AKML SQL\` (IDE-plugin state) is never touched.
+
+### Troubleshooting
+
+| Symptom | Cause / fix |
+|---------|-------------|
+| "Install succeeded" but the URL doesn't load | IIS wasn't installed. Re-run and choose "Enable IIS now", or pick "Don't host" and serve the files yourself. |
+| Install fails / engine won't bind the port | Port collision. The wizard warns if the bridge port is in use — pick another. Check `netstat -ano \| findstr <port>`. |
+| Silent install does nothing for the web component | Missing `/COMPONENTS="web,..."`, or admin rights. The installer requires elevation. |
+| Service not running after install | Check **Event Viewer** + `%CommonAppData%\AKML SQL Web\install.log`; the install summary flags a non-running service. Start it: `sc start AkmlSqlWebEngine`. |
+
+---
+
 ## Activity Logs and Diagnostics
 
 | Target | Activity Log |

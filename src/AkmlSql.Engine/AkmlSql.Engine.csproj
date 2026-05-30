@@ -32,6 +32,12 @@
     <PackageReference Include="MessagePack" Version="2.*" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.*" />
 
+    <!-- Spec 026 (M4 closure) C2: host the web-edition engine as the AkmlSqlWebEngine Windows
+         service so `sc start` reaches SERVICE_RUNNING (a bare console exe times out with 1053).
+         AddWindowsService falls back to console lifetime when not SCM-hosted. -->
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.*" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.*" />
+
     <!-- Phase 9: AI Assistance -->
     <PackageReference Include="Microsoft.Extensions.AI" Version="10.4.1" />
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.4.1" />

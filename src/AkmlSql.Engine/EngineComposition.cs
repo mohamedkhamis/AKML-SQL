@@ -29,7 +29,7 @@ public sealed class EngineComposition
     /// also starts the history-retention background loop (when history is enabled); the built
     /// <see cref="HistoryRetentionService"/> is exposed on <see cref="HistoryRetention"/> as a handle.
     /// </summary>
-    public static EngineComposition Build()
+    public static EngineComposition Build(Handlers.Handshake.HandshakeHandler? handshakeHandler = null)
     {
         var ctx = new RpcContext
         {
@@ -42,7 +42,7 @@ public sealed class EngineComposition
         };
 
         var router = new RpcRouter();
-        var retention = EngineHandlerRegistry.RegisterAllHandlers(router, ctx);
+        var retention = EngineHandlerRegistry.RegisterAllHandlers(router, ctx, handshakeHandler);
 
         return new EngineComposition
         {

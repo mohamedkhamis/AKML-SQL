@@ -168,6 +168,18 @@ Type: filesandordirs; Name: "{code:GetVS2026ExtDir}"; Check: CheckVS2026
 
 #include "environment-scanner.iss"
 
+[UninstallDelete]
+; Spec 026 (M4 closure) FR-001: bring in the Web-edition installer (the component group, [Files],
+; [Run]/[UninstallRun] steps, and the Web_* hook procedures). environment-scanner.iss (above) ends
+; in [Code]; the [UninstallDelete] header immediately above re-opens an ini-section context (a
+; section header at column 1 is recognised even inside [Code]; it adds no entries), so these ;
+; comments AND web-installer.iss's own leading ; comments parse as ini comments, not Pascal.
+; web-installer.iss's [Code] procedures still land before the main [Code] event handlers below --
+; Inno Pascal has no forward references, so the hooks (Web_Init / Web_NextButton / Web_Skip /
+; Web_PostInstall / Web_Uninstall / Web_ValidateSilentFlags) must be declared before the
+; InitializeWizard / NextButtonClick / ShouldSkipPage / CurStepChanged / etc. that call them.
+#include "web-installer.iss"
+
 [Code]
 
 var
@@ -374,6 +386,11 @@ begin
   OptionsPage.Add('Send anonymous usage telemetry (no PII)');
   OptionsPage.Values[0] := True;   // Auto-update ON by default
   OptionsPage.Values[1] := False;  // Telemetry OFF by default
+
+  // Spec 026 (M4 closure) FR-002: create the Web-edition wizard pages (Hosting / Network /
+  // IIS Port / Bridge Port / install-summary). No-op visually when the web component is unticked
+  // -- ShouldSkipPage hides them.
+  Web_Init();
 end;
 
 // --- Silent Mode Validation ---
@@ -414,6 +431,15 @@ begin
       Result := False;
       Exit;
     end;
+  end;
+
+  // Spec 026 (M4 closure) US4 (FR-021..FR-024) + US3 silent (FR-019): parse + validate the
+  // web silent-install flags (/WEB_HOST, /WEB_EXPOSURE, /WEB_PORT, /BRIDGE_PORT). No-op when no
+  // web flags are passed; aborts (non-zero exit + logged reason) on an invalid combination.
+  if not Web_ValidateSilentFlags() then
+  begin
+    Result := False;
+    Exit;
   end;
 
   // In silent mode, scan environment first then apply target selections
@@ -491,6 +517,19 @@ begin
       Result := False;
     end;
   end;
+
+  // Spec 026 (M4 closure) FR-002/FR-003/FR-003a/FR-015: web-edition page validation --
+  // port ranges, IIS-port != bridge-port, bridge-port-in-use warning, IIS-missing dialog.
+  if Result then
+    Result := Web_NextButton(CurPageID);
+end;
+
+// Spec 026 (M4 closure) FR-002/FR-006: AkmlSqlSetup.iss had no ShouldSkipPage; created here to
+// host the Web_Skip call that hides the web-edition pages when the web component is unticked
+// (and for service-only / silent installs). Returns False for all non-web pages.
+function ShouldSkipPage(PageID: Integer): Boolean;
+begin
+  Result := Web_Skip(PageID);
 end;
 
 // --- Post-Install Actions ---
@@ -666,6 +705,11 @@ begin
         StageSqlPromptStyles;
       end;
     end;
+
+    // Spec 026 (M4 closure) FR-008..FR-012 / FR-007a: configure the engine bridge, capture the
+    // pairing PIN + TLS thumbprint, verify the service started, and write INSTALL-SUMMARY.txt.
+    // Returns early internally when the web component is unticked.
+    Web_PostInstall();
   end;
 end;
 
@@ -675,6 +719,13 @@ procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   RemoveUserData: Boolean;
 begin
+  // Spec 026 (M4 closure): remove the IIS site + netsh sslcert binding and prompt about
+  // %AppData%/AKML SQL Web data. Runs at usUninstall (before program files are removed).
+  // No-op internally when the web edition was not installed. NEVER touches %AppData%/AKML SQL/
+  // (the IDE-plugin state -- SC-007).
+  if CurUninstallStep = usUninstall then
+    Web_Uninstall();
+
   if CurUninstallStep = usPostUninstall then
   begin
     // Clear MEF ComponentModelCache so the IDE stops trying to load the removed extension.

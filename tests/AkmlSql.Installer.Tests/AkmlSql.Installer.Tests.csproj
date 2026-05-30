@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Spec 026 (M4 closure) US5 / FR-027. Installer smoke suite. Opt-in plus host-gated:
+    every test carries [Trait("Category","InstallerSmoke")] (skipped on CI / non-admin) and
+    Skip.IfNot(admin and IIS) so it reports Skipped (not Failed) on a host that cannot run it.
+    Test-only: no production project references it, and it references no production project
+    (it drives the prebuilt AKMLSQLSetup.exe, FR-032).
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>AkmlSql.Installer.Tests</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.*" />
+    <PackageReference Include="xunit" Version="2.*" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.*">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <!-- FR-029: SkippableFact lets each test return "skipped" (not "errored") on a host
+         without admin rights + IIS. -->
+    <PackageReference Include="Xunit.SkippableFact" Version="1.*" />
+  </ItemGroup>
+
+</Project>

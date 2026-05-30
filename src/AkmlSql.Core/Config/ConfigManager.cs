@@ -50,6 +50,36 @@ namespace AkmlSql.Core.Config
         }
 
         /// <summary>
+        /// Spec 026 (M4 closure) C2. Loads <see cref="AppSettings"/> from an explicit path. The
+        /// web-edition engine service is launched with <c>--config %CommonAppData%\AKML SQL Web\config.json</c>
+        /// and must read exactly that file. Unlike <see cref="Load()"/> this does NOT create or write a
+        /// default file when the path is missing — the web service must never silently fall back to (or
+        /// materialise) the per-user IDE-plugin config. Returns defaults on any read/parse failure; a
+        /// null or blank path defers to <see cref="Load()"/>.
+        /// </summary>
+        public static AppSettings Load(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return Load();
+            try
+            {
+                if (!File.Exists(path))
+                {
+                    Log.Warning("Config file not found at {Path}, using defaults", path);
+                    return new AppSettings();
+                }
+
+                var json = File.ReadAllText(path);
+                var settings = JsonSerializer.Deserialize<AppSettings>(json, SerializerOptions);
+                return settings ?? new AppSettings();
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Failed to load config from {Path}, using defaults", path);
+                return new AppSettings();
+            }
+        }
+
+        /// <summary>
         /// Persists <paramref name="settings"/> to disk atomically.
         /// On .NET Standard 2.0 uses <c>File.Replace</c>; on .NET 10+ uses <c>File.Move(overwrite:true)</c>.
         /// Silently logs and swallows I/O exceptions so callers never receive a save-related exception.
