@@ -1,0 +1,136 @@
+@*
+    Spec 027 (M5 offline closure) T018 (US2) — lightweight refactoring before/after preview.
+    A modal overlay showing the result of a parser-only refactoring (run entirely in the
+    browser) before the user commits it. Apply is disabled when the operation is a no-op /
+    not applicable. US3 / T022 extends this surface for heavyweight (bridge) refactorings.
+*@
+@using AkmlSql.Web.Services
+
+<div class="akml-overlay" @onclick="OnCancel" data-testid="refactor-preview">
+    <div class="akml-rpv" @onclick:stopPropagation="true">
+        <div class="akml-rpv-header">
+            <span class="akml-rpv-title">@Title</span>
+            @if (Preview is { Changed: false })
+            {
+                <span class="akml-rpv-badge">no change</span>
+            }
+        </div>
+
+        @if (Preview is null)
+        {
+            <p class="akml-rpv-empty">No preview available.</p>
+        }
+        else if (!Preview.Changed)
+        {
+            <p class="akml-rpv-empty" data-testid="refactor-nochange">
+                This refactoring does not apply to the current document — no change would be made.
+            </p>
+        }
+        else
+        {
+            <div class="akml-rpv-diff">
+                <div class="akml-rpv-pane">
+                    <div class="akml-rpv-pane-head">Before</div>
+                    <pre class="akml-rpv-code akml-rpv-before">@Preview.Before</pre>
+                </div>
+                <div class="akml-rpv-pane">
+                    <div class="akml-rpv-pane-head">After</div>
+                    <pre class="akml-rpv-code akml-rpv-after" data-testid="refactor-after">@Preview.After</pre>
+                </div>
+            </div>
+        }
+
+        @if (Preview is { Warnings.Length: > 0 })
+        {
+            <ul class="akml-rpv-warnings">
+                @foreach (var w in Preview.Warnings)
+                {
+                    <li>⚠ @w</li>
+                }
+            </ul>
+        }
+
+        <div class="akml-rpv-footer">
+            <button class="akml-tool-button" @onclick="OnCancel">Cancel</button>
+            <button class="akml-tool-button akml-rpv-apply"
+                    data-testid="refactor-apply"
+                    disabled="@(Preview is not { Changed: true })"
+                    @onclick="OnApply">Apply</button>
+        </div>
+    </div>
+</div>
+
+<style>
+    .akml-overlay {
+        position: absolute; inset: 0;
+        background-color: rgba(0, 0, 0, 0.35);
+        display: flex; align-items: center; justify-content: center;
+        z-index: 50;
+    }
+    .akml-rpv {
+        display: flex; flex-direction: column;
+        width: 80%; max-width: 920px; max-height: 80%;
+        background-color: var(--akml-surface-panel);
+        border: 1px solid var(--akml-border-default);
+        border-radius: 4px;
+        font-family: var(--akml-type-chrome-family);
+        font-size: var(--akml-type-chrome-size);
+        color: var(--akml-text-primary);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    }
+    .akml-rpv-header {
+        display: flex; align-items: center; gap: var(--akml-scalar-spacing-s);
+        padding: var(--akml-scalar-spacing-s) var(--akml-scalar-spacing-m);
+        border-bottom: 1px solid var(--akml-border-default);
+    }
+    .akml-rpv-title { font-weight: bold; }
+    .akml-rpv-badge {
+        font-size: 11px; color: var(--akml-text-onaccent);
+        background-color: var(--akml-text-secondary); border-radius: 2px;
+        padding: 0 var(--akml-scalar-spacing-xs);
+    }
+    .akml-rpv-empty { padding: var(--akml-scalar-spacing-m); color: var(--akml-text-secondary); font-style: italic; }
+    .akml-rpv-diff { flex: 1 1 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 1px; min-height: 0; overflow: hidden; }
+    .akml-rpv-pane { display: flex; flex-direction: column; min-height: 0; }
+    .akml-rpv-pane-head {
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s);
+        color: var(--akml-text-secondary);
+        border-bottom: 1px solid var(--akml-border-subtle);
+    }
+    .akml-rpv-code {
+        margin: 0; flex: 1 1 auto; overflow: auto; white-space: pre;
+        padding: var(--akml-scalar-spacing-s);
+        font-family: var(--akml-type-editor-family);
+        background-color: var(--akml-surface-editor, var(--akml-surface-panel));
+    }
+    .akml-rpv-before { border-right: 1px solid var(--akml-border-default); }
+    .akml-rpv-warnings { margin: 0; padding: var(--akml-scalar-spacing-s) var(--akml-scalar-spacing-l, var(--akml-scalar-spacing-m)); list-style: none; color: var(--akml-status-warning); }
+    .akml-rpv-footer {
+        display: flex; justify-content: flex-end; gap: var(--akml-scalar-spacing-s);
+        padding: var(--akml-scalar-spacing-s);
+        border-top: 1px solid var(--akml-border-default);
+    }
+    .akml-tool-button {
+        font-family: var(--akml-type-chrome-family); font-size: var(--akml-type-chrome-size);
+        background-color: var(--akml-surface-panel); color: var(--akml-text-primary);
+        border: 1px solid var(--akml-border-default); border-radius: 3px;
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s); cursor: pointer;
+    }
+    .akml-tool-button:hover:not(:disabled) { background-color: var(--akml-surface-hover); }
+    .akml-tool-button:disabled { opacity: 0.5; cursor: default; }
+    .akml-rpv-apply { border-color: var(--akml-accent-primary); }
+</style>
+
+@code {
+    /// <summary>The operation's display name, shown in the header.</summary>
+    [Parameter] public string Title { get; set; } = "Refactor";
+
+    /// <summary>The lightweight preview (before / after / warnings / changed). Null = nothing to show.</summary>
+    [Parameter] public LightweightPreview? Preview { get; set; }
+
+    /// <summary>Invoked when the user commits the refactoring.</summary>
+    [Parameter] public EventCallback OnApply { get; set; }
+
+    /// <summary>Invoked when the user dismisses the panel (Cancel / overlay click).</summary>
+    [Parameter] public EventCallback OnCancel { get; set; }
+}

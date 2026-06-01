@@ -35,6 +35,7 @@
         <ProfilePickerComponent OnProfileChanged="OnProfileChangedAsync" />
         <button class="akml-tool-button" @onclick="FormatAsync" title="Ctrl+K, Ctrl+F">Format</button>
         <button class="akml-tool-button" data-testid="analyse-button" @onclick="AnalyseAsync" title="Ctrl+K, Ctrl+L">Analyse</button>
+        <button class="akml-tool-button" data-testid="refactor-button" @onclick="OpenRefactorMenu">Refactor ▾</button>
         <button class="akml-tool-button" @onclick="SaveAsync" title="Ctrl+S">Save</button>
         <span class="akml-editor-spacer"></span>
         @if (!string.IsNullOrEmpty(_status))
@@ -91,6 +92,38 @@
                 </div>
             </div>
         </div>
+    }
+
+    @* Spec 027 T017 (US2) — refactoring menu. Lists all ten lightweight (offline) ops;
+       choosing one previews it, then the preview panel commits or cancels. Heavyweight
+       (US3 / T020) entries are appended to this menu, gated by the bridge capability. *@
+    @if (_showRefactorMenu)
+    {
+        <div class="akml-overlay" @onclick="CloseRefactorMenu">
+            <div class="akml-picker" @onclick:stopPropagation="true" data-testid="refactor-menu">
+                <div class="akml-picker-header">Refactor</div>
+                <ul class="akml-picker-list">
+                    @foreach (var op in LightweightOps)
+                    {
+                        <li class="akml-picker-item" @onclick="@(() => PreviewLightweightAsync(op.Kind, op.Label))">
+                            <span class="akml-picker-title">@op.Label</span>
+                        </li>
+                    }
+                </ul>
+                <div class="akml-picker-footer">
+                    <button class="akml-tool-button" @onclick="CloseRefactorMenu">Cancel</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* Spec 027 T018 (US2) — lightweight refactoring preview. *@
+    @if (_refactorPreview != null)
+    {
+        <RefactorPreviewPanel Title="@_refactorTitle"
+                              Preview="_refactorPreview"
+                              OnApply="ApplyLightweightAsync"
+                              OnCancel="CloseRefactorPreview" />
     }
 </div>
 
@@ -215,6 +248,27 @@
     // Spec 027 T012 (US1) — surround-with picker state.
     private bool _showSurroundPicker;
     private List<WebSnippet> _surroundSnippets = new();
+
+    // Spec 027 T017/T018 (US2) — lightweight refactoring menu + preview state.
+    private bool _showRefactorMenu;
+    private LightweightPreview? _refactorPreview;
+    private string _refactorTitle = string.Empty;
+    private LightweightRefactorKind _pendingRefactorKind;
+
+    // The ten lightweight (parser-only, offline) operations, in menu order.
+    private static readonly (LightweightRefactorKind Kind, string Label)[] LightweightOps =
+    {
+        (LightweightRefactorKind.ExpandInsertColumns,    "Expand INSERT columns"),
+        (LightweightRefactorKind.ExpandUpdateColumns,    "Expand UPDATE columns"),
+        (LightweightRefactorKind.ConvertOldStyleJoins,   "Convert old-style joins"),
+        (LightweightRefactorKind.EncapsulateBeginEnd,    "Encapsulate in BEGIN/END"),
+        (LightweightRefactorKind.RemoveSemicolons,       "Remove semicolons"),
+        (LightweightRefactorKind.ReplaceDeprecatedSyntax,"Replace deprecated syntax"),
+        (LightweightRefactorKind.ExpandExecParameters,   "Expand EXEC parameters"),
+        (LightweightRefactorKind.ConvertSpExecutesql,    "Convert sp_executesql"),
+        (LightweightRefactorKind.AddGroupByColumns,      "Add GROUP BY columns"),
+        (LightweightRefactorKind.Unformat,               "Unformat"),
+    };
 
     protected override async Task OnInitializedAsync()
     {
@@ -408,6 +462,50 @@
         var body = string.Join("\n", snippet.Body);
         await _editor.SurroundSelectionAsync(body);
         Diagnostics.Log(DiagnosticLevel.Info, "snippets", $"Surrounded with '{snippet.Metadata.Shortcode}'.");
+    }
+
+    // ── Spec 027 T017/T018 (US2) — lightweight refactoring menu + preview ────────────────
+    private void OpenRefactorMenu() => _showRefactorMenu = true;
+    private void CloseRefactorMenu() => _showRefactorMenu = false;
+    private void CloseRefactorPreview() => _refactorPreview = null;
+
+    /// <summary>Run a lightweight op against the whole document and show its before/after.
+    /// Parser-only — no engine round-trip (the op runs in <see cref="IRefactoringService"/>).</summary>
+    private async Task PreviewLightweightAsync(LightweightRefactorKind kind, string label)
+    {
+        _showRefactorMenu = false;
+        _pendingRefactorKind = kind;
+        _refactorTitle = label;
+        try
+        {
+            // Whole-document scope (selStart/selLen = 0); the op's Apply mirrors the engine.
+            _refactorPreview = await Refactoring.PreviewLightweightAsync(kind, _currentText);
+        }
+        catch (Exception ex)
+        {
+            _status = $"Refactor preview failed: {ex.Message}";
+            Diagnostics.Log(DiagnosticLevel.Error, "refactor", _status);
+            _refactorPreview = null;
+        }
+        StateHasChanged();
+    }
+
+    /// <summary>Commit the previewed lightweight refactoring — replace the editor content as a
+    /// single undoable edit (CodeMirror Ctrl+Z restores the prior text).</summary>
+    private async Task ApplyLightweightAsync()
+    {
+        if (_refactorPreview is not { Changed: true } || _editor == null)
+        {
+            _refactorPreview = null;
+            return;
+        }
+        var after = await Refactoring.ApplyLightweightAsync(_pendingRefactorKind, _currentText);
+        await _editor.SetTextAsync(after);
+        _currentText = after;
+        _refactorPreview = null;
+        _status = $"Applied: {_refactorTitle}.";
+        Diagnostics.Log(DiagnosticLevel.Info, "refactor", _status);
+        StateHasChanged();
     }
 
     private async Task OnKeyDownAsync(KeyboardEventArgs e)
