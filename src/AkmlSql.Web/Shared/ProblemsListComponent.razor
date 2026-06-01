@@ -42,6 +42,23 @@
                     <span class="akml-problems-rule">@issue.RuleId</span>
                     <span class="akml-problems-message">@issue.Message</span>
                     <span class="akml-problems-location">L@(issue.Line)</span>
+                    @* Spec 027 T025/T026 (US4) — suppression actions. stopPropagation keeps
+                       the row's click-to-jump from firing when a suppress button is clicked. *@
+                    @if (!string.IsNullOrEmpty(issue.RuleId))
+                    {
+                        <span class="akml-problems-actions">
+                            <button class="akml-problems-suppress"
+                                    data-testid="suppress-line"
+                                    title="@($"Suppress {issue.RuleId} for this line")"
+                                    @onclick="@(() => SuppressLineAsync(issue))"
+                                    @onclick:stopPropagation="true">⊘line</button>
+                            <button class="akml-problems-suppress"
+                                    data-testid="suppress-global"
+                                    title="@($"Disable rule {issue.RuleId} globally")"
+                                    @onclick="@(() => SuppressGlobalAsync(issue))"
+                                    @onclick:stopPropagation="true">⊘all</button>
+                        </span>
+                    }
                 </li>
             }
         </ul>
@@ -94,7 +111,8 @@
     }
     .akml-problems-row {
         display: grid;
-        grid-template-columns: 80px 1fr 60px;
+        grid-template-columns: 80px 1fr 40px auto;
+        align-items: center;
         gap: var(--akml-scalar-spacing-s);
         padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s);
         cursor: pointer;
@@ -106,6 +124,16 @@
     .akml-problems-rule { color: var(--akml-text-secondary); font-family: var(--akml-type-editor-family); }
     .akml-problems-message { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .akml-problems-location { color: var(--akml-text-secondary); text-align: right; }
+    /* Spec 027 T025/T026 — per-finding suppress actions, revealed on row hover. */
+    .akml-problems-actions { display: flex; gap: 2px; opacity: 0; }
+    .akml-problems-row:hover .akml-problems-actions { opacity: 1; }
+    .akml-problems-suppress {
+        font-family: var(--akml-type-chrome-family); font-size: 11px;
+        background-color: var(--akml-surface-panel); color: var(--akml-text-secondary);
+        border: 1px solid var(--akml-border-default); border-radius: 2px;
+        padding: 0 var(--akml-scalar-spacing-xs); cursor: pointer;
+    }
+    .akml-problems-suppress:hover { background-color: var(--akml-surface-hover); color: var(--akml-text-primary); }
     .akml-severity-error .akml-problems-rule { color: var(--akml-status-danger); font-weight: bold; }
     .akml-severity-warning .akml-problems-rule { color: var(--akml-status-warning); font-weight: bold; }
     .akml-severity-info .akml-problems-rule { color: var(--akml-status-info); }
@@ -114,6 +142,9 @@
 @code {
     [Parameter] public CodeAnalysisResponse? Findings { get; set; }
     [Parameter] public EventCallback<IssueLocation> OnJumpToIssue { get; set; }
+    // Spec 027 T025/T026 (US4) — suppression actions surfaced up to the editor page.
+    [Parameter] public EventCallback<IssueLocation> OnSuppressLine { get; set; }
+    [Parameter] public EventCallback<IssueLocation> OnSuppressGlobal { get; set; }
 
     private bool _showInfo = true;
     private bool _showWarn = true;
@@ -162,6 +193,12 @@
 
     private Task JumpAsync(CodeIssueInfo issue) =>
         OnJumpToIssue.InvokeAsync(new IssueLocation(issue.Line, issue.Column, issue.RuleId));
+
+    private Task SuppressLineAsync(CodeIssueInfo issue) =>
+        OnSuppressLine.InvokeAsync(new IssueLocation(issue.Line, issue.Column, issue.RuleId));
+
+    private Task SuppressGlobalAsync(CodeIssueInfo issue) =>
+        OnSuppressGlobal.InvokeAsync(new IssueLocation(issue.Line, issue.Column, issue.RuleId));
 
     public sealed record IssueLocation(int Line, int Column, string RuleId);
 }

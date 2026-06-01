@@ -172,6 +172,16 @@
         await _module.InvokeVoidAsync("surroundSelection", HostId, body);
     }
 
+    /// <summary>Spec 027 (M5 offline closure) T025 — append <paramref name="text"/> at the end
+    /// of <paramref name="lineNumber"/> (1-based). Used by the suppression "this line" action
+    /// to insert <c>-- noqa: RuleId</c> at the finding's line. Returns the updated full text.</summary>
+    public async Task<string> InsertAtLineEndAsync(int lineNumber, string text)
+    {
+        if (_module == null) return InitialText;
+        await _module.InvokeVoidAsync("insertAtLineEnd", HostId, lineNumber, text);
+        return await _module.InvokeAsync<string>("getText", HostId);
+    }
+
     public async ValueTask DisposeAsync()
     {
         try

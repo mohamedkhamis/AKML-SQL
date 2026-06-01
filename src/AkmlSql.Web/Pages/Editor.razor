@@ -51,7 +51,8 @@
                                  DatabaseName="@_activeDatabaseName"
                                  OnObjectClicked="OnSchemaObjectClickedAsync" />
         }
-        <ProblemsListComponent Findings="@_findings" OnJumpToIssue="OnJumpToIssueAsync" />
+        <ProblemsListComponent Findings="@_findings" OnJumpToIssue="OnJumpToIssueAsync"
+                               OnSuppressLine="OnSuppressLineAsync" OnSuppressGlobal="OnSuppressGlobalAsync" />
     </div>
     @* Spec 024 T004: completion markers for Playwright. `_hasFormatted` / `_hasAnalysed`
        latch to true on the first successful Format / Analyse; `_formatVersion` /
@@ -502,6 +503,29 @@
     private async Task OnJumpToIssueAsync(ProblemsListComponent.IssueLocation loc)
     {
         if (_editor != null) await _editor.GotoLineAsync(loc.Line);
+    }
+
+    // ── Spec 027 T025/T026 (US4) — inline suppression ────────────────────────────────────
+    /// <summary>Suppress this finding on its line: insert ` -- noqa: RuleId` at the line end
+    /// (the shared directive the engine + WPF surface honour) and re-analyse.</summary>
+    private async Task OnSuppressLineAsync(ProblemsListComponent.IssueLocation loc)
+    {
+        if (_editor == null) return;
+        _currentText = await _editor.InsertAtLineEndAsync(loc.Line, $" -- noqa: {loc.RuleId}");
+        Diagnostics.Log(DiagnosticLevel.Info, "suppress", $"Suppressed {loc.RuleId} on line {loc.Line}.");
+        await AnalyseAsync();
+    }
+
+    /// <summary>Disable this rule globally via a browser-local per-rule override (IndexedDB);
+    /// the analyser honours it on the next pass (the T024 bugfix). Persists across reload.</summary>
+    private async Task OnSuppressGlobalAsync(ProblemsListComponent.IssueLocation loc)
+    {
+        var settings = await AnalysisSettings.GetAsync();
+        settings.RuleOverrides[loc.RuleId] = "off";
+        await AnalysisSettings.SetAsync(settings);
+        _status = $"Disabled rule {loc.RuleId} globally.";
+        Diagnostics.Log(DiagnosticLevel.Info, "suppress", _status);
+        await AnalyseAsync();
     }
 
     /// <summary>Spec 025 US4 — schema tree's click-to-insert callback. Drops the

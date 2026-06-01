@@ -341,6 +341,22 @@ export function gotoLine(hostElementId, lineNumber1Based) {
     inst.view.focus();
 }
 
+/**
+ * Spec 027 T025 (US4) — append text at the end of a 1-based line. Used by the suppression
+ * "this line" action to insert ` -- noqa: RULEID` at the finding's line end (matching the
+ * WPF FixAction). Single dispatch ⇒ one undoable edit. Returns the resulting full text via
+ * the caller's getText if needed; here we just mutate.
+ */
+export function insertAtLineEnd(hostElementId, lineNumber1Based, text) {
+    const inst = _instances.get(hostElementId);
+    if (!inst || typeof text !== 'string' || text.length === 0) return;
+    const doc = inst.view.state.doc;
+    const line = Math.max(1, Math.min(lineNumber1Based, doc.lines));
+    const lineInfo = doc.line(line);
+    inst.view.dispatch({ changes: { from: lineInfo.to, insert: text } });
+    inst.view.focus();
+}
+
 /** Replace the selection range with the cursor at offset = anchor. */
 export function setSelection(hostElementId, anchor, head) {
     const inst = _instances.get(hostElementId);
