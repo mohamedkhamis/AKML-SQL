@@ -326,6 +326,15 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                     _expectsObjects = true;
                     TriggerCompletion();
                 }
+                // SQL-Prompt-style smart GROUP BY: auto-trigger after "GROUP BY " (and
+                // "ORDER BY ") so the engine's "▶ Add columns from SELECT" action and column
+                // suggestions appear without a manual Ctrl+Space. Mirrors the web editor's
+                // POST_KEYWORD_TRIGGER, which fires after a bare "by". We deliberately do NOT
+                // set _expectsObjects — GROUP BY wants columns + the smart item, not tables.
+                else if (c == ' ' && IsByKeywordBeforeCaret())
+                {
+                    TriggerCompletion();
+                }
             }
             else if (char.IsDigit(c))
             {
@@ -897,6 +906,43 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
 
                 var word = snapshot.GetText(start, end - start);
                 return IsObjectExpectingKeyword(word);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Checks if the word immediately before the caret (before the just-typed space) is a
+        /// "BY". Used to auto-trigger column completions — and the engine's smart "Add columns
+        /// from SELECT" GROUP BY action — the moment the user finishes typing "GROUP BY " /
+        /// "ORDER BY ". The bare keyword "BY" also ends PARTITION BY (window functions); firing
+        /// a completion there is harmless — the engine only emits the smart GROUP BY item when
+        /// the cursor is in a real GROUP BY context, and column suggestions are welcome anyway.
+        /// </summary>
+        private bool IsByKeywordBeforeCaret()
+        {
+            try
+            {
+                var snapshot = _textView.TextBuffer.CurrentSnapshot;
+                int pos = _textView.Caret.Position.BufferPosition.Position;
+
+                // Caret is after the space. Move back past the space(s).
+                int end = pos - 1;
+                while (end > 0 && snapshot[end - 1] == ' ')
+                    end--;
+
+                // Now find the word before the space(s).
+                int start = end;
+                while (start > 0 && char.IsLetter(snapshot[start - 1]))
+                    start--;
+
+                if (start >= end)
+                    return false;
+
+                var word = snapshot.GetText(start, end - start);
+                return string.Equals(word, "BY", StringComparison.OrdinalIgnoreCase);
             }
             catch
             {

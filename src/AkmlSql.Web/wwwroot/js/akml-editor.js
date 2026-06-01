@@ -136,12 +136,20 @@ export async function create(hostElementId, initialText, dotNetRef) {
         if (!wordValid && !postKeyword && !context.explicit) return null;
 
         try {
-            const items = await dotNetRef.invokeMethodAsync('RequestCompletionsFromJs', context.pos);
+            // Pass the LIVE document text so the offline smart GROUP BY action parses what the
+            // user is actually editing (the debounced session would be stale during fast typing).
+            // The online path ignores it; it never reaches the engine wire.
+            const items = await dotNetRef.invokeMethodAsync(
+                'RequestCompletionsFromJs', context.pos, context.state.doc.toString());
             if (!items || items.length === 0) return null;
             return {
                 from: wordValid ? word.from : context.pos,
                 options: items.map(i => {
                     const type = i.type || 'text';
+                    // Smart-action items (SQL-Prompt-style "▶ Add columns from SELECT") must sort
+                    // to the top: CM6 orders an empty-prefix popup by label, and "▶" (U+25B6)
+                    // sorts after letters, which would otherwise bury the action at the bottom.
+                    const boost = (i.label && i.label.charCodeAt(0) === 0x25B6) ? 99 : undefined;
                     // Spec 027 T011: snippet items expand (with tab-stops) on accept instead
                     // of inserting their text literally. A function `apply` is CM6's accept
                     // hook; non-snippet items keep the plain-string `apply` (literal insert).
@@ -150,6 +158,7 @@ export async function create(hostElementId, initialText, dotNetRef) {
                             label: i.label,
                             type,
                             detail: i.detail || undefined,
+                            boost,
                             apply: (view, _completion, from, to) =>
                                 applySnippetBody(cm, view, i.insertText, from, to),
                         };
@@ -159,6 +168,7 @@ export async function create(hostElementId, initialText, dotNetRef) {
                         apply: i.insertText,
                         type,
                         detail: i.detail || undefined,
+                        boost,
                     };
                 }),
                 // CM does its own fuzzy filter against the prefix at `from`. The

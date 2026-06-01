@@ -185,4 +185,54 @@ public sealed class CompletionServiceOfflineTests
         Assert.Contains(response.Items, i => i.SourceObject == "dbo.ActiveTable");
         Assert.DoesNotContain(response.Items, i => i.SourceObject == "dbo.LegacyTable");
     }
+
+    // ── Spec 027 follow-up: SQL-Prompt-style smart GROUP BY offered offline ──
+    //
+    // The smart item is built from the LIVE document text passed on the call (the real JS flow
+    // hands CompleteAsync `context.state.doc.toString()`), NOT from the debounced editor session —
+    // so a fast typist who triggers completion before the 500 ms save still sees it.
+
+    private static CompletionService OfflineService() =>
+        new CompletionService(ClosedBridge(), new SchemaCacheStore(new InMemoryIndexedDbAdapter()));
+
+    [Fact]
+    public async Task Smart_group_by_item_is_offered_first_when_cursor_in_GROUP_BY()
+    {
+        // Works offline with NO schema cache — it's purely a parse of the live document's SELECT
+        // list. COUNT(*) is aggregated and excluded; a and b carry into the GROUP BY.
+        const string sql = "SELECT a, b, COUNT(*) AS n FROM t GROUP BY ";
+
+        var response = await OfflineService().CompleteAsync(
+            new CompletionRequest { CursorOffset = sql.Length }, CancellationToken.None, sql);
+
+        Assert.NotEmpty(response.Items);
+        var smart = response.Items[0];   // Insert(0) + JS boost ⇒ first
+        Assert.StartsWith("▶", smart.DisplayText);
+        Assert.Equal("a, b", smart.InsertText);
+        Assert.Equal((int)CompletionObjectType.Snippet, smart.ObjectType);
+    }
+
+    [Fact]
+    public async Task Smart_group_by_item_is_absent_outside_a_GROUP_BY_clause()
+    {
+        // Caret in the WHERE clause — the smart item must not appear (keywords still do).
+        const string sql = "SELECT a, b FROM t WHERE ";
+
+        var response = await OfflineService().CompleteAsync(
+            new CompletionRequest { CursorOffset = sql.Length }, CancellationToken.None, sql);
+
+        Assert.DoesNotContain(response.Items, i => i.DisplayText.StartsWith("▶"));
+    }
+
+    [Fact]
+    public async Task Smart_group_by_item_is_absent_when_no_live_document_is_supplied()
+    {
+        // No document forwarded (older caller / null) ⇒ nothing to parse, so the offline path
+        // degrades to keywords without throwing.
+        var response = await OfflineService().CompleteAsync(
+            new CompletionRequest { CursorOffset = 0 }, CancellationToken.None, liveDocumentText: null);
+
+        Assert.NotEmpty(response.Items);
+        Assert.DoesNotContain(response.Items, i => i.DisplayText.StartsWith("▶"));
+    }
 }

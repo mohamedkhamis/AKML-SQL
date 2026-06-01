@@ -66,7 +66,7 @@
     /// routes to the engine when online or to the cached SchemaSnapshot when offline.
     /// </summary>
     [JSInvokable]
-    public async Task<CompletionItemDto[]> RequestCompletionsFromJs(int cursorOffset)
+    public async Task<CompletionItemDto[]> RequestCompletionsFromJs(int cursorOffset, string? documentText = null)
     {
         try
         {
@@ -78,7 +78,10 @@
                 CursorOffset = cursorOffset,
                 TriggerKind = 0,
             };
-            var response = await Completion.CompleteAsync(request, CancellationToken.None);
+            // documentText is the LIVE editor text, passed straight from JS so the offline
+            // smart GROUP BY action parses what the user actually sees (the online path ignores
+            // it — the engine has its own copy). Kept off CompletionRequest so it never hits the wire.
+            var response = await Completion.CompleteAsync(request, CancellationToken.None, documentText);
             if (response.Items == null || response.Items.Length == 0) return System.Array.Empty<CompletionItemDto>();
 
             return response.Items.Select(i => new CompletionItemDto
