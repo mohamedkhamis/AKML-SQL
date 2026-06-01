@@ -1,0 +1,328 @@
+@page "/snippets"
+@*
+    Spec 027 (M5 offline closure) T013 / T014 (US1) — snippet management surface.
+    Lists built-ins (read-only) then personal snippets; create / edit / delete personal
+    snippets via ISnippetStore; import a .akmlsnippet file and export a personal snippet.
+    All offline — no engine required (best-effort bridge propagation lives in SnippetStore).
+*@
+@using System.Text
+@using System.Text.Json
+@using AkmlSql.Web.Services
+@using AkmlSql.Web.Shared
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
+@inject ISnippetStore SnippetStore
+@inject IDiagnosticsRingBuffer Diagnostics
+@inject IJSRuntime JS
+
+<PageTitle>Snippets — AKML SQL</PageTitle>
+
+<div class="akml-snippets">
+    <div class="akml-snippets-header">
+        <h2>Snippets</h2>
+        <span class="akml-snippets-spacer"></span>
+        <button class="akml-tool-button" @onclick="NewSnippet" data-testid="snippet-new">New</button>
+        <label class="akml-tool-button">
+            Import
+            <InputFile OnChange="OnImportAsync" accept=".akmlsnippet" class="akml-hidden-file" />
+        </label>
+        <button class="akml-tool-button" @onclick="RefreshAsync">Refresh</button>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_status))
+    {
+        <p class="akml-snippets-status">@_status</p>
+    }
+
+    <div class="akml-snippets-body">
+        <ul class="akml-snippets-list" data-testid="snippet-list">
+            @foreach (var s in _all)
+            {
+                <li class="akml-snippets-row @(IsSelected(s) ? "selected" : "")"
+                    @onclick="@(() => SelectSnippet(s))">
+                    <span class="akml-snippets-code">@s.Metadata.Shortcode</span>
+                    <span class="akml-snippets-name">@s.Metadata.Title</span>
+                    @if (s.IsBuiltIn)
+                    {
+                        <span class="akml-snippets-badge">built-in</span>
+                    }
+                </li>
+            }
+        </ul>
+
+        <div class="akml-snippets-editor">
+            @if (_selected == null)
+            {
+                <p class="akml-snippets-empty">Select a snippet, or click <strong>New</strong>.</p>
+            }
+            else
+            {
+                <div class="akml-field">
+                    <label>Shortcode</label>
+                    <input value="@_editShortcode" @oninput="@(e => _editShortcode = e.Value?.ToString() ?? "")"
+                           disabled="@_selected.IsBuiltIn" />
+                </div>
+                <div class="akml-field">
+                    <label>Title</label>
+                    <input value="@_editTitle" @oninput="@(e => _editTitle = e.Value?.ToString() ?? "")"
+                           disabled="@_selected.IsBuiltIn" />
+                </div>
+                <div class="akml-field">
+                    <label>Description</label>
+                    <input value="@_editDescription" @oninput="@(e => _editDescription = e.Value?.ToString() ?? "")"
+                           disabled="@_selected.IsBuiltIn" />
+                </div>
+                <div class="akml-field akml-field-grow">
+                    <label>Body</label>
+                    <textarea class="akml-snippets-bodyedit" spellcheck="false"
+                              value="@_editBody" @oninput="@(e => _editBody = e.Value?.ToString() ?? "")"
+                              disabled="@_selected.IsBuiltIn"></textarea>
+                    <p class="akml-snippets-hint">
+                        Placeholders use <code>$name$</code>; final caret <code>$CURSOR$</code>;
+                        selection slot <code>$SELECTEDTEXT$</code>.
+                    </p>
+                </div>
+                <div class="akml-snippets-actions">
+                    @if (!_selected.IsBuiltIn)
+                    {
+                        <button class="akml-tool-button" @onclick="SaveAsync" data-testid="snippet-save">Save</button>
+                        <button class="akml-tool-button" @onclick="DeleteAsync">Delete</button>
+                    }
+                    else
+                    {
+                        <span class="akml-snippets-readonly">Built-in snippets cannot be edited or deleted.</span>
+                    }
+                    <button class="akml-tool-button" @onclick="ExportAsync">Export</button>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<style>
+    .akml-snippets {
+        display: flex; flex-direction: column; height: 100%;
+        font-family: var(--akml-type-chrome-family);
+        font-size: var(--akml-type-chrome-size);
+        color: var(--akml-text-primary);
+    }
+    .akml-snippets-header {
+        display: flex; align-items: center; gap: var(--akml-scalar-spacing-s);
+        padding: var(--akml-scalar-spacing-s) var(--akml-scalar-spacing-m);
+        background-color: var(--akml-surface-panel);
+        border-bottom: 1px solid var(--akml-border-default);
+    }
+    .akml-snippets-header h2 { margin: 0; font-size: var(--akml-type-chrometitle-size); }
+    .akml-snippets-spacer { flex: 1 1 auto; }
+    .akml-snippets-status { padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-m); color: var(--akml-status-info); font-style: italic; margin: 0; }
+    .akml-snippets-body { flex: 1 1 auto; display: grid; grid-template-columns: 280px 1fr; min-height: 0; }
+    .akml-snippets-list {
+        margin: 0; padding: 0; list-style: none; overflow: auto;
+        border-right: 1px solid var(--akml-border-default);
+        background-color: var(--akml-surface-panel);
+    }
+    .akml-snippets-row {
+        display: flex; gap: var(--akml-scalar-spacing-s); align-items: baseline;
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-m);
+        cursor: pointer; border-bottom: 1px solid var(--akml-border-subtle);
+    }
+    .akml-snippets-row:hover { background-color: var(--akml-surface-hover); }
+    .akml-snippets-row.selected { background-color: var(--akml-surface-hover); }
+    .akml-snippets-code { font-family: var(--akml-type-editor-family); color: var(--akml-text-secondary); min-width: 64px; }
+    .akml-snippets-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .akml-snippets-badge {
+        font-size: 11px; color: var(--akml-text-onaccent);
+        background-color: var(--akml-text-secondary); border-radius: 2px;
+        padding: 0 var(--akml-scalar-spacing-xs);
+    }
+    .akml-snippets-editor { display: flex; flex-direction: column; padding: var(--akml-scalar-spacing-m); gap: var(--akml-scalar-spacing-s); overflow: auto; }
+    .akml-snippets-empty { color: var(--akml-text-secondary); font-style: italic; }
+    .akml-field { display: flex; flex-direction: column; gap: 2px; }
+    .akml-field-grow { flex: 1 1 auto; min-height: 0; }
+    .akml-field label { color: var(--akml-text-secondary); font-size: 12px; }
+    .akml-field input, .akml-snippets-bodyedit {
+        background-color: var(--akml-surface-panel); color: var(--akml-text-primary);
+        border: 1px solid var(--akml-border-default); border-radius: 3px;
+        padding: var(--akml-scalar-spacing-xs); font-family: inherit; font-size: inherit;
+    }
+    .akml-snippets-bodyedit { flex: 1 1 auto; min-height: 160px; resize: vertical; font-family: var(--akml-type-editor-family); white-space: pre; }
+    .akml-snippets-hint { color: var(--akml-text-secondary); font-size: 11px; margin: 2px 0 0; }
+    .akml-snippets-hint code { font-family: var(--akml-type-editor-family); color: var(--akml-text-primary); }
+    .akml-snippets-actions { display: flex; gap: var(--akml-scalar-spacing-s); align-items: center; }
+    .akml-snippets-readonly { color: var(--akml-text-secondary); font-style: italic; }
+    .akml-hidden-file { display: none; }
+    .akml-tool-button {
+        font-family: var(--akml-type-chrome-family); font-size: var(--akml-type-chrome-size);
+        background-color: var(--akml-surface-panel); color: var(--akml-text-primary);
+        border: 1px solid var(--akml-border-default); border-radius: 3px;
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s); cursor: pointer;
+    }
+    .akml-tool-button:hover { background-color: var(--akml-surface-hover); }
+</style>
+
+@code {
+    private const long MaxImportBytes = 1024 * 1024;   // 1 MB, mirrors the engine snippet JSON limit.
+
+    private IReadOnlyList<WebSnippet> _all = Array.Empty<WebSnippet>();
+    private WebSnippet? _selected;
+    private string? _status;
+    private IJSObjectReference? _downloadModule;
+
+    // Edit-field buffers (so editing doesn't mutate the stored snippet until Save).
+    private string _editShortcode = string.Empty;
+    private string _editTitle = string.Empty;
+    private string _editDescription = string.Empty;
+    private string _editBody = string.Empty;
+
+    protected override async Task OnInitializedAsync() => await RefreshAsync();
+
+    private async Task RefreshAsync()
+    {
+        _all = await SnippetStore.ListAsync();
+        // Keep the current selection if it still exists; else clear the editor.
+        if (_selected != null)
+        {
+            _selected = _all.FirstOrDefault(s => s.Metadata.Id == _selected.Metadata.Id);
+            if (_selected != null) LoadEditFields(_selected);
+        }
+        StateHasChanged();
+    }
+
+    private bool IsSelected(WebSnippet s) => _selected != null && s.Metadata.Id == _selected.Metadata.Id;
+
+    private void SelectSnippet(WebSnippet s)
+    {
+        _selected = s;
+        LoadEditFields(s);
+        _status = null;
+    }
+
+    private void LoadEditFields(WebSnippet s)
+    {
+        _editShortcode = s.Metadata.Shortcode;
+        _editTitle = s.Metadata.Title;
+        _editDescription = s.Metadata.Description ?? string.Empty;
+        _editBody = string.Join("\n", s.Body);
+    }
+
+    private void NewSnippet()
+    {
+        _selected = new WebSnippet { Metadata = new WebSnippetMetadata { Shortcode = "", Title = "New snippet" } };
+        _editShortcode = string.Empty;
+        _editTitle = "New snippet";
+        _editDescription = string.Empty;
+        _editBody = string.Empty;
+        _status = null;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_selected == null || _selected.IsBuiltIn) return;
+        if (string.IsNullOrWhiteSpace(_editShortcode))
+        {
+            _status = "A shortcode is required.";
+            return;
+        }
+        _selected.Metadata.Shortcode = _editShortcode.Trim();
+        _selected.Metadata.Title = string.IsNullOrWhiteSpace(_editTitle) ? _editShortcode.Trim() : _editTitle.Trim();
+        _selected.Metadata.Description = _editDescription;
+        _selected.Body = _editBody.Replace("\r\n", "\n").Split('\n');
+        try
+        {
+            await SnippetStore.SaveAsync(_selected);
+            _status = $"Saved '{_selected.Metadata.Shortcode}'.";
+            Diagnostics.Log(DiagnosticLevel.Info, "snippets", _status);
+            await RefreshAsync();
+        }
+        catch (Exception ex)
+        {
+            _status = $"Save failed: {ex.Message}";
+            Diagnostics.Log(DiagnosticLevel.Error, "snippets", _status);
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (_selected == null || _selected.IsBuiltIn || string.IsNullOrEmpty(_selected.Metadata.Id)) return;
+        try
+        {
+            await SnippetStore.DeleteAsync(_selected.Metadata.Id!);
+            _status = $"Deleted '{_selected.Metadata.Shortcode}'.";
+            Diagnostics.Log(DiagnosticLevel.Info, "snippets", _status);
+            _selected = null;
+            await RefreshAsync();
+        }
+        catch (Exception ex)
+        {
+            _status = $"Delete failed: {ex.Message}";
+        }
+    }
+
+    private async Task OnImportAsync(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            var file = e.File;
+            if (file.Size > MaxImportBytes)
+            {
+                _status = "Import rejected: file exceeds 1 MB.";
+                return;
+            }
+            using var stream = file.OpenReadStream(MaxImportBytes);
+            using var reader = new StreamReader(stream);
+            var json = await reader.ReadToEndAsync();
+            var snippet = JsonSerializer.Deserialize<WebSnippet>(json,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            if (snippet == null || string.IsNullOrWhiteSpace(snippet.Metadata.Shortcode))
+            {
+                _status = "Import rejected: not a valid snippet (missing shortcode).";
+                return;
+            }
+            // Never overwrite a built-in; imports always become a personal snippet.
+            snippet.Metadata.Id = null;
+            if (snippet.IsBuiltIn) snippet.Metadata.Id = null;   // defensive: strip a builtin.* id
+            await SnippetStore.SaveAsync(snippet);
+            _status = $"Imported '{snippet.Metadata.Shortcode}'.";
+            Diagnostics.Log(DiagnosticLevel.Info, "snippets", _status);
+            await RefreshAsync();
+        }
+        catch (JsonException)
+        {
+            _status = "Import rejected: malformed .akmlsnippet JSON. Existing snippets are unchanged.";
+        }
+        catch (Exception ex)
+        {
+            _status = $"Import failed: {ex.Message}";
+        }
+    }
+
+    private async Task ExportAsync()
+    {
+        if (_selected == null) return;
+        try
+        {
+            var json = JsonSerializer.Serialize(_selected, new JsonSerializerOptions { WriteIndented = true });
+            _downloadModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/akml-download.js");
+            var shortcode = string.IsNullOrWhiteSpace(_selected.Metadata.Shortcode) ? "snippet" : _selected.Metadata.Shortcode;
+            var safeName = new string(shortcode.Select(c => char.IsLetterOrDigit(c) || c == '-' || c == '_' ? c : '_').ToArray());
+            await _downloadModule.InvokeVoidAsync("downloadBase64",
+                $"{safeName}.akmlsnippet", "application/json",
+                Convert.ToBase64String(Encoding.UTF8.GetBytes(json)));
+            _status = $"Exported '{shortcode}'.";
+        }
+        catch (Exception ex)
+        {
+            _status = $"Export failed: {ex.Message}";
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_downloadModule != null)
+        {
+            try { await _downloadModule.DisposeAsync(); }
+            catch (JSDisconnectedException) { /* tab closing */ }
+        }
+    }
+}

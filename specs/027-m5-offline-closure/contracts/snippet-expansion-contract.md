@@ -6,16 +6,17 @@ This contract defines the browser-side snippet behaviour. No engine round-trip f
 
 ## Placeholder grammar (the body format the browser interprets)
 
+> **Corrected 2026-06-01 (implementation):** snippet bodies use the **engine-native** placeholder syntax, **not** the CodeMirror/VS-Code `${1:label}` / `$selected$` dialect this contract originally specified. The engine's authoritative `AkmlSql.Engine.Snippets.PlaceholderParser` recognises only `$Name$` (regex `\$([A-Za-z_]\w*)\$`). Authoring bodies in `${...}` would make a web-exported `.akmlsnippet` expand as **literal text** in SSMS — breaking FR-006/SC-002 cross-surface fidelity. The browser's `expandSnippet` translates the engine-native form into CodeMirror placeholders at expand time (so in-browser tab-stops still work), with a literal-strip fallback if CM6 `snippet()` is unavailable.
+
 The `WebSnippet.Body` (a `string[]` of lines, joined with `\n` on insert) embeds:
 
-| Token | Meaning | Source |
+| Token | Meaning | Notes |
 |---|---|---|
-| `${1:label}`, `${2:label}`, … | Numbered tab-stops; `label` is the initial placeholder text. Caret lands on `${1}` first; Tab advances. | CodeMirror `snippet()` native syntax |
-| `${name:default}` | Named placeholder bound to a `Variables[]` entry; `default` is the initial text. | engine `Snippet` shape (e.g. `cte` built-in) |
-| `${0}` / end | Final caret resting position after the last Tab. | CodeMirror convention |
-| `$selected$` | **Surround-with only**: replaced by the user's current selection. | this contract |
+| `$Name$` | A tab-stop / variable. The name **must start with a letter or underscore** (so `$1$` is NOT valid — use `$table$`). Default text comes from the matching `Variables[]` entry, else the name itself. Repeated names link (synchronised edit). | engine `PlaceholderParser` |
+| `$CURSOR$` | Final caret resting position after the last tab-stop. Stripped from the inserted text. | engine convention |
+| `$SELECTEDTEXT$` | **Surround-with only**: replaced by the user's current selection. | engine convention |
 
-**Mapping rule**: before handing the body to CodeMirror's `snippet()`, the browser normalises `${name:default}` named placeholders to numbered tab-stops in `Variables[]` order, so a single CM snippet call drives navigation. A malformed body (unbalanced `${}`) ⇒ literal insertion of the raw body, no throw (edge case).
+The shared `SnippetProvider` (completion path) emits a third dialect — numbered `$1`, `$2` — which the same `expandSnippet` translator also normalises to CodeMirror `${1}`, `${2}` fields. A malformed body ⇒ literal insertion of the stripped body, no throw (edge case).
 
 ## Expansion trigger (FR-002)
 
@@ -28,8 +29,8 @@ The `WebSnippet.Body` (a `string[]` of lines, joined with `\n` on insert) embeds
 ## Surround-with (FR-003)
 
 1. Keyboard chord (proposed `Ctrl+K, Ctrl+S` — settled in tasks; must not collide with the existing `Ctrl+K, Ctrl+F`/`Ctrl+K, Ctrl+L` chords on `Editor.razor`) opens a picker filtered to `SurroundsWith == true` snippets.
-2. On choose: `surroundSelection` wraps the current selection — the body's `$selected$` token is replaced by the selection text, remaining tab-stops behave as normal expansion.
-3. No selection ⇒ defined behaviour: insert at caret with `$selected$` empty (no crash) — edge case.
+2. On choose: `surroundSelection` wraps the current selection — the body's `$SELECTEDTEXT$` token is replaced by the selection text, remaining tab-stops behave as normal expansion.
+3. No selection ⇒ defined behaviour: insert at caret with `$SELECTEDTEXT$` empty (no crash) — edge case.
 
 ## Management surface (FR-004)
 

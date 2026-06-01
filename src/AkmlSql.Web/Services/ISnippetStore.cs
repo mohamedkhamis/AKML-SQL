@@ -63,7 +63,8 @@ public sealed class WebSnippetMetadata
     /// Spec 027 (M5 offline closure) T008 / FR-003: true when this snippet wraps a
     /// selection (surround-with eligible). Mirrors the engine's
     /// <c>SnippetMetadata.SurroundsWith</c> so import/export round-trips stay lossless.
-    /// Surround-capable bodies embed a <c>$selected$</c> token where the selection lands.
+    /// Surround-capable bodies embed the engine-native <c>$SELECTEDTEXT$</c> token where the
+    /// current selection lands (NOT the VS-Code <c>$selected$</c> form).
     /// </summary>
     public bool SurroundsWith { get; set; }
 }
@@ -216,53 +217,117 @@ internal sealed class SnippetStore : ISnippetStore
     }
 
     /// <summary>
-    /// Two built-in snippets shipped with the M5 release. The full snippet zoo lands
-    /// alongside the engine's existing .akmlsnippet files when the bridge serves
-    /// the snippet expansion path (T115).
+    /// Spec 027 (M5 offline closure) T009 / FR-001: the curated built-in snippet set,
+    /// synthesised programmatically (the same convention <see cref="ProfileStore"/> uses for
+    /// built-in profiles — no MSBuild EmbeddedResource gymnastics for the WASM bundle). The
+    /// set is the in-repo source of record: the engine ships no canonical <c>.akmlsnippet</c>
+    /// files (it loads built-ins from an installer-placed directory at runtime), so this is
+    /// defined fresh per spec 027 §Assumptions.
+    ///
+    /// <para>
+    /// <b>Placeholder syntax is the ENGINE-NATIVE form</b> (confirmed against
+    /// <c>AkmlSql.Engine.Snippets.PlaceholderParser</c>, regex <c>\$([A-Za-z_]\w*)\$</c>): a
+    /// tab-stop / variable is <c>$Name$</c> — it must start with a letter or underscore, so a
+    /// numbered <c>$1$</c> is NOT valid; use descriptive names like <c>$table$</c>. The final
+    /// caret is <c>$CURSOR$</c>; the selection slot for surround-with is <c>$SELECTEDTEXT$</c>.
+    /// We do NOT use the VS-Code/CodeMirror <c>${1:label}</c> / <c>$selected$</c> dialect — the
+    /// editor's <c>expandSnippet</c> translates <c>$Name$</c> to CM6 placeholders at expand
+    /// time, so a web-authored snippet exported as <c>.akmlsnippet</c> ALSO expands correctly
+    /// on the engine/WPF surface (FR-006 / SC-002 cross-surface fidelity). Default text for a
+    /// named stop comes from the matching <see cref="WebSnippetVariable"/> (else the name).
+    /// </para>
     /// </summary>
     private static Dictionary<string, WebSnippet> BuildBuiltIns()
     {
-        var ssf = new WebSnippet
+        var defs = new (string Shortcode, string Title, string Desc, string[] Tags, bool Surrounds,
+                        (string Name, string Default)[] Vars, string[] Body)[]
         {
-            Metadata = new WebSnippetMetadata
-            {
-                Id = "builtin.ssf",
-                Shortcode = "ssf",
-                Title = "SELECT * FROM",
-                Description = "Expand to SELECT * FROM ${1:table}",
-                Author = "AKML SQL",
-                Tags = new[] { "select" },
-            },
-            Body = new[] { "SELECT * FROM ${1:table};" },
+            ("ssf", "SELECT * FROM", "SELECT * FROM a table", new[] { "select" }, false,
+                new[] { ("table", "table") },
+                new[] { "SELECT * FROM $table$$CURSOR$;" }),
+
+            ("sel", "SELECT columns", "SELECT a column list with a WHERE clause", new[] { "select" }, false,
+                new[] { ("columns", "columns"), ("table", "table"), ("condition", "condition") },
+                new[] { "SELECT $columns$", "FROM $table$", "WHERE $condition$;" }),
+
+            ("cte", "Common Table Expression", "A WITH ... AS (SELECT ...) skeleton", new[] { "cte", "with" }, false,
+                new[] { ("name", "MyCte"), ("query", "SELECT 1") },
+                new[] { "WITH $name$ AS (", "    $query$", ")", "SELECT * FROM $name$;" }),
+
+            ("ins", "INSERT INTO", "INSERT INTO with an explicit column list", new[] { "insert" }, false,
+                new[] { ("table", "table"), ("columns", "columns"), ("values", "values") },
+                new[] { "INSERT INTO $table$ ($columns$)", "VALUES ($values$);" }),
+
+            ("upd", "UPDATE SET", "UPDATE ... SET ... WHERE", new[] { "update" }, false,
+                new[] { ("table", "table"), ("column", "column"), ("value", "value"), ("condition", "condition") },
+                new[] { "UPDATE $table$", "SET $column$ = $value$", "WHERE $condition$;" }),
+
+            ("del", "DELETE FROM", "DELETE FROM ... WHERE (guarded with a WHERE)", new[] { "delete" }, false,
+                new[] { ("table", "table"), ("condition", "condition") },
+                new[] { "DELETE FROM $table$", "WHERE $condition$;" }),
+
+            ("ij", "INNER JOIN", "An INNER JOIN ... ON clause", new[] { "join" }, false,
+                new[] { ("table", "table"), ("alias", "alias"), ("condition", "condition") },
+                new[] { "INNER JOIN $table$ AS $alias$", "    ON $condition$" }),
+
+            ("crproc", "CREATE PROCEDURE", "A stored-procedure skeleton", new[] { "ddl", "procedure" }, false,
+                new[] { ("name", "dbo.MyProcedure"), ("param", "@param int") },
+                new[]
+                {
+                    "CREATE PROCEDURE $name$",
+                    "    $param$",
+                    "AS",
+                    "BEGIN",
+                    "    SET NOCOUNT ON;",
+                    "    $CURSOR$",
+                    "END;",
+                }),
+
+            // ── surround-with snippets: $SELECTEDTEXT$ is replaced by the current selection ──
+            ("beginend", "Surround with BEGIN/END", "Wrap the selection in a BEGIN ... END block",
+                new[] { "surround", "block" }, true,
+                Array.Empty<(string, string)>(),
+                new[] { "BEGIN", "    $SELECTEDTEXT$", "END;" }),
+
+            ("iftest", "Surround with IF", "Wrap the selection in an IF block",
+                new[] { "surround", "control" }, true,
+                new[] { ("condition", "condition") },
+                new[] { "IF $condition$", "BEGIN", "    $SELECTEDTEXT$", "END;" }),
+
+            ("try", "Surround with TRY/CATCH", "Wrap the selection in a TRY ... CATCH block",
+                new[] { "surround", "error" }, true,
+                Array.Empty<(string, string)>(),
+                new[]
+                {
+                    "BEGIN TRY",
+                    "    $SELECTEDTEXT$",
+                    "END TRY",
+                    "BEGIN CATCH",
+                    "    $CURSOR$",
+                    "END CATCH;",
+                }),
         };
-        var cte = new WebSnippet
+
+        var map = new Dictionary<string, WebSnippet>(StringComparer.Ordinal);
+        foreach (var d in defs)
         {
-            Metadata = new WebSnippetMetadata
+            var id = "builtin." + d.Shortcode;
+            map[id] = new WebSnippet
             {
-                Id = "builtin.cte",
-                Shortcode = "cte",
-                Title = "Common Table Expression",
-                Description = "Expand to a WITH ... AS (SELECT ...) skeleton",
-                Author = "AKML SQL",
-                Tags = new[] { "cte", "with" },
-            },
-            Variables = new[]
-            {
-                new WebSnippetVariable { Name = "name", Default = "MyCte" },
-                new WebSnippetVariable { Name = "select", Default = "SELECT 1" },
-            },
-            Body = new[]
-            {
-                "WITH ${name:MyCte} AS (",
-                "    ${select:SELECT 1}",
-                ")",
-                "SELECT * FROM ${name};",
-            },
-        };
-        return new Dictionary<string, WebSnippet>(StringComparer.Ordinal)
-        {
-            ["builtin.ssf"] = ssf,
-            ["builtin.cte"] = cte,
-        };
+                Metadata = new WebSnippetMetadata
+                {
+                    Id = id,
+                    Shortcode = d.Shortcode,
+                    Title = d.Title,
+                    Description = d.Desc,
+                    Author = "AKML SQL",
+                    Tags = d.Tags,
+                    SurroundsWith = d.Surrounds,
+                },
+                Variables = d.Vars.Select(v => new WebSnippetVariable { Name = v.Name, Default = v.Default }).ToArray(),
+                Body = d.Body,
+            };
+        }
+        return map;
     }
 }

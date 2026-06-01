@@ -102,7 +102,9 @@
         (int)CompletionObjectType.View      => "class",
         (int)CompletionObjectType.Column    => "property",
         (int)CompletionObjectType.Keyword   => "keyword",
-        (int)CompletionObjectType.Snippet   => "text",
+        // Spec 027 T011: a distinct CM type so akml-editor.js routes snippet items to the
+        // expanding `apply` (tab-stops) rather than inserting the body literally.
+        (int)CompletionObjectType.Snippet   => "snippet",
         (int)CompletionObjectType.Function  => "function",
         (int)CompletionObjectType.Procedure => "function",
         (int)CompletionObjectType.Schema    => "namespace",
@@ -151,6 +153,23 @@
     {
         if (_module == null) return;
         await _module.InvokeVoidAsync("insertAtCaret", HostId, text);
+    }
+
+    /// <summary>Spec 027 (M5 offline closure) T010 — expand a snippet body at the caret with
+    /// tab-stops. <paramref name="body"/> is engine-native (<c>$Name$</c> / <c>$CURSOR$</c>);
+    /// the JS layer translates it to CodeMirror placeholders.</summary>
+    public async Task ExpandSnippetAsync(string body)
+    {
+        if (_module == null) return;
+        await _module.InvokeVoidAsync("expandSnippet", HostId, body);
+    }
+
+    /// <summary>Spec 027 (M5 offline closure) T010 — surround the current selection using a
+    /// surround-capable snippet body whose <c>$SELECTEDTEXT$</c> token receives the selection.</summary>
+    public async Task SurroundSelectionAsync(string body)
+    {
+        if (_module == null) return;
+        await _module.InvokeVoidAsync("surroundSelection", HostId, body);
     }
 
     public async ValueTask DisposeAsync()

@@ -25,6 +25,8 @@
 @inject IThemeService Theme
 @inject IJSRuntime JS
 @inject IConnectionStore Connections
+@inject ISnippetStore Snippets
+@inject IRefactoringService Refactoring
 
 <PageTitle>Editor — AKML SQL</PageTitle>
 
@@ -60,6 +62,36 @@
        wait for it to change. *@
     @if (_hasFormatted) { <span data-testid="format-complete" data-version="@_formatVersion" hidden></span> }
     @if (_hasAnalysed) { <span data-testid="analyse-complete" data-version="@_analyseVersion" hidden></span> }
+
+    @* Spec 027 T012 (US1) — surround-with picker. Opened by Ctrl+K, Ctrl+S; lists the
+       surround-capable snippets and wraps the current selection on pick. *@
+    @if (_showSurroundPicker)
+    {
+        <div class="akml-overlay" @onclick="CloseSurroundPicker">
+            <div class="akml-picker" @onclick:stopPropagation="true" data-testid="surround-picker">
+                <div class="akml-picker-header">Surround selection with…</div>
+                @if (_surroundSnippets.Count == 0)
+                {
+                    <p class="akml-picker-empty">No surround-with snippets available.</p>
+                }
+                else
+                {
+                    <ul class="akml-picker-list">
+                        @foreach (var s in _surroundSnippets)
+                        {
+                            <li class="akml-picker-item" @onclick="@(() => ApplySurroundAsync(s))">
+                                <span class="akml-picker-code">@s.Metadata.Shortcode</span>
+                                <span class="akml-picker-title">@s.Metadata.Title</span>
+                            </li>
+                        }
+                    </ul>
+                }
+                <div class="akml-picker-footer">
+                    <button class="akml-tool-button" @onclick="CloseSurroundPicker">Cancel</button>
+                </div>
+            </div>
+        </div>
+    }
 </div>
 
 <style>
@@ -68,6 +100,7 @@
         flex-direction: column;
         height: 100%;
         outline: none;
+        position: relative;   /* positioning context for the surround/refactor overlay */
     }
     .akml-editor-toolbar {
         display: flex;
@@ -103,6 +136,54 @@
        paired engine never see a blank sidebar column. */
     .akml-editor-grid.with-schema { grid-template-columns: 1fr 240px 320px; }
     .akml-editor-grid.no-schema { grid-template-columns: 1fr 320px; }
+
+    /* Spec 027 T012 — surround-with picker overlay (also reused by the refactoring menu). */
+    .akml-overlay {
+        position: absolute; inset: 0;
+        background-color: rgba(0, 0, 0, 0.35);
+        display: flex; align-items: center; justify-content: center;
+        z-index: 50;
+    }
+    .akml-picker {
+        min-width: 320px; max-width: 480px; max-height: 70%;
+        display: flex; flex-direction: column;
+        background-color: var(--akml-surface-panel);
+        border: 1px solid var(--akml-border-default);
+        border-radius: 4px;
+        font-family: var(--akml-type-chrome-family);
+        font-size: var(--akml-type-chrome-size);
+        color: var(--akml-text-primary);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    }
+    .akml-picker-header {
+        padding: var(--akml-scalar-spacing-s) var(--akml-scalar-spacing-m);
+        border-bottom: 1px solid var(--akml-border-default);
+        font-weight: bold;
+    }
+    .akml-picker-empty {
+        padding: var(--akml-scalar-spacing-m);
+        color: var(--akml-text-secondary);
+        font-style: italic;
+    }
+    .akml-picker-list { margin: 0; padding: 0; list-style: none; overflow: auto; }
+    .akml-picker-item {
+        display: flex; gap: var(--akml-scalar-spacing-s); align-items: baseline;
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-m);
+        cursor: pointer;
+        border-bottom: 1px solid var(--akml-border-subtle);
+    }
+    .akml-picker-item:hover { background-color: var(--akml-surface-hover); }
+    .akml-picker-code {
+        font-family: var(--akml-type-editor-family);
+        color: var(--akml-text-secondary);
+        min-width: 64px;
+    }
+    .akml-picker-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .akml-picker-footer {
+        display: flex; justify-content: flex-end;
+        padding: var(--akml-scalar-spacing-s);
+        border-top: 1px solid var(--akml-border-default);
+    }
 </style>
 
 @code {
@@ -130,6 +211,10 @@
     private string? _activeServerIdentity;
     private string? _activeDatabaseName;
     private bool _showSchemaTree => !string.IsNullOrEmpty(_activeServerIdentity) && !string.IsNullOrEmpty(_activeDatabaseName);
+
+    // Spec 027 T012 (US1) — surround-with picker state.
+    private bool _showSurroundPicker;
+    private List<WebSnippet> _surroundSnippets = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -300,6 +385,31 @@
         if (_editor != null) await _editor.InsertAtCaretAsync(qualifiedName);
     }
 
+    // ── Spec 027 T012 (US1) — surround-with picker ───────────────────────────────────────
+    private async Task OpenSurroundPickerAsync()
+    {
+        var all = await Snippets.ListAsync();
+        _surroundSnippets = all.Where(s => s.Metadata.SurroundsWith).ToList();
+        _showSurroundPicker = true;
+        StateHasChanged();
+    }
+
+    private void CloseSurroundPicker()
+    {
+        _showSurroundPicker = false;
+    }
+
+    private async Task ApplySurroundAsync(WebSnippet snippet)
+    {
+        _showSurroundPicker = false;
+        if (_editor == null) return;
+        // The body's $SELECTEDTEXT$ token receives the current selection; remaining
+        // $Name$/$CURSOR$ tab-stops are driven by the editor's snippet expander.
+        var body = string.Join("\n", snippet.Body);
+        await _editor.SurroundSelectionAsync(body);
+        Diagnostics.Log(DiagnosticLevel.Info, "snippets", $"Surrounded with '{snippet.Metadata.Shortcode}'.");
+    }
+
     private async Task OnKeyDownAsync(KeyboardEventArgs e)
     {
         // Chord state machine: first Ctrl+K starts the chord; second key within 1.5 s
@@ -318,6 +428,8 @@
 
             if (e.CtrlKey && e.Key == "f") { await FormatAsync(); return; }
             if (e.CtrlKey && e.Key == "l") { await AnalyseAsync(); return; }
+            // Spec 027 T012 — Ctrl+K, Ctrl+S opens the surround-with picker.
+            if (e.CtrlKey && e.Key == "s") { await OpenSurroundPickerAsync(); return; }
         }
 
         // Ctrl+S — save.
