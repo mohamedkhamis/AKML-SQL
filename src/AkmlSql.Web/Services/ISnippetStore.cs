@@ -58,6 +58,14 @@ public sealed class WebSnippetMetadata
     public string? Description { get; set; }
     public string? Author { get; set; }
     public string[] Tags { get; set; } = Array.Empty<string>();
+
+    /// <summary>
+    /// Spec 027 (M5 offline closure) T008 / FR-003: true when this snippet wraps a
+    /// selection (surround-with eligible). Mirrors the engine's
+    /// <c>SnippetMetadata.SurroundsWith</c> so import/export round-trips stay lossless.
+    /// Surround-capable bodies embed a <c>$selected$</c> token where the selection lands.
+    /// </summary>
+    public bool SurroundsWith { get; set; }
 }
 
 public sealed class WebSnippetVariable
@@ -65,6 +73,9 @@ public sealed class WebSnippetVariable
     public string Name { get; set; } = string.Empty;
     public string? Default { get; set; }
     public string? Description { get; set; }
+
+    /// <summary>Spec 027 T008: optional hover tooltip, mirroring the engine's <c>SnippetVariable.Tooltip</c>.</summary>
+    public string? Tooltip { get; set; }
 }
 
 internal sealed class SnippetStore : ISnippetStore
