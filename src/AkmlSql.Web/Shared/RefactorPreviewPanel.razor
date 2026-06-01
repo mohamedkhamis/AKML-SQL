@@ -1,10 +1,13 @@
 @*
-    Spec 027 (M5 offline closure) T018 (US2) — lightweight refactoring before/after preview.
-    A modal overlay showing the result of a parser-only refactoring (run entirely in the
-    browser) before the user commits it. Apply is disabled when the operation is a no-op /
-    not applicable. US3 / T022 extends this surface for heavyweight (bridge) refactorings.
+    Spec 027 (M5 offline closure) T018 (US2) + T022 (US3) — refactoring preview.
+    A modal overlay that renders EITHER a lightweight parser-only before/after (the `Preview`
+    parameter, run in-browser) OR a heavyweight engine `RefactorPreviewResponse` (the `Heavy`
+    parameter, returned over the bridge: a change list + generated-object texts + warnings /
+    blocking errors). Apply is disabled when the lightweight op is a no-op, or when the
+    heavyweight response is `CanApply == false` (e.g. a rename collision).
 *@
 @using AkmlSql.Web.Services
+@using AkmlSql.Core.Ipc.Messages
 
 <div class="akml-overlay" @onclick="OnCancel" data-testid="refactor-preview">
     <div class="akml-rpv" @onclick:stopPropagation="true">
@@ -16,7 +19,59 @@
             }
         </div>
 
-        @if (Preview is null)
+        @if (Heavy != null)
+        {
+            @* ── Heavyweight (bridge) preview: change list + generated objects + messages ── *@
+            @if (Heavy.Errors is { Length: > 0 })
+            {
+                <ul class="akml-rpv-errors" data-testid="refactor-errors">
+                    @foreach (var err in Heavy.Errors)
+                    {
+                        <li>❌ @err</li>
+                    }
+                </ul>
+            }
+            @if (Heavy.Changes.Length == 0 && (Heavy.Errors is null || Heavy.Errors.Length == 0))
+            {
+                <p class="akml-rpv-empty" data-testid="refactor-nochange">No changes were produced.</p>
+            }
+            else
+            {
+                <div class="akml-rpv-changes" data-testid="refactor-changes">
+                    @foreach (var c in Heavy.Changes)
+                    {
+                        <div class="akml-rpv-change">
+                            <div class="akml-rpv-change-loc">
+                                @(string.IsNullOrEmpty(c.FilePath) ? "Current document" : c.FilePath)
+                                · Line @c.Line, Col @c.Column · [@c.ChangeCategory]
+                            </div>
+                            <pre class="akml-rpv-code"><span class="akml-rpv-del">- @c.OldText</span>
+<span class="akml-rpv-add">+ @c.NewText</span></pre>
+                        </div>
+                    }
+                </div>
+                @if (Heavy.GeneratedObjectTexts is { Length: > 0 })
+                {
+                    <div class="akml-rpv-generated">
+                        <div class="akml-rpv-pane-head">Generated</div>
+                        @foreach (var g in Heavy.GeneratedObjectTexts)
+                        {
+                            <pre class="akml-rpv-code akml-rpv-after">@g</pre>
+                        }
+                    </div>
+                }
+            }
+            @if (Heavy.Warnings is { Length: > 0 })
+            {
+                <ul class="akml-rpv-warnings">
+                    @foreach (var w in Heavy.Warnings)
+                    {
+                        <li>⚠ @w</li>
+                    }
+                </ul>
+            }
+        }
+        else if (Preview is null)
         {
             <p class="akml-rpv-empty">No preview available.</p>
         }
@@ -38,23 +93,23 @@
                     <pre class="akml-rpv-code akml-rpv-after" data-testid="refactor-after">@Preview.After</pre>
                 </div>
             </div>
-        }
 
-        @if (Preview is { Warnings.Length: > 0 })
-        {
-            <ul class="akml-rpv-warnings">
-                @foreach (var w in Preview.Warnings)
-                {
-                    <li>⚠ @w</li>
-                }
-            </ul>
+            @if (Preview is { Warnings.Length: > 0 })
+            {
+                <ul class="akml-rpv-warnings">
+                    @foreach (var w in Preview.Warnings)
+                    {
+                        <li>⚠ @w</li>
+                    }
+                </ul>
+            }
         }
 
         <div class="akml-rpv-footer">
             <button class="akml-tool-button" @onclick="OnCancel">Cancel</button>
             <button class="akml-tool-button akml-rpv-apply"
                     data-testid="refactor-apply"
-                    disabled="@(Preview is not { Changed: true })"
+                    disabled="@(!CanApply)"
                     @onclick="OnApply">Apply</button>
         </div>
     </div>
@@ -119,18 +174,38 @@
     .akml-tool-button:hover:not(:disabled) { background-color: var(--akml-surface-hover); }
     .akml-tool-button:disabled { opacity: 0.5; cursor: default; }
     .akml-rpv-apply { border-color: var(--akml-accent-primary); }
+
+    /* Heavyweight (bridge) preview — change list + diff lines + messages. */
+    .akml-rpv-changes, .akml-rpv-generated { flex: 1 1 auto; overflow: auto; }
+    .akml-rpv-change { border-bottom: 1px solid var(--akml-border-subtle); }
+    .akml-rpv-change-loc {
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s);
+        color: var(--akml-text-secondary); font-size: 11px;
+    }
+    .akml-rpv-del { color: var(--akml-status-danger); }
+    .akml-rpv-add { color: var(--akml-status-success); }
+    .akml-rpv-errors { margin: 0; padding: var(--akml-scalar-spacing-s) var(--akml-scalar-spacing-m); list-style: none; color: var(--akml-status-danger); }
 </style>
 
 @code {
     /// <summary>The operation's display name, shown in the header.</summary>
     [Parameter] public string Title { get; set; } = "Refactor";
 
-    /// <summary>The lightweight preview (before / after / warnings / changed). Null = nothing to show.</summary>
+    /// <summary>The lightweight preview (before / after / warnings / changed). Null when showing a heavyweight preview or nothing.</summary>
     [Parameter] public LightweightPreview? Preview { get; set; }
+
+    /// <summary>Spec 027 T022 (US3) — the heavyweight engine preview (over the bridge). Takes precedence over <see cref="Preview"/> when set.</summary>
+    [Parameter] public RefactorPreviewResponse? Heavy { get; set; }
 
     /// <summary>Invoked when the user commits the refactoring.</summary>
     [Parameter] public EventCallback OnApply { get; set; }
 
     /// <summary>Invoked when the user dismisses the panel (Cancel / overlay click).</summary>
     [Parameter] public EventCallback OnCancel { get; set; }
+
+    /// <summary>Apply is enabled iff: heavyweight ⇒ CanApply with at least one change;
+    /// lightweight ⇒ the op changed something.</summary>
+    private bool CanApply => Heavy != null
+        ? Heavy.CanApply && Heavy.Changes.Length > 0
+        : Preview is { Changed: true };
 }

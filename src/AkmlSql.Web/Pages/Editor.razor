@@ -109,6 +109,27 @@
                             <span class="akml-picker-title">@op.Label</span>
                         </li>
                     }
+                    @* Spec 027 T020 (US3) — heavyweight (schema-aware) ops. Enabled only when a
+                       live engine advertises refactoring.heavy; otherwise shown disabled with a
+                       reason (gated, never silently absent — FR-017). *@
+                    <li class="akml-picker-sep">Schema-aware (requires engine)</li>
+                    @foreach (var op in HeavyweightOps)
+                    {
+                        @if (Refactoring.HeavyAvailable)
+                        {
+                            <li class="akml-picker-item" @onclick="@(() => OpenHeavyDialog(op))">
+                                <span class="akml-picker-title">@op.Label</span>
+                            </li>
+                        }
+                        else
+                        {
+                            <li class="akml-picker-item akml-picker-disabled"
+                                title="Requires a paired engine advertising 'refactoring.heavy'.">
+                                <span class="akml-picker-title">@op.Label</span>
+                                <span class="akml-picker-gate">engine</span>
+                            </li>
+                        }
+                    }
                 </ul>
                 <div class="akml-picker-footer">
                     <button class="akml-tool-button" @onclick="CloseRefactorMenu">Cancel</button>
@@ -124,6 +145,26 @@
                               Preview="_refactorPreview"
                               OnApply="ApplyLightweightAsync"
                               OnCancel="CloseRefactorPreview" />
+    }
+
+    @* Spec 027 T021 (US3) — heavyweight input dialog (rename / extract). *@
+    @if (_heavyInput != null)
+    {
+        <RefactorInputDialog Title="@_refactorTitle"
+                             NeedsOriginalIdentifier="_heavyInput.NeedsOriginalIdentifier"
+                             NeedsNewName="_heavyInput.NeedsNewName"
+                             NeedsUnitName="_heavyInput.NeedsUnitName"
+                             OnSubmit="HeavyPreviewAsync"
+                             OnCancel="CloseHeavyDialog" />
+    }
+
+    @* Spec 027 T022 (US3) — heavyweight (bridge) preview. *@
+    @if (_heavyPreview != null)
+    {
+        <RefactorPreviewPanel Title="@_refactorTitle"
+                              Heavy="_heavyPreview"
+                              OnApply="ApplyHeavyAsync"
+                              OnCancel="CloseHeavyPreview" />
     }
 </div>
 
@@ -211,11 +252,25 @@
         color: var(--akml-text-secondary);
         min-width: 64px;
     }
-    .akml-picker-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .akml-picker-title { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .akml-picker-footer {
         display: flex; justify-content: flex-end;
         padding: var(--akml-scalar-spacing-s);
         border-top: 1px solid var(--akml-border-default);
+    }
+    /* Spec 027 T020 — heavyweight section header + gated (engine-required) entries. */
+    .akml-picker-sep {
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-m);
+        color: var(--akml-text-secondary); font-size: 11px; text-transform: uppercase;
+        border-bottom: 1px solid var(--akml-border-subtle);
+        border-top: 1px solid var(--akml-border-default);
+    }
+    .akml-picker-disabled { cursor: default; opacity: 0.55; }
+    .akml-picker-disabled:hover { background-color: transparent; }
+    .akml-picker-gate {
+        font-size: 11px; color: var(--akml-text-onaccent);
+        background-color: var(--akml-text-secondary); border-radius: 2px;
+        padding: 0 var(--akml-scalar-spacing-xs);
     }
 </style>
 
@@ -269,6 +324,23 @@
         (LightweightRefactorKind.AddGroupByColumns,      "Add GROUP BY columns"),
         (LightweightRefactorKind.Unformat,               "Unformat"),
     };
+
+    // Spec 027 T020/T021/T022 (US3) — the three PRD-named heavyweight (bridge-only) ops.
+    // OperationType ints match RefactorOperationType: SafeRename=0, ExtractToProc=2,
+    // ParameterizeValues=7. Each declares which RefactorInputDialog fields it needs.
+    private sealed record HeavyOp(string Label, int OperationType,
+        bool NeedsOriginalIdentifier, bool NeedsNewName, bool NeedsUnitName);
+
+    private static readonly HeavyOp[] HeavyweightOps =
+    {
+        new("Smart Rename",        OperationType: 0, NeedsOriginalIdentifier: true, NeedsNewName: true,  NeedsUnitName: false),
+        new("Parameterize Values", OperationType: 7, NeedsOriginalIdentifier: false, NeedsNewName: false, NeedsUnitName: false),
+        new("Extract Procedure",   OperationType: 2, NeedsOriginalIdentifier: false, NeedsNewName: false, NeedsUnitName: true),
+    };
+
+    private HeavyOp? _heavyInput;                       // non-null while the input dialog is open
+    private RefactorPreviewResponse? _heavyPreview;     // non-null while the bridge preview is shown
+    private RefactorInputDialog.RefactorInputs? _heavyInputs;   // captured dialog values for apply
 
     protected override async Task OnInitializedAsync()
     {
@@ -505,6 +577,97 @@
         _refactorPreview = null;
         _status = $"Applied: {_refactorTitle}.";
         Diagnostics.Log(DiagnosticLevel.Info, "refactor", _status);
+        StateHasChanged();
+    }
+
+    // ── Spec 027 T020/T021/T022 (US3) — heavyweight (bridge) refactorings ─────────────────
+    private void OpenHeavyDialog(HeavyOp op)
+    {
+        _showRefactorMenu = false;
+        _refactorTitle = op.Label;
+        _heavyInput = op;
+        StateHasChanged();
+    }
+
+    private void CloseHeavyDialog() => _heavyInput = null;
+    private void CloseHeavyPreview() => _heavyPreview = null;
+
+    /// <summary>Run the bridge preview for a heavyweight op using the collected inputs.</summary>
+    private async Task HeavyPreviewAsync(RefactorInputDialog.RefactorInputs inputs)
+    {
+        var op = _heavyInput;
+        _heavyInput = null;
+        if (op == null) return;
+        _heavyInputs = inputs;
+        try
+        {
+            var request = new RefactorPreviewRequest
+            {
+                SessionId = string.Empty,
+                OperationType = op.OperationType,
+                DocumentText = _currentText,
+                OriginalIdentifier = inputs.OriginalIdentifier,
+                NewName = inputs.NewName,
+                ExtractedUnitName = inputs.ExtractedUnitName,
+            };
+            var response = await Refactoring.PreviewAsync(request, CancellationToken.None);
+            if (response == null)
+            {
+                // HeavyAvailable was true at menu time but the bridge dropped; surface a status.
+                _status = "Heavyweight refactoring is unavailable (engine not reachable).";
+                Diagnostics.Log(DiagnosticLevel.Warn, "refactor", _status);
+            }
+            else
+            {
+                _heavyPreview = response;
+            }
+        }
+        catch (Exception ex)
+        {
+            _status = $"Refactor preview failed: {ex.Message}";
+            Diagnostics.Log(DiagnosticLevel.Error, "refactor", _status);
+        }
+        StateHasChanged();
+    }
+
+    /// <summary>Commit a previewed heavyweight refactoring: send the approved changes over the
+    /// bridge, then replace the editor content with the applied result.</summary>
+    private async Task ApplyHeavyAsync()
+    {
+        var preview = _heavyPreview;
+        var inputs = _heavyInputs;
+        _heavyPreview = null;
+        if (preview is not { CanApply: true } || _editor == null) return;
+
+        var op = HeavyweightOps.FirstOrDefault(o => o.Label == _refactorTitle);
+        try
+        {
+            var apply = new RefactorApplyRequest
+            {
+                SessionId = string.Empty,
+                OperationType = op?.OperationType ?? 0,
+                ApprovedChanges = preview.Changes,
+            };
+            var response = await Refactoring.ApplyAsync(apply, CancellationToken.None);
+            if (response is { Success: true } && !string.IsNullOrEmpty(response.UpdatedDocumentText))
+            {
+                await _editor.SetTextAsync(response.UpdatedDocumentText);
+                _currentText = response.UpdatedDocumentText;
+                _status = $"Applied: {_refactorTitle} ({response.AppliedCount} change(s)).";
+            }
+            else
+            {
+                _status = response == null
+                    ? "Heavyweight refactoring is unavailable (engine not reachable)."
+                    : $"Refactor apply reported no document change ({_refactorTitle}).";
+            }
+            Diagnostics.Log(DiagnosticLevel.Info, "refactor", _status);
+        }
+        catch (Exception ex)
+        {
+            _status = $"Refactor apply failed: {ex.Message}";
+            Diagnostics.Log(DiagnosticLevel.Error, "refactor", _status);
+        }
         StateHasChanged();
     }
 
