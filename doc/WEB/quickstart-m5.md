@@ -37,6 +37,27 @@ This walks a developer through the offline IntelliSense flow: paired engine + ca
    `refactoring.heavy` capability — the menu items render with a
    `<CapabilityNotice>` when missing.
 
+## Closed by spec 027 (M5 offline closure)
+
+The items below were follow-ups when M5's substrate first landed under spec 021 Phase 6; spec 027 closed them (PR #245):
+
+- **Cache-backed completion fallback** — `CompletionService` / `QuickInfoService` /
+  `SignatureHelpService` resolve from the cached IndexedDB snapshot when the bridge
+  is unreachable (T109). The cache-aware **status indicator** (Live / Cached /
+  Offline / Disconnected) surfaces this.
+- **Snippets** — full browser library: an engine-native (`$Name$` / `$CURSOR$` /
+  `$SELECTEDTEXT$`) built-in set, in-editor expansion with tab-stops, a surround-with
+  chord (Ctrl+K, Ctrl+S), a `/snippets` management page, and `.akmlsnippet`
+  import/export.
+- **Lightweight refactoring** — all ten parser-only ops run offline via a Refactor
+  menu + before/after preview (the ops were relocated into `AkmlSql.IntelliSense` so
+  the browser runs the same code as the engine).
+- **Heavyweight refactoring UI** — Smart Rename / Parameterize Values / Extract
+  Procedure with an input dialog + change-list preview, gated on `refactoring.heavy`
+  (shown disabled with an "engine" badge when offline).
+- **Inline suppression editing** — per-finding "suppress on this line"
+  (`-- noqa: RuleId`, cross-surface) and "suppress globally" (browser-local override).
+
 ## What is *not* in M5
 
 - **Engine-side schema-cache message types.** `SchemaChecksumRequest`,
@@ -44,15 +65,14 @@ This walks a developer through the offline IntelliSense flow: paired engine + ca
   contracts/schema-cache-shape.md but the engine handler that serves them is a
   follow-up. The browser polling timer is running; the cache touches `LastUsedAt`
   to keep LRU warm until the engine wires its half.
-- **Cache-backed completion fallback.** T109 wires `CompletionService` /
-  `QuickInfoService` / `SignatureHelpService` to consult the cached snapshot
-  when the bridge is unreachable. The plumbing is in place
-  (`ISchemaCacheStore`); the fallback path itself lands when an interactive
-  session can verify completion accuracy.
-- **Heavyweight refactoring UI.** The service is wired (`IRefactoringService`)
-  and gated on the `refactoring.heavy` capability via `<CapabilityNotice>`. The
-  UI surface (rename dialog, conflict resolution) is M5.5 work that hasn't
-  landed yet.
+- **Heavyweight refactoring against a *cached* schema** (offline). The UI runs
+  heavyweight ops over the live bridge only; running them against a cached schema
+  while the engine is down is a named follow-up (research.md Decision 3).
+- **File-scope-per-rule suppression** — line + global ship; a `-- noqa-file:` style
+  directive is a named follow-up (research.md Decision 4).
+- **The offline-IntelliSense E2E + visual parity audit** run developer-side (a real
+  engine + two GUIs); the scaffolds are checked in (`UserStory4Tests`,
+  `M5-PARITY-AUDIT.md`) but the runs are interactive.
 
 ## LRU eviction
 
