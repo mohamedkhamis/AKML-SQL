@@ -27,10 +27,15 @@ builder.Services.AddSingleton<IIndexedDbAdapter, JsIndexedDbAdapter>();
 builder.Services.AddSingleton<IThemeApplier, JsThemeApplier>();
 
 builder.Services.AddSingleton<IFormatterService, FormatterService>();
-builder.Services.AddSingleton<IAnalyserService, AnalyserService>();
-builder.Services.AddSingleton<IThemeService, ThemeService>();
 builder.Services.AddSingleton<IProfileStore, ProfileStore>();
 builder.Services.AddSingleton<IAnalysisSettingsStore, AnalysisSettingsStore>();
+// Spec 027 T024/T026 (US4): AnalyserService honours the browser-local per-rule overrides
+// from IAnalysisSettingsStore. Registered via an explicit factory so the store is
+// unambiguously injected (rather than relying on DI to fill the optional ctor param) —
+// "Suppress globally" depends on this same store instance being read on the next analyse.
+builder.Services.AddSingleton<IAnalyserService>(sp =>
+    new AnalyserService(sp.GetRequiredService<IAnalysisSettingsStore>()));
+builder.Services.AddSingleton<IThemeService, ThemeService>();
 builder.Services.AddSingleton<IEditorSessionStore, EditorSessionStore>();
 builder.Services.AddSingleton<IDiagnosticsRingBuffer, DiagnosticsRingBuffer>();
 

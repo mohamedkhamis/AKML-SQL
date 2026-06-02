@@ -47,6 +47,13 @@ namespace AkmlSql.Core.Ipc.Messages
         Database = 8,
         Variable = 9,
         Alias = 10,
-        Parameter = 11
+        Parameter = 11,
+        /// <summary>
+        /// A contextual smart action (e.g. the SQL-Prompt-style "▶ Add columns from SELECT"
+        /// GROUP BY action) whose InsertText is literal text to drop in on accept. Distinct
+        /// from <see cref="Snippet"/> so SSMS commits it as a literal insert (not a snippet
+        /// shortcode lookup) and never hides it behind the snippet-visibility toggle.
+        /// </summary>
+        SmartAction = 12
     }
 }

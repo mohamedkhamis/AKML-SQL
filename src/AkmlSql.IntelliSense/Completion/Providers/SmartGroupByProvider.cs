@@ -44,41 +44,54 @@ public class SmartGroupByProvider : ICompletionProvider
 
     public IEnumerable<CompletionItem> GetCompletions(CursorContext context, DatabaseCache? cache)
     {
-        // GetCompletions is called by CompletionEngine which doesn't expose the
-        // raw token stream — but the provider can re-tokenize via the parser
-        // service it would need an instance of. We work without a parser service
-        // by relying on the document text passed via context.PartialText? No —
-        // CursorContext does not carry the full document text. Instead, this
-        // provider receives the cursor context only.
-        //
-        // To extract the SELECT list we need access to tokens. The CompletionEngine
-        // already tokenizes the document and stores the result on the context via
-        // a side channel. For this provider we ask the engine to populate
-        // context-level token info first via a small extension below.
-        //
-        // (See SmartGroupByContextExtensions for the helper.)
+        // CursorContext doesn't carry the document text, so the CompletionEngine
+        // attaches the already-tokenized stream to the context via a side channel
+        // (SmartGroupByContextExtensions) right after analysis. The item itself is
+        // produced by BuildSmartItem so the web offline completion path — which has
+        // a token stream but no CompletionEngine — can emit the identical item.
         var tokens = SmartGroupByContextExtensions.GetTokens(context);
         if (tokens == null || tokens.Count == 0)
         {
             yield break;
         }
 
-        var expressions = ExtractNonAggregatedSelectExpressions(tokens, context.CursorOffset);
+        var item = BuildSmartItem(tokens, context.CursorOffset);
+        if (item != null)
+        {
+            yield return item;
+        }
+    }
+
+    /// <summary>
+    /// Builds the SQL-Prompt-style "Add columns from SELECT" completion item from a token
+    /// stream, or returns <c>null</c> when the enclosing statement exposes no eligible
+    /// (non-aggregated, non-wildcard) SELECT-list expressions. The item is purely text
+    /// based — no <see cref="DatabaseCache"/> needed — so both the engine completion path
+    /// (via <see cref="GetCompletions"/>) and the web offline completion path share it.
+    /// The caller is responsible for confirming the cursor sits in a GROUP BY clause.
+    /// </summary>
+    public static CompletionItem? BuildSmartItem(IList<TSqlParserToken> tokens, int cursorOffset)
+    {
+        var expressions = ExtractNonAggregatedSelectExpressions(tokens, cursorOffset);
         if (expressions.Count == 0)
         {
-            yield break;
+            return null;
         }
 
         var insertText = string.Join(", ", expressions);
         var preview = expressions.Count > 3
             ? string.Join(", ", expressions.Take(3)) + ", …"
-            : string.Join(", ", expressions);
+            : insertText;
 
-        yield return new CompletionItem
+        return new CompletionItem
         {
             DisplayText = "▶ Add columns from SELECT",
             InsertText = insertText,
-            ObjectType = (int)CompletionObjectType.Snippet,
+            // SmartAction (not Snippet): SSMS commits this as a literal insert of InsertText
+            // via its default commit path, and never hides it behind the snippet-visibility
+            // toggle. (Tagging it Snippet made SSMS treat "a, b" as a shortcode to expand —
+            // inserting nothing — and hid it by default. The web inserts it literally either way.)
+            ObjectType = (int)CompletionObjectType.SmartAction,
             SecondaryText = preview,
             SourceObject = "GroupBy",
             // Negative priority so it sorts above all column suggestions

@@ -1316,3 +1316,36 @@ Three deferred items revisited; two land, one + manual smokes stay out:
 **Recommendation**: re-run `AKML_UPDATE_BASELINE=1 dotnet test --filter "FullyQualifiedName~PerformanceBaselineTests"` on a quiet machine to recapture. The baseline file is git-ignored (`.gitignore:44`) per-developer state by design — not a CI gate.
 
 *Last updated: 2026-05-28*
+
+---
+
+## Spec 027 — M5 Offline Parity Closure (Snippets, Refactoring, Suppression)
+
+**PR #245** (`027-m5-offline-closure` → master). Closes the genuinely-unmet M5 web-edition work. Most of M5's offline *substrate* already shipped under spec 021 Phase 6 (`AkmlSql.IntelliSense`, IndexedDB schema cache, LRU eviction, CHECKSUM_AGG drift sync, offline completion/quick-info/signature); spec 027 builds the user-facing feature surfaces on top.
+
+### What shipped (commit-by-commit)
+
+| Commit | Content | Verification |
+|---|---|---|
+| `1dd77e8` | **Phase 2 relocation** — 10 lightweight refactoring ops + `ILightweightOperation` + `RefactoringContext` moved `AkmlSql.Engine` → `AkmlSql.IntelliSense` (T101 pattern, namespaces preserved, zero call-site edits) so the browser runs the same code as the engine. Plus the browser cores: `RefactoringService.Preview/ApplyLightweightAsync` (+ a web-internal `LightweightRefactorKind`), the `AnalyserService` `RuleOverrides` post-pass (T024 bugfix), and `WebSnippetMetadata.SurroundsWith`. | engine refactoring suite **98** (unchanged before/after the move); IntelliSense.Tests **8**; Web.Tests **234** |
+| `89883d3` | **US1 snippets** — 11 built-ins, in-editor expansion + surround-with (Ctrl+K,Ctrl+S), `/snippets` management page, `.akmlsnippet` import/export | Web.Tests **240** |
+| `17cc68d` | **US2 lightweight refactoring UI** — Refactor menu (10 ops) + `RefactorPreviewPanel` before/after | Web.Tests **244** |
+| `2d4e8c8` | **US3 heavyweight refactoring UI** (bridge-only) — gated menu entries + `RefactorInputDialog` + heavyweight preview mode | Web.Tests **250** |
+| `3ff7885` | **US4 suppression** (per-finding `⊘line`/`⊘all`) + **US5 cache-aware status indicator** (Live/Cached/Offline/Disconnected) + explicit `AnalyserService` DI | Web.Tests **255** |
+
+### Two planning reconciliations (research.md Decisions 3 & 4)
+
+- **Heavyweight refactoring is bridge-only.** Running it against a *cached* schema while the engine is offline is descoped — the cache holds flat `SchemaPhasePayload` bytes with no reverse-rehydrator to a `DatabaseCache`. Offline ⇒ gated (disabled with an "engine" badge), never silently absent.
+- **Suppression delivers line + global, not file.** Line (`-- noqa: RULEID`) is cross-surface; global is a browser-local per-rule override. A `-- noqa-file:`-style per-rule file directive doesn't exist in the shared format; adding one would touch the analyzer parser + engine tests + WPF — named follow-up.
+
+### Mid-implementation correctness catch (worth recording)
+
+The committed `ssf`/`cte` built-ins **and** `snippet-expansion-contract.md` used the VS-Code/CodeMirror placeholder dialect (`${1:label}` / `$selected$`). But the engine's authoritative `PlaceholderParser` reads **only** `$Name$` / `$CURSOR$` / `$SELECTEDTEXT$` (regex `\$([A-Za-z_]\w*)\$`) — the `${...}` form would expand as **literal text** in SSMS, breaking FR-006/SC-002 cross-surface fidelity. Per a user decision, all built-in bodies were rewritten to the engine-native syntax, the committed contract was updated, and the JS `expandSnippet` translates the engine-native form (and the `SnippetProvider`'s separate `$1`/`$2` form) into CodeMirror `${...}` at expand time — so in-browser tab-stops still work. A test (`SnippetBuiltInsTests`) now guards against the wrong syntax returning.
+
+### Developer-side / not runtime-verified here
+
+- **US6 E2E** (`UserStory4Tests.cs`) is `[Trait("Category","BridgeE2E")]` + Skip-flagged (the established `UserStory2Tests` convention) — needs a real engine + interactive Playwright-selector iteration. The deterministic substrate is unit/bUnit-covered.
+- **Visual parity audit** (`M5-PARITY-AUDIT.md`) is a structured artifact marked PENDING CAPTURE — the screenshot pass needs a Windows host running both the WPF plugin and the web edition.
+- **All Razor/JS UI runtime behaviour** (tab-stops landing, surround wrapping, menus/dialogs rendering, suppress buttons inserting at the right place) is **build-verified only** — no headless browser. The data-layer guarantees and the bUnit-testable render/gating logic *are* test-covered (255 Web.Tests).
+
+*Last updated: 2026-06-01*

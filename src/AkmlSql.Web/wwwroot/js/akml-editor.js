@@ -136,16 +136,41 @@ export async function create(hostElementId, initialText, dotNetRef) {
         if (!wordValid && !postKeyword && !context.explicit) return null;
 
         try {
-            const items = await dotNetRef.invokeMethodAsync('RequestCompletionsFromJs', context.pos);
+            // Pass the LIVE document text so the offline smart GROUP BY action parses what the
+            // user is actually editing (the debounced session would be stale during fast typing).
+            // The online path ignores it; it never reaches the engine wire.
+            const items = await dotNetRef.invokeMethodAsync(
+                'RequestCompletionsFromJs', context.pos, context.state.doc.toString());
             if (!items || items.length === 0) return null;
             return {
                 from: wordValid ? word.from : context.pos,
-                options: items.map(i => ({
-                    label: i.label,
-                    apply: i.insertText,
-                    type: i.type || 'text',
-                    detail: i.detail || undefined,
-                })),
+                options: items.map(i => {
+                    const type = i.type || 'text';
+                    // Smart-action items (SQL-Prompt-style "▶ Add columns from SELECT") must sort
+                    // to the top: CM6 orders an empty-prefix popup by label, and "▶" (U+25B6)
+                    // sorts after letters, which would otherwise bury the action at the bottom.
+                    const boost = (i.label && i.label.charCodeAt(0) === 0x25B6) ? 99 : undefined;
+                    // Spec 027 T011: snippet items expand (with tab-stops) on accept instead
+                    // of inserting their text literally. A function `apply` is CM6's accept
+                    // hook; non-snippet items keep the plain-string `apply` (literal insert).
+                    if (type === 'snippet') {
+                        return {
+                            label: i.label,
+                            type,
+                            detail: i.detail || undefined,
+                            boost,
+                            apply: (view, _completion, from, to) =>
+                                applySnippetBody(cm, view, i.insertText, from, to),
+                        };
+                    }
+                    return {
+                        label: i.label,
+                        apply: i.insertText,
+                        type,
+                        detail: i.detail || undefined,
+                        boost,
+                    };
+                }),
                 // CM does its own fuzzy filter against the prefix at `from`. The
                 // empty-prefix case (post-keyword trigger) re-invokes the source
                 // as soon as the user types a non-word char, which is what we want.
@@ -222,6 +247,94 @@ export function insertAtCaret(hostElementId, text) {
     inst.view.focus();
 }
 
+// ── Spec 027 (M5 offline closure) T010/T011 — snippet expansion + surround-with ──────────
+//
+// Snippet bodies are authored in the ENGINE-NATIVE placeholder syntax (so a web-authored
+// .akmlsnippet ALSO expands on the SSMS/WPF surface — FR-006): a tab-stop is `$Name$`
+// (must start with a letter/underscore), the final caret is `$CURSOR$`, and the selection
+// slot for surround-with is `$SELECTEDTEXT$`. These helpers translate that into CodeMirror 6's
+// `${...}` snippet template at expand time, falling back to a literal insertion if CM6's
+// snippet() is unavailable (the function is feature-detected — it cannot be verified headless).
+
+// Engine-native named token, e.g. `$table$` / `$CURSOR$` (AkmlSql.Engine PlaceholderParser:
+// regex \$([A-Za-z_]\w*)\$). Numbered `$1`/`$2` tokens (the shared SnippetProvider dialect)
+// are handled separately — both normalise to CM6 `${...}` fields so the one expander serves
+// every in-repo snippet source.
+const SNIPPET_NAMED = /\$([A-Za-z_]\w*)\$/g;
+const SNIPPET_NUMBERED = /\$(\d+)/g;
+
+/**
+ * Translate a snippet body into a CodeMirror 6 snippet template.
+ * `$Name$`   -> `${Name}`  (CM6 tab-stop; repeated names link, matching the engine)
+ * `$CURSOR$` -> `${}`       (CM6 final cursor stop)
+ * `$1`,`$2`  -> `${1}`,`${2}` (the SnippetProvider numbered-stop dialect)
+ * Escapes any pre-existing `${` so literal text is not mis-read as a CM6 field.
+ */
+function toCmTemplate(body) {
+    return String(body)
+        .replace(/\$\{/g, '\\${')                          // protect literal ${ in user text
+        .replace(SNIPPET_NAMED, (_m, name) =>
+            name.toUpperCase() === 'CURSOR' ? '${}' : '${' + name + '}')
+        .replace(SNIPPET_NUMBERED, (_m, n) => '${' + n + '}');
+}
+
+/**
+ * Strip snippet tokens to plain text for the no-CM6-snippet fallback. Named stops become
+ * their name, numbered stops vanish, `$CURSOR$` is removed. The caret lands at end of the
+ * inserted text (an exact mid-body caret is not worth reconstructing for the rare fallback).
+ */
+function toLiteral(body) {
+    return String(body)
+        .replace(SNIPPET_NAMED, (_m, name) => name.toUpperCase() === 'CURSOR' ? '' : name)
+        .replace(SNIPPET_NUMBERED, '');
+}
+
+function applySnippetBody(cm, view, body, from, to) {
+    if (typeof body !== 'string' || body.length === 0) return;
+    const snippetFn = cm.autocomplete && cm.autocomplete.snippet;
+    if (typeof snippetFn === 'function') {
+        try {
+            // CM6: snippet(template) -> (view, completion, from, to) => void
+            snippetFn(toCmTemplate(body))(view, null, from, to);
+            view.focus();
+            return;
+        } catch { /* fall through to literal */ }
+    }
+    const text = toLiteral(body);
+    view.dispatch({
+        changes: { from, to, insert: text },
+        selection: { anchor: from + text.length },
+    });
+    view.focus();
+}
+
+/**
+ * Spec 027 T010 — expand a snippet body at the caret (replacing any current selection),
+ * driving CM6 tab-stops. Body is engine-native (`$Name$` / `$CURSOR$`).
+ */
+export function expandSnippet(hostElementId, body) {
+    const inst = _instances.get(hostElementId);
+    if (!inst) return;
+    const sel = inst.view.state.selection.main;
+    applySnippetBody(inst.cm, inst.view, body, sel.from, sel.to);
+}
+
+/**
+ * Spec 027 T010 — surround the current selection: the snippet body's `$SELECTEDTEXT$` token
+ * is replaced by the selected text, then the body expands as a normal snippet at the
+ * selection range. With no selection, `$SELECTEDTEXT$` resolves to empty (caret lands there).
+ */
+export function surroundSelection(hostElementId, body) {
+    const inst = _instances.get(hostElementId);
+    if (!inst || typeof body !== 'string') return;
+    const sel = inst.view.state.selection.main;
+    const selected = inst.view.state.sliceDoc(sel.from, sel.to);
+    // Substitute the selection slot first (case-insensitive, engine-native token), then let
+    // the standard snippet path handle any remaining $Name$ / $CURSOR$ tab-stops.
+    const resolved = body.replace(/\$SELECTEDTEXT\$/gi, () => selected);
+    applySnippetBody(inst.cm, inst.view, resolved, sel.from, sel.to);
+}
+
 /** Select the given (1-based) line and scroll it into view. */
 export function gotoLine(hostElementId, lineNumber1Based) {
     const inst = _instances.get(hostElementId);
@@ -235,6 +348,22 @@ export function gotoLine(hostElementId, lineNumber1Based) {
         selection: { anchor: lineInfo.from, head: lineInfo.to },
         effects: inst.cm.view.EditorView.scrollIntoView(lineInfo.from, { y: 'center' }),
     });
+    inst.view.focus();
+}
+
+/**
+ * Spec 027 T025 (US4) — append text at the end of a 1-based line. Used by the suppression
+ * "this line" action to insert ` -- noqa: RULEID` at the finding's line end (matching the
+ * WPF FixAction). Single dispatch ⇒ one undoable edit. Returns the resulting full text via
+ * the caller's getText if needed; here we just mutate.
+ */
+export function insertAtLineEnd(hostElementId, lineNumber1Based, text) {
+    const inst = _instances.get(hostElementId);
+    if (!inst || typeof text !== 'string' || text.length === 0) return;
+    const doc = inst.view.state.doc;
+    const line = Math.max(1, Math.min(lineNumber1Based, doc.lines));
+    const lineInfo = doc.line(line);
+    inst.view.dispatch({ changes: { from: lineInfo.to, insert: text } });
     inst.view.focus();
 }
 

@@ -25,6 +25,8 @@
 @inject IThemeService Theme
 @inject IJSRuntime JS
 @inject IConnectionStore Connections
+@inject ISnippetStore Snippets
+@inject IRefactoringService Refactoring
 
 <PageTitle>Editor — AKML SQL</PageTitle>
 
@@ -33,6 +35,7 @@
         <ProfilePickerComponent OnProfileChanged="OnProfileChangedAsync" />
         <button class="akml-tool-button" @onclick="FormatAsync" title="Ctrl+K, Ctrl+F">Format</button>
         <button class="akml-tool-button" data-testid="analyse-button" @onclick="AnalyseAsync" title="Ctrl+K, Ctrl+L">Analyse</button>
+        <button class="akml-tool-button" data-testid="refactor-button" @onclick="OpenRefactorMenu">Refactor ▾</button>
         <button class="akml-tool-button" @onclick="SaveAsync" title="Ctrl+S">Save</button>
         <span class="akml-editor-spacer"></span>
         @if (!string.IsNullOrEmpty(_status))
@@ -48,7 +51,8 @@
                                  DatabaseName="@_activeDatabaseName"
                                  OnObjectClicked="OnSchemaObjectClickedAsync" />
         }
-        <ProblemsListComponent Findings="@_findings" OnJumpToIssue="OnJumpToIssueAsync" />
+        <ProblemsListComponent Findings="@_findings" OnJumpToIssue="OnJumpToIssueAsync"
+                               OnSuppressLine="OnSuppressLineAsync" OnSuppressGlobal="OnSuppressGlobalAsync" />
     </div>
     @* Spec 024 T004: completion markers for Playwright. `_hasFormatted` / `_hasAnalysed`
        latch to true on the first successful Format / Analyse; `_formatVersion` /
@@ -60,6 +64,109 @@
        wait for it to change. *@
     @if (_hasFormatted) { <span data-testid="format-complete" data-version="@_formatVersion" hidden></span> }
     @if (_hasAnalysed) { <span data-testid="analyse-complete" data-version="@_analyseVersion" hidden></span> }
+
+    @* Spec 027 T012 (US1) — surround-with picker. Opened by Ctrl+K, Ctrl+S; lists the
+       surround-capable snippets and wraps the current selection on pick. *@
+    @if (_showSurroundPicker)
+    {
+        <div class="akml-overlay" @onclick="CloseSurroundPicker">
+            <div class="akml-picker" @onclick:stopPropagation="true" data-testid="surround-picker">
+                <div class="akml-picker-header">Surround selection with…</div>
+                @if (_surroundSnippets.Count == 0)
+                {
+                    <p class="akml-picker-empty">No surround-with snippets available.</p>
+                }
+                else
+                {
+                    <ul class="akml-picker-list">
+                        @foreach (var s in _surroundSnippets)
+                        {
+                            <li class="akml-picker-item" @onclick="@(() => ApplySurroundAsync(s))">
+                                <span class="akml-picker-code">@s.Metadata.Shortcode</span>
+                                <span class="akml-picker-title">@s.Metadata.Title</span>
+                            </li>
+                        }
+                    </ul>
+                }
+                <div class="akml-picker-footer">
+                    <button class="akml-tool-button" @onclick="CloseSurroundPicker">Cancel</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* Spec 027 T017 (US2) — refactoring menu. Lists all ten lightweight (offline) ops;
+       choosing one previews it, then the preview panel commits or cancels. Heavyweight
+       (US3 / T020) entries are appended to this menu, gated by the bridge capability. *@
+    @if (_showRefactorMenu)
+    {
+        <div class="akml-overlay" @onclick="CloseRefactorMenu">
+            <div class="akml-picker" @onclick:stopPropagation="true" data-testid="refactor-menu">
+                <div class="akml-picker-header">Refactor</div>
+                <ul class="akml-picker-list">
+                    @foreach (var op in LightweightOps)
+                    {
+                        <li class="akml-picker-item" @onclick="@(() => PreviewLightweightAsync(op.Kind, op.Label))">
+                            <span class="akml-picker-title">@op.Label</span>
+                        </li>
+                    }
+                    @* Spec 027 T020 (US3) — heavyweight (schema-aware) ops. Enabled only when a
+                       live engine advertises refactoring.heavy; otherwise shown disabled with a
+                       reason (gated, never silently absent — FR-017). *@
+                    <li class="akml-picker-sep">Schema-aware (requires engine)</li>
+                    @foreach (var op in HeavyweightOps)
+                    {
+                        @if (Refactoring.HeavyAvailable)
+                        {
+                            <li class="akml-picker-item" @onclick="@(() => OpenHeavyDialog(op))">
+                                <span class="akml-picker-title">@op.Label</span>
+                            </li>
+                        }
+                        else
+                        {
+                            <li class="akml-picker-item akml-picker-disabled"
+                                title="Requires a paired engine advertising 'refactoring.heavy'.">
+                                <span class="akml-picker-title">@op.Label</span>
+                                <span class="akml-picker-gate">engine</span>
+                            </li>
+                        }
+                    }
+                </ul>
+                <div class="akml-picker-footer">
+                    <button class="akml-tool-button" @onclick="CloseRefactorMenu">Cancel</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* Spec 027 T018 (US2) — lightweight refactoring preview. *@
+    @if (_refactorPreview != null)
+    {
+        <RefactorPreviewPanel Title="@_refactorTitle"
+                              Preview="_refactorPreview"
+                              OnApply="ApplyLightweightAsync"
+                              OnCancel="CloseRefactorPreview" />
+    }
+
+    @* Spec 027 T021 (US3) — heavyweight input dialog (rename / extract). *@
+    @if (_heavyInput != null)
+    {
+        <RefactorInputDialog Title="@_refactorTitle"
+                             NeedsOriginalIdentifier="_heavyInput.NeedsOriginalIdentifier"
+                             NeedsNewName="_heavyInput.NeedsNewName"
+                             NeedsUnitName="_heavyInput.NeedsUnitName"
+                             OnSubmit="HeavyPreviewAsync"
+                             OnCancel="CloseHeavyDialog" />
+    }
+
+    @* Spec 027 T022 (US3) — heavyweight (bridge) preview. *@
+    @if (_heavyPreview != null)
+    {
+        <RefactorPreviewPanel Title="@_refactorTitle"
+                              Heavy="_heavyPreview"
+                              OnApply="ApplyHeavyAsync"
+                              OnCancel="CloseHeavyPreview" />
+    }
 </div>
 
 <style>
@@ -68,6 +175,7 @@
         flex-direction: column;
         height: 100%;
         outline: none;
+        position: relative;   /* positioning context for the surround/refactor overlay */
     }
     .akml-editor-toolbar {
         display: flex;
@@ -103,6 +211,68 @@
        paired engine never see a blank sidebar column. */
     .akml-editor-grid.with-schema { grid-template-columns: 1fr 240px 320px; }
     .akml-editor-grid.no-schema { grid-template-columns: 1fr 320px; }
+
+    /* Spec 027 T012 — surround-with picker overlay (also reused by the refactoring menu). */
+    .akml-overlay {
+        position: absolute; inset: 0;
+        background-color: rgba(0, 0, 0, 0.35);
+        display: flex; align-items: center; justify-content: center;
+        z-index: 50;
+    }
+    .akml-picker {
+        min-width: 320px; max-width: 480px; max-height: 70%;
+        display: flex; flex-direction: column;
+        background-color: var(--akml-surface-panel);
+        border: 1px solid var(--akml-border-default);
+        border-radius: 4px;
+        font-family: var(--akml-type-chrome-family);
+        font-size: var(--akml-type-chrome-size);
+        color: var(--akml-text-primary);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    }
+    .akml-picker-header {
+        padding: var(--akml-scalar-spacing-s) var(--akml-scalar-spacing-m);
+        border-bottom: 1px solid var(--akml-border-default);
+        font-weight: bold;
+    }
+    .akml-picker-empty {
+        padding: var(--akml-scalar-spacing-m);
+        color: var(--akml-text-secondary);
+        font-style: italic;
+    }
+    .akml-picker-list { margin: 0; padding: 0; list-style: none; overflow: auto; }
+    .akml-picker-item {
+        display: flex; gap: var(--akml-scalar-spacing-s); align-items: baseline;
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-m);
+        cursor: pointer;
+        border-bottom: 1px solid var(--akml-border-subtle);
+    }
+    .akml-picker-item:hover { background-color: var(--akml-surface-hover); }
+    .akml-picker-code {
+        font-family: var(--akml-type-editor-family);
+        color: var(--akml-text-secondary);
+        min-width: 64px;
+    }
+    .akml-picker-title { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .akml-picker-footer {
+        display: flex; justify-content: flex-end;
+        padding: var(--akml-scalar-spacing-s);
+        border-top: 1px solid var(--akml-border-default);
+    }
+    /* Spec 027 T020 — heavyweight section header + gated (engine-required) entries. */
+    .akml-picker-sep {
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-m);
+        color: var(--akml-text-secondary); font-size: 11px; text-transform: uppercase;
+        border-bottom: 1px solid var(--akml-border-subtle);
+        border-top: 1px solid var(--akml-border-default);
+    }
+    .akml-picker-disabled { cursor: default; opacity: 0.55; }
+    .akml-picker-disabled:hover { background-color: transparent; }
+    .akml-picker-gate {
+        font-size: 11px; color: var(--akml-text-onaccent);
+        background-color: var(--akml-text-secondary); border-radius: 2px;
+        padding: 0 var(--akml-scalar-spacing-xs);
+    }
 </style>
 
 @code {
@@ -130,6 +300,48 @@
     private string? _activeServerIdentity;
     private string? _activeDatabaseName;
     private bool _showSchemaTree => !string.IsNullOrEmpty(_activeServerIdentity) && !string.IsNullOrEmpty(_activeDatabaseName);
+
+    // Spec 027 T012 (US1) — surround-with picker state.
+    private bool _showSurroundPicker;
+    private List<WebSnippet> _surroundSnippets = new();
+
+    // Spec 027 T017/T018 (US2) — lightweight refactoring menu + preview state.
+    private bool _showRefactorMenu;
+    private LightweightPreview? _refactorPreview;
+    private string _refactorTitle = string.Empty;
+    private LightweightRefactorKind _pendingRefactorKind;
+
+    // The ten lightweight (parser-only, offline) operations, in menu order.
+    private static readonly (LightweightRefactorKind Kind, string Label)[] LightweightOps =
+    {
+        (LightweightRefactorKind.ExpandInsertColumns,    "Expand INSERT columns"),
+        (LightweightRefactorKind.ExpandUpdateColumns,    "Expand UPDATE columns"),
+        (LightweightRefactorKind.ConvertOldStyleJoins,   "Convert old-style joins"),
+        (LightweightRefactorKind.EncapsulateBeginEnd,    "Encapsulate in BEGIN/END"),
+        (LightweightRefactorKind.RemoveSemicolons,       "Remove semicolons"),
+        (LightweightRefactorKind.ReplaceDeprecatedSyntax,"Replace deprecated syntax"),
+        (LightweightRefactorKind.ExpandExecParameters,   "Expand EXEC parameters"),
+        (LightweightRefactorKind.ConvertSpExecutesql,    "Convert sp_executesql"),
+        (LightweightRefactorKind.AddGroupByColumns,      "Add GROUP BY columns"),
+        (LightweightRefactorKind.Unformat,               "Unformat"),
+    };
+
+    // Spec 027 T020/T021/T022 (US3) — the three PRD-named heavyweight (bridge-only) ops.
+    // OperationType ints match RefactorOperationType: SafeRename=0, ExtractToProc=2,
+    // ParameterizeValues=7. Each declares which RefactorInputDialog fields it needs.
+    private sealed record HeavyOp(string Label, int OperationType,
+        bool NeedsOriginalIdentifier, bool NeedsNewName, bool NeedsUnitName);
+
+    private static readonly HeavyOp[] HeavyweightOps =
+    {
+        new("Smart Rename",        OperationType: 0, NeedsOriginalIdentifier: true, NeedsNewName: true,  NeedsUnitName: false),
+        new("Parameterize Values", OperationType: 7, NeedsOriginalIdentifier: false, NeedsNewName: false, NeedsUnitName: false),
+        new("Extract Procedure",   OperationType: 2, NeedsOriginalIdentifier: false, NeedsNewName: false, NeedsUnitName: true),
+    };
+
+    private HeavyOp? _heavyInput;                       // non-null while the input dialog is open
+    private RefactorPreviewResponse? _heavyPreview;     // non-null while the bridge preview is shown
+    private RefactorInputDialog.RefactorInputs? _heavyInputs;   // captured dialog values for apply
 
     protected override async Task OnInitializedAsync()
     {
@@ -293,11 +505,194 @@
         if (_editor != null) await _editor.GotoLineAsync(loc.Line);
     }
 
+    // ── Spec 027 T025/T026 (US4) — inline suppression ────────────────────────────────────
+    /// <summary>Suppress this finding on its line: insert ` -- noqa: RuleId` at the line end
+    /// (the shared directive the engine + WPF surface honour) and re-analyse.</summary>
+    private async Task OnSuppressLineAsync(ProblemsListComponent.IssueLocation loc)
+    {
+        if (_editor == null) return;
+        _currentText = await _editor.InsertAtLineEndAsync(loc.Line, $" -- noqa: {loc.RuleId}");
+        Diagnostics.Log(DiagnosticLevel.Info, "suppress", $"Suppressed {loc.RuleId} on line {loc.Line}.");
+        await AnalyseAsync();
+    }
+
+    /// <summary>Disable this rule globally via a browser-local per-rule override (IndexedDB);
+    /// the analyser honours it on the next pass (the T024 bugfix). Persists across reload.</summary>
+    private async Task OnSuppressGlobalAsync(ProblemsListComponent.IssueLocation loc)
+    {
+        var settings = await AnalysisSettings.GetAsync();
+        settings.RuleOverrides[loc.RuleId] = "off";
+        await AnalysisSettings.SetAsync(settings);
+        _status = $"Disabled rule {loc.RuleId} globally.";
+        Diagnostics.Log(DiagnosticLevel.Info, "suppress", _status);
+        await AnalyseAsync();
+    }
+
     /// <summary>Spec 025 US4 — schema tree's click-to-insert callback. Drops the
     /// bracketed qualifier at the caret; CodeMirror's standard Ctrl+Z undoes it.</summary>
     private async Task OnSchemaObjectClickedAsync(string qualifiedName)
     {
         if (_editor != null) await _editor.InsertAtCaretAsync(qualifiedName);
+    }
+
+    // ── Spec 027 T012 (US1) — surround-with picker ───────────────────────────────────────
+    private async Task OpenSurroundPickerAsync()
+    {
+        var all = await Snippets.ListAsync();
+        _surroundSnippets = all.Where(s => s.Metadata.SurroundsWith).ToList();
+        _showSurroundPicker = true;
+        StateHasChanged();
+    }
+
+    private void CloseSurroundPicker()
+    {
+        _showSurroundPicker = false;
+    }
+
+    private async Task ApplySurroundAsync(WebSnippet snippet)
+    {
+        _showSurroundPicker = false;
+        if (_editor == null) return;
+        // The body's $SELECTEDTEXT$ token receives the current selection; remaining
+        // $Name$/$CURSOR$ tab-stops are driven by the editor's snippet expander.
+        var body = string.Join("\n", snippet.Body);
+        await _editor.SurroundSelectionAsync(body);
+        Diagnostics.Log(DiagnosticLevel.Info, "snippets", $"Surrounded with '{snippet.Metadata.Shortcode}'.");
+    }
+
+    // ── Spec 027 T017/T018 (US2) — lightweight refactoring menu + preview ────────────────
+    private void OpenRefactorMenu() => _showRefactorMenu = true;
+    private void CloseRefactorMenu() => _showRefactorMenu = false;
+    private void CloseRefactorPreview() => _refactorPreview = null;
+
+    /// <summary>Run a lightweight op against the whole document and show its before/after.
+    /// Parser-only — no engine round-trip (the op runs in <see cref="IRefactoringService"/>).</summary>
+    private async Task PreviewLightweightAsync(LightweightRefactorKind kind, string label)
+    {
+        _showRefactorMenu = false;
+        _pendingRefactorKind = kind;
+        _refactorTitle = label;
+        try
+        {
+            // Whole-document scope (selStart/selLen = 0); the op's Apply mirrors the engine.
+            _refactorPreview = await Refactoring.PreviewLightweightAsync(kind, _currentText);
+        }
+        catch (Exception ex)
+        {
+            _status = $"Refactor preview failed: {ex.Message}";
+            Diagnostics.Log(DiagnosticLevel.Error, "refactor", _status);
+            _refactorPreview = null;
+        }
+        StateHasChanged();
+    }
+
+    /// <summary>Commit the previewed lightweight refactoring — replace the editor content as a
+    /// single undoable edit (CodeMirror Ctrl+Z restores the prior text).</summary>
+    private async Task ApplyLightweightAsync()
+    {
+        if (_refactorPreview is not { Changed: true } || _editor == null)
+        {
+            _refactorPreview = null;
+            return;
+        }
+        var after = await Refactoring.ApplyLightweightAsync(_pendingRefactorKind, _currentText);
+        await _editor.SetTextAsync(after);
+        _currentText = after;
+        _refactorPreview = null;
+        _status = $"Applied: {_refactorTitle}.";
+        Diagnostics.Log(DiagnosticLevel.Info, "refactor", _status);
+        StateHasChanged();
+    }
+
+    // ── Spec 027 T020/T021/T022 (US3) — heavyweight (bridge) refactorings ─────────────────
+    private void OpenHeavyDialog(HeavyOp op)
+    {
+        _showRefactorMenu = false;
+        _refactorTitle = op.Label;
+        _heavyInput = op;
+        StateHasChanged();
+    }
+
+    private void CloseHeavyDialog() => _heavyInput = null;
+    private void CloseHeavyPreview() => _heavyPreview = null;
+
+    /// <summary>Run the bridge preview for a heavyweight op using the collected inputs.</summary>
+    private async Task HeavyPreviewAsync(RefactorInputDialog.RefactorInputs inputs)
+    {
+        var op = _heavyInput;
+        _heavyInput = null;
+        if (op == null) return;
+        _heavyInputs = inputs;
+        try
+        {
+            var request = new RefactorPreviewRequest
+            {
+                SessionId = string.Empty,
+                OperationType = op.OperationType,
+                DocumentText = _currentText,
+                OriginalIdentifier = inputs.OriginalIdentifier,
+                NewName = inputs.NewName,
+                ExtractedUnitName = inputs.ExtractedUnitName,
+            };
+            var response = await Refactoring.PreviewAsync(request, CancellationToken.None);
+            if (response == null)
+            {
+                // HeavyAvailable was true at menu time but the bridge dropped; surface a status.
+                _status = "Heavyweight refactoring is unavailable (engine not reachable).";
+                Diagnostics.Log(DiagnosticLevel.Warn, "refactor", _status);
+            }
+            else
+            {
+                _heavyPreview = response;
+            }
+        }
+        catch (Exception ex)
+        {
+            _status = $"Refactor preview failed: {ex.Message}";
+            Diagnostics.Log(DiagnosticLevel.Error, "refactor", _status);
+        }
+        StateHasChanged();
+    }
+
+    /// <summary>Commit a previewed heavyweight refactoring: send the approved changes over the
+    /// bridge, then replace the editor content with the applied result.</summary>
+    private async Task ApplyHeavyAsync()
+    {
+        var preview = _heavyPreview;
+        var inputs = _heavyInputs;
+        _heavyPreview = null;
+        if (preview is not { CanApply: true } || _editor == null) return;
+
+        var op = HeavyweightOps.FirstOrDefault(o => o.Label == _refactorTitle);
+        try
+        {
+            var apply = new RefactorApplyRequest
+            {
+                SessionId = string.Empty,
+                OperationType = op?.OperationType ?? 0,
+                ApprovedChanges = preview.Changes,
+            };
+            var response = await Refactoring.ApplyAsync(apply, CancellationToken.None);
+            if (response is { Success: true } && !string.IsNullOrEmpty(response.UpdatedDocumentText))
+            {
+                await _editor.SetTextAsync(response.UpdatedDocumentText);
+                _currentText = response.UpdatedDocumentText;
+                _status = $"Applied: {_refactorTitle} ({response.AppliedCount} change(s)).";
+            }
+            else
+            {
+                _status = response == null
+                    ? "Heavyweight refactoring is unavailable (engine not reachable)."
+                    : $"Refactor apply reported no document change ({_refactorTitle}).";
+            }
+            Diagnostics.Log(DiagnosticLevel.Info, "refactor", _status);
+        }
+        catch (Exception ex)
+        {
+            _status = $"Refactor apply failed: {ex.Message}";
+            Diagnostics.Log(DiagnosticLevel.Error, "refactor", _status);
+        }
+        StateHasChanged();
     }
 
     private async Task OnKeyDownAsync(KeyboardEventArgs e)
@@ -318,6 +713,8 @@
 
             if (e.CtrlKey && e.Key == "f") { await FormatAsync(); return; }
             if (e.CtrlKey && e.Key == "l") { await AnalyseAsync(); return; }
+            // Spec 027 T012 — Ctrl+K, Ctrl+S opens the surround-with picker.
+            if (e.CtrlKey && e.Key == "s") { await OpenSurroundPickerAsync(); return; }
         }
 
         // Ctrl+S — save.

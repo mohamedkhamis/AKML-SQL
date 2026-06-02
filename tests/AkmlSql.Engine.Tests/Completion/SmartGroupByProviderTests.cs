@@ -179,7 +179,7 @@ public class SmartGroupByProviderTests
                 "smart action must sort above all other completion items");
         }
 
-        Assert.Equal((int)CompletionObjectType.Snippet, smart!.ObjectType);
+        Assert.Equal((int)CompletionObjectType.SmartAction, smart!.ObjectType);
     }
 
     // ── PartialText guard ──

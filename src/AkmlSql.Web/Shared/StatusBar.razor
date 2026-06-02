@@ -1,16 +1,20 @@
 @*
-    Spec 021 (web edition) -- M3 task T075. Footer status bar.
-    Reflects bridge state (Disconnected / Connecting / Open / Reconnecting / Failed)
-    so the user sees whether live IntelliSense is available. Honours FR-016 (graceful
-    offline): when disconnected, the badge says "Disconnected" -- never a full-page
-    blocker.
+    Spec 021 (web edition) -- M3 task T075; extended by spec 027 (M5 offline closure) T028
+    (US5). Footer status indicator. Surfaces a CACHE-AWARE IntelliSense-availability state
+    (Live / Cached / Offline / Disconnected) derived from BOTH the bridge state and whether a
+    schema snapshot is cached for the active (server, db) — not bridge state alone. This makes
+    the already-shipped offline IntelliSense legible: "disconnected but cached completions
+    still work" reads as **Cached**, distinct from **Offline** (keyword-only).
 *@
 @using AkmlSql.Web.Services
 @implements IDisposable
 @inject IEngineBridge Bridge
+@inject IConnectionStore Connections
+@inject ISchemaCacheStore SchemaCache
+@inject ISchemaSync SchemaSync
 
 <div class="akml-status">
-    <span class="akml-status-pill @PillClass">@PillLabel</span>
+    <span class="akml-status-pill @PillClass" data-testid="status-pill">@PillLabel</span>
     <span class="akml-status-text">@StatusText</span>
     <span class="akml-status-spacer"></span>
     @if (!string.IsNullOrEmpty(Bridge.EngineVersion))
@@ -38,9 +42,11 @@
         color: var(--akml-text-onaccent);
         font-size: 11px;
     }
+    .akml-status-pill-live { background-color: var(--akml-status-success); }
+    .akml-status-pill-cached { background-color: var(--akml-status-info); }
+    .akml-status-pill-offline { background-color: var(--akml-text-secondary); }
     .akml-status-pill-disconnected { background-color: var(--akml-text-secondary); }
     .akml-status-pill-connecting { background-color: var(--akml-status-info); }
-    .akml-status-pill-open { background-color: var(--akml-status-success); }
     .akml-status-pill-reconnecting { background-color: var(--akml-status-warning); }
     .akml-status-pill-failed { background-color: var(--akml-status-danger); }
     .akml-status-text { flex: 0 0 auto; }
@@ -48,28 +54,92 @@
 </style>
 
 @code {
-    private BridgeState _state = BridgeState.Disconnected;
-    // Spec 025 US3: countdown plumbing.
+    /// <summary>The user-facing IntelliSense-availability states (FR-023), derived from bridge
+    /// state + cache presence. Connecting / Reconnecting / Failed surface directly (with the
+    /// reconnect countdown) only when no cache softens them to Cached.</summary>
+    private enum Availability { Live, Cached, Offline, Disconnected, Connecting, Reconnecting, Failed }
+
+    private BridgeState _bridgeState = BridgeState.Disconnected;
+    private bool _cachePresent;
+    private Availability _state = Availability.Disconnected;
+
+    // Spec 025 US3: reconnect countdown plumbing (preserved).
     private DateTimeOffset? _nextRetryAt;
     private System.Threading.Timer? _countdownTimer;
 
     protected override void OnInitialized()
     {
-        _state = Bridge.State;
+        _bridgeState = Bridge.State;
         Bridge.StateChanged += OnStateChanged;
         Bridge.RetryScheduled += OnRetryScheduled;
+        SchemaSync.ChecksumDrifted += OnChecksumDrifted;
         _countdownTimer = new System.Threading.Timer(_ => TickCountdown(), null,
             System.Threading.Timeout.Infinite, System.Threading.Timeout.Infinite);
     }
 
+    protected override async Task OnInitializedAsync()
+    {
+        await ProbeCacheAsync();
+        Recompute();
+    }
+
+    /// <summary>Probe whether a schema snapshot exists for the active connection's (server, db).
+    /// Best-effort: any failure leaves <c>_cachePresent</c> false (⇒ Offline, never a crash).</summary>
+    private async Task ProbeCacheAsync()
+    {
+        try
+        {
+            var connId = await Connections.GetActiveIdAsync();
+            if (string.IsNullOrEmpty(connId)) { _cachePresent = false; return; }
+            var conn = await Connections.GetAsync(connId);
+            if (conn == null) { _cachePresent = false; return; }
+            // Matches Editor.razor's active-session derivation (db is the "master" placeholder
+            // until the per-connection db picker lands).
+            var snapshot = await SchemaCache.GetAsync($"{conn.Host}:{conn.Port}", "master");
+            _cachePresent = snapshot?.PhaseA is { Length: > 0 };
+        }
+        catch
+        {
+            _cachePresent = false;
+        }
+    }
+
     private void OnStateChanged(BridgeState newState)
     {
-        InvokeAsync(() =>
+        InvokeAsync(async () =>
         {
-            _state = newState;
-            if (_state != BridgeState.Reconnecting) _nextRetryAt = null;
+            _bridgeState = newState;
+            if (newState != BridgeState.Reconnecting) _nextRetryAt = null;
+            await ProbeCacheAsync();
+            Recompute();
             StateHasChanged();
         });
+    }
+
+    private void OnChecksumDrifted(ChecksumDriftNotice _)
+    {
+        // A drift means a fresh snapshot just landed — re-probe so the indicator reflects the
+        // cache without a reload.
+        InvokeAsync(async () =>
+        {
+            await ProbeCacheAsync();
+            Recompute();
+            StateHasChanged();
+        });
+    }
+
+    /// <summary>Derive the user-facing state per the contract matrix (FR-023). No flicker: while
+    /// Reconnecting with a cache present, hold Cached; flip to Live only on Open.</summary>
+    private void Recompute()
+    {
+        _state = _bridgeState switch
+        {
+            BridgeState.Open => Availability.Live,
+            BridgeState.Connecting => _cachePresent ? Availability.Cached : Availability.Connecting,
+            BridgeState.Reconnecting => _cachePresent ? Availability.Cached : Availability.Reconnecting,
+            BridgeState.Failed => _cachePresent ? Availability.Cached : Availability.Failed,
+            _ /* Disconnected */ => _cachePresent ? Availability.Cached : Availability.Offline,
+        };
     }
 
     private void OnRetryScheduled(DateTimeOffset? nextRetryAt)
@@ -77,14 +147,9 @@
         InvokeAsync(() =>
         {
             _nextRetryAt = nextRetryAt;
-            if (nextRetryAt != null)
-            {
-                _countdownTimer?.Change(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
-            }
-            else
-            {
-                _countdownTimer?.Change(System.Threading.Timeout.Infinite, System.Threading.Timeout.Infinite);
-            }
+            _countdownTimer?.Change(
+                nextRetryAt != null ? TimeSpan.FromSeconds(1) : System.Threading.Timeout.InfiniteTimeSpan,
+                TimeSpan.FromSeconds(1));
             StateHasChanged();
         });
     }
@@ -93,24 +158,26 @@
 
     private string PillLabel => _state switch
     {
-        BridgeState.Disconnected => "Disconnected",
-        BridgeState.Connecting => "Connecting",
-        BridgeState.Open => "Live",
-        BridgeState.Reconnecting => "Reconnecting",
-        BridgeState.Failed => "Failed",
-        _ => "Unknown",
+        Availability.Live => "Live",
+        Availability.Cached => "Cached",
+        Availability.Offline => "Offline",
+        Availability.Connecting => "Connecting",
+        Availability.Reconnecting => "Reconnecting",
+        Availability.Failed => "Failed",
+        _ => "Disconnected",
     };
 
     private string PillClass => "akml-status-pill-" + _state.ToString().ToLowerInvariant();
 
     private string StatusText => _state switch
     {
-        BridgeState.Disconnected => "Offline — formatter / analyser run in-browser only.",
-        BridgeState.Connecting => "Handshaking with engine…",
-        BridgeState.Open => "Live IntelliSense available.",
-        BridgeState.Reconnecting => ReconnectingText(),
-        BridgeState.Failed => "Handshake failed. Check engine pairing.",
-        _ => "",
+        Availability.Live => "Live IntelliSense available.",
+        Availability.Cached => "Engine offline — IntelliSense served from the local schema cache.",
+        Availability.Offline => "Offline — keyword-only IntelliSense; formatter / analyser run in-browser.",
+        Availability.Connecting => "Handshaking with engine…",
+        Availability.Reconnecting => ReconnectingText(),
+        Availability.Failed => "Handshake failed. Check engine pairing.",
+        _ => "Disconnected.",
     };
 
     private string ReconnectingText()
@@ -126,6 +193,7 @@
     {
         Bridge.StateChanged -= OnStateChanged;
         Bridge.RetryScheduled -= OnRetryScheduled;
+        SchemaSync.ChecksumDrifted -= OnChecksumDrifted;
         _countdownTimer?.Dispose();
     }
 }

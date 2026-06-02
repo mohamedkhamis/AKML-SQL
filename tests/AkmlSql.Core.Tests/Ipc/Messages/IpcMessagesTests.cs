@@ -127,6 +127,7 @@ namespace AkmlSql.Core.Tests.Ipc.Messages
             Assert.Equal(9,  (int)CompletionObjectType.Variable);
             Assert.Equal(10, (int)CompletionObjectType.Alias);
             Assert.Equal(11, (int)CompletionObjectType.Parameter);
+            Assert.Equal(12, (int)CompletionObjectType.SmartAction);
         }
 
         // ── SignatureRequest + SignatureResponse + SignatureOverload + ParameterInfo ──

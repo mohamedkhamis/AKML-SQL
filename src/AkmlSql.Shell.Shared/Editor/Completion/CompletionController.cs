@@ -292,6 +292,13 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 // Space as insertion key (SQL Prompt style): commit if enabled in settings.
                 // VS inserts the space BEFORE HandleTypedChar, so the caret is after the space.
                 // We must compute the replacement span from before the space to cover the partial text.
+
+                // SQL-Prompt-style smart GROUP BY: capture the "GROUP BY "/"ORDER BY " context
+                // BEFORE any commit mutates the buffer, so we re-open with the engine's
+                // "▶ Add columns from SELECT" action whether or not SpaceCommits consumes this
+                // space. The popup is typically OPEN here (the just-typed "BY" re-opened it), so
+                // without this the trigger in the popup-CLOSED branch below would never run.
+                bool byContext = IsByKeywordBeforeCaret();
                 try
                 {
                     var settings = AkmlSql.Core.Config.ConfigManager.Load();
@@ -301,6 +308,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                         if (item != null)
                         {
                             CommitItemFromSpaceKey(item);
+                            if (byContext) TriggerCompletion();
                             return; // Space is already inserted by VS before HandleTypedChar
                         }
                     }
@@ -314,6 +322,10 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                     _expectsObjects = true;
                     TriggerCompletion();
                 }
+                else if (byContext)
+                {
+                    TriggerCompletion();
+                }
             }
             else if (c == ' ' || c == '(' || c == ')' || c == ';' || c == ',')
             {
@@ -324,6 +336,15 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 if (c == ' ' && IsObjectExpectingKeywordBeforeCaret())
                 {
                     _expectsObjects = true;
+                    TriggerCompletion();
+                }
+                // SQL-Prompt-style smart GROUP BY: auto-trigger after "GROUP BY " (and
+                // "ORDER BY ") so the engine's "▶ Add columns from SELECT" action and column
+                // suggestions appear without a manual Ctrl+Space. Mirrors the web editor's
+                // POST_KEYWORD_TRIGGER, which fires after a bare "by". We deliberately do NOT
+                // set _expectsObjects — GROUP BY wants columns + the smart item, not tables.
+                else if (c == ' ' && IsByKeywordBeforeCaret())
+                {
                     TriggerCompletion();
                 }
             }
@@ -897,6 +918,43 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
 
                 var word = snapshot.GetText(start, end - start);
                 return IsObjectExpectingKeyword(word);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Checks if the word immediately before the caret (before the just-typed space) is a
+        /// "BY". Used to auto-trigger column completions — and the engine's smart "Add columns
+        /// from SELECT" GROUP BY action — the moment the user finishes typing "GROUP BY " /
+        /// "ORDER BY ". The bare keyword "BY" also ends PARTITION BY (window functions); firing
+        /// a completion there is harmless — the engine only emits the smart GROUP BY item when
+        /// the cursor is in a real GROUP BY context, and column suggestions are welcome anyway.
+        /// </summary>
+        private bool IsByKeywordBeforeCaret()
+        {
+            try
+            {
+                var snapshot = _textView.TextBuffer.CurrentSnapshot;
+                int pos = _textView.Caret.Position.BufferPosition.Position;
+
+                // Caret is after the space. Move back past the space(s).
+                int end = pos - 1;
+                while (end > 0 && snapshot[end - 1] == ' ')
+                    end--;
+
+                // Now find the word before the space(s).
+                int start = end;
+                while (start > 0 && char.IsLetter(snapshot[start - 1]))
+                    start--;
+
+                if (start >= end)
+                    return false;
+
+                var word = snapshot.GetText(start, end - start);
+                return string.Equals(word, "BY", StringComparison.OrdinalIgnoreCase);
             }
             catch
             {

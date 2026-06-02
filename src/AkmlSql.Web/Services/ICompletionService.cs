@@ -5,6 +5,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
+using AkmlSql.Engine.Completion.Providers;
+using AkmlSql.Engine.Parser;
 using MessagePack;
 
 namespace AkmlSql.Web.Services;
@@ -21,7 +23,15 @@ namespace AkmlSql.Web.Services;
 /// </summary>
 public interface ICompletionService
 {
-    Task<CompletionResponse> CompleteAsync(CompletionRequest request, CancellationToken ct);
+    /// <param name="liveDocumentText">
+    /// The current editor text, marshalled fresh from JS on every request. Used only by the
+    /// OFFLINE path (the smart GROUP BY action needs to parse the live SELECT list); the online
+    /// path ignores it — the engine already holds the document in its session. Passing it as a
+    /// call argument (rather than on <see cref="CompletionRequest"/>) keeps it off the engine
+    /// wire and avoids the debounced-session staleness that would hide the item during fast typing.
+    /// </param>
+    Task<CompletionResponse> CompleteAsync(
+        CompletionRequest request, CancellationToken ct, string? liveDocumentText = null);
 }
 
 internal sealed class CompletionService : ICompletionService
@@ -35,7 +45,8 @@ internal sealed class CompletionService : ICompletionService
         _cache = cache;   // null in tests that only exercise the online path
     }
 
-    public async Task<CompletionResponse> CompleteAsync(CompletionRequest request, CancellationToken ct)
+    public async Task<CompletionResponse> CompleteAsync(
+        CompletionRequest request, CancellationToken ct, string? liveDocumentText = null)
     {
         if (_bridge.State != BridgeState.Open)
         {
@@ -43,7 +54,7 @@ internal sealed class CompletionService : ICompletionService
             // synthesise a completion list from it. Returns empty when no cache.
             if (_cache != null)
             {
-                return await BuildFromCacheAsync().ConfigureAwait(false);
+                return await BuildFromCacheAsync(request.CursorOffset, liveDocumentText).ConfigureAwait(false);
             }
             return new CompletionResponse();
         }
@@ -57,13 +68,13 @@ internal sealed class CompletionService : ICompletionService
             // Bridge dropped mid-call -- try cache before returning empty.
             if (_cache != null)
             {
-                return await BuildFromCacheAsync().ConfigureAwait(false);
+                return await BuildFromCacheAsync(request.CursorOffset, liveDocumentText).ConfigureAwait(false);
             }
             return new CompletionResponse();
         }
     }
 
-    private async Task<CompletionResponse> BuildFromCacheAsync()
+    private async Task<CompletionResponse> BuildFromCacheAsync(int cursorOffset, string? liveDocumentText)
     {
         // Keywords are ALWAYS available offline — they don't depend on any cache.
         // When no schema snapshot is present (fresh browser, never paired with an
@@ -73,6 +84,13 @@ internal sealed class CompletionService : ICompletionService
         // whenever a snapshot is available.
         var items = new List<CompletionItem>();
         AppendKeywords(items);
+
+        // SQL-Prompt-style smart GROUP BY (spec 027 follow-up): when the cursor sits in a
+        // GROUP BY clause, prepend the top-priority "Add columns from SELECT" item. This is
+        // the SAME item the engine emits online via SmartGroupByProvider; offline we run the
+        // provider's text-based extraction against the LIVE document. It needs no DatabaseCache,
+        // so it works even when no schema snapshot has been fetched yet.
+        TryPrependSmartGroupBy(items, cursorOffset, liveDocumentText);
 
         // Pick the most-recently-used snapshot. The store sorts ascending; the user's
         // active session collapses to the LAST entry. Multi-server scenarios would
@@ -106,6 +124,44 @@ internal sealed class CompletionService : ICompletionService
             Items = items.ToArray(),
             IsIncomplete = false,
         };
+    }
+
+    /// <summary>
+    /// Runs the engine's <see cref="SmartGroupByProvider"/> extraction against the LIVE document
+    /// text (marshalled fresh from JS, never the debounced session) and, when the caret is in a
+    /// GROUP BY clause with no partial token, prepends the "Add columns from SELECT" action so it
+    /// sorts first. Mirrors the engine's online behaviour (same item, same gating) — purely
+    /// parser-driven, so it needs no schema cache. Best-effort: a null/empty document, an
+    /// out-of-range offset, or a parse failure leaves the list untouched.
+    /// </summary>
+    // Reused across offline completions to avoid rebuilding the ScriptDom parser on every
+    // keystroke trigger. TsqlParserService locks parser construction but NOT tokenization; a
+    // shared instance is safe here only because Blazor WASM is single-threaded. SmartGroupByProvider
+    // is stateless — held only to call its authoritative CanHandle gate so the offline surface
+    // cannot drift from the engine.
+    private static readonly TsqlParserService _offlineParser = new();
+    private static readonly SmartGroupByProvider _smartGroupBy = new();
+
+    private static void TryPrependSmartGroupBy(List<CompletionItem> items, int cursorOffset, string? liveDocumentText)
+    {
+        if (string.IsNullOrEmpty(liveDocumentText)) return;
+        if (cursorOffset < 0 || cursorOffset > liveDocumentText.Length) return;
+
+        try
+        {
+            var tokens = _offlineParser.GetTokenStream(liveDocumentText);
+            var context = new CursorContextAnalyzer().Analyze(tokens, cursorOffset);
+            // Reuse the provider's authoritative eligibility gate (GROUP BY clause, no partial
+            // token) so the offline surface can never diverge from the engine/online path.
+            if (!_smartGroupBy.CanHandle(context, null)) return;
+
+            var item = SmartGroupByProvider.BuildSmartItem(tokens, cursorOffset);
+            if (item != null) items.Insert(0, item);
+        }
+        catch
+        {
+            // Offline best-effort — never let a parse failure break the completion list.
+        }
     }
 
     // The minimal SQL keyword surface. The online engine has a richer set, but for
