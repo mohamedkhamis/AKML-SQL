@@ -239,4 +239,18 @@ public sealed class CompletionServiceOfflineTests
         Assert.NotEmpty(response.Items);
         Assert.DoesNotContain(response.Items, i => i.DisplayText.StartsWith("▶", System.StringComparison.Ordinal));
     }
+
+    [Fact]
+    public async Task Smart_group_by_item_is_absent_once_a_partial_token_is_typed()
+    {
+        // CanHandle also requires an EMPTY partial token. Once the user starts typing a column after
+        // GROUP BY ("GROUP BY a"), the smart action must yield to normal column completion. This locks
+        // the offline side of the gate directly (the engine covers it in PartialTextPresent_SuppressesSmartItem).
+        const string sql = "SELECT a, b, COUNT(*) FROM t GROUP BY a";
+
+        var response = await OfflineService().CompleteAsync(
+            new CompletionRequest { CursorOffset = sql.Length }, CancellationToken.None, sql);
+
+        Assert.DoesNotContain(response.Items, i => i.DisplayText.StartsWith("▶", System.StringComparison.Ordinal));
+    }
 }

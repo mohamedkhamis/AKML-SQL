@@ -122,6 +122,7 @@ namespace AkmlSql.Shell.Shared.Ui
                 case 9: return "Variable";
                 case 10: return "Alias";
                 case 11: return "Parameter";
+                case 12: return "SmartAction";
                 default: return "Unknown";
             }
         }

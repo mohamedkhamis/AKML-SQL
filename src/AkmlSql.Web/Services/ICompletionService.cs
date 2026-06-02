@@ -134,10 +134,11 @@ internal sealed class CompletionService : ICompletionService
     /// parser-driven, so it needs no schema cache. Best-effort: a null/empty document, an
     /// out-of-range offset, or a parse failure leaves the list untouched.
     /// </summary>
-    // Reused across offline completions. TsqlParserService is a thread-safe wrapper (and WASM is
-    // single-threaded anyway), so a shared instance avoids rebuilding the ScriptDom parser on
-    // every keystroke trigger. SmartGroupByProvider is stateless — held only to call its
-    // authoritative CanHandle gate so the offline surface cannot drift from the engine.
+    // Reused across offline completions to avoid rebuilding the ScriptDom parser on every
+    // keystroke trigger. TsqlParserService locks parser construction but NOT tokenization; a
+    // shared instance is safe here only because Blazor WASM is single-threaded. SmartGroupByProvider
+    // is stateless — held only to call its authoritative CanHandle gate so the offline surface
+    // cannot drift from the engine.
     private static readonly TsqlParserService _offlineParser = new();
     private static readonly SmartGroupByProvider _smartGroupBy = new();
 
