@@ -113,6 +113,7 @@ namespace AkmlSql.Shell.Shared.Editor
                 case 9: return VariableColor;
                 case 10: return AliasColor;
                 case 11: return ParameterColor;
+                case 12: return FunctionColor;   // SmartAction — shares Orange with Function
                 default: return SchemaColor;
             }
         }
@@ -133,6 +134,7 @@ namespace AkmlSql.Shell.Shared.Editor
                 case 9: return "@";  // Variable
                 case 10: return "A"; // Alias
                 case 11: return "P"; // Parameter
+                case 12: return "▶"; // SmartAction
                 default: return "?";
             }
         }

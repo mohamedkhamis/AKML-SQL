@@ -87,7 +87,11 @@ public class SmartGroupByProvider : ICompletionProvider
         {
             DisplayText = "▶ Add columns from SELECT",
             InsertText = insertText,
-            ObjectType = (int)CompletionObjectType.Snippet,
+            // SmartAction (not Snippet): SSMS commits this as a literal insert of InsertText
+            // via its default commit path, and never hides it behind the snippet-visibility
+            // toggle. (Tagging it Snippet made SSMS treat "a, b" as a shortcode to expand —
+            // inserting nothing — and hid it by default. The web inserts it literally either way.)
+            ObjectType = (int)CompletionObjectType.SmartAction,
             SecondaryText = preview,
             SourceObject = "GroupBy",
             // Negative priority so it sorts above all column suggestions

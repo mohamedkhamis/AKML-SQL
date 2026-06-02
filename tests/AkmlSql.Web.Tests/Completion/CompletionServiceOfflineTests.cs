@@ -206,10 +206,14 @@ public sealed class CompletionServiceOfflineTests
             new CompletionRequest { CursorOffset = sql.Length }, CancellationToken.None, sql);
 
         Assert.NotEmpty(response.Items);
-        var smart = response.Items[0];   // Insert(0) + JS boost ⇒ first
-        Assert.StartsWith("▶", smart.DisplayText);
+        // First because TryPrependSmartGroupBy does items.Insert(0, ...). NOTE: the actual
+        // top-of-popup ordering in the live editor is delivered by the JS `boost` in
+        // akml-editor.js (CM6 re-sorts an empty-prefix popup by label) — that half is verified
+        // by the Playwright run, not by this C# test.
+        var smart = response.Items[0];
+        Assert.Equal("▶ Add columns from SELECT", smart.DisplayText);
         Assert.Equal("a, b", smart.InsertText);
-        Assert.Equal((int)CompletionObjectType.Snippet, smart.ObjectType);
+        Assert.Equal((int)CompletionObjectType.SmartAction, smart.ObjectType);
     }
 
     [Fact]
@@ -221,7 +225,7 @@ public sealed class CompletionServiceOfflineTests
         var response = await OfflineService().CompleteAsync(
             new CompletionRequest { CursorOffset = sql.Length }, CancellationToken.None, sql);
 
-        Assert.DoesNotContain(response.Items, i => i.DisplayText.StartsWith("▶"));
+        Assert.DoesNotContain(response.Items, i => i.DisplayText.StartsWith("▶", System.StringComparison.Ordinal));
     }
 
     [Fact]
@@ -233,6 +237,6 @@ public sealed class CompletionServiceOfflineTests
             new CompletionRequest { CursorOffset = 0 }, CancellationToken.None, liveDocumentText: null);
 
         Assert.NotEmpty(response.Items);
-        Assert.DoesNotContain(response.Items, i => i.DisplayText.StartsWith("▶"));
+        Assert.DoesNotContain(response.Items, i => i.DisplayText.StartsWith("▶", System.StringComparison.Ordinal));
     }
 }

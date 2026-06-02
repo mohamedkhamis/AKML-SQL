@@ -131,6 +131,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 9  => ThemeTokens.IconBadgeView,         // Variable — shares Teal with View
                 10 => ThemeTokens.IconBadgeColumn,       // Alias — shares Blue with Column
                 11 => ThemeTokens.IconBadgeStoredProc,   // Parameter — shares Purple with StoredProc
+                12 => ThemeTokens.IconBadgeFunction,     // SmartAction — shares Orange with Function
                 _  => ThemeTokens.IconBadgeKeyword,      // Unknown — Silver/Gray
             };
 
@@ -163,6 +164,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 case 9: return "@";   // Variable
                 case 10: return "A";  // Alias
                 case 11: return "P";  // Parameter
+                case 12: return "▶";  // SmartAction
                 default: return "?";
             }
         }

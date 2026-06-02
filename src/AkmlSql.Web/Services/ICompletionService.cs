@@ -134,20 +134,25 @@ internal sealed class CompletionService : ICompletionService
     /// parser-driven, so it needs no schema cache. Best-effort: a null/empty document, an
     /// out-of-range offset, or a parse failure leaves the list untouched.
     /// </summary>
+    // Reused across offline completions. TsqlParserService is a thread-safe wrapper (and WASM is
+    // single-threaded anyway), so a shared instance avoids rebuilding the ScriptDom parser on
+    // every keystroke trigger. SmartGroupByProvider is stateless — held only to call its
+    // authoritative CanHandle gate so the offline surface cannot drift from the engine.
+    private static readonly TsqlParserService _offlineParser = new();
+    private static readonly SmartGroupByProvider _smartGroupBy = new();
+
     private static void TryPrependSmartGroupBy(List<CompletionItem> items, int cursorOffset, string? liveDocumentText)
     {
         if (string.IsNullOrEmpty(liveDocumentText)) return;
-        if (cursorOffset < 0 || cursorOffset > liveDocumentText!.Length) return;
+        if (cursorOffset < 0 || cursorOffset > liveDocumentText.Length) return;
 
         try
         {
-            var tokens = new TsqlParserService().GetTokenStream(liveDocumentText);
+            var tokens = _offlineParser.GetTokenStream(liveDocumentText);
             var context = new CursorContextAnalyzer().Analyze(tokens, cursorOffset);
-            // Gate exactly as SmartGroupByProvider.CanHandle does: GROUP BY, no partial token.
-            if (context.ClauseType != ClauseType.GroupBy || !string.IsNullOrEmpty(context.PartialText))
-            {
-                return;
-            }
+            // Reuse the provider's authoritative eligibility gate (GROUP BY clause, no partial
+            // token) so the offline surface can never diverge from the engine/online path.
+            if (!_smartGroupBy.CanHandle(context, null)) return;
 
             var item = SmartGroupByProvider.BuildSmartItem(tokens, cursorOffset);
             if (item != null) items.Insert(0, item);

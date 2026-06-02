@@ -292,6 +292,13 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 // Space as insertion key (SQL Prompt style): commit if enabled in settings.
                 // VS inserts the space BEFORE HandleTypedChar, so the caret is after the space.
                 // We must compute the replacement span from before the space to cover the partial text.
+
+                // SQL-Prompt-style smart GROUP BY: capture the "GROUP BY "/"ORDER BY " context
+                // BEFORE any commit mutates the buffer, so we re-open with the engine's
+                // "▶ Add columns from SELECT" action whether or not SpaceCommits consumes this
+                // space. The popup is typically OPEN here (the just-typed "BY" re-opened it), so
+                // without this the trigger in the popup-CLOSED branch below would never run.
+                bool byContext = IsByKeywordBeforeCaret();
                 try
                 {
                     var settings = AkmlSql.Core.Config.ConfigManager.Load();
@@ -301,6 +308,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                         if (item != null)
                         {
                             CommitItemFromSpaceKey(item);
+                            if (byContext) TriggerCompletion();
                             return; // Space is already inserted by VS before HandleTypedChar
                         }
                     }
@@ -312,6 +320,10 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 if (IsObjectExpectingKeywordBeforeCaret())
                 {
                     _expectsObjects = true;
+                    TriggerCompletion();
+                }
+                else if (byContext)
+                {
                     TriggerCompletion();
                 }
             }
