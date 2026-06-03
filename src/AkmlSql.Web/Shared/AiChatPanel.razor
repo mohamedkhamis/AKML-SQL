@@ -211,15 +211,16 @@
             History = snapshot,
         };
 
+        var sb = new System.Text.StringBuilder();
         var sw = System.Diagnostics.Stopwatch.StartNew();
         try
         {
             await foreach (var token in Client.StreamAsync(providerId, request, ct))
             {
-                assistant.Content += token;   // typewriter
-                if (sw.ElapsedMilliseconds >= RenderThrottleMs) { sw.Restart(); StateHasChanged(); }
+                sb.Append(token);   // O(1) amortized — avoids O(n^2) string rebuild per token
+                if (sw.ElapsedMilliseconds >= RenderThrottleMs) { sw.Restart(); assistant.Content = sb.ToString(); StateHasChanged(); }
             }
-            Diagnostics.Log(DiagnosticLevel.Info, "ai-chat", $"Turn {_conversation.Turns.Count / 2} ({assistant.Content.Length} chars).");
+            Diagnostics.Log(DiagnosticLevel.Info, "ai-chat", $"Turn {_conversation.Turns.Count / 2} ({sb.Length} chars).");
         }
         catch (OperationCanceledException)
         {
@@ -242,6 +243,7 @@
         }
         finally
         {
+            assistant.Content = sb.ToString();   // flush full / partial text before the empty check
             if (string.IsNullOrEmpty(assistant.Content))
             {
                 // Nothing came back (error / cancel before the first token): roll back the

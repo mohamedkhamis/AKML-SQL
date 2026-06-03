@@ -160,15 +160,16 @@
         _lastError = null;
         _lastResult = string.Empty;
         StateHasChanged();
+        var sb = new System.Text.StringBuilder();
         var sw = System.Diagnostics.Stopwatch.StartNew();
         try
         {
             await foreach (var token in stream(SelectedSql, ct))
             {
-                _lastResult += token;
-                if (sw.ElapsedMilliseconds >= RenderThrottleMs) { sw.Restart(); StateHasChanged(); }   // throttled typewriter
+                sb.Append(token);   // O(1) amortized — avoids O(n^2) string rebuild per token
+                if (sw.ElapsedMilliseconds >= RenderThrottleMs) { sw.Restart(); _lastResult = sb.ToString(); StateHasChanged(); }   // throttled typewriter
             }
-            Diagnostics.Log(DiagnosticLevel.Info, "ai", $"{label} completed ({_lastResult?.Length ?? 0} chars).");
+            Diagnostics.Log(DiagnosticLevel.Info, "ai", $"{label} completed ({sb.Length} chars).");
         }
         catch (OperationCanceledException)
         {
@@ -192,6 +193,7 @@
         }
         finally
         {
+            _lastResult = sb.ToString();   // flush the full / partial text (preserves FR-011 partial-on-error)
             _busy = false;
             if (!_disposed) StateHasChanged();
         }
