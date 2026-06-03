@@ -8,6 +8,7 @@
 @using AkmlSql.Web.Services
 @inject IAiClientFactory Client
 @inject IAiPreference Preference
+@inject IAiFeatureSettings Settings
 @inject IDiagnosticsRingBuffer Diagnostics
 
 <div class="akml-chat">
@@ -155,8 +156,21 @@
         if (_busy || string.IsNullOrWhiteSpace(_pending)) return;
 
         var userMessage = _pending.Trim();
-        _pending = string.Empty;
         _lastError = null;
+
+        // FR-004 / FR-012: chat honours the fully-local guard too -- refuse a cloud provider
+        // under Fully local before anything is sent.
+        var providerId = await Preference.GetActiveAsync();
+        var mode = await Settings.ResolveModeAsync("chat");
+        if (mode == AiPrivacyMode.FullyLocal && !AiProviders.IsLocal(providerId))
+        {
+            _lastError = "Chat is set to Fully local, but the active provider is not local. " +
+                         "Switch to Ollama or LM Studio in Settings -> AI.";
+            StateHasChanged();
+            return;
+        }
+
+        _pending = string.Empty;
         _busy = true;
 
         // Push the user turn into the log right away so the UI feels responsive.
@@ -165,7 +179,6 @@
 
         try
         {
-            var providerId = await Preference.GetActiveAsync();
             var request = new AiChatRequest
             {
                 SystemPrompt = SystemPrompt,

@@ -9,6 +9,7 @@
 @using AkmlSql.Web.Services
 @inject IAiKeyVault Vault
 @inject IAiPreference Preference
+@inject IAiFeatureSettings FeatureSettings
 
 <PageTitle>AI providers — AKML SQL</PageTitle>
 
@@ -106,6 +107,48 @@
             <p class="akml-ai-status">@_status</p>
         }
     </form>
+
+    <h3>Privacy modes</h3>
+    <p class="akml-help">
+        Controls how much database schema each AI feature sends to the provider.
+        "No schema" sends only your SQL; "Fully local" forces a local provider (Ollama / LM Studio).
+        Set a global default and, optionally, override it per feature.
+    </p>
+    @if (_aiSettings != null)
+    {
+        @if (_aiSettings.GlobalDefaultMode == AiPrivacyMode.FullyLocal)
+        {
+            <p class="akml-ai-form-hint">Fully local is active — only Ollama / LM Studio can be the active provider.</p>
+        }
+        <label class="akml-ai-mode-global">Global default
+            <select @onchange="OnGlobalModeChanged">
+                @foreach (var m in AllModes)
+                {
+                    <option value="@m" selected="@(_aiSettings.GlobalDefaultMode == m)">@ModeLabel(m)</option>
+                }
+            </select>
+        </label>
+        <table class="akml-ai-table">
+            <thead><tr><th>Feature</th><th>Mode override</th></tr></thead>
+            <tbody>
+                @foreach (var (id, label) in Features)
+                {
+                    <tr>
+                        <td>@label</td>
+                        <td>
+                            <select @onchange="@(e => OnFeatureModeChanged(id, e))">
+                                <option value="" selected="@(!_aiSettings.FeatureModeOverrides.ContainsKey(id))">(use default)</option>
+                                @foreach (var m in AllModes)
+                                {
+                                    <option value="@m" selected="@(_aiSettings.FeatureModeOverrides.TryGetValue(id, out var fm) && fm == m)">@ModeLabel(m)</option>
+                                }
+                            </select>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
 </div>
 
 <style>
@@ -191,11 +234,20 @@
     {
         _configs = await Vault.ListAsync();
         _activeId = await Preference.GetActiveAsync();
+        _aiSettings = await FeatureSettings.GetAsync();
         StateHasChanged();
     }
 
     private async Task SetActiveAsync(string providerId)
     {
+        // T012: fully-local mode forbids a cloud provider as the active one.
+        if (_aiSettings != null && _aiSettings.GlobalDefaultMode == AiPrivacyMode.FullyLocal && !IsLocal(providerId))
+        {
+            _status = $"Fully local mode is on — '{providerId}' is a cloud provider and can't be activated. " +
+                      "Choose Ollama or LM Studio, or change the global privacy mode below.";
+            StateHasChanged();
+            return;
+        }
         _activeId = providerId;
         await Preference.SetActiveAsync(providerId);
         _status = $"Active provider: {providerId}";
@@ -264,6 +316,70 @@
         _form = new ProviderForm();
         _errors.Clear();
         _status = null;
+    }
+
+    // Spec 028 (M6) T011/T012 -- privacy disclosure modes (global + per-feature) + fully-local gating.
+    private AiFeatureSettings? _aiSettings;
+
+    private static readonly AiPrivacyMode[] AllModes =
+        { AiPrivacyMode.FullSchema, AiPrivacyMode.SchemaNamesOnly, AiPrivacyMode.NoSchema, AiPrivacyMode.FullyLocal };
+
+    private static readonly (string Id, string Label)[] Features =
+    {
+        ("explain", "Explain"),
+        ("fix", "Fix"),
+        ("optimize", "Optimize"),
+        ("texttosql", "Text-to-SQL"),
+        ("indexanalysis", "Index Analysis"),
+        ("chat", "Chat"),
+        ("ghosttext", "Ghost Text"),
+    };
+
+    private static string ModeLabel(AiPrivacyMode m) => m switch
+    {
+        AiPrivacyMode.FullSchema => "Full schema",
+        AiPrivacyMode.SchemaNamesOnly => "Schema names only",
+        AiPrivacyMode.NoSchema => "No schema",
+        AiPrivacyMode.FullyLocal => "Fully local",
+        _ => m.ToString(),
+    };
+
+    private static bool IsLocal(string providerId) => providerId is "ollama" or "lmstudio";
+
+    private async Task OnGlobalModeChanged(ChangeEventArgs e)
+    {
+        if (_aiSettings == null) return;
+        if (Enum.TryParse<AiPrivacyMode>(e.Value?.ToString(), out var mode))
+        {
+            _aiSettings.GlobalDefaultMode = mode;
+            await FeatureSettings.SetAsync(_aiSettings);
+            _status = $"Global privacy mode: {ModeLabel(mode)}";
+
+            // T012: switching to Fully local must not leave a cloud provider active.
+            if (mode == AiPrivacyMode.FullyLocal && !string.IsNullOrEmpty(_activeId) && !IsLocal(_activeId))
+            {
+                await Preference.SetActiveAsync(string.Empty);
+                _activeId = string.Empty;
+                _status = "Fully local enabled — cleared the cloud provider. Select Ollama or LM Studio as the active provider.";
+            }
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnFeatureModeChanged(string featureId, ChangeEventArgs e)
+    {
+        if (_aiSettings == null) return;
+        var raw = e.Value?.ToString();
+        if (string.IsNullOrEmpty(raw))
+        {
+            _aiSettings.FeatureModeOverrides.Remove(featureId);
+        }
+        else if (Enum.TryParse<AiPrivacyMode>(raw, out var mode))
+        {
+            _aiSettings.FeatureModeOverrides[featureId] = mode;
+        }
+        await FeatureSettings.SetAsync(_aiSettings);
+        StateHasChanged();
     }
 
     private sealed class ProviderForm

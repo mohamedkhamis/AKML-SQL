@@ -67,6 +67,13 @@ namespace AkmlSql.Core.Ipc.Messages
         [Key(2)] public bool IsNullable { get; set; }
         [Key(3)] public bool IsPrimaryKey { get; set; }
         [Key(4)] public string? Description { get; set; }
+
+        // Spec 028 (M6): carry the type facets so a rehydrated column's TypeDisplay
+        // reconstructs sized types correctly (e.g. nvarchar(100), decimal(18,2)) instead of
+        // nvarchar(0)/decimal(0,0). Additive keys — older payloads default these to 0.
+        [Key(5)] public int MaxLength { get; set; }
+        [Key(6)] public int Precision { get; set; }
+        [Key(7)] public int Scale { get; set; }
     }
 
     [MessagePackObject]

@@ -101,4 +101,10 @@ public static class StoreNames
 
     // Spec 021 M5 -- snippets persisted browser-side.
     public const string Snippets = "snippets";
+
+    // Spec 028 M6 -- per-feature/global AI privacy modes + ghost-text settings.
+    public const string AiFeatureSettings = "aiFeatureSettings";
+
+    // Spec 028 M6 -- persisted AI chat conversations (local-only).
+    public const string ChatHistory = "chatHistory";
 }

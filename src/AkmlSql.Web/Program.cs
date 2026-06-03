@@ -83,8 +83,13 @@ builder.Services.AddSingleton<IRefactoringService, RefactoringService>();
 //   IAiPreference     T126 -- active providerId singleton.
 //   IAiClientFactory  T128 -- per-provider HTTP client with origin allow-list.
 //   IAiPromptService  T129 -- prompt builders from AkmlSql.AI + chat fetch.
+// Spec 028 (M6 closure):
+//   IAiFeatureSettings        T006 -- global + per-feature privacy disclosure modes + ghost-text knobs.
+//   IAiSchemaContextProvider  T007 -- resolves prompt schema text from the M5 cache per mode.
 builder.Services.AddSingleton<IAiKeyVault, AiKeyVault>();
 builder.Services.AddSingleton<IAiPreference, AiPreference>();
+builder.Services.AddSingleton<IAiFeatureSettings, AiFeatureSettingsStore>();
+builder.Services.AddSingleton<IAiSchemaContextProvider, AiSchemaContextProvider>();
 builder.Services.AddSingleton(sp => new System.Net.Http.HttpClient
 {
     BaseAddress = new Uri(builder.HostEnvironment.BaseAddress),

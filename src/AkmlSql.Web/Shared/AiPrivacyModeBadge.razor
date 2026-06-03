@@ -1,0 +1,48 @@
+@*
+    Spec 028 (M6) task T008. Shows the active privacy disclosure mode for a given AI
+    feature next to its control (FR-005), so the user can see what will be sent before
+    invoking. Resolves the mode from IAiFeatureSettings (per-feature override, else global).
+*@
+@using AkmlSql.Web.Services
+@inject IAiFeatureSettings Settings
+
+<span class="akml-ai-mode-badge" title="@Tooltip">@Label</span>
+
+<style>
+    .akml-ai-mode-badge {
+        display: inline-block;
+        font-family: var(--akml-type-chrome-family);
+        font-size: 10px;
+        line-height: 1.4;
+        padding: 0 var(--akml-scalar-spacing-xs);
+        border: 1px solid var(--akml-border-subtle);
+        border-radius: 3px;
+        color: var(--akml-text-secondary);
+        background-color: var(--akml-surface-panel);
+        white-space: nowrap;
+    }
+</style>
+
+@code {
+    /// <summary>The AI feature this badge describes (e.g. "explain", "chat", "ghosttext").</summary>
+    [Parameter] public string FeatureId { get; set; } = string.Empty;
+
+    private string Label = "…";
+    private string Tooltip = string.Empty;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var mode = await Settings.ResolveModeAsync(FeatureId);
+        (Label, Tooltip) = Describe(mode);
+        StateHasChanged();
+    }
+
+    private static (string Label, string Tooltip) Describe(AiPrivacyMode mode) => mode switch
+    {
+        AiPrivacyMode.FullSchema      => ("Full schema",  "Tables, columns, FKs and descriptions are sent to the provider."),
+        AiPrivacyMode.SchemaNamesOnly => ("Names only",   "Only table and column names are sent — no data types or foreign keys."),
+        AiPrivacyMode.NoSchema        => ("No schema",    "No schema is sent — only your SQL / prompt leaves the browser."),
+        AiPrivacyMode.FullyLocal      => ("Fully local",  "Full schema, but only a local provider (Ollama / LM Studio) may be used."),
+        _ => ("…", string.Empty),
+    };
+}

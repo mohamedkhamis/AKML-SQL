@@ -25,10 +25,22 @@
     @if (_hasProvider)
     {
         <div class="akml-ai-buttons">
-            <button class="akml-tool-button" @onclick="RunExplainAsync" disabled="@_busy">Explain</button>
-            <button class="akml-tool-button" @onclick="RunFixAsync" disabled="@_busy">Fix</button>
-            <button class="akml-tool-button" @onclick="RunOptimizeAsync" disabled="@_busy">Optimize</button>
-            <button class="akml-tool-button" @onclick="RunTextToSqlAsync" disabled="@_busy">NL → SQL</button>
+            <div class="akml-ai-action">
+                <button class="akml-tool-button" @onclick="RunExplainAsync" disabled="@_busy">Explain</button>
+                <AiPrivacyModeBadge FeatureId="explain" />
+            </div>
+            <div class="akml-ai-action">
+                <button class="akml-tool-button" @onclick="RunFixAsync" disabled="@_busy">Fix</button>
+                <AiPrivacyModeBadge FeatureId="fix" />
+            </div>
+            <div class="akml-ai-action">
+                <button class="akml-tool-button" @onclick="RunOptimizeAsync" disabled="@_busy">Optimize</button>
+                <AiPrivacyModeBadge FeatureId="optimize" />
+            </div>
+            <div class="akml-ai-action">
+                <button class="akml-tool-button" @onclick="RunTextToSqlAsync" disabled="@_busy">NL → SQL</button>
+                <AiPrivacyModeBadge FeatureId="texttosql" />
+            </div>
         </div>
 
         @if (_busy)
@@ -59,7 +71,8 @@
     .akml-ai-panel { padding: var(--akml-scalar-spacing-m); }
     .akml-ai-header { display: flex; align-items: center; gap: var(--akml-scalar-spacing-s); margin-bottom: var(--akml-scalar-spacing-s); }
     .akml-ai-no-provider { color: var(--akml-status-warning); }
-    .akml-ai-buttons { display: flex; gap: var(--akml-scalar-spacing-s); flex-wrap: wrap; }
+    .akml-ai-buttons { display: flex; gap: var(--akml-scalar-spacing-s); flex-wrap: wrap; align-items: flex-start; }
+    .akml-ai-action { display: inline-flex; flex-direction: column; align-items: center; gap: 2px; }
     .akml-ai-status { color: var(--akml-text-secondary); font-style: italic; }
     .akml-ai-error { color: var(--akml-status-danger); }
     .akml-ai-result {
@@ -89,8 +102,6 @@
 @code {
     /// <summary>Text the parent (Editor.razor) hands in -- usually the editor selection.</summary>
     [Parameter] public string SelectedSql { get; set; } = string.Empty;
-    /// <summary>Schema text from the cached snapshot. Empty when no cache or no connection.</summary>
-    [Parameter] public string SchemaText { get; set; } = string.Empty;
     /// <summary>Raised when the user clicks Accept -- the parent inserts the text into the editor.</summary>
     [Parameter] public EventCallback<string> OnAcceptResult { get; set; }
 
@@ -105,15 +116,14 @@
         _hasProvider = !string.IsNullOrEmpty(active);
     }
 
-    private async Task RunExplainAsync() => await RunAsync(ct => Prompts.ExplainAsync(SchemaText, SelectedSql, ct), "Explain");
+    private async Task RunExplainAsync() => await RunAsync(ct => Prompts.ExplainAsync(SelectedSql, ct), "Explain");
 
     private async Task RunFixAsync() => await RunAsync(
-        ct => Prompts.FixAsync(SchemaText, SelectedSql, errorMessage: "(no error)", errorNumber: 0, ct), "Fix");
+        ct => Prompts.FixAsync(SelectedSql, errorMessage: "(no error)", errorNumber: 0, ct), "Fix");
 
-    private async Task RunOptimizeAsync() => await RunAsync(ct => Prompts.OptimizeAsync(SchemaText, SelectedSql, ct), "Optimize");
+    private async Task RunOptimizeAsync() => await RunAsync(ct => Prompts.OptimizeAsync(SelectedSql, ct), "Optimize");
 
-    private async Task RunTextToSqlAsync() => await RunAsync(
-        ct => Prompts.TextToSqlAsync(SchemaText, SelectedSql, ct), "NL → SQL");
+    private async Task RunTextToSqlAsync() => await RunAsync(ct => Prompts.TextToSqlAsync(SelectedSql, ct), "NL → SQL");
 
     private async Task RunAsync(Func<CancellationToken, Task<string>> action, string label)
     {
