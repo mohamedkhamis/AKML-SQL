@@ -36,6 +36,8 @@
         <button class="akml-tool-button" @onclick="FormatAsync" title="Ctrl+K, Ctrl+F">Format</button>
         <button class="akml-tool-button" data-testid="analyse-button" @onclick="AnalyseAsync" title="Ctrl+K, Ctrl+L">Analyse</button>
         <button class="akml-tool-button" data-testid="refactor-button" @onclick="OpenRefactorMenu">Refactor ▾</button>
+        <button class="akml-tool-button @(_showAiPanel ? "active" : "")" data-testid="ai-button"
+                @onclick="ToggleAiPanel" title="AI assistance">AI ▾</button>
         <button class="akml-tool-button" @onclick="SaveAsync" title="Ctrl+S">Save</button>
         <span class="akml-editor-spacer"></span>
         @if (!string.IsNullOrEmpty(_status))
@@ -43,7 +45,7 @@
             <span class="akml-editor-status">@_status</span>
         }
     </div>
-    <div class="akml-editor-grid @(_showSchemaTree ? "with-schema" : "no-schema")">
+    <div class="akml-editor-grid" style="grid-template-columns: @GridColumns;">
         <EditorComponent @ref="_editor" InitialText="@_initialText" OnTextChanged="OnTextChangedAsync" />
         @if (_showSchemaTree)
         {
@@ -53,6 +55,34 @@
         }
         <ProblemsListComponent Findings="@_findings" OnJumpToIssue="OnJumpToIssueAsync"
                                OnSuppressLine="OnSuppressLineAsync" OnSuppressGlobal="OnSuppressGlobalAsync" />
+        @* Spec 028 (M6) — editor-adjacent AI dock. Toggled by the "AI ▾" toolbar button; two
+           tabs (Actions / Chat). The action panel operates on the live editor selection (or the
+           whole document when nothing is selected); Accept inserts the result at the caret. This
+           is what surfaces the M6 AI feature set to a user — the panels existed since 021 T131
+           but were wired into no reachable page until this closure. *@
+        @if (_showAiPanel)
+        {
+            <div class="akml-ai-dock" data-testid="ai-dock">
+                <div class="akml-ai-tabs">
+                    <button class="akml-ai-tab @(_aiTab == AiTab.Actions ? "active" : "")"
+                            data-testid="ai-tab-actions" @onclick="@(() => _aiTab = AiTab.Actions)">Actions</button>
+                    <button class="akml-ai-tab @(_aiTab == AiTab.Chat ? "active" : "")"
+                            data-testid="ai-tab-chat" @onclick="@(() => _aiTab = AiTab.Chat)">Chat</button>
+                    <span class="akml-ai-dock-spacer"></span>
+                    <button class="akml-ai-tab" data-testid="ai-close" @onclick="ToggleAiPanel" title="Close AI panel">✕</button>
+                </div>
+                <div class="akml-ai-dock-body">
+                    @if (_aiTab == AiTab.Actions)
+                    {
+                        <AiPanel SelectedSqlProvider="@GetAiInputSqlAsync" OnAcceptResult="OnAiAcceptResultAsync" />
+                    }
+                    else
+                    {
+                        <AiChatPanel />
+                    }
+                </div>
+            </div>
+        }
     </div>
     @* Spec 024 T004: completion markers for Playwright. `_hasFormatted` / `_hasAnalysed`
        latch to true on the first successful Format / Analyse; `_formatVersion` /
@@ -206,11 +236,49 @@
         display: grid;
         min-height: 0;
     }
-    /* Spec 025 US4: 3-column grid when an active connection feeds a schema tree.
-       No-schema fallback restores the original 2-column layout so users without a
-       paired engine never see a blank sidebar column. */
-    .akml-editor-grid.with-schema { grid-template-columns: 1fr 240px 320px; }
-    .akml-editor-grid.no-schema { grid-template-columns: 1fr 320px; }
+    /* Columns are computed in @GridColumns: editor (1fr) | [schema 240px] | problems 320px |
+       [AI dock 380px]. Spec 025 US4 added the optional schema column (only with an active
+       connection); spec 028 (M6) adds the optional AI dock (toggled by the "AI ▾" button). */
+
+    /* Spec 028 (M6) — editor-adjacent AI dock (Actions / Chat tabs). */
+    .akml-ai-dock {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        border-left: 1px solid var(--akml-border-default);
+        background-color: var(--akml-surface-canvas);
+    }
+    .akml-ai-tabs {
+        display: flex;
+        align-items: center;
+        gap: var(--akml-scalar-spacing-xs);
+        padding: var(--akml-scalar-spacing-xs);
+        background-color: var(--akml-surface-panel);
+        border-bottom: 1px solid var(--akml-border-default);
+    }
+    .akml-ai-tab {
+        font-family: var(--akml-type-chrome-family);
+        font-size: var(--akml-type-chrome-size);
+        background-color: transparent;
+        color: var(--akml-text-secondary);
+        border: 1px solid transparent;
+        border-radius: 3px;
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s);
+        cursor: pointer;
+    }
+    .akml-ai-tab:hover { background-color: var(--akml-surface-hover); }
+    .akml-ai-tab.active {
+        color: var(--akml-text-primary);
+        border-color: var(--akml-border-default);
+        background-color: var(--akml-surface-canvas);
+    }
+    .akml-ai-dock-spacer { flex: 1 1 auto; }
+    .akml-ai-dock-body { flex: 1 1 auto; min-height: 0; overflow: auto; }
+    /* The toolbar "AI ▾" toggle shows an active state while the dock is open. */
+    .akml-tool-button.active {
+        background-color: var(--akml-surface-hover);
+        border-color: var(--akml-accent-primary);
+    }
 
     /* Spec 027 T012 — surround-with picker overlay (also reused by the refactoring menu). */
     .akml-overlay {
@@ -300,6 +368,22 @@
     private string? _activeServerIdentity;
     private string? _activeDatabaseName;
     private bool _showSchemaTree => !string.IsNullOrEmpty(_activeServerIdentity) && !string.IsNullOrEmpty(_activeDatabaseName);
+
+    // Spec 028 (M6) — editor-adjacent AI dock state. The dock surfaces the AI action panel
+    // (Explain/Fix/Optimize/NL→SQL/Index Analysis) and the chat panel as two tabs; the panels
+    // existed since 021 T131 but were not hosted by any reachable page until this closure.
+    private bool _showAiPanel;
+    private enum AiTab { Actions, Chat }
+    private AiTab _aiTab = AiTab.Actions;
+
+    // Column track list, computed so the optional schema (Spec 025 US4) and AI (Spec 028) columns
+    // append in DOM order: editor | [schema] | problems | [AI]. minmax(0,1fr) lets the editor
+    // shrink instead of overflowing when several side panels are open.
+    private string GridColumns =>
+        "minmax(0, 1fr)"
+        + (_showSchemaTree ? " 240px" : string.Empty)
+        + " 320px"
+        + (_showAiPanel ? " 380px" : string.Empty);
 
     // Spec 027 T012 (US1) — surround-with picker state.
     private bool _showSurroundPicker;
@@ -558,6 +642,32 @@
         var body = string.Join("\n", snippet.Body);
         await _editor.SurroundSelectionAsync(body);
         Diagnostics.Log(DiagnosticLevel.Info, "snippets", $"Surrounded with '{snippet.Metadata.Shortcode}'.");
+    }
+
+    // ── Spec 028 (M6) — editor-adjacent AI dock ──────────────────────────────────────────
+    private void ToggleAiPanel() => _showAiPanel = !_showAiPanel;
+
+    /// <summary>Resolve the SQL the AI actions operate on: the live editor selection, falling
+    /// back to the whole document when nothing is selected (so a user can run Explain on the
+    /// full script without selecting first). Evaluated lazily at action time via
+    /// <see cref="AiPanel.SelectedSqlProvider"/> so it is always current.</summary>
+    private async Task<string> GetAiInputSqlAsync()
+    {
+        if (_editor == null) return _currentText;
+        var selection = await _editor.GetSelectedTextAsync();
+        return string.IsNullOrWhiteSpace(selection) ? await _editor.GetTextAsync() : selection;
+    }
+
+    /// <summary>Accept an AI result: insert it at the caret as a single undoable edit (CodeMirror
+    /// Ctrl+Z restores the prior text), matching how schema-tree click-to-insert already mutates
+    /// the document.</summary>
+    private async Task OnAiAcceptResultAsync(string text)
+    {
+        if (_editor == null || string.IsNullOrEmpty(text)) return;
+        await _editor.InsertAtCaretAsync(text);
+        _status = "AI result inserted.";
+        Diagnostics.Log(DiagnosticLevel.Info, "ai", "Inserted AI result at caret.");
+        StateHasChanged();
     }
 
     // ── Spec 027 T017/T018 (US2) — lightweight refactoring menu + preview ────────────────

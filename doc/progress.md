@@ -352,7 +352,7 @@ This document tracks the development progress, complete feature inventory, issue
 
 ## Spec 028 — M6 AI Parity Closure (Browser AI) (2026-06-03)
 
-**Status**: In progress on branch `028-m6-ai-browser-closure` (US1 committed `132fd93`; US2–US6 + US7 partial uncommitted).
+**Status**: US1–US6 committed; **US7 interactive verification pass done 2026-06-03** (ran the app + a real browser + a local mock provider). One latent bug found and fixed in that pass (see below).
 **Scope**: Closure spec for "M6 — AI Assistance in the Browser". The M6 scaffold (lib, key vault, client, panel, chat, settings) already shipped under spec 021 Phase 7; this closes the genuinely-unmet work.
 
 **Reconciliations (user-confirmed):** keep the shipped non-extractable-CryptoKey vault (not the PRD's passphrase/PBKDF2); privacy = the PRD's 4 *disclosure* modes (not the engine's redaction axis); **OpenAI/Azure are CORS-blocked browser-direct** (verified by a live cross-origin fetch) → documented-out, no proxy/relay; build the M5-deferred `SchemaPhasePayload→DatabaseCache` rehydrator.
@@ -367,7 +367,13 @@ This document tracks the development progress, complete feature inventory, issue
 - **US6**: `IChatHistoryStore` (persist/restore/clear) + Markdown export.
 - **Tests**: 63 AI unit/bUnit tests + 4 rehydrator tests green; full web suite no new failures (26 pre-existing formatter-parity failures unrelated). An adversarial review workflow caught (and we fixed) a real fully-local send-path privacy leak + corrupted type widths.
 
-**Remaining (interactive / doc):** US5 E2E run (T040, skip-flagged), privacy wire-capture (T041), parity screenshots (T043), first-token latency (T047), quickstart-m6 refresh (T045), and the PR merge.
+**US7 interactive pass (2026-06-03) — what running the product surfaced + closed:**
+
+- **🐞 Latent bug found + fixed: the AI panel + chat were orphaned.** `AiPanel.razor` / `AiChatPanel.razor` were built + bUnit-tested but wired into **no reachable page** (`Editor.razor` had no AI affordance; no `/ai` or `/chat` route; nav linked only to `/settings/ai`). So 2 of the "7 features" (the 5-action panel + chat) were **unreachable by a user**, despite the DoD claiming otherwise — and bUnit (render-in-isolation) structurally couldn't catch it. **Fix:** an editor-adjacent collapsible **AI dock** (`AI ▾` toolbar toggle → `[Actions] [Chat]` tabs; actions run on the live selection via a new optional `AiPanel.SelectedSqlProvider` that defaults to the existing param path → `AiPanelTests` stay 65/65; Accept inserts at the caret). New `getSelectedText`/`GetSelectedTextAsync`. Files: `Editor.razor`, `AiPanel.razor`, `EditorComponent.razor`, `akml-editor.js`.
+- **T038 mock harness + T040 E2E — done & passing.** Real `MockAiProvider` (HttpListener, Ollama/OpenAI-compat, CORS, buffered + SSE, records bodies) + `WebAppFixture`; `UserStory5AiTests` rewritten from skip-pseudocode into real Playwright (selectors verified live) — `AddProvider_RunExplain_StreamsBrowserDirect` + `GhostText_TypeShowsGreyText_TabAccepts` **both pass** (opt-in `BridgeE2E`, `[SkippableFact]`).
+- **T041 privacy wire-capture (SC-009) — done.** All 3 modes captured on the wire (Full = columns+types+FK+desc; Names = names only; None = empty), **no AKML host** in the AI path, and the plaintext key absent from all 13 IndexedDB stores (wrapped ciphertext only). Evidence: `specs/028-m6-ai-browser-closure/SC-009-EVIDENCE/`.
+- **T047 cache-hit — done (50 % ≥ 30 %, SC-006);** ghost text grey widget + Tab-accept verified live. Chat streams + persists across reload (US6).
+- **Remaining (genuinely not closeable here / user action):** WPF-half parity screenshots (no SSMS/VS host — 1 accepted-pending delta, T043) and real-provider first-token latency (needs a real key, T047); plus the PR merge. `quickstart-m6` (T045) already refreshed.
 
 ## Spec 014 Phase 3b: UI Polish — Safety Dialog & Schema Progress Margin (2026-04-11)
 

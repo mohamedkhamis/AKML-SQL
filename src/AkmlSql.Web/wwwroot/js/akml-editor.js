@@ -353,6 +353,18 @@ export function getText(hostElementId) {
     return inst.view.state.doc.toString();
 }
 
+/**
+ * Spec 028 (M6) — return the currently selected text (empty string when there is no
+ * selection). The AI dock (Editor.razor) feeds this to the action panel so Explain / Fix /
+ * etc. operate on the user's selection, falling back to the whole document when empty.
+ */
+export function getSelectedText(hostElementId) {
+    const inst = _instances.get(hostElementId);
+    if (!inst) return '';
+    const sel = inst.view.state.selection.main;
+    return inst.view.state.sliceDoc(sel.from, sel.to);
+}
+
 /** Replace the entire document. */
 export function setText(hostElementId, newText) {
     const inst = _instances.get(hostElementId);

@@ -119,6 +119,10 @@
 @code {
     /// <summary>Text the parent (Editor.razor) hands in -- usually the editor selection.</summary>
     [Parameter] public string SelectedSql { get; set; } = string.Empty;
+    /// <summary>Optional lazy provider for the SQL to operate on, evaluated at action time so the
+    /// live editor selection (or whole document) is always current. When null, <see cref="SelectedSql"/>
+    /// is used -- which is how the bUnit tests drive the panel.</summary>
+    [Parameter] public Func<Task<string>>? SelectedSqlProvider { get; set; }
     /// <summary>Raised when the user clicks Accept -- the parent inserts the text into the editor.</summary>
     [Parameter] public EventCallback<string> OnAcceptResult { get; set; }
 
@@ -160,11 +164,14 @@
         _lastError = null;
         _lastResult = string.Empty;
         StateHasChanged();
+        // Resolve the SQL lazily so the live editor selection is current at click time; the
+        // bUnit tests leave the provider null and rely on the SelectedSql parameter.
+        var sql = SelectedSqlProvider != null ? await SelectedSqlProvider() : SelectedSql;
         var sb = new System.Text.StringBuilder();
         var sw = System.Diagnostics.Stopwatch.StartNew();
         try
         {
-            await foreach (var token in stream(SelectedSql, ct))
+            await foreach (var token in stream(sql, ct))
             {
                 sb.Append(token);   // O(1) amortized — avoids O(n^2) string rebuild per token
                 if (sw.ElapsedMilliseconds >= RenderThrottleMs) { sw.Restart(); _lastResult = sb.ToString(); StateHasChanged(); }   // throttled typewriter

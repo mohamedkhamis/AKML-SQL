@@ -161,6 +161,15 @@
         return await _module.InvokeAsync<string>("getText", HostId);
     }
 
+    /// <summary>Spec 028 (M6) — the current editor selection (empty when nothing is selected).
+    /// The editor's AI dock feeds this to the action panel so Explain / Fix / Optimize operate
+    /// on the selection, falling back to the whole document when empty.</summary>
+    public async Task<string> GetSelectedTextAsync()
+    {
+        if (_module == null) return string.Empty;
+        return await _module.InvokeAsync<string>("getSelectedText", HostId);
+    }
+
     public async Task SetTextAsync(string text)
     {
         if (_module == null) { InitialText = text; return; }
