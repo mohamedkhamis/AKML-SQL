@@ -93,6 +93,9 @@ namespace AkmlSql.Engine.Handlers.Schema
             IsNullable = c.IsNullable,
             IsPrimaryKey = c.IsPrimaryKey,
             Description = c.Description,
+            MaxLength = c.MaxLength,
+            Precision = c.Precision,
+            Scale = c.Scale,
         };
 
         private static SchemaPhaseParameter MapParameter(Parameter p) => new()

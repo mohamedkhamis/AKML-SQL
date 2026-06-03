@@ -83,13 +83,22 @@ builder.Services.AddSingleton<IRefactoringService, RefactoringService>();
 //   IAiPreference     T126 -- active providerId singleton.
 //   IAiClientFactory  T128 -- per-provider HTTP client with origin allow-list.
 //   IAiPromptService  T129 -- prompt builders from AkmlSql.AI + chat fetch.
+// Spec 028 (M6 closure):
+//   IAiFeatureSettings        T006 -- global + per-feature privacy disclosure modes + ghost-text knobs.
+//   IAiSchemaContextProvider  T007 -- resolves prompt schema text from the M5 cache per mode.
 builder.Services.AddSingleton<IAiKeyVault, AiKeyVault>();
 builder.Services.AddSingleton<IAiPreference, AiPreference>();
+builder.Services.AddSingleton<IAiFeatureSettings, AiFeatureSettingsStore>();
+builder.Services.AddSingleton<IAiSchemaContextProvider, AiSchemaContextProvider>();
 builder.Services.AddSingleton(sp => new System.Net.Http.HttpClient
 {
     BaseAddress = new Uri(builder.HostEnvironment.BaseAddress),
 });
 builder.Services.AddSingleton<IAiClientFactory, AiClientFactory>();
 builder.Services.AddSingleton<IAiPromptService, AiPromptService>();
+// Spec 028 (M6) T034 (US6): local-only persisted chat conversations.
+builder.Services.AddSingleton<IChatHistoryStore, ChatHistoryStore>();
+// Spec 028 (M6) T031 (US5): direct-to-provider inline ghost-text completion.
+builder.Services.AddSingleton<IAiGhostTextService, AiGhostTextService>();
 
 await builder.Build().RunAsync();

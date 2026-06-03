@@ -12,6 +12,8 @@
 @implements IAsyncDisposable
 @inject IJSRuntime JS
 @inject ICompletionService Completion
+@inject IAiGhostTextService GhostText
+@inject IAiFeatureSettings AiFeatures
 
 <div @ref="_host" id="@HostId" class="akml-editor" data-testid="sql-editor"></div>
 
@@ -47,6 +49,11 @@
         _module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/akml-editor.js");
         _selfRef = DotNetObjectReference.Create(this);
         await _module.InvokeVoidAsync("create", HostId, InitialText, _selfRef);
+
+        // Spec 028 (M6) US5: tell the editor whether ghost text is enabled + the debounce.
+        // The JS only requests a completion when enabled, so disabling it costs no interop.
+        var ai = await AiFeatures.GetAsync();
+        await _module.InvokeVoidAsync("setGhostTextConfig", HostId, ai.GhostTextEnabled, ai.GhostTextDelayMs);
     }
 
     /// <summary>
@@ -96,6 +103,29 @@
         {
             // Never bubble through the JS interop boundary -- the popup just stays empty.
             return System.Array.Empty<CompletionItemDto>();
+        }
+    }
+
+    /// <summary>
+    /// Spec 028 (M6) task T030 (US5). JS-invokable inline ghost-text source. The CodeMirror
+    /// debounced change hook calls this with the cursor offset + live document text; we derive
+    /// the preceding text and ask <see cref="IAiGhostTextService"/> for a suggestion. Returns
+    /// null (no suggestion) on anything — ghost text must never throw into the typing path.
+    /// </summary>
+    [JSInvokable]
+    public async Task<string?> RequestGhostTextFromJs(int cursorOffset, string? documentText)
+    {
+        try
+        {
+            var doc = documentText ?? string.Empty;
+            var pos = System.Math.Clamp(cursorOffset, 0, doc.Length);
+            var start = System.Math.Max(0, pos - 500);
+            var preceding = doc.Substring(start, pos - start);
+            return await GhostText.CompleteAsync(preceding, CancellationToken.None);
+        }
+        catch
+        {
+            return null;
         }
     }
 

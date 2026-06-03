@@ -350,6 +350,25 @@ This document tracks the development progress, complete feature inventory, issue
 
 ## Development History
 
+## Spec 028 — M6 AI Parity Closure (Browser AI) (2026-06-03)
+
+**Status**: In progress on branch `028-m6-ai-browser-closure` (US1 committed `132fd93`; US2–US6 + US7 partial uncommitted).
+**Scope**: Closure spec for "M6 — AI Assistance in the Browser". The M6 scaffold (lib, key vault, client, panel, chat, settings) already shipped under spec 021 Phase 7; this closes the genuinely-unmet work.
+
+**Reconciliations (user-confirmed):** keep the shipped non-extractable-CryptoKey vault (not the PRD's passphrase/PBKDF2); privacy = the PRD's 4 *disclosure* modes (not the engine's redaction axis); **OpenAI/Azure are CORS-blocked browser-direct** (verified by a live cross-origin fetch) → documented-out, no proxy/relay; build the M5-deferred `SchemaPhasePayload→DatabaseCache` rehydrator.
+
+**Done + build-verified:**
+
+- **Foundation/US1**: `SchemaPhaseRehydrator` (AkmlSql.IntelliSense, + type-facet carry-through); 4 privacy disclosure modes (global + per-feature) via `IAiFeatureSettings` + `IAiSchemaContextProvider` + `AiPrivacyModeBadge`; fully-local guard enforced at the send path; IndexedDB v1→2 migration (`aiFeatureSettings`, `chatHistory`) + `onblocked`.
+- **US2 streaming**: `IAiClientFactory` refactored to a 3-axis provider abstraction (request-builder × auth × SSE-parser) + `StreamAsync` (ResponseHeadersRead); per-surface streaming controller + cancellation in `AiPanel`/`AiChatPanel`.
+- **US3 providers**: native Claude wire (`x-api-key`/`anthropic-version`/dangerous-direct + Anthropic SSE); Gemini verified; OpenAI/Azure not-available notice; `doc/WEB/ai-local-provider-cors.md`.
+- **US4**: Index Analysis as the 5th panel action.
+- **US5 ghost text**: CodeMirror grey-text decorator (StateField + widget + `Prec.highest` keymap + debounced/suppressed hook) + `IAiGhostTextService` (cache/rate-limit/token counter) + settings.
+- **US6**: `IChatHistoryStore` (persist/restore/clear) + Markdown export.
+- **Tests**: 63 AI unit/bUnit tests + 4 rehydrator tests green; full web suite no new failures (26 pre-existing formatter-parity failures unrelated). An adversarial review workflow caught (and we fixed) a real fully-local send-path privacy leak + corrupted type widths.
+
+**Remaining (interactive / doc):** US5 E2E run (T040, skip-flagged), privacy wire-capture (T041), parity screenshots (T043), first-token latency (T047), quickstart-m6 refresh (T045), and the PR merge.
+
 ## Spec 014 Phase 3b: UI Polish — Safety Dialog & Schema Progress Margin (2026-04-11)
 
 **Status**: Complete (uncommitted on branch `014-sql-prompt-parity`)

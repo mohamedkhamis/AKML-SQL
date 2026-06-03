@@ -8,7 +8,7 @@
 // new object-stores in place.
 
 const DB_NAME = 'AkmlSqlWeb';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 const STORES = [
     'profiles',
@@ -25,6 +25,9 @@ const STORES = [
     'keyMaterial',
     // Spec 021 M5 -- snippets persisted browser-side.
     'snippets',
+    // Spec 028 M6 -- AI privacy/feature settings + persisted chat (DB_VERSION 1->2).
+    'aiFeatureSettings',
+    'chatHistory',
 ];
 
 let _dbPromise = null;
@@ -41,8 +44,19 @@ function openDb() {
                 }
             }
         };
-        req.onsuccess = () => resolve(req.result);
+        req.onsuccess = () => {
+            // If a later version bump is requested while this connection is open in another
+            // tab, close so that tab's upgrade isn't blocked (pairs with onblocked below).
+            req.result.onversionchange = () => req.result.close();
+            resolve(req.result);
+        };
         req.onerror = () => reject(req.error);
+        // Spec 028 (M6): the v1->2 bump can be blocked by another tab still holding the old
+        // connection. Without this the promise never settles and every IndexedDB-backed
+        // operation hangs with no diagnostic. Surface it instead.
+        req.onblocked = () => reject(new Error(
+            'AkmlSqlWeb IndexedDB upgrade is blocked by another open AKML SQL tab. ' +
+            'Close other tabs of this app and reload.'));
     });
     return _dbPromise;
 }

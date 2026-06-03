@@ -1,14 +1,17 @@
 @*
-    Spec 021 (web edition) -- M6 task T131. AI panel hosts the four primary actions
-    (Text-to-SQL, Explain, Fix, Optimize). Results render to a side pane with
-    Accept (insert into editor) / Discard.
-
-    The "Index Analysis" action lands as a follow-up once the engine-side
-    index-analysis context builder ships to the web library.
+    Spec 021 (web edition) -- M6 task T131; extended by spec 028 (M6) US2/US3/US4.
+    AI panel: five actions (Explain, Fix, Optimize, Text-to-SQL, Index Analysis) that
+    stream their response (typewriter) into a result pane with Accept / Discard. Each
+    action shows its active privacy mode. When the active provider can't be reached
+    browser-direct (OpenAI / Azure -> CORS), a notice is shown instead of the actions.
 *@
+@using System.Collections.Generic
+@using System.Threading
 @using AkmlSql.Web.Services
+@implements IDisposable
 @inject IAiPromptService Prompts
 @inject IAiPreference Preference
+@inject IAiClientFactory Client
 @inject IDiagnosticsRingBuffer Diagnostics
 
 <div class="akml-ai-panel">
@@ -22,13 +25,38 @@
         }
     </div>
 
-    @if (_hasProvider)
+    @if (_hasProvider && !_providerCapable)
+    {
+        <p class="akml-ai-notice">
+            <strong>@_activeProvider</strong> can't be used directly from the browser (its API
+            doesn't allow cross-origin calls). Use the desktop edition, choose a browser-capable
+            provider (Claude, Gemini, Ollama, LM Studio), or point it at an OpenAI-compatible
+            endpoint. <a href="/settings/ai">Open Settings</a>.
+        </p>
+    }
+    else if (_hasProvider)
     {
         <div class="akml-ai-buttons">
-            <button class="akml-tool-button" @onclick="RunExplainAsync" disabled="@_busy">Explain</button>
-            <button class="akml-tool-button" @onclick="RunFixAsync" disabled="@_busy">Fix</button>
-            <button class="akml-tool-button" @onclick="RunOptimizeAsync" disabled="@_busy">Optimize</button>
-            <button class="akml-tool-button" @onclick="RunTextToSqlAsync" disabled="@_busy">NL → SQL</button>
+            <div class="akml-ai-action">
+                <button class="akml-tool-button" @onclick="RunExplainAsync" disabled="@_busy">Explain</button>
+                <AiPrivacyModeBadge FeatureId="explain" />
+            </div>
+            <div class="akml-ai-action">
+                <button class="akml-tool-button" @onclick="RunFixAsync" disabled="@_busy">Fix</button>
+                <AiPrivacyModeBadge FeatureId="fix" />
+            </div>
+            <div class="akml-ai-action">
+                <button class="akml-tool-button" @onclick="RunOptimizeAsync" disabled="@_busy">Optimize</button>
+                <AiPrivacyModeBadge FeatureId="optimize" />
+            </div>
+            <div class="akml-ai-action">
+                <button class="akml-tool-button" @onclick="RunTextToSqlAsync" disabled="@_busy">NL → SQL</button>
+                <AiPrivacyModeBadge FeatureId="texttosql" />
+            </div>
+            <div class="akml-ai-action">
+                <button class="akml-tool-button" @onclick="RunIndexAnalysisAsync" disabled="@_busy">Index Analysis</button>
+                <AiPrivacyModeBadge FeatureId="indexanalysis" />
+            </div>
         </div>
 
         @if (_busy)
@@ -47,8 +75,8 @@
                 <h4>Result</h4>
                 <pre>@_lastResult</pre>
                 <div class="akml-ai-result-buttons">
-                    <button class="akml-tool-button" @onclick="AcceptResult">Accept (copy)</button>
-                    <button class="akml-tool-button" @onclick="DiscardResult">Discard</button>
+                    <button class="akml-tool-button" @onclick="AcceptResult" disabled="@_busy">Accept (copy)</button>
+                    <button class="akml-tool-button" @onclick="DiscardResult" disabled="@_busy">Discard</button>
                 </div>
             </div>
         }
@@ -59,7 +87,9 @@
     .akml-ai-panel { padding: var(--akml-scalar-spacing-m); }
     .akml-ai-header { display: flex; align-items: center; gap: var(--akml-scalar-spacing-s); margin-bottom: var(--akml-scalar-spacing-s); }
     .akml-ai-no-provider { color: var(--akml-status-warning); }
-    .akml-ai-buttons { display: flex; gap: var(--akml-scalar-spacing-s); flex-wrap: wrap; }
+    .akml-ai-notice { color: var(--akml-status-warning); }
+    .akml-ai-buttons { display: flex; gap: var(--akml-scalar-spacing-s); flex-wrap: wrap; align-items: flex-start; }
+    .akml-ai-action { display: inline-flex; flex-direction: column; align-items: center; gap: 2px; }
     .akml-ai-status { color: var(--akml-text-secondary); font-style: italic; }
     .akml-ai-error { color: var(--akml-status-danger); }
     .akml-ai-result {
@@ -89,43 +119,66 @@
 @code {
     /// <summary>Text the parent (Editor.razor) hands in -- usually the editor selection.</summary>
     [Parameter] public string SelectedSql { get; set; } = string.Empty;
-    /// <summary>Schema text from the cached snapshot. Empty when no cache or no connection.</summary>
-    [Parameter] public string SchemaText { get; set; } = string.Empty;
     /// <summary>Raised when the user clicks Accept -- the parent inserts the text into the editor.</summary>
     [Parameter] public EventCallback<string> OnAcceptResult { get; set; }
 
     private bool _hasProvider;
+    private bool _providerCapable = true;
+    private string _activeProvider = string.Empty;
     private bool _busy;
     private string? _lastResult;
     private string? _lastError;
 
+    // Per-surface streaming controller: one in-flight stream, cancelled when a new action
+    // starts or the panel is disposed (FR-009/FR-010).
+    private CancellationTokenSource? _cts;
+    private bool _disposed;
+    private const int RenderThrottleMs = 60;   // cap typewriter re-renders (avoid O(n^2) render churn)
+
     protected override async Task OnInitializedAsync()
     {
-        var active = await Preference.GetActiveAsync();
-        _hasProvider = !string.IsNullOrEmpty(active);
+        _activeProvider = await Preference.GetActiveAsync();
+        _hasProvider = !string.IsNullOrEmpty(_activeProvider);
+        _providerCapable = !_hasProvider || Client.IsBrowserDirectCapable(_activeProvider);
     }
 
-    private async Task RunExplainAsync() => await RunAsync(ct => Prompts.ExplainAsync(SchemaText, SelectedSql, ct), "Explain");
+    private Task RunExplainAsync() => RunStreamAsync((sql, ct) => Prompts.ExplainStreamAsync(sql, ct), "Explain");
+    private Task RunFixAsync() => RunStreamAsync((sql, ct) => Prompts.FixStreamAsync(sql, "(no error)", 0, ct), "Fix");
+    private Task RunOptimizeAsync() => RunStreamAsync((sql, ct) => Prompts.OptimizeStreamAsync(sql, ct), "Optimize");
+    private Task RunTextToSqlAsync() => RunStreamAsync((sql, ct) => Prompts.TextToSqlStreamAsync(sql, ct), "NL → SQL");
+    private Task RunIndexAnalysisAsync() => RunStreamAsync((sql, ct) => Prompts.IndexAnalysisStreamAsync(sql, ct), "Index Analysis");
 
-    private async Task RunFixAsync() => await RunAsync(
-        ct => Prompts.FixAsync(SchemaText, SelectedSql, errorMessage: "(no error)", errorNumber: 0, ct), "Fix");
-
-    private async Task RunOptimizeAsync() => await RunAsync(ct => Prompts.OptimizeAsync(SchemaText, SelectedSql, ct), "Optimize");
-
-    private async Task RunTextToSqlAsync() => await RunAsync(
-        ct => Prompts.TextToSqlAsync(SchemaText, SelectedSql, ct), "NL → SQL");
-
-    private async Task RunAsync(Func<CancellationToken, Task<string>> action, string label)
+    private async Task RunStreamAsync(Func<string, CancellationToken, IAsyncEnumerable<string>> stream, string label)
     {
+        // Cancel any previous stream so its tokens never bleed into this one.
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _cts = new CancellationTokenSource();
+        var ct = _cts.Token;
+
         _busy = true;
         _lastError = null;
-        _lastResult = null;
+        _lastResult = string.Empty;
         StateHasChanged();
+        var sb = new System.Text.StringBuilder();
+        var sw = System.Diagnostics.Stopwatch.StartNew();
         try
         {
-            var result = await action(default);
-            _lastResult = result;
-            Diagnostics.Log(DiagnosticLevel.Info, "ai", $"{label} completed ({result.Length} chars).");
+            await foreach (var token in stream(SelectedSql, ct))
+            {
+                sb.Append(token);   // O(1) amortized — avoids O(n^2) string rebuild per token
+                if (sw.ElapsedMilliseconds >= RenderThrottleMs) { sw.Restart(); _lastResult = sb.ToString(); StateHasChanged(); }   // throttled typewriter
+            }
+            Diagnostics.Log(DiagnosticLevel.Info, "ai", $"{label} completed ({sb.Length} chars).");
+        }
+        catch (OperationCanceledException)
+        {
+            // Superseded by a newer action -- keep whatever partial text rendered.
+        }
+        catch (ProviderNotBrowserDirectException ex)
+        {
+            _lastError = ex.Message;
+            Diagnostics.Log(DiagnosticLevel.Error, "ai", ex.Message);
         }
         catch (UnauthorizedOriginException ex)
         {
@@ -134,13 +187,15 @@
         }
         catch (Exception ex)
         {
+            // Preserve partial text (FR-011) and surface the mapped error.
             _lastError = MapErrorToMessage(ex);
             Diagnostics.Log(DiagnosticLevel.Error, "ai", _lastError, new { Exception = ex.GetType().Name });
         }
         finally
         {
+            _lastResult = sb.ToString();   // flush the full / partial text (preserves FR-011 partial-on-error)
             _busy = false;
-            StateHasChanged();
+            if (!_disposed) StateHasChanged();
         }
     }
 
@@ -155,8 +210,7 @@
     private void DiscardResult() { _lastResult = null; }
 
     /// <summary>
-    /// FR-033 error mapping: surface user-readable messages for common provider
-    /// failures. Detailed shape (per-provider docs links) lands at T136.
+    /// FR-033 error mapping: surface user-readable messages for common provider failures.
     /// </summary>
     private static string MapErrorToMessage(Exception ex)
     {
@@ -167,5 +221,12 @@
         if (msg.Contains("content policy") || msg.Contains("safety")) return "The provider refused this prompt due to its content policy.";
         if (ex is System.Net.Http.HttpRequestException) return "Provider unreachable. Check your network.";
         return $"AI call failed: {msg}";
+    }
+
+    public void Dispose()
+    {
+        _disposed = true;
+        _cts?.Cancel();
+        _cts?.Dispose();
     }
 }
