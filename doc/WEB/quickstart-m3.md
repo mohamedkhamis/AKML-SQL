@@ -96,7 +96,7 @@ This is the operator-facing flow for the M3 PRD §1 promise.
 
    *Verification*: Completions arrive within ~200 ms of typing. The status bar shows the engine version + capability list.
 
-Close the tab and re-open the web edition: the connection — and, for LAN, its wrapped bearer token — persist in IndexedDB, so reconnecting takes **one click of Connect** with **no PIN prompt** (the stored bearer re-authenticates). Re-opening does **not** silently auto-connect; you click **Connect** on the persisted connection. (Separately, if an *already-established* connection drops mid-session, the bridge auto-reconnects with exponential backoff — see the status-bar `Reconnecting · next try in Ns` countdown.)
+Close the tab and re-open the web edition. The active connection **auto-reconnects on startup** with **no PIN prompt** — localhost auto-accepts; LAN replays the wrapped bearer token from IndexedDB. (You can also reconnect manually with **Connect**; and if an *already-established* connection drops mid-session, the bridge auto-reconnects with exponential backoff — see the status-bar `Reconnecting · next try in Ns` countdown.)
 
 ## Section 3 — Troubleshooting
 

@@ -318,7 +318,10 @@
     {
         public string Name { get; set; } = string.Empty;
         public string Host { get; set; } = "127.0.0.1";
-        public int Port { get; set; } = 5081;
+        // Default to the engine bridge's default port (BridgeOptions.Port / installer /WEB_PORT),
+        // so accepting the pre-filled value just works against a default install. (Was 5081, which
+        // matched nothing the engine listens on.)
+        public int Port { get; set; } = 47291;
         public bool IsLocalhost { get; set; } = true;
         public string PairingPin { get; set; } = string.Empty;
     }

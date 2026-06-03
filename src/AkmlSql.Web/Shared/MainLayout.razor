@@ -3,9 +3,13 @@
     via CSS variables emitted by scripts/generate-theme-css.ps1 (T004).
     Real page slots for Editor / Settings / About land in M2 (T031 onwards).
 *@
+@using System.Threading
 @using AkmlSql.Web.Services
 @inherits LayoutComponentBase
 @inject IThemeService Theme
+@inject IEngineBridge Bridge
+@inject IConnectionStore Connections
+@inject IPairingTokenVault Vault
 
 <div class="akml-app">
     <NavMenu />
@@ -59,5 +63,36 @@
         // ThemeService.InitializeAsync is idempotent (Task is cached), so pages that
         // also await it (Editor, Settings) share this Task instead of racing.
         await Theme.InitializeAsync();
+
+        // Spec 025 (M3) — auto-reconnect the active engine connection on app startup, so re-opening
+        // the web edition restores the live bridge without a manual Connect (the connection picker
+        // lives only on /settings, so this has to be a layout-level hook to cover the editor landing
+        // page too). No PIN is needed: localhost auto-accepts; LAN replays the wrapped bearer from
+        // IndexedDB. Fire-and-forget so a slow / unreachable engine never blocks first paint — on any
+        // failure the bridge simply stays Offline and the user can click Connect.
+        _ = TryAutoConnectActiveAsync();
+    }
+
+    private async Task TryAutoConnectActiveAsync()
+    {
+        try
+        {
+            if (Bridge.State != BridgeState.Disconnected) return;   // already connecting / open
+            var activeId = await Connections.GetActiveIdAsync();
+            if (string.IsNullOrEmpty(activeId)) return;
+            var conn = await Connections.GetAsync(activeId);
+            if (conn == null) return;
+
+            // Localhost auto-accepts (no PIN, no bearer); LAN replays the stored bearer so reconnect
+            // needs no PIN. A null bearer for LAN just means the engine will demand a fresh PIN —
+            // handled gracefully (the handshake returns PinRequired and we leave the bridge Offline).
+            string? bearer = conn.IsLocalhost ? null : await Vault.RetrieveAsync(conn.Id);
+            await Bridge.ConnectAsync(conn, bearer, pairingPin: null, CancellationToken.None);
+            // StatusBar subscribes to Bridge state changes, so it reflects Open/Live on its own.
+        }
+        catch
+        {
+            // Engine unreachable / no stored bearer / transient error — stay Offline by design.
+        }
     }
 }
