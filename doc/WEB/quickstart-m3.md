@@ -18,7 +18,10 @@ Use this to confirm the bridge is wired before going LAN.
    AKMLSQLSetup.exe /WEB_EXPOSURE=LOCALHOST /WEB_PORT=47291
    ```
 
-   The installer writes `bridge` into `%AppData%\AKML SQL\config.json`:
+   The installer writes `bridge` into `%ProgramData%\AKML SQL Web\config.json` — the config the
+   `AkmlSqlWebEngine` Windows service reads (it is launched `--web --config "%CommonAppData%\AKML SQL Web\config.json"`).
+   This is deliberately **not** the per-user IDE-plugin config `%AppData%\AKML SQL\config.json`, which the
+   web installer never touches (spec 026 M4 closure C3):
    ```json
    {
      "bridge": {
@@ -30,7 +33,7 @@ Use this to confirm the bridge is wired before going LAN.
    }
    ```
 
-   *Verification*: Open `%AppData%\AKML SQL\config.json` and confirm the `bridge` section is present with `bindAddress: "127.0.0.1"`.
+   *Verification*: Open `%ProgramData%\AKML SQL Web\config.json` and confirm the `bridge` section is present with `bindAddress: "127.0.0.1"`.
 
 2. **Confirm the engine is listening**:
 
@@ -42,7 +45,7 @@ Use this to confirm the bridge is wired before going LAN.
 
    *Verification*: If no LISTENING row, check `%CommonAppData%\AKML SQL Web\install.log` for the bridge-config-writer entry.
 
-3. **Open the web edition in a browser** at the install summary's URL (defaults to `http://localhost:5081/` for the IIS site; ad-hoc `dotnet run --project src/AkmlSql.Web` is also fine).
+3. **Open the web edition in a browser** at the install summary's URL (the IIS site defaults to port 80, i.e. `http://localhost/`; ad-hoc `dotnet run --project src/AkmlSql.Web` is also fine — it serves `http://localhost:5000/`).
 
 4. **Click Add Connection** in the connection picker. For localhost, just enter Host `127.0.0.1` + Port `47291`; leave the PIN field blank (localhost mode auto-accepts).
 
@@ -64,9 +67,9 @@ This is the operator-facing flow for the M3 PRD §1 promise.
 
    The installer runs four PowerShell helpers in sequence:
    - `web-iis-setup.ps1` — provisions an IIS site for the web bundle.
-   - `web-tls-setup.ps1` — generates `%ProgramData%\AKML SQL Web\certs\bridge.pfx` and binds it to the port via `netsh http add sslcert ipport=0.0.0.0:47291 certhash=<thumb>`.
+   - `web-tls-setup.ps1` — generates a self-signed cert (RSA-2048, private key **NonExportable** in `LocalMachine\My`), exports the public part to `%ProgramData%\AKML SQL Web\certs\bridge.cer`, and binds the cert to the port via `netsh http add sslcert ipport=0.0.0.0:47291 certhash=<thumb>` (the TLS handshake uses the cert-store binding by thumbprint — no PFX file is written).
    - `web-firewall.ps1` — adds the inbound `AKML SQL Web Engine` rule for TCP 47291 on all profiles.
-   - `web-config-bridge.ps1` — writes the `bridge` section into `%AppData%\AKML SQL\config.json` with `bindAddress: "0.0.0.0"` and the PFX path.
+   - `web-config-bridge.ps1` — writes the `bridge` section into `%ProgramData%\AKML SQL Web\config.json` with `bindAddress: "0.0.0.0"` and `tlsCertPath` pointing at `bridge.cer` (the engine loads it only to cross-check its thumbprint against the netsh binding).
 
    *Verification*: After install, `%CommonAppData%\AKML SQL Web\INSTALL-SUMMARY.txt` contains the LAN URL, the pairing PIN, and the TLS thumbprint. The Windows Firewall rule is visible in `netsh advfirewall firewall show rule name="AKML SQL Web Engine"`.
 
@@ -93,16 +96,16 @@ This is the operator-facing flow for the M3 PRD §1 promise.
 
    *Verification*: Completions arrive within ~200 ms of typing. The status bar shows the engine version + capability list.
 
-Close the tab and re-open the web edition. The bridge auto-connects without a PIN prompt — the wrapped bearer token in IndexedDB authenticates the reconnect.
+Close the tab and re-open the web edition: the connection — and, for LAN, its wrapped bearer token — persist in IndexedDB, so reconnecting takes **one click of Connect** with **no PIN prompt** (the stored bearer re-authenticates). Re-opening does **not** silently auto-connect; you click **Connect** on the persisted connection. (Separately, if an *already-established* connection drops mid-session, the bridge auto-reconnects with exponential backoff — see the status-bar `Reconnecting · next try in Ns` countdown.)
 
 ## Section 3 — Troubleshooting
 
 | Symptom | Probable cause | Fix |
 |---------|---------------|-----|
-| `netstat` shows nothing on the bridge port. | `config.json` has no `bridge` section or `enabled=false`. | Re-run the installer, or hand-edit `%AppData%\AKML SQL\config.json` to add the `bridge` section per Section 1 step 1. |
-| Engine refuses to start with "TlsCertPath does not exist…". | LAN mode chosen but the PFX wasn't generated, or its path moved. | Re-run `web-tls-setup.ps1` from the installer payload, or set `bridge.tlsCertPath` in `config.json` to point at the actual PFX. |
-| Engine refuses to start with "PFX thumbprint mismatch with netsh binding". | The netsh sslcert binding points at a different cert than the configured PFX (e.g., after a partial re-install). | The error message names both thumbprints — pick the one you want, then either re-run `web-tls-setup.ps1` (regenerates the netsh binding from the PFX) or replace the PFX. |
-| Browser shows "Pairing PIN was wrong or expired". | The PIN expired (5-min TTL), was already consumed, or you typed it wrong. | Restart the engine to mint a fresh PIN. The new value lands in `%CommonAppData%\AKML SQL Web\pairing-pin.txt`. |
+| `netstat` shows nothing on the bridge port. | `config.json` has no `bridge` section or `enabled=false`. | Re-run the installer, or hand-edit `%ProgramData%\AKML SQL Web\config.json` (the service config) to add the `bridge` section per Section 1 step 1. |
+| Engine refuses to start with "TlsCertPath does not exist…". | LAN mode chosen but the cert wasn't generated, or its path moved. | Re-run `web-tls-setup.ps1` from the installer payload, or set `bridge.tlsCertPath` in `config.json` to point at the actual cert (`bridge.cer`). |
+| Engine refuses to start with "PFX thumbprint mismatch with netsh binding". | The netsh sslcert binding points at a different cert than the one at `bridge.tlsCertPath` (e.g., after a partial re-install). | The error message names both thumbprints — pick the one you want, then re-run `web-tls-setup.ps1` (regenerates the cert + netsh binding together). |
+| Browser shows "Pairing PIN was wrong or expired". | The PIN expired (24-hour TTL), was already consumed, or you typed it wrong. | Restart the engine to mint a fresh PIN. The new value lands in `%CommonAppData%\AKML SQL Web\pairing-pin.txt`. |
 | Machine B can't reach Machine A's port. | Windows Firewall blocked the inbound, or the engine is bound to 127.0.0.1 (localhost mode). | `netstat -an \| findstr :47291` on Machine A: expect `0.0.0.0:47291 LISTENING` for LAN. If `127.0.0.1`, run the installer with `/WEB_EXPOSURE=LAN`. Check the firewall rule with `netsh advfirewall firewall show rule name="AKML SQL Web Engine"`. |
 | Diagnostics log shows `TLS fingerprint … changed from … to …`. | The cert was regenerated (installer re-run, or a manual `New-SelfSignedCertificate`). Per spec 025 §Out of Scope #1 there is no modal — just the log entry. | If expected (you re-ran the installer), no action needed. If unexpected, treat as a security incident: remove the connection from the picker and re-pair. |
 | Browser fails to reach `wss://`, browser console says cert untrusted. | Self-signed cert not yet trusted on Machine B. | Install `%ProgramData%\AKML SQL Web\certs\bridge.cer` to "Trusted Root Certification Authorities" on Machine B (the install summary has the steps). |
