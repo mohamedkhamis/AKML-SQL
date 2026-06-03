@@ -88,6 +88,16 @@
             <p class="akml-ai-form-hint">@DefaultDisplayName(_form.ProviderId) runs locally and doesn't use an API key.</p>
         }
 
+        @if (!IsBrowserDirect(_form.ProviderId))
+        {
+            <p class="akml-ai-form-hint">
+                @DefaultDisplayName(_form.ProviderId) can't be used directly from the browser — its API
+                doesn't send CORS headers. You can configure it here, but it runs only in the desktop
+                edition or via an OpenAI-compatible endpoint. Claude, Gemini, Ollama and LM Studio work
+                browser-direct.
+            </p>
+        }
+
         <div class="akml-ai-form-buttons">
             <button type="submit" class="akml-tool-button">Save</button>
             <button type="button" class="akml-tool-button" @onclick="ClearForm">Clear</button>
@@ -148,6 +158,25 @@
                 }
             </tbody>
         </table>
+    }
+
+    <h3>Ghost Text (inline completion)</h3>
+    <p class="akml-help">
+        Inline grey-text suggestions as you type, accepted with Tab. Opt-in — off by default.
+        Cached and rate-limited so it doesn't burn through provider tokens.
+    </p>
+    @if (_aiSettings != null)
+    {
+        <label class="akml-ai-mode-global">
+            <input type="checkbox" checked="@_aiSettings.GhostTextEnabled" @onchange="OnGhostEnabledChanged" />
+            Enable ghost text
+        </label>
+        <label>Debounce (ms)
+            <input type="number" min="100" step="50" value="@_aiSettings.GhostTextDelayMs" @onchange="OnGhostDelayChanged" />
+        </label>
+        <label>Max requests per 3 s
+            <input type="number" min="1" value="@_aiSettings.GhostTextMaxRequestsPer3s" @onchange="OnGhostRateChanged" />
+        </label>
     }
 </div>
 
@@ -346,6 +375,9 @@
 
     private static bool IsLocal(string providerId) => providerId is "ollama" or "lmstudio";
 
+    // OpenAI / Azure are CORS-blocked browser-direct (verified). Everything else works.
+    private static bool IsBrowserDirect(string providerId) => providerId is not ("openai" or "azure");
+
     private async Task OnGlobalModeChanged(ChangeEventArgs e)
     {
         if (_aiSettings == null) return;
@@ -380,6 +412,34 @@
         }
         await FeatureSettings.SetAsync(_aiSettings);
         StateHasChanged();
+    }
+
+    private async Task OnGhostEnabledChanged(ChangeEventArgs e)
+    {
+        if (_aiSettings == null) return;
+        _aiSettings.GhostTextEnabled = e.Value is bool b && b;
+        await FeatureSettings.SetAsync(_aiSettings);
+        StateHasChanged();
+    }
+
+    private async Task OnGhostDelayChanged(ChangeEventArgs e)
+    {
+        if (_aiSettings == null) return;
+        if (int.TryParse(e.Value?.ToString(), out var v) && v >= 100)
+        {
+            _aiSettings.GhostTextDelayMs = v;
+            await FeatureSettings.SetAsync(_aiSettings);
+        }
+    }
+
+    private async Task OnGhostRateChanged(ChangeEventArgs e)
+    {
+        if (_aiSettings == null) return;
+        if (int.TryParse(e.Value?.ToString(), out var v) && v >= 1)
+        {
+            _aiSettings.GhostTextMaxRequestsPer3s = v;
+            await FeatureSettings.SetAsync(_aiSettings);
+        }
     }
 
     private sealed class ProviderForm

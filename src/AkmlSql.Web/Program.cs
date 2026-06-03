@@ -96,5 +96,9 @@ builder.Services.AddSingleton(sp => new System.Net.Http.HttpClient
 });
 builder.Services.AddSingleton<IAiClientFactory, AiClientFactory>();
 builder.Services.AddSingleton<IAiPromptService, AiPromptService>();
+// Spec 028 (M6) T034 (US6): local-only persisted chat conversations.
+builder.Services.AddSingleton<IChatHistoryStore, ChatHistoryStore>();
+// Spec 028 (M6) T031 (US5): direct-to-provider inline ghost-text completion.
+builder.Services.AddSingleton<IAiGhostTextService, AiGhostTextService>();
 
 await builder.Build().RunAsync();

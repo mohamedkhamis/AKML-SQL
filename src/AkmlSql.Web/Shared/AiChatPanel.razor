@@ -1,15 +1,20 @@
 @*
-    Spec 021 (web edition) -- M6 task T132. Free-form conversational AI panel.
-    Message history is in-memory only (no persistence per the spec). Each turn
-    sends the full conversation (system prompt + every previous turn + the new
-    user message) to the active provider via IAiClientFactory.
+    Spec 021 (web edition) -- M6 task T132; extended by spec 028 (M6) US2/US6.
+    Free-form conversational AI panel. Streams the assistant response (typewriter), persists
+    the conversation locally (IndexedDB) so it survives a reload, and can export it to a
+    Markdown download. Honours the fully-local privacy guard before sending.
 *@
 @using System.Collections.Generic
+@using System.Threading
 @using AkmlSql.Web.Services
+@using Microsoft.JSInterop
+@implements IDisposable
 @inject IAiClientFactory Client
 @inject IAiPreference Preference
 @inject IAiFeatureSettings Settings
+@inject IChatHistoryStore History
 @inject IDiagnosticsRingBuffer Diagnostics
+@inject IJSRuntime JS
 
 <div class="akml-chat">
     <div class="akml-chat-header">
@@ -20,26 +25,26 @@
                 No AI provider configured. <a href="/settings/ai">Add one in Settings</a>.
             </span>
         }
-        else if (_history.Count > 0)
+        else if (_conversation.Turns.Count > 0)
         {
-            <button class="akml-tool-button" @onclick="ClearAsync">Clear</button>
+            <button class="akml-tool-button" @onclick="ExportAsync" disabled="@_busy">Export</button>
+            <button class="akml-tool-button" @onclick="ClearAsync" disabled="@_busy">Clear</button>
         }
     </div>
 
     @if (_hasProvider)
     {
         <div class="akml-chat-log">
-            @if (_history.Count == 0)
+            @if (_conversation.Turns.Count == 0)
             {
                 <p class="akml-chat-empty">
-                    Multi-turn chat. Type a question below. The conversation is in-memory
-                    only -- nothing is persisted to IndexedDB or sent anywhere except your
-                    chosen provider.
+                    Multi-turn chat. Type a question below. The conversation is stored only in
+                    this browser and sent only to your chosen provider.
                 </p>
             }
             else
             {
-                @foreach (var turn in _history)
+                @foreach (var turn in _conversation.Turns)
                 {
                     <div class="akml-chat-turn akml-chat-role-@turn.Role">
                         <div class="akml-chat-role-label">@(turn.Role == "user" ? "You" : "Assistant")</div>
@@ -133,18 +138,28 @@
     private bool _busy;
     private string _pending = string.Empty;
     private string? _lastError;
-    private readonly List<AiChatMessage> _history = new();
+    private ChatConversation _conversation = NewConversation();
+    private CancellationTokenSource? _cts;
+    private IJSObjectReference? _downloadModule;
+
+    private static ChatConversation NewConversation() => new()
+    {
+        Id = Guid.NewGuid().ToString("N"),
+        Title = "conversation",
+        CreatedAt = DateTimeOffset.UtcNow,
+        UpdatedAt = DateTimeOffset.UtcNow,
+    };
 
     protected override async Task OnInitializedAsync()
     {
         var active = await Preference.GetActiveAsync();
         _hasProvider = !string.IsNullOrEmpty(active);
+        _conversation = await History.GetAsync() ?? NewConversation();
     }
 
     private async Task OnKeyDown(KeyboardEventArgs e)
     {
-        // Ctrl+Enter sends. Plain Enter inserts a newline (default textarea
-        // behaviour).
+        // Ctrl+Enter sends. Plain Enter inserts a newline (default textarea behaviour).
         if (e.CtrlKey && e.Key == "Enter")
         {
             await SendAsync();
@@ -173,21 +188,44 @@
         _pending = string.Empty;
         _busy = true;
 
-        // Push the user turn into the log right away so the UI feels responsive.
-        _history.Add(new AiChatMessage { Role = "user", Content = userMessage });
+        // Build the history BEFORE adding the new turns (every prior turn, oldest-first).
+        var snapshot = BuildHistorySnapshot();
+        _conversation.Turns.Add(new ChatTurn { Role = "user", Content = userMessage, Timestamp = DateTimeOffset.UtcNow });
+        var assistant = new ChatTurn { Role = "assistant", Content = string.Empty, ProviderId = providerId, Timestamp = DateTimeOffset.UtcNow };
+        _conversation.Turns.Add(assistant);
         StateHasChanged();
+
+        // One in-flight stream per panel; a new message cancels the previous (FR-010).
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _cts = new CancellationTokenSource();
+        var ct = _cts.Token;
+
+        var request = new AiChatRequest
+        {
+            SystemPrompt = SystemPrompt,
+            UserPrompt = userMessage,
+            History = snapshot,
+        };
 
         try
         {
-            var request = new AiChatRequest
+            await foreach (var token in Client.StreamAsync(providerId, request, ct))
             {
-                SystemPrompt = SystemPrompt,
-                UserPrompt = userMessage,
-                History = BuildHistorySnapshot(),
-            };
-            var response = await Client.SendAsync(providerId, request, CancellationToken.None);
-            _history.Add(new AiChatMessage { Role = "assistant", Content = response });
-            Diagnostics.Log(DiagnosticLevel.Info, "ai-chat", $"Turn {_history.Count / 2} ({response.Length} chars).");
+                assistant.Content += token;   // typewriter
+                StateHasChanged();
+            }
+            await History.SaveAsync(_conversation);   // persist (FR-030); local-only
+            Diagnostics.Log(DiagnosticLevel.Info, "ai-chat", $"Turn {_conversation.Turns.Count / 2} ({assistant.Content.Length} chars).");
+        }
+        catch (OperationCanceledException)
+        {
+            // Superseded by a newer message -- keep whatever partial text rendered.
+        }
+        catch (ProviderNotBrowserDirectException ex)
+        {
+            _lastError = ex.Message;
+            Diagnostics.Log(DiagnosticLevel.Error, "ai-chat", ex.Message);
         }
         catch (UnauthorizedOriginException ex)
         {
@@ -206,24 +244,39 @@
         }
     }
 
-    /// <summary>
-    /// Build the History array to send: every PREVIOUS turn (we exclude the
-    /// just-added user turn -- it becomes the UserPrompt). The provider sees
-    /// system -> history -> userPrompt in chronological order.
-    /// </summary>
+    /// <summary>Every existing turn (oldest-first) to send as conversation context.</summary>
     private AiChatMessage[] BuildHistorySnapshot()
     {
-        if (_history.Count <= 1) return Array.Empty<AiChatMessage>();
-        var prior = new AiChatMessage[_history.Count - 1];
-        for (int i = 0; i < prior.Length; i++) prior[i] = _history[i];
+        var turns = _conversation.Turns;
+        if (turns.Count == 0) return Array.Empty<AiChatMessage>();
+        var prior = new AiChatMessage[turns.Count];
+        for (int i = 0; i < turns.Count; i++)
+        {
+            prior[i] = new AiChatMessage { Role = turns[i].Role, Content = turns[i].Content };
+        }
         return prior;
     }
 
-    private Task ClearAsync()
+    private async Task ExportAsync()
     {
-        _history.Clear();
+        var md = _conversation.ToMarkdown();
+        _downloadModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/akml-download.js");
+        var fileName = $"chat-{DateTimeOffset.UtcNow:yyyy-MM-dd-HHmm}.md";
+        var base64 = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(md));
+        await _downloadModule.InvokeVoidAsync("downloadBase64", fileName, "text/markdown", base64);
+    }
+
+    private async Task ClearAsync()
+    {
+        _conversation = NewConversation();
         _lastError = null;
+        await History.ClearAsync();   // FR-032: removed from storage; independent of schema/keys
         StateHasChanged();
-        return Task.CompletedTask;
+    }
+
+    public void Dispose()
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
     }
 }

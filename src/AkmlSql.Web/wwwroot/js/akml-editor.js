@@ -182,11 +182,129 @@ export async function create(hostElementId, initialText, dotNetRef) {
         }
     };
 
+    // ── Spec 028 (M6) US5 — inline ghost text (hand-rolled, no new package) ───────────────
+    // Per-instance config; mutated by setGhostTextConfig from EditorComponent.
+    const ghost = { enabled: false, delayMs: 350, timer: null, reqId: 0 };
+
+    class GhostWidget extends cm.view.WidgetType {
+        constructor(text) { super(); this.text = text; }
+        eq(other) { return other.text === this.text; }
+        toDOM() {
+            const span = document.createElement('span');
+            span.className = 'akml-ghost-text';
+            span.textContent = this.text;
+            span.style.opacity = '0.45';
+            span.style.fontStyle = 'italic';
+            span.style.pointerEvents = 'none';
+            span.style.whiteSpace = 'pre';
+            return span;
+        }
+    }
+
+    const setGhost = cm.state.StateEffect.define();
+    const ghostField = cm.state.StateField.define({
+        create() { return cm.view.Decoration.none; },
+        update(deco, tr) {
+            if (tr.docChanged) deco = cm.view.Decoration.none;   // dismiss-on-type
+            deco = deco.map(tr.changes);
+            for (const e of tr.effects) {
+                if (e.is(setGhost)) {
+                    deco = e.value
+                        ? cm.view.Decoration.set([
+                            cm.view.Decoration.widget({ widget: new GhostWidget(e.value.text), side: 1 }).range(e.value.pos),
+                          ])
+                        : cm.view.Decoration.none;
+                }
+            }
+            return deco;
+        },
+        provide: f => cm.view.EditorView.decorations.from(f),
+    });
+
+    function currentGhost(view) {
+        const deco = view.state.field(ghostField, false);
+        if (!deco || deco.size === 0) return null;
+        let found = null;
+        deco.between(0, view.state.doc.length, (from, _to, value) => {
+            const w = value.widget;
+            if (w && typeof w.text === 'string') found = { from, text: w.text };
+        });
+        return found;
+    }
+
+    function acceptGhost(view) {
+        const g = currentGhost(view);
+        if (!g) return false;   // fall through to autocomplete-accept / snippet-tab / indentWithTab
+        view.dispatch({
+            changes: { from: g.from, insert: g.text },
+            selection: { anchor: g.from + g.text.length },
+            effects: setGhost.of(null),
+        });
+        return true;
+    }
+
+    function dismissGhost(view) {
+        if (!currentGhost(view)) return false;
+        view.dispatch({ effects: setGhost.of(null) });
+        return true;
+    }
+
+    function ghostShouldFire(state) {
+        const pos = state.selection.main.head;
+        try { if (cm.autocomplete.completionStatus(state) !== null) return false; } catch { /* ignore */ }
+        const line = state.doc.lineAt(pos);
+        if (line.text.trim().length === 0) return false;   // empty line
+        if (pos !== line.to) return false;                 // only at end of line
+        try {
+            let node = cm.language.syntaxTree(state).resolveInner(pos, -1);
+            while (node) {
+                if (node.name === 'LineComment' || node.name === 'BlockComment' ||
+                    node.name === 'String' || node.name === 'QuotedIdentifier') return false;
+                node = node.parent;
+            }
+        } catch { /* tree not ready -> don't suppress on that basis */ }
+        return true;
+    }
+
+    function requestGhost(view) {
+        if (!ghost.enabled || !dotNetRef) return;
+        if (!ghostShouldFire(view.state)) return;
+        const pos = view.state.selection.main.head;
+        const docText = view.state.doc.toString();
+        const reqId = ++ghost.reqId;
+        dotNetRef.invokeMethodAsync('RequestGhostTextFromJs', pos, docText).then(suggestion => {
+            if (reqId !== ghost.reqId || !suggestion) return;      // superseded or empty
+            const inst = _instances.get(hostElementId);
+            if (!inst) return;
+            if (inst.view.state.selection.main.head !== pos) return; // staleness check
+            inst.view.dispatch({ effects: setGhost.of({ text: suggestion, pos }) });
+        }).catch(() => { /* ghost text never surfaces an error */ });
+    }
+
+    const ghostListener = cm.view.EditorView.updateListener.of((update) => {
+        if (!ghost.enabled || !update.docChanged) return;
+        const userTyped = update.transactions.some(t => {
+            const ev = t.annotation(cm.state.Transaction.userEvent);
+            return typeof ev === 'string' && ev.startsWith('input.');
+        });
+        if (!userTyped) return;
+        if (ghost.timer) clearTimeout(ghost.timer);
+        ghost.timer = setTimeout(() => requestGhost(update.view), ghost.delayMs);
+    });
+
+    // Prec.highest so Tab/Escape are consulted first; the handlers return false (fall through)
+    // unless a ghost suggestion is actually showing, leaving autocomplete + snippet Tab intact.
+    const ghostKeymap = cm.state.Prec.highest(cm.view.keymap.of([
+        { key: 'Tab', run: acceptGhost },
+        { key: 'Escape', run: dismissGhost },
+    ]));
+
     const state = cm.state.EditorState.create({
         doc: initialText ?? '',
         extensions: [
             cm.view.lineNumbers(),
             cm.view.highlightActiveLine(),
+            ghostKeymap,
             cm.view.keymap.of([
                 ...cm.commands.defaultKeymap,
                 ...cm.commands.historyKeymap,
@@ -203,6 +321,8 @@ export async function create(hostElementId, initialText, dotNetRef) {
                 maxRenderedOptions: 50,
             }),
             cm.lint.lintGutter(),
+            ghostField,
+            ghostListener,
             updateListener,
         ],
     });
@@ -212,7 +332,18 @@ export async function create(hostElementId, initialText, dotNetRef) {
         parent: host,
     });
 
-    _instances.set(hostElementId, { view, cm, dotNetRef });
+    _instances.set(hostElementId, { view, cm, dotNetRef, ghost });
+}
+
+/**
+ * Spec 028 (M6) US5 — enable/disable inline ghost text and set its debounce. Called from
+ * EditorComponent after create() with the persisted AiFeatureSettings.
+ */
+export function setGhostTextConfig(hostElementId, enabled, delayMs) {
+    const inst = _instances.get(hostElementId);
+    if (!inst || !inst.ghost) return;
+    inst.ghost.enabled = !!enabled;
+    if (typeof delayMs === 'number' && delayMs > 0) inst.ghost.delayMs = delayMs;
 }
 
 /** Return the current document text. */

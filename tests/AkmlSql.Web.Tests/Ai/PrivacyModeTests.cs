@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using AkmlSql.Core.Ipc.Messages;
@@ -198,7 +200,16 @@ public sealed class PrivacyModeTests
             SendCount++;
             return Task.FromResult("ok");
         }
+#pragma warning disable CS1998 // async iterator with no await is intentional for the fake
+        public async IAsyncEnumerable<string> StreamAsync(
+            string providerId, AkmlSql.Web.Services.AiChatRequest request, [EnumeratorCancellation] CancellationToken ct)
+        {
+            SendCount++;
+            yield return "ok";
+        }
+#pragma warning restore CS1998
         public bool IsOriginAllowed(string providerId, string origin) => true;
+        public bool IsBrowserDirectCapable(string providerId) => true;
     }
 
     private sealed class FixedPreference : IAiPreference
