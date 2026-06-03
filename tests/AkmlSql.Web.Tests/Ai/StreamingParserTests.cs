@@ -63,6 +63,19 @@ public sealed class StreamingParserTests
     }
 
     [Fact]
+    public void OpenAi_BuildBody_OmitsNullOptionals()
+    {
+        var config = new AiProviderConfig { ProviderId = "openai", Model = "gpt-4o" };
+        var request = new AiChatRequest { SystemPrompt = "s", UserPrompt = "u" }; // no max_tokens/temperature
+        var json = System.Text.Json.JsonSerializer.Serialize(OpenAiWire.BuildBody(config, request, stream: false));
+
+        Assert.DoesNotContain("null", json);
+        Assert.DoesNotContain("max_tokens", json);
+        Assert.DoesNotContain("temperature", json);
+        Assert.Contains("\"model\":\"gpt-4o\"", json);
+    }
+
+    [Fact]
     public void OpenAi_ApplyAuth_SetsBearer()
     {
         using var req = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/chat/completions");

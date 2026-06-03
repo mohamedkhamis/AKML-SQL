@@ -141,6 +141,8 @@
     private ChatConversation _conversation = NewConversation();
     private CancellationTokenSource? _cts;
     private IJSObjectReference? _downloadModule;
+    private bool _disposed;
+    private const int RenderThrottleMs = 60;   // cap typewriter re-renders (avoid O(n^2) render churn)
 
     private static ChatConversation NewConversation() => new()
     {
@@ -188,8 +190,9 @@
         _pending = string.Empty;
         _busy = true;
 
-        // Build the history BEFORE adding the new turns (every prior turn, oldest-first).
+        // Build the history BEFORE adding the new turns (every prior NON-EMPTY turn, oldest-first).
         var snapshot = BuildHistorySnapshot();
+        var preTurns = _conversation.Turns.Count;
         _conversation.Turns.Add(new ChatTurn { Role = "user", Content = userMessage, Timestamp = DateTimeOffset.UtcNow });
         var assistant = new ChatTurn { Role = "assistant", Content = string.Empty, ProviderId = providerId, Timestamp = DateTimeOffset.UtcNow };
         _conversation.Turns.Add(assistant);
@@ -208,14 +211,14 @@
             History = snapshot,
         };
 
+        var sw = System.Diagnostics.Stopwatch.StartNew();
         try
         {
             await foreach (var token in Client.StreamAsync(providerId, request, ct))
             {
                 assistant.Content += token;   // typewriter
-                StateHasChanged();
+                if (sw.ElapsedMilliseconds >= RenderThrottleMs) { sw.Restart(); StateHasChanged(); }
             }
-            await History.SaveAsync(_conversation);   // persist (FR-030); local-only
             Diagnostics.Log(DiagnosticLevel.Info, "ai-chat", $"Turn {_conversation.Turns.Count / 2} ({assistant.Content.Length} chars).");
         }
         catch (OperationCanceledException)
@@ -239,22 +242,37 @@
         }
         finally
         {
+            if (string.IsNullOrEmpty(assistant.Content))
+            {
+                // Nothing came back (error / cancel before the first token): roll back the
+                // user + assistant turns so an empty turn can't poison history or get persisted,
+                // and restore the typed text so the user can retry.
+                _conversation.Turns.RemoveRange(preTurns, _conversation.Turns.Count - preTurns);
+                _pending = userMessage;
+            }
+            else if (!_disposed)
+            {
+                await History.SaveAsync(_conversation);   // persist successful/partial turn (FR-030); local-only
+            }
             _busy = false;
-            StateHasChanged();
+            if (!_disposed) StateHasChanged();
         }
     }
 
-    /// <summary>Every existing turn (oldest-first) to send as conversation context.</summary>
+    /// <summary>Every existing NON-EMPTY turn (oldest-first) to send as conversation context.
+    /// Skipping empty turns is defence-in-depth: a stray empty assistant turn must never reach
+    /// the provider wire (Anthropic 400s on empty content).</summary>
     private AiChatMessage[] BuildHistorySnapshot()
     {
-        var turns = _conversation.Turns;
-        if (turns.Count == 0) return Array.Empty<AiChatMessage>();
-        var prior = new AiChatMessage[turns.Count];
-        for (int i = 0; i < turns.Count; i++)
+        var list = new List<AiChatMessage>(_conversation.Turns.Count);
+        foreach (var t in _conversation.Turns)
         {
-            prior[i] = new AiChatMessage { Role = turns[i].Role, Content = turns[i].Content };
+            if (!string.IsNullOrEmpty(t.Content))
+            {
+                list.Add(new AiChatMessage { Role = t.Role, Content = t.Content });
+            }
         }
-        return prior;
+        return list.ToArray();
     }
 
     private async Task ExportAsync()
@@ -276,6 +294,7 @@
 
     public void Dispose()
     {
+        _disposed = true;
         _cts?.Cancel();
         _cts?.Dispose();
     }

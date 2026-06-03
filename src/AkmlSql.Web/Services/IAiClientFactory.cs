@@ -309,14 +309,18 @@ internal static class OpenAiWire
         foreach (var m in request.History) messages.Add(new { role = m.Role, content = m.Content });
         messages.Add(new { role = "user", content = request.UserPrompt });
 
-        return new
+        // Build with a dictionary so unset optional numerics are OMITTED, not serialized as
+        // explicit JSON null — Anthropic and several OpenAI-compatible local servers (Ollama,
+        // llama.cpp, LM Studio) reject `"temperature":null` / `"max_tokens":null` with a 4xx.
+        var body = new Dictionary<string, object?>
         {
-            model = config.Model,
-            messages = messages.ToArray(),
-            max_tokens = request.MaxTokens,
-            temperature = request.Temperature,
-            stream,
+            ["model"] = config.Model,
+            ["messages"] = messages.ToArray(),
+            ["stream"] = stream,
         };
+        if (request.MaxTokens.HasValue) body["max_tokens"] = request.MaxTokens.Value;
+        if (request.Temperature.HasValue) body["temperature"] = request.Temperature.Value;
+        return body;
     }
 
     public static void ApplyAuth(HttpRequestMessage req, string apiKey)
@@ -384,15 +388,18 @@ internal static class AnthropicWire
         foreach (var m in request.History) messages.Add(new { role = m.Role, content = m.Content });
         messages.Add(new { role = "user", content = request.UserPrompt });
 
-        return new
+        // Dictionary so a null temperature is omitted (Anthropic rejects explicit null). system is
+        // top-level; max_tokens is required.
+        var body = new Dictionary<string, object?>
         {
-            model = config.Model,
-            system = request.SystemPrompt,          // Anthropic puts the system prompt at top level
-            messages = messages.ToArray(),
-            max_tokens = request.MaxTokens ?? 4096, // required by Anthropic
-            temperature = request.Temperature,
-            stream,
+            ["model"] = config.Model,
+            ["system"] = request.SystemPrompt,
+            ["messages"] = messages.ToArray(),
+            ["max_tokens"] = request.MaxTokens ?? 4096,
+            ["stream"] = stream,
         };
+        if (request.Temperature.HasValue) body["temperature"] = request.Temperature.Value;
+        return body;
     }
 
     public static void ApplyAuth(HttpRequestMessage req, string apiKey)

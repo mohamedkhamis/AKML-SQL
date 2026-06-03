@@ -30,6 +30,21 @@ public sealed class AnthropicWireTests
         Assert.Contains("\"max_tokens\":4096", json);   // defaulted (required by Anthropic)
         Assert.Contains("\"content\":\"hello\"", json);
         Assert.DoesNotContain("\"role\":\"system\"", json); // system is NOT a message turn
+        // Unset optionals are OMITTED, never serialized as explicit null (Anthropic 400s on null).
+        Assert.DoesNotContain("temperature", json);
+        Assert.DoesNotContain("null", json);
+    }
+
+    [Fact]
+    public void BuildBody_OmitsTemperatureNull_ButKeepsSetValues()
+    {
+        var config = new AiProviderConfig { ProviderId = "anthropic", Model = "claude" };
+        var request = new AiChatRequest { SystemPrompt = "s", UserPrompt = "u", Temperature = 0.2, MaxTokens = 150 };
+        var json = JsonSerializer.Serialize(AnthropicWire.BuildBody(config, request, stream: true));
+
+        Assert.Contains("\"temperature\":0.2", json);
+        Assert.Contains("\"max_tokens\":150", json);
+        Assert.DoesNotContain("null", json);
     }
 
     [Fact]

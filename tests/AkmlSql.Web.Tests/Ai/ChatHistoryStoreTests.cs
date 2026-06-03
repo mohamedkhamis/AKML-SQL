@@ -72,7 +72,7 @@ public sealed class ChatHistoryStoreTests
     }
 
     [Fact]
-    public void ToMarkdown_PreservesTurnsAndEscapesCodeFences()
+    public void ToMarkdown_PreservesTurnsAndCodeBlocksVerbatim()
     {
         var c = new ChatConversation { Id = "x", UpdatedAt = DateTimeOffset.UnixEpoch };
         c.Turns.Add(new ChatTurn { Role = "user", Content = "hi" });
@@ -83,8 +83,9 @@ public sealed class ChatHistoryStoreTests
         Assert.Contains("## You", md);
         Assert.Contains("## Assistant", md);
         Assert.Contains("hi", md);
-        // The message-level fence is escaped so it can't terminate the document structure.
-        Assert.Contains("\\```sql", md);
+        // Code blocks are preserved verbatim (so SQL renders as a fenced block, not mangled).
+        Assert.Contains("```sql\nSELECT 1\n```", md);
+        Assert.DoesNotContain("\\```", md);
         // Order: "You" heading precedes "Assistant" heading.
         Assert.True(md.IndexOf("## You", StringComparison.Ordinal) < md.IndexOf("## Assistant", StringComparison.Ordinal));
     }

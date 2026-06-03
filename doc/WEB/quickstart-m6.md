@@ -46,17 +46,29 @@ storage.
    "Unauthorized origin" error, before any network request is issued.
 4. Verify in the network tab: no request to attacker.example was made.
 
-## What is *not* in M6
+## Spec 028 (M6 closure) — now built
 
-- **Anthropic / Gemini wire formats.** The AiClientFactory speaks OpenAI-compatible
-  `/v1/chat/completions` only. Anthropic's `/v1/messages` and Gemini's native
-  shape land as follow-ups; the allow-list already covers their origins.
-- **Streaming responses.** Each AI action is a single POST → single response
-  body. Server-sent events are deferred to a v2.
-- **Ghost text inline completion.** T133 lands as a follow-up; the panel is the
-  primary surface for M6.
-- **Chat panel.** T132 (free-form conversational panel with message history) is
-  deferred — the four action buttons cover the bulk of US5 acceptance criteria.
+The spec-021 scaffold above is extended by spec 028 (this closure):
+
+- **Privacy disclosure modes** — full schema / schema-names-only / no-schema / fully-local,
+  set globally and per feature, shown next to every AI control; schema is resolved from the M5
+  IndexedDB cache (no engine round-trip). See `ai-privacy-commitment.md`.
+- **Streaming / typewriter** responses across the action panel and chat.
+- **All browser-direct providers** — **native Claude** (Anthropic Messages API +
+  `anthropic-dangerous-direct-browser-access`), **Gemini** (OpenAI-compatible endpoint),
+  **Ollama / LM Studio** (local; see `ai-local-provider-cors.md`). **OpenAI and Azure are
+  CORS-blocked browser-direct** and are surfaced as not-available (use the desktop edition or an
+  OpenAI-compatible endpoint).
+- **Index Analysis** as a fifth panel action.
+- **Ghost Text** — inline grey-text completion (opt-in; enable in Settings → AI; Tab to accept).
+- **Chat persistence + Markdown export** — conversations persist locally and export to `.md`.
+
+## Remaining (interactive verification only)
+
+The US5 end-to-end run, the privacy network-capture, the web-vs-WPF parity screenshots, and the
+first-token latency measurement need a running app / both surfaces — tracked in
+`specs/028-m6-ai-browser-closure/M6-PARITY-AUDIT.md`. The deterministic substrate is covered by
+the unit/bUnit suite.
 
 ## Where to look in the code
 
@@ -67,5 +79,9 @@ storage.
 | HTTP client + allow-list | `src/AkmlSql.Web/Services/IAiClientFactory.cs` |
 | Prompt builder bridge | `src/AkmlSql.Web/Services/IAiPromptService.cs` |
 | Settings page | `src/AkmlSql.Web/Pages/SettingsAi.razor` |
-| AI side panel | `src/AkmlSql.Web/Shared/AiPanel.razor` |
-| Tests | `tests/AkmlSql.Web.Tests/Ai/` (31 tests) |
+| AI side panel (5 actions, streamed) | `src/AkmlSql.Web/Shared/AiPanel.razor` |
+| Privacy modes + schema-from-cache | `IAiFeatureSettings.cs`, `IAiSchemaContextProvider.cs`, `SchemaPhaseRehydrator.cs` |
+| Provider wires (OpenAI/Anthropic) + streaming | `src/AkmlSql.Web/Services/IAiClientFactory.cs` |
+| Ghost text | `wwwroot/js/akml-editor.js`, `IAiGhostTextService.cs`, `Shared/EditorComponent.razor` |
+| Chat persistence + export | `src/AkmlSql.Web/Services/IChatHistoryStore.cs`, `Shared/AiChatPanel.razor` |
+| Tests | `tests/AkmlSql.Web.Tests/Ai/` (63 AI unit/bUnit tests) + `tests/AkmlSql.IntelliSense.Tests/SchemaPhaseRehydratorTests.cs` |

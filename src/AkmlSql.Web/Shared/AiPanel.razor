@@ -132,6 +132,8 @@
     // Per-surface streaming controller: one in-flight stream, cancelled when a new action
     // starts or the panel is disposed (FR-009/FR-010).
     private CancellationTokenSource? _cts;
+    private bool _disposed;
+    private const int RenderThrottleMs = 60;   // cap typewriter re-renders (avoid O(n^2) render churn)
 
     protected override async Task OnInitializedAsync()
     {
@@ -158,12 +160,13 @@
         _lastError = null;
         _lastResult = string.Empty;
         StateHasChanged();
+        var sw = System.Diagnostics.Stopwatch.StartNew();
         try
         {
             await foreach (var token in stream(SelectedSql, ct))
             {
                 _lastResult += token;
-                StateHasChanged();   // typewriter
+                if (sw.ElapsedMilliseconds >= RenderThrottleMs) { sw.Restart(); StateHasChanged(); }   // throttled typewriter
             }
             Diagnostics.Log(DiagnosticLevel.Info, "ai", $"{label} completed ({_lastResult?.Length ?? 0} chars).");
         }
@@ -190,7 +193,7 @@
         finally
         {
             _busy = false;
-            StateHasChanged();
+            if (!_disposed) StateHasChanged();
         }
     }
 
@@ -220,6 +223,7 @@
 
     public void Dispose()
     {
+        _disposed = true;
         _cts?.Cancel();
         _cts?.Dispose();
     }

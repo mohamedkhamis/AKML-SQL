@@ -25,8 +25,8 @@ public sealed class ChatConversation
     public DateTimeOffset UpdatedAt { get; set; }
     public List<ChatTurn> Turns { get; set; } = new();
 
-    /// <summary>Render the conversation as Markdown (FR-031). Code fences in content are
-    /// escaped by indenting any line that starts a fence, so a stray ``` cannot break the doc.</summary>
+    /// <summary>Render the conversation as Markdown (FR-031). Turn content is emitted verbatim so
+    /// SQL / fenced code blocks render as intended (a per-turn heading separates turns).</summary>
     public string ToMarkdown()
     {
         var sb = new StringBuilder();
@@ -35,24 +35,9 @@ public sealed class ChatConversation
         foreach (var turn in Turns)
         {
             sb.Append("## ").AppendLine(turn.Role == "user" ? "You" : "Assistant");
-            sb.AppendLine(EscapeFences(turn.Content)).AppendLine();
+            sb.AppendLine(turn.Content).AppendLine();
         }
         return sb.ToString();
-    }
-
-    private static string EscapeFences(string content)
-    {
-        // Prevent a message-level ``` from terminating the document structure: prefix any
-        // line beginning with a fence with a zero-width-safe escape (a leading backslash).
-        var lines = content.Replace("\r\n", "\n").Split('\n');
-        for (var i = 0; i < lines.Length; i++)
-        {
-            if (lines[i].StartsWith("```", StringComparison.Ordinal))
-            {
-                lines[i] = "\\" + lines[i];
-            }
-        }
-        return string.Join("\n", lines);
     }
 }
 

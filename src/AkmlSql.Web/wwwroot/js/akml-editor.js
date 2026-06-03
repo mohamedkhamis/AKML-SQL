@@ -509,6 +509,12 @@ export function setSelection(hostElementId, anchor, head) {
 export function dispose(hostElementId) {
     const inst = _instances.get(hostElementId);
     if (!inst) return;
+    // Spec 028 (M6) US5: cancel any pending ghost-text debounce so it can't fire requestGhost
+    // on a destroyed view / disposed DotNetObjectReference, and supersede any in-flight response.
+    if (inst.ghost) {
+        if (inst.ghost.timer) { clearTimeout(inst.ghost.timer); inst.ghost.timer = null; }
+        inst.ghost.reqId++;
+    }
     inst.view.destroy();
     if (inst.dotNetRef && typeof inst.dotNetRef.dispose === 'function') {
         inst.dotNetRef.dispose();

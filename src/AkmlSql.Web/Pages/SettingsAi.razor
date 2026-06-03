@@ -10,6 +10,7 @@
 @inject IAiKeyVault Vault
 @inject IAiPreference Preference
 @inject IAiFeatureSettings FeatureSettings
+@inject IAiClientFactory Client
 
 <PageTitle>AI providers — AKML SQL</PageTitle>
 
@@ -88,7 +89,7 @@
             <p class="akml-ai-form-hint">@DefaultDisplayName(_form.ProviderId) runs locally and doesn't use an API key.</p>
         }
 
-        @if (!IsBrowserDirect(_form.ProviderId))
+        @if (!Client.IsBrowserDirectCapable(_form.ProviderId))
         {
             <p class="akml-ai-form-hint">
                 @DefaultDisplayName(_form.ProviderId) can't be used directly from the browser — its API
@@ -270,7 +271,7 @@
     private async Task SetActiveAsync(string providerId)
     {
         // T012: fully-local mode forbids a cloud provider as the active one.
-        if (_aiSettings != null && _aiSettings.GlobalDefaultMode == AiPrivacyMode.FullyLocal && !IsLocal(providerId))
+        if (_aiSettings != null && _aiSettings.GlobalDefaultMode == AiPrivacyMode.FullyLocal && !AiProviders.IsLocal(providerId))
         {
             _status = $"Fully local mode is on — '{providerId}' is a cloud provider and can't be activated. " +
                       "Choose Ollama or LM Studio, or change the global privacy mode below.";
@@ -373,10 +374,8 @@
         _ => m.ToString(),
     };
 
-    private static bool IsLocal(string providerId) => providerId is "ollama" or "lmstudio";
-
-    // OpenAI / Azure are CORS-blocked browser-direct (verified). Everything else works.
-    private static bool IsBrowserDirect(string providerId) => providerId is not ("openai" or "azure");
+    // Locality + browser-direct capability are resolved via the single sources of truth
+    // (AiProviders.IsLocal and IAiClientFactory.IsBrowserDirectCapable) to avoid divergence.
 
     private async Task OnGlobalModeChanged(ChangeEventArgs e)
     {
@@ -388,7 +387,7 @@
             _status = $"Global privacy mode: {ModeLabel(mode)}";
 
             // T012: switching to Fully local must not leave a cloud provider active.
-            if (mode == AiPrivacyMode.FullyLocal && !string.IsNullOrEmpty(_activeId) && !IsLocal(_activeId))
+            if (mode == AiPrivacyMode.FullyLocal && !string.IsNullOrEmpty(_activeId) && !AiProviders.IsLocal(_activeId))
             {
                 await Preference.SetActiveAsync(string.Empty);
                 _activeId = string.Empty;

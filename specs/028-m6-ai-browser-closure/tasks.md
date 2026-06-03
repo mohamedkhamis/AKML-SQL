@@ -161,7 +161,7 @@ Repo root `D:\Repo\01-Khamis-Projects\AKML-SQL`. Shared lib `src/AkmlSql.Intelli
 
 ## Phase 10: Polish & Cross-Cutting Concerns
 
-- [ ] T045 [P] Update `doc/WEB/quickstart-m6.md` — remove the now-closed "what's deferred" caveats (ghost text, streaming, native Claude, privacy modes).
+- [X] T045 [P] Update `doc/WEB/quickstart-m6.md` — remove the now-closed "what's deferred" caveats (ghost text, streaming, native Claude, privacy modes).
 - [X] T046 [P] Update `doc/progress.md` with the spec-028 closure summary (per the per-spec table style): tasks done/deferred, the 4 reconciliations, the CORS finding.
 - [ ] T047 Record first-token latency for Claude/Gemini (PRD metric) and the Ghost Text cache-hit rate (SC-006 ≥30 %) in the audit/perf evidence — measured, not asserted as a hard gate.
 - [X] T048 Final full test run green: `tests/AkmlSql.IntelliSense.Tests`, `tests/AkmlSql.Web.Tests` (+ the opt-in E2E excluded from the default run); confirm no regression to existing AI/snippet/completion tests.

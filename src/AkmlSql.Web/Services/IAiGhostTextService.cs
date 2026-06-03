@@ -70,7 +70,7 @@ internal sealed class AiGhostTextService : IAiGhostTextService
 
         // Schema is read from the local cache (no provider call), so the cache key is cheap.
         var schemaText = await _schema.GetSchemaTextAsync("ghosttext", precedingText, ct).ConfigureAwait(false);
-        var key = schemaText.Length.ToString() + "" + precedingText;
+        var key = schemaText.GetHashCode().ToString("x") + "" + precedingText;
 
         // Cache hit: serve immediately, no provider call, no rate-limit consumption (FR-025).
         if (_cache.TryGetValue(key, out var cached)) return cached;
@@ -109,6 +109,7 @@ internal sealed class AiGhostTextService : IAiGhostTextService
         }
 
         var suggestion = StripFences(raw).TrimEnd();
+        if (string.IsNullOrWhiteSpace(suggestion)) return null; // don't cache an empty suggestion
         _cache[key] = suggestion;
         return suggestion;
     }
