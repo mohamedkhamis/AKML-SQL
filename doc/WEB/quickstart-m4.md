@@ -5,20 +5,25 @@ IIS site + LAN TLS cert + firewall rule + Windows service for the engine.
 
 ## Status
 
-**This document describes the M4 surface as it lands.** The actual installer
-run is the acceptance test for T081-T099 -- it needs Windows + Inno Setup 7 +
-optional IIS + admin rights. The Pascal Script + three PowerShell helpers ship
-as scaffolding; the first interactive install captures any deltas.
+The M4 installer is **wired and verified**. Spec 026 (M4 closure) integrated the
+Pascal hooks (`#include` + `Web_Init`/`Web_NextButton`/`Web_Skip`/`Web_PostInstall`/
+`Web_Uninstall` + `ShouldSkipPage`) into `AkmlSqlSetup.iss`, and the installer was
+ISCC-compiled and run end-to-end (silent IIS + localhost; service + bridge + config +
+SC-007 confirmed — see `specs/025-m3-bridge-closure/`/`026-m4-installer-closure/` evidence).
+IIS site provisioning needs the **IIS Management Scripting Tools** Windows feature (the
+`WebAdministration` COM provider); without it `web-iis-setup.ps1` fails and the install
+continues without an IIS site (host the bundle yourself, see step 1).
 
 ## Files
 
 | File | Role |
 |------|------|
-| `src/AkmlSql.Installer/AkmlSqlSetup.iss` | Main installer script (already exists for the IDE plugins). |
-| `src/AkmlSql.Installer/web-installer.iss` | M4 additions -- components, files, run actions, Pascal Script hooks. **Include from the main `.iss` per the integration note at the top of the file.** |
+| `src/AkmlSql.Installer/AkmlSqlSetup.iss` | Main installer script (already exists for the IDE plugins). **`#include`s `web-installer.iss` (integration wired in spec 026).** |
+| `src/AkmlSql.Installer/web-installer.iss` | M4 additions -- components, files, run actions, Pascal Script hooks. |
 | `src/AkmlSql.Installer/web-iis-setup.ps1` | IIS site provisioning + MIME types + CSP header. |
-| `src/AkmlSql.Installer/web-tls-setup.ps1` | Self-signed cert generation + `netsh http add sslcert`. |
+| `src/AkmlSql.Installer/web-tls-setup.ps1` | Self-signed cert generation (`bridge.cer`; NonExportable key) + `netsh http add sslcert`. |
 | `src/AkmlSql.Installer/web-firewall.ps1` | `netsh advfirewall` inbound rule. |
+| `src/AkmlSql.Installer/web-config-bridge.ps1` | Writes the `bridge` section into the web-service config (`%CommonAppData%\AKML SQL Web\config.json`). |
 
 ## Component-selection page
 
@@ -38,8 +43,14 @@ Web edition (local)
        Network exposure:
          (*) Localhost only       -- only my machine can browse
          ( ) LAN exposed          -- other machines on my network can browse
-       Port: [ 47291 ]
+       IIS site port:   [ 80 ]      -- the port you browse to (http://localhost/)
+       Engine bridge port: [ 47291 ] -- the WebSocket port; must differ from the IIS port
 ```
+
+The IIS site port and the engine bridge port are **two separate values** (two wizard
+pages: `WebIisPortPage` default 80, `WebBridgePortPage` default 47291). They must differ
+(FR-024). You browse the **IIS** port; the engine serves WebSocket frames on the **bridge**
+port.
 
 Component selection is independent: any combination of plugin and web-edition
 checkboxes is valid (FR-002).
@@ -57,7 +68,8 @@ checkboxes is valid (FR-002).
    `netsh http add sslcert ipport=0.0.0.0:<port>`.
 5. **Firewall rule** (if "LAN exposed"): inbound TCP on the chosen port.
 6. **Windows service**: `AkmlSqlWebEngine` (via `sc.exe create`) running the
-   engine with `--config %AppData%/AKML SQL Web/config.json`.
+   engine with `--web --config "%CommonAppData%\AKML SQL Web\config.json"` (machine-wide
+   service config — **not** the per-user `%AppData%\AKML SQL\config.json` IDE config).
 7. **Capture PIN** from the engine log + **TLS thumbprint** from the cert
    script, write to `%CommonAppData%/AKML SQL Web/INSTALL-SUMMARY.txt`.
 
@@ -82,21 +94,27 @@ Reverse of install:
 3. `netsh http delete sslcert` for the bridge port.
 4. Remove the `AkmlSqlWeb` IIS site.
 5. Delete `%ProgramFiles%\AKML SQL\Web\`.
-6. **Prompt** before deleting `%AppData%\AKML SQL Web\` -- the user might
-   want to keep their wrapped AI keys + connection records.
+6. **Prompt** before deleting `%CommonAppData%\AKML SQL Web\` (cert + install log +
+   summary + the bearer-token store `tokens.json`) -- keeping it lets paired browsers
+   reconnect without re-pairing after a reinstall. Note: **wrapped AI keys and connection
+   records do NOT live here** -- they're in the *browser's* IndexedDB (`aiKeys` /
+   `connections` stores), which the installer never touches.
 7. **NEVER** touch `%AppData%\AKML SQL\` (the IDE-plugin state). Acceptance
-   gate SC-007.
+   gate SC-007. (Verified: a web-only install + uninstall leaves it intact.)
 
 ## Silent install (T096)
 
 ```
-AKMLSQLSetup.exe /VERYSILENT /ACCEPTEULA \
-  /COMPONENTS="web,web\iis,web\service" \
-  /WEB_HOST=IIS /WEB_EXPOSURE=LAN /WEB_PORT=47291
+AKMLSQLSetup.exe /VERYSILENT /ACCEPTEULA ^
+  /COMPONENTS="web,web\iis,web\service" ^
+  /WEB_HOST=IIS /WEB_EXPOSURE=LAN /WEB_PORT=80 /BRIDGE_PORT=47291
 ```
 
-Reject `/WEB_HOST=NONE` with `/WEB_EXPOSURE=LAN` (no host means no LAN
-exposure point).
+- `/VERYSILENT` **requires** `/ACCEPTEULA` (the installer aborts otherwise).
+- `/WEB_PORT` is the **IIS site** port (default 80); `/BRIDGE_PORT` is the **engine bridge**
+  port (default 47291). They must differ (FR-024) — e.g. `/WEB_PORT=47291` alone collides with
+  the default bridge port and is rejected.
+- Reject `/WEB_HOST=NONE` with `/WEB_EXPOSURE=LAN` (no host means no LAN exposure point).
 
 ## First interactive test plan
 
@@ -104,14 +122,20 @@ exposure point).
 2. Build the engine: `dotnet publish src/AkmlSql.Engine -c Release -r win-x64`.
 3. Compile the installer: `"C:\Program Files\Inno Setup 7\ISCC.exe" src/AkmlSql.Installer/AkmlSqlSetup.iss`.
 4. Run `AKMLSQLSetup.exe` -- pick `Web edition`, leave IIS + localhost defaults.
-5. Browse to `http://localhost:47291/`. Confirm the editor loads.
-6. Uninstall via Control Panel. Re-run with `--LAN` -- confirm the cert + firewall rule appear.
+5. Browse to the **IIS site port** — `http://localhost/` (default 80), **not** the bridge port
+   47291 (that's the WebSocket engine, which does not serve the HTML bundle). Confirm the editor loads.
+6. Uninstall via Control Panel. Re-run with `/WEB_EXPOSURE=LAN` -- confirm the cert + firewall rule appear.
 
-## Deferred until first interactive run
+## Status of the "deferred" items
 
-- The hookup of `Web_Init` / `Web_NextButton` / `Web_Skip` / `Web_PostInstall`
-  / `Web_Uninstall` into `AkmlSqlSetup.iss`'s existing event procedures (see
-  the integration note at the top of `web-installer.iss`).
-- The actual installer compile + run + screenshot capture.
-- The re-run preservation check (T097).
-- The silent-flag plumbing (T096).
+- ✅ **Hooks integrated** — `Web_Init` / `Web_NextButton` / `Web_Skip` / `Web_PostInstall` /
+  `Web_Uninstall` + `ShouldSkipPage` are wired into `AkmlSqlSetup.iss` (spec 026).
+- ✅ **Compile + run** — ISCC-compiles clean; a silent IIS+localhost install was run end-to-end
+  (service `Running` with the correct `--web --config %CommonAppData%…` binPath, bridge port
+  listening, `config.json` at the service path, SC-007 IDE config untouched).
+- ✅ **Silent-flag plumbing (T096)** — `/WEB_HOST` `/WEB_EXPOSURE` `/WEB_PORT` `/BRIDGE_PORT`
+  parse + validate (range, ports-differ, NONE+LAN rejected, IIS-missing-in-silent abort).
+- ⏳ **Re-run preservation check (T097)** — still unverified interactively.
+- ⏳ **IIS provisioning** needs the *IIS Management Scripting Tools* feature; on a box without it,
+  `web-iis-setup.ps1` fails (`0x80040154 Class not registered`) and the install **continues
+  without an IIS site** while still reporting success — host the bundle yourself in that case.
