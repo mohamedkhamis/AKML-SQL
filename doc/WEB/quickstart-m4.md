@@ -69,8 +69,9 @@ checkboxes is valid (FR-002).
    `specs/021-web-edition/contracts/ai-key-wrapping.md`.
 4. **TLS cert** (if "LAN exposed"): `New-SelfSignedCertificate` with
    `KeyExportPolicy NonExportable`, bound via
-   `netsh http add sslcert ipport=0.0.0.0:<port>`.
-5. **Firewall rule** (if "LAN exposed"): inbound TCP on the chosen port.
+   `netsh http add sslcert ipport=0.0.0.0:<bridge-port>` (the cert protects the **engine bridge**
+   WebSocket, not the IIS site — the IIS bundle is served over plain HTTP in both modes).
+5. **Firewall rule** (if "LAN exposed"): inbound TCP on the **bridge** port (default 47291).
 6. **Windows service**: `AkmlSqlWebEngine` (via `sc.exe create`) running the
    engine with `--web --config "%CommonAppData%\AKML SQL Web\config.json"` (machine-wide
    service config — **not** the per-user `%AppData%\AKML SQL\config.json` IDE config).
@@ -99,7 +100,7 @@ Reverse of install:
 2. Remove the firewall rule.
 3. `netsh http delete sslcert` for the bridge port.
 4. Remove the `AkmlSqlWeb` IIS site.
-5. Delete `%ProgramFiles%\AKML SQL\Web\`.
+5. Delete `%ProgramFiles(x86)%\AKML SQL\Web\` (auto-removed by Inno from the install log).
 6. **Prompt** before deleting `%CommonAppData%\AKML SQL Web\` (cert + install log +
    summary + the bearer-token store `tokens.json`) -- keeping it lets paired browsers
    reconnect without re-pairing after a reinstall. Note: **wrapped AI keys and connection
