@@ -583,6 +583,20 @@ begin
             summary.Add('  The pairing PIN / token store may be readable by standard users on this host. Re-run:');
             summary.Add('  icacls "' + appdata + '" /inheritance:r /grant:r *S-1-5-32-544:(OI)(CI)F /grant:r *S-1-5-18:(OI)(CI)F');
         end;
+        { Spec 026 (M4 closure) follow-up: IIS hosting was selected but web-iis-setup.ps1 did NOT
+          create the site (it exits 0 even on failure -- e.g. the "IIS Management Scripting Tools"
+          Windows feature is missing, so the WebAdministration cmdlets fail with 0x80040154). Without
+          this the summary would claim a browsable URL that doesn't exist. Surface it honestly; the
+          install is still not failed (the bundle is on disk and can be self-hosted). }
+        if WizardIsComponentSelected('web\iis') and (not FileExists(appdata + '\iis-site.ok')) then
+        begin
+            summary.Add('');
+            summary.Add('WARNING: IIS hosting was selected but the AkmlSqlWeb site was NOT created.');
+            summary.Add('  IIS provisioning failed -- see ' + appdata + '\install.log (often the missing');
+            summary.Add('  "IIS Management Scripting Tools" Windows feature). The URL above will not work yet.');
+            summary.Add('  The web bundle is at ' + ExpandConstant('{app}\Web') + ' -- host it yourself');
+            summary.Add('  (e.g. python -m http.server) or enable IIS scripting + re-run the installer.');
+        end;
         if not WizardIsComponentSelected('web\iis') then
         begin
             summary.Add('');

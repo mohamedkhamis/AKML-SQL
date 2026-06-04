@@ -34,6 +34,14 @@ $logRoot = Join-Path $env:ProgramData 'AKML SQL Web'
 $logFile = Join-Path $logRoot 'install.log'
 New-Item -ItemType Directory -Force -Path $logRoot | Out-Null
 
+# Spec 026 (M4 closure) follow-up: this script exits 0 even on failure (IIS problems must never
+# abort the install), so the installer can't tell from the exit code whether the site was created.
+# We write a success marker only on the success path below; the installer's Web_PostInstall warns in
+# INSTALL-SUMMARY.txt when IIS hosting was requested but this marker is absent. Cleared up front so a
+# failed re-run can't leave a stale "ok".
+$okMarker = Join-Path $logRoot 'iis-site.ok'
+Remove-Item $okMarker -Force -ErrorAction SilentlyContinue
+
 function Log {
     param([string] $msg)
     $line = '[{0}] [iis] {1}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $msg
@@ -132,6 +140,7 @@ try {
         -Name "cacheControlMode" -Value "DisableCache"
 
     Log "IIS setup complete."
+    Set-Content -Path $okMarker -Value "AkmlSqlWeb on port $Port" -Encoding UTF8 -Force
     exit 0
 }
 catch {

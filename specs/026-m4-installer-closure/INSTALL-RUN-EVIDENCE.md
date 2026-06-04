@@ -32,7 +32,7 @@ AKMLSQLSetup.exe /VERYSILENT /SUPPRESSMSGBOXES /ACCEPTEULA /NORESTART ^
 | **SC-007** | `%AppData%\AKML SQL` (IDE config) **untouched** (4 items) ✓ |
 | IIS site `AkmlSqlWeb` | **NOT created** — `web-iis-setup.ps1` failed (see findings) |
 
-## Findings (beyond the doc fixes)
+## Findings + code fixes (this pass)
 
 1. **IIS provisioning failed (environment gap, not an installer defect).** `install.log`:
    `[iis] ERROR: ... CLSID {688EEEE5-…} 0x80040154 Class not registered`. The `WebAdministration`
@@ -40,14 +40,30 @@ AKMLSQLSetup.exe /VERYSILENT /SUPPRESSMSGBOXES /ACCEPTEULA /NORESTART ^
    that feature is absent, so `New-Website` can't run. Browse-verification of the IIS-hosted site
    was therefore impossible on this box. The deployed bundle is byte-identical to the publish
    output already verified to load (M2/M6 dev-server runs).
-2. **Install reports success despite IIS failure.** The IIS step is non-fatal; the install returned
-   exit 0 and wrote a success `INSTALL-SUMMARY.txt` (`URL: http://localhost/`) with **no warning**
-   that the IIS site wasn't created. Robustness gap — the summary should flag IIS provisioning
-   failure (and `/WEB_HOST=IIS` arguably warrants a non-zero exit or a clear warning).
-3. **Summary URL ignores `/WEB_PORT`.** Installed with `/WEB_PORT=8099`, but the summary still says
-   `URL: http://localhost/` (port 80). The IIS step also logged `Port=80` despite `/WEB_PORT=8099`
-   — a likely WEB_PORT-not-honored-for-IIS bug in silent mode (couldn't fully confirm because the
-   IIS step aborts on the COM error before binding). Worth a follow-up once IIS scripting is present.
+2. **Install reported success despite IIS failure → FIXED.** The IIS step is non-fatal
+   (`web-iis-setup.ps1` exits 0 even on failure), so the install returned exit 0 + a success summary
+   (`URL: http://localhost/`) with **no warning** the site wasn't created. **Fix:** `web-iis-setup.ps1`
+   now writes an `iis-site.ok` marker only on the success path, and `Web_PostInstall` adds a
+   **"WARNING: IIS hosting was selected but the AkmlSqlWeb site was NOT created"** block to the summary
+   when the marker is absent. **Verified live** — re-running on this (IIS-scripting-broken) box, the
+   summary now carries the warning and names the likely missing Windows feature.
+3. **`bridge.pfx` in the engine TLS error strings → FIXED.** `WebSocketTransport.ValidateCertBindingOrThrow`
+   accepts a `.cer` (the installer's actual output) but its two `InvalidOperationException` messages
+   said `bridge.pfx` / "PFX thumbprint mismatch". Reworded to `bridge.cer` / "certificate thumbprint
+   mismatch"; the M3 quickstart troubleshooting quote was synced.
+4. **`/WEB_PORT` "not honored" — NOT a bug (my earlier diagnosis was wrong).** A diagnostic build logged
+   `[web-flags] host=[IIS] exposure=[LOCALHOST] port=[8099] bridge=[47291]` — Inno's `{param:WEB_PORT|}`
+   **does** parse the flag. The earlier "port 80 despite /WEB_PORT=8099" came from invoking the installer
+   via PowerShell `Start-Process -ArgumentList @(array...)`, which mangled the args so Inno's `{param}`
+   saw nothing → the install fell back to the interactive defaults (IIS/localhost/80) and silently
+   ignored the web flags. Passed as a **single argument string**, the flags parse and the install then
+   **correctly aborts** (exit 5) because `IsIisInstalled()` returns false on this box (FR-019: silent +
+   `/WEB_HOST=IIS` + IIS-missing → abort). No installer change needed; the diagnostic logging was reverted.
+
+   > **Caveat on the earlier "verified" install:** because the array-arg runs ignored the web flags, the
+   > install that confirmed service/config/bridge/SC-007 ran with the **defaults** (IIS host, localhost,
+   > IIS port 80) — those checks don't depend on the port, so they stand. The IIS port itself (8099) was
+   > never exercised here because IIS provisioning is env-blocked.
 
 ## Quickstart-m4.md audit — fixed in the doc
 

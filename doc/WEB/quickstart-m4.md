@@ -57,12 +57,16 @@ checkboxes is valid (FR-002).
 
 ## What the installer does
 
-1. **Web bundle** to `%ProgramFiles%\AKML SQL\Web\`.
-2. **AppData**: `%AppData%\AKML SQL Web\` for the invoking user; per-machine
-   shared state at `%CommonAppData%\AKML SQL Web\` (cert + install log + summary).
+1. **Web bundle** to `%ProgramFiles(x86)%\AKML SQL\Web\` — the installer is 32-bit, so
+   `DefaultDirName={autopf}\AKML SQL` resolves to **Program Files (x86)** on 64-bit Windows.
+2. **Per-machine shared state** at `%CommonAppData%\AKML SQL Web\` (TLS cert + install log +
+   `INSTALL-SUMMARY.txt` + the service `config.json` + the bearer-token store `tokens.json`).
+   The web edition does **not** create a per-user `%AppData%\AKML SQL Web\` — the service runs as
+   LocalSystem and reads only `%CommonAppData%`. (The separate per-user `%AppData%\AKML SQL\` is the
+   IDE-plugin state, which the web installer never touches — SC-007.)
 3. **IIS site** (if "Host on IIS"): site `AkmlSqlWeb`, MIME types for
-   `.wasm` / `.dat` / `.blat` / `.br`, CSP header from
-   `contracts/ai-key-wrapping.md`.
+   `.wasm` / `.dat` / `.blat` / `.br` / `.dll`, CSP header per
+   `specs/021-web-edition/contracts/ai-key-wrapping.md`.
 4. **TLS cert** (if "LAN exposed"): `New-SelfSignedCertificate` with
    `KeyExportPolicy NonExportable`, bound via
    `netsh http add sslcert ipport=0.0.0.0:<port>`.
@@ -70,8 +74,10 @@ checkboxes is valid (FR-002).
 6. **Windows service**: `AkmlSqlWebEngine` (via `sc.exe create`) running the
    engine with `--web --config "%CommonAppData%\AKML SQL Web\config.json"` (machine-wide
    service config — **not** the per-user `%AppData%\AKML SQL\config.json` IDE config).
-7. **Capture PIN** from the engine log + **TLS thumbprint** from the cert
-   script, write to `%CommonAppData%/AKML SQL Web/INSTALL-SUMMARY.txt`.
+7. **Capture PIN** from `pairing-pin.txt` (the engine writes it there on startup — LAN only)
+   + **TLS thumbprint** from the cert script's `thumbprint.txt`, write to
+   `%CommonAppData%\AKML SQL Web\INSTALL-SUMMARY.txt`. (Localhost installs need no PIN — the
+   summary records "Localhost only -- no LAN access. No pairing PIN required.")
 
 ## Re-run (T094)
 
