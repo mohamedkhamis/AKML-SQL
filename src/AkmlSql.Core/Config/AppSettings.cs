@@ -309,8 +309,11 @@ namespace AkmlSql.Core.Config
         public KeywordCaseOption KeywordCase { get; set; } = KeywordCaseOption.Upper;
         /// <summary>Whether to disable native SSMS IntelliSense to avoid conflicts.</summary>
         public bool DisableNativeIntelliSense { get; set; } = true;
-        /// <summary>Use Space key to commit the selected completion item (SQL Prompt style).</summary>
-        public bool SpaceCommits { get; set; } = true;
+        /// <summary>Use Space key to commit the selected completion item (SQL Prompt style).
+        /// Default OFF: with it on, typing a prefix then pressing space replaced the typed text with
+        /// the highlighted item — surprising, since SSMS users expect space to insert a literal space.
+        /// Opt in for SQL-Prompt-style space-commit. (Dot-commit + Tab/Enter-commit are unaffected.)</summary>
+        public bool SpaceCommits { get; set; } = false;
         /// <summary>Use Dot key to commit the selected completion item.</summary>
         public bool DotCommits { get; set; } = true;
         /// <summary>Show snippet shortcuts (sel, ssf, ins, etc.) in the completion popup. Default disabled.</summary>

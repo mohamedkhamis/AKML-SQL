@@ -260,19 +260,25 @@ namespace AkmlSql.Shell.Shared.Editor
             string server;
             string database;
 
-            // Try parsing "server.database" from afterDash
-            var dotIndex = afterDash.IndexOf('.');
+            // Try parsing "server.database" from afterDash.
+            // Split at the LAST dot, not the first: the database is the final token, but the SERVER
+            // can itself contain dots — a remote FQDN ("srv.corp.contoso.com") or an IP
+            // ("10.0.0.5"). Splitting at the first dot truncated the server to "srv"/"10" and leaked
+            // the rest into the database, so the engine connected to a bogus host and loaded no
+            // schema — while dotless local names ((local) / localhost / MACHINE\INSTANCE) worked.
+            // That was the "any remote server cannot load schema, just local only" bug.
+            var dotIndex = afterDash.LastIndexOf('.');
             if (dotIndex > 0 && !afterDash.EndsWith(".sql", StringComparison.OrdinalIgnoreCase))
             {
-                // SSMS 22 format: afterDash = "(local).StockProduction"
+                // SSMS 22 format: afterDash = "(local).StockProduction" or "srv.corp.contoso.com.MyDb"
                 server = afterDash.Substring(0, dotIndex).Trim();
                 database = afterDash.Substring(dotIndex + 1).Trim();
             }
             else
             {
-                // Try SSMS 20 format: connection info is BEFORE the dash
+                // Try SSMS 20 format: connection info is BEFORE the dash. Same last-dot rule.
                 var beforeDash = caption.Substring(0, dashIndex).Trim();
-                dotIndex = beforeDash.IndexOf('.');
+                dotIndex = beforeDash.LastIndexOf('.');
                 if (dotIndex > 0 && !beforeDash.EndsWith(".sql", StringComparison.OrdinalIgnoreCase))
                 {
                     server = beforeDash.Substring(0, dotIndex).Trim();
