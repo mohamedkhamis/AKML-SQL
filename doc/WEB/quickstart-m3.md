@@ -15,8 +15,12 @@ Use this to confirm the bridge is wired before going LAN.
 1. **Install with `/WEB_EXPOSURE=LOCALHOST`**:
 
    ```
-   AKMLSQLSetup.exe /WEB_EXPOSURE=LOCALHOST /WEB_PORT=47291
+   AKMLSQLSetup.exe /WEB_EXPOSURE=LOCALHOST /BRIDGE_PORT=47291
    ```
+
+   (`/BRIDGE_PORT` sets the engine bridge port; `/WEB_PORT` sets the separate **IIS** site port,
+   default 80. The two must differ — `/WEB_PORT=47291` alone would collide with the default bridge
+   port and be rejected. `/VERYSILENT` runs additionally require `/ACCEPTEULA`.)
 
    The installer writes `bridge` into `%ProgramData%\AKML SQL Web\config.json` — the config the
    `AkmlSqlWebEngine` Windows service reads (it is launched `--web --config "%CommonAppData%\AKML SQL Web\config.json"`).
@@ -49,11 +53,17 @@ Use this to confirm the bridge is wired before going LAN.
 
 4. **Click Add Connection** in the connection picker. For localhost, just enter Host `127.0.0.1` + Port `47291`; leave the PIN field blank (localhost mode auto-accepts).
 
-   *Verification*: The status bar transitions through `Connecting` → `Open` within 1 s. The right side panel renders the live schema tree (once US4 lands — until then, only the bridge state pill changes).
+   *Verification*: The status bar pill transitions `Connecting` → `Open` (shown as **Live**) within ~1 s. The right side panel's schema tree (shipped in US4) renders once the engine has an active SQL Server connection — see step 5.
 
-5. **Type a `SELECT`** in the editor; observe IntelliSense from the live schema (requires a database connection picked in the connection picker).
+5. **Type a `SELECT`** in the editor. Live-schema IntelliSense requires the **engine** to have an
+   active SQL Server connection — established today by the SSMS/VS shell extension (or another
+   client). The web connection picker pairs with the engine *bridge* but does **not** yet have a
+   "connect to SQL Server" UI, so a web-only setup has no live schema and the editor falls back to
+   keyword/snippet completions (the engine's `SchemaIdentify` reports no active session).
 
-   *Verification*: Completions arrive within ~100 ms of typing; the status bar shows the engine version and capability list.
+   *Verification*: with a live engine session present, completions stream from the live schema within
+   ~100 ms of typing, and the status bar shows the engine version. (The engine's capability list is
+   received at handshake and used to gate features, but is not displayed in the status bar.)
 
 ## Section 2 — LAN pair from a second machine
 
@@ -62,14 +72,16 @@ This is the operator-facing flow for the M3 PRD §1 promise.
 1. **Install on Machine A with `/WEB_EXPOSURE=LAN`**:
 
    ```
-   AKMLSQLSetup.exe /WEB_EXPOSURE=LAN /WEB_PORT=47291
+   AKMLSQLSetup.exe /WEB_EXPOSURE=LAN /BRIDGE_PORT=47291
    ```
 
-   The installer runs four PowerShell helpers in sequence:
-   - `web-iis-setup.ps1` — provisions an IIS site for the web bundle.
-   - `web-tls-setup.ps1` — generates a self-signed cert (RSA-2048, private key **NonExportable** in `LocalMachine\My`), exports the public part to `%ProgramData%\AKML SQL Web\certs\bridge.cer`, and binds the cert to the port via `netsh http add sslcert ipport=0.0.0.0:47291 certhash=<thumb>` (the TLS handshake uses the cert-store binding by thumbprint — no PFX file is written).
-   - `web-firewall.ps1` — adds the inbound `AKML SQL Web Engine` rule for TCP 47291 on all profiles.
-   - `web-config-bridge.ps1` — writes the `bridge` section into `%ProgramData%\AKML SQL Web\config.json` with `bindAddress: "0.0.0.0"` and `tlsCertPath` pointing at `bridge.cer` (the engine loads it only to cross-check its thumbprint against the netsh binding).
+   The installer runs four PowerShell helpers (the first three during the install `[Run]` phase,
+   then `web-config-bridge.ps1` in the post-install hook after the service is created + the
+   shared-state dir is ACL-locked):
+   - `web-iis-setup.ps1` — provisions an IIS site for the web bundle (on the IIS port, default 80).
+   - `web-tls-setup.ps1` — generates a self-signed cert (RSA-2048, private key **NonExportable** in `LocalMachine\My`), exports the public part to `%ProgramData%\AKML SQL Web\certs\bridge.cer`, and binds the cert to the bridge port via `netsh http add sslcert ipport=0.0.0.0:<bridge-port> certhash=<thumb>` (default 47291; the TLS handshake uses the cert-store binding by thumbprint — no PFX file is written).
+   - `web-firewall.ps1` — adds the inbound `AKML SQL Web Engine` rule for the bridge port on all profiles.
+   - `web-config-bridge.ps1` (post-install) — writes the `bridge` section into `%ProgramData%\AKML SQL Web\config.json` with `bindAddress: "0.0.0.0"` and `tlsCertPath` pointing at `bridge.cer` (the engine loads it only to cross-check its thumbprint against the netsh binding).
 
    *Verification*: After install, `%CommonAppData%\AKML SQL Web\INSTALL-SUMMARY.txt` contains the LAN URL, the pairing PIN, and the TLS thumbprint. The Windows Firewall rule is visible in `netsh advfirewall firewall show rule name="AKML SQL Web Engine"`.
 
@@ -77,7 +89,13 @@ This is the operator-facing flow for the M3 PRD §1 promise.
 
    *Verification*: `netstat -an | findstr :47291` on Machine A shows a `TCP 0.0.0.0:47291 ... LISTENING` row. If the engine is bound but Machine B can't connect, the firewall rule is the most likely cause.
 
-3. **On Machine B, open the web edition** at `https://<machine-a-hostname-or-ip>:47291/` (the LAN URL from Machine A's install summary). The browser will warn about the self-signed cert — accept it for trusted-LAN deployments (or pre-install the public cert from `%ProgramData%\AKML SQL Web\certs\bridge.cer` per the install summary's instructions).
+3. **On Machine B, open the web edition** at the IIS URL from Machine A's install summary —
+   `http://<machine-a-hostname-or-ip>/` (the IIS site serves the bundle over HTTP on the IIS port,
+   default 80). **Not** `:47291` — that's the WebSocket engine bridge and does not serve the HTML
+   bundle. The bundle's JavaScript later opens the TLS bridge socket `wss://<machine-a>:47291`; for
+   that the browser must trust the self-signed cert — accept it for trusted-LAN deployments, or
+   pre-install `%ProgramData%\AKML SQL Web\certs\bridge.cer` into Trusted Root on Machine B (per the
+   install summary's instructions).
 
    *Verification*: The editor page loads; the connection picker is empty (no connections yet); the bridge state pill shows `Disconnected`.
 
@@ -92,9 +110,13 @@ This is the operator-facing flow for the M3 PRD §1 promise.
 
    *Verification*: The bridge transitions through `Connecting` → `Open` within a few seconds. The diagnostics ring buffer logs `Pinned TLS fingerprint for connection 'Office engine': …<last-12>`. The connection record is persisted to IndexedDB (visible in DevTools → Application → IndexedDB).
 
-5. **Type a `SELECT`** in the editor; observe completions arriving from Machine A's live schema.
+5. **Type a `SELECT`** in the editor. As in Section 1 step 5, live-schema completions require Machine A's
+   **engine** to have an active SQL Server connection (via the shell extension); the web edition has no
+   "connect to SQL Server" UI yet, so a web-only pairing gets keyword/snippet completions until such a
+   session exists.
 
-   *Verification*: Completions arrive within ~200 ms of typing. The status bar shows the engine version + capability list.
+   *Verification*: with a live engine session, completions arrive within ~200 ms of typing; the status
+   bar shows the engine version.
 
 Close the tab and re-open the web edition. The active connection **auto-reconnects on startup** with **no PIN prompt** — localhost auto-accepts; LAN replays the wrapped bearer token from IndexedDB. (You can also reconnect manually with **Connect**; and if an *already-established* connection drops mid-session, the bridge auto-reconnects with exponential backoff — see the status-bar `Reconnecting · next try in Ns` countdown.)
 
@@ -115,6 +137,7 @@ Close the tab and re-open the web edition. The active connection **auto-reconnec
 - **Tab colouring per connection** — PRD §5 explicitly defers.
 - **Snippets / refactoring / AI** — M5 / M6.
 - **Multi-engine connections from one browser** — one connection at a time per browser.
+- **A browser "connect to SQL Server" UI** — the web connection picker pairs with the engine *bridge* only; choosing the actual SQL database (so the engine has a live schema to serve) is done from the SSMS/VS shell extension. Until a web connect-to-SQL UI lands, the live-schema IntelliSense in steps 5 requires an engine session established by another client.
 - **TLS fingerprint mismatch modal** — see `doc/m3-security.md` §"What is NOT covered" #1.
 - **Engine-side tray pairing pane** — spec 021 T065, deferred.
 

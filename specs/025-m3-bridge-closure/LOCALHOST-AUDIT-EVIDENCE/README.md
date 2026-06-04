@@ -39,12 +39,30 @@ machines.
 - **Connection-picker default Port** — **FIXED** (owner-approved): `AddForm.Port` and the
   `EngineConnection.Port` model default were `5081` (matched nothing the engine listens on); both
   now default to **47291** (the bridge default). Verified live: the Add dialog pre-fills `47291`.
-- The engine's two TLS error strings still say `bridge.pfx` (`WebSocketTransport.cs:375,423-424`)
-  though the surrounding code/comments correctly handle `.cer`. Cosmetic; left as-is (engine code,
-  out of this doc-audit's scope).
+- The engine's two TLS error strings said `bridge.pfx` / "PFX thumbprint mismatch" though the code
+  handles `.cer` — **fixed** later (reworded to `bridge.cer` / "certificate thumbprint mismatch";
+  the M3 troubleshooting quote was synced).
 
 ## Not exercised here
 
 - **LAN (Section 2)** — needs a second machine + self-signed-cert trust; audited statically only.
   The localhost path proves the handshake/version/auto-accept; the LAN delta is TLS + PIN, whose
   wire-level behavior is covered by `tests/AkmlSql.E2E.Tests/BridgeHandshakeTests`.
+
+## Second-pass re-audit (deeper, 3-agent parallel review)
+
+A second pass cross-checked the claims the first pass didn't deeply verify. **Confirmed correct
+(no change):** all the diagnostics log strings (`Pinned TLS fingerprint…`, `TLS fingerprint …
+changed…`, `Pairing PIN was wrong or expired`), the auto-reconnect/bearer behavior, the LAN
+INSTALL-SUMMARY contents, the cert/bindAddress claims, every "what's not in M3" bullet, the
+prerequisites, and all see-also links. **Fixed (doc):**
+
+| Finding | Was | Now |
+|---|---|---|
+| Install commands | `/WEB_PORT=47291` (both sections) | `/BRIDGE_PORT=47291` — `/WEB_PORT` is the IIS port; `=47291` collides with the default bridge → rejected (same class as the M4 silent-example bug) |
+| Section 2 step 3 browse URL | `https://<machine-a>:47291/` | `http://<machine-a>/` — 47291 is the WebSocket bridge (rejects non-WS HTTP), not the IIS bundle host (HTTP, port 80) |
+| Live-schema IntelliSense (steps 5) | "observe IntelliSense from the live schema (requires a database connection picked in the connection picker)" | caveated — the web picker pairs with the engine *bridge*; there's **no browser connect-to-SQL UI**, so `SchemaIdentify` reports no session and live schema needs an engine session from another client (also added to "what's not in M3") |
+| Schema-tree caveat | "(once US4 lands — until then only the pill changes)" | US4 shipped + wired; caveat removed (tree renders once the engine has an active SQL connection) |
+| Status bar "capability list" | "shows the engine version and capability list" | capabilities are received at handshake + gate features but are **not displayed**; doc now says "version" only |
+| Four-helper "sequence" | implied all in `[Run]` | clarified: 3 in `[Run]`, `web-config-bridge.ps1` in the post-install hook |
+| netsh port | hardcoded `47291` | `<bridge-port>` (default 47291; parameterized) |
