@@ -41,5 +41,11 @@ namespace AkmlSql.Core.Ipc.Messages
         /// <summary>True if the cache for this session+database exists. False if not started.</summary>
         [Key(4)]
         public bool Exists { get; set; }
+
+        /// <summary>True if the engine's schema load for this session hit a login/permission failure
+        /// (4060/18456/18452/916). The shell uses this to surface "credentials rejected" for SQL-auth
+        /// sessions. Spec 029.</summary>
+        [Key(5)]
+        public bool AuthError { get; set; }
     }
 }

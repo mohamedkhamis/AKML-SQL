@@ -41,5 +41,45 @@ namespace AkmlSql.Shell.Shared.Tests
             Assert.Equal(expectedServer, result.Server);
             Assert.Equal(expectedDatabase, result.Database);
         }
+
+        [Theory]
+        [InlineData("1", (int)SsmsConnectionDetector.AuthMode.SqlPassword)]                         // numeric SqlPassword
+        [InlineData("SqlPassword", (int)SsmsConnectionDetector.AuthMode.SqlPassword)]               // string form
+        [InlineData("SQL Server Authentication", (int)SsmsConnectionDetector.AuthMode.SqlPassword)] // SSMS label
+        [InlineData("2", (int)SsmsConnectionDetector.AuthMode.Unsupported)]                          // AAD Password stays unsupported
+        [InlineData("4", (int)SsmsConnectionDetector.AuthMode.Unsupported)]                          // AAD Interactive stays unsupported
+        [InlineData("3", (int)SsmsConnectionDetector.AuthMode.AzureAdIntegrated)]
+        [InlineData("0", (int)SsmsConnectionDetector.AuthMode.Windows)]
+        public void ClassifyAuth_MapsSqlLoginToSqlPassword(string raw, int expectedInt)
+        {
+            var expected = (SsmsConnectionDetector.AuthMode)expectedInt;
+            Assert.Equal(expected, SsmsConnectionDetector.ClassifyAuth(raw));
+        }
+
+        [Fact]
+        public void ParseCaption_BareLogin_ClassifiesSqlPassword_CapturesLogin_NotEngineUsableYet()
+        {
+            var r = SsmsConnectionDetector.ParseCaption("q.sql - 192.168.5.123.NatGas_G2_Testing (sa (53))");
+            Assert.NotNull(r);
+            Assert.Equal("192.168.5.123", r.Server);
+            Assert.Equal("NatGas_G2_Testing", r.Database);
+            Assert.Equal("sa", r.Login);
+            Assert.Equal(SsmsConnectionDetector.AuthMode.SqlPassword, r.AuthMode);
+            Assert.False(r.IsEngineUsable);   // no password at parse time
+            Assert.Null(r.ConnectionString);
+        }
+
+        [Fact]
+        public void BuildSqlAuthConnectionString_EscapesSpecialChars_AndSetsFields()
+        {
+            var cs = SsmsConnectionDetector.BuildSqlAuthConnectionString("10.0.0.5", "MyDb", "sa", "P@ss;w'd\"x");
+            var b = new System.Data.SqlClient.SqlConnectionStringBuilder(cs);
+            Assert.Equal("10.0.0.5", b.DataSource);
+            Assert.Equal("MyDb", b.InitialCatalog);
+            Assert.Equal("sa", b.UserID);
+            Assert.Equal("P@ss;w'd\"x", b.Password);   // round-trips intact despite ; ' "
+            Assert.False(b.Encrypt);
+            Assert.True(b.TrustServerCertificate);
+        }
     }
 }

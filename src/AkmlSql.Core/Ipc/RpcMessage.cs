@@ -165,6 +165,9 @@ namespace AkmlSql.Core.Ipc
         public const int FindUnusedVariables = 91;
         public const int EncryptedObjectDecryption = 92;
 
+        // Shell → Engine (Spec 029: SQL-auth credential validation)
+        public const int TestSqlConnection = 93;
+
         // Shell → Engine (AI Assistance — Phase 9)
         public const int AiTextToSql = 70;
         public const int AiExplain = 71;
@@ -223,6 +226,9 @@ namespace AkmlSql.Core.Ipc
         public const int FindInvalidObjectsResult = 190;
         public const int FindUnusedVariablesResult = 191;
         public const int EncryptedObjectDecryptionResult = 192;
+
+        // Engine → Shell (Spec 029)
+        public const int TestSqlConnectionResult = 193;
 
         // Spec 021 (web edition) M3 — WebSocket bridge handshake.
         // See specs/021-web-edition/contracts/rpc-handshake.md.

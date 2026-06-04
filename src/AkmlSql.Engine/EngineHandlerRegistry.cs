@@ -245,11 +245,13 @@ internal static class EngineHandlerRegistry
         // === Diagnostics (1 typed) ===
         router.Register(new Handlers.Diagnostics.EngineLogTailHandler());
 
-        // === Control / lifecycle (4 typed) ===
+        // === Control / lifecycle (5 typed) ===
         router.Register(new Handlers.Control.DocumentChangedHandler());
         router.Register(new Handlers.Control.PingHandler());
         router.Register(new Handlers.Control.ShutdownHandler());
         router.Register(new Handlers.Control.ConnectionChangedHandler());
+        // Spec 029: validate SQL-auth credential before the shell stores it.
+        router.Register(new Handlers.Control.TestSqlConnectionHandler());
 
         // === WebSocket bridge handshake (spec 025 US5 wire-up; spec 026 M4 closure auth) ===
         // The HandshakeHandler exists from spec 021 T060. The named-pipe transport doesn't need

@@ -7,6 +7,7 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 using AkmlSql.Core.Ipc;
+using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Shell.Shared.Ipc;
 using AkmlSql.Shell.Shared.Ui.Theme;
@@ -31,7 +32,7 @@ namespace AkmlSql.Shell.Shared.Editor.SchemaProgress
         private const int    ReadyDisplayMs     = 2000;
         private const int    LoadingTimeoutMs   = 15_000;
 
-        private enum MarginState { Hidden, Loading, Ready }
+        private enum MarginState { Hidden, Loading, Ready, NeedsCredentials }
 
         private readonly IWpfTextView    _textView;
         private readonly IAdornmentLayer _adornmentLayer;
@@ -148,6 +149,7 @@ namespace AkmlSql.Shell.Shared.Editor.SchemaProgress
             ThemeRegistry.Instance.AttachTo(_notificationBorder);
             _notificationBorder.SetResourceReference(Border.BackgroundProperty,  ThemeTokens.EditorMarginBackground);
             _notificationBorder.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.BorderDefault);
+            _notificationBorder.MouseLeftButtonUp += OnNotificationClicked;
 
             // Continuous spinner rotation -- only START when motion is allowed (FR-019/O10).
             // If the user toggles the preference at runtime, OnAnimationsEnabledChanged swaps the
@@ -279,6 +281,24 @@ namespace AkmlSql.Shell.Shared.Editor.SchemaProgress
                     if (string.IsNullOrEmpty(_sessionId)) return;
                 }
 
+                // Spec 029: SQL-auth windows are driven by shell-local SqlAuthState, not the engine
+                // (which has no session until we send ConnectionChanged). This takes priority.
+                if (TryGetAuthState(out var authState) && authState.NeedsCredentials)
+                {
+                    if (ConnectionWiringHelper.TryResolveStoredSqlCredential(_sessionId, _textView))
+                    {
+                        // A credential is now stored (this window, or another window on the same
+                        // server/login just saved it) — ConnectionChanged was sent; show Loading.
+                        TransitionTo(MarginState.Loading);
+                        _loadingStartedAtUtc = DateTime.UtcNow;
+                    }
+                    else
+                    {
+                        TransitionTo(MarginState.NeedsCredentials);
+                    }
+                    return;
+                }
+
                 var client = EngineLifecycle.Manager?.Client;
                 if (client == null || !client.IsConnected)
                 {
@@ -291,6 +311,18 @@ namespace AkmlSql.Shell.Shared.Editor.SchemaProgress
                     MessageTypes.SchemaStatusRequest, req, timeoutMs: 3000);
 
                 if (_disposed) return;
+
+                // Spec 029: the engine rejected a stored SQL credential (login/permission failure).
+                // Only treat it as "re-enter credentials" for SQL-auth sessions (SqlAuthState present);
+                // Windows-auth permission denials keep their existing behavior.
+                if (resp != null && resp.AuthError && TryGetAuthState(out var rejected))
+                {
+                    SqlCredentialStore.Remove(rejected.Server, rejected.Login);
+                    rejected.NeedsCredentials = true;
+                    TransitionTo(MarginState.NeedsCredentials);
+                    return;
+                }
+
                 Apply(resp);
             }
             catch (Exception ex)
@@ -395,6 +427,7 @@ namespace AkmlSql.Shell.Shared.Editor.SchemaProgress
             switch (newState)
             {
                 case MarginState.Hidden:
+                    _notificationBorder.Cursor = System.Windows.Input.Cursors.Arrow;
                     FadeTo(0, () => _notificationBorder.Visibility = Visibility.Collapsed);
                     _lastDisplayedText = string.Empty;
                     break;
@@ -402,6 +435,8 @@ namespace AkmlSql.Shell.Shared.Editor.SchemaProgress
                 case MarginState.Loading:
                     EnsureAdornmentAdded();
                     _notificationBorder.Visibility = Visibility.Visible;
+                    _notificationBorder.Cursor = System.Windows.Input.Cursors.Arrow;
+                    _statusText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
                     ApplyMotionPreferenceForLoading();   // FR-019/O10: spinner vs. static "Loading..." label
                     _readyGlyph.Visibility = Visibility.Collapsed;
                     FadeTo(1, null);
@@ -410,9 +445,23 @@ namespace AkmlSql.Shell.Shared.Editor.SchemaProgress
                 case MarginState.Ready:
                     EnsureAdornmentAdded();
                     _notificationBorder.Visibility = Visibility.Visible;
+                    _notificationBorder.Cursor = System.Windows.Input.Cursors.Arrow;
+                    _statusText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
                     _spinnerArc.Visibility   = Visibility.Collapsed;
                     _loadingLabel.Visibility = Visibility.Collapsed;
                     _readyGlyph.Visibility   = Visibility.Visible;
+                    FadeTo(1, null);
+                    break;
+
+                case MarginState.NeedsCredentials:
+                    EnsureAdornmentAdded();
+                    _notificationBorder.Visibility = Visibility.Visible;
+                    _notificationBorder.Cursor = System.Windows.Input.Cursors.Hand;
+                    _spinnerArc.Visibility = Visibility.Collapsed;
+                    _loadingLabel.Visibility = Visibility.Collapsed;
+                    _readyGlyph.Visibility = Visibility.Collapsed; // no glyph — emoji render unreliably in the adornment
+                    _statusText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.EditorSpinnerStroke); // accent = actionable
+                    SetText("SQL auth — click to enable IntelliSense");
                     FadeTo(1, null);
                     break;
             }
@@ -486,6 +535,60 @@ namespace AkmlSql.Shell.Shared.Editor.SchemaProgress
             else dispatcher.BeginInvoke(new Action(Apply));
         }
 
+        private void OnNotificationClicked(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            if (_disposed) return;
+            if (_state != MarginState.NeedsCredentials) return;
+            BeginEnterCredentials();
+        }
+
+        /// <summary>Spec 029. Opens the SQL credential dialog; on a successful save (or clear),
+        /// re-resolves the connection so schema loads (or the affordance reappears).</summary>
+        public void BeginEnterCredentials()
+        {
+            if (_disposed) return;
+            if (!TryGetAuthState(out var state)) return;
+            try
+            {
+                bool hasExisting = SqlCredentialStore.Has(state.Server, state.Login);
+                var dlg = new SqlCredentialDialog(state.Server, state.Database, state.Login, hasExisting);
+                var result = dlg.ShowDialog();
+                if (result == true)
+                {
+                    if (ConnectionWiringHelper.TryResolveStoredSqlCredential(_sessionId, _textView))
+                    {
+                        TransitionTo(MarginState.Loading);
+                        _loadingStartedAtUtc = DateTime.UtcNow;
+                    }
+                    else
+                    {
+                        // "Clear saved password" was used (no credential now) — keep the affordance.
+                        state.NeedsCredentials = true;
+                        TransitionTo(MarginState.NeedsCredentials);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "BeginEnterCredentials failed");
+            }
+        }
+
+        private bool TryGetAuthState(out SqlAuthState state)
+        {
+            state = null!;
+            try
+            {
+                if (_textView.TextBuffer.Properties.TryGetProperty<SqlAuthState>("AkmlSqlAuthState", out var s) && s != null)
+                {
+                    state = s;
+                    return true;
+                }
+            }
+            catch { }
+            return false;
+        }
+
         // --- Cleanup -------------------------------------------------------
 
         private void OnTextViewClosed(object sender, EventArgs e) => Dispose();
@@ -500,6 +603,7 @@ namespace AkmlSql.Shell.Shared.Editor.SchemaProgress
             try { _textView.ViewportHeightChanged -= OnViewportSizeChanged; } catch { }
             try { _textView.LayoutChanged         -= OnLayoutChanged; } catch { }
             try { _textView.Closed -= OnTextViewClosed; } catch { }
+            try { _notificationBorder.MouseLeftButtonUp -= OnNotificationClicked; } catch { }
         }
     }
 }

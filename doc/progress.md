@@ -1374,3 +1374,38 @@ The committed `ssf`/`cte` built-ins **and** `snippet-expansion-contract.md` used
 - **All Razor/JS UI runtime behaviour** (tab-stops landing, surround wrapping, menus/dialogs rendering, suppress buttons inserting at the right place) is **build-verified only** — no headless browser. The data-layer guarantees and the bUnit-testable render/gating logic *are* test-covered (255 Web.Tests).
 
 *Last updated: 2026-06-01*
+
+---
+
+## Spec 029 — SQL-auth credential support for IntelliSense (SSMS/VS)
+
+**Origin**: bug "any remote server cannot load schema, just local only". Root cause: SQL Server-authentication windows (login like `sa`) are not engine-usable — the out-of-process engine can't reuse the SSMS-held password (R-017, spec 014) — so `ConnectionWiringHelper` skipped `ConnectionChanged`, the engine never registered the session, and the schema cache stayed empty. Local Windows-auth worked; every remote SQL-auth connection silently got no IntelliSense.
+
+Spec/plan: `specs/029-sql-auth-credentials/{design,plan}.md`.
+
+### What shipped
+
+| Area | Change |
+|---|---|
+| **Store** | `AkmlSql.Core.Config.SqlCredentialStore` — DPAPI (`CurrentUser` + entropy `AkmlSql-SqlCred-v1`), per `(server, login)`, JSON at `%AppData%\AKML SQL\sql-credentials.json`, atomic temp+rename, process-wide lock, corrupt-entry self-heal. Opt-out `intelliSense.enableSqlAuthCredentials` (default true). |
+| **Detector** | New `AuthMode.SqlPassword` (SQL logins split out of `Unsupported`; AAD-interactive modes stay `Unsupported`); `ConnectionResult.Login`; `BuildSqlAuthConnectionString` via `System.Data.SqlClient.SqlConnectionStringBuilder` (safe escaping; parse-compatible with the engine's `Microsoft.Data.SqlClient`). |
+| **IPC** | `TestSqlConnection`/`Result` (93/193) + `TestSqlConnectionHandler` (validate a candidate connection string before the shell stores the password; logs only via `ConnectionDiagnostics.Describe`). `SchemaStatusResponse.AuthError` (Key 5). `ConnectionChangedHandler` resets a terminal `PermissionDenied` cache when the connection string changes (so a corrected password reloads). |
+| **Shell UX** | Per-buffer `SqlAuthState` marker; `ConnectionWiringHelper` resolves a stored credential (fills connstr → existing send path) or marks `NeedsCredentials`; `SqlCredentialDialog` (theme-aware, validate-before-store, empty-login guard, "Clear saved password"); `SchemaProgressMargin` click-to-enter affordance + 1 s store re-check for multi-window auto-resolve + `AuthError` → "credentials rejected — click to re-enter". |
+
+### Flow
+
+Open SQL-auth window → detector `SqlPassword`/not-usable → stored credential? yes: connect; no: margin affordance → dialog validates via `TestSqlConnection` → DPAPI store → `ConnectionChanged` → schema loads. Multi-window: a credential entered in one window auto-resolves the others within ~1 s. Stale (server password changed): engine `AuthError` → re-enter → cache reset → fresh Phase A. No silent failures; the password is never logged (gate verified) and never persisted in plaintext (`SqlAuthState` holds no password; only the encrypted store does; the connstr crosses only the ACL'd pipe).
+
+### Verification
+
+- Built via subagent-driven development: 8 implementation groups, each independently spec + code-quality reviewed (fix loops applied); an Opus whole-implementation review (APPROVED) traced all four scenarios (first-time / re-use / multi-window / stale) and caught + fixed one cross-file gap — `TryResolveStoredSqlCredential` stranding a window when the engine was momentarily disconnected.
+- Tests: Core **538** (incl. 5 new `SqlCredentialStore` tests) ✅; Shell.Shared **24** (incl. classification → `SqlPassword`, AAD stays `Unsupported`, `Login` capture, builder special-char round-trip) ✅; Engine **1076** ✅. The lone `PerformanceBaselineTests` failure during the parallel run was the known per-developer, machine-variable 5 % perf gate under concurrent build load — **passed 3/3 standalone** (see the spec-025 note above for the same flake).
+- No-leak gate: enumerated every `.ConnectionString` / `Password` use across the engine + shell — no `Log.*` ever receives a raw connection string or password (IPC router/transport log message type, not contents).
+
+### Not runtime-verified here (needs a Windows host + the live server)
+
+- **Live deploy + the 5 end-to-end scenarios** against `192.168.5.123` (`sa`) on the running SSMS 22 (plan Task 13) — the load-bearing `SqlConnectionStringBuilder` ↔ `Microsoft.Data.SqlClient` interop is validated by scenario 1.
+- **VS 2026 parity** (shared `.projitems`) — code builds, but live-verified only on SSMS 22.
+- **Deferred**: Options-dialog toggle for `enableSqlAuthCredentials` (the config flag works without UI); full "Manage SQL credentials" Options page (the in-dialog "Clear saved password" covers v1).
+
+*Last updated: 2026-06-04*

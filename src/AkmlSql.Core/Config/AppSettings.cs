@@ -318,6 +318,11 @@ namespace AkmlSql.Core.Config
         public bool DotCommits { get; set; } = true;
         /// <summary>Show snippet shortcuts (sel, ssf, ins, etc.) in the completion popup. Default disabled.</summary>
         public bool SnippetsInCompletion { get; set; } = false;
+
+        /// <summary>Spec 029. When true (default), AKML offers to store a SQL Server-auth password
+        /// (DPAPI-encrypted, per server+login) so the out-of-process engine can load schema/IntelliSense
+        /// for SQL-auth connections. Set false to disable the prompt and storage entirely.</summary>
+        public bool EnableSqlAuthCredentials { get; set; } = true;
     }
 
     public enum ColumnSuggestionScope { All, ReferencedOnly }

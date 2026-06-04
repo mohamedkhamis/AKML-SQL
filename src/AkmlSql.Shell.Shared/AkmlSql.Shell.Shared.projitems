@@ -19,6 +19,8 @@
     <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\CompletionPopupProvider.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\CompletionRpcHelper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\ConnectionWiringHelper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\SqlAuthState.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\SqlCredentialDialog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\SqlPromptIcons.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\SsmsConnectionDetector.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ExtensionAssemblyResolver.cs" />
