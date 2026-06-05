@@ -138,7 +138,8 @@ namespace AkmlSql.Shell.Shared.Editor
                 var settings = ConfigManager.Load();
                 if (!settings.IntelliSense.EnableSqlAuthCredentials) return; // opt-out → behave like Unsupported
 
-                bool has = SqlCredentialStore.TryGet(conn.Server, conn.Login, out var pwd);
+                var pwd = ResolveSqlAuthPassword(conn.Server, conn.Login);
+                bool has = !string.IsNullOrEmpty(pwd);
 
                 if (textView != null)
                 {
@@ -165,6 +166,31 @@ namespace AkmlSql.Shell.Shared.Editor
         }
 
         /// <summary>
+        /// Spec 029 follow-up. Resolve the SQL-auth password for (server, login), in order:
+        /// (1) <b>inherit</b> it from SSMS's active query-window connection (zero prompt — SSMS already
+        /// holds it), persisting it to the DPAPI store for resilience; (2) the existing DPAPI store.
+        /// Returns null when neither yields a password (the caller then shows the click-to-enter
+        /// affordance). MUST run on the UI thread — the inherit step reads the SSMS ScriptFactory.
+        /// </summary>
+        private static string ResolveSqlAuthPassword(string server, string login)
+        {
+            // Tier 1: inherit the password SSMS already holds for the active window (no prompt).
+            if (SsmsConnectionDetector.TryGetActiveSqlAuthPassword(server, login, out var inherited)
+                && !string.IsNullOrEmpty(inherited))
+            {
+                try { SqlCredentialStore.Save(server, login, inherited); }
+                catch (Exception ex) { Log.Debug(ex, "ResolveSqlAuthPassword: persisting inherited credential failed (non-fatal)"); }
+                return inherited;
+            }
+
+            // Tier 2: a previously entered/inherited credential from the DPAPI store.
+            if (SqlCredentialStore.TryGet(server, login, out var stored) && !string.IsNullOrEmpty(stored))
+                return stored;
+
+            return null; // Tier 3: caller prompts via the click-to-enter affordance.
+        }
+
+        /// <summary>
         /// Spec 029. Called by the margin while a buffer is in NeedsCredentials (and after a successful
         /// dialog save): if a credential is now stored for the buffer's (server, login), build the SQL
         /// connection string, send ConnectionChanged, clear NeedsCredentials, and return true. Reads the
@@ -180,7 +206,8 @@ namespace AkmlSql.Shell.Shared.Editor
                 if (!textView.TextBuffer.Properties.TryGetProperty<SqlAuthState>("AkmlSqlAuthState", out var state)
                     || state == null)
                     return false;
-                if (!SqlCredentialStore.TryGet(state.Server, state.Login, out var pwd))
+                var pwd = ResolveSqlAuthPassword(state.Server, state.Login);
+                if (string.IsNullOrEmpty(pwd))
                     return false;
 
                 // A credential exists, but if the engine isn't connected yet there is nothing to send.

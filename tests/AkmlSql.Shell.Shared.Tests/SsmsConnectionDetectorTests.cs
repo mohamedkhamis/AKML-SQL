@@ -78,8 +78,8 @@ namespace AkmlSql.Shell.Shared.Tests
             Assert.Equal("MyDb", b.InitialCatalog);
             Assert.Equal("sa", b.UserID);
             Assert.Equal("P@ss;w'd\"x", b.Password);   // round-trips intact despite ; ' "
-            Assert.False(b.Encrypt);
-            Assert.True(b.TrustServerCertificate);
+            Assert.True(b.Encrypt);                    // spec 029 security review: encrypt the password-bearing wire
+            Assert.True(b.TrustServerCertificate);     // internal self-signed certs; mirrors SSMS 22 default
         }
     }
 }
