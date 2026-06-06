@@ -30,9 +30,20 @@ namespace AkmlSql.Shell.Shared.Analysis
             _buffer    = buffer ?? throw new ArgumentNullException(nameof(buffer));
             _sessionId = sessionId ?? throw new ArgumentNullException(nameof(sessionId));
             _buffer.Changed += OnBufferChanged;
+
+            // Initial analysis so a freshly-opened/pasted document shows findings without first
+            // requiring an edit. (No-ops if the engine isn't connected yet; the first edit re-triggers.)
+            ScheduleAnalysis();
         }
 
         private void OnBufferChanged(object sender, TextContentChangedEventArgs e)
+        {
+            if (_disposed) return;
+            ScheduleAnalysis();
+        }
+
+        /// <summary>Debounced (300ms) trigger of a single analysis pass; cancels any in-flight one.</summary>
+        private void ScheduleAnalysis()
         {
             if (_disposed) return;
 

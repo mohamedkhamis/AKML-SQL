@@ -15,6 +15,10 @@ namespace AkmlSql.Shell.Shared.Analysis
 {
     [Export(typeof(ISuggestedActionsSourceProvider))]
     [Name("AkmlSqlLightbulbProvider")]
+    // SSMS 22 reports content type "SQL" — register all three (matching CompletionPopupProvider) so
+    // the analysis quick-fix lightbulbs actually appear in SSMS, not just VS's "T-SQL" buffers.
+    [ContentType("SQL Server Tools")]
+    [ContentType("SQL")]
     [ContentType("T-SQL")]
     internal sealed class LightbulbProvider : ISuggestedActionsSourceProvider
     {
