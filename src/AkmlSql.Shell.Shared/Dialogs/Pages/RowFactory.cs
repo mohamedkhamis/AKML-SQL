@@ -111,6 +111,46 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             return (row, cb);
         }
 
+        /// <summary>A zebra row with a label (+ optional description) on the left and a right-docked
+        /// action button. Caller wires <c>Control.Click</c>.</summary>
+        public (Border Row, Button Control) AddButton(StackPanel panel, string label, string buttonText, string description = "")
+        {
+            var btn = new Button
+            {
+                Content = buttonText,
+                MinWidth = 130,
+                Height = 28,
+                FontSize = 12,
+                Foreground = _theme.FgPrimary,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(12, 0, 0, 0)
+            };
+
+            var contentPanel = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            contentPanel.Children.Add(new TextBlock { Text = label, Foreground = _theme.FgPrimary, FontSize = 13 });
+            if (!string.IsNullOrEmpty(description))
+            {
+                contentPanel.Children.Add(new TextBlock
+                {
+                    Text = description,
+                    Foreground = _theme.FgSecondary,
+                    FontSize = 11,
+                    FontStyle = FontStyles.Italic,
+                    Margin = new Thickness(0, 2, 0, 0),
+                    TextWrapping = TextWrapping.Wrap
+                });
+            }
+
+            var dock = new DockPanel { LastChildFill = true };
+            DockPanel.SetDock(btn, Dock.Right);
+            dock.Children.Add(btn);
+            dock.Children.Add(contentPanel);
+
+            var row = WrapZebraRow(dock);
+            panel.Children.Add(row);
+            return (row, btn);
+        }
+
         public (StackPanel Row, Slider Control, TextBlock ValueLabel) AddSlider(
             StackPanel panel, string label, double min, double max, double defaultValue,
             string description = "", bool largeRange = false)

@@ -3,8 +3,19 @@ using Xunit;
 
 namespace AkmlSql.Core.Tests
 {
+    /// <summary>
+    /// xunit collection that serializes tests touching the real %AppData%\AKML SQL directory
+    /// (config.json + sql-credentials.json live there). ConfigManagerTests deletes/recreates that
+    /// directory to test "create if missing"; SqlCredentialStore.Save calls Directory.CreateDirectory
+    /// on the same path — so running them in parallel races. Same-collection classes never run
+    /// concurrently, and DisableParallelization keeps the collection off the parallel pool entirely.
+    /// </summary>
+    [CollectionDefinition("AkmlSql real AppData", DisableParallelization = true)]
+    public sealed class AkmlSqlRealAppDataCollection { }
+
     // NOTE: SqlCredentialStore persists to %AppData%\AKML SQL\sql-credentials.json. These tests
     // use a unique (server, login) per case and clean up with Remove() so they don't collide.
+    [Collection("AkmlSql real AppData")]
     public class SqlCredentialStoreTests
     {
         [Fact]

@@ -86,10 +86,29 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 "Recommended to avoid conflicts with AKML SQL IntelliSense");
             ctx.RegisterSearch("Disable native SSMS IntelliSense", "Recommended to avoid conflicts with AKML SQL IntelliSense", "Toggle", rowDisableNative);
 
+            ctx.Rows.AddGroupSeparator(panel);
+            ctx.Rows.AddGroupHeader(panel, "SQL authentication");
+
+            var (rowSqlCreds, chkSqlCreds) = ctx.Rows.AddToggle(panel,
+                "Use SQL Server-auth credentials for IntelliSense",
+                "When on (default), AKML reuses the SQL password SSMS already holds for the connection — or a stored one — so SQL-auth windows get IntelliSense with no prompt. Off: SQL-auth windows are skipped. Windows / Azure AD connections are unaffected either way.");
+            ctx.RegisterSearch("Use SQL Server-auth credentials for IntelliSense", "Reuse the SSMS-held or stored SQL password so SQL-auth windows get IntelliSense", "Toggle", rowSqlCreds);
+
+            var (rowManageCreds, btnManageCreds) = ctx.Rows.AddButton(panel,
+                "Saved SQL passwords",
+                "Manage…",
+                "View and remove the SQL passwords AKML has stored (DPAPI-encrypted, per server + login).");
+            ctx.RegisterSearch("Saved SQL passwords", "View and remove stored SQL passwords", "Button", rowManageCreds);
+            btnManageCreds.Click += (_, _) =>
+            {
+                try { new Editor.SqlCredentialManagerDialog().ShowDialog(); }
+                catch { /* opening the manager is non-critical */ }
+            };
+
             return new IntelliSenseControls(chkEnabled, chkAutoTrig, chkAfterDot, chkFuzzy,
                 sldMaxSugg, lblMaxSugg, sldTrigDelay, lblTrigDelay, cboCase,
                 chkDataTypes, chkNullable, chkPkFk,
-                chkJoin, chkAlias, chkDisableNative);
+                chkJoin, chkAlias, chkDisableNative, chkSqlCreds);
         }
     }
 
@@ -110,11 +129,12 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         private readonly CheckBox _joinAssist;
         private readonly CheckBox _autoAlias;
         private readonly CheckBox _disableNativeIs;
+        private readonly CheckBox _enableSqlAuthCreds;
 
         public IntelliSenseControls(CheckBox enabled, CheckBox autoTrig, CheckBox afterDot, CheckBox fuzzy,
             Slider sldMaxSugg, TextBlock lblMaxSugg, Slider sldTrigDelay, TextBlock lblTrigDelay, ComboBox cboCase,
             CheckBox dataTypes, CheckBox nullable, CheckBox pkFk,
-            CheckBox join, CheckBox alias, CheckBox disableNative)
+            CheckBox join, CheckBox alias, CheckBox disableNative, CheckBox sqlCreds)
         {
             _enabled = enabled;
             _autoTrigger = autoTrig;
@@ -131,6 +151,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             _joinAssist = join;
             _autoAlias = alias;
             _disableNativeIs = disableNative;
+            _enableSqlAuthCreds = sqlCreds;
         }
 
         public void Load(AppSettings settings)
@@ -146,6 +167,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             _autoAlias.IsChecked = i.AutoAlias;
             _joinAssist.IsChecked = i.JoinAssist;
             _disableNativeIs.IsChecked = i.DisableNativeIntelliSense;
+            _enableSqlAuthCreds.IsChecked = i.EnableSqlAuthCredentials;
             _triggerDelay.Value = i.TriggerDelayMs;
             _triggerDelayLabel.Text = i.TriggerDelayMs.ToString(CultureInfo.InvariantCulture);
             _maxSuggestions.Value = i.MaxSuggestions;
@@ -165,6 +187,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             settings.IntelliSense.AutoAlias = _autoAlias.IsChecked == true;
             settings.IntelliSense.JoinAssist = _joinAssist.IsChecked == true;
             settings.IntelliSense.DisableNativeIntelliSense = _disableNativeIs.IsChecked == true;
+            settings.IntelliSense.EnableSqlAuthCredentials = _enableSqlAuthCreds.IsChecked == true;
             settings.IntelliSense.TriggerDelayMs = (int)_triggerDelay.Value;
             settings.IntelliSense.MaxSuggestions = (int)_maxSuggestions.Value;
             settings.IntelliSense.KeywordCase = (KeywordCaseOption)_keywordCase.SelectedIndex;

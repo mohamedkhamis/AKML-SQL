@@ -108,6 +108,19 @@ namespace AkmlSql.Core.Config
             }
         }
 
+        /// <summary>Returns the (server, login) pairs that have a stored credential, for a management UI.
+        /// Passwords are NEVER returned — only the keys.</summary>
+        public static List<(string Server, string Login)> List()
+        {
+            lock (_gate)
+            {
+                var result = new List<(string, string)>();
+                foreach (var e in LoadList())
+                    result.Add((e.Server, e.Login));
+                return result;
+            }
+        }
+
         /// <summary>Encrypts and stores the password for (server, login), replacing any existing entry.</summary>
         public static void Save(string server, string login, string password)
         {

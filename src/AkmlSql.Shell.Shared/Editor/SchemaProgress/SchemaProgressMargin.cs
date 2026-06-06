@@ -317,9 +317,21 @@ namespace AkmlSql.Shell.Shared.Editor.SchemaProgress
                 // Windows-auth permission denials keep their existing behavior.
                 if (resp != null && resp.AuthError && TryGetAuthState(out var rejected))
                 {
-                    SqlCredentialStore.Remove(rejected.Server, rejected.Login);
-                    rejected.NeedsCredentials = true;
-                    TransitionTo(MarginState.NeedsCredentials);
+                    // Only a real login failure (wrong password) clears the credential + re-prompts.
+                    // 4060 (cannot open DB) / 916 (no DB permission) are access issues with a VALID
+                    // login — don't wipe a good password (the user would only re-enter the same one);
+                    // just leave schema unloaded for this database. Spec 029 follow-up.
+                    bool credentialRejected = resp.AuthErrorNumber == 18456 || resp.AuthErrorNumber == 18452;
+                    if (credentialRejected)
+                    {
+                        SqlCredentialStore.Remove(rejected.Server, rejected.Login);
+                        rejected.NeedsCredentials = true;
+                        TransitionTo(MarginState.NeedsCredentials);
+                    }
+                    else
+                    {
+                        TransitionTo(MarginState.Hidden);
+                    }
                     return;
                 }
 

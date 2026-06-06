@@ -10,6 +10,7 @@ namespace AkmlSql.Core.Tests.Config
     /// Reads/writes the real %AppData%\AKML SQL\config.json;
     /// the constructor backs up any pre-existing file and Dispose() restores it.
     /// </summary>
+    [Collection("AkmlSql real AppData")]
     public class ConfigManagerTests : IDisposable
     {
         private readonly string _configPath = Constants.ConfigFilePath;
