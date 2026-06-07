@@ -84,6 +84,8 @@ This works because **`LayoutEngine` already computes correct nested indent** —
 
 So full DmlRules convergence (then Ddl, then ControlFlow) is a **dedicated multi-iteration effort** — pattern proven, execution scoped. Best run as a focused session/workflow per group, golden-gated.
 
+**T008 REFRAME (key — the goldens are AKML's OWN rules-OFF output, a drift-guard, NOT a Redgate parity oracle; see `FormatParityTests` class doc).** So most DmlRules-only golden "regressions" are the rules **correctly applying the styles' configured options** — all built-in styles set `andOrIndent: "alignWithWhere"`, `collapseShortStatements: true`, `selectStarOnSameLine: true`, which the stale goldens predate → **re-bless** (`AKML_UPDATE_PARITY_GOLDEN=1`) after verifying correctness, **not** fix. Only genuine layout *bugs* need code. Bugs fixed so far: (1) nested AND/OR de-dent → delta-from-existing; (2) **BETWEEN's-AND reindent** → skip (the AND in `BETWEEN x AND y` is part of the expression, not a clause connector; `DmlRules.ApplyAndOrIndent` now tracks BETWEEN and consumes its AND, with a unit test). Remaining DmlRules: audit SET/VALUES/collapse absolute writes for nesting-clobbers (fix) vs intended (verify); sanity-check the collapse-short decisions. Enable sequence (per group): verify rules-on output correct by inspection → re-bless goldens → (with Ddl + ControlFlow likewise) flip `RuleEngine.DefaultOrder` on. **This makes T008 far more tractable than "13 regressions to eliminate" — most are re-bless, only a few are bugs.**
+
 ---
 
 ## R2 — Dispatch the standalone format actions + format-time actions (P1)

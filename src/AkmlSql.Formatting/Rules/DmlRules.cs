@@ -88,11 +88,26 @@ public class DmlRules : IRuleSet
     /// </summary>
     private static void ApplyAndOrIndent(List<LayoutNode> nodes, DmlOptions dml)
     {
+        bool expectBetweenAnd = false;
         for (int i = 0; i < nodes.Count; i++)
         {
             var node = nodes[i];
             if (node.IsInNoformatRegion)
                 continue;
+
+            // The AND in `BETWEEN x AND y` belongs to the BETWEEN expression, not a clause-level
+            // boolean connector — never re-indent it (Spec 030 T008). Track BETWEEN and consume the
+            // next AND it introduces without touching its indent.
+            if (node.TokenType == TSqlTokenType.Between)
+            {
+                expectBetweenAnd = true;
+                continue;
+            }
+            if (node.TokenType == TSqlTokenType.And && expectBetweenAnd)
+            {
+                expectBetweenAnd = false;
+                continue;
+            }
 
             if (node.TokenType is TSqlTokenType.And or TSqlTokenType.Or &&
                 node.PrecedingBreak == BreakType.NewLine)
