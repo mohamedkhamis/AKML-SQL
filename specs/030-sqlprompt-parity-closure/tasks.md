@@ -127,9 +127,9 @@
 
 **Independent Test**: A `.casettings` disabling a rule under a folder silences it in the editor (matching the CLI); manage a rule; toggle analysis off/on.
 
-- [ ] T049 [P] [US4] Add `FilePath` to `CodeAnalysisRequest` in `src/AkmlSql.Core/Ipc/`; round-trip test (R3, contracts).
-- [ ] T050 [P] [US4] Failing test: editor analysis honors the `.casettings` directory and matches CLI findings on the same file in `tests/AkmlSql.Analysis.Tests` (R3, SC-005).
-- [ ] T051 [US4] Thread the document path from `AnalysisController` into the request and resolve its directory into `CaSettingsLoader.Load(dir, …)` in the engine `AnalysisHandler` (replace the `null` dir) — `src/AkmlSql.Shell.Shared/Analysis/` + `src/AkmlSql.Engine/Handlers/Analysis/` (FR-024, R3).
+- [X] T049 [P] [US4] **Done** — added `[Key(4)] FilePath` to `CodeAnalysisRequest` (additive, backward-compatible; null ⇒ prior global-defaults behaviour).
+- [X] T050 [P] [US4] **Done** — `tests/AkmlSql.Engine.Tests/Analysis/CaSettingsLiveTests.cs` (3 tests): baseline (PE003 + ST004 fire), project `.casettings` disabling PE003 (PE003 gone, ST004 still fires), and global-suppression — proving live-editor parity with the CLI (R3, SC-005).
+- [~] T051 [US4] **Engine half done** — `AnalysisEngine.AnalyzeAsync` now derives the document directory from `request.FilePath` and passes it to `CaSettingsLoader.Load` (was hardcoded `null`), so `.casettings` rule config + suppressions apply in live analysis. Verified: 314 Engine-analysis + 5 Analysis-lib tests green, no regression. **Deferred (shell, needs MSBuild):** `AnalysisController` populating `request.FilePath` with the active document's path — a one-liner once built against a host (FR-024, R3).
 - [ ] T052 [P] [US4] New `ListAnalysisRules` IPC (request/result) + handler returning the rule catalog (id, name, category, default severity, enabled); round-trip + handler tests in `tests/AkmlSql.Engine.Tests` (FR-026, contracts).
 - [ ] T053 [US4] Manage Rules dialog (per-rule enable/severity) writing overrides + firing `AnalysisSettingsChanged` in `src/AkmlSql.Shell.Shared/Analysis/` (FR-026).
 - [ ] T054 [US4] Render orange (auto-fixable) vs blue (advisory) lightbulb icons in `LightbulbSource` (FR-027).

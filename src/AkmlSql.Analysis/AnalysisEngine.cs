@@ -51,7 +51,13 @@ public class AnalysisEngine(TsqlParserService parser, RuleRegistry registry, CaS
         CodeAnalysisSettings globalSettings,
         CancellationToken ct)
     {
-        var settings = settingsLoader.Load(null, globalSettings);
+        // Spec 030 (T049/T051): resolve the document's directory so per-project .casettings (rule
+        // enable/severity + global suppressions) apply in the LIVE editor, matching the CLI. An empty
+        // FilePath (e.g. an unsaved buffer) preserves the previous null ⇒ global-defaults behaviour.
+        var caDir = string.IsNullOrEmpty(request.FilePath)
+            ? null
+            : System.IO.Path.GetDirectoryName(request.FilePath);
+        var settings = settingsLoader.Load(caDir, globalSettings);
 
         if (!settings.Enabled)
         {
