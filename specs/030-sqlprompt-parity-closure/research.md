@@ -46,6 +46,27 @@ Caveats carried into the rollout:
 - **Pre-existing base-pipeline bug (separate follow-up):** the GROUP-BY/HAVING-aggregate and CTE statements fail Stage 6 validation **with no rules** — the current production formatter returns the original for those. Out of R1's scope but worth a tracked fix.
 - **Latency delta not yet measured** — needs the T003 perf-baseline harness; gate at T014 before production enable.
 
+### R1 production-rollout investigation — REVISED: **NO-GO for enabling the rules as-is**
+
+The spike's GO was correct *only on the two axes it measured* (Stage-6 validation + Stage-7 idempotency). A deeper rollout-readiness workflow (8 agents) + three empirical checks proved those two gates are **insufficient** — they do not protect **visual indent correctness**, which the as-is rules regress.
+
+Evidence chain (all reproducible in `tests/AkmlSql.Formatting.Tests`):
+
+1. **Nested-indent de-dent — confirmed** (`R1IndentInspectionTests`): with `DmlRules` on, nested `AND`/`OR` inside a subquery move from column 8 to **column 0**. Output stays `ValidationPassed=true` and is idempotent, so it passes both gates yet is a visible default-profile regression.
+2. **Root cause is systemic, not a localized bug** (grep of `Rules/*` for `IndentLevel =` writes): **DmlRules (~13) and DdlRules (9) write exclusively hardcoded absolute indent** (`= 0/1/2`); ControlFlow/Join are mixed (some `Math.Max`/computed-relative). The rule sets were authored to **own** indentation (their unit tests feed flat synthetic node lists), so when run after `LayoutEngine` they **clobber** the nested indent LayoutEngine already computed instead of refining it. This is exactly the "architectural" mismatch the spec-020 Phase-B note flagged.
+3. **Golden oracle — 36 of 610 tests regress** (temporarily flipped `ApplyLayoutRules` default to `RuleEngine.DefaultOrder`, ran the full suite, then reverted): all 36 are `FormatParityTests.Corpus_Matches_Golden` — human-blessed expected outputs that **move**. Sampled diffs are regressions, not improvements: `01-simple-select` collapses `SELECT`+columns onto one line the golden breaks; `07-in-list-short` collapses `FROM`/`WHERE` and injects double-spaces (`FROM   orders`); `05-case-searched` diverges on list layout.
+
+**Conclusion**: the "built but not wired = cheap" thesis is **false for the formatter layout rules**. Enabling them as-is would regress ~6 % of the golden corpus plus nested-indent everywhere. **Do not enable.** The hook stays off-by-default; `RuleEngine.DefaultOrder` is documented as a not-yet-wired target.
+
+**Strategic fork (needs a deliberate decision before P1 layout-fidelity proceeds):**
+- **(A) Rework the rules' indent model** — change absolute `IndentLevel = n` writes to refine LayoutEngine's existing nested indent (read-existing + delta), systemically across Dml/Ddl and partially ControlFlow/Join. Delicate; requires the rules to know nesting depth they currently discard.
+- **(B) Move layout into `LayoutEngine`/`LineBreakDecider`** (the Phase-B architectural position) — implement the rules' *intent* (AND/OR placement, CASE/CTE/DDL layout) where nested-indent context already lives. Bigger redesign, architecturally sound.
+- **(C) Narrow scope** — enable only the non-indent-affecting behaviors (comma placement, spacing) and defer all indent-affecting layout. Salvages some parity cheaply; defers the hard part.
+
+**Still genuinely cheap + unblocked (independent of the rule pipeline):** the format-action dispatch (FR-003/004 — wire action types 0–5 in `HandleFormatAction`; the `IFormatAction` classes are standalone) and the formatting UX items (error popup, current-query preview, style-editor buttons, active-style selector). These do **not** touch the broken rule-pipeline path and remain low-cost.
+
+**Workflow-claimed but UNVERIFIED** (do not encode as fact until confirmed the way the Dml de-dent was): ControlFlowRules line-309 CASE-END-inside-BEGIN mis-pairing; line-1238 non-idempotent `IndentLevel += 1`; `Parenthesis.RemoveRedundant` peel-one-layer-per-pass. Plausible (code-grounded) but not empirically reproduced here.
+
 ---
 
 ## R2 — Dispatch the standalone format actions + format-time actions (P1)

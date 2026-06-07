@@ -40,17 +40,22 @@
 ### R1 — de-risk spike FIRST, then graduated rollout
 
 - [X] T005 [US1] **R1.0 de-risk spike**: behind an off-by-default flag, insert `rulesEngine.Apply(layoutNodes, profile)` after `LayoutEngine.BuildLayout(...)` in both `Format` and `FormatInternal` of `src/AkmlSql.Formatting/Pipeline/FormatterPipeline.cs`; run the T004 corpus through the **full** pipeline; record, per rule group, whether Stage 6 (semantic validation) and Stage 7 (idempotency) hold and the latency delta (research R1.0).
-- [X] T006 [US1] **Decision gate**: record the per-group go/no-go from T005 in `research.md` (append a "R1 spike results" note). If most groups break idempotency/validation, **STOP and re-sequence P1** (plan phasing note) before continuing.
-- [ ] T007 [P] [US1] Pipeline-level idempotency + semantic-equivalence tests (through `Format()`, not direct `_rules.Apply`) for the Dml/List/Parenthesis/Join groups in `tests/AkmlSql.Formatting.Tests`.
-- [ ] T008 [US1] Enable the cleared groups (DmlRules/ListRules/ParenthesisRules/JoinRules) in `FormatterPipeline` for the groups T007 proves clean (research R1.1) — covers leading commas, list/column alignment, JOIN/ON layout, DML statement layout (FR-001).
-- [ ] T009 [P] [US1] Pipeline-level idempotency/validation tests for `ControlFlowRules` (incl. `ApplyCaseRules`/`ApplyCteRules`) in `tests/AkmlSql.Formatting.Tests`.
-- [ ] T010 [US1] Enable `ControlFlowRules` (CASE/CTE + BEGIN/IF/TRY) in the pipeline if T009 passes; else gate off and log a follow-up (research R1.1) (FR-001).
-- [ ] T011 [US1] `DdlRules` + `AlignmentCalculator` (CREATE TABLE/PROC column/constraint/data-type alignment): pipeline tests + enable in `src/AkmlSql.Formatting/Pipeline/FormatterPipeline.cs` (FR-001, R1.1).
-- [ ] T012 [US1] `CollapseEvaluator` (collapse-short) + max-line wrapping: pipeline tests + enable; confirm wrapping honors `MaxLineWidth` (FR-002, R1.1).
-- [ ] T013 [US1] **Operators/IN-list (residual Phase B)**: verify whether token-stream pattern recognition exists for `BooleanComparison`/`InPredicate` layout; if absent, build it OR defer with a logged follow-up — do **not** ship wiring-without-layout (research R1.2).
-- [ ] T014 [US1] Perf gate: re-run T003 with rules enabled; Format SQL must stay within baseline + the <200 ms target on typical scripts; a regression blocks that group (SC-011).
+- [X] T006 [US1] **Decision gate** — DONE. Outcome (research.md "R1 production-rollout investigation"): **NO-GO for enabling the rules as-is.** Stage-6/Stage-7 pass but do NOT protect indent correctness; empirically `DmlRules` de-dents nested AND/OR/SET to col 0, Dml/Ddl write systemic absolute indent, and flipping rules on regresses **36/610** human-blessed goldens. The "wire the dormant rules" thesis is refuted for the layout rules.
 
-### Format actions (R2)
+> **⚠ ROLLOUT FINDING (supersedes T007–T014 as first drafted).** Enabling the layout rule sets first requires resolving an architectural indent-model mismatch — the rules clobber `LayoutEngine`'s nested indent instead of refining it. T007 is now an architectural decision; T008–T014 are contingent on it, not the simple "enable group" tasks originally written.
+
+- [ ] T007 [US1] **Architectural decision for layout fidelity (BLOCKING).** Choose: (A) rework the rule sets' indent writes to refine LayoutEngine's nested indent (read-existing + delta) across Dml/Ddl + ControlFlow/Join; (B) move the layout intent into `LayoutEngine`/`LineBreakDecider` (the Phase-B architectural path); or (C) narrow scope to non-indent behaviors now, defer indent layout. Record the choice + rationale in research.md; it resets the FR-001 effort estimate. Run as its own focused design effort. Pre-req: verify the still-UNVERIFIED workflow claims (ControlFlow line-309 CASE-END-in-BEGIN, line-1238 `+=`, `RemoveRedundant` peel) since they size option (A).
+- [ ] T008 [US1] [BLOCKED by T007] Build the chosen-approach foundation, gated by pipeline-level idempotency + semantic-equivalence **+ golden-corpus + indent-correctness** tests (the `FormatParityTests` golden oracle is the real signal — zero NEW regressions).
+- [ ] T009 [US1] [BLOCKED by T007] Cover CASE/CTE/BEGIN-END/IF/TRY-CATCH layout via the chosen approach; verify the procedural constructs the spike never exercised; confirm CASE-END-inside-BEGIN pairing.
+- [ ] T010 [US1] [BLOCKED by T007] Cover DDL (CREATE TABLE/PROC alignment) + DML statement layout via the chosen approach; idempotent + golden-clean.
+- [ ] T011 [US1] [BLOCKED by T007] Leading commas + list/column alignment (fix AlignAliases-after-CollapseShortLists padding growth) + parentheses (force-disable `RemoveRedundant`) via the chosen approach.
+- [ ] T012 [US1] [BLOCKED by T007] Max-line wrapping (FR-002) via the chosen approach; golden-clean + idempotent.
+- [ ] T013 [US1] [BLOCKED by T007] Operators/IN-list layout (residual Phase B — no rule class exists; build pattern recognition or defer) (research R1.2).
+- [ ] T014 [US1] [BLOCKED by T007] Perf gate (T003 baseline) + enable in production only after the golden corpus is clean/re-blessed across all enabled behaviors (SC-011).
+
+### Format actions (R2) — UNBLOCKED (independent of the rule pipeline; the genuinely-cheap P1 win)
+
+> These wire the standalone `IFormatAction` classes via `HandleFormatAction`; they do NOT touch the broken layout-rule path, so they can ship while T007's architectural decision is pending.
 
 - [ ] T015 [P] [US1] Failing tests for standalone action dispatch (types 0–5) in `tests/AkmlSql.Engine.Tests` + per-action behavior in `tests/AkmlSql.Formatting.Tests`.
 - [ ] T016 [US1] Extend the `HandleFormatAction` switch to dispatch action types 0–5 (casing, insert/remove semicolons, expand wildcards, qualify, add/remove brackets) to the existing `IFormatAction` classes in `src/AkmlSql.Engine/Formatter/FormatRequestHandler.cs` (FR-003, R2).
