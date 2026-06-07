@@ -1,5 +1,7 @@
 using System.Diagnostics;
+using AkmlSql.Formatting.Layout;
 using AkmlSql.Formatting.Profiles;
+using AkmlSql.Formatting.Rules;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Formatting.Pipeline;
@@ -15,6 +17,22 @@ namespace AkmlSql.Formatting.Pipeline;
 /// </summary>
 public class FormatterPipeline
 {
+    /// <summary>
+    /// Spec 030 R1 spike — optional layout-rule passes applied after <c>LayoutEngine.BuildLayout</c>
+    /// and before casing. NULL (the default) preserves current production behaviour (no rule passes).
+    /// Set to a list of <see cref="IRuleSet"/> to evaluate wiring the dormant Rules/* through the full
+    /// pipeline under idempotency + semantic-validation gates. See
+    /// specs/030-sqlprompt-parity-closure/research.md (R1).
+    /// </summary>
+    public IReadOnlyList<IRuleSet>? LayoutRules { get; set; }
+
+    private void ApplyLayoutRules(List<LayoutNode> nodes, FormattingProfile profile)
+    {
+        if (LayoutRules is null) return;
+        foreach (var ruleSet in LayoutRules)
+            ruleSet.Apply(nodes, profile);
+    }
+
     /// <summary>
     /// Performs a raw format pass without validation or idempotency checking.
     /// Returns null on parse failure or error, with the exception captured in the out parameter.
@@ -42,6 +60,8 @@ public class FormatterPipeline
 
             var layoutEngine = new LayoutEngine();
             var layoutNodes = layoutEngine.BuildLayout(script, tokens, comments, profile, noformatRegions);
+
+            ApplyLayoutRules(layoutNodes, profile);
 
             var casingEngine = new CasingEngine();
             casingEngine.ApplyCasing(layoutNodes, profile);
@@ -113,6 +133,9 @@ public class FormatterPipeline
             // Stage 3: Layout (pass noformat regions to mark tokens)
             var layoutEngine = new LayoutEngine();
             var layoutNodes = layoutEngine.BuildLayout(script, tokens, comments, profile, noformatRegions);
+
+            // Stage 3b (Spec 030 R1 spike): optional layout-rule passes, off by default
+            ApplyLayoutRules(layoutNodes, profile);
 
             // Stage 4: Casing
             var casingEngine = new CasingEngine();
