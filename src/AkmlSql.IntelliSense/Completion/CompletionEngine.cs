@@ -144,6 +144,38 @@ public class CompletionEngine
                 var astCteSources = cteResolver.ResolveCteSources(script, cursorOffset);
                 foreach (var (name, sources) in astCteSources)
                     context.AvailableCteSources[name] = sources;
+
+                // Spec 030 (T029): track #temp tables (CREATE TABLE #t / SELECT ... INTO #t) visible
+                // at the cursor so ColumnProvider can offer their columns, mirroring CTE handling.
+                var tempTracker = new TempTableTracker();
+                foreach (var (tmpName, tmpColumns) in tempTracker.TrackTempTables(script, cursorOffset))
+                    context.AvailableTempTables[tmpName] = tmpColumns;
+            }
+
+            // Spec 030: a #temp declared before the cursor is lost when the tail is mid-edit (the full
+            // parse fails on a partial `#t.` or empty SELECT list), so the prior CREATE TABLE #t never
+            // reaches the tracker above. Recover by re-parsing the prefix trimmed of any trailing partial
+            // identifier / dot / '#'. Mirrors the CTE prefix-recovery; gated on a '#' before the cursor
+            // so it only costs an extra parse for likely-temp documents.
+            int hashIdx = documentText.IndexOf('#');
+            if (hashIdx >= 0 && hashIdx < cursorOffset && cursorOffset <= documentText.Length)
+            {
+                int p = cursorOffset;
+                while (p > 0)
+                {
+                    char ch = documentText[p - 1];
+                    if (char.IsLetterOrDigit(ch) || ch == '_' || ch == '.' || ch == '#') p--;
+                    else break;
+                }
+                if (p <= 0) p = cursorOffset;
+                var tempPrefix = documentText.Substring(0, p);
+                var tempPrefixScript = _parserService.ParseWithSuffix(tempPrefix, out _);
+                if (tempPrefixScript != null)
+                {
+                    foreach (var (tmpName, tmpColumns) in new TempTableTracker().TrackTempTables(tempPrefixScript, tempPrefix.Length))
+                        if (!context.AvailableTempTables.ContainsKey(tmpName))
+                            context.AvailableTempTables[tmpName] = tmpColumns;
+                }
             }
 
             // Prefix-parse recovery: when content AFTER the cursor breaks the

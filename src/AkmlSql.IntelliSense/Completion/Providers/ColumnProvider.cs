@@ -67,6 +67,9 @@ public class ColumnProvider : ICompletionProvider
             if (context.AvailableCtes.ContainsKey(context.DotPrefix))
                 return true;
 
+            if (context.AvailableTempTables.ContainsKey(context.DotPrefix))
+                return true;
+
             if (cache.FindObject("dbo", context.DotPrefix) != null)
                 return true;
 
@@ -131,6 +134,28 @@ public class ColumnProvider : ICompletionProvider
                         ObjectType    = (int)CompletionObjectType.Column,
                         SecondaryText = "(CTE column) • " + alias,
                         SourceObject  = alias,
+                        SortPriority  = 30
+                    };
+                }
+                continue;
+            }
+
+            // Temp-table branch (Spec 030): if the alias resolves to (or is) a #temp table, yield its
+            // tracked columns and skip the schema-cache lookup. Mirrors the CTE branch above.
+            if (context.AvailableTempTables.TryGetValue(BareTableName(fullTableName), out var tmpCols)
+                || context.AvailableTempTables.TryGetValue(alias, out tmpCols))
+            {
+                foreach (var colName in tmpCols)
+                {
+                    var displayText = multiTable ? $"{alias}.{colName}" : colName;
+                    if (!seenColumns.Add(displayText)) continue;
+                    yield return new CompletionItem
+                    {
+                        DisplayText   = displayText,
+                        InsertText    = displayText,
+                        ObjectType    = (int)CompletionObjectType.Column,
+                        SecondaryText = "(temp table column) • " + alias,
+                        SourceObject  = fullTableName,
                         SortPriority  = 30
                     };
                 }
@@ -225,6 +250,17 @@ public class ColumnProvider : ICompletionProvider
     }
 
     /// <summary>
+    /// The bare (unqualified) table name — the last dot-delimited segment. The alias resolver
+    /// schema-qualifies references (e.g. <c>dbo.#t</c>), but the temp-table tracker keys by the bare
+    /// name (<c>#t</c>), so temp lookups strip the prefix.
+    /// </summary>
+    private static string BareTableName(string fullName)
+    {
+        int dot = fullName.LastIndexOf('.');
+        return dot >= 0 ? fullName.Substring(dot + 1) : fullName;
+    }
+
+    /// <summary>
     /// Yields columns for a single table identified by <see cref="CursorContext.DotPrefix"/>
     /// (the original "alias." / "table." behavior).
     /// </summary>
@@ -251,6 +287,28 @@ public class ColumnProvider : ICompletionProvider
                     ObjectType    = (int)CompletionObjectType.Column,
                     SecondaryText = "(CTE column)",
                     SourceObject  = context.DotPrefix,
+                    SortPriority  = 30
+                };
+            }
+            yield break;
+        }
+
+        // Temp-table branch (Spec 030): #temp columns, reached directly ("#t.|") or via an alias
+        // ("x.|" where x → #t). Mirrors the CTE branch; temp tables aren't in the schema cache.
+        var tempKey = context.AvailableAliases.TryGetValue(context.DotPrefix, out var tempResolved)
+            ? BareTableName(tempResolved)   // alias resolves to e.g. "dbo.#t"; temp tracker keys by "#t"
+            : context.DotPrefix;
+        if (context.AvailableTempTables.TryGetValue(tempKey, out var tmpCols))
+        {
+            foreach (var colName in tmpCols)
+            {
+                yield return new CompletionItem
+                {
+                    DisplayText   = colName,
+                    InsertText    = colName,
+                    ObjectType    = (int)CompletionObjectType.Column,
+                    SecondaryText = "(temp table column)",
+                    SourceObject  = tempKey,
                     SortPriority  = 30
                 };
             }

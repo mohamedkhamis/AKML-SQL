@@ -84,8 +84,8 @@
 - [ ] T025 [US2] Implement `QuickInfoSource` to send `RequestQuickInfo` (5) and render metadata tooltips for table/view/proc/function/column/variable in `src/AkmlSql.Shell.Shared/Editor/QuickInfoSource.cs` (FR-009, R4).
 - [ ] T026 [US2] Implement `SignatureHelpSource` to send `RequestSignatureHelp` (4) and track the active parameter in `src/AkmlSql.Shell.Shared/Editor/SignatureHelpSource.cs` (FR-010, R4).
 - [ ] T027 [US2] Populate the object-definition Script tab with the real CREATE script via `QuickInfoResult` (FR-017).
-- [ ] T028 [P] [US2] Failing test: temp-table structures feed completion in `tests/AkmlSql.IntelliSense.Tests` (R5).
-- [ ] T029 [US2] Wire `TempTableTracker` into `src/AkmlSql.IntelliSense/Completion/CompletionEngine.cs` so `#temp` columns complete (FR-011, R5).
+- [X] T028 [P] [US2] **Done** — `tests/AkmlSql.Engine.Tests/Completion/TempTableCompletionTests.cs` (4 tests, TDD red→green): direct `#t.`, aliased `x.` in WHERE, bare-in-clause, and SELECT-INTO.
+- [X] T029 [US2] **Done** — wired `TempTableTracker` into `CompletionEngine.GetCompletions` (populate `context.AvailableTempTables`, with a `#`-gated **prefix-parse recovery** so a `CREATE TABLE #t` before a mid-edit cursor isn't lost) + added temp-table branches to `ColumnProvider` (CanHandle, dot-qualified, and bare paths, mirroring CTE handling; strips the alias resolver's `dbo.` qualifier via `BareTableName`). `#temp` columns now complete (FR-011, R5). Verified: 4 new tests + 239 Engine-completion + 12 IntelliSense tests green; no regression. Note: the audit's "cheap wire" understated it — robust mid-edit recovery was needed (like CTEs).
 - [ ] T030 [P] [US2] Failing tests: `Enabled`/`AutoTrigger`/`ColumnScope` gate completion in `tests/AkmlSql.IntelliSense.Tests` (R6).
 - [ ] T031 [US2] Honor `IntelliSense.Enabled` + `AutoTrigger` in the trigger path of `src/AkmlSql.Shell.Shared/Editor/Completion/CompletionController.cs` (FR-012, R6).
 - [ ] T032 [US2] Honor `ColumnScope` (list-all-columns-after-SELECT) in the column provider (`src/AkmlSql.IntelliSense/Completion/Providers/ColumnProvider.cs`) (FR-012, R6).
