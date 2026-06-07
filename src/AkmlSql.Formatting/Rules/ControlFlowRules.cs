@@ -471,9 +471,12 @@ public class ControlFlowRules : IRuleSet
                         if (nodes[j].PrecedingBreak == BreakType.None)
                         {
                             nodes[j].PrecedingBreak = BreakType.NewLine;
-                            nodes[j].IndentLevel = whenIndent;
                             nodes[j].PrecedingSpaces = 0;
                         }
+                        // T008: re-assert CASE-ELSE indent even when it arrives pre-broken —
+                        // ApplyIfElseRules de-dents a CASE-ELSE to 0 (it has no enclosing IF). This
+                        // loop only iterates within a CASE...END range, so it never touches IF-ELSE.
+                        nodes[j].IndentLevel = whenIndent;
                     }
                 }
 
@@ -510,7 +513,8 @@ public class ControlFlowRules : IRuleSet
     /// </remarks>
     private static int ResolveWhenIndent(CaseOptions caseOpts, int caseIndent)
     {
-        var alignment = (caseOpts.WhenAlignment ?? "toCase").Trim().ToLowerInvariant();
+        // T008: unset ("" or null) falls through to the legacy default arm so IndentWhen is honored.
+        var alignment = (caseOpts.WhenAlignment ?? "").Trim().ToLowerInvariant();
         return alignment switch
         {
             "indentedfromcase" => caseIndent + 1,
@@ -1326,7 +1330,8 @@ public class ControlFlowRules : IRuleSet
         if (caseOpts == null) return;
         if (!caseOpts.EndOnNewLine) return;       // END is inline — alignment is moot
 
-        var mode = (caseOpts.EndAlignment ?? "toCase").Trim().ToLowerInvariant();
+        // T008: unset ("" or null) means the legacy "indented" intent (align END one in from CASE).
+        var mode = (caseOpts.EndAlignment ?? "").Trim().ToLowerInvariant();
 
         // Note: this pass also corrects a pre-Phase-B bug where `ApplyBeginEndRules` would
         // pre-break the END line *before* `ApplyCaseRules` had a chance to set its IndentLevel
@@ -1342,9 +1347,9 @@ public class ControlFlowRules : IRuleSet
                 int caseStart = caseStack.Pop();
                 if (nodes[i].PrecedingBreak != BreakType.None)
                 {
-                    nodes[i].IndentLevel = mode == "indented"
-                        ? nodes[caseStart].IndentLevel + 1
-                        : nodes[caseStart].IndentLevel;
+                    nodes[i].IndentLevel = mode == "tocase"
+                        ? nodes[caseStart].IndentLevel          // explicit "toCase" — align END under CASE
+                        : nodes[caseStart].IndentLevel + 1;     // "indented" or unset — indent one in
                 }
             }
         }

@@ -527,7 +527,9 @@ public class CaseOptions
     /// "indentedFromCase" (indent one level from CASE).
     /// </summary>
     [JsonPropertyName("whenAlignment")]
-    public string WhenAlignment { get; set; } = "toCase";
+    // T008: "" = unset → honor the legacy IndentWhen flag in ResolveWhenIndent; an explicit
+    // "toCase"/"toFirstItem"/"indentedFromCase" still wins.
+    public string WhenAlignment { get; set; } = "";
 
     /// <summary>
     /// Spec 020 T082 — SQL Prompt <c>caseExpressions.placeExpressionOnNewLine</c>:
@@ -544,7 +546,9 @@ public class CaseOptions
     /// decides whether END gets its own line — this decides where it aligns.
     /// </summary>
     [JsonPropertyName("endAlignment")]
-    public string EndAlignment { get; set; } = "toCase";
+    // T008: "" = unset → indent END one level from CASE (legacy "indented" intent), matching the
+    // parity golden; an explicit "toCase"/"indented" still wins.
+    public string EndAlignment { get; set; } = "";
 }
 
 public class CteOptions
