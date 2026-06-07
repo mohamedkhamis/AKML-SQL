@@ -57,9 +57,9 @@
 
 > These wire the standalone `IFormatAction` classes via `HandleFormatAction`; they do NOT touch the broken layout-rule path, so they can ship while T007's architectural decision is pending.
 
-- [ ] T015 [P] [US1] Failing tests for standalone action dispatch (types 0–5) in `tests/AkmlSql.Engine.Tests` + per-action behavior in `tests/AkmlSql.Formatting.Tests`.
-- [ ] T016 [US1] Extend the `HandleFormatAction` switch to dispatch action types 0–5 (casing, insert/remove semicolons, expand wildcards, qualify, add/remove brackets) to the existing `IFormatAction` classes in `src/AkmlSql.Engine/Formatter/FormatRequestHandler.cs` (FR-003, R2).
-- [ ] T017 [US1] Consume `profile.FormatActions` in `FormatterPipeline.Format` so enabled actions run as part of Format SQL (FR-004, R2).
+- [X] T015 [P] [US1] **Done** — `tests/AkmlSql.Engine.Tests/Formatter/FormatActionDispatchTests.cs` (7 tests, TDD red→green) covering the dispatched actions + a schema-stub message check.
+- [X] T016 [US1] **Done** — `HandleFormatAction` now dispatches action types **0–8** to the `IFormatAction` classes via `ResolveFormatAction`/`RunFormatAction` in `src/AkmlSql.Engine/Formatter/FormatRequestHandler.cs` (FR-003, R2). **Working:** CasingOnly(0), InsertSemicolons(1), RemoveSemicolons(2), AddSquareBrackets(5), RemoveSquareBrackets(6), RemoveAsKeyword(8) — the shell commands that already send these now function. **Schema-stubs** return a clear "requires schema cache" message (ExpandWildcards(3), QualifyObjectNames(4)); AddAsKeyword(7) is an AST-stub. Toggle-action flags set per action type with save/restore (no shared-profile mutation). 29/29 Formatter tests green.
+- [ ] T017 [US1] **[DEFERRED]** Consume `profile.FormatActions` in `FormatterPipeline.Format` so enabled actions run as part of Format SQL (FR-004, R2) — needs ordering design (actions vs the 7 pipeline stages); `FormatActionConfig` defaults are all `false` so there is no default-profile impact and no urgency; lower value than the now-working standalone commands. Follow-up.
 
 ### Formatting UX
 

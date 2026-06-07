@@ -5,6 +5,7 @@ using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Engine.Refactoring;
 using AkmlSql.Engine.Refactoring.Operations;
 using AkmlSql.Engine.Refactoring.Operations.Lightweight;
+using AkmlSql.Formatting.Actions;
 using AkmlSql.Formatting.Pipeline;
 using AkmlSql.Formatting.Profiles;
 using AkmlSql.Formatting.Selection;
@@ -123,8 +124,15 @@ public class FormatRequestHandler(ProfileManager profileManager)
             var sw = System.Diagnostics.Stopwatch.StartNew();
             var actionType = (FormatActionType)request.ActionType;
 
-            // Actions 0-8 are handled by the formatter pipeline (existing logic)
-            // Actions 9-15 are new lightweight refactoring operations
+            // Spec 030: standalone format actions (types 0-8) → the IFormatAction classes. These were
+            // never dispatched (only 9-17 were), so the shell's casing/semicolons/wildcards/qualify/
+            // brackets/AS commands returned "not supported here". ExpandWildcards/QualifyObjectNames
+            // are schema-dependent stubs that return a clear "requires schema" message.
+            var formatAction = ResolveFormatAction(actionType);
+            if (formatAction != null)
+                return RunFormatAction(formatAction, actionType, request);
+
+            // Actions 9-17 are lightweight refactoring operations.
             ILightweightOperation? op = actionType switch
             {
                 FormatActionType.ExpandInsertColumns    => new ExpandInsertColumnsOperation(),
@@ -182,6 +190,56 @@ public class FormatRequestHandler(ProfileManager profileManager)
                 FormattedText = request.Text,
                 ErrorMessage  = ex.Message
             };
+        }
+    }
+
+    // Spec 030: maps a standalone format-action type to its IFormatAction implementation.
+    // Returns null for the refactoring-operation types (9-17), which the caller dispatches separately.
+    private static IFormatAction? ResolveFormatAction(FormatActionType type) => type switch
+    {
+        FormatActionType.CasingOnly           => new CasingOnlyAction(),
+        FormatActionType.InsertSemicolons     => new InsertSemicolonsAction(),
+        FormatActionType.RemoveSemicolons     => new RemoveSemicolonsAction(),
+        FormatActionType.ExpandWildcards      => new ExpandWildcardsAction(),
+        FormatActionType.QualifyObjectNames   => new QualifyObjectNamesAction(),
+        FormatActionType.AddSquareBrackets    => new ToggleBracketsAction(),
+        FormatActionType.RemoveSquareBrackets => new ToggleBracketsAction(),
+        FormatActionType.AddAsKeyword         => new ToggleAsKeywordAction(),
+        FormatActionType.RemoveAsKeyword      => new ToggleAsKeywordAction(),
+        _ => null
+    };
+
+    private FormatActionResponse RunFormatAction(IFormatAction action, FormatActionType actionType, FormatActionRequest request)
+    {
+        var profile = LoadProfile(request.ProfileName);
+
+        // The Toggle* actions choose add-vs-remove from these profile flags. Set them to match the
+        // explicit action, then restore so a shared/cached profile instance is not mutated.
+        bool savedBrackets = profile.FormatActions.AddSquareBrackets;
+        bool savedAs = profile.FormatActions.AddAsKeyword;
+        try
+        {
+            if (actionType == FormatActionType.AddSquareBrackets) profile.FormatActions.AddSquareBrackets = true;
+            else if (actionType == FormatActionType.RemoveSquareBrackets) profile.FormatActions.AddSquareBrackets = false;
+            if (actionType == FormatActionType.AddAsKeyword) profile.FormatActions.AddAsKeyword = true;
+            else if (actionType == FormatActionType.RemoveAsKeyword) profile.FormatActions.AddAsKeyword = false;
+
+            var r = action.Execute(request.Text, profile);
+            var messages = r.Diagnostics.Select(d => d.Message).ToArray();
+            return new FormatActionResponse
+            {
+                Success       = r.Success,
+                FormattedText = r.FormattedText,
+                WasModified   = r.WasModified,
+                ElapsedMs     = r.ElapsedMs,
+                Warnings      = messages.Length > 0 ? messages : null,
+                ErrorMessage  = r.Success ? null : (messages.FirstOrDefault() ?? "Format action failed")
+            };
+        }
+        finally
+        {
+            profile.FormatActions.AddSquareBrackets = savedBrackets;
+            profile.FormatActions.AddAsKeyword = savedAs;
         }
     }
 
