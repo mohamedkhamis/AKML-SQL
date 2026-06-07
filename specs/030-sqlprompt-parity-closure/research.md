@@ -67,6 +67,17 @@ Evidence chain (all reproducible in `tests/AkmlSql.Formatting.Tests`):
 
 **Workflow-claimed but UNVERIFIED** (do not encode as fact until confirmed the way the Dml de-dent was): ControlFlowRules line-309 CASE-END-inside-BEGIN mis-pairing; line-1238 non-idempotent `IndentLevel += 1`; `Parenthesis.RemoveRedundant` peel-one-layer-per-pass. Plausible (code-grounded) but not empirically reproduced here.
 
+### T007 decision (2026-06-07): **Option A — delta-from-existing indent rework (validated)**
+
+Probed Option A empirically on the confirmed worst offender, `DmlRules.ApplyAndOrIndent` (the nested AND/OR de-dent): replaced the absolute `IndentLevel = 0/1/2` writes with **delta-from-existing** — adjust relative to the AND/OR's existing LayoutEngine-computed level (`alignWithWhere` → `Max(existing-1,0)`, `doubleIndent` → `existing+1`, `indent` → unchanged). Result:
+
+- **Inspection** (Dml-only on the nested subquery): nested `AND s.B` / `OR s.C` move from **col 0** (the regression) to **col 4** — correctly aligned with their nested `WHERE`, nesting preserved, the chosen mode still applied.
+- **`DmlRulesTests` 5/5 + full Formatting suite 610/610 green** — no test regression (the unit tests don't pin the old absolute level; the delta composes).
+
+This works because **`LayoutEngine` already computes correct nested indent** — the rules just need to *refine* it (delta) instead of *replacing* it (absolute). The fix is mechanical, per-write, and unit-test-compatible.
+
+**Decision: Option A.** Convert the absolute `IndentLevel = N` writes across `DmlRules`/`DdlRules`/`ControlFlowRules` to delta-from-existing, **incrementally per rule group, gated by the golden oracle + the indent-inspection** (zero new `FormatParityTests` regressions before enabling each group). No `LayoutEngine` redesign (Option B) required. **First step landed**: `DmlRules.ApplyAndOrIndent`. Remaining: the other DmlRules absolute writes (SET/VALUES/collapse/etc.), then Ddl, then ControlFlow; then flip `RuleEngine.DefaultOrder` on group-by-group as each clears the oracle. This resolves the staged plan's "fix-then-enable" uncertainty — the fix pattern is proven.
+
 ---
 
 ## R2 — Dispatch the standalone format actions + format-time actions (P1)

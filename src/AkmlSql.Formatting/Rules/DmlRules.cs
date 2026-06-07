@@ -97,19 +97,16 @@ public class DmlRules : IRuleSet
             if (node.TokenType is TSqlTokenType.And or TSqlTokenType.Or &&
                 node.PrecedingBreak == BreakType.NewLine)
             {
-                switch (dml.AndOrIndent)
+                // Spec 030 T007: indent RELATIVE to the AND/OR's existing (LayoutEngine-computed) level
+                // so nesting inside subqueries / nested clauses is preserved, instead of clobbering to an
+                // absolute level (which de-dented nested AND/OR to column 0). LayoutEngine already places
+                // AND/OR one level under its clause keyword ("indent"); other modes adjust from there.
+                node.IndentLevel = dml.AndOrIndent switch
                 {
-                    case "indent":
-                        node.IndentLevel = 1;
-                        break;
-                    case "alignWithWhere":
-                        // Indent level 0 aligns with clause keywords (WHERE is at level 0)
-                        node.IndentLevel = 0;
-                        break;
-                    case "doubleIndent":
-                        node.IndentLevel = 2;
-                        break;
-                }
+                    "alignWithWhere" => Math.Max(node.IndentLevel - 1, 0),
+                    "doubleIndent"   => node.IndentLevel + 1,
+                    _                => node.IndentLevel, // "indent" — keep LayoutEngine's nesting-correct level
+                };
             }
 
             // For "after" mode, adjust the token after AND/OR
