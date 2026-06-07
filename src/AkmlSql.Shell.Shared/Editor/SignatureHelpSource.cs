@@ -12,6 +12,9 @@ namespace AkmlSql.Shell.Shared.Editor
     /// T063: MEF-exported provider that creates SignatureHelpSource instances for T-SQL buffers.
     /// </summary>
     [Export(typeof(ISignatureHelpSourceProvider))]
+    // SSMS 22 query editor reports content type "SQL"; register all three so signature help fires in SSMS.
+    [ContentType("SQL Server Tools")]
+    [ContentType("SQL")]
     [ContentType("T-SQL")]
     [Name("AkmlSqlSignatureHelpSource")]
     [Order(Before = "default")]

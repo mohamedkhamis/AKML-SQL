@@ -12,6 +12,9 @@ namespace AkmlSql.Shell.Shared.Editor
     /// --region / --endregion comment blocks.
     /// </summary>
     [Export(typeof(ITaggerProvider))]
+    // SSMS 22 query editor reports content type "SQL"; register all three so region outlining fires in SSMS.
+    [ContentType("SQL Server Tools")]
+    [ContentType("SQL")]
     [ContentType("T-SQL")]
     [TagType(typeof(IOutliningRegionTag))]
     internal sealed class RegionTaggerProvider : ITaggerProvider

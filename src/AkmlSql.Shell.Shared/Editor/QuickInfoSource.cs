@@ -14,6 +14,9 @@ namespace AkmlSql.Shell.Shared.Editor
     /// T067: MEF-exported provider that creates QuickInfoSource instances for T-SQL buffers.
     /// </summary>
     [Export(typeof(IQuickInfoSourceProvider))]
+    // SSMS 22 query editor reports content type "SQL"; register all three so quick-info fires in SSMS.
+    [ContentType("SQL Server Tools")]
+    [ContentType("SQL")]
     [ContentType("T-SQL")]
     [Name("AkmlSqlQuickInfoSource")]
     [Order(Before = "default")]
