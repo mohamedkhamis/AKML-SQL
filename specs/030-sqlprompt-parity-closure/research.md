@@ -78,6 +78,12 @@ This works because **`LayoutEngine` already computes correct nested indent** —
 
 **Decision: Option A.** Convert the absolute `IndentLevel = N` writes across `DmlRules`/`DdlRules`/`ControlFlowRules` to delta-from-existing, **incrementally per rule group, gated by the golden oracle + the indent-inspection** (zero new `FormatParityTests` regressions before enabling each group). No `LayoutEngine` redesign (Option B) required. **First step landed**: `DmlRules.ApplyAndOrIndent`. Remaining: the other DmlRules absolute writes (SET/VALUES/collapse/etc.), then Ddl, then ControlFlow; then flip `RuleEngine.DefaultOrder` on group-by-group as each clears the oracle. This resolves the staged plan's "fix-then-enable" uncertainty — the fix pattern is proven.
 
+**T008 scoping — DmlRules-only golden oracle (2026-06-07):** flipping DmlRules-only on regresses **13/78** goldens (vs 36 for all six). Two distinct causes, so convergence is a per-behavior triage, not one fix:
+1. **AND/OR indent is context-dependent.** The delta fix handles nested AND inside a subquery, but `AND` after a multi-line `IN(...)` list lands at col 0 where the golden wants col 4 — LayoutEngine's baseline level differs by context, so a uniform `existing±1` isn't always right. The remaining AND/OR + SET/VALUES writes need context-aware deltas (and some may need the clause-keyword-tracking the simple delta avoided).
+2. **`ApplyCollapseShortStatements` over-collapses** — it folds multi-clause SELECTs (`SELECT * FROM x WHERE …`) onto one line where the goldens keep them multi-line. Separate behavior: tune the collapse threshold/guard, or re-bless if SQL Prompt genuinely collapses them (the golden is the parity oracle).
+
+So full DmlRules convergence (then Ddl, then ControlFlow) is a **dedicated multi-iteration effort** — pattern proven, execution scoped. Best run as a focused session/workflow per group, golden-gated.
+
 ---
 
 ## R2 — Dispatch the standalone format actions + format-time actions (P1)
