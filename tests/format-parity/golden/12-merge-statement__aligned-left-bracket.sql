@@ -1,6 +1,6 @@
 merge INTO dbo.targettable AS t using dbo.sourcetable AS s ON t.id = s.id
 WHEN matched
-AND t.value < > s.value THEN UPDATE
+AND t.value <> s.value THEN UPDATE
 SET    t.value = s.value,
     t.modified = GETDATE
 ()

@@ -4,7 +4,7 @@ WITH active_customers AS (
     WHERE  status = 'Active'), recent_orders AS (
     SELECT orderid, customerid, total
     FROM   orders
-    WHERE  orderdate > = DATEADD(MONTH, - 6, GETDATE())) SELECT c.customername,
+    WHERE  orderdate >= DATEADD(MONTH, - 6, GETDATE())) SELECT c.customername,
     COUNT(o.orderid) AS order_count,
     SUM(o.total) AS total_spent
 FROM   active_customers c LEFT

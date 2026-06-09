@@ -5,7 +5,7 @@ WITH active_customers AS (
     WHERE  status = 'Active'), recent_orders AS (
     SELECT orderid, customerid, total
     FROM   orders
-    WHERE  orderdate > = DATEADD(MONTH, - 6, GETDATE())) SELECT
+    WHERE  orderdate >= DATEADD(MONTH, - 6, GETDATE())) SELECT
     c.customername,
     COUNT( o.orderid)
     AS

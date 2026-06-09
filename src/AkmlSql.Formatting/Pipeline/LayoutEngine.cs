@@ -31,6 +31,7 @@ public class LayoutEngine
         var statementStarts = BuildStatementStartSet(script);
         TSqlTokenType? prevSemanticTokenType = null;
         string? prevSemanticTokenText = null;
+        int prevSemanticTokenEndOffset = -1;
         int baseIndent = 0;
 
         for (int i = 0; i < tokens.Count; i++)
@@ -167,6 +168,17 @@ public class LayoutEngine
                 decision = decision with { PrecedingSpaces = 1 };
             }
 
+            // Compound comparison operators (>=, <=, <>, !=, !<, !>) tokenise as two adjacent
+            // single-char operator tokens; the operator-spacing above would split them
+            // (">=" -> "> =", "<>" -> "< >"). Re-join the two halves when they were adjacent in
+            // the source (so a user-written "> =" is still left alone).
+            if (prevSemanticTokenType.HasValue
+                && IsCompoundOperatorSecondHalf(prevSemanticTokenType.Value, t.TokenType)
+                && t.Offset == prevSemanticTokenEndOffset)
+            {
+                decision = decision with { Break = BreakType.None, PrecedingSpaces = 0 };
+            }
+
             // Dot (period) — no space around
             if (t.TokenType == TSqlTokenType.Dot)
                 decision = new BreakDecision(BreakType.None, 0, 0);
@@ -192,6 +204,7 @@ public class LayoutEngine
 
             prevSemanticTokenType = t.TokenType;
             prevSemanticTokenText = t.Text;
+            prevSemanticTokenEndOffset = t.Offset + t.Text.Length;
             isFirstSemanticToken = false;
         }
 
@@ -235,6 +248,27 @@ public class LayoutEngine
             TSqlTokenType.Plus or TSqlTokenType.Minus or TSqlTokenType.Star or
             TSqlTokenType.Divide or TSqlTokenType.PercentSign or
             TSqlTokenType.Bang => true,
+            _ => false,
+        };
+    }
+
+    /// <summary>
+    /// True when <paramref name="second"/> is the trailing half of a two-token T-SQL compound
+    /// comparison operator whose leading half is <paramref name="first"/>. ScriptDom tokenises
+    /// <c>&gt;=</c>, <c>&lt;=</c>, <c>&lt;&gt;</c>, <c>!=</c>, <c>!&lt;</c>, <c>!&gt;</c> as two
+    /// adjacent single-char operator tokens; these pairs occur only as compound operators in valid
+    /// T-SQL, so they must be emitted with no interior space.
+    /// </summary>
+    private static bool IsCompoundOperatorSecondHalf(TSqlTokenType first, TSqlTokenType second)
+    {
+        return (first, second) switch
+        {
+            (TSqlTokenType.GreaterThan, TSqlTokenType.EqualsSign) => true,   // >=
+            (TSqlTokenType.LessThan, TSqlTokenType.EqualsSign) => true,      // <=
+            (TSqlTokenType.LessThan, TSqlTokenType.GreaterThan) => true,     // <>
+            (TSqlTokenType.Bang, TSqlTokenType.EqualsSign) => true,          // !=
+            (TSqlTokenType.Bang, TSqlTokenType.LessThan) => true,           // !<
+            (TSqlTokenType.Bang, TSqlTokenType.GreaterThan) => true,        // !>
             _ => false,
         };
     }

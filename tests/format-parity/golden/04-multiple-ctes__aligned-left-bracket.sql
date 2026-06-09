@@ -7,7 +7,7 @@ WITH active_customers AS
     (
     SELECT orderid, customerid, total
     FROM   orders
-    WHERE  orderdate > = DATEADD
+    WHERE  orderdate >= DATEADD
     (MONTH, - 6, GETDATE ())
 ) SELECT
     c.customername,

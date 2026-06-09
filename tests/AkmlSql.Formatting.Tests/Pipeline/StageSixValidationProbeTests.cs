@@ -105,6 +105,23 @@ public class StageSixValidationProbeTests
     }
 
     [Fact]
+    public void Dump_Operator_Tokenization()
+    {
+        const string sql = "select * from t where a >= 1 and b <> 2 and c <= 3 and d != 4 and e !< 5;";
+        var parser = new TSql170Parser(initialQuotedIdentifiers: true);
+        using var reader = new StringReader(sql);
+        var fragment = parser.Parse(reader, out _);
+        var sb = new StringBuilder();
+        foreach (var t in fragment.ScriptTokenStream)
+        {
+            if (t.TokenType == TSqlTokenType.WhiteSpace || t.TokenType == TSqlTokenType.EndOfFile) continue;
+            sb.AppendLine($"  off={t.Offset,3} type={t.TokenType,-22} text='{t.Text}'");
+        }
+        _output.WriteLine(sb.ToString());
+        Assert.True(true);
+    }
+
+    [Fact]
     public void Compare_RulesOff_vs_RulesOn_For_NewlyFormatting()
     {
         var repoRoot = FindRepoRoot();

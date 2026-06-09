@@ -9,7 +9,7 @@ select c.customerid, c.customername, (
         o.customerid =
         c.customerid
     and
-        o.orderdate > =
+        o.orderdate >=
         DATEADD( YEAR, - 1, GETDATE())
 )
     as
