@@ -18,13 +18,14 @@ namespace AkmlSql.Formatting.Pipeline;
 public class FormatterPipeline
 {
     /// <summary>
-    /// Spec 030 R1 spike — optional layout-rule passes applied after <c>LayoutEngine.BuildLayout</c>
-    /// and before casing. NULL (the default) preserves current production behaviour (no rule passes).
-    /// Set to a list of <see cref="IRuleSet"/> to evaluate wiring the dormant Rules/* through the full
-    /// pipeline under idempotency + semantic-validation gates. See
-    /// specs/030-sqlprompt-parity-closure/research.md (R1).
+    /// Spec 030 R1 — layout-rule passes applied after <c>LayoutEngine.BuildLayout</c> and before
+    /// casing. Defaults to <see cref="RuleEngine.DefaultOrder"/> (all six rule sets, T008 production
+    /// enable): the per-group golden-oracle rework + the ORDER/GROUP list-boundary fix cleared the
+    /// idempotency + semantic-validation + visual-indent gates. Set explicitly to a subset to scope
+    /// the passes, or to <c>null</c> to disable them entirely (used by the R1 inspection/spike tests
+    /// to capture a rules-off baseline). See specs/030-sqlprompt-parity-closure/research.md (R1).
     /// </summary>
-    public IReadOnlyList<IRuleSet>? LayoutRules { get; set; }
+    public IReadOnlyList<IRuleSet>? LayoutRules { get; set; } = RuleEngine.DefaultOrder;
 
     private void ApplyLayoutRules(List<LayoutNode> nodes, FormattingProfile profile)
     {

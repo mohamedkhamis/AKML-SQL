@@ -1,24 +1,26 @@
 -- akml-parity-baseline revision=1.26.0526.0000 corpus-item=05-case-searched profile=ansi
 select
-    orderid, total, case
-    when
+    orderid,
+    total,
+    case
+        when
     total >
     1000
     then
     'Large'
-    when
+        when
     total >
     100
     then
     'Medium'
-    when
+        when
     total >
     0
     then
     'Small'
-    else
+        else
     'Empty'
-    end
+        end
     as
     size_bucket
-from orders;
+from   orders;

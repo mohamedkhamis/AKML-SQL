@@ -1,23 +1,25 @@
 SELECT
-    orderid, total, CASE
-    WHEN
+    orderid,
+    total,
+    CASE
+        WHEN
     total >
     1000
     THEN
     'Large'
-    WHEN
+        WHEN
     total >
     100
     THEN
     'Medium'
-    WHEN
+        WHEN
     total >
     0
     THEN
     'Small'
-    ELSE
+        ELSE
     'Empty'
-    END
+        END
     AS
     size_bucket
-FROM orders;
+FROM   orders;

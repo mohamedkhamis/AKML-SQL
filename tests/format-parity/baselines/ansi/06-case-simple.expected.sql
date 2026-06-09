@@ -1,22 +1,23 @@
 -- akml-parity-baseline revision=1.26.0526.0000 corpus-item=06-case-simple profile=ansi
 select
-    productid, case
+    productid,
+    case
     status
-    when
+        when
     'A'
     then
     'Active'
-    when
+        when
     'D'
     then
     'Discontinued'
-    when
+        when
     'P'
     then
     'Pending'
-    else
+        else
     'Unknown'
-    end
+        end
     as
     status_text
-from products;
+from   products;

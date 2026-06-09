@@ -124,7 +124,8 @@ public class ListRules : IRuleSet
             if (IsListClause(context) && node.PrecedingBreak == BreakType.NewLine)
             {
                 // Don't indent clause keywords themselves, only their items
-                if (!IsClauseKeyword(node.TokenType))
+                // (IsListBoundary so the ORDER/GROUP keyword stays at clause level, not col +1).
+                if (!IsListBoundary(node.TokenType))
                 {
                     node.IndentLevel = Math.Max(node.IndentLevel, 1);
                 }
@@ -152,7 +153,7 @@ public class ListRules : IRuleSet
             }
 
             // Look for the start of a list (first item after a clause keyword)
-            if (IsClauseKeyword(nodes[i].TokenType))
+            if (IsListBoundary(nodes[i].TokenType))
             {
                 int listStart = i + 1;
                 int listEnd = FindListEnd(nodes, listStart);
@@ -344,6 +345,21 @@ public class ListRules : IRuleSet
         };
     }
 
+    /// <summary>
+    /// Clause-boundary predicate for the list collapse + indent paths. Extends
+    /// <see cref="IsClauseKeyword"/> with ORDER and GROUP, which carry their own ScriptDom token
+    /// types but were historically recognised only by <see cref="UpdateClauseContext"/>'s
+    /// FormattedText match. Without ORDER/GROUP here, <see cref="FindListEnd"/> over-extends a
+    /// WHERE/HAVING list across the ORDER&#160;BY / GROUP&#160;BY boundary and
+    /// <see cref="CollapseRange"/> deletes the line break before it — merging ORDER&#160;BY /
+    /// GROUP&#160;BY onto the previous clause line (spec 030 T008). Deliberately kept separate from
+    /// <see cref="IsClauseKeyword"/> so cross-clause first-item alignment
+    /// (<c>ApplyAlignItemsAcrossClauses</c>) is unaffected — folding ORDER&#160;BY into that pass
+    /// would re-pad <c>maxKeywordLen</c> across every clause.
+    /// </summary>
+    private static bool IsListBoundary(TSqlTokenType tokenType)
+        => IsClauseKeyword(tokenType) || tokenType is TSqlTokenType.Order or TSqlTokenType.Group;
+
     private static int FindPrevSemanticToken(List<LayoutNode> nodes, int index)
     {
         for (int i = index - 1; i >= 0; i--)
@@ -364,7 +380,7 @@ public class ListRules : IRuleSet
                 continue;
 
             // End of list: next clause keyword or statement terminator
-            if (IsClauseKeyword(nodes[i].TokenType) ||
+            if (IsListBoundary(nodes[i].TokenType) ||
                 nodes[i].TokenType == TSqlTokenType.Semicolon ||
                 nodes[i].TokenType == TSqlTokenType.Go)
                 return i;
