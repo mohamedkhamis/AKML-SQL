@@ -1,0 +1,169 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
+using AkmlSql.Formatting.Pipeline;
+using AkmlSql.Formatting.Profiles;
+using AkmlSql.Formatting.Rules;
+using Microsoft.SqlServer.TransactSql.ScriptDom;
+using Xunit;
+using Xunit.Abstractions;
+
+namespace AkmlSql.Formatting.Tests.Pipeline;
+
+/// <summary>
+/// Spec 030 — DIAGNOSTIC PROBE for the Stage-6 (SemanticValidator) gap: GROUP BY/HAVING-aggregate
+/// + CTE statements fail validation through the full pipeline and the formatter returns the
+/// ORIGINAL unformatted SQL (research.md §R1 caveat). This probe maps the failure surface over the
+/// whole corpus under the real <c>default.akmlstyle</c>:
+/// <list type="bullet">
+///   <item>which corpus items fail validation (ValidationPassed=false / WasModified=false);</item>
+///   <item>for each failure: does the formatted output PARSE? (the validator returns false with no
+///   diagnostic on a null parse) — and if it parses, the first differing region of the two
+///   <c>Sql170ScriptGenerator</c> normalisations the validator compares.</item>
+/// </list>
+/// Not a pass/fail gate — it asserts true and dumps evidence via ITestOutputHelper.
+/// Run: dotnet test tests/AkmlSql.Formatting.Tests --filter StageSixValidationProbe -l "console;verbosity=detailed"
+/// </summary>
+public class StageSixValidationProbeTests
+{
+    private readonly ITestOutputHelper _output;
+    public StageSixValidationProbeTests(ITestOutputHelper output) => _output = output;
+
+    [Fact]
+    public void Map_StageSix_Validation_Failures_Across_Corpus()
+    {
+        var repoRoot = FindRepoRoot();
+        var corpusDir = Path.Combine(repoRoot, "tests", "format-parity", "corpus");
+        var sb = new StringBuilder();
+
+        foreach (var path in Directory.EnumerateFiles(corpusDir, "*.sql").OrderBy(p => p))
+        {
+            var id = Path.GetFileNameWithoutExtension(path);
+            var sql = File.ReadAllText(path);
+
+            // 1) Real pipeline (validation ON) — does it fail + return original?
+            var profileOn = LoadDefaultStyle();
+            var resOn = new FormatterPipeline().Format(sql, profileOn);
+
+            sb.AppendLine("================================================================");
+            sb.AppendLine($"{id}: Success={resOn.Success} ValidationPassed={resOn.ValidationPassed} WasModified={resOn.WasModified}");
+            foreach (var d in resOn.Diagnostics)
+                sb.AppendLine($"    diag[{d.Severity}] {d.Message}");
+
+            if (resOn.ValidationPassed)
+            {
+                sb.AppendLine("    -> validation PASSES (formatted output kept).");
+                continue;
+            }
+
+            // 2) Validation FAILED. Re-run with validation OFF to capture the formatted text the
+            //    pipeline produced + discarded, then replicate the validator manually.
+            var profileOff = LoadDefaultStyle();
+            profileOff.Metadata.SkipValidation = true;
+            var resOff = new FormatterPipeline().Format(sql, profileOff);
+            var formatted = resOff.FormattedText;
+
+            var parser = new TSql170Parser(initialQuotedIdentifiers: true);
+            TSqlScript? origScript, fmtScript;
+            IList<ParseError> origErrors, fmtErrors;
+            using (var r = new StringReader(sql))
+                origScript = parser.Parse(r, out origErrors) as TSqlScript;
+            using (var r = new StringReader(formatted))
+                fmtScript = parser.Parse(r, out fmtErrors) as TSqlScript;
+
+            sb.AppendLine($"    [validation-off] formatted PARSES: {(fmtScript != null)} (errors={fmtErrors.Count})");
+            if (fmtScript == null)
+            {
+                sb.AppendLine("    ROOT CAUSE = formatted output does NOT parse. First parse errors:");
+                foreach (var e in fmtErrors.Take(5))
+                    sb.AppendLine($"        line {e.Line} col {e.Column}: {e.Message}");
+                sb.AppendLine("    --- formatted output ---");
+                AppendNumbered(sb, formatted);
+                continue;
+            }
+
+            var gen = new Sql170ScriptGenerator();
+            gen.GenerateScript(origScript, out var origNorm);
+            gen.GenerateScript(fmtScript, out var fmtNorm);
+            if (origNorm == fmtNorm)
+            {
+                sb.AppendLine("    (normalisations EQUAL — failure was a parse error or transient)");
+                continue;
+            }
+
+            bool caseOnly = string.Equals(origNorm, fmtNorm, StringComparison.OrdinalIgnoreCase);
+            sb.AppendLine($"    ROOT CAUSE = normalised ASTs DIFFER. CASE-ONLY (OrdinalIgnoreCase equal) = {caseOnly}. First divergence:");
+            AppendFirstDiff(sb, origNorm, fmtNorm);
+            sb.AppendLine("    --- formatted output (validation-off) ---");
+            AppendNumbered(sb, formatted);
+        }
+
+        _output.WriteLine(sb.ToString());
+        Assert.True(true);
+    }
+
+    [Fact]
+    public void Compare_RulesOff_vs_RulesOn_For_NewlyFormatting()
+    {
+        var repoRoot = FindRepoRoot();
+        var sb = new StringBuilder();
+        foreach (var id in new[] { "02-multi-join", "11-stored-procedure", "12-merge-statement", "03-cte-with-columns" })
+        {
+            var sql = File.ReadAllText(Path.Combine(repoRoot, "tests", "format-parity", "corpus", id + ".sql"));
+            foreach (var (label, rules) in new (string, IReadOnlyList<IRuleSet>?)[] { ("RULES OFF", null), ("RULES ON (DefaultOrder)", AkmlSql.Formatting.Rules.RuleEngine.DefaultOrder) })
+            {
+                var p = LoadDefaultStyle();
+                p.Metadata.SkipValidation = true;
+                var r = new FormatterPipeline { LayoutRules = rules }.Format(sql, p);
+                sb.AppendLine($"========= {id} — {label} =========");
+                AppendNumbered(sb, r.FormattedText);
+            }
+        }
+        _output.WriteLine(sb.ToString());
+        Assert.True(true);
+    }
+
+    private static void AppendNumbered(StringBuilder sb, string text)
+    {
+        var lines = text.Replace("\r\n", "\n").Split('\n');
+        for (int i = 0; i < lines.Length; i++)
+            sb.AppendLine($"      {i,2}|{lines[i]}");
+    }
+
+    private static void AppendFirstDiff(StringBuilder sb, string a, string b)
+    {
+        var la = a.Replace("\r\n", "\n").Split('\n');
+        var lb = b.Replace("\r\n", "\n").Split('\n');
+        int max = Math.Max(la.Length, lb.Length);
+        int shown = 0;
+        for (int i = 0; i < max && shown < 12; i++)
+        {
+            var x = i < la.Length ? la[i] : "<EOF>";
+            var y = i < lb.Length ? lb[i] : "<EOF>";
+            if (x == y) continue;
+            sb.AppendLine($"        L{i}  orig: {x}");
+            sb.AppendLine($"        L{i}  fmt : {y}");
+            shown++;
+        }
+    }
+
+    private static FormattingProfile LoadDefaultStyle()
+    {
+        var repoRoot = FindRepoRoot();
+        var stylePath = Path.Combine(repoRoot, "src", "AkmlSql.Formatting", "Profiles", "BuiltIn", "default.akmlstyle");
+        return ProfileSerializer.Deserialize(File.ReadAllText(stylePath));
+    }
+
+    private static string FindRepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null)
+        {
+            if (File.Exists(Path.Combine(dir.FullName, "AKML-SQL.slnx"))) return dir.FullName;
+            dir = dir.Parent;
+        }
+        throw new DirectoryNotFoundException("Could not locate AKML-SQL.slnx from " + AppContext.BaseDirectory);
+    }
+}
