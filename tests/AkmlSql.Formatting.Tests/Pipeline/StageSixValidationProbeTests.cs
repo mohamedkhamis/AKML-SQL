@@ -105,6 +105,37 @@ public class StageSixValidationProbeTests
     }
 
     [Fact]
+    public void Isolate_Join_OverCollapse()
+    {
+        var repoRoot = FindRepoRoot();
+        var sql = File.ReadAllText(Path.Combine(repoRoot, "tests", "format-parity", "corpus", "02-multi-join.sql"));
+        var configs = new (string label, IRuleSet[]? rules)[]
+        {
+            ("OFF (base)",          null),
+            ("Dml only",            new IRuleSet[] { new DmlRules() }),
+            ("List only",           new IRuleSet[] { new ListRules() }),
+            ("Join only",           new IRuleSet[] { new JoinRules() }),
+            ("Parenthesis only",    new IRuleSet[] { new ParenthesisRules() }),
+            ("ControlFlow only",    new IRuleSet[] { new ControlFlowRules() }),
+            ("ALL (DefaultOrder)",  new List<IRuleSet>(RuleEngine.DefaultOrder).ToArray()),
+        };
+        var sb = new StringBuilder();
+        foreach (var (label, rules) in configs)
+        {
+            var p = LoadDefaultStyle();
+            p.Metadata.SkipValidation = true;
+            var r = new FormatterPipeline { LayoutRules = rules }.Format(sql, p);
+            var lines = r.FormattedText.Replace("\r\n", "\n").Split('\n');
+            int joinLines = 0;
+            foreach (var l in lines) if (l.ToUpperInvariant().Contains("JOIN")) joinLines++;
+            sb.AppendLine($"--- {label,-20} lineCount={lines.Length} linesWithJOIN={joinLines} ---");
+            foreach (var l in lines) if (l.ToUpperInvariant().Contains("FROM") || l.ToUpperInvariant().Contains("JOIN")) sb.AppendLine($"   |{l}");
+        }
+        _output.WriteLine(sb.ToString());
+        Assert.True(true);
+    }
+
+    [Fact]
     public void Dump_Operator_Tokenization()
     {
         const string sql = "select * from t where a >= 1 and b <> 2 and c <= 3 and d != 4 and e !< 5;";

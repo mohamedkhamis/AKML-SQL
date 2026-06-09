@@ -1,9 +1,9 @@
 SELECT o.orderid, c.customername, SUM(d.unitprice * d.quantity) AS total
-FROM   orders o INNER
+FROM   orders o
 
-JOIN   customers c ON c.customerid = o.customerid LEFT
+INNER JOIN   customers c ON c.customerid = o.customerid
 
-JOIN   orderdetails d ON d.orderid = o.orderid
+LEFT JOIN   orderdetails d ON d.orderid = o.orderid
 WHERE  o.orderdate >= '2025-01-01' AND c.country = 'USA'
 GROUP BY o.orderid, c.customername
 HAVING SUM(d.unitprice * d.quantity) > 100

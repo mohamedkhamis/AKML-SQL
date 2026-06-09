@@ -79,9 +79,19 @@ public class LineBreakDecider(FormattingProfile profile)
 
         // JOIN keywords
         if (tokenType == TSqlTokenType.Join)
+        {
+            // A join-type modifier (INNER/LEFT/RIGHT/FULL/CROSS, optionally OUTER) already broke the
+            // line before itself; keep JOIN on that same line instead of breaking again — otherwise
+            // "INNER JOIN" splits across two lines ("INNER" ⏎ "JOIN").
+            if (prevSemanticTokenType is TSqlTokenType.Inner or TSqlTokenType.Left
+                or TSqlTokenType.Right or TSqlTokenType.Full or TSqlTokenType.Cross
+                or TSqlTokenType.Outer)
+                return new BreakDecision(BreakType.None, 0, 1);
+
             return join.OnNewLine
                 ? new BreakDecision(BreakType.NewLine, 0, 0)
                 : new BreakDecision(BreakType.None, 0, 1);
+        }
 
         // JOIN type modifiers (INNER, LEFT, RIGHT, FULL, CROSS) — break before the modifier
         if (IsJoinModifier(tokenType, upperText, currentClause))
@@ -163,8 +173,9 @@ public class LineBreakDecider(FormattingProfile profile)
 
     private static bool IsJoinModifier(TSqlTokenType tokenType, string upperText, ClauseContext currentClause)
     {
-        // These tokens often appear immediately before JOIN
-        if (currentClause is ClauseContext.From or ClauseContext.Join)
+        // These tokens often appear immediately before JOIN. JoinOn is included so a *chained*
+        // join (the LEFT/INNER that starts the next join after a prior "... ON <cond>") also breaks.
+        if (currentClause is ClauseContext.From or ClauseContext.Join or ClauseContext.JoinOn)
         {
             return tokenType switch
             {

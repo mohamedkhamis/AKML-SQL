@@ -358,7 +358,24 @@ public class ListRules : IRuleSet
     /// would re-pad <c>maxKeywordLen</c> across every clause.
     /// </summary>
     private static bool IsListBoundary(TSqlTokenType tokenType)
-        => IsClauseKeyword(tokenType) || tokenType is TSqlTokenType.Order or TSqlTokenType.Group;
+        => IsClauseKeyword(tokenType)
+           || tokenType is TSqlTokenType.Order or TSqlTokenType.Group
+           || IsJoinBoundary(tokenType);
+
+    /// <summary>
+    /// Join-type modifiers, treated as list boundaries (spec 030 T010) so <see cref="FindListEnd"/>
+    /// stops at them: otherwise the FROM "list" — and each JOIN body — over-runs the trailing
+    /// <c>INNER</c>/<c>LEFT</c>/… into the preceding segment, and <see cref="CollapseRange"/> pulls
+    /// the join modifier up onto the prior line (<c>FROM orders o INNER</c> ⏎ <c>JOIN …</c>) or
+    /// collapses the whole FROM+JOIN region. <c>Join</c> itself is already covered by
+    /// <see cref="IsClauseKeyword"/>. <c>ON</c> is deliberately NOT included: as a universal
+    /// boundary it makes a MERGE's <c>ON</c> start a collapsible list that pulls the following
+    /// <c>WHEN</c> up — keeping the JOIN's ON-condition on its own line needs clause-context
+    /// awareness (a separate follow-up); with modifiers-only the ON condition simply stays inline.
+    /// </summary>
+    private static bool IsJoinBoundary(TSqlTokenType tokenType)
+        => tokenType is TSqlTokenType.Inner or TSqlTokenType.Left or TSqlTokenType.Right
+            or TSqlTokenType.Full or TSqlTokenType.Cross or TSqlTokenType.Outer;
 
     private static int FindPrevSemanticToken(List<LayoutNode> nodes, int index)
     {

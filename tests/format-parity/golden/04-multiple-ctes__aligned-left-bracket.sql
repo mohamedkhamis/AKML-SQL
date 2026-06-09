@@ -19,6 +19,6 @@ WITH active_customers AS
     ( o.total)
     AS
     total_spent
-FROM   active_customers c LEFT
-JOIN   recent_orders o ON o.customerid = c.customerid
+FROM   active_customers c
+LEFT JOIN   recent_orders o ON o.customerid = c.customerid
 GROUP BY c.customername;

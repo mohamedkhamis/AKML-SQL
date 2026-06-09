@@ -13,6 +13,6 @@ with active_customers as (
     SUM( o.total)
     as
     total_spent
-from   active_customers c left
-join   recent_orders o on o.customerid = c.customerid
+from   active_customers c
+left join   recent_orders o on o.customerid = c.customerid
 group by c.customername;
