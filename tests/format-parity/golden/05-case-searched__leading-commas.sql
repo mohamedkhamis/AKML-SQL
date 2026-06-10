@@ -1,7 +1,7 @@
 SELECT
-    orderid,
-    total,
-    CASE
+    orderid
+    , total
+    , CASE
         WHEN total > 1000
     THEN 'Large'
         WHEN total > 100

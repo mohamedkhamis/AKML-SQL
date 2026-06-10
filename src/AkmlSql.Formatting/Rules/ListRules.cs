@@ -19,11 +19,18 @@ public class ListRules : IRuleSet
     {
         var list = profile.List;
 
-        ApplyCommaPosition(nodes, list);
         ApplyOneItemPerLine(nodes, list, profile);
         ApplyIndentListItems(nodes, list, profile);
         ApplyCollapseShortLists(nodes, list);
-        ApplyAlignAliases(nodes, list);
+        // After the break-affecting passes: ApplyCommaPosition moves a comma onto the break of
+        // the item that follows it, so it must see the FINAL item breaks — run first (its
+        // original slot) it saw none (ApplyOneItemPerLine hadn't created them yet) and
+        // commaPosition "leading" never took effect (spec 030 T011).
+        ApplyCommaPosition(nodes, list);
+        // AlignAliases is NOT applied here: at ListRules time the function-call parens are still
+        // exploded (ParenthesisRules re-joins them later), so every AS line measured as starting
+        // at the lone ")" and the alignment was inert. FormatterPipeline.ApplyLayoutRules calls
+        // ListRules.AlignAliases at the post-collapse finalization instead (spec 030 T011).
         ApplyAlignItemsAcrossClauses(nodes, list, profile);
         ApplySpaceAfterListComma(nodes, list);
     }
@@ -185,8 +192,13 @@ public class ListRules : IRuleSet
     /// <summary>
     /// When alignAliases is true, aligns AS aliases in SELECT lists to the same column.
     /// Computes the maximum expression width and pads preceding spaces on the AS keyword.
+    /// Called from <c>FormatterPipeline.ApplyLayoutRules</c>' post-collapse finalization (NOT from
+    /// <see cref="Apply"/>): alignment is line geometry, and the line shapes are final only after
+    /// every rule set's collapse passes have run (ParenthesisRules re-joins exploded function-call
+    /// parens after ListRules — measured before that, every AS line started at ")" and the
+    /// computed padding was always a single space).
     /// </summary>
-    private static void ApplyAlignAliases(List<LayoutNode> nodes, ListOptions list)
+    internal static void AlignAliases(List<LayoutNode> nodes, ListOptions list)
     {
         if (!list.AlignAliases)
             return;

@@ -26,7 +26,12 @@ public class ParenthesisRules : IRuleSet
         ApplyIndentContents(nodes, paren, parenPairs);
         ApplySpaceInside(nodes, paren, parenPairs);
         ApplyCollapseShort(nodes, paren, parenPairs);
-        ApplyRemoveRedundant(nodes, paren, parenPairs);
+        // ApplyRemoveRedundant is FORCE-DISABLED (spec 030 T011): it peels exactly one paren
+        // layer per format (only the innermost pair of "((a))" wraps a single token), so it is
+        // non-idempotent — and with Stage-6 validation on, the peeled output fails the semantic
+        // compare and Format silently returns the ORIGINAL (the option disabled formatting
+        // entirely). Re-enable only after a rebuild with a fixpoint loop + semantic guards.
+        // The profile option stays in the schema for round-trip compatibility.
         ApplyCreateTableColumns(nodes, paren, parenPairs);
         ApplyProcedureParameters(nodes, paren, parenPairs);
         ApplySubqueryStyle(nodes, paren, parenPairs);

@@ -219,6 +219,68 @@ public class StageSixValidationProbeTests
     }
 
     [Fact]
+    public void Probe_T011_CommaPosition_AlignAliases_RemoveRedundant()
+    {
+        var repoRoot = FindRepoRoot();
+        var sb = new StringBuilder();
+
+        // (a) leading commas: does commaPosition="leading" take effect at all?
+        var leadingPath = Path.Combine(repoRoot, "src", "AkmlSql.Formatting", "Profiles", "BuiltIn", "leading-commas.akmlstyle");
+        var leading = ProfileSerializer.Deserialize(File.ReadAllText(leadingPath));
+        leading.Metadata.SkipValidation = true;
+        const string multiItem =
+            "select o.orderid, c.customername, sum(d.unitprice * d.quantity) as total " +
+            "from orders o inner join orderdetails d on d.orderid = o.orderid " +
+            "inner join customers c on c.customerid = o.customerid group by o.orderid, c.customername;";
+        sb.AppendLine("=== (a) leading-commas style ===");
+        AppendNumbered(sb, new FormatterPipeline().Format(multiItem, leading).FormattedText);
+
+        // (b) alignAliases: multi-alias select — aligned? stable across passes?
+        var def = LoadDefaultStyle();
+        def.Metadata.SkipValidation = true;
+        const string aliases =
+            "select c.customername, count(o.orderid) as order_count, sum(o.total) as total_spent, " +
+            "max(o.orderdate) as latest_order from customers c group by c.customername;";
+        var p1 = new FormatterPipeline().Format(aliases, def).FormattedText;
+        var p2 = new FormatterPipeline().Format(p1, def).FormattedText;
+        var p3 = new FormatterPipeline().Format(p2, def).FormattedText;
+        sb.AppendLine("=== (b) alignAliases default, pass1 ===");
+        AppendNumbered(sb, p1);
+        sb.AppendLine($"=== (b) p1==p2: {p1 == p2}, p2==p3: {p2 == p3} ===");
+        if (p1 != p2) { sb.AppendLine("--- pass2 ---"); AppendNumbered(sb, p2); }
+
+        // (b2) which subset aligns the AS keywords (if any)?
+        foreach (var (label, rules) in new (string, IRuleSet[])[]
+        {
+            ("List only", new IRuleSet[] { new ListRules() }),
+            ("Dml+List", new IRuleSet[] { new DmlRules(), new ListRules() }),
+            ("Dml+List+Paren", new IRuleSet[] { new DmlRules(), new ListRules(), new ParenthesisRules() }),
+        })
+        {
+            var ps = LoadDefaultStyle();
+            ps.Metadata.SkipValidation = true;
+            var r = new FormatterPipeline { LayoutRules = rules }.Format(aliases, ps).FormattedText;
+            sb.AppendLine($"=== (b2) {label} ===");
+            AppendNumbered(sb, r);
+        }
+
+        // (c) removeRedundant=true: peel-one-layer-per-pass claim
+        var rr = LoadDefaultStyle();
+        rr.Metadata.SkipValidation = true;
+        rr.Parenthesis.RemoveRedundant = true;
+        const string parens = "select ((a)) from t where ((a > 1));";
+        var r1 = new FormatterPipeline().Format(parens, rr).FormattedText;
+        var r2 = new FormatterPipeline().Format(r1, rr).FormattedText;
+        sb.AppendLine("=== (c) removeRedundant=true ===");
+        sb.AppendLine($"r1: {r1.Replace("\r\n", "\\n").Replace("\n", "\\n")}");
+        sb.AppendLine($"r2: {r2.Replace("\r\n", "\\n").Replace("\n", "\\n")}");
+        sb.AppendLine($"r1==r2 (idempotent): {r1 == r2}");
+
+        _output.WriteLine(sb.ToString());
+        Assert.True(true);
+    }
+
+    [Fact]
     public void Isolate_13_SubqueryBody_Collapse()
     {
         var repoRoot = FindRepoRoot();

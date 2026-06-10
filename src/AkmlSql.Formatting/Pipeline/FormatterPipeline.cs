@@ -40,6 +40,11 @@ public class FormatterPipeline
         // chokepoint that catches every collapse path. See spec 030 T009 (#1).
         NormalizeUnarySignSpacing(nodes);
         NormalizeSemicolonSpacing(nodes);
+
+        // Alias alignment is line GEOMETRY, so it must see the final line shapes — after every
+        // rule set's collapse passes (ParenthesisRules re-joins exploded function-call parens
+        // after ListRules ran) and after the spacing normalizers above, which change widths.
+        ListRules.AlignAliases(nodes, profile.List);
     }
 
     /// <summary>

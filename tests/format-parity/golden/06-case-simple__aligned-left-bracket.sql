@@ -1,6 +1,6 @@
 SELECT
-    productid,
-    CASE status
+    productid
+    , CASE status
         WHEN 'A' THEN 'Active'
         WHEN 'D' THEN 'Discontinued'
         WHEN 'P' THEN 'Pending'

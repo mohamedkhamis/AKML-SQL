@@ -11,7 +11,7 @@ with active_customers as (
 select
     c.customername,
     COUNT(o.orderid) as order_count,
-    SUM(o.total) as total_spent
+    SUM(o.total)     as total_spent
 from   active_customers c
 left join   recent_orders o
     on o.customerid = c.customerid

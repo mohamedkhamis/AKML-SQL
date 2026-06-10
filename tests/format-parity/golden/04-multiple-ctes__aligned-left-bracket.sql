@@ -11,11 +11,11 @@ WITH active_customers AS
     (MONTH, -6, GETDATE ())
 )
 SELECT
-    c.customername,
-    COUNT
-(o.orderid) AS order_count,
-    SUM
-(o.total) AS total_spent
+    c.customername
+    , COUNT
+(o.orderid) AS order_count
+    , SUM
+(o.total)   AS total_spent
 FROM   active_customers c
 LEFT JOIN   recent_orders o
     ON o.customerid = c.customerid

@@ -383,7 +383,7 @@ public class ControlFlowRules : IRuleSet
                     }
                 }
 
-                int caseIndent = nodes[caseStart].IndentLevel;
+                int caseIndent = LineIndentOf(nodes, caseStart);
 
                 // T082 — Determine WHEN indent strategy from the new WhenAlignment enum,
                 // falling back to legacy IndentWhen / toCase behaviour.
@@ -800,6 +800,23 @@ public class ControlFlowRules : IRuleSet
 
             i = cteRegionEnd - 1;
         }
+    }
+
+    /// <summary>
+    /// The indent of the LINE a node sits on: the node's own IndentLevel when it carries a break,
+    /// else the IndentLevel of the nearest preceding break-carrying node. An inline node's own
+    /// IndentLevel is 0 by convention (LayoutEngine: "no break = no indentation"), so reading it
+    /// directly de-dents anything positioned relative to it — e.g. a CASE that sits inline after a
+    /// leading comma had its WHEN/ELSE/END land at item level (spec 030 T011).
+    /// </summary>
+    private static int LineIndentOf(List<LayoutNode> nodes, int index)
+    {
+        for (int i = index; i >= 0; i--)
+        {
+            if (nodes[i].PrecedingBreak != BreakType.None)
+                return nodes[i].IndentLevel;
+        }
+        return nodes[index].IndentLevel;
     }
 
     private static bool IsCteWith(List<LayoutNode> nodes, int withIndex)
@@ -1347,9 +1364,10 @@ public class ControlFlowRules : IRuleSet
                 int caseStart = caseStack.Pop();
                 if (nodes[i].PrecedingBreak != BreakType.None)
                 {
+                    int caseIndent = LineIndentOf(nodes, caseStart);
                     nodes[i].IndentLevel = mode == "tocase"
-                        ? nodes[caseStart].IndentLevel          // explicit "toCase" — align END under CASE
-                        : nodes[caseStart].IndentLevel + 1;     // "indented" or unset — indent one in
+                        ? caseIndent          // explicit "toCase" — align END under CASE
+                        : caseIndent + 1;     // "indented" or unset — indent one in
                 }
             }
         }
