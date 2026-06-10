@@ -3,20 +3,12 @@ select c.customerid, c.customername, (
         select COUNT(*)
     from   orders o
     where  o.customerid = c.customerid
-)
-    as
-    order_count, (
+) as order_count, (
         select SUM(total)
     from   orders o
-    where
-        o.customerid =
-        c.customerid
-    and
-        o.orderdate >=
-        DATEADD( YEAR, -1, GETDATE())
-)
-    as
-    last_year_total
+    where  o.customerid = c.customerid
+    and o.orderdate >= DATEADD(YEAR, -1, GETDATE())
+) as last_year_total
 from   customers c
 where  exists(
     select 1

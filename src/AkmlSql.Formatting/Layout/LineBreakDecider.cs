@@ -41,8 +41,11 @@ public class LineBreakDecider(FormattingProfile profile)
                 ws.EmptyLineBeforeGo ? BreakType.EmptyLine : BreakType.NewLine, 0, 0);
         }
 
-        // SELECT keyword at start of statement
-        if (tokenType == TSqlTokenType.Select && currentClause == ClauseContext.None)
+        // SELECT keyword at start of statement, or the main SELECT of a WITH (CTE) statement.
+        // The clause tracker freezes inside the parenthesised CTE bodies, so the main SELECT
+        // arrives with ClauseContext.With — without that arm it fell through to "single space"
+        // and crammed onto the CTE's closing paren (") SELECT …").
+        if (tokenType == TSqlTokenType.Select && currentClause is ClauseContext.None or ClauseContext.With)
             return isFirstInStatement
                 ? new BreakDecision(BreakType.None, 0, 0)
                 : new BreakDecision(BreakType.NewLine, 0, 0);
@@ -155,10 +158,26 @@ public class LineBreakDecider(FormattingProfile profile)
                 : new BreakDecision(BreakType.None, 0, 0);
         }
 
-        // Items in SELECT clause (first item after SELECT/DISTINCT/TOP N)
+        // Items in SELECT clause (first item after SELECT/DISTINCT/TOP N). The clause tracker
+        // never leaves SelectPendingFirstItem until the next clause keyword (its first-item
+        // handoff tests Select after the context already moved on), so this branch also sees
+        // every later token of the select list — AS keywords, aliases, operands after operators,
+        // subquery internals. Gate the break to tokens that actually follow the SELECT header
+        // (plus a subquery's own SELECT after "("), or the list fragments one token per line
+        // ("COUNT(x)" ⏎ "AS" ⏎ "alias").
         if (currentClause == ClauseContext.SelectPendingFirstItem)
         {
-            if (dml.SelectItemsOnNewLine && !(upperText == "*" && dml.SelectStarOnSameLine))
+            bool followsSelectHeader =
+                prevSemanticTokenType is TSqlTokenType.Select or TSqlTokenType.Distinct
+                    or TSqlTokenType.Top or TSqlTokenType.Integer
+                || prevSemanticTokenText?.ToUpperInvariant() is "PERCENT" or "TIES";
+            bool isSubquerySelect = tokenType == TSqlTokenType.Select
+                && prevSemanticTokenType == TSqlTokenType.LeftParenthesis;
+
+            if (dml.SelectItemsOnNewLine
+                && (followsSelectHeader || isSubquerySelect)
+                && tokenType != TSqlTokenType.As
+                && !(upperText == "*" && dml.SelectStarOnSameLine))
                 return new BreakDecision(BreakType.NewLine, 1, 0);
             return new BreakDecision(BreakType.None, 0, 1);
         }

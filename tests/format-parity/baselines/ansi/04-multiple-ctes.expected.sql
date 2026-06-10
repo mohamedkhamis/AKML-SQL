@@ -7,14 +7,11 @@ with active_customers as (
     select orderid, customerid, total
     from   orders
     where  orderdate >= DATEADD(MONTH, -6, GETDATE())
-) select
+)
+select
     c.customername,
-    COUNT( o.orderid)
-    as
-    order_count,
-    SUM( o.total)
-    as
-    total_spent
+    COUNT(o.orderid) as order_count,
+    SUM(o.total) as total_spent
 from   active_customers c
 left join   recent_orders o on o.customerid = c.customerid
 group by c.customername;

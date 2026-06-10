@@ -4,6 +4,7 @@ with monthly_sales(year_num, month_num, region, total_amount
     select YEAR(orderdate), MONTH(orderdate), region, SUM(amount)
     from   orders
     group by YEAR(orderdate), MONTH(orderdate), region
-    ) select year_num, month_num, region, total_amount
+    )
+select year_num, month_num, region, total_amount
 from   monthly_sales
 where  total_amount > 1000;

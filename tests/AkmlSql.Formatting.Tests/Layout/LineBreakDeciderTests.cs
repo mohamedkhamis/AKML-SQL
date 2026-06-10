@@ -545,7 +545,47 @@ public class LineBreakDeciderTests
         };
         var d = Create(profile);
         var result = Decide(d, TSqlTokenType.Identifier, "col1",
-            clause: ClauseContext.SelectPendingFirstItem);
+            clause: ClauseContext.SelectPendingFirstItem,
+            prevType: TSqlTokenType.Select, prevText: "SELECT");
+        Assert.Equal(BreakType.NewLine, result.Break);
+    }
+
+    [Fact]
+    public void Decide_InSelectPending_MidItemToken_NoBreak()
+    {
+        // The clause tracker stays in SelectPendingFirstItem for the whole select list, so the
+        // first-item break must NOT fire for mid-item tokens (an alias AS after "COUNT(x)") —
+        // that fragmented items one token per line (spec 030 T009).
+        var profile = new FormattingProfile
+        {
+            Dml =
+            {
+                SelectItemsOnNewLine = true,
+                SelectStarOnSameLine = false
+            }
+        };
+        var d = Create(profile);
+        var result = Decide(d, TSqlTokenType.As, "AS",
+            clause: ClauseContext.SelectPendingFirstItem,
+            prevType: TSqlTokenType.RightParenthesis, prevText: ")");
+        Assert.Equal(BreakType.None, result.Break);
+    }
+
+    [Fact]
+    public void Decide_InSelectPending_SubquerySelectAfterOpenParen_Breaks()
+    {
+        var profile = new FormattingProfile
+        {
+            Dml =
+            {
+                SelectItemsOnNewLine = true,
+                SelectStarOnSameLine = false
+            }
+        };
+        var d = Create(profile);
+        var result = Decide(d, TSqlTokenType.Select, "SELECT",
+            clause: ClauseContext.SelectPendingFirstItem,
+            prevType: TSqlTokenType.LeftParenthesis, prevText: "(");
         Assert.Equal(BreakType.NewLine, result.Break);
     }
 

@@ -1,5 +1,8 @@
-SELECT o.orderid, c.customername, SUM
-    (d.unitprice * d.quantity) AS total
+SELECT
+    o.orderid,
+    c.customername,
+    SUM
+(d.unitprice * d.quantity) AS total
 FROM   orders o
 INNER JOIN   customers c ON c.customerid = o.customerid
 LEFT JOIN   orderdetails d ON d.orderid = o.orderid

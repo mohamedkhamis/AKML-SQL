@@ -196,7 +196,7 @@ public class StageSixValidationProbeTests
     {
         var repoRoot = FindRepoRoot();
         var sb = new StringBuilder();
-        foreach (var id in new[] { "02-multi-join", "11-stored-procedure", "12-merge-statement", "03-cte-with-columns" })
+        foreach (var id in new[] { "02-multi-join", "11-stored-procedure", "12-merge-statement", "03-cte-with-columns", "04-multiple-ctes", "13-subqueries" })
         {
             var sql = File.ReadAllText(Path.Combine(repoRoot, "tests", "format-parity", "corpus", id + ".sql"));
             foreach (var (label, rules) in new (string, IReadOnlyList<IRuleSet>?)[] { ("RULES OFF", null), ("RULES ON (DefaultOrder)", AkmlSql.Formatting.Rules.RuleEngine.DefaultOrder) })

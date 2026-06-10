@@ -10,6 +10,7 @@ WITH monthly_sales
     GROUP BY YEAR
     (orderdate), MONTH
     (orderdate), region
-) SELECT year_num, month_num, region, total_amount
+)
+SELECT year_num, month_num, region, total_amount
 FROM   monthly_sales
 WHERE  total_amount > 1000;
