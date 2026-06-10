@@ -29,6 +29,7 @@ public class LayoutEngine
         bool isFirstSemanticToken = true;
         int statementIndex = 0;
         var statementStarts = BuildStatementStartSet(script);
+        var nestedStatementStarts = BuildNestedStatementStartSet(script);
         TSqlTokenType? prevSemanticTokenType = null;
         string? prevSemanticTokenText = null;
         int prevSemanticTokenEndOffset = -1;
@@ -112,6 +113,17 @@ public class LayoutEngine
                 isFirstInStatement,
                 prevSemanticTokenType,
                 prevSemanticTokenText);
+
+            // Nested block statements (a proc/trigger/function body, BEGIN…END, TRY/CATCH, WHILE)
+            // must each start a new line. The top-level statement-start path above never reaches
+            // them (BuildStatementStartSet walks only batch.Statements) and would reset baseIndent
+            // to 0 anyway — so force the break here and let ControlFlowRules' BEGIN…END indent pass
+            // place them at block depth (it indents any block content that already carries a break).
+            if (!isFirstSemanticToken && decision.Break == BreakType.None
+                && nestedStatementStarts.Contains(t.Offset))
+            {
+                decision = decision with { Break = BreakType.NewLine, PrecedingSpaces = 0 };
+            }
 
             // Compute final indent level
             int indentLevel;
@@ -226,6 +238,64 @@ public class LayoutEngine
             }
         }
         return starts;
+    }
+
+    /// <summary>
+    /// Start offsets of statements that live inside a block body (a stored procedure / function /
+    /// trigger body, a BEGIN…END block, a TRY/CATCH, or a WHILE body). These are NOT in
+    /// <see cref="BuildStatementStartSet"/> (which walks only top-level <c>batch.Statements</c>), so
+    /// without this the proc body crams onto the BEGIN line. The direct children of a block's
+    /// statement list each get a forced line break; an IF/WHILE sub-statement is recursed for nested
+    /// blocks but the sub-statement itself is left where it is (so <c>IF cond SET …</c> stays inline).
+    /// </summary>
+    private static HashSet<int> BuildNestedStatementStartSet(TSqlScript script)
+    {
+        var starts = new HashSet<int>();
+        foreach (var batch in script.Batches)
+            foreach (var stmt in batch.Statements)
+                CollectNestedStatementStarts(stmt, starts);
+        return starts;
+    }
+
+    private static void CollectNestedStatementStarts(TSqlStatement stmt, HashSet<int> starts)
+    {
+        switch (stmt)
+        {
+            case BeginEndBlockStatement b:
+                AddBlock(b.StatementList, starts);
+                break;
+            case CreateProcedureStatement p:
+                AddBlock(p.StatementList, starts);
+                break;
+            case CreateFunctionStatement f:
+                AddBlock(f.StatementList, starts);
+                break;
+            case CreateTriggerStatement tr:
+                AddBlock(tr.StatementList, starts);
+                break;
+            case TryCatchStatement tc:
+                AddBlock(tc.TryStatements, starts);
+                AddBlock(tc.CatchStatements, starts);
+                break;
+            case WhileStatement w when w.Statement != null:
+                // Recurse for a nested block, but don't force-break a single-statement body.
+                CollectNestedStatementStarts(w.Statement, starts);
+                break;
+            case IfStatement ifs:
+                if (ifs.ThenStatement != null) CollectNestedStatementStarts(ifs.ThenStatement, starts);
+                if (ifs.ElseStatement != null) CollectNestedStatementStarts(ifs.ElseStatement, starts);
+                break;
+        }
+    }
+
+    private static void AddBlock(StatementList? list, HashSet<int> starts)
+    {
+        if (list == null) return;
+        foreach (var s in list.Statements)
+        {
+            starts.Add(s.StartOffset);
+            CollectNestedStatementStarts(s, starts);
+        }
     }
 
     private static bool IsOpenParenNoSpace(TSqlTokenType prevType)
