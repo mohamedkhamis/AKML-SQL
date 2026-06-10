@@ -484,6 +484,18 @@ public class ListRules : IRuleSet
     {
         int length = nodes[keywordIndex].FormattedText.Length;
 
+        // JoinRules' joinTypeStyle "explicit" rewrites a bare JOIN's text to "INNER JOIN" in the
+        // same pass (before this measurement), but a re-format tokenises INNER as its own node —
+        // so measuring the full rewritten text makes the cross-clause alignment column differ
+        // between the first format and a re-format (non-idempotent). Measure only the keyword
+        // itself (the last word) so both passes see the same width.
+        if (nodes[keywordIndex].TokenType == TSqlTokenType.Join)
+        {
+            int lastSpace = nodes[keywordIndex].FormattedText.LastIndexOf(' ');
+            if (lastSpace >= 0)
+                length -= lastSpace + 1;
+        }
+
         // Check for two-word keywords like GROUP BY, ORDER BY, INSERT INTO
         if (keywordIndex + 1 < nodes.Count)
         {

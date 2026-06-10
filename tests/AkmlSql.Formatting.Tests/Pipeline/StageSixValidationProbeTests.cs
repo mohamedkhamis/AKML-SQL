@@ -219,6 +219,77 @@ public class StageSixValidationProbeTests
     }
 
     [Fact]
+    public void Isolate_13_SubqueryBody_Collapse()
+    {
+        var repoRoot = FindRepoRoot();
+        var sql = File.ReadAllText(Path.Combine(repoRoot, "tests", "format-parity", "corpus", "13-subqueries.sql"));
+        var configs = new (string label, IRuleSet[]? rules)[]
+        {
+            ("OFF (base)",          null),
+            ("Dml only",            new IRuleSet[] { new DmlRules() }),
+            ("List only",           new IRuleSet[] { new ListRules() }),
+            ("Parenthesis only",    new IRuleSet[] { new ParenthesisRules() }),
+            ("ControlFlow only",    new IRuleSet[] { new ControlFlowRules() }),
+            ("ALL (DefaultOrder)",  new List<IRuleSet>(RuleEngine.DefaultOrder).ToArray()),
+        };
+        var sb = new StringBuilder();
+        foreach (var (label, rules) in configs)
+        {
+            var p = LoadDefaultStyle();
+            p.Metadata.SkipValidation = true;
+            var r = new FormatterPipeline { LayoutRules = rules }.Format(sql, p).FormattedText;
+            var lines = r.Replace("\r\n", "\n").Split('\n');
+            var countLine = lines.FirstOrDefault(l => l.ToUpperInvariant().Contains("COUNT"));
+            sb.AppendLine($"{label,-20} COUNT-line: |{countLine}|");
+        }
+        _output.WriteLine(sb.ToString());
+        Assert.True(true);
+    }
+
+    [Fact]
+    public void Dump_TwoPass_CteAlignment()
+    {
+        const string sql =
+            "with a as (select customerid, customername from customers where active = 1), " +
+            "b as (select orderid from orders) " +
+            "select a.customername, b.orderid from a join b on a.customerid = b.orderid " +
+            "where a.customername like 'X%' order by b.orderid desc;";
+        var p = LoadDefaultStyle();
+        p.Metadata.SkipValidation = true;
+        var pass1 = new FormatterPipeline().Format(sql, p).FormattedText;
+        var pass2 = new FormatterPipeline().Format(pass1, p).FormattedText;
+        var pass3 = new FormatterPipeline().Format(pass2, p).FormattedText;
+        var sb = new StringBuilder();
+        sb.AppendLine("--- PASS 1 ---"); AppendNumbered(sb, pass1);
+        sb.AppendLine("--- PASS 2 ---"); AppendNumbered(sb, pass2);
+        sb.AppendLine($"--- pass2==pass3: {pass2 == pass3} ---");
+        if (pass2 != pass3) { sb.AppendLine("--- PASS 3 ---"); AppendNumbered(sb, pass3); }
+
+        // Which rule subset introduces the pass-1-only col-11 alignment?
+        var sb2 = new StringBuilder();
+        foreach (var (label, rules) in new (string, IRuleSet[])[]
+        {
+            ("Join only", new IRuleSet[] { new JoinRules() }),
+            ("List only", new IRuleSet[] { new ListRules() }),
+            ("Join+List", new IRuleSet[] { new JoinRules(), new ListRules() }),
+        })
+        {
+            foreach (var (src, srcLabel) in new[] { (sql, "input=ORIG"), (pass1, "input=PASS1") })
+            {
+                var pp = LoadDefaultStyle();
+                pp.Metadata.SkipValidation = true;
+                var r = new FormatterPipeline { LayoutRules = rules }.Format(src, pp).FormattedText;
+                var fromLine = r.Replace("\r\n", "\n").Split('\n')
+                    .FirstOrDefault(l => l.TrimStart().StartsWith("FROM", StringComparison.OrdinalIgnoreCase) && l.Contains(" a"));
+                sb2.AppendLine($"{label,-10} {srcLabel,-12} FROM-line: |{fromLine}|");
+            }
+        }
+        _output.WriteLine(sb.ToString());
+        _output.WriteLine(sb2.ToString());
+        Assert.True(true);
+    }
+
+    [Fact]
     public void Compare_RulesOff_vs_RulesOn_For_NewlyFormatting()
     {
         var repoRoot = FindRepoRoot();
