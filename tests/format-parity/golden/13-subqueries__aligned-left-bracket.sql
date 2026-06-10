@@ -4,7 +4,9 @@ SELECT c.customerid, c.customername,
         (*)
     FROM   orders o
     WHERE  o.customerid = c.customerid
-) AS order_count,
+)
+    AS
+    order_count,
 (
         SELECT SUM
         (total)

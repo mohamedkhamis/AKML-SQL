@@ -2,7 +2,10 @@
 select c.customerid, c.customername, (
         select COUNT(*)
     from   orders o
-    where  o.customerid = c.customerid) as order_count, (
+    where  o.customerid = c.customerid
+)
+    as
+    order_count, (
         select SUM(total)
     from   orders o
     where
@@ -18,5 +21,6 @@ from   customers c
 where  exists(
     select 1
     from   orders o
-    where  o.customerid = c.customerid and o.total > 1000)
+    where  o.customerid = c.customerid and o.total > 1000
+)
 order by last_year_total desc;

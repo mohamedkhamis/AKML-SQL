@@ -391,15 +391,36 @@ public class ListRules : IRuleSet
 
     private static int FindListEnd(List<LayoutNode> nodes, int start)
     {
+        // Track parenthesis depth relative to the list start. A ')' seen at depth 0 closes a paren
+        // that was opened BEFORE the list — i.e. a structural subquery/CTE/derived-table close — so
+        // the list ends there. A balanced function-call ')' (opened inside the list) stays in the
+        // list. Without this, the CTE body's last clause-list over-runs the CTE's closing ')' and
+        // CollapseRange deletes its line break, merging ')' + the main SELECT up (spec 030 T009).
+        int parenDepth = 0;
         for (int i = start; i < nodes.Count; i++)
         {
             if (nodes[i].IsInNoformatRegion)
                 continue;
 
+            var tokenType = nodes[i].TokenType;
+
+            if (tokenType == TSqlTokenType.LeftParenthesis)
+            {
+                parenDepth++;
+                continue;
+            }
+            if (tokenType == TSqlTokenType.RightParenthesis)
+            {
+                if (parenDepth == 0)
+                    return i;   // closes an enclosing paren → structural list boundary
+                parenDepth--;
+                continue;
+            }
+
             // End of list: next clause keyword or statement terminator
-            if (IsListBoundary(nodes[i].TokenType) ||
-                nodes[i].TokenType == TSqlTokenType.Semicolon ||
-                nodes[i].TokenType == TSqlTokenType.Go)
+            if (IsListBoundary(tokenType) ||
+                tokenType == TSqlTokenType.Semicolon ||
+                tokenType == TSqlTokenType.Go)
                 return i;
         }
         return nodes.Count;
