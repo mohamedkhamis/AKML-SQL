@@ -136,6 +136,45 @@ public class StageSixValidationProbeTests
     }
 
     [Fact]
+    public void Dump_Statement_Structure_11()
+    {
+        var repoRoot = FindRepoRoot();
+        var sql = File.ReadAllText(Path.Combine(repoRoot, "tests", "format-parity", "corpus", "11-stored-procedure.sql"));
+        var parser = new TSql170Parser(initialQuotedIdentifiers: true);
+        using var reader = new StringReader(sql);
+        var script = parser.Parse(reader, out _) as TSqlScript;
+        var sb = new StringBuilder();
+        foreach (var batch in script!.Batches)
+        {
+            sb.AppendLine($"BATCH: {batch.Statements.Count} top-level statement(s)");
+            foreach (var stmt in batch.Statements)
+                DumpStmt(sb, stmt, 1);
+        }
+        _output.WriteLine(sb.ToString());
+        Assert.True(true);
+    }
+
+    private static void DumpStmt(StringBuilder sb, TSqlStatement stmt, int depth)
+    {
+        sb.AppendLine($"{new string(' ', depth * 2)}{stmt.GetType().Name} startOffset={stmt.StartOffset}");
+        // recurse into the common control-flow containers
+        if (stmt is BeginEndBlockStatement b)
+            foreach (var s in b.StatementList.Statements) DumpStmt(sb, s, depth + 1);
+        else if (stmt is IfStatement ifs)
+        {
+            if (ifs.ThenStatement != null) DumpStmt(sb, ifs.ThenStatement, depth + 1);
+            if (ifs.ElseStatement != null) DumpStmt(sb, ifs.ElseStatement, depth + 1);
+        }
+        else if (stmt is WhileStatement w && w.Statement != null)
+            DumpStmt(sb, w.Statement, depth + 1);
+        else if (stmt is TryCatchStatement tc)
+        {
+            foreach (var s in tc.TryStatements.Statements) DumpStmt(sb, s, depth + 1);
+            foreach (var s in tc.CatchStatements.Statements) DumpStmt(sb, s, depth + 1);
+        }
+    }
+
+    [Fact]
     public void Dump_Operator_Tokenization()
     {
         const string sql = "select * from t where a >= 1 and b <> 2 and c <= 3 and d != 4 and e !< 5;";
