@@ -39,6 +39,23 @@ public class FormatterPipeline
         // which would re-separate a sign from its operand. A single post-collapse pass is the one
         // chokepoint that catches every collapse path. See spec 030 T009 (#1).
         NormalizeUnarySignSpacing(nodes);
+        NormalizeSemicolonSpacing(nodes);
+    }
+
+    /// <summary>
+    /// A statement terminator hugs the token before it ("SELECT 1;", "DELETE;" — never "1 ;").
+    /// The base layout already emits semicolons with zero preceding spaces; only the collapse
+    /// passes re-space them (one space before every non-comma token), so this is the same
+    /// post-collapse chokepoint as <see cref="NormalizeUnarySignSpacing"/>.
+    /// </summary>
+    private static void NormalizeSemicolonSpacing(List<LayoutNode> nodes)
+    {
+        foreach (var node in nodes)
+        {
+            if (node.TokenType == TSqlTokenType.Semicolon && !node.IsInNoformatRegion
+                && node.PrecedingBreak == BreakType.None)
+                node.PrecedingSpaces = 0;
+        }
     }
 
     /// <summary>

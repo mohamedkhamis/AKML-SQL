@@ -174,9 +174,11 @@ public class LineBreakDecider(FormattingProfile profile)
             bool isSubquerySelect = tokenType == TSqlTokenType.Select
                 && prevSemanticTokenType == TSqlTokenType.LeftParenthesis;
 
+            // As and Semicolon can never start a select item ("SELECT 1;" must not break the
+            // terminator off the item when the prev token — the Integer — is in the gate).
             if (dml.SelectItemsOnNewLine
                 && (followsSelectHeader || isSubquerySelect)
-                && tokenType != TSqlTokenType.As
+                && tokenType is not TSqlTokenType.As and not TSqlTokenType.Semicolon
                 && !(upperText == "*" && dml.SelectStarOnSameLine))
                 return new BreakDecision(BreakType.NewLine, 1, 0);
             return new BreakDecision(BreakType.None, 0, 1);

@@ -192,6 +192,33 @@ public class StageSixValidationProbeTests
     }
 
     [Fact]
+    public void Isolate_TinyProc_BlockCram()
+    {
+        const string sql = "create procedure dbo.p as begin set nocount on; select 1; end";
+        var configs = new (string label, IRuleSet[]? rules)[]
+        {
+            ("OFF (base)",          null),
+            ("Dml only",            new IRuleSet[] { new DmlRules() }),
+            ("Ddl only",            new IRuleSet[] { new DdlRules() }),
+            ("List only",           new IRuleSet[] { new ListRules() }),
+            ("Parenthesis only",    new IRuleSet[] { new ParenthesisRules() }),
+            ("ControlFlow only",    new IRuleSet[] { new ControlFlowRules() }),
+            ("ALL (DefaultOrder)",  new List<IRuleSet>(RuleEngine.DefaultOrder).ToArray()),
+        };
+        var sb = new StringBuilder();
+        foreach (var (label, rules) in configs)
+        {
+            var p = LoadDefaultStyle();
+            p.Metadata.SkipValidation = true;
+            var r = new FormatterPipeline { LayoutRules = rules }.Format(sql, p);
+            sb.AppendLine($"--- {label} ---");
+            AppendNumbered(sb, r.FormattedText);
+        }
+        _output.WriteLine(sb.ToString());
+        Assert.True(true);
+    }
+
+    [Fact]
     public void Compare_RulesOff_vs_RulesOn_For_NewlyFormatting()
     {
         var repoRoot = FindRepoRoot();

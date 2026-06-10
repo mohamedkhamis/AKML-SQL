@@ -7,4 +7,4 @@ SET    t.value = s.value,
     WHEN NOT matched BY target THEN INSERT
 (id, value, created)
 VALUES
-(s.id, s.value, GETDATE ()) WHEN NOT matched BY source THEN DELETE ;
+(s.id, s.value, GETDATE ()) WHEN NOT matched BY source THEN DELETE;

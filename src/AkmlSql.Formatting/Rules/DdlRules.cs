@@ -450,7 +450,20 @@ public class DdlRules : IRuleSet
                 int stmtEnd = FindDdlEnd(nodes, i + 1);
                 int totalLength = MeasureLength(nodes, i, stmtEnd);
 
-                if (totalLength <= ddl.CollapseThreshold)
+                // Never collapse across a block boundary: a short proc/function/trigger body's
+                // BEGIN…END layout (the nested-statement breaks) is structural — inlining
+                // "AS BEGIN SET …" undoes it and nothing downstream restores the body breaks.
+                bool containsBlock = false;
+                for (int j = i + 1; j < stmtEnd && j < nodes.Count; j++)
+                {
+                    if (nodes[j].TokenType == TSqlTokenType.Begin)
+                    {
+                        containsBlock = true;
+                        break;
+                    }
+                }
+
+                if (!containsBlock && totalLength <= ddl.CollapseThreshold)
                 {
                     for (int j = i + 1; j < stmtEnd && j < nodes.Count; j++)
                     {

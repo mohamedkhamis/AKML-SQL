@@ -156,7 +156,12 @@ public class ListRules : IRuleSet
             if (IsListBoundary(nodes[i].TokenType))
             {
                 int listStart = i + 1;
-                int listEnd = FindListEnd(nodes, listStart);
+                // A list opened by JOIN stops at its ON keyword, so collapse cannot delete the
+                // ON-condition's break (the style's onConditionNewLine). ON is deliberately NOT a
+                // universal boundary — a list starting after a MERGE's ON pulls the following WHEN
+                // up — so the stop is scoped to JOIN-opened lists (a MERGE has no JOIN keyword).
+                bool stopAtOn = nodes[i].TokenType == TSqlTokenType.Join;
+                int listEnd = FindListEnd(nodes, listStart, stopAtOn);
 
                 if (listEnd > listStart)
                 {
@@ -389,7 +394,7 @@ public class ListRules : IRuleSet
         return -1;
     }
 
-    private static int FindListEnd(List<LayoutNode> nodes, int start)
+    private static int FindListEnd(List<LayoutNode> nodes, int start, bool stopAtOn = false)
     {
         // Track parenthesis depth relative to the list start. A ')' seen at depth 0 closes a paren
         // that was opened BEFORE the list — i.e. a structural subquery/CTE/derived-table close — so
@@ -417,8 +422,10 @@ public class ListRules : IRuleSet
                 continue;
             }
 
-            // End of list: next clause keyword or statement terminator
+            // End of list: next clause keyword or statement terminator (or, for a JOIN-opened
+            // list, the ON keyword — see ApplyCollapseShortLists).
             if (IsListBoundary(tokenType) ||
+                (stopAtOn && tokenType == TSqlTokenType.On && parenDepth == 0) ||
                 tokenType == TSqlTokenType.Semicolon ||
                 tokenType == TSqlTokenType.Go)
                 return i;

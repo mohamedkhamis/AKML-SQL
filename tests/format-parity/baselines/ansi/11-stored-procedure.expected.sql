@@ -8,7 +8,8 @@ begin
     if @enddate is null set    @enddate = GETDATE();
     select o.orderid, o.orderdate, o.total, c.customername
     from   orders o
-    inner join   customers c on c.customerid = o.customerid
+    inner join   customers c
+        on c.customerid = o.customerid
     where  o.customerid = @customerid
     and o.orderdate between @startdate and @enddate order by o.orderdate desc;
 end;

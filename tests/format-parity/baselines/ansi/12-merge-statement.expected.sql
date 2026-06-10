@@ -5,4 +5,4 @@ and t.value <> s.value then update
 set    t.value = s.value,
     t.modified = GETDATE()
     when not matched by target then insert (id, value, created)
-values (s.id, s.value, GETDATE()) when not matched by source then delete ;
+values (s.id, s.value, GETDATE()) when not matched by source then delete;
