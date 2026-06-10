@@ -17,7 +17,7 @@ SELECT c.customerid, c.customername,
     AND
         o.orderdate >=
         DATEADD
-        ( YEAR, - 1, GETDATE ())
+        ( YEAR, -1, GETDATE ())
 )
     AS
     last_year_total

@@ -32,6 +32,33 @@ public class FormatterPipeline
         if (LayoutRules is null) return;
         foreach (var ruleSet in LayoutRules)
             ruleSet.Apply(nodes, profile);
+
+        // Finalization: keep a unary sign hugging its operand ("-1", not "- 1"). This runs after
+        // every rule because the collapse passes (one per rule set: Dml/Ddl/List/Parenthesis/
+        // ControlFlow) re-join an exploded list and force one space before each non-comma token —
+        // which would re-separate a sign from its operand. A single post-collapse pass is the one
+        // chokepoint that catches every collapse path. See spec 030 T009 (#1).
+        NormalizeUnarySignSpacing(nodes);
+    }
+
+    /// <summary>
+    /// Sets the operand directly after a unary <c>-</c>/<c>+</c> sign to zero preceding spaces, so a
+    /// sign hugs its operand on the same line. A sign is unary (vs. binary subtraction) when the
+    /// token two back does not end a value — see <see cref="TokenClassification.IsUnarySign"/>. Only
+    /// touches inline tokens (the sign and operand already on one line); a sign/operand split across
+    /// a line break is left to the layout rules. Noformat regions are never altered.
+    /// </summary>
+    private static void NormalizeUnarySignSpacing(List<LayoutNode> nodes)
+    {
+        for (int i = 1; i < nodes.Count; i++)
+        {
+            var operand = nodes[i];
+            if (operand.IsInNoformatRegion || operand.PrecedingBreak != BreakType.None || operand.PrecedingSpaces == 0)
+                continue;
+            var beforeSign = i >= 2 ? nodes[i - 2].TokenType : (TSqlTokenType?)null;
+            if (TokenClassification.IsUnarySign(nodes[i - 1].TokenType, beforeSign))
+                operand.PrecedingSpaces = 0;
+        }
     }
 
     /// <summary>
