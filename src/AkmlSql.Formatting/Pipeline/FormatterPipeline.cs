@@ -45,6 +45,10 @@ public class FormatterPipeline
         // rule set's collapse passes (ParenthesisRules re-joins exploded function-call parens
         // after ListRules ran) and after the spacing normalizers above, which change widths.
         ListRules.AlignAliases(nodes, profile.List);
+
+        // Max-line wrapping runs LAST — it is the hard width constraint over whatever geometry
+        // the rules, normalizers, and alignment produced (FR-002, spec 030 T012).
+        LineWrapper.Wrap(nodes, profile);
     }
 
     /// <summary>
