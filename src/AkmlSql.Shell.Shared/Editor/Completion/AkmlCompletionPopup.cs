@@ -29,10 +29,17 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         private bool _isOpen;
 
         /// <summary>
-        /// Raised when the selected completion item changes (keyboard navigation or filter).
-        /// The controller subscribes to this to trigger QuickInfo requests with debounce.
+        /// Raised when the selected completion item changes (keyboard navigation, filter, or a
+        /// mouse click on a row). The controller subscribes to this to trigger QuickInfo requests
+        /// with debounce.
         /// </summary>
         public event EventHandler<CompletionItemModel> SelectionChanged;
+
+        /// <summary>
+        /// Raised when the user double-clicks an item row — the controller commits it exactly like
+        /// Tab/Enter (SQL Prompt parity; mirrors <see cref="WildcardExpansionPopup.CommitRequested"/>).
+        /// </summary>
+        public event EventHandler<CompletionItemModel> ItemCommitRequested;
 
         private const int    MaxVisibleItems   = 15;
         private const double ItemHeight        = 22;
@@ -361,8 +368,10 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             };
             secondaryText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
 
-            // Row layout
-            var grid = new Grid { Height = ItemHeight };
+            // Row layout. Transparent (not null) background so the WHOLE row hit-tests — with a
+            // null background, clicks between/after the text blocks fell through and the mouse
+            // did nothing on the list.
+            var grid = new Grid { Height = ItemHeight, Background = Brushes.Transparent };
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -374,6 +383,28 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             grid.Children.Add(badge);
             grid.Children.Add(displayText);
             grid.Children.Add(secondaryText);
+
+            // Mouse interaction (SQL Prompt parity; mirrors WildcardExpansionPopup):
+            //   • single click → select the row under the mouse (highlight + QuickInfo follow);
+            //   • double click → commit the item, same as Tab/Enter.
+            // The popup and its items are non-focusable so this never steals editor focus; the
+            // event is always handled so the click cannot bubble on into the editor view.
+            grid.MouseLeftButtonDown += (sender, e) =>
+            {
+                int idx = Array.IndexOf(_filteredItems, item);
+                if (idx >= 0 && _listBox.SelectedIndex != idx)
+                {
+                    _listBox.SelectedIndex = idx;
+                    RaiseSelectionChanged();
+                }
+                if (e.ClickCount == 2)
+                {
+                    var selected = GetSelectedItem();
+                    if (selected != null)
+                        ItemCommitRequested?.Invoke(this, selected);
+                }
+                e.Handled = true;
+            };
 
             return grid;
         }
@@ -394,6 +425,9 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             style.Setters.Add(new Setter(ListBoxItem.PaddingProperty,         new Thickness(0)));
             style.Setters.Add(new Setter(ListBoxItem.MarginProperty,          new Thickness(0)));
             style.Setters.Add(new Setter(ListBoxItem.FocusableProperty,       false));
+            // Stretch the row visual to the full item width so the click handler on the row grid
+            // covers the whole line, not just the rendered text.
+            style.Setters.Add(new Setter(ListBoxItem.HorizontalContentAlignmentProperty, HorizontalAlignment.Stretch));
 
             // Selected item highlight
             var selectedTrigger = new Trigger { Property = ListBoxItem.IsSelectedProperty, Value = true };

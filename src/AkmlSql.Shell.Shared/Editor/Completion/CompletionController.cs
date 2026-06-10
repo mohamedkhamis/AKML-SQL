@@ -54,6 +54,9 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             // Wildcard popup: double-click commits (same as Tab/Enter) — SQL Prompt parity.
             _adornment.WildcardPopup.CommitRequested += CommitWildcardExpansion;
 
+            // Completion popup: double-click commits the clicked item (same as Tab/Enter).
+            _adornment.Popup.ItemCommitRequested += OnPopupItemCommitRequested;
+
             // Timer that continuously suppresses native IntelliSense while our popup is open
             _suppressTimer = new System.Windows.Threading.DispatcherTimer
             {
@@ -574,6 +577,12 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
+        private void OnPopupItemCommitRequested(object sender, CompletionItemModel item)
+        {
+            // Mouse double-click on a popup row — same commit path as Tab/Enter.
+            CommitItem(item);
+        }
+
         private void CommitItem(CompletionItemModel item)
         {
             try
