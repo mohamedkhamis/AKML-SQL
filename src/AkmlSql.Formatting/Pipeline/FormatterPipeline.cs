@@ -49,6 +49,11 @@ public class FormatterPipeline
         // Max-line wrapping runs LAST — it is the hard width constraint over whatever geometry
         // the rules, normalizers, and alignment produced (FR-002, spec 030 T012).
         LineWrapper.Wrap(nodes, profile);
+
+        // Right-alignment (operators/IN items) writes absolute line-start columns the tab grid
+        // can't hit; it must see the final line shapes, so it runs after wrapping (spec 030 T013).
+        // No-op unless a style opts into operators/inStatements alignment "rightAligned".
+        RightAligner.Align(nodes, profile);
     }
 
     /// <summary>

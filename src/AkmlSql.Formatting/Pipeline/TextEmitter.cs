@@ -31,12 +31,12 @@ public class TextEmitter
                 case BreakType.EmptyLine:
                     sb.Append('\n');
                     sb.Append('\n');
-                    AppendIndent(sb, node.IndentLevel, useTabs, tabSize);
+                    AppendLineStart(sb, node, useTabs, tabSize);
                     break;
 
                 case BreakType.NewLine:
                     sb.Append('\n');
-                    AppendIndent(sb, node.IndentLevel, useTabs, tabSize);
+                    AppendLineStart(sb, node, useTabs, tabSize);
                     break;
 
                 case BreakType.None:
@@ -75,6 +75,18 @@ public class TextEmitter
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Leading whitespace for a line-start token: the opt-in absolute space count from the
+    /// right-align pass (spaces mode only), else the normal IndentLevel×tabSize indent.
+    /// </summary>
+    private static void AppendLineStart(StringBuilder sb, LayoutNode node, bool useTabs, int tabSize)
+    {
+        if (!useTabs && node.AbsoluteLeadingSpaces >= 0)
+            sb.Append(' ', node.AbsoluteLeadingSpaces);
+        else
+            AppendIndent(sb, node.IndentLevel, useTabs, tabSize);
     }
 
     private static void AppendIndent(StringBuilder sb, int level, bool useTabs, int tabSize)

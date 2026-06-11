@@ -27,7 +27,7 @@ public class ControlFlowRules : IRuleSet
         ApplyBeginEndRules(nodes, profile.ControlFlow);
         ApplyCaseRules(nodes, profile.Case);
         ApplyCteRules(nodes, profile.Cte, profile.Whitespace);
-        ApplyExpressionRules(nodes, profile.Expression);
+        ApplyExpressionRules(nodes, profile.Expression, profile.InStatements);
         // Spec 020 T083 / T084 — operator alignment + BETWEEN + IN-list alignment
         ApplyOperatorRules(nodes, profile.Operators, profile.Expression);
         ApplyInStatementsAlignment(nodes, profile.InStatements);
@@ -877,11 +877,11 @@ public class ControlFlowRules : IRuleSet
     // Expression rules
     // -----------------------------------------------------------------------
 
-    private static void ApplyExpressionRules(List<LayoutNode> nodes, ExpressionOptions expr)
+    private static void ApplyExpressionRules(List<LayoutNode> nodes, ExpressionOptions expr, InStatementsOptions inStmt)
     {
         ApplyBooleanOperatorNewLine(nodes, expr);
         ApplyBetweenOnOneLine(nodes, expr);
-        ApplyInListStyle(nodes, expr);
+        ApplyInListStyle(nodes, expr, inStmt);
         ApplyExistsSubqueryIndent(nodes, expr);
     }
 
@@ -987,8 +987,21 @@ public class ControlFlowRules : IRuleSet
     /// "multiLine" puts each item on its own line.
     /// "auto" uses threshold to decide.
     /// </summary>
-    private static void ApplyInListStyle(List<LayoutNode> nodes, ExpressionOptions expr)
+    private static void ApplyInListStyle(List<LayoutNode> nodes, ExpressionOptions expr, InStatementsOptions inStmt)
     {
+        // Precedence: the canonical SQL Prompt control `inStatements.placeItemsOnNewLine` drives
+        // when explicitly set to always/never; its default "ifLongerThanWrap" defers to the older
+        // `expression.inListStyle` (a string can't distinguish absent from explicitly-default, so
+        // default = defer — which keeps AKML's own styles on their inListStyle behavior). A
+        // `.sqlpromptstyle` import that sets always/never takes effect (spec 030 T013).
+        var place = (inStmt?.PlaceItemsOnNewLine ?? "iflongerthanwrap").Trim().ToLowerInvariant();
+        string effectiveStyle = place switch
+        {
+            "always" => "multiLine",
+            "never" => "singleLine",
+            _ => expr.InListStyle,   // "ifLongerThanWrap" (default) → defer to inListStyle
+        };
+
         for (int i = 0; i < nodes.Count; i++)
         {
             if (nodes[i].IsInNoformatRegion || nodes[i].TokenType != TSqlTokenType.In)
@@ -1025,7 +1038,7 @@ public class ControlFlowRules : IRuleSet
             if (hasSubquery)
                 continue;
 
-            switch (expr.InListStyle)
+            switch (effectiveStyle)
             {
                 case "singleLine":
                     CollapseRange(nodes, openParen + 1, closeParen);
@@ -1246,7 +1259,10 @@ public class ControlFlowRules : IRuleSet
         if (ops == null) return;
 
         var alignment = (ops.Alignment ?? "inlineWithStatement").Trim().ToLowerInvariant();
-        bool bumpIndent = alignment == "indentedfromstatement" || alignment == "rightaligned";
+        // "rightAligned" is no longer faked as an indent bump — it gets true column right-alignment
+        // in the RightAligner finalization pass (spec 030 T013). Only "indentedFromStatement"
+        // bumps indent here.
+        bool bumpIndent = alignment == "indentedfromstatement";
 
         if (bumpIndent)
         {
