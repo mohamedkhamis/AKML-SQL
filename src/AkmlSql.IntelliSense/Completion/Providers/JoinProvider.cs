@@ -29,6 +29,14 @@ public class JoinProvider : ICompletionProvider
     /// </summary>
     public bool UseAliases { get; set; }
 
+    /// <summary>
+    /// Controls how the JOIN target table is qualified in the insertion text — same policy as
+    /// <see cref="ObjectProvider.SchemaQualifyMode"/>, so a committed FK-join suggestion writes
+    /// <c>dbo.Orders o ON …</c> exactly like committing the table from the plain list.
+    /// Set by <see cref="CompletionEngine"/> before each call.
+    /// </summary>
+    public AkmlSql.Core.Config.SchemaQualifyMode SchemaQualifyMode { get; set; } = AkmlSql.Core.Config.SchemaQualifyMode.Always;
+
     public bool CanHandle(CursorContext context, DatabaseCache? cache)
     {
         // Activate ONLY when in JoinTable clause (after a JOIN keyword) — never in plain FROM.
@@ -103,9 +111,16 @@ public class JoinProvider : ICompletionProvider
                     continue;
                 }
 
-                var qualifiedName = otherSchema.Equals("dbo", StringComparison.OrdinalIgnoreCase)
-                    ? otherTable
-                    : otherFullName;
+                // Qualify the join target per the engine's schema policy (Always → "dbo.Orders";
+                // NonDefaultOnly → bare for dbo; Never → bare everywhere).
+                var qualifiedName = SchemaQualifyMode switch
+                {
+                    AkmlSql.Core.Config.SchemaQualifyMode.Always => otherFullName,
+                    AkmlSql.Core.Config.SchemaQualifyMode.Never => otherTable,
+                    _ => otherSchema.Equals("dbo", StringComparison.OrdinalIgnoreCase)
+                        ? otherTable
+                        : otherFullName,
+                };
 
                 // When UseAliases is off, both sides of the ON clause fall back to bare
                 // qualified names. The existing side (`alias`) is the user's alias from

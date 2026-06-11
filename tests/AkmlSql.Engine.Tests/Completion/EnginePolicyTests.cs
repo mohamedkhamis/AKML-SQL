@@ -137,8 +137,8 @@ public class EnginePolicyTests
     }
 
     /// <summary>
-    /// When SchemaMode is NonDefaultOnly (the default), dbo objects are inserted
-    /// without the schema prefix.
+    /// When SchemaMode is NonDefaultOnly, dbo objects are inserted without the
+    /// schema prefix.
     /// </summary>
     [Fact]
     public void SchemaMode_NonDefaultOnly_DboObjectHasBareInsertText()
@@ -148,6 +148,46 @@ public class EnginePolicyTests
 
         var cache = MakeCacheWithTable("dbo", "Customers");
         var sql = "SELECT * FROM ";
+        var response = engine.GetCompletions(sql, sql.Length, cache);
+
+        var customersItem = response.Items.FirstOrDefault(i =>
+            i.DisplayText.Equals("Customers", StringComparison.OrdinalIgnoreCase));
+
+        Assert.NotNull(customersItem);
+        Assert.Equal("Customers", customersItem.InsertText);
+    }
+
+    /// <summary>
+    /// The DEFAULT SchemaMode is Always (SQL Prompt parity: committing a table from the
+    /// suggestion list inserts the owner-qualified name, "dbo.Customers" — the user never
+    /// types the schema). User-reported 2026-06-11.
+    /// </summary>
+    [Fact]
+    public void SchemaMode_Default_QualifiesDboObjects()
+    {
+        var engine = CreateEngine();   // no explicit SchemaQualifyMode — the default applies
+
+        var cache = MakeCacheWithTable("dbo", "Customers");
+        var sql = "SELECT * FROM ";
+        var response = engine.GetCompletions(sql, sql.Length, cache);
+
+        var customersItem = response.Items.FirstOrDefault(i =>
+            i.InsertText.Equals("dbo.Customers", StringComparison.OrdinalIgnoreCase));
+
+        Assert.NotNull(customersItem);
+    }
+
+    /// <summary>
+    /// After an explicit "dbo." prefix the dot-qualified path serves BARE names — committing
+    /// must not produce "dbo.dbo.Customers".
+    /// </summary>
+    [Fact]
+    public void SchemaMode_Default_DotPrefixedCompletion_IsNotDoubleQualified()
+    {
+        var engine = CreateEngine();
+
+        var cache = MakeCacheWithTable("dbo", "Customers");
+        var sql = "SELECT * FROM dbo.";
         var response = engine.GetCompletions(sql, sql.Length, cache);
 
         var customersItem = response.Items.FirstOrDefault(i =>

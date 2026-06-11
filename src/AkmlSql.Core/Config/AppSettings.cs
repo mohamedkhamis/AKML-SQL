@@ -348,8 +348,10 @@ namespace AkmlSql.Core.Config
     /// <summary>How object names are formatted when inserted from the suggestion list.</summary>
     public class QualificationSettings
     {
+        // Always = SQL Prompt's default: committing a table from the suggestion list inserts
+        // the owner-qualified name ("dbo.Customers") so the user never types the schema.
         [JsonPropertyName("schemaMode")]
-        public SchemaQualifyMode SchemaMode { get; set; } = SchemaQualifyMode.NonDefaultOnly;
+        public SchemaQualifyMode SchemaMode { get; set; } = SchemaQualifyMode.Always;
 
         [JsonPropertyName("bracketMode")]
         public BracketMode BracketMode { get; set; } = BracketMode.WhenRequired;

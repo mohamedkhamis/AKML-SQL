@@ -60,9 +60,10 @@ public class CompletionEngine
     /// <summary>
     /// Controls how object names are qualified when inserted.
     /// Maps to <c>IntelliSense.Qualification.SchemaMode</c>.
-    /// Default <see cref="SchemaQualifyMode.NonDefaultOnly"/>.
+    /// Default <see cref="SchemaQualifyMode.Always"/> — SQL Prompt parity: committing a table
+    /// from the suggestion list inserts the owner-qualified name ("dbo.Customers").
     /// </summary>
-    public SchemaQualifyMode SchemaQualifyMode { get; set; } = SchemaQualifyMode.NonDefaultOnly;
+    public SchemaQualifyMode SchemaQualifyMode { get; set; } = SchemaQualifyMode.Always;
 
     public CompletionEngine(TsqlParserService parserService)
     {
@@ -271,6 +272,7 @@ public class CompletionEngine
             // always runs when JoinAssist is enabled — AutoAlias only decides whether
             // the inserted JOIN target carries a fresh alias or uses its bare name.
             _joinProvider.UseAliases = TableAliasEnabled;
+            _joinProvider.SchemaQualifyMode = SchemaQualifyMode;
 
             // Push IntelliSense policy flags into ObjectProvider before each request.
             _objectProvider.IncludeSystemObjects = IncludeSystemObjects;

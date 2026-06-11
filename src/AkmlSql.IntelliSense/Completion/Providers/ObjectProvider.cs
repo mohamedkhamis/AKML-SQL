@@ -26,8 +26,9 @@ public class ObjectProvider : ICompletionProvider
     /// <summary>
     /// Controls how object names are qualified in <see cref="InsertText"/>.
     /// Set by <see cref="CompletionEngine"/> before each request.
+    /// Default <see cref="SchemaQualifyMode.Always"/> (SQL Prompt parity).
     /// </summary>
-    public SchemaQualifyMode SchemaQualifyMode { get; set; } = SchemaQualifyMode.NonDefaultOnly;
+    public SchemaQualifyMode SchemaQualifyMode { get; set; } = SchemaQualifyMode.Always;
 
     private static readonly HashSet<ClauseType> ObjectClauseTypes =
     [
