@@ -1395,6 +1395,13 @@ public class ControlFlowRules : IRuleSet
             // Heuristic: a "real" function-call paren has no space between the name and (
             if (nodes[i].PrecedingBreak != BreakType.None || nodes[i].PrecedingSpaces > 0) continue;
 
+            // NOT a function call: the paren of a DDL object — "CREATE TABLE dbo.orders(...)"
+            // matches Identifier+adjacent-( too, and this pass then exploded the whole column
+            // list (with depth-blind comma breaks splitting "identity(1, 1)" args). Walk back
+            // over the multi-part name; a preceding TABLE/PROC/FUNCTION/TRIGGER/VIEW keyword
+            // means the DDL passes own this paren's layout.
+            if (IsDdlObjectName(nodes, i - 1)) continue;
+
             int close = FindMatchingParen(nodes, i);
             if (close < 0) continue;
 
@@ -1425,17 +1432,22 @@ public class ControlFlowRules : IRuleSet
             int parentIndent = prev.IndentLevel;
             int paramIndent = opts.IndentParameters ? parentIndent + 1 : parentIndent;
 
-            // First parameter on its own line; each comma-followed param on its own line; close
-            // paren on its own line aligned with the parent.
+            // First parameter on its own line; each TOP-LEVEL comma-followed param on its own
+            // line (a comma nested in an inner call's argument list is not a parameter boundary
+            // of THIS call); close paren on its own line aligned with the parent.
             if (nodes[i + 1].PrecedingBreak == BreakType.None)
             {
                 nodes[i + 1].PrecedingBreak = BreakType.NewLine;
                 nodes[i + 1].IndentLevel = paramIndent;
                 nodes[i + 1].PrecedingSpaces = 0;
             }
+            int argDepth = 0;
             for (int j = i + 1; j < close; j++)
             {
-                if (nodes[j].TokenType == TSqlTokenType.Comma && j + 1 < close)
+                if (nodes[j].TokenType == TSqlTokenType.LeftParenthesis) { argDepth++; continue; }
+                if (nodes[j].TokenType == TSqlTokenType.RightParenthesis) { argDepth--; continue; }
+
+                if (argDepth == 0 && nodes[j].TokenType == TSqlTokenType.Comma && j + 1 < close)
                 {
                     if (nodes[j + 1].PrecedingBreak == BreakType.None)
                     {
@@ -1477,6 +1489,24 @@ public class ControlFlowRules : IRuleSet
     /// Only IN lists with literal/identifier members are reshaped — IN-subquery lists are left
     /// alone (consistent with <see cref="ApplyInListStyle"/>).
     /// </summary>
+    /// <summary>
+    /// True when the identifier at <paramref name="nameEnd"/> is the (possibly multi-part) name
+    /// of a DDL object — i.e. walking back over Identifier/QuotedIdentifier/Dot tokens lands on
+    /// TABLE / PROCEDURE / FUNCTION / TRIGGER / VIEW. Such a name's paren is a column or
+    /// parameter list owned by the DDL layout passes, not a function call.
+    /// </summary>
+    private static bool IsDdlObjectName(List<LayoutNode> nodes, int nameEnd)
+    {
+        int k = nameEnd;
+        while (k >= 0 && nodes[k].TokenType is TSqlTokenType.Identifier
+            or TSqlTokenType.QuotedIdentifier or TSqlTokenType.Dot)
+        {
+            k--;
+        }
+        return k >= 0 && nodes[k].TokenType is TSqlTokenType.Table or TSqlTokenType.Procedure
+            or TSqlTokenType.Function or TSqlTokenType.Trigger or TSqlTokenType.View;
+    }
+
     private static void ApplyInStatementsAlignment(List<LayoutNode> nodes, InStatementsOptions inStmt)
     {
         if (inStmt == null) return;

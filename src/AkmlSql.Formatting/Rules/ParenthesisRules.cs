@@ -331,10 +331,25 @@ public class ParenthesisRules : IRuleSet
                 if (openParen < 0 || !parenPairs.TryGetValue(openParen, out int closeParen))
                     continue;
 
-                // Put each column definition on a new line (after each comma)
+                // Put each column definition on a new line — only after TOP-LEVEL commas.
+                // Commas nested in type/identity arguments ("decimal(18, 2)", "identity(1, 1)")
+                // are not column boundaries (same depth fix as DdlRules.
+                // ApplyCreateTableColumnsOnNewLine — this pass duplicates its break loop).
+                int parenDepth = 0;
                 for (int j = openParen + 1; j < closeParen; j++)
                 {
-                    if (nodes[j].TokenType == TSqlTokenType.Comma && j + 1 < closeParen)
+                    if (nodes[j].TokenType == TSqlTokenType.LeftParenthesis)
+                    {
+                        parenDepth++;
+                        continue;
+                    }
+                    if (nodes[j].TokenType == TSqlTokenType.RightParenthesis)
+                    {
+                        parenDepth--;
+                        continue;
+                    }
+
+                    if (parenDepth == 0 && nodes[j].TokenType == TSqlTokenType.Comma && j + 1 < closeParen)
                     {
                         var next = nodes[j + 1];
                         if (next.PrecedingBreak == BreakType.None)

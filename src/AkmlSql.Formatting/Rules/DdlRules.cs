@@ -54,10 +54,25 @@ public class DdlRules : IRuleSet
                 }
             }
 
-            // Each column after comma on new line
+            // Each column after a TOP-LEVEL comma on a new line. Commas nested inside type or
+            // identity arguments — "decimal(18, 2)", "identity(1, 1)" — are NOT column
+            // boundaries and must stay inline (ParseColumnDefinitions is already depth-aware;
+            // this break loop was not, and split the argument lists across lines).
+            int parenDepth = 0;
             for (int j = openParen + 1; j < closeParen; j++)
             {
-                if (nodes[j].TokenType == TSqlTokenType.Comma && j + 1 < closeParen)
+                if (nodes[j].TokenType == TSqlTokenType.LeftParenthesis)
+                {
+                    parenDepth++;
+                    continue;
+                }
+                if (nodes[j].TokenType == TSqlTokenType.RightParenthesis)
+                {
+                    parenDepth--;
+                    continue;
+                }
+
+                if (parenDepth == 0 && nodes[j].TokenType == TSqlTokenType.Comma && j + 1 < closeParen)
                 {
                     var next = nodes[j + 1];
                     if (next.PrecedingBreak == BreakType.None)
@@ -338,7 +353,28 @@ public class DdlRules : IRuleSet
                 }
             }
 
-            // alignParameterDataTypes
+            // parameterAlignment "aligned": every parameter starts its own line (SQL Prompt
+            // layout — the datatype/default alignment below is per-LINE alignment and is
+            // meaningless on a single inline run). Previously only the first parameter ever
+            // broke, yet the padding below still applied — stale double-spacing inside one line.
+            bool aligned = string.Equals(ddl.ParameterAlignment, "aligned", StringComparison.OrdinalIgnoreCase);
+            if (aligned && parameterNodes.Count > 1)
+            {
+                foreach (var (startIdx, _) in parameterNodes)
+                {
+                    var paramNode = nodes[startIdx];
+                    if (paramNode.PrecedingBreak == BreakType.None)
+                    {
+                        paramNode.PrecedingBreak = BreakType.NewLine;
+                        paramNode.IndentLevel = 1;
+                        paramNode.PrecedingSpaces = 0;
+                    }
+                }
+            }
+
+            // alignParameterDataTypes — pad only parameters that actually START their line;
+            // padding an inline parameter writes stale alignment spacing into the middle of
+            // the line ("@startdate  datetime").
             if (ddl.AlignParameterDataTypes && parameterNodes.Count >= 2)
             {
                 int maxNameWidth = 0;
@@ -355,8 +391,9 @@ public class DdlRules : IRuleSet
 
                 for (int p = 0; p < parameterNodes.Count; p++)
                 {
-                    var (_, dataTypeIdx) = parameterNodes[p];
+                    var (startIdx, dataTypeIdx) = parameterNodes[p];
                     if (dataTypeIdx >= 0 && nameWidths[p] > 0 &&
+                        nodes[startIdx].PrecedingBreak != BreakType.None &&
                         nodes[dataTypeIdx].PrecedingBreak == BreakType.None)
                     {
                         int padding = maxNameWidth - nameWidths[p] + 1;
@@ -744,7 +781,10 @@ public class DdlRules : IRuleSet
 
             int width = MeasureWidth(nodes, parameterNodes[p].startIdx, eqIdx);
             int padding = maxPreDefaultWidth - width + 1;
-            if (nodes[eqIdx].PrecedingBreak == BreakType.None)
+            // Same gating as the datatype alignment: only a parameter that starts its own
+            // line participates — padding an inline parameter's "=" writes stale spacing.
+            if (nodes[eqIdx].PrecedingBreak == BreakType.None &&
+                nodes[parameterNodes[p].startIdx].PrecedingBreak != BreakType.None)
             {
                 nodes[eqIdx].PrecedingSpaces = Math.Max(padding, 1);
             }

@@ -1,6 +1,8 @@
 -- akml-parity-baseline revision=1.26.0526.0000 corpus-item=11-stored-procedure profile=default
 CREATE PROCEDURE dbo.GetCustomerOrders
-    @customerid int, @startdate  datetime = NULL, @enddate    datetime = NULL
+    @customerid int,
+    @startdate  datetime = NULL,
+    @enddate    datetime = NULL
 AS
 BEGIN
     SET    nocount ON;

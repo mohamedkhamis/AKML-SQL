@@ -175,6 +175,23 @@ public class StageSixValidationProbeTests
     }
 
     [Fact]
+    public void Dump_CreateTable_Tokenization()
+    {
+        const string sql = "create table dbo.orders (orderid int identity(1, 1) not null primary key);";
+        var parser = new TSql170Parser(initialQuotedIdentifiers: true);
+        using var reader = new StringReader(sql);
+        var fragment = parser.Parse(reader, out _);
+        var sb = new StringBuilder();
+        foreach (var t in fragment.ScriptTokenStream)
+        {
+            if (t.TokenType == TSqlTokenType.WhiteSpace || t.TokenType == TSqlTokenType.EndOfFile) continue;
+            sb.AppendLine($"  type={t.TokenType,-22} text='{t.Text}'");
+        }
+        _output.WriteLine(sb.ToString());
+        Assert.True(true);
+    }
+
+    [Fact]
     public void Dump_Operator_Tokenization()
     {
         const string sql = "select * from t where a >= 1 and b <> 2 and c <= 3 and d != 4 and e !< 5;";
@@ -276,6 +293,95 @@ public class StageSixValidationProbeTests
         sb.AppendLine($"r2: {r2.Replace("\r\n", "\\n").Replace("\n", "\\n")}");
         sb.AppendLine($"r1==r2 (idempotent): {r1 == r2}");
 
+        _output.WriteLine(sb.ToString());
+        Assert.True(true);
+    }
+
+    [Fact]
+    public void Isolate_CreateTable_TypeArgSplit_ByPass()
+    {
+        // Which individual ControlFlowRules pass reshapes the CREATE TABLE? Invoke each private
+        // static Apply* via reflection on a fresh full-pipeline run that stops short of rules,
+        // then compare the emitted text against the no-pass baseline.
+        const string sql =
+            "create table dbo.orders (orderid int identity(1, 1) not null primary key, " +
+            "total decimal(18, 2) not null, status varchar(20) not null);";
+        var profile = LoadDefaultStyle();
+        profile.Metadata.SkipValidation = true;
+
+        var passes = new (string name, object?[] argsFactory)[]
+        {
+            ("ApplyIfElseRules", new object?[] { profile.ControlFlow }),
+            ("ApplyTryCatchRules", new object?[] { profile.ControlFlow }),
+            ("ApplyBeginEndRules", new object?[] { profile.ControlFlow }),
+            ("ApplyCaseRules", new object?[] { profile.Case }),
+            ("ApplyCteRules", new object?[] { profile.Cte, profile.Whitespace }),
+            ("ApplyExpressionRules", new object?[] { profile.Expression }),
+            ("ApplyOperatorRules", new object?[] { profile.Operators, profile.Expression }),
+            ("ApplyInStatementsAlignment", new object?[] { profile.InStatements }),
+            ("ApplyCteAsOnNewLine", new object?[] { profile.Cte }),
+            ("ApplyCaseEndAlignment", new object?[] { profile.Case }),
+            ("ApplyFunctionCallParameters", new object?[] { profile.FunctionCalls, profile.Whitespace }),
+        };
+
+        var sb = new StringBuilder();
+        var baseline = new FormatterPipeline { LayoutRules = Array.Empty<IRuleSet>() }.Format(sql, profile).FormattedText;
+        sb.AppendLine("--- no-pass baseline ---");
+        AppendNumbered(sb, baseline);
+
+        foreach (var (name, args) in passes)
+        {
+            var single = new SinglePassRuleSet(name, args);
+            var r = new FormatterPipeline { LayoutRules = new IRuleSet[] { single } }.Format(sql, profile).FormattedText;
+            sb.AppendLine(r == baseline ? $"{name}: unchanged" : $"{name}: *** CHANGED ***");
+            if (r != baseline) AppendNumbered(sb, r);
+        }
+        _output.WriteLine(sb.ToString());
+        Assert.True(true);
+    }
+
+    private sealed class SinglePassRuleSet : IRuleSet
+    {
+        private readonly string _method;
+        private readonly object?[] _extraArgs;
+        public SinglePassRuleSet(string method, object?[] extraArgs) { _method = method; _extraArgs = extraArgs; }
+        public void Apply(List<AkmlSql.Formatting.Layout.LayoutNode> nodes, FormattingProfile profile)
+        {
+            var mi = typeof(ControlFlowRules).GetMethod(_method,
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            if (mi == null) throw new InvalidOperationException("no method " + _method);
+            var all = new object?[_extraArgs.Length + 1];
+            all[0] = nodes;
+            Array.Copy(_extraArgs, 0, all, 1, _extraArgs.Length);
+            mi.Invoke(null, all);
+        }
+    }
+
+    [Fact]
+    public void Isolate_CreateTable_TypeArgSplit()
+    {
+        var variants = new (string label, string sql)[]
+        {
+            ("full",        "create table dbo.orders (orderid int identity(1, 1) not null primary key, total decimal(18, 2) not null, status varchar(20) not null);"),
+            ("no-identity", "create table dbo.orders (orderid int not null primary key, total decimal(18, 2) not null);"),
+            ("minimal",     "create table t (a decimal(18, 2));"),
+        };
+        var sb = new StringBuilder();
+        foreach (var (vLabel, sql) in variants)
+        {
+            foreach (var (label, rules) in new (string, IRuleSet[]?)[]
+            {
+                ("OFF", null),
+                ("ControlFlow only", new IRuleSet[] { new ControlFlowRules() }),
+            })
+            {
+                var p = LoadDefaultStyle();
+                p.Metadata.SkipValidation = true;
+                var r = new FormatterPipeline { LayoutRules = rules }.Format(sql, p).FormattedText;
+                sb.AppendLine($"--- {vLabel} / {label} ---");
+                AppendNumbered(sb, r);
+            }
+        }
         _output.WriteLine(sb.ToString());
         Assert.True(true);
     }

@@ -1,5 +1,7 @@
 CREATE PROCEDURE dbo.GetCustomerOrders
-    @customerid int, @startdate  datetime = NULL, @enddate    datetime = NULL
+    @customerid int,
+    @startdate  datetime = NULL,
+    @enddate    datetime = NULL
 AS
 BEGIN
     SET    nocount ON;
