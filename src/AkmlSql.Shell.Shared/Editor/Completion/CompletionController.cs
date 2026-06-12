@@ -37,6 +37,11 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         private int _wildcardStarPos = -1;
         private string _wildcardQualifier = string.Empty;
 
+        // Spec 030 T033 / FR-013 — when true, the (shared) wildcard checkbox popup is acting as the
+        // Column Picker: it was opened via Ctrl+Right (not a '*'), and committing INSERTS the checked
+        // columns at the live caret rather than replacing a '*'.
+        private bool _columnPickerMode;
+
         public IOleCommandTarget NextTarget { get; set; }
 
         /// <summary>
@@ -220,6 +225,27 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                         if (_adornment.Popup.IsOpen)
                         {
                             _adornment.Popup.MoveSelection(1);
+                            return VSConstants.S_OK;
+                        }
+                        break;
+
+                    // Spec 030 T033 / FR-013 — Ctrl+Left / Ctrl+Right toggle between the suggestions
+                    // box and the column picker. Only intercepted while one of them is open; otherwise
+                    // word-navigation passes through untouched.
+                    case VSConstants.VSStd2KCmdID.WORDPREV:
+                    case VSConstants.VSStd2KCmdID.WORDNEXT:
+                        if (_columnPickerMode && _adornment.IsWildcardOpen)
+                        {
+                            // Picker → back to the suggestions box.
+                            DismissWildcardPopup();
+                            TriggerCompletion();
+                            return VSConstants.S_OK;
+                        }
+                        if (_adornment.Popup.IsOpen)
+                        {
+                            // Suggestions box → column picker.
+                            DismissPopup();
+                            TriggerColumnPicker();
                             return VSConstants.S_OK;
                         }
                         break;
@@ -1483,7 +1509,11 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 try
                 {
                     var client = Ipc.EngineLifecycle.Manager?.Client;
-                    if (client == null || !client.IsConnected) return;
+                    if (client == null || !client.IsConnected)
+                    {
+                        _textView.VisualElement.Dispatcher.Invoke(() => _wildcardPending = false);
+                        return;
+                    }
 
                     var response = await client.SendRequestAsync<
                         AkmlSql.Core.Ipc.Messages.WildcardExpansionResponse,
@@ -1550,10 +1580,151 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         }
 
         /// <summary>
+        /// Spec 030 T033 / FR-013 — open the Column Picker: fetch the in-scope columns at the
+        /// caret (reusing the WildcardExpansion engine path with an empty qualifier — it resolves
+        /// the FROM-clause tables and returns their columns grouped, no '*' required) and show the
+        /// shared checkbox popup in picker mode.
+        /// </summary>
+        private void TriggerColumnPicker()
+        {
+            int caretPos;
+            string docText;
+            try
+            {
+                caretPos = _textView.Caret.Position.BufferPosition.Position;
+                docText = _textView.TextBuffer.CurrentSnapshot.GetText();
+            }
+            catch { return; }
+            if (string.IsNullOrEmpty(docText)) return;
+
+            _columnPickerMode = true;
+            _wildcardPending = true;
+
+            System.Threading.Tasks.Task.Run(async () =>
+            {
+                try
+                {
+                    var client = Ipc.EngineLifecycle.Manager?.Client;
+                    if (client == null || !client.IsConnected)
+                    {
+                        // Engine down — clear the picker flags so they don't strand and misroute a
+                        // later real wildcard ('*') commit into CommitColumnPicker.
+                        _textView.VisualElement.Dispatcher.Invoke(() => { _wildcardPending = false; _columnPickerMode = false; });
+                        return;
+                    }
+
+                    var response = await client.SendRequestAsync<
+                        AkmlSql.Core.Ipc.Messages.WildcardExpansionResponse,
+                        AkmlSql.Core.Ipc.Messages.WildcardExpansionRequest>(
+                        AkmlSql.Core.Ipc.MessageTypes.WildcardExpansion,
+                        new AkmlSql.Core.Ipc.Messages.WildcardExpansionRequest
+                        {
+                            SessionId = _sessionId,
+                            CursorOffset = caretPos,
+                            DocumentText = docText,
+                            Qualifier = string.Empty   // all in-scope tables
+                        },
+                        timeoutMs: 5000);
+
+                    if (response?.Success == true && response.Tables != null && response.Tables.Length > 0)
+                    {
+                        _textView.VisualElement.Dispatcher.Invoke(() =>
+                        {
+                            if (!_wildcardPending || !_columnPickerMode) return;
+                            _wildcardPending = false;
+                            // Typing during the async fetch may have reopened the suggestions box —
+                            // dismiss it so only the picker is visible (no two popups at once).
+                            if (_adornment.Popup.IsOpen) DismissPopup();
+
+                            var groups = new List<WildcardExpansionPopup.TableGroupData>();
+                            foreach (var t in response.Tables)
+                            {
+                                var cols = new WildcardExpansionPopup.ColumnData[t.Columns.Length];
+                                for (int i = 0; i < t.Columns.Length; i++)
+                                {
+                                    cols[i] = new WildcardExpansionPopup.ColumnData
+                                    {
+                                        ColumnName = t.Columns[i].ColumnName,
+                                        TypeDisplay = t.Columns[i].TypeDisplay
+                                    };
+                                }
+                                groups.Add(new WildcardExpansionPopup.TableGroupData
+                                {
+                                    TableName = t.TableName,
+                                    Qualifier = t.Qualifier,
+                                    Columns = cols
+                                });
+                            }
+
+                            _adornment.WildcardPopup.SetData(groups);
+                            _adornment.ShowWildcard();
+                            _adornment.RepositionWildcard();
+                            SuppressNativeIntelliSense();
+                        });
+                    }
+                    else
+                    {
+                        _textView.VisualElement.Dispatcher.Invoke(() => { _wildcardPending = false; _columnPickerMode = false; });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Debug(ex, "Column picker RPC failed");
+                    try { _textView.VisualElement.Dispatcher.Invoke(() => { _wildcardPending = false; _columnPickerMode = false; }); }
+                    catch { }
+                }
+            });
+        }
+
+        /// <summary>
+        /// FR-013 — insert the picker's checked columns as a comma list at the caret (no '*' to
+        /// replace). Qualifies columns when more than one table is in scope.
+        /// </summary>
+        private void CommitColumnPicker()
+        {
+            try
+            {
+                var columns = _adornment.WildcardPopup.GetCheckedColumns();
+                if (columns == null || columns.Count == 0)
+                {
+                    DismissWildcardPopup();
+                    return;
+                }
+
+                // Insert at the LIVE caret. The picker popup is non-focusable, so the caret stays in
+                // the editor; using it (not a stale offset captured before the async fetch) lands the
+                // columns where the user is now, even if they typed while the fetch was in flight.
+                int insertPos = _textView.Caret.Position.BufferPosition.Position;
+
+                bool useQualifier = columns.Select(c => c.Qualifier)
+                    .Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1;
+
+                var parts = columns
+                    .Select(c => useQualifier ? c.Qualifier + "." + c.ColumnName : c.ColumnName)
+                    .ToList();
+                var text = string.Join(", ", parts);
+
+                _textView.TextBuffer.Insert(insertPos, text);
+                DismissWildcardPopup();
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "Failed to commit column picker");
+                DismissWildcardPopup();
+            }
+        }
+
+        /// <summary>
         /// Replace * or alias.* with the checked columns, formatted multi-line.
         /// </summary>
         private void CommitWildcardExpansion()
         {
+            // FR-013: the shared popup is acting as the Column Picker — insert at the caret instead.
+            if (_columnPickerMode)
+            {
+                CommitColumnPicker();
+                return;
+            }
             try
             {
                 var columns = _adornment.WildcardPopup.GetCheckedColumns();
@@ -1655,6 +1826,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         {
             _adornment.HideWildcard();
             _wildcardPending = false;
+            _columnPickerMode = false;
         }
 
         #endregion
