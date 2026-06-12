@@ -39,6 +39,13 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
 
         public IOleCommandTarget NextTarget { get; set; }
 
+        /// <summary>
+        /// Spec 030 T026 / FR-010 — signature (parameter) help broker, set by
+        /// <c>CompletionPopupProvider</c>. Used to start/refresh a signature session on '(' / ','.
+        /// Null if the broker was unavailable (signature help silently inert).
+        /// </summary>
+        public Microsoft.VisualStudio.Language.Intellisense.ISignatureHelpBroker SignatureBroker { get; set; }
+
         private const int DebounceMs = 150;
         private const int QuickInfoDebounceMs = 300;
 
@@ -121,14 +128,17 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                             return VSConstants.S_OK; // Don't insert space
                         }
 
-                        // Suppress native IntelliSense BEFORE letting VS handle the keystroke
-                        SuppressNativeIntelliSense();
+                        // Suppress native IntelliSense BEFORE letting VS handle the keystroke —
+                        // but only while AKML completion is enabled; when disabled (FR-012) we hand
+                        // off to the host's native IntelliSense instead of suppressing it.
+                        bool akmlCompletionOn = CompletionEnabled();
+                        if (akmlCompletionOn) SuppressNativeIntelliSense();
 
                         // Let VS insert the character
                         var result = NextTarget.Exec(ref pguidCmdGroup, nCmdId, nCmdexecopt, pvaIn, pvaOut);
 
                         // Suppress again after VS processes (it may trigger native IntelliSense)
-                        SuppressNativeIntelliSense();
+                        if (akmlCompletionOn) SuppressNativeIntelliSense();
 
                         HandleTypedChar(typedChar);
                         UpdatePopupCtrlTransparency();
@@ -226,6 +236,10 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                     case VSConstants.VSStd2KCmdID.COMPLETEWORD:
                     case VSConstants.VSStd2KCmdID.SHOWMEMBERLIST:
                     case VSConstants.VSStd2KCmdID.AUTOCOMPLETE:
+                        // FR-012: when IntelliSense is disabled, let the host's native completion
+                        // handle the command (fall through) rather than swallowing it.
+                        if (!CompletionEnabled())
+                            break;
                         // Intercept ALL completion commands — prevent native IntelliSense
                         SuppressNativeIntelliSense();
                         TriggerCompletion();
@@ -237,7 +251,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             if (pguidCmdGroup == VSConstants.GUID_VSStandardCommandSet97)
             {
                 var cmdId97 = (VSConstants.VSStd97CmdID)nCmdId;
-                if (cmdId97 == (VSConstants.VSStd97CmdID)898)
+                if (cmdId97 == (VSConstants.VSStd97CmdID)898 && CompletionEnabled())
                 {
                     SuppressNativeIntelliSense();
                     TriggerCompletion();
@@ -272,7 +286,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                     }
                 }
                 _filterText = string.Empty;
-                TriggerCompletion();
+                AutoTriggerCompletion();
             }
             else if (char.IsLetter(c) || c == '_' || c == '@' || c == '#')
             {
@@ -287,7 +301,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 {
                     // Trigger IMMEDIATELY — no debounce. Show cached items instantly
                     // to beat SSMS native IntelliSense which also triggers immediately.
-                    TriggerCompletion();
+                    AutoTriggerCompletion();
                 }
             }
             else if (c == ' ' && _adornment.Popup.IsOpen)
@@ -311,7 +325,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                         if (item != null)
                         {
                             CommitItemFromSpaceKey(item);
-                            if (byContext) TriggerCompletion();
+                            if (byContext) AutoTriggerCompletion();
                             return; // Space is already inserted by VS before HandleTypedChar
                         }
                     }
@@ -323,23 +337,31 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 if (IsObjectExpectingKeywordBeforeCaret())
                 {
                     _expectsObjects = true;
-                    TriggerCompletion();
+                    AutoTriggerCompletion();
                 }
                 else if (byContext)
                 {
-                    TriggerCompletion();
+                    AutoTriggerCompletion();
                 }
             }
             else if (c == ' ' || c == '(' || c == ')' || c == ';' || c == ',')
             {
                 DismissPopup();
 
+                // Signature help (FR-010): '(' starts a call, ',' advances the active parameter,
+                // ')' / ';' ends it. Re-trigger on '(' and ',' so the engine recomputes the active
+                // parameter; dismiss on the closers.
+                if (c == '(' || c == ',')
+                    TriggerSignatureHelp();
+                else if (c == ')' || c == ';')
+                    DismissSignatureHelp();
+
                 // After space, check if the preceding word is a keyword that expects
                 // object names (table/view). If so, auto-trigger a fresh completion.
                 if (c == ' ' && IsObjectExpectingKeywordBeforeCaret())
                 {
                     _expectsObjects = true;
-                    TriggerCompletion();
+                    AutoTriggerCompletion();
                 }
                 // SQL-Prompt-style smart GROUP BY: auto-trigger after "GROUP BY " (and
                 // "ORDER BY ") so the engine's "▶ Add columns from SELECT" action and column
@@ -348,7 +370,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 // set _expectsObjects — GROUP BY wants columns + the smart item, not tables.
                 else if (c == ' ' && IsByKeywordBeforeCaret())
                 {
-                    TriggerCompletion();
+                    AutoTriggerCompletion();
                 }
             }
             else if (char.IsDigit(c))
@@ -390,6 +412,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         /// <summary>Dismiss native IntelliSense then show AKML popup (for Ctrl+Space).</summary>
         public void SuppressAndTrigger()
         {
+            if (!CompletionEnabled()) return;   // FR-012: IntelliSense disabled
             SuppressNativeIntelliSense();
             TriggerCompletion();
         }
@@ -398,6 +421,63 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         {
             _filterText = GetWordAtCaret();
             FetchAndShowCompletions();
+        }
+
+        // Spec 030 R6 / T030-T031 / FR-012 — honor IntelliSense.Enabled (suppress the box entirely)
+        // and AutoTrigger (typing triggers only when on; Ctrl+Space always works while Enabled).
+        // Settings are cached with a short TTL so a fast typist doesn't hit the disk per keystroke,
+        // while an Options change still applies within ~2s (no settings-changed event in the shell).
+        private AkmlSql.Core.Config.AppSettings _settingsCache;
+        private DateTime _settingsCacheUtc;
+
+        private AkmlSql.Core.Config.IntelliSenseSettings IntelliSenseSettings()
+        {
+            if (_settingsCache == null || (DateTime.UtcNow - _settingsCacheUtc).TotalSeconds > 2)
+            {
+                try { _settingsCache = AkmlSql.Core.Config.ConfigManager.Load(); }
+                catch { _settingsCache ??= new AkmlSql.Core.Config.AppSettings(); }
+                _settingsCacheUtc = DateTime.UtcNow;
+            }
+            return _settingsCache.IntelliSense;
+        }
+
+        /// <summary>IntelliSense master switch (FR-012). False ⇒ no AKML completion at all.</summary>
+        private bool CompletionEnabled() => IntelliSenseSettings().Enabled;
+
+        /// <summary>Auto-trigger (typing) gate (FR-012). Requires Enabled AND AutoTrigger.</summary>
+        private bool AutoTriggerEnabled()
+        {
+            var i = IntelliSenseSettings();
+            return i.Enabled && i.AutoTrigger;
+        }
+
+        /// <summary>Trigger completion from a typing event — no-op unless auto-trigger is on.</summary>
+        private void AutoTriggerCompletion()
+        {
+            if (AutoTriggerEnabled())
+                TriggerCompletion();
+        }
+
+        /// <summary>
+        /// Spec 030 T026 / FR-010 — start (or refresh) a signature-help session. Dismisses any
+        /// existing session first so the engine recomputes the active parameter as commas are typed.
+        /// </summary>
+        private void TriggerSignatureHelp()
+        {
+            var broker = SignatureBroker;
+            if (broker == null || !CompletionEnabled()) return;   // FR-012: IntelliSense disabled
+            try
+            {
+                broker.DismissAllSessions(_textView);
+                broker.TriggerSignatureHelp(_textView);
+            }
+            catch (Exception ex) { Log.Debug(ex, "SignatureHelp: trigger failed"); }
+        }
+
+        private void DismissSignatureHelp()
+        {
+            try { SignatureBroker?.DismissAllSessions(_textView); }
+            catch (Exception ex) { Log.Debug(ex, "SignatureHelp: dismiss failed"); }
         }
 
         private void TriggerCompletionDebounced()
@@ -862,7 +942,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 if (item.ObjectType == 3 && IsObjectExpectingKeyword(item.InsertText))
                 {
                     _expectsObjects = true;
-                    TriggerCompletion();
+                    AutoTriggerCompletion();
                 }
             }
             catch (Exception ex)

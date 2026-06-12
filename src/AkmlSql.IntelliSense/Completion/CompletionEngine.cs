@@ -16,6 +16,7 @@ public class CompletionEngine
     private readonly JoinProvider _joinProvider = new();
     private readonly JoinOnFkProvider _joinOnFkProvider = new();
     private readonly ObjectProvider _objectProvider = new();
+    private readonly ColumnProvider _columnProvider = new();
     private int _maxSuggestions = 50;
 
     /// <summary>
@@ -65,6 +66,14 @@ public class CompletionEngine
     /// </summary>
     public SchemaQualifyMode SchemaQualifyMode { get; set; } = SchemaQualifyMode.Always;
 
+    /// <summary>
+    /// Spec 030 R6 / T032 / FR-012 — column suggestion scope. Maps to
+    /// <c>IntelliSense.SuggestionTypes.ColumnScope</c>; pushed onto <see cref="ColumnProvider"/>
+    /// per request. <see cref="ColumnSuggestionScope.All"/> suggests columns from every table
+    /// even before a FROM clause exists.
+    /// </summary>
+    public ColumnSuggestionScope ColumnScopeMode { get; set; } = ColumnSuggestionScope.ReferencedOnly;
+
     public CompletionEngine(TsqlParserService parserService)
     {
         _parserService = parserService;
@@ -75,7 +84,7 @@ public class CompletionEngine
         // The engine registers it externally via RegisterProvider after construction.
         // The web edition simply doesn't register it -- USE-keyword completion falls through.
         RegisterProvider(new SmartGroupByProvider());
-        RegisterProvider(new ColumnProvider());
+        RegisterProvider(_columnProvider);
         RegisterProvider(_objectProvider);
         RegisterProvider(new KeywordProvider());
         RegisterProvider(_joinProvider);
@@ -277,6 +286,9 @@ public class CompletionEngine
             // Push IntelliSense policy flags into ObjectProvider before each request.
             _objectProvider.IncludeSystemObjects = IncludeSystemObjects;
             _objectProvider.SchemaQualifyMode = SchemaQualifyMode;
+
+            // Push column-suggestion scope into ColumnProvider (FR-012 / T032).
+            _columnProvider.ColumnScopeMode = ColumnScopeMode;
 
             // Push join options into JoinOnFkProvider before each request.
             _joinOnFkProvider.MatchByColumnName = MatchByColumnName;

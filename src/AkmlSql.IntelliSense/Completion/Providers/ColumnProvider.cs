@@ -1,3 +1,4 @@
+using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Engine.Parser;
 using AkmlSql.Engine.Schema;
@@ -17,6 +18,15 @@ namespace AkmlSql.Engine.Completion.Providers;
 public class ColumnProvider : ICompletionProvider
 {
     public string Name => "Column";
+
+    /// <summary>
+    /// Spec 030 R6 / T032 / FR-012 — suggestion scope for bare column completions. Default
+    /// <see cref="ColumnSuggestionScope.ReferencedOnly"/>: columns only from FROM-referenced
+    /// tables. <see cref="ColumnSuggestionScope.All"/>: when no table is referenced yet (e.g. a
+    /// bare <c>SELECT |</c>), suggest columns from every column-loaded user table. Pushed per
+    /// request by <see cref="CompletionEngine"/>.
+    /// </summary>
+    public ColumnSuggestionScope ColumnScopeMode { get; set; } = ColumnSuggestionScope.ReferencedOnly;
 
     /// <summary>
     /// Clause contexts where bare column names are valid completions
@@ -83,10 +93,11 @@ public class ColumnProvider : ICompletionProvider
         }
 
         // ── Path 2: bare column name in an expression-position clause ──
-        // The cursor is in WHERE/JOIN ON/SELECT/etc. AND there is at least one
-        // table already referenced in the FROM/JOIN clause that we can pull columns from.
+        // The cursor is in WHERE/JOIN ON/SELECT/etc. AND there is at least one table already
+        // referenced in the FROM/JOIN clause — OR ColumnScope=All (FR-012), which suggests
+        // columns from all tables even before a FROM clause exists.
         return ExpressionClauses.Contains(context.ClauseType)
-               && context.AvailableAliases.Count > 0;
+               && (context.AvailableAliases.Count > 0 || ColumnScopeMode == ColumnSuggestionScope.All);
     }
 
     public IEnumerable<CompletionItem> GetCompletions(CursorContext context, DatabaseCache? cache)
@@ -100,6 +111,17 @@ public class ColumnProvider : ICompletionProvider
         if (context.PrecedingDot && !string.IsNullOrEmpty(context.DotPrefix))
         {
             foreach (var item in GetDotQualifiedColumns(context, cache))
+                yield return item;
+            yield break;
+        }
+
+        // ── ColumnScope=All (FR-012): no FROM table referenced yet → suggest columns from every
+        // column-loaded user table so the user can pick a column before writing FROM. ──
+        if (ExpressionClauses.Contains(context.ClauseType)
+            && context.AvailableAliases.Count == 0
+            && ColumnScopeMode == ColumnSuggestionScope.All)
+        {
+            foreach (var item in GetAllTableColumns(cache))
                 yield return item;
             yield break;
         }
@@ -264,6 +286,44 @@ public class ColumnProvider : ICompletionProvider
     /// Yields columns for a single table identified by <see cref="CursorContext.DotPrefix"/>
     /// (the original "alias." / "table." behavior).
     /// </summary>
+    /// <summary>
+    /// Spec 030 T032 / FR-012 — columns from every column-loaded user table/view, used when
+    /// ColumnScope=All and no table is referenced yet. Tables whose columns haven't loaded
+    /// (Phase B background load) are skipped — never force a load here. Items are bare column
+    /// names with the owning table in the secondary text; the popup filter narrows as the user types.
+    /// </summary>
+    private static IEnumerable<CompletionItem> GetAllTableColumns(DatabaseCache cache)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var schema in cache.Schemas.Values)
+        {
+            foreach (var obj in cache.GetObjectsInSchema(schema.SchemaName))
+            {
+                if (obj.ObjectType != DbObjectType.Table && obj.ObjectType != DbObjectType.View)
+                    continue;
+                if (!obj.ColumnsLoaded || obj.Columns.Count == 0)
+                    continue;
+
+                foreach (var column in obj.Columns)
+                {
+                    if (!seen.Add($"{obj.FullName}.{column.ColumnName}"))
+                        continue;
+
+                    int priority = column.IsPrimaryKey ? 10 : 30;
+                    yield return new CompletionItem
+                    {
+                        DisplayText = column.ColumnName,
+                        InsertText = column.ColumnName,
+                        ObjectType = (int)CompletionObjectType.Column,
+                        SecondaryText = FormatSecondaryText(column) + " • " + obj.ObjectName,
+                        SourceObject = obj.FullName,
+                        SortPriority = priority,
+                    };
+                }
+            }
+        }
+    }
+
     private static IEnumerable<CompletionItem> GetDotQualifiedColumns(CursorContext context, DatabaseCache cache)
     {
         string schemaName;

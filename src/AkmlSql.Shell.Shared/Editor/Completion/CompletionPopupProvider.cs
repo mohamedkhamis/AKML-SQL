@@ -88,6 +88,11 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                     vsView.AddCommandFilter(controller, out var nextTarget);
                     controller.NextTarget = nextTarget;
 
+                    // Spec 030 T026 / FR-010 — give the controller the signature-help broker so it
+                    // can start/refresh parameter help on '(' / ',' (null-tolerant if unavailable).
+                    controller.SignatureBroker = componentModel
+                        ?.GetService<Microsoft.VisualStudio.Language.Intellisense.ISignatureHelpBroker>();
+
                     // Install the thread-level keyboard hook (once per UI thread) to intercept
                     // Ctrl+Space before SSMS's native IntelliSense handler can consume it.
                     // WH_KEYBOARD hooks sit earlier in the message chain than IOleCommandTarget,
