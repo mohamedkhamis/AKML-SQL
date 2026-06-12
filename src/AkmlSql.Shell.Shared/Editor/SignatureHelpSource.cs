@@ -52,6 +52,7 @@ namespace AkmlSql.Shell.Shared.Editor
         private readonly object _gate = new object();
         private readonly Dictionary<int, SignatureResponse> _cache = new Dictionary<int, SignatureResponse>();
         private readonly HashSet<int> _pending = new HashSet<int>();
+        private int _cacheGeneration;   // bumped on edit so a slow fetch can't write a stale entry
         private bool _disposed;
 
         public SignatureHelpSource(ITextBuffer buffer)
@@ -63,7 +64,7 @@ namespace AkmlSql.Shell.Shared.Editor
 
         private void OnBufferChanged(object sender, TextContentChangedEventArgs e)
         {
-            lock (_gate) { _cache.Clear(); _pending.Clear(); }
+            lock (_gate) { _cache.Clear(); _pending.Clear(); _cacheGeneration++; }
         }
 
         public void AugmentSignatureHelpSession(ISignatureHelpSession session, IList<ISignature> signatures)
@@ -122,6 +123,9 @@ namespace AkmlSql.Shell.Shared.Editor
 
         private void FetchAndRetrigger(ISignatureHelpSession session, int position)
         {
+            int generation;
+            lock (_gate) { generation = _cacheGeneration; }
+
             _ = System.Threading.Tasks.Task.Run(async () =>
             {
                 try
@@ -130,6 +134,7 @@ namespace AkmlSql.Shell.Shared.Editor
                     if (client == null || !client.IsConnected)
                     {
                         lock (_gate) { _pending.Remove(position); }
+                        await DismissSessionAsync(session);   // engine down — don't leave an empty popup open
                         return;
                     }
 
@@ -139,16 +144,21 @@ namespace AkmlSql.Shell.Shared.Editor
                         timeoutMs: 1500).ConfigureAwait(false);
 
                     bool hasContent = response?.Overloads != null && response.Overloads.Length > 0;
+                    bool store;
                     lock (_gate)
                     {
                         _pending.Remove(position);
-                        if (hasContent) _cache[position] = response!;
+                        // Discard a response whose document generation has moved on (edit landed
+                        // while the fetch was in flight) — otherwise a stale signature could linger.
+                        store = hasContent && generation == _cacheGeneration;
+                        if (store) _cache[position] = response!;
                     }
-                    if (!hasContent)
+
+                    if (!store)
                     {
-                        // No function context — dismiss the (empty) session we opened.
-                        await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-                        if (!_disposed && !session.IsDismissed) session.Dismiss();
+                        // No function context, or a stale/superseded result — dismiss the session
+                        // we opened so it doesn't render as a stuck empty popup.
+                        await DismissSessionAsync(session);
                         return;
                     }
 
@@ -160,8 +170,21 @@ namespace AkmlSql.Shell.Shared.Editor
                 {
                     lock (_gate) { _pending.Remove(position); }
                     Log.Debug(ex, "SignatureHelp: fetch failed");
+                    await DismissSessionAsync(session);   // failure — don't strand an empty session
                 }
             });
+        }
+
+        /// <summary>Marshals to the UI thread and dismisses the session (best-effort).</summary>
+        private async System.Threading.Tasks.Task DismissSessionAsync(ISignatureHelpSession session)
+        {
+            try
+            {
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                if (!_disposed && !session.IsDismissed)
+                    session.Dismiss();
+            }
+            catch (Exception ex) { Log.Debug(ex, "SignatureHelp: dismiss failed"); }
         }
 
         private static void BuildSignatures(
@@ -189,7 +212,7 @@ namespace AkmlSql.Shell.Shared.Editor
         private static int FindCallStart(ITextSnapshot snapshot, int position)
         {
             int depth = 0;
-            for (int i = position - 1; i >= 0 && i < snapshot.Length; i--)
+            for (int i = Math.Min(position, snapshot.Length) - 1; i >= 0; i--)
             {
                 char c = snapshot[i];
                 if (c == ')') depth++;

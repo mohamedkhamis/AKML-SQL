@@ -57,6 +57,7 @@ namespace AkmlSql.Shell.Shared.Editor
         private readonly Dictionary<int, QuickInfoResponse> _cache = new Dictionary<int, QuickInfoResponse>();
         // offsets with an IPC request currently in flight (so we don't fire twice).
         private readonly HashSet<int> _pending = new HashSet<int>();
+        private int _cacheGeneration;   // bumped on edit so a slow fetch can't write a stale entry
         private bool _disposed;
 
         public QuickInfoSource(ITextBuffer buffer)
@@ -69,7 +70,7 @@ namespace AkmlSql.Shell.Shared.Editor
 
         private void OnBufferChanged(object sender, TextContentChangedEventArgs e)
         {
-            lock (_gate) { _cache.Clear(); _pending.Clear(); }
+            lock (_gate) { _cache.Clear(); _pending.Clear(); _cacheGeneration++; }
         }
 
         public void AugmentQuickInfoSession(IQuickInfoSession session, IList<object> quickInfoContent, out ITrackingSpan applicableToSpan)
@@ -130,6 +131,9 @@ namespace AkmlSql.Shell.Shared.Editor
 
         private void FetchAndRetrigger(IQuickInfoSession session, int position)
         {
+            int generation;
+            lock (_gate) { generation = _cacheGeneration; }
+
             _ = System.Threading.Tasks.Task.Run(async () =>
             {
                 try
@@ -151,12 +155,16 @@ namespace AkmlSql.Shell.Shared.Editor
                             || (response.Details != null && response.Details.Length > 0)
                             || !string.IsNullOrEmpty(response.Description));
 
+                    bool store;
                     lock (_gate)
                     {
                         _pending.Remove(position);
-                        if (hasContent) _cache[position] = response!;
+                        // Drop a response whose generation has moved on (edit landed mid-fetch) so a
+                        // stale hover can't linger in the cache for the same offset.
+                        store = hasContent && generation == _cacheGeneration;
+                        if (store) _cache[position] = response!;
                     }
-                    if (!hasContent) return;   // nothing to show — don't re-trigger an empty hover
+                    if (!store) return;   // nothing to show / superseded — don't re-trigger
 
                     await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
                     if (!_disposed && !session.IsDismissed)

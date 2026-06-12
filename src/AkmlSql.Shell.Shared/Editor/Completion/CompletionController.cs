@@ -406,8 +406,12 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             }
         }
 
-        /// <summary>Public entry point for Ctrl+Space from WPF PreviewKeyDown.</summary>
-        public void TriggerManualCompletion() => TriggerCompletion();
+        /// <summary>Public entry point for Ctrl+Space from WPF PreviewKeyDown. Respects FR-012.</summary>
+        public void TriggerManualCompletion()
+        {
+            if (!CompletionEnabled()) return;
+            TriggerCompletion();
+        }
 
         /// <summary>Dismiss native IntelliSense then show AKML popup (for Ctrl+Space).</summary>
         public void SuppressAndTrigger()
@@ -435,7 +439,13 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             if (_settingsCache == null || (DateTime.UtcNow - _settingsCacheUtc).TotalSeconds > 2)
             {
                 try { _settingsCache = AkmlSql.Core.Config.ConfigManager.Load(); }
-                catch { _settingsCache ??= new AkmlSql.Core.Config.AppSettings(); }
+                catch (Exception ex)
+                {
+                    // Fall back to defaults (IntelliSense on), but log it — a corrupt/locked config
+                    // would otherwise silently re-enable a popup the user disabled (FR-012).
+                    _settingsCache ??= new AkmlSql.Core.Config.AppSettings();
+                    Log.Warning(ex, "CompletionController: failed to load IntelliSense settings; using defaults");
+                }
                 _settingsCacheUtc = DateTime.UtcNow;
             }
             return _settingsCache.IntelliSense;
