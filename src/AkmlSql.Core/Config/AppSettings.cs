@@ -265,6 +265,9 @@ namespace AkmlSql.Core.Config
         [JsonPropertyName("joinOptions")]
         public JoinOptionsSettings JoinOptions { get; set; } = new();
 
+        [JsonPropertyName("aliasOptions")]
+        public AliasOptionsSettings AliasOptions { get; set; } = new();
+
         /// <summary>Master switch — disabling this suppresses all IntelliSense features.</summary>
         public bool Enabled { get; set; } = true;
         /// <summary>Show completion list automatically while typing (no Ctrl+Space required).</summary>
@@ -378,6 +381,31 @@ namespace AkmlSql.Core.Config
     {
         [JsonPropertyName("matchByColumnName")]
         public bool MatchByColumnName { get; set; } = true;
+    }
+
+    /// <summary>
+    /// Spec 030 T035 / FR-015 — automatic alias generation policy. Controls how aliases suggested
+    /// after a table name in FROM/JOIN (and FK-assisted JOIN inserts) are formed and rendered.
+    /// </summary>
+    public class AliasOptionsSettings
+    {
+        /// <summary>Insert the <c>AS</c> keyword (<c>Orders AS o</c> vs <c>Orders o</c>). SQL Prompt default: on.</summary>
+        [JsonPropertyName("includeAs")]
+        public bool IncludeAs { get; set; } = true;
+
+        /// <summary>
+        /// User-defined object→alias overrides, keyed by (bare) object name, case-insensitive —
+        /// e.g. <c>{"Orders":"ord"}</c>. When the table matches, its alias is offered first.
+        /// </summary>
+        [JsonPropertyName("objectAliasMap")]
+        public Dictionary<string, string> ObjectAliasMap { get; set; } = new();
+
+        /// <summary>
+        /// Prefixes stripped from a table name before generating an alias — e.g. <c>["tbl_","tb_"]</c>
+        /// so <c>tbl_Orders</c> generates <c>o</c>/<c>od</c> rather than <c>t</c>/<c>to</c>.
+        /// </summary>
+        [JsonPropertyName("prefixesToIgnore")]
+        public string[] PrefixesToIgnore { get; set; } = [];
     }
 
     /// <summary>Settings for the in-memory schema cache.</summary>

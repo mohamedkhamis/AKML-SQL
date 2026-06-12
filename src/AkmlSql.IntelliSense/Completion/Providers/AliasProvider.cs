@@ -13,6 +13,15 @@ public class AliasProvider : ICompletionProvider
 {
     public string Name => "Alias";
 
+    // Spec 030 T035 / FR-015 — alias generation policy, pushed per request by CompletionEngine.
+    /// <summary>Insert the <c>AS</c> keyword ("Orders AS o" vs "Orders o").</summary>
+    public bool IncludeAs { get; set; } = true;
+    /// <summary>User-defined object→alias overrides (case-insensitive by object name).</summary>
+    public IReadOnlyDictionary<string, string> ObjectAliasMap { get; set; }
+        = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    /// <summary>Prefixes stripped from a table name before generating an alias (e.g. "tbl_").</summary>
+    public IReadOnlyList<string> PrefixesToIgnore { get; set; } = System.Array.Empty<string>();
+
     public bool CanHandle(CursorContext context, DatabaseCache? cache)
     {
         // Suggest alias when in FROM/JOIN after a table name (no dot, no partial text)
@@ -44,26 +53,72 @@ public class AliasProvider : ICompletionProvider
         }
 
         var tableName = context.PrecedingToken.Text.Trim('[', ']', '"');
-        var candidates = GenerateAliasCandidates(tableName);
         var existingAliases = new HashSet<string>(context.AvailableAliases.Keys, StringComparer.OrdinalIgnoreCase);
 
-        foreach (var candidate in candidates)
+        foreach (var (display, insert) in BuildAliasItems(tableName, existingAliases))
         {
-            if (existingAliases.Contains(candidate))
-            {
-                continue;
-            }
-
             yield return new CompletionItem
             {
-                DisplayText = candidate,
-                InsertText = candidate,
+                DisplayText = display,
+                InsertText = insert,
                 ObjectType = (int)CompletionObjectType.Alias,
                 SecondaryText = $"Alias for {tableName}",
                 SourceObject = tableName,
                 SortPriority = 50 // High priority — aliases are contextually relevant
             };
         }
+    }
+
+    /// <summary>
+    /// Spec 030 T035 / FR-015 — applies the alias policy: a custom <see cref="ObjectAliasMap"/>
+    /// entry is offered first; otherwise candidates are generated from the table name after
+    /// stripping any <see cref="PrefixesToIgnore"/>. <c>Insert</c> carries the <c>AS</c> keyword
+    /// when <see cref="IncludeAs"/> is set. Aliases already in scope are skipped.
+    /// </summary>
+    public IReadOnlyList<(string Display, string Insert)> BuildAliasItems(string tableName, ISet<string> existingAliases)
+    {
+        var result = new List<(string, string)>();
+        if (string.IsNullOrEmpty(tableName))
+            return result;
+
+        var candidates = new List<string>(4);
+
+        // 1. Custom object→alias override (offered first).
+        if (ObjectAliasMap != null && ObjectAliasMap.TryGetValue(tableName, out var mapped)
+            && !string.IsNullOrWhiteSpace(mapped))
+        {
+            candidates.Add(mapped);
+        }
+
+        // 2. Generated candidates from the prefix-stripped name.
+        foreach (var c in GenerateAliasCandidates(StripIgnoredPrefixes(tableName)))
+        {
+            if (!candidates.Contains(c, StringComparer.OrdinalIgnoreCase))
+                candidates.Add(c);
+        }
+
+        foreach (var candidate in candidates)
+        {
+            if (existingAliases != null && existingAliases.Contains(candidate))
+                continue;
+            result.Add((candidate, IncludeAs ? "AS " + candidate : candidate));
+        }
+        return result;
+    }
+
+    /// <summary>Returns <paramref name="tableName"/> with the first matching ignored prefix removed.</summary>
+    internal string StripIgnoredPrefixes(string tableName)
+    {
+        if (PrefixesToIgnore == null) return tableName;
+        foreach (var prefix in PrefixesToIgnore)
+        {
+            if (!string.IsNullOrEmpty(prefix) && tableName.Length > prefix.Length
+                && tableName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                return tableName.Substring(prefix.Length);
+            }
+        }
+        return tableName;
     }
 
     /// <summary>

@@ -69,6 +69,9 @@ namespace AkmlSql.Engine.Handlers.Completion
             _engine.SchemaQualifyMode        = settings.IntelliSense.Qualification.SchemaMode;
             _engine.MatchByColumnName        = settings.IntelliSense.JoinOptions.MatchByColumnName;
             _engine.ColumnScopeMode          = settings.IntelliSense.SuggestionTypes.ColumnScope;
+            _engine.AliasIncludeAs           = settings.IntelliSense.AliasOptions.IncludeAs;
+            _engine.AliasObjectMap           = settings.IntelliSense.AliasOptions.ObjectAliasMap;
+            _engine.AliasPrefixesToIgnore    = settings.IntelliSense.AliasOptions.PrefixesToIgnore;
 
             var response = _engine.GetCompletions(documentText, request.CursorOffset, dbCache, request.SessionId);
             return Task.FromResult(response);

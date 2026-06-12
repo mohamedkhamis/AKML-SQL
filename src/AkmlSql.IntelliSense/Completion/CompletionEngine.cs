@@ -17,6 +17,7 @@ public class CompletionEngine
     private readonly JoinOnFkProvider _joinOnFkProvider = new();
     private readonly ObjectProvider _objectProvider = new();
     private readonly ColumnProvider _columnProvider = new();
+    private readonly AliasProvider _aliasProvider = new();
     private int _maxSuggestions = 50;
 
     /// <summary>
@@ -74,6 +75,12 @@ public class CompletionEngine
     /// </summary>
     public ColumnSuggestionScope ColumnScopeMode { get; set; } = ColumnSuggestionScope.ReferencedOnly;
 
+    // Spec 030 T035 / FR-015 — alias generation policy, pushed onto AliasProvider per request.
+    public bool AliasIncludeAs { get; set; } = true;
+    public IReadOnlyDictionary<string, string> AliasObjectMap { get; set; }
+        = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    public IReadOnlyList<string> AliasPrefixesToIgnore { get; set; } = Array.Empty<string>();
+
     public CompletionEngine(TsqlParserService parserService)
     {
         _parserService = parserService;
@@ -91,7 +98,7 @@ public class CompletionEngine
         RegisterProvider(_joinOnFkProvider);
         RegisterProvider(new VariableProvider());
         RegisterProvider(new SnippetProvider());
-        RegisterProvider(new AliasProvider());
+        RegisterProvider(_aliasProvider);
     }
 
     public void RegisterProvider(ICompletionProvider provider)
@@ -289,6 +296,11 @@ public class CompletionEngine
 
             // Push column-suggestion scope into ColumnProvider (FR-012 / T032).
             _columnProvider.ColumnScopeMode = ColumnScopeMode;
+
+            // Push alias-generation policy into AliasProvider (FR-015 / T035).
+            _aliasProvider.IncludeAs = AliasIncludeAs;
+            _aliasProvider.ObjectAliasMap = AliasObjectMap;
+            _aliasProvider.PrefixesToIgnore = AliasPrefixesToIgnore;
 
             // Push join options into JoinOnFkProvider before each request.
             _joinOnFkProvider.MatchByColumnName = MatchByColumnName;
