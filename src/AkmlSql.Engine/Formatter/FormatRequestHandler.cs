@@ -297,6 +297,25 @@ public class FormatRequestHandler(ProfileManager profileManager)
         }
     }
 
+    /// <summary>
+    /// Spec 030 T020 — server-side duplicate of a stored profile (Format Styles editor New/Copy).
+    /// <see cref="ProfileManager.Duplicate"/> loads the source's persisted values, clones them with
+    /// a fresh identity + <c>BasedOn</c> link, and saves under the new name.
+    /// </summary>
+    public DuplicateProfileResponse HandleDuplicateProfile(DuplicateProfileRequest request)
+    {
+        try
+        {
+            var copy = profileManager.Duplicate(request.SourceName, request.NewName);
+            return new DuplicateProfileResponse { Success = true, NewName = copy.Metadata.Name };
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Profile duplicate failed ({Source} -> {New})", request.SourceName, request.NewName);
+            return new DuplicateProfileResponse { Success = false, ErrorMessage = ex.Message };
+        }
+    }
+
     public async Task<BulkFormatReportResponse> HandleBulkFormatAsync(BulkFormatRequest request)
     {
         try

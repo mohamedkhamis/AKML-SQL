@@ -73,6 +73,13 @@ namespace AkmlSql.Shell.Shared.Formatting
                             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
                             FormatActionHelper.ApplyFormattedText(buffer, response.FormattedText);
                         }
+                        else
+                        {
+                            // FR-005: original preserved. FormatSelectionResponse carries no
+                            // Diagnostics, so the notice uses the generic preserve message.
+                            await FormatFailureNotifier.NotifyIfPreservedAsync(
+                                response.Success, response.ValidationPassed, diagnostics: null);
+                        }
                     }
                     catch (Exception ex)
                     {

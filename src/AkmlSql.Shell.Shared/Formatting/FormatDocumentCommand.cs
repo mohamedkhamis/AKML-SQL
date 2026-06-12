@@ -99,6 +99,12 @@ namespace AkmlSql.Shell.Shared.Formatting
                             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
                             FormatActionHelper.ApplyFormattedText(buffer, response.FormattedText);
                         }
+                        else
+                        {
+                            // FR-005: the engine preserved the original — tell the user why.
+                            await FormatFailureNotifier.NotifyIfPreservedAsync(
+                                response.Success, response.ValidationPassed, response.Diagnostics);
+                        }
                     }
                     catch (Exception ex)
                     {

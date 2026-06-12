@@ -154,7 +154,16 @@ namespace AkmlSql.Ssms22
                 var statusBar = (IVsStatusbar)await GetServiceAsync(typeof(SVsStatusbar));
                 if (statusBar != null)
                 {
-                    StatusBarManager.SetLoaded(statusBar);
+                    // Spec 030 T021 / FR-006: annotate the idle status text with the active
+                    // formatting style when the user has opted into it (best-effort).
+                    string? activeStyle = null;
+                    try
+                    {
+                        var fmt = AkmlSql.Core.Config.ConfigManager.Load().Formatter;
+                        if (fmt.ShowProfileInStatusBar) activeStyle = fmt.ActiveProfile;
+                    }
+                    catch (Exception cfgEx) { Log.Debug(cfgEx, "Status-bar active-style annotation: config load failed (using version only)"); }
+                    StatusBarManager.SetLoaded(statusBar, activeStyle);
                 }
 
                 UpdateLauncher.LaunchIfDue();

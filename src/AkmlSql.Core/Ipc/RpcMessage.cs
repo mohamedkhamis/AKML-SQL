@@ -127,6 +127,13 @@ namespace AkmlSql.Core.Ipc
         // Engine → Shell (Spec 020 T031: ProfileExportSqlPrompt result — pairs with request 29)
         public const int ProfileExportSqlPromptResult = 129;
 
+        // Engine → Shell (Spec 030 T020: DuplicateProfile result — pairs with request 32)
+        public const int DuplicateProfileResult = 132;
+
+        // Shell → Engine (Spec 030 T020: Format Styles editor New/Copy — server-side duplicate of
+        //   a stored profile by name via ProfileManager.Duplicate. Pairs with response 132.)
+        public const int DuplicateProfile = 32;
+
         // Shell → Engine (Refactoring — heavyweight preview/apply)
         public const int RequestRefactorPreview = 30;
         public const int RequestRefactorApply = 31;

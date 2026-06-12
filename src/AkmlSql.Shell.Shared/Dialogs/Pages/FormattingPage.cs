@@ -1,6 +1,13 @@
 #nullable enable
+using System;
+using System.Linq;
 using System.Windows.Controls;
+using Microsoft.VisualStudio.Shell;
 using AkmlSql.Core.Config;
+using AkmlSql.Core.Ipc;
+using AkmlSql.Core.Ipc.Messages;
+using AkmlSql.Shell.Shared.Ipc;
+using Serilog;
 
 namespace AkmlSql.Shell.Shared.Dialogs.Pages
 {
@@ -12,6 +19,20 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {
+            // Spec 030 T021 / FR-006 — see + switch the active formatting style.
+            ctx.Rows.AddGroupHeader(panel, "Active style");
+
+            var (rowActive, cboActive) = ctx.Rows.AddDropdown(panel,
+                "Active style",
+                System.Array.Empty<string>(),
+                "The formatting style Format SQL applies. Edit styles in Format Styles editor.");
+            ctx.RegisterSearch("Active style", "The formatting style Format SQL applies", "Dropdown", rowActive);
+
+            var (rowShowProfile, chkShowProfile) = ctx.Rows.AddToggle(panel,
+                "Show active style in status bar", "Display the active formatting style in the status bar");
+            ctx.RegisterSearch("Show active style in status bar", "Display the active formatting style in the status bar", "Toggle", rowShowProfile);
+
+            ctx.Rows.AddGroupSeparator(panel);
             ctx.Rows.AddGroupHeader(panel, "Triggers");
 
             var (rowEnabled, chkEnabled) = ctx.Rows.AddToggle(panel,
@@ -53,13 +74,15 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 "Re-parse formatted SQL to verify it is semantically equivalent");
             ctx.RegisterSearch("Validate formatting preserves semantics", "Re-parse formatted SQL to verify it is semantically equivalent", "Toggle", rowSemantic);
 
-            return new FormattingControls(chkEnabled, chkPaste, chkSave, chkDelim,
+            return new FormattingControls(cboActive, chkShowProfile, chkEnabled, chkPaste, chkSave, chkDelim,
                 chkBulk, chkBackups, chkNoFmt, chkSemantic);
         }
     }
 
     internal sealed class FormattingControls : IPageControls
     {
+        private readonly ComboBox _activeStyle;
+        private readonly CheckBox _showProfile;
         private readonly CheckBox _enabled;
         private readonly CheckBox _onPaste;
         private readonly CheckBox _onSave;
@@ -69,9 +92,12 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         private readonly CheckBox _respectNoformat;
         private readonly CheckBox _semanticValidation;
 
-        public FormattingControls(CheckBox enabled, CheckBox onPaste, CheckBox onSave, CheckBox onDelim,
+        public FormattingControls(ComboBox activeStyle, CheckBox showProfile,
+            CheckBox enabled, CheckBox onPaste, CheckBox onSave, CheckBox onDelim,
             CheckBox bulk, CheckBox backups, CheckBox noFmt, CheckBox semantic)
         {
+            _activeStyle = activeStyle;
+            _showProfile = showProfile;
             _enabled = enabled;
             _onPaste = onPaste;
             _onSave = onSave;
@@ -85,6 +111,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         public void Load(AppSettings settings)
         {
             var f = settings.Formatter;
+            _showProfile.IsChecked = f.ShowProfileInStatusBar;
             _enabled.IsChecked = f.Enabled;
             _onPaste.IsChecked = f.FormatOnPaste;
             _onSave.IsChecked = f.FormatOnSave;
@@ -93,10 +120,20 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             _createBackups.IsChecked = f.CreateBackups;
             _respectNoformat.IsChecked = f.RespectNoformat;
             _semanticValidation.IsChecked = f.SemanticValidation;
+
+            // Seed the dropdown synchronously with the persisted active style so it is never empty,
+            // then fill the full list from the engine (custom + built-in) asynchronously.
+            var active = string.IsNullOrWhiteSpace(f.ActiveProfile) ? "Default" : f.ActiveProfile;
+            SetItems(new[] { active }, active);
+            _ = PopulateProfilesAsync(active);
         }
 
         public void Save(AppSettings settings)
         {
+            var selected = SelectedName();
+            if (!string.IsNullOrEmpty(selected))
+                settings.Formatter.ActiveProfile = selected!;
+            settings.Formatter.ShowProfileInStatusBar = _showProfile.IsChecked == true;
             settings.Formatter.Enabled = _enabled.IsChecked == true;
             settings.Formatter.FormatOnPaste = _onPaste.IsChecked == true;
             settings.Formatter.FormatOnSave = _onSave.IsChecked == true;
@@ -108,5 +145,69 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         }
 
         public void Reset(AppSettings defaults) => Load(defaults);
+
+        private async System.Threading.Tasks.Task PopulateProfilesAsync(string active)
+        {
+            try
+            {
+                var client = EngineLifecycle.Manager?.Client;
+                if (client == null || !client.IsConnected) return;
+
+                var response = await client.SendRequestAsync<ProfileListResponse, ProfileListRequest>(
+                    MessageTypes.ProfileList, new ProfileListRequest(), timeoutMs: 3000);
+
+                var names = (response?.Profiles ?? System.Array.Empty<ProfileInfo>())
+                    .Select(p => p.Name)
+                    .Where(n => !string.IsNullOrWhiteSpace(n))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                if (names.Count == 0) return;
+                if (!names.Any(n => string.Equals(n, active, StringComparison.OrdinalIgnoreCase)))
+                    names.Insert(0, active);
+
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                SetItems(names, active);
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "Active-style dropdown: profile list IPC failed (seed retained)");
+            }
+        }
+
+        private void SetItems(System.Collections.Generic.IEnumerable<string> names, string selectName)
+        {
+            _activeStyle.Items.Clear();
+            foreach (var name in names)
+            {
+                _activeStyle.Items.Add(new ComboBoxItem
+                {
+                    Content = new TextBlock { Text = name },
+                    Foreground = _activeStyle.Foreground,
+                });
+            }
+            SelectByName(selectName);
+        }
+
+        private void SelectByName(string name)
+        {
+            for (int i = 0; i < _activeStyle.Items.Count; i++)
+            {
+                if (_activeStyle.Items[i] is ComboBoxItem item
+                    && item.Content is TextBlock tb
+                    && string.Equals(tb.Text, name, StringComparison.OrdinalIgnoreCase))
+                {
+                    _activeStyle.SelectedIndex = i;
+                    return;
+                }
+            }
+            if (_activeStyle.Items.Count > 0) _activeStyle.SelectedIndex = 0;
+        }
+
+        private string? SelectedName()
+        {
+            if (_activeStyle.SelectedItem is ComboBoxItem item && item.Content is TextBlock tb)
+                return tb.Text;
+            return null;
+        }
     }
 }

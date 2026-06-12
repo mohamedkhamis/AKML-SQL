@@ -96,6 +96,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)IntelliSense\NativeIntelliSenseManager.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatDocumentCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatSelectionCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatFailureNotifier.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\ProfileSelectorDropdown.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatOnPasteHandler.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatOnSaveHandler.cs" />

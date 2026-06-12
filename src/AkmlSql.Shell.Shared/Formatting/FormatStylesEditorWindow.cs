@@ -5,8 +5,11 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using AkmlSql.Shell.Shared.StatusBar;
 using AkmlSql.Shell.Shared.Ui.Theme;
 using Microsoft.VisualStudio.PlatformUI;
+using Microsoft.VisualStudio.Shell;
+using Microsoft.VisualStudio.Shell.Interop;
 using Serilog;
 
 namespace AkmlSql.Shell.Shared.Formatting
@@ -203,6 +206,7 @@ namespace AkmlSql.Shell.Shared.Formatting
         {
             var panel = new Grid();
             panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // header
+            panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // toolbar (T020)
             panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
             var label = new TextBlock
@@ -216,6 +220,19 @@ namespace AkmlSql.Shell.Shared.Formatting
             label.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPrimary);
             Grid.SetRow(label, 0);
             panel.Children.Add(label);
+
+            // Spec 030 T020 / FR-007 — New / Copy / Set Active / Export toolbar.
+            var toolbar = new WrapPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Margin = new Thickness(Spacing.Sm, 0, Spacing.Sm, Spacing.Sm),
+            };
+            toolbar.Children.Add(MakeToolbarButton("New", OnNewStyleAsync));
+            toolbar.Children.Add(MakeToolbarButton("Copy", OnCopyStyleAsync));
+            toolbar.Children.Add(MakeToolbarButton("Set Active", OnSetActiveAsync));
+            toolbar.Children.Add(MakeToolbarButton("Export", OnExportAsync));
+            Grid.SetRow(toolbar, 1);
+            panel.Children.Add(toolbar);
 
             _styleList = new ListBox
             {
@@ -236,11 +253,122 @@ namespace AkmlSql.Shell.Shared.Formatting
                     _viewModel.SelectedProfileName = item.Name;
                 }
             };
-            Grid.SetRow(_styleList, 1);
+            Grid.SetRow(_styleList, 2);
             panel.Children.Add(_styleList);
 
             Grid.SetColumn(panel, 0);
             return panel;
+        }
+
+        private Button MakeToolbarButton(string content, Func<System.Threading.Tasks.Task> onClick)
+        {
+            var btn = new Button
+            {
+                Content = content,
+                Padding = new Thickness(Spacing.Sm, Spacing.Xs, Spacing.Sm, Spacing.Xs),
+                Margin = new Thickness(0, 0, Spacing.Xs, 0),
+                MinWidth = 56,
+                FontFamily = Typography.UiFont,
+                FontSize = Typography.Small,
+            };
+            // async-void click handler is the WPF event idiom; guarded so a faulted task can't crash the host.
+            btn.Click += async (_, _) =>
+            {
+                try { await onClick(); }
+                catch (Exception ex) { Log.Warning(ex, "FormatStylesEditor: toolbar action '{Action}' failed", content); SetStatus(ex.Message); }
+            };
+            return btn;
+        }
+
+        /// <summary>The currently-selected style name, or null when nothing is selected.</summary>
+        private string? SelectedStyle()
+            => (_styleList?.SelectedItem as StyleListItem)?.Name ?? _viewModel.SelectedProfileName;
+
+        private async System.Threading.Tasks.Task OnNewStyleAsync()
+        {
+            var created = await _viewModel.NewProfileAsync();
+            AfterCreate(created, "New style created");
+        }
+
+        private async System.Threading.Tasks.Task OnCopyStyleAsync()
+        {
+            var source = SelectedStyle();
+            if (string.IsNullOrEmpty(source)) { SetStatus("Select a style to copy."); return; }
+            var created = await _viewModel.CopyProfileAsync(source!);
+            AfterCreate(created, $"Copied '{source}'");
+        }
+
+        private System.Threading.Tasks.Task OnSetActiveAsync()
+        {
+            var name = SelectedStyle();
+            if (string.IsNullOrEmpty(name)) { SetStatus("Select a style to make active."); return System.Threading.Tasks.Task.CompletedTask; }
+            if (_viewModel.SetActiveProfile(name!))
+            {
+                SetStatus($"Active style: {name}");
+                UpdateStatusBarActiveStyle(name!);
+            }
+            else
+            {
+                SetStatus(_viewModel.LastError ?? "Could not set active style.");
+            }
+            return System.Threading.Tasks.Task.CompletedTask;
+        }
+
+        private async System.Threading.Tasks.Task OnExportAsync()
+        {
+            var name = SelectedStyle();
+            if (string.IsNullOrEmpty(name)) { SetStatus("Select a style to export."); return; }
+            var dialog = new Microsoft.Win32.SaveFileDialog
+            {
+                Title = "Export formatting style",
+                FileName = name + ".sqlpromptstylev2",
+                Filter = "SQL Prompt style (*.sqlpromptstylev2)|*.sqlpromptstylev2|All files (*.*)|*.*",
+                DefaultExt = ".sqlpromptstylev2",
+                OverwritePrompt = true,
+            };
+            if (dialog.ShowDialog(this) != true) return;
+            if (await _viewModel.ExportProfileAsync(name!, dialog.FileName))
+                SetStatus($"Exported '{name}'");
+            else
+                SetStatus(_viewModel.LastError ?? "Export failed.");
+        }
+
+        /// <summary>Selects the newly created style in the list + reports status.</summary>
+        private void AfterCreate(string? created, string okMessage)
+        {
+            if (string.IsNullOrEmpty(created)) { SetStatus(_viewModel.LastError ?? "Operation failed."); return; }
+            if (_styleList != null)
+            {
+                foreach (var obj in _styleList.Items)
+                {
+                    if (obj is StyleListItem item && string.Equals(item.Name, created, StringComparison.OrdinalIgnoreCase))
+                    {
+                        _styleList.SelectedItem = item;
+                        _styleList.ScrollIntoView(item);
+                        break;
+                    }
+                }
+            }
+            SetStatus(okMessage);
+        }
+
+        private void SetStatus(string text)
+        {
+            if (_statusText != null) _statusText.Text = text;
+        }
+
+        private static void UpdateStatusBarActiveStyle(string name)
+        {
+            try
+            {
+                ThreadHelper.ThrowIfNotOnUIThread();
+                var statusBar = (IVsStatusbar?)Package.GetGlobalService(typeof(SVsStatusbar));
+                if (statusBar != null) StatusBarManager.SetActiveProfile(statusBar, name);
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "FormatStylesEditor: status-bar active-style update failed (best-effort)");
+            }
         }
 
         private static DataTemplate BuildStyleListItemTemplate()
@@ -412,8 +540,59 @@ namespace AkmlSql.Shell.Shared.Formatting
             bottomBorder.SetResourceReference(Panel.BackgroundProperty, ThemeTokens.EditorPopupBackground);
 
             var bottomStack = new Grid();
-            bottomStack.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            bottomStack.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            bottomStack.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // T019 source toggle
+            bottomStack.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // warning bar
+            bottomStack.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // preview
+
+            // Spec 030 T019 / FR-008 — preview the active style against the sample OR the SQL from
+            // the editor that was open when this dialog launched.
+            var sourceBar = new Border
+            {
+                Padding = new Thickness(Spacing.Md, Spacing.Xs, Spacing.Md, Spacing.Xs),
+                BorderThickness = new Thickness(0, 0, 0, 1),
+            };
+            sourceBar.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.BorderSubtle);
+            var sourceStack = new StackPanel { Orientation = Orientation.Horizontal };
+            var sourceLabel = new TextBlock
+            {
+                Text = "Preview:",
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, Spacing.Sm, 0),
+                FontFamily = Typography.UiFont,
+                FontSize = Typography.Small,
+            };
+            sourceLabel.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+            var rbSample = new RadioButton
+            {
+                Content = "Sample",
+                GroupName = "akmlPreviewSource",
+                IsChecked = true,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, Spacing.Md, 0),
+                FontFamily = Typography.UiFont,
+                FontSize = Typography.Small,
+            };
+            rbSample.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
+            var rbCurrent = new RadioButton
+            {
+                Content = "Current query",
+                GroupName = "akmlPreviewSource",
+                VerticalAlignment = VerticalAlignment.Center,
+                FontFamily = Typography.UiFont,
+                FontSize = Typography.Small,
+                // Disabled (with a hint) when no editor query was captured at launch.
+                IsEnabled = _viewModel.HasCurrentQuery,
+                ToolTip = _viewModel.HasCurrentQuery ? null : "No active SQL editor when this dialog opened.",
+            };
+            rbCurrent.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
+            rbSample.Checked += (_, _) => _viewModel.PreviewSourceMode = FormatPreviewSource.Sample;
+            rbCurrent.Checked += (_, _) => _viewModel.PreviewSourceMode = FormatPreviewSource.CurrentQuery;
+            sourceStack.Children.Add(sourceLabel);
+            sourceStack.Children.Add(rbSample);
+            sourceStack.Children.Add(rbCurrent);
+            sourceBar.Child = sourceStack;
+            Grid.SetRow(sourceBar, 0);
+            bottomStack.Children.Add(sourceBar);
 
             _previewWarningBar = new Border
             {
@@ -434,7 +613,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             };
             _previewWarningText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPrimary);
             _previewWarningBar.Child = _previewWarningText;
-            Grid.SetRow(_previewWarningBar, 0);
+            Grid.SetRow(_previewWarningBar, 1);
             bottomStack.Children.Add(_previewWarningBar);
 
             _previewTextBox = new TextBox
@@ -452,7 +631,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                 Text = "// Live preview will appear after the schema loads and a profile is selected.",
             };
             _previewTextBox.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
-            Grid.SetRow(_previewTextBox, 1);
+            Grid.SetRow(_previewTextBox, 2);
             bottomStack.Children.Add(_previewTextBox);
 
             bottomBorder.Child = bottomStack;
@@ -865,6 +1044,9 @@ namespace AkmlSql.Shell.Shared.Formatting
             try
             {
                 var vm = new FormatStylesEditorViewModel();
+                // Spec 030 T019 / FR-008 — capture the active editor's SQL so the preview can run
+                // against it (set before constructing the window so the toggle reflects availability).
+                vm.CurrentQueryText = TryGetActiveDocumentText() ?? string.Empty;
                 var window = new FormatStylesEditorWindow(vm);
                 window.ShowDialog();
             }
@@ -876,6 +1058,30 @@ namespace AkmlSql.Shell.Shared.Formatting
                     "AKML SQL",
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);
+            }
+        }
+
+        /// <summary>
+        /// Best-effort capture of the active editor's full text via DTE (spec 030 T019 / FR-008).
+        /// Works in both SSMS 22 and VS 2026 (Pattern B — DTE.ActiveDocument, not IVsTextManager
+        /// which is unreliable outside a command Execute). Returns null when there is no active
+        /// SQL document.
+        /// </summary>
+        private static string? TryGetActiveDocumentText()
+        {
+            try
+            {
+                ThreadHelper.ThrowIfNotOnUIThread();
+                if (Package.GetGlobalService(typeof(EnvDTE.DTE)) is not EnvDTE.DTE dte) return null;
+                var doc = dte.ActiveDocument;
+                if (doc?.Object("TextDocument") is not EnvDTE.TextDocument td) return null;
+                var text = td.StartPoint.CreateEditPoint().GetText(td.EndPoint);
+                return string.IsNullOrWhiteSpace(text) ? null : text;
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "FormatStylesEditor: capturing active document text failed (sample preview used)");
+                return null;
             }
         }
     }

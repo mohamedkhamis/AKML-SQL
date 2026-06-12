@@ -129,4 +129,19 @@ namespace AkmlSql.Engine.Handlers.Formatting
         public Task<StyleEditorSchemaResponse> HandleAsync(StyleEditorSchemaRequest request, RpcContext ctx, CancellationToken ct)
             => Task.FromResult(_inner.HandleStyleEditorSchema(request));
     }
+
+    /// <summary>
+    /// Spec 030 T020 — Format Styles editor New/Copy: server-side duplicate of a stored profile.
+    /// Routes <see cref="MessageTypes.DuplicateProfile"/> (32) to
+    /// <see cref="FormatRequestHandler.HandleDuplicateProfile"/>, responds on 132.
+    /// </summary>
+    public sealed class DuplicateProfileHandler : IRpcRequestHandler<DuplicateProfileRequest, DuplicateProfileResponse>
+    {
+        private readonly FormatRequestHandler _inner;
+        public DuplicateProfileHandler(FormatRequestHandler inner) => _inner = inner ?? throw new ArgumentNullException(nameof(inner));
+        public int RequestMessageType => MessageTypes.DuplicateProfile;
+        public int ResponseMessageType => MessageTypes.DuplicateProfileResult;
+        public Task<DuplicateProfileResponse> HandleAsync(DuplicateProfileRequest request, RpcContext ctx, CancellationToken ct)
+            => Task.FromResult(_inner.HandleDuplicateProfile(request));
+    }
 }
