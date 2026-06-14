@@ -101,6 +101,10 @@ namespace AkmlSql.Core.Ipc
         public const int RequestAnalyze = 25;
         public const int AnalysisSettingsChanged = 26;
 
+        // Shell → Engine (Spec 030 T052: Manage Rules dialog — request the full rule catalog.
+        //   Pairs with response 133.)
+        public const int ListAnalysisRules = 33;
+
         // Shell → Engine (Wildcard Expansion)
         public const int WildcardExpansion = 27;
 
@@ -117,6 +121,9 @@ namespace AkmlSql.Core.Ipc
 
         // Engine → Shell (Code Analysis)
         public const int AnalysisResult = 125;
+
+        // Engine → Shell (Spec 030 T052: ListAnalysisRules result — pairs with request 33)
+        public const int ListAnalysisRulesResult = 133;
 
         // Engine → Shell (Wildcard Expansion)
         public const int WildcardExpansionResult = 127;
