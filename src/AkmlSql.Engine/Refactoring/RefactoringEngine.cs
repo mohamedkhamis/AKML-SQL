@@ -41,6 +41,10 @@ public class RefactoringEngine(TsqlParserService parser, SchemaCacheManager sche
                     await new ParameterizeValuesOperation().PreviewAsync(request, ctx, ct),
                 RefactorOperationType.SplitTable =>
                     await new SplitTableOperation().PreviewAsync(request, ctx, ct),
+                RefactorOperationType.InlineExec =>           // Spec 030 T064
+                    await new InlineExecOperation().PreviewAsync(request, ctx, ct),
+                RefactorOperationType.InsertToUpdate =>       // Spec 030 T065
+                    await new InsertToUpdateOperation().PreviewAsync(request, ctx, ct),
                 _ => new RefactorPreviewResponse
                 {
                     CanApply = false,
@@ -84,6 +88,10 @@ public class RefactoringEngine(TsqlParserService parser, SchemaCacheManager sche
                     await new ParameterizeValuesOperation().ApplyAsync(request, ct),
                 RefactorOperationType.SplitTable =>
                     await new SplitTableOperation().ApplyAsync(request, ct),
+                RefactorOperationType.InlineExec =>           // Spec 030 T064
+                    await new InlineExecOperation().ApplyAsync(request, ct),
+                RefactorOperationType.InsertToUpdate =>       // Spec 030 T065
+                    await new InsertToUpdateOperation().ApplyAsync(request, ct),
                 _ => new RefactorApplyResponse { Success = false }
             };
         }

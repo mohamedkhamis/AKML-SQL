@@ -19,6 +19,21 @@ public abstract class HeavyweightOperationBase
 
     // ── Shared text utilities ────────────────────────────────────────────────
 
+    /// <summary>
+    /// Spec 030 (review): returns an end offset that excludes a trailing statement terminator. If the
+    /// span <c>[start, end)</c> ends with optional whitespace then a <c>;</c>, the returned end points
+    /// just before the <c>;</c> so replacing <c>[start, newEnd)</c> leaves the <c>;</c> in the document
+    /// (a statement-replacing refactor must not swallow the terminator).
+    /// </summary>
+    protected internal static int TrimTrailingTerminator(string docText, int start, int end)
+    {
+        int probe = Math.Min(end, docText.Length);
+        while (probe > start && char.IsWhiteSpace(docText[probe - 1])) probe--;
+        if (probe > start && docText[probe - 1] == ';')
+            return probe - 1; // exclude the ';'
+        return Math.Min(end, docText.Length);
+    }
+
     protected internal static (int line, int col) OffsetToLineCol(string text, int offset)
     {
         int line = 1, col = 1;

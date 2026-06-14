@@ -12,7 +12,9 @@ namespace AkmlSql.Core.Ipc.Messages
         ConvertTempToTableVar = 5,
         ConvertTableVarToTemp = 6,
         ParameterizeValues    = 7,
-        SplitTable            = 8
+        SplitTable            = 8,
+        InlineExec            = 9,  // Spec 030 T064
+        InsertToUpdate        = 10  // Spec 030 T065
     }
 
     public enum RefactorScope
