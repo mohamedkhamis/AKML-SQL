@@ -125,7 +125,10 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         public bool HasContent => _hasContent;
 
         /// <summary>
-        /// Populate both tabs from a QuickInfoResponse.
+        /// Populate the Summary tab from a QuickInfoResponse and reset the Script tab to a loading
+        /// placeholder. The real CREATE script is supplied separately via <see cref="SetScript"/>
+        /// (spec 030 T027 — the Script tab shows the object's DDL, not the MS_Description text; the
+        /// description, when present, becomes a Summary row so it is not lost).
         /// </summary>
         public void UpdateContent(
             string objectType,
@@ -137,18 +140,25 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             var typeLabel = string.IsNullOrEmpty(objectType) ? "" : objectType + ": ";
             _headerText.Text = typeLabel + (header ?? string.Empty);
 
-            // Summary tab: detail rows
+            // Summary tab: detail rows, then the description (if any) as a final row.
             _summaryContent.Children.Clear();
+            int rowCount = 0;
             if (details != null)
             {
                 foreach (var detail in details)
                 {
-                    var row = CreateDetailRow(detail.Label, detail.Value);
-                    _summaryContent.Children.Add(row);
+                    _summaryContent.Children.Add(CreateDetailRow(detail.Label, detail.Value));
+                    rowCount++;
                 }
             }
 
-            if (details == null || details.Length == 0)
+            if (!string.IsNullOrWhiteSpace(description))
+            {
+                _summaryContent.Children.Add(CreateDetailRow("Description", description));
+                rowCount++;
+            }
+
+            if (rowCount == 0)
             {
                 var empty = new TextBlock
                 {
@@ -161,21 +171,27 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 _summaryContent.Children.Add(empty);
             }
 
-            // Script tab: DDL
-            if (!string.IsNullOrWhiteSpace(description))
-            {
-                _scriptContent.Text = description;
-            }
-            else
-            {
-                _scriptContent.Text = "-- No script available";
-            }
+            // Script tab: real DDL arrives asynchronously via SetScript — show a placeholder until then.
+            _scriptContent.Text = "-- Loading definition…";
 
             // Switch to Summary tab by default
             _tabControl.SelectedIndex = 0;
 
             _hasContent = true;
             Visibility  = Visibility.Visible;
+        }
+
+        /// <summary>
+        /// Spec 030 T027 (FR-017) — set the Script tab to the object's CREATE definition. When
+        /// <paramref name="definition"/> is empty, shows a commented <paramref name="unavailableReason"/>
+        /// (e.g. "No definition for this item type"). Called by the controller after the object
+        /// definition is fetched from the engine.
+        /// </summary>
+        public void SetScript(string? definition, string? unavailableReason)
+        {
+            _scriptContent.Text = !string.IsNullOrWhiteSpace(definition)
+                ? definition
+                : "-- " + (string.IsNullOrWhiteSpace(unavailableReason) ? "No definition available" : unavailableReason);
         }
 
         /// <summary>Clear all content and hide the panel.</summary>

@@ -42,6 +42,13 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         // columns at the live caret rather than replacing a '*'.
         private bool _columnPickerMode;
 
+        // Spec 030 T027 / FR-017 — the object-definition panel's Script tab is filled with the real
+        // CREATE script (via GetObjectDefinition) for the currently-shown completion item. Cached per
+        // session by full name so re-selecting the same object doesn't re-query the engine.
+        private CompletionItemModel _currentDefinitionItem;
+        private readonly System.Collections.Generic.Dictionary<string, string> _definitionCache =
+            new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
         public IOleCommandTarget NextTarget { get; set; }
 
         /// <summary>
@@ -658,7 +665,8 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                                     InsertText = item.InsertText ?? item.DisplayText ?? string.Empty,
                                     SecondaryText = item.SecondaryText ?? string.Empty,
                                     ObjectType = item.ObjectType,
-                                    SortPriority = item.SortPriority
+                                    SortPriority = item.SortPriority,
+                                    SourceObject = item.SourceObject ?? string.Empty
                                 });
                             }
 
@@ -1022,6 +1030,10 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             // from the engine with the correct context (e.g., keywords after table name,
             // not table names after FROM).
             CompletionRpcHelper.ClearCache(_sessionId);
+            // T027 — the object-definition cache lives only for one popup session: clearing on close
+            // keeps the within-session re-selection benefit while picking up mid-session DDL changes
+            // on the next open (and bounds its growth).
+            _definitionCache.Clear();
         }
 
         private string GetWordAtCaret()
@@ -1272,6 +1284,9 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                                 response.Description);
                             _adornment.ShowDefinition();
                             _adornment.RepositionDefinition();
+
+                            // T027 — fill the Script tab with the object's real CREATE definition.
+                            LoadScriptTab(item);
                         }
                         else
                         {
@@ -1299,11 +1314,149 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             Interlocked.Increment(ref _quickInfoVersion);
             _quickInfoTimer?.Dispose();
             _quickInfoTimer = null;
+            _currentDefinitionItem = null;   // T027 — drop any in-flight Script-tab fetch result
             try
             {
                 _adornment.HideDefinition();
             }
             catch { }
+        }
+
+        /// <summary>
+        /// Spec 030 T027 / FR-017 — eagerly populate the definition panel's Script tab with the
+        /// object's CREATE script. Gated to definition-bearing item types; identity comes from the
+        /// engine's authoritative <see cref="CompletionItemModel.SourceObject"/> (clean even for
+        /// decorated FK-join items). Cached per full name; a response is applied only if the selection
+        /// has not moved on (reference guard). Runs on the UI thread (called from the QuickInfo block).
+        /// </summary>
+        private void LoadScriptTab(CompletionItemModel item)
+        {
+            _currentDefinitionItem = item;
+            if (item == null) return;
+
+            // Only Table / View / Function / Procedure have a CREATE definition.
+            if (item.ObjectType != 0 && item.ObjectType != 1 && item.ObjectType != 5 && item.ObjectType != 6)
+            {
+                _adornment.DefinitionPanel.SetScript(null, "No definition for this item type");
+                return;
+            }
+
+            if (!TryParseObjectIdentity(item.SourceObject, out var objectName, out var schemaName))
+            {
+                _adornment.DefinitionPanel.SetScript(null, "No definition available");
+                return;
+            }
+
+            var cacheKey = (schemaName != null ? schemaName + "." : string.Empty) + objectName;
+            if (_definitionCache.TryGetValue(cacheKey, out var cachedDef))
+            {
+                _adornment.DefinitionPanel.SetScript(cachedDef, null);
+                return;
+            }
+
+            var target = item;
+            System.Threading.Tasks.Task.Run(async () =>
+            {
+                try
+                {
+                    var client = Ipc.EngineLifecycle.Manager?.Client;
+                    if (client == null || !client.IsConnected)
+                    {
+                        ResetScriptTabIfCurrent(target, "Definition unavailable");
+                        return;
+                    }
+
+                    var response = await client.SendRequestAsync<
+                        AkmlSql.Core.Ipc.Messages.GetObjectDefinitionResponse,
+                        AkmlSql.Core.Ipc.Messages.GetObjectDefinitionRequest>(
+                        AkmlSql.Core.Ipc.MessageTypes.GetObjectDefinition,
+                        new AkmlSql.Core.Ipc.Messages.GetObjectDefinitionRequest
+                        {
+                            SessionId = _sessionId,
+                            ObjectName = objectName,
+                            SchemaName = schemaName,
+                            PeekOnly = true
+                        },
+                        timeoutMs: 5000);
+
+                    _textView.VisualElement.Dispatcher.Invoke(() =>
+                    {
+                        // Selection moved on, or the panel was dismissed — drop a stale result.
+                        if (!ReferenceEquals(_currentDefinitionItem, target)) return;
+                        if (!_adornment.DefinitionPanel.HasContent) return;
+
+                        if (response != null && response.Success && !string.IsNullOrWhiteSpace(response.Definition))
+                        {
+                            _definitionCache[cacheKey] = response.Definition;
+                            _adornment.DefinitionPanel.SetScript(response.Definition, null);
+                        }
+                        else
+                        {
+                            _adornment.DefinitionPanel.SetScript(null, response?.Error ?? "Definition not found");
+                        }
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Log.Debug(ex, "Object-definition (Script tab) fetch failed");
+                    // Timeout / disconnect / engine error all throw here — clear the placeholder so the
+                    // Script tab doesn't sit on "-- Loading definition…" forever (symmetric with success).
+                    ResetScriptTabIfCurrent(target, "Definition unavailable");
+                }
+            });
+        }
+
+        /// <summary>
+        /// Replaces the Script tab's loading placeholder with an unavailable message, but only if the
+        /// target is still the selected item and the panel is still showing. Marshals to the UI thread;
+        /// tolerant of a tearing-down view.
+        /// </summary>
+        private void ResetScriptTabIfCurrent(CompletionItemModel target, string reason)
+        {
+            try
+            {
+                _textView.VisualElement.Dispatcher.Invoke(() =>
+                {
+                    if (!ReferenceEquals(_currentDefinitionItem, target)) return;
+                    if (!_adornment.DefinitionPanel.HasContent) return;
+                    _adornment.DefinitionPanel.SetScript(null, reason);
+                });
+            }
+            catch { /* view tearing down */ }
+        }
+
+        /// <summary>
+        /// Parses the engine's <c>schema.object</c> SourceObject into (objectName, schemaName?).
+        /// Rejects empty / whitespace-bearing names (defensive — SourceObject is normally clean, but
+        /// this guards against any decorated value slipping through).
+        /// </summary>
+        private static bool TryParseObjectIdentity(string sourceObject, out string objectName, out string schemaName)
+        {
+            objectName = string.Empty;
+            schemaName = null;
+            if (string.IsNullOrWhiteSpace(sourceObject)) return false;
+
+            var raw = sourceObject.Replace("[", string.Empty).Replace("]", string.Empty).Trim();
+            if (raw.Length == 0) return false;
+
+            var parts = raw.Split('.');
+            var name = parts[parts.Length - 1].Trim();
+            if (name.Length == 0 || HasWhitespace(name)) return false;
+            objectName = name;
+
+            if (parts.Length >= 2)
+            {
+                var sch = parts[parts.Length - 2].Trim();
+                if (sch.Length > 0 && !HasWhitespace(sch)) schemaName = sch;
+            }
+            return true;
+        }
+
+        private static bool HasWhitespace(string s)
+        {
+            for (int i = 0; i < s.Length; i++)
+                if (char.IsWhiteSpace(s[i])) return true;
+            return false;
         }
 
         #endregion
