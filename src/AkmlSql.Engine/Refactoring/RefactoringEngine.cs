@@ -45,6 +45,8 @@ public class RefactoringEngine(TsqlParserService parser, SchemaCacheManager sche
                     await new InlineExecOperation().PreviewAsync(request, ctx, ct),
                 RefactorOperationType.InsertToUpdate =>       // Spec 030 T065
                     await new InsertToUpdateOperation().PreviewAsync(request, ctx, ct),
+                RefactorOperationType.InlineStoredProcedure => // Spec 030 T063
+                    await new InlineStoredProcOperation().PreviewAsync(request, ctx, ct),
                 _ => new RefactorPreviewResponse
                 {
                     CanApply = false,
@@ -92,6 +94,8 @@ public class RefactoringEngine(TsqlParserService parser, SchemaCacheManager sche
                     await new InlineExecOperation().ApplyAsync(request, ct),
                 RefactorOperationType.InsertToUpdate =>       // Spec 030 T065
                     await new InsertToUpdateOperation().ApplyAsync(request, ct),
+                RefactorOperationType.InlineStoredProcedure => // Spec 030 T063
+                    await new InlineStoredProcOperation().ApplyAsync(request, ct),
                 _ => new RefactorApplyResponse { Success = false }
             };
         }
@@ -108,6 +112,9 @@ public class RefactoringEngine(TsqlParserService parser, SchemaCacheManager sche
         var cache = session != null
             ? schemaCacheManager.GetCache(request.SessionId, session.DatabaseName)
             : null;
+        // Spec 030 T063: only a live, connected session exposes its connection string; operations
+        // that need a catalog lookup (Inline Stored Procedure) require it and otherwise refuse.
+        var connectionString = session is { IsConnected: true } ? session.ConnectionString : null;
 
         var script = parser.Parse(request.DocumentText, out _) ?? new Microsoft.SqlServer.TransactSql.ScriptDom.TSqlScript();
         var tokens = parser.GetTokenStream(request.DocumentText);
@@ -124,6 +131,7 @@ public class RefactoringEngine(TsqlParserService parser, SchemaCacheManager sche
             SessionId         = request.SessionId,
             Settings          = settings,
             SchemaCache       = cache,
+            ConnectionString  = connectionString,
             AdditionalFilePaths = request.AdditionalFilePaths
         };
     }

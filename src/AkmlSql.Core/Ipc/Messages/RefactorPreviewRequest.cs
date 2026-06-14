@@ -14,7 +14,8 @@ namespace AkmlSql.Core.Ipc.Messages
         ParameterizeValues    = 7,
         SplitTable            = 8,
         InlineExec            = 9,  // Spec 030 T064
-        InsertToUpdate        = 10  // Spec 030 T065
+        InsertToUpdate        = 10, // Spec 030 T065
+        InlineStoredProcedure = 11  // Spec 030 T063
     }
 
     public enum RefactorScope
