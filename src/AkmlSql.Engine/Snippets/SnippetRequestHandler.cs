@@ -49,10 +49,37 @@ public class SnippetRequestHandler
         };
 
         var expandedText = _variableResolver.Resolve(bodyText, context);
-        var cursorOffset = PlaceholderParser.FindCursorOffset(expandedText);
-        expandedText = expandedText.Replace("$CURSOR$", "", StringComparison.OrdinalIgnoreCase);
 
-        // Adjust cursor offset for removed $CURSOR$ marker
+        // Locate the markers in the resolved text BEFORE stripping. $CURSOR$ positions the caret;
+        // $SELECTIONSTART$/$SELECTIONEND$ delimit the post-expansion selection (T040/T047). All three
+        // are stripped, so each surviving offset must be remapped against the FINAL text — a marker
+        // shifts every offset that appears AFTER it by its own length.
+        var rawCursor   = expandedText.IndexOf("$CURSOR$",         StringComparison.OrdinalIgnoreCase);
+        var rawSelStart = expandedText.IndexOf("$SELECTIONSTART$", StringComparison.OrdinalIgnoreCase);
+        var rawSelEnd   = expandedText.IndexOf("$SELECTIONEND$",   StringComparison.OrdinalIgnoreCase);
+
+        expandedText = expandedText
+            .Replace("$CURSOR$",         "", StringComparison.OrdinalIgnoreCase)
+            .Replace("$SELECTIONSTART$", "", StringComparison.OrdinalIgnoreCase)
+            .Replace("$SELECTIONEND$",   "", StringComparison.OrdinalIgnoreCase);
+
+        // Strict '<' so a marker never subtracts its own length; -1 (absent) maps to -1.
+        int MapOffset(int raw)
+        {
+            if (raw < 0) return -1;
+            var shift = 0;
+            if (rawCursor   >= 0 && rawCursor   < raw) shift += "$CURSOR$".Length;
+            if (rawSelStart >= 0 && rawSelStart < raw) shift += "$SELECTIONSTART$".Length;
+            if (rawSelEnd   >= 0 && rawSelEnd   < raw) shift += "$SELECTIONEND$".Length;
+            return raw - shift;
+        }
+
+        var cursorOffset     = MapOffset(rawCursor);
+        var selectionStart   = MapOffset(rawSelStart);
+        var selectionEnd     = MapOffset(rawSelEnd);
+
+        // Adjust cursor offset for removed $CURSOR$ marker (caret falls at end-of-text when absent).
+        // Selection offsets stay -1 when absent — they are not clamped.
         if (cursorOffset < 0) cursorOffset = expandedText.Length;
 
         var placeholders = PlaceholderParser.Parse(expandedText, snippet.Variables);
@@ -63,6 +90,8 @@ public class SnippetRequestHandler
             ExpandedText = expandedText,
             Placeholders = placeholders.ToArray(),
             CursorOffset = cursorOffset,
+            SelectionStartOffset = selectionStart,
+            SelectionEndOffset = selectionEnd,
             WasFormatted = false // TODO: integrate format-on-expand
         };
     }
@@ -220,7 +249,7 @@ public class SnippetRequestHandler
 
     private static List<Snippet>? ParseImportContent(string content, int sourceFormat)
     {
-        // SourceFormat: 0=Auto, 4=AkmlSnippet
+        // SourceFormat: 0=Auto, 1=SqlPromptXml, 4=AkmlSnippet
         if (sourceFormat == 4 || sourceFormat == 0)
         {
             var result = TryParseAkmlSnippet(content);
@@ -228,11 +257,20 @@ public class SnippetRequestHandler
                 return result;
         }
 
+        // .sqlpromptsnippet (SQL Prompt XML) — T042/T043, FR-032. In Auto mode this runs AFTER the
+        // AkmlSnippet (JSON) probe, which throws JsonException on XML and returns null, so we reach here.
+        if (sourceFormat == 1 || sourceFormat == 0)
+        {
+            var result = SqlPromptSnippetParser.ParseXml(content);
+            if (result.Count > 0)
+                return result;
+        }
+
         if (sourceFormat == 0)
         {
             Log.Warning("Auto-detect: no supported format matched the import content");
         }
-        else if (sourceFormat != 4)
+        else if (sourceFormat != 4 && sourceFormat != 1)
         {
             Log.Warning("Source format {Format} is not yet supported for import", sourceFormat);
         }

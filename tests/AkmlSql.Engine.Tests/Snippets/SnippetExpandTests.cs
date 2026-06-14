@@ -1,5 +1,6 @@
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Engine.Snippets;
+using MessagePack;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Snippets;
@@ -62,6 +63,95 @@ public sealed class SnippetExpandTests : System.IDisposable
         var resp = handler.HandleExpand(new SnippetExpandRequest { Shortcode = "no-such-code" });
 
         Assert.False(resp.Success);
+    }
+
+    // ── Selection-range markers $SELECTIONSTART$ / $SELECTIONEND$ (T040 / T047) ──
+
+    [Fact]
+    public void Response_RoundTrip_PreservesSelectionOffsets()
+    {
+        var original = new SnippetExpandResponse
+        {
+            Success = true,
+            ExpandedText = "SELECT 1",
+            CursorOffset = 8,
+            SelectionStartOffset = 0,
+            SelectionEndOffset = 6,
+            WasFormatted = true
+        };
+
+        var bytes = MessagePackSerializer.Serialize(original);
+        var copy = MessagePackSerializer.Deserialize<SnippetExpandResponse>(bytes);
+
+        Assert.Equal(original.Success, copy.Success);
+        Assert.Equal(original.ExpandedText, copy.ExpandedText);
+        Assert.Equal(original.CursorOffset, copy.CursorOffset);
+        Assert.Equal(0, copy.SelectionStartOffset);
+        Assert.Equal(6, copy.SelectionEndOffset);
+        Assert.Equal(original.WasFormatted, copy.WasFormatted);
+    }
+
+    [Fact]
+    public void Response_DefaultSelectionOffsets_AreMinusOne()
+    {
+        // A fresh response (e.g. the failure path) must serialize -1, not 0, for both selection fields.
+        var resp = new SnippetExpandResponse { Success = false };
+
+        var copy = MessagePackSerializer.Deserialize<SnippetExpandResponse>(
+            MessagePackSerializer.Serialize(resp));
+
+        Assert.Equal(-1, copy.SelectionStartOffset);
+        Assert.Equal(-1, copy.SelectionEndOffset);
+    }
+
+    [Fact]
+    public void Expand_SelectionMarkers_ReportOffsets_AndStripMarkers()
+    {
+        // Body laid out as a single line so offsets are easy to reason about:
+        //   $SELECTIONSTART$SELECT$SELECTIONEND$ $CURSOR$  →  "SELECT "
+        WriteSnippet(_builtInDir, "zsel", "$SELECTIONSTART$SELECT$SELECTIONEND$ $CURSOR$");
+        var handler = new SnippetRequestHandler(_personalDir, _builtInDir);
+
+        var resp = handler.HandleExpand(new SnippetExpandRequest { Shortcode = "zsel" });
+
+        Assert.True(resp.Success);
+        Assert.Equal("SELECT ", resp.ExpandedText);
+        Assert.DoesNotContain("$SELECTIONSTART$", resp.ExpandedText);
+        Assert.DoesNotContain("$SELECTIONEND$", resp.ExpandedText);
+        Assert.DoesNotContain("$CURSOR$", resp.ExpandedText);
+        Assert.Equal(0, resp.SelectionStartOffset); // selection begins at start of "SELECT"
+        Assert.Equal(6, resp.SelectionEndOffset);   // selection ends after "SELECT"
+        Assert.Equal(7, resp.CursorOffset);          // caret lands after the trailing space
+    }
+
+    [Fact]
+    public void Expand_NoSelectionMarkers_OffsetsAreMinusOne()
+    {
+        WriteSnippet(_builtInDir, "znosel", "SELECT *", "FROM $CURSOR$");
+        var handler = new SnippetRequestHandler(_personalDir, _builtInDir);
+
+        var resp = handler.HandleExpand(new SnippetExpandRequest { Shortcode = "znosel" });
+
+        Assert.True(resp.Success);
+        Assert.Equal(-1, resp.SelectionStartOffset);
+        Assert.Equal(-1, resp.SelectionEndOffset);
+        Assert.Equal("SELECT *\nFROM ".Length, resp.CursorOffset); // unchanged $CURSOR$ behavior
+    }
+
+    [Fact]
+    public void Expand_SelectionMarkers_WithoutCursor_ClampCursorToEnd()
+    {
+        // No $CURSOR$ → caret clamps to end-of-text; selection offsets must still be exact.
+        WriteSnippet(_builtInDir, "zselnc", "($SELECTIONSTART$x$SELECTIONEND$)");
+        var handler = new SnippetRequestHandler(_personalDir, _builtInDir);
+
+        var resp = handler.HandleExpand(new SnippetExpandRequest { Shortcode = "zselnc" });
+
+        Assert.True(resp.Success);
+        Assert.Equal("(x)", resp.ExpandedText);
+        Assert.Equal(1, resp.SelectionStartOffset); // after the '('
+        Assert.Equal(2, resp.SelectionEndOffset);   // after the 'x'
+        Assert.Equal(3, resp.CursorOffset);          // clamped to end of "(x)"
     }
 
     // ── Shipped built-in pack (T041 / FR-031) ──

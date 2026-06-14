@@ -48,7 +48,9 @@ public class BuiltInVariableResolver
         result = result.Replace("$FILENAME$", context.FileName, StringComparison.OrdinalIgnoreCase);
         result = result.Replace("$CLIPBOARD$", context.ClipboardText, StringComparison.OrdinalIgnoreCase);
         result = result.Replace("$SELECTEDTEXT$", context.SelectedText, StringComparison.OrdinalIgnoreCase);
-        // $CURSOR$ is handled separately by PlaceholderParser (removed and tracked as position)
+        // $CURSOR$ is handled separately by PlaceholderParser (removed and tracked as position).
+        // $SELECTIONSTART$ / $SELECTIONEND$ are likewise deliberately PRESERVED here — they are
+        // selection-range markers (not built-in vars), stripped/tracked by SnippetRequestHandler.
         return result;
     }
 }

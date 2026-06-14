@@ -25,6 +25,9 @@ public sealed class HistoryRetentionService(HistoryDatabase database, HistorySet
         try
         {
             await _database.PurgeExpiredEntriesAsync(_settings.RetentionDays, _settings.MaxEntries);
+            // FR-039: version-preserving trim — drop old version snapshots while keeping
+            // each query's latest version and all execution records.
+            await _database.PurgeOldVersionsAsync(_settings.RetentionDays);
             Log.Information("History retention: initial purge completed (retention={Days}d, maxEntries={Max})",
                 _settings.RetentionDays, _settings.MaxEntries);
         }
@@ -48,6 +51,9 @@ public sealed class HistoryRetentionService(HistoryDatabase database, HistorySet
         try
         {
             await _database.PurgeExpiredEntriesAsync(_settings.RetentionDays, _settings.MaxEntries);
+            // FR-039: version-preserving trim — drop old version snapshots while keeping
+            // each query's latest version and all execution records.
+            await _database.PurgeOldVersionsAsync(_settings.RetentionDays);
             Log.Debug("History retention: periodic purge completed");
         }
         catch (Exception ex)

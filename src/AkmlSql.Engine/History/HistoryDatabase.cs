@@ -34,6 +34,23 @@ public sealed class HistoryDatabase : IDisposable
     }
 
     /// <summary>
+    /// Test-only constructor that targets a caller-supplied database file path instead of
+    /// the per-user AppData location. Used by the engine test project (via InternalsVisibleTo)
+    /// to isolate each test run in a temporary database.
+    /// </summary>
+    internal HistoryDatabase(string dbPath)
+    {
+        if (string.IsNullOrWhiteSpace(dbPath))
+            throw new ArgumentException("Database path must be provided.", nameof(dbPath));
+
+        var dir = Path.GetDirectoryName(dbPath);
+        if (!string.IsNullOrEmpty(dir))
+            Directory.CreateDirectory(dir);
+
+        _connectionString = $"Data Source={dbPath}";
+    }
+
+    /// <summary>
     /// Initializes the database schema (tables, indexes, FTS5 virtual table, triggers).
     /// Safe to call multiple times — uses IF NOT EXISTS throughout.
     /// If the database is corrupted, renames the corrupted file and creates a fresh database.
@@ -380,6 +397,48 @@ public sealed class HistoryDatabase : IDisposable
                     deletedCount, totalCount, maxEntries);
             }
         }
+    }
+
+    /// <summary>
+    /// Version-preserving retention (FR-039): trims OLD version snapshots from
+    /// <c>history_versions</c> while keeping each query's latest version and ALL execution
+    /// records (the <c>history</c> rows themselves are never touched here).
+    /// <para>
+    /// A version row is deleted only when BOTH:
+    /// (1) it is older than <paramref name="retentionDays"/>, AND
+    /// (2) it is not the latest version for its parent entry (highest <c>id</c> per
+    ///     <c>history_id</c> — autoincrement encodes insertion recency, robust against
+    ///     second-granularity ties in <c>saved_at</c>).
+    /// </para>
+    /// Favorites are preserved implicitly: this method never deletes <c>history</c> rows.
+    /// </summary>
+    /// <returns>The number of version rows deleted.</returns>
+    public async Task<int> PurgeOldVersionsAsync(int retentionDays)
+    {
+        await using var conn = new SqliteConnection(_connectionString);
+        await conn.OpenAsync();
+
+        // Note: saved_at is populated by the column default datetime('now') which yields
+        // 'YYYY-MM-DD HH:MM:SS' (space-separated, no 'T'/'Z'), NOT the ISO 8601 "o" format
+        // used for executed_at. Wrap BOTH sides in datetime() so the comparison is
+        // format-agnostic and never over-trims due to string-collation differences.
+        await using var cmd = new SqliteCommand(@"
+            DELETE FROM history_versions
+            WHERE datetime(saved_at) < datetime('now', @cutoffOffset)
+              AND id NOT IN (
+                  SELECT MAX(id) FROM history_versions GROUP BY history_id
+              );", conn);
+        cmd.Parameters.AddWithValue("@cutoffOffset", $"-{retentionDays} days");
+
+        var deletedCount = await cmd.ExecuteNonQueryAsync();
+        if (deletedCount > 0)
+        {
+            Log.Information(
+                "History version trim: deleted {Count} old version snapshots older than {Days} days (latest versions + executions kept)",
+                deletedCount, retentionDays);
+        }
+
+        return deletedCount;
     }
 
     /// <summary>

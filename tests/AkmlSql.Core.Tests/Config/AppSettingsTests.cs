@@ -1,4 +1,5 @@
 using System;
+using System.Text.Json;
 using Xunit;
 using AkmlSql.Core.Config;
 
@@ -447,6 +448,123 @@ namespace AkmlSql.Core.Tests.Config
             Assert.Equal("TypeServerName", prod);
             Assert.True(s.EnvironmentSeverity.TryGetValue("STAGING", out var staging));
             Assert.Equal("SimpleConfirm", staging);
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Spec 030 T077 (FR-042/FR-043): config-only settings that the Options
+        // dialog will surface. Additive, backward-compatible POCO fields. These
+        // tests pin defaults and verify a JSON round-trip preserves the values.
+        // ─────────────────────────────────────────────────────────────────────
+
+        // ── SpecialCharacterSettings (IntelliSense.SpecialCharOptions) ──
+
+        [Fact]
+        public void SpecialCharacterSettings_Defaults()
+        {
+            var s = new SpecialCharacterSettings();
+            Assert.True(s.AutoCloseCharacters);
+            Assert.True(s.AddParentheses);
+        }
+
+        [Fact]
+        public void SpecialCharacterSettings_Mutations()
+        {
+            var s = new SpecialCharacterSettings
+            {
+                AutoCloseCharacters = false,
+                AddParentheses = false
+            };
+            Assert.False(s.AutoCloseCharacters);
+            Assert.False(s.AddParentheses);
+        }
+
+        [Fact]
+        public void IntelliSenseSettings_SpecialCharOptions_DefaultNotNull()
+        {
+            var s = new IntelliSenseSettings();
+            Assert.NotNull(s.SpecialCharOptions);
+            Assert.True(s.SpecialCharOptions.AutoCloseCharacters);
+            Assert.True(s.SpecialCharOptions.AddParentheses);
+        }
+
+        // ── HistorySettings.DisableAutoTrim ──
+
+        [Fact]
+        public void HistorySettings_DisableAutoTrim_DefaultsFalse()
+        {
+            var s = new HistorySettings();
+            Assert.False(s.DisableAutoTrim);
+        }
+
+        [Fact]
+        public void HistorySettings_DisableAutoTrim_Mutation()
+        {
+            var s = new HistorySettings { DisableAutoTrim = true };
+            Assert.True(s.DisableAutoTrim);
+        }
+
+        // ── ColoringRule.DatabaseName ──
+
+        [Fact]
+        public void ColoringRule_DatabaseName_DefaultsEmpty()
+        {
+            var r = new ColoringRule();
+            Assert.Equal(string.Empty, r.DatabaseName);
+        }
+
+        [Fact]
+        public void ColoringRule_DatabaseName_Mutation()
+        {
+            var r = new ColoringRule { DatabaseName = "AdventureWorks" };
+            Assert.Equal("AdventureWorks", r.DatabaseName);
+        }
+
+        // ── JSON round-trip preserves the new fields ──
+
+        [Fact]
+        public void Spec030T077_Fields_RoundTripJson()
+        {
+            var original = new AppSettings();
+            original.IntelliSense.SpecialCharOptions.AutoCloseCharacters = false;
+            original.IntelliSense.SpecialCharOptions.AddParentheses = false;
+            original.History.DisableAutoTrim = true;
+            original.Tabs.ColoringRules.Add(new ColoringRule
+            {
+                Order = 99,
+                Pattern = "*",
+                MatchTarget = "databaseName",
+                DatabaseName = "AdventureWorks",
+                Color = "#123456",
+                Label = "AW"
+            });
+
+            var json = JsonSerializer.Serialize(original);
+            var restored = JsonSerializer.Deserialize<AppSettings>(json);
+
+            Assert.NotNull(restored);
+            Assert.False(restored!.IntelliSense.SpecialCharOptions.AutoCloseCharacters);
+            Assert.False(restored.IntelliSense.SpecialCharOptions.AddParentheses);
+            Assert.True(restored.History.DisableAutoTrim);
+
+            var rule = restored.Tabs.ColoringRules.Find(c => c.Order == 99);
+            Assert.NotNull(rule);
+            Assert.Equal("AdventureWorks", rule!.DatabaseName);
+            Assert.Equal("databaseName", rule.MatchTarget);
+        }
+
+        [Fact]
+        public void Spec030T077_JsonPropertyNames_AreCamelCase()
+        {
+            var s = new AppSettings();
+            s.History.DisableAutoTrim = true;
+            s.IntelliSense.SpecialCharOptions.AutoCloseCharacters = true;
+
+            var json = JsonSerializer.Serialize(s);
+
+            Assert.Contains("\"specialCharOptions\"", json);
+            Assert.Contains("\"autoCloseCharacters\"", json);
+            Assert.Contains("\"addParentheses\"", json);
+            Assert.Contains("\"disableAutoTrim\"", json);
         }
     }
 }

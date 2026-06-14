@@ -133,11 +133,12 @@ internal static class EngineHandlerRegistry
             return (session.ConnectionString, session.DatabaseName);
         };
 
-        // === Spec 014 stubs (FindInvalidObjects / FindUnusedVariables / EncryptedObjectDecryption) ===
-        var findInvalidStub = new Server.Stubs.FindInvalidObjectsHandlerStub();
+        // === Spec 014 stubs (FindUnusedVariables / EncryptedObjectDecryption) ===
+        // Spec 030 T058: FindInvalidObjects is now a real handler (sys.sql_expression_dependencies), replacing its stub.
+        var findInvalidHandler = new Handlers.Refactoring.FindInvalidObjectsHandler();
         var findUnusedStub = new Server.Stubs.FindUnusedVariablesHandlerStub();
         var encryptedStub = new Server.Stubs.EncryptedObjectDecryptionHandlerStub();
-        router.RegisterRaw(MessageTypes.FindInvalidObjects, (msg, ct) => findInvalidStub.HandleAsync(msg, ct));
+        router.RegisterRaw(MessageTypes.FindInvalidObjects, (msg, ct) => findInvalidHandler.HandleAsync(msg, lookupSession, ct));
         router.RegisterRaw(MessageTypes.FindUnusedVariables, (msg, ct) => findUnusedStub.HandleAsync(msg, ct));
         router.RegisterRaw(MessageTypes.EncryptedObjectDecryption, (msg, ct) => encryptedStub.HandleAsync(msg, ct));
 
@@ -306,8 +307,8 @@ internal static class EngineHandlerRegistry
             (msg, ct) => navigationHandler.HandleGetObjectDefinitionAsync(msg, lookupSession, ct));
         router.RegisterRaw(MessageTypes.FindReferences,
             (msg, ct) => navigationHandler.HandleFindReferencesAsync(msg, lookupSession, ct));
-        router.RegisterRaw(MessageTypes.ObjectSearch,
-            (msg, ct) => navigationHandler.HandleObjectSearchAsync(msg, lookupSession, ct));
+        // Spec 030 T085: typed ObjectSearch handler (cache keyed by sessionId — fixes the legacy raw path's miss).
+        router.Register(new Handlers.Productivity.ObjectSearchHandler());
 
         router.RegisterRaw(MessageTypes.CrudGeneration, (msg, ct) => crudHandler.HandleAsync(msg, lookupSession, ct));
         router.RegisterRaw(MessageTypes.ScriptAs, (msg, ct) => scriptAsHandler.HandleAsync(msg, lookupSession, ct));

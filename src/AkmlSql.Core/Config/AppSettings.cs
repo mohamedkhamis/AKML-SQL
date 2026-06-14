@@ -271,6 +271,13 @@ namespace AkmlSql.Core.Config
         [JsonPropertyName("connectionScope")]
         public ConnectionScopeSettings ConnectionScope { get; set; } = new();
 
+        /// <summary>
+        /// Spec 030 T077 / FR-043 — special-character handling for the editor (auto-close
+        /// matching characters, auto-add parentheses after functions). Surfaced in Options by T080.
+        /// </summary>
+        [JsonPropertyName("specialCharOptions")]
+        public SpecialCharacterSettings SpecialCharOptions { get; set; } = new();
+
         /// <summary>Master switch — disabling this suppresses all IntelliSense features.</summary>
         public bool Enabled { get; set; } = true;
         /// <summary>Show completion list automatically while typing (no Ctrl+Space required).</summary>
@@ -384,6 +391,27 @@ namespace AkmlSql.Core.Config
     {
         [JsonPropertyName("matchByColumnName")]
         public bool MatchByColumnName { get; set; } = true;
+    }
+
+    /// <summary>
+    /// Spec 030 T077 / FR-043 — special-character handling in the editor. Exposed via
+    /// <see cref="IntelliSenseSettings.SpecialCharOptions"/> and surfaced in Options by T080.
+    /// </summary>
+    public class SpecialCharacterSettings
+    {
+        /// <summary>
+        /// Auto-close matching characters: typing an opening <c>(</c>, <c>[</c>, <c>'</c>, etc.
+        /// inserts the matching close character. SQL Prompt default: on.
+        /// </summary>
+        [JsonPropertyName("autoCloseCharacters")]
+        public bool AutoCloseCharacters { get; set; } = true;
+
+        /// <summary>
+        /// Add parentheses automatically after inserting a function from the completion list.
+        /// SQL Prompt default: on.
+        /// </summary>
+        [JsonPropertyName("addParentheses")]
+        public bool AddParentheses { get; set; } = true;
     }
 
     /// <summary>
@@ -664,6 +692,14 @@ namespace AkmlSql.Core.Config
         [JsonPropertyName("deduplication")]
         public bool Deduplication { get; set; } = true;
 
+        /// <summary>
+        /// Spec 030 T077 / FR-043 — when <c>true</c>, recorded history entries are stored
+        /// verbatim without trimming leading/trailing whitespace. Default <c>false</c>
+        /// (entries are auto-trimmed, the prior behaviour).
+        /// </summary>
+        [JsonPropertyName("disableAutoTrim")]
+        public bool DisableAutoTrim { get; set; }
+
         [JsonPropertyName("shortcut")]
         public string Shortcut { get; set; } = "Ctrl+Alt+H";
     }
@@ -722,6 +758,15 @@ namespace AkmlSql.Core.Config
 
         [JsonPropertyName("matchTarget")]
         public string MatchTarget { get; set; } = Models.Tabs.EnvironmentMatcher.MatchTargetServerName;
+
+        /// <summary>
+        /// Spec 030 T077 / FR-043 — database name this rule matches against when
+        /// <see cref="MatchTarget"/> targets the database. Empty string = no database
+        /// restriction (server-name matching only, the prior behaviour). Additive and
+        /// backward-compatible: absent in existing configs and ignored by the server-name matcher.
+        /// </summary>
+        [JsonPropertyName("databaseName")]
+        public string DatabaseName { get; set; } = string.Empty;
 
         [JsonPropertyName("color")]
         public string Color { get; set; } = string.Empty;
