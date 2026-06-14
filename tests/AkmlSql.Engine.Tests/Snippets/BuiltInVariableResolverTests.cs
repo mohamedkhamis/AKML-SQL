@@ -162,4 +162,43 @@ public class BuiltInVariableResolverTests
         Assert.Equal(string.Empty, ctx.ClipboardText);
         Assert.Equal(string.Empty, ctx.SelectedText);
     }
+
+    // ── Spec 030 T047 / FR-037: custom $DATE(fmt)$ / $TIME(fmt)$ / $DATETIME(fmt)$ formats.
+    //    Uses the deterministic `now` overload so the assertions don't race the clock. ──
+
+    private static readonly DateTime FixedNow = new(2026, 06, 14, 09, 05, 07);
+
+    [Fact]
+    public void CustomDateFormat_Applies()
+        => Assert.Equal("2026", _resolver.Resolve("$DATE(yyyy)$", Context(), FixedNow));
+
+    [Fact]
+    public void CustomTimeFormat_Applies()
+        => Assert.Equal("09:05", _resolver.Resolve("$TIME(HH:mm)$", Context(), FixedNow));
+
+    [Fact]
+    public void CustomDateTimeFormat_Applies()
+        => Assert.Equal("2026-06-14 09:05",
+            _resolver.Resolve("$DATETIME(yyyy-MM-dd HH:mm)$", Context(), FixedNow));
+
+    [Fact]
+    public void CustomFormat_TokenIsCaseInsensitive_FormatCasingPreserved()
+        => Assert.Equal("2026", _resolver.Resolve("$date(yyyy)$", Context(), FixedNow));
+
+    [Fact]
+    public void FixedDateToken_StillWorks_AlongsideCustom()
+        => Assert.Equal("2026-06-14", _resolver.Resolve("$DATE$", Context(), FixedNow));
+
+    [Fact]
+    public void EmptyCustomFormat_FallsBackToDefault()
+        => Assert.Equal("2026-06-14", _resolver.Resolve("$DATE()$", Context(), FixedNow));
+
+    [Fact]
+    public void InvalidCustomFormat_FallsBackToDefault()
+        => Assert.Equal("2026-06-14", _resolver.Resolve("$DATE(%)$", Context(), FixedNow));
+
+    [Fact]
+    public void MixedTokens_AllResolve()
+        => Assert.Equal("y=2026 t=09:05 d=2026-06-14",
+            _resolver.Resolve("y=$DATE(yyyy)$ t=$TIME(HH:mm)$ d=$DATE$", Context(), FixedNow));
 }

@@ -116,7 +116,7 @@
 - [ ] T044 [US3] Create-from-selection command (auto-name from initials) in `src/AkmlSql.Shell.Shared/Snippets/` (FR-033).
 - [ ] T045 [US3] Surround-with command (`Ctrl+K,Ctrl+S` wiring; selection → `$SELECTEDTEXT$`) in `src/AkmlSql.Shell.Shared/Snippets/` (FR-034).
 - [ ] T046 [US3] Preserve custom `Variables` on Snippet Manager save (stop writing `variables=[]`) + variable-authoring UI in `src/AkmlSql.Shell.Shared/Snippets/` (FR-036).
-- [ ] T047 [P] [US3] `$SELECTIONSTART$/$SELECTIONEND$` markers + custom `$DATE(...)$`/`$TIME(...)$` formats in `PlaceholderParser`/`BuiltInVariableResolver` (FR-037).
+- [~] T047 [P] [US3] **Custom date/time formats DONE (2026-06-14, FR-037).** `BuiltInVariableResolver` now resolves `$DATE(fmt)$` / `$TIME(fmt)$` / `$DATETIME(fmt)$` with any .NET format string (empty or invalid format → the token's default; the fixed no-paren `$DATE$`/`$TIME$`/`$DATETIME$` tokens are unaffected since the regex requires parens). Added a deterministic internal `Resolve(text, ctx, now)` overload (the public one passes `DateTime.Now`) so date/time tokens are testable; +8 `BuiltInVariableResolverTests` (custom date/time/datetime, case-insensitive token, fixed-still-works, empty→default, invalid→default, mixed). 90 snippet tests green. **Deferred (pairs with T045 surround-with):** the `$SELECTIONSTART$`/`$SELECTIONEND$` selection-range markers — they need additive `SnippetExpandResponse` selection-offset fields + the shell applying the resulting selection, which is only meaningful once surround-with consumes a selection. Tracked with the T040/T045 selection batch.
 - [ ] T048 [US3] Verify US3 live on SSMS 22 + VS 2026 per `quickstart.md` (P2).
 
 **Checkpoint**: P2 complete — IntelliSense surfaces + snippets work on both desktop hosts.
