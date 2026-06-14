@@ -268,6 +268,9 @@ namespace AkmlSql.Core.Config
         [JsonPropertyName("aliasOptions")]
         public AliasOptionsSettings AliasOptions { get; set; } = new();
 
+        [JsonPropertyName("connectionScope")]
+        public ConnectionScopeSettings ConnectionScope { get; set; } = new();
+
         /// <summary>Master switch — disabling this suppresses all IntelliSense features.</summary>
         public bool Enabled { get; set; } = true;
         /// <summary>Show completion list automatically while typing (no Ctrl+Space required).</summary>
@@ -406,6 +409,60 @@ namespace AkmlSql.Core.Config
         /// </summary>
         [JsonPropertyName("prefixesToIgnore")]
         public string[] PrefixesToIgnore { get; set; } = [];
+    }
+
+    /// <summary>
+    /// Spec 030 T036 / FR-016 — suggestion connection scope. Limits the object suggestion list to
+    /// chosen databases/schemas and (forward-looking) toggles linked-server objects. Empty lists mean
+    /// "no restriction" so the default has zero behavioural impact (matches the AliasOptions pattern).
+    /// Pushed onto the engine per request via <c>CompletionHandler</c>; the Options UI pairs with T082.
+    /// </summary>
+    public class ConnectionScopeSettings
+    {
+        /// <summary>
+        /// Databases the suggestion list is limited to (bare names, case-insensitive). Empty = all.
+        /// The schema cache is single-database, so the only honest effect is: when the connected
+        /// database is NOT in a non-empty list, its object/schema suggestions are suppressed.
+        /// </summary>
+        [JsonPropertyName("databases")]
+        public string[] Databases { get; set; } = [];
+
+        /// <summary>Schemas the object suggestion list is limited to (case-insensitive). Empty = all.</summary>
+        [JsonPropertyName("schemas")]
+        public string[] Schemas { get; set; } = [];
+
+        /// <summary>
+        /// Include linked-server objects in suggestions. Forward-looking: the schema cache does not
+        /// load linked-server objects today, so this is honored only where such loading exists (none
+        /// yet) — it is threaded through the completion path but currently has no observable effect.
+        /// Default off.
+        /// </summary>
+        [JsonPropertyName("includeLinkedServers")]
+        public bool IncludeLinkedServers { get; set; }
+
+        /// <summary>
+        /// True when the supplied connected-database name is in scope: the allow-list is empty
+        /// (no restriction), the name is unknown (don't suppress), or the list contains it
+        /// (case-insensitive). Used by <c>CompletionHandler</c> to decide whether to suppress
+        /// the connected database's object suggestions.
+        /// </summary>
+        public bool IncludesDatabase(string? databaseName)
+        {
+            if (Databases is null || Databases.Length == 0) return true;
+            if (string.IsNullOrEmpty(databaseName)) return true;
+            foreach (var d in Databases)
+                if (string.Equals(d, databaseName, StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
+        }
+
+        /// <summary>True when the schema is in scope: an empty allow-list (all) or a case-insensitive match.</summary>
+        public bool IncludesSchema(string schemaName)
+        {
+            if (Schemas is null || Schemas.Length == 0) return true;
+            foreach (var s in Schemas)
+                if (string.Equals(s, schemaName, StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
+        }
     }
 
     /// <summary>Settings for the in-memory schema cache.</summary>

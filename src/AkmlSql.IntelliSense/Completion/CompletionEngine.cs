@@ -19,6 +19,7 @@ public class CompletionEngine
     private readonly ColumnProvider _columnProvider = new();
     private readonly AliasProvider _aliasProvider = new();
     private int _maxSuggestions = 50;
+    private static readonly HashSet<string> _emptySchemaScope = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// When enabled, the completion pipeline generates new aliases for tables inserted
@@ -80,6 +81,18 @@ public class CompletionEngine
     public IReadOnlyDictionary<string, string> AliasObjectMap { get; set; }
         = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     public IReadOnlyList<string> AliasPrefixesToIgnore { get; set; } = Array.Empty<string>();
+
+    // Spec 030 T036 / FR-016 — suggestion connection scope, pushed onto ObjectProvider per request.
+    /// <summary>Schemas the object suggestion list is limited to (case-insensitive). Empty = all.</summary>
+    public IReadOnlyCollection<string> ScopeSchemas { get; set; } = Array.Empty<string>();
+    /// <summary>
+    /// False when the connected database is excluded from a non-empty database allow-list — the
+    /// connected database's object/schema suggestions are then suppressed. Computed in the handler
+    /// from the session's database name; default true (no restriction).
+    /// </summary>
+    public bool DatabaseInScope { get; set; } = true;
+    /// <summary>Forward-looking linked-server inclusion (no cache data today); threaded, currently inert.</summary>
+    public bool IncludeLinkedServers { get; set; }
 
     public CompletionEngine(TsqlParserService parserService)
     {
@@ -296,6 +309,14 @@ public class CompletionEngine
 
             // Push column-suggestion scope into ColumnProvider (FR-012 / T032).
             _columnProvider.ColumnScopeMode = ColumnScopeMode;
+
+            // Push connection scope into ObjectProvider (FR-016 / T036). ScopeSchemas is normalized to a
+            // case-insensitive set; an empty set means "no restriction".
+            _objectProvider.ObjectsInScope = DatabaseInScope;
+            _objectProvider.ScopeSchemas = ScopeSchemas is { Count: > 0 }
+                ? new HashSet<string>(ScopeSchemas, StringComparer.OrdinalIgnoreCase)
+                : _emptySchemaScope;
+            _objectProvider.IncludeLinkedServers = IncludeLinkedServers;
 
             // Push alias-generation policy into AliasProvider (FR-015 / T035).
             _aliasProvider.IncludeAs = AliasIncludeAs;

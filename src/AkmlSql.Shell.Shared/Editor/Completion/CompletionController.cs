@@ -211,7 +211,11 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                         }
                         if (_adornment.Popup.IsOpen)
                         {
-                            _adornment.Popup.MoveSelection(-1);
+                            // Spec 030 T034 / FR-014 — Ctrl+Up jumps to the previous category; plain
+                            // Up moves to the previous item. (Ctrl+Up usually arrives as SCROLLUP —
+                            // handled below — but cover the modifier-on-arrow delivery path here too.)
+                            if (CtrlHeld) _adornment.Popup.MoveCategory(-1);
+                            else _adornment.Popup.MoveSelection(-1);
                             return VSConstants.S_OK;
                         }
                         break;
@@ -224,7 +228,27 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                         }
                         if (_adornment.Popup.IsOpen)
                         {
-                            _adornment.Popup.MoveSelection(1);
+                            if (CtrlHeld) _adornment.Popup.MoveCategory(1);
+                            else _adornment.Popup.MoveSelection(1);
+                            return VSConstants.S_OK;
+                        }
+                        break;
+
+                    // Spec 030 T034 / FR-014 — Ctrl+Up/Down arrive as the editor's scroll-line commands.
+                    // While the suggestions box is open, repurpose them for category navigation; otherwise
+                    // let them fall through to the host's normal scroll behaviour.
+                    case VSConstants.VSStd2KCmdID.SCROLLUP:
+                        if (_adornment.Popup.IsOpen)
+                        {
+                            _adornment.Popup.MoveCategory(-1);
+                            return VSConstants.S_OK;
+                        }
+                        break;
+
+                    case VSConstants.VSStd2KCmdID.SCROLLDN:
+                        if (_adornment.Popup.IsOpen)
+                        {
+                            _adornment.Popup.MoveCategory(1);
                             return VSConstants.S_OK;
                         }
                         break;
@@ -1157,6 +1181,10 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         {
             return char.IsLetterOrDigit(c) || c == '_' || c == '#' || c == '@';
         }
+
+        /// <summary>True when Ctrl is currently held — used to distinguish Ctrl+Up/Down (category nav) from plain arrows.</summary>
+        private static bool CtrlHeld =>
+            (System.Windows.Input.Keyboard.Modifiers & System.Windows.Input.ModifierKeys.Control) != 0;
 
         #region Object Definition (QuickInfo)
 

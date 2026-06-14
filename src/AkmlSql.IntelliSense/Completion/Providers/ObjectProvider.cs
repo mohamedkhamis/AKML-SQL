@@ -30,6 +30,26 @@ public class ObjectProvider : ICompletionProvider
     /// </summary>
     public SchemaQualifyMode SchemaQualifyMode { get; set; } = SchemaQualifyMode.Always;
 
+    /// <summary>
+    /// Spec 030 T036 / FR-016 — suggestion connection scope. <see cref="ScopeSchemas"/> limits the
+    /// unqualified object + schema-name list to the named schemas (case-insensitive; empty = all).
+    /// <see cref="ObjectsInScope"/> is false when the connected database is excluded from a non-empty
+    /// database allow-list — its cache-derived object suggestions are then suppressed entirely.
+    /// <see cref="IncludeLinkedServers"/> is threaded for forward compatibility but currently inert
+    /// (the schema cache loads no linked-server objects). Set by <see cref="CompletionEngine"/> per request.
+    /// </summary>
+    public ISet<string> ScopeSchemas { get; set; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>False ⇒ suppress this database's cache-derived object/schema suggestions (FR-016).</summary>
+    public bool ObjectsInScope { get; set; } = true;
+
+    /// <summary>Forward-looking linked-server inclusion (no cache data today); stored, currently inert.</summary>
+    public bool IncludeLinkedServers { get; set; }
+
+    /// <summary>True when the schema is in scope: an empty allow-list (all) or a case-insensitive match.</summary>
+    private bool SchemaInScope(string schemaName) =>
+        ScopeSchemas.Count == 0 || ScopeSchemas.Contains(schemaName);
+
     private static readonly HashSet<ClauseType> ObjectClauseTypes =
     [
         ClauseType.From,
@@ -167,6 +187,12 @@ public class ObjectProvider : ICompletionProvider
 
         if (context.PrecedingDot && !string.IsNullOrEmpty(context.DotPrefix))
         {
+            // FR-016 (T036): when the connected database is out of scope, suppress its objects even
+            // for an explicit schema/database prefix. (Schema-scope is NOT applied to an explicit
+            // prefix — typing "hr." is a deliberate request for that schema's objects.)
+            if (!ObjectsInScope)
+                yield break;
+
             // T047: Multi-part name completion
             foreach (var item in GetDotQualifiedCompletions(context, cache))
                 yield return item;
@@ -190,45 +216,61 @@ public class ObjectProvider : ICompletionProvider
         // references to FK-join against, so JoinProvider wouldn't run anyway.
         var skipFkTables = context.ClauseType == ClauseType.JoinTable && fkRelated.Count > 0;
 
-        // First, yield objects from default schema (dbo) with higher priority.
-        // When SchemaMode is Always, dbo objects also get the "dbo." prefix in InsertText.
-        bool qualifyDbo = SchemaQualifyMode == SchemaQualifyMode.Always;
-        foreach (var obj in GetFilteredObjects(cache, "dbo", allowedTypes))
+        // FR-016 (T036): suppress this database's cache-derived object + schema-name suggestions
+        // when the connected database is excluded from the database allow-list. The schema scope
+        // (below) then narrows the list to the in-scope schemas. CTEs (above) and system procs
+        // (EXEC, below) are not the connected database's user objects and are unaffected.
+        if (ObjectsInScope)
         {
-            if (skipFkTables && fkRelated.ContainsKey(obj.FullName))
-                continue;
-            yield return ToCompletionItem(obj, sortPriorityBase: 100, includeSchema: qualifyDbo, fkRelated: fkRelated);
-        }
-
-        // Yield objects from non-dbo schemas, schema-qualified.
-        // NonDefaultOnly and Always both qualify non-dbo objects; Never skips the prefix.
-        bool qualifyNonDbo = SchemaQualifyMode != SchemaQualifyMode.Never;
-        foreach (var schema in cache.Schemas.Values)
-        {
-            if (schema.SchemaName.Equals("dbo", StringComparison.OrdinalIgnoreCase))
+            // First, yield objects from default schema (dbo) with higher priority.
+            // When SchemaMode is Always, dbo objects also get the "dbo." prefix in InsertText.
+            if (SchemaInScope("dbo"))
             {
-                continue;
+                bool qualifyDbo = SchemaQualifyMode == SchemaQualifyMode.Always;
+                foreach (var obj in GetFilteredObjects(cache, "dbo", allowedTypes))
+                {
+                    if (skipFkTables && fkRelated.ContainsKey(obj.FullName))
+                        continue;
+                    yield return ToCompletionItem(obj, sortPriorityBase: 100, includeSchema: qualifyDbo, fkRelated: fkRelated);
+                }
             }
 
-            foreach (var obj in GetFilteredObjects(cache, schema.SchemaName, allowedTypes))
+            // Yield objects from non-dbo schemas, schema-qualified.
+            // NonDefaultOnly and Always both qualify non-dbo objects; Never skips the prefix.
+            bool qualifyNonDbo = SchemaQualifyMode != SchemaQualifyMode.Never;
+            foreach (var schema in cache.Schemas.Values)
             {
-                if (skipFkTables && fkRelated.ContainsKey(obj.FullName))
+                if (schema.SchemaName.Equals("dbo", StringComparison.OrdinalIgnoreCase))
+                {
                     continue;
-                yield return ToCompletionItem(obj, sortPriorityBase: 200, includeSchema: qualifyNonDbo, fkRelated: fkRelated);
-            }
-        }
+                }
 
-        // Yield schema names as completions
-        foreach (var schemaName in cache.GetSchemaNames())
-        {
-            yield return new CompletionItem
+                if (!SchemaInScope(schema.SchemaName))
+                    continue;
+
+                foreach (var obj in GetFilteredObjects(cache, schema.SchemaName, allowedTypes))
+                {
+                    if (skipFkTables && fkRelated.ContainsKey(obj.FullName))
+                        continue;
+                    yield return ToCompletionItem(obj, sortPriorityBase: 200, includeSchema: qualifyNonDbo, fkRelated: fkRelated);
+                }
+            }
+
+            // Yield schema names as completions (in-scope schemas only).
+            foreach (var schemaName in cache.GetSchemaNames())
             {
-                DisplayText = schemaName,
-                InsertText = schemaName,
-                ObjectType = (int)CompletionObjectType.Schema,
-                SecondaryText = "Schema",
-                SortPriority = 300
-            };
+                if (!SchemaInScope(schemaName))
+                    continue;
+
+                yield return new CompletionItem
+                {
+                    DisplayText = schemaName,
+                    InsertText = schemaName,
+                    ObjectType = (int)CompletionObjectType.Schema,
+                    SecondaryText = "Schema",
+                    SortPriority = 300
+                };
+            }
         }
 
         // Yield system stored procedures in EXEC context — gated on IncludeSystemObjects.
