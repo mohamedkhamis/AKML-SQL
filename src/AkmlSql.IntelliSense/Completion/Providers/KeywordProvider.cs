@@ -35,6 +35,17 @@ public class KeywordProvider(
 
     public IEnumerable<CompletionItem> GetCompletions(CursorContext context, DatabaseCache? cache)
     {
+        // Spec 030 (user-reported): after an `IS` token the only valid continuations are NULL / NOT NULL.
+        // Offer THOSE — not the full "IS NULL" / "IS NOT NULL" predicate keywords, which would duplicate
+        // the already-typed IS (e.g. `WHERE x IS ` + committing `IS NOT NULL` → `IS IS NOT NULL`). The full
+        // predicates still appear before IS is typed (filtered by the partial), so `IS NULL` is reachable.
+        if (IsPrecedingTokenIs(context))
+        {
+            yield return KeywordItem("NOT NULL", 490);
+            yield return KeywordItem("NULL", 491);
+            yield break;
+        }
+
         var keywords = KeywordDictionary.GetKeywordsForClause(context.ClauseType);
 
         // If the clause-specific list is empty (e.g., Exec), fall back to nothing
@@ -111,6 +122,24 @@ public class KeywordProvider(
                 };
             }
         }
+    }
+
+    /// <summary>True when the token immediately before the cursor is the <c>IS</c> predicate keyword.</summary>
+    private static bool IsPrecedingTokenIs(CursorContext context)
+        => context.PrecedingToken != null
+           && string.Equals(context.PrecedingToken.Text?.Trim(), "is", StringComparison.OrdinalIgnoreCase);
+
+    private CompletionItem KeywordItem(string keyword, int sortPriority)
+    {
+        var displayText = ApplyCasing(keyword);
+        return new CompletionItem
+        {
+            DisplayText  = displayText,
+            InsertText   = displayText,
+            ObjectType   = (int)CompletionObjectType.Keyword,
+            SecondaryText = "Keyword",
+            SortPriority = sortPriority
+        };
     }
 
     private string ApplyCasing(string keyword)
