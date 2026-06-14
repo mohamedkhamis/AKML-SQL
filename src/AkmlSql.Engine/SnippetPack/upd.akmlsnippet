@@ -1,0 +1,20 @@
+{
+  "metadata": {
+    "id": "builtin-upd",
+    "shortcode": "upd",
+    "name": "UPDATE SET",
+    "description": "UPDATE <table> SET <column> = <value> WHERE <predicate>",
+    "author": "AKML SQL",
+    "version": "1.0",
+    "category": "DML",
+    "tags": [ "update" ],
+    "context": [ "global" ],
+    "surroundsWith": false
+  },
+  "variables": [],
+  "body": [
+    "UPDATE $CURSOR$",
+    "SET ",
+    "WHERE "
+  ]
+}

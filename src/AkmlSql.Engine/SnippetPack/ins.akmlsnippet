@@ -1,0 +1,19 @@
+{
+  "metadata": {
+    "id": "builtin-ins",
+    "shortcode": "ins",
+    "name": "INSERT INTO",
+    "description": "INSERT INTO <table> (<columns>) VALUES (<values>)",
+    "author": "AKML SQL",
+    "version": "1.0",
+    "category": "DML",
+    "tags": [ "insert" ],
+    "context": [ "global" ],
+    "surroundsWith": false
+  },
+  "variables": [],
+  "body": [
+    "INSERT INTO $CURSOR$ ()",
+    "VALUES ()"
+  ]
+}

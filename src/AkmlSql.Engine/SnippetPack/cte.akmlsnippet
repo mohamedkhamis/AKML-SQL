@@ -1,0 +1,24 @@
+{
+  "metadata": {
+    "id": "builtin-cte",
+    "shortcode": "cte",
+    "name": "Common Table Expression",
+    "description": "Common Table Expression (WITH ... AS)",
+    "author": "AKML SQL",
+    "version": "1.0",
+    "category": "Query",
+    "tags": [ "cte", "with" ],
+    "context": [ "global" ],
+    "surroundsWith": false
+  },
+  "variables": [],
+  "body": [
+    ";WITH $CURSOR$ AS (",
+    "    SELECT ",
+    "    FROM ",
+    "    WHERE ",
+    ")",
+    "SELECT *",
+    "FROM "
+  ]
+}

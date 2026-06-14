@@ -1,0 +1,19 @@
+{
+  "metadata": {
+    "id": "builtin-ssf",
+    "shortcode": "ssf",
+    "name": "SELECT * FROM",
+    "description": "SELECT * FROM <table>",
+    "author": "AKML SQL",
+    "version": "1.0",
+    "category": "Query",
+    "tags": [ "select" ],
+    "context": [ "global" ],
+    "surroundsWith": false
+  },
+  "variables": [],
+  "body": [
+    "SELECT *",
+    "FROM $CURSOR$"
+  ]
+}

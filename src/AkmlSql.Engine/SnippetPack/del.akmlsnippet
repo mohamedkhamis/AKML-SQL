@@ -1,0 +1,19 @@
+{
+  "metadata": {
+    "id": "builtin-del",
+    "shortcode": "del",
+    "name": "DELETE FROM",
+    "description": "DELETE FROM <table> WHERE <predicate>",
+    "author": "AKML SQL",
+    "version": "1.0",
+    "category": "DML",
+    "tags": [ "delete" ],
+    "context": [ "global" ],
+    "surroundsWith": false
+  },
+  "variables": [],
+  "body": [
+    "DELETE FROM $CURSOR$",
+    "WHERE "
+  ]
+}

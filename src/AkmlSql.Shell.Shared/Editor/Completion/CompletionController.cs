@@ -768,7 +768,10 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                         int snippetInsertPos = start;
                         int snippetReplaceLen = span.Length;
                         DismissPopup();
-                        TryExpandSnippetAtPosition(item.InsertText, snippetInsertPos, snippetReplaceLen);
+                        // Spec 030 T039 / FR-030 — pass the SHORTCODE (DisplayText) to the engine, not the
+                        // body (InsertText). SnippetProvider sets DisplayText = shortcode, InsertText = body;
+                        // the engine resolves snippets by shortcode, so sending the body never matched.
+                        TryExpandSnippetAtPosition(item.DisplayText, snippetInsertPos, snippetReplaceLen);
                         return;
                     }
 
@@ -811,6 +814,15 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 int start = dotPos;
                 while (start > 0 && IsIdentifierChar(snapshot[start - 1]))
                     start--;
+
+                // T039 — a snippet committed before a dot must expand via the engine, not insert its raw
+                // body (rare interaction, but keep all commit paths consistent).
+                if (item.ObjectType == 4)
+                {
+                    _adornment.Hide();
+                    TryExpandSnippetAtPosition(item.DisplayText, start, dotPos - start);
+                    return;
+                }
 
                 // Replace word before dot with the selected item
                 var span = new Span(start, dotPos - start);
@@ -866,23 +878,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                         if (response?.Success == true && !string.IsNullOrEmpty(response.ExpandedText))
                         {
                             _textView.VisualElement.Dispatcher.Invoke(() =>
-                            {
-                                try
-                                {
-                                    var currentSnapshot = _textView.TextBuffer.CurrentSnapshot;
-                                    int replaceLen = caretPos - start;
-                                    if (start + replaceLen <= currentSnapshot.Length)
-                                    {
-                                        _textView.TextBuffer.Replace(
-                                            new Span(start, replaceLen),
-                                            response.ExpandedText);
-                                    }
-                                }
-                                catch (Exception ex)
-                                {
-                                    Log.Debug(ex, "Snippet expansion: failed to insert text");
-                                }
-                            });
+                                InsertSnippetExpansion(start, caretPos - start, response.ExpandedText, response.CursorOffset));
                         }
                     }
                     catch (Exception ex)
@@ -931,22 +927,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                         if (response?.Success == true && !string.IsNullOrEmpty(response.ExpandedText))
                         {
                             _textView.VisualElement.Dispatcher.Invoke(() =>
-                            {
-                                try
-                                {
-                                    var currentSnapshot = _textView.TextBuffer.CurrentSnapshot;
-                                    if (insertPos + replaceLen <= currentSnapshot.Length)
-                                    {
-                                        _textView.TextBuffer.Replace(
-                                            new Span(insertPos, replaceLen),
-                                            response.ExpandedText);
-                                    }
-                                }
-                                catch (Exception ex)
-                                {
-                                    Log.Debug(ex, "Snippet expansion: failed to insert at position {Pos}", insertPos);
-                                }
-                            });
+                                InsertSnippetExpansion(insertPos, replaceLen, response.ExpandedText, response.CursorOffset));
                         }
                     }
                     catch (Exception ex)
@@ -959,6 +940,62 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             {
                 Log.Debug(ex, "Snippet expansion at position failed");
             }
+        }
+
+        /// <summary>
+        /// Spec 030 T039 / FR-035 — insert an expanded snippet body at <paramref name="insertPos"/>
+        /// (replacing <paramref name="replaceLen"/> chars), normalizing the engine's LF-joined text to
+        /// the document's newline so a CRLF buffer doesn't end up with mixed line endings, then placing
+        /// the caret at the <c>$CURSOR$</c> position (<paramref name="cursorOffset"/>, -1 ⇒ end), adjusted
+        /// for the newline expansion. Must run on the UI thread.
+        /// </summary>
+        private void InsertSnippetExpansion(int insertPos, int replaceLen, string expandedText, int cursorOffset)
+        {
+            try
+            {
+                var snapshot = _textView.TextBuffer.CurrentSnapshot;
+                if (insertPos < 0 || replaceLen < 0 || insertPos + replaceLen > snapshot.Length) return;
+
+                string text = expandedText ?? string.Empty;
+                int caret = cursorOffset >= 0 ? cursorOffset : text.Length;
+
+                string nl = GetBufferNewLine();
+                if (nl != "\n" && text.IndexOf('\n') >= 0)
+                {
+                    // Count LF before the caret to keep the $CURSOR$ offset correct after LF → CRLF growth.
+                    int lfBefore = 0, upto = Math.Min(caret, text.Length);
+                    for (int i = 0; i < upto; i++) if (text[i] == '\n') lfBefore++;
+                    text = text.Replace("\r\n", "\n").Replace("\n", nl);
+                    caret += lfBefore * (nl.Length - 1);
+                }
+
+                _textView.TextBuffer.Replace(new Span(insertPos, replaceLen), text);
+
+                var after = _textView.TextBuffer.CurrentSnapshot;
+                int caretPos = insertPos + caret;
+                if (caretPos >= 0 && caretPos <= after.Length)
+                    _textView.Caret.MoveTo(new SnapshotPoint(after, caretPos));
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "Snippet expansion: insert failed at {Pos}", insertPos);
+            }
+        }
+
+        /// <summary>Returns the document's line-break text (first non-empty line break, default CRLF).</summary>
+        private string GetBufferNewLine()
+        {
+            try
+            {
+                var snap = _textView.TextBuffer.CurrentSnapshot;
+                for (int i = 0; i < snap.LineCount; i++)
+                {
+                    var lb = snap.GetLineFromLineNumber(i).GetLineBreakText();
+                    if (!string.IsNullOrEmpty(lb)) return lb;
+                }
+            }
+            catch { }
+            return "\r\n";
         }
 
         /// <summary>
@@ -1000,6 +1037,17 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 int start = beforeSpace;
                 while (start > 0 && IsIdentifierChar(snapshot[start - 1]))
                     start--;
+
+                // T039 / FR-030 — snippet items expand via the engine by SHORTCODE (DisplayText); never
+                // insert the raw body (InsertText). Mirror CommitItem case 4 for the space-commit path.
+                // Replace the shortcode AND the just-typed space so no stray space survives the expansion.
+                if (item.ObjectType == 4)
+                {
+                    int snippetReplaceLen = caretPos - start;
+                    DismissPopup();
+                    TryExpandSnippetAtPosition(item.DisplayText, start, snippetReplaceLen);
+                    return;
+                }
 
                 // Replace: partial text + space → insertText + space
                 var span = new Span(start, beforeSpace - start); // exclude the space itself
