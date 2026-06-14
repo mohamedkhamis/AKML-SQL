@@ -1,5 +1,6 @@
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
+using AkmlSql.Engine.Navigation;
 using AkmlSql.Engine.Schema;
 using AkmlSql.Engine.Schema.Models;
 using MessagePack;
@@ -42,6 +43,22 @@ namespace AkmlSql.Engine.Productivity
 
                 // Get the database cache for this session
                 var dbCache = _schemaCacheManager.GetCache(connectionString, databaseName);
+
+                // Spec 030 T066 (FR-022): "Script as → ALTER" rewrites a programmable object's live
+                // definition (sys.sql_modules). It uses the connection directly and does NOT need the
+                // column cache, so branch here — before the dbCache null-guard — so it still works on a
+                // cold start where columns aren't loaded yet.
+                if (string.Equals(request.TemplateType, "ALTER", StringComparison.OrdinalIgnoreCase))
+                {
+                    var alterResponse = await GenerateAlterAsync(request, connectionString, dbCache, ct);
+                    return new RpcMessage
+                    {
+                        MessageType = MessageTypes.ScriptAsResult,
+                        RequestId = message.RequestId,
+                        Payload = MessagePackSerializer.Serialize(alterResponse)
+                    };
+                }
+
                 if (dbCache == null)
                 {
                     return CreateErrorResponse(message.RequestId,
@@ -93,6 +110,51 @@ namespace AkmlSql.Engine.Productivity
                 Log.Error(ex, "ScriptAsHandler: request failed");
                 return CreateErrorResponse(message.RequestId, ex.Message);
             }
+        }
+
+        /// <summary>
+        /// Spec 030 T066 — fetches the object's live module definition and rewrites its leading
+        /// CREATE to ALTER. Programmable objects only: a table (whose "definition" is a synthesised
+        /// CREATE TABLE script) is refused, since ALTER TABLE has different semantics.
+        /// </summary>
+        private static async Task<ScriptAsResponse> GenerateAlterAsync(
+            ScriptAsRequest request, string connectionString, DatabaseCache? dbCache, CancellationToken ct)
+        {
+            var (definition, objectType, fullName) = await new ObjectDefinitionService()
+                .GetDefinitionAsync(request.ObjectName, request.SchemaName, connectionString, dbCache, ct);
+
+            if (string.IsNullOrEmpty(definition))
+            {
+                return new ScriptAsResponse
+                {
+                    Success = false,
+                    Error = $"Could not retrieve a definition for [{request.SchemaName}].[{request.ObjectName}]. " +
+                            "The object may not exist or its schema cache is not populated."
+                };
+            }
+
+            if (string.Equals(objectType, "Table", StringComparison.OrdinalIgnoreCase))
+            {
+                return new ScriptAsResponse
+                {
+                    Success = false,
+                    Error = "Script as ALTER applies to procedures, views, functions and triggers — not tables."
+                };
+            }
+
+            var (ok, altered, error) = ScriptAsAlterRewriter.ToAlter(definition);
+            if (!ok)
+            {
+                return new ScriptAsResponse { Success = false, Error = error };
+            }
+
+            return new ScriptAsResponse
+            {
+                Success = true,
+                Sql = altered,
+                TemplateType = "ALTER",
+                FullObjectName = fullName ?? $"[{request.SchemaName}].[{request.ObjectName}]"
+            };
         }
 
         private static RpcMessage CreateErrorResponse(int requestId, string error)
