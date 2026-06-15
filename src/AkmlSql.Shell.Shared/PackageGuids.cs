@@ -123,5 +123,8 @@ namespace AkmlSql.Shell.Shared
         // Spec 020 US3 T059 — Format Styles editor launcher (takes the next free slot;
         // spec 019's reservation note above is tightened from 0x0916..0x093F to 0x0917..0x093F).
         public const int CmdFormatStyles                 = 0x0916;
+
+        // Spec 030 T053 — Manage Code Analysis Rules dialog launcher.
+        public const int CmdManageCodeAnalysisRules      = 0x0917;
     }
 }

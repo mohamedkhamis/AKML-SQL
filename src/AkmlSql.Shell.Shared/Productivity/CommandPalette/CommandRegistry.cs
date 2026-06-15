@@ -130,6 +130,7 @@ namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
 
             // Analysis
             commands.Add(Cmd("akml.bulkAnalysis", "Run Bulk Code Analysis", "Analysis", CommandIds.CmdBulkAnalysis));
+            commands.Add(Cmd("akml.manageRules", "Manage Code Analysis Rules", "Analysis", CommandIds.CmdManageCodeAnalysisRules));
 
             // History
             commands.Add(Cmd("akml.historyPanel", "Show SQL History", "History", CommandIds.CmdHistoryPanel, "Ctrl+Alt+H"));

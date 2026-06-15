@@ -63,6 +63,8 @@ namespace AkmlSql.Ssms22
                 CheckUpdateCommand.Initialize(this, commandService);
                 OptionsCommand.Initialize(this, commandService);
                 FormatStylesCommand.Initialize(this, commandService);
+                // Spec 030 T053 — Manage Code Analysis Rules dialog
+                AkmlSql.Shell.Shared.Analysis.ManageRulesCommand.Initialize(this, commandService);
                 SendFeedbackCommand.Initialize(this, commandService);
                 ViewLogsCommand.Initialize(this, commandService);
                 RefreshCacheCommand.Initialize(this, commandService);

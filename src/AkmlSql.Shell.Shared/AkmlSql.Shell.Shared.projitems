@@ -130,6 +130,8 @@
     <Compile Include="$(MSBuildThisFileDirectory)Analysis\ErrorListReporter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Analysis\FixAction.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Analysis\LightbulbProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Analysis\ManageRulesCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Analysis\ManageRulesDialog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Analysis\RefactoringAction.cs" />
     <!-- Bulk analysis command and result dialog -->
     <Compile Include="$(MSBuildThisFileDirectory)Commands\BulkAnalysisCommand.cs" />
