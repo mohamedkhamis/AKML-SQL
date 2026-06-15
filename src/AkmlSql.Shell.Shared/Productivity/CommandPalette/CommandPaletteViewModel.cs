@@ -318,6 +318,8 @@ namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
                 "akml.insertToUpdate" => CommandIds.CmdInsertToUpdate,
                 "akml.inlineStoredProcedure" => CommandIds.CmdInlineStoredProcedure,
                 "akml.scriptAsAlter" => CommandIds.CmdScriptAsAlter,
+                "akml.findInvalidObjects" => CommandIds.CmdShowFindInvalidObjects,
+                "akml.toggleCodeAnalysis" => CommandIds.CmdToggleCodeAnalysis,
                 "akml.bulkAnalysis" => CommandIds.CmdBulkAnalysis,
                 "akml.manageRules" => CommandIds.CmdManageCodeAnalysisRules,
                 "akml.historyPanel" => CommandIds.CmdHistoryPanel,

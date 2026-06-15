@@ -70,6 +70,9 @@ namespace AkmlSql.Ssms22
                 InsertToUpdateCommand.Initialize(this, commandService);
                 InlineStoredProcedureCommand.Initialize(this, commandService);
                 ScriptAsAlterCommand.Initialize(this, commandService);
+                FindInvalidObjectsCommand.Initialize(this, commandService);
+                // Spec 030 T056 — toggle code analysis on/off
+                AkmlSql.Shell.Shared.Analysis.ToggleCodeAnalysisCommand.Initialize(this, commandService);
                 SendFeedbackCommand.Initialize(this, commandService);
                 ViewLogsCommand.Initialize(this, commandService);
                 RefreshCacheCommand.Initialize(this, commandService);

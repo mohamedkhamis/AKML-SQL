@@ -42,6 +42,13 @@ namespace AkmlSql.Shell.Shared.Analysis
             ScheduleAnalysis();
         }
 
+        /// <summary>
+        /// Spec 030 T056 — forces a fresh analysis pass without an edit. Used by the
+        /// "Toggle Code Analysis" command so disabling clears the squiggles immediately (the engine
+        /// returns no issues when disabled) and enabling re-populates them.
+        /// </summary>
+        public void TriggerReanalysis() => ScheduleAnalysis();
+
         /// <summary>Debounced (300ms) trigger of a single analysis pass; cancels any in-flight one.</summary>
         private void ScheduleAnalysis()
         {

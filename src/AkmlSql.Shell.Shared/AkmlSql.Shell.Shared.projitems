@@ -132,6 +132,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Analysis\LightbulbProvider.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Analysis\ManageRulesCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Analysis\ManageRulesDialog.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Analysis\ToggleCodeAnalysisCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Analysis\RefactoringAction.cs" />
     <!-- Bulk analysis command and result dialog -->
     <Compile Include="$(MSBuildThisFileDirectory)Commands\BulkAnalysisCommand.cs" />
@@ -154,6 +155,8 @@
     <Compile Include="$(MSBuildThisFileDirectory)Refactoring\InsertToUpdateCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Refactoring\InlineStoredProcedureCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Refactoring\ScriptAsAlterCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Refactoring\FindInvalidObjectsCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Refactoring\FindInvalidObjectsDialog.cs" />
     <!-- Phase 7 — SQL History: execution capture, search, and tool window -->
     <Compile Include="$(MSBuildThisFileDirectory)History\ExecutionCapture.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)History\HistoryViewModel.cs" />

@@ -131,5 +131,8 @@ namespace AkmlSql.Shell.Shared
         // ScriptAsAlter=0x0909 already exist above and are reused).
         public const int CmdInlineExec                   = 0x0918;
         public const int CmdInsertToUpdate               = 0x0919;
+
+        // Spec 030 T056 — toggle code analysis on/off.
+        public const int CmdToggleCodeAnalysis           = 0x091A;
     }
 }

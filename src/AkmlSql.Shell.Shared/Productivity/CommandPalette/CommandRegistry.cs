@@ -132,10 +132,12 @@ namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
             commands.Add(Cmd("akml.insertToUpdate", "Convert INSERT to UPDATE", "Refactoring", CommandIds.CmdInsertToUpdate));
             commands.Add(Cmd("akml.inlineStoredProcedure", "Inline Stored Procedure", "Refactoring", CommandIds.CmdInlineStoredProcedure));
             commands.Add(Cmd("akml.scriptAsAlter", "Script as ALTER", "Refactoring", CommandIds.CmdScriptAsAlter));
+            commands.Add(Cmd("akml.findInvalidObjects", "Find Invalid Objects", "Refactoring", CommandIds.CmdShowFindInvalidObjects));
 
             // Analysis
             commands.Add(Cmd("akml.bulkAnalysis", "Run Bulk Code Analysis", "Analysis", CommandIds.CmdBulkAnalysis));
             commands.Add(Cmd("akml.manageRules", "Manage Code Analysis Rules", "Analysis", CommandIds.CmdManageCodeAnalysisRules));
+            commands.Add(Cmd("akml.toggleCodeAnalysis", "Toggle Code Analysis", "Analysis", CommandIds.CmdToggleCodeAnalysis));
 
             // History
             commands.Add(Cmd("akml.historyPanel", "Show SQL History", "History", CommandIds.CmdHistoryPanel, "Ctrl+Alt+H"));
