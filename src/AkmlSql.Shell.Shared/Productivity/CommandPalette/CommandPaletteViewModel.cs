@@ -315,6 +315,7 @@ namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
                 "akml.convertTableVarToTemp" => CommandIds.CmdConvertTableVarToTemp,
                 "akml.parameterizeValues" => CommandIds.CmdParameterizeValues,
                 "akml.bulkAnalysis" => CommandIds.CmdBulkAnalysis,
+                "akml.manageRules" => CommandIds.CmdManageCodeAnalysisRules,
                 "akml.historyPanel" => CommandIds.CmdHistoryPanel,
                 "akml.restoreClosedTab" => CommandIds.CmdRestoreClosedTab,
                 "akml.closeUnmodified" => CommandIds.CmdCloseUnmodified,
