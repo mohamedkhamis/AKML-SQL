@@ -14,6 +14,7 @@
 @inject ICompletionService Completion
 @inject IAiGhostTextService GhostText
 @inject IAiFeatureSettings AiFeatures
+@inject ISqlConnectionService SqlConn
 
 <div @ref="_host" id="@HostId" class="akml-editor" data-testid="sql-editor"></div>
 
@@ -77,14 +78,21 @@
     {
         try
         {
+            // Spec 030: when connected to a SQL Server (via the engine bridge), use the ONE canonical
+            // session id so the engine resolves the live schema; otherwise empty → offline/keyword path.
             var request = new CompletionRequest
             {
-                SessionId = string.Empty,   // SessionId is the engine-side identifier;
-                                            // the offline path doesn't use it and the
-                                            // online path will get it from the bridge.
+                SessionId = SqlConn.IsConnected ? SqlConn.SessionId : string.Empty,
                 CursorOffset = cursorOffset,
                 TriggerKind = 0,
             };
+            // Spec 030: push the live document to the engine session FIRST (DocumentChanged), then ask
+            // for completion. Frames are delivered in order over the one socket, so the engine has the
+            // current text (clause context) before it completes. No-op offline.
+            if (SqlConn.IsConnected && documentText != null)
+            {
+                await SqlConn.SendDocumentAsync(documentText, CancellationToken.None);
+            }
             // documentText is the LIVE editor text, passed straight from JS so the offline
             // smart GROUP BY action parses what the user actually sees (the online path ignores
             // it — the engine has its own copy). Kept off CompletionRequest so it never hits the wire.

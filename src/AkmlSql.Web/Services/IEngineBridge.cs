@@ -75,6 +75,17 @@ public interface IEngineBridge : IAsyncDisposable
         where TRequest : class
         where TResponse : class;
 
+    /// <summary>
+    /// Spec 030 — fire-and-forget send for engine NOTIFICATIONS (ResponseMessageType = 0), e.g.
+    /// <c>ConnectionChanged</c> / <c>DocumentChanged</c>. Awaits the socket <em>send</em> only; the
+    /// engine sends no reply, so no pending-request entry is registered (registering one would leak
+    /// and the await would hang forever). Frames are delivered in call order over the single socket,
+    /// so a caller may send <c>DocumentChanged</c> then a completion request and rely on the engine
+    /// seeing the document first.
+    /// </summary>
+    Task SendNotificationAsync<TPayload>(int messageType, TPayload payload, CancellationToken ct)
+        where TPayload : class;
+
     Task DisconnectAsync();
 }
 
@@ -315,6 +326,26 @@ internal sealed class EngineBridge : IEngineBridge
         {
             _pendingRequests.TryRemove(requestId, out _);
         }
+    }
+
+    public async Task SendNotificationAsync<TPayload>(int messageType, TPayload payload, CancellationToken ct)
+        where TPayload : class
+    {
+        if (_socket == null || _socket.State != BridgeWebSocketState.Open)
+        {
+            throw new InvalidOperationException("Bridge is not open.");
+        }
+
+        // RequestId = 0: the engine routes by MessageType and the handler has ResponseMessageType = 0,
+        // so no reply frame is produced. We deliberately do NOT add a _pendingRequests entry.
+        var envelope = new RpcMessage
+        {
+            MessageType = messageType,
+            RequestId = 0,
+            Payload = MessagePackSerializer.Serialize(payload),
+        };
+        var frame = MessagePackSerializer.Serialize(envelope);
+        await _socket.SendAsync(frame, ct).ConfigureAwait(false);
     }
 
     private async Task ReceiveLoopAsync(IBridgeWebSocket socket)

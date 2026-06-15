@@ -134,6 +134,7 @@ public sealed class LightweightParityTests
         public string? EngineVersion => null;
         public Task<HandshakeResponse> ConnectAsync(EngineConnection c, string? b, string? p, CancellationToken ct) => Task.FromResult(new HandshakeResponse());
         public Task<TResponse> SendAsync<TRequest, TResponse>(int t, TRequest r, CancellationToken ct) where TRequest : class where TResponse : class => throw new InvalidOperationException();
+        public Task SendNotificationAsync<TPayload>(int t, TPayload p, CancellationToken ct) where TPayload : class => Task.CompletedTask;
         public Task DisconnectAsync() => Task.CompletedTask;
         public ValueTask DisposeAsync() => default;
     }
