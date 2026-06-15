@@ -57,6 +57,22 @@ public class CaSettingsLoader : IDisposable
             AutoFixOnFormat = globalSettings.AutoFixOnFormat,
         };
 
+        // Spec 030 T053: apply user-level per-rule overrides from the global config (Manage Rules
+        // dialog) FIRST, so a project .casettings (loaded below) still wins. "ignore" severity, like
+        // in .casettings, disables the rule.
+        if (globalSettings.RuleOverrides != null)
+        {
+            foreach (var (ruleId, ov) in globalSettings.RuleOverrides)
+            {
+                if (string.IsNullOrWhiteSpace(ruleId) || ov == null) continue;
+                settings.EffectiveRules[ruleId] = new ResolvedRuleConfig
+                {
+                    Enabled  = ov.Enabled && !string.Equals(ov.Severity, "ignore", StringComparison.OrdinalIgnoreCase),
+                    Severity = ParseSeverity(ov.Severity)
+                };
+            }
+        }
+
         var caFile = FindCaSettingsFile(startDir);
         if (caFile == null) return settings;
 

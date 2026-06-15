@@ -644,6 +644,30 @@ namespace AkmlSql.Core.Config
         /// </summary>
         [JsonPropertyName("applyFixOnAllOccurrencesShortcut")]
         public string ApplyFixOnAllOccurrencesShortcut { get; set; } = "Shift+Click";
+
+        /// <summary>
+        /// Spec 030 T053 — user-level per-rule overrides set from the Manage Rules dialog.
+        /// Keyed by rule id (e.g. "PE001"). Applied by <c>CaSettingsLoader</c> over the built-in
+        /// rule defaults and BELOW any project <c>.casettings</c> (project-local wins). Empty by
+        /// default, so the global baseline is the rules' own defaults.
+        /// </summary>
+        [JsonPropertyName("ruleOverrides")]
+        public Dictionary<string, RuleOverride> RuleOverrides { get; set; } = new();
+    }
+
+    /// <summary>
+    /// Spec 030 T053 — a single global per-rule override (enable/severity), persisted in
+    /// <c>config.json</c> under <c>codeAnalysis.ruleOverrides</c>. Severity is a string matching the
+    /// <c>.casettings</c> convention: "error", "warning", "information", "hint", or "ignore"
+    /// (empty = leave the rule's default severity, only the enable flag applies).
+    /// </summary>
+    public class RuleOverride
+    {
+        [JsonPropertyName("enabled")]
+        public bool Enabled { get; set; } = true;
+
+        [JsonPropertyName("severity")]
+        public string Severity { get; set; } = string.Empty;
     }
 
     /// <summary>Settings for the refactoring engine.</summary>
