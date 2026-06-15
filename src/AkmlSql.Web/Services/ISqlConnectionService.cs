@@ -74,13 +74,30 @@ internal sealed class SqlConnectionService : ISqlConnectionService
         if (string.IsNullOrWhiteSpace(database))
             return (false, "Database is required.");
 
+        // Reject connection-string metacharacters in the identifiers up front. The builder below
+        // would safely quote them anyway, but a ';' / quote / control char in a server or database
+        // name is never legitimate — it can only be an attempt to inject extra keywords (e.g. flip
+        // Integrated Security), so we refuse rather than silently quote it. (Passwords may legally
+        // contain ';' and are left to the builder's quoting.)
+        if (!IsSafeIdentifier(server))
+            return (false, "Server name contains invalid characters.");
+        if (!IsSafeIdentifier(database))
+            return (false, "Database name contains invalid characters.");
+
         if (_bridge.State != BridgeState.Open)
             return (false, "Pair an engine first (Engine connections → Add), then connect to SQL Server.");
 
-        // SECURITY NOTE (spec 030): in a LAN deployment a remote browser should NOT be able to make
-        // the engine open an arbitrary server under the engine host's identity. This first cut targets
-        // the localhost engine; a LAN guard (e.g. restrict to the engine host's own SQL instances, or
-        // require an allow-list) is a follow-up before LAN exposure.
+        // SECURITY (spec 030): confused-deputy / SSRF guard. The engine opens this connection under
+        // ITS OWN identity (for Windows auth, its Windows account), so a browser-supplied host is a
+        // confused-deputy lever — a malicious/compromised page could make the engine reach an
+        // arbitrary SQL/SMB listener and authenticate as the engine host. This build is localhost-
+        // scoped, so we hard-restrict to loopback servers (localhost / 127.x / ::1 / . / (local) /
+        // (localdb)) and reject UNC/named-pipe/remote targets. Before any LAN exposure: replace this
+        // with a configured allow-list AND enforce the same check engine-side (defense in depth).
+        if (!IsLoopbackServer(server))
+            return (false, "This build only connects to a LOCAL SQL Server (localhost, 127.0.0.1, ., (local), (localdb)). " +
+                           "Remote/UNC servers are disabled because the engine would connect under its own Windows identity.");
+
         var connStr = BuildConnectionString(server.Trim(), database.Trim(), windowsAuth, user, password);
 
         try
@@ -144,11 +161,71 @@ internal sealed class SqlConnectionService : ISqlConnectionService
 
     private static string BuildConnectionString(string server, string database, bool windowsAuth, string? user, string? password)
     {
-        // TrustServerCertificate=True keeps a local/dev SQL Server (often self-signed) from failing
-        // the TLS handshake. Application Name aids server-side diagnostics.
-        var baseStr = $"Server={server};Database={database};TrustServerCertificate=True;Application Name=AKML SQL Web;Connect Timeout=15";
-        return windowsAuth
-            ? baseStr + ";Integrated Security=True"
-            : baseStr + $";User ID={user};Password={password}";
+        // Use DbConnectionStringBuilder (System.Data.Common, BCL — WASM-safe, unlike
+        // Microsoft.Data.SqlClient) so each value is validated and properly quoted/escaped. This
+        // prevents connection-string injection: a value containing ';', '=' or quotes is wrapped
+        // rather than treated as a new keyword. TrustServerCertificate keeps a local/dev SQL Server
+        // (often self-signed) from failing the TLS handshake; Application Name aids diagnostics.
+        var b = new System.Data.Common.DbConnectionStringBuilder
+        {
+            ["Server"] = server,
+            ["Database"] = database,
+            ["TrustServerCertificate"] = true,
+            ["Application Name"] = "AKML SQL Web",
+            ["Connect Timeout"] = 15,
+        };
+        if (windowsAuth)
+        {
+            b["Integrated Security"] = true;
+        }
+        else
+        {
+            b["User ID"] = user ?? string.Empty;
+            b["Password"] = password ?? string.Empty;
+        }
+        return b.ConnectionString;
+    }
+
+    /// <summary>
+    /// SECURITY (spec 030): true only for a LOOPBACK SQL Server target. Strips an optional
+    /// <c>tcp:</c> protocol prefix, the <c>\instance</c> suffix and the <c>,port</c> suffix, then
+    /// matches the host against the loopback aliases. Rejects UNC (<c>\\</c>), named-pipe/other
+    /// protocol prefixes, and any non-loopback host. This is the confused-deputy/SSRF guard for the
+    /// localhost-scoped build; a LAN deployment must replace it with a configured allow-list.
+    /// </summary>
+    private static bool IsLoopbackServer(string server)
+    {
+        var s = (server ?? string.Empty).Trim();
+        if (s.Length == 0) return false;
+        if (s.StartsWith("\\\\")) return false; // UNC path → not a loopback TCP host
+        if (s.StartsWith("np:", StringComparison.OrdinalIgnoreCase)
+            || s.StartsWith("lpc:", StringComparison.OrdinalIgnoreCase)
+            || s.StartsWith("admin:", StringComparison.OrdinalIgnoreCase))
+            return false; // non-TCP / DAC protocol prefixes
+        if (s.StartsWith("tcp:", StringComparison.OrdinalIgnoreCase)) s = s.Substring(4).Trim();
+
+        var host = s;
+        int slash = host.IndexOf('\\'); if (slash >= 0) host = host.Substring(0, slash); // drop \instance
+        int comma = host.IndexOf(','); if (comma >= 0) host = host.Substring(0, comma);   // drop ,port
+        host = host.Trim().Trim('[', ']').ToLowerInvariant();
+
+        return host is "localhost" or "127.0.0.1" or "::1" or "." or "(local)"
+            || host.StartsWith("127.")
+            || host.StartsWith("(localdb)");
+    }
+
+    /// <summary>
+    /// True when an identifier (server / database) is free of connection-string metacharacters and
+    /// control characters. Server/database names never legitimately contain ';', '=', quotes or
+    /// control chars, so their presence is treated as an injection attempt.
+    /// </summary>
+    private static bool IsSafeIdentifier(string value)
+    {
+        foreach (var ch in value)
+        {
+            if (ch == ';' || ch == '=' || ch == '"' || ch == '\'' || char.IsControl(ch))
+                return false;
+        }
+        return true;
     }
 }
