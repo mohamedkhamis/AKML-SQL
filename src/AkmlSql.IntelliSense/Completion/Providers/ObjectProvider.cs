@@ -223,10 +223,17 @@ public class ObjectProvider : ICompletionProvider
         if (ObjectsInScope)
         {
             // First, yield objects from default schema (dbo) with higher priority.
-            // When SchemaMode is Always, dbo objects also get the "dbo." prefix in InsertText.
+            // When SchemaMode is Always, dbo objects also get the "dbo." prefix in InsertText —
+            // but only when the statement has no join. Bug #2 (2026-06-14): re-selecting a table in
+            // a single-table FROM should insert "dbo.martyrs"; once a join is involved, qualification
+            // is noise (aliases carry the disambiguation), so dbo stays bare. A join is present when
+            // the cursor is at a JOIN target, or ≥2 tables are already referenced (JOIN or comma-join).
+            bool statementHasJoin =
+                context.ClauseType == ClauseType.JoinTable ||
+                context.AvailableAliases.Count >= 2;
             if (SchemaInScope("dbo"))
             {
-                bool qualifyDbo = SchemaQualifyMode == SchemaQualifyMode.Always;
+                bool qualifyDbo = SchemaQualifyMode == SchemaQualifyMode.Always && !statementHasJoin;
                 foreach (var obj in GetFilteredObjects(cache, "dbo", allowedTypes))
                 {
                     if (skipFkTables && fkRelated.ContainsKey(obj.FullName))
