@@ -65,6 +65,11 @@ namespace AkmlSql.VS2026
                 FormatStylesCommand.Initialize(this, commandService);
                 // Spec 030 T053 — Manage Code Analysis Rules dialog
                 AkmlSql.Shell.Shared.Analysis.ManageRulesCommand.Initialize(this, commandService);
+                // Spec 030 T067 — editor-context refactor commands
+                InlineExecCommand.Initialize(this, commandService);
+                InsertToUpdateCommand.Initialize(this, commandService);
+                InlineStoredProcedureCommand.Initialize(this, commandService);
+                ScriptAsAlterCommand.Initialize(this, commandService);
                 SendFeedbackCommand.Initialize(this, commandService);
                 ViewLogsCommand.Initialize(this, commandService);
                 RefreshCacheCommand.Initialize(this, commandService);

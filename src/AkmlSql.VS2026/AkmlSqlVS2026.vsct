@@ -52,6 +52,31 @@
           <ButtonText>Manage Code Analysis Rules...</ButtonText>
         </Strings>
       </Button>
+      <!-- Spec 030 T067 — editor-context refactor commands -->
+      <Button guid="guidAkmlSqlCmdSet" id="cmdInlineExec" priority="0x0303" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Strings>
+          <ButtonText>Inline EXEC</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="cmdInsertToUpdate" priority="0x0304" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Strings>
+          <ButtonText>Convert INSERT to UPDATE</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="cmdInlineStoredProcedure" priority="0x0305" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Strings>
+          <ButtonText>Inline Stored Procedure</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="cmdScriptAsAlter" priority="0x0306" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Strings>
+          <ButtonText>Script as ALTER</ButtonText>
+        </Strings>
+      </Button>
       <Button guid="guidAkmlSqlCmdSet" id="cmdSendFeedback" priority="0x0400" type="Button">
         <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
         <Strings>
@@ -374,6 +399,11 @@
       <IDSymbol name="cmdFormatStyles" value="0x0916" />
       <!-- Spec 030 T053 — Manage Code Analysis Rules dialog -->
       <IDSymbol name="cmdManageRules" value="0x0917" />
+      <!-- Spec 030 T067 — editor-context refactor commands -->
+      <IDSymbol name="cmdInlineExec" value="0x0918" />
+      <IDSymbol name="cmdInsertToUpdate" value="0x0919" />
+      <IDSymbol name="cmdInlineStoredProcedure" value="0x090E" />
+      <IDSymbol name="cmdScriptAsAlter" value="0x0909" />
       <IDSymbol name="cmdSendFeedback" value="0x0103" />
       <IDSymbol name="cmdViewLogs" value="0x0104" />
       <IDSymbol name="cmdRefreshCache" value="0x0105" />

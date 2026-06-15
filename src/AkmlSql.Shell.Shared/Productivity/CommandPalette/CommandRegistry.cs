@@ -127,6 +127,11 @@ namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
             commands.Add(Cmd("akml.convertTempToTableVar", "Convert #Temp to @TableVar", "Refactoring", CommandIds.CmdConvertTempToTableVar));
             commands.Add(Cmd("akml.convertTableVarToTemp", "Convert @TableVar to #Temp", "Refactoring", CommandIds.CmdConvertTableVarToTemp));
             commands.Add(Cmd("akml.parameterizeValues", "Parameterize Literal Values", "Refactoring", CommandIds.CmdParameterizeValues));
+            // Spec 030 T067 — editor-context refactor commands
+            commands.Add(Cmd("akml.inlineExec", "Inline EXEC", "Refactoring", CommandIds.CmdInlineExec));
+            commands.Add(Cmd("akml.insertToUpdate", "Convert INSERT to UPDATE", "Refactoring", CommandIds.CmdInsertToUpdate));
+            commands.Add(Cmd("akml.inlineStoredProcedure", "Inline Stored Procedure", "Refactoring", CommandIds.CmdInlineStoredProcedure));
+            commands.Add(Cmd("akml.scriptAsAlter", "Script as ALTER", "Refactoring", CommandIds.CmdScriptAsAlter));
 
             // Analysis
             commands.Add(Cmd("akml.bulkAnalysis", "Run Bulk Code Analysis", "Analysis", CommandIds.CmdBulkAnalysis));

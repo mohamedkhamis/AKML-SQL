@@ -126,5 +126,10 @@ namespace AkmlSql.Shell.Shared
 
         // Spec 030 T053 — Manage Code Analysis Rules dialog launcher.
         public const int CmdManageCodeAnalysisRules      = 0x0917;
+
+        // Spec 030 T067 — refactor ops that lacked an id (InlineStoredProcedure=0x090E and
+        // ScriptAsAlter=0x0909 already exist above and are reused).
+        public const int CmdInlineExec                   = 0x0918;
+        public const int CmdInsertToUpdate               = 0x0919;
     }
 }
