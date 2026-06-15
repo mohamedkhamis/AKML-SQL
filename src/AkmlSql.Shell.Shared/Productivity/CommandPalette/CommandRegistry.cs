@@ -108,6 +108,7 @@ namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
             commands.Add(Cmd("akml.toggleBrackets", "Toggle Square Brackets", "Format", CommandIds.CmdToggleBrackets));
             commands.Add(Cmd("akml.toggleAs", "Toggle AS Keyword", "Format", CommandIds.CmdToggleAs));
             commands.Add(Cmd("akml.editProfile", "Edit Format Profile", "Format", CommandIds.CmdEditProfile));
+            commands.Add(Cmd("akml.disableFormattingForSelection", "Disable Formatting for Selection", "Format", CommandIds.CmdDisableFormattingForSelection));
 
             // Refactoring — Lightweight
             commands.Add(Cmd("akml.expandInsertColumns", "Expand INSERT Column List", "Refactoring", CommandIds.CmdExpandInsertColumns));

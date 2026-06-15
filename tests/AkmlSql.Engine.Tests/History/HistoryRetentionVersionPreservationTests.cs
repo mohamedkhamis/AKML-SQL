@@ -147,6 +147,25 @@ public sealed class HistoryRetentionVersionPreservationTests : IDisposable
         Assert.NotNull(await _db.GetFullSqlAsync(historyId));
     }
 
+    [Fact]
+    public async Task RetentionService_DisableAutoTrim_SkipsAllPurging()
+    {
+        // Spec 030 T075 (FR-040): with auto-trim disabled, an over-retention version is NOT purged.
+        var historyId = await SeedExecutionAsync(sqlText: "SELECT 8");
+        await SeedVersionAsync(historyId, "old", DaysAgo(40));
+        await SeedVersionAsync(historyId, "latest", DaysAgo(0));
+
+        var settings = new HistorySettings { RetentionDays = 7, MaxEntries = 100_000, DisableAutoTrim = true };
+        using (var service = new HistoryRetentionService(_db, settings))
+        {
+            await service.StartAsync();
+        }
+
+        // Both versions remain (the 40-day-old one would normally be trimmed at retention=7).
+        var versions = await _db.GetVersionsAsync(historyId);
+        Assert.Equal(2, versions.Count);
+    }
+
     // ── Seeding helpers ───────────────────────────────────────────────────────
 
     /// <summary>Seeds one execution (history) row and returns its id.</summary>

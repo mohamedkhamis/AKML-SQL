@@ -73,6 +73,8 @@ namespace AkmlSql.VS2026
                 FindInvalidObjectsCommand.Initialize(this, commandService);
                 // Spec 030 T056 — toggle code analysis on/off
                 AkmlSql.Shell.Shared.Analysis.ToggleCodeAnalysisCommand.Initialize(this, commandService);
+                // Spec 030 T068 — disable formatting for selection
+                DisableFormattingForSelectionCommand.Initialize(this, commandService);
                 SendFeedbackCommand.Initialize(this, commandService);
                 ViewLogsCommand.Initialize(this, commandService);
                 RefreshCacheCommand.Initialize(this, commandService);

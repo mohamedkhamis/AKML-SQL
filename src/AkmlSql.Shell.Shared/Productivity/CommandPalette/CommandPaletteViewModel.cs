@@ -299,6 +299,7 @@ namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
                 "akml.toggleBrackets" => CommandIds.CmdToggleBrackets,
                 "akml.toggleAs" => CommandIds.CmdToggleAs,
                 "akml.editProfile" => CommandIds.CmdEditProfile,
+                "akml.disableFormattingForSelection" => CommandIds.CmdDisableFormattingForSelection,
                 "akml.expandInsertColumns" => CommandIds.CmdExpandInsertColumns,
                 "akml.expandExecParameters" => CommandIds.CmdExpandExecParameters,
                 "akml.expandUpdateColumns" => CommandIds.CmdExpandUpdateColumns,
