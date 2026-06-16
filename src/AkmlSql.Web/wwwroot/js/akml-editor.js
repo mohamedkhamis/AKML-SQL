@@ -299,6 +299,175 @@ export async function create(hostElementId, initialText, dotNetRef) {
         { key: 'Escape', run: dismissGhost },
     ]));
 
+    // ── Spec 030 (web Phase 1) — Quick Info on hover ─────────────────────────────────────────
+    // CM6 hoverTooltip extension: asks the .NET IQuickInfoService for the object/column under the
+    // hovered position and renders a small themed tooltip. Returns null = no tooltip.
+    const quickInfoHover = cm.view.hoverTooltip(async (view, pos) => {
+        if (!dotNetRef) return null;
+        let info;
+        try { info = await dotNetRef.invokeMethodAsync('RequestQuickInfoFromJs', pos, view.state.doc.toString()); }
+        catch { return null; }
+        if (!info) return null;
+        const wr = view.state.wordAt(pos);
+        const from = wr ? wr.from : pos;
+        const to = wr ? wr.to : pos;
+        return {
+            pos: from, end: to, above: true,
+            create() {
+                const dom = document.createElement('div');
+                dom.className = 'akml-qi-tooltip';
+                const header = document.createElement('div');
+                header.className = 'akml-qi-header';
+                header.textContent = (info.objectType ? `[${info.objectType}] ` : '') + (info.header || '');
+                dom.appendChild(header);
+                if (info.description) {
+                    const desc = document.createElement('div');
+                    desc.className = 'akml-qi-desc';
+                    desc.textContent = info.description;
+                    dom.appendChild(desc);
+                }
+                if (info.details && info.details.length) {
+                    const list = document.createElement('div');
+                    list.className = 'akml-qi-details';
+                    for (const d of info.details) {
+                        const row = document.createElement('div');
+                        row.textContent = d.value ? `${d.label}: ${d.value}` : d.label;
+                        list.appendChild(row);
+                    }
+                    dom.appendChild(list);
+                }
+                return { dom };
+            },
+        };
+    }, { hoverTime: 350 });
+
+    // ── Spec 030 (web Phase 1) — Signature help (parameter hints) ─────────────────────────────
+    // A single themed tooltip driven by a StateField, shown when the caret is inside a proc/function
+    // call. Re-requested when the user types '(' or ',' (or types further while one is showing);
+    // dismissed on ')' / Escape / when the service reports no call site.
+    const setSig = cm.state.StateEffect.define();
+    const sigField = cm.state.StateField.define({
+        create() { return null; },
+        update(value, tr) {
+            for (const e of tr.effects) if (e.is(setSig)) value = e.value;
+            return value;
+        },
+        provide: f => cm.view.showTooltip.from(f),
+    });
+
+    async function requestSignature(view) {
+        if (!dotNetRef) return;
+        const pos = view.state.selection.main.head;
+        let sig;
+        try { sig = await dotNetRef.invokeMethodAsync('RequestSignatureHelpFromJs', pos, view.state.doc.toString()); }
+        catch { return; }
+        const inst = _instances.get(hostElementId);
+        if (!inst) return;
+        if (!sig) { inst.view.dispatch({ effects: setSig.of(null) }); return; }
+        const tooltip = {
+            pos: inst.view.state.selection.main.head,
+            above: true,
+            create() {
+                const dom = document.createElement('div');
+                dom.className = 'akml-sig-tooltip';
+                const label = document.createElement('div');
+                label.className = 'akml-sig-label';
+                label.textContent = sig.label || '';
+                dom.appendChild(label);
+                if (sig.parameters && sig.parameters.length) {
+                    const ap = Math.max(0, Math.min(sig.activeParameter, sig.parameters.length - 1));
+                    const p = sig.parameters[ap];
+                    const active = document.createElement('div');
+                    active.className = 'akml-sig-active';
+                    active.textContent = (p.name || '') + (p.type ? ' ' + p.type : '');
+                    dom.appendChild(active);
+                }
+                if (sig.documentation) {
+                    const doc = document.createElement('div');
+                    doc.className = 'akml-sig-doc';
+                    doc.textContent = sig.documentation;
+                    dom.appendChild(doc);
+                }
+                return { dom };
+            },
+        };
+        inst.view.dispatch({ effects: setSig.of(tooltip) });
+    }
+
+    function dismissSignature(view) {
+        if (view.state.field(sigField, false)) { view.dispatch({ effects: setSig.of(null) }); return true; }
+        return false;
+    }
+
+    const signatureListener = cm.view.EditorView.updateListener.of((update) => {
+        if (!update.docChanged || !dotNetRef) return;
+        const userTyped = update.transactions.some(t => {
+            const ev = t.annotation(cm.state.Transaction.userEvent);
+            return typeof ev === 'string' && ev.startsWith('input.');
+        });
+        if (!userTyped) return;
+        let lastChar = '';
+        update.changes.iterChanges((_fa, _ta, _fb, _tb, inserted) => {
+            const s = inserted.toString();
+            if (s.length > 0) lastChar = s[s.length - 1];
+        });
+        if (lastChar === ')') { dismissSignature(update.view); return; }
+        const showing = update.state.field(sigField, false) != null;
+        if (lastChar === '(' || lastChar === ',' || showing) {
+            requestSignature(update.view);
+        }
+    });
+
+    // ── Spec 030 (web Phase 1) — Go to definition (F12) → peek panel ──────────────────────────
+    function removePeekPanel(host) {
+        if (host && host._akmlPeek) { host._akmlPeek.remove(); host._akmlPeek = null; }
+    }
+
+    function showPeekPanel(host, def) {
+        removePeekPanel(host);
+        const panel = document.createElement('div');
+        panel.className = 'akml-peek-panel';
+        const header = document.createElement('div');
+        header.className = 'akml-peek-header';
+        const title = document.createElement('span');
+        title.textContent = (def.found
+            ? ((def.objectType ? def.objectType + ': ' : '') + (def.fullName || 'Definition'))
+            : (def.message || 'No definition found.'));
+        const close = document.createElement('button');
+        close.className = 'akml-peek-close';
+        close.type = 'button';
+        close.textContent = '✕';
+        close.onclick = () => removePeekPanel(host);
+        header.appendChild(title);
+        header.appendChild(close);
+        panel.appendChild(header);
+        if (def.found && def.definition) {
+            const pre = document.createElement('pre');
+            pre.className = 'akml-peek-body';
+            pre.textContent = def.definition;
+            panel.appendChild(pre);
+        }
+        host.appendChild(panel);
+        host._akmlPeek = panel;
+    }
+
+    function gotoDefinition(view) {
+        if (!dotNetRef) return true;
+        const pos = view.state.selection.main.head;
+        dotNetRef.invokeMethodAsync('RequestGoToDefinitionFromJs', pos, view.state.doc.toString())
+            .then(def => {
+                const host = document.getElementById(hostElementId);
+                if (host && def) showPeekPanel(host, def);
+            })
+            .catch(() => { /* go-to-def never surfaces an error into typing */ });
+        return true;   // handled (the work is async)
+    }
+
+    const navKeymap = cm.view.keymap.of([
+        { key: 'F12', run: gotoDefinition },
+        { key: 'Escape', run: dismissSignature },   // also clears a stray signature tooltip
+    ]);
+
     const state = cm.state.EditorState.create({
         doc: initialText ?? '',
         extensions: [
@@ -323,6 +492,11 @@ export async function create(hostElementId, initialText, dotNetRef) {
             cm.lint.lintGutter(),
             ghostField,
             ghostListener,
+            // Spec 030 (web Phase 1) — IntelliSense parity: hover quick-info, signature help, F12 goto.
+            quickInfoHover,
+            sigField,
+            signatureListener,
+            navKeymap,
             updateListener,
         ],
     });
@@ -527,6 +701,8 @@ export function dispose(hostElementId) {
         if (inst.ghost.timer) { clearTimeout(inst.ghost.timer); inst.ghost.timer = null; }
         inst.ghost.reqId++;
     }
+    const host = document.getElementById(hostElementId);
+    if (host && host._akmlPeek) { host._akmlPeek.remove(); host._akmlPeek = null; }
     inst.view.destroy();
     if (inst.dotNetRef && typeof inst.dotNetRef.dispose === 'function') {
         inst.dotNetRef.dispose();

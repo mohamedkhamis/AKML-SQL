@@ -15,6 +15,9 @@
 @inject IAiGhostTextService GhostText
 @inject IAiFeatureSettings AiFeatures
 @inject ISqlConnectionService SqlConn
+@inject IQuickInfoService QuickInfo
+@inject ISignatureHelpService SignatureHelp
+@inject IGotoDefinitionService GotoDefinition
 
 <div @ref="_host" id="@HostId" class="akml-editor" data-testid="sql-editor"></div>
 
@@ -22,12 +25,52 @@
     .akml-editor {
         height: 100%;
         min-height: 320px;
+        position: relative; /* anchors the go-to-definition peek panel */
         background-color: var(--akml-surface-editor);
         font-family: var(--akml-type-editor-family);
         font-size: var(--akml-type-editor-size);
     }
     .akml-editor .cm-editor { height: 100%; }
     .akml-editor .cm-scroller { font-family: inherit; font-size: inherit; }
+
+    /* Spec 030 (web Phase 1) — quick-info hover + signature tooltip content. */
+    .akml-qi-tooltip, .akml-sig-tooltip {
+        max-width: 460px;
+        padding: 6px 8px;
+        color: var(--akml-text-primary);
+        font-family: var(--akml-type-chrome-family);
+        font-size: 12px;
+        line-height: 1.5;
+    }
+    .akml-qi-header, .akml-sig-label { font-weight: 600; }
+    .akml-qi-desc, .akml-sig-doc { color: var(--akml-text-secondary); margin-top: 2px; }
+    .akml-qi-details { margin-top: 4px; color: var(--akml-text-secondary); font-family: var(--akml-type-editor-family); }
+    .akml-sig-active { margin-top: 3px; color: var(--akml-accent, var(--akml-text-primary)); font-weight: 600; }
+
+    /* Go-to-definition peek panel — anchored to the bottom of the editor. */
+    .akml-peek-panel {
+        position: absolute; left: 0; right: 0; bottom: 0; z-index: 20;
+        max-height: 45%; display: flex; flex-direction: column;
+        background-color: var(--akml-surface-panel);
+        border-top: 1px solid var(--akml-border-default);
+        box-shadow: 0 -2px 8px rgba(0,0,0,0.25);
+    }
+    .akml-peek-header {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 4px 8px; font-family: var(--akml-type-chrome-family); font-size: 12px;
+        color: var(--akml-text-primary); background-color: var(--akml-surface-hover, var(--akml-surface-panel));
+        border-bottom: 1px solid var(--akml-border-default);
+    }
+    .akml-peek-close {
+        background: transparent; border: none; cursor: pointer; font-size: 13px;
+        color: var(--akml-text-secondary); padding: 0 4px;
+    }
+    .akml-peek-close:hover { color: var(--akml-text-primary); }
+    .akml-peek-body {
+        margin: 0; padding: 8px; overflow: auto; white-space: pre;
+        font-family: var(--akml-type-editor-family); font-size: var(--akml-type-editor-size);
+        color: var(--akml-text-primary);
+    }
 </style>
 
 @code {
@@ -137,6 +180,110 @@
         }
     }
 
+    /// <summary>Spec 030 (web Phase 1) — JS-invokable hover quick-info. Returns null when there is
+    /// nothing to show (the JS hoverTooltip then shows no tooltip). Online routes through the engine;
+    /// offline synthesises from the cached schema (handled inside IQuickInfoService).</summary>
+    [JSInvokable]
+    public async Task<QuickInfoDto?> RequestQuickInfoFromJs(int cursorOffset, string? documentText)
+    {
+        try
+        {
+            if (SqlConn.IsConnected && documentText != null)
+                await SqlConn.SendDocumentAsync(documentText, CancellationToken.None);
+
+            var r = await QuickInfo.GetAsync(new QuickInfoRequest
+            {
+                SessionId = SqlConn.IsConnected ? SqlConn.SessionId : string.Empty,
+                CursorOffset = cursorOffset,
+            }, CancellationToken.None);
+
+            bool empty = r == null
+                || (string.IsNullOrEmpty(r.Header) && string.IsNullOrEmpty(r.Description)
+                    && (r.Details == null || r.Details.Length == 0));
+            if (empty) return null;
+
+            return new QuickInfoDto
+            {
+                Header = r!.Header ?? string.Empty,
+                ObjectType = r.ObjectType ?? string.Empty,
+                Description = r.Description ?? string.Empty,
+                Details = (r.Details ?? System.Array.Empty<QuickInfoDetail>())
+                    .Select(d => new DetailDto { Label = d.Label ?? string.Empty, Value = d.Value ?? string.Empty })
+                    .ToArray(),
+            };
+        }
+        catch { return null; }
+    }
+
+    /// <summary>Spec 030 (web Phase 1) — JS-invokable signature help (triggered on '(' / ','). Returns
+    /// the active overload's label + parameters + the active parameter index, or null.</summary>
+    [JSInvokable]
+    public async Task<SignatureDto?> RequestSignatureHelpFromJs(int cursorOffset, string? documentText)
+    {
+        try
+        {
+            if (SqlConn.IsConnected && documentText != null)
+                await SqlConn.SendDocumentAsync(documentText, CancellationToken.None);
+
+            var r = await SignatureHelp.GetAsync(new SignatureRequest
+            {
+                SessionId = SqlConn.IsConnected ? SqlConn.SessionId : string.Empty,
+                CursorOffset = cursorOffset,
+            }, CancellationToken.None);
+
+            if (r == null || r.Overloads == null || r.Overloads.Length == 0) return null;
+            var ov = r.Overloads[System.Math.Clamp(r.ActiveOverload, 0, r.Overloads.Length - 1)];
+
+            return new SignatureDto
+            {
+                Label = ov.Label ?? string.Empty,
+                Documentation = ov.Documentation ?? string.Empty,
+                ActiveParameter = r.ActiveParameter,
+                Parameters = (ov.Parameters ?? System.Array.Empty<ParameterInfo>())
+                    .Select(p => new ParamDto { Name = p.Name ?? string.Empty, Type = p.Type ?? string.Empty })
+                    .ToArray(),
+            };
+        }
+        catch { return null; }
+    }
+
+    /// <summary>Spec 030 (web Phase 1) — JS-invokable go-to-definition (F12). Resolves the identifier
+    /// at the caret and asks the engine for the object's CREATE definition (online-only). Returns a
+    /// flat result the JS peek panel renders; Found=false carries a short reason.</summary>
+    [JSInvokable]
+    public async Task<DefinitionDto> RequestGoToDefinitionFromJs(int cursorOffset, string? documentText)
+    {
+        try
+        {
+            var doc = documentText ?? string.Empty;
+            var token = OfflineSqlScanner.FindIdentifierAt(doc, cursorOffset);
+            if (!token.IsValid)
+                return new DefinitionDto { Found = false, Message = "No object under the cursor." };
+            if (!SqlConn.IsConnected)
+                return new DefinitionDto { Found = false, Message = "Connect to a SQL Server to view object definitions." };
+
+            var r = await GotoDefinition.GetAsync(new GetObjectDefinitionRequest
+            {
+                SessionId = SqlConn.SessionId,
+                ObjectName = token.Identifier,
+                SchemaName = string.IsNullOrEmpty(token.Prefix) ? null : token.Prefix,
+                PeekOnly = true,
+            }, CancellationToken.None);
+
+            if (r == null || !r.Success || string.IsNullOrEmpty(r.Definition))
+                return new DefinitionDto { Found = false, Message = r?.Error ?? $"No definition found for '{token.Identifier}'." };
+
+            return new DefinitionDto
+            {
+                Found = true,
+                FullName = r.FullName ?? token.Identifier,
+                ObjectType = r.ObjectType ?? string.Empty,
+                Definition = r.Definition!,
+            };
+        }
+        catch { return new DefinitionDto { Found = false, Message = "Could not retrieve the definition." }; }
+    }
+
     private static string ToCmType(int objectType) => objectType switch
     {
         (int)CompletionObjectType.Table     => "class",
@@ -161,6 +308,43 @@
         public string InsertText { get; set; } = string.Empty;
         public string Type { get; set; } = "text";
         public string? Detail { get; set; }
+    }
+
+    public sealed class QuickInfoDto
+    {
+        public string Header { get; set; } = string.Empty;
+        public string ObjectType { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public DetailDto[] Details { get; set; } = System.Array.Empty<DetailDto>();
+    }
+
+    public sealed class DetailDto
+    {
+        public string Label { get; set; } = string.Empty;
+        public string Value { get; set; } = string.Empty;
+    }
+
+    public sealed class SignatureDto
+    {
+        public string Label { get; set; } = string.Empty;
+        public string Documentation { get; set; } = string.Empty;
+        public int ActiveParameter { get; set; }
+        public ParamDto[] Parameters { get; set; } = System.Array.Empty<ParamDto>();
+    }
+
+    public sealed class ParamDto
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Type { get; set; } = string.Empty;
+    }
+
+    public sealed class DefinitionDto
+    {
+        public bool Found { get; set; }
+        public string FullName { get; set; } = string.Empty;
+        public string ObjectType { get; set; } = string.Empty;
+        public string Definition { get; set; } = string.Empty;
+        public string Message { get; set; } = string.Empty;
     }
 
     public async Task<string> GetTextAsync()
