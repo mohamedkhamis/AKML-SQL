@@ -39,6 +39,11 @@ builder.Services.AddSingleton<IThemeService, ThemeService>();
 builder.Services.AddSingleton<IEditorSessionStore, EditorSessionStore>();
 builder.Services.AddSingleton<IDiagnosticsRingBuffer, DiagnosticsRingBuffer>();
 
+// Spec 030: ⌘P command palette registry. Singleton so the palette (hosted in MainLayout) and
+// context-bearing pages (Editor.razor) share one registry — pages register actions on mount and
+// dispose the returned token on unmount.
+builder.Services.AddSingleton<ICommandRegistry, CommandRegistry>();
+
 // Spec 021 M3 (browser-side bridge):
 //   IWebCryptoWrapper      T069 -- AES-GCM wrap via wwwroot/js/akml-crypto.js.
 //   IPairingTokenVault     T069 -- bearer tokens at rest, bound to connectionId via aad.

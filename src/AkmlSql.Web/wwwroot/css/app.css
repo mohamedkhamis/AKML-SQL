@@ -44,6 +44,15 @@ a:hover { color: var(--akml-accent-primaryhover); }
     *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
 
+/* ── ⌘P command palette (spec 030) ─────────────────────────────────────────
+   The scrim's 120ms fade-in. Lives here (plain CSS) rather than in CommandPalette.razor's
+   scoped <style> because a Razor <style> block mis-parses an @keyframes rule's nested braces.
+   prefers-reduced-motion (above) neutralises the duration. */
+@keyframes akml-cmd-fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
 /* ── Themed scrollbars (subtle, token-driven) ──────────────────────────────── */
 * { scrollbar-color: var(--akml-border-strong) transparent; scrollbar-width: thin; }
 ::-webkit-scrollbar { width: 10px; height: 10px; }

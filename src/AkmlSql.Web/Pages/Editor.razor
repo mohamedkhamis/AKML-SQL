@@ -27,6 +27,7 @@
 @inject IConnectionStore Connections
 @inject ISnippetStore Snippets
 @inject IRefactoringService Refactoring
+@inject ICommandRegistry Commands
 
 <PageTitle>Editor — AKML SQL</PageTitle>
 
@@ -461,6 +462,11 @@
     private RefactorInputDialog.RefactorInputs? _heavyInputs;   // captured dialog values for apply
     private string _heavyPreviewDocText = string.Empty; // the exact text the preview offsets refer to
 
+    // Spec 030 — ⌘P command palette context-action registration. Closures over this page's live
+    // state (the editor, the snippet store). Disposed on unmount so the palette can never run a
+    // command against a torn-down editor.
+    private IDisposable? _commandRegistration;
+
     protected override async Task OnInitializedAsync()
     {
         // T034: apply the persisted theme as soon as we have services. The shim is wired
@@ -503,6 +509,45 @@
                 _activeDatabaseName = "master";   // placeholder until per-connection db picker lands.
             }
         }
+
+        // Spec 030 — register this page's context actions with the ⌘P palette. These close over the
+        // live editor + page handlers; the registration token is disposed in DisposeAsync.
+        _commandRegistration = Commands.Register(BuildContextActions());
+    }
+
+    /// <summary>Spec 030 — the editor's context-action contributions to the ⌘P palette.</summary>
+    private IEnumerable<CommandAction> BuildContextActions()
+    {
+        yield return new CommandAction
+        {
+            Id = "editor:format", Title = "Format SQL", Group = CommandGroup.Action,
+            Icon = "🧱", Shortcut = "Ctrl+K Ctrl+F", Run = FormatAsync,
+        };
+        yield return new CommandAction
+        {
+            Id = "editor:analyse", Title = "Analyse SQL", Group = CommandGroup.Action,
+            Icon = "🔍", Shortcut = "Ctrl+K Ctrl+L", Run = AnalyseAsync,
+        };
+        yield return new CommandAction
+        {
+            Id = "editor:refactor", Title = "Refactor…", Group = CommandGroup.Action,
+            Icon = "🔧", Run = () => { OpenRefactorMenu(); StateHasChanged(); return Task.CompletedTask; },
+        };
+        yield return new CommandAction
+        {
+            Id = "editor:save", Title = "Save as .sql", Group = CommandGroup.Action,
+            Icon = "💾", Shortcut = "Ctrl+S", Run = SaveAsync,
+        };
+        yield return new CommandAction
+        {
+            Id = "editor:ai", Title = "Toggle AI panel", Group = CommandGroup.Action,
+            Icon = "🤖", Run = () => { ToggleAiPanel(); StateHasChanged(); return Task.CompletedTask; },
+        };
+        yield return new CommandAction
+        {
+            Id = "editor:surround", Title = "Surround selection with…", Group = CommandGroup.Action,
+            Icon = "🎁", Shortcut = "Ctrl+K Ctrl+S", Run = OpenSurroundPickerAsync,
+        };
     }
 
     private async Task OnTextChangedAsync(string newText)
@@ -880,6 +925,9 @@
 
     public async ValueTask DisposeAsync()
     {
+        // Spec 030 — drop our ⌘P palette actions FIRST so a late palette open can't run a closure
+        // over the editor we're tearing down.
+        _commandRegistration?.Dispose();
         _analyseCts?.Cancel();
         _analyseCts?.Dispose();
         await SessionStore.FlushAsync();

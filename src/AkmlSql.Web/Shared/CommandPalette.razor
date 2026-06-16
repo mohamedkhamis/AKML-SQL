@@ -1,0 +1,677 @@
+@*
+    Spec 030 (web edition) — the ⌘P command palette. A scrimmed, centered modal that surfaces
+    Recent / Actions / Files / Objects in a ranked, fuzzy-filtered list.
+
+    Invocation: wwwroot/js/akml-command-palette.js registers a document-level CAPTURE-phase
+    keydown listener that, on Ctrl/Cmd+P, calls preventDefault() SYNCHRONOUSLY (to beat the
+    browser Print dialog) and then invokeMethodAsync('Open', commandMode). Ctrl/Cmd+Shift+P opens
+    in command mode (Actions-first). On close, focus is restored to whatever held it (the editor).
+
+    In-palette keys are handled by @onkeydown on the search <input> — once open, focus is in our
+    input, so element-scoped handling is correct (the @onkeydown ban applies ONLY to the global
+    Ctrl+P capture, which CodeMirror would otherwise swallow).
+*@
+@using System.Text
+@using AkmlSql.Core.Ipc.Messages
+@using AkmlSql.Web.Services
+@using Microsoft.AspNetCore.Components.Routing
+@using Microsoft.JSInterop
+@using MessagePack
+@implements IAsyncDisposable
+@inject ICommandRegistry Registry
+@inject IThemeService Theme
+@inject ISchemaCacheStore SchemaCache
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+@if (_open)
+{
+    <div class="akml-cmd-scrim" @onclick="Close" data-testid="command-palette-scrim">
+        <div class="akml-cmd-panel" role="dialog" aria-modal="true" aria-label="Command palette"
+             @onclick:stopPropagation="true" data-testid="command-palette">
+            <input @ref="_inputRef" class="akml-cmd-input" type="text" spellcheck="false"
+                   role="combobox" aria-expanded="true" aria-controls="akml-cmd-list"
+                   aria-activedescendant="@ActiveRowId"
+                   placeholder="Type a command, file, or symbol…"
+                   data-testid="command-palette-input"
+                   value="@_query" @oninput="OnQueryInput" @onkeydown="OnKeyDownAsync" />
+
+            <div class="akml-cmd-list" id="akml-cmd-list" role="listbox" data-testid="command-palette-list">
+                @if (_results.Count == 0)
+                {
+                    <div class="akml-cmd-empty">No matching commands.</div>
+                }
+                else
+                {
+                    @foreach (var group in _grouped)
+                    {
+                        <div class="akml-cmd-group-header">@GroupLabel(group.Key)</div>
+                        @foreach (var row in group)
+                        {
+                            var idx = row.Index;
+                            <div class="akml-cmd-row @(idx == _selected ? "selected" : "")"
+                                 id="@RowId(idx)" role="option" aria-selected="@(idx == _selected ? "true" : "false")"
+                                 data-testid="command-palette-row"
+                                 @onclick="@(() => RunAsync(row.Match.Action))"
+                                 @onmouseenter="@(() => _selected = idx)">
+                                <span class="akml-cmd-icon">@row.Match.Action.Icon</span>
+                                <span class="akml-cmd-name">
+                                    @foreach (var seg in HighlightSegments(row.Match))
+                                    {
+                                        if (seg.Matched)
+                                        {
+                                            <span class="akml-cmd-match">@seg.Text</span>
+                                        }
+                                        else
+                                        {
+                                            @seg.Text
+                                        }
+                                    }
+                                </span>
+                                @if (!string.IsNullOrEmpty(row.Match.Action.Meta))
+                                {
+                                    <span class="akml-cmd-meta">@row.Match.Action.Meta</span>
+                                }
+                                @if (!string.IsNullOrEmpty(row.Match.Action.Shortcut))
+                                {
+                                    <span class="akml-cmd-shortcut">@row.Match.Action.Shortcut</span>
+                                }
+                            </div>
+                        }
+                    }
+                }
+            </div>
+
+            <div class="akml-cmd-footer">
+                <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+                <span><kbd>↵</kbd> run</span>
+                <span><kbd>Esc</kbd> close</span>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    /* Command palette — chrome from --akml-* tokens only (NavMenu / Editor house convention:
+       a global style block with akml-cmd-* prefixed classes; real CSS isolation would need a
+       .razor.css companion). NO animation on the list (IntelliSense-instant ethos); a 120ms fade
+       on the scrim is the only motion. */
+    .akml-cmd-scrim {
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
+        background-color: rgba(0, 0, 0, 0.45);
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        padding-top: 12vh;
+        /* 120ms scrim fade — keyframes live in wwwroot/css/app.css (plain CSS), since a Razor
+           style block mis-parses the nested braces of a keyframes rule. */
+        animation: akml-cmd-fade 120ms ease-out;
+    }
+
+    .akml-cmd-panel {
+        width: 560px;
+        max-width: calc(100vw - 32px);
+        max-height: 440px;
+        display: flex;
+        flex-direction: column;
+        background-color: var(--akml-surface-panel);
+        border: 1px solid var(--akml-border-strong);
+        border-radius: var(--akml-scalar-radius-m);
+        box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+        color: var(--akml-text-primary);
+        font-family: var(--akml-type-chrome-family);
+        font-size: var(--akml-type-chrome-size);
+        overflow: hidden;
+    }
+
+    .akml-cmd-input {
+        flex: 0 0 auto;
+        box-sizing: border-box;
+        width: 100%;
+        padding: var(--akml-scalar-spacing-m) var(--akml-scalar-spacing-l);
+        border: none;
+        border-bottom: 1px solid var(--akml-border-default);
+        background-color: var(--akml-surface-input);
+        color: var(--akml-text-primary);
+        font-family: inherit;
+        font-size: 15px;
+        outline: none;
+    }
+    .akml-cmd-input::placeholder { color: var(--akml-text-placeholder); }
+
+    .akml-cmd-list {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        padding: var(--akml-scalar-spacing-xs) 0;
+    }
+
+    .akml-cmd-empty {
+        padding: var(--akml-scalar-spacing-l);
+        color: var(--akml-text-secondary);
+        font-style: italic;
+        text-align: center;
+    }
+
+    .akml-cmd-group-header {
+        padding: var(--akml-scalar-spacing-s) var(--akml-scalar-spacing-l) var(--akml-scalar-spacing-xs);
+        color: var(--akml-text-secondary);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+
+    .akml-cmd-row {
+        display: flex;
+        align-items: center;
+        gap: var(--akml-scalar-spacing-s);
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-l);
+        cursor: pointer;
+        white-space: nowrap;
+    }
+    .akml-cmd-row.selected {
+        background-color: var(--akml-surface-selectionstrong);
+        color: var(--akml-text-onaccent);
+    }
+    /* Keep muted/meta text legible against the strong selection fill. */
+    .akml-cmd-row.selected .akml-cmd-meta,
+    .akml-cmd-row.selected .akml-cmd-shortcut { color: var(--akml-text-onaccent); opacity: 0.85; }
+    .akml-cmd-row.selected .akml-cmd-match { color: var(--akml-text-onaccent); }
+
+    .akml-cmd-icon {
+        flex: 0 0 auto;
+        width: 18px;
+        text-align: center;
+        color: var(--akml-text-secondary);
+    }
+    .akml-cmd-row.selected .akml-cmd-icon { color: var(--akml-text-onaccent); }
+
+    .akml-cmd-name {
+        flex: 1 1 auto;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    /* Bolded matched substring — uses accent so it reads on the unselected rows too. */
+    .akml-cmd-match { font-weight: 700; color: var(--akml-accent-primary); }
+
+    .akml-cmd-meta {
+        flex: 0 0 auto;
+        color: var(--akml-text-secondary);
+        font-size: 12px;
+    }
+    .akml-cmd-shortcut {
+        flex: 0 0 auto;
+        color: var(--akml-text-secondary);
+        font-size: 11px;
+        font-family: var(--akml-type-editor-family);
+    }
+
+    .akml-cmd-footer {
+        flex: 0 0 auto;
+        display: flex;
+        gap: var(--akml-scalar-spacing-l);
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-l);
+        border-top: 1px solid var(--akml-border-default);
+        background-color: var(--akml-surface-sidebar);
+        color: var(--akml-text-secondary);
+        font-size: 11px;
+    }
+    .akml-cmd-footer kbd {
+        font-family: var(--akml-type-editor-family);
+        background-color: var(--akml-surface-hover);
+        border: 1px solid var(--akml-border-default);
+        border-radius: var(--akml-scalar-radius-xs);
+        padding: 0 4px;
+        margin-right: 2px;
+    }
+</style>
+
+@code {
+    private const int PerGroupCap = 9;       // ~8-10 rows per group, per spec
+    private const int ObjectFlattenCap = 400; // safety bound on the per-open object flatten
+
+    private bool _open;
+    private bool _commandMode;
+    private string _query = string.Empty;
+    private int _selected;
+
+    private ElementReference _inputRef;
+    private bool _focusOnNextRender;
+
+    private IJSObjectReference? _module;
+    private DotNetObjectReference<CommandPalette>? _selfRef;
+
+    // Static (always-available) actions registered by the palette itself.
+    private IDisposable? _staticRegistration;
+
+    // Object rows are flattened from the MRU schema snapshot once per open (NOT per keystroke).
+    private List<CommandAction> _objectActions = new();
+
+    // Current ranked, capped results plus the grouped projection for rendering.
+    private List<RankedRow> _results = new();
+    private List<IGrouping<CommandGroup, RankedRow>> _grouped = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _selfRef = DotNetObjectReference.Create(this);
+        _module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/akml-command-palette.js");
+        await _module.InvokeVoidAsync("init", _selfRef);
+
+        _staticRegistration = Registry.Register(BuildStaticActions());
+        Registry.Changed += OnRegistryChanged;
+    }
+
+    /// <summary>JS-invokable entry point. Called from akml-command-palette.js after it has already
+    /// (synchronously) preventDefault'd the browser Print shortcut. Entered from JS, so the
+    /// state mutation + render runs through InvokeAsync.</summary>
+    [JSInvokable]
+    public Task Open(bool commandMode)
+    {
+        // Re-entrant guard: pressing Ctrl/Cmd+P again while already open must NOT reset the query
+        // or selection (matches VS Code). The JS focus-stash is likewise guarded so the editor's
+        // focus isn't clobbered by the palette's own input on the second press.
+        if (_open) return Task.CompletedTask;
+        return InvokeAsync(async () =>
+        {
+            _commandMode = commandMode;
+            _query = string.Empty;
+            _selected = 0;
+            _open = true;
+            _objectActions = new();          // cleared until the (async) flatten lands
+            Recompute();                     // show Recent/Actions/Files instantly — do NOT block on schema
+            _focusOnNextRender = true;       // autofocus the input on the render that shows it
+            StateHasChanged();
+
+            // Fill the Objects group asynchronously so opening is never gated on schema deserialisation.
+            await LoadObjectsAsync();
+            Recompute();
+            StateHasChanged();
+        });
+    }
+
+    private void Close()
+    {
+        if (!_open) return;
+        _open = false;
+        StateHasChanged();
+        // Hand focus back to whatever held it when we opened (typically the CodeMirror editor).
+        if (_module != null)
+        {
+            _ = _module.InvokeVoidAsync("restoreFocus");
+        }
+    }
+
+    private void OnRegistryChanged() => InvokeAsync(() =>
+    {
+        if (_open) { Recompute(); StateHasChanged(); }
+    });
+
+    private void OnQueryInput(ChangeEventArgs e)
+    {
+        _query = e.Value?.ToString() ?? string.Empty;
+        _selected = 0;
+        Recompute();
+    }
+
+    private async Task OnKeyDownAsync(KeyboardEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case "Escape":
+                Close();
+                break;
+            case "ArrowDown":
+                Move(1);
+                await ScrollSelectedIntoViewAsync();
+                break;
+            case "ArrowUp":
+                Move(-1);
+                await ScrollSelectedIntoViewAsync();
+                break;
+            case "Enter":
+                if (_selected >= 0 && _selected < _results.Count)
+                {
+                    await RunAsync(_results[_selected].Match.Action);
+                }
+                break;
+        }
+    }
+
+    private void Move(int delta)
+    {
+        if (_results.Count == 0) { _selected = 0; return; }
+        // Wrap around per the keyboard contract.
+        _selected = (_selected + delta + _results.Count) % _results.Count;
+    }
+
+    /// <summary>Keep the keyboard-selected row visible: the list is height-capped (440px panel) and
+    /// can hold more rows than fit, so arrowing past the edge must scroll it into view.</summary>
+    private async Task ScrollSelectedIntoViewAsync()
+    {
+        if (_module == null || _results.Count == 0) return;
+        try { await _module.InvokeVoidAsync("scrollIntoView", RowId(_selected)); }
+        catch (JSDisconnectedException) { /* tab closing — ignore */ }
+    }
+
+    private async Task RunAsync(CommandAction action)
+    {
+        Registry.RecordUsed(action.Id);
+        Close();
+        try
+        {
+            await action.Run();
+        }
+        catch
+        {
+            // A failing command must not bring down the host; the action itself owns user-facing
+            // error surfacing (status text, diagnostics). The palette stays closed regardless.
+        }
+    }
+
+    // ── Ranking ──────────────────────────────────────────────────────────────────────────────
+    private void Recompute()
+    {
+        var actions = Registry.Snapshot().Concat(_objectActions).ToList();
+        var recentIds = Registry.RecentIds;
+        var recentRank = recentIds
+            .Select((id, i) => (id, i))
+            .ToDictionary(t => t.id, t => t.i);
+
+        var matches = new List<FuzzyMatch>();
+        foreach (var a in actions)
+        {
+            // Command mode (Ctrl/Cmd+Shift+P) surfaces Actions only.
+            if (_commandMode && a.Group != CommandGroup.Action) continue;
+
+            if (FuzzyScorer.TryScore(a.Title, _query, out var score, out var indices))
+            {
+                matches.Add(new FuzzyMatch(a, score, indices));
+            }
+        }
+
+        // Project into display groups: a matched action that is among the recents floats into the
+        // Recent group (when the query is empty or short, this is the dominant signal).
+        var rows = new List<RankedRow>();
+        var perGroupCount = new Dictionary<CommandGroup, int>();
+
+        // Order: Recent first, then by group enum, then by descending score, then alphabetically.
+        IEnumerable<FuzzyMatch> ordered = matches
+            .OrderByDescending(m => recentRank.ContainsKey(m.Action.Id) ? 1 : 0)
+            .ThenBy(m => recentRank.TryGetValue(m.Action.Id, out var r) ? r : int.MaxValue)
+            .ThenBy(m => (int)m.Action.Group)
+            .ThenByDescending(m => m.Score)
+            .ThenBy(m => m.Action.Title, StringComparer.OrdinalIgnoreCase);
+
+        int globalIndex = 0;
+        foreach (var m in ordered)
+        {
+            var displayGroup = recentRank.ContainsKey(m.Action.Id) ? CommandGroup.Recent : m.Action.Group;
+            var count = perGroupCount.TryGetValue(displayGroup, out var c) ? c : 0;
+            if (count >= PerGroupCap) continue;
+            perGroupCount[displayGroup] = count + 1;
+            rows.Add(new RankedRow(globalIndex++, m, displayGroup));
+        }
+
+        _results = rows;
+        _grouped = rows.GroupBy(r => r.DisplayGroup).OrderBy(g => (int)g.Key).ToList();
+        if (_selected >= _results.Count) _selected = _results.Count == 0 ? 0 : _results.Count - 1;
+        if (_selected < 0) _selected = 0;
+    }
+
+    // ── Objects group: flatten the MRU schema snapshot ONCE per open ──────────────────────────
+    private async Task LoadObjectsAsync()
+    {
+        var list = new List<CommandAction>();
+        try
+        {
+            // ISchemaCacheStore.ListAsync() is sorted ascending by LastUsedAt, so the MRU snapshot
+            // is the LAST element. If nothing is cached the Objects group is simply empty (the spec
+            // says an empty group must never block open).
+            var snapshots = await SchemaCache.ListAsync();
+            if (snapshots.Count > 0)
+            {
+                var mru = snapshots[snapshots.Count - 1];
+                var bytes = mru.PhaseB ?? mru.PhaseA;
+                if (bytes is { Length: > 0 })
+                {
+                    var payload = SafeDeserialize(bytes);
+                    if (payload?.Schemas != null)
+                    {
+                        foreach (var schema in payload.Schemas)
+                        {
+                            foreach (var obj in schema.Objects ?? Array.Empty<SchemaPhaseObject>())
+                            {
+                                if (list.Count >= ObjectFlattenCap) break;
+                                var schemaName = string.IsNullOrEmpty(obj.SchemaName) ? schema.Name : obj.SchemaName;
+                                var qualified = $"[{schemaName}].[{obj.ObjectName}]";
+                                // Capture the qualifier so Run navigates to the editor and inserts it.
+                                var insert = qualified;
+                                list.Add(new CommandAction
+                                {
+                                    Id = "object:" + schemaName + "." + obj.ObjectName,
+                                    Title = $"{schemaName}.{obj.ObjectName}",
+                                    Group = CommandGroup.Object,
+                                    Icon = ObjectIcon(obj.ObjectType),
+                                    Meta = ObjectKindLabel(obj.ObjectType),
+                                    Run = () =>
+                                    {
+                                        // No live-editor handle here; route to the editor so the user lands
+                                        // on the object's surface. (Click-to-insert lives in the schema tree.)
+                                        Nav.NavigateTo("/editor");
+                                        return Task.CompletedTask;
+                                    },
+                                });
+                            }
+                            if (list.Count >= ObjectFlattenCap) break;
+                        }
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // A bad/partial snapshot must not break the palette — just leave Objects empty.
+        }
+        _objectActions = list;
+    }
+
+    private static SchemaPhasePayload? SafeDeserialize(byte[] bytes)
+    {
+        try { return MessagePackSerializer.Deserialize<SchemaPhasePayload>(bytes); }
+        catch (MessagePackSerializationException) { return null; }
+    }
+
+    // ── Static (palette-owned) actions ────────────────────────────────────────────────────────
+    private IEnumerable<CommandAction> BuildStaticActions()
+    {
+        // Navigate to each nav route.
+        var routes = new (string Title, string Route, string Icon)[]
+        {
+            ("Go to Editor", "/editor", "📝"),
+            ("Go to Snippets", "/snippets", "✂️"),
+            ("Go to Settings", "/settings", "⚙️"),
+            ("Go to AI providers", "/settings/ai", "🤖"),
+            ("Go to Schema cache", "/settings/schema-cache", "🗄️"),
+            ("Go to Diagnostics", "/diagnostics", "🩺"),
+        };
+        foreach (var r in routes)
+        {
+            var route = r.Route;
+            yield return new CommandAction
+            {
+                Id = "nav:" + route,
+                Title = r.Title,
+                Group = CommandGroup.File,
+                Icon = r.Icon,
+                Meta = route,
+                Run = () => { Nav.NavigateTo(route); return Task.CompletedTask; },
+            };
+        }
+
+        // Switch theme.
+        var themes = new (string Title, ThemeMode Mode)[]
+        {
+            ("Theme: System", ThemeMode.System),
+            ("Theme: Light", ThemeMode.Light),
+            ("Theme: Dark", ThemeMode.Dark),
+            ("Theme: High contrast", ThemeMode.HighContrast),
+        };
+        foreach (var th in themes)
+        {
+            var mode = th.Mode;
+            yield return new CommandAction
+            {
+                Id = "theme:" + mode,
+                Title = th.Title,
+                Group = CommandGroup.Action,
+                Icon = "🎨",
+                Run = () => Theme.SetAsync(mode),
+            };
+        }
+
+        // Connect to SQL — routes to settings (the connect form gathers server/db/auth there;
+        // a static closure can't supply those inline). Kept as a discoverable command.
+        yield return new CommandAction
+        {
+            Id = "sql:connect",
+            Title = "Connect to SQL Server…",
+            Group = CommandGroup.Action,
+            Icon = "🔌",
+            Meta = "/settings",
+            Run = () => { Nav.NavigateTo("/settings"); return Task.CompletedTask; },
+        };
+
+        // Clear schema cache.
+        yield return new CommandAction
+        {
+            Id = "schema:clear",
+            Title = "Clear schema cache",
+            Group = CommandGroup.Action,
+            Icon = "🧹",
+            Run = () => SchemaCache.ClearAllAsync(),
+        };
+
+        // Insert snippet — routes to the Snippets page (the editor-bound "expand at caret" action is
+        // registered by Editor.razor, which holds the live editor + selection).
+        yield return new CommandAction
+        {
+            Id = "snippet:browse",
+            Title = "Browse snippets…",
+            Group = CommandGroup.File,
+            Icon = "✂️",
+            Meta = "/snippets",
+            Run = () => { Nav.NavigateTo("/snippets"); return Task.CompletedTask; },
+        };
+    }
+
+    // ── Rendering helpers ──────────────────────────────────────────────────────────────────────
+    private static string GroupLabel(CommandGroup g) => g switch
+    {
+        CommandGroup.Recent => "Recent",
+        CommandGroup.Action => "Actions",
+        CommandGroup.File => "Files",
+        CommandGroup.Object => "Objects",
+        _ => g.ToString(),
+    };
+
+    private static string ObjectKindLabel(int objectType) => objectType switch
+    {
+        0 => "table",
+        1 => "view",
+        2 => "procedure",
+        3 or 4 or 5 => "function",
+        6 => "synonym",
+        7 => "sequence",
+        _ => "object",
+    };
+
+    private static string ObjectIcon(int objectType) => objectType switch
+    {
+        0 => "▤",   // table
+        1 => "◫",   // view
+        2 => "⚙",   // procedure
+        3 or 4 or 5 => "ƒ", // function
+        _ => "◇",
+    };
+
+    private string RowId(int idx) => $"akml-cmd-row-{idx}";
+    private string? ActiveRowId => _results.Count == 0 ? null : RowId(_selected);
+
+    /// <summary>
+    /// Split the title into alternating matched / unmatched runs so the Razor markup (not a manual
+    /// RenderTreeBuilder with computed sequence numbers) renders the bolded substrings. Coalescing
+    /// consecutive matched indices keeps the segment count minimal.
+    /// </summary>
+    private static IEnumerable<HighlightSegment> HighlightSegments(FuzzyMatch match)
+    {
+        var title = match.Action.Title;
+        var matched = match.Indices;
+        if (matched.Length == 0)
+        {
+            if (title.Length > 0) yield return new HighlightSegment(title, false);
+            yield break;
+        }
+
+        int i = 0;
+        int mPos = 0;
+        while (i < title.Length)
+        {
+            bool isMatch = mPos < matched.Length && matched[mPos] == i;
+            int start = i;
+            if (isMatch)
+            {
+                while (mPos < matched.Length && matched[mPos] == i) { mPos++; i++; }
+                yield return new HighlightSegment(title.Substring(start, i - start), true);
+            }
+            else
+            {
+                while (i < title.Length && !(mPos < matched.Length && matched[mPos] == i)) i++;
+                yield return new HighlightSegment(title.Substring(start, i - start), false);
+            }
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focusOnNextRender && _open)
+        {
+            _focusOnNextRender = false;
+            try
+            {
+                await _inputRef.FocusAsync();
+                // Trap Tab (focus-out of the modal) + Arrow caret-jump on the input WITHOUT an
+                // unconditional preventDefault (which would also kill typing). Once per open.
+                if (_module != null) await _module.InvokeVoidAsync("trapKeys", _inputRef);
+            }
+            catch (Microsoft.JSInterop.JSException) { /* element not yet in DOM — harmless */ }
+            catch (JSDisconnectedException) { /* tab closing — ignore */ }
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Registry.Changed -= OnRegistryChanged;
+        _staticRegistration?.Dispose();
+        try
+        {
+            if (_module != null)
+            {
+                await _module.InvokeVoidAsync("dispose");
+                await _module.DisposeAsync();
+            }
+        }
+        catch (JSDisconnectedException) { /* tab closing */ }
+        finally
+        {
+            _selfRef?.Dispose();
+        }
+    }
+
+    // ── Internal records ────────────────────────────────────────────────────────────────────────
+    private sealed record FuzzyMatch(CommandAction Action, int Score, int[] Indices);
+    private sealed record RankedRow(int Index, FuzzyMatch Match, CommandGroup DisplayGroup);
+    private readonly record struct HighlightSegment(string Text, bool Matched);
+}

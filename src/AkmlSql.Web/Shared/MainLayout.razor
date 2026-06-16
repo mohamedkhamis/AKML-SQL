@@ -29,6 +29,9 @@
         @Body
     </main>
     <StatusBar />
+    @* Spec 030 — ⌘P command palette. Hosted at the layout level so it overlays every page and its
+       global Ctrl/Cmd+P capture-phase listener is alive regardless of which route is mounted. *@
+    <CommandPalette />
 </div>
 
 <style>
