@@ -85,5 +85,17 @@ namespace AkmlSql.Shell.Shared.Tabs
         {
             return EnvironmentMatcher.Match(_rules, serverName);
         }
+
+        /// <summary>
+        /// Tests a (<paramref name="serverName"/>, <paramref name="databaseName"/>) pair against each
+        /// rule in order — the database-aware overload (spec 030 T071). A rule whose
+        /// <see cref="ColoringRule.MatchTarget"/> is <c>Database</c> matches on the database name; the
+        /// default <c>Server</c> rules still match on the server. Returns the first matching rule, or
+        /// <c>null</c> if none match.
+        /// </summary>
+        public static EnvironmentRule? Match(string? serverName, string? databaseName)
+        {
+            return EnvironmentMatcher.Match(_rules, serverName, databaseName);
+        }
     }
 }

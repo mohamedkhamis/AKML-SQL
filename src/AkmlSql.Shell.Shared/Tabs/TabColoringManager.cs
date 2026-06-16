@@ -155,7 +155,8 @@ namespace AkmlSql.Shell.Shared.Tabs
                             continue;
                         }
 
-                        var rule = EnvironmentDetector.Match(serverName);
+                        var databaseName = GetActiveDatabaseName(window);
+                        var rule = EnvironmentDetector.Match(serverName, databaseName);
                         if (rule != null)
                             ApplyTabColor(window, rule);
                         else
@@ -174,7 +175,8 @@ namespace AkmlSql.Shell.Shared.Tabs
                     if (activeWindow?.Kind == "Document")
                     {
                         var server = GetActiveServerName(activeWindow);
-                        var rule = !string.IsNullOrWhiteSpace(server) ? EnvironmentDetector.Match(server) : null;
+                        var database = GetActiveDatabaseName(activeWindow);
+                        var rule = !string.IsNullOrWhiteSpace(server) ? EnvironmentDetector.Match(server, database) : null;
                         if (rule != null)
                         {
                             var color = ParseHexColor(rule.Color);
@@ -240,8 +242,9 @@ namespace AkmlSql.Shell.Shared.Tabs
                     return;
                 }
 
-                // Match against environment rules.
-                var rule = EnvironmentDetector.Match(serverName);
+                // Match against environment rules (database-aware — spec 030 T071).
+                var databaseName = GetActiveDatabaseName(gotFocus);
+                var rule = EnvironmentDetector.Match(serverName, databaseName);
                 if (rule != null)
                 {
                     ApplyTabColor(gotFocus, rule);
@@ -951,6 +954,67 @@ namespace AkmlSql.Shell.Shared.Tabs
                     var possibleServer = trimmed.Substring(0, lastDot);
                     if (!string.IsNullOrWhiteSpace(possibleServer))
                         return possibleServer;
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Resolves the active database name for a document window (spec 030 T071), used to feed the
+        /// database-aware <see cref="EnvironmentDetector.Match(string?, string?)"/> overload so rules
+        /// targeting a database (not just a server) can colour the tab. Mirrors
+        /// <see cref="GetActiveServerName"/>: the only reliable source today is the SSMS caption, where
+        /// the connection segment is <c>"SERVERNAME.DatabaseName"</c>. Returns <c>null</c> when no
+        /// database can be parsed (callers then match on the server alone).
+        /// </summary>
+        private static string? GetActiveDatabaseName(Window window)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
+            try
+            {
+                var caption = window.Caption;
+                if (!string.IsNullOrEmpty(caption))
+                    return ParseDatabaseNameFromCaption(caption);
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "TabColoringManager: could not extract database name from window");
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Parses the database name from an SSMS-style window caption — the segment after the LAST dot
+        /// of the <c>"SERVERNAME.DatabaseName"</c> connection part (the mirror of
+        /// <see cref="ParseServerNameFromCaption"/>, which returns everything before that last dot).
+        /// For <c>"SQLQuery1.sql - SERVER.Northwind - sa"</c> this returns <c>"Northwind"</c>.
+        /// </summary>
+        private static string? ParseDatabaseNameFromCaption(string caption)
+        {
+            if (string.IsNullOrEmpty(caption))
+                return null;
+
+            var parts = caption.Split(new[] { " - " }, StringSplitOptions.RemoveEmptyEntries);
+
+            foreach (var part in parts)
+            {
+                var trimmed = part.Trim();
+
+                // Skip file-name segments — those dots are extensions, not server.database separators.
+                if (trimmed.EndsWith(".sql", StringComparison.OrdinalIgnoreCase) ||
+                    trimmed.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                var dotIndex = trimmed.IndexOf('.');
+                if (dotIndex > 0 && dotIndex < trimmed.Length - 1)
+                {
+                    var lastDot = trimmed.LastIndexOf('.');
+                    var possibleDatabase = trimmed.Substring(lastDot + 1).Trim();
+                    if (!string.IsNullOrWhiteSpace(possibleDatabase))
+                        return possibleDatabase;
                 }
             }
 
