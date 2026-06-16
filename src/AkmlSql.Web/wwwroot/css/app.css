@@ -1,0 +1,51 @@
+/*
+  AKML SQL — web edition global base styles (Phase 2 redesign).
+  Token-driven (consumes the --akml-* custom properties defined by the active theme
+  variant in css/themes/*.css). Component-specific styling lives in each .razor's
+  scoped <style>; this file holds only cross-cutting base + accessibility rules.
+*/
+
+/* ── Base ────────────────────────────────────────────────────────────────── */
+html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background-color: var(--akml-surface-canvas);
+    color: var(--akml-text-primary);
+    font-family: var(--akml-type-chrome-family), system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: var(--akml-type-chrome-size);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+a { color: var(--akml-text-link); }
+a:hover { color: var(--akml-accent-primaryhover); }
+
+/* ── Accessibility: focus rings (WCAG 2.2 AA — 2px AKML-Blue ring) ──────────
+   Keyboard-only via :focus-visible so mouse clicks don't show the ring. Applies to
+   every natively-focusable control plus anything opted in with [tabindex]. */
+:focus-visible {
+    outline: 2px solid var(--akml-border-focus);
+    outline-offset: 2px;
+    border-radius: var(--akml-scalar-radius-xs);
+}
+/* Don't double-ring elements that already paint their own focus treatment. */
+.cm-editor.cm-focused { outline: none; }
+
+/* ── Motion (spec: 100-150ms micro, 200-250ms panel slides; reduced-motion off) ── */
+:root {
+    --akml-motion-micro: 120ms;
+    --akml-motion-panel: 220ms;
+    --akml-ease: cubic-bezier(0.2, 0, 0, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+/* ── Themed scrollbars (subtle, token-driven) ──────────────────────────────── */
+* { scrollbar-color: var(--akml-border-strong) transparent; scrollbar-width: thin; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--akml-border-strong); border-radius: var(--akml-scalar-radius-pill); }
+::-webkit-scrollbar-track { background: transparent; }

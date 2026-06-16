@@ -41,10 +41,16 @@
         color: var(--akml-text-primary);
         text-decoration: none;
         padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s);
-        border-radius: 3px;
+        border-radius: var(--akml-scalar-radius-xs);
     }
     .akml-nav-link:hover {
         background-color: var(--akml-surface-hover);
+        color: var(--akml-accent-primary);
+    }
+    .akml-nav-link.active {
+        color: var(--akml-accent-primary);
+        background-color: var(--akml-surface-selection);
+        font-weight: var(--akml-type-chrometitle-weight);
     }
     .akml-disabled {
         color: var(--akml-text-disabled);

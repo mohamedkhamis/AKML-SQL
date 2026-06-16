@@ -6,21 +6,35 @@
 @using AkmlSql.Web.Services
 @inject IAiFeatureSettings Settings
 
-<span class="akml-ai-mode-badge" title="@Tooltip">@Label</span>
+<span class="akml-ai-mode-badge akml-ai-mode-@Status" title="@Tooltip">@Label</span>
 
 <style>
     .akml-ai-mode-badge {
-        display: inline-block;
+        display: inline-flex;
+        align-items: center;
+        gap: var(--akml-scalar-spacing-xs);
         font-family: var(--akml-type-chrome-family);
         font-size: 10px;
         line-height: 1.4;
         padding: 0 var(--akml-scalar-spacing-xs);
         border: 1px solid var(--akml-border-subtle);
-        border-radius: 3px;
+        border-radius: var(--akml-scalar-radius-xs);
         color: var(--akml-text-secondary);
         background-color: var(--akml-surface-panel);
         white-space: nowrap;
     }
+    /* Status dot pairs the badge text with its disclosure-level color (FR-005). */
+    .akml-ai-mode-badge::before {
+        content: "";
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        border-radius: var(--akml-scalar-radius-pill);
+        background-color: var(--akml-text-secondary);
+    }
+    .akml-ai-mode-success::before { background-color: var(--akml-status-success); }
+    .akml-ai-mode-info::before { background-color: var(--akml-status-info); }
+    .akml-ai-mode-warning::before { background-color: var(--akml-status-warning); }
 </style>
 
 @code {
@@ -29,20 +43,22 @@
 
     private string Label = "…";
     private string Tooltip = string.Empty;
+    private string Status = string.Empty;
 
     protected override async Task OnParametersSetAsync()
     {
         var mode = await Settings.ResolveModeAsync(FeatureId);
-        (Label, Tooltip) = Describe(mode);
+        (Label, Tooltip, Status) = Describe(mode);
         StateHasChanged();
     }
 
-    private static (string Label, string Tooltip) Describe(AiPrivacyMode mode) => mode switch
+    // Status maps disclosure level to a --akml-status-* color: less data sent = greener.
+    private static (string Label, string Tooltip, string Status) Describe(AiPrivacyMode mode) => mode switch
     {
-        AiPrivacyMode.FullSchema      => ("Full schema",  "Tables, columns, FKs and descriptions are sent to the provider."),
-        AiPrivacyMode.SchemaNamesOnly => ("Names only",   "Only table and column names are sent — no data types or foreign keys."),
-        AiPrivacyMode.NoSchema        => ("No schema",    "No schema is sent — only your SQL / prompt leaves the browser."),
-        AiPrivacyMode.FullyLocal      => ("Fully local",  "Full schema, but only a local provider (Ollama / LM Studio) may be used."),
-        _ => ("…", string.Empty),
+        AiPrivacyMode.FullSchema      => ("Full schema",  "Tables, columns, FKs and descriptions are sent to the provider.", "warning"),
+        AiPrivacyMode.SchemaNamesOnly => ("Names only",   "Only table and column names are sent — no data types or foreign keys.", "info"),
+        AiPrivacyMode.NoSchema        => ("No schema",    "No schema is sent — only your SQL / prompt leaves the browser.", "info"),
+        AiPrivacyMode.FullyLocal      => ("Fully local",  "Full schema, but only a local provider (Ollama / LM Studio) may be used.", "success"),
+        _ => ("…", string.Empty, string.Empty),
     };
 }

@@ -45,20 +45,28 @@
         font-family: var(--akml-type-chrome-family);
         font-size: var(--akml-type-chrome-size);
     }
+    /* Pair the warning color with an icon (not color alone). As a flex container's first
+       ::before, the glyph leads the banner: icon → content → dismiss. */
+    .akml-tls-banner::before {
+        content: "\26A0"; /* ⚠ warning */
+        flex: 0 0 auto;
+        font-size: 1.1em;
+        line-height: 1;
+    }
     .akml-tls-banner-content { flex: 1 1 auto; }
     .akml-tls-banner-conn { font-weight: bold; }
     .akml-tls-banner-more { opacity: 0.85; margin-left: var(--akml-scalar-spacing-xs); }
     .akml-tls-banner code {
         background-color: rgba(0,0,0,0.18);
         padding: 0 4px;
-        border-radius: 2px;
+        border-radius: var(--akml-scalar-radius-xs);
         font-family: var(--akml-type-editor-family);
     }
     .akml-tls-banner-dismiss {
         background-color: transparent;
         color: var(--akml-text-onaccent);
         border: 1px solid var(--akml-text-onaccent);
-        border-radius: 3px;
+        border-radius: var(--akml-scalar-radius-xs);
         padding: 2px var(--akml-scalar-spacing-s);
         cursor: pointer;
         font-family: inherit;

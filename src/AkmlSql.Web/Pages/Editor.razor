@@ -226,7 +226,7 @@
         background-color: var(--akml-surface-panel);
         color: var(--akml-text-primary);
         border: 1px solid var(--akml-border-default);
-        border-radius: 3px;
+        border-radius: var(--akml-scalar-radius-xs);
         padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s);
         cursor: pointer;
     }
@@ -262,7 +262,7 @@
         background-color: transparent;
         color: var(--akml-text-secondary);
         border: 1px solid transparent;
-        border-radius: 3px;
+        border-radius: var(--akml-scalar-radius-xs);
         padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s);
         cursor: pointer;
     }
@@ -292,7 +292,7 @@
         display: flex; flex-direction: column;
         background-color: var(--akml-surface-panel);
         border: 1px solid var(--akml-border-default);
-        border-radius: 4px;
+        border-radius: var(--akml-scalar-radius-xs);
         font-family: var(--akml-type-chrome-family);
         font-size: var(--akml-type-chrome-size);
         color: var(--akml-text-primary);
@@ -338,8 +338,41 @@
     .akml-picker-disabled:hover { background-color: transparent; }
     .akml-picker-gate {
         font-size: 11px; color: var(--akml-text-onaccent);
-        background-color: var(--akml-text-secondary); border-radius: 2px;
+        background-color: var(--akml-text-secondary); border-radius: var(--akml-scalar-radius-xs);
         padding: 0 var(--akml-scalar-spacing-xs);
+    }
+
+    /* AKML-Blue chrome for the CodeMirror autocomplete (IntelliSense) popup. CodeMirror
+       attaches `.cm-tooltip-autocomplete` at the editor/body level, so these page-global
+       rules reach it. IntelliSense must feel instantaneous — NO transition/animation here. */
+    .cm-tooltip.cm-tooltip-autocomplete {
+        background-color: var(--akml-surface-panel);
+        border: 1px solid var(--akml-border-default);
+        border-radius: var(--akml-scalar-radius-xs);
+        color: var(--akml-text-primary);
+        font-family: var(--akml-type-editor-family);
+        font-size: var(--akml-type-editor-size);
+    }
+    .cm-tooltip-autocomplete > ul > li {
+        color: var(--akml-text-primary);
+        padding: 1px var(--akml-scalar-spacing-s);
+    }
+    .cm-tooltip-autocomplete > ul > li[aria-selected] {
+        background-color: var(--akml-surface-selectionstrong);
+        color: var(--akml-text-onaccent);
+    }
+    .cm-tooltip-autocomplete > ul > li[aria-selected] .cm-completionDetail {
+        color: var(--akml-text-onaccent);
+    }
+    .cm-completionLabel { color: inherit; }
+    .cm-completionDetail { color: var(--akml-text-secondary); font-style: italic; }
+    .cm-completionMatchedText {
+        color: var(--akml-accent-primary);
+        text-decoration: none;
+        font-weight: var(--akml-type-chrome-weight);
+    }
+    .cm-tooltip-autocomplete > ul > li[aria-selected] .cm-completionMatchedText {
+        color: var(--akml-text-onaccent);
     }
 </style>
 
