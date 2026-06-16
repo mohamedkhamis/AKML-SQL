@@ -166,6 +166,103 @@ public sealed class HistoryRetentionVersionPreservationTests : IDisposable
         Assert.Equal(2, versions.Count);
     }
 
+    // ── Spec 030 T074 (FR-041): RemoveOlderThan ────────────────────────────────
+
+    [Fact]
+    public async Task DeleteEntriesOlderThan_RemovesOlderNonFavorites_KeepsReferenceFavoritesAndNewer()
+    {
+        var oldest    = await SeedExecutionAsync("SELECT 1");
+        var oldFav    = await SeedExecutionAsync("SELECT 2");
+        var reference = await SeedExecutionAsync("SELECT 3");
+        var newer     = await SeedExecutionAsync("SELECT 4");
+
+        await SetExecutedAtAsync(oldest,    DaysAgo(40));
+        await SetExecutedAtAsync(oldFav,    DaysAgo(30));
+        await SetExecutedAtAsync(reference, DaysAgo(10));
+        await SetExecutedAtAsync(newer,     DaysAgo(1));
+
+        await _db.ToggleFavoriteAsync(oldFav); // favorite, older than the reference
+
+        var deleted = await _db.DeleteEntriesOlderThanAsync(reference, keepFavorites: true);
+
+        // Only 'oldest' (older AND not favorite) is removed; the favorite old entry, the reference
+        // itself (strictly-older means equal cutoff is kept), and the newer entry all survive.
+        Assert.Equal(1, deleted);
+        Assert.Null(await _db.GetFullSqlAsync(oldest));
+        Assert.NotNull(await _db.GetFullSqlAsync(oldFav));
+        Assert.NotNull(await _db.GetFullSqlAsync(reference));
+        Assert.NotNull(await _db.GetFullSqlAsync(newer));
+    }
+
+    [Fact]
+    public async Task DeleteEntriesOlderThan_KeepFavoritesFalse_AlsoRemovesOlderFavorites()
+    {
+        var oldest    = await SeedExecutionAsync("SELECT 1");
+        var oldFav    = await SeedExecutionAsync("SELECT 2");
+        var reference = await SeedExecutionAsync("SELECT 3");
+
+        await SetExecutedAtAsync(oldest,    DaysAgo(40));
+        await SetExecutedAtAsync(oldFav,    DaysAgo(30));
+        await SetExecutedAtAsync(reference, DaysAgo(10));
+        await _db.ToggleFavoriteAsync(oldFav);
+
+        var deleted = await _db.DeleteEntriesOlderThanAsync(reference, keepFavorites: false);
+
+        Assert.Equal(2, deleted); // both older entries removed, favorite included
+        Assert.Null(await _db.GetFullSqlAsync(oldest));
+        Assert.Null(await _db.GetFullSqlAsync(oldFav));
+        Assert.NotNull(await _db.GetFullSqlAsync(reference));
+    }
+
+    [Fact]
+    public async Task DeleteEntriesOlderThan_UnknownReference_DeletesNothing()
+    {
+        var only = await SeedExecutionAsync("SELECT 1");
+
+        var deleted = await _db.DeleteEntriesOlderThanAsync(referenceEntryId: 999_999, keepFavorites: true);
+
+        Assert.Equal(0, deleted);
+        Assert.NotNull(await _db.GetFullSqlAsync(only));
+    }
+
+    [Fact]
+    public async Task DeleteEntriesOlderThan_MixedTimestampFormats_DoesNotDeleteNewerSaveVersionRows()
+    {
+        // executed_at is NOT uniformly ISO: InsertEntryAsync writes ISO 'o' but SaveVersionByTabTitle
+        // rewrites it as space-separated 'YYYY-MM-DD HH:MM:SS'. A raw lexicographic compare treats the
+        // space-format row as older than any same-day ISO row (space 0x20 < 'T' 0x54), so a genuinely
+        // NEWER space-format row would be wrongly deleted. datetime()-normalized compare must keep it.
+        var reference        = await SeedExecutionAsync("SELECT ref");
+        var newerSaveVersion = await SeedExecutionAsync("SELECT newer");
+
+        await SetExecutedAtRawAsync(reference,        "2026-06-16T05:17:00.0000000Z"); // ISO 'o'
+        await SetExecutedAtRawAsync(newerSaveVersion, "2026-06-16 05:17:30");           // space format, 30s NEWER
+
+        var deleted = await _db.DeleteEntriesOlderThanAsync(reference, keepFavorites: true);
+
+        Assert.Equal(0, deleted);
+        Assert.NotNull(await _db.GetFullSqlAsync(newerSaveVersion));
+        Assert.NotNull(await _db.GetFullSqlAsync(reference));
+    }
+
+    /// <summary>Raw-updates a history row's <c>executed_at</c> to a controlled ISO-8601 ("o") value —
+    /// the format production writes (see <c>PurgeExpiredEntriesAsync</c>) so string comparison sorts.</summary>
+    private Task SetExecutedAtAsync(long id, DateTime executedAtUtc)
+        => SetExecutedAtRawAsync(id, executedAtUtc.ToString("o", System.Globalization.CultureInfo.InvariantCulture));
+
+    /// <summary>Raw-updates a history row's <c>executed_at</c> to an exact string (to simulate the
+    /// space-separated format SaveVersion writes alongside the ISO 'o' format InsertEntry writes).</summary>
+    private async Task SetExecutedAtRawAsync(long id, string executedAt)
+    {
+        await using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+        await using var cmd = new SqliteCommand(
+            "UPDATE history SET executed_at = @executedAt WHERE id = @id;", conn);
+        cmd.Parameters.AddWithValue("@executedAt", executedAt);
+        cmd.Parameters.AddWithValue("@id", id);
+        await cmd.ExecuteNonQueryAsync();
+    }
+
     // ── Seeding helpers ───────────────────────────────────────────────────────
 
     /// <summary>Seeds one execution (history) row and returns its id.</summary>

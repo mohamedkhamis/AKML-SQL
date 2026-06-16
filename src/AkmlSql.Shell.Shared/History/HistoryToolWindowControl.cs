@@ -727,6 +727,12 @@ namespace AkmlSql.Shell.Shared.History
                 new Binding(nameof(HistoryViewModel.DeleteCommand)));
             contextMenu.Items.Add(deleteItem);
 
+            // Spec 030 T074 (FR-041) — remove all entries older than the selected one (favorites kept).
+            var removeOlderItem = new MenuItem { Header = "Remove older than this..." };
+            removeOlderItem.SetBinding(MenuItem.CommandProperty,
+                new Binding(nameof(HistoryViewModel.RemoveOlderThanCommand)));
+            contextMenu.Items.Add(removeOlderItem);
+
             return contextMenu;
         }
 

@@ -39,6 +39,10 @@ namespace AkmlSql.Core.Ipc.Messages
         /// </summary>
         [Key(6)]
         public HistoryVersionDto[]? Versions { get; set; }
+
+        /// <summary>Number of entries removed (returned by RemoveOlderThan / delete actions).</summary>
+        [Key(7)]
+        public int DeletedCount { get; set; }
     }
 
     /// <summary>

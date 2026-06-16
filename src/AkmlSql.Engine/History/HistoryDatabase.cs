@@ -869,6 +869,52 @@ public sealed class HistoryDatabase : IDisposable
     }
 
     /// <summary>
+    /// Spec 030 T074 / FR-041 — deletes every entry STRICTLY OLDER than the reference entry's
+    /// <c>executed_at</c> (so the reference entry itself is kept). The cutoff is resolved server-side
+    /// (SELECT by id) to avoid timestamp-format drift across the IPC boundary. When
+    /// <paramref name="keepFavorites"/> is true (default), favorited entries are preserved — matching
+    /// the auto-trim purge convention. The FTS index is kept in sync by the AFTER DELETE trigger.
+    /// Returns the number of entries deleted (0 if the reference id is unknown).
+    /// <para>
+    /// Both sides of the comparison are wrapped in SQLite <c>datetime()</c> (as
+    /// <see cref="PurgeOldVersionsAsync"/> does): <c>executed_at</c> is NOT uniformly ISO-8601 — most
+    /// rows are ISO 'o' (<see cref="InsertEntryAsync"/>) but <c>SaveVersionByTabTitleAsync</c> rewrites
+    /// it via <c>datetime('now')</c> (space-separated). A raw lexicographic compare would treat a
+    /// space-format row as older than any ISO row on the same day (space &lt; 'T'), silently deleting
+    /// NEWER entries. <c>datetime()</c> canonicalises both forms so the comparison is by real time.
+    /// </para>
+    /// </summary>
+    public async Task<int> DeleteEntriesOlderThanAsync(long referenceEntryId, bool keepFavorites = true)
+    {
+        await using var conn = new SqliteConnection(_connectionString);
+        await conn.OpenAsync();
+
+        string? cutoff;
+        await using (var lookup = new SqliteCommand(
+            "SELECT executed_at FROM history WHERE id = @id;", conn))
+        {
+            lookup.Parameters.AddWithValue("@id", referenceEntryId);
+            cutoff = (await lookup.ExecuteScalarAsync()) as string;
+        }
+
+        if (string.IsNullOrEmpty(cutoff))
+        {
+            Log.Warning("History: RemoveOlderThan reference entry {Id} not found; nothing deleted", referenceEntryId);
+            return 0;
+        }
+
+        var sql = keepFavorites
+            ? "DELETE FROM history WHERE datetime(executed_at) < datetime(@cutoff) AND is_favorite = 0;"
+            : "DELETE FROM history WHERE datetime(executed_at) < datetime(@cutoff);";
+        await using var cmd = new SqliteCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@cutoff", cutoff);
+        var deletedCount = await cmd.ExecuteNonQueryAsync();
+        Log.Information("History: RemoveOlderThan deleted {Count} entries older than {Cutoff} (keepFavorites={Keep})",
+            deletedCount, cutoff, keepFavorites);
+        return deletedCount;
+    }
+
+    /// <summary>
     /// Deletes all non-favorite history entries. Returns the number deleted.
     /// </summary>
     public async Task<int> DeleteAllNonFavoriteAsync()
