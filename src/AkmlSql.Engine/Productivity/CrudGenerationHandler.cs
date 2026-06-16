@@ -39,8 +39,9 @@ namespace AkmlSql.Engine.Productivity
                         "No active database connection for this session. Ensure a connection is active.");
                 }
 
-                // Get the database cache for this session
-                var dbCache = _schemaCacheManager.GetCache(connectionString, databaseName);
+                // Get the database cache for this session. Keyed by SESSION ID (the populators use
+                // GetOrCreateCache(SessionId, db)) — passing the connection string always misses.
+                var dbCache = _schemaCacheManager.GetCache(request.SessionId, databaseName);
                 if (dbCache == null)
                 {
                     return CreateErrorResponse(message.RequestId,

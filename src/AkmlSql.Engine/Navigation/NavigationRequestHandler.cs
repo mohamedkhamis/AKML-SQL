@@ -49,8 +49,10 @@ public class NavigationRequestHandler(SchemaCacheManager schemaCacheManager)
                 });
             }
 
+            // Cache is keyed by SESSION ID (the populators use GetOrCreateCache(SessionId, db));
+            // passing the connection string here always missed and forced the live-query fallback.
             var dbCache = databaseName != null
-                ? _schemaCacheManager.GetCache(connectionString, databaseName)
+                ? _schemaCacheManager.GetCache(req.SessionId, databaseName)
                 : null;
 
             var (definition, objectType, fullName) = await _definitionService.GetDefinitionAsync(
@@ -175,8 +177,9 @@ public class NavigationRequestHandler(SchemaCacheManager schemaCacheManager)
                 }));
             }
 
+            // Cache is keyed by SESSION ID (see the populators) — the connection string never matched.
             var dbCache = !string.IsNullOrEmpty(connectionString)
-                ? _schemaCacheManager.GetCache(connectionString, databaseName)
+                ? _schemaCacheManager.GetCache(req.SessionId, databaseName)
                 : null;
             if (dbCache == null)
             {
