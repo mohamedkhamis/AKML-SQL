@@ -176,8 +176,8 @@
 - [~] T071 [US6] **Core DONE (2026-06-14, FR-038).** `EnvironmentMatcher` has a `MatchTargetDatabase` ("database") constant + a 3-arg `Match(rules, serverName, databaseName)` overload evaluating db rules against the database on any server; the existing single-arg `Match` delegates with `databaseName=null` (server behavior 100% intact). `ColoringRule.DatabaseName` added (T077). **Deferred (shell):** `TabColoringManager` must resolve the active database and call the 3-arg overload — a shell wiring task in the US6 shell batch.
 - [X] T072 [P] [US6] **DONE (2026-06-14, R10).** `HistoryRetentionVersionPreservationTests` (Engine.Tests) — old versions trimmed while latest version + execution records kept; below-limit purge trims nothing; favorites preserved. Done via batch-1 impl workflow.
 - [X] T073 [US6] **DONE (2026-06-14, FR-039, R10).** `HistoryDatabase.PurgeOldVersionsAsync(retentionDays)` deletes version rows older than the cutoff that are NOT the latest version for their entry (never deletes the latest version or execution rows); `HistoryRetentionService` calls it alongside the existing entry-level purge.
-- [ ] T074 [US6] Remove-older-than bulk action (`HistoryActions` + three-dot menu) in `src/AkmlSql.Shell.Shared/History/` (FR-041).
-- [~] T075 [US6] **Engine done (unit-tested).** `HistoryRetentionService` now honors `History.DisableAutoTrim` (T077 field): `StartAsync` skips all purges and doesn't schedule the timer; `RunPurgeAsync` is also gated. Test `RetentionService_DisableAutoTrim_SkipsAllPurging` proves an over-retention version survives (6 history-retention tests green). **Deferred (shell):** the Options dialog toggle for `disableAutoTrim` — folds into the Options batch (T078–T082).
+- [X] T074 [US6] **DONE (2026-06-16, FR-041).** Remove-older-than via the History context menu. New `HistoryActions.RemoveOlderThan=10` (+ `KeepFavorites` Key(8), response `DeletedCount` Key(7)); engine `HistoryDatabase.DeleteEntriesOlderThanAsync` deletes strictly-older non-favorite rows with the cutoff resolved server-side and **both sides wrapped in `datetime()`** (review caught a HIGH bug: raw string compare wrongly deleted newer `SaveVersion`-written space-format rows); `HistoryViewModel.RemoveOlderThanCommand` confirms then refreshes. 10 history tests green (incl. a mixed-timestamp-format regression).
+- [X] T075 [US6] **DONE (2026-06-16, FR-040).** Engine (was done): `HistoryRetentionService` honors `History.DisableAutoTrim`. Shell (this batch): the **Options toggle** "Disable automatic history trimming" added to `HistoryPage` (Storage group); also corrected the stale `DisableAutoTrim` XML-doc (it described whitespace-trimming, not retention).
 - [ ] T076 [US6] Verify US6 live per `quickstart.md` (P3).
 
 **Checkpoint**: Tab/history parity refinements in place.
@@ -191,12 +191,12 @@
 **Independent Test**: Every in-scope setting has a control (no config-only); alias + special-char options take effect; each page offers help.
 
 - [X] T077 [P] [US7] **DONE (2026-06-14, FR-042/043).** Added backing fields: `IntelliSense.SpecialCharOptions` (`SpecialCharacterSettings` { AutoCloseCharacters, AddParentheses }), `History.DisableAutoTrim` (bool), `ColoringRule.DatabaseName` (string) — all additive + backward-compatible, defaults + JSON round-trip tested in `AppSettingsTests`. (Alias policy `AliasOptions` already shipped in T035.) Behavioral wiring + Options surfacing are T078–T082. Done via batch-1 impl workflow.
-- [ ] T078 [US7] Surface the config-only settings in Options (object/parameter tooltips, insertion keys, decrypt-encrypted, auto-trigger/scope) in `src/AkmlSql.Shell.Shared/Dialogs/Pages/` (FR-042).
-- [ ] T079 [US7] Aliases Options page (include-AS, custom map, prefixes) — pairs with T035 (FR-043).
-- [ ] T080 [US7] Special-characters Options (auto-close characters, add parentheses) (FR-043).
-- [ ] T081 [US7] Active-style selector on the Format Options page — pairs with T021 (FR-043).
-- [ ] T082 [US7] Suggestion Connections/linked-server scope Options — pairs with T036 (FR-043).
-- [ ] T083 [US7] Per-page help on Options pages (FR-044).
+- [X] T078 [US7] **DONE (2026-06-16, FR-042).** New `CompletionPolishPage` (object/parameter tooltips → `EnableMsDescription`/`EnableParameterHighlight`, decrypt-encrypted, temp-table IntelliSense, Column-Picker sort) + commit-key toggles (`SpaceCommits`/`DotCommits`/`SnippetsInCompletion`) folded onto `IntelliSensePage`. Auto-trigger was already surfaced. NOTE: several `CompletionPolish.*` + `DotCommits` are not yet consumed at runtime — surfaced per SC-007 (adjustable), behavior-wiring is separate.
+- [X] T079 [US7] **DONE (2026-06-16, FR-043).** New `AliasesPage` — include-AS toggle, object→alias map and prefixes edited as plain multi-line text (self-contained Load/Save, no host CRUD). Binds `IntelliSense.AliasOptions` (T035; engine already consumes it).
+- [X] T080 [US7] **DONE (2026-06-16, FR-043).** Auto-close + add-parentheses toggles added to `IntelliSensePage` (Special characters group), binding `IntelliSense.SpecialCharOptions` (T077). NOTE: no editor consumer yet — surfaced per SC-007.
+- [X] T081 [US7] **DONE — satisfied by T021/commit d940a01.** The active-style dropdown + status-bar toggle already exist on `FormattingPage` (lines 26-34), fully Load/Save/async-populate wired. Verified, no new control.
+- [X] T082 [US7] **DONE (2026-06-16, FR-043).** New `ConnectionScopePage` — database/schema scope (comma-separated) + a forward-looking include-linked-servers toggle, binding `IntelliSense.ConnectionScope` (T036).
+- [X] T083 [US7] **DONE (2026-06-16, FR-044).** `IPageBuilder.Help` made a required member (rendered as an accent-bordered block in `AddPageHeader`); all 23 pages supply a distinct, control-grounded help string. Reviewed for content accuracy.
 - [ ] T084 [US7] Verify US7 live per `quickstart.md` (P3) — confirm no in-scope setting remains config-only (SC-007).
 
 **Checkpoint**: Options coverage complete.
