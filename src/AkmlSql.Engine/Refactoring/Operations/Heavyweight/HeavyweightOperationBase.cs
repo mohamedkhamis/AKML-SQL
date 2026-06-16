@@ -96,6 +96,25 @@ public abstract class HeavyweightOperationBase
     }
 
     /// <summary>
+    /// Appends a substituted parameter value to <paramref name="sb"/> during token-aware inlining,
+    /// inserting a single separating space when the value's leading operator character would FUSE
+    /// with a trailing operator character already in the buffer. Without this, a binding adjacent to
+    /// an operator with no whitespace (e.g. <c>5-@x</c> with <c>@x = -1</c>) emits <c>5--1</c> — a
+    /// <c>--</c> line comment that silently truncates the statement (also guards <c>/*</c>, <c>+-</c>).
+    /// A space is semantically inert in every scalar position, unlike wrapping parens which is invalid
+    /// in some spots (e.g. EXEC arguments). Positive literals never trip this, so goldens are unchanged.
+    /// </summary>
+    protected internal static void AppendSubstitutedValue(StringBuilder sb, string value)
+    {
+        if (string.IsNullOrEmpty(value)) return;
+        if (sb.Length > 0 && IsOperatorChar(sb[sb.Length - 1]) && IsOperatorChar(value[0]))
+            sb.Append(' ');
+        sb.Append(value);
+    }
+
+    private static bool IsOperatorChar(char c) => "+-*/%=<>!~&|^".IndexOf(c) >= 0;
+
+    /// <summary>
     /// Applies a pre-filtered list of changes directly to a text string (no FilePath filtering).
     /// Assumes the caller has already grouped changes by file. Applies in descending offset order.
     /// </summary>

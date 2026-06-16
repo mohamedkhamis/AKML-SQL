@@ -196,9 +196,12 @@ namespace AkmlSql.Shell.Shared.Refactoring
 
             static bool IsIdent(char ch) => char.IsLetterOrDigit(ch) || ch == '_' || ch == '#' || ch == '@' || ch == '$';
 
-            // Expand left/right over the identifier under the caret.
+            // Expand left/right over the identifier under the caret. The left scan must allow BOTH
+            // brackets (']' AND '['): with only ']' allowed, a bracketed name like [hr].[Proc] stops
+            // the scan just after the opening '[', so the schema look-left below sees '[' instead of
+            // the '.' and silently defaults the schema to "dbo" — scripting the wrong object.
             int start = caret;
-            while (start > 0 && (IsIdent(docText[start - 1]) || docText[start - 1] == ']')) start--;
+            while (start > 0 && (IsIdent(docText[start - 1]) || docText[start - 1] == ']' || docText[start - 1] == '[')) start--;
             int end = caret;
             while (end < docText.Length && (IsIdent(docText[end]) || docText[end] == '[' || docText[end] == ']')) end++;
             // Caret just past the identifier (start==end): step back one.

@@ -77,7 +77,7 @@ public class InlineExecOperation : HeavyweightOperationBase
         RefactorApplyRequest request,
         CancellationToken ct)
     {
-        var result = ApplyChanges(request.ApprovedChanges, string.Empty);
+        var result = ApplyChanges(request.ApprovedChanges, request.DocumentText);
         return Task.FromResult(new RefactorApplyResponse
         {
             Success             = true,
@@ -214,7 +214,7 @@ public class InlineExecOperation : HeavyweightOperationBase
             {
                 if (bindings.TryGetValue(tok.Text, out var value))
                 {
-                    sb.Append(value);
+                    AppendSubstitutedValue(sb, value); // space-guard against '--' / '/*' token fusion
                     continue;
                 }
                 unresolved.Add(tok.Text);

@@ -189,7 +189,7 @@ public static class InlineStoredProcRewriter
             if (tok.TokenType == TSqlTokenType.Variable && bindings.TryGetValue(tok.Text, out var value))
             {
                 useCount[tok.Text] = useCount.TryGetValue(tok.Text, out var c) ? c + 1 : 1;
-                sb.Append(value);
+                HeavyweightOperationBase.AppendSubstitutedValue(sb, value); // guard '--' / '/*' fusion
                 continue;
             }
             sb.Append(tok.Text);

@@ -90,6 +90,20 @@ public sealed class InlineStoredProcRewriterTests
         Assert.Contains(r.Warnings, w => w.Contains("@id"));
     }
 
+    // Regression for spec-030 sweep finding #5 (MED): a negative argument substituted directly after
+    // an operator with no whitespace ("5-@id" with @id = -1) must NOT fuse into "5--1" — that "--"
+    // is a line comment that silently truncates the statement. A single separating space is inserted
+    // only in this fusing case (positive arguments like "3" above stay flush, so other goldens hold).
+    [Fact]
+    public void Negative_argument_adjacent_to_operator_does_not_form_a_comment_token()
+    {
+        const string def = "CREATE PROCEDURE dbo.P @id int AS SELECT 5-@id";
+        var r = InlineStoredProcRewriter.Inline(def, [Pos("-1")]);
+        Assert.True(r.Ok, r.Error);
+        Assert.DoesNotContain("--", r.InlinedSql);
+        Assert.Equal("SELECT 5- -1", r.InlinedSql);
+    }
+
     [Fact]
     public void Alter_procedure_definition_is_also_inlinable()
     {

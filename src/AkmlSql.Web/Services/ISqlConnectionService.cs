@@ -209,9 +209,18 @@ internal sealed class SqlConnectionService : ISqlConnectionService
         int comma = host.IndexOf(','); if (comma >= 0) host = host.Substring(0, comma);   // drop ,port
         host = host.Trim().Trim('[', ']').ToLowerInvariant();
 
-        return host is "localhost" or "127.0.0.1" or "::1" or "." or "(local)"
-            || host.StartsWith("127.")
-            || host.StartsWith("(localdb)");
+        // Named local aliases — EXACT match only. A substring test like host.StartsWith("127.")
+        // is a loopback-guard bypass: "127.0.0.1.attacker.com" begins with "127." yet is a
+        // DNS-resolvable REMOTE host, so the engine would connect (under its own Windows identity)
+        // to the attacker and leak NTLM credentials. "(localdb)" is a local instance moniker, not a
+        // network host, so it is safe to allow exactly.
+        if (host is "localhost" or "." or "(local)" or "(localdb)")
+            return true;
+
+        // IP literals — accept ONLY true loopback: 127.0.0.0/8 and ::1. IPAddress.IsLoopback
+        // covers the whole 127/8 block and IPv6 ::1; IPAddress.TryParse fails for any FQDN, so a
+        // hostname like "127.0.0.1.attacker.com" falls through to false here.
+        return System.Net.IPAddress.TryParse(host, out var addr) && System.Net.IPAddress.IsLoopback(addr);
     }
 
     /// <summary>

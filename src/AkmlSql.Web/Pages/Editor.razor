@@ -426,6 +426,7 @@
     private HeavyOp? _heavyInput;                       // non-null while the input dialog is open
     private RefactorPreviewResponse? _heavyPreview;     // non-null while the bridge preview is shown
     private RefactorInputDialog.RefactorInputs? _heavyInputs;   // captured dialog values for apply
+    private string _heavyPreviewDocText = string.Empty; // the exact text the preview offsets refer to
 
     protected override async Task OnInitializedAsync()
     {
@@ -735,6 +736,10 @@
         _heavyInputs = inputs;
         try
         {
+            // Pin the exact text the preview offsets are computed against, so the later apply
+            // reconstructs from THIS text — not whatever the editor holds after the user may have
+            // typed while the confirm dialog was open (stale offsets would corrupt the document).
+            _heavyPreviewDocText = _currentText;
             var request = new RefactorPreviewRequest
             {
                 SessionId = string.Empty,
@@ -781,6 +786,12 @@
                 SessionId = string.Empty,
                 OperationType = op?.OperationType ?? 0,
                 ApprovedChanges = preview.Changes,
+                // The engine reconstructs UpdatedDocumentText by applying the approved changes onto
+                // this original text (change offsets are absolute into it). Use the text captured at
+                // PREVIEW time (not the live _currentText) so the offsets stay valid even if the user
+                // edited while the confirm dialog was open. Without any text the engine applies onto an
+                // empty buffer and returns a truncated document, which we'd write back — wiping work.
+                DocumentText = _heavyPreviewDocText,
             };
             var response = await Refactoring.ApplyAsync(apply, CancellationToken.None);
             if (response is { Success: true } && !string.IsNullOrEmpty(response.UpdatedDocumentText))

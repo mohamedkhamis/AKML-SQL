@@ -232,11 +232,33 @@ public sealed class InlineExecTests
         var preview  = await Op.PreviewAsync(MakeRequest(), ctx, default);
         Assert.True(preview.CanApply);
 
-        var applyReq = new RefactorApplyRequest { ApprovedChanges = preview.Changes };
-        // ApplyChanges in the base operates on a document string; pass the original.
+        // ApplyChanges reconstructs the document from DocumentText — pass the original.
+        var applyReq = new RefactorApplyRequest { ApprovedChanges = preview.Changes, DocumentText = sql };
         var applied  = await Op.ApplyAsync(applyReq, default);
 
         Assert.True(applied.Success);
         Assert.Equal(preview.Changes.Length, applied.AppliedCount);
+        Assert.Equal("SELECT 1", applied.UpdatedDocumentText);
+    }
+
+    // Regression for spec-030 sweep finding #4 (HIGH, data-corruption): when the EXEC is NOT at
+    // offset 0, the apply must keep everything before it. The old code reconstructed from an empty
+    // string, so the StartOffset>0 change was silently dropped and the document came back truncated
+    // (the web editor then wrote that empty/partial result back, wiping the user's work).
+    [Fact]
+    public async Task InlineExec_Apply_PreservesTextBeforeExec()
+    {
+        const string sql = "SELECT 'before';\nEXEC('SELECT 2')";
+
+        var ctx     = LightweightOperationTestHelper.CreateContext(sql);
+        var preview = await Op.PreviewAsync(MakeRequest(), ctx, default);
+        Assert.True(preview.CanApply);
+        Assert.True(preview.Changes[0].StartOffset > 0, "test premise: the EXEC must not start at offset 0");
+
+        var applyReq = new RefactorApplyRequest { ApprovedChanges = preview.Changes, DocumentText = sql };
+        var applied  = await Op.ApplyAsync(applyReq, default);
+
+        Assert.True(applied.Success);
+        Assert.Equal("SELECT 'before';\nSELECT 2", applied.UpdatedDocumentText);
     }
 }

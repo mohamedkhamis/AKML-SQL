@@ -41,8 +41,11 @@ namespace AkmlSql.Engine.Productivity
                         "No active database connection for this session. Ensure a connection is active.");
                 }
 
-                // Get the database cache for this session
-                var dbCache = _schemaCacheManager.GetCache(connectionString, databaseName);
+                // Get the database cache for this session. The cache is keyed by SESSION ID (see
+                // ConnectionChangedHandler / AnalysisHandlers / SchemaRefreshService, which all populate
+                // via GetOrCreateCache(SessionId, db)) — NOT the connection string. Passing the raw
+                // connection string here made every lookup miss → spurious "Schema cache not available".
+                var dbCache = _schemaCacheManager.GetCache(request.SessionId, databaseName);
 
                 // Spec 030 T066 (FR-022): "Script as → ALTER" rewrites a programmable object's live
                 // definition (sys.sql_modules). It uses the connection directly and does NOT need the

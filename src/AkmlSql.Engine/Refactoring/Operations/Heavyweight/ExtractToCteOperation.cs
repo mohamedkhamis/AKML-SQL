@@ -98,7 +98,7 @@ public class ExtractToCteOperation : HeavyweightOperationBase
         RefactorApplyRequest request,
         CancellationToken ct)
     {
-        var result = ApplyChanges(request.ApprovedChanges, string.Empty);
+        var result = ApplyChanges(request.ApprovedChanges, request.DocumentText);
         return Task.FromResult(new RefactorApplyResponse
         {
             Success             = true,
