@@ -22,6 +22,13 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         string Title { get; }
 
         /// <summary>
+        /// Page-specific help/intro text (spec 030 T083 / FR-044), rendered by the host beneath the
+        /// page header in an accent-bordered block. Every page supplies its own so help coverage is
+        /// uniform by construction; return <see cref="string.Empty"/> to render nothing.
+        /// </summary>
+        string Help { get; }
+
+        /// <summary>
         /// Appends this page's body rows to <paramref name="panel"/> (which the host
         /// has pre-populated with the page header). Returns a controls bag the host
         /// uses to load/save settings for this page.

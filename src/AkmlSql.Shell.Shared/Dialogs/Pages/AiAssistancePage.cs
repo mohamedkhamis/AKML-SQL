@@ -11,6 +11,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         public string Key     => "AI Assistance";
         public string Display => "AI Assistance";
         public string Title   => "AI Assistance";
+        public string Help    => "Connect an AI provider (Anthropic, OpenAI, Gemini, Ollama, and more) and tune the model, privacy mode, and request parameters that power AI features. Enable assistance such as natural-language-to-SQL, query explanation, error fixes, optimization, index suggestions, the chat panel, and inline ghost-text completions.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {

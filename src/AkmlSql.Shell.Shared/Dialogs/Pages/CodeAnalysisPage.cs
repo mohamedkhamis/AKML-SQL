@@ -9,6 +9,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         public string Key     => "Code Analysis";
         public string Display => "Code Analysis";
         public string Title   => "Code Analysis";
+        public string Help    => "Controls the code analysis engine: enable it overall, choose whether rules run while you type or on save, and whether issues appear in the Error List.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {

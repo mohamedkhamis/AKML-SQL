@@ -16,6 +16,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         public string Key     => "InsertOptions";
         public string Display => "Inserted Code › INSERT statements";
         public string Title   => "INSERT statements";
+        public string Help    => "Controls how INSERT INTO statements are expanded — whether to add an explicit column list and annotate defaults as comments — and whether EXEC calls convert positional arguments to named parameters.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {

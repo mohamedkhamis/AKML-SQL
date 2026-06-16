@@ -717,9 +717,10 @@ namespace AkmlSql.Core.Config
         public bool Deduplication { get; set; } = true;
 
         /// <summary>
-        /// Spec 030 T077 / FR-043 — when <c>true</c>, recorded history entries are stored
-        /// verbatim without trimming leading/trailing whitespace. Default <c>false</c>
-        /// (entries are auto-trimmed, the prior behaviour).
+        /// Spec 030 T075 / FR-040 — when <c>true</c>, history retention purging is disabled: all
+        /// entries and version snapshots are kept regardless of <see cref="RetentionDays"/> /
+        /// <see cref="MaxEntries"/>, and the engine's <c>HistoryRetentionService</c> skips every purge
+        /// and does not schedule its timer. Default <c>false</c> (auto-trim on, the prior behaviour).
         /// </summary>
         [JsonPropertyName("disableAutoTrim")]
         public bool DisableAutoTrim { get; set; }

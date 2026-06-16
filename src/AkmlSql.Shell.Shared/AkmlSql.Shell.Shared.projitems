@@ -61,6 +61,9 @@
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\TabsPage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\IntelliSensePage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\SuggestionTypesPage.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\CompletionPolishPage.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\AliasesPage.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\ConnectionScopePage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\QualificationPage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\InsertStatementsPage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\JoinCompletionPage.cs" />

@@ -16,6 +16,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         public string Key     => "Formatting";
         public string Display => "Format › Styles";
         public string Title   => "SQL Formatting";
+        public string Help    => "Choose the active formatting style and control when Format SQL runs (on paste, save, or delimiter), plus safety options like bulk-format confirmation, backups, --noformat regions, and semantic validation.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {

@@ -10,6 +10,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         public string Key     => "Execution";
         public string Display => "Queries › Execution";
         public string Title   => "Execution";
+        public string Help    => "Configure query execution behavior: toggle the status-bar execution timer, enable multi-database execution, and set how many seconds a query must run before a long-running notification appears.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {

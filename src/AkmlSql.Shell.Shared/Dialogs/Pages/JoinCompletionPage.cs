@@ -19,6 +19,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         public string Key     => "JoinOptions";
         public string Display => "Inserted Code › JOIN completion";
         public string Title   => "JOIN completion";
+        public string Help    => "Controls how JOIN completion suggests ON conditions, including whether to fall back to matching column names when no foreign key links the two tables.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {

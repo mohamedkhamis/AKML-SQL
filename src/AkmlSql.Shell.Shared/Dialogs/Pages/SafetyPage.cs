@@ -10,6 +10,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         public string Key     => "Safety";
         public string Display => "Queries › Execution Warnings";
         public string Title   => "Execution Safety";
+        public string Help    => "Configure confirmation prompts and warnings for risky T-SQL execution, including production-server alerts, unguarded DELETE/UPDATE, DROP and TRUNCATE confirmations, and periodic open-transaction reminders.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {

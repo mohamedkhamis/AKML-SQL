@@ -10,6 +10,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         public string Key     => "General";
         public string Display => "Miscellaneous › Main";
         public string Title   => "General Settings";
+        public string Help    => "Configure the AKML SQL dialog theme, automatic update checks, and anonymous usage telemetry. This page also shows the configuration file, log directory, and installed version.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {

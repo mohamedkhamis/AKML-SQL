@@ -312,6 +312,62 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             return (container, textBox);
         }
 
+        /// <summary>
+        /// A multi-line text editor row (label + optional description + a wrapping, scrollable
+        /// <see cref="TextBox"/> with <c>AcceptsReturn</c>). Themed from <see cref="PageTheme"/> so it
+        /// matches <see cref="AddTextInput"/>; used for list-style settings edited one entry per line.
+        /// </summary>
+        public (StackPanel Row, TextBox Control) AddMultilineTextInput(
+            StackPanel panel, string label, string description = "", double height = 90)
+        {
+            var container = new StackPanel { Margin = new Thickness(0, 0, 0, 12) };
+
+            container.Children.Add(new TextBlock
+            {
+                Text = label,
+                Foreground = _theme.FgPrimary,
+                FontSize = 13,
+                Margin = new Thickness(0, 0, 0, 4)
+            });
+
+            var textBox = new TextBox
+            {
+                Background = _theme.Input,
+                Foreground = _theme.FgPrimary,
+                BorderBrush = _theme.ComboBorder,
+                BorderThickness = new Thickness(1),
+                CaretBrush = _theme.Caret,
+                FontSize = 13,
+                MinHeight = height,
+                Padding = new Thickness(6, 4, 6, 4),
+                MaxWidth = 500,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                MinWidth = 300,
+                AcceptsReturn = true,
+                TextWrapping = TextWrapping.NoWrap,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto
+            };
+
+            container.Children.Add(textBox);
+
+            if (!string.IsNullOrEmpty(description))
+            {
+                container.Children.Add(new TextBlock
+                {
+                    Text = description,
+                    Foreground = _theme.FgSecondary,
+                    FontSize = 11,
+                    FontStyle = FontStyles.Italic,
+                    Margin = new Thickness(0, 2, 0, 0),
+                    TextWrapping = TextWrapping.Wrap
+                });
+            }
+
+            panel.Children.Add(container);
+            return (container, textBox);
+        }
+
         public (StackPanel Row, TextBox Control) AddReadOnlyField(StackPanel panel, string label, string value)
         {
             var container = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };

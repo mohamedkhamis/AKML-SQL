@@ -9,6 +9,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         public string Key     => "Navigation";
         public string Display => "Editor › Navigation";
         public string Title   => "Navigation";
+        public string Help    => "Turn code-navigation commands on or off: Go to Definition (F12), Peek Definition (Alt+F12), Find All References (Shift+F12), and Object Search (Ctrl+T).";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {

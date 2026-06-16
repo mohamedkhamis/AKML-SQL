@@ -68,6 +68,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
             ["Tabs & UI"] = new TabsPage(),
             ["IntelliSense"] = new IntelliSensePage(),
             ["SuggestionTypes"] = new SuggestionTypesPage(),
+            ["CompletionPolish"] = new CompletionPolishPage(),
+            ["Aliases"] = new AliasesPage(),
+            ["ConnectionScope"] = new ConnectionScopePage(),
             ["Qualification"] = new QualificationPage(),
             ["InsertOptions"] = new InsertStatementsPage(),
             ["JoinOptions"] = new JoinCompletionPage(),
@@ -439,6 +442,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
             AddTreeGroup("Suggestions", expanded: true,
                 ("Behavior", "IntelliSense"),
                 ("Types of suggestion", "SuggestionTypes"),
+                ("Tooltips", "CompletionPolish"),
+                ("Aliases", "Aliases"),
+                ("Connections", "ConnectionScope"),
                 ("Database", "Schema Cache"));
 
             // Inserted Code group introduced in Phase 2 (C.2-C.4).
@@ -999,6 +1005,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 ("General",       "Miscellaneous › Main"),
                 ("IntelliSense",  "Suggestions › Behavior"),
                 ("SuggestionTypes", "Suggestions › Types of suggestion"),
+                ("CompletionPolish", "Suggestions › Tooltips"),
+                ("Aliases",       "Suggestions › Aliases"),
+                ("ConnectionScope", "Suggestions › Connections"),
                 ("Schema Cache",  "Suggestions › Database"),
                 ("Qualification", "Inserted Code › Qualification & Brackets"),
                 ("InsertOptions", "Inserted Code › INSERT statements"),
@@ -1027,7 +1036,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
                     continue;
 
                 var hostPanel = CreatePagePanel();
-                AddPageHeader(hostPanel, pageBuilder.Title);
+                AddPageHeader(hostPanel, pageBuilder.Title, pageBuilder.Help);
                 var ctx = new PageContext(_theme, _settings, new RowFactory(_theme), RegisterSearchEntry);
                 var controls = pageBuilder.Build(hostPanel, ctx);
                 _pageControlsByKey[key] = controls;
@@ -1175,7 +1184,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
         /// SQL Prompt-style page header: blue accent title on the left, "Restore Defaults"
         /// link on the right, and a thin separator underline.
         /// </summary>
-        private void AddPageHeader(StackPanel panel, string text)
+        private void AddPageHeader(StackPanel panel, string text, string help)
         {
             var header = new Grid { Margin = new Thickness(0, 0, 0, 14) };
             header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -1213,6 +1222,28 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 Background = _theme.Sep,
                 Margin = new Thickness(0, 0, 0, 12)
             });
+
+            // Spec 030 T083 (FR-044) — page-specific help block, accent-left-bordered, beneath the
+            // header. Uniform across pages because IPageBuilder.Help is a required member.
+            if (!string.IsNullOrEmpty(help))
+            {
+                panel.Children.Add(new Border
+                {
+                    BorderBrush = _theme.FgAccent,
+                    BorderThickness = new Thickness(2, 0, 0, 0),
+                    Background = _theme.Panel,
+                    Padding = new Thickness(10, 8, 10, 8),
+                    Margin = new Thickness(0, 0, 0, 12),
+                    Child = new TextBlock
+                    {
+                        Text = help,
+                        Foreground = _theme.FgSecondary,
+                        FontSize = 12,
+                        TextWrapping = TextWrapping.Wrap,
+                        LineHeight = 18
+                    }
+                });
+            }
         }
 
         // Add* row helpers + ComboBox theming + zebra striping migrated to
@@ -1564,6 +1595,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
                     break;
                 case "IntelliSense": _settings.IntelliSense = defaults.IntelliSense; break;
                 case "SuggestionTypes": _settings.IntelliSense.SuggestionTypes = defaults.IntelliSense.SuggestionTypes; break;
+                case "CompletionPolish": _settings.CompletionPolish = defaults.CompletionPolish; break;
+                case "Aliases": _settings.IntelliSense.AliasOptions = defaults.IntelliSense.AliasOptions; break;
+                case "ConnectionScope": _settings.IntelliSense.ConnectionScope = defaults.IntelliSense.ConnectionScope; break;
                 case "Qualification": _settings.IntelliSense.Qualification = defaults.IntelliSense.Qualification; break;
                 case "InsertOptions": _settings.IntelliSense.InsertOptions = defaults.IntelliSense.InsertOptions; break;
                 case "JoinOptions": _settings.IntelliSense.JoinOptions = defaults.IntelliSense.JoinOptions; break;

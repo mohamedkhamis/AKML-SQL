@@ -10,6 +10,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         public string Key     => "Schema Cache";
         public string Display => "Suggestions › Database";
         public string Title   => "Schema Cache";
+        public string Help    => "Controls how the database schema cache is kept current and stored: background auto-refresh interval, immediate DDL-change detection, and storage limits such as the number of cached databases, lazy-loading of column metadata, and persisting the cache to disk.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {

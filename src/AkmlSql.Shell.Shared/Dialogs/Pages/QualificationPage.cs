@@ -16,6 +16,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         public string Key     => "Qualification";
         public string Display => "Inserted Code › Qualification & Brackets";
         public string Title   => "Qualification & Brackets";
+        public string Help    => "Controls how completion-inserted code is qualified: whether object names carry their schema prefix, when identifiers are wrapped in square brackets, and whether column references are prefixed with their table name or alias.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {
