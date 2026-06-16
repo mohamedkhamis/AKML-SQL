@@ -212,6 +212,9 @@ public class AnalysisEngine(TsqlParserService parser, RuleRegistry registry, CaS
 
     private static CodeIssueInfo ToIssueInfo(AnalysisDiagnostic d)
     {
+        // Spec 030 T055 (FR-028) — attach the rule's catalog description + reference URL per-issue so
+        // the shell's Ctrl-hover issue-details popup can render them (the catalog is engine-only).
+        var meta = RuleMetadataCatalog.Get(d.RuleId);
         return new CodeIssueInfo
         {
             RuleId = d.RuleId,
@@ -221,6 +224,8 @@ public class AnalysisEngine(TsqlParserService parser, RuleRegistry registry, CaS
             EndOffset = d.EndOffset,
             Line = d.Line,
             Column = d.Column,
+            Description = meta.Description,
+            ReferenceUrl = meta.ReferenceUrl,
             FixActions = d.FixActions.Select(f => new FixActionInfo
             {
                 Label = f.Label,

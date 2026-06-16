@@ -6,11 +6,12 @@ namespace AkmlSql.Engine.Analysis;
 /// </summary>
 public sealed class RuleMetadata
 {
-    public RuleMetadata(string name, string description, bool autoFixable)
+    public RuleMetadata(string name, string description, bool autoFixable, string referenceUrl = "")
     {
         Name = name;
         Description = description;
         AutoFixable = autoFixable;
+        ReferenceUrl = referenceUrl;
     }
 
     /// <summary>Short rule name shown in the Manage Rules list (e.g. "SELECT * in procedures/views").</summary>
@@ -24,6 +25,12 @@ public sealed class RuleMetadata
     /// (T054): orange = auto-fixable quick action, blue = informational only.
     /// </summary>
     public bool AutoFixable { get; }
+
+    /// <summary>
+    /// Spec 030 T055 (FR-028) — optional reference/documentation URL (http/https) shown as a
+    /// clickable link in the Ctrl-hover issue-details popup. Empty when none is configured.
+    /// </summary>
+    public string ReferenceUrl { get; }
 }
 
 /// <summary>
@@ -83,15 +90,15 @@ public static class RuleMetadataCatalog
         ["PE030"] = new("Repeated temp table usage", "Repeated temp table usage — consider a Table-Valued Parameter for batching", false),
         ["PE031"] = new("Implicit cast in predicate", "Implicit data-type cast in predicate — may prevent index use (schema required)", false),
         ["PE032"] = new("Stale statistics", "Statistics may be stale based on modification counters (schema required)", false),
-        ["PE033"] = new("NOLOCK dirty reads", "`NOLOCK` / `READUNCOMMITTED` hint — can return dirty reads and phantom rows", false),
+        ["PE033"] = new("NOLOCK dirty reads", "`NOLOCK` / `READUNCOMMITTED` hint — can return dirty reads and phantom rows", false, "https://learn.microsoft.com/sql/t-sql/queries/hints-transact-sql-table"),
         ["PE034"] = new("RECOMPILE hint", "`RECOMPILE` hint — verify it is needed; excessive recompilation degrades throughput", false),
         ["PE035"] = new("View without SCHEMABINDING", "View without `SCHEMABINDING` — prevents indexed views and allows unnoticed breaking changes (schema required)", false),
 
         // ── Best Practices (BP) ──
-        ["BP001"] = new("@@IDENTITY used", "`@@IDENTITY` used — returns identity from any scope; use `SCOPE_IDENTITY()` instead", false),
+        ["BP001"] = new("@@IDENTITY used", "`@@IDENTITY` used — returns identity from any scope; use `SCOPE_IDENTITY()` instead", false, "https://learn.microsoft.com/sql/t-sql/functions/scope-identity-transact-sql"),
         ["BP002"] = new("ISNUMERIC used", "`ISNUMERIC()` used — returns true for values like `$` and `1e2`; use `TRY_CONVERT`", false),
         ["BP003"] = new("No TRY/CATCH with DML", "No `TRY/CATCH` block in procedure with DML — unhandled errors leave transactions open", false),
-        ["BP004"] = new("= NULL comparison", "`= NULL` comparison — always evaluates to `UNKNOWN`; use `IS NULL`", true),
+        ["BP004"] = new("= NULL comparison", "`= NULL` comparison — always evaluates to `UNKNOWN`; use `IS NULL`", true, "https://learn.microsoft.com/sql/t-sql/language-elements/null-and-unknown-transact-sql"),
         ["BP005"] = new("EXEC string pattern", "`EXEC(string)` pattern — use `sp_executesql` with parameters to avoid SQL injection", false),
         ["BP006"] = new("DML without transaction", "Multiple DML statements without an explicit transaction — data may be partially committed", false),
         ["BP007"] = new("Empty CATCH block", "Empty `CATCH` block — swallows errors silently", false),
@@ -122,10 +129,10 @@ public static class RuleMetadataCatalog
         ["SE002"] = new("Hard-coded credential literal", "Hard-coded password or credential literal in SQL text", false),
         ["SE003"] = new("GRANT to PUBLIC role", "`GRANT` privilege to `PUBLIC` role — affects all users", false),
         ["SE004"] = new("EXECUTE AS OWNER", "`EXECUTE AS OWNER` — elevates to object owner's permissions; verify intent", false),
-        ["SE005"] = new("TRUSTWORTHY ON", "`TRUSTWORTHY ON` for a database — allows CLR and ownership-chaining exploits", false),
+        ["SE005"] = new("TRUSTWORTHY ON", "`TRUSTWORTHY ON` for a database — allows CLR and ownership-chaining exploits", false, "https://learn.microsoft.com/sql/relational-databases/security/trustworthy-database-property"),
         ["SE006"] = new("Weak hash algorithm", "Weak hash algorithm (`MD5` or `SHA1`) — not collision-resistant", true),
         ["SE007"] = new("Cross-database object reference", "Cross-database object reference (`OtherDb.dbo.Table`) — increases attack surface", false),
-        ["SE008"] = new("xp_cmdshell usage", "`xp_cmdshell` — executes OS commands; should be disabled in production", false),
+        ["SE008"] = new("xp_cmdshell usage", "`xp_cmdshell` — executes OS commands; should be disabled in production", false, "https://learn.microsoft.com/sql/relational-databases/system-stored-procedures/xp-cmdshell-transact-sql"),
         ["SE009"] = new("OPENROWSET external data", "`OPENROWSET` — accesses external data sources; can exfiltrate data", false),
         ["SE010"] = new("Connection string with credentials", "Connection string containing credentials embedded in SQL", false),
         ["SE011"] = new("sa login used directly", "`sa` login used directly — use dedicated least-privilege accounts", false),
@@ -175,7 +182,7 @@ public static class RuleMetadataCatalog
         ["DE007"] = new("IDENTITY on non-integer column", "`IDENTITY` on a non-integer column type — unexpected behavior", false),
 
         // ── Deprecated (DEP) ──
-        ["DEP001"] = new("text/ntext/image data type", "`text`, `ntext`, or `image` data type — removed in SQL Server 2022+", true),
+        ["DEP001"] = new("text/ntext/image data type", "`text`, `ntext`, or `image` data type — removed in SQL Server 2022+", true, "https://learn.microsoft.com/sql/t-sql/data-types/ntext-text-and-image-transact-sql"),
         ["DEP002"] = new("Deprecated system procedure", "Deprecated system stored procedure (e.g. `sp_addtype`, `sp_bindrule`)", false),
         ["DEP003"] = new("SET FMTONLY ON", "`SET FMTONLY ON` — removed in SQL Server 2012", false),
         ["DEP004"] = new("Old outer-join operators", "Old outer-join operators (`*=`, `=*`) — removed in SQL Server 2012", false),

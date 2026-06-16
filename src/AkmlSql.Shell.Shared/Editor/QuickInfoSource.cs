@@ -1,9 +1,16 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
+using System.Diagnostics;
 using System.Text;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Documents;
+using System.Windows.Input;
+using System.Windows.Navigation;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
+using AkmlSql.Shell.Shared.Analysis;
 using AkmlSql.Shell.Shared.Ipc;
 using Microsoft.VisualStudio.Language.Intellisense;
 using Microsoft.VisualStudio.Shell;
@@ -60,12 +67,28 @@ namespace AkmlSql.Shell.Shared.Editor
         private int _cacheGeneration;   // bumped on edit so a slow fetch can't write a stale entry
         private bool _disposed;
 
+        // Spec 030 T055 (FR-028) — the AnalysisController for this buffer; its CurrentIssues feeds the
+        // Ctrl-hover issue-details popup with no IPC round-trip. Resolved lazily (it may be created
+        // after this source) and never subscribed to, so there is no lifecycle to manage.
+        private AnalysisController _analysisController;
+
         public QuickInfoSource(ITextBuffer buffer)
         {
             _buffer = buffer;
             buffer.Properties.TryGetProperty("AkmlSqlSessionId", out _sessionId);
             // Metadata can change as the document is edited — drop any cached/pending hovers.
             buffer.Changed += OnBufferChanged;
+            buffer.Properties.TryGetProperty(typeof(AnalysisController), out _analysisController);
+        }
+
+        /// <summary>Current analysis issues for this buffer, resolving the controller lazily (it can be
+        /// created after this QuickInfoSource). Empty when analysis is off / no controller exists.</summary>
+        private CodeIssueInfo[] GetCurrentIssues()
+        {
+            var controller = _analysisController;
+            if (controller == null && _buffer.Properties.TryGetProperty(typeof(AnalysisController), out controller))
+                _analysisController = controller;
+            return controller?.CurrentIssues ?? Array.Empty<CodeIssueInfo>();
         }
 
         private void OnBufferChanged(object sender, TextContentChangedEventArgs e)
@@ -87,6 +110,16 @@ namespace AkmlSql.Shell.Shared.Editor
                     return;
 
                 int position = point.Value.Position;
+
+                // Spec 030 T055 (FR-028) — Ctrl held: show the analysis issue's rule description +
+                // reference link for the squiggle under the cursor, instead of object metadata. When
+                // Ctrl is down we stay in "issue mode": if no issue covers the position, show nothing
+                // (rather than falling back to the object-metadata hover).
+                if ((Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+                {
+                    TryRenderIssueDetails(snapshot, position, quickInfoContent, out applicableToSpan);
+                    return;
+                }
 
                 // Word span under the cursor (also what the tooltip applies to).
                 int start = position;
@@ -204,6 +237,103 @@ namespace AkmlSql.Shell.Shared.Editor
             if (text.Length > 0)
                 quickInfoContent.Add(text);
         }
+
+        /// <summary>
+        /// Spec 030 T055 (FR-028) — renders the analysis issue(s) whose span covers <paramref name="position"/>
+        /// as a themed popup (rule id + description + optional reference link). No-op (and no
+        /// <paramref name="applicableToSpan"/>) when no issue covers the position.
+        /// </summary>
+        private void TryRenderIssueDetails(ITextSnapshot snapshot, int position, IList<object> quickInfoContent, out ITrackingSpan applicableToSpan)
+        {
+            applicableToSpan = null;
+            var issues = GetCurrentIssues();
+            if (issues.Length == 0)
+                return;
+
+            bool any = false;
+            foreach (var issue in issues)
+            {
+                int start = Math.Max(0, Math.Min(issue.StartOffset, snapshot.Length));
+                int end   = Math.Max(start, Math.Min(issue.EndOffset, snapshot.Length));
+                if (position < start || position > end)
+                    continue;
+
+                if (!any)
+                {
+                    applicableToSpan = snapshot.CreateTrackingSpan(start, end - start, SpanTrackingMode.EdgeInclusive);
+                    any = true;
+                }
+                quickInfoContent.Add(BuildIssuePanel(issue));
+            }
+        }
+
+        /// <summary>Builds the WPF content for one issue: a UIElement (not a string) so the reference
+        /// link is clickable. Colours are inherited from the QuickInfo presenter's theme.</summary>
+        private static UIElement BuildIssuePanel(CodeIssueInfo issue)
+        {
+            var panel = new StackPanel { MaxWidth = 480 };
+
+            panel.Children.Add(new TextBlock
+            {
+                Text = string.IsNullOrEmpty(issue.RuleId) ? "Analysis issue" : issue.RuleId,
+                FontWeight = FontWeights.Bold,
+                TextWrapping = TextWrapping.Wrap
+            });
+
+            // FR-028: the offending rule's description; fall back to the per-finding message when the
+            // rule has no catalog description.
+            var body = !string.IsNullOrEmpty(issue.Description) ? issue.Description : issue.Message;
+            if (!string.IsNullOrEmpty(body))
+            {
+                panel.Children.Add(new TextBlock
+                {
+                    Text = body,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 2, 0, 0)
+                });
+            }
+
+            // The specific finding text, when it differs from the rule description.
+            if (!string.IsNullOrEmpty(issue.Message) && !string.Equals(issue.Message, body, StringComparison.Ordinal))
+            {
+                panel.Children.Add(new TextBlock
+                {
+                    Text = issue.Message,
+                    TextWrapping = TextWrapping.Wrap,
+                    FontStyle = FontStyles.Italic,
+                    Margin = new Thickness(0, 2, 0, 0)
+                });
+            }
+
+            if (IsHttpUrl(issue.ReferenceUrl))
+            {
+                var link = new Hyperlink(new Run("Learn more")) { NavigateUri = new Uri(issue.ReferenceUrl) };
+                link.RequestNavigate += OnReferenceNavigate;
+                panel.Children.Add(new TextBlock(link) { Margin = new Thickness(0, 4, 0, 0) });
+            }
+
+            return panel;
+        }
+
+        private static void OnReferenceNavigate(object sender, RequestNavigateEventArgs e)
+        {
+            try
+            {
+                // Only ever launch http/https — never a file:// or custom scheme from issue data.
+                if (e.Uri != null && IsHttpUrl(e.Uri.AbsoluteUri))
+                    Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true });
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "QuickInfo: failed to open reference URL");
+            }
+            e.Handled = true;
+        }
+
+        private static bool IsHttpUrl(string url)
+            => !string.IsNullOrEmpty(url)
+               && Uri.TryCreate(url, UriKind.Absolute, out var u)
+               && (u.Scheme == Uri.UriSchemeHttp || u.Scheme == Uri.UriSchemeHttps);
 
         private static bool IsIdentifierChar(char c)
         {

@@ -25,6 +25,15 @@ namespace AkmlSql.Shell.Shared.Analysis
         /// <summary>Raised on the thread pool when a new set of diagnostics is available.</summary>
         public event EventHandler<DiagnosticsUpdatedEventArgs> DiagnosticsUpdated;
 
+        /// <summary>
+        /// Spec 030 T055 — the most recent set of issues, cached so consumers (e.g. the Ctrl-hover
+        /// issue-details popup) can read the current findings directly without subscribing — robust to
+        /// being created after the last <see cref="DiagnosticsUpdated"/> fired. Array-ref read/write is
+        /// atomic; the value may be one analysis cycle stale, which is fine for a hover.
+        /// </summary>
+        public CodeIssueInfo[] CurrentIssues => _currentIssues;
+        private volatile CodeIssueInfo[] _currentIssues = Array.Empty<CodeIssueInfo>();
+
         public AnalysisController(ITextBuffer buffer, string sessionId)
         {
             _buffer    = buffer ?? throw new ArgumentNullException(nameof(buffer));
@@ -92,11 +101,12 @@ namespace AkmlSql.Shell.Shared.Analysis
                 if (!ct.IsCancellationRequested)
                 {
                     sw.Stop();
-                    var count = response?.Issues?.Length ?? 0;
+                    var issues = response?.Issues ?? Array.Empty<CodeIssueInfo>();
+                    _currentIssues = issues; // cache for direct readers (T055 Ctrl-hover popup)
                     Log.Debug("Analysis complete: {Count} findings in {Ms}ms for session {Session}",
-                        count, sw.ElapsedMilliseconds, _sessionId);
+                        issues.Length, sw.ElapsedMilliseconds, _sessionId);
                     DiagnosticsUpdated?.Invoke(this, new DiagnosticsUpdatedEventArgs(
-                        _buffer.CurrentSnapshot, response?.Issues));
+                        _buffer.CurrentSnapshot, issues));
                 }
             }
             catch (OperationCanceledException) { }
