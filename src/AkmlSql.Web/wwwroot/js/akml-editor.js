@@ -21,8 +21,9 @@ function loadCm() {
         import(`${CM_BASE}/autocomplete@6`),
         import(`${CM_BASE}/search@6`),
         import(`${CM_BASE}/lint@6`),
-    ]).then(([state, view, commands, language, langSql, autocomplete, search, lint]) => ({
-        state, view, commands, language, langSql, autocomplete, search, lint,
+        import('https://esm.sh/@lezer/highlight@1'),   // `tags` for the token-driven syntax theme
+    ]).then(([state, view, commands, language, langSql, autocomplete, search, lint, highlight]) => ({
+        state, view, commands, language, langSql, autocomplete, search, lint, highlight,
     }));
     return _cmModulesPromise;
 }
@@ -49,6 +50,19 @@ export async function create(hostElementId, initialText, dotNetRef) {
     }
 
     const cm = await loadCm();
+
+    // Spec 030 web redesign — token-driven SQL syntax theme. Colours resolve from the --akml-syntax-*
+    // CSS custom properties (generated from docs/theme-tokens.json), so the editor follows the active
+    // light/dark/HC theme automatically instead of CM6's hardcoded defaultHighlightStyle.
+    const t = cm.highlight.tags;
+    const akmlHighlightStyle = cm.language.HighlightStyle.define([
+        { tag: t.keyword, color: 'var(--akml-syntax-keyword)' },
+        { tag: [t.string, t.special(t.string), t.character], color: 'var(--akml-syntax-string)' },
+        { tag: [t.number, t.bool, t.null], color: 'var(--akml-syntax-number)' },
+        { tag: [t.comment, t.lineComment, t.blockComment], color: 'var(--akml-syntax-comment)', fontStyle: 'italic' },
+        { tag: [t.function(t.variableName), t.function(t.propertyName), t.standard(t.name)], color: 'var(--akml-syntax-function)' },
+        { tag: [t.typeName, t.propertyName, t.className, t.attributeName], color: 'var(--akml-syntax-tablecolumn)' },
+    ]);
 
     // T109 follow-up: route CodeMirror's autocomplete through ICompletionService
     // on the .NET side so the popup is fed by the bridge (online) or the cached
@@ -481,8 +495,9 @@ export async function create(hostElementId, initialText, dotNetRef) {
                 cm.commands.indentWithTab,
             ]),
             cm.langSql.sql(),
-            // Without this the SQL grammar parses but renders as plain text.
-            // fallback:true is needed because we don't pair a CM6 editor theme yet.
+            // Token-driven SQL syntax theme (--akml-syntax-*). fallback:true keeps any tag we didn't
+            // map rendering via CM6's default so nothing goes uncoloured.
+            cm.language.syntaxHighlighting(akmlHighlightStyle, { fallback: true }),
             cm.language.syntaxHighlighting(cm.language.defaultHighlightStyle, { fallback: true }),
             cm.autocomplete.autocompletion({
                 override: [completionSource],

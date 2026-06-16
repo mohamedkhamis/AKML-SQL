@@ -74,54 +74,54 @@ namespace AkmlSql.Shell.Shared.Ui.Theme
         {
             var d = new Dictionary<string, SolidColorBrush>(StringComparer.Ordinal)
             {
-                // Surface
-                [ThemeTokens.SurfaceCanvas]          = Solid(0xF0, 0xF0, 0xF0),
+                // Surface (v2 AKML-Blue / slate)
+                [ThemeTokens.SurfaceCanvas]          = Solid(0xF1, 0xF5, 0xF9),
                 [ThemeTokens.SurfacePanel]           = Solid(0xFF, 0xFF, 0xFF),
                 [ThemeTokens.SurfaceElevated]        = Solid(0xFF, 0xFF, 0xFF),
-                [ThemeTokens.SurfaceSidebar]         = Solid(0xFF, 0xFF, 0xFF),
+                [ThemeTokens.SurfaceSidebar]         = Solid(0xF8, 0xFA, 0xFC),
                 [ThemeTokens.SurfaceInput]           = Solid(0xFF, 0xFF, 0xFF),
-                [ThemeTokens.SurfaceInputReadOnly]   = Solid(0xF8, 0xF8, 0xF8),
-                [ThemeTokens.SurfaceHover]           = Solid(0xF0, 0xF0, 0xF0),
-                [ThemeTokens.SurfaceSelection]       = Solid(0x1F, 0x00, 0x78, 0xD4), // ~12% accent
-                [ThemeTokens.SurfaceSelectionStrong] = Solid(0x00, 0x78, 0xD4),
+                [ThemeTokens.SurfaceInputReadOnly]   = Solid(0xF8, 0xFA, 0xFC),
+                [ThemeTokens.SurfaceHover]           = Solid(0xF1, 0xF5, 0xF9),
+                [ThemeTokens.SurfaceSelection]       = Solid(0x1F, 0x25, 0x63, 0xEB), // ~12% AKML Blue
+                [ThemeTokens.SurfaceSelectionStrong] = Solid(0x25, 0x63, 0xEB),
 
                 // Text
-                [ThemeTokens.TextPrimary]     = Solid(0x1E, 0x1E, 0x1E),
-                [ThemeTokens.TextSecondary]   = Solid(0x55, 0x55, 0x55),
-                [ThemeTokens.TextDisabled]    = Solid(0xA0, 0xA0, 0xA0),
-                [ThemeTokens.TextPlaceholder] = Solid(0xA0, 0xA0, 0xA0),
-                [ThemeTokens.TextLink]        = Solid(0x00, 0x78, 0xD4),
+                [ThemeTokens.TextPrimary]     = Solid(0x0F, 0x17, 0x2A),
+                [ThemeTokens.TextSecondary]   = Solid(0x47, 0x55, 0x69),
+                [ThemeTokens.TextDisabled]    = Solid(0x94, 0xA3, 0xB8),
+                [ThemeTokens.TextPlaceholder] = Solid(0x94, 0xA3, 0xB8),
+                [ThemeTokens.TextLink]        = Solid(0x25, 0x63, 0xEB),
                 [ThemeTokens.TextOnAccent]    = Solid(0xFF, 0xFF, 0xFF),
                 [ThemeTokens.TextOnDanger]    = Solid(0xFF, 0xFF, 0xFF),
 
                 // Border
-                [ThemeTokens.BorderDefault]  = Solid(0xCC, 0xCC, 0xCC),
-                [ThemeTokens.BorderStrong]   = Solid(0x99, 0x99, 0x99),
-                [ThemeTokens.BorderSubtle]   = Solid(0xEA, 0xEA, 0xEA),
-                [ThemeTokens.BorderFocus]    = Solid(0x00, 0x78, 0xD4),
-                [ThemeTokens.BorderSplitter] = Solid(0xCC, 0xCC, 0xCC),
+                [ThemeTokens.BorderDefault]  = Solid(0xE2, 0xE8, 0xF0),
+                [ThemeTokens.BorderStrong]   = Solid(0xCB, 0xD5, 0xE1),
+                [ThemeTokens.BorderSubtle]   = Solid(0xE2, 0xE8, 0xF0),
+                [ThemeTokens.BorderFocus]    = Solid(0x25, 0x63, 0xEB),
+                [ThemeTokens.BorderSplitter] = Solid(0xE2, 0xE8, 0xF0),
 
-                // Accent
-                [ThemeTokens.AccentPrimary]        = Solid(0x00, 0x78, 0xD4),
-                [ThemeTokens.AccentPrimaryHover]   = Solid(0x10, 0x6E, 0xBE),
-                [ThemeTokens.AccentPrimaryPressed] = Solid(0x00, 0x5A, 0x9E),
+                // Accent (AKML Blue)
+                [ThemeTokens.AccentPrimary]        = Solid(0x25, 0x63, 0xEB),
+                [ThemeTokens.AccentPrimaryHover]   = Solid(0x1E, 0x40, 0xAF),
+                [ThemeTokens.AccentPrimaryPressed] = Solid(0x1E, 0x40, 0xAF),
 
                 // Status
-                [ThemeTokens.StatusSuccess] = Solid(0x2E, 0xCC, 0x71),
-                [ThemeTokens.StatusWarning] = Solid(0xF3, 0x9C, 0x12),
-                [ThemeTokens.StatusDanger]  = Solid(0xE7, 0x4C, 0x3C),
-                [ThemeTokens.StatusInfo]    = Solid(0x00, 0x78, 0xD4),
+                [ThemeTokens.StatusSuccess] = Solid(0x16, 0xA3, 0x4A),
+                [ThemeTokens.StatusWarning] = Solid(0xEA, 0x58, 0x0C),
+                [ThemeTokens.StatusDanger]  = Solid(0xDC, 0x26, 0x26),
+                [ThemeTokens.StatusInfo]    = Solid(0x25, 0x63, 0xEB),
 
                 // Editor
-                [ThemeTokens.EditorMarginBackground] = Solid(0xFB, 0xFB, 0xFB),
-                [ThemeTokens.EditorSpinnerStroke]    = Solid(0x00, 0x78, 0xD4),
+                [ThemeTokens.EditorMarginBackground] = Solid(0xF8, 0xFA, 0xFC),
+                [ThemeTokens.EditorSpinnerStroke]    = Solid(0x25, 0x63, 0xEB),
                 [ThemeTokens.EditorPopupBackground]  = Solid(0xFF, 0xFF, 0xFF),
-                [ThemeTokens.EditorPopupBorder]      = Solid(0xCC, 0xCC, 0xCC),
+                [ThemeTokens.EditorPopupBorder]      = Solid(0xE2, 0xE8, 0xF0),
 
                 // Chat
-                [ThemeTokens.ChatUserBubble]      = Solid(0xE5, 0xF1, 0xFB),
-                [ThemeTokens.ChatAssistantBubble] = Solid(0xF5, 0xF5, 0xF5),
-                [ThemeTokens.ChatSystemBubble]    = Solid(0xFF, 0xF8, 0xE1),
+                [ThemeTokens.ChatUserBubble]      = Solid(0xDB, 0xEA, 0xFE),
+                [ThemeTokens.ChatAssistantBubble] = Solid(0xF1, 0xF5, 0xF9),
+                [ThemeTokens.ChatSystemBubble]    = Solid(0xFE, 0xF3, 0xC7),
 
                 // Spec 020 — IconBadge (solid foreground colour per object type).
                 // Same hex values as Dark — these are saturated badge colours intended to
@@ -150,11 +150,11 @@ namespace AkmlSql.Shell.Shared.Ui.Theme
                 [ThemeTokens.TabColorPink]   = Solid(0xE9, 0x1E, 0x63),
                 [ThemeTokens.TabColorGray]   = Solid(0x80, 0x8A, 0x99),
 
-                // Spec 020 — History (Light theme values from §16.2).
-                [ThemeTokens.HistoryOpenIcon]       = Solid(0x2E, 0xCC, 0x71),
-                [ThemeTokens.HistoryClosedIcon]     = Solid(0xE7, 0x4C, 0x3C),
-                [ThemeTokens.HistoryStarActive]     = Solid(0xF3, 0x9C, 0x12),
-                [ThemeTokens.HistoryStarInactive]   = Solid(0xCC, 0xCC, 0xCC),
+                // Spec 020 — History (Light; v2 aligned to new status colours).
+                [ThemeTokens.HistoryOpenIcon]       = Solid(0x16, 0xA3, 0x4A),
+                [ThemeTokens.HistoryClosedIcon]     = Solid(0xDC, 0x26, 0x26),
+                [ThemeTokens.HistoryStarActive]     = Solid(0xEA, 0x58, 0x0C),
+                [ThemeTokens.HistoryStarInactive]   = Solid(0xE2, 0xE8, 0xF0),
                 // Spec 020 PR-235 review fix: legacy ThemeManager.HistorySearchHighlight
                 // returned Color.FromArgb(0x4D, ...) — 30 % alpha so editor text behind the
                 // match remains readable. Preserving that alpha here against the
@@ -171,53 +171,53 @@ namespace AkmlSql.Shell.Shared.Ui.Theme
         {
             var d = new Dictionary<string, SolidColorBrush>(StringComparer.Ordinal)
             {
-                // Surface
-                [ThemeTokens.SurfaceCanvas]          = Solid(0x2D, 0x2D, 0x3B),
-                [ThemeTokens.SurfacePanel]           = Solid(0x1E, 0x1E, 0x2E),
-                [ThemeTokens.SurfaceElevated]        = Solid(0x25, 0x28, 0x36),
-                [ThemeTokens.SurfaceSidebar]         = Solid(0x1E, 0x1E, 0x2E),
-                [ThemeTokens.SurfaceInput]           = Solid(0x2D, 0x2D, 0x3B),
-                [ThemeTokens.SurfaceInputReadOnly]   = Solid(0x25, 0x28, 0x36),
-                [ThemeTokens.SurfaceHover]           = Solid(0x25, 0x28, 0x36),
-                [ThemeTokens.SurfaceSelection]       = Solid(0x26, 0x00, 0x78, 0xD4), // ~15% accent
-                [ThemeTokens.SurfaceSelectionStrong] = Solid(0x00, 0x78, 0xD4),
+                // Surface (v2 AKML-Blue / slate-dark)
+                [ThemeTokens.SurfaceCanvas]          = Solid(0x0F, 0x17, 0x2A),
+                [ThemeTokens.SurfacePanel]           = Solid(0x1E, 0x29, 0x3B),
+                [ThemeTokens.SurfaceElevated]        = Solid(0x33, 0x41, 0x55),
+                [ThemeTokens.SurfaceSidebar]         = Solid(0x1E, 0x29, 0x3B),
+                [ThemeTokens.SurfaceInput]           = Solid(0x1E, 0x29, 0x3B),
+                [ThemeTokens.SurfaceInputReadOnly]   = Solid(0x33, 0x41, 0x55),
+                [ThemeTokens.SurfaceHover]           = Solid(0x33, 0x41, 0x55),
+                [ThemeTokens.SurfaceSelection]       = Solid(0x26, 0x25, 0x63, 0xEB), // ~15% AKML Blue
+                [ThemeTokens.SurfaceSelectionStrong] = Solid(0x25, 0x63, 0xEB),
 
                 // Text
-                [ThemeTokens.TextPrimary]     = Solid(0xD4, 0xD4, 0xD4),
-                [ThemeTokens.TextSecondary]   = Solid(0x88, 0x92, 0xA8),
-                [ThemeTokens.TextDisabled]    = Solid(0x5C, 0x63, 0x70),
-                [ThemeTokens.TextPlaceholder] = Solid(0x6E, 0x6E, 0x6E),
-                [ThemeTokens.TextLink]        = Solid(0x4F, 0x8C, 0xFF),
+                [ThemeTokens.TextPrimary]     = Solid(0xE2, 0xE8, 0xF0),
+                [ThemeTokens.TextSecondary]   = Solid(0x94, 0xA3, 0xB8),
+                [ThemeTokens.TextDisabled]    = Solid(0x64, 0x74, 0x8B),
+                [ThemeTokens.TextPlaceholder] = Solid(0x64, 0x74, 0x8B),
+                [ThemeTokens.TextLink]        = Solid(0x60, 0xA5, 0xFA),
                 [ThemeTokens.TextOnAccent]    = Solid(0xFF, 0xFF, 0xFF),
                 [ThemeTokens.TextOnDanger]    = Solid(0xFF, 0xFF, 0xFF),
 
-                // Border
-                [ThemeTokens.BorderDefault]  = Solid(0x3A, 0x3F, 0x4E),
-                [ThemeTokens.BorderStrong]   = Solid(0x5C, 0x63, 0x70),
-                [ThemeTokens.BorderSubtle]   = Solid(0x2A, 0x2D, 0x3A),
-                [ThemeTokens.BorderFocus]    = Solid(0x4F, 0x8C, 0xFF),
-                [ThemeTokens.BorderSplitter] = Solid(0x3A, 0x3F, 0x4E),
+                // Border (low-alpha white-on-slate)
+                [ThemeTokens.BorderDefault]  = Solid(0x14, 0xFF, 0xFF, 0xFF),
+                [ThemeTokens.BorderStrong]   = Solid(0x28, 0xFF, 0xFF, 0xFF),
+                [ThemeTokens.BorderSubtle]   = Solid(0x0D, 0xFF, 0xFF, 0xFF),
+                [ThemeTokens.BorderFocus]    = Solid(0x60, 0xA5, 0xFA),
+                [ThemeTokens.BorderSplitter] = Solid(0x14, 0xFF, 0xFF, 0xFF),
 
-                // Accent
-                [ThemeTokens.AccentPrimary]        = Solid(0x00, 0x78, 0xD4),
-                [ThemeTokens.AccentPrimaryHover]   = Solid(0x1A, 0x8C, 0xDC),
-                [ThemeTokens.AccentPrimaryPressed] = Solid(0x00, 0x66, 0xB5),
+                // Accent (AKML Blue)
+                [ThemeTokens.AccentPrimary]        = Solid(0x25, 0x63, 0xEB),
+                [ThemeTokens.AccentPrimaryHover]   = Solid(0x3B, 0x82, 0xF6),
+                [ThemeTokens.AccentPrimaryPressed] = Solid(0x1E, 0x40, 0xAF),
 
                 // Status
-                [ThemeTokens.StatusSuccess] = Solid(0x3D, 0xD6, 0x8C),
-                [ThemeTokens.StatusWarning] = Solid(0xFB, 0xBF, 0x24),
-                [ThemeTokens.StatusDanger]  = Solid(0xFF, 0x5C, 0x5C),
-                [ThemeTokens.StatusInfo]    = Solid(0x4F, 0x8C, 0xFF),
+                [ThemeTokens.StatusSuccess] = Solid(0x4A, 0xDE, 0x80),
+                [ThemeTokens.StatusWarning] = Solid(0xFB, 0x92, 0x3C),
+                [ThemeTokens.StatusDanger]  = Solid(0xF8, 0x71, 0x71),
+                [ThemeTokens.StatusInfo]    = Solid(0x60, 0xA5, 0xFA),
 
                 // Editor
-                [ThemeTokens.EditorMarginBackground] = Solid(0x25, 0x25, 0x26),
-                [ThemeTokens.EditorSpinnerStroke]    = Solid(0x4F, 0x8C, 0xFF),
-                [ThemeTokens.EditorPopupBackground]  = Solid(0x25, 0x25, 0x26),
-                [ThemeTokens.EditorPopupBorder]      = Solid(0x3A, 0x3F, 0x4E),
+                [ThemeTokens.EditorMarginBackground] = Solid(0x1E, 0x29, 0x3B),
+                [ThemeTokens.EditorSpinnerStroke]    = Solid(0x60, 0xA5, 0xFA),
+                [ThemeTokens.EditorPopupBackground]  = Solid(0x1E, 0x29, 0x3B),
+                [ThemeTokens.EditorPopupBorder]      = Solid(0x14, 0xFF, 0xFF, 0xFF),
 
                 // Chat
-                [ThemeTokens.ChatUserBubble]      = Solid(0x1A, 0x3A, 0x5C),
-                [ThemeTokens.ChatAssistantBubble] = Solid(0x25, 0x28, 0x36),
+                [ThemeTokens.ChatUserBubble]      = Solid(0x1E, 0x3A, 0x5F),
+                [ThemeTokens.ChatAssistantBubble] = Solid(0x33, 0x41, 0x55),
                 [ThemeTokens.ChatSystemBubble]    = Solid(0x3A, 0x30, 0x00),
 
                 // Spec 020 — IconBadge (same hex as Light; documented in SQL_Prompt_Features_Core.md §1.2
@@ -246,11 +246,11 @@ namespace AkmlSql.Shell.Shared.Ui.Theme
                 [ThemeTokens.TabColorPink]   = Solid(0xE9, 0x1E, 0x63),
                 [ThemeTokens.TabColorGray]   = Solid(0x80, 0x8A, 0x99),
 
-                // Spec 020 — History (Dark theme values from §16.2).
-                [ThemeTokens.HistoryOpenIcon]       = Solid(0x3D, 0xD6, 0x8C),
-                [ThemeTokens.HistoryClosedIcon]     = Solid(0xFF, 0x5C, 0x5C),
-                [ThemeTokens.HistoryStarActive]     = Solid(0xFB, 0xBF, 0x24),
-                [ThemeTokens.HistoryStarInactive]   = Solid(0x3A, 0x3F, 0x4E),
+                // Spec 020 — History (Dark; v2 aligned to new status colours).
+                [ThemeTokens.HistoryOpenIcon]       = Solid(0x4A, 0xDE, 0x80),
+                [ThemeTokens.HistoryClosedIcon]     = Solid(0xF8, 0x71, 0x71),
+                [ThemeTokens.HistoryStarActive]     = Solid(0xFB, 0x92, 0x3C),
+                [ThemeTokens.HistoryStarInactive]   = Solid(0x14, 0xFF, 0xFF, 0xFF),
                 // Spec 020 PR-235 review fix: 30 % alpha (0x4D) preserves the legacy
                 // ThemeManager.HistorySearchHighlight read-through behaviour. Dark-theme
                 // hex (#DAA520 gold) per doc/SQL-PROMPT/SQL-Prompt-History §16.2.
