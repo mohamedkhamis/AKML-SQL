@@ -32,6 +32,18 @@
     }
     .akml-editor .cm-editor { height: 100%; }
     .akml-editor .cm-scroller { font-family: inherit; font-size: inherit; }
+    /* Theme the line-number gutter — CodeMirror's default is a hardcoded light #f5f5f5 that stayed
+       light in dark mode (a jarring strip down the editor's left edge). Token-drive it so it follows
+       the editor surface in every theme; the active line gets a subtle hover tint. */
+    .akml-editor .cm-gutters {
+        background-color: var(--akml-surface-editor);
+        color: var(--akml-text-secondary);
+        border-right: 1px solid var(--akml-border-subtle);
+    }
+    .akml-editor .cm-activeLineGutter {
+        background-color: var(--akml-surface-hover);
+        color: var(--akml-text-primary);
+    }
 
     /* Spec 030 (web Phase 1) — quick-info hover + signature tooltip content. */
     .akml-qi-tooltip, .akml-sig-tooltip {
