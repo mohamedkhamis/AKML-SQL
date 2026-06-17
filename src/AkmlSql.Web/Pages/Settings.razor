@@ -13,6 +13,7 @@
 @inject IEditorSessionStore SessionStore
 @inject ISqlConnectionService SqlConn
 @inject IEngineBridge Bridge
+@inject IConnectionManagerController ConnManager
 
 <PageTitle>Settings — AKML SQL</PageTitle>
 
@@ -62,34 +63,16 @@
             Requires a paired engine (above) and currently targets a local engine.
         </p>
 
-        @if (Bridge.State != BridgeState.Open)
-        {
-            <p class="akml-settings-help">Pair an engine first (Engine connections → Add), then connect to SQL Server.</p>
-        }
-        else if (SqlConn.IsConnected)
+        @if (SqlConn.IsConnected)
         {
             <p class="akml-settings-status">Connected: <strong>@SqlConn.Server</strong> / <strong>@SqlConn.Database</strong> — live schema IntelliSense is on.</p>
             <button class="akml-tool-button" @onclick="DisconnectSqlAsync">Disconnect</button>
         }
-        else
+        else if (Bridge.State != BridgeState.Open)
         {
-            <div class="akml-field"><label>Server</label><input class="akml-input" @bind="_sqlServer" placeholder="localhost or server\instance" /></div>
-            <div class="akml-field"><label>Database</label><input class="akml-input" @bind="_sqlDatabase" placeholder="master" /></div>
-            <div class="akml-field">
-                <label class="akml-radio"><input type="radio" name="sqlauth" checked="@_sqlWindowsAuth" @onchange="() => _sqlWindowsAuth = true" /> Windows authentication</label>
-                <label class="akml-radio"><input type="radio" name="sqlauth" checked="@(!_sqlWindowsAuth)" @onchange="() => _sqlWindowsAuth = false" /> SQL Server authentication</label>
-            </div>
-            @if (!_sqlWindowsAuth)
-            {
-                <div class="akml-field"><label>Login</label><input class="akml-input" @bind="_sqlUser" /></div>
-                <div class="akml-field"><label>Password</label><input class="akml-input" type="password" @bind="_sqlPassword" /></div>
-            }
-            <button class="akml-tool-button" @onclick="ConnectSqlAsync">Connect</button>
-            @if (!string.IsNullOrEmpty(_sqlError))
-            {
-                <p class="akml-settings-status" style="color: var(--akml-status-danger);">@_sqlError</p>
-            }
+            <p class="akml-settings-help">Pair an engine first (Engine connections → Add), then connect to SQL Server.</p>
         }
+        <button class="akml-tool-button" @onclick="() => ConnManager.Open()" data-testid="settings-manage-connections">Manage connections…</button>
     </section>
 
     <section class="akml-settings-section">
@@ -147,22 +130,8 @@
     private WebAnalysisSettings _settings = new();
     private string? _status;
 
-    // Spec 030 — Connect to SQL Server form state.
-    private string _sqlServer = "localhost";
-    private string _sqlDatabase = "master";
-    private bool _sqlWindowsAuth = true;
-    private string _sqlUser = string.Empty;
-    private string _sqlPassword = string.Empty;
-    private string? _sqlError;
-
-    private async Task ConnectSqlAsync()
-    {
-        _sqlError = null;
-        var (ok, error) = await SqlConn.ConnectAsync(
-            _sqlServer, _sqlDatabase, _sqlWindowsAuth, _sqlUser, _sqlPassword, CancellationToken.None);
-        if (!ok) { _sqlError = error; }
-        StateHasChanged();
-    }
+    // Phase 4 — the inline connect form moved to the global ConnectionManagerModal (opened via
+    // ConnManager.Open()). Settings keeps only the connected-status line + Disconnect below.
 
     private async Task DisconnectSqlAsync()
     {

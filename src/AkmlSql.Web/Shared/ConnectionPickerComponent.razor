@@ -15,7 +15,6 @@
 @inject IConnectionStore Connections
 @inject IPairingTokenVault Vault
 @inject IEngineBridge Bridge
-@inject ISchemaSync SchemaSync
 @inject IDiagnosticsRingBuffer Diagnostics
 
 <div class="akml-connections">
@@ -191,11 +190,11 @@
             await Connections.AddAsync(connection);
             await Connections.SetActiveIdAsync(connection.Id);
 
-            // T109 follow-up Issue 2: after handshake, ask the engine which
-            // (server, database) its current session is on, and if it has one,
-            // start the SchemaSync polling loop so Phase A/B blobs flow into the
-            // browser cache.
-            await TryStartSchemaSyncAsync(connection.Id);
+            // Phase 4: SchemaSync is now owned SOLELY by the MainLayout SqlConn.StateChanged
+            // subscriber, keyed on the canonical SqlConn.SessionId. This component is engine-PAIRING
+            // only; it no longer starts SchemaSync (the old TryStartSchemaSyncAsync passed
+            // EngineConnection.Id — a pairing GUID the engine never registered as a session — so its
+            // SchemaIdentify always returned HasConnection=false). Removed to keep one owner.
 
             _showAdd = false;
             await ReloadAsync();
@@ -225,7 +224,8 @@
                 c.LastKnownEngineVersion = response.EngineVersion;
                 c.LastKnownCapabilities = response.EngineCapabilities;
                 await Connections.UpdateAsync(c);
-                await TryStartSchemaSyncAsync(c.Id);
+                // Phase 4: SchemaSync start removed — owned solely by the MainLayout SQL-connection
+                // owner (keyed on SqlConn.SessionId). This component remains engine-pairing only.
                 await ReloadAsync();
             }
             else
@@ -238,68 +238,6 @@
             _lastError = ex.Message;
         }
         StateHasChanged();
-    }
-
-    /// <summary>
-    /// T109 follow-up Issue 2: post-handshake schema initialisation.
-    ///
-    /// Sends <see cref="SchemaIdentifyRequest"/> to resolve the canonical (server, db)
-    /// pair the engine sees on this session, then starts <see cref="ISchemaSync"/>
-    /// which immediately fires its first poll (no 30 s wait). The sync's
-    /// PollOnceAsync detects checksum drift versus the cached snapshot (initially:
-    /// "" vs the engine's current checksum), fetches Phase A synchronously, and
-    /// fire-and-forgets Phase B.
-    ///
-    /// <para>Known limitation: today the engine only has an active session when a
-    /// <see cref="MessageTypes.ConnectionChanged"/> message has populated it. The
-    /// web edition doesn't yet have UI for "connect to SQL Server" — that lives on
-    /// the shell extension. Until the browser grows that affordance, SchemaIdentify
-    /// returns HasConnection = false here and we log the reason. The architectural
-    /// piece is in place so the moment a connect-to-SQL UI lands, IntelliSense
-    /// starts flowing automatically.</para>
-    ///
-    /// <para><b>TODO (PR #236 review):</b> we pass <paramref name="connectionId"/>
-    /// (a browser-minted GUID from <c>EngineConnection.Id</c>) as the engine's
-    /// <c>SessionId</c>. The engine's existing handlers look it up in
-    /// <c>SessionManager.GetSession(sessionId)</c>, which only contains sessions
-    /// the shell extension registered via <c>ConnectionChanged</c>. Until the
-    /// browser sends <c>ConnectionChanged</c> too — OR the engine starts assigning
-    /// a session id at handshake and echoing it back to the browser — this id will
-    /// never match a real engine session, and SchemaIdentify will always report
-    /// HasConnection=false. When the connect-to-SQL UI lands, decide which side
-    /// owns the session-id source of truth before wiring more bridge calls.</para>
-    /// </summary>
-    private async Task TryStartSchemaSyncAsync(string connectionId)
-    {
-        // Reset any previous sync before starting a new one — we may be switching
-        // engines mid-session.
-        await SchemaSync.StopAsync();
-
-        SchemaIdentifyResponse identify;
-        try
-        {
-            identify = await Bridge.SendAsync<SchemaIdentifyRequest, SchemaIdentifyResponse>(
-                MessageTypes.SchemaIdentifyRequest,
-                new SchemaIdentifyRequest { SessionId = connectionId },
-                CancellationToken.None);
-        }
-        catch (Exception ex)
-        {
-            Diagnostics.Log(DiagnosticLevel.Warn, "connections",
-                $"SchemaIdentify failed: {ex.Message}");
-            return;
-        }
-
-        if (!identify.HasConnection)
-        {
-            Diagnostics.Log(DiagnosticLevel.Info, "connections",
-                $"Engine has no active SQL session yet — schema fallback stays empty. {identify.ErrorMessage}");
-            return;
-        }
-
-        await SchemaSync.StartAsync(connectionId, identify.ServerCanonicalIdentity, identify.DatabaseName);
-        Diagnostics.Log(DiagnosticLevel.Info, "connections",
-            $"Schema sync started for {identify.ServerCanonicalIdentity}/{identify.DatabaseName}.");
     }
 
     private async Task RemoveAsync(EngineConnection c)

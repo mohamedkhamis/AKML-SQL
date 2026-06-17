@@ -74,15 +74,36 @@ internal sealed class SchemaSync : ISchemaSync
         _cts = new CancellationTokenSource();
         _lastEditorActivity = DateTimeOffset.UtcNow;
 
-        // T109 follow-up Issue 2b: fire an immediate first poll instead of waiting
-        // the full 30-second cadence. On a fresh connect the cached snapshot is
-        // empty, so the user would otherwise type SQL for 30 s with no IntelliSense
-        // before the first checksum + Phase A round-trip even starts. The
-        // background loop then takes over for the steady-state cadence. Tracked
-        // so StopAsync can await it for a clean teardown.
+        // T109 follow-up Issue 2b: fire an immediate first poll instead of waiting the full 30 s
+        // cadence. On a fresh connect the cached snapshot is empty, so the user would otherwise
+        // type SQL for 30 s with no IntelliSense before the first checksum + Phase A round-trip.
+        //
+        // Two staggered delays conspire here (both observed live): (1) ConnectionChanged is sent
+        // FIRE-AND-FORGET, and (2) even once the engine reports HasConnection=true the instant the
+        // SQL connection opens, its OWN Phase A snapshot lands a beat later (its checksum flips
+        // NotLoaded -> PhaseB on a background populate). So the break condition must be REAL schema
+        // availability — a non-empty Phase A in OUR cache — NOT mere HasConnection. Breaking on
+        // connection (an earlier bug) dropped back to the 30 s steady cadence before any schema was
+        // fetched, defeating the whole optimisation. Capped so a never-loading target can't spin;
+        // the 30 s loop then owns steady state. Tracked so StopAsync can await it for clean teardown.
         _initialPoll = Task.Run(async () =>
         {
-            try { await PollOnceAsync(_cts!.Token).ConfigureAwait(false); }
+            var ct = _cts!.Token;
+            const int maxFastPolls = 20;                          // ceiling ≈ 20 × 1.5 s ≈ 30 s
+            var fastDelay = TimeSpan.FromMilliseconds(1500);
+            try
+            {
+                for (var attempt = 0; attempt < maxFastPolls && !ct.IsCancellationRequested; attempt++)
+                {
+                    if (attempt > 0) await Task.Delay(fastDelay, ct).ConfigureAwait(false);
+                    await PollOnceAsync(ct).ConfigureAwait(false);
+                    // Break once the engine's schema has actually landed in our cache (a drift poll
+                    // fetched a non-empty Phase A). A warm cache from a prior session breaks on the
+                    // first poll — stale-but-present schema beats none, and the steady loop refreshes.
+                    var snap = await _cache.GetAsync(_server!, _database!).ConfigureAwait(false);
+                    if (snap?.PhaseA is { Length: > 0 }) break;
+                }
+            }
             catch (OperationCanceledException) { /* StopAsync raced -- expected */ }
             catch (Exception ex)
             {
@@ -144,6 +165,9 @@ internal sealed class SchemaSync : ISchemaSync
         }
     }
 
+    /// <summary>Poll the engine once: refresh the checksum and, on drift, fetch a fresh Phase A
+    /// (synchronously) + Phase B (background). The initial fast-retry loop decides when to stop by
+    /// inspecting the cache (real Phase A landed), not this method's outcome.</summary>
     private async Task PollOnceAsync(CancellationToken ct)
     {
         // When the bridge is closed we can still refresh LastUsedAt to keep LRU warm.
@@ -201,68 +225,75 @@ internal sealed class SchemaSync : ISchemaSync
     /// snapshot is left intact (we never overwrite real bytes with empty bytes).</summary>
     internal async Task FetchPhaseAAsync(CancellationToken ct)
     {
-        if (_bridge.State != BridgeState.Open || _sessionId == null) return;
+        // Snapshot the session triple up front: Phase B runs under CancellationToken.None, so a
+        // concurrent StopAsync (which nulls these) must not turn a mid-await read into a swallowed
+        // NRE + misleading "for /" log. Bail cleanly if a stop already cleared them.
+        var session = _sessionId; var server = _server; var database = _database;
+        if (_bridge.State != BridgeState.Open || session == null || server == null || database == null) return;
         try
         {
             var response = await _bridge.SendAsync<SchemaPhaseARequest, SchemaPhaseAResponse>(
                 MessageTypes.SchemaPhaseARequest,
-                new SchemaPhaseARequest { SessionId = _sessionId!, DatabaseName = _database! },
+                new SchemaPhaseARequest { SessionId = session, DatabaseName = database },
                 ct).ConfigureAwait(false);
 
             if (!response.HasConnection || response.PhaseA == null || response.PhaseA.Length == 0)
             {
                 _diagnostics.Log(DiagnosticLevel.Trace, "schema-sync",
-                    $"Phase A unavailable for {_server}/{_database}: {response.ErrorMessage}");
+                    $"Phase A unavailable for {server}/{database}: {response.ErrorMessage}");
                 return;
             }
 
-            var snap = await _cache.GetAsync(_server!, _database!).ConfigureAwait(false)
-                       ?? new SchemaSnapshot { ServerCanonicalIdentity = _server!, DatabaseName = _database! };
+            var snap = await _cache.GetAsync(server, database).ConfigureAwait(false)
+                       ?? new SchemaSnapshot { ServerCanonicalIdentity = server, DatabaseName = database };
             snap.PhaseA = response.PhaseA;
             if (!string.IsNullOrEmpty(response.Checksum)) snap.Checksum = response.Checksum;
             snap.FetchedAt = DateTimeOffset.UtcNow;
             await _cache.SetAsync(snap).ConfigureAwait(false);
             _diagnostics.Log(DiagnosticLevel.Info, "schema-sync",
-                $"Phase A fetched for {_server}/{_database} ({response.PhaseA.Length} bytes).");
+                $"Phase A fetched for {server}/{database} ({response.PhaseA.Length} bytes).");
         }
         catch (Exception ex)
         {
             _diagnostics.Log(DiagnosticLevel.Warn, "schema-sync",
-                $"Phase A fetch failed for {_server}/{_database}: {ex.Message}");
+                $"Phase A fetch failed for {server}/{database}: {ex.Message}");
         }
     }
 
     /// <summary>T109: background Phase B fetch + persist. Same null-overwrite guard.</summary>
     internal async Task FetchPhaseBAsync(CancellationToken ct)
     {
-        if (_bridge.State != BridgeState.Open || _sessionId == null) return;
+        // Snapshot the session triple before the first await (see FetchPhaseAAsync) — this runs
+        // under CancellationToken.None so a concurrent StopAsync must produce a clean no-op.
+        var session = _sessionId; var server = _server; var database = _database;
+        if (_bridge.State != BridgeState.Open || session == null || server == null || database == null) return;
         try
         {
             var response = await _bridge.SendAsync<SchemaPhaseBRequest, SchemaPhaseBResponse>(
                 MessageTypes.SchemaPhaseBRequest,
-                new SchemaPhaseBRequest { SessionId = _sessionId!, DatabaseName = _database! },
+                new SchemaPhaseBRequest { SessionId = session, DatabaseName = database },
                 ct).ConfigureAwait(false);
 
             if (!response.HasConnection || response.PhaseB == null || response.PhaseB.Length == 0)
             {
                 _diagnostics.Log(DiagnosticLevel.Trace, "schema-sync",
-                    $"Phase B unavailable for {_server}/{_database}: {response.ErrorMessage}");
+                    $"Phase B unavailable for {server}/{database}: {response.ErrorMessage}");
                 return;
             }
 
-            var snap = await _cache.GetAsync(_server!, _database!).ConfigureAwait(false)
-                       ?? new SchemaSnapshot { ServerCanonicalIdentity = _server!, DatabaseName = _database! };
+            var snap = await _cache.GetAsync(server, database).ConfigureAwait(false)
+                       ?? new SchemaSnapshot { ServerCanonicalIdentity = server, DatabaseName = database };
             snap.PhaseB = response.PhaseB;
             if (!string.IsNullOrEmpty(response.Checksum)) snap.Checksum = response.Checksum;
             snap.FetchedAt = DateTimeOffset.UtcNow;
             await _cache.SetAsync(snap).ConfigureAwait(false);
             _diagnostics.Log(DiagnosticLevel.Info, "schema-sync",
-                $"Phase B fetched for {_server}/{_database} ({response.PhaseB.Length} bytes).");
+                $"Phase B fetched for {server}/{database} ({response.PhaseB.Length} bytes).");
         }
         catch (Exception ex)
         {
             _diagnostics.Log(DiagnosticLevel.Warn, "schema-sync",
-                $"Phase B fetch failed for {_server}/{_database}: {ex.Message}");
+                $"Phase B fetch failed for {server}/{database}: {ex.Message}");
         }
     }
 

@@ -8,7 +8,8 @@
 // new object-stores in place.
 
 const DB_NAME = 'AkmlSqlWeb';
-const DB_VERSION = 2;
+// Phase 4 (web connection manager) added the 'savedSqlConnections' bucket: 2 -> 3.
+const DB_VERSION = 3;
 
 const STORES = [
     'profiles',
@@ -28,6 +29,9 @@ const STORES = [
     // Spec 028 M6 -- AI privacy/feature settings + persisted chat (DB_VERSION 1->2).
     'aiFeatureSettings',
     'chatHistory',
+    // Phase 4 (web connection manager) -- saved SQL-Server connections (DB_VERSION 2->3).
+    // Non-secret metadata only (name/server/database/auth/login) — never a password.
+    'savedSqlConnections',
 ];
 
 let _dbPromise = null;

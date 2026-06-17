@@ -6,10 +6,13 @@
 @using System.Threading
 @using AkmlSql.Web.Services
 @inherits LayoutComponentBase
+@implements IDisposable
 @inject IThemeService Theme
 @inject IEngineBridge Bridge
 @inject IConnectionStore Connections
 @inject IPairingTokenVault Vault
+@inject ISqlConnectionService SqlConn
+@inject ISchemaSync SchemaSync
 
 <div class="akml-app">
     <NavMenu />
@@ -32,6 +35,9 @@
     @* Spec 030 — ⌘P command palette. Hosted at the layout level so it overlays every page and its
        global Ctrl/Cmd+P capture-phase listener is alive regardless of which route is mounted. *@
     <CommandPalette />
+    @* Phase 4 — the "Connect to SQL Server" modal. App-global (overlays every page) so the command
+       palette / Settings / StatusBar can open it from any route via IConnectionManagerController. *@
+    <ConnectionManagerModal />
 </div>
 
 <style>
@@ -62,6 +68,15 @@
 @code {
     protected override async Task OnInitializedAsync()
     {
+        // Phase 4 — THE single owner of SchemaSync's lifecycle. Subscribe to the SQL-connection
+        // state so a connect (from the connection-manager modal, or anywhere else) starts schema
+        // polling, and a disconnect stops it. This is the ONLY place SchemaSync.StartAsync is called:
+        // it uses SqlConn.SessionId — the SAME id sent in ConnectionChanged / DocumentChanged / every
+        // completion request — so the engine's SessionManager actually knows the session. The old
+        // picker path passed EngineConnection.Id (a pairing GUID the engine never registered), which
+        // is why its SchemaIdentify always reported HasConnection=false; that path is now neutralized.
+        SqlConn.StateChanged += OnSqlConnStateChanged;
+
         // Pull the persisted theme override before any page reads Theme.Current.
         // ThemeService.InitializeAsync is idempotent (Task is cached), so pages that
         // also await it (Editor, Settings) share this Task instead of racing.
@@ -97,5 +112,34 @@
         {
             // Engine unreachable / no stored bearer / transient error — stay Offline by design.
         }
+    }
+
+    /// <summary>
+    /// Phase 4 — the SINGLE SchemaSync owner. StateChanged fires on BOTH connect and disconnect, and
+    /// DisconnectAsync nulls Server/Database, so we MUST guard on IsConnected before starting. StopAsync
+    /// runs first unconditionally: StartAsync early-returns if already running, so the Stop is what lets
+    /// switching saved connections actually re-key to the new (server, db). Fire-and-forget so a slow
+    /// engine never blocks the UI; PollOnceAsync self-heals (no-ops gracefully on HasConnection=false /
+    /// bridge-closed) until the engine's fire-and-forget Phase-A connection opens.
+    /// </summary>
+    private void OnSqlConnStateChanged() => _ = InvokeAsync(async () =>
+    {
+        try
+        {
+            await SchemaSync.StopAsync();
+            if (SqlConn.IsConnected)
+            {
+                await SchemaSync.StartAsync(SqlConn.SessionId, SqlConn.Server!, SqlConn.Database!);
+            }
+        }
+        catch
+        {
+            // Schema sync is best-effort; a failure here must never break the layout.
+        }
+    });
+
+    public void Dispose()
+    {
+        SqlConn.StateChanged -= OnSqlConnStateChanged;
     }
 }

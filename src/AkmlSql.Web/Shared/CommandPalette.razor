@@ -21,6 +21,7 @@
 @inject ICommandRegistry Registry
 @inject IThemeService Theme
 @inject ISchemaCacheStore SchemaCache
+@inject IConnectionManagerController ConnManager
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 
@@ -532,16 +533,15 @@
             };
         }
 
-        // Connect to SQL — routes to settings (the connect form gathers server/db/auth there;
-        // a static closure can't supply those inline). Kept as a discoverable command.
+        // Connect to SQL — opens the Phase 4 connection-manager modal directly (it gathers
+        // server/db/auth and lists saved connections), rather than routing to Settings.
         yield return new CommandAction
         {
             Id = "sql:connect",
             Title = "Connect to SQL Server…",
             Group = CommandGroup.Action,
             Icon = "🔌",
-            Meta = "/settings",
-            Run = () => { Nav.NavigateTo("/settings"); return Task.CompletedTask; },
+            Run = () => { ConnManager.Open(); return Task.CompletedTask; },
         };
 
         // Clear schema cache.

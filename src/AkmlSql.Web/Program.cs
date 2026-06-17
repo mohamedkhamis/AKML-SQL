@@ -63,6 +63,11 @@ builder.Services.AddSingleton<IEngineBridge, EngineBridge>();
 // bridge using one canonical SessionId, enabling live-schema IntelliSense (Windows or SQL auth).
 builder.Services.AddSingleton<ISqlConnectionService, SqlConnectionService>();
 
+// Phase 4 (web connection manager): saved SQL-Server connections (IndexedDB, no password) + the
+// modal-opener singleton that the command palette / Settings / StatusBar call to surface the modal.
+builder.Services.AddSingleton<ISavedSqlConnectionStore, SavedSqlConnectionStore>();
+builder.Services.AddSingleton<IConnectionManagerController, ConnectionManagerController>();
+
 // M3.5 bridge-routed services (T072, T073, T074). Each routes through the bridge
 // when open; otherwise returns an empty response. M5/T109 will install the
 // IndexedDB-cache fallback for completion + signature + quick-info.

@@ -36,6 +36,20 @@ public interface ISqlConnectionService
     Task<(bool Ok, string? Error)> ConnectAsync(
         string server, string database, bool windowsAuth, string? user, string? password, CancellationToken ct);
 
+    /// <summary>
+    /// Phase 4 — validate credentials WITHOUT changing the active session. Runs the SAME
+    /// identifier + loopback (SSRF) guard as <see cref="ConnectAsync"/> FIRST, then sends the
+    /// existing <c>TestSqlConnection</c> request/response IPC so the engine actually opens the
+    /// connection and reports success/failure. Unlike ConnectAsync this is a real round-trip
+    /// (the engine replies), so it is the only path that truly validates a SQL-auth password.
+    ///
+    /// SECURITY: the guard MUST run before the send because <c>TestSqlConnectionHandler</c> has
+    /// no engine-side host check — it opens whatever connection string it is handed under the
+    /// engine's identity. Skipping the guard here would re-open the confused-deputy/SSRF hole.
+    /// </summary>
+    Task<(bool Ok, string? Error)> TestAsync(
+        string server, string database, bool windowsAuth, string? user, string? password, CancellationToken ct);
+
     /// <summary>Clears the local connected state. (The engine session lingers harmlessly.)</summary>
     Task DisconnectAsync();
 
@@ -69,34 +83,13 @@ internal sealed class SqlConnectionService : ISqlConnectionService
     public async Task<(bool Ok, string? Error)> ConnectAsync(
         string server, string database, bool windowsAuth, string? user, string? password, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(server))
-            return (false, "Server is required.");
-        if (string.IsNullOrWhiteSpace(database))
-            return (false, "Database is required.");
-
-        // Reject connection-string metacharacters in the identifiers up front. The builder below
-        // would safely quote them anyway, but a ';' / quote / control char in a server or database
-        // name is never legitimate — it can only be an attempt to inject extra keywords (e.g. flip
-        // Integrated Security), so we refuse rather than silently quote it. (Passwords may legally
-        // contain ';' and are left to the builder's quoting.)
-        if (!IsSafeIdentifier(server))
-            return (false, "Server name contains invalid characters.");
-        if (!IsSafeIdentifier(database))
-            return (false, "Database name contains invalid characters.");
+        // Identifier + loopback (SSRF) guard — single-sourced in ValidateTarget so ConnectAsync and
+        // TestAsync enforce IDENTICAL rules. Runs before anything touches the bridge.
+        var (ok, error) = ValidateTarget(server, database);
+        if (!ok) return (false, error);
 
         if (_bridge.State != BridgeState.Open)
             return (false, "Pair an engine first (Engine connections → Add), then connect to SQL Server.");
-
-        // SECURITY (spec 030): confused-deputy / SSRF guard. The engine opens this connection under
-        // ITS OWN identity (for Windows auth, its Windows account), so a browser-supplied host is a
-        // confused-deputy lever — a malicious/compromised page could make the engine reach an
-        // arbitrary SQL/SMB listener and authenticate as the engine host. This build is localhost-
-        // scoped, so we hard-restrict to loopback servers (localhost / 127.x / ::1 / . / (local) /
-        // (localdb)) and reject UNC/named-pipe/remote targets. Before any LAN exposure: replace this
-        // with a configured allow-list AND enforce the same check engine-side (defense in depth).
-        if (!IsLoopbackServer(server))
-            return (false, "This build only connects to a LOCAL SQL Server (localhost, 127.0.0.1, ., (local), (localdb)). " +
-                           "Remote/UNC servers are disabled because the engine would connect under its own Windows identity.");
 
         var connStr = BuildConnectionString(server.Trim(), database.Trim(), windowsAuth, user, password);
 
@@ -129,6 +122,51 @@ internal sealed class SqlConnectionService : ISqlConnectionService
         return (true, null);
     }
 
+    public async Task<(bool Ok, string? Error)> TestAsync(
+        string server, string database, bool windowsAuth, string? user, string? password, CancellationToken ct)
+    {
+        // SECURITY (Phase 4): run the SAME identifier + loopback guard as ConnectAsync, and run it
+        // FIRST — before building the connection string and before sending anything to the engine.
+        // TestSqlConnectionHandler opens whatever string it receives with no engine-side host check,
+        // so omitting this would make Test an SSRF/confused-deputy hole. Behaviour is unchanged:
+        // loopback-only; remote/UNC/Azure targets are rejected here, never reaching the engine.
+        var (ok, error) = ValidateTarget(server, database);
+        if (!ok) return (false, error);
+
+        if (_bridge.State != BridgeState.Open)
+            return (false, "Pair an engine first (Engine connections → Add), then test the SQL connection.");
+
+        var connStr = BuildConnectionString(server.Trim(), database.Trim(), windowsAuth, user, password);
+
+        try
+        {
+            // Reuse the EXISTING TestSqlConnection request/response pair (the same the desktop shell
+            // uses) — no new connect/test IPC. The engine opens the connection, then closes it, and
+            // replies Ok / ErrorMessage. This is the only path that truly validates a SQL password.
+            var response = await _bridge.SendAsync<TestSqlConnectionRequest, TestSqlConnectionResponse>(
+                MessageTypes.TestSqlConnection,
+                new TestSqlConnectionRequest { ConnectionString = connStr },
+                ct).ConfigureAwait(false);
+
+            if (response == null)
+                return (false, "The engine did not return a result for the connection test.");
+
+            if (response.Ok)
+            {
+                _diagnostics.Log(DiagnosticLevel.Info, "sql-connect",
+                    $"Test connection to {server.Trim()}/{database.Trim()} succeeded (auth={(windowsAuth ? "Windows" : "SQL")}).");
+                return (true, null);
+            }
+
+            return (false, string.IsNullOrEmpty(response.ErrorMessage) ? "The connection test failed." : response.ErrorMessage);
+        }
+        catch (Exception ex)
+        {
+            _diagnostics.Log(DiagnosticLevel.Warn, "sql-connect", $"TestSqlConnection send failed: {ex.Message}");
+            return (false, "Could not reach the engine: " + ex.Message);
+        }
+    }
+
     public Task DisconnectAsync()
     {
         IsConnected = false;
@@ -157,6 +195,47 @@ internal sealed class SqlConnectionService : ISqlConnectionService
         {
             // Best-effort — a dropped DocumentChanged just means the next completion is stale.
         }
+    }
+
+    /// <summary>
+    /// SECURITY (Phase 4): the SINGLE source of truth for the SQL-target guard, shared by
+    /// <see cref="ConnectAsync"/> and <see cref="TestAsync"/>. Enforces, in order:
+    /// non-empty server/database, no connection-string metacharacters in the identifiers
+    /// (<see cref="IsSafeIdentifier"/>), and loopback-only host (<see cref="IsLoopbackServer"/>).
+    /// Pure/static (no bridge dependency) so both callers — and a unit test — get identical
+    /// behaviour. Returns (true, null) on pass; (false, message) on the first failure. Loopback-
+    /// only is unchanged: remote/UNC/named-pipe/Azure targets are rejected.
+    /// </summary>
+    private static (bool Ok, string? Error) ValidateTarget(string server, string database)
+    {
+        if (string.IsNullOrWhiteSpace(server))
+            return (false, "Server is required.");
+        if (string.IsNullOrWhiteSpace(database))
+            return (false, "Database is required.");
+
+        // Reject connection-string metacharacters in the identifiers up front. The builder would
+        // safely quote them anyway, but a ';' / quote / control char in a server or database name is
+        // never legitimate — it can only be an attempt to inject extra keywords (e.g. flip Integrated
+        // Security), so we refuse rather than silently quote it. (Passwords may legally contain ';'
+        // and are left to the builder's quoting.)
+        if (!IsSafeIdentifier(server))
+            return (false, "Server name contains invalid characters.");
+        if (!IsSafeIdentifier(database))
+            return (false, "Database name contains invalid characters.");
+
+        // Confused-deputy / SSRF guard. The engine opens this connection under ITS OWN identity
+        // (for Windows auth, its Windows account), so a browser-supplied host is a confused-deputy
+        // lever — a malicious/compromised page could make the engine reach an arbitrary SQL/SMB
+        // listener and authenticate as the engine host. This build is localhost-scoped, so we hard-
+        // restrict to loopback servers (localhost / 127.x / ::1 / . / (local) / (localdb)) and reject
+        // UNC/named-pipe/remote targets. Before any LAN exposure: replace this with a configured
+        // allow-list AND enforce the same check engine-side (defense in depth — the engine handlers
+        // currently apply no host check of their own).
+        if (!IsLoopbackServer(server))
+            return (false, "This build only connects to a LOCAL SQL Server (localhost, 127.0.0.1, ., (local), (localdb)). " +
+                           "Remote/UNC servers are disabled because the engine would connect under its own Windows identity.");
+
+        return (true, null);
     }
 
     private static string BuildConnectionString(string server, string database, bool windowsAuth, string? user, string? password)
