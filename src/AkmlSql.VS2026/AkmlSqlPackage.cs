@@ -127,6 +127,9 @@ namespace AkmlSql.VS2026
 
                 // Phase 10 — SQL Prompt Core Parity
                 SnippetManagerCommand.Initialize(this, commandService);
+                // Spec 030 T044/T045 — Create Snippet from Selection + Surround With
+                AkmlSql.Shell.Shared.Snippets.CreateFromSelectionCommand.Initialize(this, commandService);
+                AkmlSql.Shell.Shared.Snippets.SurroundWithCommand.Initialize(this, commandService);
                 AkmlSql.Shell.Shared.Navigation.BookmarkCommands.Initialize(this, commandService);
                 SplitTableCommand.Initialize(this, commandService);
 

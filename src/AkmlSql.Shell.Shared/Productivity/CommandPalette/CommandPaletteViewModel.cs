@@ -340,6 +340,8 @@ namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
                 "akml.crudGeneration" => CommandIds.CmdCrudGeneration,
                 "akml.documentOutline" => CommandIds.CmdDocumentOutline,
                 "akml.commandPalette" => CommandIds.CmdCommandPalette,
+                "akml.snippetCreateFromSelection" => CommandIds.CmdSnippetCreateFromSelection,
+                "akml.snippetSurroundWith" => CommandIds.CmdSnippetSurroundWith,
                 _ => -1
             };
         }

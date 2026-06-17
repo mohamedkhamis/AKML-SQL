@@ -164,6 +164,10 @@ namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
             commands.Add(Cmd("akml.crudGeneration", "Generate CRUD Scripts", "Grid", CommandIds.CmdCrudGeneration));
             commands.Add(Cmd("akml.documentOutline", "Document Outline", "Editor", CommandIds.CmdDocumentOutline));
 
+            // Snippets — Spec 030 T044/T045
+            commands.Add(Cmd("akml.snippetCreateFromSelection", "Create Snippet from Selection", "Snippets", CommandIds.CmdSnippetCreateFromSelection));
+            commands.Add(Cmd("akml.snippetSurroundWith", "Surround Selection With Snippet", "Snippets", CommandIds.CmdSnippetSurroundWith, "Ctrl+K, Ctrl+S"));
+
             // Command Palette itself
             commands.Add(Cmd("akml.commandPalette", "Command Palette", "General", CommandIds.CmdCommandPalette, "Ctrl+Shift+P"));
         }

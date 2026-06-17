@@ -38,6 +38,9 @@ namespace AkmlSql.Shell.Shared.Snippets
         private Button? _duplicateButton;
         private Button? _saveButton;
         private TextBlock? _statusText;
+        // Spec 030 T046 / FR-036 — programmatic variables editor (Name/Default/Tooltip rows + Add/Remove).
+        private StackPanel? _variablesPanel;
+        private Button? _addVariableButton;
 
         public SnippetManagerDialog(SnippetManagerViewModel viewModel)
         {
@@ -159,15 +162,17 @@ namespace AkmlSql.Shell.Shared.Snippets
             // RIGHT PANEL: Edit fields + Body
             // ================================================================
             var rightPanel = new Grid { Margin = new Thickness(6) };
-            // Rows: Shortcode, Name, Description, Category, Tags, Body label, Body editor
+            // Rows: Shortcode, Name, Description, Category, Tags, Variables (T046), Separator, Body
             rightPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 0: Shortcode
             rightPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 1: Name
             rightPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 2: Description
             rightPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 3: Category
             rightPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 4: Tags
-            rightPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 5: Separator
-            rightPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 6: Body label
-            rightPanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // 7: Body editor
+            rightPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 5: Variables header (T046)
+            rightPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 6: Variables editor (T046)
+            rightPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 7: Separator
+            rightPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 8: Body label
+            rightPanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // 9: Body editor
 
             // 2 columns: label (Auto) + field (Star)
             rightPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -229,19 +234,64 @@ namespace AkmlSql.Shell.Shared.Snippets
             Grid.SetColumn(_tagsBox, 1);
             rightPanel.Children.Add(_tagsBox);
 
-            // --- Row 5: Separator ---
+            // --- Row 5: Variables header + Add button (Spec 030 T046 / FR-036) ---
+            var variablesHeader = new DockPanel
+            {
+                Margin = new Thickness(0, 6, 0, 2),
+                LastChildFill = false,
+            };
+            var variablesLabel = new TextBlock
+            {
+                Text = "Variables:",
+                Foreground = fg,
+                FontWeight = FontWeights.SemiBold,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            DockPanel.SetDock(variablesLabel, Dock.Left);
+            variablesHeader.Children.Add(variablesLabel);
+
+            _addVariableButton = CreateButton("Add Variable", null, null);
+            _addVariableButton.MinWidth = 90;
+            _addVariableButton.Padding = new Thickness(8, 2, 8, 2);
+            _addVariableButton.Click += OnAddVariableClick;
+            DockPanel.SetDock(_addVariableButton, Dock.Right);
+            variablesHeader.Children.Add(_addVariableButton);
+
+            Grid.SetRow(variablesHeader, 5);
+            Grid.SetColumn(variablesHeader, 0);
+            Grid.SetColumnSpan(variablesHeader, 2);
+            rightPanel.Children.Add(variablesHeader);
+
+            // --- Row 6: Variables editor rows (Name / Default / Tooltip + Remove) ---
+            _variablesPanel = new StackPanel { Margin = new Thickness(0, 0, 0, 2) };
+            var variablesScroll = new ScrollViewer
+            {
+                Content = _variablesPanel,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                MaxHeight = 132, // ~4 rows before scrolling, keeps the Body editor dominant
+                BorderBrush = border,
+                BorderThickness = new Thickness(1),
+                Background = editorPanel,
+            };
+            Grid.SetRow(variablesScroll, 6);
+            Grid.SetColumn(variablesScroll, 0);
+            Grid.SetColumnSpan(variablesScroll, 2);
+            rightPanel.Children.Add(variablesScroll);
+
+            // --- Row 7: Separator ---
             var separator = new Border
             {
                 Height = 1,
                 Background = border,
                 Margin = new Thickness(0, 6, 0, 6),
             };
-            Grid.SetRow(separator, 5);
+            Grid.SetRow(separator, 7);
             Grid.SetColumn(separator, 0);
             Grid.SetColumnSpan(separator, 2);
             rightPanel.Children.Add(separator);
 
-            // --- Row 6: Body label ---
+            // --- Row 8: Body label ---
             var bodyLabel = new TextBlock
             {
                 Text = "Body:",
@@ -250,12 +300,12 @@ namespace AkmlSql.Shell.Shared.Snippets
                 Margin = new Thickness(0, 0, 0, 4),
                 VerticalAlignment = VerticalAlignment.Center,
             };
-            Grid.SetRow(bodyLabel, 6);
+            Grid.SetRow(bodyLabel, 8);
             Grid.SetColumn(bodyLabel, 0);
             Grid.SetColumnSpan(bodyLabel, 2);
             rightPanel.Children.Add(bodyLabel);
 
-            // --- Row 7: Body editor ---
+            // --- Row 9: Body editor ---
             _bodyBox = new TextBox
             {
                 AcceptsReturn = true,
@@ -271,7 +321,7 @@ namespace AkmlSql.Shell.Shared.Snippets
                 BorderThickness = new Thickness(1),
                 Padding = new Thickness(4),
             };
-            Grid.SetRow(_bodyBox, 7);
+            Grid.SetRow(_bodyBox, 9);
             Grid.SetColumn(_bodyBox, 0);
             Grid.SetColumnSpan(_bodyBox, 2);
             rightPanel.Children.Add(_bodyBox);
@@ -362,6 +412,7 @@ namespace AkmlSql.Shell.Shared.Snippets
 
             // Initial state: nothing selected
             UpdateEditFieldsEnabled();
+            RebuildVariablesEditor();
         }
 
         // -------------------------------------------------------------------
@@ -541,14 +592,22 @@ namespace AkmlSql.Shell.Shared.Snippets
                 case nameof(SnippetManagerViewModel.SelectedSnippet):
                     UpdateEditFieldsFromViewModel();
                     UpdateEditFieldsEnabled();
+                    RebuildVariablesEditor();
                     break;
 
                 case nameof(SnippetManagerViewModel.IsBuiltIn):
                     UpdateEditFieldsEnabled();
+                    RebuildVariablesEditor();
                     break;
 
                 case nameof(SnippetManagerViewModel.IsEditing):
                     UpdateEditFieldsEnabled();
+                    RebuildVariablesEditor();
+                    break;
+
+                // Spec 030 T046 — the VM raised Variables (load / New / NewSnippetFromSelection).
+                case nameof(SnippetManagerViewModel.Variables):
+                    RebuildVariablesEditor();
                     break;
 
                 case nameof(SnippetManagerViewModel.EditShortcode):
@@ -613,6 +672,8 @@ namespace AkmlSql.Shell.Shared.Snippets
             if (_deleteButton != null) _deleteButton.IsEnabled = canEdit && _viewModel.SelectedSnippet != null;
             if (_duplicateButton != null) _duplicateButton.IsEnabled = hasSelection;
             if (_saveButton != null) _saveButton.IsEnabled = canEdit;
+            // Spec 030 T046 — the variables editor follows the same edit gate as the other fields.
+            if (_addVariableButton != null) _addVariableButton.IsEnabled = canEdit;
         }
 
         // -------------------------------------------------------------------
@@ -778,7 +839,9 @@ namespace AkmlSql.Shell.Shared.Snippets
                             ["category"] = _viewModel.EditCategory ?? string.Empty,
                             ["tags"] = tags
                         },
-                        ["variables"] = Array.Empty<object>(),
+                        // Spec 030 T046 / FR-036 — export the snippet's custom variables instead of
+                        // wiping them (the second of the two former variables=[] wipe sites).
+                        ["variables"] = _viewModel.SerializeVariables(),
                         ["body"] = bodyLines
                     };
 
@@ -819,6 +882,128 @@ namespace AkmlSql.Shell.Shared.Snippets
             if (_categoryBox != null) _viewModel.EditCategory = _categoryBox.Text;
             if (_tagsBox != null) _viewModel.EditTags = _tagsBox.Text;
             if (_bodyBox != null) _viewModel.EditBody = _bodyBox.Text;
+            // Spec 030 T046 — variable rows write back to their SnippetVariableRow on TextChanged, so the
+            // VM's Variables collection is already current here. Nothing extra to copy.
+        }
+
+        // -------------------------------------------------------------------
+        // Variables editor (Spec 030 T046 / FR-036)
+        // -------------------------------------------------------------------
+
+        /// <summary>
+        /// Rebuilds the variables editor rows from the ViewModel's <see cref="SnippetManagerViewModel.Variables"/>.
+        /// Each row's three textboxes write straight back to the bound <see cref="SnippetVariableRow"/> on
+        /// edit (no data binding in this programmatic-WPF dialog). Disabled for built-in/non-editing state.
+        /// </summary>
+        private void RebuildVariablesEditor()
+        {
+            if (_variablesPanel == null) return;
+
+            _variablesPanel.Children.Clear();
+
+            var res = ThemeRegistry.Instance.Resources;
+            var fg          = (SolidColorBrush)res[ThemeTokens.TextPrimary];
+            var border      = (SolidColorBrush)res[ThemeTokens.BorderDefault];
+            var editorPanel = (SolidColorBrush)res[ThemeTokens.SurfaceElevated];
+            var placeholder = (SolidColorBrush)res[ThemeTokens.TextPlaceholder];
+
+            bool canEdit = _viewModel.IsEditing && !_viewModel.IsBuiltIn;
+
+            if (_viewModel.Variables.Count == 0)
+            {
+                _variablesPanel.Children.Add(new TextBlock
+                {
+                    Text = "(no custom variables — use $CURSOR$, $SELECTEDTEXT$ etc. in the body, or add a named variable)",
+                    Foreground = placeholder,
+                    FontSize = 11,
+                    Margin = new Thickness(6, 4, 6, 4),
+                    TextWrapping = TextWrapping.Wrap,
+                });
+            }
+
+            foreach (var variable in _viewModel.Variables)
+            {
+                var row = BuildVariableRow(variable, fg, editorPanel, border, placeholder, canEdit);
+                _variablesPanel.Children.Add(row);
+            }
+        }
+
+        private UIElement BuildVariableRow(
+            SnippetVariableRow variable,
+            SolidColorBrush fg,
+            SolidColorBrush editorPanel,
+            SolidColorBrush border,
+            SolidColorBrush placeholder,
+            bool canEdit)
+        {
+            var grid = new Grid { Margin = new Thickness(4, 2, 4, 2) };
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.0, GridUnitType.Star) }); // Name
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.0, GridUnitType.Star) }); // Default
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.4, GridUnitType.Star) }); // Tooltip
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });                        // Remove
+
+            var nameBox = MakeVariableCell(variable.Name, "name", fg, editorPanel, border, placeholder, canEdit);
+            nameBox.TextChanged += (s, _) => variable.Name = nameBox.Text;
+            Grid.SetColumn(nameBox, 0);
+            grid.Children.Add(nameBox);
+
+            var defaultBox = MakeVariableCell(variable.Default, "default", fg, editorPanel, border, placeholder, canEdit);
+            defaultBox.TextChanged += (s, _) => variable.Default = defaultBox.Text;
+            Grid.SetColumn(defaultBox, 1);
+            grid.Children.Add(defaultBox);
+
+            var tooltipBox = MakeVariableCell(variable.Tooltip, "tooltip", fg, editorPanel, border, placeholder, canEdit);
+            tooltipBox.TextChanged += (s, _) => variable.Tooltip = tooltipBox.Text;
+            Grid.SetColumn(tooltipBox, 2);
+            grid.Children.Add(tooltipBox);
+
+            var removeBtn = CreateButton("X", null, null);
+            removeBtn.MinWidth = 24;
+            removeBtn.Width = 24;
+            removeBtn.Margin = new Thickness(2, 0, 0, 0);
+            removeBtn.Padding = new Thickness(0);
+            removeBtn.ToolTip = "Remove this variable";
+            removeBtn.IsEnabled = canEdit;
+            removeBtn.Click += (s, _) =>
+            {
+                _viewModel.Variables.Remove(variable);
+                RebuildVariablesEditor();
+            };
+            Grid.SetColumn(removeBtn, 3);
+            grid.Children.Add(removeBtn);
+
+            return grid;
+        }
+
+        private static TextBox MakeVariableCell(
+            string value,
+            string placeholderText,
+            SolidColorBrush fg,
+            SolidColorBrush editorPanel,
+            SolidColorBrush border,
+            SolidColorBrush placeholder,
+            bool canEdit)
+        {
+            return new TextBox
+            {
+                Text = value ?? string.Empty,
+                Foreground = fg,
+                Background = editorPanel,
+                BorderBrush = border,
+                BorderThickness = new Thickness(1),
+                Padding = new Thickness(3, 2, 3, 2),
+                Margin = new Thickness(0, 0, 2, 0),
+                IsEnabled = canEdit,
+                ToolTip = placeholderText,
+                VerticalContentAlignment = VerticalAlignment.Center,
+            };
+        }
+
+        private void OnAddVariableClick(object sender, RoutedEventArgs e)
+        {
+            if (!_viewModel.IsEditing || _viewModel.IsBuiltIn) return;
+            _viewModel.Variables.Add(new SnippetVariableRow { Name = string.Empty });
+            RebuildVariablesEditor();
         }
 
         private static TextBlock CreateFieldLabel(string text, SolidColorBrush foreground)

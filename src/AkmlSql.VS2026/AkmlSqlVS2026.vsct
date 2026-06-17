@@ -278,6 +278,15 @@
           <ButtonText>Snippet Manager</ButtonText>
         </Strings>
       </Button>
+      <!-- Spec 030 T045 — Surround With needs a command-table entry so the Ctrl+K,Ctrl+S KeyBinding
+           resolves (a KeyBinding without a Button/Command is ignored). Mirrors CmdBookmarkToggle. -->
+      <Button guid="guidAkmlSqlCmdSet" id="CmdSnippetSurroundWith" priority="0x0812" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <Strings>
+          <ButtonText>Surround Selection With Snippet…</ButtonText>
+        </Strings>
+      </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdBookmarkToggle" priority="0x0811" type="Button">
         <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
@@ -403,6 +412,13 @@
                 editor="guidVSStd97" key1="K" mod1="Control" key2="N" mod2="Control" />
     <KeyBinding guid="guidAkmlSqlCmdSet" id="CmdBookmarkPrev"
                 editor="guidVSStd97" key1="K" mod1="Control" key2="P" mod2="Control" />
+    <!-- Spec 030 T045 — Surround With (FR-034): Ctrl+K, Ctrl+S.
+         HOST-VERIFY: Ctrl+K,Ctrl+S collides with VS2026 native Surround With (Edit.SurroundWith).
+         When two bindings share a chord on editor=guidVSStd97, VS resolves by scope/registration order;
+         this may shadow or be shadowed by the built-in. Verify in a running VS2026 instance and, if it
+         loses, rebind to a non-conflicting chord (e.g. Ctrl+K, Ctrl+W) for the VS2026 host only. -->
+    <KeyBinding guid="guidAkmlSqlCmdSet" id="CmdSnippetSurroundWith"
+                editor="guidVSStd97" key1="K" mod1="Control" key2="S" mod2="Control" />
   </KeyBindings>
 
   <Symbols>
@@ -464,6 +480,11 @@
       <IDSymbol name="CmdBookmarkNext" value="0x0802" />
       <IDSymbol name="CmdBookmarkPrev" value="0x0803" />
       <IDSymbol name="CmdSplitTable" value="0x0804" />
+      <!-- Spec 030 T044/T045 — snippet selection commands (palette-surfaced; T045 also bound to a chord).
+           No Button: these mirror the T067 editor-context commands (IDSymbol only) so dte.Commands.Raise
+           and the KeyBinding resolve them. -->
+      <IDSymbol name="CmdSnippetCreateFromSelection" value="0x091B" />
+      <IDSymbol name="CmdSnippetSurroundWith" value="0x091C" />
     </GuidSymbol>
   </Symbols>
 

@@ -134,5 +134,10 @@ namespace AkmlSql.Shell.Shared
 
         // Spec 030 T056 — toggle code analysis on/off.
         public const int CmdToggleCodeAnalysis           = 0x091A;
+
+        // Spec 030 T044 — Create Snippet from Selection (FR-033).
+        public const int CmdSnippetCreateFromSelection   = 0x091B;
+        // Spec 030 T045 — Surround With snippet (FR-034); bound to Ctrl+K, Ctrl+S.
+        public const int CmdSnippetSurroundWith          = 0x091C;
     }
 }

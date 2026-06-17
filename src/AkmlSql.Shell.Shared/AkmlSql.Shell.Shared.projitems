@@ -293,6 +293,9 @@
     <Compile Include="$(MSBuildThisFileDirectory)Snippets\SnippetManagerViewModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Snippets\SnippetManagerDialog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Snippets\SnippetManagerCommand.cs" />
+    <!-- Spec 030 T044/T045 — Create Snippet from Selection + Surround With -->
+    <Compile Include="$(MSBuildThisFileDirectory)Snippets\CreateFromSelectionCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Snippets\SurroundWithCommand.cs" />
     <!-- Phase 10 US8 — Bookmarks & Document Outline -->
     <Compile Include="$(MSBuildThisFileDirectory)Navigation\BookmarkManager.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Navigation\BookmarkGlyphFactory.cs" />

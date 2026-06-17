@@ -122,7 +122,17 @@ public class SnippetRequestHandler
             Source = (int)r.Source,
             SurroundsWith = r.Snippet.Metadata.SurroundsWith,
             UsageCount = 0, // TODO: integrate usage tracker
-            Tags = r.Snippet.Metadata.Tags
+            Tags = r.Snippet.Metadata.Tags,
+            // Spec 030 T046 / FR-036 — deliver the custom variable definitions to the shell so the
+            // Snippet Manager can edit/re-save them without wiping. Engine SnippetVariable JSON keys
+            // (name/default/tooltip/schemaAware) are preserved on the Core DTO.
+            Variables = (r.Snippet.Variables ?? []).Select(v => new SnippetVariableInfo
+            {
+                Name = v.Name,
+                Default = v.Default,
+                Tooltip = v.Tooltip,
+                SchemaAware = v.SchemaAware
+            }).ToArray()
         }).ToArray();
 
         return new SnippetListResponse { Snippets = infos };
