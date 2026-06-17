@@ -38,6 +38,15 @@ a:hover { color: var(--akml-accent-primaryhover); }
 /* Don't double-ring elements that already paint their own focus treatment. */
 .cm-editor.cm-focused { outline: none; }
 
+/* ── Semantic aliases (theme-delegating; keep the codegen'd theme files untouched) ──
+   The editor-surface token several components reference (EditorComponent .akml-editor,
+   RefactorPreviewPanel) was never defined → an undefined var() with no fallback rendered the
+   editor wrapper transparent. Alias it to the panel surface so it resolves in every theme
+   (light/dark/HC) via surface-panel; CodeMirror still paints its own background on top. */
+:root {
+    --akml-surface-editor: var(--akml-surface-panel);
+}
+
 /* ── Motion (spec: 100-150ms micro, 200-250ms panel slides; reduced-motion off) ── */
 :root {
     --akml-motion-micro: 120ms;
