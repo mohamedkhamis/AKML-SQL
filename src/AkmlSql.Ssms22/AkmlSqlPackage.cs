@@ -71,6 +71,8 @@ namespace AkmlSql.Ssms22
                 InlineStoredProcedureCommand.Initialize(this, commandService);
                 ScriptAsAlterCommand.Initialize(this, commandService);
                 FindInvalidObjectsCommand.Initialize(this, commandService);
+                // Spec 030 T062 — database-wide Smart Rename (FR-018)
+                SafeRenameCommand.Initialize(this, commandService);
                 // Spec 030 T056 — toggle code analysis on/off
                 AkmlSql.Shell.Shared.Analysis.ToggleCodeAnalysisCommand.Initialize(this, commandService);
                 // Spec 030 T068 — disable formatting for selection

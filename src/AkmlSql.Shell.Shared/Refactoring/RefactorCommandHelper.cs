@@ -239,5 +239,98 @@ namespace AkmlSql.Shell.Shared.Refactoring
             name   = name.Trim('[', ']', ' ');
             return (schema, name);
         }
+
+        /// <summary>
+        /// Spec 030 / T062 / FR-018 — resolves the identifier under the caret for database-wide Smart
+        /// Rename, classifying it as an OBJECT or a COLUMN. A column is recognised only when the caret
+        /// token is a real multi-part reference qualified by a TABLE name (<c>[schema.]table.column</c>),
+        /// not an alias — the engine cannot resolve an alias to a table from text alone.
+        /// <para>
+        /// Returns the pieces in the exact shape the engine's database-wide preview expects:
+        /// <list type="bullet">
+        /// <item><description>OBJECT: <c>IsColumn=false</c>, <c>Schema</c>=object schema (default dbo),
+        /// <c>Name</c>=object name, <c>ParentTable=null</c>.</description></item>
+        /// <item><description>COLUMN: <c>IsColumn=true</c>, <c>Schema</c>=the TABLE's schema (default dbo),
+        /// <c>ParentTable</c>=the table name, <c>Name</c>=the column name. (The engine binds
+        /// <c>@schema=Schema, @table=ParentTable, @column=Name</c>; the command then sends
+        /// <c>OriginalIdentifier="Schema.Name"</c> and <c>ExtractedUnitName="ParentTable"</c>.)</description></item>
+        /// </list>
+        /// </para>
+        /// Returns <c>("","",..,false)</c> with an empty Name when nothing identifiable is under the caret.
+        /// </summary>
+        public static (string Schema, string? ParentTable, string Name, bool IsColumn) ExtractRenameTargetAtCaret(
+            string docText, int caret)
+        {
+            if (string.IsNullOrEmpty(docText)) return (string.Empty, null, string.Empty, false);
+            if (caret < 0) caret = 0;
+            if (caret > docText.Length) caret = docText.Length;
+
+            static bool IsIdent(char ch) => char.IsLetterOrDigit(ch) || ch == '_' || ch == '#' || ch == '@' || ch == '$';
+
+            // Grab the FULL dotted reference around the caret (identifiers, brackets, and the dots
+            // between them), e.g. "dbo.Orders.Total" or "[dbo].[Orders].[Total]".
+            int start = caret;
+            while (start > 0)
+            {
+                char ch = docText[start - 1];
+                if (IsIdent(ch) || ch == ']' || ch == '[' || ch == '.') start--;
+                else break;
+            }
+            int end = caret;
+            while (end < docText.Length)
+            {
+                char ch = docText[end];
+                if (IsIdent(ch) || ch == '[' || ch == ']' || ch == '.') end++;
+                else break;
+            }
+            if (start >= end) return (string.Empty, null, string.Empty, false);
+
+            var token = docText.Substring(start, end - start).Trim().Trim('.');
+            if (string.IsNullOrEmpty(token)) return (string.Empty, null, string.Empty, false);
+
+            var parts = SplitDotted(token);
+            if (parts.Count == 0) return (string.Empty, null, string.Empty, false);
+
+            switch (parts.Count)
+            {
+                case 1:
+                    // Bare name → object in dbo.
+                    return ("dbo", null, parts[0], false);
+
+                case 2:
+                    // Ambiguous: "schema.object" OR "table.column". We cannot tell from text alone, so
+                    // treat as an OBJECT (schema.object). A 2-part table.column without a schema is the
+                    // alias-or-table case the engine can't bind reliably; the engine refuses if it isn't
+                    // a real object. (Column rename is supported via the explicit 3-part form below.)
+                    return (parts[0], null, parts[1], false);
+
+                default:
+                    // 3+ parts: schema.table.column → a COLUMN rename. Use the LAST three parts.
+                    int n = parts.Count;
+                    return (parts[n - 3], parts[n - 2], parts[n - 1], true);
+            }
+        }
+
+        /// <summary>Splits a dotted identifier into its (bracket-stripped) parts, respecting [brackets].</summary>
+        private static System.Collections.Generic.List<string> SplitDotted(string token)
+        {
+            var parts = new System.Collections.Generic.List<string>();
+            var sb = new System.Text.StringBuilder();
+            bool inBracket = false;
+            foreach (char ch in token)
+            {
+                if (ch == '[') { inBracket = true; continue; }
+                if (ch == ']') { inBracket = false; continue; }
+                if (ch == '.' && !inBracket)
+                {
+                    parts.Add(sb.ToString().Trim());
+                    sb.Clear();
+                    continue;
+                }
+                sb.Append(ch);
+            }
+            if (sb.Length > 0) parts.Add(sb.ToString().Trim());
+            return parts.Where(p => p.Length > 0).ToList();
+        }
     }
 }
