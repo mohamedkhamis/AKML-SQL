@@ -1,0 +1,672 @@
+@*
+    Spec 030 — Phase 5. The bottom results pane: a DIV-based role=grid (Blazor <Virtualize> cannot
+    live inside a <tbody>, so an HTML <table> is wrong for the virtualized body). Renders N result
+    sets (a tab strip when >1) + a Messages pane. Inline CRUD: double-click an editable cell to edit;
+    edits/inserts/deletes are tracked per result set and applied (RUN-IMMEDIATELY, no confirm) via a
+    single transactional Apply on the engine's persistent connection. CRUD state is shown as inset
+    edge-bars PLUS legend glyphs so it isn't conveyed by colour alone (a11y).
+
+    All chrome reads --akml-* tokens (see wwwroot/css/components/results-grid.css). Status colours
+    (amber/green/red) are the only hardcoded semantics — they read the same in every theme.
+*@
+@using AkmlSql.Core.Ipc.Messages
+@using AkmlSql.Web.Services
+
+@if (_result != null)
+{
+    <div class="akml-results-pane" data-testid="results-pane">
+        <div class="akml-results-header">
+            @* Result-set tab strip (only when more than one set). *@
+            @if (_result.ResultSets.Length > 1)
+            {
+                <div class="akml-results-tabs" role="tablist">
+                    @for (int i = 0; i < _result.ResultSets.Length; i++)
+                    {
+                        var idx = i;
+                        <button class="akml-results-tab @(idx == _activeSet ? "active" : "")"
+                                role="tab" aria-selected="@(idx == _activeSet)"
+                                data-testid="@($"results-tab-{idx}")"
+                                @onclick="@(() => SelectSet(idx))">Result @(idx + 1)</button>
+                    }
+                    <button class="akml-results-tab @(_activeSet == MessagesTab ? "active" : "")"
+                            role="tab" data-testid="results-tab-messages"
+                            @onclick="@(() => SelectSet(MessagesTab))">Messages (@_result.Messages.Length)</button>
+                </div>
+            }
+            <span class="akml-results-spacer"></span>
+            <span class="akml-results-stat" data-testid="results-elapsed">@_result.ElapsedMs ms</span>
+            @if (_result.TotalRowsAffected > 0)
+            {
+                <span class="akml-results-stat" data-testid="results-affected">@_result.TotalRowsAffected affected</span>
+            }
+        </div>
+
+        @if (_result.Status != ExecuteStatus.Ok)
+        {
+            <div class="akml-results-error" role="alert" data-testid="results-error">
+                @StatusLabel(_result.Status): @_result.ErrorMessage
+            </div>
+        }
+        else if (_result.ConnectionWasReset)
+        {
+            <div class="akml-results-warning" role="alert" data-testid="results-conn-reset">
+                The connection was reopened — any #temp tables, SET options or USE state from earlier runs were lost.
+            </div>
+        }
+
+        @{
+            var set = ActiveSet;
+        }
+
+        @if (_activeSet == MessagesTab || (set == null && _result.Status == ExecuteStatus.Ok))
+        {
+            <div class="akml-results-messages" data-testid="results-messages">
+                @if (_result.Messages.Length == 0)
+                {
+                    @* Only claim success when the batch actually succeeded — otherwise the red error
+                       banner already conveys the failure and a "completed successfully" line is a lie. *@
+                    @if (_result.Status == ExecuteStatus.Ok)
+                    {
+                        <div class="akml-results-message">Command(s) completed successfully.</div>
+                    }
+                }
+                else
+                {
+                    @foreach (var m in _result.Messages)
+                    {
+                        <div class="akml-results-message">@m</div>
+                    }
+                }
+            </div>
+        }
+        else if (set != null)
+        {
+            @* CRUD legend — only when the set is editable. Each chip pairs a glyph with the colour. *@
+            @if (set.IsEditable)
+            {
+                <div class="akml-results-legend" data-testid="results-legend">
+                    <span class="akml-legend-chip akml-row-edited">✎ edited</span>
+                    <span class="akml-legend-chip akml-row-new">＋ new</span>
+                    <span class="akml-legend-chip akml-row-deleted">✕ deleted</span>
+                    <span class="akml-results-spacer"></span>
+                    <button class="akml-connmgr-btn" data-testid="results-add-row"
+                            @onclick="AddNewRow" title="Add a new row">＋ Row</button>
+                </div>
+            }
+
+            <div class="akml-results-grid" role="grid" data-testid="results-grid"
+                 aria-rowcount="@(set.Rows.Length + 1 + _inserts.Count)" aria-colcount="@(set.ColumnNames.Length + 1)">
+                @* Header row (aria-rowindex 1; data rows start at 2). *@
+                <div class="akml-results-row akml-results-headerrow" role="row" aria-rowindex="1">
+                    <div class="akml-results-cell akml-results-rowmarker" role="columnheader"></div>
+                    @for (int c = 0; c < set.ColumnNames.Length; c++)
+                    {
+                        <div class="akml-results-cell akml-results-colheader" role="columnheader"
+                             data-testid="@($"results-col-{c}")">
+                            <span class="akml-col-name">@set.ColumnNames[c]</span>
+                            <span class="akml-col-type" title="@TypeHintTitle(set, c)">@set.ColumnSqlTypes.ElementAtOrDefault(c)</span>
+                        </div>
+                    }
+                </div>
+
+                @* Body — virtualized only above the threshold (mirrors SchemaTreeComponent). *@
+                @if (set.Rows.Length > VirtualizeThreshold)
+                {
+                    <div class="akml-results-virtualbody" data-testid="results-virtualized">
+                        <Virtualize Items="@_rowIndexes" Context="ri" ItemSize="24">
+                            @RenderRow(set, ri)
+                        </Virtualize>
+                    </div>
+                }
+                else
+                {
+                    @for (int r = 0; r < set.Rows.Length; r++)
+                    {
+                        @RenderRow(set, r)
+                    }
+                }
+
+                @* Inserted (new) rows ALWAYS render after the body — OUTSIDE the virtualize branch, so
+                   they are visible and editable on large/virtualized sets too (a <Virtualize> body
+                   only renders fetched rows, never the pending inserts). *@
+                @foreach (var ins in _inserts)
+                {
+                    @RenderInsertRow(set, ins)
+                }
+            </div>
+
+            @* Footer: row count + truncation banner. *@
+            <div class="akml-results-footer">
+                <span class="akml-results-stat" data-testid="results-rowcount">
+                    showing @set.Rows.Length row@(set.Rows.Length == 1 ? "" : "s")
+                </span>
+                @if (set.Truncated)
+                {
+                    <span class="akml-results-truncated" data-testid="results-truncated">
+                        result capped (~@(set.RowsOmitted)+ rows omitted) — raise Max rows to fetch more
+                    </span>
+                }
+            </div>
+
+            @* Apply bar — only when there are pending edits. RUN-IMMEDIATELY (no confirm). *@
+            @if (set.IsEditable && HasPendingEdits)
+            {
+                <div class="akml-results-applybar" data-testid="results-applybar">
+                    <span class="akml-results-stat">@PendingCount pending change@(PendingCount == 1 ? "" : "s")</span>
+                    @if (!string.IsNullOrEmpty(_applyMessage))
+                    {
+                        <span class="@(_applyOk ? "akml-connmgr-msg-ok" : "akml-connmgr-msg-error")"
+                              data-testid="results-apply-message">@_applyMessage</span>
+                    }
+                    <span class="akml-results-spacer"></span>
+                    <button class="akml-connmgr-btn" data-testid="results-discard"
+                            @onclick="DiscardEdits" disabled="@_applying">Discard</button>
+                    <button class="akml-connmgr-btn akml-connmgr-btn-primary" data-testid="results-apply"
+                            @onclick="ApplyEditsAsync" disabled="@_applying">@(_applying ? "Applying…" : "Apply")</button>
+                </div>
+            }
+        }
+    </div>
+}
+
+@code {
+    [Inject] private IQueryExecutionService QueryExec { get; set; } = default!;
+
+    private const int VirtualizeThreshold = 200;
+    private const int MessagesTab = -1;
+
+    private ExecuteQueryResult? _result;
+    private int _activeSet;
+    private int[] _rowIndexes = System.Array.Empty<int>();
+
+    // Edit tracking for the ACTIVE result set, keyed by fetched row index.
+    private readonly Dictionary<int, Dictionary<int, string?>> _edits = new();   // rowIndex -> (colIndex -> new value)
+    private readonly HashSet<int> _deletes = new();                              // deleted fetched rows
+    private readonly List<Dictionary<int, string?>> _inserts = new();            // new rows (colIndex -> value)
+
+    // Inline-edit cursor.
+    private int _editingRow = -1;
+    private int _editingCol = -1;
+    private bool _editingInsert;
+    private int _editingInsertIdx = -1;
+
+    // Inline-editor focus: the HTML `autofocus` attribute is ignored on Blazor-inserted inputs, so we
+    // capture the element and FocusAsync it on the render that follows a double-click.
+    private Microsoft.AspNetCore.Components.ElementReference _editorRef;
+    private bool _focusEditorPending;
+
+    private bool _applying;
+    private string? _applyMessage;
+    private bool _applyOk;
+
+    private ExecuteResultSet? ActiveSet =>
+        (_result != null && _activeSet >= 0 && _activeSet < _result.ResultSets.Length)
+            ? _result.ResultSets[_activeSet] : null;
+
+    private bool HasPendingEdits => _edits.Count > 0 || _deletes.Count > 0 || _inserts.Count > 0;
+    private int PendingCount => _edits.Count + _deletes.Count + _inserts.Count;
+
+    /// <summary>Called by the page after an execute completes. Resets all edit state. Pass
+    /// <paramref name="preserveActiveTab"/> on an apply-refresh re-run so the user isn't yanked back to
+    /// result set 1 (clamped to the new result-set count).</summary>
+    public void ShowResult(ExecuteQueryResult result, bool preserveActiveTab = false)
+    {
+        int prevActive = _activeSet;
+        _result = result;
+        if (preserveActiveTab && prevActive >= 0 && prevActive < result.ResultSets.Length)
+            _activeSet = prevActive;
+        else
+            _activeSet = result.ResultSets.Length == 0 ? MessagesTab : 0;
+        ResetEditState();
+        RebuildRowIndexes();
+        StateHasChanged();
+    }
+
+    private void SelectSet(int idx)
+    {
+        _activeSet = idx;
+        ResetEditState();
+        RebuildRowIndexes();
+    }
+
+    private void ResetEditState()
+    {
+        _edits.Clear();
+        _deletes.Clear();
+        _inserts.Clear();
+        _editingRow = _editingCol = -1;
+        _editingInsert = false;
+        _editingInsertIdx = -1;
+        _applyMessage = null;
+    }
+
+    private void RebuildRowIndexes()
+    {
+        var set = ActiveSet;
+        int n = set?.Rows.Length ?? 0;
+        _rowIndexes = new int[n];
+        for (int i = 0; i < n; i++) _rowIndexes[i] = i;
+    }
+
+    private RenderFragment RenderRow(ExecuteResultSet set, int r) => builder =>
+    {
+        bool deleted = _deletes.Contains(r);
+        bool edited = _edits.ContainsKey(r);
+        string rowClass = "akml-results-row" + (deleted ? " akml-row-deleted" : edited ? " akml-row-edited" : "");
+
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "class", rowClass);
+        builder.AddAttribute(2, "role", "row");
+        builder.AddAttribute(3, "data-testid", $"results-row-{r}");
+        builder.AddAttribute(4, "aria-rowindex", r + 2); // +2: header row is aria-rowindex 1.
+
+        // Row marker cell: a delete/restore toggle when editable.
+        builder.OpenElement(10, "div");
+        builder.AddAttribute(11, "class", "akml-results-cell akml-results-rowmarker");
+        builder.AddAttribute(12, "role", "gridcell");
+        if (set.IsEditable)
+        {
+            builder.OpenElement(13, "button");
+            builder.AddAttribute(14, "class", "akml-rowmarker-btn");
+            builder.AddAttribute(15, "title", deleted ? "Restore row" : "Delete row");
+            builder.AddAttribute(16, "data-testid", $"results-delete-{r}");
+            builder.AddAttribute(17, "onclick", EventCallback.Factory.Create(this, () => ToggleDelete(r)));
+            builder.AddContent(18, deleted ? "↺" : "✕");
+            builder.CloseElement();
+        }
+        builder.CloseElement();
+
+        for (int c = 0; c < set.ColumnNames.Length; c++)
+        {
+            int col = c;
+            bool editableCell = set.IsEditable && IsColumnEditable(set, col) && !deleted;
+            string? value = CurrentCellValue(set, r, col);
+
+            builder.OpenElement(20 + c * 10, "div");
+            builder.AddAttribute(21, "class", "akml-results-cell" + (editableCell ? " akml-cell-editable" : "") + (value == null ? " akml-cell-null" : ""));
+            builder.AddAttribute(22, "role", "gridcell");
+            builder.AddAttribute(23, "data-testid", $"results-cell-{r}-{col}");
+            if (editableCell)
+            {
+                builder.AddAttribute(24, "ondblclick", EventCallback.Factory.Create(this, () => BeginEdit(r, col, false, -1)));
+            }
+
+            if (!deleted && _editingRow == r && _editingCol == col && !_editingInsert)
+            {
+                AddEditor(builder, value, v => CommitEdit(r, col, v, false, -1));
+            }
+            else
+            {
+                builder.AddContent(28, DisplayCell(set, col, value));
+            }
+            builder.CloseElement();
+        }
+        builder.CloseElement();
+    };
+
+    private RenderFragment RenderInsertRow(ExecuteResultSet set, Dictionary<int, string?> ins) => builder =>
+    {
+        int insIdx = _inserts.IndexOf(ins);
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "class", "akml-results-row akml-row-new");
+        builder.AddAttribute(2, "role", "row");
+        builder.AddAttribute(3, "data-testid", $"results-insert-{insIdx}");
+        builder.AddAttribute(4, "aria-rowindex", set.Rows.Length + 2 + insIdx); // after header + data rows.
+
+        builder.OpenElement(10, "div");
+        builder.AddAttribute(11, "class", "akml-results-cell akml-results-rowmarker");
+        builder.AddAttribute(12, "role", "gridcell");
+        builder.OpenElement(13, "button");
+        builder.AddAttribute(14, "class", "akml-rowmarker-btn");
+        builder.AddAttribute(15, "title", "Remove new row");
+        builder.AddAttribute(16, "data-testid", $"results-remove-insert-{insIdx}");
+        builder.AddAttribute(17, "onclick", EventCallback.Factory.Create(this, () => RemoveInsert(insIdx)));
+        builder.AddContent(18, "✕");
+        builder.CloseElement();
+        builder.CloseElement();
+
+        for (int c = 0; c < set.ColumnNames.Length; c++)
+        {
+            int col = c;
+            bool editableCell = IsColumnInsertable(set, col);
+            ins.TryGetValue(col, out var value);
+
+            builder.OpenElement(20 + c * 10, "div");
+            builder.AddAttribute(21, "class", "akml-results-cell" + (editableCell ? " akml-cell-editable" : "") + (value == null ? " akml-cell-null" : ""));
+            builder.AddAttribute(22, "role", "gridcell");
+            builder.AddAttribute(23, "data-testid", $"results-insert-cell-{insIdx}-{col}");
+            if (editableCell)
+            {
+                builder.AddAttribute(24, "ondblclick", EventCallback.Factory.Create(this, () => BeginEdit(-1, col, true, insIdx)));
+            }
+
+            if (_editingInsert && _editingInsertIdx == insIdx && _editingCol == col)
+            {
+                AddEditor(builder, value, v => CommitEdit(-1, col, v, true, insIdx));
+            }
+            else
+            {
+                builder.AddContent(28, IsAutoIncrement(set, col) ? "(auto)" : DisplayCell(set, col, value));
+            }
+            builder.CloseElement();
+        }
+        builder.CloseElement();
+    };
+
+    private void AddEditor(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder builder, string? value, Action<string?> commit)
+    {
+        builder.OpenElement(30, "input");
+        builder.AddAttribute(31, "class", "akml-cell-input");
+        builder.AddAttribute(32, "value", value ?? string.Empty);
+        builder.AddAttribute(33, "data-testid", "results-cell-input");
+        builder.AddAttribute(34, "onchange", EventCallback.Factory.Create<Microsoft.AspNetCore.Components.ChangeEventArgs>(
+            this, e => commit(e.Value?.ToString())));
+        builder.AddAttribute(35, "onblur", EventCallback.Factory.Create<Microsoft.AspNetCore.Components.Web.FocusEventArgs>(
+            this, _ => { _editingRow = _editingCol = -1; _editingInsert = false; _editingInsertIdx = -1; }));
+        builder.AddAttribute(36, "autofocus", true);
+        builder.AddElementReferenceCapture(37, er => _editorRef = er);
+        builder.CloseElement();
+    }
+
+    private void BeginEdit(int row, int col, bool insert, int insIdx)
+    {
+        _editingRow = row;
+        _editingCol = col;
+        _editingInsert = insert;
+        _editingInsertIdx = insIdx;
+        _focusEditorPending = true; // focus the just-rendered input (autofocus is ignored on inserted nodes).
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focusEditorPending)
+        {
+            _focusEditorPending = false;
+            try { await _editorRef.FocusAsync(); }
+            catch { /* element gone / not focusable — harmless */ }
+        }
+    }
+
+    private void CommitEdit(int row, int col, string? value, bool insert, int insIdx)
+    {
+        var set = ActiveSet;
+        if (set == null) return;
+
+        // A blank input on a nullable column means SQL NULL; otherwise keep empty string.
+        string? normalized = value;
+
+        if (insert)
+        {
+            if (insIdx >= 0 && insIdx < _inserts.Count)
+            {
+                _inserts[insIdx][col] = normalized;
+            }
+        }
+        else
+        {
+            // Only record a change if it actually differs from the fetched value.
+            var original = set.Rows[row].ElementAtOrDefault(col);
+            if (!string.Equals(original, normalized, StringComparison.Ordinal))
+            {
+                if (!_edits.TryGetValue(row, out var rowEdits))
+                {
+                    rowEdits = new Dictionary<int, string?>();
+                    _edits[row] = rowEdits;
+                }
+                rowEdits[col] = normalized;
+            }
+            else if (_edits.TryGetValue(row, out var rowEdits))
+            {
+                rowEdits.Remove(col);
+                if (rowEdits.Count == 0) _edits.Remove(row);
+            }
+        }
+
+        _editingRow = _editingCol = -1;
+        _editingInsert = false;
+        _editingInsertIdx = -1;
+    }
+
+    private void ToggleDelete(int row)
+    {
+        if (!_deletes.Remove(row)) _deletes.Add(row);
+        // A deleted row's pending edits are moot.
+        if (_deletes.Contains(row)) _edits.Remove(row);
+    }
+
+    private void AddNewRow()
+    {
+        _inserts.Add(new Dictionary<int, string?>());
+    }
+
+    private void RemoveInsert(int insIdx)
+    {
+        if (insIdx >= 0 && insIdx < _inserts.Count) _inserts.RemoveAt(insIdx);
+    }
+
+    private void DiscardEdits()
+    {
+        ResetEditState();
+    }
+
+    private async Task ApplyEditsAsync()
+    {
+        var set = ActiveSet;
+        if (set == null || !set.IsEditable) return;
+
+        _applying = true;
+        _applyMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            var req = BuildApplyRequest(set);
+            var result = await QueryExec.ApplyAsync(req, System.Threading.CancellationToken.None);
+
+            if (result.Status == ExecuteStatus.Ok)
+            {
+                _applyOk = true;
+                _applyMessage = $"Applied {req.Edits.Length} change(s).";
+                ResetEditState();
+                // Caller may re-run the query to refresh; we surface the success and clear tints.
+                await OnApplied.InvokeAsync();
+            }
+            else
+            {
+                _applyOk = false;
+                // Surface the SPECIFIC failed edit from the per-edit results (the engine rolled the whole
+                // batch back, so nothing persisted). Keep the pending edits — do NOT ResetEditState — so
+                // the user can correct the offending value and re-Apply.
+                var failed = (result.Results ?? System.Array.Empty<CrudEditResult>())
+                    .FirstOrDefault(r => !r.Ok && !string.IsNullOrEmpty(r.Error));
+                _applyMessage = failed?.Error ?? result.ErrorMessage ?? "Apply failed.";
+                if (result.ConnectionWasReset)
+                    _applyMessage += " (connection was reset — #temp/SET state lost.)";
+            }
+        }
+        finally
+        {
+            _applying = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>Raised after a successful Apply so the page can re-run the query to refresh the grid.</summary>
+    [Parameter] public EventCallback OnApplied { get; set; }
+
+    private ApplyChangesRequest BuildApplyRequest(ExecuteResultSet set)
+    {
+        var edits = new List<CrudEditDto>();
+
+        // Key columns: prefer true PK; fall back to any IsKey column.
+        var keyProv = set.Provenance.Where(p => p.IsTruePrimaryKey).ToList();
+        if (keyProv.Count == 0) keyProv = set.Provenance.Where(p => p.IsKey).ToList();
+
+        // UPDATE SET: writable NON-KEY columns (keys go to the WHERE, never the SET).
+        bool IsUpdatable(ColumnProvenanceDto p) =>
+            !p.IsReadOnly && !p.IsExpression && !p.IsAutoIncrement
+            && !p.IsKey && !p.IsTruePrimaryKey
+            && !string.IsNullOrEmpty(p.BaseColumnName);
+
+        // INSERT VALUES: every supplyable column INCLUDING a non-identity (natural) key.
+        bool IsInsertable(ColumnProvenanceDto p) =>
+            !p.IsReadOnly && !p.IsExpression && !p.IsAutoIncrement && !string.IsNullOrEmpty(p.BaseColumnName);
+
+        // Deletes.
+        foreach (var rowIdx in _deletes)
+        {
+            edits.Add(new CrudEditDto
+            {
+                Op = CrudOp.Delete,
+                KeyCells = keyProv.Select(p => KeyCell(set, rowIdx, p)).ToArray(),
+            });
+        }
+
+        // Updates (skip rows also marked for delete).
+        foreach (var kv in _edits)
+        {
+            if (_deletes.Contains(kv.Key)) continue;
+            var setCells = kv.Value
+                .Where(e => IsUpdatable(set.Provenance[e.Key]))
+                .Select(e => new CrudCellDto
+                {
+                    BaseColumnName = set.Provenance[e.Key].BaseColumnName!,
+                    ProviderType = set.Provenance[e.Key].ProviderType,
+                    Size = set.Provenance[e.Key].ColumnSize,
+                    Precision = set.Provenance[e.Key].Precision,
+                    Scale = set.Provenance[e.Key].Scale,
+                    Value = e.Value,
+                })
+                .ToArray();
+            if (setCells.Length == 0) continue;
+            edits.Add(new CrudEditDto
+            {
+                Op = CrudOp.Update,
+                SetCells = setCells,
+                KeyCells = keyProv.Select(p => KeyCell(set, kv.Key, p)).ToArray(),
+            });
+        }
+
+        // Inserts.
+        foreach (var ins in _inserts)
+        {
+            var setCells = new List<CrudCellDto>();
+            for (int c = 0; c < set.Provenance.Length; c++)
+            {
+                var p = set.Provenance[c];
+                if (!IsInsertable(p)) continue;
+                ins.TryGetValue(c, out var v);
+                setCells.Add(new CrudCellDto
+                {
+                    BaseColumnName = p.BaseColumnName!,
+                    ProviderType = p.ProviderType,
+                    Size = p.ColumnSize,
+                    Precision = p.Precision,
+                    Scale = p.Scale,
+                    Value = v,
+                });
+            }
+            if (setCells.Count == 0) continue;
+            edits.Add(new CrudEditDto { Op = CrudOp.Insert, SetCells = setCells.ToArray() });
+        }
+
+        return new ApplyChangesRequest
+        {
+            BaseCatalog = set.BaseCatalog,
+            BaseSchema = set.BaseSchema ?? string.Empty,
+            BaseTable = set.BaseTable ?? string.Empty,
+            Edits = edits.ToArray(),
+        };
+    }
+
+    private static CrudCellDto KeyCell(ExecuteResultSet set, int rowIdx, ColumnProvenanceDto p) => new()
+    {
+        BaseColumnName = p.BaseColumnName!,
+        ProviderType = p.ProviderType,
+        Size = p.ColumnSize,
+        Precision = p.Precision,
+        Scale = p.Scale,
+        // The WHERE always uses the ORIGINAL fetched value (not any pending edit).
+        Value = set.Rows[rowIdx].ElementAtOrDefault(p.Ordinal),
+    };
+
+    /// <summary>Editable in an EXISTING row: writable, non-identity, AND not a key column — the key is
+    /// the WHERE identity, so editing it would retarget or orphan the row.</summary>
+    private bool IsColumnEditable(ExecuteResultSet set, int col)
+    {
+        if (col >= set.Provenance.Length) return false;
+        var p = set.Provenance[col];
+        return !p.IsReadOnly && !p.IsExpression && !p.IsAutoIncrement
+            && !p.IsKey && !p.IsTruePrimaryKey
+            && !string.IsNullOrEmpty(p.BaseColumnName);
+    }
+
+    /// <summary>Supplyable on a NEW row: writable + non-identity, INCLUDING a non-identity (natural) key
+    /// the user must provide on insert. (Identity/computed/expression columns are still excluded.)</summary>
+    private bool IsColumnInsertable(ExecuteResultSet set, int col)
+    {
+        if (col >= set.Provenance.Length) return false;
+        var p = set.Provenance[col];
+        return !p.IsReadOnly && !p.IsExpression && !p.IsAutoIncrement && !string.IsNullOrEmpty(p.BaseColumnName);
+    }
+
+    private bool IsAutoIncrement(ExecuteResultSet set, int col) =>
+        col < set.Provenance.Length && set.Provenance[col].IsAutoIncrement;
+
+    private string? CurrentCellValue(ExecuteResultSet set, int row, int col)
+    {
+        if (_edits.TryGetValue(row, out var rowEdits) && rowEdits.TryGetValue(col, out var edited))
+            return edited;
+        return set.Rows[row].ElementAtOrDefault(col);
+    }
+
+    private static string DisplayCell(ExecuteResultSet set, int col, string? value)
+    {
+        if (value == null) return "NULL";
+        // Binary cells render a compact "[binary N bytes]" indicator instead of a raw base64 blob.
+        // (The engine already substitutes cells over 64 KB; this also condenses smaller ones.)
+        if (set.ClrTypeHints.ElementAtOrDefault(col) == ClrTypeHint.Binary
+            && !value.StartsWith("[binary ", StringComparison.Ordinal)
+            && !value.StartsWith("[text ", StringComparison.Ordinal))
+        {
+            return $"[binary {Base64ByteLength(value)} bytes]";
+        }
+        return value;
+    }
+
+    /// <summary>Decoded byte length of a base64 string (without materialising the bytes).</summary>
+    private static int Base64ByteLength(string b64)
+    {
+        int len = b64.Length;
+        if (len == 0) return 0;
+        int pad = b64[len - 1] == '=' ? (len > 1 && b64[len - 2] == '=' ? 2 : 1) : 0;
+        return System.Math.Max(0, (len / 4) * 3 - pad);
+    }
+
+    private static string TypeHintTitle(ExecuteResultSet set, int col)
+    {
+        var hint = set.ClrTypeHints.ElementAtOrDefault(col);
+        return hint switch
+        {
+            ClrTypeHint.Int64 => "integer",
+            ClrTypeHint.Double => "floating point",
+            ClrTypeHint.Decimal => "decimal",
+            ClrTypeHint.Bool => "bit (0/1)",
+            ClrTypeHint.DateTime => "date/time (ISO-8601)",
+            ClrTypeHint.DateTimeOffset => "datetimeoffset (ISO-8601)",
+            ClrTypeHint.Guid => "uniqueidentifier",
+            ClrTypeHint.Binary => "binary (base64)",
+            ClrTypeHint.Variant => "sql_variant",
+            _ => "text",
+        };
+    }
+
+    private static string StatusLabel(int status) => status switch
+    {
+        ExecuteStatus.Error => "Error",
+        ExecuteStatus.Cancelled => "Cancelled",
+        ExecuteStatus.TimedOut => "Timed out",
+        ExecuteStatus.NoConnection => "Not connected",
+        _ => "Status",
+    };
+}

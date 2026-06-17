@@ -1,0 +1,208 @@
+/*
+  Spec 030 — Phase 5. Token-only styling for ResultsGridComponent. No hardcoded chrome hex —
+  every surface/border/text colour reads an --akml-* token; only the semantic CRUD status colours
+  (--akml-status-warning/success/danger) are intentional (they read the same in every theme).
+  The grid body is DIV-based (role=grid) so Blazor <Virtualize> works (it cannot live in <tbody>).
+*/
+
+.akml-results-pane {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;                 /* lets the grid shrink inside the flex-column page */
+    height: 38%;
+    max-height: 55%;
+    border-top: 1px solid var(--akml-border-default);
+    background-color: var(--akml-surface-panel);
+    overflow: hidden;
+}
+
+/* ── Header / tabs ─────────────────────────────────────────────────────────── */
+.akml-results-header {
+    display: flex;
+    align-items: center;
+    gap: var(--akml-scalar-spacing-s);
+    padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s);
+    border-bottom: 1px solid var(--akml-border-subtle);
+    background-color: var(--akml-surface-elevated);
+    flex: 0 0 auto;
+}
+.akml-results-tabs { display: flex; gap: var(--akml-scalar-spacing-xs); }
+.akml-results-tab {
+    font-family: var(--akml-type-chrome-family);
+    font-size: var(--akml-type-chrome-size);
+    background: transparent;
+    color: var(--akml-text-secondary);
+    border: 1px solid transparent;
+    border-radius: var(--akml-scalar-radius-xs);
+    padding: 2px var(--akml-scalar-spacing-s);
+    cursor: pointer;
+}
+.akml-results-tab:hover { background-color: var(--akml-surface-hover); }
+.akml-results-tab.active {
+    color: var(--akml-text-primary);
+    border-color: var(--akml-accent-primary);
+    background-color: var(--akml-surface-selection);
+}
+.akml-results-spacer { flex: 1 1 auto; }
+.akml-results-stat { color: var(--akml-text-secondary); font-size: var(--akml-type-chrome-size); }
+
+/* ── Banners ───────────────────────────────────────────────────────────────── */
+.akml-results-error,
+.akml-results-warning {
+    padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s);
+    font-size: var(--akml-type-chrome-size);
+    border-bottom: 1px solid var(--akml-border-subtle);
+}
+.akml-results-error { color: var(--akml-status-danger); }
+.akml-results-warning { color: var(--akml-status-warning); }
+
+/* ── Messages pane ─────────────────────────────────────────────────────────── */
+.akml-results-messages {
+    flex: 1 1 auto;
+    overflow: auto;
+    padding: var(--akml-scalar-spacing-s);
+    font-family: var(--akml-type-editorgrid-family);
+    font-size: var(--akml-type-editorgrid-size);
+    color: var(--akml-text-primary);
+}
+.akml-results-message { white-space: pre-wrap; line-height: 1.5; }
+
+/* ── Legend (CRUD glyph chips — a11y: state is glyph + colour, never colour alone) ── */
+.akml-results-legend {
+    display: flex;
+    align-items: center;
+    gap: var(--akml-scalar-spacing-m);
+    padding: 2px var(--akml-scalar-spacing-s);
+    border-bottom: 1px solid var(--akml-border-subtle);
+    font-size: var(--akml-type-chrome-size);
+    flex: 0 0 auto;
+}
+.akml-legend-chip { color: var(--akml-text-secondary); }
+.akml-legend-chip.akml-row-edited { color: var(--akml-status-warning); box-shadow: none; }
+.akml-legend-chip.akml-row-new { color: var(--akml-status-success); box-shadow: none; }
+.akml-legend-chip.akml-row-deleted { color: var(--akml-status-danger); box-shadow: none; }
+
+/* ── Grid ──────────────────────────────────────────────────────────────────── */
+.akml-results-grid {
+    flex: 1 1 auto;
+    overflow: auto;
+    font-family: var(--akml-type-editorgrid-family);
+    font-size: var(--akml-type-editorgrid-size);
+    color: var(--akml-text-primary);
+}
+.akml-results-virtualbody { display: block; }
+
+.akml-results-row {
+    display: flex;
+    border-bottom: 1px solid var(--akml-border-subtle);
+    min-height: 24px;
+}
+.akml-results-row:hover { background-color: var(--akml-surface-hover); }
+.akml-results-headerrow {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background-color: var(--akml-surface-elevated);
+    border-bottom: 1px solid var(--akml-border-default);
+}
+.akml-results-headerrow:hover { background-color: var(--akml-surface-elevated); }
+
+.akml-results-cell {
+    flex: 1 0 120px;
+    min-width: 80px;
+    padding: 2px var(--akml-scalar-spacing-s);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    border-right: 1px solid var(--akml-border-subtle);
+}
+.akml-results-rowmarker {
+    flex: 0 0 28px;
+    min-width: 28px;
+    text-align: center;
+    color: var(--akml-text-secondary);
+    padding: 0;
+}
+.akml-results-colheader {
+    display: flex;
+    flex-direction: column;
+    color: var(--akml-text-secondary);
+    font-family: var(--akml-type-chrome-family);
+}
+.akml-col-name { color: var(--akml-text-primary); font-weight: 600; }
+.akml-col-type { color: var(--akml-text-secondary); font-size: 10px; }
+
+.akml-cell-null { color: var(--akml-text-secondary); font-style: italic; }
+.akml-cell-editable { cursor: cell; }
+.akml-cell-editable:hover { background-color: var(--akml-surface-selection); }
+
+.akml-cell-input {
+    width: 100%;
+    box-sizing: border-box;
+    font-family: var(--akml-type-editorgrid-family);
+    font-size: var(--akml-type-editorgrid-size);
+    color: var(--akml-text-primary);
+    background-color: var(--akml-surface-canvas);
+    border: 1px solid var(--akml-accent-primary);
+    border-radius: var(--akml-scalar-radius-xs);
+    padding: 0 2px;
+}
+
+.akml-rowmarker-btn {
+    background: transparent;
+    border: none;
+    color: var(--akml-text-secondary);
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 22px;
+}
+.akml-rowmarker-btn:hover { color: var(--akml-text-primary); }
+
+/* CRUD tints — inset LEFT edge-bar (semantic colour) so it works on any theme; the legend
+   glyph carries the meaning for colour-blind users. */
+.akml-row-edited { box-shadow: inset 3px 0 0 0 var(--akml-status-warning); }
+.akml-row-new { box-shadow: inset 3px 0 0 0 var(--akml-status-success); }
+.akml-row-deleted {
+    box-shadow: inset 3px 0 0 0 var(--akml-status-danger);
+    text-decoration: line-through;
+    opacity: 0.7;
+}
+
+/* ── Footer / truncation ───────────────────────────────────────────────────── */
+.akml-results-footer {
+    display: flex;
+    align-items: center;
+    gap: var(--akml-scalar-spacing-m);
+    padding: 2px var(--akml-scalar-spacing-s);
+    border-top: 1px solid var(--akml-border-subtle);
+    flex: 0 0 auto;
+}
+.akml-results-truncated { color: var(--akml-status-warning); font-size: var(--akml-type-chrome-size); }
+
+/* ── Apply bar (connmgr footer idiom) ──────────────────────────────────────── */
+.akml-results-applybar {
+    display: flex;
+    align-items: center;
+    gap: var(--akml-scalar-spacing-s);
+    padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s);
+    border-top: 1px solid var(--akml-border-default);
+    background-color: var(--akml-surface-sidebar);
+    flex: 0 0 auto;
+}
+
+/* Action buttons — reuse the canonical connmgr button idiom (kept local so the grid is
+   self-contained even if the connmgr stylesheet is scoped). */
+.akml-results-pane .akml-connmgr-btn {
+    font-family: var(--akml-type-chrome-family);
+    background-color: var(--akml-surface-panel);
+    color: var(--akml-text-primary);
+    border: 1px solid var(--akml-border-default);
+    border-radius: var(--akml-scalar-radius-xs);
+    padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-m);
+    cursor: pointer;
+}
+.akml-results-pane .akml-connmgr-btn:hover:not(:disabled) { background-color: var(--akml-surface-hover); }
+.akml-results-pane .akml-connmgr-btn:disabled { opacity: 0.5; cursor: default; }
+.akml-results-pane .akml-connmgr-btn-primary { border-color: var(--akml-accent-primary); }
+.akml-results-pane .akml-connmgr-msg-ok { color: var(--akml-status-success); font-size: var(--akml-type-chrome-size); }
+.akml-results-pane .akml-connmgr-msg-error { color: var(--akml-status-danger); font-size: var(--akml-type-chrome-size); }

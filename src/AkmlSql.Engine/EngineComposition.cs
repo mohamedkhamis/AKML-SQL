@@ -39,6 +39,9 @@ public sealed class EngineComposition
             SettingsLoader = ConfigManager.Load,
             ParserService = new TsqlParserService(),
             SchemaMetadata = new SchemaMetadataService(),
+            // Spec 030 — Phase 5: one registry shared by every transport so #temp/SET/USE state
+            // persists across executes on the SAME per-session SqlConnection.
+            SessionConnections = new Execution.SessionConnectionRegistry(),
         };
 
         var router = new RpcRouter();

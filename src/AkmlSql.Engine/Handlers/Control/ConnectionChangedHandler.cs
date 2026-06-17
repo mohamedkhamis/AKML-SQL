@@ -40,6 +40,16 @@ namespace AkmlSql.Engine.Handlers.Control
             ctx.Sessions.UpdateSession(request);
             ctx.ParserService.SetServerVersion(request.ServerVersion);
 
+            // Spec 030 — Phase 5: dispose the persistent execute connection when the credential changes.
+            // The stale SqlConnection carries the now-wrong identity + #temp/SET/USE state; the next
+            // ExecuteQuery lazily reopens under the new identity. This is the canonical disposal hook
+            // (NOT socket close — a reconnect reuses the same SessionId). Null-safe: SessionConnections
+            // is non-required, so older/test contexts without it skip this branch.
+            if (!string.Equals(previousConnStr, request.ConnectionString, StringComparison.Ordinal))
+            {
+                ctx.SessionConnections?.Dispose(request.SessionId);
+            }
+
             // Invalidate any cached database list for this session -- a new connection may be
             // to a different server and we must not leak the previous server's databases into
             // USE-completion.

@@ -63,6 +63,12 @@ builder.Services.AddSingleton<IEngineBridge, EngineBridge>();
 // bridge using one canonical SessionId, enabling live-schema IntelliSense (Windows or SQL auth).
 builder.Services.AddSingleton<ISqlConnectionService, SqlConnectionService>();
 
+// Spec 030 — Phase 5: query execution + results grid + inline CRUD. QueryExecutionService routes
+// ExecuteQuery / ExecuteCancel / ApplyChanges through the bridge using the canonical SessionId;
+// ExecutionSettingsStore persists the advisory max-rows / timeout caps (the engine re-clamps).
+builder.Services.AddSingleton<IExecutionSettingsStore, ExecutionSettingsStore>();
+builder.Services.AddSingleton<IQueryExecutionService, QueryExecutionService>();
+
 // Phase 4 (web connection manager): saved SQL-Server connections (IndexedDB, no password) + the
 // modal-opener singleton that the command palette / Settings / StatusBar call to surface the modal.
 builder.Services.AddSingleton<ISavedSqlConnectionStore, SavedSqlConnectionStore>();

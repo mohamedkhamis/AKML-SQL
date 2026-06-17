@@ -28,6 +28,9 @@
 @inject ISnippetStore Snippets
 @inject IRefactoringService Refactoring
 @inject ICommandRegistry Commands
+@inject ISqlConnectionService SqlConn
+@inject IQueryExecutionService QueryExec
+@inject IExecutionSettingsStore ExecSettings
 
 <PageTitle>Editor — AKML SQL</PageTitle>
 
@@ -40,6 +43,27 @@
         <button class="akml-tool-button @(_showAiPanel ? "active" : "")" data-testid="ai-button"
                 @onclick="ToggleAiPanel" title="AI assistance">AI ▾</button>
         <button class="akml-tool-button" @onclick="SaveAsync" title="Ctrl+S">Save</button>
+        @* Spec 030 — Phase 5: Execute + advisory resource caps. Mod-Enter (CM6 keymap) also runs it. *@
+        <button class="akml-tool-button akml-tool-button-run" data-testid="execute-button"
+                @onclick="ExecuteAsync" disabled="@(_executing || !SqlConn.IsConnected)"
+                title="Ctrl+Enter — run the selection or the whole document">
+            @(_executing ? "Running…" : "▶ Execute")
+        </button>
+        @if (_executing)
+        {
+            <button class="akml-tool-button" data-testid="execute-cancel" @onclick="CancelExecuteAsync"
+                    title="Cancel a queued query">Cancel</button>
+        }
+        <span class="akml-caps">
+            <label title="Maximum rows to fetch (the engine re-clamps to its ceiling)">rows
+                <input type="number" class="akml-caps-input" data-testid="caps-maxrows" min="1" max="100000"
+                       value="@_maxRows" @onchange="OnMaxRowsChanged" />
+            </label>
+            <label title="Command timeout in seconds (the engine re-clamps to its ceiling)">timeout
+                <input type="number" class="akml-caps-input" data-testid="caps-timeout" min="1" max="600"
+                       value="@_timeoutSeconds" @onchange="OnTimeoutChanged" />
+            </label>
+        </span>
         <span class="akml-editor-spacer"></span>
         @if (!string.IsNullOrEmpty(_status))
         {
@@ -47,7 +71,7 @@
         }
     </div>
     <div class="akml-editor-grid" style="grid-template-columns: @GridColumns;">
-        <EditorComponent @ref="_editor" InitialText="@_initialText" OnTextChanged="OnTextChangedAsync" />
+        <EditorComponent @ref="_editor" InitialText="@_initialText" OnTextChanged="OnTextChangedAsync" OnExecute="ExecuteAsync" />
         @if (_showSchemaTree)
         {
             <SchemaTreeComponent ServerCanonicalIdentity="@_activeServerIdentity"
@@ -85,6 +109,10 @@
             </div>
         }
     </div>
+    @* Spec 030 — Phase 5: the results pane is a THIRD flex-column sibling AFTER .akml-editor-grid,
+       inside the flex-column .akml-editor-page, so it occupies the full-width bottom slot. *@
+    <ResultsGridComponent @ref="_resultsGrid" OnApplied="OnAppliedReExecuteAsync" />
+
     @* Spec 024 T004: completion markers for Playwright. `_hasFormatted` / `_hasAnalysed`
        latch to true on the first successful Format / Analyse; `_formatVersion` /
        `_analyseVersion` increment per success so a test can detect a *repeat* operation
@@ -231,7 +259,28 @@
         padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s);
         cursor: pointer;
     }
-    .akml-tool-button:hover { background-color: var(--akml-surface-hover); }
+    .akml-tool-button:hover:not(:disabled) { background-color: var(--akml-surface-hover); }
+    .akml-tool-button:disabled { opacity: 0.5; cursor: default; }
+    /* Spec 030 — Phase 5: Execute button (accent-bordered) + advisory resource-cap inputs. */
+    .akml-tool-button-run { border-color: var(--akml-accent-primary); color: var(--akml-text-primary); }
+    .akml-caps {
+        display: flex;
+        align-items: center;
+        gap: var(--akml-scalar-spacing-s);
+        color: var(--akml-text-secondary);
+        font-size: var(--akml-type-chrome-size);
+    }
+    .akml-caps label { display: inline-flex; align-items: center; gap: 4px; }
+    .akml-caps-input {
+        width: 64px;
+        font-family: var(--akml-type-chrome-family);
+        font-size: var(--akml-type-chrome-size);
+        background-color: var(--akml-surface-canvas);
+        color: var(--akml-text-primary);
+        border: 1px solid var(--akml-border-default);
+        border-radius: var(--akml-scalar-radius-xs);
+        padding: 1px 4px;
+    }
     .akml-editor-grid {
         flex: 1 1 auto;
         display: grid;
@@ -467,6 +516,14 @@
     // command against a torn-down editor.
     private IDisposable? _commandRegistration;
 
+    // Spec 030 — Phase 5: query execution + results pane state.
+    private ResultsGridComponent? _resultsGrid;
+    private bool _executing;
+    private int _maxRows = 1000;
+    private int _timeoutSeconds = 30;
+    private string? _activeQueryId;
+    private string _lastExecutedSql = string.Empty;
+
     protected override async Task OnInitializedAsync()
     {
         // T034: apply the persisted theme as soon as we have services. The shim is wired
@@ -510,10 +567,110 @@
             }
         }
 
+        // Spec 030 — Phase 5: seed the execute caps from the store, and re-render the Execute button's
+        // enabled state when the SQL connection comes/goes.
+        var execSettings = await ExecSettings.GetAsync();
+        _maxRows = execSettings.MaxRows;
+        _timeoutSeconds = execSettings.CommandTimeoutSeconds;
+        SqlConn.StateChanged += OnSqlConnStateChanged;
+
         // Spec 030 — register this page's context actions with the ⌘P palette. These close over the
         // live editor + page handlers; the registration token is disposed in DisposeAsync.
         _commandRegistration = Commands.Register(BuildContextActions());
     }
+
+    private void OnSqlConnStateChanged() => InvokeAsync(StateHasChanged);
+
+    // ── Spec 030 — Phase 5: execute + caps + apply-refresh ───────────────────────────────────────
+
+    /// <summary>
+    /// Run the query. Reads the LIVE editor text (selection-or-whole-doc, NOT the 500ms-debounced
+    /// _currentText) exactly like GetAiInputSqlAsync, builds an ExecuteQueryRequest with the canonical
+    /// SessionId + advisory caps, and hands the status-bearing result to the results pane. Triggered by
+    /// the toolbar button AND the CM6 Mod-Enter keymap (via EditorComponent.OnExecute).
+    /// </summary>
+    private async Task ExecuteAsync()
+    {
+        if (_executing || _editor == null) return;
+        if (!SqlConn.IsConnected)
+        {
+            _status = "Connect to a SQL Server first (Connect button / palette).";
+            StateHasChanged();
+            return;
+        }
+
+        // LIVE text — selection if any, else the whole document.
+        var selection = await _editor.GetSelectedTextAsync();
+        var sql = string.IsNullOrWhiteSpace(selection) ? await _editor.GetTextAsync() : selection;
+        if (string.IsNullOrWhiteSpace(sql)) return;
+
+        _lastExecutedSql = sql;
+        _activeQueryId = Guid.NewGuid().ToString("N");
+        _executing = true;
+        _status = "Running…";
+        StateHasChanged();
+
+        try
+        {
+            var result = await QueryExec.ExecuteAsync(sql, _maxRows, _timeoutSeconds, _activeQueryId, CancellationToken.None);
+            _resultsGrid?.ShowResult(result);
+            _status = result.Status == ExecuteStatus.Ok
+                ? $"Done in {result.ElapsedMs} ms"
+                : null;
+            if (result.Status != ExecuteStatus.Ok)
+            {
+                Diagnostics.Log(DiagnosticLevel.Warn, "execute", $"Execute status {result.Status}: {result.ErrorMessage}");
+            }
+        }
+        finally
+        {
+            _executing = false;
+            _activeQueryId = null;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CancelExecuteAsync()
+    {
+        var qid = _activeQueryId;
+        if (!string.IsNullOrEmpty(qid))
+        {
+            await QueryExec.CancelAsync(qid, CancellationToken.None);
+        }
+    }
+
+    /// <summary>After a successful inline-CRUD Apply, re-run the last query so the grid refreshes
+    /// (and the tints clear). Run-immediately — no confirm.</summary>
+    private async Task OnAppliedReExecuteAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_lastExecutedSql) || !SqlConn.IsConnected) return;
+        _activeQueryId = Guid.NewGuid().ToString("N");
+        var result = await QueryExec.ExecuteAsync(_lastExecutedSql, _maxRows, _timeoutSeconds, _activeQueryId, CancellationToken.None);
+        _activeQueryId = null;
+        _resultsGrid?.ShowResult(result, preserveActiveTab: true); // keep the user on the set they applied to.
+        StateHasChanged();
+    }
+
+    private async Task OnMaxRowsChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var v) && v > 0)
+        {
+            _maxRows = Math.Clamp(v, 1, 100_000);
+            await PersistCapsAsync();
+        }
+    }
+
+    private async Task OnTimeoutChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var v) && v > 0)
+        {
+            _timeoutSeconds = Math.Clamp(v, 1, 600);
+            await PersistCapsAsync();
+        }
+    }
+
+    private Task PersistCapsAsync() =>
+        ExecSettings.SetAsync(new ExecutionSettings { MaxRows = _maxRows, CommandTimeoutSeconds = _timeoutSeconds });
 
     /// <summary>Spec 030 — the editor's context-action contributions to the ⌘P palette.</summary>
     private IEnumerable<CommandAction> BuildContextActions()
@@ -928,6 +1085,9 @@
         // Spec 030 — drop our ⌘P palette actions FIRST so a late palette open can't run a closure
         // over the editor we're tearing down.
         _commandRegistration?.Dispose();
+        // Spec 030 — Phase 5: drop the connection-state subscription so the disposed page isn't
+        // re-rendered on a later connect/disconnect.
+        SqlConn.StateChanged -= OnSqlConnStateChanged;
         _analyseCts?.Cancel();
         _analyseCts?.Dispose();
         await SessionStore.FlushAsync();

@@ -477,9 +477,21 @@ export async function create(hostElementId, initialText, dotNetRef) {
         return true;   // handled (the work is async)
     }
 
+    // Spec 030 — Phase 5: Ctrl/Cmd+Enter runs the query. Registered INSIDE the CM6 keymap (not just
+    // the Blazor page handler) because CM6 has focus and swallows Mod-Enter. The Blazor side surfaces
+    // it via EditorComponent.ExecuteFromJs → OnExecute → Editor.ExecuteAsync. F5 is deliberately NOT
+    // bound (browser refresh) — the toolbar Execute button covers that muscle memory.
+    function runExecute(view) {
+        if (!dotNetRef) return false;
+        dotNetRef.invokeMethodAsync('ExecuteFromJs')
+            .catch(() => { /* execution errors surface in the results pane, never into the editor */ });
+        return true;   // handled (the work is async); stops CM inserting a newline.
+    }
+
     const navKeymap = cm.view.keymap.of([
         { key: 'F12', run: gotoDefinition },
         { key: 'Escape', run: dismissSignature },   // also clears a stray signature tooltip
+        { key: 'Mod-Enter', run: runExecute },      // Spec 030 Phase 5 — Execute query.
     ]);
 
     const state = cm.state.EditorState.create({

@@ -5,6 +5,10 @@
   scoped <style>; this file holds only cross-cutting base + accessibility rules.
 */
 
+/* Spec 030 — Phase 5: results grid + inline-CRUD chrome (token-only). @import must
+   precede all rules, so it sits at the very top of the stylesheet body. */
+@import url("components/results-grid.css");
+
 /* ── Base ────────────────────────────────────────────────────────────────── */
 html, body {
     margin: 0;

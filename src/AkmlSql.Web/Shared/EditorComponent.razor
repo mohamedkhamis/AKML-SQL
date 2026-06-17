@@ -79,6 +79,11 @@
     /// <summary>Raised whenever the editor's text changes. Debounced by CodeMirror.</summary>
     [Parameter] public EventCallback<string> OnTextChanged { get; set; }
 
+    /// <summary>Spec 030 — Phase 5. Raised when the user presses Ctrl/Cmd+Enter in the editor
+    /// (CM6 keymap → <see cref="ExecuteFromJs"/>). The page handles it by reading the live text and
+    /// running the query. Same shape as <see cref="OnTextChanged"/>.</summary>
+    [Parameter] public EventCallback OnExecute { get; set; }
+
     private string HostId { get; } = $"akml-editor-{Guid.NewGuid():N}";
     private ElementReference _host;
     private IJSObjectReference? _module;
@@ -109,6 +114,11 @@
     {
         return OnTextChanged.InvokeAsync(text);
     }
+
+    /// <summary>Spec 030 — Phase 5. JS-invokable Execute bridge (CM6 Mod-Enter keymap). Surfaces the
+    /// <see cref="OnExecute"/> EventCallback up to the page, which reads the LIVE editor text.</summary>
+    [JSInvokable]
+    public Task ExecuteFromJs() => OnExecute.InvokeAsync();
 
     /// <summary>
     /// JS-invokable completion source called by CodeMirror's autocompletion. Returns

@@ -285,5 +285,20 @@ namespace AkmlSql.Core.Ipc
         public const int SchemaPhaseAResponse = 209;
         public const int SchemaPhaseBRequest = 210;
         public const int SchemaPhaseBResponse = 211;
+
+        // Spec 030 — Phase 5 (web edition) query execution + virtualized results grid + inline CRUD.
+        // Kept in the 200+ web-bridge band (212+ was free; the named-pipe shell does not use these).
+        //   • ExecuteQuery (212) → ExecuteQueryResult (213): run a SELECT/batch on the persistent
+        //     per-session SqlConnection and stream back row data (SAFE string?[][] encoding) + per-column
+        //     provenance for CRUD eligibility.
+        //   • ExecuteCancel (214): NOTIFICATION (RequestId=0, no paired result) — signal the per-session
+        //     CancellationTokenSource for a QueryId (cancels a queued execute; mirrors AiStreamCancel=78).
+        //   • ApplyChanges (215) → ApplyChangesResult (216): commit grid edits (parameterized
+        //     UPDATE/INSERT/DELETE) inside one transaction on the SAME persistent connection.
+        public const int ExecuteQuery = 212;
+        public const int ExecuteQueryResult = 213;
+        public const int ExecuteCancel = 214;
+        public const int ApplyChanges = 215;
+        public const int ApplyChangesResult = 216;
     }
 }

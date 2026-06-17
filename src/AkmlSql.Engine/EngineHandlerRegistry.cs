@@ -320,6 +320,26 @@ internal static class EngineHandlerRegistry
 
         router.RegisterRaw(MessageTypes.GridExport, (msg, ct) => gridExportService.HandleAsync(msg));
 
+        // === Spec 030 Phase 5: query execution + inline CRUD (3 raw) ===
+        // Share the per-session persistent-connection registry (built in EngineComposition.Build) so
+        // #temp/SET/USE state persists across executes on the SAME SqlConnection. ExecuteQuery and
+        // ApplyChanges also take the schema cache for the is_primary_key cross-check. ExecuteCancel is
+        // a notification (ack-and-drop), mirroring AiStreamCancel=78.
+        var sessionConnections = ctx.SessionConnections
+            ?? new Execution.SessionConnectionRegistry();
+        var executeQueryHandler = new Execution.ExecuteQueryHandler(sessionConnections, schemaCache);
+        var applyChangesHandler = new Execution.ApplyChangesHandler(sessionConnections);
+        var executeCancelHandler = new Execution.ExecuteCancelHandler(sessionConnections);
+        router.RegisterRaw(MessageTypes.ExecuteQuery,
+            (msg, ct) => executeQueryHandler.HandleAsync(msg, lookupSession, ct));
+        router.RegisterRaw(MessageTypes.ApplyChanges,
+            (msg, ct) => applyChangesHandler.HandleAsync(msg, lookupSession, ct));
+        router.RegisterRaw(MessageTypes.ExecuteCancel, (msg, ct) =>
+        {
+            executeCancelHandler.Handle(msg);
+            return Task.FromResult<RpcMessage?>(null);
+        });
+
         return historyRetention;
     }
 }
