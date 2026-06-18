@@ -99,7 +99,7 @@ public class InsertToUpdateOperation : HeavyweightOperationBase
             }
 
             // Skip identity / computed columns from SET (can't be assigned).
-            if (meta is { IsIdentity: true } || meta is { IsComputed: true })
+            if (meta is { IsIdentity: true } or { IsComputed: true })
                 continue;
 
             setLines.Add($"{colName} = {valueText}");

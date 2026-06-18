@@ -447,9 +447,6 @@
                             {
                                 if (list.Count >= ObjectFlattenCap) break;
                                 var schemaName = string.IsNullOrEmpty(obj.SchemaName) ? schema.Name : obj.SchemaName;
-                                var qualified = $"[{schemaName}].[{obj.ObjectName}]";
-                                // Capture the qualifier so Run navigates to the editor and inserts it.
-                                var insert = qualified;
                                 list.Add(new CommandAction
                                 {
                                     Id = "object:" + schemaName + "." + obj.ObjectName,

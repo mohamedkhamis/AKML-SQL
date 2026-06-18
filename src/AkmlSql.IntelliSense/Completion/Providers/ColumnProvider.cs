@@ -283,10 +283,6 @@ public class ColumnProvider : ICompletionProvider
     }
 
     /// <summary>
-    /// Yields columns for a single table identified by <see cref="CursorContext.DotPrefix"/>
-    /// (the original "alias." / "table." behavior).
-    /// </summary>
-    /// <summary>
     /// Spec 030 T032 / FR-012 — columns from every column-loaded user table/view, used when
     /// ColumnScope=All and no table is referenced yet. Tables whose columns haven't loaded
     /// (Phase B background load) are skipped — never force a load here. Items are bare column
@@ -324,6 +320,10 @@ public class ColumnProvider : ICompletionProvider
         }
     }
 
+    /// <summary>
+    /// Yields columns for a single table identified by <see cref="CursorContext.DotPrefix"/>
+    /// (the original "alias." / "table." behavior).
+    /// </summary>
     private static IEnumerable<CompletionItem> GetDotQualifiedColumns(CursorContext context, DatabaseCache cache)
     {
         string schemaName;

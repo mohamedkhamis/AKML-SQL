@@ -923,7 +923,7 @@ namespace AkmlSql.Shell.Shared.Snippets
 
             foreach (var variable in _viewModel.Variables)
             {
-                var row = BuildVariableRow(variable, fg, editorPanel, border, placeholder, canEdit);
+                var row = BuildVariableRow(variable, fg, editorPanel, border, canEdit);
                 _variablesPanel.Children.Add(row);
             }
         }
@@ -933,7 +933,6 @@ namespace AkmlSql.Shell.Shared.Snippets
             SolidColorBrush fg,
             SolidColorBrush editorPanel,
             SolidColorBrush border,
-            SolidColorBrush placeholder,
             bool canEdit)
         {
             var grid = new Grid { Margin = new Thickness(4, 2, 4, 2) };
@@ -942,17 +941,17 @@ namespace AkmlSql.Shell.Shared.Snippets
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.4, GridUnitType.Star) }); // Tooltip
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });                        // Remove
 
-            var nameBox = MakeVariableCell(variable.Name, "name", fg, editorPanel, border, placeholder, canEdit);
+            var nameBox = MakeVariableCell(variable.Name, "name", fg, editorPanel, border, canEdit);
             nameBox.TextChanged += (s, _) => variable.Name = nameBox.Text;
             Grid.SetColumn(nameBox, 0);
             grid.Children.Add(nameBox);
 
-            var defaultBox = MakeVariableCell(variable.Default, "default", fg, editorPanel, border, placeholder, canEdit);
+            var defaultBox = MakeVariableCell(variable.Default, "default", fg, editorPanel, border, canEdit);
             defaultBox.TextChanged += (s, _) => variable.Default = defaultBox.Text;
             Grid.SetColumn(defaultBox, 1);
             grid.Children.Add(defaultBox);
 
-            var tooltipBox = MakeVariableCell(variable.Tooltip, "tooltip", fg, editorPanel, border, placeholder, canEdit);
+            var tooltipBox = MakeVariableCell(variable.Tooltip, "tooltip", fg, editorPanel, border, canEdit);
             tooltipBox.TextChanged += (s, _) => variable.Tooltip = tooltipBox.Text;
             Grid.SetColumn(tooltipBox, 2);
             grid.Children.Add(tooltipBox);
@@ -981,7 +980,6 @@ namespace AkmlSql.Shell.Shared.Snippets
             SolidColorBrush fg,
             SolidColorBrush editorPanel,
             SolidColorBrush border,
-            SolidColorBrush placeholder,
             bool canEdit)
         {
             return new TextBox

@@ -2,7 +2,6 @@ using System;
 using System.Data;
 using System.Globalization;
 using AkmlSql.Core.Ipc.Messages;
-using Microsoft.Data.SqlClient;
 
 namespace AkmlSql.Engine.Execution
 {

@@ -27,11 +27,12 @@ public abstract class HeavyweightOperationBase
     /// </summary>
     protected internal static int TrimTrailingTerminator(string docText, int start, int end)
     {
-        int probe = Math.Min(end, docText.Length);
+        int limit = Math.Min(end, docText.Length);
+        int probe = limit;
         while (probe > start && char.IsWhiteSpace(docText[probe - 1])) probe--;
         if (probe > start && docText[probe - 1] == ';')
             return probe - 1; // exclude the ';'
-        return Math.Min(end, docText.Length);
+        return limit;
     }
 
     protected internal static (int line, int col) OffsetToLineCol(string text, int offset)

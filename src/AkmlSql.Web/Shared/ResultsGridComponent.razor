@@ -427,7 +427,8 @@
         var set = ActiveSet;
         if (set == null) return;
 
-        // A blank input on a nullable column means SQL NULL; otherwise keep empty string.
+        // The cell value is stored verbatim (a blank input is kept as an empty string, not coerced to
+        // SQL NULL); the write path binds it through SqlScalarEncoder.Decode for the column's type.
         string? normalized = value;
 
         if (insert)

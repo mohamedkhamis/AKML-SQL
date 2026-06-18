@@ -1484,6 +1484,24 @@ public class ControlFlowRules : IRuleSet
         }
     }
 
+    /// <summary>
+    /// True when the identifier at <paramref name="nameEnd"/> is the (possibly multi-part) name
+    /// of a DDL object — i.e. walking back over Identifier/QuotedIdentifier/Dot tokens lands on
+    /// TABLE / PROCEDURE / FUNCTION / TRIGGER / VIEW. Such a name's paren is a column or
+    /// parameter list owned by the DDL layout passes, not a function call.
+    /// </summary>
+    private static bool IsDdlObjectName(List<LayoutNode> nodes, int nameEnd)
+    {
+        int k = nameEnd;
+        while (k >= 0 && nodes[k].TokenType is TSqlTokenType.Identifier
+            or TSqlTokenType.QuotedIdentifier or TSqlTokenType.Dot)
+        {
+            k--;
+        }
+        return k >= 0 && nodes[k].TokenType is TSqlTokenType.Table or TSqlTokenType.Procedure
+            or TSqlTokenType.Function or TSqlTokenType.Trigger or TSqlTokenType.View;
+    }
+
     // -----------------------------------------------------------------------
     // T084 — IN-list alignment
     // -----------------------------------------------------------------------
@@ -1505,24 +1523,6 @@ public class ControlFlowRules : IRuleSet
     /// Only IN lists with literal/identifier members are reshaped — IN-subquery lists are left
     /// alone (consistent with <see cref="ApplyInListStyle"/>).
     /// </summary>
-    /// <summary>
-    /// True when the identifier at <paramref name="nameEnd"/> is the (possibly multi-part) name
-    /// of a DDL object — i.e. walking back over Identifier/QuotedIdentifier/Dot tokens lands on
-    /// TABLE / PROCEDURE / FUNCTION / TRIGGER / VIEW. Such a name's paren is a column or
-    /// parameter list owned by the DDL layout passes, not a function call.
-    /// </summary>
-    private static bool IsDdlObjectName(List<LayoutNode> nodes, int nameEnd)
-    {
-        int k = nameEnd;
-        while (k >= 0 && nodes[k].TokenType is TSqlTokenType.Identifier
-            or TSqlTokenType.QuotedIdentifier or TSqlTokenType.Dot)
-        {
-            k--;
-        }
-        return k >= 0 && nodes[k].TokenType is TSqlTokenType.Table or TSqlTokenType.Procedure
-            or TSqlTokenType.Function or TSqlTokenType.Trigger or TSqlTokenType.View;
-    }
-
     private static void ApplyInStatementsAlignment(List<LayoutNode> nodes, InStatementsOptions inStmt)
     {
         if (inStmt == null) return;
