@@ -248,6 +248,41 @@
         for (int i = 0; i < n; i++) _rowIndexes[i] = i;
     }
 
+    /// <summary>
+    /// After a successful Apply, reflect the committed edits / deletes / inserts in the in-memory
+    /// result set so the grid stays consistent with the database WITHOUT re-running the query. The
+    /// page only re-runs single read-only SELECTs (see Editor.OnAppliedReExecuteAsync /
+    /// <see cref="QueryRefreshSafety"/>); for a multi-statement batch we must NOT re-run it (that
+    /// would repeat its side effects), so without this the grid would revert to the stale pre-edit
+    /// values when the overlay is cleared. When the page DOES re-run, the fresh ShowResult simply
+    /// replaces these rows. Server-filled identity/computed values on INSERT aren't known here — a
+    /// manual re-Execute surfaces them.
+    /// </summary>
+    private void BakeCommittedChangesIntoActiveSet(ExecuteResultSet set)
+    {
+        int colCount = set.ColumnNames.Length;
+        var rows = new List<string?[]>(set.Rows.Length + _inserts.Count);
+        for (int r = 0; r < set.Rows.Length; r++)
+        {
+            if (_deletes.Contains(r)) continue;                  // committed delete → drop the row
+            var row = set.Rows[r];
+            if (_edits.TryGetValue(r, out var rowEdits))         // committed edits → overwrite cells
+            {
+                foreach (var (c, v) in rowEdits)
+                    if (c >= 0 && c < row.Length) row[c] = v;
+            }
+            rows.Add(row);
+        }
+        foreach (var ins in _inserts)                            // committed inserts → append rows
+        {
+            var row = new string?[colCount];
+            foreach (var (c, v) in ins)
+                if (c >= 0 && c < colCount) row[c] = v;
+            rows.Add(row);
+        }
+        set.Rows = rows.ToArray();
+    }
+
     private RenderFragment RenderRow(ExecuteResultSet set, int r) => builder =>
     {
         bool deleted = _deletes.Contains(r);
@@ -467,7 +502,11 @@
             {
                 _applyOk = true;
                 _applyMessage = $"Applied {req.Edits.Length} change(s).";
+                // Reflect the committed changes in-memory BEFORE clearing the overlay so the grid shows
+                // the new values even when the page declines to re-run the query (multi-statement batch).
+                BakeCommittedChangesIntoActiveSet(set);
                 ResetEditState();
+                RebuildRowIndexes();   // deletes/inserts changed the row set.
                 // Caller may re-run the query to refresh; we surface the success and clear tints.
                 await OnApplied.InvokeAsync();
             }
