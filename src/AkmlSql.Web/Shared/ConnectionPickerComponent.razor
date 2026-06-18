@@ -90,6 +90,12 @@
     }
     .akml-connections-name { font-weight: bold; }
     .akml-connections-host { color: var(--akml-text-secondary); font-family: var(--akml-type-editor-family); }
+    /* On the active row the background is --akml-surface-selection, which is a saturated system
+       Highlight in the high-contrast theme. The de-emphasised host colour (text-secondary = GrayText)
+       drops to ~1.15:1 on it — effectively invisible. Promote it to text-primary on the active row so
+       it reads against the selection fill in every theme (light/dark selection tints are subtle, so
+       primary text stays readable there too). */
+    .akml-connections-row-active .akml-connections-host { color: var(--akml-text-primary); }
     .akml-connections-badge {
         font-size: 11px;
         padding: 0 var(--akml-scalar-spacing-xs);
