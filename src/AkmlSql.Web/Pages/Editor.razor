@@ -552,20 +552,13 @@
         await Diagnostics.RestoreAsync();
         Diagnostics.Log(DiagnosticLevel.Info, "editor", "Editor page mounted.");
 
-        // Spec 025 US4: load the active connection so the schema tree has a target. The
-        // database name comes from spec 021's connection record (currently fixed at the
-        // host's default database; per-connection db picker is a follow-up). Server
-        // identity = "host:port" — matches the engine's canonical identity format.
-        var schemaConnId = await Connections.GetActiveIdAsync();
-        if (!string.IsNullOrEmpty(schemaConnId))
-        {
-            var schemaConn = await Connections.GetAsync(schemaConnId);
-            if (schemaConn != null)
-            {
-                _activeServerIdentity = $"{schemaConn.Host}:{schemaConn.Port}";
-                _activeDatabaseName = "master";   // placeholder until per-connection db picker lands.
-            }
-        }
+        // Spec 025 US4 / spec 030 loop fix: point the schema tree at the ACTIVE SQL connection's
+        // (server, database) — the SAME key MainLayout passes to SchemaSync.StartAsync, so the tree
+        // finds the snapshot the sync populated. The previous code keyed the tree off the engine
+        // pairing record (host:port) with a hard-coded "master" database, which never matched the
+        // cache — the tree stayed "not yet loaded" and mislabelled the database even when connected
+        // to e.g. Northwind. Re-evaluated on every SQL connection state change (OnSqlConnStateChanged).
+        RefreshSchemaTarget();
 
         // Spec 030 — Phase 5: seed the execute caps from the store, and re-render the Execute button's
         // enabled state when the SQL connection comes/goes.
@@ -579,7 +572,31 @@
         _commandRegistration = Commands.Register(BuildContextActions());
     }
 
-    private void OnSqlConnStateChanged() => InvokeAsync(StateHasChanged);
+    private void OnSqlConnStateChanged()
+    {
+        RefreshSchemaTarget();
+        InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>
+    /// Align the schema-tree target with the live SQL connection so its (server, database) lookup key
+    /// matches what MainLayout passes to <c>SchemaSync.StartAsync</c> (<c>SqlConn.Server</c> /
+    /// <c>SqlConn.Database</c>). Cleared when no SQL connection is open — the tree then hides via
+    /// <c>_showSchemaTree</c>.
+    /// </summary>
+    private void RefreshSchemaTarget()
+    {
+        if (SqlConn.IsConnected && !string.IsNullOrEmpty(SqlConn.Server) && !string.IsNullOrEmpty(SqlConn.Database))
+        {
+            _activeServerIdentity = SqlConn.Server;
+            _activeDatabaseName = SqlConn.Database;
+        }
+        else
+        {
+            _activeServerIdentity = null;
+            _activeDatabaseName = null;
+        }
+    }
 
     // ── Spec 030 — Phase 5: execute + caps + apply-refresh ───────────────────────────────────────
 
