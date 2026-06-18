@@ -101,7 +101,11 @@ namespace AkmlSql.Engine.Execution
                         }
                         else
                         {
-                            int affected = await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+                            // The UPDATE/DELETE command ends with "SELECT @@ROWCOUNT" (see CrudWriteGenerator),
+                            // so read the affected count via ExecuteScalar. @@ROWCOUNT is unaffected by
+                            // SET NOCOUNT ON (which ExecuteNonQuery's return value is NOT — it yields -1).
+                            var countScalar = await cmd.ExecuteScalarAsync(ct).ConfigureAwait(false);
+                            int affected = (countScalar is null or DBNull) ? 0 : Convert.ToInt32(countScalar);
                             if (affected != 1)
                             {
                                 // A keyed UPDATE/DELETE must touch EXACTLY one row. Any other count means

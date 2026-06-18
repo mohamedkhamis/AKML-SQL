@@ -249,6 +249,63 @@ public sealed class ExecuteQueryIntegrationTests
     }
 
     [SkippableFact]
+    public async Task ApplyChanges_Update_Succeeds_UnderSetNocountOn()
+    {
+        Skip.IfNot(TryReachLocalSql(), "No local SQL Server reachable on (local)/tempdb.");
+
+        var (transport, _) = BuildEngine();
+        var sid = Guid.NewGuid().ToString("N");
+        await ConnectAsync(transport, sid);
+
+        var tableName = "akml_nocount_" + Guid.NewGuid().ToString("N");
+        try
+        {
+            var setup = await ExecuteAsync(transport, sid,
+                $"CREATE TABLE dbo.[{tableName}] (Id int PRIMARY KEY, Name nvarchar(50)); " +
+                $"INSERT INTO dbo.[{tableName}] VALUES (1, 'Alice'), (2, 'Bob');", 1);
+            Assert.Equal(ExecuteStatus.Ok, setup.Status);
+
+            // Turn NOCOUNT ON on the PERSISTENT session — exactly what a prior user batch can leave behind.
+            // Under NOCOUNT, ExecuteNonQuery returns -1, so a keyed-write guard that reads its return value
+            // would wrongly reject the UPDATE. The write must instead read @@ROWCOUNT (unaffected by NOCOUNT).
+            var nocount = await ExecuteAsync(transport, sid, "SET NOCOUNT ON;", 2);
+            Assert.Equal(ExecuteStatus.Ok, nocount.Status);
+
+            var apply = new ApplyChangesRequest
+            {
+                SessionId = sid,
+                BaseSchema = "dbo",
+                BaseTable = tableName,
+                Edits = new[]
+                {
+                    new CrudEditDto
+                    {
+                        Op = CrudOp.Update,
+                        SetCells = new[] { new CrudCellDto { BaseColumnName = "Name", ProviderType = (int)System.Data.SqlDbType.NVarChar, Value = "Bobby" } },
+                        KeyCells = new[] { new CrudCellDto { BaseColumnName = "Id", ProviderType = (int)System.Data.SqlDbType.Int, Value = "2" } },
+                    },
+                },
+            };
+            var applyResp = await transport.SendAsync(new RpcMessage
+            {
+                MessageType = MessageTypes.ApplyChanges, RequestId = 3, Payload = MessagePackSerializer.Serialize(apply),
+            }, CancellationToken.None);
+            var applyResult = MessagePackSerializer.Deserialize<ApplyChangesResult>(applyResp!.Payload!);
+
+            Assert.Equal(ExecuteStatus.Ok, applyResult.Status);
+            Assert.True(applyResult.Results[0].Ok, applyResult.Results[0].Error);
+            Assert.Equal(1, applyResult.Results[0].RowsAffected);
+
+            var reread = await ExecuteAsync(transport, sid, $"SELECT Name FROM dbo.[{tableName}] WHERE Id = 2;", 4);
+            Assert.Equal("Bobby", reread.ResultSets[0].Rows[0][0]);
+        }
+        finally
+        {
+            await ExecuteAsync(transport, sid, $"IF OBJECT_ID('dbo.[{tableName}]') IS NOT NULL DROP TABLE dbo.[{tableName}];", 99);
+        }
+    }
+
+    [SkippableFact]
     public async Task Execute_WithoutConnection_ReturnsNoConnectionEnvelope()
     {
         // No Skip — this path needs no DB; it asserts the never-null NoConnection envelope.

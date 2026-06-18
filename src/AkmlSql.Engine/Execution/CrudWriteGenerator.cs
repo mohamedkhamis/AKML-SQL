@@ -109,6 +109,10 @@ namespace AkmlSql.Engine.Execution
             }
 
             AppendWhereKeys(sb, cmd, edit.KeyCells);
+            // SELECT @@ROWCOUNT so the handler reads the affected count via ExecuteScalar. Unlike
+            // ExecuteNonQuery's return value, @@ROWCOUNT is NOT suppressed by SET NOCOUNT ON — which a
+            // prior batch can leave active on the persistent session, making ExecuteNonQuery return -1.
+            sb.Append("; SELECT @@ROWCOUNT;");
             cmd.CommandText = sb.ToString();
         }
 
@@ -140,6 +144,7 @@ namespace AkmlSql.Engine.Execution
             var sb = new StringBuilder();
             sb.Append("DELETE FROM ").Append(table);
             AppendWhereKeys(sb, cmd, edit.KeyCells);
+            sb.Append("; SELECT @@ROWCOUNT;");   // see BuildUpdate — read count via ExecuteScalar, NOCOUNT-safe.
             cmd.CommandText = sb.ToString();
         }
 

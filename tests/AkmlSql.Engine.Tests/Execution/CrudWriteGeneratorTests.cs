@@ -64,7 +64,7 @@ public sealed class CrudWriteGeneratorTests
         using var conn = NewClosedConnection();
         using var cmd = CrudWriteGenerator.BuildCommand(req, edit, conn, null);
 
-        Assert.Equal("UPDATE [dbo].[Customers] SET [Name] = @p0, [Age] = @p1 WHERE [Id] = @k0", cmd.CommandText);
+        Assert.Equal("UPDATE [dbo].[Customers] SET [Name] = @p0, [Age] = @p1 WHERE [Id] = @k0; SELECT @@ROWCOUNT;", cmd.CommandText);
         // No inlined literals — every value is a typed parameter.
         Assert.Equal(3, cmd.Parameters.Count);
         Assert.Equal("Alice", cmd.Parameters["@p0"].Value);
@@ -108,7 +108,7 @@ public sealed class CrudWriteGeneratorTests
         using var conn = NewClosedConnection();
         using var cmd = CrudWriteGenerator.BuildCommand(req, edit, conn, null);
 
-        Assert.Equal("DELETE FROM [dbo].[Customers] WHERE [Id] = @k0", cmd.CommandText);
+        Assert.Equal("DELETE FROM [dbo].[Customers] WHERE [Id] = @k0; SELECT @@ROWCOUNT;", cmd.CommandText);
         Assert.Single(cmd.Parameters);
         Assert.Equal(42, cmd.Parameters["@k0"].Value);
     }
@@ -126,7 +126,7 @@ public sealed class CrudWriteGeneratorTests
         using var conn = NewClosedConnection();
         using var cmd = CrudWriteGenerator.BuildCommand(req, edit, conn, null);
 
-        Assert.Equal("DELETE FROM [dbo].[OrderLines] WHERE [OrderId] = @k0 AND [LineNo] = @k1", cmd.CommandText);
+        Assert.Equal("DELETE FROM [dbo].[OrderLines] WHERE [OrderId] = @k0 AND [LineNo] = @k1; SELECT @@ROWCOUNT;", cmd.CommandText);
     }
 
     [Fact]
@@ -184,7 +184,7 @@ public sealed class CrudWriteGeneratorTests
         using var conn = NewClosedConnection();
         using var cmd = CrudWriteGenerator.BuildCommand(req, edit, conn, null);
 
-        Assert.Equal("DELETE FROM [dbo].[Customers] WHERE [OptionalKey] IS NULL", cmd.CommandText);
+        Assert.Equal("DELETE FROM [dbo].[Customers] WHERE [OptionalKey] IS NULL; SELECT @@ROWCOUNT;", cmd.CommandText);
         Assert.Empty(cmd.Parameters); // no @kN bound for an IS NULL comparison.
     }
 
@@ -202,7 +202,7 @@ public sealed class CrudWriteGeneratorTests
         using var conn = NewClosedConnection();
         using var cmd = CrudWriteGenerator.BuildCommand(req, edit, conn, null);
 
-        Assert.Equal("UPDATE [dbo].[Customers] SET [MiddleName] = @p0 WHERE [Id] = @k0", cmd.CommandText);
+        Assert.Equal("UPDATE [dbo].[Customers] SET [MiddleName] = @p0 WHERE [Id] = @k0; SELECT @@ROWCOUNT;", cmd.CommandText);
         Assert.Equal(DBNull.Value, cmd.Parameters["@p0"].Value);
     }
 
