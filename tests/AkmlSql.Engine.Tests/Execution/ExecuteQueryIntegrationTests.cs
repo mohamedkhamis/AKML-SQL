@@ -129,6 +129,36 @@ public sealed class ExecuteQueryIntegrationTests
     }
 
     [SkippableFact]
+    public async Task Select_OmittingPrimaryKey_FiltersHiddenKeyInfoColumn()
+    {
+        Skip.IfNot(TryReachLocalSql(), "No local SQL Server reachable on (local)/tempdb.");
+
+        var (transport, _) = BuildEngine();
+        var sid = Guid.NewGuid().ToString("N");
+        await ConnectAsync(transport, sid);
+
+        // A base table whose PRIMARY KEY is NOT in the SELECT list. Under CommandBehavior.KeyInfo
+        // SQL Server appends the PK as a HIDDEN column so each row is identifiable — it must be
+        // filtered out, never shown beside the one column the user actually selected (spec 030 loop).
+        await ExecuteAsync(transport, sid,
+            "CREATE TABLE #hk (id int PRIMARY KEY, val varchar(10)); INSERT INTO #hk VALUES (1,'a'),(2,'b');", 1);
+
+        var sel = await ExecuteAsync(transport, sid, "SELECT val FROM #hk ORDER BY val;", 2);
+        Assert.Equal(ExecuteStatus.Ok, sel.Status);
+        var rs = sel.ResultSets[0];
+        Assert.Equal(new[] { "val" }, rs.ColumnNames);          // hidden 'id' filtered out
+        Assert.All(rs.Rows, r => Assert.Single(r));              // each row carries only the visible column
+        // The key is absent from the result set → rows can't be targeted → read-only.
+        Assert.False(rs.IsEditable);
+
+        // Sanity: when the key IS selected it appears (not hidden) and the set is editable.
+        var sel2 = await ExecuteAsync(transport, sid, "SELECT id, val FROM #hk ORDER BY id;", 3);
+        var rs2 = sel2.ResultSets[0];
+        Assert.Equal(new[] { "id", "val" }, rs2.ColumnNames);
+        Assert.True(rs2.IsEditable);
+    }
+
+    [SkippableFact]
     public async Task TempTable_PersistsAcrossExecutes()
     {
         Skip.IfNot(TryReachLocalSql(), "No local SQL Server reachable on (local)/tempdb.");

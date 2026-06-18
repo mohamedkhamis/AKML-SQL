@@ -72,7 +72,24 @@ namespace AkmlSql.Engine.Execution
             long byteBudgetRemaining,
             CancellationToken ct)
         {
-            int fieldCount = reader.FieldCount;
+            int rawFieldCount = reader.FieldCount;
+
+            // Under CommandBehavior.KeyInfo (the provenance path) SQL Server appends HIDDEN key columns
+            // to the result set so each row is identifiable — e.g. a SELECT over a view (sys.databases)
+            // or a base table whose PRIMARY KEY is not in the SELECT list. They inflate FieldCount and
+            // must never reach the grid (a phantom "id" beside the one column the user actually asked
+            // for). GetColumnSchema().IsHidden flags them; read it once here and reuse it for provenance.
+            // Best-effort: if the schema can't be read we fall back to every column (prior behaviour).
+            ReadOnlyCollection<DbColumn>? cols = null;
+            if (includeProvenance)
+            {
+                try { cols = reader.GetColumnSchema(); } catch { cols = null; }
+            }
+            // displayOrdinals[displayIndex] = reader ordinal, hidden columns removed. null when nothing
+            // is hidden (the common case) → identity mapping with no extra allocation or indirection.
+            int[]? displayOrdinals = BuildVisibleOrdinals(cols, rawFieldCount);
+            int fieldCount = displayOrdinals?.Length ?? rawFieldCount;
+
             var columnNames = new string[fieldCount];
             var columnSqlTypes = new string[fieldCount];
             var clrHints = new int[fieldCount];
@@ -80,9 +97,10 @@ namespace AkmlSql.Engine.Execution
 
             for (int i = 0; i < fieldCount; i++)
             {
-                columnNames[i] = reader.GetName(i);
-                columnSqlTypes[i] = SafeDataTypeName(reader, i);
-                sqlDbTypes[i] = ResolveSqlDbType(reader, i);
+                int ord = displayOrdinals?[i] ?? i;
+                columnNames[i] = reader.GetName(ord);
+                columnSqlTypes[i] = SafeDataTypeName(reader, ord);
+                sqlDbTypes[i] = ResolveSqlDbType(reader, ord);
                 clrHints[i] = SqlScalarEncoder.ClrHint(sqlDbTypes[i]);
             }
 
@@ -96,7 +114,7 @@ namespace AkmlSql.Engine.Execution
             // Provenance FIRST (off the column schema; no rows read yet) — best-effort, never throws out.
             if (includeProvenance)
             {
-                TryPopulateProvenance(reader, fieldCount, sqlDbTypes, set);
+                TryPopulateProvenance(cols, displayOrdinals, fieldCount, sqlDbTypes, set);
             }
 
             // Rows.
@@ -123,7 +141,8 @@ namespace AkmlSql.Engine.Execution
                 var row = new string?[fieldCount];
                 for (int c = 0; c < fieldCount; c++)
                 {
-                    string? cell = EncodeCell(reader, c, sqlDbTypes[c]);
+                    int ord = displayOrdinals?[c] ?? c;
+                    string? cell = EncodeCell(reader, ord, sqlDbTypes[c]);
                     row[c] = cell;
                     approxBytes += EstimateCellBytes(cell);
                 }
@@ -134,6 +153,35 @@ namespace AkmlSql.Engine.Execution
             set.Truncated = truncated;
             set.RowsOmitted = omitted;
             return set;
+        }
+
+        /// <summary>
+        /// Map display column index → reader ordinal, skipping HIDDEN columns — the key columns
+        /// <see cref="CommandBehavior.KeyInfo"/> appends so each row is identifiable when the base
+        /// table's key isn't in the SELECT list. Returns <c>null</c> when nothing is hidden (the
+        /// overwhelmingly common case) so the hot path keeps identity ordinals with no allocation.
+        /// A result set whose only key column is hidden is correctly NOT editable: to edit rows the
+        /// user must include the key in the SELECT (SSMS-like), rather than the grid silently showing
+        /// a phantom key column it added behind their back.
+        /// </summary>
+        internal static int[]? BuildVisibleOrdinals(ReadOnlyCollection<DbColumn>? cols, int rawFieldCount)
+        {
+            if (cols == null) return null;
+
+            bool anyHidden = false;
+            for (int i = 0; i < rawFieldCount && i < cols.Count; i++)
+            {
+                if (cols[i].IsHidden == true) { anyHidden = true; break; }
+            }
+            if (!anyHidden) return null;
+
+            var visible = new List<int>(rawFieldCount);
+            for (int i = 0; i < rawFieldCount; i++)
+            {
+                bool hidden = i < cols.Count && cols[i].IsHidden == true;
+                if (!hidden) visible.Add(i);
+            }
+            return visible.ToArray();
         }
 
         private static string? EncodeCell(SqlDataReader reader, int ordinal, SqlDbType sqlDbType)
@@ -186,11 +234,17 @@ namespace AkmlSql.Engine.Execution
         /// column schema (KeyInfo). Best-effort: any failure leaves the set read-only and never
         /// disturbs the data read.
         /// </summary>
-        private void TryPopulateProvenance(SqlDataReader reader, int fieldCount, SqlDbType[] sqlDbTypes, ExecuteResultSet set)
+        private void TryPopulateProvenance(
+            ReadOnlyCollection<DbColumn>? cols, int[]? displayOrdinals, int fieldCount, SqlDbType[] sqlDbTypes, ExecuteResultSet set)
         {
+            if (cols == null)
+            {
+                set.Provenance = Array.Empty<ColumnProvenanceDto>();
+                set.IsEditable = false;
+                return;
+            }
             try
             {
-                ReadOnlyCollection<DbColumn> cols = reader.GetColumnSchema();
                 var prov = new ColumnProvenanceDto[fieldCount];
 
                 string? baseCatalog = null, baseSchema = null, baseTable = null;
@@ -198,9 +252,11 @@ namespace AkmlSql.Engine.Execution
                 bool anyRealBaseTable = false;
                 bool anyKey = false;
 
-                for (int i = 0; i < fieldCount && i < cols.Count; i++)
+                for (int i = 0; i < fieldCount; i++)
                 {
-                    var col = cols[i];
+                    int ord = displayOrdinals?[i] ?? i;
+                    if (ord >= cols.Count) continue;
+                    var col = cols[ord];
                     bool isExpr = col.IsExpression == true;
                     string? bTable = col.BaseTableName;
                     string? bSchema = col.BaseSchemaName;
