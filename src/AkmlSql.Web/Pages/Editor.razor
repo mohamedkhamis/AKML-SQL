@@ -644,6 +644,16 @@
     private async Task OnAppliedReExecuteAsync()
     {
         if (string.IsNullOrWhiteSpace(_lastExecutedSql) || !SqlConn.IsConnected) return;
+
+        // Refresh by re-running the query ONLY when it is a single read-only SELECT. Re-running a
+        // multi-statement batch or any mutating statement would REPEAT its side effects on the
+        // persistent connection: a `CREATE TABLE #t; …; SELECT` errors ("object already exists") and,
+        // worse, an `INSERT …; SELECT` would DUPLICATE the inserted rows. The Apply already committed
+        // and the grid already shows the committed values with tints cleared (ResetEditState ran before
+        // this callback), so skipping the auto-refresh is safe — the user can re-Execute manually to
+        // pick up server-side recomputes (triggers / computed columns).
+        if (!QueryRefreshSafety.IsSingleReadOnlySelect(_lastExecutedSql)) return;
+
         _activeQueryId = Guid.NewGuid().ToString("N");
         var result = await QueryExec.ExecuteAsync(_lastExecutedSql, _maxRows, _timeoutSeconds, _activeQueryId, CancellationToken.None);
         _activeQueryId = null;
