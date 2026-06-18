@@ -6,8 +6,8 @@ create procedure dbo.GetCustomerOrders
 as
 begin
     set    nocount on;
-    if @startdate is null set    @startdate = '1900-01-01';
-    if @enddate is null set    @enddate = GETDATE();
+    if @startdate is null set @startdate = '1900-01-01';
+    if @enddate is null set @enddate = GETDATE();
     select o.orderid, o.orderdate, o.total, c.customername
     from   orders o
     inner join   customers c

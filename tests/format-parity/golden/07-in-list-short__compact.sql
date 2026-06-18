@@ -1,4 +1,4 @@
-SELECT * FROM   orders WHERE  status IN(
+SELECT * FROM orders WHERE status IN(
     'Open',
     'Pending',
     'Shipped'

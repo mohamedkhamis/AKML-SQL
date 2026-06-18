@@ -21,6 +21,34 @@ public class FormatterPipelineTests
     }
 
     [Fact]
+    public void Format_ShortStatement_CollapsesWithoutResidualAlignmentPadding()
+    {
+        // Spec 030 loop fix: collapseShortStatements (default on, threshold 80) collapses a short
+        // statement onto one line. The cross-clause alignment padding that forms a vertical river in
+        // the multi-line form ("FROM   dbo", "WHERE  id") must be dropped on collapse, not left as
+        // stray double-spaces. Regression for the "SELECT id, name FROM   t WHERE  id = 1" bug.
+        var sql = "select id, name from dbo.users where id = 1";
+        var result = _pipeline.Format(sql, _profile);
+
+        Assert.True(result.Success);
+        Assert.DoesNotContain("\n", result.FormattedText.TrimEnd());   // collapsed onto a single line
+        Assert.DoesNotContain("  ", result.FormattedText);             // no residual alignment gaps
+    }
+
+    [Fact]
+    public void Format_CollapsedShortStatement_IsIdempotent()
+    {
+        // The clamp must be a fixed point: re-formatting the collapsed output yields the same text
+        // (otherwise the pipeline's stage-7 idempotency check would also flag it).
+        var sql = "select id, name from dbo.users where id = 1";
+        var first = _pipeline.Format(sql, _profile);
+        var second = _pipeline.Format(first.FormattedText, _profile);
+
+        Assert.True(second.Success);
+        Assert.Equal(first.FormattedText, second.FormattedText);
+    }
+
+    [Fact]
     public void Format_AlreadyFormatted_ReturnsUnmodified()
     {
         // A well-formatted query should return WasModified=false or similar output

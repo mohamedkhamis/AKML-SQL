@@ -282,18 +282,60 @@ public class ListRules : IRuleSet
         if (clauseItems.Count < 2)
             return;
 
-        // Find the maximum clause keyword length
-        int maxKeywordLen = 0;
-        foreach (var (_, _, kwLen) in clauseItems)
-            maxKeywordLen = Math.Max(maxKeywordLen, kwLen);
-
-        // Adjust spacing so first items align
-        foreach (var (keywordIndex, firstItemIndex, kwLen) in clauseItems)
+        // Cross-clause first-item alignment is vertical geometry: it forms a "river" only when the
+        // clause keywords actually stack on separate lines. A clause counts as stacked when its
+        // keyword starts a line — the leading clause implicitly, every other clause when it carries a
+        // line break. After a collapse pass (collapseShortStatements / collapseShortSubqueries) folds
+        // a short statement onto one line, the trailing clause keywords are inline (PrecedingBreak ==
+        // None); padding their first items to the keyword column would re-introduce stray gaps
+        // ("FROM   dbo", "WHERE  id") on that single line. Only align when ≥2 clauses are stacked, and
+        // only pad the stacked ones. Multi-line statements are unaffected: SELECT is the leading
+        // clause and FROM/WHERE/ORDER BY each carry a break, so every clause stays stacked.
+        bool ClauseStartsLine(int ordinal)
         {
-            var firstItem = nodes[firstItemIndex];
+            if (ordinal == 0) return true;
+            // Report a line start when a break falls anywhere in the clause's (possibly compound)
+            // keyword phrase. JOIN keywords carry prefixes (INNER/LEFT/RIGHT/FULL/OUTER/CROSS) and the
+            // layout's break may attach to the prefix OR to JOIN itself — inconsistently across format
+            // passes. Inspecting only the JOIN token would (a) misread a stacked "INNER JOIN" whose
+            // break sits on INNER as collapsed and (b) flip between passes, making the formatter
+            // non-idempotent. Walk back across the prefix tokens so the whole phrase is considered.
+            int idx = clauseItems[ordinal].keywordIndex;
+            while (idx >= 0)
+            {
+                if (nodes[idx].PrecedingBreak is BreakType.NewLine or BreakType.EmptyLine)
+                    return true;
+                if (idx == 0) break;
+                var prev = nodes[idx - 1].TokenType;
+                bool prevIsJoinPrefix = prev is TSqlTokenType.Inner or TSqlTokenType.Left
+                    or TSqlTokenType.Right or TSqlTokenType.Full or TSqlTokenType.Outer or TSqlTokenType.Cross;
+                if (!prevIsJoinPrefix) break;
+                idx--;
+            }
+            return false;
+        }
+
+        // Maximum keyword length across the STACKED clauses only.
+        int maxKeywordLen = 0;
+        int stackedClauses = 0;
+        for (int c = 0; c < clauseItems.Count; c++)
+        {
+            if (!ClauseStartsLine(c)) continue;
+            stackedClauses++;
+            maxKeywordLen = Math.Max(maxKeywordLen, clauseItems[c].keywordLength);
+        }
+
+        if (stackedClauses < 2)
+            return;   // single-line (collapsed) statement — no vertical river to align to
+
+        // Adjust spacing so the stacked clauses' first items align.
+        for (int c = 0; c < clauseItems.Count; c++)
+        {
+            if (!ClauseStartsLine(c)) continue;
+            var firstItem = nodes[clauseItems[c].firstItemIndex];
             if (firstItem.PrecedingBreak == BreakType.None)
             {
-                firstItem.PrecedingSpaces = maxKeywordLen - kwLen + 1;
+                firstItem.PrecedingSpaces = maxKeywordLen - clauseItems[c].keywordLength + 1;
             }
         }
     }
