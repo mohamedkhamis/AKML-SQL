@@ -1,6 +1,9 @@
 using System.Diagnostics.CodeAnalysis;
 using Xunit;
+using AkmlSql.Formatting.Layout;
 using AkmlSql.Formatting.Pipeline;
+using AkmlSql.Formatting.Profiles;
+using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Formatting.Tests.Pipeline;
 
@@ -115,5 +118,82 @@ public class CasingEngineTests
             UseCamelCaseDictionary = true
         };
         Assert.True(engine.UseCamelCaseDictionary);
+    }
+
+    // ── Global vs local variable casing (ApplyCasing through the public path) ──
+
+    private static LayoutNode Node(
+        string text,
+        TSqlTokenType tokenType = TSqlTokenType.Variable,
+        bool inNoformat = false)
+    {
+        return new LayoutNode
+        {
+            FormattedText = text,
+            TokenType = tokenType,
+            PrecedingBreak = BreakType.None,
+            PrecedingSpaces = 1,
+            IsInNoformatRegion = inNoformat
+        };
+    }
+
+    [Fact]
+    public void ApplyCasing_GlobalVariable_UsesGlobalVariablesMode_NotLocal()
+    {
+        // GlobalVariables and LocalVariables MUST differ — that asymmetry is the only
+        // thing that proves @@-globals follow GlobalVariables and not LocalVariables.
+        var profile = new FormattingProfile
+        {
+            Casing = { GlobalVariables = "UPPERCASE", LocalVariables = "AsIs" }
+        };
+        var nodes = new List<LayoutNode> { Node("@@rowcount", TSqlTokenType.Variable) };
+
+        new CasingEngine().ApplyCasing(nodes, profile);
+
+        Assert.Equal("@@ROWCOUNT", nodes[0].FormattedText);
+    }
+
+    [Fact]
+    public void ApplyCasing_GlobalVariable_Lowercase()
+    {
+        var profile = new FormattingProfile
+        {
+            Casing = { GlobalVariables = "lowercase", LocalVariables = "AsIs" }
+        };
+        var nodes = new List<LayoutNode> { Node("@@ROWCOUNT", TSqlTokenType.Variable) };
+
+        new CasingEngine().ApplyCasing(nodes, profile);
+
+        Assert.Equal("@@rowcount", nodes[0].FormattedText);
+    }
+
+    [Fact]
+    public void ApplyCasing_LocalVariable_StillUsesLocalVariablesMode()
+    {
+        // Regression guard: a single-@ local must keep following LocalVariables,
+        // never GlobalVariables, after the @@-split.
+        var profile = new FormattingProfile
+        {
+            Casing = { GlobalVariables = "UPPERCASE", LocalVariables = "lowercase" }
+        };
+        var nodes = new List<LayoutNode> { Node("@MyVar", TSqlTokenType.Variable) };
+
+        new CasingEngine().ApplyCasing(nodes, profile);
+
+        Assert.Equal("@myvar", nodes[0].FormattedText);
+    }
+
+    [Fact]
+    public void ApplyCasing_GlobalVariable_InNoformatRegion_Untouched()
+    {
+        var profile = new FormattingProfile
+        {
+            Casing = { GlobalVariables = "UPPERCASE", LocalVariables = "AsIs" }
+        };
+        var nodes = new List<LayoutNode> { Node("@@rowcount", TSqlTokenType.Variable, inNoformat: true) };
+
+        new CasingEngine().ApplyCasing(nodes, profile);
+
+        Assert.Equal("@@rowcount", nodes[0].FormattedText);
     }
 }

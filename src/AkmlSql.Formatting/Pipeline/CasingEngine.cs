@@ -138,9 +138,14 @@ public class CasingEngine
         if (node.TokenType == TSqlTokenType.Identifier)
             return casing.Identifiers;
 
-        // Variables
+        // Variables — @@-prefixed tokens are system globals (you cannot DECLARE a
+        // @@-named local), so they follow GlobalVariables; single-@ locals follow
+        // LocalVariables. Before this split every Variable token used LocalVariables,
+        // so @@ROWCOUNT etc. were never cased per the GlobalVariables option.
         if (node.TokenType == TSqlTokenType.Variable)
-            return casing.LocalVariables;
+            return text.StartsWith("@@", StringComparison.Ordinal)
+                ? casing.GlobalVariables
+                : casing.LocalVariables;
 
         return "AsIs";
     }

@@ -43,6 +43,41 @@ public sealed class SnippetExpandTests : System.IDisposable
     }
 
     [Fact]
+    public async System.Threading.Tasks.Task Expand_ServerPlaceholder_ResolvesFromSessionConnectionString()
+    {
+        // Spec 030 (re-audit GO): $SERVER$ must resolve to the connected server at runtime.
+        // The session-aware SnippetExpandHandler previously passed only the database name and
+        // dropped the server, so $SERVER$ silently resolved to "". It must derive the server
+        // from the session's connection string (SqlConnectionStringBuilder.DataSource).
+        WriteSnippet(_builtInDir, "zsrv", "USE $SERVER$");
+        var inner = new SnippetRequestHandler(_personalDir, _builtInDir);
+        var handler = new AkmlSql.Engine.Handlers.Snippets.SnippetExpandHandler(inner);
+
+        var sessions = new AkmlSql.Engine.Server.SessionManager();
+        sessions.UpdateSession(new ConnectionInfo
+        {
+            SessionId        = "s1",
+            ConnectionString = "Data Source=SQLSRV01;Initial Catalog=ShopDb;Integrated Security=true",
+            DatabaseName     = "ShopDb"
+        });
+
+        var ctx = new AkmlSql.Engine.RpcContext
+        {
+            Sessions       = sessions,
+            SchemaCache    = new AkmlSql.Engine.Schema.SchemaCacheManager(),
+            Logger         = Serilog.Log.Logger,
+            SettingsLoader = () => new AkmlSql.Core.Config.AppSettings()
+        };
+
+        var resp = await handler.HandleAsync(
+            new SnippetExpandRequest { Shortcode = "zsrv", SessionId = "s1" },
+            ctx, System.Threading.CancellationToken.None);
+
+        Assert.True(resp.Success);
+        Assert.Contains("SQLSRV01", resp.ExpandedText);
+    }
+
+    [Fact]
     public void Expand_ByShortcode_ReturnsBody_AndStripsCursorWithOffset()
     {
         WriteSnippet(_builtInDir, "zzt", "SELECT *", "FROM $CURSOR$");
