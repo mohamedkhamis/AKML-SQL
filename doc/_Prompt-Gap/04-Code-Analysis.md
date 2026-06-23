@@ -13,10 +13,10 @@ Status legend: ✅ done · 🟡 partial · ❌ missing · ➖ out of scope
 | Background static analysis | Parses code as you type/review and checks against built-in rules | auto | ✅ debounced 300ms + on-open |
 | Green wavy underline | Marks code that breaks a rule | editor | ✅ DiagnosticTagger IErrorTag |
 | Lightbulb indicator | Blue = info; **orange = auto-fixable** | left margin | 🟡 lightbulb shown; no blue/orange icon distinction |
-| Issue Details popup | Rule description, why it matters, often a link to an article | `Ctrl` (cursor in underlined area) | 🟡 squiggle hover shows message; no Ctrl popup/article link |
+| Issue Details popup | Rule description, why it matters, often a link to an article | `Ctrl` (cursor in underlined area) | ✅ T055 done; QuickInfoSource.cs:118 Ctrl-gate + :310 Learn-more hyperlink; ReferenceUrl threaded via CodeIssueInfo + RuleMetadataCatalog |
 | Toggle analysis on/off | Enable/disable all analysis | `Ctrl + Shift + A`; SQL Prompt menu | 🟡 Options checkbox only; no shortcut/menu toggle |
-| Manage rules dialog | Enable/disable individual rules (Code Analysis Rules dialog) | SQL Prompt ▸ Manage code analysis rules | ❌ no per-rule grid; Options has master toggles only |
-| Disable a single rule from Issue Details | Quick-disable the offending rule | Issue Details | 🟡 lightbulb writes %AppData% .casettings; inert in live editor |
+| Manage rules dialog | Enable/disable individual rules (Code Analysis Rules dialog) | SQL Prompt ▸ Manage code analysis rules | ✅ T053 done; ManageRulesDialog.cs + ManageRulesCommand.cs — grid with Enable/Severity/AutoFix per rule; wired in both hosts |
+| Disable a single rule from Issue Details | Quick-disable the offending rule | Issue Details | ✅ T051 done: AnalysisController.cs:99 sets FilePath; DisableRuleGloballyFixAction writes .casettings + fires AnalysisSettingsChanged; engine applies it live |
 | Show issues list | Tabular list of all issues in a script | SQL Prompt ▸ Show List… | ✅ results grid (shell) + live Problems panel (web) |
 | Auto-fix | One-click fix for orange (auto-fixable) issues | lightbulb / Actions | ✅ real FixAction (semicolon, dbo., SET NOCOUNT) |
 
@@ -42,9 +42,9 @@ SQL Prompt groups rules into categories shown in the Manage Rules dialog. Each r
 | Feature | Description | Where | Status |
 |---|---|---|---|
 | CASettings file | Rules export to a Code Analysis Settings file (XML) with all rules; edit to taste | export | 🟡 hand-edit .casettings JSON; no in-product export |
-| Share rules (folder) | Distribute a CASettings file to the team | docs: "Sharing Code Analysis rules" | 🟡 upward .casettings honored by CLI only; inert in live editor |
+| Share rules (folder) | Distribute a CASettings file to the team | docs: "Sharing Code Analysis rules" | ✅ T051 done: AnalysisController.cs:131 ResolveDocumentPath() → CaSettingsLoader upward-search now applies in live editor, not CLI only |
 | Share rules via Redgate Platform | Cloud sharing of CA rules (Toolbelt Essentials subscription) | Redgate Platform | ➖ Redgate cloud/subscription |
-| Per-team / per-database settings | Maintain multiple CASettings files | manual | 🟡 multiple .casettings honored by CLI only; inert in live editor |
+| Per-team / per-database settings | Maintain multiple CASettings files | manual | ✅ T051 done: upward .casettings search via ResolveDocumentPath() now live in editor; multiple .casettings honored per-project directory |
 | Bulk code analysis | Run analysis across a whole codebase at once | Bulk Actions / Command Palette (`Alt+S`) | ✅ folder scan command + Analyzer CLI |
 
 ---

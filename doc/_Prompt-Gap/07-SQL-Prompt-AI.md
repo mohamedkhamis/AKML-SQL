@@ -32,8 +32,8 @@ Status legend: ✅ done · 🟡 partial · ❌ missing · ➖ out of scope
 
 | Feature | Description | Where | Status |
 |---|---|---|---|
-| Fix SQL query with AI | One-click fix of errors in a selected query | selection / popup | ❌ command returns before send, handler unreachable |
-| Error-fix suggestion popup | Offers to fix when an error is detected | popup | ❌ OfferFixForError unwired; status-bar only |
+| Fix SQL query with AI | One-click fix of errors in a selected query | selection / popup | ✅ AiFixCommand.cs full ExecuteAsync() wired: sends AiFix IPC, shows FixPreviewPanel, applies fix |
+| Error-fix suggestion popup | Offers to fix when an error is detected | popup | 🟡 OfferFixForError() defined and status-bar notification fires on AutoFixOnError; no calling site wired to an execution-error event; popup not shown proactively |
 | Optimize SQL query with AI | Suggest an optimized rewrite of a query | menu / window | 🟡 real call, results dumped to temp .sql |
 | AI code completion (Preview) | Greyed "ghost text" predictions as you type; accept `Tab`, dismiss `Esc`, manual `Ctrl+Alt+Up` | Options ▸ Prompt AI ▸ "Enable AI code completion" | 🟡 real Tab/Esc; no manual-trigger command |
 | Ghost-text auto delay | Auto-request after N ms (default 500); adjustable; or manual-only mode | Options ▸ Prompt AI | 🟡 hardcoded 300ms; config unused, not adjustable |

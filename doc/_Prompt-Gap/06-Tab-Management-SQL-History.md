@@ -21,8 +21,8 @@ Status legend: ✅ done · 🟡 partial · ❌ missing · ➖ out of scope
 | Star / favorite | Mark a query as favorite; filter to starred | star icon / star filter | ✅ |
 | Rename query | Rename (not while open) | three-dot menu | ✅ |
 | Remove query | Delete a query and its history | three-dot menu | ✅ |
-| Remove older than | Bulk-delete all queries older than the selected one | three-dot menu | ❌ |
-| Auto-trim retention | Periodic background trim of old versions; configurable retention (default 7 days); keeps latest version; doesn't remove executions; can disable | Options ▸ Queries ▸ History | 🟡 purges whole entries; config-only; no disable toggle |
+| Remove older than | Bulk-delete all queries older than the selected one | three-dot menu | ✅ |
+| Auto-trim retention | Periodic background trim of old versions; configurable retention (default 7 days); keeps latest version; doesn't remove executions; can disable | Options ▸ Queries ▸ History | ✅ |
 
 ## 2. Tab History (legacy, v10.12 and older)
 
@@ -35,12 +35,12 @@ Status legend: ✅ done · 🟡 partial · ❌ missing · ➖ out of scope
 | Feature | Description | Where | Status |
 |---|---|---|---|
 | Color tabs by server | Right-click tab ▸ Tab Color (Server) ▸ environment (e.g. Production → red) | tab context | 🟡 auto pattern-based; no right-click menu |
-| Color tabs by database | Right-click DB in Object Explorer ▸ Tab Color (Database) ▸ environment | OE context | ❌ matcher is server-name only |
-| Color DB on any server | Add a server/blank + database row mapped to an environment | Options ▸ Tabs ▸ Color | ❌ no database match target |
+| Color tabs by database | Right-click DB in Object Explorer ▸ Tab Color (Database) ▸ environment | OE context | ✅ |
+| Color DB on any server | Add a server/blank + database row mapped to an environment | Options ▸ Tabs ▸ Color | ✅ |
 | Environments | Named environments (Production, Development, Test, …) each with a color | Options ▸ Tabs ▸ Color ▸ Edit environments | ✅ |
 | Edit environment colors | Pick custom colors per environment | Edit environments dialog | 🟡 hex text input + preview, no color picker |
 | Gradient colors toggle | "Use gradient colors" on/off | Edit environments dialog | ✅ |
-| Restore default environments | Reset to default environment set | right-click in dialog | 🟡 page Restore Defaults skips rules list |
+| Restore default environments | Reset to default environment set | right-click in dialog | ✅ |
 | SSMS version support | Tab coloring works in SSMS 2012+ | — | ✅ multi-version visual-tree walk; SSMS+VS |
 
 ---

@@ -15,43 +15,43 @@ Status legend: ✅ done · 🟡 partial · ❌ missing · ➖ out of scope
 | Export options | Save the entire options set to file | bottom of Options dialog | ✅ Export… button |
 | Restore Defaults (page) | Reset only the current page | top-right of each page | ✅ per-page link |
 | Restore All Defaults | Reset every page | bottom-left of Options dialog | ✅ button + confirm |
-| Per-page help (`?`) | Interactive help dialogs with friendly-name links | each page | 🟡 F1 URL only, no per-page dialog |
+| Per-page help (`?`) | Interactive help dialogs with friendly-name links | each page | ✅ T083/FR-044: IPageBuilder.Help required member; all 23 pages supply distinct help text rendered by AddPageHeader |
 | Dark theme support | Options UI follows SSMS dark theme | — | ✅ Dark/Light/System |
 
 ## 1. Main / Behavior
 
 | Setting | Description | Status |
 |---|---|---|
-| Enable code suggestions | Master on/off for the suggestions box | 🟡 toggle not consumed by completion engine |
-| Automatically trigger suggestions | Auto-show vs on-demand (`Ctrl+Space`) only | 🟡 AutoTrigger flag not consumed |
-| Display object definitions | Show the object definition box on selection | ❌ box always on, no toggle |
-| Show tooltips for ▸ Objects | Object tooltips on hover | 🟡 EnableMsDescription config-only |
-| Show tooltips for ▸ Parameters | Parameter/function-parameter tooltips | 🟡 EnableParameterHighlight config-only |
-| Insertion keys | Keys that commit a suggestion/snippet (default `Enter`, `Tab`) | 🟡 SpaceCommits/DotCommits config-only |
+| Enable code suggestions | Master on/off for the suggestions box | ✅ T031/FR-012: CompletionController.cs:492 honors IntelliSense.Enabled; toggle in IntelliSensePage |
+| Automatically trigger suggestions | Auto-show vs on-demand (`Ctrl+Space`) only | ✅ T031/FR-012: AutoTrigger flag gated in CompletionController; TriggerDelayMs surfaced in IntelliSensePage.cs:222 |
+| Display object definitions | Show the object definition box on selection | 🟡 T027: DDL Script tab eagerly wired in popup; no Options toggle to show/hide the definition box |
+| Show tooltips for ▸ Objects | Object tooltips on hover | ✅ T078/FR-042: CompletionPolishPage.cs:80 binds EnableMsDescription toggle |
+| Show tooltips for ▸ Parameters | Parameter/function-parameter tooltips | ✅ T078/FR-042: CompletionPolishPage.cs:81 binds EnableParameterHighlight toggle |
+| Insertion keys | Keys that commit a suggestion/snippet (default `Enter`, `Tab`) | ✅ T078/FR-042: IntelliSensePage.cs:219-220 surfaces SpaceCommits/DotCommits; DotCommits consumed at runtime |
 
 ## 2. Suggestions
 
 ### 2.1 Suggestions ▸ Behavior
 | Setting | Description | Status |
 |---|---|---|
-| Automatically show suggestions after… | Auto-show toggle + delay/frequency | 🟡 AutoTrigger flag not consumed |
+| Automatically show suggestions after… | Auto-show toggle + delay/frequency | ✅ T031+T078: AutoTrigger gated in CompletionController; TriggerDelayMs in IntelliSensePage.cs:222 |
 | Use ranked suggestions | Relevance-ranked ordering | ❌ no setting |
 | Make popups transparent when Ctrl held | Semi-transparent popups | ❌ no setting |
-| Show tooltips for (Objects / Parameters) | Tooltip toggles | 🟡 config-only, no UI |
-| Show object definitions | Definition box toggle | ❌ no enable setting |
-| Decrypt encrypted objects | Show creation script of encrypted objects | 🟡 EnableEncryptedDecryption config-only |
+| Show tooltips for (Objects / Parameters) | Tooltip toggles | ✅ T078/FR-042: CompletionPolishPage.cs binds EnableMsDescription+EnableParameterHighlight |
+| Show object definitions | Definition box toggle | 🟡 T027: Script tab wired eagerly; no Options on/off toggle in CompletionPolishPage |
+| Decrypt encrypted objects | Show creation script of encrypted objects | ✅ T078/FR-042: CompletionPolishPage.cs:82 binds EnableEncryptedDecryption toggle |
 
 ### 2.2 Suggestions ▸ Types of suggestion
 | Setting | Description | Status |
 |---|---|---|
-| List all database columns after a SELECT statement | Show all columns right after `SELECT` | 🟡 ColumnScope not consumed by provider |
+| List all database columns after a SELECT statement | Show all columns right after `SELECT` | ✅ T032/FR-012: ColumnScopeMode wired in CompletionEngine+ColumnProvider; SuggestionTypesPage.cs:45 surfaces it |
 | Other suggestion-type toggles | Which object kinds to suggest [verify in UI] | 🟡 scope unconsumed; types partial |
 
 ### 2.3 Suggestions ▸ Connections
 | Setting | Description | Status |
 |---|---|---|
-| Databases/schemas to suggest | Scope suggestions to chosen DBs/schemas | ❌ no setting |
-| Load suggestions for linked servers | Linked-server objects (also avoids master-DB access) | ❌ no setting |
+| Databases/schemas to suggest | Scope suggestions to chosen DBs/schemas | ✅ T082/FR-043: ConnectionScopePage.cs wired — database/schema scope comma-separated fields |
+| Load suggestions for linked servers | Linked-server objects (also avoids master-DB access) | 🟡 T036/T082: includeLinkedServers toggle surfaced in ConnectionScopePage; engine flag is inert |
 
 ### 2.4 Suggestions ▸ Join conditions
 | Setting | Description | Status |
@@ -76,23 +76,23 @@ Status legend: ✅ done · 🟡 partial · ❌ missing · ➖ out of scope
 | Setting | Description | Status |
 |---|---|---|
 | Assign aliases | Auto-alias tables/views | ✅ Tables Alias toggle |
-| Include AS in alias definition | Include/exclude `AS` | ❌ no setting |
-| Custom aliases | Object→alias map | ❌ no setting |
-| Prefixes to ignore | Ignore prefixes when generating aliases | ❌ no setting |
+| Include AS in alias definition | Include/exclude `AS` | ✅ T079/FR-043: AliasesPage.cs binds AliasOptions.IncludeAs toggle |
+| Custom aliases | Object→alias map | ✅ T079/FR-043: AliasesPage.cs object-to-alias map as multi-line text field |
+| Prefixes to ignore | Ignore prefixes when generating aliases | ✅ T079/FR-043: AliasesPage.cs prefixes-to-ignore multi-line text field |
 
 ### 3.4 Inserted code ▸ Special characters
 | Setting | Description | Status |
 |---|---|---|
 | Enclose all identifiers in square brackets | Auto-bracket identifiers | 🟡 dropdown UI, engine WhenRequired only |
-| Add parentheses for functions/data types | Auto-parentheses (+ parameter tooltip) | ❌ no setting |
-| Automatically insert closing characters | Auto-close quotes/comments/brackets | ❌ no setting |
+| Add parentheses for functions/data types | Auto-parentheses (+ parameter tooltip) | ✅ T078/T080/FR-043: IntelliSensePage.cs:102 adds AddParentheses toggle |
+| Automatically insert closing characters | Auto-close quotes/comments/brackets | 🟡 T080/FR-043: IntelliSensePage.cs:217 binds AutoCloseCharacters toggle; no editor consumer yet |
 
 ## 4. Format ▸ Styles
 | Setting | Description | Status |
 |---|---|---|
-| Active style selector | Choose the style applied by Format SQL | 🟡 ActiveProfile config, no Options selector |
+| Active style selector | Choose the style applied by Format SQL | ✅ T021/FR-006: FormattingPage.cs:23-34 async-populated Active style dropdown + ShowProfileInStatusBar toggle |
 | Format-time actions | Which actions run with Format SQL (casing, semicolons, qualification, wildcard expansion, brackets) | 🟡 profile-level, not Options toggles |
-| Edit/create/import/export styles | (see file 02) | 🟡 edit+round-trip work; create/copy UI deferred |
+| Edit/create/import/export styles | (see file 02) | ✅ T020/FR-007: New/Copy/Set-Active/Export wired via DuplicateProfile IPC (32/132); round-trip already existed |
 
 ## 5. Tabs
 | Setting | Description | Status |

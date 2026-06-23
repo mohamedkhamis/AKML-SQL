@@ -54,6 +54,27 @@ Files 01–09 now have their **Status** columns filled from a file-by-file **cod
 
 ≈32 % at parity (✅), ≈35 % partial (🟡), ≈27 % missing (❌), ≈7 % out-of-scope (➖ — mostly Redgate-cloud / license-tier rows that don't apply to AKML's free/MIT model). **Actionable gaps (🟡 + ❌) = 199.**
 
+---
+
+### UPDATE — RE-AUDIT (code audit — 2026-06-23)
+
+All 324 rows were re-verified against current code (one reader per file, bounded). The 2026-06-07 table above is kept for history; the **current** distribution is:
+
+| File | Scope | ✅ | 🟡 | ❌ | ➖ | Rows |
+|---|---|--:|--:|--:|--:|--:|
+| 01 | Code Completion / IntelliSense | 31 | 14 | 4 | 0 | 49 |
+| 02 | Formatting & Styles | 54 | 7 | 3 | 1 | 65 |
+| 03 | Refactoring & Actions | 16 | 8 | 1 | 0 | 25 |
+| 04 | Code Analysis | 15 | 4 | 2 | 1 | 22 |
+| 05 | Snippets | 16 | 6 | 2 | 4 | 28 |
+| 06 | Tab Management & SQL History | 18 | 3 | 0 | 1 | 22 |
+| 07 | SQL Prompt AI | 6 | 12 | 6 | 3 | 27 |
+| 08 | Options & Settings | 35 | 11 | 6 | 0 | 52 |
+| 09 | Editions / Licensing / Platform | 8 | 9 | 5 | 12 | 34 |
+| **Total** | | **199** | **74** | **29** | **22** | **324** |
+
+**Net change: ✅ 103 → 199 (+96) · 🟡 112 → 74 · ❌ 87 → 29 · ➖ 22 (flat). Actionable gaps (🟡 + ❌) = 103** (was 199). Almost all of the movement is spec-030: formatter `Rules/*` wired into the pipeline (T008–T012), IntelliSense surfaces (QuickInfo/SignatureHelp/temp-table/column-picker/category-grouping/alias-policy/connection-scope, T025–T036), Options pages consuming those flags (T077–T083), refactor actions + Script-as-ALTER + Smart-Rename + inline-proc/EXEC (T058–T068), snippet expand/surround/create-from-selection + placeholders (T039–T047), and history/tab-coloring (T070–T075). 07-AI was deliberately **excluded** from spec-030 (only address as UX-parity if asked); 09-Editions is mostly licensing → `➖`. Status glyphs in files 01–08 were refreshed to match; 09 was unchanged. Two engine gaps caught during this pass were fixed (global `@@`-variable casing → follows the GlobalVariables style option; `$SERVER$` snippet now resolves from the session connection); `$PASTE$`/clipboard stays `🟡` (engine-ready, shell capture unbuilt).
+
 > **Parity bar = desktop SSMS 22 / VS 2026.** AKML Web-edition-only behaviours that are broken on desktop count as ❌, not partial (most visible in file 05 snippets). The Web edition itself is a differentiator, not a SQL Prompt parity target.
 
 ### Headline finding: "built but not wired"

@@ -23,18 +23,18 @@ Status legend: ✅ done · 🟡 partial · ❌ missing · ➖ out of scope
 | Resizable box (remembered) | Drag resize handle; size persists across sessions | — | 🟡 resizable but size not persisted |
 | Semi-transparent on demand | Hold `Ctrl` to see code behind the box; toggleable | Options ▸ Suggestions ▸ Behavior | 🟡 Ctrl-held works, not toggleable |
 | Context-aware ordering | After `USE` → databases first; after `FROM` → tables→views→schemas→DBs; in `CREATE TABLE` after a column → data types first | — | 🟡 USE→db works; no FROM/datatype ordering |
-| List all columns after SELECT | Optional: show every column alphabetically right after `SELECT` | Options ▸ Suggestions ▸ Types of suggestion | ❌ setting exists, never consumed |
-| Decrypt encrypted objects | Show creation script of encrypted objects in definition box; toggleable | Options ▸ Suggestions ▸ Behavior | ❌ engine handler exists; shell never calls it |
+| List all columns after SELECT | Optional: show every column alphabetically right after `SELECT` | Options ▸ Suggestions ▸ Types of suggestion | ✅ delivered end-to-end by ColumnScope.All / GetAllTableColumns (T032); SuggestAllColumnsAfterSelect checkbox is a redundant duplicate switch (engine-unread) |
+| Decrypt encrypted objects | Show creation script of encrypted objects in definition box; toggleable | Options ▸ Suggestions ▸ Behavior | 🟡 Options toggle + AppSettings EnableEncryptedDecryption present; shell LoadScriptTab (T027) does not pass flag to GetObjectDefinition IPC; engine handler exists |
 
 ## 2. Categories & object types in the box
 
 | Feature | Description | Status |
 |---|---|---|
-| Category grouping | Tables / Views / Columns / Functions / Stored Procedures / Snippets / Other Suggestions | 🟡 flat list with type badges, no grouping |
-| Switch category | `Ctrl + Up` / `Ctrl + Down`, or the "All Suggestions" dropdown | ❌ no categories to switch |
+| Category grouping | Tables / Views / Columns / Functions / Stored Procedures / Snippets / Other Suggestions | ✅ spec-030 T034; AkmlCompletionPopup.cs groups by category with header rows |
+| Switch category | `Ctrl + Up` / `Ctrl + Down`, or the "All Suggestions" dropdown | ✅ spec-030 T034; CompletionController.cs MoveCategory(±1) wired to Ctrl+arrow |
 | Column metadata in list | Shows data type + table/alias; primary-key and foreign-key icons | 🟡 type+PK text+table; no PK/FK icons |
 | "Other Suggestions" object types | DML triggers, DDL triggers, rules, users, defaults, roles, user-defined types, full-text catalogs, system variables, join suggestions, linked-server objects, assemblies, queues, asymmetric/symmetric keys, certificates, routes, contracts, services, schemas, service bindings, event notifications, message types, synonyms, partition functions/schemes, XML schema collections, full-text stoplist | 🟡 only synonyms/schemas/system-procs/variables |
-| Schema (owner) name display | Toggle owner names on/off with the arrow at the box's bottom-left; box widens to show greyed owner | ❌ no owner-name toggle |
+| Schema (owner) name display | Toggle owner names on/off with the arrow at the box's bottom-left; box widens to show greyed owner | ✅ spec-030 T034; AkmlCompletionPopup.cs footer toggle for _showOwnerNames; hides leading schema. prefix on display labels |
 
 ## 3. List navigation
 
@@ -42,8 +42,8 @@ Status legend: ✅ done · 🟡 partial · ❌ missing · ➖ out of scope
 |---|---|---|
 | Move one item | `Up` / `Down` (wraps top↔bottom) | ✅ |
 | Move one page | `Page Up` / `Page Down` (also `Ctrl+PgUp`/`Ctrl+PgDn`) | ❌ not handled |
-| Switch to/from column picker | `Ctrl + Left` / `Ctrl + Right` | ❌ no column picker |
-| Move through category filters | `Ctrl + Up` / `Ctrl + Down` | ❌ no category filters |
+| Switch to/from column picker | `Ctrl + Left` / `Ctrl + Right` | ✅ spec-030 T033; WORDPREV/WORDNEXT intercepted; TriggerColumnPicker() wired |
+| Move through category filters | `Ctrl + Up` / `Ctrl + Down` | ✅ spec-030 T034; MoveCategory(±1) wired — same as Switch category above |
 
 ## 4. Insertion behavior
 
@@ -61,8 +61,8 @@ Status legend: ✅ done · 🟡 partial · ❌ missing · ➖ out of scope
 
 | Feature | Description | Status |
 |---|---|---|
-| Column picker panel | List of available columns with data types to multi-select and insert | ❌ ColumnPickerWindow not implemented |
-| Toggle to/from picker | `Ctrl + Left` / `Ctrl + Right` from the suggestions box | ❌ no picker to toggle |
+| Column picker panel | List of available columns with data types to multi-select and insert | ✅ spec-030 T033; TriggerColumnPicker reuses WildcardExpansionPopup in picker mode |
+| Toggle to/from picker | `Ctrl + Left` / `Ctrl + Right` from the suggestions box | ✅ spec-030 T033; Ctrl+Left/Right toggling between suggestions box and column picker wired |
 
 ## 6. Aliases (Options ▸ Inserted code ▸ Aliases)
 
@@ -70,35 +70,35 @@ Status legend: ✅ done · 🟡 partial · ❌ missing · ➖ out of scope
 |---|---|---|
 | Auto-assign aliases | Adds an alias to each referenced table/view when columns or `*` are selected | 🟡 suggests aliases + JOIN-insert aliases, not auto-add on `*` |
 | Alias generation rules | First letter; respects underscores (`TBL_Contact`→`tc`), hyphens (`hyphenated-tablename`→`ht`), case (`MixedCase`→`mc`) | 🟡 first-letter/PascalCase/underscore; no hyphen handling |
-| Include / exclude `AS` | "Include AS in alias definition" toggle | ❌ no AS toggle |
+| Include / exclude `AS` | "Include AS in alias definition" toggle | ✅ spec-030 T035; AliasesPage.cs toggle; AliasProvider.IncludeAs consumed by CompletionEngine |
 | Ambiguity handling | Generates extra aliases for self-joins | ✅ numbered-suffix on conflict (GenerateAlias) |
-| Custom aliases | User-defined object→alias map (New / Save / Delete) | ❌ no custom-alias map |
-| Prefixes to ignore | Ignore a prefix (e.g. `TBL`) when generating aliases; case-insensitive; underscore optional | ❌ no prefixes-to-ignore |
+| Custom aliases | User-defined object→alias map (New / Save / Delete) | ✅ spec-030 T035; AliasesPage.cs custom map UI; AliasProvider.ObjectAliasMap consumed by CompletionEngine |
+| Prefixes to ignore | Ignore a prefix (e.g. `TBL`) when generating aliases; case-insensitive; underscore optional | ✅ spec-030 T035; AliasesPage.cs prefixes text; AliasProvider.PrefixesToIgnore consumed by CompletionEngine |
 
 ## 7. Object definition box & tooltips
 
 | Feature | Description | Where | Status |
 |---|---|---|---|
-| Object definition box | Appears on selecting a suggestion: **Summary** tab (columns, data types, nullability) + **Script** tab (creation script, copyable) | Options ▸ Suggestions ▸ Behavior (Show object definitions) | 🟡 Summary works; Script tab shows description, not DDL |
-| Object tooltips | Hover an object to see its definition; clickable for tables/views/procs | Options ▸ Suggestions ▸ Behavior (Show tooltips for) | ❌ QuickInfoSource is a stub TODO |
-| Parameter tooltips | Hover/parameter hints, including for built-in functions | Options ▸ Tooltips | ❌ SignatureHelpSource stub; shell never calls IPC |
+| Object definition box | Appears on selecting a suggestion: **Summary** tab (columns, data types, nullability) + **Script** tab (creation script, copyable) | Options ▸ Suggestions ▸ Behavior (Show object definitions) | ✅ spec-030 T027; LoadScriptTab fetches GetObjectDefinition IPC; real DDL from sys.sql_modules/schema cache |
+| Object tooltips | Hover an object to see its definition; clickable for tables/views/procs | Options ▸ Suggestions ▸ Behavior (Show tooltips for) | ✅ spec-030 T025; QuickInfoSource.cs sends RequestQuickInfo IPC with cache-and-retrigger bridge |
+| Parameter tooltips | Hover/parameter hints, including for built-in functions | Options ▸ Tooltips | ✅ spec-030 T026; SignatureHelpSource.cs sends RequestSignatureHelp IPC; triggered on '('/',' in CompletionController |
 | Dependencies tooltip | For columns: click tooltip to see objects referencing / referenced by the column | Options ▸ Suggestions ▸ Behavior | ❌ only FK shown, no dependency graph |
-| Fully-qualified name tooltip | Shows the fully qualified object name on hover | — | ❌ hover path (QuickInfoSource) is a stub |
+| Fully-qualified name tooltip | Shows the fully qualified object name on hover | — | ✅ spec-030 T025; QuickInfoSource renders Header with qualified name from QuickInfoResponse |
 
 ## 8. Temp-table IntelliSense (with documented limits)
 
 | Feature | Description | Status |
 |---|---|---|
-| `#temp` table suggestions | Columns suggested for temp tables | ❌ TempTableTracker exists but unwired |
-| Structure captured at first parse | Reads structure at `CREATE TABLE` / `SELECT INTO` | ❌ tracker built+tested but never called |
-| Known limitation | Later `ALTER TABLE` columns may not be re-recognized in the same script (by design) — recommendation is to define columns up front / use `SELECT INTO` | ❌ moot — temp completion unreachable |
+| `#temp` table suggestions | Columns suggested for temp tables | ✅ spec-030 T029; CompletionEngine populates AvailableTempTables; ColumnProvider serves temp columns |
+| Structure captured at first parse | Reads structure at `CREATE TABLE` / `SELECT INTO` | ✅ spec-030 T029; TempTableTracker.TrackTempTables called with prefix-parse recovery for mid-edit cursor |
+| Known limitation | Later `ALTER TABLE` columns may not be re-recognized in the same script (by design) — recommendation is to define columns up front / use `SELECT INTO` | 🟡 feature now reachable; limitation still by design; EnableTempTableIntellisense not gating engine (always on) |
 
 ## 9. Connections / suggestion scope (Options ▸ Suggestions ▸ Connections)
 
 | Feature | Description | Status |
 |---|---|---|
-| Control databases/schemas suggested | Limit which DBs/schemas produce suggestions | ❌ no DB/schema scope filter |
-| Linked-server suggestions toggle | "Load suggestions for linked servers" (also avoids needing master DB access) | ❌ no linked-server suggestions |
+| Control databases/schemas suggested | Limit which DBs/schemas produce suggestions | ✅ spec-030 T036; ConnectionScope threaded to ObjectProvider via CompletionEngine; ConnectionScopeTests +8 |
+| Linked-server suggestions toggle | "Load suggestions for linked servers" (also avoids needing master DB access) | 🟡 spec-030 T036; includeLinkedServers threaded but inert — schema cache loads no linked-server objects; forward-looking |
 
 ---
 
