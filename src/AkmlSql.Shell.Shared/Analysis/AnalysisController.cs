@@ -92,7 +92,11 @@ namespace AkmlSql.Shell.Shared.Analysis
                     SessionId       = _sessionId,
                     RequestId       = documentVersion.ToString(),
                     DocumentText    = _buffer.CurrentSnapshot.GetText(),
-                    DocumentVersion = documentVersion
+                    DocumentVersion = documentVersion,
+                    // Spec 030 FR-024 / T051: thread the document path so the engine locates the
+                    // nearest .casettings and honors per-project rule config + inline suppressions
+                    // in the LIVE editor (was hardcoded null → editor always saw global defaults).
+                    FilePath        = ResolveDocumentPath()
                 };
 
                 var response = await client.SendRequestAsync<CodeAnalysisResponse, CodeAnalysisRequest>(
@@ -114,6 +118,28 @@ namespace AkmlSql.Shell.Shared.Analysis
             {
                 Log.Warning(ex, "AnalysisController: analysis RPC failed for session {Session}", _sessionId);
             }
+        }
+
+        /// <summary>
+        /// Spec 030 FR-024 / T051: resolve the active document's file path from the buffer's
+        /// property bag (same source <see cref="DiagnosticTagger"/> / ErrorListReporter use) so the
+        /// engine can find the nearest <c>.casettings</c> and apply per-project rule config + inline
+        /// suppressions in the LIVE editor (matching the CLI analyzer). Resolved per-request so a
+        /// save/rename after the controller was created is picked up. Returns <c>null</c> for an
+        /// unsaved buffer (no directory to search) → the engine falls back to global defaults.
+        /// </summary>
+        private string? ResolveDocumentPath()
+        {
+            try
+            {
+                if (_buffer.Properties.TryGetProperty(typeof(ITextDocument), out ITextDocument textDoc))
+                {
+                    var path = textDoc?.FilePath;
+                    if (!string.IsNullOrEmpty(path)) return path;
+                }
+            }
+            catch { /* property-bag race / disposed buffer — fall back to global defaults */ }
+            return null;
         }
 
         public void Dispose()

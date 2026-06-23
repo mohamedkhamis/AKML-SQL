@@ -332,8 +332,13 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         {
             if (c == '.')
             {
-                // Dot: commit current selection (if any) + trigger new completion
-                if (_adornment.Popup.IsOpen)
+                // Dot: commit current selection (if any) + trigger new completion.
+                // Spec 030 T078 / FR-042: gate the commit on the DotCommits setting (default true,
+                // so behaviour is unchanged out of the box). When the user turns "Dot commits" off,
+                // typing "." still re-triggers completion (e.g. the column list after "table.") but no
+                // longer accepts the highlighted item — matching SQL Prompt. Cached accessor (2s TTL),
+                // so no per-keystroke disk read.
+                if (_adornment.Popup.IsOpen && IntelliSenseSettings().DotCommits)
                 {
                     var item = _adornment.Popup.GetSelectedItem();
                     if (item != null)
