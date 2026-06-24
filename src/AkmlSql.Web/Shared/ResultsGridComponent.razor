@@ -135,7 +135,7 @@
                 }
             </div>
 
-            @* Footer: row count + truncation banner. *@
+            @* Footer: row count + truncation banner + apply result message. *@
             <div class="akml-results-footer">
                 <span class="akml-results-stat" data-testid="results-rowcount">
                     showing @set.Rows.Length row@(set.Rows.Length == 1 ? "" : "s")
@@ -146,6 +146,15 @@
                         result capped (~@(set.RowsOmitted)+ rows omitted) — raise Max rows to fetch more
                     </span>
                 }
+                @* The apply result message lives HERE, not in the apply-bar: a SUCCESSFUL apply clears
+                   the pending edits, which removes the apply-bar entirely, so the confirmation must
+                   render in the always-present footer to be seen at all (PR #247 follow-up). A FAILED
+                   apply keeps the pending edits and shows the error here too, above the apply-bar. *@
+                @if (!string.IsNullOrEmpty(_applyMessage))
+                {
+                    <span class="@(_applyOk ? "akml-connmgr-msg-ok" : "akml-connmgr-msg-error")"
+                          data-testid="results-apply-message">@_applyMessage</span>
+                }
             </div>
 
             @* Apply bar — only when there are pending edits. RUN-IMMEDIATELY (no confirm). *@
@@ -153,11 +162,7 @@
             {
                 <div class="akml-results-applybar" data-testid="results-applybar">
                     <span class="akml-results-stat">@PendingCount pending change@(PendingCount == 1 ? "" : "s")</span>
-                    @if (!string.IsNullOrEmpty(_applyMessage))
-                    {
-                        <span class="@(_applyOk ? "akml-connmgr-msg-ok" : "akml-connmgr-msg-error")"
-                              data-testid="results-apply-message">@_applyMessage</span>
-                    }
+                    @* (apply result message moved to the always-present footer — see above) *@
                     <span class="akml-results-spacer"></span>
                     <button class="akml-connmgr-btn" data-testid="results-discard"
                             @onclick="DiscardEdits" disabled="@_applying">Discard</button>
