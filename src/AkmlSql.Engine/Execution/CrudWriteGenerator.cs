@@ -31,6 +31,9 @@ namespace AkmlSql.Engine.Execution
         /// <summary>
         /// Build the three-part (or two-part) quoted table reference: [catalog].[schema].[table].
         /// A catalog is included only when non-empty so the command stays valid on the current DB.
+        /// When a catalog is present but schema is empty the default-schema double-dot form
+        /// <c>[catalog]..[table]</c> is emitted — a single dot would produce an invalid two-part
+        /// name that SQL Server cannot resolve.
         /// </summary>
         public static string BuildQualifiedTable(string? catalog, string schema, string table)
         {
@@ -38,6 +41,12 @@ namespace AkmlSql.Engine.Execution
             if (!string.IsNullOrEmpty(catalog))
             {
                 sb.Append(QuoteName(catalog!)).Append('.');
+                // When catalog is present but schema is absent the T-SQL three-part name requires
+                // an empty schema slot (double-dot notation): [catalog]..[table].
+                if (string.IsNullOrEmpty(schema))
+                {
+                    sb.Append('.');
+                }
             }
             // Schema may be empty (default schema) — emit it only when present.
             if (!string.IsNullOrEmpty(schema))

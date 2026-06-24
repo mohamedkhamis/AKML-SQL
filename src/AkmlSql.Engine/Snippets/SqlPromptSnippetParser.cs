@@ -193,14 +193,15 @@ internal static class SqlPromptSnippetParser
         if (string.IsNullOrEmpty(body))
             return [];
 
-        // Normalise CRLF/CR → LF, then split. Trim a single leading/trailing blank line that CDATA
-        // formatting commonly introduces, but keep interior blank lines intact.
+        // Normalise CRLF/CR → LF, then split. Trim at most ONE leading and ONE trailing blank line
+        // that CDATA formatting commonly introduces, but keep all other blank lines intact (including
+        // any additional leading/trailing blank lines the author intentionally added).
         var normalised = body.Replace("\r\n", "\n").Replace("\r", "\n");
         var lines = normalised.Split('\n').ToList();
 
-        while (lines.Count > 0 && lines[0].Trim().Length == 0)
+        if (lines.Count > 0 && lines[0].Trim().Length == 0)
             lines.RemoveAt(0);
-        while (lines.Count > 0 && lines[^1].Trim().Length == 0)
+        if (lines.Count > 0 && lines[^1].Trim().Length == 0)
             lines.RemoveAt(lines.Count - 1);
 
         return lines.ToArray();

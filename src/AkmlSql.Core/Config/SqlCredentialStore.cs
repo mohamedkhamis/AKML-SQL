@@ -85,7 +85,7 @@ namespace AkmlSql.Core.Config
                     password = Decrypt(entry.EncryptedPassword);
                     return !string.IsNullOrEmpty(password);
                 }
-                catch (CryptographicException ex)
+                catch (Exception ex) when (ex is CryptographicException || ex is FormatException)
                 {
                     Log.Warning(ex, "SqlCredentialStore: could not decrypt credential for {Server}/{Login}; dropping it", server, login);
                     list.Remove(entry);

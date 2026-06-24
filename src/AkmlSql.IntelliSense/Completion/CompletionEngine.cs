@@ -307,8 +307,12 @@ public class CompletionEngine
             _objectProvider.IncludeSystemObjects = IncludeSystemObjects;
             _objectProvider.SchemaQualifyMode = SchemaQualifyMode;
 
-            // Push column-suggestion scope into ColumnProvider (FR-012 / T032).
+            // Push column-suggestion scope and connection scope into ColumnProvider (FR-012 / T032,
+            // FR-016 / T036). ScopeSchemas is shared with ObjectProvider — same normalization.
             _columnProvider.ColumnScopeMode = ColumnScopeMode;
+            _columnProvider.ScopeSchemas = ScopeSchemas is { Count: > 0 }
+                ? new HashSet<string>(ScopeSchemas, StringComparer.OrdinalIgnoreCase)
+                : _emptySchemaScope;
 
             // Push connection scope into ObjectProvider (FR-016 / T036). ScopeSchemas is normalized to a
             // case-insensitive set; an empty set means "no restriction".

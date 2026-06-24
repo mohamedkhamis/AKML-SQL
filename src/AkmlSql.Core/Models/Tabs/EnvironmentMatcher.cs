@@ -46,7 +46,11 @@ namespace AkmlSql.Core.Models.Tabs
                 if (string.Equals(rule.MatchTarget, MatchTargetDatabase, StringComparison.OrdinalIgnoreCase))
                 {
                     // Database rule: match against the database name on any server.
-                    if (!string.IsNullOrWhiteSpace(databaseName) && MatchesPattern(rule.Pattern, databaseName!))
+                    // Prefer DatabaseName (the dedicated db-pattern field) over Pattern so that
+                    // ColoringRule.DatabaseName is honoured; fall back to Pattern for rules
+                    // constructed without a dedicated DatabaseName (backward compatibility).
+                    var dbPattern = string.IsNullOrEmpty(rule.DatabaseName) ? rule.Pattern : rule.DatabaseName;
+                    if (!string.IsNullOrWhiteSpace(databaseName) && MatchesPattern(dbPattern, databaseName!))
                         return rule;
                 }
                 else if (string.Equals(rule.MatchTarget, MatchTargetServerName, StringComparison.OrdinalIgnoreCase))

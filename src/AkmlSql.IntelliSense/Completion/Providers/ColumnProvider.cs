@@ -29,6 +29,13 @@ public class ColumnProvider : ICompletionProvider
     public ColumnSuggestionScope ColumnScopeMode { get; set; } = ColumnSuggestionScope.ReferencedOnly;
 
     /// <summary>
+    /// Spec 030 T036 / FR-016 — limits the <see cref="ColumnSuggestionScope.All"/> column list
+    /// to schemas in this set (case-insensitive). Empty = all schemas in scope. Mirrors the same
+    /// property on <see cref="ObjectProvider"/>; pushed per request by <see cref="CompletionEngine"/>.
+    /// </summary>
+    public ISet<string> ScopeSchemas { get; set; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
     /// Clause contexts where bare column names are valid completions
     /// (i.e. expression positions inside a query referencing in-scope tables).
     /// </summary>
@@ -121,7 +128,7 @@ public class ColumnProvider : ICompletionProvider
             && context.AvailableAliases.Count == 0
             && ColumnScopeMode == ColumnSuggestionScope.All)
         {
-            foreach (var item in GetAllTableColumns(cache))
+            foreach (var item in GetAllTableColumns(cache, ScopeSchemas))
                 yield return item;
             yield break;
         }
@@ -287,12 +294,19 @@ public class ColumnProvider : ICompletionProvider
     /// ColumnScope=All and no table is referenced yet. Tables whose columns haven't loaded
     /// (Phase B background load) are skipped — never force a load here. Items are bare column
     /// names with the owning table in the secondary text; the popup filter narrows as the user types.
+    /// <para>FR-016: only schemas in <paramref name="scopeSchemas"/> are considered (empty = all).</para>
     /// </summary>
-    private static IEnumerable<CompletionItem> GetAllTableColumns(DatabaseCache cache)
+    private static IEnumerable<CompletionItem> GetAllTableColumns(DatabaseCache cache,
+        ISet<string>? scopeSchemas = null)
     {
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var schema in cache.Schemas.Values)
         {
+            // FR-016: skip schemas that are outside the connection scope.
+            if (scopeSchemas != null && scopeSchemas.Count > 0
+                && !scopeSchemas.Contains(schema.SchemaName))
+                continue;
+
             foreach (var obj in cache.GetObjectsInSchema(schema.SchemaName))
             {
                 if (obj.ObjectType != DbObjectType.Table && obj.ObjectType != DbObjectType.View)
@@ -300,7 +314,10 @@ public class ColumnProvider : ICompletionProvider
                 if (!obj.ColumnsLoaded || obj.Columns.Count == 0)
                     continue;
 
-                foreach (var column in obj.Columns)
+                // Snapshot the column list before iterating — Phase B may still be
+                // Add()-ing to the underlying List<Column> on a background thread.
+                var columns = obj.Columns.ToArray();
+                foreach (var column in columns)
                 {
                     if (!seen.Add($"{obj.FullName}.{column.ColumnName}"))
                         continue;

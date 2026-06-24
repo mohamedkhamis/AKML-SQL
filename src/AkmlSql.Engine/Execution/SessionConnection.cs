@@ -166,15 +166,20 @@ namespace AkmlSql.Engine.Execution
             {
                 return false; // busy — skip; it will be revisited on the next opportunistic sweep.
             }
-            try
+            // Idle gate claimed. Tear the SqlConnection down on a BACKGROUND task so the caller — the
+            // opportunistic EvictIdle on the execute hot path — is never blocked on TCP teardown. The
+            // old DisposeCoreAsync().GetAwaiter().GetResult() under the gate blocked a thread-pool
+            // thread for the duration of the teardown. EvictIdle removes this now-orphaned instance
+            // from the registry once we return true, so the gate is released by the background task
+            // with no other holder (SemaphoreSlim permits cross-thread release). Mirrors the existing
+            // fire-and-forget SessionConnectionRegistry.Dispose(sessionId) pattern.
+            _ = Task.Run(async () =>
             {
-                DisposeCoreAsync().GetAwaiter().GetResult();
-                return true;
-            }
-            finally
-            {
-                _gate.Release();
-            }
+                try { await DisposeCoreAsync().ConfigureAwait(false); }
+                catch (Exception ex) { Log.Warning(ex, "SessionConnection: idle dispose failed for session {Session}", _sessionId); }
+                finally { _gate.Release(); }
+            });
+            return true;
         }
 
         public async ValueTask DisposeAsync()

@@ -67,15 +67,25 @@ namespace AkmlSql.Engine.Execution
                 var dbCache = !string.IsNullOrEmpty(dbName) ? _schemaCache.GetCache(req.SessionId, dbName!) : null;
 
                 // Per-execute CTS — the transport ct is per-CONNECTION, never per-request.
+                // IMPORTANT: RegisterQuery must happen INSIDE the gate (after RunExclusiveAsync
+                // acquires it), not before. Registering before the gate is entered means a
+                // CancelQuery request that arrives while this execute is still queued (waiting
+                // for the semaphore) would cancel a not-yet-running request. We register inside
+                // the work callback so the CTS is only visible to TryCancel once the request is
+                // actually the active one executing on the connection.
                 using var cts = new CancellationTokenSource();
-                sessionConn.RegisterQuery(queryId, cts);
                 var sw = Stopwatch.StartNew();
 
                 try
                 {
                     var (result, wasReset) = await sessionConn.RunExclusiveAsync(
                         connStr!,
-                        (conn, _) => ExecuteOnConnectionAsync(conn, req, maxRows, timeoutSec, dbCache, cts.Token),
+                        (conn, _) =>
+                        {
+                            // We now hold the gate — register the CTS so TryCancel can reach it.
+                            sessionConn.RegisterQuery(queryId, cts);
+                            return ExecuteOnConnectionAsync(conn, req, maxRows, timeoutSec, dbCache, cts.Token);
+                        },
                         ct).ConfigureAwait(false);
 
                     sw.Stop();

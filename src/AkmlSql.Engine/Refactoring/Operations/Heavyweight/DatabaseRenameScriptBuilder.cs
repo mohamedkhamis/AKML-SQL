@@ -206,10 +206,14 @@ internal static class DatabaseRenameScriptBuilder
         var sb = new StringBuilder(dep.Definition);
         foreach (var m in matches)
         {
-            // Preserve bracket quoting if the matched text was bracketed.
-            string replacement = m.MatchedText.StartsWith("[", StringComparison.Ordinal)
-                ? $"[{newName}]"
-                : newName;
+            // Preserve bracket quoting if the original source token was bracketed.
+            // NOTE: m.MatchedText is id.Value from ScriptDom — it is always the bare (unquoted)
+            // identifier value, so StartsWith("[") is never true there. We must look at the
+            // character in the original source text at m.StartOffset instead.
+            bool wasBracketed = m.StartOffset >= 0
+                && m.StartOffset < dep.Definition.Length
+                && dep.Definition[m.StartOffset] == '[';
+            string replacement = wasBracketed ? $"[{newName}]" : newName;
 
             int len = m.EndOffset - m.StartOffset;
             if (m.StartOffset < 0 || len < 0 || m.StartOffset + len > sb.Length) continue;

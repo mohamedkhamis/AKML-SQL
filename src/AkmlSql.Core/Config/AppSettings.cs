@@ -650,9 +650,21 @@ namespace AkmlSql.Core.Config
         /// Keyed by rule id (e.g. "PE001"). Applied by <c>CaSettingsLoader</c> over the built-in
         /// rule defaults and BELOW any project <c>.casettings</c> (project-local wins). Empty by
         /// default, so the global baseline is the rules' own defaults.
+        /// The setter normalises the comparer to <see cref="StringComparer.OrdinalIgnoreCase"/> so that
+        /// hand-edited config.json entries with lowercase rule ids (e.g. "pe001") are treated identically
+        /// to the engine's canonical uppercase ids ("PE001"). System.Text.Json always calls the setter
+        /// with a freshly-constructed ordinal dictionary, so the normalisation happens on every deserialise.
         /// </summary>
         [JsonPropertyName("ruleOverrides")]
-        public Dictionary<string, RuleOverride> RuleOverrides { get; set; } = new();
+        public Dictionary<string, RuleOverride> RuleOverrides
+        {
+            get => _ruleOverrides;
+            set => _ruleOverrides = value == null
+                ? new Dictionary<string, RuleOverride>(StringComparer.OrdinalIgnoreCase)
+                : new Dictionary<string, RuleOverride>(value, StringComparer.OrdinalIgnoreCase);
+        }
+
+        private Dictionary<string, RuleOverride> _ruleOverrides = new(StringComparer.OrdinalIgnoreCase);
     }
 
     /// <summary>

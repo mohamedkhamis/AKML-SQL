@@ -27,6 +27,20 @@ public class AnalysisEngine(TsqlParserService parser, RuleRegistry registry, CaS
     private readonly SemaphoreSlim _ruleSemaphore = new(8, 8);
 
     /// <summary>
+    /// Clears the batch-level result cache so the next analysis re-runs all rules under the
+    /// current settings. Must be called whenever analysis settings change (rule enable/disable,
+    /// severity overrides) to prevent stale diagnostics being returned for unchanged batches.
+    /// Thread-safe: takes a lock matching the cache's single-writer usage pattern.
+    /// </summary>
+    public void ClearBatchCache()
+    {
+        lock (_batchCache)
+        {
+            _batchCache.Clear();
+        }
+    }
+
+    /// <summary>
     /// Analyzes the SQL document referenced by <paramref name="request"/> and returns all diagnostics.
     /// Uses batch-level result caching (keyed by SHA-256 hash) to skip unchanged batches.
     /// Rules run in parallel bounded by an internal semaphore (max 8 concurrent rules).

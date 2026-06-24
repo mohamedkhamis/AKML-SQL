@@ -182,6 +182,9 @@ internal static class EngineHandlerRegistry
             // Services.SettingsProvider() -> ctx.EnsureSettings().Ai, so the explicit
             // aiHandler.RefreshSettings() call (and the AiRequestHandler class itself) is gone.
             ctx.InvalidateSettings();
+            // PR-247 fix: flush stale batch-level cache so the next analysis re-runs rules
+            // under the new settings rather than returning diagnostics computed under the old ones.
+            analysisEngine.ClearBatchCache();
         }));
 
         // === Snippets (5 typed) ===

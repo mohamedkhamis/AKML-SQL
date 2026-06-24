@@ -93,7 +93,13 @@ public class DmlRules : IRuleSet
         {
             var node = nodes[i];
             if (node.IsInNoformatRegion)
+            {
+                // A BETWEEN whose AND lands inside a noformat region cannot be paired across the
+                // boundary. Reset so the next real AND (after the region) is not mistaken for the
+                // BETWEEN's AND and silently skipped.
+                expectBetweenAnd = false;
                 continue;
+            }
 
             // The AND in `BETWEEN x AND y` belongs to the BETWEEN expression, not a clause-level
             // boolean connector — never re-indent it (Spec 030 T008). Track BETWEEN and consume the

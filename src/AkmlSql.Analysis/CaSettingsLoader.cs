@@ -27,11 +27,20 @@ public class CaSettingsLoader : IDisposable
             if (_cache.TryGetValue(dir, out var cached))
                 return cached;
 
-            var resolved = Build(dir, globalSettings);
+            var (resolved, caFile) = Build(dir, globalSettings);
             _cache[dir] = resolved;
 
-            if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir))
-                EnsureWatcher(dir);
+            // Watch the directory that actually contains the governing .casettings file (which may be
+            // an ancestor of dir). This ensures that editing a parent-level .casettings invalidates
+            // all cache entries that resolved through it, not just entries for that exact directory.
+            // Fall back to dir itself so we still detect a .casettings created there later.
+            var watchDir = (!string.IsNullOrEmpty(caFile)
+                ? Path.GetDirectoryName(caFile)
+                : null)
+                ?? dir;
+
+            if (!string.IsNullOrEmpty(watchDir) && Directory.Exists(watchDir))
+                EnsureWatcher(watchDir);
 
             return resolved;
         }
@@ -47,7 +56,7 @@ public class CaSettingsLoader : IDisposable
         lock (_lock) { _cache.Remove(dir); }
     }
 
-    private ResolvedAnalysisSettings Build(string startDir, CodeAnalysisSettings globalSettings)
+    private (ResolvedAnalysisSettings, string?) Build(string startDir, CodeAnalysisSettings globalSettings)
     {
         var settings = new ResolvedAnalysisSettings
         {
@@ -74,14 +83,14 @@ public class CaSettingsLoader : IDisposable
         }
 
         var caFile = FindCaSettingsFile(startDir);
-        if (caFile == null) return settings;
+        if (caFile == null) return (settings, null);
 
         try
         {
             var json = File.ReadAllText(caFile);
             var ca   = JsonSerializer.Deserialize<CaSettings>(json,
                            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-            if (ca == null) return settings;
+            if (ca == null) return (settings, caFile);
 
             foreach (var (ruleId, cfg) in ca.Rules)
             {
@@ -103,7 +112,7 @@ public class CaSettingsLoader : IDisposable
             Log.Warning(ex, "Failed to load CAsettings from {File}; using defaults", caFile);
         }
 
-        return settings;
+        return (settings, caFile);
     }
 
     private static string? FindCaSettingsFile(string startDir)
@@ -136,9 +145,11 @@ public class CaSettingsLoader : IDisposable
                 NotifyFilter      = NotifyFilters.LastWrite | NotifyFilters.FileName,
                 EnableRaisingEvents = true
             };
-            watcher.Changed += (_, _) => InvalidateDirectory(dir);
-            watcher.Created += (_, _) => InvalidateDirectory(dir);
-            watcher.Deleted += (_, _) => InvalidateDirectory(dir);
+            // Invalidate the whole cache so child-dir entries that resolved through an
+            // ancestor .casettings are also dropped (not just the ancestor's own entry).
+            watcher.Changed += (_, _) => InvalidateCache();
+            watcher.Created += (_, _) => InvalidateCache();
+            watcher.Deleted += (_, _) => InvalidateCache();
             _watchers[dir] = watcher;
         }
         catch (Exception ex)
