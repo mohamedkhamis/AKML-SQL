@@ -102,9 +102,9 @@ namespace AkmlSql.Shell.Shared.Ui.Theme
                 [ThemeTokens.BorderSplitter] = Solid(0xE2, 0xE8, 0xF0),
 
                 // Accent (AKML Blue)
-                [ThemeTokens.AccentPrimary]        = Solid(0x25, 0x63, 0xEB),
-                [ThemeTokens.AccentPrimaryHover]   = Solid(0x1E, 0x40, 0xAF),
-                [ThemeTokens.AccentPrimaryPressed] = Solid(0x1E, 0x40, 0xAF),
+                [ThemeTokens.AccentPrimary]        = Solid(0x25, 0x63, 0xEB),  // blue-600
+                [ThemeTokens.AccentPrimaryHover]   = Solid(0x1D, 0x4E, 0xD8),  // blue-700 — one step darker than base
+                [ThemeTokens.AccentPrimaryPressed] = Solid(0x1E, 0x40, 0xAF),  // blue-800 — two steps darker (deepest)
 
                 // Status
                 [ThemeTokens.StatusSuccess] = Solid(0x16, 0xA3, 0x4A),

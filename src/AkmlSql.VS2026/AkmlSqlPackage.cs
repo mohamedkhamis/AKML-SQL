@@ -59,84 +59,84 @@ namespace AkmlSql.VS2026
 
             if (commandService != null)
             {
-                AboutCommand.Initialize(this, commandService);
-                CheckUpdateCommand.Initialize(this, commandService);
-                OptionsCommand.Initialize(this, commandService);
-                FormatStylesCommand.Initialize(this, commandService);
+                TryInitCommand("AboutCommand", () => AboutCommand.Initialize(this, commandService));
+                TryInitCommand("CheckUpdateCommand", () => CheckUpdateCommand.Initialize(this, commandService));
+                TryInitCommand("OptionsCommand", () => OptionsCommand.Initialize(this, commandService));
+                TryInitCommand("FormatStylesCommand", () => FormatStylesCommand.Initialize(this, commandService));
                 // Spec 030 T053 — Manage Code Analysis Rules dialog
-                AkmlSql.Shell.Shared.Analysis.ManageRulesCommand.Initialize(this, commandService);
+                TryInitCommand("ManageRulesCommand", () => AkmlSql.Shell.Shared.Analysis.ManageRulesCommand.Initialize(this, commandService));
                 // Spec 030 T067 — editor-context refactor commands
-                InlineExecCommand.Initialize(this, commandService);
-                InsertToUpdateCommand.Initialize(this, commandService);
-                InlineStoredProcedureCommand.Initialize(this, commandService);
-                ScriptAsAlterCommand.Initialize(this, commandService);
-                FindInvalidObjectsCommand.Initialize(this, commandService);
+                TryInitCommand("InlineExecCommand", () => InlineExecCommand.Initialize(this, commandService));
+                TryInitCommand("InsertToUpdateCommand", () => InsertToUpdateCommand.Initialize(this, commandService));
+                TryInitCommand("InlineStoredProcedureCommand", () => InlineStoredProcedureCommand.Initialize(this, commandService));
+                TryInitCommand("ScriptAsAlterCommand", () => ScriptAsAlterCommand.Initialize(this, commandService));
+                TryInitCommand("FindInvalidObjectsCommand", () => FindInvalidObjectsCommand.Initialize(this, commandService));
                 // Spec 030 T062 — database-wide Smart Rename (FR-018)
-                SafeRenameCommand.Initialize(this, commandService);
+                TryInitCommand("SafeRenameCommand", () => SafeRenameCommand.Initialize(this, commandService));
                 // Spec 030 T056 — toggle code analysis on/off
-                AkmlSql.Shell.Shared.Analysis.ToggleCodeAnalysisCommand.Initialize(this, commandService);
+                TryInitCommand("ToggleCodeAnalysisCommand", () => AkmlSql.Shell.Shared.Analysis.ToggleCodeAnalysisCommand.Initialize(this, commandService));
                 // Spec 030 T068 — disable formatting for selection
-                DisableFormattingForSelectionCommand.Initialize(this, commandService);
-                SendFeedbackCommand.Initialize(this, commandService);
-                ViewLogsCommand.Initialize(this, commandService);
-                RefreshCacheCommand.Initialize(this, commandService);
+                TryInitCommand("DisableFormattingForSelectionCommand", () => DisableFormattingForSelectionCommand.Initialize(this, commandService));
+                TryInitCommand("SendFeedbackCommand", () => SendFeedbackCommand.Initialize(this, commandService));
+                TryInitCommand("ViewLogsCommand", () => ViewLogsCommand.Initialize(this, commandService));
+                TryInitCommand("RefreshCacheCommand", () => RefreshCacheCommand.Initialize(this, commandService));
 
                 // Phase 7 — Tab management and safety commands
-                RestoreClosedTabCommand.Initialize(this, commandService);
-                CloseUnmodifiedCommand.Initialize(this, commandService);
-                DuplicateTabCommand.Initialize(this, commandService);
-                PinTabCommand.Initialize(this, commandService);
+                TryInitCommand("RestoreClosedTabCommand", () => RestoreClosedTabCommand.Initialize(this, commandService));
+                TryInitCommand("CloseUnmodifiedCommand", () => CloseUnmodifiedCommand.Initialize(this, commandService));
+                TryInitCommand("DuplicateTabCommand", () => DuplicateTabCommand.Initialize(this, commandService));
+                TryInitCommand("PinTabCommand", () => PinTabCommand.Initialize(this, commandService));
 
                 // Phase 7 US2 — SQL History panel
-                HistoryPanelCommand.Initialize(this, commandService);
+                TryInitCommand("HistoryPanelCommand", () => HistoryPanelCommand.Initialize(this, commandService));
 
                 // Phase 8 US7 — Go to Definition & Peek Definition
-                GoToDefinitionCommand.Initialize(this, commandService);
-                PeekDefinitionCommand.Initialize(this, commandService);
+                TryInitCommand("GoToDefinitionCommand", () => GoToDefinitionCommand.Initialize(this, commandService));
+                TryInitCommand("PeekDefinitionCommand", () => PeekDefinitionCommand.Initialize(this, commandService));
 
                 // Phase 8 US12 — Object Search & Find References
-                ObjectSearchCommand.Initialize(this, commandService);
-                FindReferencesCommand.Initialize(this, commandService);
+                TryInitCommand("ObjectSearchCommand", () => ObjectSearchCommand.Initialize(this, commandService));
+                TryInitCommand("FindReferencesCommand", () => FindReferencesCommand.Initialize(this, commandService));
 
                 // Phase 8 US2 — Grid Copy/Export commands
-                GridContextMenuWiring.RegisterCommands(commandService);
+                TryInitCommand("GridContextMenuWiring", () => GridContextMenuWiring.RegisterCommands(commandService));
 
                 // Phase 8 US3 — Command Palette
-                CommandPaletteCommand.Initialize(this, commandService);
+                TryInitCommand("CommandPaletteCommand", () => CommandPaletteCommand.Initialize(this, commandService));
 
                 // Phase 8 US4 — Execute Current Statement
-                ExecuteCurrentStatementCommand.Initialize(this, commandService);
-                ExecuteToCursorCommand.Initialize(this, commandService);
+                TryInitCommand("ExecuteCurrentStatementCommand", () => ExecuteCurrentStatementCommand.Initialize(this, commandService));
+                TryInitCommand("ExecuteToCursorCommand", () => ExecuteToCursorCommand.Initialize(this, commandService));
 
                 // Phase 8 US5 — Document Outline
-                DocumentOutlineCommand.Initialize(this, commandService);
+                TryInitCommand("DocumentOutlineCommand", () => DocumentOutlineCommand.Initialize(this, commandService));
 
                 // Phase 8 US8 — Navigation commands
-                NavigateStatementCommand.Initialize(this, commandService);
-                NavigateMatchingPairCommand.Initialize(this, commandService);
+                TryInitCommand("NavigateStatementCommand", () => NavigateStatementCommand.Initialize(this, commandService));
+                TryInitCommand("NavigateMatchingPairCommand", () => NavigateMatchingPairCommand.Initialize(this, commandService));
 
                 // Phase 9 US2 — AI Explain
-                AiExplainCommand.Initialize(this, commandService);
+                TryInitCommand("AiExplainCommand", () => AiExplainCommand.Initialize(this, commandService));
 
                 // Phase 9 US3 — AI Fix
-                AiFixCommand.Initialize(this, commandService);
+                TryInitCommand("AiFixCommand", () => AiFixCommand.Initialize(this, commandService));
 
                 // Phase 9 US6 — AI Chat Panel
-                AiChatPanelCommand.Initialize(this, commandService);
+                TryInitCommand("AiChatPanelCommand", () => AiChatPanelCommand.Initialize(this, commandService));
 
                 // Phase 5 — Bulk Analysis
-                BulkAnalysisCommand.Initialize(this, commandService);
+                TryInitCommand("BulkAnalysisCommand", () => BulkAnalysisCommand.Initialize(this, commandService));
 
                 // Phase 10 — SQL Prompt Core Parity
-                SnippetManagerCommand.Initialize(this, commandService);
+                TryInitCommand("SnippetManagerCommand", () => SnippetManagerCommand.Initialize(this, commandService));
                 // Spec 030 T044/T045 — Create Snippet from Selection + Surround With
-                AkmlSql.Shell.Shared.Snippets.CreateFromSelectionCommand.Initialize(this, commandService);
-                AkmlSql.Shell.Shared.Snippets.SurroundWithCommand.Initialize(this, commandService);
-                AkmlSql.Shell.Shared.Navigation.BookmarkCommands.Initialize(this, commandService);
-                SplitTableCommand.Initialize(this, commandService);
+                TryInitCommand("CreateFromSelectionCommand", () => AkmlSql.Shell.Shared.Snippets.CreateFromSelectionCommand.Initialize(this, commandService));
+                TryInitCommand("SurroundWithCommand", () => AkmlSql.Shell.Shared.Snippets.SurroundWithCommand.Initialize(this, commandService));
+                TryInitCommand("BookmarkCommands", () => AkmlSql.Shell.Shared.Navigation.BookmarkCommands.Initialize(this, commandService));
+                TryInitCommand("SplitTableCommand", () => SplitTableCommand.Initialize(this, commandService));
 
                 // Formatting commands
-                UnformatCommand.Initialize(this, commandService);
+                TryInitCommand("UnformatCommand", () => UnformatCommand.Initialize(this, commandService));
             }
 
             // Non-critical initialization — failures must not break the extension
@@ -210,6 +210,22 @@ namespace AkmlSql.VS2026
                 {
                     // Swallow — we must never crash the IDE
                 }
+            }
+        }
+
+        /// <summary>
+        /// Invokes a single command's Initialize call. Catches and logs any exception so that a
+        /// failure in one command does not prevent subsequent commands from registering.
+        /// </summary>
+        private static void TryInitCommand(string commandName, Action init)
+        {
+            try
+            {
+                init();
+            }
+            catch (Exception ex)
+            {
+                try { Log.Warning(ex, "Command registration failed for {CommandName} — skipping (non-fatal)", commandName); } catch { /* Intentional: logger may not be initialized */ }
             }
         }
 

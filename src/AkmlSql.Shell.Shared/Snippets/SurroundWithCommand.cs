@@ -125,6 +125,32 @@ namespace AkmlSql.Shell.Shared.Snippets
                     return;
                 }
 
+                // Re-capture the live selection from the view NOW (after the modal picker + two IPC
+                // round-trips). The user may have dismissed the dialog and clicked elsewhere, making the
+                // previously-captured selStart/selLen stale or outside the current snapshot.
+                {
+                    var liveView = ctx.View;
+                    if (liveView.Selection.IsEmpty)
+                    {
+                        WinForms.MessageBox.Show(
+                            "The selection was lost while the picker was open — try selecting the code again.",
+                            Constants.ProductName, WinForms.MessageBoxButtons.OK, WinForms.MessageBoxIcon.Information);
+                        return;
+                    }
+                    int liveStart = liveView.Selection.Start.Position.Position;
+                    int liveLen   = liveView.Selection.End.Position.Position - liveStart;
+                    int liveDocLen = liveView.TextBuffer.CurrentSnapshot.Length;
+                    if (liveStart < 0 || liveLen <= 0 || liveStart + liveLen > liveDocLen)
+                    {
+                        WinForms.MessageBox.Show(
+                            "The selection is no longer valid — try selecting the code again.",
+                            Constants.ProductName, WinForms.MessageBoxButtons.OK, WinForms.MessageBoxIcon.Information);
+                        return;
+                    }
+                    selStart = liveStart;
+                    selLen   = liveLen;
+                }
+
                 ApplySurround(ctx.View, selStart, selLen, response);
                 Log.Information("SurroundWith: applied snippet '{Shortcode}' around the selection", chosen.Shortcode);
             }

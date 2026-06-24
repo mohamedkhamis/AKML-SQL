@@ -46,6 +46,7 @@ namespace AkmlSql.Shell.Shared.Tabs
                         cr.Order,
                         cr.Pattern,
                         cr.MatchTarget,
+                        cr.DatabaseName,
                         cr.Color,
                         cr.Label));
                 }

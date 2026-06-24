@@ -172,14 +172,30 @@ namespace AkmlSql.Shell.Shared.Analysis
         }
 
         /// <summary>
-        /// Collects the per-rule deviations from the grid: a rule is an override only when it is
-        /// disabled or its severity differs from the rule's built-in default; rules left at their
-        /// default are omitted (so toggling one back to default removes its override).
+        /// Collects the per-rule global overrides to persist. The caller replaces
+        /// <c>config.json codeAnalysis.ruleOverrides</c> wholesale with this result, so the method
+        /// must preserve any existing global overrides the user did NOT touch in this session.
+        ///
+        /// Strategy:
+        /// 1. Seed <paramref name="result"/> from the current on-disk global overrides so that
+        ///    untouched rules keep their saved global setting.
+        /// 2. For each grid row compare the current value against the effective baseline shown on
+        ///    open (dto.Enabled / dto.EffectiveSeverity — the values the row was populated with):
+        ///    - Unchanged → skip; the seeded value (if any) survives unchanged.
+        ///    - Changed AND still differs from built-in default → write/replace the override.
+        ///    - Changed AND reverted to built-in default → remove the override entry entirely
+        ///      (lets the user explicitly clear a rule back to factory default).
+        ///
+        /// This avoids the old bug where comparing against dto.DefaultSeverity would silently bake
+        /// project-.casettings values into config.json on every Save.
         /// </summary>
         public Dictionary<string, RuleOverride> GetOverrides()
         {
             _grid.EndEdit();
-            var result = new Dictionary<string, RuleOverride>(StringComparer.OrdinalIgnoreCase);
+
+            // Seed from the current global config so untouched rows preserve existing overrides.
+            var existing = ConfigManager.Load().CodeAnalysis.RuleOverrides;
+            var result   = new Dictionary<string, RuleOverride>(existing, StringComparer.OrdinalIgnoreCase);
 
             foreach (DataGridViewRow row in _grid.Rows)
             {
@@ -188,14 +204,25 @@ namespace AkmlSql.Shell.Shared.Analysis
                 bool enabled = Convert.ToBoolean(row.Cells[ColEnabled].Value ?? true);
                 int  sevIdx  = LabelToSeverity(row.Cells[ColSeverity].Value?.ToString());
 
-                bool isDefault = enabled && sevIdx == dto.DefaultSeverity;
-                if (isDefault) continue;
+                // If the user left the row exactly as it was displayed on open, do nothing —
+                // the seeded value (if any) is already in result.
+                bool unchanged = enabled == dto.Enabled && sevIdx == dto.EffectiveSeverity;
+                if (unchanged) continue;
 
-                result[dto.RuleId] = new RuleOverride
+                // User changed something. If they reverted all the way back to the rule's built-in
+                // default, remove any override so the rule falls through to engine defaults.
+                if (enabled && sevIdx == dto.DefaultSeverity)
                 {
-                    Enabled  = enabled,
-                    Severity = SeverityToString(sevIdx)
-                };
+                    result.Remove(dto.RuleId);
+                }
+                else
+                {
+                    result[dto.RuleId] = new RuleOverride
+                    {
+                        Enabled  = enabled,
+                        Severity = SeverityToString(sevIdx)
+                    };
+                }
             }
 
             return result;
