@@ -369,12 +369,19 @@ export async function create(hostElementId, initialText, dotNetRef) {
         provide: f => cm.view.showTooltip.from(f),
     });
 
+    // Monotonic request sequence: each requestSignature claims the next value; its async response
+    // is applied only if no newer request OR dismissal happened meanwhile — otherwise a slow
+    // round-trip could re-show a stale tooltip after the user already typed ')' / moved on.
+    let sigSeq = 0;
+
     async function requestSignature(view) {
         if (!dotNetRef) return;
+        const seq = ++sigSeq;
         const pos = view.state.selection.main.head;
         let sig;
         try { sig = await dotNetRef.invokeMethodAsync('RequestSignatureHelpFromJs', pos, view.state.doc.toString()); }
         catch { return; }
+        if (seq !== sigSeq) return;   // superseded by a newer request or a dismissal
         const inst = _instances.get(hostElementId);
         if (!inst) return;
         if (!sig) { inst.view.dispatch({ effects: setSig.of(null) }); return; }
@@ -409,6 +416,7 @@ export async function create(hostElementId, initialText, dotNetRef) {
     }
 
     function dismissSignature(view) {
+        sigSeq++;   // invalidate any in-flight requestSignature so its stale response is dropped
         if (view.state.field(sigField, false)) { view.dispatch({ effects: setSig.of(null) }); return true; }
         return false;
     }

@@ -402,14 +402,27 @@
 
     private async Task TestAsync()
     {
+        // Passwords are never stored, so a saved SQL-auth connection loads with an empty password.
+        // Require one rather than silently testing with "" (which always fails confusingly).
+        if (!_windowsAuth && string.IsNullOrEmpty(_password))
+        {
+            SetMessage("Enter the SQL password to test this connection (passwords are never stored).", isError: true);
+            return;
+        }
         _busy = true;
         _message = null;
         StateHasChanged();
-        var (ok, error) = await SqlConn.TestAsync(_server, _database, _windowsAuth,
-            _windowsAuth ? null : _login, _windowsAuth ? null : _password, CancellationToken.None);
-        SetMessage(ok ? "Connection test succeeded." : (error ?? "Connection test failed."), isError: !ok);
-        _busy = false;
-        StateHasChanged();
+        try
+        {
+            var (ok, error) = await SqlConn.TestAsync(_server, _database, _windowsAuth,
+                _windowsAuth ? null : _login, _windowsAuth ? null : _password, CancellationToken.None);
+            SetMessage(ok ? "Connection test succeeded." : (error ?? "Connection test failed."), isError: !ok);
+        }
+        finally
+        {
+            _busy = false;
+            StateHasChanged();
+        }
     }
 
     private async Task SaveAsync()
@@ -481,35 +494,45 @@
 
     private async Task ConnectAsync()
     {
+        if (!_windowsAuth && string.IsNullOrEmpty(_password))
+        {
+            SetMessage("Enter the SQL password to connect (passwords are never stored).", isError: true);
+            return;
+        }
         _busy = true;
         _message = null;
         StateHasChanged();
-        var (ok, error) = await SqlConn.ConnectAsync(_server, _database, _windowsAuth,
-            _windowsAuth ? null : _login, _windowsAuth ? null : _password, CancellationToken.None);
-        if (ok)
+        try
         {
-            // Persist LastConnectedAt + remember this as the active saved row when it maps to one.
-            if (!string.IsNullOrEmpty(_selectedId))
+            var (ok, error) = await SqlConn.ConnectAsync(_server, _database, _windowsAuth,
+                _windowsAuth ? null : _login, _windowsAuth ? null : _password, CancellationToken.None);
+            if (ok)
             {
-                try
+                // Persist LastConnectedAt + remember this as the active saved row when it maps to one.
+                if (!string.IsNullOrEmpty(_selectedId))
                 {
-                    var existing = await Store.GetAsync(_selectedId!);
-                    if (existing != null)
+                    try
                     {
-                        existing.LastConnectedAt = DateTimeOffset.UtcNow;
-                        await Store.UpdateAsync(existing);
-                        await Store.SetActiveIdAsync(existing.Id);
+                        var existing = await Store.GetAsync(_selectedId!);
+                        if (existing != null)
+                        {
+                            existing.LastConnectedAt = DateTimeOffset.UtcNow;
+                            await Store.UpdateAsync(existing);
+                            await Store.SetActiveIdAsync(existing.Id);
+                        }
                     }
+                    catch { /* best-effort metadata update — connect already succeeded */ }
                 }
-                catch { /* best-effort metadata update — connect already succeeded */ }
+                Close();   // MainLayout's StateChanged owner starts SchemaSync on SqlConn.SessionId.
+                return;
             }
-            _busy = false;
-            Close();   // MainLayout's StateChanged owner starts SchemaSync on SqlConn.SessionId.
-            return;
+            SetMessage(error ?? "Connect failed.", isError: true);
         }
-        SetMessage(error ?? "Connect failed.", isError: true);
-        _busy = false;
-        StateHasChanged();
+        finally
+        {
+            _busy = false;
+            StateHasChanged();
+        }
     }
 
     private void SetMessage(string message, bool isError)

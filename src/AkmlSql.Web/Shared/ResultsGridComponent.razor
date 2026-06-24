@@ -501,13 +501,15 @@
 
             if (result.Status == ExecuteStatus.Ok)
             {
-                _applyOk = true;
-                _applyMessage = $"Applied {req.Edits.Length} change(s).";
                 // Reflect the committed changes in-memory BEFORE clearing the overlay so the grid shows
                 // the new values even when the page declines to re-run the query (multi-statement batch).
                 BakeCommittedChangesIntoActiveSet(set);
                 ResetEditState();
                 RebuildRowIndexes();   // deletes/inserts changed the row set.
+                // Set the success message AFTER ResetEditState — which clears _applyMessage — so it
+                // actually surfaces (previously it was set then immediately nulled by the reset).
+                _applyOk = true;
+                _applyMessage = $"Applied {req.Edits.Length} change(s).";
                 // Caller may re-run the query to refresh; we surface the success and clear tints.
                 await OnApplied.InvokeAsync();
             }

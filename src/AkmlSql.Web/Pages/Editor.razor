@@ -608,26 +608,27 @@
     private async Task ExecuteAsync()
     {
         if (_executing || _editor == null) return;
-        if (!SqlConn.IsConnected)
-        {
-            _status = "Connect to a SQL Server first (Connect button / palette).";
-            StateHasChanged();
-            return;
-        }
-
-        // LIVE text — selection if any, else the whole document.
-        var selection = await _editor.GetSelectedTextAsync();
-        var sql = string.IsNullOrWhiteSpace(selection) ? await _editor.GetTextAsync() : selection;
-        if (string.IsNullOrWhiteSpace(sql)) return;
-
-        _lastExecutedSql = sql;
-        _activeQueryId = Guid.NewGuid().ToString("N");
+        // Claim the slot BEFORE any await so a second trigger (toolbar + Mod-Enter) can't reenter
+        // through the two JS-interop awaits below. The finally always releases it.
         _executing = true;
-        _status = "Running…";
-        StateHasChanged();
-
         try
         {
+            if (!SqlConn.IsConnected)
+            {
+                _status = "Connect to a SQL Server first (Connect button / palette).";
+                return;
+            }
+
+            // LIVE text — selection if any, else the whole document.
+            var selection = await _editor.GetSelectedTextAsync();
+            var sql = string.IsNullOrWhiteSpace(selection) ? await _editor.GetTextAsync() : selection;
+            if (string.IsNullOrWhiteSpace(sql)) return;
+
+            _lastExecutedSql = sql;
+            _activeQueryId = Guid.NewGuid().ToString("N");
+            _status = "Running…";
+            StateHasChanged();
+
             var result = await QueryExec.ExecuteAsync(sql, _maxRows, _timeoutSeconds, _activeQueryId, CancellationToken.None);
             _resultsGrid?.ShowResult(result);
             _status = result.Status == ExecuteStatus.Ok
@@ -670,11 +671,22 @@
         // pick up server-side recomputes (triggers / computed columns).
         if (!QueryRefreshSafety.IsSingleReadOnlySelect(_lastExecutedSql)) return;
 
-        _activeQueryId = Guid.NewGuid().ToString("N");
-        var result = await QueryExec.ExecuteAsync(_lastExecutedSql, _maxRows, _timeoutSeconds, _activeQueryId, CancellationToken.None);
-        _activeQueryId = null;
-        _resultsGrid?.ShowResult(result, preserveActiveTab: true); // keep the user on the set they applied to.
-        StateHasChanged();
+        // Share the same reentry guard as ExecuteAsync so a manual Execute can't race the
+        // auto-refresh on the serial connection (and vice-versa).
+        if (_executing) return;
+        _executing = true;
+        try
+        {
+            _activeQueryId = Guid.NewGuid().ToString("N");
+            var result = await QueryExec.ExecuteAsync(_lastExecutedSql, _maxRows, _timeoutSeconds, _activeQueryId, CancellationToken.None);
+            _resultsGrid?.ShowResult(result, preserveActiveTab: true); // keep the user on the set they applied to.
+        }
+        finally
+        {
+            _executing = false;
+            _activeQueryId = null;
+            StateHasChanged();
+        }
     }
 
     private async Task OnMaxRowsChanged(ChangeEventArgs e)
