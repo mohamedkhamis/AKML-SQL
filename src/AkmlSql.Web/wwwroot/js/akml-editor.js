@@ -163,7 +163,16 @@ export async function create(hostElementId, initialText, dotNetRef) {
                     // Smart-action items (SQL-Prompt-style "▶ Add columns from SELECT") must sort
                     // to the top: CM6 orders an empty-prefix popup by label, and "▶" (U+25B6)
                     // sorts after letters, which would otherwise bury the action at the bottom.
-                    const boost = (i.label && i.label.charCodeAt(0) === 0x25B6) ? 99 : undefined;
+                    // Map the engine's SortPriority (ASCENDING — lower ranks first) to CM6's
+                    // boost (DESCENDING — higher ranks first) so the web popup order matches the
+                    // desktop (e.g. data types before constraint keywords in a CREATE TABLE column).
+                    // ▶ smart-actions keep the top slot. The /10 scale keeps boost a gentle
+                    // tiebreaker: it fully orders the empty-prefix popup but does not override CM's
+                    // fuzzy-match score once a prefix is typed (mirrors the engine: score, then
+                    // SortPriority).
+                    const boost = (i.label && i.label.charCodeAt(0) === 0x25B6)
+                        ? 99
+                        : (typeof i.sortPriority === 'number' ? (100 - i.sortPriority) / 10 : undefined);
                     // Spec 027 T011: snippet items expand (with tab-stops) on accept instead
                     // of inserting their text literally. A function `apply` is CM6's accept
                     // hook; non-snippet items keep the plain-string `apply` (literal insert).

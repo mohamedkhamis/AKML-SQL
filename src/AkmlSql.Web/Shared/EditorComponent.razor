@@ -170,6 +170,7 @@
                 InsertText = string.IsNullOrEmpty(i.InsertText) ? i.DisplayText : i.InsertText,
                 Type = ToCmType(i.ObjectType),
                 Detail = i.SecondaryText,
+                SortPriority = i.SortPriority,
             }).ToArray();
         }
         catch
@@ -330,6 +331,10 @@
         public string InsertText { get; set; } = string.Empty;
         public string Type { get; set; } = "text";
         public string? Detail { get; set; }
+        /// <summary>Engine ordering key (ASCENDING — lower ranks first). The JS editor maps it
+        /// to CodeMirror's <c>boost</c> so the web popup order matches the desktop (e.g. data
+        /// types before constraint keywords in a CREATE TABLE column).</summary>
+        public int SortPriority { get; set; }
     }
 
     public sealed class QuickInfoDto
