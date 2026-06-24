@@ -69,6 +69,18 @@ public class CompletionEngine
     public SchemaQualifyMode SchemaQualifyMode { get; set; } = SchemaQualifyMode.Always;
 
     /// <summary>
+    /// Controls whether inserted object names are wrapped in square brackets.
+    /// <list type="bullet">
+    ///   <item><see cref="BracketMode.Always"/> — always insert <c>[Name]</c>.</item>
+    ///   <item><see cref="BracketMode.WhenRequired"/> (default) — bracket only identifiers
+    ///         that contain spaces, reserved words, or other characters that require escaping.</item>
+    ///   <item><see cref="BracketMode.Never"/> — never insert brackets, even for reserved words.</item>
+    /// </list>
+    /// Maps to <c>IntelliSense.Qualification.BracketMode</c>.
+    /// </summary>
+    public BracketMode BracketMode { get; set; } = BracketMode.WhenRequired;
+
+    /// <summary>
     /// Spec 030 R6 / T032 / FR-012 — column suggestion scope. Maps to
     /// <c>IntelliSense.SuggestionTypes.ColumnScope</c>; pushed onto <see cref="ColumnProvider"/>
     /// per request. <see cref="ColumnSuggestionScope.All"/> suggests columns from every table
@@ -306,6 +318,7 @@ public class CompletionEngine
             // Push IntelliSense policy flags into ObjectProvider before each request.
             _objectProvider.IncludeSystemObjects = IncludeSystemObjects;
             _objectProvider.SchemaQualifyMode = SchemaQualifyMode;
+            _objectProvider.BracketMode = BracketMode;
 
             // Push column-suggestion scope and connection scope into ColumnProvider (FR-012 / T032,
             // FR-016 / T036). ScopeSchemas is shared with ObjectProvider — same normalization.

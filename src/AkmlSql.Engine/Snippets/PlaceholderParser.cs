@@ -11,7 +11,7 @@ public static class PlaceholderParser
 
     private static readonly HashSet<string> BuiltInVariables = new(StringComparer.OrdinalIgnoreCase)
     {
-        "CURSOR", "SELECTEDTEXT", "CLIPBOARD", "DATE", "DATETIME", "TIME",
+        "CURSOR", "SELECTEDTEXT", "CLIPBOARD", "PASTE", "DATE", "DATETIME", "TIME",
         "USER", "MACHINE", "DATABASE", "SERVER", "SCHEMA", "GUID", "YEAR", "FILENAME"
     };
 

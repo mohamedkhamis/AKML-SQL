@@ -170,11 +170,11 @@ public class AliasProvider : ICompletionProvider
         for (int i = 0; i < name.Length; i++)
         {
             char c = name[i];
-            if (i == 0 || char.IsUpper(c) || c == '_')
+            if (i == 0 || char.IsUpper(c) || c == '_' || c == '-')
             {
-                if (c == '_')
+                if (c == '_' || c == '-')
                 {
-                    // Take the character after underscore
+                    // Take the character after the separator (underscore or hyphen)
                     if (i + 1 < name.Length)
                     {
                         chars.Add(char.ToLowerInvariant(name[i + 1]));

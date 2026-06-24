@@ -58,7 +58,9 @@ internal static class EngineHandlerRegistry
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AKML SQL");
         var personalSnippets = Path.Combine(appDataFolder, "snippets", "personal");
         var builtInSnippets = Path.Combine(AppContext.BaseDirectory, "snippets");
-        var snippetHandler = new SnippetRequestHandler(personalSnippets, builtInSnippets);
+        var teamSnippets = ctx.EnsureSettings().Snippets.TeamFolder;
+        var snippetHandler = new SnippetRequestHandler(personalSnippets, builtInSnippets,
+            teamFolder: string.IsNullOrEmpty(teamSnippets) ? null : teamSnippets);
 
         var caSettingsLoader = new CaSettingsLoader();
         var ruleRegistry = new RuleRegistry();

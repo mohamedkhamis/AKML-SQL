@@ -67,6 +67,7 @@ namespace AkmlSql.Engine.Handlers.Completion
             _engine.IncludeKeywords          = settings.IntelliSense.SuggestionTypes.IncludeKeywords;
             _engine.IncludeSystemObjects     = settings.IntelliSense.SuggestionTypes.IncludeSystemObjects;
             _engine.SchemaQualifyMode        = settings.IntelliSense.Qualification.SchemaMode;
+            _engine.BracketMode              = settings.IntelliSense.Qualification.BracketMode;
             _engine.MatchByColumnName        = settings.IntelliSense.JoinOptions.MatchByColumnName;
             _engine.ColumnScopeMode          = settings.IntelliSense.SuggestionTypes.ColumnScope;
             _engine.AliasIncludeAs           = settings.IntelliSense.AliasOptions.IncludeAs;

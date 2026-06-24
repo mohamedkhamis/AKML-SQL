@@ -32,7 +32,8 @@ public enum ClauseType
     Grant,       // After GRANT/REVOKE/DENY — permission context
     ForXml,      // After FOR XML — XML output mode
     ForJson,     // After FOR JSON — JSON output mode
-    Use          // After USE keyword — expects a database name (to be inserted as [Name])
+    Use,         // After USE keyword — expects a database name (to be inserted as [Name])
+    CreateTableColumnDef // Inside CREATE TABLE ( ) after a column-name identifier — expects a data type
 }
 
 public class CursorContext
@@ -265,7 +266,23 @@ public class CursorContextAnalyzer
                 case TSqlTokenType.On: return ClauseType.JoinOn;
                 case TSqlTokenType.Having: return ClauseType.Having;
                 case TSqlTokenType.Delete: return ClauseType.Delete;
-                case TSqlTokenType.Create: return ClauseType.Create;
+                case TSqlTokenType.Create:
+                    // If the cursor is inside the first-level paren of a CREATE TABLE statement
+                    // (checkedEnclosingParen == true, meaning we exited exactly one paren level)
+                    // and the token immediately before the cursor is a column-name identifier,
+                    // classify as CreateTableColumnDef so data-type keywords rank first.
+                    if (checkedEnclosingParen)
+                    {
+                        int fwdCreate = i + 1;
+                        while (fwdCreate < tokens.Count && IsWhitespaceOrComment(tokens[fwdCreate])) fwdCreate++;
+                        if (fwdCreate < tokens.Count && tokens[fwdCreate].TokenType == TSqlTokenType.Table
+                            && context.PrecedingToken?.TokenType is TSqlTokenType.Identifier
+                                                                 or TSqlTokenType.QuotedIdentifier)
+                        {
+                            return ClauseType.CreateTableColumnDef;
+                        }
+                    }
+                    return ClauseType.Create;
                 case TSqlTokenType.Alter:
                     return DetectAlterClauseType(tokens, i, context);
                 case TSqlTokenType.With:

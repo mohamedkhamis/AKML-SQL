@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using AkmlSql.Engine.Parser;
 
 namespace AkmlSql.Engine.Completion.Dictionaries;
@@ -550,6 +551,11 @@ public static class KeywordDictionary
             ClauseType.ForXml      => AfterForXml,
             ClauseType.ForJson     => AfterForJson,
             ClauseType.Exec        => [],
+            // CreateTableColumnDef: KeywordProvider handles priority splitting (data types
+            // at 100, constraint keywords at 150).  Return the combined list here so that
+            // callers who only need the keyword set (e.g. tests, GetAllKeywords) still get
+            // the full list without duplicating array definitions.
+            ClauseType.CreateTableColumnDef => AfterCreateTableColumnDef,
             _                      => GeneralKeywords
         };
     }
@@ -881,6 +887,53 @@ public static class KeywordDictionary
     [
         "PATH", "AUTO",
         "ROOT", "INCLUDE_NULL_VALUES", "WITHOUT_ARRAY_WRAPPER"
+    ];
+
+    /// <summary>
+    /// Case-insensitive set of T-SQL built-in data-type keywords.  Used by
+    /// <see cref="Providers.KeywordProvider"/> to assign a lower SortPriority (higher rank)
+    /// to data types when the cursor is in a CREATE TABLE column-definition position.
+    /// </summary>
+    internal static readonly HashSet<string> DataTypeSet = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "INT", "BIGINT", "SMALLINT", "TINYINT", "BIT",
+        "DECIMAL", "NUMERIC", "FLOAT", "REAL", "MONEY", "SMALLMONEY",
+        "CHAR", "VARCHAR", "NCHAR", "NVARCHAR", "TEXT", "NTEXT",
+        "DATE", "TIME", "DATETIME", "DATETIME2", "SMALLDATETIME", "DATETIMEOFFSET",
+        "BINARY", "VARBINARY", "IMAGE",
+        "UNIQUEIDENTIFIER", "XML", "SQL_VARIANT",
+        "GEOGRAPHY", "GEOMETRY", "HIERARCHYID",
+        "ROWVERSION", "TIMESTAMP", "SYSNAME", "MAX",
+        "CURSOR", "TABLE"
+    };
+
+    /// <summary>
+    /// Keywords offered in a CREATE TABLE column-definition position (after the column name).
+    /// Data types come first (emitted at priority 100 by KeywordProvider); constraint keywords
+    /// follow (priority 150).  Both sets are combined here for callers that only need the
+    /// full set without caring about ordering (e.g. GetAllKeywords, tests).
+    /// </summary>
+    internal static readonly string[] AfterCreateTableColumnDef =
+    [
+        // Data types (priority 100 in KeywordProvider — rendered first)
+        "INT", "BIGINT", "SMALLINT", "TINYINT", "BIT",
+        "DECIMAL", "NUMERIC", "FLOAT", "REAL", "MONEY", "SMALLMONEY",
+        "CHAR", "VARCHAR", "NCHAR", "NVARCHAR", "TEXT", "NTEXT",
+        "DATE", "TIME", "DATETIME", "DATETIME2", "SMALLDATETIME", "DATETIMEOFFSET",
+        "BINARY", "VARBINARY", "IMAGE",
+        "UNIQUEIDENTIFIER", "XML", "SQL_VARIANT",
+        "GEOGRAPHY", "GEOMETRY", "HIERARCHYID",
+        "ROWVERSION", "TIMESTAMP", "SYSNAME",
+        // Constraint/column-property keywords (priority 150 in KeywordProvider — rendered after data types)
+        "NOT NULL", "NULL",
+        "DEFAULT",
+        "IDENTITY",
+        "PRIMARY KEY", "UNIQUE",
+        "REFERENCES",
+        "CHECK",
+        "COLLATE",
+        "ROWGUIDCOL", "PERSISTED", "SPARSE",
+        "NOT FOR REPLICATION"
     ];
 
     private static readonly string[] GeneralKeywords =

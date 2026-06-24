@@ -204,6 +204,8 @@ Rules that detect runtime errors detectable at parse/analysis time.
 | EX004 | Information | Unreachable code after `RETURN` or `THROW` |
 | EX005 | Warning | Identical condition in `IF`/`CASE` branches — one branch is dead code |
 | EX006 | Warning | Always-true condition (`1=1`, `0=0`) — likely a copy-paste artifact |
+| EX007 | Warning | Unclosed cursor — a `DECLARE CURSOR` without a matching `CLOSE` + `DEALLOCATE` in the same batch |
+| EX008 | Warning | Unbalanced transaction — `BEGIN TRANSACTION` count differs from `COMMIT`/`ROLLBACK` count (CATCH-block rollbacks excluded) |
 
 ---
 

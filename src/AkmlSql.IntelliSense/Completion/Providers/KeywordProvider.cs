@@ -46,6 +46,30 @@ public class KeywordProvider(
             yield break;
         }
 
+        // CREATE TABLE column-definition context: data types rank first (100), then
+        // constraint keywords (150). Handled separately to support different priorities
+        // for the two sub-groups within the same clause context.
+        if (context.ClauseType == ClauseType.CreateTableColumnDef)
+        {
+            var seenColDef = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var keyword in KeywordDictionary.AfterCreateTableColumnDef)
+            {
+                if (!seenColDef.Add(keyword)) continue;
+                bool isDataType = KeywordDictionary.DataTypeSet.Contains(keyword);
+                int priority = isDataType ? 100 : 150;
+                var displayText = ApplyCasing(keyword);
+                yield return new CompletionItem
+                {
+                    DisplayText   = displayText,
+                    InsertText    = displayText,
+                    ObjectType    = (int)CompletionObjectType.Keyword,
+                    SecondaryText = isDataType ? "Data Type" : "Keyword",
+                    SortPriority  = priority
+                };
+            }
+            yield break;
+        }
+
         var keywords = KeywordDictionary.GetKeywordsForClause(context.ClauseType);
 
         // If the clause-specific list is empty (e.g., Exec), fall back to nothing

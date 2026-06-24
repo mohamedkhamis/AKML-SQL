@@ -198,6 +198,8 @@ public static class RuleMetadataCatalog
         ["EX004"] = new("Unreachable code", "Unreachable code after `RETURN` or `THROW`", false),
         ["EX005"] = new("Identical branch condition", "Identical condition in `IF`/`CASE` branches — one branch is dead code", false),
         ["EX006"] = new("Always-true condition", "Always-true condition (`1=1`, `0=0`) — likely a copy-paste artifact", false),
+        ["EX007"] = new("Unclosed cursor", "Cursor declared but never both `CLOSE`-d and `DEALLOCATE`-d — server-side resource leak", false),
+        ["EX008"] = new("Transaction imbalance", "`BEGIN TRANSACTION` count does not match `COMMIT`/`ROLLBACK` count — transaction may be left open or committed outside an active transaction", false),
 
         // ── Naming (NM) ──
         ["NM001"] = new("Reserved word as identifier", "Reserved word used as an identifier without quoting", false),

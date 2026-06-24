@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using AkmlSql.Formatting.Actions;
 using AkmlSql.Formatting.Layout;
 using AkmlSql.Formatting.Profiles;
 using AkmlSql.Formatting.Rules;
@@ -238,6 +239,40 @@ public class FormatterPipeline
                         Severity = DiagnosticSeverity.Warning,
                         Message = "Idempotency check failed: second format pass produced different output"
                     });
+                }
+            }
+
+            // Stage 8 (Spec 030 FR-004 R2): format-time actions — apply enabled FormatActionConfig
+            // flags after the main pipeline pass. Only runs when validation passed (preserving the
+            // contract that a validation-failed return keeps the original SQL untouched).
+            // Skipped: CasingOnly (pipeline already cased), AddAsKeyword (add-path is an AST stub),
+            // ExpandWildcards + QualifyObjectNames (schema stubs). ApplyLayout / ApplyCasing gate
+            // the main pipeline stages, not the action chain.
+            // NOTE: false for AddSquareBrackets means "off", NOT "remove brackets" — there is no
+            // RemoveSquareBrackets flag in FormatActionConfig, so "false" must be a no-op.
+            if (validationPassed)
+            {
+                var actions = profile.FormatActions;
+
+                // InsertSemicolons: add terminators where absent
+                if (actions.InsertSemicolons)
+                {
+                    var r = new InsertSemicolonsAction().Execute(formatted, profile);
+                    if (r.Success) formatted = r.FormattedText;
+                }
+                // RemoveSemicolons: strip all terminators (mutually exclusive with Insert, but
+                // if both are set the caller is responsible — we run them in declaration order)
+                else if (actions.RemoveSemicolons)
+                {
+                    var r = new RemoveSemicolonsAction().Execute(formatted, profile);
+                    if (r.Success) formatted = r.FormattedText;
+                }
+
+                // AddSquareBrackets: bracket all plain identifiers (opt-in only; false = no-op)
+                if (actions.AddSquareBrackets)
+                {
+                    var r = new ToggleBracketsAction().Execute(formatted, profile);
+                    if (r.Success) formatted = r.FormattedText;
                 }
             }
 

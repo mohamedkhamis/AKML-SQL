@@ -38,7 +38,10 @@ public class BuiltInVariableResolver
         result = result.Replace("$DATE$", now.ToString("yyyy-MM-dd"), StringComparison.OrdinalIgnoreCase);
         result = result.Replace("$DATETIME$", now.ToString("yyyy-MM-dd HH:mm:ss"), StringComparison.OrdinalIgnoreCase);
         result = result.Replace("$TIME$", now.ToString("HH:mm:ss"), StringComparison.OrdinalIgnoreCase);
-        result = result.Replace("$USER$", Environment.UserName, StringComparison.OrdinalIgnoreCase);
+        // $USER$ prefers the SQL login name when available (e.g. sa, domain\user via SYSTEM_USER);
+        // falls back to the OS user when the session has no explicit login (integrated auth).
+        var userName = string.IsNullOrEmpty(context.SqlUserName) ? Environment.UserName : context.SqlUserName;
+        result = result.Replace("$USER$", userName, StringComparison.OrdinalIgnoreCase);
         result = result.Replace("$MACHINE$", Environment.MachineName, StringComparison.OrdinalIgnoreCase);
         result = result.Replace("$DATABASE$", context.DatabaseName, StringComparison.OrdinalIgnoreCase);
         result = result.Replace("$SERVER$", context.ServerName, StringComparison.OrdinalIgnoreCase);
@@ -47,6 +50,8 @@ public class BuiltInVariableResolver
         result = result.Replace("$YEAR$", now.Year.ToString(), StringComparison.OrdinalIgnoreCase);
         result = result.Replace("$FILENAME$", context.FileName, StringComparison.OrdinalIgnoreCase);
         result = result.Replace("$CLIPBOARD$", context.ClipboardText, StringComparison.OrdinalIgnoreCase);
+        // $PASTE$ is a SQL Prompt-compatible alias for $CLIPBOARD$ (FR-037 parity).
+        result = result.Replace("$PASTE$", context.ClipboardText, StringComparison.OrdinalIgnoreCase);
         result = result.Replace("$SELECTEDTEXT$", context.SelectedText, StringComparison.OrdinalIgnoreCase);
         // $CURSOR$ is handled separately by PlaceholderParser (removed and tracked as position).
         // $SELECTIONSTART$ / $SELECTIONEND$ are likewise deliberately PRESERVED here — they are

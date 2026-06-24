@@ -33,7 +33,7 @@ public class SnippetRequestHandler
         Log.Information("Snippet index rebuilt: {Count} snippets from {Sources} sources", _index.Count, _sources.Count);
     }
 
-    public SnippetExpandResponse HandleExpand(SnippetExpandRequest request, string? databaseName = null, string? serverName = null)
+    public SnippetExpandResponse HandleExpand(SnippetExpandRequest request, string? databaseName = null, string? serverName = null, string? sqlUserName = null)
     {
         var snippet = _index.GetByShortcode(request.Shortcode);
         if (snippet == null)
@@ -45,7 +45,9 @@ public class SnippetRequestHandler
             DatabaseName = databaseName ?? string.Empty,
             ServerName = serverName ?? string.Empty,
             ClipboardText = request.ClipboardText,
-            SelectedText = request.SelectedText
+            SelectedText = request.SelectedText,
+            // $USER$ prefers the SQL login; empty means fall back to Environment.UserName in the resolver.
+            SqlUserName = sqlUserName ?? string.Empty
         };
 
         var expandedText = _variableResolver.Resolve(bodyText, context);

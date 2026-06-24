@@ -31,6 +31,13 @@ public class ObjectProvider : ICompletionProvider
     public SchemaQualifyMode SchemaQualifyMode { get; set; } = SchemaQualifyMode.Always;
 
     /// <summary>
+    /// Controls whether inserted identifier names are wrapped in square brackets.
+    /// Set by <see cref="CompletionEngine"/> before each request.
+    /// Default <see cref="BracketMode.WhenRequired"/>.
+    /// </summary>
+    public BracketMode BracketMode { get; set; } = BracketMode.WhenRequired;
+
+    /// <summary>
     /// Spec 030 T036 / FR-016 — suggestion connection scope. <see cref="ScopeSchemas"/> limits the
     /// unqualified object + schema-name list to the named schemas (case-insensitive; empty = all).
     /// <see cref="ObjectsInScope"/> is false when the connected database is excluded from a non-empty
@@ -338,7 +345,7 @@ public class ObjectProvider : ICompletionProvider
         return result;
     }
 
-    private static IEnumerable<CompletionItem> GetDotQualifiedCompletions(CursorContext context, DatabaseCache cache)
+    private IEnumerable<CompletionItem> GetDotQualifiedCompletions(CursorContext context, DatabaseCache cache)
     {
         var prefix = context.DotPrefix;
 
@@ -413,14 +420,15 @@ public class ObjectProvider : ICompletionProvider
             .ThenBy(o => o.ObjectName, StringComparer.OrdinalIgnoreCase);
     }
 
-    private static CompletionItem ToCompletionItem(
+    private CompletionItem ToCompletionItem(
         DatabaseObject obj,
         int sortPriorityBase,
         bool includeSchema = false,
         Dictionary<string, string>? fkRelated = null)
     {
         var displayText = includeSchema ? obj.FullName : obj.ObjectName;
-        var insertText = includeSchema ? obj.FullName : obj.ObjectName;
+        var rawInsertText = includeSchema ? obj.FullName : obj.ObjectName;
+        var insertText = ApplyBrackets(rawInsertText, BracketMode);
 
         var completionType = MapObjectType(obj.ObjectType);
 
@@ -483,6 +491,72 @@ public class ObjectProvider : ICompletionProvider
             DbObjectType.Sequence => CompletionObjectType.Table,
             _ => CompletionObjectType.Table
         };
+    }
+
+    /// <summary>
+    /// Applies square-bracket escaping to an identifier according to <paramref name="mode"/>.
+    /// <list type="bullet">
+    ///   <item><see cref="BracketMode.Always"/>: always returns <c>[identifier]</c>.</item>
+    ///   <item><see cref="BracketMode.Never"/>: always returns the bare identifier.</item>
+    ///   <item><see cref="BracketMode.WhenRequired"/> (default): brackets only when the
+    ///         identifier contains spaces, hyphens, or is already un-bracketed with special
+    ///         characters — mirrors the "safe-by-default" convention for SQL Prompt parity.</item>
+    /// </list>
+    /// When the input already contains brackets (e.g. schema-qualified <c>[dbo].[Table]</c>)
+    /// the result is returned as-is for <c>Always</c> (already bracketed) and stripped of
+    /// brackets for <c>Never</c>.
+    /// </summary>
+    internal static string ApplyBrackets(string identifier, BracketMode mode)
+    {
+        if (string.IsNullOrEmpty(identifier)) return identifier;
+
+        switch (mode)
+        {
+            case BracketMode.Always:
+                // If the identifier is already fully bracketed (e.g. "[Name]"), leave it.
+                // If it is schema-qualified (e.g. "dbo.Table"), bracket each part.
+                return BracketEachPart(identifier);
+
+            case BracketMode.Never:
+                // Strip any existing brackets from each part.
+                return StripBracketsEachPart(identifier);
+
+            default: // WhenRequired
+                return identifier;
+        }
+    }
+
+    /// <summary>Brackets each dot-separated part of a (possibly schema-qualified) identifier.</summary>
+    private static string BracketEachPart(string identifier)
+    {
+        var parts = identifier.Split('.');
+        for (int i = 0; i < parts.Length; i++)
+        {
+            var part = parts[i];
+            // Already bracketed — leave as-is.
+            if (part.StartsWith("[", System.StringComparison.Ordinal) &&
+                part.EndsWith("]", System.StringComparison.Ordinal))
+                continue;
+            parts[i] = "[" + part + "]";
+        }
+        return string.Join(".", parts);
+    }
+
+    /// <summary>Strips square brackets from each dot-separated part of an identifier.</summary>
+    private static string StripBracketsEachPart(string identifier)
+    {
+        var parts = identifier.Split('.');
+        for (int i = 0; i < parts.Length; i++)
+        {
+            var part = parts[i];
+            if (part.StartsWith("[", System.StringComparison.Ordinal) &&
+                part.EndsWith("]", System.StringComparison.Ordinal) &&
+                part.Length >= 2)
+            {
+                parts[i] = part.Substring(1, part.Length - 2);
+            }
+        }
+        return string.Join(".", parts);
     }
 
     private static string FormatRowCount(long count)
