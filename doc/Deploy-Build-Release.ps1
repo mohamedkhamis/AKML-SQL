@@ -288,6 +288,33 @@ foreach ($proj in $publishProjects) {
     Start-Sleep -Milliseconds 750
 }
 
+# Web edition (Blazor WASM) — published SEPARATELY from $publishProjects because it
+# is framework-dependent and must NOT get -r win-x64 (that would wrongly make the
+# WASM app self-contained). The installer's web component sources the published
+# wwwroot, so this must run before the ISCC packaging step.
+$webCsproj = Join-Path $srcDir 'AkmlSql.Web\AkmlSql.Web.csproj'
+if (Test-Path $webCsproj) {
+    Write-Host "  Publishing Web edition (Blazor WASM)..." -NoNewline
+    $attempt = 0
+    $maxAttempts = 3
+    while ($true) {
+        $attempt++
+        $output = dotnet publish $webCsproj -c $Configuration --verbosity quiet 2>&1
+        if ($LASTEXITCODE -eq 0) { break }
+        if ($attempt -ge $maxAttempts) {
+            Write-Fail " FAILED (after $maxAttempts attempts)"
+            $output | Select-String 'error' | ForEach-Object { Write-Host "    $_" -ForegroundColor Red }
+            $script:errors += "Publish failed for AkmlSql.Web"
+            break
+        }
+        Write-Host " retry $attempt..." -NoNewline -ForegroundColor Yellow
+        Start-Sleep -Seconds 2
+    }
+    if ($LASTEXITCODE -eq 0) { Write-Host " OK" -ForegroundColor Green }
+} else {
+    Write-Warn "AkmlSql.Web not found, skipping web publish"
+}
+
 # ─────────────────────────────────────────────────────────────────────────────
 #  Step 5: Run unit tests
 # ─────────────────────────────────────────────────────────────────────────────
