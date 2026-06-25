@@ -1,0 +1,19 @@
+{
+  "metadata": {
+    "id": "builtin-st",
+    "shortcode": "st",
+    "name": "SELECT TOP",
+    "description": "SELECT TOP <n> * FROM <table>",
+    "author": "AKML SQL",
+    "version": "1.0",
+    "category": "Query",
+    "tags": [ "select", "top" ],
+    "context": [ "global" ],
+    "surroundsWith": false
+  },
+  "variables": [],
+  "body": [
+    "SELECT TOP (1000) *",
+    "FROM $CURSOR$"
+  ]
+}

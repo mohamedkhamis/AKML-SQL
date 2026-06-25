@@ -34,6 +34,7 @@ public sealed class RuleEngine
         new ListRules(),
         new ParenthesisRules(),
         new DdlRules(),
+        new DeclareRules(),
         new ControlFlowRules(),
     };
 

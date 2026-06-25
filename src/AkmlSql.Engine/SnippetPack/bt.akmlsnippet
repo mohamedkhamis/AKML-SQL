@@ -1,0 +1,29 @@
+{
+  "metadata": {
+    "id": "builtin-bt",
+    "shortcode": "bt",
+    "name": "BEGIN TRANSACTION",
+    "description": "BEGIN TRAN / COMMIT / ROLLBACK template",
+    "author": "AKML SQL",
+    "version": "1.0",
+    "category": "Control",
+    "tags": [ "transaction", "begin", "commit" ],
+    "context": [ "global" ],
+    "surroundsWith": false
+  },
+  "variables": [],
+  "body": [
+    "BEGIN TRY",
+    "    BEGIN TRANSACTION;",
+    "",
+    "    $CURSOR$",
+    "",
+    "    COMMIT TRANSACTION;",
+    "END TRY",
+    "BEGIN CATCH",
+    "    IF @@TRANCOUNT > 0",
+    "        ROLLBACK TRANSACTION;",
+    "    THROW;",
+    "END CATCH;"
+  ]
+}

@@ -1,6 +1,7 @@
 using System.Text;
 using AkmlSql.Formatting.Layout;
 using AkmlSql.Formatting.Profiles;
+using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Formatting.Pipeline;
 
@@ -17,6 +18,13 @@ public class TextEmitter
         var ws = profile.Whitespace;
         bool useTabs = ws.TabStyle == "tabs";
         int tabSize = ws.TabSize;
+
+        // Pre-compute whether comment formatting is active. Only the explicitly-known opt-in value
+        // "normaliseIndent" activates the block-comment re-indent pass. The DEFAULT value
+        // "preserve" is false here — byte-identical output guaranteed. Any other value (including
+        // the modelled-but-not-yet-implemented "joinShortLines", typos, or empty string) is also
+        // treated as a no-op, preventing silently wrong output.
+        bool commentFormattingActive = profile.Comments.MultilineFormatting == "normaliseIndent";
 
         foreach (var node in nodes)
         {
@@ -45,7 +53,25 @@ public class TextEmitter
                     break;
             }
 
-            sb.Append(node.FormattedText);
+            // Opt-in comment body formatting — only when MultilineFormatting == "normaliseIndent".
+            // The default ("preserve") and all other values (including the modelled-but-not-implemented
+            // "joinShortLines") skip this branch, preserving byte-identical output for all 709 goldens.
+            if (commentFormattingActive
+                && node.TokenType == TSqlTokenType.MultilineComment
+                && node.FormattedText.Contains('\n'))
+            {
+                var formatted = FormatBlockComment(
+                    node.FormattedText,
+                    node.IndentLevel,
+                    useTabs,
+                    tabSize,
+                    profile.Comments);
+                sb.Append(formatted);
+            }
+            else
+            {
+                sb.Append(node.FormattedText);
+            }
 
             // Emit trailing comment on same line
             if (node.TrailingComment != null)
@@ -137,5 +163,111 @@ public class TextEmitter
         }
 
         return sb.ToString();
+    }
+
+    // ── Comment formatting helpers (opt-in: only called when MultilineFormatting != "preserve") ──
+
+    /// <summary>
+    /// Re-indents the body lines of a <c>/* … */</c> block comment to the surrounding context
+    /// indentation level. The first line (the <c>/*</c> line) and the last line (the <c>*/</c>
+    /// closing delimiter) keep their leading whitespace stripped (the caller's
+    /// <see cref="AppendLineStart"/> already positioned the cursor). Body lines (lines 2..n-1)
+    /// have their leading whitespace replaced with the context indent string.
+    ///
+    /// <para>Banner / header comments — whose body lines are dominated by a repeated decoration
+    /// character (<c>*</c>, <c>=</c>, <c>-</c>, <c>#</c>) — are skipped when
+    /// <see cref="CommentsOptions.RecognizeCommonPatterns"/> is <see langword="true"/>.</para>
+    /// </summary>
+    private static string FormatBlockComment(
+        string commentText,
+        int indentLevel,
+        bool useTabs,
+        int tabSize,
+        CommentsOptions options)
+    {
+        // Split on \n, preserving \r if present (strip \r, re-join with \n only).
+        var lines = commentText.Replace("\r\n", "\n").Replace("\r", "\n").Split('\n');
+
+        if (lines.Length <= 1)
+        {
+            // Single-line block comment (no internal newlines after split) — nothing to re-indent.
+            return commentText;
+        }
+
+        // Banner / header detection when RecognizeCommonPatterns is active:
+        // if more than half of the body lines (lines 1..n-2) have a trimmed first non-space
+        // character that is a decoration char, treat the whole comment as a banner and leave it as-is.
+        if (options.RecognizeCommonPatterns && IsBannerComment(lines))
+            return commentText;
+
+        // Build the indent string for body lines (lines 1..n-2) and the closing delimiter (line n-1).
+        string indent = BuildIndentString(indentLevel, useTabs, tabSize);
+
+        var sb = new StringBuilder();
+        for (int i = 0; i < lines.Length; i++)
+        {
+            if (i == 0)
+            {
+                // First line: the /* opener. AppendLineStart already emitted the line-start indent
+                // before node.FormattedText; the opener's own text starts with "/*" and may have
+                // trailing content. Trim leading whitespace (the emitter provides the prefix).
+                sb.Append(lines[i].TrimStart());
+            }
+            else
+            {
+                sb.Append('\n');
+                // Body lines and the closing delimiter: strip their original leading whitespace
+                // and re-apply the context indent.
+                string trimmed = lines[i].TrimStart();
+                if (trimmed.Length > 0)
+                    sb.Append(indent).Append(trimmed);
+                // else: a blank line inside the comment — emit as a bare newline (no trailing spaces).
+            }
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Returns <see langword="true"/> if the body lines of a split block comment look like a
+    /// banner or header comment — i.e. more than half the body lines (excluding the first /*
+    /// and last */ lines, which are just delimiters) start with a repeated decoration character.
+    /// </summary>
+    private static bool IsBannerComment(string[] lines)
+    {
+        // Only inspect body lines (not the first /* line or the last */ closing delimiter).
+        // We need at least 3 lines to have any body lines.
+        if (lines.Length < 3)
+            return false;
+
+        int bodyCount = 0;
+        int decoratedCount = 0;
+
+        for (int i = 1; i < lines.Length - 1; i++)
+        {
+            string trimmed = lines[i].TrimStart();
+            if (trimmed.Length == 0)
+                continue;
+
+            bodyCount++;
+            char first = trimmed[0];
+            if (first is '*' or '=' or '-' or '#')
+                decoratedCount++;
+        }
+
+        if (bodyCount == 0)
+            return false;
+
+        // Banner if > 50% of non-blank body lines start with a decoration char.
+        return decoratedCount * 2 > bodyCount;
+    }
+
+    private static string BuildIndentString(int level, bool useTabs, int tabSize)
+    {
+        if (level <= 0)
+            return string.Empty;
+        if (useTabs)
+            return new string('\t', level);
+        return new string(' ', level * tabSize);
     }
 }

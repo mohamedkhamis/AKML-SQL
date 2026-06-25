@@ -1,0 +1,20 @@
+{
+  "metadata": {
+    "id": "builtin-cix",
+    "shortcode": "cix",
+    "name": "CREATE INDEX",
+    "description": "CREATE INDEX <name> ON <schema>.<table> (<columns>)",
+    "author": "AKML SQL",
+    "version": "1.0",
+    "category": "DDL",
+    "tags": [ "create", "index" ],
+    "context": [ "global" ],
+    "surroundsWith": false
+  },
+  "variables": [],
+  "body": [
+    "CREATE INDEX $CURSOR$",
+    "ON  ()",
+    "GO"
+  ]
+}

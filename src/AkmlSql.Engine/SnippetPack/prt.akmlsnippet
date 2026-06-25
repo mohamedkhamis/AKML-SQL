@@ -1,0 +1,18 @@
+{
+  "metadata": {
+    "id": "builtin-prt",
+    "shortcode": "prt",
+    "name": "PRINT",
+    "description": "PRINT a diagnostic message with timestamp",
+    "author": "AKML SQL",
+    "version": "1.0",
+    "category": "Utility",
+    "tags": [ "print", "debug" ],
+    "context": [ "global" ],
+    "surroundsWith": false
+  },
+  "variables": [],
+  "body": [
+    "PRINT CONVERT(VARCHAR(23), GETDATE(), 121) + ' $CURSOR$';"
+  ]
+}

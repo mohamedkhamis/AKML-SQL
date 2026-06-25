@@ -57,6 +57,9 @@ public class FormattingProfile
     [JsonPropertyName("comments")]
     public CommentsOptions Comments { get; set; } = new();
 
+    [JsonPropertyName("declare")]
+    public DeclareOptions Declare { get; set; } = new();
+
     [JsonPropertyName("formatActions")]
     public FormatActionConfig FormatActions { get; set; } = new();
 
@@ -709,6 +712,42 @@ public class CommentsOptions
     /// </summary>
     [JsonPropertyName("recognizeCommonPatterns")]
     public bool RecognizeCommonPatterns { get; set; } = true;
+}
+
+/// <summary>
+/// Spec 030 — SQL Prompt DECLARE / SET variable layout options.
+/// Controls one-declaration-per-line expansion and optional column alignment for DECLARE blocks.
+/// All flags default to <c>false</c> so that the default profile produces byte-identical output
+/// to the pre-030 formatter (the rule early-exits when <see cref="OneDeclarationPerLine"/> is off).
+/// </summary>
+public class DeclareOptions
+{
+    /// <summary>
+    /// When true, a multi-variable <c>DECLARE @a INT, @b INT</c> is expanded so that each
+    /// variable occupies its own line. Individual <c>DECLARE @x TYPE</c> statements are
+    /// already one-per-line; this only splits comma-separated declarations.
+    /// Default: <c>false</c> (current behaviour — leave as-is).
+    /// </summary>
+    [JsonPropertyName("oneDeclarationPerLine")]
+    public bool OneDeclarationPerLine { get; set; }
+
+    /// <summary>
+    /// When true (and <see cref="OneDeclarationPerLine"/> is also true), aligns the data-type
+    /// tokens of each variable in a DECLARE block to a common column by padding with spaces.
+    /// Mirrors SQL Prompt's <c>variables.alignDataTypes</c>.
+    /// Default: <c>false</c>.
+    /// </summary>
+    [JsonPropertyName("alignDataTypes")]
+    public bool AlignDataTypes { get; set; }
+
+    /// <summary>
+    /// When true (and <see cref="OneDeclarationPerLine"/> is also true), aligns the <c>=</c>
+    /// assignment operators (default values) in a DECLARE block to a common column.
+    /// Mirrors SQL Prompt's <c>variables.alignDefaultValues</c>.
+    /// Default: <c>false</c>.
+    /// </summary>
+    [JsonPropertyName("alignDefaultValues")]
+    public bool AlignDefaultValues { get; set; }
 }
 
 public class FormatActionConfig

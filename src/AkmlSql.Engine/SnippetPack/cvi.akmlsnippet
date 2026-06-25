@@ -1,0 +1,22 @@
+{
+  "metadata": {
+    "id": "builtin-cvi",
+    "shortcode": "cvi",
+    "name": "CREATE VIEW",
+    "description": "CREATE OR ALTER VIEW <schema>.<name>",
+    "author": "AKML SQL",
+    "version": "1.0",
+    "category": "DDL",
+    "tags": [ "create", "view" ],
+    "context": [ "global" ],
+    "surroundsWith": false
+  },
+  "variables": [],
+  "body": [
+    "CREATE OR ALTER VIEW $CURSOR$",
+    "AS",
+    "SELECT ",
+    "FROM ",
+    "GO"
+  ]
+}

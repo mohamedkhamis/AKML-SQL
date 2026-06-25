@@ -1,0 +1,19 @@
+{
+  "metadata": {
+    "id": "builtin-cdb",
+    "shortcode": "cdb",
+    "name": "CREATE DATABASE",
+    "description": "CREATE DATABASE <name>",
+    "author": "AKML SQL",
+    "version": "1.0",
+    "category": "DDL",
+    "tags": [ "create", "database" ],
+    "context": [ "global" ],
+    "surroundsWith": false
+  },
+  "variables": [],
+  "body": [
+    "CREATE DATABASE $CURSOR$",
+    "GO"
+  ]
+}

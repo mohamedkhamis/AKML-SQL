@@ -1,0 +1,24 @@
+{
+  "metadata": {
+    "id": "builtin-cfn",
+    "shortcode": "cfn",
+    "name": "CREATE FUNCTION",
+    "description": "CREATE OR ALTER FUNCTION <schema>.<name> scalar skeleton",
+    "author": "AKML SQL",
+    "version": "1.0",
+    "category": "DDL",
+    "tags": [ "create", "function" ],
+    "context": [ "global" ],
+    "surroundsWith": false
+  },
+  "variables": [],
+  "body": [
+    "CREATE OR ALTER FUNCTION $CURSOR$ ()",
+    "RETURNS INT",
+    "AS",
+    "BEGIN",
+    "    RETURN 0;",
+    "END;",
+    "GO"
+  ]
+}
