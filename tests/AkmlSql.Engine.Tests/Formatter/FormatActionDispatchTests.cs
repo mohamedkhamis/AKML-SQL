@@ -9,8 +9,10 @@ namespace AkmlSql.Engine.Tests.Formatter;
 /// Spec 030 (T015/T016) — the standalone format-action dispatch. Actions 0–8 (the IFormatAction
 /// classes) were never dispatched by HandleFormatAction (only 9–17 were); the shell already sends
 /// these action types, so they returned "not supported here". These tests pin the wired behaviour.
-/// Schema-dependent actions (ExpandWildcards=3, QualifyObjectNames=4) are stubs that return a clear
-/// "requires schema" message rather than transforming.
+/// Schema-dependent actions (ExpandWildcards=3, QualifyObjectNames=4) are now schema-aware
+/// lightweight operations (spec 030); under this no-session dispatch (one-arg HandleFormatAction)
+/// they have no schema cache, so they return a clear "schema cache not available" warning rather
+/// than transforming. The transforming behaviour is covered by the Parity3_* operation tests.
 /// </summary>
 public class FormatActionDispatchTests : IDisposable
 {
@@ -88,11 +90,22 @@ public class FormatActionDispatchTests : IDisposable
     }
 
     [Fact]
-    public void ExpandWildcards_Stub_ReturnsClearSchemaMessage()
+    public void ExpandWildcards_NoSchemaCache_ReturnsClearSchemaWarning()
     {
+        // One-arg dispatch has no SessionManager/SchemaCacheManager → no cache → graceful warning.
         var r = Run(FormatActionType.ExpandWildcards, "SELECT * FROM t");
-        Assert.True(r.Success);                 // stub does not error
-        Assert.False(r.WasModified);            // and does not transform
+        Assert.True(r.Success);                 // does not error
+        Assert.False(r.WasModified);            // and does not transform without a cache
+        Assert.NotNull(r.Warnings);
+        Assert.Contains(r.Warnings!, w => w.Contains("schema", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void QualifyObjectNames_NoSchemaCache_ReturnsClearSchemaWarning()
+    {
+        var r = Run(FormatActionType.QualifyObjectNames, "SELECT a FROM t");
+        Assert.True(r.Success);
+        Assert.False(r.WasModified);
         Assert.NotNull(r.Warnings);
         Assert.Contains(r.Warnings!, w => w.Contains("schema", StringComparison.OrdinalIgnoreCase));
     }

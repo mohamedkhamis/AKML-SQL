@@ -55,7 +55,7 @@ namespace AkmlSql.Engine.Handlers.Formatting
         public int RequestMessageType => MessageTypes.FormatAction;
         public int ResponseMessageType => MessageTypes.FormatActionResult;
         public Task<FormatActionResponse> HandleAsync(FormatActionRequest request, RpcContext ctx, CancellationToken ct)
-            => Task.FromResult(_inner.HandleFormatAction(request));
+            => Task.FromResult(_inner.HandleFormatAction(request, ctx.SchemaCache, ctx.Sessions));
     }
 
     /// <summary>

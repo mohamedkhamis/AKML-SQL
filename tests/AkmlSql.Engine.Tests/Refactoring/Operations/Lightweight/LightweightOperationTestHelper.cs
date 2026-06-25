@@ -1,6 +1,7 @@
 using AkmlSql.Core.Config;
 using AkmlSql.Engine.Parser;
 using AkmlSql.Engine.Refactoring;
+using AkmlSql.Engine.Schema;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Tests.Refactoring.Operations.Lightweight;
@@ -43,6 +44,18 @@ internal static class LightweightOperationTestHelper
             SchemaCache     = null,
             IntelliSense    = intelliSense
         };
+    }
+
+    /// <summary>
+    /// Creates a RefactoringContext backed by an in-memory <see cref="DatabaseCache"/>.
+    /// Mirrors the null-cache <see cref="CreateContext(string, IntelliSenseSettings?)"/> overload but
+    /// wires <c>ctx.SchemaCache</c> so schema-aware ops (ExpandWildcards / QualifyObjectNames) resolve.
+    /// </summary>
+    public static RefactoringContext CreateContext(string sql, DatabaseCache cache)
+    {
+        var ctx = CreateContext(sql);
+        ctx.SchemaCache = cache;
+        return ctx;
     }
 
     /// <summary>

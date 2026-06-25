@@ -5,6 +5,8 @@ using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Engine.Refactoring;
 using AkmlSql.Engine.Refactoring.Operations;
 using AkmlSql.Engine.Refactoring.Operations.Lightweight;
+using AkmlSql.Engine.Schema;
+using AkmlSql.Engine.Server;
 using AkmlSql.Formatting.Actions;
 using AkmlSql.Formatting.Pipeline;
 using AkmlSql.Formatting.Profiles;
@@ -117,7 +119,14 @@ public class FormatRequestHandler(ProfileManager profileManager)
         }
     }
 
+    // Spec 030: one-arg delegator preserved for call sites without schema/session access
+    // (e.g. the web edition's offline path). Schema-aware actions (ExpandWildcards /
+    // QualifyObjectNames) gracefully warn "schema cache not available" under this path.
     public FormatActionResponse HandleFormatAction(FormatActionRequest request)
+        => HandleFormatAction(request, null, null);
+
+    public FormatActionResponse HandleFormatAction(
+        FormatActionRequest request, SchemaCacheManager? schemaCache, SessionManager? sessions)
     {
         try
         {
@@ -125,14 +134,15 @@ public class FormatRequestHandler(ProfileManager profileManager)
             var actionType = (FormatActionType)request.ActionType;
 
             // Spec 030: standalone format actions (types 0-8) → the IFormatAction classes. These were
-            // never dispatched (only 9-17 were), so the shell's casing/semicolons/wildcards/qualify/
-            // brackets/AS commands returned "not supported here". ExpandWildcards/QualifyObjectNames
-            // are schema-dependent stubs that return a clear "requires schema" message.
+            // never dispatched (only 9-17 were), so the shell's casing/semicolons/brackets/AS commands
+            // returned "not supported here". ExpandWildcards/QualifyObjectNames are deliberately NOT
+            // resolved here — they fall through to the schema-aware lightweight switch below.
             var formatAction = ResolveFormatAction(actionType);
             if (formatAction != null)
                 return RunFormatAction(formatAction, actionType, request);
 
-            // Actions 9-17 are lightweight refactoring operations.
+            // Actions 9-17 (plus schema-aware ExpandWildcards/QualifyObjectNames) are lightweight
+            // refactoring operations.
             ILightweightOperation? op = actionType switch
             {
                 FormatActionType.ExpandInsertColumns    => new ExpandInsertColumnsOperation(),
@@ -144,6 +154,8 @@ public class FormatRequestHandler(ProfileManager profileManager)
                 FormatActionType.ReplaceDeprecatedSyntax => new ReplaceDeprecatedSyntaxOperation(),
                 FormatActionType.ConvertSpExecutesql    => new ConvertSpExecutesqlOperation(),
                 FormatActionType.Unformat               => new UnformatOperation(),
+                FormatActionType.ExpandWildcards        => new ExpandWildcardsOperation(),
+                FormatActionType.QualifyObjectNames     => new QualifyObjectNamesOperation(),
                 _ => null
             };
 
@@ -157,8 +169,18 @@ public class FormatRequestHandler(ProfileManager profileManager)
                 };
             }
 
-            // Build a minimal RefactoringContext (no schema cache, no session for lightweight ops)
+            // Build the RefactoringContext. Populate the schema cache GENERICALLY for ALL lightweight
+            // ops — same idiom as RefactoringEngine.BuildContext (GetCache's first param is named
+            // serverName but is the SessionId by convention). Schema-independent ops simply ignore it.
             var parser = new Parser.TsqlParserService();
+            DatabaseCache? cache = null;
+            if (sessions != null && !string.IsNullOrEmpty(request.SessionId))
+            {
+                var session = sessions.GetSession(request.SessionId);
+                if (session != null)
+                    cache = schemaCache?.GetCache(request.SessionId, session.DatabaseName);
+            }
+
             var ctx = new RefactoringContext
             {
                 DocumentText    = request.Text,
@@ -166,7 +188,8 @@ public class FormatRequestHandler(ProfileManager profileManager)
                 Tokens          = parser.GetTokenStream(request.Text),
                 SelectionStart  = request.SelectionStart,
                 SelectionLength = request.SelectionLength,
-                SessionId       = request.SessionId ?? string.Empty
+                SessionId       = request.SessionId ?? string.Empty,
+                SchemaCache     = cache
             };
 
             var (modifiedText, warnings) = op.Apply(ctx);
@@ -200,8 +223,8 @@ public class FormatRequestHandler(ProfileManager profileManager)
         FormatActionType.CasingOnly           => new CasingOnlyAction(),
         FormatActionType.InsertSemicolons     => new InsertSemicolonsAction(),
         FormatActionType.RemoveSemicolons     => new RemoveSemicolonsAction(),
-        FormatActionType.ExpandWildcards      => new ExpandWildcardsAction(),
-        FormatActionType.QualifyObjectNames   => new QualifyObjectNamesAction(),
+        // ExpandWildcards / QualifyObjectNames are intentionally absent — they are schema-aware
+        // lightweight operations dispatched through the ILightweightOperation switch (spec 030).
         FormatActionType.AddSquareBrackets    => new ToggleBracketsAction(),
         FormatActionType.RemoveSquareBrackets => new ToggleBracketsAction(),
         FormatActionType.AddAsKeyword         => new ToggleAsKeywordAction(),
