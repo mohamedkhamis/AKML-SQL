@@ -140,6 +140,76 @@ public class Parity_BracketModeAndColumnDefTests
     }
 
     // ──────────────────────────────────────────────────────────────────────────
+    //  ApplyBrackets — QUOTENAME ']' doubling + WhenRequired quoting (bugs #4/#5)
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Bug #4: a name containing a literal ']' must have it doubled (QUOTENAME
+    /// semantics), otherwise the bracketed identifier is invalid T-SQL.
+    /// "Has]Bracket" -> "[Has]]Bracket]", NOT "[Has]Bracket]".
+    /// </summary>
+    [Fact]
+    public void ApplyBrackets_Always_DoublesEmbeddedClosingBracket()
+    {
+        var result = AkmlSql.Engine.Completion.Providers.ObjectProvider
+            .ApplyBrackets("Has]Bracket", BracketMode.Always);
+
+        Assert.Equal("[Has]]Bracket]", result);
+    }
+
+    /// <summary>
+    /// Bug #4 (also under WhenRequired): the embedded ']' makes the name an invalid
+    /// regular identifier, so it must be bracketed AND the ']' doubled.
+    /// </summary>
+    [Fact]
+    public void ApplyBrackets_WhenRequired_DoublesEmbeddedClosingBracket()
+    {
+        var result = AkmlSql.Engine.Completion.Providers.ObjectProvider
+            .ApplyBrackets("Has]Bracket", BracketMode.WhenRequired);
+
+        Assert.Equal("[Has]]Bracket]", result);
+    }
+
+    /// <summary>
+    /// Bug #5: a name containing a space requires quoting; under WhenRequired it must
+    /// be bracketed (previously the default arm returned it unchanged -> invalid SQL).
+    /// </summary>
+    [Fact]
+    public void ApplyBrackets_WhenRequired_BracketsNameWithSpace()
+    {
+        var result = AkmlSql.Engine.Completion.Providers.ObjectProvider
+            .ApplyBrackets("Order Date", BracketMode.WhenRequired);
+
+        Assert.Equal("[Order Date]", result);
+    }
+
+    /// <summary>
+    /// Bug #5: a name containing a hyphen is not a valid regular identifier; under
+    /// WhenRequired it must be bracketed.
+    /// </summary>
+    [Fact]
+    public void ApplyBrackets_WhenRequired_BracketsNameWithHyphen()
+    {
+        var result = AkmlSql.Engine.Completion.Providers.ObjectProvider
+            .ApplyBrackets("My-Table", BracketMode.WhenRequired);
+
+        Assert.Equal("[My-Table]", result);
+    }
+
+    /// <summary>
+    /// Bug #5 (must-not-regress): a plain valid regular identifier must stay UNbracketed
+    /// under WhenRequired.
+    /// </summary>
+    [Fact]
+    public void ApplyBrackets_WhenRequired_LeavesPlainNameUnbracketed()
+    {
+        var result = AkmlSql.Engine.Completion.Providers.ObjectProvider
+            .ApplyBrackets("Orders", BracketMode.WhenRequired);
+
+        Assert.Equal("Orders", result);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
     //  ClauseType.CreateTableColumnDef detection
     // ──────────────────────────────────────────────────────────────────────────
 

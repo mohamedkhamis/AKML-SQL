@@ -498,15 +498,17 @@ public class ObjectProvider : ICompletionProvider
     /// <list type="bullet">
     ///   <item><see cref="BracketMode.Always"/>: always returns <c>[identifier]</c>.</item>
     ///   <item><see cref="BracketMode.Never"/>: always returns the bare identifier.</item>
-    ///   <item><see cref="BracketMode.WhenRequired"/> (default): brackets only when the
-    ///         identifier contains spaces, hyphens, or is already un-bracketed with special
-    ///         characters — mirrors the "safe-by-default" convention for SQL Prompt parity.</item>
+    ///   <item><see cref="BracketMode.WhenRequired"/> (default): brackets only the parts
+    ///         that are not valid regular identifiers (spaces, hyphens, leading digit,
+    ///         other special chars) or that are T-SQL reserved words — mirrors the
+    ///         "safe-by-default" convention for SQL Prompt parity. Bracketing applies
+    ///         QUOTENAME <c>']'</c>-doubling.</item>
     /// </list>
     /// When the input already contains brackets (e.g. schema-qualified <c>[dbo].[Table]</c>)
     /// the result is returned as-is for <c>Always</c> (already bracketed) and stripped of
     /// brackets for <c>Never</c>.
     /// </summary>
-    internal static string ApplyBrackets(string identifier, BracketMode mode)
+    public static string ApplyBrackets(string identifier, BracketMode mode)
     {
         if (string.IsNullOrEmpty(identifier)) return identifier;
 
@@ -522,7 +524,10 @@ public class ObjectProvider : ICompletionProvider
                 return StripBracketsEachPart(identifier);
 
             default: // WhenRequired
-                return identifier;
+                // Bracket only the dot-separated parts that actually require quoting
+                // (spaces, hyphens, leading digit, other special chars, or reserved words).
+                // Parts that are valid regular identifiers are left bare.
+                return BracketRequiredParts(identifier);
         }
     }
 
@@ -537,10 +542,92 @@ public class ObjectProvider : ICompletionProvider
             if (part.StartsWith("[", System.StringComparison.Ordinal) &&
                 part.EndsWith("]", System.StringComparison.Ordinal))
                 continue;
-            parts[i] = "[" + part + "]";
+            // QUOTENAME semantics: double any embedded ']' so the result is valid T-SQL.
+            parts[i] = "[" + part.Replace("]", "]]") + "]";
         }
         return string.Join(".", parts);
     }
+
+    /// <summary>
+    /// Brackets only the dot-separated parts that require quoting (used for
+    /// <see cref="BracketMode.WhenRequired"/>), applying the same QUOTENAME
+    /// <c>']'</c>-doubling rule as <see cref="BracketEachPart"/>.
+    /// </summary>
+    private static string BracketRequiredParts(string identifier)
+    {
+        var parts = identifier.Split('.');
+        for (int i = 0; i < parts.Length; i++)
+        {
+            var part = parts[i];
+            // Already bracketed — leave as-is.
+            if (part.StartsWith("[", System.StringComparison.Ordinal) &&
+                part.EndsWith("]", System.StringComparison.Ordinal))
+                continue;
+            if (NeedsBracketing(part))
+                parts[i] = "[" + part.Replace("]", "]]") + "]";
+        }
+        return string.Join(".", parts);
+    }
+
+    /// <summary>
+    /// Regular-identifier pattern per T-SQL rules: first char a letter, <c>_</c>,
+    /// <c>@</c>, or <c>#</c>; subsequent chars letters, digits, <c>_</c>, <c>@</c>,
+    /// <c>#</c>, or <c>$</c>.
+    /// </summary>
+    private static readonly System.Text.RegularExpressions.Regex RegularIdentifier =
+        new(@"^[A-Za-z_@#][A-Za-z0-9_@#$]*$",
+            System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>
+    /// Returns true when <paramref name="name"/> is NOT a valid regular identifier
+    /// (e.g. contains spaces, hyphens, leads with a digit, or other special chars)
+    /// OR is a T-SQL reserved word — i.e. it must be bracketed to be valid.
+    /// </summary>
+    private static bool NeedsBracketing(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return false;
+        if (!RegularIdentifier.IsMatch(name)) return true;
+        return ReservedWords.Contains(name);
+    }
+
+    /// <summary>
+    /// T-SQL reserved keywords that cannot be used as an unquoted identifier.
+    /// (ISO/Transact-SQL reserved word list — not the full keyword set.)
+    /// </summary>
+    private static readonly System.Collections.Generic.HashSet<string> ReservedWords =
+        new(System.StringComparer.OrdinalIgnoreCase)
+        {
+            "ADD", "ALL", "ALTER", "AND", "ANY", "AS", "ASC", "AUTHORIZATION",
+            "BACKUP", "BEGIN", "BETWEEN", "BREAK", "BROWSE", "BULK", "BY",
+            "CASCADE", "CASE", "CHECK", "CHECKPOINT", "CLOSE", "CLUSTERED",
+            "COALESCE", "COLLATE", "COLUMN", "COMMIT", "COMPUTE", "CONSTRAINT",
+            "CONTAINS", "CONTAINSTABLE", "CONTINUE", "CONVERT", "CREATE", "CROSS",
+            "CURRENT", "CURRENT_DATE", "CURRENT_TIME", "CURRENT_TIMESTAMP",
+            "CURRENT_USER", "CURSOR", "DATABASE", "DBCC", "DEALLOCATE", "DECLARE",
+            "DEFAULT", "DELETE", "DENY", "DESC", "DISK", "DISTINCT", "DISTRIBUTED",
+            "DOUBLE", "DROP", "DUMP", "ELSE", "END", "ERRLVL", "ESCAPE", "EXCEPT",
+            "EXEC", "EXECUTE", "EXISTS", "EXIT", "EXTERNAL", "FETCH", "FILE",
+            "FILLFACTOR", "FOR", "FOREIGN", "FREETEXT", "FREETEXTTABLE", "FROM",
+            "FULL", "FUNCTION", "GOTO", "GRANT", "GROUP", "HAVING", "HOLDLOCK",
+            "IDENTITY", "IDENTITY_INSERT", "IDENTITYCOL", "IF", "IN", "INDEX",
+            "INNER", "INSERT", "INTERSECT", "INTO", "IS", "JOIN", "KEY", "KILL",
+            "LEFT", "LIKE", "LINENO", "LOAD", "MERGE", "NATIONAL", "NOCHECK",
+            "NONCLUSTERED", "NOT", "NULL", "NULLIF", "OF", "OFF", "OFFSETS", "ON",
+            "OPEN", "OPENDATASOURCE", "OPENQUERY", "OPENROWSET", "OPENXML",
+            "OPTION", "OR", "ORDER", "OUTER", "OVER", "PERCENT", "PIVOT", "PLAN",
+            "PRECISION", "PRIMARY", "PRINT", "PROC", "PROCEDURE", "PUBLIC",
+            "RAISERROR", "READ", "READTEXT", "RECONFIGURE", "REFERENCES",
+            "REPLICATION", "RESTORE", "RESTRICT", "RETURN", "REVERT", "REVOKE",
+            "RIGHT", "ROLLBACK", "ROWCOUNT", "ROWGUIDCOL", "RULE", "SAVE",
+            "SCHEMA", "SECURITYAUDIT", "SELECT", "SEMANTICKEYPHRASETABLE",
+            "SEMANTICSIMILARITYDETAILSTABLE", "SEMANTICSIMILARITYTABLE",
+            "SESSION_USER", "SET", "SETUSER", "SHUTDOWN", "SOME", "STATISTICS",
+            "SYSTEM_USER", "TABLE", "TABLESAMPLE", "TEXTSIZE", "THEN", "TO", "TOP",
+            "TRAN", "TRANSACTION", "TRIGGER", "TRUNCATE", "TRY_CONVERT", "TSEQUAL",
+            "UNION", "UNIQUE", "UNPIVOT", "UPDATE", "UPDATETEXT", "USE", "USER",
+            "VALUES", "VARYING", "VIEW", "WAITFOR", "WHEN", "WHERE", "WHILE",
+            "WITH", "WITHIN", "WRITETEXT"
+        };
 
     /// <summary>Strips square brackets from each dot-separated part of an identifier.</summary>
     private static string StripBracketsEachPart(string identifier)

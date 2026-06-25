@@ -345,6 +345,42 @@ public class Parity2_DeclareLayoutTests
     }
 
     [Fact]
+    public void DeclareFollowedBySet_NoSemicolons_SetStatementUntouched()
+    {
+        // Review #6: IsDeclareStatementBoundary omitted TSqlTokenType.Set, so a semicolon-free
+        // "DECLARE @a INT" followed by "SET @value = 1" let FindDeclareEnd scan PAST the DECLARE
+        // into the SET statement and miscompute alignment over the SET's tokens. With SET now a
+        // boundary, the single-variable DECLARE is left alone and the SET statement is untouched.
+        var nodes = new List<LayoutNode>
+        {
+            Node("DECLARE", TSqlTokenType.Declare, BreakType.NewLine, 0, 0),
+            Node("@a",      TSqlTokenType.Variable),                       // index 1
+            Node("INT",     TSqlTokenType.Identifier),                     // index 2 (single var → no align)
+            Node("SET",     TSqlTokenType.Set, BreakType.NewLine, 0, 0),   // index 3 — boundary
+            Node("@value",  TSqlTokenType.Variable, BreakType.None, 1),    // index 4
+            Node("=",       TSqlTokenType.EqualsSign),                     // index 5
+            Node("1",       TSqlTokenType.Integer),                        // index 6
+        };
+
+        var snapshot = nodes.Select(n => (n.PrecedingBreak, n.PrecedingSpaces, n.IndentLevel)).ToList();
+
+        var profile = new FormattingProfile
+        {
+            Declare = { OneDeclarationPerLine = true, AlignDataTypes = true, AlignDefaultValues = true }
+        };
+
+        _rules.Apply(nodes, profile);
+
+        // The SET statement (indices 3-6) AND the single-var DECLARE's INT (index 2) must be unchanged.
+        for (int i = 2; i < nodes.Count; i++)
+        {
+            Assert.Equal(snapshot[i].PrecedingBreak,  nodes[i].PrecedingBreak);
+            Assert.Equal(snapshot[i].PrecedingSpaces, nodes[i].PrecedingSpaces);
+            Assert.Equal(snapshot[i].IndentLevel,     nodes[i].IndentLevel);
+        }
+    }
+
+    [Fact]
     public void SingleVariableDeclare_NoChange()
     {
         // A single-variable DECLARE should not be affected regardless of flags

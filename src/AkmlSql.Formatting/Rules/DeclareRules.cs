@@ -234,7 +234,7 @@ public class DeclareRules : IRuleSet
         TSqlTokenType.Drop or TSqlTokenType.Declare or TSqlTokenType.If or
         TSqlTokenType.While or TSqlTokenType.Begin or TSqlTokenType.Execute or
         TSqlTokenType.Exec or TSqlTokenType.With or TSqlTokenType.Merge or
-        TSqlTokenType.Return or TSqlTokenType.Print => true,
+        TSqlTokenType.Return or TSqlTokenType.Print or TSqlTokenType.Set => true,
         _ => false,
     };
 
