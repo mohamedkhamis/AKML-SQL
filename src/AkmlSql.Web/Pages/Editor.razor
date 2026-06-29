@@ -30,6 +30,8 @@
 @inject ISqlConnectionService SqlConn
 @inject IQueryExecutionService QueryExec
 @inject IExecutionSettingsStore ExecSettings
+@inject IHistoryService History
+@inject NavigationManager Nav
 
 <PageTitle>Editor — AKML SQL</PageTitle>
 
@@ -522,9 +524,15 @@
     private int _timeoutSeconds = 30;
     private string? _activeQueryId;
     private string _lastExecutedSql = string.Empty;
+    // web History "Re-execute": set from the ?autorun=1 query flag; consumed once the restored
+    // document is populated (which happens AFTER firstRender via the async session restore).
+    private bool _autorunPending;
 
     protected override async Task OnInitializedAsync()
     {
+        // web History "Re-execute" intent — read before any await so it is known by the first render.
+        _autorunPending = new Uri(Nav.Uri).Query.Contains("autorun=1");
+
         // T034: apply the persisted theme as soon as we have services. The shim is wired
         // for "system" already (index.html runs apply('system') inline), so this is an
         // upgrade only when the user has stored a non-system preference.
@@ -624,20 +632,7 @@
             var sql = string.IsNullOrWhiteSpace(selection) ? await _editor.GetTextAsync() : selection;
             if (string.IsNullOrWhiteSpace(sql)) return;
 
-            _lastExecutedSql = sql;
-            _activeQueryId = Guid.NewGuid().ToString("N");
-            _status = "Running…";
-            StateHasChanged();
-
-            var result = await QueryExec.ExecuteAsync(sql, _maxRows, _timeoutSeconds, _activeQueryId, CancellationToken.None);
-            _resultsGrid?.ShowResult(result);
-            _status = result.Status == ExecuteStatus.Ok
-                ? $"Done in {result.ElapsedMs} ms"
-                : null;
-            if (result.Status != ExecuteStatus.Ok)
-            {
-                Diagnostics.Log(DiagnosticLevel.Warn, "execute", $"Execute status {result.Status}: {result.ErrorMessage}");
-            }
+            await RunSqlAsync(sql);
         }
         finally
         {
@@ -645,6 +640,55 @@
             _activeQueryId = null;
             StateHasChanged();
         }
+    }
+
+    /// <summary>Runs <paramref name="sql"/> through the engine, shows the result, and records it in
+    /// SQL History (best-effort). Shared by the toolbar/Mod-Enter execute and the web History
+    /// "Re-execute" autorun. The caller owns the <c>_executing</c> guard.</summary>
+    private async Task RunSqlAsync(string sql)
+    {
+        _lastExecutedSql = sql;
+        _activeQueryId = Guid.NewGuid().ToString("N");
+        _status = "Running…";
+        StateHasChanged();
+
+        var result = await QueryExec.ExecuteAsync(sql, _maxRows, _timeoutSeconds, _activeQueryId, CancellationToken.None);
+        _resultsGrid?.ShowResult(result);
+
+        // Record into SQL History (fire-and-forget) — NoConnection isn't recorded (nothing ran).
+        if (WebHistoryLogic.ShouldRecord(result.Status))
+        {
+            var rec = WebHistoryLogic.BuildRecordRequest(sql, result, SqlConn.Server, SqlConn.Database);
+            _ = History.RecordAsync(rec, CancellationToken.None);
+        }
+
+        _status = result.Status == ExecuteStatus.Ok
+            ? $"Done in {result.ElapsedMs} ms"
+            : null;
+        if (result.Status != ExecuteStatus.Ok)
+        {
+            Diagnostics.Log(DiagnosticLevel.Warn, "execute", $"Execute status {result.Status}: {result.ErrorMessage}");
+        }
+    }
+
+    /// <summary>web History "Re-execute": when navigated to with <c>?autorun=1</c>, run the restored
+    /// document once. The restored text lands AFTER firstRender (the session restore is async), so we
+    /// wait — across renders — until <see cref="_initialText"/> is populated rather than firing on
+    /// firstRender (where it is still empty). The flag is consumed exactly once, then the URL flag is
+    /// stripped so a manual refresh doesn't re-run.</summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Wait for the async restore to populate the document; don't consume the flag until it has.
+        if (!_autorunPending || string.IsNullOrWhiteSpace(_initialText)) return;
+        _autorunPending = false;
+        if (_executing || !SqlConn.IsConnected) return;
+
+        _executing = true;
+        try { await RunSqlAsync(_initialText); }
+        finally { _executing = false; _activeQueryId = null; }
+
+        Nav.NavigateTo(new Uri(Nav.Uri).GetLeftPart(UriPartial.Path), replace: true);
+        await InvokeAsync(StateHasChanged);
     }
 
     private async Task CancelExecuteAsync()

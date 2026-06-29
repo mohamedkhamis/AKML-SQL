@@ -68,6 +68,10 @@ builder.Services.AddSingleton<ISqlConnectionService, SqlConnectionService>();
 // ExecutionSettingsStore persists the advisory max-rows / timeout caps (the engine re-clamps).
 builder.Services.AddSingleton<IExecutionSettingsStore, ExecutionSettingsStore>();
 builder.Services.AddSingleton<IQueryExecutionService, QueryExecutionService>();
+// Spec 030 — web SQL History: read/search/record/manage via the engine's history IPC (40/41/42)
+// over the bridge (shared per-user store; no new engine code). Editor.razor records user-initiated
+// executions; the /history page reads + manages them.
+builder.Services.AddSingleton<IHistoryService, HistoryService>();
 
 // Phase 4 (web connection manager): saved SQL-Server connections (IndexedDB, no password) + the
 // modal-opener singleton that the command palette / Settings / StatusBar call to surface the modal.

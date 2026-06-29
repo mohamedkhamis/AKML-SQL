@@ -1,0 +1,614 @@
+@page "/history"
+@*
+    Spec 030 — web SQL HistorySvc. Ports the desktop SQL History tool window to the web edition,
+    reusing the engine's history IPC (HistoryRecord=40 / HistorySearch=41 / HistoryAction=42) over
+    the bridge against the shared per-user store. Online-only (history needs the engine paired).
+*@
+@using System.Globalization
+@using System.Linq
+@using System.Text
+@using AkmlSql.Core.Ipc.Messages
+@using AkmlSql.Web.Services
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
+@inject IHistoryService HistorySvc
+@inject IEngineBridge Bridge
+@inject ISqlConnectionService SqlConn
+@inject IThemeService Theme
+@inject IDiagnosticsRingBuffer Diagnostics
+@inject IEditorSessionStore SessionStore
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>SQL History — AKML SQL</PageTitle>
+
+<div class="akml-hist">
+    <!-- Top bar: search + filters -->
+    <div class="akml-hist-top">
+        <input class="akml-hist-search" placeholder="Search SQL history…  (server: db: name: starred:)"
+               value="@_search" @oninput="@(e => _search = e.Value?.ToString() ?? "")"
+               @onkeydown="OnSearchKey" data-testid="history-search" />
+        <button class="akml-tool-button @(_favoritesOnly ? "active" : "")" title="Favorites only"
+                @onclick="ToggleFavoritesFilter" data-testid="history-fav-filter">★</button>
+        <select class="akml-hist-select" value="@(_server ?? "")" @onchange="OnServerChanged" title="Server">
+            <option value="">All servers</option>
+            @foreach (var s in _servers) { <option value="@s">@s</option> }
+        </select>
+        <select class="akml-hist-select" value="@(_database ?? "")" @onchange="OnDatabaseChanged" title="Database">
+            <option value="">All databases</option>
+            @foreach (var d in _databases) { <option value="@d">@d</option> }
+        </select>
+        <button class="akml-tool-button" @onclick="@(() => LoadAsync(true))" title="Refresh">⟳</button>
+        @if (_compare.Count == 2)
+        {
+            <button class="akml-tool-button" @onclick="OpenCompareAsync" data-testid="history-compare">Compare (2)</button>
+        }
+        <span class="akml-hist-spacer"></span>
+        <select class="akml-hist-select" value="" @onchange="OnExportChanged" title="Export visible entries">
+            <option value="">Export…</option>
+            <option value="csv">CSV</option>
+            <option value="json">JSON</option>
+            <option value="sql">SQL</option>
+        </select>
+    </div>
+
+    @if (!HistorySvc.IsAvailable)
+    {
+        <div class="akml-hist-empty">
+            <p>Connect an engine to view SQL history.</p>
+            <button class="akml-tool-button" @onclick="@(() => LoadAsync(true))">Retry</button>
+        </div>
+    }
+    else
+    {
+        <div class="akml-hist-body">
+            <!-- LEFT: master list (top) + version sub-panel (bottom) -->
+            <div class="akml-hist-left">
+                <div class="akml-hist-list" data-testid="history-list">
+                    @{ string? lastBucket = null; }
+                    @foreach (var e in _entries)
+                    {
+                        var bucket = WebHistoryLogic.DateBucket(e.ExecutedAt, DateTime.Now);
+                        if (bucket != lastBucket)
+                        {
+                            lastBucket = bucket;
+                            var b = bucket;
+                            <div class="akml-hist-group" @onclick="@(() => ToggleBucket(b))">
+                                <span class="akml-hist-chevron">@(_collapsed.Contains(b) ? "▸" : "▾")</span>
+                                <span>@b</span>
+                            </div>
+                        }
+                        if (!_collapsed.Contains(bucket))
+                        {
+                            var entry = e;
+                            <div class="akml-hist-row @(_selected?.Id == e.Id ? "selected" : "")"
+                                 @onclick="@(() => SelectAsync(entry))">
+                                <span class="akml-hist-star @(e.IsFavorite ? "on" : "")" title="Toggle favorite"
+                                      @onclick="@(() => ToggleFavoriteAsync(entry))" @onclick:stopPropagation="true">
+                                    @(e.IsFavorite ? "★" : "☆")
+                                </span>
+                                <span class="akml-hist-rowmain">
+                                    <span class="akml-hist-name">@DisplayName(e)</span>
+                                    <span class="akml-hist-meta">
+                                        <span>@RelativeTime(e.ExecutedAt)</span>
+                                        @if (e.ExecutionCount > 1) { <span class="akml-hist-count"> · ×@e.ExecutionCount</span> }
+                                        <span class="akml-hist-conn">
+                                            <span class="akml-hist-dot" style="color:@(e.IsOpen ? "var(--akml-status-success)" : "var(--akml-status-danger)")">●</span>
+                                            @ServerDb(e)
+                                        </span>
+                                    </span>
+                                </span>
+                                <input type="checkbox" class="akml-hist-cmp" title="Select for compare"
+                                       checked="@_compare.Contains(e.Id)"
+                                       @onclick:stopPropagation="true"
+                                       @onchange="@(args => ToggleCompare(entry, args))" />
+                            </div>
+                        }
+                    }
+                    @if (_entries.Count == 0 && !_loading)
+                    {
+                        <p class="akml-hist-none">No history entries@(string.IsNullOrWhiteSpace(_search) ? "" : " match your search").</p>
+                    }
+                    @if (_entries.Count < _total)
+                    {
+                        <button class="akml-tool-button akml-hist-more" @onclick="@(() => LoadAsync(false))">
+                            Load more (@(_total - _entries.Count) more)
+                        </button>
+                    }
+                </div>
+
+                <div class="akml-hist-versions">
+                    <div class="akml-hist-vhdr">@(_selected == null ? "HISTORY" : $"History for {DisplayName(_selected)}")</div>
+                    <div class="akml-hist-vlist">
+                        @for (int i = 0; i < _versions.Length; i++)
+                        {
+                            var idx = i;
+                            var vnum = _versions.Length - i;
+                            <div class="akml-hist-vrow @(_selectedVersion == idx ? "selected" : "")"
+                                 @onclick="@(() => SelectVersion(idx))">
+                                <span class="akml-hist-vlabel">v@(vnum)@(i == 0 ? " (current)" : "")</span>
+                                <span class="akml-hist-vtime">@VersionTime(_versions[idx].SavedAt)</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT: preview + metadata + actions -->
+            <div class="akml-hist-right">
+                <div class="akml-hist-phdr">
+                    <span class="akml-hist-pname">@(_selected == null ? "Preview" : DisplayName(_selected))</span>
+                    <span class="akml-hist-ptime">@(_selected == null ? "" : AbsTime(_selected.ExecutedAt))</span>
+                </div>
+                <pre class="akml-hist-preview" data-testid="history-preview">@if (_selected != null)
+{
+    foreach (var seg in HistoryPreviewHighlighter.BuildSegments(_previewSql, _search))
+    {<span class="@SegClass(seg)">@seg.Text</span>}
+}</pre>
+                <div class="akml-hist-meta-bar">
+                    @if (_selected != null)
+                    {
+                        <span class="akml-hist-dot" style="color:var(--akml-status-success)">●</span>
+                        <span class="akml-hist-mtext">@(_selected.Server)@(string.IsNullOrEmpty(_selected.Database) ? "" : " · " + _selected.Database)</span>
+                        @if (_versions.Length > 0)
+                        {
+                            <span class="akml-hist-mtext"> · v@(_versions.Length - (_selectedVersion < 0 ? 0 : _selectedVersion)) of @_versions.Length</span>
+                        }
+                    }
+                    <span class="akml-hist-spacer"></span>
+                    @if (_selected != null)
+                    {
+                        <button class="akml-tool-button" @onclick="CopySqlAsync">Copy</button>
+                        <button class="akml-tool-button" @onclick="@(() => RenameAsync(_selected))">Rename</button>
+                        <button class="akml-tool-button" @onclick="@(() => DeleteAsync(_selected))">Delete</button>
+                        <button class="akml-tool-button" @onclick="@(() => RemoveOlderAsync(_selected))">Remove older</button>
+                        <button class="akml-tool-button" @onclick="ReExecuteAsync">Re-execute</button>
+                        <button class="akml-tool-button primary" @onclick="OpenInEditorAsync" data-testid="history-open">Open</button>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Status strip -->
+    <div class="akml-hist-status">
+        <span>@_total entries@(string.IsNullOrEmpty(_statusMsg) ? "" : " · " + _statusMsg)</span>
+        <span class="akml-hist-spacer"></span>
+        @if (_loading) { <span class="akml-hist-loading">Loading…</span> }
+    </div>
+</div>
+
+@if (_compareOpen)
+{
+    <div class="akml-hist-modal-backdrop" @onclick="CloseCompare">
+        <div class="akml-hist-modal" @onclick:stopPropagation="true">
+            <div class="akml-hist-modal-hdr">Compare</div>
+            <div class="akml-hist-modal-body">
+                <pre class="akml-hist-preview">@_diffLeft</pre>
+                <pre class="akml-hist-preview">@_diffRight</pre>
+            </div>
+            <div class="akml-hist-modal-foot">
+                <button class="akml-tool-button" @onclick="CloseCompare">Close</button>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .akml-hist { display: flex; flex-direction: column; height: 100%;
+        font-family: var(--akml-type-chrome-family); font-size: var(--akml-type-chrome-size);
+        color: var(--akml-text-primary); background-color: var(--akml-surface-canvas); }
+    .akml-hist-top { display: flex; align-items: center; gap: var(--akml-scalar-spacing-s);
+        padding: var(--akml-scalar-spacing-s) var(--akml-scalar-spacing-m);
+        background-color: var(--akml-surface-panel); border-bottom: 1px solid var(--akml-border-default); }
+    .akml-hist-search { flex: 1 1 auto; min-width: 120px; background-color: var(--akml-surface-input);
+        color: var(--akml-text-primary); border: 1px solid var(--akml-border-default);
+        border-radius: var(--akml-scalar-radius-xs); padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s); }
+    .akml-hist-select { background-color: var(--akml-surface-input); color: var(--akml-text-primary);
+        border: 1px solid var(--akml-border-default); border-radius: var(--akml-scalar-radius-xs);
+        padding: 2px var(--akml-scalar-spacing-xs); }
+    .akml-hist-spacer { flex: 1 1 auto; }
+    .akml-hist-body { flex: 1 1 auto; display: grid; grid-template-columns: 42% 1fr; min-height: 0; }
+    .akml-hist-left { display: grid; grid-template-rows: 1fr auto; min-height: 0;
+        border-right: 1px solid var(--akml-border-default); }
+    .akml-hist-list { overflow: auto; background-color: var(--akml-surface-panel); }
+    .akml-hist-group { display: flex; align-items: center; gap: var(--akml-scalar-spacing-xs);
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s); cursor: pointer;
+        color: var(--akml-text-secondary); font-size: 11px; font-weight: var(--akml-type-chrome-weight);
+        text-transform: uppercase; border-bottom: 1px solid var(--akml-border-subtle); }
+    .akml-hist-chevron { width: 12px; display: inline-block; }
+    .akml-hist-row { display: flex; align-items: center; gap: var(--akml-scalar-spacing-xs);
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s); cursor: pointer;
+        border-left: 3px solid transparent; border-bottom: 1px solid var(--akml-border-subtle); }
+    .akml-hist-row:hover { background-color: var(--akml-surface-hover); }
+    .akml-hist-row.selected { background-color: var(--akml-surface-selection);
+        border-left-color: var(--akml-accent-primary); }
+    .akml-hist-star { cursor: pointer; color: var(--akml-text-disabled); font-size: 14px; width: 16px; text-align: center; }
+    .akml-hist-star.on { color: var(--akml-history-star-active, var(--akml-status-warning)); }
+    .akml-hist-rowmain { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+    .akml-hist-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        color: var(--akml-text-primary); font-weight: var(--akml-type-chrome-weight); }
+    .akml-hist-meta { display: flex; gap: 4px; align-items: center; color: var(--akml-text-secondary);
+        font-size: 11px; overflow: hidden; }
+    .akml-hist-conn { margin-left: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .akml-hist-dot { font-size: 9px; margin-right: 2px; }
+    .akml-hist-count { font-style: italic; }
+    .akml-hist-cmp { flex: 0 0 auto; }
+    .akml-hist-none { color: var(--akml-text-secondary); font-style: italic; padding: var(--akml-scalar-spacing-m); }
+    .akml-hist-more { margin: var(--akml-scalar-spacing-s); }
+    .akml-hist-versions { border-top: 1px solid var(--akml-border-default); display: flex; flex-direction: column;
+        max-height: 38%; background-color: var(--akml-surface-panel); }
+    .akml-hist-vhdr { padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s);
+        color: var(--akml-text-secondary); font-size: 11px; font-weight: var(--akml-type-chrome-weight);
+        text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .akml-hist-vlist { overflow: auto; }
+    .akml-hist-vrow { display: flex; justify-content: space-between; cursor: pointer;
+        padding: 2px var(--akml-scalar-spacing-s); }
+    .akml-hist-vrow:hover { background-color: var(--akml-surface-hover); }
+    .akml-hist-vrow.selected { background-color: var(--akml-surface-selection); }
+    .akml-hist-vlabel { color: var(--akml-text-link); }
+    .akml-hist-vtime { color: var(--akml-text-secondary); font-size: 11px; }
+    .akml-hist-right { display: flex; flex-direction: column; min-height: 0;
+        background-color: var(--akml-editor-popupbackground); }
+    .akml-hist-phdr { display: flex; justify-content: space-between; align-items: center;
+        padding: var(--akml-scalar-spacing-s) var(--akml-scalar-spacing-m);
+        background-color: var(--akml-surface-elevated); border-bottom: 1px solid var(--akml-border-default); }
+    .akml-hist-pname { font-weight: var(--akml-type-chrome-weight); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .akml-hist-ptime { color: var(--akml-text-secondary); font-size: 11px; }
+    .akml-hist-preview { flex: 1 1 auto; margin: 0; overflow: auto; white-space: pre-wrap;
+        padding: var(--akml-scalar-spacing-m); font-family: var(--akml-type-editor-family);
+        font-size: var(--akml-type-editor-size); color: var(--akml-text-primary);
+        background-color: var(--akml-editor-popupbackground); }
+    .akml-hist-preview .tok-keyword { color: var(--akml-accent-primary); }
+    .akml-hist-preview .tok-string { color: var(--akml-status-success); }
+    .akml-hist-preview .tok-comment { color: var(--akml-text-secondary); font-style: italic; }
+    .akml-hist-preview .hit { background-color: var(--akml-history-match-highlight, var(--akml-surface-selection)); }
+    .akml-hist-meta-bar { display: flex; align-items: center; gap: var(--akml-scalar-spacing-xs);
+        padding: var(--akml-scalar-spacing-s) var(--akml-scalar-spacing-m);
+        border-top: 1px solid var(--akml-border-default); background-color: var(--akml-surface-elevated); }
+    .akml-hist-mtext { color: var(--akml-text-secondary); font-size: 11px; }
+    .akml-hist-status { display: flex; align-items: center; padding: 2px var(--akml-scalar-spacing-m);
+        color: var(--akml-text-secondary); font-size: 11px; border-top: 1px solid var(--akml-border-default); }
+    .akml-hist-loading { font-style: italic; }
+    .akml-hist-empty { flex: 1 1 auto; display: flex; flex-direction: column; align-items: center;
+        justify-content: center; gap: var(--akml-scalar-spacing-s); color: var(--akml-text-secondary); }
+    .akml-tool-button { font-family: var(--akml-type-chrome-family); font-size: var(--akml-type-chrome-size);
+        background-color: var(--akml-surface-panel); color: var(--akml-text-primary);
+        border: 1px solid var(--akml-border-default); border-radius: var(--akml-scalar-radius-xs);
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s); cursor: pointer; white-space: nowrap; }
+    .akml-tool-button:hover { background-color: var(--akml-surface-hover); }
+    .akml-tool-button.active { color: var(--akml-history-star-active, var(--akml-status-warning)); }
+    .akml-tool-button.primary { background-color: var(--akml-accent-primary); color: var(--akml-text-onaccent);
+        border-color: var(--akml-accent-primary); }
+    .akml-hist-modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+        display: flex; align-items: center; justify-content: center; z-index: 1000; }
+    .akml-hist-modal { width: 80%; height: 70%; display: flex; flex-direction: column;
+        background-color: var(--akml-surface-panel); border: 1px solid var(--akml-border-default);
+        border-radius: var(--akml-scalar-radius-s); }
+    .akml-hist-modal-hdr { padding: var(--akml-scalar-spacing-s) var(--akml-scalar-spacing-m);
+        font-weight: var(--akml-type-chrome-weight); border-bottom: 1px solid var(--akml-border-default); }
+    .akml-hist-modal-body { flex: 1 1 auto; display: grid; grid-template-columns: 1fr 1fr;
+        gap: 1px; min-height: 0; background-color: var(--akml-border-default); }
+    .akml-hist-modal-foot { padding: var(--akml-scalar-spacing-s) var(--akml-scalar-spacing-m);
+        display: flex; justify-content: flex-end; border-top: 1px solid var(--akml-border-default); }
+</style>
+
+@code {
+    private const int PageSize = 100;
+
+    private readonly List<HistoryEntryDto> _entries = new();
+    private HistoryEntryDto? _selected;
+    private string _previewSql = string.Empty;
+    private HistoryVersionDto[] _versions = Array.Empty<HistoryVersionDto>();
+    private int _selectedVersion = -1;   // -1 == current (the entry itself / newest version)
+
+    private string _search = string.Empty;
+    private bool _favoritesOnly;
+    private string? _server;
+    private string? _database;
+    private IReadOnlyList<string> _servers = Array.Empty<string>();
+    private IReadOnlyList<string> _databases = Array.Empty<string>();
+
+    private int _total;
+    private bool _loading;
+    private string? _statusMsg;
+
+    private readonly HashSet<string> _collapsed = new();
+    private readonly List<long> _compare = new();   // up to 2 ids selected for compare
+    private bool _compareOpen;
+    private string _diffLeft = string.Empty;
+    private string _diffRight = string.Empty;
+
+    private IJSObjectReference? _downloadModule;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Theme.InitializeAsync();
+        SqlConn.StateChanged += OnConnChanged;
+        Bridge.StateChanged += OnBridgeStateChanged;
+        await LoadAsync(true);
+    }
+
+    private void OnConnChanged() => InvokeAsync(StateHasChanged);
+
+    // The bridge handshake usually completes AFTER this page's initial load, so the first
+    // LoadAsync runs while not-yet-available. Reload once the bridge reaches Open so history
+    // appears without a manual Retry; on disconnect, re-render to show the not-connected state.
+    private void OnBridgeStateChanged(BridgeState state) =>
+        InvokeAsync(async () =>
+        {
+            if (state == BridgeState.Open) await LoadAsync(true);
+            else StateHasChanged();
+        });
+
+    private async Task LoadAsync(bool reset)
+    {
+        if (_loading) return;
+        _loading = true;
+        StateHasChanged();
+        try
+        {
+            var request = new HistorySearchRequest
+            {
+                SearchText = string.IsNullOrWhiteSpace(_search) ? null : _search.Trim(),
+                Server = _server,
+                Database = _database,
+                FavoritesOnly = _favoritesOnly,
+                Deduplicate = true,
+                Offset = reset ? 0 : _entries.Count,
+                Limit = PageSize,
+            };
+            var resp = await HistorySvc.SearchAsync(request, CancellationToken.None);
+            if (reset) _entries.Clear();
+            if (resp.Entries != null) _entries.AddRange(resp.Entries);
+            _total = resp.TotalCount;
+            (_servers, _databases) = WebHistoryLogic.DeriveSources(_entries);
+
+            // Keep the selection if it is still present; otherwise clear the detail panes.
+            if (_selected != null && _entries.All(e => e.Id != _selected.Id)) ClearDetail();
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SelectAsync(HistoryEntryDto entry)
+    {
+        _selected = entry;
+        _selectedVersion = -1;
+        _previewSql = await HistorySvc.GetFullSqlAsync(entry.Id, CancellationToken.None) ?? entry.SqlText ?? string.Empty;
+        _versions = await HistorySvc.GetVersionsAsync(entry.Id, CancellationToken.None);
+        StateHasChanged();
+    }
+
+    private void SelectVersion(int idx)
+    {
+        if (idx < 0 || idx >= _versions.Length) return;
+        _selectedVersion = idx;
+        _previewSql = _versions[idx].SqlText ?? string.Empty;
+    }
+
+    private void ClearDetail()
+    {
+        _selected = null;
+        _previewSql = string.Empty;
+        _versions = Array.Empty<HistoryVersionDto>();
+        _selectedVersion = -1;
+    }
+
+    private async Task OnSearchKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await LoadAsync(true);
+    }
+
+    private async Task ToggleFavoritesFilter()
+    {
+        _favoritesOnly = !_favoritesOnly;
+        await LoadAsync(true);
+    }
+
+    private async Task OnServerChanged(ChangeEventArgs e)
+    {
+        var v = e.Value?.ToString();
+        _server = string.IsNullOrEmpty(v) ? null : v;
+        await LoadAsync(true);
+    }
+
+    private async Task OnDatabaseChanged(ChangeEventArgs e)
+    {
+        var v = e.Value?.ToString();
+        _database = string.IsNullOrEmpty(v) ? null : v;
+        await LoadAsync(true);
+    }
+
+    private void ToggleBucket(string bucket)
+    {
+        if (!_collapsed.Remove(bucket)) _collapsed.Add(bucket);
+    }
+
+    private async Task ToggleFavoriteAsync(HistoryEntryDto entry)
+    {
+        await HistorySvc.ToggleFavoriteAsync(entry.Id, CancellationToken.None);
+        await LoadAsync(true);
+    }
+
+    private void ToggleCompare(HistoryEntryDto entry, ChangeEventArgs args)
+    {
+        var on = args.Value is bool b && b;
+        if (on)
+        {
+            if (!_compare.Contains(entry.Id))
+            {
+                if (_compare.Count == 2) _compare.RemoveAt(0);   // keep the two most recent picks
+                _compare.Add(entry.Id);
+            }
+        }
+        else
+        {
+            _compare.Remove(entry.Id);
+        }
+    }
+
+    private async Task OpenCompareAsync()
+    {
+        if (_compare.Count != 2) return;
+        var diff = await HistorySvc.GetDiffAsync(_compare[0], _compare[1], CancellationToken.None);
+        if (diff == null) { _statusMsg = "Compare failed."; return; }
+        _diffLeft = diff.Value.left;
+        _diffRight = diff.Value.right;
+        _compareOpen = true;
+    }
+
+    private void CloseCompare() => _compareOpen = false;
+
+    private async Task RenameAsync(HistoryEntryDto entry)
+    {
+        var current = entry.TabTitle ?? string.Empty;
+        var name = await JS.InvokeAsync<string?>("prompt", "Rename history entry:", current);
+        if (string.IsNullOrWhiteSpace(name) || name == current) return;
+        if (await HistorySvc.RenameAsync(entry.Id, name.Trim(), CancellationToken.None))
+        {
+            // Mirror the desktop (HistoryToolWindowControl: entry.TabTitle = newName) so the right-pane
+            // header (DisplayName(_selected)) updates immediately — _selected is this same reference.
+            entry.TabTitle = name.Trim();
+            await LoadAsync(true);
+        }
+    }
+
+    private async Task DeleteAsync(HistoryEntryDto entry)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", "Delete this history entry?")) return;
+        await HistorySvc.DeleteAsync(new[] { entry.Id }, CancellationToken.None);
+        ClearDetail();
+        await LoadAsync(true);
+    }
+
+    private async Task RemoveOlderAsync(HistoryEntryDto entry)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", "Remove all entries older than this one? (favorites are kept)")) return;
+        var n = await HistorySvc.RemoveOlderThanAsync(entry.Id, keepFavorites: true, CancellationToken.None);
+        _statusMsg = $"Removed {n} older entr{(n == 1 ? "y" : "ies")}.";
+        await LoadAsync(true);
+    }
+
+    private async Task CopySqlAsync()
+    {
+        try { await JS.InvokeVoidAsync("navigator.clipboard.writeText", _previewSql); _statusMsg = "Copied SQL."; }
+        catch (Exception ex) { Diagnostics.Log(DiagnosticLevel.Warn, "history", $"Copy failed: {ex.Message}"); }
+    }
+
+    private async Task OpenInEditorAsync()
+    {
+        if (_selected == null) return;
+        await SessionStore.SaveAsync(new EditorSessionRecord { DocumentText = _previewSql });
+        await SessionStore.FlushAsync();
+        Nav.NavigateTo("/");
+    }
+
+    private async Task ReExecuteAsync()
+    {
+        if (_selected == null) return;
+        await SessionStore.SaveAsync(new EditorSessionRecord { DocumentText = _previewSql });
+        await SessionStore.FlushAsync();
+        Nav.NavigateTo("/?autorun=1");
+    }
+
+    private async Task OnExportChanged(ChangeEventArgs e)
+    {
+        var fmt = e.Value?.ToString();
+        if (string.IsNullOrEmpty(fmt)) return;
+        try
+        {
+            var (name, mime, content) = BuildExport(fmt);
+            _downloadModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/akml-download.js");
+            await _downloadModule.InvokeVoidAsync("downloadBase64", name, mime,
+                Convert.ToBase64String(Encoding.UTF8.GetBytes(content)));
+            _statusMsg = $"Exported {_entries.Count} entries ({fmt}).";
+        }
+        catch (Exception ex) { Diagnostics.Log(DiagnosticLevel.Warn, "history", $"Export failed: {ex.Message}"); }
+    }
+
+    private (string name, string mime, string content) BuildExport(string fmt)
+    {
+        switch (fmt)
+        {
+            case "json":
+                var json = System.Text.Json.JsonSerializer.Serialize(_entries,
+                    new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+                return ("history.json", "application/json", json);
+            case "sql":
+                var sb = new StringBuilder();
+                foreach (var e in _entries)
+                {
+                    sb.AppendLine($"-- {e.ExecutedAt}  {e.Server}/{e.Database}");
+                    sb.AppendLine(e.SqlText);
+                    sb.AppendLine("GO");
+                    sb.AppendLine();
+                }
+                return ("history.sql", "text/plain", sb.ToString());
+            default: // csv
+                var csv = new StringBuilder("ExecutedAt,Server,Database,Status,DurationMs,RowCount,Sql\n");
+                foreach (var e in _entries)
+                    csv.AppendLine(string.Join(",", Csv(e.ExecutedAt), Csv(e.Server), Csv(e.Database),
+                        e.Status.ToString(), e.DurationMs.ToString(), e.RowCount.ToString(), Csv(e.SqlText)));
+                return ("history.csv", "text/csv", csv.ToString());
+        }
+    }
+
+    private static string Csv(string? v) => "\"" + (v ?? string.Empty).Replace("\"", "\"\"") + "\"";
+
+    private static string SegClass(HistoryPreviewHighlighter.Segment seg) =>
+        seg.Hit ? $"tok-{seg.Kind} hit" : $"tok-{seg.Kind}";
+
+    private static string DisplayName(HistoryEntryDto e)
+    {
+        if (!string.IsNullOrWhiteSpace(e.TabTitle)) return e.TabTitle!;
+        var sql = System.Text.RegularExpressions.Regex.Replace(e.SqlText ?? string.Empty, @"\s+", " ").Trim();
+        if (sql.Length == 0) return "(Untitled query)";
+        return sql.Length > 60 ? sql[..60] + "…" : sql;
+    }
+
+    private static string ServerDb(HistoryEntryDto e)
+    {
+        if (!string.IsNullOrEmpty(e.Server) && !string.IsNullOrEmpty(e.Database)) return $"{e.Server}→{e.Database}";
+        return e.Server ?? e.Database ?? "";
+    }
+
+    private static string RelativeTime(string? iso)
+    {
+        if (!DateTime.TryParse(iso, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dt)) return "";
+        var local = dt.ToLocalTime();
+        var elapsed = DateTime.Now - local;
+        if (elapsed.TotalMinutes < 1) return "just now";
+        if (elapsed.TotalMinutes < 60) return $"{(int)elapsed.TotalMinutes}m ago";
+        if (elapsed.TotalHours < 24) return local.ToString("HH:mm", CultureInfo.CurrentCulture);
+        if (local.Date == DateTime.Today.AddDays(-1)) return "Yesterday " + local.ToString("HH:mm", CultureInfo.CurrentCulture);
+        return local.ToString("yyyy-MM-dd HH:mm", CultureInfo.CurrentCulture);
+    }
+
+    private static string AbsTime(string? iso)
+    {
+        if (!DateTime.TryParse(iso, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dt)) return "";
+        return dt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.CurrentCulture);
+    }
+
+    private static string VersionTime(string? saved)
+    {
+        if (!DateTime.TryParse(saved, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var dt))
+            return saved ?? "";
+        return dt.ToLocalTime().ToString("MMM dd, HH:mm", CultureInfo.CurrentCulture);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        SqlConn.StateChanged -= OnConnChanged;
+        Bridge.StateChanged -= OnBridgeStateChanged;
+        if (_downloadModule != null)
+        {
+            try { await _downloadModule.DisposeAsync(); }
+            catch (JSDisconnectedException) { }
+        }
+    }
+}
