@@ -24,7 +24,11 @@ namespace AkmlSql.Core.Models.History
 
             var collapsed = Regex.Replace(sql ?? string.Empty, @"\s+", " ").Trim();
             if (collapsed.Length == 0) return Placeholder;
-            return collapsed.Length > MaxLength ? collapsed.Substring(0, MaxLength) + "…" : collapsed;
+            if (collapsed.Length <= MaxLength) return collapsed;
+            // Avoid splitting a UTF-16 surrogate pair: if the last kept char is a high surrogate, its
+            // low-surrogate partner is at index MaxLength, so cut one char earlier to drop the pair whole.
+            var cut = char.IsHighSurrogate(collapsed[MaxLength - 1]) ? MaxLength - 1 : MaxLength;
+            return collapsed.Substring(0, cut) + "…";
         }
     }
 }

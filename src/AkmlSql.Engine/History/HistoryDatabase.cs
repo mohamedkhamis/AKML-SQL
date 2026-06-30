@@ -1205,6 +1205,16 @@ public sealed class HistoryDatabase : IDisposable
     /// <summary>
     /// Updates the tab_title (display name) for a history entry.
     /// Used by the "Rename" feature for closed queries.
+    /// <para>
+    /// The rename is applied to EVERY row sharing the target entry's <c>content_hash</c> (the whole
+    /// deduplication group), not just the single row identified by <paramref name="entryId"/>. The
+    /// display name is a query-level label: the deduplicated search derives it via a window function
+    /// over the filtered partition, so a per-row name would vanish whenever a filter excludes the
+    /// renamed row (e.g. a server filter that hides the exact execution that was renamed). Stamping
+    /// the name on all rows of the group makes it consistent across executions and filters. This
+    /// cannot reintroduce the old "name bleeds across a name filter" bug, because every row of the
+    /// content_hash carries the SAME name. The AFTER UPDATE FTS sync (if any) still fires per row.
+    /// </para>
     /// </summary>
     public async Task UpdateTabTitleAsync(long entryId, string newName)
     {
@@ -1212,12 +1222,12 @@ public sealed class HistoryDatabase : IDisposable
         await conn.OpenAsync();
 
         await using var cmd = new SqliteCommand(
-            "UPDATE history SET tab_title = @name WHERE id = @id;", conn);
+            "UPDATE history SET tab_title = @name WHERE content_hash = (SELECT content_hash FROM history WHERE id = @id);", conn);
         cmd.Parameters.AddWithValue("@name", newName);
         cmd.Parameters.AddWithValue("@id", entryId);
 
         await cmd.ExecuteNonQueryAsync();
-        Log.Debug("History entry {Id}: tab_title updated to '{Name}'", entryId, newName);
+        Log.Debug("History entry {Id}: tab_title updated to '{Name}' (applied to whole content_hash group)", entryId, newName);
     }
 
     /// <summary>

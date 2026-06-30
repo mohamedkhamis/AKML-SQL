@@ -35,9 +35,10 @@ namespace AkmlSql.Core.Models.History
 
         /// <summary>
         /// Classifies an already-local timestamp relative to <paramref name="now"/> using the same
-        /// today / prior-six-days / 7–59-days / 60+-days thresholds.
+        /// today / prior-six-days / 7–59-days / 60+-days thresholds. Internal helper for the string
+        /// overload — there is no external caller of the <see cref="DateTime"/> overload.
         /// </summary>
-        public static string Of(DateTime executedAtLocal, DateTime now)
+        private static string Of(DateTime executedAtLocal, DateTime now)
         {
             var d = executedAtLocal.Date;
             var today = now.Date;

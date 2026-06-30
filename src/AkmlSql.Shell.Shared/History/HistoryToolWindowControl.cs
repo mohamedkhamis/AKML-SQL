@@ -1445,144 +1445,16 @@ namespace AkmlSql.Shell.Shared.History
         }
 
         /// <summary>
-        /// Extracts highlight terms from the search text.
-        /// - Splits by OR (case-sensitive word boundary) into separate groups
-        /// - Strips NOT-prefixed terms (these filter but should not highlight)
-        /// - Extracts quoted phrases as whole terms (quotes stripped for matching)
-        /// - Removes prefix filters (server:, database:, db:, name:, sql:, starred:, open:)
-        /// - Each remaining word/phrase becomes a highlight term
+        /// Extracts highlight terms from the search text. Delegates to the shared, canonical
+        /// quote-aware extractor <see cref="AkmlSql.Core.Text.HistorySearchTerms.Extract"/> (one
+        /// implementation shared with the web History page). This adopts the web's quote-aware rules:
+        /// a double-quoted span is one term (quotes stripped); bare AND/OR/NOT are dropped
+        /// (case-insensitive); the value of metadata prefixes (server:/db:/database:/name:/starred:/
+        /// is:/open:) is dropped entirely while sql: keeps its value; unknown prefixes stay literal;
+        /// and a single trailing FTS5 <c>*</c> is stripped.
         /// </summary>
-        private static List<string> ExtractHighlightTerms(string searchText)
-        {
-            var terms = new List<string>();
-
-            // Split by OR at word boundaries: " OR " or start/end anchored OR
-            var orParts = Regex.Split(searchText, @"(?<=\s)OR(?=\s)|^OR(?=\s)|(?<=\s)OR$");
-
-            foreach (var orPart in orParts)
-            {
-                var part = orPart.Trim();
-                if (string.IsNullOrEmpty(part)) continue;
-
-                // Tokenize the part respecting quoted strings
-                var tokens = TokenizeForHighlight(part);
-
-                bool skipNext = false;
-                for (int i = 0; i < tokens.Count; i++)
-                {
-                    var token = tokens[i];
-
-                    // Skip AND keyword (FTS5 boolean, not a highlight term)
-                    if (string.Equals(token, "AND", StringComparison.Ordinal))
-                        continue;
-
-                    // NOT: skip the NOT keyword and the next token (the negated term)
-                    if (string.Equals(token, "NOT", StringComparison.Ordinal))
-                    {
-                        skipNext = true;
-                        continue;
-                    }
-
-                    if (skipNext)
-                    {
-                        skipNext = false;
-                        continue;
-                    }
-
-                    // Check for prefix filters — skip these entirely
-                    if (IsPrefixFilter(token))
-                        continue;
-
-                    // Strip quotes from quoted phrases
-                    var term = token;
-                    if (term.Length >= 2 && term.StartsWith("\"", StringComparison.Ordinal)
-                                        && term.EndsWith("\"", StringComparison.Ordinal))
-                    {
-                        term = term.Substring(1, term.Length - 2);
-                    }
-
-                    // Strip trailing wildcard (*) used for FTS5 prefix search
-                    if (term.EndsWith("*", StringComparison.Ordinal))
-                    {
-                        term = term.Substring(0, term.Length - 1);
-                    }
-
-                    if (!string.IsNullOrWhiteSpace(term) && !terms.Contains(term))
-                    {
-                        terms.Add(term);
-                    }
-                }
-            }
-
-            return terms;
-        }
-
-        /// <summary>
-        /// Tokenizes a search string respecting quoted phrases.
-        /// Quoted strings (including prefix:&quot;value&quot;) are kept as single tokens.
-        /// </summary>
-        private static List<string> TokenizeForHighlight(string text)
-        {
-            var tokens = new List<string>();
-            var sb = new System.Text.StringBuilder();
-            bool inQuotes = false;
-
-            for (int i = 0; i < text.Length; i++)
-            {
-                char c = text[i];
-
-                if (c == '"')
-                {
-                    inQuotes = !inQuotes;
-                    sb.Append(c);
-                    continue;
-                }
-
-                if (char.IsWhiteSpace(c) && !inQuotes)
-                {
-                    if (sb.Length > 0)
-                    {
-                        tokens.Add(sb.ToString());
-                        sb.Clear();
-                    }
-                    continue;
-                }
-
-                sb.Append(c);
-            }
-
-            if (sb.Length > 0)
-            {
-                tokens.Add(sb.ToString());
-            }
-
-            return tokens;
-        }
-
-        /// <summary>
-        /// Returns true if the token is a prefix filter (server:val, database:val, db:val,
-        /// sql:val, name:val, starred:val, open:val). These should not be highlighted.
-        /// </summary>
-        private static bool IsPrefixFilter(string token)
-        {
-            var colonIdx = token.IndexOf(':');
-            if (colonIdx <= 0) return false;
-
-            var prefix = token.Substring(0, colonIdx).ToLowerInvariant();
-            switch (prefix)
-            {
-                case "server":
-                case "database":
-                case "db":
-                case "sql":
-                case "name":
-                case "starred":
-                case "open":
-                    return true;
-                default:
-                    return false;
-            }
-        }
+        private static List<string> ExtractHighlightTerms(string searchText) =>
+            AkmlSql.Core.Text.HistorySearchTerms.Extract(searchText).ToList();
 
         /// <summary>
         /// Finds all highlight regions in the SQL text for the given terms.

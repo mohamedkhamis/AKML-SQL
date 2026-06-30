@@ -4,12 +4,17 @@ using System.Collections.Generic;
 namespace AkmlSql.Core.Text
 {
     /// <summary>
-    /// Lightweight, pure T-SQL tokenizer shared by every SQL-preview surface (web History page,
-    /// desktop History tool window, desktop format-preview renderer). Emits CONTIGUOUS spans that
-    /// cover every character — so the concatenated span text always equals the input verbatim —
-    /// classifying string literals, line/block comments, and a fixed keyword set; everything else
-    /// is <see cref="KindDefault"/>. Intentionally simple: it colours for readability, it is not a
-    /// parser. Pure C# only (netstandard2.0 + net10.0) so both editions can share it.
+    /// Lightweight, pure T-SQL tokenizer that backs the SQL HISTORY previews on both editions (the
+    /// web History page and the desktop History tool window). Emits CONTIGUOUS spans that cover every
+    /// character — so the concatenated span text always equals the input verbatim — classifying string
+    /// literals, line/block comments, and a fixed keyword set; everything else is
+    /// <see cref="KindDefault"/>. Intentionally simple: it colours for readability, it is not a parser.
+    /// Pure C# only (netstandard2.0 + net10.0) so both editions can share it.
+    /// <para>
+    /// The desktop ProfileEditor format-preview renderer (<c>AkmlSql.Shell.Shared/Ui/SqlPreviewRenderer.cs</c>)
+    /// was deliberately NOT migrated onto this tokenizer: it keeps its own richer tokenizer by design,
+    /// because the format preview needs finer number/function colouring than the history previews require.
+    /// </para>
     /// </summary>
     public static class SqlPreviewTokenizer
     {
@@ -19,9 +24,9 @@ namespace AkmlSql.Core.Text
         public const string KindDefault = "default";
 
         /// <summary>
-        /// The union of every preview surface's keyword set (superset). Includes the desktop
-        /// format-preview renderer's extra keywords (APPLY / EXCEPT / INTERSECT / RETURNS / TEXT /
-        /// CLUSTERED / NONCLUSTERED / NTILE) so all three consumers colour the same words.
+        /// The union of both history preview surfaces' keyword sets (superset), including the extra
+        /// keywords (APPLY / EXCEPT / INTERSECT / RETURNS / TEXT / CLUSTERED / NONCLUSTERED / NTILE)
+        /// so the web and desktop history previews colour the same words.
         /// </summary>
         private static readonly HashSet<string> Keywords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {

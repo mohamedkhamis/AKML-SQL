@@ -370,7 +370,14 @@
                 Limit = PageSize,
             };
             var resp = await HistorySvc.SearchAsync(request, CancellationToken.None);
-            if (reset) _entries.Clear();
+            if (reset)
+            {
+                // A reset/filter reload REPLACES the result set; drop the cached row views too so a
+                // renamed/changed entry can't keep a stale view (RebuildRowViews only builds ids it
+                // hasn't seen). Load-more (reset:false) keeps the cache so prior pages aren't rebuilt.
+                _entries.Clear();
+                _rowViews.Clear();
+            }
             if (resp.Entries != null) _entries.AddRange(resp.Entries);
             _total = resp.TotalCount;
             (_servers, _databases) = WebHistoryLogic.DeriveSources(_entries);
@@ -583,13 +590,25 @@
     private static string SegClass(HistoryPreviewHighlighter.Segment seg) =>
         seg.Hit ? $"tok-{seg.Kind} hit" : $"tok-{seg.Kind}";
 
-    // Recompute every entry's derived display values against a single "now" snapshot (more consistent
-    // than the old per-row DateTime.Now). Ids are unique post-dedup, so a wholesale rebuild is O(n).
+    // Build derived display values for entries we haven't cached yet, against a single "now" snapshot.
+    // LoadAsync(reset:false) APPENDs each paginated 'load more' page, so rebuilding EVERY row here would
+    // be O(n^2) across pages (page k recomputing all prior rows). Building only the new ids keeps each
+    // load O(page). The reset/filter path clears _rowViews in LoadAsync so changed entries refresh; we
+    // also prune any cached id no longer in _entries here as a safety net against stale rows.
     private void RebuildRowViews()
     {
         var now = DateTime.Now;
-        _rowViews.Clear();
-        foreach (var e in _entries) _rowViews[e.Id] = BuildRowView(e, now);
+        var live = new HashSet<long>(_entries.Count);
+        foreach (var e in _entries)
+        {
+            live.Add(e.Id);
+            if (!_rowViews.ContainsKey(e.Id)) _rowViews[e.Id] = BuildRowView(e, now);
+        }
+        if (_rowViews.Count != live.Count)
+        {
+            var stale = _rowViews.Keys.Where(k => !live.Contains(k)).ToList();
+            foreach (var k in stale) _rowViews.Remove(k);
+        }
     }
 
     private RowView RowFor(HistoryEntryDto e) =>

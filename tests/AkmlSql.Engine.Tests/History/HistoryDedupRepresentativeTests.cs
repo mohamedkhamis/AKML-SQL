@@ -140,6 +140,32 @@ public sealed class HistoryDedupRepresentativeTests : IDisposable
         Assert.Equal(new[] { a, b }.OrderBy(x => x), new[] { id0, id1 }.OrderBy(x => x)); // both ids, once each
     }
 
+    [Fact]
+    public async Task Rename_AppliesToWholeContentHashGroup_AndSurvivesFilter()
+    {
+        // Same sql executed twice (→ same content_hash → one deduped group across servers), both
+        // initially unnamed. Older row is on server 'A'; newer row is on server 'B'. Rename targets
+        // the NEWER (server-B) row's id. Because the rename now stamps tab_title on EVERY row of the
+        // content_hash group, a search FILTERED to server 'A' — which excludes the renamed row — must
+        // still show the new name. Under the old per-row rename (WHERE id = @id) the A row's tab_title
+        // stayed null and the deduped (filtered) window would surface no name, so this FAILS on the
+        // old code and PASSES only because the rename propagated to the whole group.
+        var older = await SeedAsync("SELECT 42", status: 0, durationMs: 1, rowCount: 0, tabTitle: null);
+        var newer = await SeedAsync("SELECT 42", status: 0, durationMs: 1, rowCount: 0, tabTitle: null);
+        await SetServerAsync(older, "A");
+        await SetServerAsync(newer, "B");
+        await SetExecutedAtAsync(older, DaysAgo(2));
+        await SetExecutedAtAsync(newer, DaysAgo(0));
+
+        await _db.UpdateTabTitleAsync(newer, "MyReport"); // rename the server-B row...
+
+        var (entries, _) = await _db.SearchAsync(new HistoryFilter { Deduplicate = true, Server = "A" });
+
+        var rep = Assert.Single(entries);
+        Assert.Equal(older, rep.Id);            // only the A row survives the filter
+        Assert.Equal("MyReport", rep.TabTitle); // ...yet the rename propagated to it (query-level label)
+    }
+
     // ── helpers ────────────────────────────────────────────────────────────────
 
     private Task<long> SeedAsync(string sqlText, int status, long durationMs, long rowCount, string? tabTitle) =>

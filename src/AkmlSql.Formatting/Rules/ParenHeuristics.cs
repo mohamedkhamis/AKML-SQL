@@ -6,8 +6,11 @@ namespace AkmlSql.Formatting.Rules;
 
 /// <summary>
 /// Shared parenthesis-classification heuristics used by more than one rule set
-/// (<see cref="ParenthesisRules"/> and <see cref="ControlFlowRules"/>). Extracted so the two passes
-/// can never drift on "is this paren a DDL object's column/parameter list vs a function call".
+/// (<see cref="ParenthesisRules"/> and <see cref="ControlFlowRules"/>). Only the DDL-object-name check
+/// (<see cref="IsDdlObjectName"/>) is shared, so the two passes agree on "is this paren a DDL object's
+/// column/parameter list". The function-name policy is intentionally NOT shared: each rule keeps its own
+/// (e.g. <c>ParenthesisRules.IsFunctionNameToken</c> accepts COALESCE / CONVERT / NULLIF, while
+/// <c>ControlFlowRules</c> stays Identifier-only).
 /// </summary>
 internal static class ParenHeuristics
 {
