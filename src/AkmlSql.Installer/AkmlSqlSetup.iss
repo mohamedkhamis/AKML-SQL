@@ -715,6 +715,32 @@ end;
 
 // --- Uninstall Actions ---
 
+// Removes AKML SQL *settings and log files* while PRESERVING user-created data: the SQL query
+// history database (history\), saved snippets (snippets\) and custom formatting styles (profiles\).
+// History etc. are kept regardless of the confirmation answer because an UPGRADE runs a SILENT
+// uninstall, where a MB_YESNO MsgBox returns its default (Yes) — the old blanket DelTree therefore
+// wiped the user's query history on every upgrade. config.json (a setting) is regenerated with
+// defaults on next launch / by post-install, so deleting it here is safe.
+procedure RemoveSettingsPreservingUserData;
+var
+  AppData: String;
+  LocalAppData: String;
+begin
+  AppData := ExpandConstant('{userappdata}') + '\AKML SQL';
+  LocalAppData := ExpandConstant('{localappdata}') + '\AKML SQL';
+
+  // Settings + logs + transient import scratch only.
+  DeleteFile(AppData + '\config.json');
+  DeleteFile(AppData + '\pending-import.json');
+  DelTree(AppData + '\logs', True, True, True);
+  DelTree(AppData + '\import-staging', True, True, True);
+
+  // %LocalAppData%\AKML SQL holds only the regenerable update cache.
+  DelTree(LocalAppData + '\cache', True, True, True);
+
+  Log('AKML SQL settings and logs removed; SQL history, snippets and profiles preserved.');
+end;
+
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   RemoveUserData: Boolean;
@@ -737,17 +763,17 @@ begin
     ClearVSMefCaches('17.0');
     ClearVSMefCaches('18.0');
 
-    // Ask about user data removal
+    // Ask about settings/log removal. SQL history, snippets and saved styles are ALWAYS kept —
+    // see RemoveSettingsPreservingUserData (an upgrade's silent uninstall would otherwise default
+    // to Yes and destroy the user's query history).
     RemoveUserData := MsgBox('Do you want to remove your AKML SQL settings and log files?'#13#10#13#10
-      + 'Location: ' + ExpandConstant('{userappdata}') + '\AKML SQL',
+      + 'Your SQL query history, snippets and saved formatting styles will be KEPT.'#13#10
+      + 'To remove those too, delete this folder manually after uninstalling:'#13#10
+      + ExpandConstant('{userappdata}') + '\AKML SQL',
       mbConfirmation, MB_YESNO) = IDYES;
 
     if RemoveUserData then
-    begin
-      DelTree(ExpandConstant('{userappdata}') + '\AKML SQL', True, True, True);
-      DelTree(ExpandConstant('{localappdata}') + '\AKML SQL', True, True, True);
-      Log('User data removed.');
-    end;
+      RemoveSettingsPreservingUserData;
   end;
 end;
 
