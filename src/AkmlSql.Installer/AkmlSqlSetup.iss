@@ -732,6 +732,7 @@ begin
   // Settings + logs + transient import scratch only.
   DeleteFile(AppData + '\config.json');
   DeleteFile(AppData + '\pending-import.json');
+  DeleteFile(AppData + '\update-available.json');
   DelTree(AppData + '\logs', True, True, True);
   DelTree(AppData + '\import-staging', True, True, True);
 

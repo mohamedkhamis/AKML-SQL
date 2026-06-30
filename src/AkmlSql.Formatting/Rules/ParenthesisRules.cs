@@ -112,9 +112,21 @@ public class ParenthesisRules : IRuleSet
         if (i < 1) return false;
         if (nodes[i].PrecedingSpaces > 0 || nodes[i].PrecedingBreak != BreakType.None) return false;
         var prev = nodes[i - 1];
-        if (prev.IsInNoformatRegion || prev.TokenType != TSqlTokenType.Identifier) return false;
+        if (prev.IsInNoformatRegion || !IsFunctionNameToken(prev.TokenType)) return false;
         return !IsDdlObjectName(nodes, i - 1);
     }
+
+    /// <summary>
+    /// True when <paramref name="t"/> can stand as the name of a function call. Plain identifiers
+    /// cover user functions and most built-ins (e.g. <c>SUM</c>, <c>DATEADD</c>), but some built-in
+    /// functions are tokenized as their own KEYWORD types and would otherwise be stranded onto a
+    /// new line under openOnSameLine=false (spec 030 FIX 2: <c>COALESCE(...)</c>, <c>CONVERT(...)</c>).
+    /// Deliberately excludes ambiguous positional keywords like <c>LEFT</c>/<c>RIGHT</c> (JOIN modifiers).
+    /// </summary>
+    private static bool IsFunctionNameToken(TSqlTokenType t) =>
+        t == TSqlTokenType.Identifier
+        || t is TSqlTokenType.Coalesce or TSqlTokenType.Convert
+            or TSqlTokenType.NullIf;
 
     /// <summary>
     /// True when the identifier at <paramref name="nameEnd"/> is the (possibly multi-part) name of a

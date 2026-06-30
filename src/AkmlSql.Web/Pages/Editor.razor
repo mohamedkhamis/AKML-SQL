@@ -674,14 +674,19 @@
     /// <summary>web History "Re-execute": when navigated to with <c>?autorun=1</c>, run the restored
     /// document once. The restored text lands AFTER firstRender (the session restore is async), so we
     /// wait — across renders — until <see cref="_initialText"/> is populated rather than firing on
-    /// firstRender (where it is still empty). The flag is consumed exactly once, then the URL flag is
-    /// stripped so a manual refresh doesn't re-run.</summary>
+    /// firstRender (where it is still empty). The flag persists until BOTH the document is populated AND
+    /// the connection is ready — on a hard-reload/connection race the restored text can land before
+    /// <see cref="ISqlConnectionService.IsConnected"/> flips true, so the flag stays pending across renders and a
+    /// later render (when the connection comes up) retries. It is consumed exactly once the run actually
+    /// proceeds, then the URL flag is stripped so a manual refresh doesn't re-run.</summary>
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         // Wait for the async restore to populate the document; don't consume the flag until it has.
         if (!_autorunPending || string.IsNullOrWhiteSpace(_initialText)) return;
-        _autorunPending = false;
+        // Keep the flag pending until we are actually connected and idle — otherwise a connection race
+        // would silently drop the autorun with no retry.
         if (_executing || !SqlConn.IsConnected) return;
+        _autorunPending = false;
 
         _executing = true;
         try { await RunSqlAsync(_initialText); }

@@ -585,10 +585,14 @@ public sealed class HistoryDatabase : IDisposable
             // column therefore comes from that single latest row. This replaces the prior
             // GROUP-BY-with-bare-columns query, where SQLite (with several MAX() aggregates present)
             // pulled name/status/row-count/duration from an ARBITRARY row in the group — so a repeated
-            // query could show a stale status or the wrong duration. exec_count is the total executions;
-            // favourite/open are "any version" (MAX over the partition, matching the FavoritesOnly
-            // filter); and the display name is the latest NON-NULL tab_title so a rename survives later
-            // re-executions. The {whereClause} filters live INSIDE the windowed subquery so
+            // query could show a stale status or the wrong duration. exec_count is the number of
+            // executions MATCHING THE CURRENT FILTER (equal to the total when unfiltered, because
+            // COUNT(*) OVER runs after {whereClause}); favourite/open are "any version" (MAX over the
+            // partition, matching the FavoritesOnly filter); and the display name is the latest NON-NULL
+            // tab_title within the filtered partition so a rename survives later re-executions. The
+            // tab_title is a WINDOW column computed INSIDE the ranked subquery so it respects
+            // {whereClause} (a correlated subquery over the bare table would ignore the filters). The
+            // {whereClause} filters live INSIDE the windowed subquery so
             // COUNT()/ROW_NUMBER() see the filtered set; only `rn = 1` is applied outside.
             dataSql = $@"
                 SELECT
@@ -603,9 +607,7 @@ public sealed class HistoryDatabase : IDisposable
                     ranked.status,
                     ranked.error_msg,
                     ranked.source,
-                    (SELECT t.tab_title FROM history t
-                       WHERE t.content_hash = ranked.content_hash AND t.tab_title IS NOT NULL
-                       ORDER BY t.executed_at DESC, t.id DESC LIMIT 1) as tab_title,
+                    ranked.tab_title,
                     ranked.is_favorite,
                     ranked.exec_count,
                     ranked.content_hash,
@@ -627,13 +629,18 @@ public sealed class HistoryDatabase : IDisposable
                         COUNT(*)           OVER (PARTITION BY h.content_hash) as exec_count,
                         MAX(h.is_favorite) OVER (PARTITION BY h.content_hash) as is_favorite,
                         MAX(h.is_open)     OVER (PARTITION BY h.content_hash) as is_open,
+                        FIRST_VALUE(h.tab_title) OVER (
+                            PARTITION BY h.content_hash
+                            ORDER BY (CASE WHEN h.tab_title IS NULL THEN 1 ELSE 0 END), h.executed_at DESC, h.id DESC
+                            ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+                        ) as tab_title,
                         ROW_NUMBER()       OVER (PARTITION BY h.content_hash
                                                  ORDER BY h.executed_at DESC, h.id DESC) as rn
                     FROM {fromClause}
                     {whereClause}
                 ) AS ranked
                 WHERE ranked.rn = 1
-                ORDER BY ranked.executed_at DESC
+                ORDER BY ranked.executed_at DESC, ranked.id DESC
                 LIMIT @limit OFFSET @offset";
         }
         else

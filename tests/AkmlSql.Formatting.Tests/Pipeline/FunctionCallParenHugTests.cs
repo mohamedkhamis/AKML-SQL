@@ -32,6 +32,8 @@ public class FunctionCallParenHugTests
     [InlineData("SELECT SUM(x) AS s FROM t;", "sum(x)")]
     [InlineData("SELECT COUNT(o.id) AS c FROM o;", "count(o.id)")]
     [InlineData("SELECT DATEADD(MONTH, -6, GETDATE()) AS d;", "dateadd(month")]
+    [InlineData("SELECT COALESCE(a, b) AS c FROM t;", "coalesce(a")]
+    [InlineData("SELECT CONVERT(int, x) AS d FROM t;", "convert(int")]
     public void FunctionCallParen_HugsName_InAlignedLeftBracket(string input, string expectedContiguousLower)
     {
         var profile = AlignedLeftBracketProfile();

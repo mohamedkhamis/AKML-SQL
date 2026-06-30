@@ -93,6 +93,53 @@ public sealed class HistoryDedupRepresentativeTests : IDisposable
         Assert.True(rep.IsFavorite);
     }
 
+    [Fact]
+    public async Task Deduplicate_StickyName_RespectsFilter_NotBledFromOtherPartitionMember()
+    {
+        // Same sql executed on two servers (→ same content_hash → one deduped group across servers).
+        // The OLDER row is on server 'A' (name 'KeepMe'); the NEWER row is on server 'B' with a
+        // DIFFERENT name 'Bled'. When the search is FILTERED to server 'A', only the A row is in the
+        // partition, so the display name must be 'KeepMe'. This is adversarial: the OLD correlated
+        // subquery scanned the bare table ignoring the filter and would return the latest non-null
+        // across ALL servers ('Bled', from the filtered-out B row) — so it FAILS on the old code and
+        // PASSES only because tab_title is now a window column over the FILTERED partition.
+        var older = await SeedAsync("SELECT 9", status: 0, durationMs: 1, rowCount: 0, tabTitle: "KeepMe");
+        var newer = await SeedAsync("SELECT 9", status: 0, durationMs: 1, rowCount: 0, tabTitle: "Bled");
+        await SetServerAsync(older, "A");
+        await SetServerAsync(newer, "B");
+        await SetExecutedAtAsync(older, DaysAgo(2));
+        await SetExecutedAtAsync(newer, DaysAgo(0));
+
+        var (entries, _) = await _db.SearchAsync(new HistoryFilter { Deduplicate = true, Server = "A" });
+
+        var rep = Assert.Single(entries);
+        Assert.Equal(older, rep.Id);              // only the A row survives the filter
+        Assert.Equal("KeepMe", rep.TabTitle);     // name from the A partition, NOT 'Bled' from server B
+    }
+
+    [Fact]
+    public async Task Deduplicate_Paging_IsStableViaIdTiebreak()
+    {
+        // Two DISTINCT sql texts (→ two content_hashes → two groups) with the SAME executed_at.
+        // Without an id tiebreak in the outer ORDER BY, equal executed_at groups can reorder across
+        // LIMIT/OFFSET pages, duplicating/skipping rows on "Load more". Page 0 and page 1 (size 1)
+        // must return the two distinct ids with no overlap.
+        var a = await SeedAsync("SELECT 100", status: 0, durationMs: 1, rowCount: 0, tabTitle: null);
+        var b = await SeedAsync("SELECT 200", status: 0, durationMs: 1, rowCount: 0, tabTitle: null);
+        var sameTime = DaysAgo(0);
+        await SetExecutedAtAsync(a, sameTime);
+        await SetExecutedAtAsync(b, sameTime);
+
+        var (page0, total) = await _db.SearchAsync(new HistoryFilter { Deduplicate = true, Limit = 1, Offset = 0 });
+        var (page1, _) = await _db.SearchAsync(new HistoryFilter { Deduplicate = true, Limit = 1, Offset = 1 });
+
+        Assert.Equal(2, total);
+        var id0 = Assert.Single(page0).Id;
+        var id1 = Assert.Single(page1).Id;
+        Assert.NotEqual(id0, id1);                                  // no overlap across pages
+        Assert.Equal(new[] { a, b }.OrderBy(x => x), new[] { id0, id1 }.OrderBy(x => x)); // both ids, once each
+    }
+
     // ── helpers ────────────────────────────────────────────────────────────────
 
     private Task<long> SeedAsync(string sqlText, int status, long durationMs, long rowCount, string? tabTitle) =>
@@ -116,6 +163,17 @@ public sealed class HistoryDedupRepresentativeTests : IDisposable
         await using var cmd = new SqliteCommand(
             "UPDATE history SET executed_at = @executedAt WHERE id = @id;", conn);
         cmd.Parameters.AddWithValue("@executedAt", executedAtUtc.ToString("o", CultureInfo.InvariantCulture));
+        cmd.Parameters.AddWithValue("@id", id);
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    private async Task SetServerAsync(long id, string server)
+    {
+        await using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+        await using var cmd = new SqliteCommand(
+            "UPDATE history SET server = @server WHERE id = @id;", conn);
+        cmd.Parameters.AddWithValue("@server", server);
         cmd.Parameters.AddWithValue("@id", id);
         await cmd.ExecuteNonQueryAsync();
     }

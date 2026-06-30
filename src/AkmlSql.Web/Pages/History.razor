@@ -26,7 +26,7 @@
     <!-- Top bar: search + filters -->
     <div class="akml-hist-top">
         <input class="akml-hist-search" placeholder="Search SQL history…  (server: db: name: starred:)"
-               value="@_search" @oninput="@(e => _search = e.Value?.ToString() ?? "")"
+               value="@_search" @oninput="OnSearchInput"
                @onkeydown="OnSearchKey" data-testid="history-search" />
         <button class="akml-tool-button @(_favoritesOnly ? "active" : "")" title="Favorites only"
                 @onclick="ToggleFavoritesFilter" data-testid="history-fav-filter">★</button>
@@ -68,7 +68,8 @@
                     @{ string? lastBucket = null; }
                     @foreach (var e in _entries)
                     {
-                        var bucket = WebHistoryLogic.DateBucket(e.ExecutedAt, DateTime.Now);
+                        var rv = RowFor(e);
+                        var bucket = rv.Bucket;
                         if (bucket != lastBucket)
                         {
                             lastBucket = bucket;
@@ -88,13 +89,13 @@
                                     @(e.IsFavorite ? "★" : "☆")
                                 </span>
                                 <span class="akml-hist-rowmain">
-                                    <span class="akml-hist-name">@DisplayName(e)</span>
+                                    <span class="akml-hist-name">@rv.DisplayName</span>
                                     <span class="akml-hist-meta">
-                                        <span>@RelativeTime(e.ExecutedAt)</span>
+                                        <span>@rv.RelativeTime</span>
                                         @if (e.ExecutionCount > 1) { <span class="akml-hist-count"> · ×@e.ExecutionCount</span> }
                                         <span class="akml-hist-conn">
                                             <span class="akml-hist-dot" style="color:@(e.IsOpen ? "var(--akml-status-success)" : "var(--akml-status-danger)")">●</span>
-                                            @ServerDb(e)
+                                            @rv.ServerDb
                                         </span>
                                     </span>
                                 </span>
@@ -118,7 +119,7 @@
                 </div>
 
                 <div class="akml-hist-versions">
-                    <div class="akml-hist-vhdr">@(_selected == null ? "HISTORY" : $"History for {DisplayName(_selected)}")</div>
+                    <div class="akml-hist-vhdr">@(_selected == null ? "HISTORY" : $"History for {RowFor(_selected).DisplayName}")</div>
                     <div class="akml-hist-vlist">
                         @for (int i = 0; i < _versions.Length; i++)
                         {
@@ -137,12 +138,12 @@
             <!-- RIGHT: preview + metadata + actions -->
             <div class="akml-hist-right">
                 <div class="akml-hist-phdr">
-                    <span class="akml-hist-pname">@(_selected == null ? "Preview" : DisplayName(_selected))</span>
+                    <span class="akml-hist-pname">@(_selected == null ? "Preview" : RowFor(_selected).DisplayName)</span>
                     <span class="akml-hist-ptime">@(_selected == null ? "" : AbsTime(_selected.ExecutedAt))</span>
                 </div>
                 <pre class="akml-hist-preview" data-testid="history-preview">@if (_selected != null)
 {
-    foreach (var seg in HistoryPreviewHighlighter.BuildSegments(_previewSql, _search))
+    foreach (var seg in _previewSegments)
     {<span class="@SegClass(seg)">@seg.Text</span>}
 }</pre>
                 <div class="akml-hist-meta-bar">
@@ -302,6 +303,16 @@
     private HistoryVersionDto[] _versions = Array.Empty<HistoryVersionDto>();
     private int _selectedVersion = -1;   // -1 == current (the entry itself / newest version)
 
+    // Per-entry derived display values computed once per load (keyed by entry id) so the render tree
+    // never re-runs the regex/date/relative-time work per row per render. See RebuildRowViews.
+    private readonly Dictionary<long, RowView> _rowViews = new();
+    private sealed record RowView(string DisplayName, string Bucket, string RelativeTime, string ServerDb);
+
+    // Cached preview segments — recomputed only when _previewSql or _search changes (SelectAsync,
+    // SelectVersion, ClearDetail, OnSearchInput), never inside the render tree.
+    private IReadOnlyList<HistoryPreviewHighlighter.Segment> _previewSegments =
+        Array.Empty<HistoryPreviewHighlighter.Segment>();
+
     private string _search = string.Empty;
     private bool _favoritesOnly;
     private string? _server;
@@ -363,6 +374,7 @@
             if (resp.Entries != null) _entries.AddRange(resp.Entries);
             _total = resp.TotalCount;
             (_servers, _databases) = WebHistoryLogic.DeriveSources(_entries);
+            RebuildRowViews();
 
             // Keep the selection if it is still present; otherwise clear the detail panes.
             if (_selected != null && _entries.All(e => e.Id != _selected.Id)) ClearDetail();
@@ -380,6 +392,7 @@
         _selectedVersion = -1;
         _previewSql = await HistorySvc.GetFullSqlAsync(entry.Id, CancellationToken.None) ?? entry.SqlText ?? string.Empty;
         _versions = await HistorySvc.GetVersionsAsync(entry.Id, CancellationToken.None);
+        RecomputePreviewSegments();
         StateHasChanged();
     }
 
@@ -388,6 +401,7 @@
         if (idx < 0 || idx >= _versions.Length) return;
         _selectedVersion = idx;
         _previewSql = _versions[idx].SqlText ?? string.Empty;
+        RecomputePreviewSegments();
     }
 
     private void ClearDetail()
@@ -396,6 +410,13 @@
         _previewSql = string.Empty;
         _versions = Array.Empty<HistoryVersionDto>();
         _selectedVersion = -1;
+        RecomputePreviewSegments();
+    }
+
+    private void OnSearchInput(ChangeEventArgs e)
+    {
+        _search = e.Value?.ToString() ?? string.Empty;
+        RecomputePreviewSegments();   // highlight terms changed → refresh the cached preview segments
     }
 
     private async Task OnSearchKey(KeyboardEventArgs e)
@@ -561,6 +582,26 @@
 
     private static string SegClass(HistoryPreviewHighlighter.Segment seg) =>
         seg.Hit ? $"tok-{seg.Kind} hit" : $"tok-{seg.Kind}";
+
+    // Recompute every entry's derived display values against a single "now" snapshot (more consistent
+    // than the old per-row DateTime.Now). Ids are unique post-dedup, so a wholesale rebuild is O(n).
+    private void RebuildRowViews()
+    {
+        var now = DateTime.Now;
+        _rowViews.Clear();
+        foreach (var e in _entries) _rowViews[e.Id] = BuildRowView(e, now);
+    }
+
+    private RowView RowFor(HistoryEntryDto e) =>
+        _rowViews.TryGetValue(e.Id, out var v) ? v : BuildRowView(e, DateTime.Now);
+
+    private static RowView BuildRowView(HistoryEntryDto e, DateTime now) =>
+        new(DisplayName(e), WebHistoryLogic.DateBucket(e.ExecutedAt, now), RelativeTime(e.ExecutedAt), ServerDb(e));
+
+    private void RecomputePreviewSegments() =>
+        _previewSegments = _selected == null
+            ? Array.Empty<HistoryPreviewHighlighter.Segment>()
+            : HistoryPreviewHighlighter.BuildSegments(_previewSql, _search);
 
     private static string DisplayName(HistoryEntryDto e)
     {
