@@ -299,6 +299,7 @@ namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
                 "akml.toggleBrackets" => CommandIds.CmdToggleBrackets,
                 "akml.toggleAs" => CommandIds.CmdToggleAs,
                 "akml.editProfile" => CommandIds.CmdEditProfile,
+                "akml.disableFormattingForSelection" => CommandIds.CmdDisableFormattingForSelection,
                 "akml.expandInsertColumns" => CommandIds.CmdExpandInsertColumns,
                 "akml.expandExecParameters" => CommandIds.CmdExpandExecParameters,
                 "akml.expandUpdateColumns" => CommandIds.CmdExpandUpdateColumns,
@@ -314,7 +315,14 @@ namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
                 "akml.convertTempToTableVar" => CommandIds.CmdConvertTempToTableVar,
                 "akml.convertTableVarToTemp" => CommandIds.CmdConvertTableVarToTemp,
                 "akml.parameterizeValues" => CommandIds.CmdParameterizeValues,
+                "akml.inlineExec" => CommandIds.CmdInlineExec,
+                "akml.insertToUpdate" => CommandIds.CmdInsertToUpdate,
+                "akml.inlineStoredProcedure" => CommandIds.CmdInlineStoredProcedure,
+                "akml.scriptAsAlter" => CommandIds.CmdScriptAsAlter,
+                "akml.findInvalidObjects" => CommandIds.CmdShowFindInvalidObjects,
+                "akml.toggleCodeAnalysis" => CommandIds.CmdToggleCodeAnalysis,
                 "akml.bulkAnalysis" => CommandIds.CmdBulkAnalysis,
+                "akml.manageRules" => CommandIds.CmdManageCodeAnalysisRules,
                 "akml.historyPanel" => CommandIds.CmdHistoryPanel,
                 "akml.restoreClosedTab" => CommandIds.CmdRestoreClosedTab,
                 "akml.closeUnmodified" => CommandIds.CmdCloseUnmodified,
@@ -332,6 +340,8 @@ namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
                 "akml.crudGeneration" => CommandIds.CmdCrudGeneration,
                 "akml.documentOutline" => CommandIds.CmdDocumentOutline,
                 "akml.commandPalette" => CommandIds.CmdCommandPalette,
+                "akml.snippetCreateFromSelection" => CommandIds.CmdSnippetCreateFromSelection,
+                "akml.snippetSurroundWith" => CommandIds.CmdSnippetSurroundWith,
                 _ => -1
             };
         }

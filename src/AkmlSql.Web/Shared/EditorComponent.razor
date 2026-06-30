@@ -14,6 +14,10 @@
 @inject ICompletionService Completion
 @inject IAiGhostTextService GhostText
 @inject IAiFeatureSettings AiFeatures
+@inject ISqlConnectionService SqlConn
+@inject IQuickInfoService QuickInfo
+@inject ISignatureHelpService SignatureHelp
+@inject IGotoDefinitionService GotoDefinition
 
 <div @ref="_host" id="@HostId" class="akml-editor" data-testid="sql-editor"></div>
 
@@ -21,12 +25,64 @@
     .akml-editor {
         height: 100%;
         min-height: 320px;
+        position: relative; /* anchors the go-to-definition peek panel */
         background-color: var(--akml-surface-editor);
         font-family: var(--akml-type-editor-family);
         font-size: var(--akml-type-editor-size);
     }
     .akml-editor .cm-editor { height: 100%; }
     .akml-editor .cm-scroller { font-family: inherit; font-size: inherit; }
+    /* Theme the line-number gutter — CodeMirror's default is a hardcoded light #f5f5f5 that stayed
+       light in dark mode (a jarring strip down the editor's left edge). Token-drive it so it follows
+       the editor surface in every theme; the active line gets a subtle hover tint. */
+    .akml-editor .cm-gutters {
+        background-color: var(--akml-surface-editor);
+        color: var(--akml-text-secondary);
+        border-right: 1px solid var(--akml-border-subtle);
+    }
+    .akml-editor .cm-activeLineGutter {
+        background-color: var(--akml-surface-hover);
+        color: var(--akml-text-primary);
+    }
+
+    /* Spec 030 (web Phase 1) — quick-info hover + signature tooltip content. */
+    .akml-qi-tooltip, .akml-sig-tooltip {
+        max-width: 460px;
+        padding: 6px 8px;
+        color: var(--akml-text-primary);
+        font-family: var(--akml-type-chrome-family);
+        font-size: 12px;
+        line-height: 1.5;
+    }
+    .akml-qi-header, .akml-sig-label { font-weight: 600; }
+    .akml-qi-desc, .akml-sig-doc { color: var(--akml-text-secondary); margin-top: 2px; }
+    .akml-qi-details { margin-top: 4px; color: var(--akml-text-secondary); font-family: var(--akml-type-editor-family); }
+    .akml-sig-active { margin-top: 3px; color: var(--akml-text-link); font-weight: 600; }
+
+    /* Go-to-definition peek panel — anchored to the bottom of the editor. */
+    .akml-peek-panel {
+        position: absolute; left: 0; right: 0; bottom: 0; z-index: 20;
+        max-height: 45%; display: flex; flex-direction: column;
+        background-color: var(--akml-surface-panel);
+        border-top: 1px solid var(--akml-border-default);
+        box-shadow: 0 -2px 8px rgba(0,0,0,0.25);
+    }
+    .akml-peek-header {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 4px 8px; font-family: var(--akml-type-chrome-family); font-size: 12px;
+        color: var(--akml-text-primary); background-color: var(--akml-surface-hover, var(--akml-surface-panel));
+        border-bottom: 1px solid var(--akml-border-default);
+    }
+    .akml-peek-close {
+        background: transparent; border: none; cursor: pointer; font-size: 13px;
+        color: var(--akml-text-secondary); padding: 0 4px;
+    }
+    .akml-peek-close:hover { color: var(--akml-text-primary); }
+    .akml-peek-body {
+        margin: 0; padding: 8px; overflow: auto; white-space: pre;
+        font-family: var(--akml-type-editor-family); font-size: var(--akml-type-editor-size);
+        color: var(--akml-text-primary);
+    }
 </style>
 
 @code {
@@ -35,11 +91,21 @@
     /// <summary>Raised whenever the editor's text changes. Debounced by CodeMirror.</summary>
     [Parameter] public EventCallback<string> OnTextChanged { get; set; }
 
+    /// <summary>Spec 030 — Phase 5. Raised when the user presses Ctrl/Cmd+Enter in the editor
+    /// (CM6 keymap → <see cref="ExecuteFromJs"/>). The page handles it by reading the live text and
+    /// running the query. Same shape as <see cref="OnTextChanged"/>.</summary>
+    [Parameter] public EventCallback OnExecute { get; set; }
+
     private string HostId { get; } = $"akml-editor-{Guid.NewGuid():N}";
     private ElementReference _host;
     private IJSObjectReference? _module;
     private DotNetObjectReference<EditorComponent>? _selfRef;
     private bool _initialised;
+    // The InitialText value last pushed into CodeMirror. CM is created once (below); if the parent
+    // later changes InitialText (async session restore, or History "Open in editor"), OnParametersSetAsync
+    // pushes it via setText so the new document actually appears. User edits flow OUT via OnTextChanged
+    // and never mutate InitialText, so this can't clobber typing.
+    private string? _appliedInitialText;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -48,12 +114,35 @@
 
         _module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/akml-editor.js");
         _selfRef = DotNetObjectReference.Create(this);
-        await _module.InvokeVoidAsync("create", HostId, InitialText, _selfRef);
+        var seed = InitialText;
+        await _module.InvokeVoidAsync("create", HostId, seed, _selfRef);
+        _appliedInitialText = seed;
 
         // Spec 028 (M6) US5: tell the editor whether ghost text is enabled + the debounce.
         // The JS only requests a completion when enabled, so disabling it costs no interop.
         var ai = await AiFeatures.GetAsync();
         await _module.InvokeVoidAsync("setGhostTextConfig", HostId, ai.GhostTextEnabled, ai.GhostTextDelayMs);
+
+        // A parameter change (async session restore, or History "Open in editor"/"Re-execute") may have
+        // landed while _module was still null above — OnParametersSetAsync would have skipped it. Apply
+        // the latest InitialText now that the editor exists, so the restored document actually appears.
+        if (InitialText != _appliedInitialText)
+        {
+            _appliedInitialText = InitialText;
+            await _module.InvokeVoidAsync("setText", HostId, InitialText);
+        }
+    }
+
+    /// <summary>If the parent updates <see cref="InitialText"/> after CodeMirror is already created
+    /// (async session restore, or History "Open in editor"/"Re-execute"), push the new document into
+    /// the editor. Guarded so it only fires on an actual change post-init.</summary>
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_initialised && _module != null && InitialText != _appliedInitialText)
+        {
+            _appliedInitialText = InitialText;
+            await _module.InvokeVoidAsync("setText", HostId, InitialText);
+        }
     }
 
     /// <summary>
@@ -66,6 +155,11 @@
         return OnTextChanged.InvokeAsync(text);
     }
 
+    /// <summary>Spec 030 — Phase 5. JS-invokable Execute bridge (CM6 Mod-Enter keymap). Surfaces the
+    /// <see cref="OnExecute"/> EventCallback up to the page, which reads the LIVE editor text.</summary>
+    [JSInvokable]
+    public Task ExecuteFromJs() => OnExecute.InvokeAsync();
+
     /// <summary>
     /// JS-invokable completion source called by CodeMirror's autocompletion. Returns
     /// an array of plain objects shaped for the JS side: { label, insertText, type,
@@ -77,14 +171,21 @@
     {
         try
         {
+            // Spec 030: when connected to a SQL Server (via the engine bridge), use the ONE canonical
+            // session id so the engine resolves the live schema; otherwise empty → offline/keyword path.
             var request = new CompletionRequest
             {
-                SessionId = string.Empty,   // SessionId is the engine-side identifier;
-                                            // the offline path doesn't use it and the
-                                            // online path will get it from the bridge.
+                SessionId = SqlConn.IsConnected ? SqlConn.SessionId : string.Empty,
                 CursorOffset = cursorOffset,
                 TriggerKind = 0,
             };
+            // Spec 030: push the live document to the engine session FIRST (DocumentChanged), then ask
+            // for completion. Frames are delivered in order over the one socket, so the engine has the
+            // current text (clause context) before it completes. No-op offline.
+            if (SqlConn.IsConnected && documentText != null)
+            {
+                await SqlConn.SendDocumentAsync(documentText, CancellationToken.None);
+            }
             // documentText is the LIVE editor text, passed straight from JS so the offline
             // smart GROUP BY action parses what the user actually sees (the online path ignores
             // it — the engine has its own copy). Kept off CompletionRequest so it never hits the wire.
@@ -97,6 +198,7 @@
                 InsertText = string.IsNullOrEmpty(i.InsertText) ? i.DisplayText : i.InsertText,
                 Type = ToCmType(i.ObjectType),
                 Detail = i.SecondaryText,
+                SortPriority = i.SortPriority,
             }).ToArray();
         }
         catch
@@ -129,6 +231,110 @@
         }
     }
 
+    /// <summary>Spec 030 (web Phase 1) — JS-invokable hover quick-info. Returns null when there is
+    /// nothing to show (the JS hoverTooltip then shows no tooltip). Online routes through the engine;
+    /// offline synthesises from the cached schema (handled inside IQuickInfoService).</summary>
+    [JSInvokable]
+    public async Task<QuickInfoDto?> RequestQuickInfoFromJs(int cursorOffset, string? documentText)
+    {
+        try
+        {
+            if (SqlConn.IsConnected && documentText != null)
+                await SqlConn.SendDocumentAsync(documentText, CancellationToken.None);
+
+            var r = await QuickInfo.GetAsync(new QuickInfoRequest
+            {
+                SessionId = SqlConn.IsConnected ? SqlConn.SessionId : string.Empty,
+                CursorOffset = cursorOffset,
+            }, CancellationToken.None);
+
+            bool empty = r == null
+                || (string.IsNullOrEmpty(r.Header) && string.IsNullOrEmpty(r.Description)
+                    && (r.Details == null || r.Details.Length == 0));
+            if (empty) return null;
+
+            return new QuickInfoDto
+            {
+                Header = r!.Header ?? string.Empty,
+                ObjectType = r.ObjectType ?? string.Empty,
+                Description = r.Description ?? string.Empty,
+                Details = (r.Details ?? System.Array.Empty<QuickInfoDetail>())
+                    .Select(d => new DetailDto { Label = d.Label ?? string.Empty, Value = d.Value ?? string.Empty })
+                    .ToArray(),
+            };
+        }
+        catch { return null; }
+    }
+
+    /// <summary>Spec 030 (web Phase 1) — JS-invokable signature help (triggered on '(' / ','). Returns
+    /// the active overload's label + parameters + the active parameter index, or null.</summary>
+    [JSInvokable]
+    public async Task<SignatureDto?> RequestSignatureHelpFromJs(int cursorOffset, string? documentText)
+    {
+        try
+        {
+            if (SqlConn.IsConnected && documentText != null)
+                await SqlConn.SendDocumentAsync(documentText, CancellationToken.None);
+
+            var r = await SignatureHelp.GetAsync(new SignatureRequest
+            {
+                SessionId = SqlConn.IsConnected ? SqlConn.SessionId : string.Empty,
+                CursorOffset = cursorOffset,
+            }, CancellationToken.None);
+
+            if (r == null || r.Overloads == null || r.Overloads.Length == 0) return null;
+            var ov = r.Overloads[System.Math.Clamp(r.ActiveOverload, 0, r.Overloads.Length - 1)];
+
+            return new SignatureDto
+            {
+                Label = ov.Label ?? string.Empty,
+                Documentation = ov.Documentation ?? string.Empty,
+                ActiveParameter = r.ActiveParameter,
+                Parameters = (ov.Parameters ?? System.Array.Empty<ParameterInfo>())
+                    .Select(p => new ParamDto { Name = p.Name ?? string.Empty, Type = p.Type ?? string.Empty })
+                    .ToArray(),
+            };
+        }
+        catch { return null; }
+    }
+
+    /// <summary>Spec 030 (web Phase 1) — JS-invokable go-to-definition (F12). Resolves the identifier
+    /// at the caret and asks the engine for the object's CREATE definition (online-only). Returns a
+    /// flat result the JS peek panel renders; Found=false carries a short reason.</summary>
+    [JSInvokable]
+    public async Task<DefinitionDto> RequestGoToDefinitionFromJs(int cursorOffset, string? documentText)
+    {
+        try
+        {
+            var doc = documentText ?? string.Empty;
+            var token = OfflineSqlScanner.FindIdentifierAt(doc, cursorOffset);
+            if (!token.IsValid)
+                return new DefinitionDto { Found = false, Message = "No object under the cursor." };
+            if (!SqlConn.IsConnected)
+                return new DefinitionDto { Found = false, Message = "Connect to a SQL Server to view object definitions." };
+
+            var r = await GotoDefinition.GetAsync(new GetObjectDefinitionRequest
+            {
+                SessionId = SqlConn.SessionId,
+                ObjectName = token.Identifier,
+                SchemaName = string.IsNullOrEmpty(token.Prefix) ? null : token.Prefix,
+                PeekOnly = true,
+            }, CancellationToken.None);
+
+            if (r == null || !r.Success || string.IsNullOrEmpty(r.Definition))
+                return new DefinitionDto { Found = false, Message = r?.Error ?? $"No definition found for '{token.Identifier}'." };
+
+            return new DefinitionDto
+            {
+                Found = true,
+                FullName = r.FullName ?? token.Identifier,
+                ObjectType = r.ObjectType ?? string.Empty,
+                Definition = r.Definition!,
+            };
+        }
+        catch { return new DefinitionDto { Found = false, Message = "Could not retrieve the definition." }; }
+    }
+
     private static string ToCmType(int objectType) => objectType switch
     {
         (int)CompletionObjectType.Table     => "class",
@@ -153,12 +359,62 @@
         public string InsertText { get; set; } = string.Empty;
         public string Type { get; set; } = "text";
         public string? Detail { get; set; }
+        /// <summary>Engine ordering key (ASCENDING — lower ranks first). The JS editor maps it
+        /// to CodeMirror's <c>boost</c> so the web popup order matches the desktop (e.g. data
+        /// types before constraint keywords in a CREATE TABLE column).</summary>
+        public int SortPriority { get; set; }
+    }
+
+    public sealed class QuickInfoDto
+    {
+        public string Header { get; set; } = string.Empty;
+        public string ObjectType { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public DetailDto[] Details { get; set; } = System.Array.Empty<DetailDto>();
+    }
+
+    public sealed class DetailDto
+    {
+        public string Label { get; set; } = string.Empty;
+        public string Value { get; set; } = string.Empty;
+    }
+
+    public sealed class SignatureDto
+    {
+        public string Label { get; set; } = string.Empty;
+        public string Documentation { get; set; } = string.Empty;
+        public int ActiveParameter { get; set; }
+        public ParamDto[] Parameters { get; set; } = System.Array.Empty<ParamDto>();
+    }
+
+    public sealed class ParamDto
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Type { get; set; } = string.Empty;
+    }
+
+    public sealed class DefinitionDto
+    {
+        public bool Found { get; set; }
+        public string FullName { get; set; } = string.Empty;
+        public string ObjectType { get; set; } = string.Empty;
+        public string Definition { get; set; } = string.Empty;
+        public string Message { get; set; } = string.Empty;
     }
 
     public async Task<string> GetTextAsync()
     {
         if (_module == null) return InitialText;
         return await _module.InvokeAsync<string>("getText", HostId);
+    }
+
+    /// <summary>Spec 028 (M6) — the current editor selection (empty when nothing is selected).
+    /// The editor's AI dock feeds this to the action panel so Explain / Fix / Optimize operate
+    /// on the selection, falling back to the whole document when empty.</summary>
+    public async Task<string> GetSelectedTextAsync()
+    {
+        if (_module == null) return string.Empty;
+        return await _module.InvokeAsync<string>("getSelectedText", HostId);
     }
 
     public async Task SetTextAsync(string text)

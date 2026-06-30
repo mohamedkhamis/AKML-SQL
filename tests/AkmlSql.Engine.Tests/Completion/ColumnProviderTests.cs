@@ -64,6 +64,52 @@ public class ColumnProviderTests
         return engine.GetCompletions(sql, cursorOffset, cache);
     }
 
+    /// <summary>As <see cref="RunCompletion"/> but with an explicit column-suggestion scope (T032).</summary>
+    private CompletionResponse RunCompletion(string sqlWithMarker, DatabaseCache cache,
+        AkmlSql.Core.Config.ColumnSuggestionScope scope)
+    {
+        var cursorOffset = sqlWithMarker.IndexOf('|');
+        Assert.True(cursorOffset >= 0, "test SQL must contain a cursor marker");
+        var sql = sqlWithMarker.Replace("|", string.Empty);
+        var engine = new CompletionEngine(_parserService) { ColumnScopeMode = scope };
+        return engine.GetCompletions(sql, cursorOffset, cache);
+    }
+
+    // ── ColumnScope (spec 030 T032 / FR-012): columns before a FROM clause ──
+
+    [Fact]
+    public void Select_NoFrom_ScopeAll_ListsColumnsFromAllTables()
+    {
+        var cache = BuildCache(
+            ("Customers", new[] { "CustomerId", "CustomerName" }),
+            ("Orders", new[] { "OrderId", "Total" }));
+
+        var response = RunCompletion("SELECT |", cache, AkmlSql.Core.Config.ColumnSuggestionScope.All);
+
+        var columns = response.Items
+            .Where(i => i.ObjectType == (int)CompletionObjectType.Column)
+            .Select(i => i.DisplayText)
+            .ToList();
+
+        Assert.Contains("CustomerName", columns);
+        Assert.Contains("OrderId", columns);
+        Assert.Contains("Total", columns);
+    }
+
+    [Fact]
+    public void Select_NoFrom_ScopeReferencedOnly_ListsNoColumns()
+    {
+        var cache = BuildCache(("Customers", new[] { "CustomerId", "CustomerName" }));
+
+        var response = RunCompletion("SELECT |", cache, AkmlSql.Core.Config.ColumnSuggestionScope.ReferencedOnly);
+
+        var columns = response.Items
+            .Where(i => i.ObjectType == (int)CompletionObjectType.Column)
+            .ToList();
+
+        Assert.Empty(columns);   // no FROM table referenced → no columns under ReferencedOnly
+    }
+
     // ── Bare-column path: WHERE clause, single table ──
 
     [Fact]

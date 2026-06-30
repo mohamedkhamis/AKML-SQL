@@ -81,19 +81,33 @@
         overflow-y: auto;
         background-color: var(--akml-surface-canvas);
         border: 1px solid var(--akml-border-default);
-        border-radius: 4px;
+        border-radius: var(--akml-scalar-radius-xs);
         padding: var(--akml-scalar-spacing-s);
         min-height: 240px;
     }
     .akml-chat-empty { color: var(--akml-text-secondary); font-style: italic; }
-    .akml-chat-turn { margin-bottom: var(--akml-scalar-spacing-m); }
+    .akml-chat-turn {
+        margin-bottom: var(--akml-scalar-spacing-m);
+        width: fit-content;
+        max-width: 80%;
+        padding: var(--akml-scalar-spacing-s);
+        border-radius: var(--akml-scalar-radius-m);
+    }
+    .akml-chat-role-user {
+        margin-left: auto;
+        background-color: var(--akml-chat-userbubble);
+    }
+    .akml-chat-role-assistant {
+        margin-right: auto;
+        background-color: var(--akml-chat-assistantbubble);
+    }
     .akml-chat-role-label {
         font-weight: bold;
         font-size: 12px;
         color: var(--akml-text-secondary);
         margin-bottom: var(--akml-scalar-spacing-xs);
     }
-    .akml-chat-role-user .akml-chat-role-label { color: var(--akml-accent-primary); }
+    .akml-chat-role-user .akml-chat-role-label { color: var(--akml-text-link); }
     .akml-chat-turn-text {
         font-family: var(--akml-type-editor-family);
         font-size: var(--akml-type-editor-size);
@@ -121,7 +135,7 @@
     .akml-tool-button {
         font-family: var(--akml-type-chrome-family); font-size: var(--akml-type-chrome-size);
         background-color: var(--akml-surface-panel); color: var(--akml-text-primary);
-        border: 1px solid var(--akml-border-default); border-radius: 3px;
+        border: 1px solid var(--akml-border-default); border-radius: var(--akml-scalar-radius-xs);
         padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s); cursor: pointer;
     }
     .akml-tool-button:disabled { opacity: 0.5; cursor: not-allowed; }

@@ -37,7 +37,26 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         private int _wildcardStarPos = -1;
         private string _wildcardQualifier = string.Empty;
 
+        // Spec 030 T033 / FR-013 — when true, the (shared) wildcard checkbox popup is acting as the
+        // Column Picker: it was opened via Ctrl+Right (not a '*'), and committing INSERTS the checked
+        // columns at the live caret rather than replacing a '*'.
+        private bool _columnPickerMode;
+
+        // Spec 030 T027 / FR-017 — the object-definition panel's Script tab is filled with the real
+        // CREATE script (via GetObjectDefinition) for the currently-shown completion item. Cached per
+        // session by full name so re-selecting the same object doesn't re-query the engine.
+        private CompletionItemModel _currentDefinitionItem;
+        private readonly System.Collections.Generic.Dictionary<string, string> _definitionCache =
+            new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
         public IOleCommandTarget NextTarget { get; set; }
+
+        /// <summary>
+        /// Spec 030 T026 / FR-010 — signature (parameter) help broker, set by
+        /// <c>CompletionPopupProvider</c>. Used to start/refresh a signature session on '(' / ','.
+        /// Null if the broker was unavailable (signature help silently inert).
+        /// </summary>
+        public Microsoft.VisualStudio.Language.Intellisense.ISignatureHelpBroker SignatureBroker { get; set; }
 
         private const int DebounceMs = 150;
         private const int QuickInfoDebounceMs = 300;
@@ -53,6 +72,9 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
 
             // Wildcard popup: double-click commits (same as Tab/Enter) — SQL Prompt parity.
             _adornment.WildcardPopup.CommitRequested += CommitWildcardExpansion;
+
+            // Completion popup: double-click commits the clicked item (same as Tab/Enter).
+            _adornment.Popup.ItemCommitRequested += OnPopupItemCommitRequested;
 
             // Timer that continuously suppresses native IntelliSense while our popup is open
             _suppressTimer = new System.Windows.Threading.DispatcherTimer
@@ -118,14 +140,17 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                             return VSConstants.S_OK; // Don't insert space
                         }
 
-                        // Suppress native IntelliSense BEFORE letting VS handle the keystroke
-                        SuppressNativeIntelliSense();
+                        // Suppress native IntelliSense BEFORE letting VS handle the keystroke —
+                        // but only while AKML completion is enabled; when disabled (FR-012) we hand
+                        // off to the host's native IntelliSense instead of suppressing it.
+                        bool akmlCompletionOn = CompletionEnabled();
+                        if (akmlCompletionOn) SuppressNativeIntelliSense();
 
                         // Let VS insert the character
                         var result = NextTarget.Exec(ref pguidCmdGroup, nCmdId, nCmdexecopt, pvaIn, pvaOut);
 
                         // Suppress again after VS processes (it may trigger native IntelliSense)
-                        SuppressNativeIntelliSense();
+                        if (akmlCompletionOn) SuppressNativeIntelliSense();
 
                         HandleTypedChar(typedChar);
                         UpdatePopupCtrlTransparency();
@@ -193,7 +218,11 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                         }
                         if (_adornment.Popup.IsOpen)
                         {
-                            _adornment.Popup.MoveSelection(-1);
+                            // Spec 030 T034 / FR-014 — Ctrl+Up jumps to the previous category; plain
+                            // Up moves to the previous item. (Ctrl+Up usually arrives as SCROLLUP —
+                            // handled below — but cover the modifier-on-arrow delivery path here too.)
+                            if (CtrlHeld) _adornment.Popup.MoveCategory(-1);
+                            else _adornment.Popup.MoveSelection(-1);
                             return VSConstants.S_OK;
                         }
                         break;
@@ -206,7 +235,48 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                         }
                         if (_adornment.Popup.IsOpen)
                         {
-                            _adornment.Popup.MoveSelection(1);
+                            if (CtrlHeld) _adornment.Popup.MoveCategory(1);
+                            else _adornment.Popup.MoveSelection(1);
+                            return VSConstants.S_OK;
+                        }
+                        break;
+
+                    // Spec 030 T034 / FR-014 — Ctrl+Up/Down arrive as the editor's scroll-line commands.
+                    // While the suggestions box is open, repurpose them for category navigation; otherwise
+                    // let them fall through to the host's normal scroll behaviour.
+                    case VSConstants.VSStd2KCmdID.SCROLLUP:
+                        if (_adornment.Popup.IsOpen)
+                        {
+                            _adornment.Popup.MoveCategory(-1);
+                            return VSConstants.S_OK;
+                        }
+                        break;
+
+                    case VSConstants.VSStd2KCmdID.SCROLLDN:
+                        if (_adornment.Popup.IsOpen)
+                        {
+                            _adornment.Popup.MoveCategory(1);
+                            return VSConstants.S_OK;
+                        }
+                        break;
+
+                    // Spec 030 T033 / FR-013 — Ctrl+Left / Ctrl+Right toggle between the suggestions
+                    // box and the column picker. Only intercepted while one of them is open; otherwise
+                    // word-navigation passes through untouched.
+                    case VSConstants.VSStd2KCmdID.WORDPREV:
+                    case VSConstants.VSStd2KCmdID.WORDNEXT:
+                        if (_columnPickerMode && _adornment.IsWildcardOpen)
+                        {
+                            // Picker → back to the suggestions box.
+                            DismissWildcardPopup();
+                            TriggerCompletion();
+                            return VSConstants.S_OK;
+                        }
+                        if (_adornment.Popup.IsOpen)
+                        {
+                            // Suggestions box → column picker.
+                            DismissPopup();
+                            TriggerColumnPicker();
                             return VSConstants.S_OK;
                         }
                         break;
@@ -223,6 +293,10 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                     case VSConstants.VSStd2KCmdID.COMPLETEWORD:
                     case VSConstants.VSStd2KCmdID.SHOWMEMBERLIST:
                     case VSConstants.VSStd2KCmdID.AUTOCOMPLETE:
+                        // FR-012: when IntelliSense is disabled, let the host's native completion
+                        // handle the command (fall through) rather than swallowing it.
+                        if (!CompletionEnabled())
+                            break;
                         // Intercept ALL completion commands — prevent native IntelliSense
                         SuppressNativeIntelliSense();
                         TriggerCompletion();
@@ -234,7 +308,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             if (pguidCmdGroup == VSConstants.GUID_VSStandardCommandSet97)
             {
                 var cmdId97 = (VSConstants.VSStd97CmdID)nCmdId;
-                if (cmdId97 == (VSConstants.VSStd97CmdID)898)
+                if (cmdId97 == (VSConstants.VSStd97CmdID)898 && CompletionEnabled())
                 {
                     SuppressNativeIntelliSense();
                     TriggerCompletion();
@@ -258,8 +332,13 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         {
             if (c == '.')
             {
-                // Dot: commit current selection (if any) + trigger new completion
-                if (_adornment.Popup.IsOpen)
+                // Dot: commit current selection (if any) + trigger new completion.
+                // Spec 030 T078 / FR-042: gate the commit on the DotCommits setting (default true,
+                // so behaviour is unchanged out of the box). When the user turns "Dot commits" off,
+                // typing "." still re-triggers completion (e.g. the column list after "table.") but no
+                // longer accepts the highlighted item — matching SQL Prompt. Cached accessor (2s TTL),
+                // so no per-keystroke disk read.
+                if (_adornment.Popup.IsOpen && IntelliSenseSettings().DotCommits)
                 {
                     var item = _adornment.Popup.GetSelectedItem();
                     if (item != null)
@@ -269,7 +348,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                     }
                 }
                 _filterText = string.Empty;
-                TriggerCompletion();
+                AutoTriggerCompletion();
             }
             else if (char.IsLetter(c) || c == '_' || c == '@' || c == '#')
             {
@@ -284,7 +363,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 {
                     // Trigger IMMEDIATELY — no debounce. Show cached items instantly
                     // to beat SSMS native IntelliSense which also triggers immediately.
-                    TriggerCompletion();
+                    AutoTriggerCompletion();
                 }
             }
             else if (c == ' ' && _adornment.Popup.IsOpen)
@@ -308,7 +387,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                         if (item != null)
                         {
                             CommitItemFromSpaceKey(item);
-                            if (byContext) TriggerCompletion();
+                            if (byContext) AutoTriggerCompletion();
                             return; // Space is already inserted by VS before HandleTypedChar
                         }
                     }
@@ -320,23 +399,31 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 if (IsObjectExpectingKeywordBeforeCaret())
                 {
                     _expectsObjects = true;
-                    TriggerCompletion();
+                    AutoTriggerCompletion();
                 }
                 else if (byContext)
                 {
-                    TriggerCompletion();
+                    AutoTriggerCompletion();
                 }
             }
             else if (c == ' ' || c == '(' || c == ')' || c == ';' || c == ',')
             {
                 DismissPopup();
 
+                // Signature help (FR-010): '(' starts a call, ',' advances the active parameter,
+                // ')' / ';' ends it. Re-trigger on '(' and ',' so the engine recomputes the active
+                // parameter; dismiss on the closers.
+                if (c == '(' || c == ',')
+                    TriggerSignatureHelp();
+                else if (c == ')' || c == ';')
+                    DismissSignatureHelp();
+
                 // After space, check if the preceding word is a keyword that expects
                 // object names (table/view). If so, auto-trigger a fresh completion.
                 if (c == ' ' && IsObjectExpectingKeywordBeforeCaret())
                 {
                     _expectsObjects = true;
-                    TriggerCompletion();
+                    AutoTriggerCompletion();
                 }
                 // SQL-Prompt-style smart GROUP BY: auto-trigger after "GROUP BY " (and
                 // "ORDER BY ") so the engine's "▶ Add columns from SELECT" action and column
@@ -345,7 +432,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 // set _expectsObjects — GROUP BY wants columns + the smart item, not tables.
                 else if (c == ' ' && IsByKeywordBeforeCaret())
                 {
-                    TriggerCompletion();
+                    AutoTriggerCompletion();
                 }
             }
             else if (char.IsDigit(c))
@@ -381,12 +468,17 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             }
         }
 
-        /// <summary>Public entry point for Ctrl+Space from WPF PreviewKeyDown.</summary>
-        public void TriggerManualCompletion() => TriggerCompletion();
+        /// <summary>Public entry point for Ctrl+Space from WPF PreviewKeyDown. Respects FR-012.</summary>
+        public void TriggerManualCompletion()
+        {
+            if (!CompletionEnabled()) return;
+            TriggerCompletion();
+        }
 
         /// <summary>Dismiss native IntelliSense then show AKML popup (for Ctrl+Space).</summary>
         public void SuppressAndTrigger()
         {
+            if (!CompletionEnabled()) return;   // FR-012: IntelliSense disabled
             SuppressNativeIntelliSense();
             TriggerCompletion();
         }
@@ -395,6 +487,69 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         {
             _filterText = GetWordAtCaret();
             FetchAndShowCompletions();
+        }
+
+        // Spec 030 R6 / T030-T031 / FR-012 — honor IntelliSense.Enabled (suppress the box entirely)
+        // and AutoTrigger (typing triggers only when on; Ctrl+Space always works while Enabled).
+        // Settings are cached with a short TTL so a fast typist doesn't hit the disk per keystroke,
+        // while an Options change still applies within ~2s (no settings-changed event in the shell).
+        private AkmlSql.Core.Config.AppSettings _settingsCache;
+        private DateTime _settingsCacheUtc;
+
+        private AkmlSql.Core.Config.IntelliSenseSettings IntelliSenseSettings()
+        {
+            if (_settingsCache == null || (DateTime.UtcNow - _settingsCacheUtc).TotalSeconds > 2)
+            {
+                try { _settingsCache = AkmlSql.Core.Config.ConfigManager.Load(); }
+                catch (Exception ex)
+                {
+                    // Fall back to defaults (IntelliSense on), but log it — a corrupt/locked config
+                    // would otherwise silently re-enable a popup the user disabled (FR-012).
+                    _settingsCache ??= new AkmlSql.Core.Config.AppSettings();
+                    Log.Warning(ex, "CompletionController: failed to load IntelliSense settings; using defaults");
+                }
+                _settingsCacheUtc = DateTime.UtcNow;
+            }
+            return _settingsCache.IntelliSense;
+        }
+
+        /// <summary>IntelliSense master switch (FR-012). False ⇒ no AKML completion at all.</summary>
+        private bool CompletionEnabled() => IntelliSenseSettings().Enabled;
+
+        /// <summary>Auto-trigger (typing) gate (FR-012). Requires Enabled AND AutoTrigger.</summary>
+        private bool AutoTriggerEnabled()
+        {
+            var i = IntelliSenseSettings();
+            return i.Enabled && i.AutoTrigger;
+        }
+
+        /// <summary>Trigger completion from a typing event — no-op unless auto-trigger is on.</summary>
+        private void AutoTriggerCompletion()
+        {
+            if (AutoTriggerEnabled())
+                TriggerCompletion();
+        }
+
+        /// <summary>
+        /// Spec 030 T026 / FR-010 — start (or refresh) a signature-help session. Dismisses any
+        /// existing session first so the engine recomputes the active parameter as commas are typed.
+        /// </summary>
+        private void TriggerSignatureHelp()
+        {
+            var broker = SignatureBroker;
+            if (broker == null || !CompletionEnabled()) return;   // FR-012: IntelliSense disabled
+            try
+            {
+                broker.DismissAllSessions(_textView);
+                broker.TriggerSignatureHelp(_textView);
+            }
+            catch (Exception ex) { Log.Debug(ex, "SignatureHelp: trigger failed"); }
+        }
+
+        private void DismissSignatureHelp()
+        {
+            try { SignatureBroker?.DismissAllSessions(_textView); }
+            catch (Exception ex) { Log.Debug(ex, "SignatureHelp: dismiss failed"); }
         }
 
         private void TriggerCompletionDebounced()
@@ -515,7 +670,8 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                                     InsertText = item.InsertText ?? item.DisplayText ?? string.Empty,
                                     SecondaryText = item.SecondaryText ?? string.Empty,
                                     ObjectType = item.ObjectType,
-                                    SortPriority = item.SortPriority
+                                    SortPriority = item.SortPriority,
+                                    SourceObject = item.SourceObject ?? string.Empty
                                 });
                             }
 
@@ -574,6 +730,12 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
+        private void OnPopupItemCommitRequested(object sender, CompletionItemModel item)
+        {
+            // Mouse double-click on a popup row — same commit path as Tab/Enter.
+            CommitItem(item);
+        }
+
         private void CommitItem(CompletionItemModel item)
         {
             try
@@ -611,7 +773,10 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                         int snippetInsertPos = start;
                         int snippetReplaceLen = span.Length;
                         DismissPopup();
-                        TryExpandSnippetAtPosition(item.InsertText, snippetInsertPos, snippetReplaceLen);
+                        // Spec 030 T039 / FR-030 — pass the SHORTCODE (DisplayText) to the engine, not the
+                        // body (InsertText). SnippetProvider sets DisplayText = shortcode, InsertText = body;
+                        // the engine resolves snippets by shortcode, so sending the body never matched.
+                        TryExpandSnippetAtPosition(item.DisplayText, snippetInsertPos, snippetReplaceLen);
                         return;
                     }
 
@@ -654,6 +819,15 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 int start = dotPos;
                 while (start > 0 && IsIdentifierChar(snapshot[start - 1]))
                     start--;
+
+                // T039 — a snippet committed before a dot must expand via the engine, not insert its raw
+                // body (rare interaction, but keep all commit paths consistent).
+                if (item.ObjectType == 4)
+                {
+                    _adornment.Hide();
+                    TryExpandSnippetAtPosition(item.DisplayText, start, dotPos - start);
+                    return;
+                }
 
                 // Replace word before dot with the selected item
                 var span = new Span(start, dotPos - start);
@@ -709,23 +883,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                         if (response?.Success == true && !string.IsNullOrEmpty(response.ExpandedText))
                         {
                             _textView.VisualElement.Dispatcher.Invoke(() =>
-                            {
-                                try
-                                {
-                                    var currentSnapshot = _textView.TextBuffer.CurrentSnapshot;
-                                    int replaceLen = caretPos - start;
-                                    if (start + replaceLen <= currentSnapshot.Length)
-                                    {
-                                        _textView.TextBuffer.Replace(
-                                            new Span(start, replaceLen),
-                                            response.ExpandedText);
-                                    }
-                                }
-                                catch (Exception ex)
-                                {
-                                    Log.Debug(ex, "Snippet expansion: failed to insert text");
-                                }
-                            });
+                                InsertSnippetExpansion(start, caretPos - start, response.ExpandedText, response.CursorOffset));
                         }
                     }
                     catch (Exception ex)
@@ -774,22 +932,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                         if (response?.Success == true && !string.IsNullOrEmpty(response.ExpandedText))
                         {
                             _textView.VisualElement.Dispatcher.Invoke(() =>
-                            {
-                                try
-                                {
-                                    var currentSnapshot = _textView.TextBuffer.CurrentSnapshot;
-                                    if (insertPos + replaceLen <= currentSnapshot.Length)
-                                    {
-                                        _textView.TextBuffer.Replace(
-                                            new Span(insertPos, replaceLen),
-                                            response.ExpandedText);
-                                    }
-                                }
-                                catch (Exception ex)
-                                {
-                                    Log.Debug(ex, "Snippet expansion: failed to insert at position {Pos}", insertPos);
-                                }
-                            });
+                                InsertSnippetExpansion(insertPos, replaceLen, response.ExpandedText, response.CursorOffset));
                         }
                     }
                     catch (Exception ex)
@@ -802,6 +945,62 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             {
                 Log.Debug(ex, "Snippet expansion at position failed");
             }
+        }
+
+        /// <summary>
+        /// Spec 030 T039 / FR-035 — insert an expanded snippet body at <paramref name="insertPos"/>
+        /// (replacing <paramref name="replaceLen"/> chars), normalizing the engine's LF-joined text to
+        /// the document's newline so a CRLF buffer doesn't end up with mixed line endings, then placing
+        /// the caret at the <c>$CURSOR$</c> position (<paramref name="cursorOffset"/>, -1 ⇒ end), adjusted
+        /// for the newline expansion. Must run on the UI thread.
+        /// </summary>
+        private void InsertSnippetExpansion(int insertPos, int replaceLen, string expandedText, int cursorOffset)
+        {
+            try
+            {
+                var snapshot = _textView.TextBuffer.CurrentSnapshot;
+                if (insertPos < 0 || replaceLen < 0 || insertPos + replaceLen > snapshot.Length) return;
+
+                string text = expandedText ?? string.Empty;
+                int caret = cursorOffset >= 0 ? cursorOffset : text.Length;
+
+                string nl = GetBufferNewLine();
+                if (nl != "\n" && text.IndexOf('\n') >= 0)
+                {
+                    // Count LF before the caret to keep the $CURSOR$ offset correct after LF → CRLF growth.
+                    int lfBefore = 0, upto = Math.Min(caret, text.Length);
+                    for (int i = 0; i < upto; i++) if (text[i] == '\n') lfBefore++;
+                    text = text.Replace("\r\n", "\n").Replace("\n", nl);
+                    caret += lfBefore * (nl.Length - 1);
+                }
+
+                _textView.TextBuffer.Replace(new Span(insertPos, replaceLen), text);
+
+                var after = _textView.TextBuffer.CurrentSnapshot;
+                int caretPos = insertPos + caret;
+                if (caretPos >= 0 && caretPos <= after.Length)
+                    _textView.Caret.MoveTo(new SnapshotPoint(after, caretPos));
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "Snippet expansion: insert failed at {Pos}", insertPos);
+            }
+        }
+
+        /// <summary>Returns the document's line-break text (first non-empty line break, default CRLF).</summary>
+        private string GetBufferNewLine()
+        {
+            try
+            {
+                var snap = _textView.TextBuffer.CurrentSnapshot;
+                for (int i = 0; i < snap.LineCount; i++)
+                {
+                    var lb = snap.GetLineFromLineNumber(i).GetLineBreakText();
+                    if (!string.IsNullOrEmpty(lb)) return lb;
+                }
+            }
+            catch { }
+            return "\r\n";
         }
 
         /// <summary>
@@ -844,6 +1043,17 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 while (start > 0 && IsIdentifierChar(snapshot[start - 1]))
                     start--;
 
+                // T039 / FR-030 — snippet items expand via the engine by SHORTCODE (DisplayText); never
+                // insert the raw body (InsertText). Mirror CommitItem case 4 for the space-commit path.
+                // Replace the shortcode AND the just-typed space so no stray space survives the expansion.
+                if (item.ObjectType == 4)
+                {
+                    int snippetReplaceLen = caretPos - start;
+                    DismissPopup();
+                    TryExpandSnippetAtPosition(item.DisplayText, start, snippetReplaceLen);
+                    return;
+                }
+
                 // Replace: partial text + space → insertText + space
                 var span = new Span(start, beforeSpace - start); // exclude the space itself
                 _textView.TextBuffer.Replace(span, item.InsertText);
@@ -853,7 +1063,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 if (item.ObjectType == 3 && IsObjectExpectingKeyword(item.InsertText))
                 {
                     _expectsObjects = true;
-                    TriggerCompletion();
+                    AutoTriggerCompletion();
                 }
             }
             catch (Exception ex)
@@ -873,6 +1083,10 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             // from the engine with the correct context (e.g., keywords after table name,
             // not table names after FROM).
             CompletionRpcHelper.ClearCache(_sessionId);
+            // T027 — the object-definition cache lives only for one popup session: clearing on close
+            // keeps the within-session re-selection benefit while picking up mid-session DDL changes
+            // on the next open (and bounds its growth).
+            _definitionCache.Clear();
         }
 
         private string GetWordAtCaret()
@@ -1033,6 +1247,10 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             return char.IsLetterOrDigit(c) || c == '_' || c == '#' || c == '@';
         }
 
+        /// <summary>True when Ctrl is currently held — used to distinguish Ctrl+Up/Down (category nav) from plain arrows.</summary>
+        private static bool CtrlHeld =>
+            (System.Windows.Input.Keyboard.Modifiers & System.Windows.Input.ModifierKeys.Control) != 0;
+
         #region Object Definition (QuickInfo)
 
         /// <summary>
@@ -1119,6 +1337,9 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                                 response.Description);
                             _adornment.ShowDefinition();
                             _adornment.RepositionDefinition();
+
+                            // T027 — fill the Script tab with the object's real CREATE definition.
+                            LoadScriptTab(item);
                         }
                         else
                         {
@@ -1146,11 +1367,149 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             Interlocked.Increment(ref _quickInfoVersion);
             _quickInfoTimer?.Dispose();
             _quickInfoTimer = null;
+            _currentDefinitionItem = null;   // T027 — drop any in-flight Script-tab fetch result
             try
             {
                 _adornment.HideDefinition();
             }
             catch { }
+        }
+
+        /// <summary>
+        /// Spec 030 T027 / FR-017 — eagerly populate the definition panel's Script tab with the
+        /// object's CREATE script. Gated to definition-bearing item types; identity comes from the
+        /// engine's authoritative <see cref="CompletionItemModel.SourceObject"/> (clean even for
+        /// decorated FK-join items). Cached per full name; a response is applied only if the selection
+        /// has not moved on (reference guard). Runs on the UI thread (called from the QuickInfo block).
+        /// </summary>
+        private void LoadScriptTab(CompletionItemModel item)
+        {
+            _currentDefinitionItem = item;
+            if (item == null) return;
+
+            // Only Table / View / Function / Procedure have a CREATE definition.
+            if (item.ObjectType != 0 && item.ObjectType != 1 && item.ObjectType != 5 && item.ObjectType != 6)
+            {
+                _adornment.DefinitionPanel.SetScript(null, "No definition for this item type");
+                return;
+            }
+
+            if (!TryParseObjectIdentity(item.SourceObject, out var objectName, out var schemaName))
+            {
+                _adornment.DefinitionPanel.SetScript(null, "No definition available");
+                return;
+            }
+
+            var cacheKey = (schemaName != null ? schemaName + "." : string.Empty) + objectName;
+            if (_definitionCache.TryGetValue(cacheKey, out var cachedDef))
+            {
+                _adornment.DefinitionPanel.SetScript(cachedDef, null);
+                return;
+            }
+
+            var target = item;
+            System.Threading.Tasks.Task.Run(async () =>
+            {
+                try
+                {
+                    var client = Ipc.EngineLifecycle.Manager?.Client;
+                    if (client == null || !client.IsConnected)
+                    {
+                        ResetScriptTabIfCurrent(target, "Definition unavailable");
+                        return;
+                    }
+
+                    var response = await client.SendRequestAsync<
+                        AkmlSql.Core.Ipc.Messages.GetObjectDefinitionResponse,
+                        AkmlSql.Core.Ipc.Messages.GetObjectDefinitionRequest>(
+                        AkmlSql.Core.Ipc.MessageTypes.GetObjectDefinition,
+                        new AkmlSql.Core.Ipc.Messages.GetObjectDefinitionRequest
+                        {
+                            SessionId = _sessionId,
+                            ObjectName = objectName,
+                            SchemaName = schemaName,
+                            PeekOnly = true
+                        },
+                        timeoutMs: 5000);
+
+                    _textView.VisualElement.Dispatcher.Invoke(() =>
+                    {
+                        // Selection moved on, or the panel was dismissed — drop a stale result.
+                        if (!ReferenceEquals(_currentDefinitionItem, target)) return;
+                        if (!_adornment.DefinitionPanel.HasContent) return;
+
+                        if (response != null && response.Success && !string.IsNullOrWhiteSpace(response.Definition))
+                        {
+                            _definitionCache[cacheKey] = response.Definition;
+                            _adornment.DefinitionPanel.SetScript(response.Definition, null);
+                        }
+                        else
+                        {
+                            _adornment.DefinitionPanel.SetScript(null, response?.Error ?? "Definition not found");
+                        }
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Log.Debug(ex, "Object-definition (Script tab) fetch failed");
+                    // Timeout / disconnect / engine error all throw here — clear the placeholder so the
+                    // Script tab doesn't sit on "-- Loading definition…" forever (symmetric with success).
+                    ResetScriptTabIfCurrent(target, "Definition unavailable");
+                }
+            });
+        }
+
+        /// <summary>
+        /// Replaces the Script tab's loading placeholder with an unavailable message, but only if the
+        /// target is still the selected item and the panel is still showing. Marshals to the UI thread;
+        /// tolerant of a tearing-down view.
+        /// </summary>
+        private void ResetScriptTabIfCurrent(CompletionItemModel target, string reason)
+        {
+            try
+            {
+                _textView.VisualElement.Dispatcher.Invoke(() =>
+                {
+                    if (!ReferenceEquals(_currentDefinitionItem, target)) return;
+                    if (!_adornment.DefinitionPanel.HasContent) return;
+                    _adornment.DefinitionPanel.SetScript(null, reason);
+                });
+            }
+            catch { /* view tearing down */ }
+        }
+
+        /// <summary>
+        /// Parses the engine's <c>schema.object</c> SourceObject into (objectName, schemaName?).
+        /// Rejects empty / whitespace-bearing names (defensive — SourceObject is normally clean, but
+        /// this guards against any decorated value slipping through).
+        /// </summary>
+        private static bool TryParseObjectIdentity(string sourceObject, out string objectName, out string schemaName)
+        {
+            objectName = string.Empty;
+            schemaName = null;
+            if (string.IsNullOrWhiteSpace(sourceObject)) return false;
+
+            var raw = sourceObject.Replace("[", string.Empty).Replace("]", string.Empty).Trim();
+            if (raw.Length == 0) return false;
+
+            var parts = raw.Split('.');
+            var name = parts[parts.Length - 1].Trim();
+            if (name.Length == 0 || HasWhitespace(name)) return false;
+            objectName = name;
+
+            if (parts.Length >= 2)
+            {
+                var sch = parts[parts.Length - 2].Trim();
+                if (sch.Length > 0 && !HasWhitespace(sch)) schemaName = sch;
+            }
+            return true;
+        }
+
+        private static bool HasWhitespace(string s)
+        {
+            for (int i = 0; i < s.Length; i++)
+                if (char.IsWhiteSpace(s[i])) return true;
+            return false;
         }
 
         #endregion
@@ -1384,7 +1743,11 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 try
                 {
                     var client = Ipc.EngineLifecycle.Manager?.Client;
-                    if (client == null || !client.IsConnected) return;
+                    if (client == null || !client.IsConnected)
+                    {
+                        _textView.VisualElement.Dispatcher.Invoke(() => _wildcardPending = false);
+                        return;
+                    }
 
                     var response = await client.SendRequestAsync<
                         AkmlSql.Core.Ipc.Messages.WildcardExpansionResponse,
@@ -1451,10 +1814,151 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         }
 
         /// <summary>
+        /// Spec 030 T033 / FR-013 — open the Column Picker: fetch the in-scope columns at the
+        /// caret (reusing the WildcardExpansion engine path with an empty qualifier — it resolves
+        /// the FROM-clause tables and returns their columns grouped, no '*' required) and show the
+        /// shared checkbox popup in picker mode.
+        /// </summary>
+        private void TriggerColumnPicker()
+        {
+            int caretPos;
+            string docText;
+            try
+            {
+                caretPos = _textView.Caret.Position.BufferPosition.Position;
+                docText = _textView.TextBuffer.CurrentSnapshot.GetText();
+            }
+            catch { return; }
+            if (string.IsNullOrEmpty(docText)) return;
+
+            _columnPickerMode = true;
+            _wildcardPending = true;
+
+            System.Threading.Tasks.Task.Run(async () =>
+            {
+                try
+                {
+                    var client = Ipc.EngineLifecycle.Manager?.Client;
+                    if (client == null || !client.IsConnected)
+                    {
+                        // Engine down — clear the picker flags so they don't strand and misroute a
+                        // later real wildcard ('*') commit into CommitColumnPicker.
+                        _textView.VisualElement.Dispatcher.Invoke(() => { _wildcardPending = false; _columnPickerMode = false; });
+                        return;
+                    }
+
+                    var response = await client.SendRequestAsync<
+                        AkmlSql.Core.Ipc.Messages.WildcardExpansionResponse,
+                        AkmlSql.Core.Ipc.Messages.WildcardExpansionRequest>(
+                        AkmlSql.Core.Ipc.MessageTypes.WildcardExpansion,
+                        new AkmlSql.Core.Ipc.Messages.WildcardExpansionRequest
+                        {
+                            SessionId = _sessionId,
+                            CursorOffset = caretPos,
+                            DocumentText = docText,
+                            Qualifier = string.Empty   // all in-scope tables
+                        },
+                        timeoutMs: 5000);
+
+                    if (response?.Success == true && response.Tables != null && response.Tables.Length > 0)
+                    {
+                        _textView.VisualElement.Dispatcher.Invoke(() =>
+                        {
+                            if (!_wildcardPending || !_columnPickerMode) return;
+                            _wildcardPending = false;
+                            // Typing during the async fetch may have reopened the suggestions box —
+                            // dismiss it so only the picker is visible (no two popups at once).
+                            if (_adornment.Popup.IsOpen) DismissPopup();
+
+                            var groups = new List<WildcardExpansionPopup.TableGroupData>();
+                            foreach (var t in response.Tables)
+                            {
+                                var cols = new WildcardExpansionPopup.ColumnData[t.Columns.Length];
+                                for (int i = 0; i < t.Columns.Length; i++)
+                                {
+                                    cols[i] = new WildcardExpansionPopup.ColumnData
+                                    {
+                                        ColumnName = t.Columns[i].ColumnName,
+                                        TypeDisplay = t.Columns[i].TypeDisplay
+                                    };
+                                }
+                                groups.Add(new WildcardExpansionPopup.TableGroupData
+                                {
+                                    TableName = t.TableName,
+                                    Qualifier = t.Qualifier,
+                                    Columns = cols
+                                });
+                            }
+
+                            _adornment.WildcardPopup.SetData(groups);
+                            _adornment.ShowWildcard();
+                            _adornment.RepositionWildcard();
+                            SuppressNativeIntelliSense();
+                        });
+                    }
+                    else
+                    {
+                        _textView.VisualElement.Dispatcher.Invoke(() => { _wildcardPending = false; _columnPickerMode = false; });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Debug(ex, "Column picker RPC failed");
+                    try { _textView.VisualElement.Dispatcher.Invoke(() => { _wildcardPending = false; _columnPickerMode = false; }); }
+                    catch { }
+                }
+            });
+        }
+
+        /// <summary>
+        /// FR-013 — insert the picker's checked columns as a comma list at the caret (no '*' to
+        /// replace). Qualifies columns when more than one table is in scope.
+        /// </summary>
+        private void CommitColumnPicker()
+        {
+            try
+            {
+                var columns = _adornment.WildcardPopup.GetCheckedColumns();
+                if (columns == null || columns.Count == 0)
+                {
+                    DismissWildcardPopup();
+                    return;
+                }
+
+                // Insert at the LIVE caret. The picker popup is non-focusable, so the caret stays in
+                // the editor; using it (not a stale offset captured before the async fetch) lands the
+                // columns where the user is now, even if they typed while the fetch was in flight.
+                int insertPos = _textView.Caret.Position.BufferPosition.Position;
+
+                bool useQualifier = columns.Select(c => c.Qualifier)
+                    .Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1;
+
+                var parts = columns
+                    .Select(c => useQualifier ? c.Qualifier + "." + c.ColumnName : c.ColumnName)
+                    .ToList();
+                var text = string.Join(", ", parts);
+
+                _textView.TextBuffer.Insert(insertPos, text);
+                DismissWildcardPopup();
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "Failed to commit column picker");
+                DismissWildcardPopup();
+            }
+        }
+
+        /// <summary>
         /// Replace * or alias.* with the checked columns, formatted multi-line.
         /// </summary>
         private void CommitWildcardExpansion()
         {
+            // FR-013: the shared popup is acting as the Column Picker — insert at the caret instead.
+            if (_columnPickerMode)
+            {
+                CommitColumnPicker();
+                return;
+            }
             try
             {
                 var columns = _adornment.WildcardPopup.GetCheckedColumns();
@@ -1556,6 +2060,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         {
             _adornment.HideWildcard();
             _wildcardPending = false;
+            _columnPickerMode = false;
         }
 
         #endregion

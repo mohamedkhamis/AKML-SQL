@@ -107,4 +107,8 @@ public static class StoreNames
 
     // Spec 028 M6 -- persisted AI chat conversations (local-only).
     public const string ChatHistory = "chatHistory";
+
+    // Phase 4 (web connection manager) -- saved SQL-Server connections. The value MUST
+    // match the JS STORES string in akml-indexeddb.js exactly. NO password is ever stored.
+    public const string SavedSqlConnections = "savedSqlConnections";
 }

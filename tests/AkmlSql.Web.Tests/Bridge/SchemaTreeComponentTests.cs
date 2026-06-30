@@ -314,6 +314,9 @@ internal sealed class FakeEngineBridge : IEngineBridge
         where TRequest : class
         where TResponse : class => Task.FromResult<TResponse>(default!);
 
+    public Task SendNotificationAsync<TPayload>(int messageType, TPayload payload, CancellationToken ct)
+        where TPayload : class => Task.CompletedTask;
+
     public Task DisconnectAsync() => Task.CompletedTask;
     public ValueTask DisposeAsync() => default;
 

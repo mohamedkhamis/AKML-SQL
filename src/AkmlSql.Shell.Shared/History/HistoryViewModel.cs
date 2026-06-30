@@ -77,6 +77,7 @@ namespace AkmlSql.Shell.Shared.History
             // US9 action commands
             ToggleFavoriteCommand = new RelayCommand(_ => ExecuteToggleFavoriteAsync(), _ => !IsLoading && SelectedEntry != null);
             DeleteCommand = new RelayCommand(_ => ExecuteDeleteAsync(), _ => !IsLoading && SelectedEntries.Count > 0);
+            RemoveOlderThanCommand = new RelayCommand(_ => ExecuteRemoveOlderThanAsync(), _ => !IsLoading && SelectedEntry != null);
             ExportCommand = new RelayCommand(_ => ExecuteExportAsync(), _ => !IsLoading);
         }
 
@@ -230,6 +231,9 @@ namespace AkmlSql.Shell.Shared.History
 
         /// <summary>Deletes the selected entries from history.</summary>
         public ICommand DeleteCommand { get; }
+
+        /// <summary>Spec 030 T074 — removes all history older than the selected entry (favorites kept).</summary>
+        public ICommand RemoveOlderThanCommand { get; }
 
         /// <summary>Exports history entries to a file (CSV, JSON, or SQL).</summary>
         public ICommand ExportCommand { get; }
@@ -726,6 +730,63 @@ namespace AkmlSql.Shell.Shared.History
             catch (Exception ex)
             {
                 Log.Error(ex, "HistoryViewModel: delete failed");
+            }
+        }
+
+        /// <summary>
+        /// Spec 030 T074 (FR-041) — removes every history entry older than the selected one
+        /// (favorites kept; the selected entry itself is kept). Prompts for confirmation first.
+        /// </summary>
+        private async void ExecuteRemoveOlderThanAsync()
+        {
+            try
+            {
+                var entry = SelectedEntry;
+                if (entry == null) return;
+
+                var client = EngineLifecycle.Manager?.Client;
+                if (client == null || !client.IsConnected) return;
+
+                var confirm = MessageBox.Show(
+                    $"Remove all history older than this entry ({entry.ExecutedAt})?\n\n" +
+                    "Favorited entries are kept. This cannot be undone.",
+                    "AKML SQL", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                if (confirm != MessageBoxResult.Yes) return;
+
+                IsLoading = true;
+                try
+                {
+                    var actionRequest = new HistoryActionRequest
+                    {
+                        Action = HistoryActions.RemoveOlderThan,
+                        EntryIds = new[] { entry.Id },
+                        KeepFavorites = true
+                    };
+
+                    var response = await client.SendRequestAsync<HistoryActionResponse, HistoryActionRequest>(
+                        MessageTypes.HistoryAction, actionRequest, timeoutMs: 10000);
+
+                    if (response.Success)
+                    {
+                        Log.Information("HistoryViewModel: RemoveOlderThan removed {Count} entries", response.DeletedCount);
+                        await SearchInternalAsync(resetOffset: true);
+                        MessageBox.Show(
+                            $"Removed {response.DeletedCount} older {(response.DeletedCount == 1 ? "entry" : "entries")}.",
+                            "AKML SQL", MessageBoxButton.OK, MessageBoxImage.Information);
+                    }
+                    else
+                    {
+                        Log.Warning("HistoryViewModel: RemoveOlderThan returned error: {Error}", response.Error);
+                    }
+                }
+                finally
+                {
+                    IsLoading = false;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "HistoryViewModel: remove older than failed");
             }
         }
 

@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using AkmlSql.Core.Ipc;
+using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Shell.Shared.Ipc;
 using Microsoft.VisualStudio.Text;
@@ -38,6 +39,7 @@ namespace AkmlSql.Shell.Shared.Editor
                                 await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                                 {
                                     conn = SsmsConnectionDetector.TryDetectConnection(serviceProvider, textView);
+                                    MaybeApplyStoredSqlCredential(conn, textView);
                                 });
                                 if (conn != null)
                                 {
@@ -70,6 +72,8 @@ namespace AkmlSql.Shell.Shared.Editor
                     });
                     return;
                 }
+
+                MaybeApplyStoredSqlCredential(connection, textView);
 
                 if (!connection.IsEngineUsable)
                 {
@@ -113,6 +117,125 @@ namespace AkmlSql.Shell.Shared.Editor
             catch (Exception ex)
             {
                 Log.Debug(ex, "Failed to detect/send SSMS connection");
+            }
+        }
+
+        /// <summary>
+        /// Spec 029. For a SQL-auth detection: write the per-buffer <see cref="SqlAuthState"/> marker,
+        /// and if a credential is already stored, fill the connection string + mark engine-usable so the
+        /// connection flows through the existing send path. When no credential is stored, leave the
+        /// connection not-engine-usable (the existing skip path runs) and NeedsCredentials=true so the
+        /// margin shows the click-to-enter affordance. No-op for non-SQL auth, or when disabled by config.
+        /// </summary>
+        private static void MaybeApplyStoredSqlCredential(
+            SsmsConnectionDetector.ConnectionResult conn,
+            Microsoft.VisualStudio.Text.Editor.IWpfTextView textView)
+        {
+            try
+            {
+                if (conn == null || conn.AuthMode != SsmsConnectionDetector.AuthMode.SqlPassword) return;
+
+                var settings = ConfigManager.Load();
+                if (!settings.IntelliSense.EnableSqlAuthCredentials) return; // opt-out → behave like Unsupported
+
+                var pwd = ResolveSqlAuthPassword(conn.Server, conn.Login);
+                bool has = !string.IsNullOrEmpty(pwd);
+
+                if (textView != null)
+                {
+                    textView.TextBuffer.Properties["AkmlSqlAuthState"] = new SqlAuthState
+                    {
+                        Server = conn.Server,
+                        Database = conn.Database,
+                        Login = conn.Login,
+                        NeedsCredentials = !has
+                    };
+                }
+
+                if (has)
+                {
+                    conn.ConnectionString = SsmsConnectionDetector.BuildSqlAuthConnectionString(
+                        conn.Server, conn.Database, conn.Login, pwd);
+                    conn.IsEngineUsable = true;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "MaybeApplyStoredSqlCredential failed");
+            }
+        }
+
+        /// <summary>
+        /// Spec 029 follow-up. Resolve the SQL-auth password for (server, login), in order:
+        /// (1) <b>inherit</b> it from SSMS's active query-window connection (zero prompt — SSMS already
+        /// holds it), persisting it to the DPAPI store for resilience; (2) the existing DPAPI store.
+        /// Returns null when neither yields a password (the caller then shows the click-to-enter
+        /// affordance). MUST run on the UI thread — the inherit step reads the SSMS ScriptFactory.
+        /// </summary>
+        private static string ResolveSqlAuthPassword(string server, string login)
+        {
+            // Tier 1: inherit the password SSMS already holds for the active window (no prompt).
+            if (SsmsConnectionDetector.TryGetActiveSqlAuthPassword(server, login, out var inherited)
+                && !string.IsNullOrEmpty(inherited))
+            {
+                try { SqlCredentialStore.Save(server, login, inherited); }
+                catch (Exception ex) { Log.Debug(ex, "ResolveSqlAuthPassword: persisting inherited credential failed (non-fatal)"); }
+                return inherited;
+            }
+
+            // Tier 2: a previously entered/inherited credential from the DPAPI store.
+            if (SqlCredentialStore.TryGet(server, login, out var stored) && !string.IsNullOrEmpty(stored))
+                return stored;
+
+            return null; // Tier 3: caller prompts via the click-to-enter affordance.
+        }
+
+        /// <summary>
+        /// Spec 029. Called by the margin while a buffer is in NeedsCredentials (and after a successful
+        /// dialog save): if a credential is now stored for the buffer's (server, login), build the SQL
+        /// connection string, send ConnectionChanged, clear NeedsCredentials, and return true. Reads the
+        /// stored marker — no caption parse, no DTE walk (cheap enough for the 1s poll). Returns false
+        /// when there is no marker or no stored credential.
+        /// </summary>
+        public static bool TryResolveStoredSqlCredential(
+            string sessionId, Microsoft.VisualStudio.Text.Editor.IWpfTextView textView)
+        {
+            try
+            {
+                if (textView == null) return false;
+                if (!textView.TextBuffer.Properties.TryGetProperty<SqlAuthState>("AkmlSqlAuthState", out var state)
+                    || state == null)
+                    return false;
+                var pwd = ResolveSqlAuthPassword(state.Server, state.Login);
+                if (string.IsNullOrEmpty(pwd))
+                    return false;
+
+                // A credential exists, but if the engine isn't connected yet there is nothing to send.
+                // Leave NeedsCredentials=true and return false so the affordance persists and the next
+                // poll retries — otherwise we'd clear the state, send nothing, and strand the window
+                // with neither schema nor the click-to-enter affordance.
+                var client = EngineLifecycle.Manager?.Client;
+                if (client == null || !client.IsConnected)
+                    return false;
+
+                var conn = new SsmsConnectionDetector.ConnectionResult
+                {
+                    Server = state.Server,
+                    Database = state.Database,
+                    Login = state.Login,
+                    ConnectionString = SsmsConnectionDetector.BuildSqlAuthConnectionString(
+                        state.Server, state.Database, state.Login, pwd),
+                    AuthMode = SsmsConnectionDetector.AuthMode.SqlPassword,
+                    IsEngineUsable = true
+                };
+                state.NeedsCredentials = false;
+                Task.Run(() => SendConnectionChangedAsync(client, sessionId, conn));
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "TryResolveStoredSqlCredential failed for session={Session}", sessionId);
+                return false;
             }
         }
 

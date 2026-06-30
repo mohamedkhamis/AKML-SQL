@@ -65,6 +65,63 @@
           <ButtonText>Format Styles...</ButtonText>
         </Strings>
       </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="cmdManageRules" priority="0x0302" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Strings>
+          <ButtonText>Manage Code Analysis Rules...</ButtonText>
+        </Strings>
+      </Button>
+      <!-- Spec 030 T067 — editor-context refactor commands -->
+      <Button guid="guidAkmlSqlCmdSet" id="cmdInlineExec" priority="0x0303" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Strings>
+          <ButtonText>Inline EXEC</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="cmdInsertToUpdate" priority="0x0304" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Strings>
+          <ButtonText>Convert INSERT to UPDATE</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="cmdInlineStoredProcedure" priority="0x0305" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Strings>
+          <ButtonText>Inline Stored Procedure</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="cmdScriptAsAlter" priority="0x0306" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Strings>
+          <ButtonText>Script as ALTER</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="cmdShowFindInvalidObjects" priority="0x0307" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Strings>
+          <ButtonText>Find Invalid Objects</ButtonText>
+        </Strings>
+      </Button>
+      <!-- Spec 030 T062 — database-wide Smart Rename (FR-018). Declaring the button lets the
+           Command Palette's dte.Commands.Raise resolve CmdSafeRename (it had no VSCT entry before). -->
+      <Button guid="guidAkmlSqlCmdSet" id="cmdSafeRename" priority="0x030A" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Strings>
+          <ButtonText>Smart Rename (Database-wide)</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="cmdToggleCodeAnalysis" priority="0x0308" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Strings>
+          <ButtonText>Toggle Code Analysis</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="cmdDisableFormattingForSelection" priority="0x0309" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Strings>
+          <ButtonText>Disable Formatting for Selection</ButtonText>
+        </Strings>
+      </Button>
       <Button guid="guidAkmlSqlCmdSet" id="cmdSendFeedback" priority="0x0400" type="Button">
         <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
         <Strings>
@@ -248,6 +305,15 @@
           <ButtonText>Snippet Manager</ButtonText>
         </Strings>
       </Button>
+      <!-- Spec 030 T045 — Surround With needs a command-table entry so the Ctrl+K,Ctrl+S KeyBinding
+           resolves (a KeyBinding without a Button/Command is ignored). Mirrors CmdBookmarkToggle. -->
+      <Button guid="guidAkmlSqlCmdSet" id="CmdSnippetSurroundWith" priority="0x0812" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <Strings>
+          <ButtonText>Surround Selection With Snippet…</ButtonText>
+        </Strings>
+      </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdBookmarkToggle" priority="0x0811" type="Button">
         <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
@@ -403,6 +469,9 @@
                 editor="guidVSStd97" key1="K" mod1="Control" key2="N" mod2="Control" />
     <KeyBinding guid="guidAkmlSqlCmdSet" id="CmdBookmarkPrev"
                 editor="guidVSStd97" key1="K" mod1="Control" key2="P" mod2="Control" />
+    <!-- Spec 030 T045 — Surround With (FR-034): Ctrl+K, Ctrl+S. SSMS has no native Surround With chord. -->
+    <KeyBinding guid="guidAkmlSqlCmdSet" id="CmdSnippetSurroundWith"
+                editor="guidVSStd97" key1="K" mod1="Control" key2="S" mod2="Control" />
   </KeyBindings>
 
   <Symbols>
@@ -423,6 +492,18 @@
       <IDSymbol name="cmdOptions" value="0x0102" />
       <!-- Spec 020 US3 T059 — Format Styles editor launcher -->
       <IDSymbol name="cmdFormatStyles" value="0x0916" />
+      <!-- Spec 030 T053 — Manage Code Analysis Rules dialog -->
+      <IDSymbol name="cmdManageRules" value="0x0917" />
+      <!-- Spec 030 T067 — editor-context refactor commands -->
+      <IDSymbol name="cmdInlineExec" value="0x0918" />
+      <IDSymbol name="cmdInsertToUpdate" value="0x0919" />
+      <IDSymbol name="cmdInlineStoredProcedure" value="0x090E" />
+      <IDSymbol name="cmdScriptAsAlter" value="0x0909" />
+      <IDSymbol name="cmdShowFindInvalidObjects" value="0x090D" />
+      <!-- Spec 030 T062 — database-wide Smart Rename (reuses existing CmdSafeRename id) -->
+      <IDSymbol name="cmdSafeRename" value="0x0400" />
+      <IDSymbol name="cmdToggleCodeAnalysis" value="0x091A" />
+      <IDSymbol name="cmdDisableFormattingForSelection" value="0x0914" />
       <IDSymbol name="cmdSendFeedback" value="0x0103" />
       <IDSymbol name="cmdViewLogs" value="0x0104" />
       <IDSymbol name="cmdRefreshCache" value="0x0105" />
@@ -462,6 +543,11 @@
       <IDSymbol name="CmdBookmarkNext" value="0x0802" />
       <IDSymbol name="CmdBookmarkPrev" value="0x0803" />
       <IDSymbol name="CmdSplitTable" value="0x0804" />
+      <!-- Spec 030 T044/T045 — snippet selection commands (palette-surfaced; T045 also bound to a chord).
+           No Button: these mirror the T067 editor-context commands (IDSymbol only) so dte.Commands.Raise
+           and the KeyBinding resolve them. -->
+      <IDSymbol name="CmdSnippetCreateFromSelection" value="0x091B" />
+      <IDSymbol name="CmdSnippetSurroundWith" value="0x091C" />
     </GuidSymbol>
   </Symbols>
 

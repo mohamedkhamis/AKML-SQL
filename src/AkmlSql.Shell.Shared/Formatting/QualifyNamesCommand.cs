@@ -5,6 +5,7 @@ using Microsoft.VisualStudio.TextManager.Interop;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Shell.Shared.Ipc;
+using AkmlSql.Shell.Shared.Refactoring;
 using Serilog;
 
 namespace AkmlSql.Shell.Shared.Formatting
@@ -49,11 +50,16 @@ namespace AkmlSql.Shell.Shared.Formatting
                     return;
                 }
 
+                var editorCtx = RefactorCommandHelper.TryGetActiveEditor();
+                var sessionId = editorCtx?.SessionId ?? Guid.NewGuid().ToString("N");
+
                 var request = new FormatActionRequest
                 {
-                    SessionId = Guid.NewGuid().ToString("N"),
-                    Text = documentText,
-                    ActionType = (int)FormatActionType.QualifyObjectNames
+                    SessionId       = sessionId,
+                    Text            = documentText,
+                    ActionType      = (int)FormatActionType.QualifyObjectNames,
+                    SelectionStart  = editorCtx != null && editorCtx.SelectionLength > 0 ? editorCtx.SelectionStart  : 0,
+                    SelectionLength = editorCtx != null && editorCtx.SelectionLength > 0 ? editorCtx.SelectionLength : 0
                 };
 
                 System.Threading.Tasks.Task.Run(async () =>

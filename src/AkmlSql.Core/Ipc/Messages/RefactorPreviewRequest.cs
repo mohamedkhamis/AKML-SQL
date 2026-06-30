@@ -12,13 +12,25 @@ namespace AkmlSql.Core.Ipc.Messages
         ConvertTempToTableVar = 5,
         ConvertTableVarToTemp = 6,
         ParameterizeValues    = 7,
-        SplitTable            = 8
+        SplitTable            = 8,
+        InlineExec            = 9,  // Spec 030 T064
+        InsertToUpdate        = 10, // Spec 030 T065
+        InlineStoredProcedure = 11  // Spec 030 T063
     }
 
     public enum RefactorScope
     {
         CurrentScript    = 0,
-        ProjectDirectory = 1
+        ProjectDirectory = 1,
+
+        /// <summary>
+        /// Spec 030 / FR-018 / R8 — database-wide Smart Rename. The discriminator (not a new
+        /// <see cref="RefactorOperationType"/>) for the connected rename path on
+        /// <c>SafeRenameOperation</c>: the engine enumerates referencing modules via
+        /// <c>sys.sql_expression_dependencies</c> and emits a reviewable <c>sp_rename</c> +
+        /// per-dependent <c>ALTER</c> script.
+        /// </summary>
+        Database         = 2
     }
 
     [MessagePackObject]

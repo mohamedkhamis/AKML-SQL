@@ -1,0 +1,21 @@
+{
+  "metadata": {
+    "id": "builtin-ie",
+    "shortcode": "ie",
+    "name": "IF EXISTS",
+    "description": "IF EXISTS (SELECT 1 FROM ...) <action>",
+    "author": "AKML SQL",
+    "version": "1.0",
+    "category": "Control",
+    "tags": [ "if", "exists" ],
+    "context": [ "global" ],
+    "surroundsWith": false
+  },
+  "variables": [],
+  "body": [
+    "IF EXISTS (SELECT 1 FROM $CURSOR$ WHERE )",
+    "BEGIN",
+    "",
+    "END;"
+  ]
+}

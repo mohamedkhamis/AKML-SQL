@@ -14,6 +14,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         public string Key     => "SuggestionTypes";
         public string Display => "Suggestions › Types of suggestion";
         public string Title   => "Types of suggestion";
+        public string Help    => "Controls which kinds of items appear in the completion list, including system objects, all database columns after SELECT, and SQL keywords, and whether column suggestions are scoped to referenced tables only or every table in the database.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {

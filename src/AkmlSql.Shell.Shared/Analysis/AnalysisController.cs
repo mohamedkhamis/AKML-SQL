@@ -25,14 +25,41 @@ namespace AkmlSql.Shell.Shared.Analysis
         /// <summary>Raised on the thread pool when a new set of diagnostics is available.</summary>
         public event EventHandler<DiagnosticsUpdatedEventArgs> DiagnosticsUpdated;
 
+        /// <summary>
+        /// Spec 030 T055 — the most recent set of issues, cached so consumers (e.g. the Ctrl-hover
+        /// issue-details popup) can read the current findings directly without subscribing — robust to
+        /// being created after the last <see cref="DiagnosticsUpdated"/> fired. Array-ref read/write is
+        /// atomic; the value may be one analysis cycle stale, which is fine for a hover.
+        /// </summary>
+        public CodeIssueInfo[] CurrentIssues => _currentIssues;
+        private volatile CodeIssueInfo[] _currentIssues = Array.Empty<CodeIssueInfo>();
+
         public AnalysisController(ITextBuffer buffer, string sessionId)
         {
             _buffer    = buffer ?? throw new ArgumentNullException(nameof(buffer));
             _sessionId = sessionId ?? throw new ArgumentNullException(nameof(sessionId));
             _buffer.Changed += OnBufferChanged;
+
+            // Initial analysis so a freshly-opened/pasted document shows findings without first
+            // requiring an edit. (No-ops if the engine isn't connected yet; the first edit re-triggers.)
+            ScheduleAnalysis();
         }
 
         private void OnBufferChanged(object sender, TextContentChangedEventArgs e)
+        {
+            if (_disposed) return;
+            ScheduleAnalysis();
+        }
+
+        /// <summary>
+        /// Spec 030 T056 — forces a fresh analysis pass without an edit. Used by the
+        /// "Toggle Code Analysis" command so disabling clears the squiggles immediately (the engine
+        /// returns no issues when disabled) and enabling re-populates them.
+        /// </summary>
+        public void TriggerReanalysis() => ScheduleAnalysis();
+
+        /// <summary>Debounced (300ms) trigger of a single analysis pass; cancels any in-flight one.</summary>
+        private void ScheduleAnalysis()
         {
             if (_disposed) return;
 
@@ -65,7 +92,11 @@ namespace AkmlSql.Shell.Shared.Analysis
                     SessionId       = _sessionId,
                     RequestId       = documentVersion.ToString(),
                     DocumentText    = _buffer.CurrentSnapshot.GetText(),
-                    DocumentVersion = documentVersion
+                    DocumentVersion = documentVersion,
+                    // Spec 030 FR-024 / T051: thread the document path so the engine locates the
+                    // nearest .casettings and honors per-project rule config + inline suppressions
+                    // in the LIVE editor (was hardcoded null → editor always saw global defaults).
+                    FilePath        = ResolveDocumentPath()
                 };
 
                 var response = await client.SendRequestAsync<CodeAnalysisResponse, CodeAnalysisRequest>(
@@ -74,11 +105,12 @@ namespace AkmlSql.Shell.Shared.Analysis
                 if (!ct.IsCancellationRequested)
                 {
                     sw.Stop();
-                    var count = response?.Issues?.Length ?? 0;
+                    var issues = response?.Issues ?? Array.Empty<CodeIssueInfo>();
+                    _currentIssues = issues; // cache for direct readers (T055 Ctrl-hover popup)
                     Log.Debug("Analysis complete: {Count} findings in {Ms}ms for session {Session}",
-                        count, sw.ElapsedMilliseconds, _sessionId);
+                        issues.Length, sw.ElapsedMilliseconds, _sessionId);
                     DiagnosticsUpdated?.Invoke(this, new DiagnosticsUpdatedEventArgs(
-                        _buffer.CurrentSnapshot, response?.Issues));
+                        _buffer.CurrentSnapshot, issues));
                 }
             }
             catch (OperationCanceledException) { }
@@ -86,6 +118,28 @@ namespace AkmlSql.Shell.Shared.Analysis
             {
                 Log.Warning(ex, "AnalysisController: analysis RPC failed for session {Session}", _sessionId);
             }
+        }
+
+        /// <summary>
+        /// Spec 030 FR-024 / T051: resolve the active document's file path from the buffer's
+        /// property bag (same source <see cref="DiagnosticTagger"/> / ErrorListReporter use) so the
+        /// engine can find the nearest <c>.casettings</c> and apply per-project rule config + inline
+        /// suppressions in the LIVE editor (matching the CLI analyzer). Resolved per-request so a
+        /// save/rename after the controller was created is picked up. Returns <c>null</c> for an
+        /// unsaved buffer (no directory to search) → the engine falls back to global defaults.
+        /// </summary>
+        private string? ResolveDocumentPath()
+        {
+            try
+            {
+                if (_buffer.Properties.TryGetProperty(typeof(ITextDocument), out ITextDocument textDoc))
+                {
+                    var path = textDoc?.FilePath;
+                    if (!string.IsNullOrEmpty(path)) return path;
+                }
+            }
+            catch { /* property-bag race / disposed buffer — fall back to global defaults */ }
+            return null;
         }
 
         public void Dispose()

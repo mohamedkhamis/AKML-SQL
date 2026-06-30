@@ -21,10 +21,21 @@ public sealed class HistoryRetentionService(HistoryDatabase database, HistorySet
     /// </summary>
     public async Task StartAsync()
     {
+        // Spec 030 T075 (FR-040): when the user disables auto-trim, never purge — keep all entries
+        // and version snapshots. Don't even schedule the periodic timer.
+        if (_settings.DisableAutoTrim)
+        {
+            Log.Information("History retention: auto-trim is disabled — skipping all purges");
+            return;
+        }
+
         // Run initial purge on startup
         try
         {
             await _database.PurgeExpiredEntriesAsync(_settings.RetentionDays, _settings.MaxEntries);
+            // FR-039: version-preserving trim — drop old version snapshots while keeping
+            // each query's latest version and all execution records.
+            await _database.PurgeOldVersionsAsync(_settings.RetentionDays);
             Log.Information("History retention: initial purge completed (retention={Days}d, maxEntries={Max})",
                 _settings.RetentionDays, _settings.MaxEntries);
         }
@@ -45,9 +56,13 @@ public sealed class HistoryRetentionService(HistoryDatabase database, HistorySet
 
     private async Task RunPurgeAsync()
     {
+        if (_settings.DisableAutoTrim) return; // T075: auto-trim disabled
         try
         {
             await _database.PurgeExpiredEntriesAsync(_settings.RetentionDays, _settings.MaxEntries);
+            // FR-039: version-preserving trim — drop old version snapshots while keeping
+            // each query's latest version and all execution records.
+            await _database.PurgeOldVersionsAsync(_settings.RetentionDays);
             Log.Debug("History retention: periodic purge completed");
         }
         catch (Exception ex)

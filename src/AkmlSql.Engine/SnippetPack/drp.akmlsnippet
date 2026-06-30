@@ -1,0 +1,19 @@
+{
+  "metadata": {
+    "id": "builtin-drp",
+    "shortcode": "drp",
+    "name": "DROP TABLE IF EXISTS",
+    "description": "DROP TABLE IF EXISTS <schema>.<table>",
+    "author": "AKML SQL",
+    "version": "1.0",
+    "category": "DDL",
+    "tags": [ "drop", "table" ],
+    "context": [ "global" ],
+    "surroundsWith": false
+  },
+  "variables": [],
+  "body": [
+    "DROP TABLE IF EXISTS $CURSOR$;",
+    "GO"
+  ]
+}

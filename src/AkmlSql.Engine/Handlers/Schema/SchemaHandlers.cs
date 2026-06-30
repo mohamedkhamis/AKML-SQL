@@ -64,6 +64,8 @@ namespace AkmlSql.Engine.Handlers.Schema
 
             response.Exists = true;
             response.Phase = (int)cache.Phase;
+            response.AuthError = cache.PermissionDenied;
+            response.AuthErrorNumber = cache.PermissionDeniedErrorNumber;
 
             int objectCount = 0;
             int columnsLoaded = 0;

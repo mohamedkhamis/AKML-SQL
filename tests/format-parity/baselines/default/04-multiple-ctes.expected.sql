@@ -1,11 +1,18 @@
 -- akml-parity-baseline revision=1.26.0526.0000 corpus-item=04-multiple-ctes profile=default
-with active_customers as (
-    select customerid, customername from customers where status = 'Active'
-),
-recent_orders as (
-    select orderid, customerid, total from orders where orderdate >= dateadd(month, -6, getdate())
+WITH active_customers AS (
+    SELECT customerid, customername
+    FROM   customers
+    WHERE  status = 'Active'
+), recent_orders AS (
+    SELECT orderid, customerid, total
+    FROM   orders
+    WHERE  orderdate >= DATEADD(MONTH, -6, GETDATE())
 )
-select c.customername, count(o.orderid) as order_count, sum(o.total) as total_spent
-from active_customers c
-left join recent_orders o on o.customerid = c.customerid
-group by c.customername;
+SELECT
+    c.customername,
+    COUNT(o.orderid) AS order_count,
+    SUM(o.total)     AS total_spent
+FROM   active_customers c
+LEFT JOIN   recent_orders o
+    ON o.customerid = c.customerid
+GROUP BY c.customername;

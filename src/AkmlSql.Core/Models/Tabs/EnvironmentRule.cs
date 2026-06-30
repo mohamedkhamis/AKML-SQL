@@ -20,10 +20,18 @@ namespace AkmlSql.Core.Models.Tabs
         public string Pattern { get; }
 
         /// <summary>
-        /// Which connection property to match against. Currently only <c>"serverName"</c>
-        /// is supported; future versions may support <c>"databaseName"</c>, <c>"userName"</c>, etc.
+        /// Which connection property to match against. <c>"serverName"</c> (default) or
+        /// <c>"database"</c> (see <see cref="EnvironmentMatcher.MatchTargetDatabase"/>).
         /// </summary>
         public string MatchTarget { get; }
+
+        /// <summary>
+        /// For database-target rules (<see cref="MatchTarget"/> == <c>"database"</c>):
+        /// the comma-separated glob pattern(s) matched against the connected database name.
+        /// When non-empty, takes precedence over <see cref="Pattern"/> for database matching.
+        /// Maps from <see cref="AkmlSql.Core.Config.ColoringRule.DatabaseName"/>.
+        /// </summary>
+        public string DatabaseName { get; }
 
         /// <summary>
         /// Background colour for the document tab header, as a hex string (e.g. <c>"#FF4444"</c>).
@@ -37,12 +45,20 @@ namespace AkmlSql.Core.Models.Tabs
 
         /// <summary>Creates an immutable <see cref="EnvironmentRule"/> instance.</summary>
         public EnvironmentRule(int order, string? pattern, string? matchTarget, string? color, string? label)
+            : this(order, pattern, matchTarget, null, color, label) { }
+
+        /// <summary>
+        /// Creates an immutable <see cref="EnvironmentRule"/> instance with an explicit
+        /// <paramref name="databaseName"/> pattern for database-target rules.
+        /// </summary>
+        public EnvironmentRule(int order, string? pattern, string? matchTarget, string? databaseName, string? color, string? label)
         {
-            Order       = order;
-            Pattern     = pattern ?? string.Empty;
-            MatchTarget = matchTarget ?? "serverName";
-            Color       = color ?? string.Empty;
-            Label       = label ?? string.Empty;
+            Order        = order;
+            Pattern      = pattern ?? string.Empty;
+            MatchTarget  = matchTarget ?? "serverName";
+            DatabaseName = databaseName ?? string.Empty;
+            Color        = color ?? string.Empty;
+            Label        = label ?? string.Empty;
         }
     }
 }

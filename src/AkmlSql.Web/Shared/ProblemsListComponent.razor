@@ -89,7 +89,7 @@
         background-color: var(--akml-status-info);
         color: var(--akml-text-onaccent);
         padding: 0 var(--akml-scalar-spacing-xs);
-        border-radius: 8px;
+        border-radius: var(--akml-scalar-radius-s);
         font-size: 11px;
     }
     .akml-problems-spacer { flex: 1 1 auto; }
@@ -130,13 +130,19 @@
     .akml-problems-suppress {
         font-family: var(--akml-type-chrome-family); font-size: 11px;
         background-color: var(--akml-surface-panel); color: var(--akml-text-secondary);
-        border: 1px solid var(--akml-border-default); border-radius: 2px;
+        border: 1px solid var(--akml-border-default); border-radius: var(--akml-scalar-radius-xs);
         padding: 0 var(--akml-scalar-spacing-xs); cursor: pointer;
     }
     .akml-problems-suppress:hover { background-color: var(--akml-surface-hover); color: var(--akml-text-primary); }
     .akml-severity-error .akml-problems-rule { color: var(--akml-status-danger); font-weight: bold; }
     .akml-severity-warning .akml-problems-rule { color: var(--akml-status-warning); font-weight: bold; }
     .akml-severity-info .akml-problems-rule { color: var(--akml-status-info); }
+    /* Severity glyph paired with color (not color alone) — rendered as an in-cell ::before
+       so the row's 80px/1fr/40px/auto grid template is unaffected. */
+    .akml-problems-rule::before { margin-right: var(--akml-scalar-spacing-xs); font-weight: bold; }
+    .akml-severity-error .akml-problems-rule::before { content: "\26D4"; }   /* ⛔ no-entry */
+    .akml-severity-warning .akml-problems-rule::before { content: "\26A0"; } /* ⚠ warning */
+    .akml-severity-info .akml-problems-rule::before { content: "\2139"; }    /* ℹ info */
 </style>
 
 @code {

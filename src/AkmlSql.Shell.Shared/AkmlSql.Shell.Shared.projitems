@@ -19,6 +19,9 @@
     <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\CompletionPopupProvider.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\CompletionRpcHelper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\ConnectionWiringHelper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\SqlAuthState.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\SqlCredentialDialog.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\SqlCredentialManagerDialog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\SqlPromptIcons.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\SsmsConnectionDetector.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ExtensionAssemblyResolver.cs" />
@@ -58,6 +61,9 @@
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\TabsPage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\IntelliSensePage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\SuggestionTypesPage.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\CompletionPolishPage.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\AliasesPage.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\ConnectionScopePage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\QualificationPage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\InsertStatementsPage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\JoinCompletionPage.cs" />
@@ -93,6 +99,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)IntelliSense\NativeIntelliSenseManager.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatDocumentCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatSelectionCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatFailureNotifier.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\ProfileSelectorDropdown.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatOnPasteHandler.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatOnSaveHandler.cs" />
@@ -120,12 +127,16 @@
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\EncapsulateBeginEndCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\ReplaceDeprecatedSyntaxCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\UnformatCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\DisableFormattingForSelectionCommand.cs" />
     <!-- Analysis: real-time squiggles, error list, lightbulb fix actions -->
     <Compile Include="$(MSBuildThisFileDirectory)Analysis\AnalysisController.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Analysis\DiagnosticTagger.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Analysis\ErrorListReporter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Analysis\FixAction.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Analysis\LightbulbProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Analysis\ManageRulesCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Analysis\ManageRulesDialog.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Analysis\ToggleCodeAnalysisCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Analysis\RefactoringAction.cs" />
     <!-- Bulk analysis command and result dialog -->
     <Compile Include="$(MSBuildThisFileDirectory)Commands\BulkAnalysisCommand.cs" />
@@ -142,9 +153,18 @@
     <Compile Include="$(MSBuildThisFileDirectory)Refactoring\ExtractToDerivedTableCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Refactoring\EncapsulateAsViewCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Refactoring\SplitTableCommand.cs" />
+    <!-- Spec 030 T067 — editor-context refactor commands + shared dispatch -->
+    <Compile Include="$(MSBuildThisFileDirectory)Refactoring\RefactorCommandHelper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Refactoring\InlineExecCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Refactoring\InsertToUpdateCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Refactoring\InlineStoredProcedureCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Refactoring\ScriptAsAlterCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Refactoring\FindInvalidObjectsCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Refactoring\FindInvalidObjectsDialog.cs" />
     <!-- Phase 7 — SQL History: execution capture, search, and tool window -->
     <Compile Include="$(MSBuildThisFileDirectory)History\ExecutionCapture.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)History\HistoryViewModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)History\DateBucketConverter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)History\HistoryToolWindowControl.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)History\HistoryDiffWindow.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)History\HistoryToolWindow.cs" />
@@ -274,6 +294,9 @@
     <Compile Include="$(MSBuildThisFileDirectory)Snippets\SnippetManagerViewModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Snippets\SnippetManagerDialog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Snippets\SnippetManagerCommand.cs" />
+    <!-- Spec 030 T044/T045 — Create Snippet from Selection + Surround With -->
+    <Compile Include="$(MSBuildThisFileDirectory)Snippets\CreateFromSelectionCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Snippets\SurroundWithCommand.cs" />
     <!-- Phase 10 US8 — Bookmarks & Document Outline -->
     <Compile Include="$(MSBuildThisFileDirectory)Navigation\BookmarkManager.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Navigation\BookmarkGlyphFactory.cs" />

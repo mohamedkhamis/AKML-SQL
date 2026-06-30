@@ -38,7 +38,18 @@ $BuildTime   = $_now.ToString("HHmm")
 $Version     = "1.$BuildYear.$BuildDate.$BuildTime"
 
 # --- Tool paths ---
+# MSBuild: prefer VS 2022 Enterprise (the canonical build host); fall back to
+# vswhere discovery so the build also runs on VS 2026 / 18.x dev machines instead
+# of being pinned to one edition/path. Shell extensions still require full MSBuild
+# (not `dotnet build`) per CLAUDE.md — vswhere returns exactly that.
 $MSBuild = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe"
+if (-not (Test-Path $MSBuild)) {
+    $_vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+    if (Test-Path $_vswhere) {
+        $_found = & $_vswhere -latest -prerelease -requires Microsoft.Component.MSBuild -find "MSBuild\**\Bin\MSBuild.exe" | Select-Object -First 1
+        if ($_found) { $MSBuild = $_found }
+    }
+}
 $ISCC    = "C:\Program Files\Inno Setup 7\ISCC.exe"
 
 # --- Validate tools ---
@@ -76,9 +87,18 @@ function Invoke-Build([string]$Description, [scriptblock]$Command) {
 function Build-Shell([string]$Project) {
     $Name = [System.IO.Path]::GetFileNameWithoutExtension($Project)
     Invoke-Build "Shell: $Name" {
-        & $MSBuild "$Root\$Project" -t:Restore -p:Configuration=$Configuration -p:Version=$Version -v:quiet -nologo
+        # Clean obj/bin first. The SSMS22 + VS2026 shell builds otherwise cross-
+        # contaminate via STALE VSCT state: a non-clean obj makes one project's
+        # MergeWithCTO read the OTHER project's CTO (VSSDK1307 "Could not read cto
+        # data from ...AkmlSql<other>.cto" — the contamination CLAUDE.md warns
+        # about; node reuse is NOT the cause — disabling it does not help, and the
+        # failing direction flips run-to-run). A clean obj/bin makes each project's
+        # VSCT compile resolve its OWN .cto. (-nodeReuse:false kept as cheap insurance.)
+        $ProjDir = Split-Path -Parent "$Root\$Project"
+        Remove-Item -Recurse -Force "$ProjDir\obj","$ProjDir\bin" -ErrorAction SilentlyContinue
+        & $MSBuild "$Root\$Project" -t:Restore -p:Configuration=$Configuration -p:Version=$Version -v:quiet -nologo -nodeReuse:false
         if ($LASTEXITCODE -ne 0) { return }
-        & $MSBuild "$Root\$Project" -t:Build -p:Configuration=$Configuration -p:Version=$Version -v:minimal -nologo
+        & $MSBuild "$Root\$Project" -t:Build -p:Configuration=$Configuration -p:Version=$Version -v:minimal -nologo -nodeReuse:false
     }
 }
 
@@ -110,8 +130,11 @@ $TotalSw = [System.Diagnostics.Stopwatch]::StartNew()
 # Theme CSS must be in sync with docs/theme-tokens.json so the WPF surface and the
 # web edition cannot drift apart visually. Fails the build on drift.
 Invoke-Build "Gate: theme CSS drift check" {
+    # Pass -RepoRoot explicitly: under powershell.exe (5.1) -File, the script's
+    # default `Split-Path -Parent $PSScriptRoot` evaluates $PSScriptRoot as empty
+    # and the gate dies on "Cannot bind argument ... empty string".
     & powershell.exe -NoProfile -ExecutionPolicy Bypass `
-        -File "$Root\scripts\generate-theme-css.ps1" -CheckOnly
+        -File "$Root\scripts\generate-theme-css.ps1" -CheckOnly -RepoRoot "$Root"
 }
 
 # --- .NET projects ---
@@ -137,6 +160,14 @@ Invoke-Build "Formatter CLI (publish)" {
 
 Invoke-Build "Analyzer CLI (publish)" {
     dotnet publish "$Root\src\AkmlSql.Analyzer\AkmlSql.Analyzer.csproj" -c $Configuration -r win-x64 -p:Version=$Version -v quiet --nologo
+}
+
+# Web edition (Blazor WASM) — framework-dependent, so NO -r win-x64 (that would
+# wrongly make the WASM app self-contained). The installer's web component
+# (web-installer.iss [Files]) sources the published wwwroot; this MUST run before
+# the Inno Setup step below or ISCC fails with "Source file not found".
+Invoke-Build "Web edition (publish)" {
+    dotnet publish "$Root\src\AkmlSql.Web\AkmlSql.Web.csproj" -c $Configuration -p:Version=$Version -v quiet --nologo
 }
 
 # --- Shell extensions (MSBuild, one at a time) ---

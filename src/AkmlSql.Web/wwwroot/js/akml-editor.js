@@ -21,8 +21,9 @@ function loadCm() {
         import(`${CM_BASE}/autocomplete@6`),
         import(`${CM_BASE}/search@6`),
         import(`${CM_BASE}/lint@6`),
-    ]).then(([state, view, commands, language, langSql, autocomplete, search, lint]) => ({
-        state, view, commands, language, langSql, autocomplete, search, lint,
+        import('https://esm.sh/@lezer/highlight@1'),   // `tags` for the token-driven syntax theme
+    ]).then(([state, view, commands, language, langSql, autocomplete, search, lint, highlight]) => ({
+        state, view, commands, language, langSql, autocomplete, search, lint, highlight,
     }));
     return _cmModulesPromise;
 }
@@ -49,6 +50,19 @@ export async function create(hostElementId, initialText, dotNetRef) {
     }
 
     const cm = await loadCm();
+
+    // Spec 030 web redesign — token-driven SQL syntax theme. Colours resolve from the --akml-syntax-*
+    // CSS custom properties (generated from docs/theme-tokens.json), so the editor follows the active
+    // light/dark/HC theme automatically instead of CM6's hardcoded defaultHighlightStyle.
+    const t = cm.highlight.tags;
+    const akmlHighlightStyle = cm.language.HighlightStyle.define([
+        { tag: t.keyword, color: 'var(--akml-syntax-keyword)' },
+        { tag: [t.string, t.special(t.string), t.character], color: 'var(--akml-syntax-string)' },
+        { tag: [t.number, t.bool, t.null], color: 'var(--akml-syntax-number)' },
+        { tag: [t.comment, t.lineComment, t.blockComment], color: 'var(--akml-syntax-comment)', fontStyle: 'italic' },
+        { tag: [t.function(t.variableName), t.function(t.propertyName), t.standard(t.name)], color: 'var(--akml-syntax-function)' },
+        { tag: [t.typeName, t.propertyName, t.className, t.attributeName], color: 'var(--akml-syntax-tablecolumn)' },
+    ]);
 
     // T109 follow-up: route CodeMirror's autocomplete through ICompletionService
     // on the .NET side so the popup is fed by the bridge (online) or the cached
@@ -149,7 +163,16 @@ export async function create(hostElementId, initialText, dotNetRef) {
                     // Smart-action items (SQL-Prompt-style "▶ Add columns from SELECT") must sort
                     // to the top: CM6 orders an empty-prefix popup by label, and "▶" (U+25B6)
                     // sorts after letters, which would otherwise bury the action at the bottom.
-                    const boost = (i.label && i.label.charCodeAt(0) === 0x25B6) ? 99 : undefined;
+                    // Map the engine's SortPriority (ASCENDING — lower ranks first) to CM6's
+                    // boost (DESCENDING — higher ranks first) so the web popup order matches the
+                    // desktop (e.g. data types before constraint keywords in a CREATE TABLE column).
+                    // ▶ smart-actions keep the top slot. The /10 scale keeps boost a gentle
+                    // tiebreaker: it fully orders the empty-prefix popup but does not override CM's
+                    // fuzzy-match score once a prefix is typed (mirrors the engine: score, then
+                    // SortPriority).
+                    const boost = (i.label && i.label.charCodeAt(0) === 0x25B6)
+                        ? 99
+                        : (typeof i.sortPriority === 'number' ? (100 - i.sortPriority) / 10 : undefined);
                     // Spec 027 T011: snippet items expand (with tab-stops) on accept instead
                     // of inserting their text literally. A function `apply` is CM6's accept
                     // hook; non-snippet items keep the plain-string `apply` (literal insert).
@@ -299,6 +322,195 @@ export async function create(hostElementId, initialText, dotNetRef) {
         { key: 'Escape', run: dismissGhost },
     ]));
 
+    // ── Spec 030 (web Phase 1) — Quick Info on hover ─────────────────────────────────────────
+    // CM6 hoverTooltip extension: asks the .NET IQuickInfoService for the object/column under the
+    // hovered position and renders a small themed tooltip. Returns null = no tooltip.
+    const quickInfoHover = cm.view.hoverTooltip(async (view, pos) => {
+        if (!dotNetRef) return null;
+        let info;
+        try { info = await dotNetRef.invokeMethodAsync('RequestQuickInfoFromJs', pos, view.state.doc.toString()); }
+        catch { return null; }
+        if (!info) return null;
+        const wr = view.state.wordAt(pos);
+        const from = wr ? wr.from : pos;
+        const to = wr ? wr.to : pos;
+        return {
+            pos: from, end: to, above: true,
+            create() {
+                const dom = document.createElement('div');
+                dom.className = 'akml-qi-tooltip';
+                const header = document.createElement('div');
+                header.className = 'akml-qi-header';
+                header.textContent = (info.objectType ? `[${info.objectType}] ` : '') + (info.header || '');
+                dom.appendChild(header);
+                if (info.description) {
+                    const desc = document.createElement('div');
+                    desc.className = 'akml-qi-desc';
+                    desc.textContent = info.description;
+                    dom.appendChild(desc);
+                }
+                if (info.details && info.details.length) {
+                    const list = document.createElement('div');
+                    list.className = 'akml-qi-details';
+                    for (const d of info.details) {
+                        const row = document.createElement('div');
+                        row.textContent = d.value ? `${d.label}: ${d.value}` : d.label;
+                        list.appendChild(row);
+                    }
+                    dom.appendChild(list);
+                }
+                return { dom };
+            },
+        };
+    }, { hoverTime: 350 });
+
+    // ── Spec 030 (web Phase 1) — Signature help (parameter hints) ─────────────────────────────
+    // A single themed tooltip driven by a StateField, shown when the caret is inside a proc/function
+    // call. Re-requested when the user types '(' or ',' (or types further while one is showing);
+    // dismissed on ')' / Escape / when the service reports no call site.
+    const setSig = cm.state.StateEffect.define();
+    const sigField = cm.state.StateField.define({
+        create() { return null; },
+        update(value, tr) {
+            for (const e of tr.effects) if (e.is(setSig)) value = e.value;
+            return value;
+        },
+        provide: f => cm.view.showTooltip.from(f),
+    });
+
+    // Monotonic request sequence: each requestSignature claims the next value; its async response
+    // is applied only if no newer request OR dismissal happened meanwhile — otherwise a slow
+    // round-trip could re-show a stale tooltip after the user already typed ')' / moved on.
+    let sigSeq = 0;
+
+    async function requestSignature(view) {
+        if (!dotNetRef) return;
+        const seq = ++sigSeq;
+        const pos = view.state.selection.main.head;
+        let sig;
+        try { sig = await dotNetRef.invokeMethodAsync('RequestSignatureHelpFromJs', pos, view.state.doc.toString()); }
+        catch { return; }
+        if (seq !== sigSeq) return;   // superseded by a newer request or a dismissal
+        const inst = _instances.get(hostElementId);
+        if (!inst) return;
+        if (!sig) { inst.view.dispatch({ effects: setSig.of(null) }); return; }
+        const tooltip = {
+            pos: inst.view.state.selection.main.head,
+            above: true,
+            create() {
+                const dom = document.createElement('div');
+                dom.className = 'akml-sig-tooltip';
+                const label = document.createElement('div');
+                label.className = 'akml-sig-label';
+                label.textContent = sig.label || '';
+                dom.appendChild(label);
+                if (sig.parameters && sig.parameters.length) {
+                    const ap = Math.max(0, Math.min(sig.activeParameter, sig.parameters.length - 1));
+                    const p = sig.parameters[ap];
+                    const active = document.createElement('div');
+                    active.className = 'akml-sig-active';
+                    active.textContent = (p.name || '') + (p.type ? ' ' + p.type : '');
+                    dom.appendChild(active);
+                }
+                if (sig.documentation) {
+                    const doc = document.createElement('div');
+                    doc.className = 'akml-sig-doc';
+                    doc.textContent = sig.documentation;
+                    dom.appendChild(doc);
+                }
+                return { dom };
+            },
+        };
+        inst.view.dispatch({ effects: setSig.of(tooltip) });
+    }
+
+    function dismissSignature(view) {
+        sigSeq++;   // invalidate any in-flight requestSignature so its stale response is dropped
+        if (view.state.field(sigField, false)) { view.dispatch({ effects: setSig.of(null) }); return true; }
+        return false;
+    }
+
+    const signatureListener = cm.view.EditorView.updateListener.of((update) => {
+        if (!update.docChanged || !dotNetRef) return;
+        const userTyped = update.transactions.some(t => {
+            const ev = t.annotation(cm.state.Transaction.userEvent);
+            return typeof ev === 'string' && ev.startsWith('input.');
+        });
+        if (!userTyped) return;
+        let lastChar = '';
+        update.changes.iterChanges((_fa, _ta, _fb, _tb, inserted) => {
+            const s = inserted.toString();
+            if (s.length > 0) lastChar = s[s.length - 1];
+        });
+        if (lastChar === ')') { dismissSignature(update.view); return; }
+        const showing = update.state.field(sigField, false) != null;
+        if (lastChar === '(' || lastChar === ',' || showing) {
+            requestSignature(update.view);
+        }
+    });
+
+    // ── Spec 030 (web Phase 1) — Go to definition (F12) → peek panel ──────────────────────────
+    function removePeekPanel(host) {
+        if (host && host._akmlPeek) { host._akmlPeek.remove(); host._akmlPeek = null; }
+    }
+
+    function showPeekPanel(host, def) {
+        removePeekPanel(host);
+        const panel = document.createElement('div');
+        panel.className = 'akml-peek-panel';
+        const header = document.createElement('div');
+        header.className = 'akml-peek-header';
+        const title = document.createElement('span');
+        title.textContent = (def.found
+            ? ((def.objectType ? def.objectType + ': ' : '') + (def.fullName || 'Definition'))
+            : (def.message || 'No definition found.'));
+        const close = document.createElement('button');
+        close.className = 'akml-peek-close';
+        close.type = 'button';
+        close.textContent = '✕';
+        close.onclick = () => removePeekPanel(host);
+        header.appendChild(title);
+        header.appendChild(close);
+        panel.appendChild(header);
+        if (def.found && def.definition) {
+            const pre = document.createElement('pre');
+            pre.className = 'akml-peek-body';
+            pre.textContent = def.definition;
+            panel.appendChild(pre);
+        }
+        host.appendChild(panel);
+        host._akmlPeek = panel;
+    }
+
+    function gotoDefinition(view) {
+        if (!dotNetRef) return true;
+        const pos = view.state.selection.main.head;
+        dotNetRef.invokeMethodAsync('RequestGoToDefinitionFromJs', pos, view.state.doc.toString())
+            .then(def => {
+                const host = document.getElementById(hostElementId);
+                if (host && def) showPeekPanel(host, def);
+            })
+            .catch(() => { /* go-to-def never surfaces an error into typing */ });
+        return true;   // handled (the work is async)
+    }
+
+    // Spec 030 — Phase 5: Ctrl/Cmd+Enter runs the query. Registered INSIDE the CM6 keymap (not just
+    // the Blazor page handler) because CM6 has focus and swallows Mod-Enter. The Blazor side surfaces
+    // it via EditorComponent.ExecuteFromJs → OnExecute → Editor.ExecuteAsync. F5 is deliberately NOT
+    // bound (browser refresh) — the toolbar Execute button covers that muscle memory.
+    function runExecute(view) {
+        if (!dotNetRef) return false;
+        dotNetRef.invokeMethodAsync('ExecuteFromJs')
+            .catch(() => { /* execution errors surface in the results pane, never into the editor */ });
+        return true;   // handled (the work is async); stops CM inserting a newline.
+    }
+
+    const navKeymap = cm.view.keymap.of([
+        { key: 'F12', run: gotoDefinition },
+        { key: 'Escape', run: dismissSignature },   // also clears a stray signature tooltip
+        { key: 'Mod-Enter', run: runExecute },      // Spec 030 Phase 5 — Execute query.
+    ]);
+
     const state = cm.state.EditorState.create({
         doc: initialText ?? '',
         extensions: [
@@ -312,8 +524,9 @@ export async function create(hostElementId, initialText, dotNetRef) {
                 cm.commands.indentWithTab,
             ]),
             cm.langSql.sql(),
-            // Without this the SQL grammar parses but renders as plain text.
-            // fallback:true is needed because we don't pair a CM6 editor theme yet.
+            // Token-driven SQL syntax theme (--akml-syntax-*). fallback:true keeps any tag we didn't
+            // map rendering via CM6's default so nothing goes uncoloured.
+            cm.language.syntaxHighlighting(akmlHighlightStyle, { fallback: true }),
             cm.language.syntaxHighlighting(cm.language.defaultHighlightStyle, { fallback: true }),
             cm.autocomplete.autocompletion({
                 override: [completionSource],
@@ -323,6 +536,11 @@ export async function create(hostElementId, initialText, dotNetRef) {
             cm.lint.lintGutter(),
             ghostField,
             ghostListener,
+            // Spec 030 (web Phase 1) — IntelliSense parity: hover quick-info, signature help, F12 goto.
+            quickInfoHover,
+            sigField,
+            signatureListener,
+            navKeymap,
             updateListener,
         ],
     });
@@ -351,6 +569,18 @@ export function getText(hostElementId) {
     const inst = _instances.get(hostElementId);
     if (!inst) return '';
     return inst.view.state.doc.toString();
+}
+
+/**
+ * Spec 028 (M6) — return the currently selected text (empty string when there is no
+ * selection). The AI dock (Editor.razor) feeds this to the action panel so Explain / Fix /
+ * etc. operate on the user's selection, falling back to the whole document when empty.
+ */
+export function getSelectedText(hostElementId) {
+    const inst = _instances.get(hostElementId);
+    if (!inst) return '';
+    const sel = inst.view.state.selection.main;
+    return inst.view.state.sliceDoc(sel.from, sel.to);
 }
 
 /** Replace the entire document. */
@@ -515,6 +745,8 @@ export function dispose(hostElementId) {
         if (inst.ghost.timer) { clearTimeout(inst.ghost.timer); inst.ghost.timer = null; }
         inst.ghost.reqId++;
     }
+    const host = document.getElementById(hostElementId);
+    if (host && host._akmlPeek) { host._akmlPeek.remove(); host._akmlPeek = null; }
     inst.view.destroy();
     if (inst.dotNetRef && typeof inst.dotNetRef.dispose === 'function') {
         inst.dotNetRef.dispose();

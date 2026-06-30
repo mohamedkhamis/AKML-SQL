@@ -67,7 +67,20 @@ namespace AkmlSql.Engine.Handlers.Completion
             _engine.IncludeKeywords          = settings.IntelliSense.SuggestionTypes.IncludeKeywords;
             _engine.IncludeSystemObjects     = settings.IntelliSense.SuggestionTypes.IncludeSystemObjects;
             _engine.SchemaQualifyMode        = settings.IntelliSense.Qualification.SchemaMode;
+            _engine.BracketMode              = settings.IntelliSense.Qualification.BracketMode;
             _engine.MatchByColumnName        = settings.IntelliSense.JoinOptions.MatchByColumnName;
+            _engine.ColumnScopeMode          = settings.IntelliSense.SuggestionTypes.ColumnScope;
+            _engine.AliasIncludeAs           = settings.IntelliSense.AliasOptions.IncludeAs;
+            _engine.AliasObjectMap           = settings.IntelliSense.AliasOptions.ObjectAliasMap;
+            _engine.AliasPrefixesToIgnore    = settings.IntelliSense.AliasOptions.PrefixesToIgnore;
+
+            // Spec 030 T036 / FR-016 — suggestion connection scope. The schema cache is single-database,
+            // so the database allow-list resolves to a single in-scope bool against the session's database
+            // (suppress when the connected DB is excluded); the schema allow-list filters the object list.
+            var scope = settings.IntelliSense.ConnectionScope;
+            _engine.ScopeSchemas         = scope.Schemas ?? Array.Empty<string>();
+            _engine.DatabaseInScope      = scope.IncludesDatabase(session?.DatabaseName);
+            _engine.IncludeLinkedServers = scope.IncludeLinkedServers;
 
             var response = _engine.GetCompletions(documentText, request.CursorOffset, dbCache, request.SessionId);
             return Task.FromResult(response);

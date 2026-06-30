@@ -27,7 +27,7 @@ public class ControlFlowRules : IRuleSet
         ApplyBeginEndRules(nodes, profile.ControlFlow);
         ApplyCaseRules(nodes, profile.Case);
         ApplyCteRules(nodes, profile.Cte, profile.Whitespace);
-        ApplyExpressionRules(nodes, profile.Expression);
+        ApplyExpressionRules(nodes, profile.Expression, profile.InStatements);
         // Spec 020 T083 / T084 — operator alignment + BETWEEN + IN-list alignment
         ApplyOperatorRules(nodes, profile.Operators, profile.Expression);
         ApplyInStatementsAlignment(nodes, profile.InStatements);
@@ -383,7 +383,7 @@ public class ControlFlowRules : IRuleSet
                     }
                 }
 
-                int caseIndent = nodes[caseStart].IndentLevel;
+                int caseIndent = LineIndentOf(nodes, caseStart);
 
                 // T082 — Determine WHEN indent strategy from the new WhenAlignment enum,
                 // falling back to legacy IndentWhen / toCase behaviour.
@@ -471,9 +471,12 @@ public class ControlFlowRules : IRuleSet
                         if (nodes[j].PrecedingBreak == BreakType.None)
                         {
                             nodes[j].PrecedingBreak = BreakType.NewLine;
-                            nodes[j].IndentLevel = whenIndent;
                             nodes[j].PrecedingSpaces = 0;
                         }
+                        // T008: re-assert CASE-ELSE indent even when it arrives pre-broken —
+                        // ApplyIfElseRules de-dents a CASE-ELSE to 0 (it has no enclosing IF). This
+                        // loop only iterates within a CASE...END range, so it never touches IF-ELSE.
+                        nodes[j].IndentLevel = whenIndent;
                     }
                 }
 
@@ -510,7 +513,8 @@ public class ControlFlowRules : IRuleSet
     /// </remarks>
     private static int ResolveWhenIndent(CaseOptions caseOpts, int caseIndent)
     {
-        var alignment = (caseOpts.WhenAlignment ?? "toCase").Trim().ToLowerInvariant();
+        // T008: unset ("" or null) falls through to the legacy default arm so IndentWhen is honored.
+        var alignment = (caseOpts.WhenAlignment ?? "").Trim().ToLowerInvariant();
         return alignment switch
         {
             "indentedfromcase" => caseIndent + 1,
@@ -798,6 +802,23 @@ public class ControlFlowRules : IRuleSet
         }
     }
 
+    /// <summary>
+    /// The indent of the LINE a node sits on: the node's own IndentLevel when it carries a break,
+    /// else the IndentLevel of the nearest preceding break-carrying node. An inline node's own
+    /// IndentLevel is 0 by convention (LayoutEngine: "no break = no indentation"), so reading it
+    /// directly de-dents anything positioned relative to it — e.g. a CASE that sits inline after a
+    /// leading comma had its WHEN/ELSE/END land at item level (spec 030 T011).
+    /// </summary>
+    private static int LineIndentOf(List<LayoutNode> nodes, int index)
+    {
+        for (int i = index; i >= 0; i--)
+        {
+            if (nodes[i].PrecedingBreak != BreakType.None)
+                return nodes[i].IndentLevel;
+        }
+        return nodes[index].IndentLevel;
+    }
+
     private static bool IsCteWith(List<LayoutNode> nodes, int withIndex)
     {
         // A CTE WITH is followed by an identifier and then AS (
@@ -856,11 +877,11 @@ public class ControlFlowRules : IRuleSet
     // Expression rules
     // -----------------------------------------------------------------------
 
-    private static void ApplyExpressionRules(List<LayoutNode> nodes, ExpressionOptions expr)
+    private static void ApplyExpressionRules(List<LayoutNode> nodes, ExpressionOptions expr, InStatementsOptions inStmt)
     {
         ApplyBooleanOperatorNewLine(nodes, expr);
         ApplyBetweenOnOneLine(nodes, expr);
-        ApplyInListStyle(nodes, expr);
+        ApplyInListStyle(nodes, expr, inStmt);
         ApplyExistsSubqueryIndent(nodes, expr);
     }
 
@@ -966,8 +987,21 @@ public class ControlFlowRules : IRuleSet
     /// "multiLine" puts each item on its own line.
     /// "auto" uses threshold to decide.
     /// </summary>
-    private static void ApplyInListStyle(List<LayoutNode> nodes, ExpressionOptions expr)
+    private static void ApplyInListStyle(List<LayoutNode> nodes, ExpressionOptions expr, InStatementsOptions inStmt)
     {
+        // Precedence: the canonical SQL Prompt control `inStatements.placeItemsOnNewLine` drives
+        // when explicitly set to always/never; its default "ifLongerThanWrap" defers to the older
+        // `expression.inListStyle` (a string can't distinguish absent from explicitly-default, so
+        // default = defer — which keeps AKML's own styles on their inListStyle behavior). A
+        // `.sqlpromptstyle` import that sets always/never takes effect (spec 030 T013).
+        var place = (inStmt?.PlaceItemsOnNewLine ?? "iflongerthanwrap").Trim().ToLowerInvariant();
+        string effectiveStyle = place switch
+        {
+            "always" => "multiLine",
+            "never" => "singleLine",
+            _ => expr.InListStyle,   // "ifLongerThanWrap" (default) → defer to inListStyle
+        };
+
         for (int i = 0; i < nodes.Count; i++)
         {
             if (nodes[i].IsInNoformatRegion || nodes[i].TokenType != TSqlTokenType.In)
@@ -1004,7 +1038,7 @@ public class ControlFlowRules : IRuleSet
             if (hasSubquery)
                 continue;
 
-            switch (expr.InListStyle)
+            switch (effectiveStyle)
             {
                 case "singleLine":
                     CollapseRange(nodes, openParen + 1, closeParen);
@@ -1225,7 +1259,10 @@ public class ControlFlowRules : IRuleSet
         if (ops == null) return;
 
         var alignment = (ops.Alignment ?? "inlineWithStatement").Trim().ToLowerInvariant();
-        bool bumpIndent = alignment == "indentedfromstatement" || alignment == "rightaligned";
+        // "rightAligned" is no longer faked as an indent bump — it gets true column right-alignment
+        // in the RightAligner finalization pass (spec 030 T013). Only "indentedFromStatement"
+        // bumps indent here.
+        bool bumpIndent = alignment == "indentedfromstatement";
 
         if (bumpIndent)
         {
@@ -1326,7 +1363,8 @@ public class ControlFlowRules : IRuleSet
         if (caseOpts == null) return;
         if (!caseOpts.EndOnNewLine) return;       // END is inline — alignment is moot
 
-        var mode = (caseOpts.EndAlignment ?? "toCase").Trim().ToLowerInvariant();
+        // T008: unset ("" or null) means the legacy "indented" intent (align END one in from CASE).
+        var mode = (caseOpts.EndAlignment ?? "").Trim().ToLowerInvariant();
 
         // Note: this pass also corrects a pre-Phase-B bug where `ApplyBeginEndRules` would
         // pre-break the END line *before* `ApplyCaseRules` had a chance to set its IndentLevel
@@ -1342,9 +1380,10 @@ public class ControlFlowRules : IRuleSet
                 int caseStart = caseStack.Pop();
                 if (nodes[i].PrecedingBreak != BreakType.None)
                 {
-                    nodes[i].IndentLevel = mode == "indented"
-                        ? nodes[caseStart].IndentLevel + 1
-                        : nodes[caseStart].IndentLevel;
+                    int caseIndent = LineIndentOf(nodes, caseStart);
+                    nodes[i].IndentLevel = mode == "tocase"
+                        ? caseIndent          // explicit "toCase" — align END under CASE
+                        : caseIndent + 1;     // "indented" or unset — indent one in
                 }
             }
         }
@@ -1371,6 +1410,13 @@ public class ControlFlowRules : IRuleSet
             if (prev.TokenType != TSqlTokenType.Identifier) continue;
             // Heuristic: a "real" function-call paren has no space between the name and (
             if (nodes[i].PrecedingBreak != BreakType.None || nodes[i].PrecedingSpaces > 0) continue;
+
+            // NOT a function call: the paren of a DDL object — "CREATE TABLE dbo.orders(...)"
+            // matches Identifier+adjacent-( too, and this pass then exploded the whole column
+            // list (with depth-blind comma breaks splitting "identity(1, 1)" args). Walk back
+            // over the multi-part name; a preceding TABLE/PROC/FUNCTION/TRIGGER/VIEW keyword
+            // means the DDL passes own this paren's layout.
+            if (ParenHeuristics.IsDdlObjectName(nodes, i - 1)) continue;
 
             int close = FindMatchingParen(nodes, i);
             if (close < 0) continue;
@@ -1402,17 +1448,22 @@ public class ControlFlowRules : IRuleSet
             int parentIndent = prev.IndentLevel;
             int paramIndent = opts.IndentParameters ? parentIndent + 1 : parentIndent;
 
-            // First parameter on its own line; each comma-followed param on its own line; close
-            // paren on its own line aligned with the parent.
+            // First parameter on its own line; each TOP-LEVEL comma-followed param on its own
+            // line (a comma nested in an inner call's argument list is not a parameter boundary
+            // of THIS call); close paren on its own line aligned with the parent.
             if (nodes[i + 1].PrecedingBreak == BreakType.None)
             {
                 nodes[i + 1].PrecedingBreak = BreakType.NewLine;
                 nodes[i + 1].IndentLevel = paramIndent;
                 nodes[i + 1].PrecedingSpaces = 0;
             }
+            int argDepth = 0;
             for (int j = i + 1; j < close; j++)
             {
-                if (nodes[j].TokenType == TSqlTokenType.Comma && j + 1 < close)
+                if (nodes[j].TokenType == TSqlTokenType.LeftParenthesis) { argDepth++; continue; }
+                if (nodes[j].TokenType == TSqlTokenType.RightParenthesis) { argDepth--; continue; }
+
+                if (argDepth == 0 && nodes[j].TokenType == TSqlTokenType.Comma && j + 1 < close)
                 {
                     if (nodes[j + 1].PrecedingBreak == BreakType.None)
                     {
@@ -1432,6 +1483,7 @@ public class ControlFlowRules : IRuleSet
             i = close;        // skip past this function call
         }
     }
+
 
     // -----------------------------------------------------------------------
     // T084 — IN-list alignment

@@ -33,8 +33,22 @@ namespace AkmlSql.Engine.Handlers.Control
             if (ctx.SchemaMetadata == null)
                 throw new InvalidOperationException("RpcContext.SchemaMetadata is required for ConnectionChanged dispatch.");
 
+            // Spec 029: capture the previous connection string before UpdateSession overwrites it
+            // so we can detect a credential change (different password / user) below.
+            var previousConnStr = ctx.Sessions.GetSession(request.SessionId)?.ConnectionString;
+
             ctx.Sessions.UpdateSession(request);
             ctx.ParserService.SetServerVersion(request.ServerVersion);
+
+            // Spec 030 — Phase 5: dispose the persistent execute connection when the credential changes.
+            // The stale SqlConnection carries the now-wrong identity + #temp/SET/USE state; the next
+            // ExecuteQuery lazily reopens under the new identity. This is the canonical disposal hook
+            // (NOT socket close — a reconnect reuses the same SessionId). Null-safe: SessionConnections
+            // is non-required, so older/test contexts without it skip this branch.
+            if (!string.Equals(previousConnStr, request.ConnectionString, StringComparison.Ordinal))
+            {
+                ctx.SessionConnections?.Dispose(request.SessionId);
+            }
 
             // Invalidate any cached database list for this session -- a new connection may be
             // to a different server and we must not leak the previous server's databases into
@@ -46,6 +60,20 @@ namespace AkmlSql.Engine.Handlers.Control
             // hit 4060/18456/..., every subsequent ConnectionChanged against the same session:db
             // would otherwise re-run Phase A, re-fire SchedulePrefetch, and re-log the warning.
             var schemaCache = ctx.SchemaCache.GetOrCreateCache(request.SessionId, request.DatabaseName);
+
+            // Spec 029: a corrected credential (or any reconnect with a different identity) produces a
+            // different connection string. A PermissionDenied cache is otherwise terminal and would
+            // never retry Phase A — reset it so the new credential gets a fresh attempt.
+            if (schemaCache.PermissionDenied &&
+                !string.Equals(previousConnStr, request.ConnectionString, StringComparison.Ordinal))
+            {
+                schemaCache.Schemas.Clear();
+                schemaCache.ForeignKeys.Clear();
+                schemaCache.Phase = PopulationPhase.NotLoaded;
+                schemaCache.PermissionDenied = false;
+                Log.Information("ConnectionChanged: connection string changed for session={Session} db={Db} — reset permission-denied cache for a fresh Phase A",
+                    request.SessionId, request.DatabaseName);
+            }
 
             // Warm the database-list cache in the background so the first USE-completion keystroke
             // finds it already populated and does not have to block on a SQL round trip. Skip when

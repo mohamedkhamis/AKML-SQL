@@ -4,6 +4,7 @@ using System.Linq;
 using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
+using AkmlSql.Shell.Shared.Editor;
 using AkmlSql.Shell.Shared.Ipc;
 using AkmlSql.Core.Models.Tabs;
 using AkmlSql.Shell.Shared.Tabs;
@@ -230,12 +231,30 @@ namespace AkmlSql.Shell.Shared.Safety
                     return true; // Fail-open: allow execution if engine is unavailable
                 }
 
-                // Resolve environment info once — used for production detection, dialog mode, and audit
+                // Resolve environment info once — used for production detection, dialog mode, and audit.
+                // Pass both server AND database so database-target EnvironmentRules (MatchTarget=Database)
+                // fire correctly; using only serverName (1-arg overload) permanently passed databaseName=null
+                // and silently skipped all database-scoped safety rules.
                 EnvironmentRule? matchedEnvRule = null;
                 bool isProductionServer = false;
                 try
                 {
-                    matchedEnvRule = EnvironmentDetector.Match(serverName);
+                    string? databaseName = null;
+                    try
+                    {
+                        var sp = ServiceProvider.GlobalProvider as System.IServiceProvider;
+                        if (sp != null)
+                        {
+                            var connResult = SsmsConnectionDetector.TryDetectConnection(sp);
+                            databaseName = connResult?.Database;
+                        }
+                    }
+                    catch (Exception dbEx)
+                    {
+                        Log.Debug(dbEx, "ExecutionInterceptor: failed to resolve active database name for environment detection — proceeding with server-only match");
+                    }
+
+                    matchedEnvRule = EnvironmentDetector.Match(serverName, databaseName);
                     if (matchedEnvRule != null)
                     {
                         isProductionServer = matchedEnvRule.Label.IndexOf(

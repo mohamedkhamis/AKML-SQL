@@ -23,6 +23,14 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         public int ObjectType { get; set; }
         public int SortPriority { get; set; }
 
+        /// <summary>
+        /// Spec 030 T027 — the engine's authoritative fully-qualified object identity
+        /// (<c>schema.object</c>), independent of how <see cref="InsertText"/> is decorated
+        /// (e.g. FK-assisted JOIN items whose InsertText is <c>"dbo.Orders o ON …"</c>). Used to fetch
+        /// the object's CREATE script for the definition panel's Script tab. Empty for non-object items.
+        /// </summary>
+        public string SourceObject { get; set; } = string.Empty;
+
         // Computed presentation properties — resolved fresh each access so theme switches
         // pick up the new palette automatically without rebuilding the model.
         public string IconLetter => GetLetter(ObjectType);

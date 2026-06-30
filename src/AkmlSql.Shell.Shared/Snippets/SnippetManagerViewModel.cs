@@ -36,7 +36,15 @@ namespace AkmlSql.Shell.Shared.Snippets
         {
             Snippets = new ObservableCollection<SnippetInfo>();
             FilteredSnippets = new ObservableCollection<SnippetInfo>();
+            Variables = new ObservableCollection<SnippetVariableRow>();
         }
+
+        /// <summary>
+        /// Spec 030 T046 / FR-036 — the editable custom-variable definitions for the snippet currently
+        /// being edited. Populated from <see cref="SnippetInfo.Variables"/> on load (the dialog binds an
+        /// editor grid to this collection); serialized back on Save/Export so variables are never wiped.
+        /// </summary>
+        public ObservableCollection<SnippetVariableRow> Variables { get; }
 
         /// <summary>The full list of snippets from the engine.</summary>
         public ObservableCollection<SnippetInfo> Snippets { get; }
@@ -209,7 +217,11 @@ namespace AkmlSql.Shell.Shared.Snippets
                         ["category"] = _editCategory,
                         ["tags"] = tags
                     },
-                    ["variables"] = Array.Empty<object>(),
+                    // Spec 030 T046 / FR-036 — serialize the current custom variables instead of wiping
+                    // them. Keys (name/default/tooltip/schemaAware) match SnippetVariable's JsonPropertyName
+                    // exactly because the engine's HandleSave deserializes with default (case-SENSITIVE)
+                    // JsonSerializerOptions.
+                    ["variables"] = SerializeVariables(),
                     ["body"] = bodyLines
                 };
 
@@ -316,9 +328,35 @@ namespace AkmlSql.Shell.Shared.Snippets
             EditBody = string.Empty;
             EditCategory = string.Empty;
             EditTags = string.Empty;
+            Variables.Clear();
+            OnPropertyChanged(nameof(Variables));
             IsEditing = true;
             IsBuiltIn = false;
             StatusMessage = "Enter details for the new snippet.";
+        }
+
+        /// <summary>
+        /// Spec 030 T044 / FR-033 — seam for "Create Snippet from Selection". Begins a new-snippet edit
+        /// pre-populated with the selected SQL as the body and an auto-derived shortcode (initials), then
+        /// reuses the variable-preserving <see cref="SaveSnippet"/> path. Call AFTER the dialog is
+        /// constructed so the dialog's PropertyChanged handlers push these values into the textboxes.
+        /// </summary>
+        public void NewSnippetFromSelection(string body, string shortcode)
+        {
+            _selectedSnippet = null;
+            OnPropertyChanged(nameof(SelectedSnippet));
+
+            EditShortcode = shortcode ?? string.Empty;
+            EditName = string.Empty;
+            EditDescription = string.Empty;
+            EditBody = body ?? string.Empty;
+            EditCategory = string.Empty;
+            EditTags = string.Empty;
+            Variables.Clear();
+            OnPropertyChanged(nameof(Variables));
+            IsEditing = true;
+            IsBuiltIn = false;
+            StatusMessage = "New snippet from selection — review the shortcode and save.";
         }
 
         /// <summary>
@@ -337,7 +375,9 @@ namespace AkmlSql.Shell.Shared.Snippets
 
             EditShortcode = _editShortcode + "_copy";
             EditName = _editName + " (Copy)";
-            // Keep description, body, category, and tags as-is
+            // Keep description, body, category, tags, and custom variables as-is. Spec 030 T046:
+            // the Variables collection already holds the source snippet's variables (loaded in
+            // OnSelectedSnippetChanged); leaving it untouched carries them into the duplicate.
             IsEditing = true;
             IsBuiltIn = false;
             StatusMessage = "Duplicated snippet. Modify and save.";
@@ -393,6 +433,8 @@ namespace AkmlSql.Shell.Shared.Snippets
                 EditBody = string.Empty;
                 EditCategory = string.Empty;
                 EditTags = string.Empty;
+                Variables.Clear();
+                OnPropertyChanged(nameof(Variables));
                 return;
             }
 
@@ -403,6 +445,25 @@ namespace AkmlSql.Shell.Shared.Snippets
             EditDescription = _selectedSnippet.Description ?? string.Empty;
             EditCategory = _selectedSnippet.Category ?? string.Empty;
             EditTags = _selectedSnippet.Tags != null ? string.Join(", ", _selectedSnippet.Tags) : string.Empty;
+
+            // Spec 030 T046 / FR-036 — load the snippet's custom variables (the root-cause fix: the VM
+            // never received them before, so any re-save wiped them). SnippetInfo.Variables now arrives
+            // from the engine's HandleList. Replace the collection contents in place.
+            Variables.Clear();
+            if (_selectedSnippet.Variables != null)
+            {
+                foreach (var v in _selectedSnippet.Variables)
+                {
+                    Variables.Add(new SnippetVariableRow
+                    {
+                        Name = v.Name ?? string.Empty,
+                        Default = v.Default ?? string.Empty,
+                        Tooltip = v.Tooltip ?? string.Empty,
+                        SchemaAware = v.SchemaAware
+                    });
+                }
+            }
+            OnPropertyChanged(nameof(Variables));
 
             // Load the snippet body from the engine via SnippetExpand (with FormatOnExpand=false).
             // SnippetExpandResponse.ExpandedText contains the raw body with placeholders intact.
@@ -470,6 +531,32 @@ namespace AkmlSql.Shell.Shared.Snippets
             return false;
         }
 
+        /// <summary>
+        /// Spec 030 T046 / FR-036 — serialize the current <see cref="Variables"/> into the JSON shape the
+        /// engine expects. Keys (name/default/tooltip/schemaAware) match the engine's SnippetVariable
+        /// JsonPropertyName attributes exactly; HandleSave uses default (case-SENSITIVE) options, so the
+        /// keys MUST be lowercase here. Empty-named rows are dropped. <c>schemaAware</c> is omitted when
+        /// null so a non-schema-aware variable round-trips to <c>null</c>, not "".
+        /// </summary>
+        public List<Dictionary<string, object?>> SerializeVariables()
+        {
+            var result = new List<Dictionary<string, object?>>();
+            foreach (var v in Variables)
+            {
+                if (string.IsNullOrWhiteSpace(v.Name)) continue;
+                var dict = new Dictionary<string, object?>
+                {
+                    ["name"] = v.Name ?? string.Empty,
+                    ["default"] = v.Default ?? string.Empty,
+                    ["tooltip"] = v.Tooltip ?? string.Empty,
+                };
+                if (!string.IsNullOrEmpty(v.SchemaAware))
+                    dict["schemaAware"] = v.SchemaAware;
+                result.Add(dict);
+            }
+            return result;
+        }
+
         private static string[] ParseTags(string tagsText)
         {
             if (string.IsNullOrWhiteSpace(tagsText))
@@ -498,5 +585,18 @@ namespace AkmlSql.Shell.Shared.Snippets
         }
 
         #endregion
+    }
+
+    /// <summary>
+    /// Spec 030 T046 / FR-036 — an editable custom-variable row in the Snippet Manager's variables grid.
+    /// Mirrors the engine's SnippetVariable (name/default/tooltip/schemaAware). <see cref="SchemaAware"/>
+    /// is null for a plain text variable.
+    /// </summary>
+    internal sealed class SnippetVariableRow
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Default { get; set; } = string.Empty;
+        public string Tooltip { get; set; } = string.Empty;
+        public string? SchemaAware { get; set; }
     }
 }

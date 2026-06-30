@@ -11,7 +11,8 @@ namespace AkmlSql.Core.Ipc.Messages
     {
         /// <summary>
         /// The action to perform.
-        /// 0 = GetFullSql, 1 = ToggleFavorite, 2 = Delete, 3 = Export, 4 = GetDiff, 5 = DeleteAll.
+        /// 0 = GetFullSql, 1 = ToggleFavorite, 2 = Delete, 3 = Export, 4 = GetDiff, 5 = DeleteAll,
+        /// 6 = Rename, 7 = GetVersions, 8 = SetOpenStatus, 9 = SaveVersion, 10 = RemoveOlderThan.
         /// </summary>
         [Key(0)]
         public int Action { get; set; }
@@ -63,6 +64,13 @@ namespace AkmlSql.Core.Ipc.Messages
         /// </summary>
         [Key(7)]
         public string? SqlText { get; set; }
+
+        /// <summary>
+        /// For RemoveOlderThan: keep favorited entries (default true). The cutoff is the executed_at
+        /// timestamp of <see cref="EntryIds"/>[0], resolved server-side.
+        /// </summary>
+        [Key(8)]
+        public bool? KeepFavorites { get; set; }
     }
 
     /// <summary>
@@ -80,5 +88,6 @@ namespace AkmlSql.Core.Ipc.Messages
         public const int GetVersions = 7;
         public const int SetOpenStatus = 8;
         public const int SaveVersion = 9;
+        public const int RemoveOlderThan = 10;
     }
 }

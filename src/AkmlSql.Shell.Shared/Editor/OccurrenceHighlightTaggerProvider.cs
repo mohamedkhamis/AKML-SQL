@@ -13,6 +13,9 @@ namespace AkmlSql.Shell.Shared.Editor
     /// for T-SQL editor views. Guarded by <see cref="EditorProductivitySettings.HighlightOccurrences"/>.
     /// </summary>
     [Export(typeof(IViewTaggerProvider))]
+    // SSMS 22 query editor reports content type "SQL"; register all three so occurrence highlight fires in SSMS.
+    [ContentType("SQL Server Tools")]
+    [ContentType("SQL")]
     [ContentType("T-SQL")]
     [TagType(typeof(ITextMarkerTag))]
     internal sealed class OccurrenceHighlightTaggerProvider : IViewTaggerProvider

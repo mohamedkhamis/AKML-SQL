@@ -34,6 +34,23 @@ public sealed class HistoryDatabase : IDisposable
     }
 
     /// <summary>
+    /// Test-only constructor that targets a caller-supplied database file path instead of
+    /// the per-user AppData location. Used by the engine test project (via InternalsVisibleTo)
+    /// to isolate each test run in a temporary database.
+    /// </summary>
+    internal HistoryDatabase(string dbPath)
+    {
+        if (string.IsNullOrWhiteSpace(dbPath))
+            throw new ArgumentException("Database path must be provided.", nameof(dbPath));
+
+        var dir = Path.GetDirectoryName(dbPath);
+        if (!string.IsNullOrEmpty(dir))
+            Directory.CreateDirectory(dir);
+
+        _connectionString = $"Data Source={dbPath}";
+    }
+
+    /// <summary>
     /// Initializes the database schema (tables, indexes, FTS5 virtual table, triggers).
     /// Safe to call multiple times — uses IF NOT EXISTS throughout.
     /// If the database is corrupted, renames the corrupted file and creates a fresh database.
@@ -383,6 +400,48 @@ public sealed class HistoryDatabase : IDisposable
     }
 
     /// <summary>
+    /// Version-preserving retention (FR-039): trims OLD version snapshots from
+    /// <c>history_versions</c> while keeping each query's latest version and ALL execution
+    /// records (the <c>history</c> rows themselves are never touched here).
+    /// <para>
+    /// A version row is deleted only when BOTH:
+    /// (1) it is older than <paramref name="retentionDays"/>, AND
+    /// (2) it is not the latest version for its parent entry (highest <c>id</c> per
+    ///     <c>history_id</c> — autoincrement encodes insertion recency, robust against
+    ///     second-granularity ties in <c>saved_at</c>).
+    /// </para>
+    /// Favorites are preserved implicitly: this method never deletes <c>history</c> rows.
+    /// </summary>
+    /// <returns>The number of version rows deleted.</returns>
+    public async Task<int> PurgeOldVersionsAsync(int retentionDays)
+    {
+        await using var conn = new SqliteConnection(_connectionString);
+        await conn.OpenAsync();
+
+        // Note: saved_at is populated by the column default datetime('now') which yields
+        // 'YYYY-MM-DD HH:MM:SS' (space-separated, no 'T'/'Z'), NOT the ISO 8601 "o" format
+        // used for executed_at. Wrap BOTH sides in datetime() so the comparison is
+        // format-agnostic and never over-trims due to string-collation differences.
+        await using var cmd = new SqliteCommand(@"
+            DELETE FROM history_versions
+            WHERE datetime(saved_at) < datetime('now', @cutoffOffset)
+              AND id NOT IN (
+                  SELECT MAX(id) FROM history_versions GROUP BY history_id
+              );", conn);
+        cmd.Parameters.AddWithValue("@cutoffOffset", $"-{retentionDays} days");
+
+        var deletedCount = await cmd.ExecuteNonQueryAsync();
+        if (deletedCount > 0)
+        {
+            Log.Information(
+                "History version trim: deleted {Count} old version snapshots older than {Days} days (latest versions + executions kept)",
+                deletedCount, retentionDays);
+        }
+
+        return deletedCount;
+    }
+
+    /// <summary>
     /// Searches the history database with the given filter criteria.
     /// Supports full-text search, column filters, date ranges, deduplication, and pagination.
     /// Returns a tuple of (matching entries for the current page, total count across all pages).
@@ -521,28 +580,67 @@ public sealed class HistoryDatabase : IDisposable
         string dataSql;
         if (filter.Deduplicate)
         {
+            // Deduplicated view: one representative row per content_hash = the MOST RECENT execution,
+            // chosen deterministically by ROW_NUMBER (latest executed_at, id as tiebreak). Every scalar
+            // column therefore comes from that single latest row. This replaces the prior
+            // GROUP-BY-with-bare-columns query, where SQLite (with several MAX() aggregates present)
+            // pulled name/status/row-count/duration from an ARBITRARY row in the group — so a repeated
+            // query could show a stale status or the wrong duration. exec_count is the number of
+            // executions MATCHING THE CURRENT FILTER (equal to the total when unfiltered, because
+            // COUNT(*) OVER runs after {whereClause}); favourite/open are "any version" (MAX over the
+            // partition, matching the FavoritesOnly filter); and the display name is the latest NON-NULL
+            // tab_title within the filtered partition so a rename survives later re-executions. The
+            // tab_title is a WINDOW column computed INSIDE the ranked subquery so it respects
+            // {whereClause} (a correlated subquery over the bare table would ignore the filters). The
+            // {whereClause} filters live INSIDE the windowed subquery so
+            // COUNT()/ROW_NUMBER() see the filtered set; only `rn = 1` is applied outside.
             dataSql = $@"
                 SELECT
-                    MAX(h.id) as id,
-                    substr(h.sql_text, 1, 500) as sql_text,
-                    h.server,
-                    h.database_name,
-                    h.username,
-                    MAX(h.executed_at) as executed_at,
-                    h.duration_ms,
-                    h.row_count,
-                    h.status,
-                    h.error_msg,
-                    h.source,
-                    h.tab_title,
-                    h.is_favorite,
-                    COUNT(*) as exec_count,
-                    h.content_hash,
-                    MAX(h.is_open) as is_open
-                FROM {fromClause}
-                {whereClause}
-                GROUP BY h.content_hash
-                ORDER BY MAX(h.executed_at) DESC
+                    ranked.id,
+                    substr(ranked.sql_text, 1, 500) as sql_text,
+                    ranked.server,
+                    ranked.database_name,
+                    ranked.username,
+                    ranked.executed_at,
+                    ranked.duration_ms,
+                    ranked.row_count,
+                    ranked.status,
+                    ranked.error_msg,
+                    ranked.source,
+                    ranked.tab_title,
+                    ranked.is_favorite,
+                    ranked.exec_count,
+                    ranked.content_hash,
+                    ranked.is_open
+                FROM (
+                    SELECT
+                        h.id,
+                        h.sql_text,
+                        h.server,
+                        h.database_name,
+                        h.username,
+                        h.executed_at,
+                        h.duration_ms,
+                        h.row_count,
+                        h.status,
+                        h.error_msg,
+                        h.source,
+                        h.content_hash,
+                        COUNT(*)           OVER (PARTITION BY h.content_hash) as exec_count,
+                        MAX(h.is_favorite) OVER (PARTITION BY h.content_hash) as is_favorite,
+                        MAX(h.is_open)     OVER (PARTITION BY h.content_hash) as is_open,
+                        FIRST_VALUE(h.tab_title) OVER (
+                            PARTITION BY h.content_hash
+                            ORDER BY (CASE WHEN h.tab_title IS NULL THEN 1 ELSE 0 END), h.executed_at DESC, h.id DESC
+                            ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+                        ) as tab_title,
+                        ROW_NUMBER()       OVER (PARTITION BY h.content_hash
+                                                 ORDER BY h.executed_at DESC, h.id DESC) as rn
+                    FROM {fromClause}
+                    {whereClause}
+                ) AS ranked
+                WHERE ranked.rn = 1
+                ORDER BY ranked.executed_at DESC, ranked.id DESC
                 LIMIT @limit OFFSET @offset";
         }
         else
@@ -810,6 +908,52 @@ public sealed class HistoryDatabase : IDisposable
     }
 
     /// <summary>
+    /// Spec 030 T074 / FR-041 — deletes every entry STRICTLY OLDER than the reference entry's
+    /// <c>executed_at</c> (so the reference entry itself is kept). The cutoff is resolved server-side
+    /// (SELECT by id) to avoid timestamp-format drift across the IPC boundary. When
+    /// <paramref name="keepFavorites"/> is true (default), favorited entries are preserved — matching
+    /// the auto-trim purge convention. The FTS index is kept in sync by the AFTER DELETE trigger.
+    /// Returns the number of entries deleted (0 if the reference id is unknown).
+    /// <para>
+    /// Both sides of the comparison are wrapped in SQLite <c>datetime()</c> (as
+    /// <see cref="PurgeOldVersionsAsync"/> does): <c>executed_at</c> is NOT uniformly ISO-8601 — most
+    /// rows are ISO 'o' (<see cref="InsertEntryAsync"/>) but <c>SaveVersionByTabTitleAsync</c> rewrites
+    /// it via <c>datetime('now')</c> (space-separated). A raw lexicographic compare would treat a
+    /// space-format row as older than any ISO row on the same day (space &lt; 'T'), silently deleting
+    /// NEWER entries. <c>datetime()</c> canonicalises both forms so the comparison is by real time.
+    /// </para>
+    /// </summary>
+    public async Task<int> DeleteEntriesOlderThanAsync(long referenceEntryId, bool keepFavorites = true)
+    {
+        await using var conn = new SqliteConnection(_connectionString);
+        await conn.OpenAsync();
+
+        string? cutoff;
+        await using (var lookup = new SqliteCommand(
+            "SELECT executed_at FROM history WHERE id = @id;", conn))
+        {
+            lookup.Parameters.AddWithValue("@id", referenceEntryId);
+            cutoff = (await lookup.ExecuteScalarAsync()) as string;
+        }
+
+        if (string.IsNullOrEmpty(cutoff))
+        {
+            Log.Warning("History: RemoveOlderThan reference entry {Id} not found; nothing deleted", referenceEntryId);
+            return 0;
+        }
+
+        var sql = keepFavorites
+            ? "DELETE FROM history WHERE datetime(executed_at) < datetime(@cutoff) AND is_favorite = 0;"
+            : "DELETE FROM history WHERE datetime(executed_at) < datetime(@cutoff);";
+        await using var cmd = new SqliteCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@cutoff", cutoff);
+        var deletedCount = await cmd.ExecuteNonQueryAsync();
+        Log.Information("History: RemoveOlderThan deleted {Count} entries older than {Cutoff} (keepFavorites={Keep})",
+            deletedCount, cutoff, keepFavorites);
+        return deletedCount;
+    }
+
+    /// <summary>
     /// Deletes all non-favorite history entries. Returns the number deleted.
     /// </summary>
     public async Task<int> DeleteAllNonFavoriteAsync()
@@ -1061,6 +1205,16 @@ public sealed class HistoryDatabase : IDisposable
     /// <summary>
     /// Updates the tab_title (display name) for a history entry.
     /// Used by the "Rename" feature for closed queries.
+    /// <para>
+    /// The rename is applied to EVERY row sharing the target entry's <c>content_hash</c> (the whole
+    /// deduplication group), not just the single row identified by <paramref name="entryId"/>. The
+    /// display name is a query-level label: the deduplicated search derives it via a window function
+    /// over the filtered partition, so a per-row name would vanish whenever a filter excludes the
+    /// renamed row (e.g. a server filter that hides the exact execution that was renamed). Stamping
+    /// the name on all rows of the group makes it consistent across executions and filters. This
+    /// cannot reintroduce the old "name bleeds across a name filter" bug, because every row of the
+    /// content_hash carries the SAME name. The AFTER UPDATE FTS sync (if any) still fires per row.
+    /// </para>
     /// </summary>
     public async Task UpdateTabTitleAsync(long entryId, string newName)
     {
@@ -1068,12 +1222,12 @@ public sealed class HistoryDatabase : IDisposable
         await conn.OpenAsync();
 
         await using var cmd = new SqliteCommand(
-            "UPDATE history SET tab_title = @name WHERE id = @id;", conn);
+            "UPDATE history SET tab_title = @name WHERE content_hash = (SELECT content_hash FROM history WHERE id = @id);", conn);
         cmd.Parameters.AddWithValue("@name", newName);
         cmd.Parameters.AddWithValue("@id", entryId);
 
         await cmd.ExecuteNonQueryAsync();
-        Log.Debug("History entry {Id}: tab_title updated to '{Name}'", entryId, newName);
+        Log.Debug("History entry {Id}: tab_title updated to '{Name}' (applied to whole content_hash group)", entryId, newName);
     }
 
     /// <summary>

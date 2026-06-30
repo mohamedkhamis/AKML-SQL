@@ -405,6 +405,85 @@ public class ControlFlowRulesTests
         Assert.Equal(2, nodes[1].IndentLevel);
     }
 
+    // ── T008 — unset WhenAlignment/EndAlignment honor the legacy intent ───
+
+    [Fact]
+    public void T008_WhenAlignment_Unset_HonorsIndentWhen()
+    {
+        var profile = new FormattingProfile
+        {
+            Case =
+            {
+                WhenOnNewLine = true,
+                WhenAlignment = "",        // unset → honor legacy IndentWhen (was shadowed by "toCase")
+                IndentWhen = true,
+                CollapseShortCase = false,
+            }
+        };
+
+        var nodes = new List<LayoutNode>
+        {
+            Node("CASE", TSqlTokenType.Case, indent: 2),
+            Node("WHEN", TSqlTokenType.When),
+            Node("1"),
+            Node("THEN", TSqlTokenType.Then),
+            Node("a"),
+            Node("END", TSqlTokenType.End)
+        };
+
+        _rules.Apply(nodes, profile);
+
+        // unset + IndentWhen=true => WHEN at caseIndent + 1 = 3 (the bug de-dented it to 2).
+        Assert.Equal(3, nodes[1].IndentLevel);
+    }
+
+    [Fact]
+    public void T008_WhenAlignment_Unset_IndentWhenFalse_KeepsAtCase()
+    {
+        var profile = new FormattingProfile
+        {
+            Case = { WhenOnNewLine = true, WhenAlignment = "", IndentWhen = false, CollapseShortCase = false }
+        };
+
+        var nodes = new List<LayoutNode>
+        {
+            Node("CASE", TSqlTokenType.Case, indent: 2),
+            Node("WHEN", TSqlTokenType.When),
+            Node("1"),
+            Node("THEN", TSqlTokenType.Then),
+            Node("a"),
+            Node("END", TSqlTokenType.End)
+        };
+
+        _rules.Apply(nodes, profile);
+
+        Assert.Equal(2, nodes[1].IndentLevel);
+    }
+
+    [Fact]
+    public void T008_EndAlignment_Unset_IndentsEnd()
+    {
+        var profile = new FormattingProfile
+        {
+            Case = { EndOnNewLine = true, EndAlignment = "", CollapseShortCase = false }
+        };
+
+        var nodes = new List<LayoutNode>
+        {
+            Node("CASE", TSqlTokenType.Case, indent: 2),
+            Node("WHEN", TSqlTokenType.When, BreakType.NewLine),
+            Node("1"),
+            Node("THEN", TSqlTokenType.Then),
+            Node("a"),
+            Node("END", TSqlTokenType.End, BreakType.NewLine)
+        };
+
+        _rules.Apply(nodes, profile);
+
+        // unset EndAlignment => END indented one in from CASE: caseIndent(2) + 1 = 3.
+        Assert.Equal(3, nodes[5].IndentLevel);
+    }
+
     // ── T083 — Operators.BetweenOnNewLine ────────────────────────────────
 
     [Fact]

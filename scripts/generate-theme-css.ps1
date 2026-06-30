@@ -111,6 +111,16 @@ function Format-VariantCss {
         $null = $sb.AppendLine("    ${cssName}: ${px}px;")
     }
 
+    # Radius (theme-invariant scalars; pills use a large px value, not a percentage)
+    if ($json.PSObject.Properties.Name -contains 'radius') {
+        $null = $sb.AppendLine("    /* Radius (theme-invariant scalars in DIU) */")
+        foreach ($radiusKey in $json.radius.PSObject.Properties.Name) {
+            $cssName = ConvertTo-CssVarName $radiusKey
+            $px = $json.radius.$radiusKey
+            $null = $sb.AppendLine("    ${cssName}: ${px}px;")
+        }
+    }
+
     # Typography (composite; split into family/size/weight sub-variables)
     $null = $sb.AppendLine("    /* Typography (theme-invariant; split into family/size/weight) */")
     foreach ($typeKey in $json.typography.PSObject.Properties.Name) {

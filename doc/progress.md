@@ -352,7 +352,7 @@ This document tracks the development progress, complete feature inventory, issue
 
 ## Spec 028 — M6 AI Parity Closure (Browser AI) (2026-06-03)
 
-**Status**: In progress on branch `028-m6-ai-browser-closure` (US1 committed `132fd93`; US2–US6 + US7 partial uncommitted).
+**Status**: US1–US6 committed; **US7 interactive verification pass done 2026-06-03** (ran the app + a real browser + a local mock provider). One latent bug found and fixed in that pass (see below).
 **Scope**: Closure spec for "M6 — AI Assistance in the Browser". The M6 scaffold (lib, key vault, client, panel, chat, settings) already shipped under spec 021 Phase 7; this closes the genuinely-unmet work.
 
 **Reconciliations (user-confirmed):** keep the shipped non-extractable-CryptoKey vault (not the PRD's passphrase/PBKDF2); privacy = the PRD's 4 *disclosure* modes (not the engine's redaction axis); **OpenAI/Azure are CORS-blocked browser-direct** (verified by a live cross-origin fetch) → documented-out, no proxy/relay; build the M5-deferred `SchemaPhasePayload→DatabaseCache` rehydrator.
@@ -367,7 +367,13 @@ This document tracks the development progress, complete feature inventory, issue
 - **US6**: `IChatHistoryStore` (persist/restore/clear) + Markdown export.
 - **Tests**: 63 AI unit/bUnit tests + 4 rehydrator tests green; full web suite no new failures (26 pre-existing formatter-parity failures unrelated). An adversarial review workflow caught (and we fixed) a real fully-local send-path privacy leak + corrupted type widths.
 
-**Remaining (interactive / doc):** US5 E2E run (T040, skip-flagged), privacy wire-capture (T041), parity screenshots (T043), first-token latency (T047), quickstart-m6 refresh (T045), and the PR merge.
+**US7 interactive pass (2026-06-03) — what running the product surfaced + closed:**
+
+- **🐞 Latent bug found + fixed: the AI panel + chat were orphaned.** `AiPanel.razor` / `AiChatPanel.razor` were built + bUnit-tested but wired into **no reachable page** (`Editor.razor` had no AI affordance; no `/ai` or `/chat` route; nav linked only to `/settings/ai`). So 2 of the "7 features" (the 5-action panel + chat) were **unreachable by a user**, despite the DoD claiming otherwise — and bUnit (render-in-isolation) structurally couldn't catch it. **Fix:** an editor-adjacent collapsible **AI dock** (`AI ▾` toolbar toggle → `[Actions] [Chat]` tabs; actions run on the live selection via a new optional `AiPanel.SelectedSqlProvider` that defaults to the existing param path → `AiPanelTests` stay 65/65; Accept inserts at the caret). New `getSelectedText`/`GetSelectedTextAsync`. Files: `Editor.razor`, `AiPanel.razor`, `EditorComponent.razor`, `akml-editor.js`.
+- **T038 mock harness + T040 E2E — done & passing.** Real `MockAiProvider` (HttpListener, Ollama/OpenAI-compat, CORS, buffered + SSE, records bodies) + `WebAppFixture`; `UserStory5AiTests` rewritten from skip-pseudocode into real Playwright (selectors verified live) — `AddProvider_RunExplain_StreamsBrowserDirect` + `GhostText_TypeShowsGreyText_TabAccepts` **both pass** (opt-in `BridgeE2E`, `[SkippableFact]`).
+- **T041 privacy wire-capture (SC-009) — done.** All 3 modes captured on the wire (Full = columns+types+FK+desc; Names = names only; None = empty), **no AKML host** in the AI path, and the plaintext key absent from all 13 IndexedDB stores (wrapped ciphertext only). Evidence: `specs/028-m6-ai-browser-closure/SC-009-EVIDENCE/`.
+- **T047 cache-hit — done (50 % ≥ 30 %, SC-006);** ghost text grey widget + Tab-accept verified live. Chat streams + persists across reload (US6).
+- **Remaining (genuinely not closeable here / user action):** WPF-half parity screenshots (no SSMS/VS host — 1 accepted-pending delta, T043) and real-provider first-token latency (needs a real key, T047); plus the PR merge. `quickstart-m6` (T045) already refreshed.
 
 ## Spec 014 Phase 3b: UI Polish — Safety Dialog & Schema Progress Margin (2026-04-11)
 
@@ -1368,3 +1374,38 @@ The committed `ssf`/`cte` built-ins **and** `snippet-expansion-contract.md` used
 - **All Razor/JS UI runtime behaviour** (tab-stops landing, surround wrapping, menus/dialogs rendering, suppress buttons inserting at the right place) is **build-verified only** — no headless browser. The data-layer guarantees and the bUnit-testable render/gating logic *are* test-covered (255 Web.Tests).
 
 *Last updated: 2026-06-01*
+
+---
+
+## Spec 029 — SQL-auth credential support for IntelliSense (SSMS/VS)
+
+**Origin**: bug "any remote server cannot load schema, just local only". Root cause: SQL Server-authentication windows (login like `sa`) are not engine-usable — the out-of-process engine can't reuse the SSMS-held password (R-017, spec 014) — so `ConnectionWiringHelper` skipped `ConnectionChanged`, the engine never registered the session, and the schema cache stayed empty. Local Windows-auth worked; every remote SQL-auth connection silently got no IntelliSense.
+
+Spec/plan: `specs/029-sql-auth-credentials/{design,plan}.md`.
+
+### What shipped
+
+| Area | Change |
+|---|---|
+| **Store** | `AkmlSql.Core.Config.SqlCredentialStore` — DPAPI (`CurrentUser` + entropy `AkmlSql-SqlCred-v1`), per `(server, login)`, JSON at `%AppData%\AKML SQL\sql-credentials.json`, atomic temp+rename, process-wide lock, corrupt-entry self-heal. Opt-out `intelliSense.enableSqlAuthCredentials` (default true). |
+| **Detector** | New `AuthMode.SqlPassword` (SQL logins split out of `Unsupported`; AAD-interactive modes stay `Unsupported`); `ConnectionResult.Login`; `BuildSqlAuthConnectionString` via `System.Data.SqlClient.SqlConnectionStringBuilder` (safe escaping; parse-compatible with the engine's `Microsoft.Data.SqlClient`). |
+| **IPC** | `TestSqlConnection`/`Result` (93/193) + `TestSqlConnectionHandler` (validate a candidate connection string before the shell stores the password; logs only via `ConnectionDiagnostics.Describe`). `SchemaStatusResponse.AuthError` (Key 5). `ConnectionChangedHandler` resets a terminal `PermissionDenied` cache when the connection string changes (so a corrected password reloads). |
+| **Shell UX** | Per-buffer `SqlAuthState` marker; `ConnectionWiringHelper` resolves a stored credential (fills connstr → existing send path) or marks `NeedsCredentials`; `SqlCredentialDialog` (theme-aware, validate-before-store, empty-login guard, "Clear saved password"); `SchemaProgressMargin` click-to-enter affordance + 1 s store re-check for multi-window auto-resolve + `AuthError` → "credentials rejected — click to re-enter". |
+
+### Flow
+
+Open SQL-auth window → detector `SqlPassword`/not-usable → stored credential? yes: connect; no: margin affordance → dialog validates via `TestSqlConnection` → DPAPI store → `ConnectionChanged` → schema loads. Multi-window: a credential entered in one window auto-resolves the others within ~1 s. Stale (server password changed): engine `AuthError` → re-enter → cache reset → fresh Phase A. No silent failures; the password is never logged (gate verified) and never persisted in plaintext (`SqlAuthState` holds no password; only the encrypted store does; the connstr crosses only the ACL'd pipe).
+
+### Verification
+
+- Built via subagent-driven development: 8 implementation groups, each independently spec + code-quality reviewed (fix loops applied); an Opus whole-implementation review (APPROVED) traced all four scenarios (first-time / re-use / multi-window / stale) and caught + fixed one cross-file gap — `TryResolveStoredSqlCredential` stranding a window when the engine was momentarily disconnected.
+- Tests: Core **538** (incl. 5 new `SqlCredentialStore` tests) ✅; Shell.Shared **24** (incl. classification → `SqlPassword`, AAD stays `Unsupported`, `Login` capture, builder special-char round-trip) ✅; Engine **1076** ✅. The lone `PerformanceBaselineTests` failure during the parallel run was the known per-developer, machine-variable 5 % perf gate under concurrent build load — **passed 3/3 standalone** (see the spec-025 note above for the same flake).
+- No-leak gate: enumerated every `.ConnectionString` / `Password` use across the engine + shell — no `Log.*` ever receives a raw connection string or password (IPC router/transport log message type, not contents).
+
+### Not runtime-verified here (needs a Windows host + the live server)
+
+- **Live deploy + the 5 end-to-end scenarios** against `192.168.5.123` (`sa`) on the running SSMS 22 (plan Task 13) — the load-bearing `SqlConnectionStringBuilder` ↔ `Microsoft.Data.SqlClient` interop is validated by scenario 1.
+- **VS 2026 parity** (shared `.projitems`) — code builds, but live-verified only on SSMS 22.
+- **Deferred**: Options-dialog toggle for `enableSqlAuthCredentials` (the config flag works without UI); full "Manage SQL credentials" Options page (the in-dialog "Clear saved password" covers v1).
+
+*Last updated: 2026-06-04*

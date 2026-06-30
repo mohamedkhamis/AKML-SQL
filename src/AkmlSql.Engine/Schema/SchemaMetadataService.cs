@@ -238,6 +238,7 @@ public class SchemaMetadataService
             // Mark the cache as permission-denied so callers stop re-dispatching Phase
             // A, periodic refresh, and DatabaseProvider prefetch against this key.
             cache.PermissionDenied = true;
+            cache.PermissionDeniedErrorNumber = sqlEx.Number;
             Log.Warning(
                 "Phase A skipped for {Key}: login/permission denied (err={ErrorNumber} state={State} class={Class}). Connection: {ConnDesc}. Schema-aware IntelliSense is disabled for this database until the user connects with an identity that can access it.",
                 cache.CacheKey, sqlEx.Number, sqlEx.State, sqlEx.Class, connDesc);
@@ -308,6 +309,7 @@ public class SchemaMetadataService
             // may have had its token expire, or the user switched to a different DB
             // they don't own. Single warning, no stack trace.
             cache.PermissionDenied = true;
+            cache.PermissionDeniedErrorNumber = sqlEx.Number;
             Log.Warning(
                 "Phase B skipped for {Key}: login/permission denied (err={ErrorNumber} state={State}). Connection: {ConnDesc}. Column/FK completions disabled until reconnect.",
                 cache.CacheKey, sqlEx.Number, sqlEx.State, connDesc);

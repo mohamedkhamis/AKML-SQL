@@ -137,5 +137,58 @@ namespace AkmlSql.Shell.Shared.Commands
                     Constants.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
+
+        /// <summary>
+        /// Analyzes a SINGLE document's text (the active query) and shows the findings in
+        /// <see cref="BulkAnalysisResultDialog"/>. Used by the editor toolbar's analysis button, which
+        /// acts on the current query rather than a folder — and which can't reliably dispatch the VS
+        /// command in SSMS, so it calls this directly. Awaits the engine (no sync-over-async block), so
+        /// it's safe to call from a UI-thread click; the await resumes on the UI thread for ShowDialog.
+        /// </summary>
+        public static async void AnalyzeDocumentAsync(string displayName, string sql)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(sql))
+                {
+                    MessageBox.Show("Nothing to analyze — the document is empty.",
+                        Constants.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                var client = EngineLifecycle.Manager?.Client;
+                if (client == null || !client.IsConnected)
+                {
+                    MessageBox.Show("AKML SQL engine is not running yet — try again in a moment.",
+                        Constants.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                var request = new CodeAnalysisRequest
+                {
+                    SessionId       = "toolbar",
+                    RequestId       = "1",
+                    DocumentText    = sql,
+                    DocumentVersion = 1
+                };
+
+                var response = await client.SendRequestAsync<CodeAnalysisResponse, CodeAnalysisRequest>(
+                    MessageTypes.RequestAnalyze, request, timeoutMs: 15_000);
+
+                var issues = new List<(string File, CodeIssueInfo Issue)>();
+                if (response?.Issues != null)
+                    foreach (var issue in response.Issues)
+                        issues.Add((displayName ?? "current query", issue));
+
+                using var dialog = new BulkAnalysisResultDialog(issues, 1);
+                dialog.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "BulkAnalysisCommand.AnalyzeDocumentAsync failed");
+                MessageBox.Show("Code analysis failed: " + ex.Message,
+                    Constants.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
     }
 }

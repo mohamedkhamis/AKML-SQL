@@ -11,6 +11,9 @@
 @inject IThemeService Theme
 @inject IAnalysisSettingsStore AnalysisSettings
 @inject IEditorSessionStore SessionStore
+@inject ISqlConnectionService SqlConn
+@inject IEngineBridge Bridge
+@inject IConnectionManagerController ConnManager
 
 <PageTitle>Settings — AKML SQL</PageTitle>
 
@@ -53,6 +56,26 @@
     </section>
 
     <section class="akml-settings-section">
+        <h3>Connect to SQL Server</h3>
+        <p class="akml-settings-help">
+            Tell the paired engine which SQL Server + database to open, so IntelliSense gets the live
+            schema. Windows authentication uses the <em>engine host's</em> identity (no password).
+            Requires a paired engine (above) and currently targets a local engine.
+        </p>
+
+        @if (SqlConn.IsConnected)
+        {
+            <p class="akml-settings-status">Connected: <strong>@SqlConn.Server</strong> / <strong>@SqlConn.Database</strong> — live schema IntelliSense is on.</p>
+            <button class="akml-tool-button" @onclick="DisconnectSqlAsync">Disconnect</button>
+        }
+        else if (Bridge.State != BridgeState.Open)
+        {
+            <p class="akml-settings-help">Pair an engine first (Engine connections → Add), then connect to SQL Server.</p>
+        }
+        <button class="akml-tool-button" @onclick="() => ConnManager.Open()" data-testid="settings-manage-connections">Manage connections…</button>
+    </section>
+
+    <section class="akml-settings-section">
         <h3>Schema cache</h3>
         <p class="akml-settings-help">
             The browser caches schema metadata per (server, database) so IntelliSense
@@ -88,16 +111,35 @@
     .akml-tool-button {
         font-family: var(--akml-type-chrome-family); font-size: var(--akml-type-chrome-size);
         background-color: var(--akml-surface-panel); color: var(--akml-text-primary);
-        border: 1px solid var(--akml-border-default); border-radius: 3px;
+        border: 1px solid var(--akml-border-default); border-radius: var(--akml-scalar-radius-xs);
         padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s); cursor: pointer;
     }
     .akml-tool-button:hover { background-color: var(--akml-surface-hover); }
     .akml-settings-status { color: var(--akml-status-info); font-style: italic; }
+    .akml-field { display: flex; align-items: center; gap: var(--akml-scalar-spacing-s); margin-bottom: var(--akml-scalar-spacing-xs); }
+    .akml-field > label:first-child { width: 90px; color: var(--akml-text-secondary); font-size: 13px; }
+    .akml-input {
+        flex: 1; max-width: 320px;
+        background-color: var(--akml-surface-input, var(--akml-surface-panel)); color: var(--akml-text-primary);
+        border: 1px solid var(--akml-border-default); border-radius: var(--akml-scalar-radius-xs);
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s);
+    }
 </style>
 
 @code {
     private WebAnalysisSettings _settings = new();
     private string? _status;
+
+    // Phase 4 — the inline connect form moved to the global ConnectionManagerModal (opened via
+    // ConnManager.Open()). Settings keeps only the connected-status line + Disconnect below.
+
+    private async Task DisconnectSqlAsync()
+    {
+        await SqlConn.DisconnectAsync();
+        StateHasChanged();
+    }
+
+    private void OnConnStateChanged() => InvokeAsync(StateHasChanged);
 
     protected override async Task OnInitializedAsync()
     {
@@ -108,10 +150,13 @@
         // idempotent (Task is cached), so MainLayout's parallel call is fine.
         await Theme.InitializeAsync();
         Theme.Changed += OnThemeChanged;
+        Bridge.StateChanged += OnBridgeStateChanged;
+        SqlConn.StateChanged += OnConnStateChanged;
         _settings = await AnalysisSettings.GetAsync();
     }
 
     private void OnThemeChanged() => InvokeAsync(StateHasChanged);
+    private void OnBridgeStateChanged(BridgeState _) => InvokeAsync(StateHasChanged);
 
     private async Task SetTheme(ThemeMode mode)
     {
@@ -123,6 +168,8 @@
     public void Dispose()
     {
         Theme.Changed -= OnThemeChanged;
+        Bridge.StateChanged -= OnBridgeStateChanged;
+        SqlConn.StateChanged -= OnConnStateChanged;
     }
 
     private async Task ToggleEnabled(ChangeEventArgs e)

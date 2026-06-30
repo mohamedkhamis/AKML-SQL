@@ -23,6 +23,14 @@ public class RefactoringContext
     public string[] AdditionalFilePaths { get; set; } = [];
 
     /// <summary>
+    /// The active session's connection string, when connected. Heavyweight operations that need a
+    /// live catalog lookup (e.g. Inline Stored Procedure fetching the body from sys.sql_modules)
+    /// read it here; it is only consulted during Preview. Null when there is no live connection —
+    /// such operations then return CanApply = false.
+    /// </summary>
+    public string? ConnectionString { get; set; }
+
+    /// <summary>
     /// IntelliSense policy flags consulted by lightweight refactoring operations
     /// (e.g. <c>InsertOptions.IncludeColumns</c> gates ExpandInsertColumns).
     /// When null, operations fall back to <c>ConfigManager.Load().IntelliSense</c>.

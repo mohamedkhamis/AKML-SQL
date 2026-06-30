@@ -21,7 +21,42 @@ namespace AkmlSql.Engine.Handlers.Snippets
         public Task<SnippetExpandResponse> HandleAsync(SnippetExpandRequest request, RpcContext ctx, CancellationToken ct)
         {
             var session = ctx.Sessions.GetSession(request.SessionId);
-            return Task.FromResult(_inner.HandleExpand(request, session?.DatabaseName));
+            // Spec 030 (re-audit): thread the server name so the $SERVER$ placeholder resolves at
+            // runtime. Previously only DatabaseName was passed, so $SERVER$ silently expanded to "".
+            // Spec 030 FR-037 parity: thread the SQL login so $USER$ resolves to the connected login.
+            // Integrated-auth connections yield "" from UserID → resolver falls back to Environment.UserName.
+            return Task.FromResult(_inner.HandleExpand(
+                request,
+                session?.DatabaseName,
+                DeriveServerName(session?.ConnectionString),
+                DeriveLogin(session?.ConnectionString)));
+        }
+
+        // Derive the server from the session's connection string DataSource — the same scrub
+        // SessionManager / SessionTrackerBridge use. Null/empty/unparseable → "" so $SERVER$ falls
+        // back to empty rather than throwing.
+        private static string DeriveServerName(string? connectionString)
+        {
+            if (string.IsNullOrEmpty(connectionString)) return string.Empty;
+            try
+            {
+                return new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(connectionString).DataSource ?? string.Empty;
+            }
+            catch { return string.Empty; }
+        }
+
+        // Derive the SQL login from the connection string UserID. Returns "" for integrated-auth
+        // (Windows auth) connections so the resolver falls back to Environment.UserName, which is a
+        // coherent approximation. Note: live SYSTEM_USER query was intentionally not implemented to
+        // keep the handler sync/IO-free.
+        private static string DeriveLogin(string? connectionString)
+        {
+            if (string.IsNullOrEmpty(connectionString)) return string.Empty;
+            try
+            {
+                return new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(connectionString).UserID ?? string.Empty;
+            }
+            catch { return string.Empty; }
         }
     }
 

@@ -214,7 +214,28 @@ namespace AkmlSql.Shell.Shared.Editor.Toolbar
         private void OnHistoryClick()  => InvokeVsCommand(CommandIds.CmdHistoryPanel,    "HistoryPanel");
         private void OnOutlineClick()  => InvokeVsCommand(CommandIds.CmdDocumentOutline, "DocumentOutline");
         private void OnSearchClick()   => InvokeVsCommand(CommandIds.CmdObjectSearch,    "ObjectSearch");
-        private void OnAnalysisClick() => InvokeVsCommand(CommandIds.CmdBulkAnalysis,    "BulkAnalysis");
+        private void OnAnalysisClick()
+        {
+            // Analyze THIS query directly (the toolbar button is per-editor) and show the results.
+            // This also sidesteps the VS command-dispatch that can't reach CmdBulkAnalysis in SSMS.
+            try
+            {
+                var sql = _textView?.TextBuffer?.CurrentSnapshot?.GetText() ?? string.Empty;
+                string name = "current query";
+                if (_textView != null &&
+                    _textView.TextBuffer.Properties.TryGetProperty(
+                        typeof(Microsoft.VisualStudio.Text.ITextDocument),
+                        out Microsoft.VisualStudio.Text.ITextDocument doc) && doc?.FilePath != null)
+                {
+                    name = System.IO.Path.GetFileName(doc.FilePath);
+                }
+                AkmlSql.Shell.Shared.Commands.BulkAnalysisCommand.AnalyzeDocumentAsync(name, sql);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "EditorToolbar: analysis click failed");
+            }
+        }
         private void OnAiChatClick()   => InvokeVsCommand(CommandIds.CmdAiChatPanel,     "AiChatPanel");
         private void OnSettingsClick() => InvokeVsCommand(CommandIds.CmdOptions,         "Options");
 

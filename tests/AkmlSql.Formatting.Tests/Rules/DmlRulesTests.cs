@@ -56,6 +56,39 @@ public class DmlRulesTests
         Assert.Equal(BreakType.NewLine, nodes[2].PrecedingBreak);
     }
 
+    // ── BETWEEN's AND must not be re-indented; the clause-level AND must (Spec 030 T008) ──
+
+    [Fact]
+    public void Apply_AndOrIndent_LeavesBetweenAnd_ReindentsBooleanAnd()
+    {
+        var profile = new FormattingProfile
+        {
+            Dml =
+            {
+                AndOrNewLine = "before",
+                AndOrIndent = "alignWithWhere"
+            }
+        };
+
+        var nodes = new List<LayoutNode>
+        {
+            Node("col", TSqlTokenType.Identifier, indent: 1),
+            Node("BETWEEN", TSqlTokenType.Between, indent: 1),
+            Node("1", TSqlTokenType.Integer),
+            Node("AND", TSqlTokenType.And, BreakType.NewLine, indent: 2),   // BETWEEN's AND
+            Node("10", TSqlTokenType.Integer),
+            Node("AND", TSqlTokenType.And, BreakType.NewLine, indent: 2),   // clause-level boolean AND
+            Node("y = 1", TSqlTokenType.Identifier)
+        };
+
+        _rules.Apply(nodes, profile);
+
+        // BETWEEN's AND keeps its indent — it is part of the BETWEEN expression.
+        Assert.Equal(2, nodes[3].IndentLevel);
+        // The clause-level boolean AND re-aligns with WHERE: alignWithWhere => existing(2) - 1 = 1.
+        Assert.Equal(1, nodes[5].IndentLevel);
+    }
+
     [Fact]
     public void Apply_AndOrNewLine_After_OrToken_MoveBreakToAfterOr()
     {

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Reflection;
 using EnvDTE;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Text;
@@ -36,7 +37,9 @@ namespace AkmlSql.Shell.Shared.Editor
             Windows,
             /// <summary>Azure AD integrated — engine inherits the user's AAD token.</summary>
             AzureAdIntegrated,
-            /// <summary>Interactive/MFA/Password/SQL — engine cannot silently reuse these credentials.</summary>
+            /// <summary>SQL Server authentication (username + password) — engine connects once the user supplies a credential (spec 029).</summary>
+            SqlPassword,
+            /// <summary>AAD Interactive/MFA/Password (and similar) — engine cannot silently reuse these credentials.</summary>
             Unsupported
         }
         /// <summary>
@@ -260,19 +263,25 @@ namespace AkmlSql.Shell.Shared.Editor
             string server;
             string database;
 
-            // Try parsing "server.database" from afterDash
-            var dotIndex = afterDash.IndexOf('.');
+            // Try parsing "server.database" from afterDash.
+            // Split at the LAST dot, not the first: the database is the final token, but the SERVER
+            // can itself contain dots — a remote FQDN ("srv.corp.contoso.com") or an IP
+            // ("10.0.0.5"). Splitting at the first dot truncated the server to "srv"/"10" and leaked
+            // the rest into the database, so the engine connected to a bogus host and loaded no
+            // schema — while dotless local names ((local) / localhost / MACHINE\INSTANCE) worked.
+            // That was the "any remote server cannot load schema, just local only" bug.
+            var dotIndex = afterDash.LastIndexOf('.');
             if (dotIndex > 0 && !afterDash.EndsWith(".sql", StringComparison.OrdinalIgnoreCase))
             {
-                // SSMS 22 format: afterDash = "(local).StockProduction"
+                // SSMS 22 format: afterDash = "(local).StockProduction" or "srv.corp.contoso.com.MyDb"
                 server = afterDash.Substring(0, dotIndex).Trim();
                 database = afterDash.Substring(dotIndex + 1).Trim();
             }
             else
             {
-                // Try SSMS 20 format: connection info is BEFORE the dash
+                // Try SSMS 20 format: connection info is BEFORE the dash. Same last-dot rule.
                 var beforeDash = caption.Substring(0, dashIndex).Trim();
-                dotIndex = beforeDash.IndexOf('.');
+                dotIndex = beforeDash.LastIndexOf('.');
                 if (dotIndex > 0 && !beforeDash.EndsWith(".sql", StringComparison.OrdinalIgnoreCase))
                 {
                     server = beforeDash.Substring(0, dotIndex).Trim();
@@ -289,12 +298,14 @@ namespace AkmlSql.Shell.Shared.Editor
 
             // Heuristic: if DTE couldn't tell us the auth type but the caption
             // shows a bare username (no DOMAIN\ prefix, no user@tenant UPN),
-            // it's almost certainly a SQL Server login. The engine can't
-            // silently reuse SQL auth (no password available across the process
-            // boundary — see R-017 in spec 014 for why ObjectExplorer reflection
-            // is not an option), so classify as Unsupported. This stops us from
-            // building an Integrated Security connection string that would fail
-            // with a noisy 4060 on every session bind.
+            // it's almost certainly a SQL Server login. Classify as SqlPassword
+            // (spec 029): the engine still can't silently reuse SQL auth (no
+            // password across the process boundary — see R-017 in spec 014), but
+            // instead of giving up we let the user supply the password once via
+            // the click-to-enter affordance, after which the engine connects with
+            // a SQL-auth connection string. Until then ConnectionString stays null
+            // (IsEngineUsable=false), so we never build an Integrated Security
+            // string that would fail with a noisy 4060 on every session bind.
             if (authMode == AuthMode.Unknown && !string.IsNullOrEmpty(captionUserName))
             {
                 bool hasDomainPrefix = captionUserName.IndexOf('\\') >= 0;
@@ -303,9 +314,9 @@ namespace AkmlSql.Shell.Shared.Editor
                 if (!hasDomainPrefix && !looksLikeUpn)
                 {
                     Log.Debug(
-                        "ParseCaption: caption-user='{User}' has no domain/UPN markers → inferring SQL auth (Unsupported) for '{Caption}'",
+                        "ParseCaption: caption-user='{User}' has no domain/UPN markers → inferring SQL auth (SqlPassword) for '{Caption}'",
                         captionUserName, caption);
-                    authMode = AuthMode.Unsupported;
+                    authMode = AuthMode.SqlPassword;
                     if (string.IsNullOrEmpty(rawAuthType))
                         rawAuthType = $"inferred-SqlAuth(user='{captionUserName}')";
                 }
@@ -327,27 +338,38 @@ namespace AkmlSql.Shell.Shared.Editor
             }
             else
             {
-                // One Warning per (server, database, authMode) — retries and repeated
-                // detect calls stay quiet after the first occurrence.
-                var dedupeKey = $"{server}|{database}|{authMode}";
-                if (_warnedUnusableAuth.TryAdd(dedupeKey, 0))
+                if (authMode == AuthMode.SqlPassword)
                 {
-                    // IMPORTANT: each unique placeholder name binds to ONE argument in
-                    // Serilog — repeated names overwrite each other in the property bag.
-                    // Keep placeholder names unique and match the argument count exactly.
-                    Log.Warning(
-                        "AKML SQL IntelliSense disabled for {Server}.{Database}: " +
-                        "this window is using {AuthMode} (raw='{RawAuth}'), which the out-of-process " +
-                        "engine cannot silently reuse. To enable IntelliSense, either (a) reconnect " +
-                        "this window using Windows authentication, or (b) grant your Windows user " +
-                        "access to {TargetDatabase} in SQL Server. Caption='{Caption}'.",
-                        server, database, authMode, rawAuthType ?? "(null)", database, caption);
+                    // SQL auth is handled by the click-to-enter affordance (spec 029) — no scary
+                    // "IntelliSense disabled" warning. The wiring/margin take over from here.
+                    Log.Debug(
+                        "SsmsConnectionDetector: SQL auth for {Server}.{Database} (login='{Login}') — schema loads once a credential is stored/entered",
+                        server, database, captionUserName);
                 }
                 else
                 {
-                    Log.Debug(
-                        "SsmsConnectionDetector: repeat unusable-auth detection for {Server}.{Database} ({AuthMode}) — warning already emitted",
-                        server, database, authMode);
+                    // One Warning per (server, database, authMode) — retries and repeated
+                    // detect calls stay quiet after the first occurrence.
+                    var dedupeKey = $"{server}|{database}|{authMode}";
+                    if (_warnedUnusableAuth.TryAdd(dedupeKey, 0))
+                    {
+                        // IMPORTANT: each unique placeholder name binds to ONE argument in
+                        // Serilog — repeated names overwrite each other in the property bag.
+                        // Keep placeholder names unique and match the argument count exactly.
+                        Log.Warning(
+                            "AKML SQL IntelliSense disabled for {Server}.{Database}: " +
+                            "this window is using {AuthMode} (raw='{RawAuth}'), which the out-of-process " +
+                            "engine cannot silently reuse. To enable IntelliSense, either (a) reconnect " +
+                            "this window using Windows authentication, or (b) grant your Windows user " +
+                            "access to {TargetDatabase} in SQL Server. Caption='{Caption}'.",
+                            server, database, authMode, rawAuthType ?? "(null)", database, caption);
+                    }
+                    else
+                    {
+                        Log.Debug(
+                            "SsmsConnectionDetector: repeat unusable-auth detection for {Server}.{Database} ({AuthMode}) — warning already emitted",
+                            server, database, authMode);
+                    }
                 }
             }
 
@@ -355,10 +377,171 @@ namespace AkmlSql.Shell.Shared.Editor
             {
                 Server = server,
                 Database = database,
+                Login = captionUserName,
                 ConnectionString = connStr,
                 AuthMode = authMode,
                 IsEngineUsable = usable
             };
+        }
+
+        /// <summary>
+        /// Builds the SQL-authentication connection string the engine uses once the user's password
+        /// is available (spec 029). Uses <see cref="System.Data.SqlClient.SqlConnectionStringBuilder"/>
+        /// so the password is escaped correctly (semicolons, quotes, equals) — never hand-concatenated.
+        /// The keyword set is parse-compatible with the engine's Microsoft.Data.SqlClient.
+        /// <para>
+        /// Transport: <c>Encrypt=true</c> — unlike the engine's Windows/AAD shadow connections, a
+        /// SQL-auth connection carries a reusable password, so the wire (login + data) is encrypted to
+        /// defeat passive network interception. <c>TrustServerCertificate=true</c> is kept because
+        /// internal SQL Servers almost always present a self-signed certificate that would not chain-
+        /// validate; this mirrors SSMS 22's own default (encrypt + trust). The residual exposure is an
+        /// active MITM that substitutes a certificate; full validation (<c>TrustServerCertificate=false</c>)
+        /// is a future opt-in, not a safe default for internal self-signed-cert servers.
+        /// </para>
+        /// </summary>
+        internal static string BuildSqlAuthConnectionString(string server, string database, string login, string password)
+        {
+            var b = new System.Data.SqlClient.SqlConnectionStringBuilder
+            {
+                DataSource = server,
+                InitialCatalog = database,
+                UserID = login,
+                Password = password,
+                IntegratedSecurity = false,
+                ApplicationName = "AKML SQL Engine",
+                TrustServerCertificate = true,
+                Encrypt = true,   // encrypt the password-bearing connection on the wire (spec 029 security review)
+                ConnectTimeout = 5
+            };
+            return b.ConnectionString;
+        }
+
+        // Resolved once (lazily) and cached — the SSMS process loads hundreds of assemblies, so we
+        // don't want to scan them on every detect/poll. null-sentinel via _scriptFactoryResolved.
+        private static Type _scriptFactoryType;
+        private static bool _scriptFactoryResolved;
+
+        /// <summary>
+        /// Spec 029 follow-up: read the SQL-auth password SSMS already holds for the active query
+        /// window, so the user never re-types a password SSMS has. Reads
+        /// <c>ScriptFactory.Instance.CurrentlyActiveWndConnectionInfo.UIConnectionInfo.Password</c>
+        /// entirely by reflection — there is NO compile-time dependency on SSMS assemblies, so this is
+        /// a silent no-op on VS 2026 / older SSMS where the types or the active connection are absent
+        /// (the caller then falls back to the stored credential, then the prompt). The password is
+        /// returned ONLY when the active connection's server + login match the window being wired, so
+        /// one window's credential is never handed to another window's engine session.
+        /// <para>MUST be called on the UI thread (the SSMS ScriptFactory singleton is UI-affine).</para>
+        /// </summary>
+        internal static bool TryGetActiveSqlAuthPassword(string expectedServer, string expectedLogin, out string password)
+        {
+            password = null;
+            if (string.IsNullOrEmpty(expectedServer) || string.IsNullOrEmpty(expectedLogin))
+                return false;
+
+            try
+            {
+                var sfType = ResolveScriptFactoryType();
+                if (sfType == null) return false;
+
+                var sf = sfType.GetProperty("Instance", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
+                if (sf == null) return false;
+
+                var caw = sf.GetType().GetProperty("CurrentlyActiveWndConnectionInfo")?.GetValue(sf);
+                var uci = caw?.GetType().GetProperty("UIConnectionInfo")?.GetValue(caw);
+                if (uci == null) return false;
+
+                var uciType = uci.GetType();
+                var srv = uciType.GetProperty("ServerName")?.GetValue(uci) as string;
+                var usr = uciType.GetProperty("UserName")?.GetValue(uci) as string;
+
+                // Prefer the plaintext Password, but SSMS 22 commonly keeps the real secret only in
+                // InMemoryPassword (a SecureString) and leaves the plaintext property empty unless
+                // persist-security-info is set — so marshal the SecureString when Password is blank.
+                var pwd = uciType.GetProperty("Password")?.GetValue(uci) as string;
+                if (string.IsNullOrEmpty(pwd))
+                {
+                    var secure = uciType.GetProperty("InMemoryPassword")?.GetValue(uci) as System.Security.SecureString;
+                    pwd = SecureStringToString(secure);
+                }
+
+                if (string.IsNullOrEmpty(pwd))
+                    return false; // Windows/AAD auth, or SSMS didn't retain a password — nothing to inherit
+
+                // Only inherit when the active connection IS the window we're wiring (server + login).
+                if (!ServerHostMatches(srv, expectedServer)) return false;
+                if (!string.Equals((usr ?? string.Empty).Trim(), expectedLogin.Trim(), StringComparison.OrdinalIgnoreCase))
+                    return false;
+
+                password = pwd;
+                Log.Debug("TryGetActiveSqlAuthPassword: inherited SQL password from SSMS for {Server}/{Login}",
+                    expectedServer, expectedLogin);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "TryGetActiveSqlAuthPassword: reflection into the SSMS connection failed (non-fatal — falling back)");
+                return false;
+            }
+        }
+
+        private static Type ResolveScriptFactoryType()
+        {
+            if (_scriptFactoryResolved) return _scriptFactoryType;
+            const string fullName = "Microsoft.SqlServer.Management.UI.VSIntegration.Editors.ScriptFactory";
+            try
+            {
+                foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+                {
+                    try
+                    {
+                        var t = asm.GetType(fullName, throwOnError: false);
+                        if (t != null) { _scriptFactoryType = t; break; }
+                    }
+                    catch { /* skip assemblies that can't be inspected */ }
+                }
+            }
+            catch { /* ignore */ }
+            _scriptFactoryResolved = true;
+            return _scriptFactoryType;
+        }
+
+        /// <summary>Lenient server match: SSMS may format the name differently than the caption
+        /// (case, default instance, a trailing port/instance). Compare the host token before any
+        /// <c>\</c> or <c>,</c>.</summary>
+        private static bool ServerHostMatches(string a, string b)
+        {
+            if (string.IsNullOrEmpty(a) || string.IsNullOrEmpty(b)) return false;
+            a = a.Trim(); b = b.Trim();
+            if (string.Equals(a, b, StringComparison.OrdinalIgnoreCase)) return true;
+            string Host(string s)
+            {
+                int i = s.IndexOfAny(new[] { '\\', ',' });
+                return (i > 0 ? s.Substring(0, i) : s).Trim();
+            }
+            return string.Equals(Host(a), Host(b), StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>Marshals a <see cref="System.Security.SecureString"/> to a managed string,
+        /// zero-freeing the unmanaged buffer. Returns null for a null/empty input.</summary>
+        private static string SecureStringToString(System.Security.SecureString secure)
+        {
+            if (secure == null || secure.Length == 0) return null;
+            IntPtr bstr = IntPtr.Zero;
+            try
+            {
+                bstr = System.Runtime.InteropServices.Marshal.SecureStringToBSTR(secure);
+                return System.Runtime.InteropServices.Marshal.PtrToStringBSTR(bstr);
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "SecureStringToString: marshal failed");
+                return null;
+            }
+            finally
+            {
+                if (bstr != IntPtr.Zero)
+                    System.Runtime.InteropServices.Marshal.ZeroFreeBSTR(bstr);
+            }
         }
 
         /// <summary>
@@ -501,7 +684,7 @@ namespace AkmlSql.Shell.Shared.Editor
                 var mapped = numeric switch
                 {
                     0 => AuthMode.Windows,   // NotSpecified → SSMS treats as Windows
-                    1 => AuthMode.Unsupported, // SqlPassword
+                    1 => AuthMode.SqlPassword, // SQL login — engine connects with a stored/entered credential
                     2 => AuthMode.Unsupported, // AAD Password
                     3 => AuthMode.AzureAdIntegrated,
                     4 => AuthMode.Unsupported, // AAD Interactive
@@ -546,9 +729,9 @@ namespace AkmlSql.Shell.Shared.Editor
 
             if (lower.IndexOf("SQL", StringComparison.OrdinalIgnoreCase) >= 0)
             {
-                // SQL Server auth — we'd need the password, which SSMS doesn't expose.
-                Log.Debug("ClassifyAuth: string raw='{Raw}' matched 'SQL' → Unsupported", raw);
-                return AuthMode.Unsupported;
+                // SQL Server auth — engine connects with a stored/entered credential (spec 029).
+                Log.Debug("ClassifyAuth: string raw='{Raw}' matched 'SQL' → SqlPassword", raw);
+                return AuthMode.SqlPassword;
             }
 
             Log.Debug("ClassifyAuth: string raw='{Raw}' matched no known pattern → Unknown (please add this value to ClassifyAuth if it recurs)", raw);
@@ -559,6 +742,10 @@ namespace AkmlSql.Shell.Shared.Editor
         {
             public string Server { get; set; }
             public string Database { get; set; }
+
+            /// <summary>The login parsed from the SSMS caption "(Login (SPID))", used to key the
+            /// SQL credential store. Empty when not available. Spec 029.</summary>
+            public string Login { get; set; }
 
             /// <summary>
             /// Connection string suitable for the engine process. <c>null</c> when the

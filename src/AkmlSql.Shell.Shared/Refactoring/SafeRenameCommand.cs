@@ -13,10 +13,21 @@ using Constants = AkmlSql.Core.Constants;
 namespace AkmlSql.Shell.Shared.Refactoring
 {
     /// <summary>
-    /// Shell command for the Safe Rename heavyweight refactoring operation.
-    /// Flow: prompt for new name → send preview request to engine → show preview dialog →
-    /// generate SQL script → open script in new editor tab.
-    /// Per spec clarification: does NOT execute against the database directly.
+    /// Spec 030 / T062 / FR-018 / R8 — shell command for database-wide Smart Rename.
+    /// <para>
+    /// Dispatch foundation (the command was previously built-but-unwired): the ctor registers an
+    /// <see cref="OleMenuCommand"/> on <see cref="CommandIds.CmdSafeRename"/> (mirroring
+    /// <c>ScriptAsAlterCommand</c>/<c>InlineExecCommand</c>); <see cref="Execute(object, EventArgs)"/>
+    /// resolves the caret object/column via <see cref="RefactorCommandHelper"/>, prompts for a new name,
+    /// runs a <c>RefactorPreview</c> with <see cref="RefactorScope.Database"/>, shows
+    /// <see cref="RefactoringPreviewDialog"/>, and on OK opens the engine-generated reviewable script
+    /// (<see cref="RefactorPreviewResponse.GeneratedObjectTexts"/>) in a new editor tab.
+    /// </para>
+    /// <para>
+    /// Apply = emit the reviewable script (the user runs it deliberately), NOT auto-execute against the
+    /// database. The script is engine-generated (only the engine has the live connection to enumerate
+    /// dependents) — the comment-only <c>RenameScriptGenerator</c> is intentionally NOT used.
+    /// </para>
     /// </summary>
     internal sealed class SafeRenameCommand
     {
@@ -24,9 +35,13 @@ namespace AkmlSql.Shell.Shared.Refactoring
 
         private SafeRenameCommand(Package package, OleMenuCommandService commandService)
         {
-            // Safe Rename is invoked from the editor context menu or via F2.
-            // For now, register as an OleMenuCommand so it can be triggered from
-            // the Command Palette and future context menu integration.
+            // (1) of the 3-part dispatch foundation: register the OleMenuCommand so the palette's
+            // dte.Commands.Raise('{cmdSet}', CmdSafeRename) — and any future menu/context placement —
+            // reaches Execute. Without this AddCommand the command was never invokable.
+            var cmdId = new CommandID(PackageGuids.AkmlSqlCmdSet, CommandIds.CmdSafeRename);
+            var item  = new OleMenuCommand(Execute, cmdId);
+            item.BeforeQueryStatus += (s, _) => { if (s is OleMenuCommand c) { c.Visible = true; c.Enabled = true; } };
+            commandService.AddCommand(item);
         }
 
         public static void Initialize(Package package, OleMenuCommandService commandService)
@@ -35,54 +50,62 @@ namespace AkmlSql.Shell.Shared.Refactoring
         }
 
         /// <summary>
-        /// Executes the Safe Rename flow. Can be called from context menu, F2, or Command Palette.
+        /// OleMenuCommand handler: resolves the active editor + the caret object/column, prompts for a
+        /// new name, runs the database-wide preview, and opens the reviewable script.
         /// </summary>
-        /// <param name="sessionId">The active editor session ID.</param>
-        /// <param name="documentText">Full text of the active document.</param>
-        /// <param name="selectionStart">Character offset of the selection/cursor.</param>
-        /// <param name="selectionLength">Length of the selection (0 if just a cursor).</param>
-        /// <param name="originalIdentifier">The identifier under the cursor to rename.</param>
-        public static void Execute(
-            string sessionId,
-            string documentText,
-            int selectionStart,
-            int selectionLength,
-            string originalIdentifier)
+        private void Execute(object sender, EventArgs e)
         {
             try
             {
                 ThreadHelper.ThrowIfNotOnUIThread();
 
-                if (string.IsNullOrWhiteSpace(originalIdentifier))
+                var ctx = RefactorCommandHelper.TryGetActiveEditor();
+                if (ctx == null || string.IsNullOrEmpty(ctx.DocumentText))
                 {
-                    MessageBox.Show("Place the cursor on an identifier to rename.",
+                    MessageBox.Show("Open a SQL document and place the cursor on the object or column to rename.",
                         Constants.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
                 }
 
-                // Step 1: Prompt for the new name
-                var newName = PromptForNewName(originalIdentifier);
-                if (string.IsNullOrWhiteSpace(newName) || newName == originalIdentifier)
+                // Resolve the caret target and classify object-vs-column. For a column the engine expects
+                // OriginalIdentifier="tableSchema.column" + ExtractedUnitName="tableName".
+                var (schema, parentTable, name, isColumn) =
+                    RefactorCommandHelper.ExtractRenameTargetAtCaret(ctx.DocumentText, ctx.CaretOffset);
+
+                if (string.IsNullOrEmpty(name))
+                {
+                    MessageBox.Show("Place the cursor on a table, view, procedure, function, or a column qualified by its table (schema.table.column).",
+                        Constants.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                var displayName = isColumn ? $"{schema}.{parentTable}.{name}" : $"{schema}.{name}";
+
+                var newName = PromptForNewName(name);
+                if (string.IsNullOrWhiteSpace(newName) || newName == name)
                     return; // User cancelled or entered the same name
 
-                // Step 2: Send preview request to engine
                 var client = EngineLifecycle.Manager?.Client;
                 if (client == null || !client.IsConnected)
                 {
-                    MessageBox.Show("The AKML SQL engine is not running. Please wait for it to start.",
+                    MessageBox.Show("The AKML SQL engine is not running yet — try again in a moment.",
                         Constants.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
 
                 var request = new RefactorPreviewRequest
                 {
-                    SessionId = sessionId,
-                    OperationType = 0, // SafeRename
-                    DocumentText = documentText,
-                    SelectionStart = selectionStart,
-                    SelectionLength = selectionLength > 0 ? selectionLength : originalIdentifier.Length,
-                    NewName = newName,
-                    OriginalIdentifier = originalIdentifier
+                    SessionId          = ctx.SessionId,
+                    OperationType      = (int)RefactorOperationType.SafeRename,
+                    Scope              = (int)RefactorScope.Database,
+                    DocumentText       = ctx.DocumentText,
+                    SelectionStart     = ctx.SelectionStart,
+                    SelectionLength    = ctx.SelectionLength,
+                    NewName            = newName,
+                    // For a column rename the engine reads the TABLE from ExtractedUnitName and the
+                    // (tableSchema, column) from OriginalIdentifier; for an object it is just schema.name.
+                    OriginalIdentifier = $"{schema}.{name}",
+                    ExtractedUnitName  = isColumn ? (parentTable ?? string.Empty) : string.Empty
                 };
 
                 RefactorPreviewResponse? response = null;
@@ -101,50 +124,43 @@ namespace AkmlSql.Shell.Shared.Refactoring
                     return;
                 }
 
-                if (response.Changes.Length == 0 && response.Errors.Length == 0)
+                // Blocking errors (no connection, permission denied, unresolved target) — show and stop.
+                if (!response.CanApply)
                 {
-                    MessageBox.Show($"No references to '{originalIdentifier}' were found in the current scope.",
-                        Constants.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    return;
-                }
-
-                // Check for blocking errors before showing preview
-                if (response.Errors.Length > 0 && !response.CanApply)
-                {
-                    MessageBox.Show("Cannot rename:\n\n" + string.Join("\n", response.Errors),
+                    var msg = response.Errors.Length > 0
+                        ? string.Join("\n", response.Errors)
+                        : "Smart Rename could not produce a script.";
+                    MessageBox.Show("Cannot rename:\n\n" + msg,
                         Constants.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return;
                 }
 
-                // Step 3: Show preview dialog
-                using var previewDialog = new RefactoringPreviewDialog(response, originalIdentifier, newName);
-                var dialogResult = previewDialog.ShowDialog();
-
-                if (dialogResult != DialogResult.OK)
-                    return; // User cancelled
-
-                // Step 4: Generate SQL script from approved changes
-                var approvedChanges = previewDialog.ApprovedChanges;
-                if (approvedChanges == null || approvedChanges.Length == 0)
+                // For DB-wide rename the reviewable SCRIPT lives in GeneratedObjectTexts (NOT Changes — a
+                // valid object rename with zero dependents has an empty Changes list but a real script).
+                if (response.GeneratedObjectTexts == null || response.GeneratedObjectTexts.Length == 0
+                    || string.IsNullOrWhiteSpace(response.GeneratedObjectTexts[0]))
                 {
-                    MessageBox.Show("No changes were selected.",
-                        Constants.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show("The engine did not return a rename script.",
+                        Constants.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
 
-                var script = RenameScriptGenerator.Generate(
-                    approvedChanges, originalIdentifier, newName, response.Warnings);
+                // Show the preview dialog (lists the affected dependents from Changes; the script header
+                // names the rename). On OK we emit the engine script for the user to review and run.
+                using var previewDialog = new RefactoringPreviewDialog(
+                    response, displayName, newName, applyButtonText: "Generate Script");
+                if (previewDialog.ShowDialog() != DialogResult.OK)
+                    return; // User cancelled
 
-                // Step 5: Open script in a new editor tab
-                OpenScriptInNewTab(script, $"Rename_{originalIdentifier}_to_{newName}.sql");
+                OpenScriptInNewTab(response.GeneratedObjectTexts[0], $"SmartRename_{name}_to_{newName}.sql");
 
-                Log.Information("SafeRename: generated script for '{Original}' → '{New}' with {Count} change(s)",
-                    originalIdentifier, newName, approvedChanges.Length);
+                Log.Information("SmartRename(DB-wide): generated script for '{Original}' → '{New}' ({DepCount} dependent(s))",
+                    displayName, newName, response.Changes?.Length ?? 0);
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "SafeRenameCommand: failed to execute Safe Rename");
-                MessageBox.Show($"Safe Rename failed: {ex.Message}",
+                Log.Error(ex, "SafeRenameCommand: failed to execute Smart Rename");
+                MessageBox.Show($"Smart Rename failed: {ex.Message}",
                     Constants.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }

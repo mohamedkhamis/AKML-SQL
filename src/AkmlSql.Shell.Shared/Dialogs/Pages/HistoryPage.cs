@@ -10,6 +10,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         public string Key     => "History";
         public string Display => "Queries › History";
         public string Title   => "SQL History";
+        public string Help    => "Controls recording of executed SQL statements to a local history database, and how that history is stored — retention period, maximum entries, encryption at rest, and automatic trimming.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {
@@ -48,7 +49,12 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 "Encrypt stored SQL history using DPAPI + AES-256");
             ctx.RegisterSearch("Encrypt at rest", "Encrypt stored SQL history using DPAPI + AES-256", "Toggle", rowEncrypt);
 
-            return new HistoryControls(chkEnabled, chkFailures, chkDedup, sldRetention, lblRetention, sldMax, lblMax, chkEncrypt);
+            var (rowDisableTrim, chkDisableTrim) = ctx.Rows.AddToggle(panel,
+                "Disable automatic history trimming",
+                "Keep all history entries and version snapshots — never purge based on retention days or max entries");
+            ctx.RegisterSearch("Disable automatic history trimming", "Keep all history entries and version snapshots — never purge based on retention days or max entries", "Toggle", rowDisableTrim);
+
+            return new HistoryControls(chkEnabled, chkFailures, chkDedup, sldRetention, lblRetention, sldMax, lblMax, chkEncrypt, chkDisableTrim);
         }
     }
 
@@ -62,9 +68,11 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         private readonly Slider _maxEntries;
         private readonly TextBlock _maxEntriesLabel;
         private readonly CheckBox _encryptAtRest;
+        private readonly CheckBox _disableAutoTrim;
 
         public HistoryControls(CheckBox enabled, CheckBox failures, CheckBox dedup,
-            Slider retention, TextBlock retentionLbl, Slider maxEntries, TextBlock maxEntriesLbl, CheckBox encrypt)
+            Slider retention, TextBlock retentionLbl, Slider maxEntries, TextBlock maxEntriesLbl, CheckBox encrypt,
+            CheckBox disableAutoTrim)
         {
             _enabled = enabled;
             _recordFailures = failures;
@@ -74,6 +82,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             _maxEntries = maxEntries;
             _maxEntriesLabel = maxEntriesLbl;
             _encryptAtRest = encrypt;
+            _disableAutoTrim = disableAutoTrim;
         }
 
         public void Load(AppSettings settings)
@@ -83,6 +92,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             _recordFailures.IsChecked = h.RecordFailures;
             _deduplication.IsChecked = h.Deduplication;
             _encryptAtRest.IsChecked = h.EncryptAtRest;
+            _disableAutoTrim.IsChecked = h.DisableAutoTrim;
             _retentionDays.Value = h.RetentionDays;
             _retentionLabel.Text = h.RetentionDays.ToString(CultureInfo.InvariantCulture);
             _maxEntries.Value = h.MaxEntries;
@@ -95,6 +105,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             settings.History.RecordFailures = _recordFailures.IsChecked == true;
             settings.History.Deduplication = _deduplication.IsChecked == true;
             settings.History.EncryptAtRest = _encryptAtRest.IsChecked == true;
+            settings.History.DisableAutoTrim = _disableAutoTrim.IsChecked == true;
             settings.History.RetentionDays = (int)_retentionDays.Value;
             settings.History.MaxEntries = (int)_maxEntries.Value;
         }

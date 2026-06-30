@@ -127,7 +127,7 @@
         width: 80%; max-width: 920px; max-height: 80%;
         background-color: var(--akml-surface-panel);
         border: 1px solid var(--akml-border-default);
-        border-radius: 4px;
+        border-radius: var(--akml-scalar-radius-m);
         font-family: var(--akml-type-chrome-family);
         font-size: var(--akml-type-chrome-size);
         color: var(--akml-text-primary);
@@ -141,7 +141,7 @@
     .akml-rpv-title { font-weight: bold; }
     .akml-rpv-badge {
         font-size: 11px; color: var(--akml-text-onaccent);
-        background-color: var(--akml-text-secondary); border-radius: 2px;
+        background-color: var(--akml-text-secondary); border-radius: var(--akml-scalar-radius-xs);
         padding: 0 var(--akml-scalar-spacing-xs);
     }
     .akml-rpv-empty { padding: var(--akml-scalar-spacing-m); color: var(--akml-text-secondary); font-style: italic; }
@@ -168,7 +168,7 @@
     .akml-tool-button {
         font-family: var(--akml-type-chrome-family); font-size: var(--akml-type-chrome-size);
         background-color: var(--akml-surface-panel); color: var(--akml-text-primary);
-        border: 1px solid var(--akml-border-default); border-radius: 3px;
+        border: 1px solid var(--akml-border-default); border-radius: var(--akml-scalar-radius-xs);
         padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s); cursor: pointer;
     }
     .akml-tool-button:hover:not(:disabled) { background-color: var(--akml-surface-hover); }

@@ -175,6 +175,47 @@ public class FormatRequestHandlerTests : IDisposable
         Assert.Contains(response.Profiles, p => p.Name == "TestProfile");
     }
 
+    // ── HandleDuplicateProfile (Spec 030 T020) ──────────────────────────
+
+    [Fact]
+    public void HandleDuplicateProfile_ExistingSource_CreatesCopy()
+    {
+        var source = new FormattingProfile();
+        source.Metadata.Name = "Source";
+        _profileManager.Save(source);
+
+        var response = _handler.HandleDuplicateProfile(
+            new DuplicateProfileRequest { SourceName = "Source", NewName = "Source copy" });
+
+        Assert.True(response.Success, response.ErrorMessage);
+        Assert.Equal("Source copy", response.NewName);
+        Assert.Contains(_handler.HandleProfileList().Profiles, p => p.Name == "Source copy");
+    }
+
+    [Fact]
+    public void HandleDuplicateProfile_CopyIsBasedOnSource_AndNotBuiltIn()
+    {
+        var source = new FormattingProfile();
+        source.Metadata.Name = "Base";
+        _profileManager.Save(source);
+
+        _handler.HandleDuplicateProfile(new DuplicateProfileRequest { SourceName = "Base", NewName = "Base copy" });
+
+        var copy = _profileManager.Load("Base copy");
+        Assert.Equal("Base", copy.Metadata.BasedOn);
+        Assert.False(copy.Metadata.IsBuiltIn);
+    }
+
+    [Fact]
+    public void HandleDuplicateProfile_MissingSource_ReturnsFailure()
+    {
+        var response = _handler.HandleDuplicateProfile(
+            new DuplicateProfileRequest { SourceName = "DoesNotExist", NewName = "X" });
+
+        Assert.False(response.Success);
+        Assert.NotNull(response.ErrorMessage);
+    }
+
     // ── HandleStyleEditorSchema (Spec 020 US3 T049) ──────────────────────
 
     [Fact]

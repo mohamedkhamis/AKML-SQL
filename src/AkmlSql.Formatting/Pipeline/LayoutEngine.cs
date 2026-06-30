@@ -29,8 +29,10 @@ public class LayoutEngine
         bool isFirstSemanticToken = true;
         int statementIndex = 0;
         var statementStarts = BuildStatementStartSet(script);
+        var nestedStatementStarts = BuildNestedStatementStartSet(script);
         TSqlTokenType? prevSemanticTokenType = null;
         string? prevSemanticTokenText = null;
+        int prevSemanticTokenEndOffset = -1;
         int baseIndent = 0;
 
         for (int i = 0; i < tokens.Count; i++)
@@ -112,6 +114,17 @@ public class LayoutEngine
                 prevSemanticTokenType,
                 prevSemanticTokenText);
 
+            // Nested block statements (a proc/trigger/function body, BEGIN…END, TRY/CATCH, WHILE)
+            // must each start a new line. The top-level statement-start path above never reaches
+            // them (BuildStatementStartSet walks only batch.Statements) and would reset baseIndent
+            // to 0 anyway — so force the break here and let ControlFlowRules' BEGIN…END indent pass
+            // place them at block depth (it indents any block content that already carries a break).
+            if (!isFirstSemanticToken && decision.Break == BreakType.None
+                && nestedStatementStarts.Contains(t.Offset))
+            {
+                decision = decision with { Break = BreakType.NewLine, PrecedingSpaces = 0 };
+            }
+
             // Compute final indent level
             int indentLevel;
             if (decision.Break is BreakType.NewLine or BreakType.EmptyLine)
@@ -167,6 +180,17 @@ public class LayoutEngine
                 decision = decision with { PrecedingSpaces = 1 };
             }
 
+            // Compound comparison operators (>=, <=, <>, !=, !<, !>) tokenise as two adjacent
+            // single-char operator tokens; the operator-spacing above would split them
+            // (">=" -> "> =", "<>" -> "< >"). Re-join the two halves when they were adjacent in
+            // the source (so a user-written "> =" is still left alone).
+            if (prevSemanticTokenType.HasValue
+                && IsCompoundOperatorSecondHalf(prevSemanticTokenType.Value, t.TokenType)
+                && t.Offset == prevSemanticTokenEndOffset)
+            {
+                decision = decision with { Break = BreakType.None, PrecedingSpaces = 0 };
+            }
+
             // Dot (period) — no space around
             if (t.TokenType == TSqlTokenType.Dot)
                 decision = new BreakDecision(BreakType.None, 0, 0);
@@ -192,6 +216,7 @@ public class LayoutEngine
 
             prevSemanticTokenType = t.TokenType;
             prevSemanticTokenText = t.Text;
+            prevSemanticTokenEndOffset = t.Offset + t.Text.Length;
             isFirstSemanticToken = false;
         }
 
@@ -215,6 +240,64 @@ public class LayoutEngine
         return starts;
     }
 
+    /// <summary>
+    /// Start offsets of statements that live inside a block body (a stored procedure / function /
+    /// trigger body, a BEGIN…END block, a TRY/CATCH, or a WHILE body). These are NOT in
+    /// <see cref="BuildStatementStartSet"/> (which walks only top-level <c>batch.Statements</c>), so
+    /// without this the proc body crams onto the BEGIN line. The direct children of a block's
+    /// statement list each get a forced line break; an IF/WHILE sub-statement is recursed for nested
+    /// blocks but the sub-statement itself is left where it is (so <c>IF cond SET …</c> stays inline).
+    /// </summary>
+    private static HashSet<int> BuildNestedStatementStartSet(TSqlScript script)
+    {
+        var starts = new HashSet<int>();
+        foreach (var batch in script.Batches)
+            foreach (var stmt in batch.Statements)
+                CollectNestedStatementStarts(stmt, starts);
+        return starts;
+    }
+
+    private static void CollectNestedStatementStarts(TSqlStatement stmt, HashSet<int> starts)
+    {
+        switch (stmt)
+        {
+            case BeginEndBlockStatement b:
+                AddBlock(b.StatementList, starts);
+                break;
+            case CreateProcedureStatement p:
+                AddBlock(p.StatementList, starts);
+                break;
+            case CreateFunctionStatement f:
+                AddBlock(f.StatementList, starts);
+                break;
+            case CreateTriggerStatement tr:
+                AddBlock(tr.StatementList, starts);
+                break;
+            case TryCatchStatement tc:
+                AddBlock(tc.TryStatements, starts);
+                AddBlock(tc.CatchStatements, starts);
+                break;
+            case WhileStatement w when w.Statement != null:
+                // Recurse for a nested block, but don't force-break a single-statement body.
+                CollectNestedStatementStarts(w.Statement, starts);
+                break;
+            case IfStatement ifs:
+                if (ifs.ThenStatement != null) CollectNestedStatementStarts(ifs.ThenStatement, starts);
+                if (ifs.ElseStatement != null) CollectNestedStatementStarts(ifs.ElseStatement, starts);
+                break;
+        }
+    }
+
+    private static void AddBlock(StatementList? list, HashSet<int> starts)
+    {
+        if (list == null) return;
+        foreach (var s in list.Statements)
+        {
+            starts.Add(s.StartOffset);
+            CollectNestedStatementStarts(s, starts);
+        }
+    }
+
     private static bool IsOpenParenNoSpace(TSqlTokenType prevType)
     {
         // Function calls and keywords like IN(...) don't need space before (
@@ -235,6 +318,27 @@ public class LayoutEngine
             TSqlTokenType.Plus or TSqlTokenType.Minus or TSqlTokenType.Star or
             TSqlTokenType.Divide or TSqlTokenType.PercentSign or
             TSqlTokenType.Bang => true,
+            _ => false,
+        };
+    }
+
+    /// <summary>
+    /// True when <paramref name="second"/> is the trailing half of a two-token T-SQL compound
+    /// comparison operator whose leading half is <paramref name="first"/>. ScriptDom tokenises
+    /// <c>&gt;=</c>, <c>&lt;=</c>, <c>&lt;&gt;</c>, <c>!=</c>, <c>!&lt;</c>, <c>!&gt;</c> as two
+    /// adjacent single-char operator tokens; these pairs occur only as compound operators in valid
+    /// T-SQL, so they must be emitted with no interior space.
+    /// </summary>
+    private static bool IsCompoundOperatorSecondHalf(TSqlTokenType first, TSqlTokenType second)
+    {
+        return (first, second) switch
+        {
+            (TSqlTokenType.GreaterThan, TSqlTokenType.EqualsSign) => true,   // >=
+            (TSqlTokenType.LessThan, TSqlTokenType.EqualsSign) => true,      // <=
+            (TSqlTokenType.LessThan, TSqlTokenType.GreaterThan) => true,     // <>
+            (TSqlTokenType.Bang, TSqlTokenType.EqualsSign) => true,          // !=
+            (TSqlTokenType.Bang, TSqlTokenType.LessThan) => true,           // !<
+            (TSqlTokenType.Bang, TSqlTokenType.GreaterThan) => true,        // !>
             _ => false,
         };
     }

@@ -1,15 +1,18 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Shapes;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Shell.Shared.Ipc;
@@ -19,11 +22,15 @@ using AkmlSql.Shell.Shared.Ui.Theme;
 namespace AkmlSql.Shell.Shared.History
 {
     /// <summary>
-    /// WPF UserControl that provides a SQL Prompt-style 3-panel layout for the SQL History tool window.
+    /// WPF UserControl that provides a SQL Prompt-style 2-region layout for the SQL History tool window.
     /// Built programmatically (no XAML) for Shell.Shared compatibility across all 6 targets.
-    /// Layout: top search/filter bar, then left query list | middle version history | right code preview.
-    /// Features: search bar, filter tabs (All/Starred/Open/Closed), virtualized query list,
-    /// version history, code preview with search highlighting, context menus, and all action commands.
+    /// Layout: top search + "Recent queries" toolbar, then a 2-column body
+    /// [LEFT master list + version sub-panel split by a horizontal splitter | vertical splitter |
+    /// RIGHT code preview (dark header + syntax-highlighted preview + metadata/Open bar)],
+    /// then a bottom status strip.
+    /// Features: search bar with line-art icons, date-grouped virtualized query list, favorites toggle,
+    /// version history, syntax-highlighted code preview with search highlighting, infinite scroll,
+    /// context menus, and all action commands.
     /// </summary>
     internal class HistoryToolWindowControl : ThemeAwareUserControl
     {
@@ -34,21 +41,24 @@ namespace AkmlSql.Shell.Shared.History
         private ListBox? _versionListBox;
         private TextBlock? _codePreviewTextBlock;
         private TextBlock? _codePreviewHeaderTimestamp;
+        private TextBlock? _codePreviewHeaderFilename;
         private TextBlock? _metadataServerLabel;
         private TextBlock? _metadataDatabaseLabel;
         private TextBlock? _metadataVersionLabel;
 
-        // Filter tab buttons (Button so they're keyboard-focusable and FocusVisualStyles.HighStakes can render).
-        private Button? _filterAll;
-        private Button? _filterStarred;
-        private Button? _filterOpen;
-        private Button? _filterClosed;
-        private string _activeFilter = "all";
+        // LEFT bottom version sub-panel header — relabelled "History for <file>" on selection.
+        private TextBlock? _versionPanelHeader;
+
+        // Toolbar favorites star — visual state mirrors HistoryViewModel.FavoritesOnly.
+        private Button? _favoritesStarButton;
+        private TextBlock? _favoritesStarGlyph;
 
         // Status bar elements
         private TextBlock? _statusCountLabel;
         private TextBlock? _statusLoadingLabel;
-        private Button? _loadMoreButton;
+
+        // Infinite-scroll guard — prevents duplicate LoadMore fires while one is in flight.
+        private bool _loadMoreInFlight;
 
         public HistoryToolWindowControl()
         {
@@ -77,33 +87,41 @@ namespace AkmlSql.Shell.Shared.History
 
         private void BuildUi()
         {
-            // Main layout: Row 0 = top bar, Row 1 = 3-panel area, Row 2 = status bar
+            // Main layout: Row 0 = search + "Recent queries" toolbar, Row 1 = 2-region body, Row 2 = status strip
             var mainGrid = new Grid();
             mainGrid.SetResourceReference(BackgroundProperty, ThemeTokens.SurfaceCanvas);
-            mainGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });    // Search + filter tabs
-            mainGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // 3-panel
-            mainGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });    // Status bar
+            mainGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });    // Search + toolbar
+            mainGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // 2-region body
+            mainGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });    // Status strip
 
-            // ROW 0: Search bar + filter tabs
+            // ROW 0: Search bar + "Recent queries" toolbar
             var topBar = BuildTopBar();
             Grid.SetRow(topBar, 0);
             mainGrid.Children.Add(topBar);
 
-            // ROW 1: 3-panel grid with splitters
-            var panelsGrid = BuildThreePanelGrid();
+            // ROW 1: 2-region grid (left master+versions | splitter | right preview)
+            var panelsGrid = BuildTwoRegionGrid();
             Grid.SetRow(panelsGrid, 1);
             mainGrid.Children.Add(panelsGrid);
 
-            // ROW 2: Status bar
+            // ROW 2: Status strip
             var statusBar = BuildStatusBar();
             Grid.SetRow(statusBar, 2);
             mainGrid.Children.Add(statusBar);
+
+            // Keep the toolbar favorites-star visual in sync with FavoritesOnly even when it is reset
+            // elsewhere (e.g. ClearFiltersCommand).
+            _viewModel.PropertyChanged += (_, args) =>
+            {
+                if (args.PropertyName == nameof(HistoryViewModel.FavoritesOnly))
+                    UpdateFavoritesStarVisual();
+            };
 
             Content = mainGrid;
         }
 
         // ================================================================
-        // ROW 0: Top bar (search + filter tabs)
+        // ROW 0: Search + "Recent queries" toolbar
         // ================================================================
 
         private StackPanel BuildTopBar()
@@ -113,44 +131,48 @@ namespace AkmlSql.Shell.Shared.History
                 Margin = new Thickness(8, 8, 8, 4)
             };
 
-            // ----- Search row -----
-            var searchRow = new DockPanel { Margin = new Thickness(0, 0, 0, 6) };
-
-            // Advanced search link (right-docked)
-            var advSearchLink = new TextBlock
-            {
-                FontSize = 11,
-                Cursor = Cursors.Hand,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(8, 0, 0, 0),
-                TextDecorations = TextDecorations.Underline,
-                ToolTip = "Use prefix filters: server:, db:, sql:, starred:yes, open:yes",
-                Text = "Advanced search"
-            };
-            advSearchLink.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextLink);
-            advSearchLink.MouseLeftButtonDown += (_, __) =>
-            {
-                // Insert example prefix text to help the user
-                _viewModel.SearchText = "server: db: sql:SELECT ";
-            };
-            DockPanel.SetDock(advSearchLink, Dock.Right);
-            searchRow.Children.Add(advSearchLink);
-
-            // Search TextBox with rounded border
+            // ----- Search row: rounded border holding [magnifier path] [textbox] [clear X] -----
             var searchBorder = new Border
             {
                 CornerRadius = new CornerRadius(6),
                 BorderThickness = new Thickness(1),
-                Padding = new Thickness(0)
+                Padding = new Thickness(0),
+                Margin = new Thickness(0, 0, 0, 6)
             };
             searchBorder.SetResourceReference(Border.BackgroundProperty, ThemeTokens.SurfaceInput);
             searchBorder.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.BorderDefault);
 
+            var searchDock = new DockPanel();
+
+            // Line-art magnifier (NOT emoji) \u2014 circle + handle drawn with a Path geometry.
+            var magnifier = BuildMagnifierIcon();
+            DockPanel.SetDock(magnifier, Dock.Left);
+            searchDock.Children.Add(magnifier);
+
+            // Clear "X" button (right-docked) \u2014 fires ClearFiltersCommand.
+            var clearButton = new Button
+            {
+                Width = 22,
+                Cursor = Cursors.Hand,
+                BorderThickness = new Thickness(0),
+                Background = Brushes.Transparent,
+                Padding = new Thickness(0),
+                ToolTip = "Clear search and filters",
+                FocusVisualStyle = FocusVisualStyles.HighStakes,
+                Content = BuildClearIcon(),
+                Template = BuildBareButtonTemplate()
+            };
+            clearButton.SetBinding(System.Windows.Controls.Primitives.ButtonBase.CommandProperty,
+                new Binding(nameof(HistoryViewModel.ClearFiltersCommand)));
+            DockPanel.SetDock(clearButton, Dock.Right);
+            searchDock.Children.Add(clearButton);
+
+            // Search TextBox (fills remaining space) with placeholder overlay.
             var searchBox = new TextBox
             {
                 Background = Brushes.Transparent, // theme-independent: lets the parent Border's background show through
                 BorderThickness = new Thickness(0),
-                Padding = new Thickness(8, 6, 8, 6),
+                Padding = new Thickness(4, 6, 4, 6),
                 FontSize = 12,
                 VerticalContentAlignment = VerticalAlignment.Center,
                 FocusVisualStyle = FocusVisualStyles.HighStakes
@@ -164,13 +186,12 @@ namespace AkmlSql.Shell.Shared.History
                     UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged
                 });
 
-            // Placeholder behavior
             var placeholderText = new TextBlock
             {
-                Text = "\U0001F50D Search SQL history...",
+                Text = "Search SQL history...",
                 IsHitTestVisible = false,
                 VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(10, 0, 0, 0),
+                Margin = new Thickness(6, 0, 0, 0),
                 FontSize = 12
             };
             placeholderText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPlaceholder);
@@ -179,25 +200,16 @@ namespace AkmlSql.Shell.Shared.History
             searchGrid.Children.Add(searchBox);
             searchGrid.Children.Add(placeholderText);
 
-            // Show/hide placeholder based on text
-            searchBox.TextChanged += (_, __) =>
-            {
+            void SyncPlaceholder() =>
                 placeholderText.Visibility = string.IsNullOrEmpty(searchBox.Text)
                     ? Visibility.Visible
                     : Visibility.Collapsed;
-            };
-            searchBox.GotFocus += (_, __) =>
-            {
-                placeholderText.Visibility = Visibility.Collapsed;
-            };
-            searchBox.LostFocus += (_, __) =>
-            {
-                placeholderText.Visibility = string.IsNullOrEmpty(searchBox.Text)
-                    ? Visibility.Visible
-                    : Visibility.Collapsed;
-            };
 
-            // Enter key triggers search
+            searchBox.TextChanged += (_, __) => SyncPlaceholder();
+            searchBox.GotFocus += (_, __) => placeholderText.Visibility = Visibility.Collapsed;
+            searchBox.LostFocus += (_, __) => SyncPlaceholder();
+
+            // Enter key triggers search (keeps SearchCommand + HistorySearchParser path).
             searchBox.KeyDown += (s, e) =>
             {
                 if (e.Key == Key.Enter && _viewModel.SearchCommand.CanExecute(null))
@@ -206,122 +218,190 @@ namespace AkmlSql.Shell.Shared.History
                 }
             };
 
-            searchBorder.Child = searchGrid;
-            searchRow.Children.Add(searchBorder);
-            panel.Children.Add(searchRow);
+            searchDock.Children.Add(searchGrid); // LastChildFill \u2014 takes remaining space
+            searchBorder.Child = searchDock;
+            panel.Children.Add(searchBorder);
 
-            // ----- Filter tabs row -----
-            var tabRow = new StackPanel
+            // ----- "Recent queries" toolbar row -----
+            var toolbar = new DockPanel { Margin = new Thickness(0, 0, 0, 4) };
+
+            var iconStack = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
-                Margin = new Thickness(0, 0, 0, 4)
+                VerticalAlignment = VerticalAlignment.Center
             };
+            DockPanel.SetDock(iconStack, Dock.Right);
 
-            _filterAll = CreateFilterTab("\U0001F4CB All", "all", isActive: true);
+            // Refresh \u2014 re-run the current search.
+            var refreshButton = CreateToolbarIconButton(BuildRefreshIcon(), "Refresh", (_, __) =>
+            {
+                if (_viewModel.SearchCommand.CanExecute(null))
+                    _viewModel.SearchCommand.Execute(null);
+            });
+            iconStack.Children.Add(refreshButton);
 
-            // Build the Starred tab with an embedded count badge bound to HistoryViewModel.StarredCount.
-            _filterStarred = CreateFilterTab(starredContentBuilder: BuildStarredTabContent, filterKey: "starred", isActive: false);
+            // Favorites star \u2014 toggles FavoritesOnly + re-runs search; shows active state.
+            _favoritesStarGlyph = new TextBlock
+            {
+                Text = "\u2605",
+                FontSize = 14,
+                VerticalAlignment = VerticalAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Center
+            };
+            _favoritesStarButton = CreateToolbarIconButton(_favoritesStarGlyph, "Show favorites only", (_, __) =>
+            {
+                _viewModel.FavoritesOnly = !_viewModel.FavoritesOnly;
+                if (_viewModel.SearchCommand.CanExecute(null))
+                    _viewModel.SearchCommand.Execute(null);
+            });
+            iconStack.Children.Add(_favoritesStarButton);
+            UpdateFavoritesStarVisual();
 
-            _filterOpen = CreateFilterTab("\U0001F4C2 Open", "open");
-            _filterClosed = CreateFilterTab("\U0001F4D5 Closed", "closed");
+            // Source/server menu \u2014 small dropdown over Servers / Databases.
+            var sourceButton = CreateToolbarIconButton(BuildSourceIcon(), "Source / Server", null);
+            sourceButton.ContextMenu = BuildSourceMenu();
+            sourceButton.Click += (s, __) =>
+            {
+                if (sourceButton.ContextMenu != null)
+                {
+                    sourceButton.ContextMenu.PlacementTarget = sourceButton;
+                    sourceButton.ContextMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+                    sourceButton.ContextMenu.IsOpen = true;
+                }
+            };
+            iconStack.Children.Add(sourceButton);
 
-            tabRow.Children.Add(_filterAll);
-            tabRow.Children.Add(_filterStarred);
-            tabRow.Children.Add(_filterOpen);
-            tabRow.Children.Add(_filterClosed);
+            toolbar.Children.Add(iconStack);
 
-            panel.Children.Add(tabRow);
+            var heading = new TextBlock
+            {
+                Text = "Recent queries",
+                FontWeight = FontWeights.SemiBold,
+                FontSize = 12,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            heading.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPrimary);
+            toolbar.Children.Add(heading); // LastChildFill
+
+            panel.Children.Add(toolbar);
             return panel;
         }
 
-        /// <summary>
-        /// Builds the inner content for the Starred filter tab: label + live count badge
-        /// bound to <see cref="HistoryViewModel.StarredCount"/>.
-        /// </summary>
-        private static StackPanel BuildStarredTabContent()
+        /// <summary>Reflects <see cref="HistoryViewModel.FavoritesOnly"/> onto the toolbar star colour.</summary>
+        private void UpdateFavoritesStarVisual()
         {
-            var labelText = new TextBlock
-            {
-                Text = "\u2B50 Starred",
-                FontSize = 11.5,
-                Padding = new Thickness(0),
-                TextAlignment = TextAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            labelText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPrimary);
-
-            var badge = new TextBlock
-            {
-                FontSize = 10,
-                FontWeight = FontWeights.SemiBold,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(4, 0, 0, 0)
-            };
-            badge.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.AccentPrimary);
-            badge.SetBinding(TextBlock.TextProperty,
-                new Binding(nameof(HistoryViewModel.StarredCount)) { StringFormat = "({0})" });
-
-            var tabStack = new StackPanel { Orientation = Orientation.Horizontal };
-            tabStack.Children.Add(labelText);
-            tabStack.Children.Add(badge);
-            return tabStack;
+            if (_favoritesStarGlyph == null) return;
+            _favoritesStarGlyph.SetResourceReference(TextBlock.ForegroundProperty,
+                _viewModel.FavoritesOnly ? ThemeTokens.StatusWarning : ThemeTokens.TextSecondary);
         }
 
-        /// <summary>
-        /// Creates a filter chip as a focusable <see cref="Button"/>. The Button is templated as a
-        /// rounded <see cref="Border"/> wrapping a <see cref="ContentPresenter"/>, so it visually
-        /// matches the prior pill chip while gaining keyboard focus + <see cref="FocusVisualStyles.HighStakes"/>.
-        /// </summary>
-        private Button CreateFilterTab(string label, string filterKey, bool isActive = false)
+        /// <summary>Builds the Servers / Databases dropdown for the toolbar source/server button.</summary>
+        private ContextMenu BuildSourceMenu()
         {
-            var content = new TextBlock
+            var menu = new ContextMenu();
+
+            var allItem = new MenuItem { Header = "All servers / databases" };
+            allItem.Click += (_, __) =>
             {
-                Text = label,
-                FontSize = 11.5,
-                Padding = new Thickness(0),
-                TextAlignment = TextAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
+                _viewModel.SelectedServer = null;
+                _viewModel.SelectedDatabase = null;
+                if (_viewModel.SearchCommand.CanExecute(null))
+                    _viewModel.SearchCommand.Execute(null);
             };
-            content.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPrimary);
-            return CreateFilterTabCore(content, filterKey, isActive);
+            menu.Items.Add(allItem);
+
+            // Populate Servers / Databases lazily each time it opens (collections refresh after search).
+            menu.Opened += (_, __) =>
+            {
+                // Remove everything after the static "All" item before repopulating.
+                while (menu.Items.Count > 1)
+                    menu.Items.RemoveAt(menu.Items.Count - 1);
+
+                _viewModel.RefreshDropdownsFromEntries();
+
+                if (_viewModel.Servers.Count > 0)
+                {
+                    menu.Items.Add(new Separator());
+                    var serversHeader = new MenuItem { Header = "Servers", IsEnabled = false };
+                    menu.Items.Add(serversHeader);
+                    foreach (var server in _viewModel.Servers)
+                    {
+                        var capturedServer = server;
+                        var item = new MenuItem
+                        {
+                            Header = server,
+                            IsCheckable = true,
+                            IsChecked = string.Equals(_viewModel.SelectedServer, server, StringComparison.OrdinalIgnoreCase)
+                        };
+                        item.Click += (_, ___) =>
+                        {
+                            _viewModel.SelectedServer = capturedServer;
+                            if (_viewModel.SearchCommand.CanExecute(null))
+                                _viewModel.SearchCommand.Execute(null);
+                        };
+                        menu.Items.Add(item);
+                    }
+                }
+
+                if (_viewModel.Databases.Count > 0)
+                {
+                    menu.Items.Add(new Separator());
+                    var dbHeader = new MenuItem { Header = "Databases", IsEnabled = false };
+                    menu.Items.Add(dbHeader);
+                    foreach (var db in _viewModel.Databases)
+                    {
+                        var capturedDb = db;
+                        var item = new MenuItem
+                        {
+                            Header = db,
+                            IsCheckable = true,
+                            IsChecked = string.Equals(_viewModel.SelectedDatabase, db, StringComparison.OrdinalIgnoreCase)
+                        };
+                        item.Click += (_, ___) =>
+                        {
+                            _viewModel.SelectedDatabase = capturedDb;
+                            if (_viewModel.SearchCommand.CanExecute(null))
+                                _viewModel.SearchCommand.Execute(null);
+                        };
+                        menu.Items.Add(item);
+                    }
+                }
+            };
+
+            return menu;
         }
 
-        private Button CreateFilterTab(Func<UIElement> starredContentBuilder, string filterKey, bool isActive)
-        {
-            return CreateFilterTabCore(starredContentBuilder(), filterKey, isActive);
-        }
-
-        private Button CreateFilterTabCore(UIElement content, string filterKey, bool isActive)
+        /// <summary>Creates a flat, theme-aware toolbar icon button with a bare (chromeless) template.</summary>
+        private Button CreateToolbarIconButton(UIElement content, string toolTip, RoutedEventHandler? onClick)
         {
             var button = new Button
             {
                 Content = content,
-                Tag = filterKey,
-                Margin = new Thickness(0, 0, 6, 0),
-                Padding = new Thickness(10, 4, 10, 4),
-                BorderThickness = new Thickness(1),
+                Width = 26,
+                Height = 24,
+                Margin = new Thickness(2, 0, 0, 0),
                 Cursor = Cursors.Hand,
+                Background = Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                Padding = new Thickness(0),
+                ToolTip = toolTip,
                 FocusVisualStyle = FocusVisualStyles.HighStakes,
-                Template = BuildFilterTabTemplate()
+                Template = BuildBareButtonTemplate()
             };
-
-            ApplyFilterTabState(button, isActive);
-            button.Click += OnFilterTabClick;
+            if (onClick != null) button.Click += onClick;
             return button;
         }
 
         /// <summary>
-        /// Custom <see cref="Button"/> template: a rounded <see cref="Border"/> wrapping a
-        /// <see cref="ContentPresenter"/>. Background / BorderBrush / BorderThickness / Padding flow
-        /// through TemplateBinding so imperative state changes via SetResourceReference still work.
+        /// Bare button template: a rounded <see cref="Border"/> (TemplateBinding background / hover) wrapping
+        /// the content. Used for chromeless toolbar / search-clear buttons.
         /// </summary>
-        private static ControlTemplate BuildFilterTabTemplate()
+        private static ControlTemplate BuildBareButtonTemplate()
         {
             var border = new FrameworkElementFactory(typeof(Border));
-            border.SetValue(Border.CornerRadiusProperty, new CornerRadius(5));
+            border.Name = "Bd";
+            border.SetValue(Border.CornerRadiusProperty, new CornerRadius(4));
             border.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Control.BackgroundProperty));
-            border.SetValue(Border.BorderBrushProperty, new TemplateBindingExtension(Control.BorderBrushProperty));
-            border.SetValue(Border.BorderThicknessProperty, new TemplateBindingExtension(Control.BorderThicknessProperty));
             border.SetValue(Border.PaddingProperty, new TemplateBindingExtension(Control.PaddingProperty));
 
             var content = new FrameworkElementFactory(typeof(ContentPresenter));
@@ -329,106 +409,161 @@ namespace AkmlSql.Shell.Shared.History
             content.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
             border.AppendChild(content);
 
-            return new ControlTemplate(typeof(Button)) { VisualTree = border };
+            var template = new ControlTemplate(typeof(Button)) { VisualTree = border };
+
+            // Hover highlight via SurfaceHover.
+            var hover = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
+            hover.Setters.Add(new Setter(Border.BackgroundProperty,
+                new DynamicResourceExtension(ThemeTokens.SurfaceHover), "Bd"));
+            template.Triggers.Add(hover);
+
+            return template;
         }
 
-        private static void ApplyFilterTabState(Button tab, bool isActive)
+        // --- Line-art icon builders (theme-aware Path strokes; no emoji) ---
+
+        private static Path BuildMagnifierIcon()
         {
-            if (isActive)
+            var geo = Geometry.Parse("M 5,5 A 4,4 0 1 0 5.01,5 M 8,8 L 11.5,11.5");
+            var path = new Path
             {
-                tab.SetResourceReference(Control.BackgroundProperty, ThemeTokens.SurfaceSelectionStrong);
-                tab.SetResourceReference(Control.BorderBrushProperty, ThemeTokens.AccentPrimary);
-            }
-            else
-            {
-                tab.SetResourceReference(Control.BackgroundProperty, ThemeTokens.SurfaceElevated);
-                tab.SetResourceReference(Control.BorderBrushProperty, ThemeTokens.BorderDefault);
-            }
+                Data = geo,
+                StrokeThickness = 1.4,
+                Stretch = Stretch.None,
+                Width = 16,
+                Height = 18,
+                Margin = new Thickness(8, 0, 2, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round
+            };
+            path.SetResourceReference(Shape.StrokeProperty, ThemeTokens.TextSecondary);
+            return path;
         }
 
-        private void OnFilterTabClick(object sender, RoutedEventArgs e)
+        private static Path BuildClearIcon()
         {
-            if (sender is Button clicked && clicked.Tag is string filterKey)
+            var geo = Geometry.Parse("M 3,3 L 9,9 M 9,3 L 3,9");
+            var path = new Path
             {
-                _activeFilter = filterKey;
-                UpdateFilterTabVisuals();
-                ApplyFilterAndSearch();
-            }
+                Data = geo,
+                StrokeThickness = 1.4,
+                Stretch = Stretch.None,
+                Width = 12,
+                Height = 12,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round
+            };
+            path.SetResourceReference(Shape.StrokeProperty, ThemeTokens.TextSecondary);
+            return path;
         }
 
-        private void UpdateFilterTabVisuals()
+        private static Path BuildRefreshIcon()
         {
-            var tabs = new[] { _filterAll, _filterStarred, _filterOpen, _filterClosed };
-            foreach (var tab in tabs)
+            // Circular arrow: ~300\u00B0 arc with a small arrowhead.
+            var geo = Geometry.Parse(
+                "M 11,6 A 5,5 0 1 1 8.5,1.7 M 8.5,1.7 L 6.2,1.2 M 8.5,1.7 L 8.9,4.1");
+            var path = new Path
             {
-                if (tab == null) continue;
-                ApplyFilterTabState(tab, (string)tab.Tag == _activeFilter);
-            }
+                Data = geo,
+                StrokeThickness = 1.4,
+                Stretch = Stretch.None,
+                Width = 14,
+                Height = 14,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round
+            };
+            path.SetResourceReference(Shape.StrokeProperty, ThemeTokens.TextSecondary);
+            return path;
         }
 
-        private void ApplyFilterAndSearch()
+        private static Canvas BuildSourceIcon()
         {
-            // Reset all filters before applying the active tab
-            _viewModel.FavoritesOnly = false;
-            _viewModel.IsOpenFilter = null;
-            _viewModel.SelectedStatus = null;
+            // Stacked-cylinder (database) glyph drawn with two ellipses + side strokes.
+            var canvas = new Canvas { Width = 14, Height = 14 };
 
-            switch (_activeFilter)
+            void AddEllipse(double top)
             {
-                case "starred":
-                    _viewModel.FavoritesOnly = true;
-                    break;
-                case "open":
-                    _viewModel.IsOpenFilter = true;
-                    break;
-                case "closed":
-                    _viewModel.IsOpenFilter = false;
-                    break;
+                var e = new System.Windows.Shapes.Ellipse { Width = 10, Height = 3.4, StrokeThickness = 1.2 };
+                e.SetResourceReference(Shape.StrokeProperty, ThemeTokens.TextSecondary);
+                Canvas.SetLeft(e, 2);
+                Canvas.SetTop(e, top);
+                canvas.Children.Add(e);
             }
+            AddEllipse(2);
+            AddEllipse(8);
 
-            if (_viewModel.SearchCommand.CanExecute(null))
+            void AddSide(double x)
             {
-                _viewModel.SearchCommand.Execute(null);
+                var line = new System.Windows.Shapes.Line { X1 = x, Y1 = 3.7, X2 = x, Y2 = 9.7, StrokeThickness = 1.2 };
+                line.SetResourceReference(Shape.StrokeProperty, ThemeTokens.TextSecondary);
+                canvas.Children.Add(line);
             }
+            AddSide(2);
+            AddSide(12);
+
+            return canvas;
         }
 
         // ================================================================
-        // ROW 1: Three-panel grid
+        // ROW 1: Two-region grid (left master+versions | splitter | right preview)
         // ================================================================
 
-        private Grid BuildThreePanelGrid()
+        private Grid BuildTwoRegionGrid()
         {
             var grid = new Grid();
 
-            // Column definitions: query list | splitter | version history | splitter | code preview
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(320, GridUnitType.Star), MinWidth = 200 });
+            // Column definitions: left ~42% | splitter | right ~58%
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42, GridUnitType.Star), MinWidth = 220 });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); // splitter
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(170, GridUnitType.Star), MinWidth = 120 });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); // splitter
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(400, GridUnitType.Star), MinWidth = 200 });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(58, GridUnitType.Star), MinWidth = 240 });
 
-            // Left panel: Query List
-            var leftPanel = BuildQueryListPanel();
-            Grid.SetColumn(leftPanel, 0);
-            grid.Children.Add(leftPanel);
+            // LEFT region: master list (top) + version sub-panel (bottom), split by a horizontal splitter.
+            var leftRegion = BuildLeftRegion();
+            Grid.SetColumn(leftRegion, 0);
+            grid.Children.Add(leftRegion);
 
-            // Splitter 1
-            var splitter1 = BuildSplitter(column: 1);
-            grid.Children.Add(splitter1);
+            // Vertical splitter between left and right.
+            var splitter = BuildSplitter(column: 1);
+            grid.Children.Add(splitter);
 
-            // Middle panel: Version History
-            var middlePanel = BuildVersionHistoryPanel();
-            Grid.SetColumn(middlePanel, 2);
-            grid.Children.Add(middlePanel);
-
-            // Splitter 2
-            var splitter2 = BuildSplitter(column: 3);
-            grid.Children.Add(splitter2);
-
-            // Right panel: Code Preview
+            // RIGHT region: code preview.
             var rightPanel = BuildCodePreviewPanel();
-            Grid.SetColumn(rightPanel, 4);
+            Grid.SetColumn(rightPanel, 2);
             grid.Children.Add(rightPanel);
+
+            return grid;
+        }
+
+        /// <summary>
+        /// LEFT region: a 2-row grid \u2014 top master list, a horizontal GridSplitter, bottom version sub-panel.
+        /// </summary>
+        private Grid BuildLeftRegion()
+        {
+            var grid = new Grid();
+            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(62, GridUnitType.Star), MinHeight = 120 }); // master list
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // horizontal splitter
+            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(38, GridUnitType.Star), MinHeight = 80 }); // versions
+
+            var masterPanel = BuildQueryListPanel();
+            Grid.SetRow(masterPanel, 0);
+            grid.Children.Add(masterPanel);
+
+            var hSplitter = new GridSplitter
+            {
+                Height = 3,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Center,
+                ResizeDirection = GridResizeDirection.Rows,
+                ResizeBehavior = GridResizeBehavior.PreviousAndNext
+            };
+            hSplitter.SetResourceReference(GridSplitter.BackgroundProperty, ThemeTokens.BorderSplitter);
+            Grid.SetRow(hSplitter, 1);
+            grid.Children.Add(hSplitter);
+
+            var versionPanel = BuildVersionHistoryPanel();
+            Grid.SetRow(versionPanel, 2);
+            grid.Children.Add(versionPanel);
 
             return grid;
         }
@@ -456,26 +591,7 @@ namespace AkmlSql.Shell.Shared.History
             var dock = new DockPanel();
             dock.SetResourceReference(DockPanel.BackgroundProperty, ThemeTokens.SurfacePanel);
 
-            // Header
-            var header = new TextBlock
-            {
-                Text = "QUERIES",
-                FontWeight = FontWeights.SemiBold,
-                FontSize = 10,
-                Padding = new Thickness(10, 8, 10, 6),
-                // Letter spacing via character spacing is not directly supported in WPF TextBlock,
-                // so we just use uppercase + semibold for the same visual effect
-            };
-            header.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
-            DockPanel.SetDock(header, Dock.Top);
-            dock.Children.Add(header);
-
-            // Action bar below header
-            var actionBar = BuildActionBar();
-            DockPanel.SetDock(actionBar, Dock.Bottom);
-            dock.Children.Add(actionBar);
-
-            // Query ListView
+            // Query ListView (date-grouped, virtualized).
             _queryListView = new ListView
             {
                 BorderThickness = new Thickness(0),
@@ -486,49 +602,138 @@ namespace AkmlSql.Shell.Shared.History
             _queryListView.SetResourceReference(ListView.BackgroundProperty, ThemeTokens.SurfacePanel);
             _queryListView.SetResourceReference(ListView.ForegroundProperty, ThemeTokens.TextPrimary);
 
-            // Enable virtualization
+            // Virtualization \u2014 grouping disables it unless IsVirtualizingWhenGrouping=true + ScrollUnit=Item.
             VirtualizingPanel.SetIsVirtualizing(_queryListView, true);
             VirtualizingPanel.SetVirtualizationMode(_queryListView, VirtualizationMode.Recycling);
+            VirtualizingPanel.SetIsVirtualizingWhenGrouping(_queryListView, true);
+            VirtualizingPanel.SetScrollUnit(_queryListView, ScrollUnit.Item);
             ScrollViewer.SetCanContentScroll(_queryListView, true);
 
-            // Bind ItemsSource
-            _queryListView.SetBinding(ItemsControl.ItemsSourceProperty,
-                new Binding(nameof(HistoryViewModel.Entries)));
+            // Bind ItemsSource through a CollectionViewSource that groups by date bucket.
+            var cvs = new CollectionViewSource { Source = _viewModel.Entries };
+            cvs.GroupDescriptions.Add(
+                new PropertyGroupDescription(nameof(HistoryEntryDto.ExecutedAt), new DateBucketConverter()));
+            _queryListView.ItemsSource = cvs.View;
 
-            // Item template: custom card-like layout per entry
+            // Item template: 2-line row per entry.
             _queryListView.ItemTemplate = CreateQueryItemTemplate();
 
-            // ItemContainerStyle: selected item accent
+            // ItemContainerStyle: selected item accent (3px left border).
             _queryListView.ItemContainerStyle = CreateQueryItemContainerStyle();
 
-            // Context menu
+            // GroupStyle: collapsible chevron + bucket name header.
+            _queryListView.GroupStyle.Add(CreateDateGroupStyle());
+
+            // Context menu \u2014 all entry actions (Copy/Open/Re-run/Compare/Export/Delete + Rename/Favorite).
             _queryListView.ContextMenu = BuildQueryContextMenu();
 
-            // Events
+            // Events \u2014 the selection chain (preview drive + metadata + version load) is preserved here.
             _queryListView.MouseDoubleClick += OnListViewDoubleClick;
             _queryListView.SelectionChanged += OnListViewSelectionChanged;
+
+            // Infinite scroll \u2014 load more when scrolled near the bottom.
+            _queryListView.AddHandler(ScrollViewer.ScrollChangedEvent,
+                new ScrollChangedEventHandler(OnQueryListScrollChanged));
 
             dock.Children.Add(_queryListView);
 
             return dock;
         }
 
+        /// <summary>
+        /// GroupStyle for the date-bucketed master list: a collapsible chevron ToggleButton + bucket-name
+        /// header, with the group's items presenter below. Toggling the chevron collapses/expands the rows.
+        /// Implemented via a <see cref="GroupItem"/> ContainerStyle so the chevron can drive the
+        /// <see cref="ItemsPresenter"/> visibility (a HeaderTemplate alone can't reach the presenter).
+        /// Virtualization is preserved: the ListView keeps IsVirtualizingWhenGrouping=true + ScrollUnit=Item
+        /// and WPF's default group panel is a VirtualizingStackPanel.
+        /// </summary>
+        private static GroupStyle CreateDateGroupStyle()
+        {
+            // ----- GroupItem template: [chevron + name] (Top) over an ItemsPresenter -----
+            var rootPanel = new FrameworkElementFactory(typeof(StackPanel));
+
+            // Header row.
+            var headerDock = new FrameworkElementFactory(typeof(DockPanel));
+            headerDock.SetValue(FrameworkElement.MarginProperty, new Thickness(6, 6, 6, 2));
+
+            var chevron = new FrameworkElementFactory(typeof(ToggleButton));
+            chevron.Name = "GroupChevron";
+            chevron.SetValue(ToggleButton.IsCheckedProperty, true); // expanded by default
+            chevron.SetValue(FrameworkElement.CursorProperty, Cursors.Hand);
+            chevron.SetValue(Control.BackgroundProperty, Brushes.Transparent);
+            chevron.SetValue(Control.BorderThicknessProperty, new Thickness(0));
+            chevron.SetValue(FrameworkElement.WidthProperty, 16.0);
+            chevron.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            chevron.SetValue(DockPanel.DockProperty, Dock.Left);
+            chevron.SetValue(ToggleButton.TemplateProperty, BuildChevronTemplate());
+            headerDock.AppendChild(chevron);
+
+            var name = new FrameworkElementFactory(typeof(TextBlock));
+            name.SetBinding(TextBlock.TextProperty, new Binding("Name")); // DataContext is the CollectionViewGroup
+            name.SetValue(TextBlock.FontWeightProperty, FontWeights.SemiBold);
+            name.SetValue(TextBlock.FontSizeProperty, 10.5);
+            name.SetResourceBinding(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+            name.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            name.SetValue(FrameworkElement.MarginProperty, new Thickness(2, 0, 0, 0));
+            name.SetValue(FrameworkElement.CursorProperty, Cursors.Hand);
+            headerDock.AppendChild(name);
+
+            rootPanel.AppendChild(headerDock);
+
+            // Items presenter — visibility bound to the chevron's IsChecked (collapse/expand the rows).
+            var itemsPresenter = new FrameworkElementFactory(typeof(ItemsPresenter));
+            itemsPresenter.SetBinding(UIElement.VisibilityProperty, new Binding("IsChecked")
+            {
+                ElementName = "GroupChevron",
+                Converter = new BoolToVisibilityConverter()
+            });
+            rootPanel.AppendChild(itemsPresenter);
+
+            var containerTemplate = new ControlTemplate(typeof(GroupItem)) { VisualTree = rootPanel };
+
+            var containerStyle = new Style(typeof(GroupItem));
+            containerStyle.Setters.Add(new Setter(Control.TemplateProperty, containerTemplate));
+
+            return new GroupStyle
+            {
+                ContainerStyle = containerStyle
+            };
+        }
+
+        /// <summary>A rotating-triangle chevron template for the group ToggleButton.</summary>
+        private static ControlTemplate BuildChevronTemplate()
+        {
+            var arrow = new FrameworkElementFactory(typeof(Path));
+            arrow.Name = "Arrow";
+            // Down-pointing triangle (expanded); rotated -90\u00B0 when collapsed.
+            arrow.SetValue(Path.DataProperty, Geometry.Parse("M 0,0 L 8,0 L 4,5 Z"));
+            arrow.SetResourceBinding(Shape.FillProperty, ThemeTokens.TextSecondary);
+            arrow.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+            arrow.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            arrow.SetValue(FrameworkElement.RenderTransformOriginProperty, new Point(0.5, 0.5));
+            arrow.SetValue(FrameworkElement.RenderTransformProperty, new RotateTransform(0));
+
+            var template = new ControlTemplate(typeof(ToggleButton)) { VisualTree = arrow };
+
+            // Collapsed (IsChecked=false): rotate the arrow to point right.
+            var collapsed = new Trigger { Property = ToggleButton.IsCheckedProperty, Value = false };
+            collapsed.Setters.Add(new Setter(FrameworkElement.RenderTransformProperty,
+                new RotateTransform(-90), "Arrow"));
+            template.Triggers.Add(collapsed);
+
+            return template;
+        }
+
         private DataTemplate CreateQueryItemTemplate()
         {
             var template = new DataTemplate(typeof(HistoryEntryDto));
 
-            // We use a DockPanel-based layout because ColumnDefinitions cannot be added via FrameworkElementFactory.
+            // Root: DockPanel \u2014 far-left star toggle, far-right overflow, center two-line content.
             var outerDock = new FrameworkElementFactory(typeof(DockPanel));
             outerDock.SetValue(FrameworkElement.MarginProperty, new Thickness(4, 4, 4, 4));
 
-            // Right side: Star + overflow menu
-            var rightStack = new FrameworkElementFactory(typeof(StackPanel));
-            rightStack.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
-            rightStack.SetValue(DockPanel.DockProperty, Dock.Right);
-            rightStack.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Top);
-            rightStack.SetValue(FrameworkElement.MarginProperty, new Thickness(4, 0, 0, 0));
-
-            // Star icon \u2014 Foreground is bound through FavoriteColorConverter so it can collapse onto Status.Warning.
+            // Far-left star toggle (reuses FavoriteIconConverter / FavoriteColorConverter + OnFavoriteStarClick).
             var starText = new FrameworkElementFactory(typeof(TextBlock));
             starText.SetBinding(TextBlock.TextProperty,
                 new Binding(nameof(HistoryEntryDto.IsFavorite))
@@ -541,47 +746,33 @@ namespace AkmlSql.Shell.Shared.History
                     Converter = new FavoriteColorConverter()
                 });
             starText.SetValue(TextBlock.FontSizeProperty, 14.0);
+            starText.SetValue(DockPanel.DockProperty, Dock.Left);
+            starText.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            starText.SetValue(FrameworkElement.MarginProperty, new Thickness(0, 0, 8, 0));
             starText.SetValue(FrameworkElement.CursorProperty, Cursors.Hand);
             starText.SetValue(ToolTipProperty, "Toggle favorite");
             starText.AddHandler(UIElement.MouseLeftButtonDownEvent,
                 new MouseButtonEventHandler(OnFavoriteStarClick));
-            rightStack.AppendChild(starText);
+            outerDock.AppendChild(starText);
 
-            // Overflow "..." button
+            // Far-right overflow "\u22EE" button (opens the query context menu).
             var overflowText = new FrameworkElementFactory(typeof(TextBlock));
-            overflowText.SetValue(TextBlock.TextProperty, " \u22EE");
+            overflowText.SetValue(TextBlock.TextProperty, "\u22EE");
             overflowText.SetResourceBinding(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
             overflowText.SetValue(TextBlock.FontSizeProperty, 14.0);
+            overflowText.SetValue(DockPanel.DockProperty, Dock.Right);
+            overflowText.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            overflowText.SetValue(FrameworkElement.MarginProperty, new Thickness(4, 0, 0, 0));
             overflowText.SetValue(FrameworkElement.CursorProperty, Cursors.Hand);
             overflowText.SetValue(ToolTipProperty, "More actions");
             overflowText.AddHandler(UIElement.MouseLeftButtonDownEvent,
                 new MouseButtonEventHandler(OnOverflowClick));
-            rightStack.AppendChild(overflowText);
+            outerDock.AppendChild(overflowText);
 
-            outerDock.AppendChild(rightStack);
-
-            // Left side: Status icon \u2014 Foreground via OpenClosedColorConverter (Status.Success / Status.Danger).
-            var statusIcon = new FrameworkElementFactory(typeof(TextBlock));
-            statusIcon.SetBinding(TextBlock.TextProperty,
-                new Binding(nameof(HistoryEntryDto.IsOpen))
-                {
-                    Converter = new OpenClosedIconConverter()
-                });
-            statusIcon.SetBinding(TextBlock.ForegroundProperty,
-                new Binding(nameof(HistoryEntryDto.IsOpen))
-                {
-                    Converter = new OpenClosedColorConverter()
-                });
-            statusIcon.SetValue(TextBlock.FontSizeProperty, 16.0);
-            statusIcon.SetValue(DockPanel.DockProperty, Dock.Left);
-            statusIcon.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Top);
-            statusIcon.SetValue(FrameworkElement.MarginProperty, new Thickness(0, 0, 8, 0));
-            outerDock.AppendChild(statusIcon);
-
-            // Center: content stack (name, connection, time)
+            // Center: two-line content stack (fills via LastChildFill).
             var contentStack = new FrameworkElementFactory(typeof(StackPanel));
 
-            // Row 1: Query name (TabTitle or first 60 chars of SQL)
+            // Line 1: filename (QueryNameConverter), bold.
             var nameText = new FrameworkElementFactory(typeof(TextBlock));
             nameText.SetBinding(TextBlock.TextProperty,
                 new Binding { Converter = new QueryNameConverter() });
@@ -593,7 +784,12 @@ namespace AkmlSql.Shell.Shared.History
             nameText.SetValue(ToolTipProperty, "Right-click \u2192 Rename to give this query a custom name");
             contentStack.AppendChild(nameText);
 
-            // Row 2: Server -> Database
+            // Line 2: DockPanel \u2014 left: relative time \u00B7 exec count; right: \u25CF server\instance.
+            var line2 = new FrameworkElementFactory(typeof(DockPanel));
+            line2.SetValue(FrameworkElement.MarginProperty, new Thickness(0, 2, 0, 0));
+
+            // Right side, rendered as "\u25CF server\instance": with Dock.Right the FIRST child added docks
+            // rightmost, so add the server text first then the dot \u2014 the dot lands left-adjacent to it.
             var connText = new FrameworkElementFactory(typeof(TextBlock));
             connText.SetBinding(TextBlock.TextProperty, new MultiBinding
             {
@@ -604,13 +800,29 @@ namespace AkmlSql.Shell.Shared.History
                     new Binding(nameof(HistoryEntryDto.Database))
                 }
             });
-            connText.SetValue(TextBlock.FontSizeProperty, 10.5);
+            connText.SetValue(TextBlock.FontSizeProperty, 10.0);
             connText.SetResourceBinding(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
             connText.SetValue(TextBlock.TextTrimmingProperty, TextTrimming.CharacterEllipsis);
-            connText.SetValue(FrameworkElement.MarginProperty, new Thickness(0, 2, 0, 0));
-            contentStack.AppendChild(connText);
+            connText.SetValue(DockPanel.DockProperty, Dock.Right);
+            connText.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            line2.AppendChild(connText);
 
-            // Row 3: Relative timestamp
+            var connDot = new FrameworkElementFactory(typeof(TextBlock));
+            connDot.SetValue(TextBlock.TextProperty, "\u25CF ");
+            connDot.SetBinding(TextBlock.ForegroundProperty,
+                new Binding(nameof(HistoryEntryDto.IsOpen))
+                {
+                    Converter = new OpenClosedColorConverter()
+                });
+            connDot.SetValue(TextBlock.FontSizeProperty, 9.0);
+            connDot.SetValue(DockPanel.DockProperty, Dock.Right);
+            connDot.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            line2.AppendChild(connDot);
+
+            // Left (fills): relative time + " \u00B7 " + exec count (separator hidden when count <= 1).
+            var leftMeta = new FrameworkElementFactory(typeof(StackPanel));
+            leftMeta.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
+
             var timeText = new FrameworkElementFactory(typeof(TextBlock));
             timeText.SetBinding(TextBlock.TextProperty,
                 new Binding(nameof(HistoryEntryDto.ExecutedAt))
@@ -619,30 +831,87 @@ namespace AkmlSql.Shell.Shared.History
                 });
             timeText.SetValue(TextBlock.FontSizeProperty, 10.0);
             timeText.SetResourceBinding(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
-            timeText.SetValue(FrameworkElement.MarginProperty, new Thickness(0, 2, 0, 0));
-            contentStack.AppendChild(timeText);
+            timeText.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            leftMeta.AppendChild(timeText);
 
-            // Row 4: Execution count (only visible when > 1)
+            var dotSep = new FrameworkElementFactory(typeof(TextBlock));
+            dotSep.SetValue(TextBlock.TextProperty, " \u00B7 ");
+            dotSep.SetValue(TextBlock.FontSizeProperty, 10.0);
+            dotSep.SetResourceBinding(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+            dotSep.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            dotSep.SetBinding(VisibilityProperty,
+                new Binding(nameof(HistoryEntryDto.ExecutionCount))
+                {
+                    Converter = new ExecCountVisibilityConverter()
+                });
+            leftMeta.AppendChild(dotSep);
+
             var execCountText = new FrameworkElementFactory(typeof(TextBlock));
             execCountText.SetBinding(TextBlock.TextProperty,
                 new Binding(nameof(HistoryEntryDto.ExecutionCount))
                 {
                     Converter = new ExecCountConverter()
                 });
-            execCountText.SetValue(TextBlock.FontSizeProperty, 9.5);
+            execCountText.SetValue(TextBlock.FontSizeProperty, 10.0);
             execCountText.SetResourceBinding(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
             execCountText.SetValue(TextBlock.FontStyleProperty, FontStyles.Italic);
+            execCountText.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
             execCountText.SetBinding(VisibilityProperty,
                 new Binding(nameof(HistoryEntryDto.ExecutionCount))
                 {
                     Converter = new ExecCountVisibilityConverter()
                 });
-            contentStack.AppendChild(execCountText);
+            leftMeta.AppendChild(execCountText);
+
+            line2.AppendChild(leftMeta); // LastChildFill \u2014 takes remaining width
+            contentStack.AppendChild(line2);
 
             outerDock.AppendChild(contentStack);
 
             template.VisualTree = outerDock;
             return template;
+        }
+
+        /// <summary>
+        /// Infinite scroll: fires LoadMoreCommand when the list is scrolled near the bottom.
+        /// Offsets are in item units (ScrollUnit=Item). Guarded by HasMoreEntries + an in-flight flag.
+        /// </summary>
+        private void OnQueryListScrollChanged(object sender, ScrollChangedEventArgs e)
+        {
+            if (_loadMoreInFlight) return;
+            if (!_viewModel.HasMoreEntries) return;
+            if (e.ExtentHeight <= 0) return;
+
+            // Near bottom: within ~5 items of the end.
+            const double thresholdItems = 5.0;
+            if (e.VerticalOffset + e.ViewportHeight >= e.ExtentHeight - thresholdItems)
+            {
+                if (_viewModel.LoadMoreCommand.CanExecute(null))
+                {
+                    _loadMoreInFlight = true;
+
+                    // Release the guard once the in-flight search clears IsLoading.
+                    void Release(object s, PropertyChangedEventArgs args)
+                    {
+                        if (args.PropertyName == nameof(HistoryViewModel.IsLoading) && !_viewModel.IsLoading)
+                        {
+                            _loadMoreInFlight = false;
+                            _viewModel.PropertyChanged -= Release;
+                        }
+                    }
+                    _viewModel.PropertyChanged += Release;
+
+                    _viewModel.LoadMoreCommand.Execute(null);
+
+                    // If the load short-circuited (e.g. engine not connected) IsLoading never toggled,
+                    // so Release will never fire — clear the guard immediately to avoid a stuck flag.
+                    if (!_viewModel.IsLoading)
+                    {
+                        _viewModel.PropertyChanged -= Release;
+                        _loadMoreInFlight = false;
+                    }
+                }
+            }
         }
 
         private static Style CreateQueryItemContainerStyle()
@@ -727,68 +996,17 @@ namespace AkmlSql.Shell.Shared.History
                 new Binding(nameof(HistoryViewModel.DeleteCommand)));
             contextMenu.Items.Add(deleteItem);
 
+            // Spec 030 T074 (FR-041) — remove all entries older than the selected one (favorites kept).
+            var removeOlderItem = new MenuItem { Header = "Remove older than this..." };
+            removeOlderItem.SetBinding(MenuItem.CommandProperty,
+                new Binding(nameof(HistoryViewModel.RemoveOlderThanCommand)));
+            contextMenu.Items.Add(removeOlderItem);
+
             return contextMenu;
         }
 
-        private StackPanel BuildActionBar()
-        {
-            var panel = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Margin = new Thickness(6, 4, 6, 6),
-                HorizontalAlignment = HorizontalAlignment.Left
-            };
-
-            var btnStyle = new Style(typeof(Button));
-            btnStyle.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(6, 2, 6, 2)));
-            btnStyle.Setters.Add(new Setter(FrameworkElement.MarginProperty, new Thickness(0, 0, 3, 0)));
-            btnStyle.Setters.Add(new Setter(Control.FontSizeProperty, 10.5));
-
-            var copyBtn = new Button { Content = "Copy", Style = btnStyle, ToolTip = "Copy full SQL to clipboard" };
-            copyBtn.SetBinding(System.Windows.Controls.Primitives.ButtonBase.CommandProperty,
-                new Binding(nameof(HistoryViewModel.CopySqlCommand)));
-            panel.Children.Add(copyBtn);
-
-            var openBtn = new Button { Content = "Open", Style = btnStyle, ToolTip = "Open in new editor tab" };
-            openBtn.SetBinding(System.Windows.Controls.Primitives.ButtonBase.CommandProperty,
-                new Binding(nameof(HistoryViewModel.OpenInNewTabCommand)));
-            panel.Children.Add(openBtn);
-
-            var reExecBtn = new Button { Content = "Re-run", Style = btnStyle, ToolTip = "Re-execute selected query" };
-            reExecBtn.SetBinding(System.Windows.Controls.Primitives.ButtonBase.CommandProperty,
-                new Binding(nameof(HistoryViewModel.ReExecuteCommand)));
-            panel.Children.Add(reExecBtn);
-
-            var compareBtn = new Button { Content = "Compare", Style = btnStyle, ToolTip = "Compare two selected entries" };
-            compareBtn.SetBinding(System.Windows.Controls.Primitives.ButtonBase.CommandProperty,
-                new Binding(nameof(HistoryViewModel.CompareCommand)));
-            panel.Children.Add(compareBtn);
-
-            // Visual separator
-            var separator = new Border
-            {
-                Width = 1,
-                Margin = new Thickness(3, 0, 3, 0),
-                VerticalAlignment = VerticalAlignment.Stretch
-            };
-            separator.SetResourceReference(Border.BackgroundProperty, ThemeTokens.BorderDefault);
-            panel.Children.Add(separator);
-
-            var exportBtn = new Button { Content = "Export", Style = btnStyle, ToolTip = "Export history" };
-            exportBtn.SetBinding(System.Windows.Controls.Primitives.ButtonBase.CommandProperty,
-                new Binding(nameof(HistoryViewModel.ExportCommand)));
-            panel.Children.Add(exportBtn);
-
-            var deleteBtn = new Button { Content = "Delete", Style = btnStyle, ToolTip = "Delete selected" };
-            deleteBtn.SetBinding(System.Windows.Controls.Primitives.ButtonBase.CommandProperty,
-                new Binding(nameof(HistoryViewModel.DeleteCommand)));
-            panel.Children.Add(deleteBtn);
-
-            return panel;
-        }
-
         // ================================================================
-        // Middle Panel: Version History
+        // LEFT-bottom Panel: Version sub-panel ("History for <file>")
         // ================================================================
 
         private DockPanel BuildVersionHistoryPanel()
@@ -796,17 +1014,18 @@ namespace AkmlSql.Shell.Shared.History
             var dock = new DockPanel();
             dock.SetResourceReference(DockPanel.BackgroundProperty, ThemeTokens.SurfacePanel);
 
-            // Header
-            var header = new TextBlock
+            // Header — relabelled "History for <file>" when an entry is selected (see LoadVersionHistory).
+            _versionPanelHeader = new TextBlock
             {
                 Text = "HISTORY",
                 FontWeight = FontWeights.SemiBold,
                 FontSize = 10,
-                Padding = new Thickness(10, 8, 10, 6)
+                Padding = new Thickness(10, 8, 10, 6),
+                TextTrimming = TextTrimming.CharacterEllipsis
             };
-            header.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
-            DockPanel.SetDock(header, Dock.Top);
-            dock.Children.Add(header);
+            _versionPanelHeader.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+            DockPanel.SetDock(_versionPanelHeader, Dock.Top);
+            dock.Children.Add(_versionPanelHeader);
 
             // Version ListBox
             _versionListBox = new ListBox
@@ -824,7 +1043,7 @@ namespace AkmlSql.Shell.Shared.History
         }
 
         // ================================================================
-        // Right Panel: Code Preview
+        // Right region: Code Preview (dark header + preview + metadata/Open bar)
         // ================================================================
 
         private DockPanel BuildCodePreviewPanel()
@@ -832,44 +1051,72 @@ namespace AkmlSql.Shell.Shared.History
             var dock = new DockPanel();
             dock.SetResourceReference(DockPanel.BackgroundProperty, ThemeTokens.EditorPopupBackground);
 
-            // Header row: "CODE PREVIEW" + timestamp
-            var headerRow = new DockPanel
+            // --- TOP: heavier dark header bar — filename left, ISO timestamp right ---
+            var headerBar = new Border
             {
-                Margin = new Thickness(10, 8, 10, 4)
+                Padding = new Thickness(10, 7, 10, 7),
+                BorderThickness = new Thickness(0, 0, 0, 1)
             };
+            headerBar.SetResourceReference(Border.BackgroundProperty, ThemeTokens.SurfaceElevated);
+            headerBar.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.BorderDefault);
+
+            var headerRow = new DockPanel();
 
             _codePreviewHeaderTimestamp = new TextBlock
             {
-                FontSize = 10,
+                FontSize = 10.5,
                 VerticalAlignment = VerticalAlignment.Center
             };
             _codePreviewHeaderTimestamp.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
             DockPanel.SetDock(_codePreviewHeaderTimestamp, Dock.Right);
             headerRow.Children.Add(_codePreviewHeaderTimestamp);
 
-            var headerLabel = new TextBlock
+            _codePreviewHeaderFilename = new TextBlock
             {
-                Text = "CODE PREVIEW",
+                Text = "Preview",
                 FontWeight = FontWeights.SemiBold,
-                FontSize = 10
+                FontSize = 12,
+                VerticalAlignment = VerticalAlignment.Center,
+                TextTrimming = TextTrimming.CharacterEllipsis
             };
-            headerLabel.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
-            headerRow.Children.Add(headerLabel);
+            _codePreviewHeaderFilename.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPrimary);
+            headerRow.Children.Add(_codePreviewHeaderFilename); // LastChildFill
 
-            DockPanel.SetDock(headerRow, Dock.Top);
-            dock.Children.Add(headerRow);
+            headerBar.Child = headerRow;
+            DockPanel.SetDock(headerBar, Dock.Top);
+            dock.Children.Add(headerBar);
 
-            // Bottom metadata bar: server | database | version
+            // --- BOTTOM: metadata + action bar (● server · database | vN of M | Open) ---
             var metaBar = new DockPanel
             {
-                Margin = new Thickness(10, 4, 10, 8)
+                Margin = new Thickness(10, 6, 10, 8)
             };
-            metaBar.SetResourceReference(DockPanel.BackgroundProperty, ThemeTokens.SurfacePanel);
+
+            // Prominent primary-styled "Open" button (right-docked) — OpenInNewTabCommand.
+            var openButton = new Button
+            {
+                Content = "Open",
+                Padding = new Thickness(16, 4, 16, 4),
+                Cursor = Cursors.Hand,
+                FontSize = 11.5,
+                FontWeight = FontWeights.SemiBold,
+                BorderThickness = new Thickness(0),
+                FocusVisualStyle = FocusVisualStyles.HighStakes,
+                ToolTip = "Open this query in a new editor tab",
+                Template = BuildPrimaryButtonTemplate()
+            };
+            openButton.SetResourceReference(Control.BackgroundProperty, ThemeTokens.AccentPrimary);
+            openButton.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextOnAccent);
+            openButton.SetBinding(System.Windows.Controls.Primitives.ButtonBase.CommandProperty,
+                new Binding(nameof(HistoryViewModel.OpenInNewTabCommand)));
+            DockPanel.SetDock(openButton, Dock.Right);
+            metaBar.Children.Add(openButton);
 
             _metadataVersionLabel = new TextBlock
             {
-                FontSize = 10,
-                VerticalAlignment = VerticalAlignment.Center
+                FontSize = 10.5,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(10, 0, 10, 0)
             };
             _metadataVersionLabel.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
             DockPanel.SetDock(_metadataVersionLabel, Dock.Right);
@@ -881,7 +1128,7 @@ namespace AkmlSql.Shell.Shared.History
                 VerticalAlignment = VerticalAlignment.Center
             };
 
-            // Green circle + server name (Status.Success — matches the Open icon role)
+            // ● server (Status.Success dot role)
             _metadataServerLabel = new TextBlock
             {
                 FontSize = 10.5,
@@ -893,7 +1140,7 @@ namespace AkmlSql.Shell.Shared.History
             // Separator
             var metaSeparator = new TextBlock
             {
-                Text = " | ",
+                Text = " · ",
                 FontSize = 10.5,
                 VerticalAlignment = VerticalAlignment.Center
             };
@@ -909,12 +1156,12 @@ namespace AkmlSql.Shell.Shared.History
             _metadataDatabaseLabel.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
             metaLeft.Children.Add(_metadataDatabaseLabel);
 
-            metaBar.Children.Add(metaLeft);
+            metaBar.Children.Add(metaLeft); // LastChildFill
 
             DockPanel.SetDock(metaBar, Dock.Bottom);
             dock.Children.Add(metaBar);
 
-            // Code preview TextBlock in ScrollViewer
+            // --- CENTER: monospaced read-only preview in a ScrollViewer (added LAST = fills) ---
             _codePreviewTextBlock = new TextBlock
             {
                 FontFamily = AkmlSql.Shell.Shared.Ui.Theme.Typography.MonoFont,
@@ -938,8 +1185,40 @@ namespace AkmlSql.Shell.Shared.History
             return dock;
         }
 
+        /// <summary>
+        /// Primary (accent) button template: rounded <see cref="Border"/> with TemplateBinding background,
+        /// hover/pressed accent states. Used for the prominent right-pane "Open" button.
+        /// </summary>
+        private static ControlTemplate BuildPrimaryButtonTemplate()
+        {
+            var border = new FrameworkElementFactory(typeof(Border));
+            border.Name = "Bd";
+            border.SetValue(Border.CornerRadiusProperty, new CornerRadius(5));
+            border.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Control.BackgroundProperty));
+            border.SetValue(Border.PaddingProperty, new TemplateBindingExtension(Control.PaddingProperty));
+
+            var content = new FrameworkElementFactory(typeof(ContentPresenter));
+            content.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+            content.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            border.AppendChild(content);
+
+            var template = new ControlTemplate(typeof(Button)) { VisualTree = border };
+
+            var hover = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
+            hover.Setters.Add(new Setter(Border.BackgroundProperty,
+                new DynamicResourceExtension(ThemeTokens.AccentPrimaryHover), "Bd"));
+            template.Triggers.Add(hover);
+
+            var pressed = new Trigger { Property = System.Windows.Controls.Primitives.ButtonBase.IsPressedProperty, Value = true };
+            pressed.Setters.Add(new Setter(Border.BackgroundProperty,
+                new DynamicResourceExtension(ThemeTokens.AccentPrimaryPressed), "Bd"));
+            template.Triggers.Add(pressed);
+
+            return template;
+        }
+
         // ================================================================
-        // ROW 2: Status bar
+        // ROW 2: Status strip
         // ================================================================
 
         private DockPanel BuildStatusBar()
@@ -949,24 +1228,6 @@ namespace AkmlSql.Shell.Shared.History
                 Margin = new Thickness(8, 2, 8, 4)
             };
             bar.SetResourceReference(DockPanel.BackgroundProperty, ThemeTokens.SurfaceCanvas);
-
-            // Load More button on the right
-            _loadMoreButton = new Button
-            {
-                Content = "Load More",
-                Padding = new Thickness(8, 2, 8, 2),
-                Margin = new Thickness(4, 0, 0, 0),
-                FontSize = 10.5
-            };
-            _loadMoreButton.SetBinding(System.Windows.Controls.Primitives.ButtonBase.CommandProperty,
-                new Binding(nameof(HistoryViewModel.LoadMoreCommand)));
-            _loadMoreButton.SetBinding(VisibilityProperty,
-                new Binding(nameof(HistoryViewModel.HasMoreEntries))
-                {
-                    Converter = new BoolToVisibilityConverter()
-                });
-            DockPanel.SetDock(_loadMoreButton, Dock.Right);
-            bar.Children.Add(_loadMoreButton);
 
             // Loading indicator
             _statusLoadingLabel = new TextBlock
@@ -1036,26 +1297,31 @@ namespace AkmlSql.Shell.Shared.History
         }
 
         /// <summary>
-        /// Updates the code preview TextBlock with search match highlighting.
-        /// When SearchText is active, matching segments get the HistorySearchHighlight background.
-        /// Supports multi-term highlighting: splits by OR, strips NOT terms, extracts quoted phrases,
-        /// removes prefix filters (server:, database:, name:, sql:, starred:, open:), and merges
-        /// overlapping highlight regions.
+        /// Updates the code preview with one merged Run-emission pass that composes
+        /// (a) SQL syntax coloring (keyword / string / comment foreground from a lightweight tokenizer)
+        /// with (b) search-match background highlighting (from <see cref="FindHighlightRegions"/>).
+        /// Also refreshes the dark header (filename + ISO timestamp).
         /// </summary>
         private void UpdatePreviewWithHighlighting()
         {
             if (_codePreviewTextBlock == null) return;
-            _codePreviewTextBlock.Inlines.Clear();
 
             var entry = _viewModel.SelectedEntry;
             if (entry == null)
             {
+                _codePreviewTextBlock.Inlines.Clear();
                 if (_codePreviewHeaderTimestamp != null)
                     _codePreviewHeaderTimestamp.Text = string.Empty;
+                if (_codePreviewHeaderFilename != null)
+                    _codePreviewHeaderFilename.Text = "Preview";
                 return;
             }
 
-            // Update the timestamp in the header
+            // Header — filename (left) + ISO timestamp (right).
+            if (_codePreviewHeaderFilename != null)
+            {
+                _codePreviewHeaderFilename.Text = QueryDisplayName(entry);
+            }
             if (_codePreviewHeaderTimestamp != null)
             {
                 if (DateTime.TryParse(entry.ExecutedAt, CultureInfo.InvariantCulture,
@@ -1064,209 +1330,131 @@ namespace AkmlSql.Shell.Shared.History
                     _codePreviewHeaderTimestamp.Text = dt.ToLocalTime()
                         .ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.CurrentCulture);
                 }
+                else
+                {
+                    _codePreviewHeaderTimestamp.Text = string.Empty;
+                }
             }
 
-            var sqlText = entry.SqlText ?? string.Empty;
+            RenderPreview(entry.SqlText ?? string.Empty);
+        }
+
+        /// <summary>
+        /// Renders <paramref name="sqlText"/> into the preview TextBlock with one merged pass:
+        /// syntax-color foreground (live theme tokens) + search-match background. Used by both the
+        /// entry-selection preview drive and the version-selection drive so both share coloring.
+        /// </summary>
+        private void RenderPreview(string sqlText)
+        {
+            if (_codePreviewTextBlock == null) return;
+            _codePreviewTextBlock.Inlines.Clear();
+
+            if (string.IsNullOrEmpty(sqlText)) return;
+
+            // (a) Tokenize ALWAYS (coloring is not gated on search). Spans cover every character so
+            //     the concatenated Run text equals sqlText verbatim. Shared Core tokenizer.
+            var tokens = AkmlSql.Core.Text.SqlPreviewTokenizer.Tokenize(sqlText);
+
+            // (b) Search-match regions (background only). Empty when no search / no match.
+            var regions = new List<HighlightRegion>();
             var searchText = _viewModel.SearchText;
-
-            if (string.IsNullOrWhiteSpace(searchText))
+            if (!string.IsNullOrWhiteSpace(searchText))
             {
-                // No search active: plain text
-                _codePreviewTextBlock.Inlines.Add(new Run(sqlText));
-                return;
+                var terms = ExtractHighlightTerms(searchText);
+                if (terms.Count > 0)
+                    regions = FindHighlightRegions(sqlText, terms);
             }
 
-            // Parse search text into individual highlight terms
-            var highlightTerms = ExtractHighlightTerms(searchText);
-
-            if (highlightTerms.Count == 0)
+            // Walk token spans, clipping each against the sorted match regions so each emitted Run
+            // is a sub-span whose foreground = the token colour and whose background = match highlight
+            // iff the sub-span lies inside a region. Run brushes are LIVE-bound (theme-switch safe).
+            int regionIdx = 0;
+            foreach (var token in tokens)
             {
-                // All terms were prefix filters or NOT terms — no highlighting needed
-                _codePreviewTextBlock.Inlines.Add(new Run(sqlText));
-                return;
-            }
+                int spanStart = token.Start;
+                int spanEnd = token.Start + token.Length;
+                int cursor = spanStart;
 
-            // Find all match regions across all terms
-            var regions = FindHighlightRegions(sqlText, highlightTerms);
-
-            if (regions.Count == 0)
-            {
-                // No matches found
-                _codePreviewTextBlock.Inlines.Add(new Run(sqlText));
-                return;
-            }
-
-            // Render the text with highlighted regions. Spec 020 (US1 T021) replaces the legacy
-            // ThemeManager.HistorySearchHighlight facade with the dedicated HistoryMatchHighlight
-            // token — same semantic role (yellow-ochre highlight), now flows through ThemeRegistry
-            // so light/dark variants come from ThemePalette like every other chrome brush.
-            var highlightBrush = (SolidColorBrush)ThemeRegistry.Instance.Resources[ThemeTokens.HistoryMatchHighlight];
-
-            int pos = 0;
-            foreach (var region in regions)
-            {
-                // Add non-matching segment before this region
-                if (region.Start > pos)
+                // Advance past regions that end before this span.
+                while (regionIdx < regions.Count &&
+                       regions[regionIdx].Start + regions[regionIdx].Length <= spanStart)
                 {
-                    _codePreviewTextBlock.Inlines.Add(new Run(sqlText.Substring(pos, region.Start - pos)));
+                    regionIdx++;
                 }
 
-                // Add highlighted segment
-                var matchRun = new Run(sqlText.Substring(region.Start, region.Length))
+                int localRegion = regionIdx;
+                while (cursor < spanEnd)
                 {
-                    Background = highlightBrush
-                };
-                _codePreviewTextBlock.Inlines.Add(matchRun);
+                    // Find the next region overlapping [cursor, spanEnd).
+                    while (localRegion < regions.Count &&
+                           regions[localRegion].Start + regions[localRegion].Length <= cursor)
+                    {
+                        localRegion++;
+                    }
 
-                pos = region.Start + region.Length;
-            }
+                    if (localRegion >= regions.Count || regions[localRegion].Start >= spanEnd)
+                    {
+                        // No more overlap in this span — emit the remainder unhighlighted.
+                        EmitRun(sqlText.Substring(cursor, spanEnd - cursor), token.Kind, highlighted: false);
+                        cursor = spanEnd;
+                        break;
+                    }
 
-            // Add remaining text after last highlight
-            if (pos < sqlText.Length)
-            {
-                _codePreviewTextBlock.Inlines.Add(new Run(sqlText.Substring(pos)));
+                    var region = regions[localRegion];
+                    int regionStart = Math.Max(region.Start, cursor);
+                    int regionEnd = Math.Min(region.Start + region.Length, spanEnd);
+
+                    // Plain segment before the region.
+                    if (regionStart > cursor)
+                    {
+                        EmitRun(sqlText.Substring(cursor, regionStart - cursor), token.Kind, highlighted: false);
+                    }
+
+                    // Highlighted segment (clipped to this span).
+                    if (regionEnd > regionStart)
+                    {
+                        EmitRun(sqlText.Substring(regionStart, regionEnd - regionStart), token.Kind, highlighted: true);
+                    }
+
+                    cursor = regionEnd;
+                }
             }
+        }
+
+        /// <summary>Emits one preview Run with a live-bound foreground (token colour) and optional match background.</summary>
+        private void EmitRun(string text, string kind, bool highlighted)
+        {
+            if (_codePreviewTextBlock == null || text.Length == 0) return;
+
+            var run = new Run(text);
+
+            // Foreground: theme-aware per token kind (NO hardcoded blue). Kinds are the shared
+            // AkmlSql.Core.Text.SqlPreviewTokenizer constants.
+            string fgKey;
+            if (kind == AkmlSql.Core.Text.SqlPreviewTokenizer.KindKeyword) fgKey = ThemeTokens.AccentPrimary;
+            else if (kind == AkmlSql.Core.Text.SqlPreviewTokenizer.KindString) fgKey = ThemeTokens.StatusSuccess;
+            else if (kind == AkmlSql.Core.Text.SqlPreviewTokenizer.KindComment) fgKey = ThemeTokens.TextSecondary;
+            else fgKey = ThemeTokens.TextPrimary;
+            run.SetResourceReference(TextElement.ForegroundProperty, fgKey);
+
+            // Background: search-match highlight (live-bound) only on matched sub-spans.
+            if (highlighted)
+                run.SetResourceReference(TextElement.BackgroundProperty, ThemeTokens.HistoryMatchHighlight);
+
+            _codePreviewTextBlock.Inlines.Add(run);
         }
 
         /// <summary>
-        /// Extracts highlight terms from the search text.
-        /// - Splits by OR (case-sensitive word boundary) into separate groups
-        /// - Strips NOT-prefixed terms (these filter but should not highlight)
-        /// - Extracts quoted phrases as whole terms (quotes stripped for matching)
-        /// - Removes prefix filters (server:, database:, db:, name:, sql:, starred:, open:)
-        /// - Each remaining word/phrase becomes a highlight term
+        /// Extracts highlight terms from the search text. Delegates to the shared, canonical
+        /// quote-aware extractor <see cref="AkmlSql.Core.Text.HistorySearchTerms.Extract"/> (one
+        /// implementation shared with the web History page). This adopts the web's quote-aware rules:
+        /// a double-quoted span is one term (quotes stripped); bare AND/OR/NOT are dropped
+        /// (case-insensitive); the value of metadata prefixes (server:/db:/database:/name:/starred:/
+        /// is:/open:) is dropped entirely while sql: keeps its value; unknown prefixes stay literal;
+        /// and a single trailing FTS5 <c>*</c> is stripped.
         /// </summary>
-        private static List<string> ExtractHighlightTerms(string searchText)
-        {
-            var terms = new List<string>();
-
-            // Split by OR at word boundaries: " OR " or start/end anchored OR
-            var orParts = Regex.Split(searchText, @"(?<=\s)OR(?=\s)|^OR(?=\s)|(?<=\s)OR$");
-
-            foreach (var orPart in orParts)
-            {
-                var part = orPart.Trim();
-                if (string.IsNullOrEmpty(part)) continue;
-
-                // Tokenize the part respecting quoted strings
-                var tokens = TokenizeForHighlight(part);
-
-                bool skipNext = false;
-                for (int i = 0; i < tokens.Count; i++)
-                {
-                    var token = tokens[i];
-
-                    // Skip AND keyword (FTS5 boolean, not a highlight term)
-                    if (string.Equals(token, "AND", StringComparison.Ordinal))
-                        continue;
-
-                    // NOT: skip the NOT keyword and the next token (the negated term)
-                    if (string.Equals(token, "NOT", StringComparison.Ordinal))
-                    {
-                        skipNext = true;
-                        continue;
-                    }
-
-                    if (skipNext)
-                    {
-                        skipNext = false;
-                        continue;
-                    }
-
-                    // Check for prefix filters — skip these entirely
-                    if (IsPrefixFilter(token))
-                        continue;
-
-                    // Strip quotes from quoted phrases
-                    var term = token;
-                    if (term.Length >= 2 && term.StartsWith("\"", StringComparison.Ordinal)
-                                        && term.EndsWith("\"", StringComparison.Ordinal))
-                    {
-                        term = term.Substring(1, term.Length - 2);
-                    }
-
-                    // Strip trailing wildcard (*) used for FTS5 prefix search
-                    if (term.EndsWith("*", StringComparison.Ordinal))
-                    {
-                        term = term.Substring(0, term.Length - 1);
-                    }
-
-                    if (!string.IsNullOrWhiteSpace(term) && !terms.Contains(term))
-                    {
-                        terms.Add(term);
-                    }
-                }
-            }
-
-            return terms;
-        }
-
-        /// <summary>
-        /// Tokenizes a search string respecting quoted phrases.
-        /// Quoted strings (including prefix:&quot;value&quot;) are kept as single tokens.
-        /// </summary>
-        private static List<string> TokenizeForHighlight(string text)
-        {
-            var tokens = new List<string>();
-            var sb = new System.Text.StringBuilder();
-            bool inQuotes = false;
-
-            for (int i = 0; i < text.Length; i++)
-            {
-                char c = text[i];
-
-                if (c == '"')
-                {
-                    inQuotes = !inQuotes;
-                    sb.Append(c);
-                    continue;
-                }
-
-                if (char.IsWhiteSpace(c) && !inQuotes)
-                {
-                    if (sb.Length > 0)
-                    {
-                        tokens.Add(sb.ToString());
-                        sb.Clear();
-                    }
-                    continue;
-                }
-
-                sb.Append(c);
-            }
-
-            if (sb.Length > 0)
-            {
-                tokens.Add(sb.ToString());
-            }
-
-            return tokens;
-        }
-
-        /// <summary>
-        /// Returns true if the token is a prefix filter (server:val, database:val, db:val,
-        /// sql:val, name:val, starred:val, open:val). These should not be highlighted.
-        /// </summary>
-        private static bool IsPrefixFilter(string token)
-        {
-            var colonIdx = token.IndexOf(':');
-            if (colonIdx <= 0) return false;
-
-            var prefix = token.Substring(0, colonIdx).ToLowerInvariant();
-            switch (prefix)
-            {
-                case "server":
-                case "database":
-                case "db":
-                case "sql":
-                case "name":
-                case "starred":
-                case "open":
-                    return true;
-                default:
-                    return false;
-            }
-        }
+        private static List<string> ExtractHighlightTerms(string searchText) =>
+            AkmlSql.Core.Text.HistorySearchTerms.Extract(searchText).ToList();
 
         /// <summary>
         /// Finds all highlight regions in the SQL text for the given terms.
@@ -1373,7 +1561,16 @@ namespace AkmlSql.Shell.Shared.History
             _versionListBox.Items.Clear();
 
             var entry = _viewModel.SelectedEntry;
-            if (entry == null) return;
+            if (entry == null)
+            {
+                if (_versionPanelHeader != null)
+                    _versionPanelHeader.Text = "HISTORY";
+                return;
+            }
+
+            // Relabel the LEFT-bottom version sub-panel header "History for <file>".
+            if (_versionPanelHeader != null)
+                _versionPanelHeader.Text = "History for " + QueryDisplayName(entry);
 
             try
             {
@@ -1467,8 +1664,8 @@ namespace AkmlSql.Shell.Shared.History
 
             if (_versionListBox.SelectedItem is ListBoxItem item && item.Tag is string versionSql)
             {
-                _codePreviewTextBlock.Inlines.Clear();
-                _codePreviewTextBlock.Inlines.Add(new Run(versionSql));
+                // Same merged syntax + search highlighting pass as the entry-selection preview.
+                RenderPreview(versionSql);
 
                 // Update version label in metadata bar
                 if (_metadataVersionLabel != null)
@@ -1828,13 +2025,14 @@ namespace AkmlSql.Shell.Shared.History
         // ================================================================
 
         /// <summary>
-        /// Creates and freezes a SolidColorBrush from a Color.
+        /// Returns the display name for an entry — its TabTitle, else a collapsed 60-char SQL preview,
+        /// else a placeholder. Mirrors <see cref="QueryNameConverter"/> for use by the right-pane filename
+        /// header and the "History for &lt;file&gt;" version-panel header.
         /// </summary>
-        private static SolidColorBrush Freeze(Color color)
+        private static string QueryDisplayName(HistoryEntryDto entry)
         {
-            var brush = new SolidColorBrush(color);
-            brush.Freeze();
-            return brush;
+            if (entry == null) return "Preview";
+            return AkmlSql.Core.Models.History.HistoryDisplayName.Of(entry.TabTitle, entry.SqlText);
         }
 
         // ================================================================
@@ -1842,20 +2040,6 @@ namespace AkmlSql.Shell.Shared.History
         // ================================================================
 
         #region Value Converters
-
-        /// <summary>Converts IsOpen bool to open/closed folder icon.</summary>
-        private class OpenClosedIconConverter : IValueConverter
-        {
-            public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-            {
-                return value is true ? "\U0001F4C2" : "\U0001F4D5"; // open folder vs closed book
-            }
-
-            public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-            {
-                throw new NotSupportedException();
-            }
-        }
 
         /// <summary>Converts IsOpen bool to a theme-aware brush via Status.Success / Status.Danger.</summary>
         private class OpenClosedColorConverter : IValueConverter
@@ -1873,30 +2057,16 @@ namespace AkmlSql.Shell.Shared.History
         }
 
         /// <summary>
-        /// Converts the full HistoryEntryDto to a display name:
-        /// TabTitle if set, otherwise first 60 chars of SQL with whitespace collapsed.
+        /// Converts the full HistoryEntryDto to a display name (shared Core helper):
+        /// TabTitle if set, otherwise first 60 chars of SQL with whitespace collapsed, otherwise
+        /// "(Untitled query)". The "right-click to rename" hint remains the row TextBlock tooltip.
         /// </summary>
         private class QueryNameConverter : IValueConverter
         {
             public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
             {
                 if (value is HistoryEntryDto entry)
-                {
-                    if (!string.IsNullOrWhiteSpace(entry.TabTitle))
-                        return entry.TabTitle;
-
-                    var sql = entry.SqlText ?? string.Empty;
-                    var collapsed = System.Text.RegularExpressions.Regex.Replace(sql, @"\s+", " ").Trim();
-                    if (collapsed.Length > 0)
-                    {
-                        if (collapsed.Length > 60)
-                            return collapsed.Substring(0, 60) + "...";
-                        return collapsed;
-                    }
-
-                    // No custom name and no SQL — show a discoverable placeholder
-                    return "(Untitled query \u2014 right-click to rename)";
-                }
+                    return AkmlSql.Core.Models.History.HistoryDisplayName.Of(entry.TabTitle, entry.SqlText);
                 return "";
             }
 

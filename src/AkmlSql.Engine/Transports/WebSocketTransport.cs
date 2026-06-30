@@ -372,7 +372,7 @@ namespace AkmlSql.Engine.Transports
             {
                 throw new InvalidOperationException(
                     $"WebSocketTransport: TlsCertPath does not exist on disk: '{pfxPath}'. " +
-                    "Re-run AKMLSQLSetup.exe or check `%ProgramData%/AKML SQL Web/certs/bridge.pfx`.");
+                    "Re-run AKMLSQLSetup.exe or check `%ProgramData%/AKML SQL Web/certs/bridge.cer`.");
             }
 
             string pfxThumb;
@@ -420,8 +420,8 @@ namespace AkmlSql.Engine.Transports
             if (!string.Equals(pfxThumb, netshThumb, StringComparison.OrdinalIgnoreCase))
             {
                 throw new InvalidOperationException(
-                    "WebSocketTransport: PFX thumbprint mismatch with netsh binding. " +
-                    $"PFX ('{pfxPath}') reports {pfxThumb}; netsh binding for 0.0.0.0:{port} " +
+                    "WebSocketTransport: certificate thumbprint mismatch with netsh binding. " +
+                    $"TlsCertPath ('{pfxPath}') reports {pfxThumb}; netsh binding for 0.0.0.0:{port} " +
                     $"reports {netshThumb}. Re-run `web-tls-setup.ps1` or update TlsCertPath.");
             }
 

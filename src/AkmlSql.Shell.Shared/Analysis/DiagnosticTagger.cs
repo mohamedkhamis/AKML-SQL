@@ -11,6 +11,11 @@ using Microsoft.VisualStudio.Utilities;
 namespace AkmlSql.Shell.Shared.Analysis
 {
     [Export(typeof(IViewTaggerProvider))]
+    // SSMS 22's query editor reports content type "SQL" (VS 2026 uses "SQL"/"T-SQL"); register all
+    // three — matching CompletionPopupProvider — so the analysis tagger actually fires in SSMS. With
+    // only "T-SQL", CreateTagger was never called in SSMS, so no squiggles/Error List ever appeared.
+    [ContentType("SQL Server Tools")]
+    [ContentType("SQL")]
     [ContentType("T-SQL")]
     [TagType(typeof(IErrorTag))]
     internal sealed class DiagnosticTaggerProvider : IViewTaggerProvider

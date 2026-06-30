@@ -8,6 +8,7 @@
     <span class="akml-spacer"></span>
     <a class="akml-nav-link" href="/">Editor</a>
     <a class="akml-nav-link" href="/snippets">Snippets</a>
+    <a class="akml-nav-link" href="/history">History</a>
     <a class="akml-nav-link" href="/settings">Settings</a>
     <a class="akml-nav-link" href="/settings/ai">AI providers</a>
     <a class="akml-nav-link" href="/settings/schema-cache">Schema cache</a>
@@ -29,7 +30,7 @@
         font-family: var(--akml-type-chrometitle-family);
         font-size: var(--akml-type-chrometitle-size);
         font-weight: var(--akml-type-chrometitle-weight);
-        color: var(--akml-accent-primary);
+        color: var(--akml-text-link);
     }
     .akml-tagline {
         color: var(--akml-text-secondary);
@@ -41,10 +42,16 @@
         color: var(--akml-text-primary);
         text-decoration: none;
         padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s);
-        border-radius: 3px;
+        border-radius: var(--akml-scalar-radius-xs);
     }
     .akml-nav-link:hover {
         background-color: var(--akml-surface-hover);
+        color: var(--akml-text-link);
+    }
+    .akml-nav-link.active {
+        color: var(--akml-text-link);
+        background-color: var(--akml-surface-selection);
+        font-weight: var(--akml-type-chrometitle-weight);
     }
     .akml-disabled {
         color: var(--akml-text-disabled);

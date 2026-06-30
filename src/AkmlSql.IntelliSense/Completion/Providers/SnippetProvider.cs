@@ -12,25 +12,29 @@ public class SnippetProvider : ICompletionProvider
 {
     public string Name => "Snippet";
 
+    // Spec 030 T039/T041: shortcode + description drive the popup list. The InsertText body is a
+    // display fallback only — committing a snippet now resolves the shipped .akmlsnippet pack by
+    // shortcode through the engine (CompletionController → SnippetExpand), so these bodies are kept in
+    // sync with src/AkmlSql.Engine/snippets/*.akmlsnippet (the $CURSOR$ marker, not $1/$2 tab-stops).
     private static readonly SnippetDefinition[] BuiltInSnippets =
     [
         new("ssf", "SELECT * FROM",
-            "SELECT *\nFROM $1\nWHERE $2"),
+            "SELECT *\nFROM $CURSOR$"),
 
         new("sel", "SELECT columns",
-            "SELECT $1\nFROM $2\nWHERE $3\nORDER BY $4"),
+            "SELECT $CURSOR$\nFROM \nWHERE \nORDER BY "),
 
         new("ins", "INSERT INTO",
-            "INSERT INTO $1 ($2)\nVALUES ($3)"),
+            "INSERT INTO $CURSOR$ ()\nVALUES ()"),
 
         new("upd", "UPDATE SET",
-            "UPDATE $1\nSET $2 = $3\nWHERE $4"),
+            "UPDATE $CURSOR$\nSET \nWHERE "),
 
         new("del", "DELETE FROM",
-            "DELETE FROM $1\nWHERE $2"),
+            "DELETE FROM $CURSOR$\nWHERE "),
 
         new("cte", "Common Table Expression",
-            ";WITH $1 AS (\n    SELECT $2\n    FROM $3\n    WHERE $4\n)\nSELECT *\nFROM $1")
+            ";WITH $CURSOR$ AS (\n    SELECT \n    FROM \n    WHERE \n)\nSELECT *\nFROM ")
     ];
 
     public bool CanHandle(CursorContext context, DatabaseCache? cache)

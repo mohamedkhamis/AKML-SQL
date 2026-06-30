@@ -7,9 +7,10 @@ using Serilog;
 namespace AkmlSql.Engine.Navigation;
 
 /// <summary>
-/// Handles navigation IPC requests: GetObjectDefinition (60), FindReferences (61), ObjectSearch (62).
+/// Handles navigation IPC requests: GetObjectDefinition (60), FindReferences (61).
 /// Delegates to <see cref="ObjectDefinitionService"/> and <see cref="ReferenceCollector"/> for
-/// database queries, and uses <see cref="SchemaCacheManager"/> for object search.
+/// database queries, and uses <see cref="SchemaCacheManager"/> to resolve the session's schema cache.
+/// (ObjectSearch (62) moved to the typed <c>ObjectSearchHandler</c> in spec 030.)
 /// </summary>
 public class NavigationRequestHandler(SchemaCacheManager schemaCacheManager)
 {
@@ -49,8 +50,10 @@ public class NavigationRequestHandler(SchemaCacheManager schemaCacheManager)
                 });
             }
 
+            // Cache is keyed by SESSION ID (the populators use GetOrCreateCache(SessionId, db));
+            // passing the connection string here always missed and forced the live-query fallback.
             var dbCache = databaseName != null
-                ? _schemaCacheManager.GetCache(connectionString, databaseName)
+                ? _schemaCacheManager.GetCache(req.SessionId, databaseName)
                 : null;
 
             var (definition, objectType, fullName) = await _definitionService.GetDefinitionAsync(
@@ -140,166 +143,6 @@ public class NavigationRequestHandler(SchemaCacheManager schemaCacheManager)
         }
     }
 
-    /// <summary>
-    /// Handles ObjectSearch (MessageType 62).
-    /// Searches the schema cache for objects matching a fuzzy name pattern.
-    /// </summary>
-    public Task<RpcMessage?> HandleObjectSearchAsync(
-        RpcMessage request,
-        Func<string, (string? ConnectionString, string? DatabaseName)> sessionLookup,
-        CancellationToken ct)
-    {
-        try
-        {
-            if (request.Payload == null)
-            {
-                return Task.FromResult<RpcMessage?>(CreateSearchResponse(request.RequestId, new ObjectSearchResponse
-                {
-                    Success = false,
-                    Error = "Payload required"
-                }));
-            }
-
-            var req = MessagePackSerializer.Deserialize<ObjectSearchRequest>(request.Payload);
-            var (connectionString, databaseName) = sessionLookup(req.SessionId);
-
-            Log.Debug("ObjectSearch: session={SessionId} hasConnection={HasConn} database={Db}",
-                req.SessionId, !string.IsNullOrEmpty(connectionString), databaseName ?? "(null)");
-
-            if (string.IsNullOrEmpty(connectionString) || string.IsNullOrEmpty(databaseName))
-            {
-                return Task.FromResult<RpcMessage?>(CreateSearchResponse(request.RequestId, new ObjectSearchResponse
-                {
-                    Success = false,
-                    Error = "No active database connection for this session"
-                }));
-            }
-
-            var dbCache = !string.IsNullOrEmpty(connectionString)
-                ? _schemaCacheManager.GetCache(connectionString, databaseName)
-                : null;
-            if (dbCache == null)
-            {
-                return Task.FromResult<RpcMessage?>(CreateSearchResponse(request.RequestId, new ObjectSearchResponse
-                {
-                    Success = true,
-                    Results = []
-                }));
-            }
-
-            var results = SearchObjects(dbCache, req.SearchText, req.MaxResults);
-
-            Log.Debug("ObjectSearch: found {Count} results for '{Search}'", results.Length, req.SearchText);
-
-            return Task.FromResult<RpcMessage?>(CreateSearchResponse(request.RequestId, new ObjectSearchResponse
-            {
-                Success = true,
-                Results = results
-            }));
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "ObjectSearch failed");
-            return Task.FromResult<RpcMessage?>(CreateSearchResponse(request.RequestId, new ObjectSearchResponse
-            {
-                Success = false,
-                Error = $"Search failed: {ex.Message}"
-            }));
-        }
-    }
-
-    /// <summary>
-    /// Searches the schema cache for objects matching the search text.
-    /// Uses fuzzy matching: prefix match, contains match, and abbreviation match.
-    /// Results are sorted by match quality (prefix > contains > abbreviation).
-    /// </summary>
-    private static ObjectSearchResultDto[] SearchObjects(DatabaseCache dbCache, string searchText, int maxResults)
-    {
-        if (string.IsNullOrWhiteSpace(searchText))
-        {
-            return [];
-        }
-
-        var searchLower = searchText.ToLowerInvariant();
-        var results = new List<(ObjectSearchResultDto Result, int Score)>();
-
-        foreach (var obj in dbCache.GetAllObjects())
-        {
-            var nameLower = obj.ObjectName.ToLowerInvariant();
-            var fullNameLower = obj.FullName.ToLowerInvariant();
-            int score = 0;
-
-            // Exact match (highest priority)
-            if (nameLower == searchLower || fullNameLower == searchLower)
-            {
-                score = 100;
-            }
-            // Prefix match
-            else if (nameLower.StartsWith(searchLower, StringComparison.Ordinal))
-            {
-                score = 80;
-            }
-            // Full name prefix match (schema.name)
-            else if (fullNameLower.StartsWith(searchLower, StringComparison.Ordinal))
-            {
-                score = 70;
-            }
-            // Contains match
-            else if (nameLower.Contains(searchLower, StringComparison.Ordinal))
-            {
-                score = 50;
-            }
-            // Abbreviation/camelCase match (e.g. "gau" matches "GetAllUsers")
-            else if (MatchesAbbreviation(obj.ObjectName, searchText))
-            {
-                score = 30;
-            }
-
-            if (score > 0)
-            {
-                results.Add((new ObjectSearchResultDto
-                {
-                    SchemaName = obj.SchemaName,
-                    ObjectName = obj.ObjectName,
-                    ObjectType = obj.ObjectType.ToString()
-                }, score));
-            }
-        }
-
-        return results
-            .OrderByDescending(r => r.Score)
-            .ThenBy(r => r.Result.ObjectName, StringComparer.OrdinalIgnoreCase)
-            .Take(maxResults)
-            .Select(r => r.Result)
-            .ToArray();
-    }
-
-    /// <summary>
-    /// Checks if the search text matches as an abbreviation of the object name.
-    /// Matches uppercase letters and word boundaries (e.g. "gau" matches "GetAllUsers",
-    /// "usp_gu" matches "usp_GetUsers").
-    /// </summary>
-    private static bool MatchesAbbreviation(string objectName, string searchText)
-    {
-        if (string.IsNullOrEmpty(searchText) || string.IsNullOrEmpty(objectName))
-            return false;
-
-        int searchIdx = 0;
-        for (int i = 0; i < objectName.Length && searchIdx < searchText.Length; i++)
-        {
-            if (char.ToLowerInvariant(objectName[i]) == char.ToLowerInvariant(searchText[searchIdx]))
-            {
-                // Match if at start, after underscore, or uppercase letter
-                if (i == 0 || objectName[i - 1] == '_' || char.IsUpper(objectName[i]) || searchIdx > 0)
-                {
-                    searchIdx++;
-                }
-            }
-        }
-
-        return searchIdx == searchText.Length;
-    }
-
     private static RpcMessage CreateDefinitionResponse(int requestId, GetObjectDefinitionResponse response)
     {
         return new RpcMessage
@@ -315,16 +158,6 @@ public class NavigationRequestHandler(SchemaCacheManager schemaCacheManager)
         return new RpcMessage
         {
             MessageType = MessageTypes.FindReferencesResult,
-            RequestId = requestId,
-            Payload = MessagePackSerializer.Serialize(response)
-        };
-    }
-
-    private static RpcMessage CreateSearchResponse(int requestId, ObjectSearchResponse response)
-    {
-        return new RpcMessage
-        {
-            MessageType = MessageTypes.ObjectSearchResult,
             RequestId = requestId,
             Payload = MessagePackSerializer.Serialize(response)
         };

@@ -11,6 +11,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         public string Key     => "Tabs & UI";
         public string Display => "Tabs › Color";
         public string Title   => "Tabs & UI";
+        public string Help    => "Configure environment-based tab coloring rules, session recovery with auto-save and startup restore, and a custom window title template.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {

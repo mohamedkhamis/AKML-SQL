@@ -20,4 +20,12 @@ public class LayoutNode
     public int PrecedingSpaces { get; set; }
     public CommentAttachment? TrailingComment { get; set; }
     public bool IsInNoformatRegion { get; set; }
+
+    /// <summary>
+    /// Opt-in absolute leading-space count for a line-start token, overriding the
+    /// <see cref="IndentLevel"/>×tabSize indent. Default -1 = unset (use IndentLevel). Set only by
+    /// the right-align finalization pass (<c>RightAligner</c>), which needs per-space columns the
+    /// tab grid can't hit. Honored by <c>TextEmitter</c> in spaces mode only (tabs can't sub-align).
+    /// </summary>
+    public int AbsoluteLeadingSpaces { get; set; } = -1;
 }

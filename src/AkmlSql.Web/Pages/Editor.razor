@@ -24,9 +24,14 @@
 @inject IDiagnosticsRingBuffer Diagnostics
 @inject IThemeService Theme
 @inject IJSRuntime JS
-@inject IConnectionStore Connections
 @inject ISnippetStore Snippets
 @inject IRefactoringService Refactoring
+@inject ICommandRegistry Commands
+@inject ISqlConnectionService SqlConn
+@inject IQueryExecutionService QueryExec
+@inject IExecutionSettingsStore ExecSettings
+@inject IHistoryService History
+@inject NavigationManager Nav
 
 <PageTitle>Editor — AKML SQL</PageTitle>
 
@@ -36,15 +41,38 @@
         <button class="akml-tool-button" @onclick="FormatAsync" title="Ctrl+K, Ctrl+F">Format</button>
         <button class="akml-tool-button" data-testid="analyse-button" @onclick="AnalyseAsync" title="Ctrl+K, Ctrl+L">Analyse</button>
         <button class="akml-tool-button" data-testid="refactor-button" @onclick="OpenRefactorMenu">Refactor ▾</button>
+        <button class="akml-tool-button @(_showAiPanel ? "active" : "")" data-testid="ai-button"
+                @onclick="ToggleAiPanel" title="AI assistance">AI ▾</button>
         <button class="akml-tool-button" @onclick="SaveAsync" title="Ctrl+S">Save</button>
+        @* Spec 030 — Phase 5: Execute + advisory resource caps. Mod-Enter (CM6 keymap) also runs it. *@
+        <button class="akml-tool-button akml-tool-button-run" data-testid="execute-button"
+                @onclick="ExecuteAsync" disabled="@(_executing || !SqlConn.IsConnected)"
+                title="Ctrl+Enter — run the selection or the whole document">
+            @(_executing ? "Running…" : "▶ Execute")
+        </button>
+        @if (_executing)
+        {
+            <button class="akml-tool-button" data-testid="execute-cancel" @onclick="CancelExecuteAsync"
+                    title="Cancel a queued query">Cancel</button>
+        }
+        <span class="akml-caps">
+            <label title="Maximum rows to fetch (the engine re-clamps to its ceiling)">rows
+                <input type="number" class="akml-caps-input" data-testid="caps-maxrows" min="1" max="100000"
+                       value="@_maxRows" @onchange="OnMaxRowsChanged" />
+            </label>
+            <label title="Command timeout in seconds (the engine re-clamps to its ceiling)">timeout
+                <input type="number" class="akml-caps-input" data-testid="caps-timeout" min="1" max="600"
+                       value="@_timeoutSeconds" @onchange="OnTimeoutChanged" />
+            </label>
+        </span>
         <span class="akml-editor-spacer"></span>
         @if (!string.IsNullOrEmpty(_status))
         {
             <span class="akml-editor-status">@_status</span>
         }
     </div>
-    <div class="akml-editor-grid @(_showSchemaTree ? "with-schema" : "no-schema")">
-        <EditorComponent @ref="_editor" InitialText="@_initialText" OnTextChanged="OnTextChangedAsync" />
+    <div class="akml-editor-grid" style="grid-template-columns: @GridColumns;">
+        <EditorComponent @ref="_editor" InitialText="@_initialText" OnTextChanged="OnTextChangedAsync" OnExecute="ExecuteAsync" />
         @if (_showSchemaTree)
         {
             <SchemaTreeComponent ServerCanonicalIdentity="@_activeServerIdentity"
@@ -53,7 +81,39 @@
         }
         <ProblemsListComponent Findings="@_findings" OnJumpToIssue="OnJumpToIssueAsync"
                                OnSuppressLine="OnSuppressLineAsync" OnSuppressGlobal="OnSuppressGlobalAsync" />
+        @* Spec 028 (M6) — editor-adjacent AI dock. Toggled by the "AI ▾" toolbar button; two
+           tabs (Actions / Chat). The action panel operates on the live editor selection (or the
+           whole document when nothing is selected); Accept inserts the result at the caret. This
+           is what surfaces the M6 AI feature set to a user — the panels existed since 021 T131
+           but were wired into no reachable page until this closure. *@
+        @if (_showAiPanel)
+        {
+            <div class="akml-ai-dock" data-testid="ai-dock">
+                <div class="akml-ai-tabs">
+                    <button class="akml-ai-tab @(_aiTab == AiTab.Actions ? "active" : "")"
+                            data-testid="ai-tab-actions" @onclick="@(() => _aiTab = AiTab.Actions)">Actions</button>
+                    <button class="akml-ai-tab @(_aiTab == AiTab.Chat ? "active" : "")"
+                            data-testid="ai-tab-chat" @onclick="@(() => _aiTab = AiTab.Chat)">Chat</button>
+                    <span class="akml-ai-dock-spacer"></span>
+                    <button class="akml-ai-tab" data-testid="ai-close" @onclick="ToggleAiPanel" title="Close AI panel">✕</button>
+                </div>
+                <div class="akml-ai-dock-body">
+                    @if (_aiTab == AiTab.Actions)
+                    {
+                        <AiPanel SelectedSqlProvider="@GetAiInputSqlAsync" OnAcceptResult="OnAiAcceptResultAsync" />
+                    }
+                    else
+                    {
+                        <AiChatPanel />
+                    }
+                </div>
+            </div>
+        }
     </div>
+    @* Spec 030 — Phase 5: the results pane is a THIRD flex-column sibling AFTER .akml-editor-grid,
+       inside the flex-column .akml-editor-page, so it occupies the full-width bottom slot. *@
+    <ResultsGridComponent @ref="_resultsGrid" OnApplied="OnAppliedReExecuteAsync" />
+
     @* Spec 024 T004: completion markers for Playwright. `_hasFormatted` / `_hasAnalysed`
        latch to true on the first successful Format / Analyse; `_formatVersion` /
        `_analyseVersion` increment per success so a test can detect a *repeat* operation
@@ -196,21 +256,80 @@
         background-color: var(--akml-surface-panel);
         color: var(--akml-text-primary);
         border: 1px solid var(--akml-border-default);
-        border-radius: 3px;
+        border-radius: var(--akml-scalar-radius-xs);
         padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s);
         cursor: pointer;
     }
-    .akml-tool-button:hover { background-color: var(--akml-surface-hover); }
+    .akml-tool-button:hover:not(:disabled) { background-color: var(--akml-surface-hover); }
+    .akml-tool-button:disabled { opacity: 0.5; cursor: default; }
+    /* Spec 030 — Phase 5: Execute button (accent-bordered) + advisory resource-cap inputs. */
+    .akml-tool-button-run { border-color: var(--akml-accent-primary); color: var(--akml-text-primary); }
+    .akml-caps {
+        display: flex;
+        align-items: center;
+        gap: var(--akml-scalar-spacing-s);
+        color: var(--akml-text-secondary);
+        font-size: var(--akml-type-chrome-size);
+    }
+    .akml-caps label { display: inline-flex; align-items: center; gap: 4px; }
+    .akml-caps-input {
+        width: 64px;
+        font-family: var(--akml-type-chrome-family);
+        font-size: var(--akml-type-chrome-size);
+        background-color: var(--akml-surface-canvas);
+        color: var(--akml-text-primary);
+        border: 1px solid var(--akml-border-default);
+        border-radius: var(--akml-scalar-radius-xs);
+        padding: 1px 4px;
+    }
     .akml-editor-grid {
         flex: 1 1 auto;
         display: grid;
         min-height: 0;
     }
-    /* Spec 025 US4: 3-column grid when an active connection feeds a schema tree.
-       No-schema fallback restores the original 2-column layout so users without a
-       paired engine never see a blank sidebar column. */
-    .akml-editor-grid.with-schema { grid-template-columns: 1fr 240px 320px; }
-    .akml-editor-grid.no-schema { grid-template-columns: 1fr 320px; }
+    /* Columns are computed in @GridColumns: editor (1fr) | [schema 240px] | problems 320px |
+       [AI dock 380px]. Spec 025 US4 added the optional schema column (only with an active
+       connection); spec 028 (M6) adds the optional AI dock (toggled by the "AI ▾" button). */
+
+    /* Spec 028 (M6) — editor-adjacent AI dock (Actions / Chat tabs). */
+    .akml-ai-dock {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        border-left: 1px solid var(--akml-border-default);
+        background-color: var(--akml-surface-canvas);
+    }
+    .akml-ai-tabs {
+        display: flex;
+        align-items: center;
+        gap: var(--akml-scalar-spacing-xs);
+        padding: var(--akml-scalar-spacing-xs);
+        background-color: var(--akml-surface-panel);
+        border-bottom: 1px solid var(--akml-border-default);
+    }
+    .akml-ai-tab {
+        font-family: var(--akml-type-chrome-family);
+        font-size: var(--akml-type-chrome-size);
+        background-color: transparent;
+        color: var(--akml-text-secondary);
+        border: 1px solid transparent;
+        border-radius: var(--akml-scalar-radius-xs);
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s);
+        cursor: pointer;
+    }
+    .akml-ai-tab:hover { background-color: var(--akml-surface-hover); }
+    .akml-ai-tab.active {
+        color: var(--akml-text-primary);
+        border-color: var(--akml-border-default);
+        background-color: var(--akml-surface-canvas);
+    }
+    .akml-ai-dock-spacer { flex: 1 1 auto; }
+    .akml-ai-dock-body { flex: 1 1 auto; min-height: 0; overflow: auto; }
+    /* The toolbar "AI ▾" toggle shows an active state while the dock is open. */
+    .akml-tool-button.active {
+        background-color: var(--akml-surface-hover);
+        border-color: var(--akml-accent-primary);
+    }
 
     /* Spec 027 T012 — surround-with picker overlay (also reused by the refactoring menu). */
     .akml-overlay {
@@ -224,7 +343,7 @@
         display: flex; flex-direction: column;
         background-color: var(--akml-surface-panel);
         border: 1px solid var(--akml-border-default);
-        border-radius: 4px;
+        border-radius: var(--akml-scalar-radius-xs);
         font-family: var(--akml-type-chrome-family);
         font-size: var(--akml-type-chrome-size);
         color: var(--akml-text-primary);
@@ -270,8 +389,41 @@
     .akml-picker-disabled:hover { background-color: transparent; }
     .akml-picker-gate {
         font-size: 11px; color: var(--akml-text-onaccent);
-        background-color: var(--akml-text-secondary); border-radius: 2px;
+        background-color: var(--akml-text-secondary); border-radius: var(--akml-scalar-radius-xs);
         padding: 0 var(--akml-scalar-spacing-xs);
+    }
+
+    /* AKML-Blue chrome for the CodeMirror autocomplete (IntelliSense) popup. CodeMirror
+       attaches `.cm-tooltip-autocomplete` at the editor/body level, so these page-global
+       rules reach it. IntelliSense must feel instantaneous — NO transition/animation here. */
+    .cm-tooltip.cm-tooltip-autocomplete {
+        background-color: var(--akml-surface-panel);
+        border: 1px solid var(--akml-border-default);
+        border-radius: var(--akml-scalar-radius-xs);
+        color: var(--akml-text-primary);
+        font-family: var(--akml-type-editor-family);
+        font-size: var(--akml-type-editor-size);
+    }
+    .cm-tooltip-autocomplete > ul > li {
+        color: var(--akml-text-primary);
+        padding: 1px var(--akml-scalar-spacing-s);
+    }
+    .cm-tooltip-autocomplete > ul > li[aria-selected] {
+        background-color: var(--akml-surface-selectionstrong);
+        color: var(--akml-text-onaccent);
+    }
+    .cm-tooltip-autocomplete > ul > li[aria-selected] .cm-completionDetail {
+        color: var(--akml-text-onaccent);
+    }
+    .cm-completionLabel { color: inherit; }
+    .cm-completionDetail { color: var(--akml-text-secondary); font-style: italic; }
+    .cm-completionMatchedText {
+        color: var(--akml-text-link);
+        text-decoration: none;
+        font-weight: var(--akml-type-chrome-weight);
+    }
+    .cm-tooltip-autocomplete > ul > li[aria-selected] .cm-completionMatchedText {
+        color: var(--akml-text-onaccent);
     }
 </style>
 
@@ -300,6 +452,22 @@
     private string? _activeServerIdentity;
     private string? _activeDatabaseName;
     private bool _showSchemaTree => !string.IsNullOrEmpty(_activeServerIdentity) && !string.IsNullOrEmpty(_activeDatabaseName);
+
+    // Spec 028 (M6) — editor-adjacent AI dock state. The dock surfaces the AI action panel
+    // (Explain/Fix/Optimize/NL→SQL/Index Analysis) and the chat panel as two tabs; the panels
+    // existed since 021 T131 but were not hosted by any reachable page until this closure.
+    private bool _showAiPanel;
+    private enum AiTab { Actions, Chat }
+    private AiTab _aiTab = AiTab.Actions;
+
+    // Column track list, computed so the optional schema (Spec 025 US4) and AI (Spec 028) columns
+    // append in DOM order: editor | [schema] | problems | [AI]. minmax(0,1fr) lets the editor
+    // shrink instead of overflowing when several side panels are open.
+    private string GridColumns =>
+        "minmax(0, 1fr)"
+        + (_showSchemaTree ? " 240px" : string.Empty)
+        + " 320px"
+        + (_showAiPanel ? " 380px" : string.Empty);
 
     // Spec 027 T012 (US1) — surround-with picker state.
     private bool _showSurroundPicker;
@@ -342,9 +510,29 @@
     private HeavyOp? _heavyInput;                       // non-null while the input dialog is open
     private RefactorPreviewResponse? _heavyPreview;     // non-null while the bridge preview is shown
     private RefactorInputDialog.RefactorInputs? _heavyInputs;   // captured dialog values for apply
+    private string _heavyPreviewDocText = string.Empty; // the exact text the preview offsets refer to
+
+    // Spec 030 — ⌘P command palette context-action registration. Closures over this page's live
+    // state (the editor, the snippet store). Disposed on unmount so the palette can never run a
+    // command against a torn-down editor.
+    private IDisposable? _commandRegistration;
+
+    // Spec 030 — Phase 5: query execution + results pane state.
+    private ResultsGridComponent? _resultsGrid;
+    private bool _executing;
+    private int _maxRows = 1000;
+    private int _timeoutSeconds = 30;
+    private string? _activeQueryId;
+    private string _lastExecutedSql = string.Empty;
+    // web History "Re-execute": set from the ?autorun=1 query flag; consumed once the restored
+    // document is populated (which happens AFTER firstRender via the async session restore).
+    private bool _autorunPending;
 
     protected override async Task OnInitializedAsync()
     {
+        // web History "Re-execute" intent — read before any await so it is known by the first render.
+        _autorunPending = new Uri(Nav.Uri).Query.Contains("autorun=1");
+
         // T034: apply the persisted theme as soon as we have services. The shim is wired
         // for "system" already (index.html runs apply('system') inline), so this is an
         // upgrade only when the user has stored a non-system preference.
@@ -371,20 +559,240 @@
         await Diagnostics.RestoreAsync();
         Diagnostics.Log(DiagnosticLevel.Info, "editor", "Editor page mounted.");
 
-        // Spec 025 US4: load the active connection so the schema tree has a target. The
-        // database name comes from spec 021's connection record (currently fixed at the
-        // host's default database; per-connection db picker is a follow-up). Server
-        // identity = "host:port" — matches the engine's canonical identity format.
-        var schemaConnId = await Connections.GetActiveIdAsync();
-        if (!string.IsNullOrEmpty(schemaConnId))
+        // Spec 025 US4 / spec 030 loop fix: point the schema tree at the ACTIVE SQL connection's
+        // (server, database) — the SAME key MainLayout passes to SchemaSync.StartAsync, so the tree
+        // finds the snapshot the sync populated. The previous code keyed the tree off the engine
+        // pairing record (host:port) with a hard-coded "master" database, which never matched the
+        // cache — the tree stayed "not yet loaded" and mislabelled the database even when connected
+        // to e.g. Northwind. Re-evaluated on every SQL connection state change (OnSqlConnStateChanged).
+        RefreshSchemaTarget();
+
+        // Spec 030 — Phase 5: seed the execute caps from the store, and re-render the Execute button's
+        // enabled state when the SQL connection comes/goes.
+        var execSettings = await ExecSettings.GetAsync();
+        _maxRows = execSettings.MaxRows;
+        _timeoutSeconds = execSettings.CommandTimeoutSeconds;
+        SqlConn.StateChanged += OnSqlConnStateChanged;
+
+        // Spec 030 — register this page's context actions with the ⌘P palette. These close over the
+        // live editor + page handlers; the registration token is disposed in DisposeAsync.
+        _commandRegistration = Commands.Register(BuildContextActions());
+    }
+
+    private void OnSqlConnStateChanged()
+    {
+        RefreshSchemaTarget();
+        InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>
+    /// Align the schema-tree target with the live SQL connection so its (server, database) lookup key
+    /// matches what MainLayout passes to <c>SchemaSync.StartAsync</c> (<c>SqlConn.Server</c> /
+    /// <c>SqlConn.Database</c>). Cleared when no SQL connection is open — the tree then hides via
+    /// <c>_showSchemaTree</c>.
+    /// </summary>
+    private void RefreshSchemaTarget()
+    {
+        if (SqlConn.IsConnected && !string.IsNullOrEmpty(SqlConn.Server) && !string.IsNullOrEmpty(SqlConn.Database))
         {
-            var schemaConn = await Connections.GetAsync(schemaConnId);
-            if (schemaConn != null)
-            {
-                _activeServerIdentity = $"{schemaConn.Host}:{schemaConn.Port}";
-                _activeDatabaseName = "master";   // placeholder until per-connection db picker lands.
-            }
+            _activeServerIdentity = SqlConn.Server;
+            _activeDatabaseName = SqlConn.Database;
         }
+        else
+        {
+            _activeServerIdentity = null;
+            _activeDatabaseName = null;
+        }
+    }
+
+    // ── Spec 030 — Phase 5: execute + caps + apply-refresh ───────────────────────────────────────
+
+    /// <summary>
+    /// Run the query. Reads the LIVE editor text (selection-or-whole-doc, NOT the 500ms-debounced
+    /// _currentText) exactly like GetAiInputSqlAsync, builds an ExecuteQueryRequest with the canonical
+    /// SessionId + advisory caps, and hands the status-bearing result to the results pane. Triggered by
+    /// the toolbar button AND the CM6 Mod-Enter keymap (via EditorComponent.OnExecute).
+    /// </summary>
+    private async Task ExecuteAsync()
+    {
+        if (_executing || _editor == null) return;
+        // Claim the slot BEFORE any await so a second trigger (toolbar + Mod-Enter) can't reenter
+        // through the two JS-interop awaits below. The finally always releases it.
+        _executing = true;
+        try
+        {
+            if (!SqlConn.IsConnected)
+            {
+                _status = "Connect to a SQL Server first (Connect button / palette).";
+                return;
+            }
+
+            // LIVE text — selection if any, else the whole document.
+            var selection = await _editor.GetSelectedTextAsync();
+            var sql = string.IsNullOrWhiteSpace(selection) ? await _editor.GetTextAsync() : selection;
+            if (string.IsNullOrWhiteSpace(sql)) return;
+
+            await RunSqlAsync(sql);
+        }
+        finally
+        {
+            _executing = false;
+            _activeQueryId = null;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>Runs <paramref name="sql"/> through the engine, shows the result, and records it in
+    /// SQL History (best-effort). Shared by the toolbar/Mod-Enter execute and the web History
+    /// "Re-execute" autorun. The caller owns the <c>_executing</c> guard.</summary>
+    private async Task RunSqlAsync(string sql)
+    {
+        _lastExecutedSql = sql;
+        _activeQueryId = Guid.NewGuid().ToString("N");
+        _status = "Running…";
+        StateHasChanged();
+
+        var result = await QueryExec.ExecuteAsync(sql, _maxRows, _timeoutSeconds, _activeQueryId, CancellationToken.None);
+        _resultsGrid?.ShowResult(result);
+
+        // Record into SQL History (fire-and-forget) — NoConnection isn't recorded (nothing ran).
+        if (WebHistoryLogic.ShouldRecord(result.Status))
+        {
+            var rec = WebHistoryLogic.BuildRecordRequest(sql, result, SqlConn.Server, SqlConn.Database);
+            _ = History.RecordAsync(rec, CancellationToken.None);
+        }
+
+        _status = result.Status == ExecuteStatus.Ok
+            ? $"Done in {result.ElapsedMs} ms"
+            : null;
+        if (result.Status != ExecuteStatus.Ok)
+        {
+            Diagnostics.Log(DiagnosticLevel.Warn, "execute", $"Execute status {result.Status}: {result.ErrorMessage}");
+        }
+    }
+
+    /// <summary>web History "Re-execute": when navigated to with <c>?autorun=1</c>, run the restored
+    /// document once. The restored text lands AFTER firstRender (the session restore is async), so we
+    /// wait — across renders — until <see cref="_initialText"/> is populated rather than firing on
+    /// firstRender (where it is still empty). The flag stays PENDING until the connection is up — on a
+    /// hard-reload/connection race the restored text can land before
+    /// <see cref="ISqlConnectionService.IsConnected"/> flips true, so a later render (when the connection
+    /// comes up) retries. It is CONSUMED exactly once we are connected, regardless of whether the run
+    /// proceeds. If a manual execute is already in flight at that moment the autorun is SUPPRESSED (not
+    /// duplicated): the flag was already cleared, so the post-manual-run re-render cannot re-fire it.
+    /// After a run proceeds the URL flag is stripped so a manual refresh doesn't re-run.</summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Wait for the async restore to populate the document; don't consume the flag until it has.
+        if (!_autorunPending || string.IsNullOrWhiteSpace(_initialText)) return;
+        if (!SqlConn.IsConnected) return;   // stay pending until the connection is up
+        _autorunPending = false;            // connected -> consume exactly once
+        if (_executing) return;             // a manual run is already in flight -> don't double-run
+
+        _executing = true;
+        try { await RunSqlAsync(_initialText); }
+        finally { _executing = false; _activeQueryId = null; }
+
+        Nav.NavigateTo(new Uri(Nav.Uri).GetLeftPart(UriPartial.Path), replace: true);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task CancelExecuteAsync()
+    {
+        var qid = _activeQueryId;
+        if (!string.IsNullOrEmpty(qid))
+        {
+            await QueryExec.CancelAsync(qid, CancellationToken.None);
+        }
+    }
+
+    /// <summary>After a successful inline-CRUD Apply, re-run the last query so the grid refreshes
+    /// (and the tints clear). Run-immediately — no confirm.</summary>
+    private async Task OnAppliedReExecuteAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_lastExecutedSql) || !SqlConn.IsConnected) return;
+
+        // Refresh by re-running the query ONLY when it is a single read-only SELECT. Re-running a
+        // multi-statement batch or any mutating statement would REPEAT its side effects on the
+        // persistent connection: a `CREATE TABLE #t; …; SELECT` errors ("object already exists") and,
+        // worse, an `INSERT …; SELECT` would DUPLICATE the inserted rows. The Apply already committed
+        // and the grid already shows the committed values with tints cleared (ResetEditState ran before
+        // this callback), so skipping the auto-refresh is safe — the user can re-Execute manually to
+        // pick up server-side recomputes (triggers / computed columns).
+        if (!QueryRefreshSafety.IsSingleReadOnlySelect(_lastExecutedSql)) return;
+
+        // Share the same reentry guard as ExecuteAsync so a manual Execute can't race the
+        // auto-refresh on the serial connection (and vice-versa).
+        if (_executing) return;
+        _executing = true;
+        try
+        {
+            _activeQueryId = Guid.NewGuid().ToString("N");
+            var result = await QueryExec.ExecuteAsync(_lastExecutedSql, _maxRows, _timeoutSeconds, _activeQueryId, CancellationToken.None);
+            _resultsGrid?.ShowResult(result, preserveActiveTab: true); // keep the user on the set they applied to.
+        }
+        finally
+        {
+            _executing = false;
+            _activeQueryId = null;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnMaxRowsChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var v) && v > 0)
+        {
+            _maxRows = Math.Clamp(v, 1, 100_000);
+            await PersistCapsAsync();
+        }
+    }
+
+    private async Task OnTimeoutChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var v) && v > 0)
+        {
+            _timeoutSeconds = Math.Clamp(v, 1, 600);
+            await PersistCapsAsync();
+        }
+    }
+
+    private Task PersistCapsAsync() =>
+        ExecSettings.SetAsync(new ExecutionSettings { MaxRows = _maxRows, CommandTimeoutSeconds = _timeoutSeconds });
+
+    /// <summary>Spec 030 — the editor's context-action contributions to the ⌘P palette.</summary>
+    private IEnumerable<CommandAction> BuildContextActions()
+    {
+        yield return new CommandAction
+        {
+            Id = "editor:format", Title = "Format SQL", Group = CommandGroup.Action,
+            Icon = "🧱", Shortcut = "Ctrl+K Ctrl+F", Run = FormatAsync,
+        };
+        yield return new CommandAction
+        {
+            Id = "editor:analyse", Title = "Analyse SQL", Group = CommandGroup.Action,
+            Icon = "🔍", Shortcut = "Ctrl+K Ctrl+L", Run = AnalyseAsync,
+        };
+        yield return new CommandAction
+        {
+            Id = "editor:refactor", Title = "Refactor…", Group = CommandGroup.Action,
+            Icon = "🔧", Run = () => { OpenRefactorMenu(); StateHasChanged(); return Task.CompletedTask; },
+        };
+        yield return new CommandAction
+        {
+            Id = "editor:save", Title = "Save as .sql", Group = CommandGroup.Action,
+            Icon = "💾", Shortcut = "Ctrl+S", Run = SaveAsync,
+        };
+        yield return new CommandAction
+        {
+            Id = "editor:ai", Title = "Toggle AI panel", Group = CommandGroup.Action,
+            Icon = "🤖", Run = () => { ToggleAiPanel(); StateHasChanged(); return Task.CompletedTask; },
+        };
+        yield return new CommandAction
+        {
+            Id = "editor:surround", Title = "Surround selection with…", Group = CommandGroup.Action,
+            Icon = "🎁", Shortcut = "Ctrl+K Ctrl+S", Run = OpenSurroundPickerAsync,
+        };
     }
 
     private async Task OnTextChangedAsync(string newText)
@@ -560,6 +968,32 @@
         Diagnostics.Log(DiagnosticLevel.Info, "snippets", $"Surrounded with '{snippet.Metadata.Shortcode}'.");
     }
 
+    // ── Spec 028 (M6) — editor-adjacent AI dock ──────────────────────────────────────────
+    private void ToggleAiPanel() => _showAiPanel = !_showAiPanel;
+
+    /// <summary>Resolve the SQL the AI actions operate on: the live editor selection, falling
+    /// back to the whole document when nothing is selected (so a user can run Explain on the
+    /// full script without selecting first). Evaluated lazily at action time via
+    /// <see cref="AiPanel.SelectedSqlProvider"/> so it is always current.</summary>
+    private async Task<string> GetAiInputSqlAsync()
+    {
+        if (_editor == null) return _currentText;
+        var selection = await _editor.GetSelectedTextAsync();
+        return string.IsNullOrWhiteSpace(selection) ? await _editor.GetTextAsync() : selection;
+    }
+
+    /// <summary>Accept an AI result: insert it at the caret as a single undoable edit (CodeMirror
+    /// Ctrl+Z restores the prior text), matching how schema-tree click-to-insert already mutates
+    /// the document.</summary>
+    private async Task OnAiAcceptResultAsync(string text)
+    {
+        if (_editor == null || string.IsNullOrEmpty(text)) return;
+        await _editor.InsertAtCaretAsync(text);
+        _status = "AI result inserted.";
+        Diagnostics.Log(DiagnosticLevel.Info, "ai", "Inserted AI result at caret.");
+        StateHasChanged();
+    }
+
     // ── Spec 027 T017/T018 (US2) — lightweight refactoring menu + preview ────────────────
     private void OpenRefactorMenu() => _showRefactorMenu = true;
     private void CloseRefactorMenu() => _showRefactorMenu = false;
@@ -625,6 +1059,10 @@
         _heavyInputs = inputs;
         try
         {
+            // Pin the exact text the preview offsets are computed against, so the later apply
+            // reconstructs from THIS text — not whatever the editor holds after the user may have
+            // typed while the confirm dialog was open (stale offsets would corrupt the document).
+            _heavyPreviewDocText = _currentText;
             var request = new RefactorPreviewRequest
             {
                 SessionId = string.Empty,
@@ -671,6 +1109,12 @@
                 SessionId = string.Empty,
                 OperationType = op?.OperationType ?? 0,
                 ApprovedChanges = preview.Changes,
+                // The engine reconstructs UpdatedDocumentText by applying the approved changes onto
+                // this original text (change offsets are absolute into it). Use the text captured at
+                // PREVIEW time (not the live _currentText) so the offsets stay valid even if the user
+                // edited while the confirm dialog was open. Without any text the engine applies onto an
+                // empty buffer and returns a truncated document, which we'd write back — wiping work.
+                DocumentText = _heavyPreviewDocText,
             };
             var response = await Refactoring.ApplyAsync(apply, CancellationToken.None);
             if (response is { Success: true } && !string.IsNullOrEmpty(response.UpdatedDocumentText))
@@ -726,6 +1170,12 @@
 
     public async ValueTask DisposeAsync()
     {
+        // Spec 030 — drop our ⌘P palette actions FIRST so a late palette open can't run a closure
+        // over the editor we're tearing down.
+        _commandRegistration?.Dispose();
+        // Spec 030 — Phase 5: drop the connection-state subscription so the disposed page isn't
+        // re-rendered on a later connect/disconnect.
+        SqlConn.StateChanged -= OnSqlConnStateChanged;
         _analyseCts?.Cancel();
         _analyseCts?.Dispose();
         await SessionStore.FlushAsync();

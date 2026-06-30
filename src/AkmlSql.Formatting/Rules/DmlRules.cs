@@ -88,28 +88,46 @@ public class DmlRules : IRuleSet
     /// </summary>
     private static void ApplyAndOrIndent(List<LayoutNode> nodes, DmlOptions dml)
     {
+        bool expectBetweenAnd = false;
         for (int i = 0; i < nodes.Count; i++)
         {
             var node = nodes[i];
             if (node.IsInNoformatRegion)
+            {
+                // A BETWEEN whose AND lands inside a noformat region cannot be paired across the
+                // boundary. Reset so the next real AND (after the region) is not mistaken for the
+                // BETWEEN's AND and silently skipped.
+                expectBetweenAnd = false;
                 continue;
+            }
+
+            // The AND in `BETWEEN x AND y` belongs to the BETWEEN expression, not a clause-level
+            // boolean connector — never re-indent it (Spec 030 T008). Track BETWEEN and consume the
+            // next AND it introduces without touching its indent.
+            if (node.TokenType == TSqlTokenType.Between)
+            {
+                expectBetweenAnd = true;
+                continue;
+            }
+            if (node.TokenType == TSqlTokenType.And && expectBetweenAnd)
+            {
+                expectBetweenAnd = false;
+                continue;
+            }
 
             if (node.TokenType is TSqlTokenType.And or TSqlTokenType.Or &&
                 node.PrecedingBreak == BreakType.NewLine)
             {
-                switch (dml.AndOrIndent)
+                // Spec 030 T007: indent RELATIVE to the AND/OR's existing (LayoutEngine-computed) level
+                // so nesting inside subqueries / nested clauses is preserved, instead of clobbering to an
+                // absolute level (which de-dented nested AND/OR to column 0). LayoutEngine already places
+                // AND/OR one level under its clause keyword ("indent"); other modes adjust from there.
+                node.IndentLevel = dml.AndOrIndent switch
                 {
-                    case "indent":
-                        node.IndentLevel = 1;
-                        break;
-                    case "alignWithWhere":
-                        // Indent level 0 aligns with clause keywords (WHERE is at level 0)
-                        node.IndentLevel = 0;
-                        break;
-                    case "doubleIndent":
-                        node.IndentLevel = 2;
-                        break;
-                }
+                    "alignWithWhere" => Math.Max(node.IndentLevel - 1, 0),
+                    "doubleIndent"   => node.IndentLevel + 1,
+                    _                => node.IndentLevel, // "indent" — keep LayoutEngine's nesting-correct level
+                };
             }
 
             // For "after" mode, adjust the token after AND/OR
@@ -323,6 +341,7 @@ public class DmlRules : IRuleSet
         if (!dml.CollapseShortStatements)
             return;
 
+        int parenDepth = 0;
         int i = 0;
         while (i < nodes.Count)
         {
@@ -332,7 +351,17 @@ public class DmlRules : IRuleSet
                 continue;
             }
 
-            if (IsStatementStart(nodes[i].TokenType))
+            if (nodes[i].TokenType == TSqlTokenType.LeftParenthesis)
+                parenDepth++;
+            else if (nodes[i].TokenType == TSqlTokenType.RightParenthesis)
+                parenDepth = Math.Max(0, parenDepth - 1);
+
+            // Only a top-level (paren depth 0) keyword anchors a statement. A break-carrying
+            // SELECT inside parens — a CTE body or a scalar subquery — is NOT a statement:
+            // ranging it here either merged the enclosing ')' + the next CTE's header onto the
+            // body line, or inlined bodies that belong to collapseShortSubqueries' (stricter,
+            // parens-inclusive) threshold.
+            if (parenDepth == 0 && IsStatementStart(nodes[i].TokenType))
             {
                 int stmtStart = i;
                 int stmtEnd = FindStatementEnd(nodes, i + 1);
@@ -346,13 +375,12 @@ public class DmlRules : IRuleSet
                         CollapseRange(nodes, stmtStart, stmtEnd);
                     }
                 }
+            }
 
-                i = stmtEnd;
-            }
-            else
-            {
-                i++;
-            }
+            // Advance token-by-token (no jump to stmtEnd): the paren-depth bookkeeping above
+            // must see every '('/')'; jumping over a ranged region would leave the depth stale
+            // and let a paren-nested SELECT anchor as if it were top-level.
+            i++;
         }
     }
 
@@ -441,14 +469,37 @@ public class DmlRules : IRuleSet
 
     private static int FindStatementEnd(List<LayoutNode> nodes, int start)
     {
+        // Track parenthesis depth relative to the statement start. A ')' seen at depth 0 closes a
+        // paren opened BEFORE the statement, so the statement cannot extend past it. With ranges
+        // anchored at top level only (see ApplyCollapseShortStatements) this is a defensive
+        // backstop — but without it a paren-nested range ran to the next break-carrying statement
+        // start and CollapseRange merged the closing ')' + the next CTE's header onto the body
+        // line ("… active = 1), b AS (").
+        int parenDepth = 0;
         for (int i = start; i < nodes.Count; i++)
         {
-            if (nodes[i].TokenType == TSqlTokenType.Semicolon ||
-                nodes[i].TokenType == TSqlTokenType.Go)
+            var tokenType = nodes[i].TokenType;
+
+            if (tokenType == TSqlTokenType.LeftParenthesis)
+            {
+                parenDepth++;
+                continue;
+            }
+            if (tokenType == TSqlTokenType.RightParenthesis)
+            {
+                if (parenDepth == 0)
+                    return i;   // closes an enclosing paren → structural statement boundary
+                parenDepth--;
+                continue;
+            }
+
+            if (tokenType == TSqlTokenType.Semicolon ||
+                tokenType == TSqlTokenType.Go)
                 return i;
 
-            // Next statement start
-            if (i > start && IsStatementStart(nodes[i].TokenType) &&
+            // Next statement start — only at top level; a paren-nested SELECT (subquery / CTE
+            // body) is part of THIS statement, not the start of the next one.
+            if (i > start && parenDepth == 0 && IsStatementStart(tokenType) &&
                 nodes[i].PrecedingBreak != BreakType.None)
                 return i;
         }

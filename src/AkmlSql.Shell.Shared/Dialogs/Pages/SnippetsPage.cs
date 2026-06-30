@@ -14,6 +14,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         public string Key     => "Snippets";
         public string Display => "Snippets";
         public string Title   => "Snippets";
+        public string Help    => "Configure the snippet engine: enable snippets, show them in IntelliSense completions, format after expansion, filter by SQL context, and track usage for ranking. Set the personal and team folders where your .akmlsnippet files live.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {

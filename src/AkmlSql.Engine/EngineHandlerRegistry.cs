@@ -58,10 +58,13 @@ internal static class EngineHandlerRegistry
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AKML SQL");
         var personalSnippets = Path.Combine(appDataFolder, "snippets", "personal");
         var builtInSnippets = Path.Combine(AppContext.BaseDirectory, "snippets");
-        var snippetHandler = new SnippetRequestHandler(personalSnippets, builtInSnippets);
+        var teamSnippets = ctx.EnsureSettings().Snippets.TeamFolder;
+        var snippetHandler = new SnippetRequestHandler(personalSnippets, builtInSnippets,
+            teamFolder: string.IsNullOrEmpty(teamSnippets) ? null : teamSnippets);
 
         var caSettingsLoader = new CaSettingsLoader();
-        var analysisEngine = new AnalysisEngine(parser, new RuleRegistry(), caSettingsLoader);
+        var ruleRegistry = new RuleRegistry();
+        var analysisEngine = new AnalysisEngine(parser, ruleRegistry, caSettingsLoader);
         var refactoringEngine = new RefactoringEngine(parser, schemaCache);
 
         var safetyHandler = new SafetyCheckHandler(parser);
@@ -133,11 +136,12 @@ internal static class EngineHandlerRegistry
             return (session.ConnectionString, session.DatabaseName);
         };
 
-        // === Spec 014 stubs (FindInvalidObjects / FindUnusedVariables / EncryptedObjectDecryption) ===
-        var findInvalidStub = new Server.Stubs.FindInvalidObjectsHandlerStub();
+        // === Spec 014 stubs (FindUnusedVariables / EncryptedObjectDecryption) ===
+        // Spec 030 T058: FindInvalidObjects is now a real handler (sys.sql_expression_dependencies), replacing its stub.
+        var findInvalidHandler = new Handlers.Refactoring.FindInvalidObjectsHandler();
         var findUnusedStub = new Server.Stubs.FindUnusedVariablesHandlerStub();
         var encryptedStub = new Server.Stubs.EncryptedObjectDecryptionHandlerStub();
-        router.RegisterRaw(MessageTypes.FindInvalidObjects, (msg, ct) => findInvalidStub.HandleAsync(msg, ct));
+        router.RegisterRaw(MessageTypes.FindInvalidObjects, (msg, ct) => findInvalidHandler.HandleAsync(msg, lookupSession, ct));
         router.RegisterRaw(MessageTypes.FindUnusedVariables, (msg, ct) => findUnusedStub.HandleAsync(msg, ct));
         router.RegisterRaw(MessageTypes.EncryptedObjectDecryption, (msg, ct) => encryptedStub.HandleAsync(msg, ct));
 
@@ -159,14 +163,19 @@ internal static class EngineHandlerRegistry
         router.Register(new Handlers.Formatting.ProfileImportHandler(formatHandler));
         router.Register(new Handlers.Formatting.ProfileExportSqlPromptHandler(formatHandler));
         router.Register(new Handlers.Formatting.StyleEditorSchemaHandler(formatHandler));
+        router.Register(new Handlers.Formatting.DuplicateProfileHandler(formatHandler));
 
         // === Bulk Formatting (2 typed) ===
         router.Register(new Handlers.Formatting.BulkFormatHandler(formatHandler));
         router.Register(new Handlers.Formatting.BulkFormatCancelHandler(formatHandler));
 
-        // === Analysis (2 typed) ===
+        // === Analysis (3 typed) ===
         router.Register(new Handlers.Analysis.AnalysisHandler(
             analysisEngine, () => ctx.EnsureSettings()));
+        // Spec 030 T052: Manage Rules dialog catalog. Shares ruleRegistry + caSettingsLoader with
+        // AnalysisHandler so the reported enabled/severity match what analysis actually applies.
+        router.Register(new Handlers.Analysis.ListAnalysisRulesHandler(
+            ruleRegistry, caSettingsLoader, () => ctx.EnsureSettings()));
         router.Register(new Handlers.Analysis.AnalysisSettingsChangedHandler(() =>
         {
             caSettingsLoader.InvalidateCache();
@@ -175,6 +184,9 @@ internal static class EngineHandlerRegistry
             // Services.SettingsProvider() -> ctx.EnsureSettings().Ai, so the explicit
             // aiHandler.RefreshSettings() call (and the AiRequestHandler class itself) is gone.
             ctx.InvalidateSettings();
+            // PR-247 fix: flush stale batch-level cache so the next analysis re-runs rules
+            // under the new settings rather than returning diagnostics computed under the old ones.
+            analysisEngine.ClearBatchCache();
         }));
 
         // === Snippets (5 typed) ===
@@ -245,11 +257,13 @@ internal static class EngineHandlerRegistry
         // === Diagnostics (1 typed) ===
         router.Register(new Handlers.Diagnostics.EngineLogTailHandler());
 
-        // === Control / lifecycle (4 typed) ===
+        // === Control / lifecycle (5 typed) ===
         router.Register(new Handlers.Control.DocumentChangedHandler());
         router.Register(new Handlers.Control.PingHandler());
         router.Register(new Handlers.Control.ShutdownHandler());
         router.Register(new Handlers.Control.ConnectionChangedHandler());
+        // Spec 029: validate SQL-auth credential before the shell stores it.
+        router.Register(new Handlers.Control.TestSqlConnectionHandler());
 
         // === WebSocket bridge handshake (spec 025 US5 wire-up; spec 026 M4 closure auth) ===
         // The HandshakeHandler exists from spec 021 T060. The named-pipe transport doesn't need
@@ -303,13 +317,33 @@ internal static class EngineHandlerRegistry
             (msg, ct) => navigationHandler.HandleGetObjectDefinitionAsync(msg, lookupSession, ct));
         router.RegisterRaw(MessageTypes.FindReferences,
             (msg, ct) => navigationHandler.HandleFindReferencesAsync(msg, lookupSession, ct));
-        router.RegisterRaw(MessageTypes.ObjectSearch,
-            (msg, ct) => navigationHandler.HandleObjectSearchAsync(msg, lookupSession, ct));
+        // Spec 030 T085: typed ObjectSearch handler (cache keyed by sessionId — fixes the legacy raw path's miss).
+        router.Register(new Handlers.Productivity.ObjectSearchHandler());
 
         router.RegisterRaw(MessageTypes.CrudGeneration, (msg, ct) => crudHandler.HandleAsync(msg, lookupSession, ct));
         router.RegisterRaw(MessageTypes.ScriptAs, (msg, ct) => scriptAsHandler.HandleAsync(msg, lookupSession, ct));
 
         router.RegisterRaw(MessageTypes.GridExport, (msg, ct) => gridExportService.HandleAsync(msg));
+
+        // === Spec 030 Phase 5: query execution + inline CRUD (3 raw) ===
+        // Share the per-session persistent-connection registry (built in EngineComposition.Build) so
+        // #temp/SET/USE state persists across executes on the SAME SqlConnection. ExecuteQuery and
+        // ApplyChanges also take the schema cache for the is_primary_key cross-check. ExecuteCancel is
+        // a notification (ack-and-drop), mirroring AiStreamCancel=78.
+        var sessionConnections = ctx.SessionConnections
+            ?? new Execution.SessionConnectionRegistry();
+        var executeQueryHandler = new Execution.ExecuteQueryHandler(sessionConnections, schemaCache);
+        var applyChangesHandler = new Execution.ApplyChangesHandler(sessionConnections);
+        var executeCancelHandler = new Execution.ExecuteCancelHandler(sessionConnections);
+        router.RegisterRaw(MessageTypes.ExecuteQuery,
+            (msg, ct) => executeQueryHandler.HandleAsync(msg, lookupSession, ct));
+        router.RegisterRaw(MessageTypes.ApplyChanges,
+            (msg, ct) => applyChangesHandler.HandleAsync(msg, lookupSession, ct));
+        router.RegisterRaw(MessageTypes.ExecuteCancel, (msg, ct) =>
+        {
+            executeCancelHandler.Handle(msg);
+            return Task.FromResult<RpcMessage?>(null);
+        });
 
         return historyRetention;
     }

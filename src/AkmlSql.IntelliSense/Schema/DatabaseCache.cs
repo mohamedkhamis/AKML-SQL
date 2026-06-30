@@ -60,6 +60,11 @@ public class DatabaseCache
     /// </summary>
     public bool PermissionDenied { get; set; }
 
+    /// <summary>The SQL error number that set <see cref="PermissionDenied"/> (18456 login failed,
+    /// 18452 untrusted-domain, 4060 cannot-open-database, 916 no-database-permission), or 0. Lets the
+    /// shell tell a rejected password apart from a valid-login-but-no-DB-access case. Spec 029 follow-up.</summary>
+    public int PermissionDeniedErrorNumber { get; set; }
+
     // Index for O(1) FK lookup keyed by "schema.table" (both parent and referenced sides)
     private Dictionary<string, List<ForeignKey>>? _fkByTable;
 

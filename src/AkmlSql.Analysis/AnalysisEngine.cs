@@ -27,6 +27,20 @@ public class AnalysisEngine(TsqlParserService parser, RuleRegistry registry, CaS
     private readonly SemaphoreSlim _ruleSemaphore = new(8, 8);
 
     /// <summary>
+    /// Clears the batch-level result cache so the next analysis re-runs all rules under the
+    /// current settings. Must be called whenever analysis settings change (rule enable/disable,
+    /// severity overrides) to prevent stale diagnostics being returned for unchanged batches.
+    /// Thread-safe: takes a lock matching the cache's single-writer usage pattern.
+    /// </summary>
+    public void ClearBatchCache()
+    {
+        lock (_batchCache)
+        {
+            _batchCache.Clear();
+        }
+    }
+
+    /// <summary>
     /// Analyzes the SQL document referenced by <paramref name="request"/> and returns all diagnostics.
     /// Uses batch-level result caching (keyed by SHA-256 hash) to skip unchanged batches.
     /// Rules run in parallel bounded by an internal semaphore (max 8 concurrent rules).
@@ -51,7 +65,13 @@ public class AnalysisEngine(TsqlParserService parser, RuleRegistry registry, CaS
         CodeAnalysisSettings globalSettings,
         CancellationToken ct)
     {
-        var settings = settingsLoader.Load(null, globalSettings);
+        // Spec 030 (T049/T051): resolve the document's directory so per-project .casettings (rule
+        // enable/severity + global suppressions) apply in the LIVE editor, matching the CLI. An empty
+        // FilePath (e.g. an unsaved buffer) preserves the previous null ⇒ global-defaults behaviour.
+        var caDir = string.IsNullOrEmpty(request.FilePath)
+            ? null
+            : System.IO.Path.GetDirectoryName(request.FilePath);
+        var settings = settingsLoader.Load(caDir, globalSettings);
 
         if (!settings.Enabled)
         {
@@ -206,6 +226,9 @@ public class AnalysisEngine(TsqlParserService parser, RuleRegistry registry, CaS
 
     private static CodeIssueInfo ToIssueInfo(AnalysisDiagnostic d)
     {
+        // Spec 030 T055 (FR-028) — attach the rule's catalog description + reference URL per-issue so
+        // the shell's Ctrl-hover issue-details popup can render them (the catalog is engine-only).
+        var meta = RuleMetadataCatalog.Get(d.RuleId);
         return new CodeIssueInfo
         {
             RuleId = d.RuleId,
@@ -215,6 +238,8 @@ public class AnalysisEngine(TsqlParserService parser, RuleRegistry registry, CaS
             EndOffset = d.EndOffset,
             Line = d.Line,
             Column = d.Column,
+            Description = meta.Description,
+            ReferenceUrl = meta.ReferenceUrl,
             FixActions = d.FixActions.Select(f => new FixActionInfo
             {
                 Label = f.Label,

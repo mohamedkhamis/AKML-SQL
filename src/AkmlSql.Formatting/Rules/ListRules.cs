@@ -19,11 +19,18 @@ public class ListRules : IRuleSet
     {
         var list = profile.List;
 
-        ApplyCommaPosition(nodes, list);
         ApplyOneItemPerLine(nodes, list, profile);
         ApplyIndentListItems(nodes, list, profile);
         ApplyCollapseShortLists(nodes, list);
-        ApplyAlignAliases(nodes, list);
+        // After the break-affecting passes: ApplyCommaPosition moves a comma onto the break of
+        // the item that follows it, so it must see the FINAL item breaks — run first (its
+        // original slot) it saw none (ApplyOneItemPerLine hadn't created them yet) and
+        // commaPosition "leading" never took effect (spec 030 T011).
+        ApplyCommaPosition(nodes, list);
+        // AlignAliases is NOT applied here: at ListRules time the function-call parens are still
+        // exploded (ParenthesisRules re-joins them later), so every AS line measured as starting
+        // at the lone ")" and the alignment was inert. FormatterPipeline.ApplyLayoutRules calls
+        // ListRules.AlignAliases at the post-collapse finalization instead (spec 030 T011).
         ApplyAlignItemsAcrossClauses(nodes, list, profile);
         ApplySpaceAfterListComma(nodes, list);
     }
@@ -124,7 +131,8 @@ public class ListRules : IRuleSet
             if (IsListClause(context) && node.PrecedingBreak == BreakType.NewLine)
             {
                 // Don't indent clause keywords themselves, only their items
-                if (!IsClauseKeyword(node.TokenType))
+                // (IsListBoundary so the ORDER/GROUP keyword stays at clause level, not col +1).
+                if (!IsListBoundary(node.TokenType))
                 {
                     node.IndentLevel = Math.Max(node.IndentLevel, 1);
                 }
@@ -152,10 +160,15 @@ public class ListRules : IRuleSet
             }
 
             // Look for the start of a list (first item after a clause keyword)
-            if (IsClauseKeyword(nodes[i].TokenType))
+            if (IsListBoundary(nodes[i].TokenType))
             {
                 int listStart = i + 1;
-                int listEnd = FindListEnd(nodes, listStart);
+                // A list opened by JOIN stops at its ON keyword, so collapse cannot delete the
+                // ON-condition's break (the style's onConditionNewLine). ON is deliberately NOT a
+                // universal boundary — a list starting after a MERGE's ON pulls the following WHEN
+                // up — so the stop is scoped to JOIN-opened lists (a MERGE has no JOIN keyword).
+                bool stopAtOn = nodes[i].TokenType == TSqlTokenType.Join;
+                int listEnd = FindListEnd(nodes, listStart, stopAtOn);
 
                 if (listEnd > listStart)
                 {
@@ -179,8 +192,13 @@ public class ListRules : IRuleSet
     /// <summary>
     /// When alignAliases is true, aligns AS aliases in SELECT lists to the same column.
     /// Computes the maximum expression width and pads preceding spaces on the AS keyword.
+    /// Called from <c>FormatterPipeline.ApplyLayoutRules</c>' post-collapse finalization (NOT from
+    /// <see cref="Apply"/>): alignment is line geometry, and the line shapes are final only after
+    /// every rule set's collapse passes have run (ParenthesisRules re-joins exploded function-call
+    /// parens after ListRules — measured before that, every AS line started at ")" and the
+    /// computed padding was always a single space).
     /// </summary>
-    private static void ApplyAlignAliases(List<LayoutNode> nodes, ListOptions list)
+    internal static void AlignAliases(List<LayoutNode> nodes, ListOptions list)
     {
         if (!list.AlignAliases)
             return;
@@ -264,18 +282,60 @@ public class ListRules : IRuleSet
         if (clauseItems.Count < 2)
             return;
 
-        // Find the maximum clause keyword length
-        int maxKeywordLen = 0;
-        foreach (var (_, _, kwLen) in clauseItems)
-            maxKeywordLen = Math.Max(maxKeywordLen, kwLen);
-
-        // Adjust spacing so first items align
-        foreach (var (keywordIndex, firstItemIndex, kwLen) in clauseItems)
+        // Cross-clause first-item alignment is vertical geometry: it forms a "river" only when the
+        // clause keywords actually stack on separate lines. A clause counts as stacked when its
+        // keyword starts a line — the leading clause implicitly, every other clause when it carries a
+        // line break. After a collapse pass (collapseShortStatements / collapseShortSubqueries) folds
+        // a short statement onto one line, the trailing clause keywords are inline (PrecedingBreak ==
+        // None); padding their first items to the keyword column would re-introduce stray gaps
+        // ("FROM   dbo", "WHERE  id") on that single line. Only align when ≥2 clauses are stacked, and
+        // only pad the stacked ones. Multi-line statements are unaffected: SELECT is the leading
+        // clause and FROM/WHERE/ORDER BY each carry a break, so every clause stays stacked.
+        bool ClauseStartsLine(int ordinal)
         {
-            var firstItem = nodes[firstItemIndex];
+            if (ordinal == 0) return true;
+            // Report a line start when a break falls anywhere in the clause's (possibly compound)
+            // keyword phrase. JOIN keywords carry prefixes (INNER/LEFT/RIGHT/FULL/OUTER/CROSS) and the
+            // layout's break may attach to the prefix OR to JOIN itself — inconsistently across format
+            // passes. Inspecting only the JOIN token would (a) misread a stacked "INNER JOIN" whose
+            // break sits on INNER as collapsed and (b) flip between passes, making the formatter
+            // non-idempotent. Walk back across the prefix tokens so the whole phrase is considered.
+            int idx = clauseItems[ordinal].keywordIndex;
+            while (idx >= 0)
+            {
+                if (nodes[idx].PrecedingBreak is BreakType.NewLine or BreakType.EmptyLine)
+                    return true;
+                if (idx == 0) break;
+                var prev = nodes[idx - 1].TokenType;
+                bool prevIsJoinPrefix = prev is TSqlTokenType.Inner or TSqlTokenType.Left
+                    or TSqlTokenType.Right or TSqlTokenType.Full or TSqlTokenType.Outer or TSqlTokenType.Cross;
+                if (!prevIsJoinPrefix) break;
+                idx--;
+            }
+            return false;
+        }
+
+        // Maximum keyword length across the STACKED clauses only.
+        int maxKeywordLen = 0;
+        int stackedClauses = 0;
+        for (int c = 0; c < clauseItems.Count; c++)
+        {
+            if (!ClauseStartsLine(c)) continue;
+            stackedClauses++;
+            maxKeywordLen = Math.Max(maxKeywordLen, clauseItems[c].keywordLength);
+        }
+
+        if (stackedClauses < 2)
+            return;   // single-line (collapsed) statement — no vertical river to align to
+
+        // Adjust spacing so the stacked clauses' first items align.
+        for (int c = 0; c < clauseItems.Count; c++)
+        {
+            if (!ClauseStartsLine(c)) continue;
+            var firstItem = nodes[clauseItems[c].firstItemIndex];
             if (firstItem.PrecedingBreak == BreakType.None)
             {
-                firstItem.PrecedingSpaces = maxKeywordLen - kwLen + 1;
+                firstItem.PrecedingSpaces = maxKeywordLen - clauseItems[c].keywordLength + 1;
             }
         }
     }
@@ -344,6 +404,38 @@ public class ListRules : IRuleSet
         };
     }
 
+    /// <summary>
+    /// Clause-boundary predicate for the list collapse + indent paths. Extends
+    /// <see cref="IsClauseKeyword"/> with ORDER and GROUP, which carry their own ScriptDom token
+    /// types but were historically recognised only by <see cref="UpdateClauseContext"/>'s
+    /// FormattedText match. Without ORDER/GROUP here, <see cref="FindListEnd"/> over-extends a
+    /// WHERE/HAVING list across the ORDER&#160;BY / GROUP&#160;BY boundary and
+    /// <see cref="CollapseRange"/> deletes the line break before it — merging ORDER&#160;BY /
+    /// GROUP&#160;BY onto the previous clause line (spec 030 T008). Deliberately kept separate from
+    /// <see cref="IsClauseKeyword"/> so cross-clause first-item alignment
+    /// (<c>ApplyAlignItemsAcrossClauses</c>) is unaffected — folding ORDER&#160;BY into that pass
+    /// would re-pad <c>maxKeywordLen</c> across every clause.
+    /// </summary>
+    private static bool IsListBoundary(TSqlTokenType tokenType)
+        => IsClauseKeyword(tokenType)
+           || tokenType is TSqlTokenType.Order or TSqlTokenType.Group
+           || IsJoinBoundary(tokenType);
+
+    /// <summary>
+    /// Join-type modifiers, treated as list boundaries (spec 030 T010) so <see cref="FindListEnd"/>
+    /// stops at them: otherwise the FROM "list" — and each JOIN body — over-runs the trailing
+    /// <c>INNER</c>/<c>LEFT</c>/… into the preceding segment, and <see cref="CollapseRange"/> pulls
+    /// the join modifier up onto the prior line (<c>FROM orders o INNER</c> ⏎ <c>JOIN …</c>) or
+    /// collapses the whole FROM+JOIN region. <c>Join</c> itself is already covered by
+    /// <see cref="IsClauseKeyword"/>. <c>ON</c> is deliberately NOT included: as a universal
+    /// boundary it makes a MERGE's <c>ON</c> start a collapsible list that pulls the following
+    /// <c>WHEN</c> up — keeping the JOIN's ON-condition on its own line needs clause-context
+    /// awareness (a separate follow-up); with modifiers-only the ON condition simply stays inline.
+    /// </summary>
+    private static bool IsJoinBoundary(TSqlTokenType tokenType)
+        => tokenType is TSqlTokenType.Inner or TSqlTokenType.Left or TSqlTokenType.Right
+            or TSqlTokenType.Full or TSqlTokenType.Cross or TSqlTokenType.Outer;
+
     private static int FindPrevSemanticToken(List<LayoutNode> nodes, int index)
     {
         for (int i = index - 1; i >= 0; i--)
@@ -356,17 +448,40 @@ public class ListRules : IRuleSet
         return -1;
     }
 
-    private static int FindListEnd(List<LayoutNode> nodes, int start)
+    private static int FindListEnd(List<LayoutNode> nodes, int start, bool stopAtOn = false)
     {
+        // Track parenthesis depth relative to the list start. A ')' seen at depth 0 closes a paren
+        // that was opened BEFORE the list — i.e. a structural subquery/CTE/derived-table close — so
+        // the list ends there. A balanced function-call ')' (opened inside the list) stays in the
+        // list. Without this, the CTE body's last clause-list over-runs the CTE's closing ')' and
+        // CollapseRange deletes its line break, merging ')' + the main SELECT up (spec 030 T009).
+        int parenDepth = 0;
         for (int i = start; i < nodes.Count; i++)
         {
             if (nodes[i].IsInNoformatRegion)
                 continue;
 
-            // End of list: next clause keyword or statement terminator
-            if (IsClauseKeyword(nodes[i].TokenType) ||
-                nodes[i].TokenType == TSqlTokenType.Semicolon ||
-                nodes[i].TokenType == TSqlTokenType.Go)
+            var tokenType = nodes[i].TokenType;
+
+            if (tokenType == TSqlTokenType.LeftParenthesis)
+            {
+                parenDepth++;
+                continue;
+            }
+            if (tokenType == TSqlTokenType.RightParenthesis)
+            {
+                if (parenDepth == 0)
+                    return i;   // closes an enclosing paren → structural list boundary
+                parenDepth--;
+                continue;
+            }
+
+            // End of list: next clause keyword or statement terminator (or, for a JOIN-opened
+            // list, the ON keyword — see ApplyCollapseShortLists).
+            if (IsListBoundary(tokenType) ||
+                (stopAtOn && tokenType == TSqlTokenType.On && parenDepth == 0) ||
+                tokenType == TSqlTokenType.Semicolon ||
+                tokenType == TSqlTokenType.Go)
                 return i;
         }
         return nodes.Count;
@@ -422,6 +537,18 @@ public class ListRules : IRuleSet
     private static int GetClauseKeywordLength(List<LayoutNode> nodes, int keywordIndex)
     {
         int length = nodes[keywordIndex].FormattedText.Length;
+
+        // JoinRules' joinTypeStyle "explicit" rewrites a bare JOIN's text to "INNER JOIN" in the
+        // same pass (before this measurement), but a re-format tokenises INNER as its own node —
+        // so measuring the full rewritten text makes the cross-clause alignment column differ
+        // between the first format and a re-format (non-idempotent). Measure only the keyword
+        // itself (the last word) so both passes see the same width.
+        if (nodes[keywordIndex].TokenType == TSqlTokenType.Join)
+        {
+            int lastSpace = nodes[keywordIndex].FormattedText.LastIndexOf(' ');
+            if (lastSpace >= 0)
+                length -= lastSpace + 1;
+        }
 
         // Check for two-word keywords like GROUP BY, ORDER BY, INSERT INTO
         if (keywordIndex + 1 < nodes.Count)

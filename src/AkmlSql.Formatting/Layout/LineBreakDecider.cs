@@ -41,8 +41,11 @@ public class LineBreakDecider(FormattingProfile profile)
                 ws.EmptyLineBeforeGo ? BreakType.EmptyLine : BreakType.NewLine, 0, 0);
         }
 
-        // SELECT keyword at start of statement
-        if (tokenType == TSqlTokenType.Select && currentClause == ClauseContext.None)
+        // SELECT keyword at start of statement, or the main SELECT of a WITH (CTE) statement.
+        // The clause tracker freezes inside the parenthesised CTE bodies, so the main SELECT
+        // arrives with ClauseContext.With — without that arm it fell through to "single space"
+        // and crammed onto the CTE's closing paren (") SELECT …").
+        if (tokenType == TSqlTokenType.Select && currentClause is ClauseContext.None or ClauseContext.With)
             return isFirstInStatement
                 ? new BreakDecision(BreakType.None, 0, 0)
                 : new BreakDecision(BreakType.NewLine, 0, 0);
@@ -79,9 +82,19 @@ public class LineBreakDecider(FormattingProfile profile)
 
         // JOIN keywords
         if (tokenType == TSqlTokenType.Join)
+        {
+            // A join-type modifier (INNER/LEFT/RIGHT/FULL/CROSS, optionally OUTER) already broke the
+            // line before itself; keep JOIN on that same line instead of breaking again — otherwise
+            // "INNER JOIN" splits across two lines ("INNER" ⏎ "JOIN").
+            if (prevSemanticTokenType is TSqlTokenType.Inner or TSqlTokenType.Left
+                or TSqlTokenType.Right or TSqlTokenType.Full or TSqlTokenType.Cross
+                or TSqlTokenType.Outer)
+                return new BreakDecision(BreakType.None, 0, 1);
+
             return join.OnNewLine
                 ? new BreakDecision(BreakType.NewLine, 0, 0)
                 : new BreakDecision(BreakType.None, 0, 1);
+        }
 
         // JOIN type modifiers (INNER, LEFT, RIGHT, FULL, CROSS) — break before the modifier
         if (IsJoinModifier(tokenType, upperText, currentClause))
@@ -145,10 +158,28 @@ public class LineBreakDecider(FormattingProfile profile)
                 : new BreakDecision(BreakType.None, 0, 0);
         }
 
-        // Items in SELECT clause (first item after SELECT/DISTINCT/TOP N)
+        // Items in SELECT clause (first item after SELECT/DISTINCT/TOP N). The clause tracker
+        // never leaves SelectPendingFirstItem until the next clause keyword (its first-item
+        // handoff tests Select after the context already moved on), so this branch also sees
+        // every later token of the select list — AS keywords, aliases, operands after operators,
+        // subquery internals. Gate the break to tokens that actually follow the SELECT header
+        // (plus a subquery's own SELECT after "("), or the list fragments one token per line
+        // ("COUNT(x)" ⏎ "AS" ⏎ "alias").
         if (currentClause == ClauseContext.SelectPendingFirstItem)
         {
-            if (dml.SelectItemsOnNewLine && !(upperText == "*" && dml.SelectStarOnSameLine))
+            bool followsSelectHeader =
+                prevSemanticTokenType is TSqlTokenType.Select or TSqlTokenType.Distinct
+                    or TSqlTokenType.Top or TSqlTokenType.Integer
+                || prevSemanticTokenText?.ToUpperInvariant() is "PERCENT" or "TIES";
+            bool isSubquerySelect = tokenType == TSqlTokenType.Select
+                && prevSemanticTokenType == TSqlTokenType.LeftParenthesis;
+
+            // As and Semicolon can never start a select item ("SELECT 1;" must not break the
+            // terminator off the item when the prev token — the Integer — is in the gate).
+            if (dml.SelectItemsOnNewLine
+                && (followsSelectHeader || isSubquerySelect)
+                && tokenType is not TSqlTokenType.As and not TSqlTokenType.Semicolon
+                && !(upperText == "*" && dml.SelectStarOnSameLine))
                 return new BreakDecision(BreakType.NewLine, 1, 0);
             return new BreakDecision(BreakType.None, 0, 1);
         }
@@ -163,8 +194,9 @@ public class LineBreakDecider(FormattingProfile profile)
 
     private static bool IsJoinModifier(TSqlTokenType tokenType, string upperText, ClauseContext currentClause)
     {
-        // These tokens often appear immediately before JOIN
-        if (currentClause is ClauseContext.From or ClauseContext.Join)
+        // These tokens often appear immediately before JOIN. JoinOn is included so a *chained*
+        // join (the LEFT/INNER that starts the next join after a prior "... ON <cond>") also breaks.
+        if (currentClause is ClauseContext.From or ClauseContext.Join or ClauseContext.JoinOn)
         {
             return tokenType switch
             {

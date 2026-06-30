@@ -37,6 +37,20 @@ public sealed class StatusIndicatorTests : TestContext
         Services.AddSingleton<ISchemaSync>(_sync);
         Services.AddSingleton<ISchemaCacheStore>(_cache);
         Services.AddSingleton<IConnectionStore>(_connections);
+        // Phase 4: StatusBar now hosts the SQL-connection indicator (the third connection-manager
+        // entry point). A default SqlConnectionService reports IsConnected=false (renders "Connect")
+        // — these tests assert the bridge/cache PILL, not the connection chip.
+        Services.AddSingleton<ISqlConnectionService>(new SqlConnectionService(_bridge, new NoopDiagnostics()));
+        Services.AddSingleton<IConnectionManagerController>(new ConnectionManagerController());
+    }
+
+    private sealed class NoopDiagnostics : IDiagnosticsRingBuffer
+    {
+        public void Log(DiagnosticLevel level, string source, string message, object? data = null) { }
+        public System.Collections.Generic.IReadOnlyList<DiagnosticEntry> Snapshot() => Array.Empty<DiagnosticEntry>();
+        public void Clear() { }
+        public Task FlushAsync() => Task.CompletedTask;
+        public Task RestoreAsync() => Task.CompletedTask;
     }
 
     private async Task SeedActiveConnectionAsync()

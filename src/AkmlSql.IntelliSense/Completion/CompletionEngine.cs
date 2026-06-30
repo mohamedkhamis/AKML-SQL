@@ -16,7 +16,10 @@ public class CompletionEngine
     private readonly JoinProvider _joinProvider = new();
     private readonly JoinOnFkProvider _joinOnFkProvider = new();
     private readonly ObjectProvider _objectProvider = new();
+    private readonly ColumnProvider _columnProvider = new();
+    private readonly AliasProvider _aliasProvider = new();
     private int _maxSuggestions = 50;
+    private static readonly HashSet<string> _emptySchemaScope = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// When enabled, the completion pipeline generates new aliases for tables inserted
@@ -60,9 +63,48 @@ public class CompletionEngine
     /// <summary>
     /// Controls how object names are qualified when inserted.
     /// Maps to <c>IntelliSense.Qualification.SchemaMode</c>.
-    /// Default <see cref="SchemaQualifyMode.NonDefaultOnly"/>.
+    /// Default <see cref="SchemaQualifyMode.Always"/> — SQL Prompt parity: committing a table
+    /// from the suggestion list inserts the owner-qualified name ("dbo.Customers").
     /// </summary>
-    public SchemaQualifyMode SchemaQualifyMode { get; set; } = SchemaQualifyMode.NonDefaultOnly;
+    public SchemaQualifyMode SchemaQualifyMode { get; set; } = SchemaQualifyMode.Always;
+
+    /// <summary>
+    /// Controls whether inserted object names are wrapped in square brackets.
+    /// <list type="bullet">
+    ///   <item><see cref="BracketMode.Always"/> — always insert <c>[Name]</c>.</item>
+    ///   <item><see cref="BracketMode.WhenRequired"/> (default) — bracket only identifiers
+    ///         that contain spaces, reserved words, or other characters that require escaping.</item>
+    ///   <item><see cref="BracketMode.Never"/> — never insert brackets, even for reserved words.</item>
+    /// </list>
+    /// Maps to <c>IntelliSense.Qualification.BracketMode</c>.
+    /// </summary>
+    public BracketMode BracketMode { get; set; } = BracketMode.WhenRequired;
+
+    /// <summary>
+    /// Spec 030 R6 / T032 / FR-012 — column suggestion scope. Maps to
+    /// <c>IntelliSense.SuggestionTypes.ColumnScope</c>; pushed onto <see cref="ColumnProvider"/>
+    /// per request. <see cref="ColumnSuggestionScope.All"/> suggests columns from every table
+    /// even before a FROM clause exists.
+    /// </summary>
+    public ColumnSuggestionScope ColumnScopeMode { get; set; } = ColumnSuggestionScope.ReferencedOnly;
+
+    // Spec 030 T035 / FR-015 — alias generation policy, pushed onto AliasProvider per request.
+    public bool AliasIncludeAs { get; set; } = true;
+    public IReadOnlyDictionary<string, string> AliasObjectMap { get; set; }
+        = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    public IReadOnlyList<string> AliasPrefixesToIgnore { get; set; } = Array.Empty<string>();
+
+    // Spec 030 T036 / FR-016 — suggestion connection scope, pushed onto ObjectProvider per request.
+    /// <summary>Schemas the object suggestion list is limited to (case-insensitive). Empty = all.</summary>
+    public IReadOnlyCollection<string> ScopeSchemas { get; set; } = Array.Empty<string>();
+    /// <summary>
+    /// False when the connected database is excluded from a non-empty database allow-list — the
+    /// connected database's object/schema suggestions are then suppressed. Computed in the handler
+    /// from the session's database name; default true (no restriction).
+    /// </summary>
+    public bool DatabaseInScope { get; set; } = true;
+    /// <summary>Forward-looking linked-server inclusion (no cache data today); threaded, currently inert.</summary>
+    public bool IncludeLinkedServers { get; set; }
 
     public CompletionEngine(TsqlParserService parserService)
     {
@@ -74,14 +116,14 @@ public class CompletionEngine
         // The engine registers it externally via RegisterProvider after construction.
         // The web edition simply doesn't register it -- USE-keyword completion falls through.
         RegisterProvider(new SmartGroupByProvider());
-        RegisterProvider(new ColumnProvider());
+        RegisterProvider(_columnProvider);
         RegisterProvider(_objectProvider);
         RegisterProvider(new KeywordProvider());
         RegisterProvider(_joinProvider);
         RegisterProvider(_joinOnFkProvider);
         RegisterProvider(new VariableProvider());
         RegisterProvider(new SnippetProvider());
-        RegisterProvider(new AliasProvider());
+        RegisterProvider(_aliasProvider);
     }
 
     public void RegisterProvider(ICompletionProvider provider)
@@ -144,6 +186,38 @@ public class CompletionEngine
                 var astCteSources = cteResolver.ResolveCteSources(script, cursorOffset);
                 foreach (var (name, sources) in astCteSources)
                     context.AvailableCteSources[name] = sources;
+
+                // Spec 030 (T029): track #temp tables (CREATE TABLE #t / SELECT ... INTO #t) visible
+                // at the cursor so ColumnProvider can offer their columns, mirroring CTE handling.
+                var tempTracker = new TempTableTracker();
+                foreach (var (tmpName, tmpColumns) in tempTracker.TrackTempTables(script, cursorOffset))
+                    context.AvailableTempTables[tmpName] = tmpColumns;
+            }
+
+            // Spec 030: a #temp declared before the cursor is lost when the tail is mid-edit (the full
+            // parse fails on a partial `#t.` or empty SELECT list), so the prior CREATE TABLE #t never
+            // reaches the tracker above. Recover by re-parsing the prefix trimmed of any trailing partial
+            // identifier / dot / '#'. Mirrors the CTE prefix-recovery; gated on a '#' before the cursor
+            // so it only costs an extra parse for likely-temp documents.
+            int hashIdx = documentText.IndexOf('#');
+            if (hashIdx >= 0 && hashIdx < cursorOffset && cursorOffset <= documentText.Length)
+            {
+                int p = cursorOffset;
+                while (p > 0)
+                {
+                    char ch = documentText[p - 1];
+                    if (char.IsLetterOrDigit(ch) || ch == '_' || ch == '.' || ch == '#') p--;
+                    else break;
+                }
+                if (p <= 0) p = cursorOffset;
+                var tempPrefix = documentText.Substring(0, p);
+                var tempPrefixScript = _parserService.ParseWithSuffix(tempPrefix, out _);
+                if (tempPrefixScript != null)
+                {
+                    foreach (var (tmpName, tmpColumns) in new TempTableTracker().TrackTempTables(tempPrefixScript, tempPrefix.Length))
+                        if (!context.AvailableTempTables.ContainsKey(tmpName))
+                            context.AvailableTempTables[tmpName] = tmpColumns;
+                }
             }
 
             // Prefix-parse recovery: when content AFTER the cursor breaks the
@@ -239,10 +313,32 @@ public class CompletionEngine
             // always runs when JoinAssist is enabled — AutoAlias only decides whether
             // the inserted JOIN target carries a fresh alias or uses its bare name.
             _joinProvider.UseAliases = TableAliasEnabled;
+            _joinProvider.SchemaQualifyMode = SchemaQualifyMode;
 
             // Push IntelliSense policy flags into ObjectProvider before each request.
             _objectProvider.IncludeSystemObjects = IncludeSystemObjects;
             _objectProvider.SchemaQualifyMode = SchemaQualifyMode;
+            _objectProvider.BracketMode = BracketMode;
+
+            // Push column-suggestion scope and connection scope into ColumnProvider (FR-012 / T032,
+            // FR-016 / T036). ScopeSchemas is shared with ObjectProvider — same normalization.
+            _columnProvider.ColumnScopeMode = ColumnScopeMode;
+            _columnProvider.ScopeSchemas = ScopeSchemas is { Count: > 0 }
+                ? new HashSet<string>(ScopeSchemas, StringComparer.OrdinalIgnoreCase)
+                : _emptySchemaScope;
+
+            // Push connection scope into ObjectProvider (FR-016 / T036). ScopeSchemas is normalized to a
+            // case-insensitive set; an empty set means "no restriction".
+            _objectProvider.ObjectsInScope = DatabaseInScope;
+            _objectProvider.ScopeSchemas = ScopeSchemas is { Count: > 0 }
+                ? new HashSet<string>(ScopeSchemas, StringComparer.OrdinalIgnoreCase)
+                : _emptySchemaScope;
+            _objectProvider.IncludeLinkedServers = IncludeLinkedServers;
+
+            // Push alias-generation policy into AliasProvider (FR-015 / T035).
+            _aliasProvider.IncludeAs = AliasIncludeAs;
+            _aliasProvider.ObjectAliasMap = AliasObjectMap;
+            _aliasProvider.PrefixesToIgnore = AliasPrefixesToIgnore;
 
             // Push join options into JoinOnFkProvider before each request.
             _joinOnFkProvider.MatchByColumnName = MatchByColumnName;

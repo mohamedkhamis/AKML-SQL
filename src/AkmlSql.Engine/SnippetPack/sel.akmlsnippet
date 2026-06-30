@@ -1,0 +1,21 @@
+{
+  "metadata": {
+    "id": "builtin-sel",
+    "shortcode": "sel",
+    "name": "SELECT columns",
+    "description": "SELECT <columns> FROM <table> WHERE <predicate> ORDER BY",
+    "author": "AKML SQL",
+    "version": "1.0",
+    "category": "Query",
+    "tags": [ "select" ],
+    "context": [ "global" ],
+    "surroundsWith": false
+  },
+  "variables": [],
+  "body": [
+    "SELECT $CURSOR$",
+    "FROM ",
+    "WHERE ",
+    "ORDER BY "
+  ]
+}

@@ -39,6 +39,11 @@ builder.Services.AddSingleton<IThemeService, ThemeService>();
 builder.Services.AddSingleton<IEditorSessionStore, EditorSessionStore>();
 builder.Services.AddSingleton<IDiagnosticsRingBuffer, DiagnosticsRingBuffer>();
 
+// Spec 030: ⌘P command palette registry. Singleton so the palette (hosted in MainLayout) and
+// context-bearing pages (Editor.razor) share one registry — pages register actions on mount and
+// dispose the returned token on unmount.
+builder.Services.AddSingleton<ICommandRegistry, CommandRegistry>();
+
 // Spec 021 M3 (browser-side bridge):
 //   IWebCryptoWrapper      T069 -- AES-GCM wrap via wwwroot/js/akml-crypto.js.
 //   IPairingTokenVault     T069 -- bearer tokens at rest, bound to connectionId via aad.
@@ -54,6 +59,24 @@ builder.Services.AddSingleton<IConnectionStore, ConnectionStore>();
 builder.Services.AddTransient<IBridgeWebSocket, JsBridgeWebSocket>();
 builder.Services.AddSingleton<Func<IBridgeWebSocket>>(sp => () => sp.GetRequiredService<IBridgeWebSocket>());
 builder.Services.AddSingleton<IEngineBridge, EngineBridge>();
+// Spec 030: browser-side "Connect to SQL Server" — sends ConnectionChanged/DocumentChanged over the
+// bridge using one canonical SessionId, enabling live-schema IntelliSense (Windows or SQL auth).
+builder.Services.AddSingleton<ISqlConnectionService, SqlConnectionService>();
+
+// Spec 030 — Phase 5: query execution + results grid + inline CRUD. QueryExecutionService routes
+// ExecuteQuery / ExecuteCancel / ApplyChanges through the bridge using the canonical SessionId;
+// ExecutionSettingsStore persists the advisory max-rows / timeout caps (the engine re-clamps).
+builder.Services.AddSingleton<IExecutionSettingsStore, ExecutionSettingsStore>();
+builder.Services.AddSingleton<IQueryExecutionService, QueryExecutionService>();
+// Spec 030 — web SQL History: read/search/record/manage via the engine's history IPC (40/41/42)
+// over the bridge (shared per-user store; no new engine code). Editor.razor records user-initiated
+// executions; the /history page reads + manages them.
+builder.Services.AddSingleton<IHistoryService, HistoryService>();
+
+// Phase 4 (web connection manager): saved SQL-Server connections (IndexedDB, no password) + the
+// modal-opener singleton that the command palette / Settings / StatusBar call to surface the modal.
+builder.Services.AddSingleton<ISavedSqlConnectionStore, SavedSqlConnectionStore>();
+builder.Services.AddSingleton<IConnectionManagerController, ConnectionManagerController>();
 
 // M3.5 bridge-routed services (T072, T073, T074). Each routes through the bridge
 // when open; otherwise returns an empty response. M5/T109 will install the

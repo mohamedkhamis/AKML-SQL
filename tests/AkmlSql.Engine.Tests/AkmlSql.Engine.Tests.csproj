@@ -33,6 +33,15 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Spec 030 T038/T041: copy the engine's built-in snippet pack into the test output so the
+         shipped-pack test loads the SAME .akmlsnippet files that ship with the engine publish. -->
+    <Content Include="..\..\src\AkmlSql.Engine\SnippetPack\*.akmlsnippet">
+      <Link>snippets\%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
     <EmbeddedResource Include="Refactoring\Corpus\corpus01_simple_select.sql" />
     <EmbeddedResource Include="Refactoring\Corpus\corpus02_insert_update_delete.sql" />
     <EmbeddedResource Include="Refactoring\Corpus\corpus03_joins_and_aggregates.sql" />

@@ -25,6 +25,9 @@
     <PackageReference Include="Microsoft.VisualStudio.Language.Intellisense" Version="17.*" ExcludeAssets="runtime" />
     <PackageReference Include="Microsoft.VisualStudio.Text.UI.Wpf" Version="17.*" ExcludeAssets="runtime" />
     <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="17.*" PrivateAssets="all" />
+    <!-- Spec 029: DPAPI for SqlCredentialStore. Reaches the shell transitively via AkmlSql.Core
+         (netstandard2.0); this explicit ref guarantees the assembly deploys into the extension folder. -->
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.*" />
   </ItemGroup>
 
   <ItemGroup>

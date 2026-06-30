@@ -123,5 +123,21 @@ namespace AkmlSql.Shell.Shared
         // Spec 020 US3 T059 — Format Styles editor launcher (takes the next free slot;
         // spec 019's reservation note above is tightened from 0x0916..0x093F to 0x0917..0x093F).
         public const int CmdFormatStyles                 = 0x0916;
+
+        // Spec 030 T053 — Manage Code Analysis Rules dialog launcher.
+        public const int CmdManageCodeAnalysisRules      = 0x0917;
+
+        // Spec 030 T067 — refactor ops that lacked an id (InlineStoredProcedure=0x090E and
+        // ScriptAsAlter=0x0909 already exist above and are reused).
+        public const int CmdInlineExec                   = 0x0918;
+        public const int CmdInsertToUpdate               = 0x0919;
+
+        // Spec 030 T056 — toggle code analysis on/off.
+        public const int CmdToggleCodeAnalysis           = 0x091A;
+
+        // Spec 030 T044 — Create Snippet from Selection (FR-033).
+        public const int CmdSnippetCreateFromSelection   = 0x091B;
+        // Spec 030 T045 — Surround With snippet (FR-034); bound to Ctrl+K, Ctrl+S.
+        public const int CmdSnippetSurroundWith          = 0x091C;
     }
 }

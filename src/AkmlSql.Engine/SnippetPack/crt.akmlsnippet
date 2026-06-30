@@ -1,0 +1,21 @@
+{
+  "metadata": {
+    "id": "builtin-crt",
+    "shortcode": "crt",
+    "name": "CREATE TABLE",
+    "description": "CREATE TABLE <schema>.<name> with a primary key column",
+    "author": "AKML SQL",
+    "version": "1.0",
+    "category": "DDL",
+    "tags": [ "create", "table" ],
+    "context": [ "global" ],
+    "surroundsWith": false
+  },
+  "variables": [],
+  "body": [
+    "CREATE TABLE $CURSOR$ (",
+    "    Id INT NOT NULL IDENTITY(1,1),",
+    "    CONSTRAINT PK_ PRIMARY KEY (Id)",
+    ");"
+  ]
+}

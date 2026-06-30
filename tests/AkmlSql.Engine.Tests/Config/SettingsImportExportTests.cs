@@ -78,7 +78,8 @@ namespace AkmlSql.Engine.Tests.Config
             Assert.False(settings.IntelliSense.SuggestionTypes.IncludeSystemObjects);
             Assert.True(settings.IntelliSense.SuggestionTypes.IncludeKeywords);
             Assert.Equal(ColumnSuggestionScope.ReferencedOnly, settings.IntelliSense.SuggestionTypes.ColumnScope);
-            Assert.Equal(SchemaQualifyMode.NonDefaultOnly, settings.IntelliSense.Qualification.SchemaMode);
+            // Always = SQL Prompt parity: table commits insert the owner-qualified name.
+            Assert.Equal(SchemaQualifyMode.Always, settings.IntelliSense.Qualification.SchemaMode);
             Assert.Equal(BracketMode.WhenRequired, settings.IntelliSense.Qualification.BracketMode);
             Assert.True(settings.IntelliSense.InsertOptions.IncludeColumns);
             Assert.True(settings.IntelliSense.JoinOptions.MatchByColumnName);

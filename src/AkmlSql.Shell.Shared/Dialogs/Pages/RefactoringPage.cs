@@ -9,6 +9,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         public string Key     => "Refactoring";
         public string Display => "Editor › Refactoring";
         public string Title   => "Refactoring";
+        public string Help    => "Control how refactoring changes are applied, including preview-before-apply, automatic backups, and reformatting after a refactor. Configure Safe Rename behavior such as whether comments and string literals are included and the rename scope.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {

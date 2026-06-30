@@ -8,8 +8,10 @@ using System.IO;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Shell.Shared.Ipc;
@@ -138,6 +140,45 @@ namespace AkmlSql.Shell.Shared.Formatting
             }
         }
         private string _previewSample = LoadPersistedSampleOrDefault();
+
+        /// <summary>
+        /// Spec 030 T019 / FR-008 — preview source: the persisted sample, or the SQL from the
+        /// editor that was active when the styles editor opened (<see cref="CurrentQueryText"/>).
+        /// </summary>
+        public FormatPreviewSource PreviewSourceMode
+        {
+            get => _previewSourceMode;
+            set
+            {
+                if (_previewSourceMode == value) return;
+                _previewSourceMode = value;
+                OnPropertyChanged();
+                QueuePreviewAsync();
+            }
+        }
+        private FormatPreviewSource _previewSourceMode = FormatPreviewSource.Sample;
+
+        /// <summary>The active editor's text captured at editor-open (FR-008). Empty if none.</summary>
+        public string CurrentQueryText
+        {
+            get => _currentQueryText;
+            set
+            {
+                _currentQueryText = value ?? string.Empty;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(HasCurrentQuery));
+            }
+        }
+        private string _currentQueryText = string.Empty;
+
+        /// <summary>True when a current-editor query was captured (gates the "Current query" option).</summary>
+        public bool HasCurrentQuery => !string.IsNullOrWhiteSpace(_currentQueryText);
+
+        /// <summary>The SQL the preview pane formats given the selected source.</summary>
+        private string EffectivePreviewSample =>
+            PreviewSourceMode == FormatPreviewSource.CurrentQuery && HasCurrentQuery
+                ? _currentQueryText
+                : _previewSample;
 
         private static string PreviewSamplePath
         {
@@ -319,7 +360,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                     var request = new FormatPreviewRequest
                     {
                         SessionId = "format-styles-editor",
-                        SampleText = PreviewSample,
+                        SampleText = EffectivePreviewSample,
                         ProfileJson = BuildProfileJson(),
                     };
 
@@ -372,6 +413,124 @@ namespace AkmlSql.Shell.Shared.Formatting
             }
         }
 
+        // -----------------------------------------------------------------
+        // Spec 030 T020 — Format Styles editor New / Copy / Set Active / Export.
+        // New/Copy duplicate a STORED profile server-side (DuplicateProfile IPC) — faithful to the
+        // persisted values, independent of the editor's working-values preview state. Set Active
+        // writes AppSettings.Formatter.ActiveProfile (a Core/ConfigManager concern; the engine has
+        // no set-active IPC). Export reuses the existing ProfileExportSqlPrompt IPC.
+        // -----------------------------------------------------------------
+
+        /// <summary>New style: duplicate the built-in <c>Default</c> under a unique name.</summary>
+        public Task<string?> NewProfileAsync()
+            => DuplicateAsync("Default", UniqueName("Custom Style"));
+
+        /// <summary>Copy: duplicate the given stored profile under a unique "{name} copy" name.</summary>
+        public Task<string?> CopyProfileAsync(string sourceName)
+            => string.IsNullOrWhiteSpace(sourceName)
+                ? Task.FromResult<string?>(null)
+                : DuplicateAsync(sourceName, UniqueName($"{sourceName} copy"));
+
+        private async Task<string?> DuplicateAsync(string source, string newName)
+        {
+            var client = EngineLifecycle.Manager?.Client;
+            if (client == null || !client.IsConnected)
+            {
+                LastError = "Engine not connected.";
+                return null;
+            }
+            try
+            {
+                var response = await client.SendRequestAsync<DuplicateProfileResponse, DuplicateProfileRequest>(
+                    MessageTypes.DuplicateProfile,
+                    new DuplicateProfileRequest { SourceName = source, NewName = newName },
+                    timeoutMs: 5000).ConfigureAwait(false);
+
+                if (response == null || !response.Success)
+                {
+                    LastError = response?.ErrorMessage ?? "Duplicate failed.";
+                    return null;
+                }
+                await RefreshProfilesAsync().ConfigureAwait(false);
+                return response.NewName;
+            }
+            catch (Exception ex)
+            {
+                LastError = ex.Message;
+                Log.Warning(ex, "FormatStylesEditor: duplicate {Source} -> {New} failed", source, newName);
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Sets the active formatting style (FR-006). Writes <c>AppSettings.Formatter.ActiveProfile</c>
+        /// via ConfigManager; the next Format SQL dispatch reads it. Returns true on success.
+        /// </summary>
+        public bool SetActiveProfile(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return false;
+            try
+            {
+                var settings = ConfigManager.Load();
+                settings.Formatter.ActiveProfile = name;
+                ConfigManager.Save(settings);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                LastError = ex.Message;
+                Log.Warning(ex, "FormatStylesEditor: set-active {Name} failed", name);
+                return false;
+            }
+        }
+
+        /// <summary>Exports the given stored profile to a .sqlpromptstylev2 file at the given path.</summary>
+        public async Task<bool> ExportProfileAsync(string profileName, string destinationPath)
+        {
+            var client = EngineLifecycle.Manager?.Client;
+            if (client == null || !client.IsConnected)
+            {
+                LastError = "Engine not connected.";
+                return false;
+            }
+            try
+            {
+                var response = await client.SendRequestAsync<ProfileExportSqlPromptResponse, ProfileExportSqlPromptRequest>(
+                    MessageTypes.ProfileExportSqlPrompt,
+                    new ProfileExportSqlPromptRequest { Name = profileName, DestinationPath = destinationPath },
+                    timeoutMs: 5000).ConfigureAwait(false);
+
+                if (response == null || !response.Success)
+                {
+                    LastError = response?.ErrorMessage ?? "Export failed.";
+                    return false;
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                LastError = ex.Message;
+                Log.Warning(ex, "FormatStylesEditor: export {Name} failed", profileName);
+                return false;
+            }
+        }
+
+        /// <summary>Re-fetches the profile list (after New/Copy create a profile).</summary>
+        public Task RefreshProfilesAsync() => LoadProfilesAsync(CancellationToken.None);
+
+        /// <summary>Returns <paramref name="baseName"/>, or "baseName 2", "baseName 3"… if taken.</summary>
+        private string UniqueName(string baseName)
+        {
+            bool Taken(string n) => Profiles.Any(p => string.Equals(p.Name, n, StringComparison.OrdinalIgnoreCase));
+            if (!Taken(baseName)) return baseName;
+            for (int i = 2; i < 1000; i++)
+            {
+                var candidate = $"{baseName} {i}";
+                if (!Taken(candidate)) return candidate;
+            }
+            return $"{baseName} {Guid.NewGuid():N}";
+        }
+
         private async Task LoadProfilesAsync(CancellationToken ct)
         {
             var client = EngineLifecycle.Manager?.Client;
@@ -388,6 +547,12 @@ namespace AkmlSql.Shell.Shared.Formatting
                     new ProfileListRequest(),
                     timeoutMs: 3000,
                     ct).ConfigureAwait(false);
+
+                // Profiles is bound to the style ListBox (ItemsSource) — mutate it on the UI thread.
+                // The IPC await above resumed on a thread-pool thread (ConfigureAwait(false)); without
+                // this switch, Clear()/Add() throw off-dispatcher, which surfaced as New/Copy wrongly
+                // reporting failure after a successful server-side duplicate (spec 030 T020 review).
+                await Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
 
                 Profiles.Clear();
                 if (response?.Profiles == null) return;
@@ -508,5 +673,14 @@ VALUES ('SampleQuery', GETDATE());";
 
         public override string ToString() =>
             string.IsNullOrEmpty(Description) ? Name : $"{Name} — {Description}";
+    }
+
+    /// <summary>Spec 030 T019 / FR-008 — which SQL the Format Styles preview formats.</summary>
+    internal enum FormatPreviewSource
+    {
+        /// <summary>The persisted/default sample snippet.</summary>
+        Sample,
+        /// <summary>The text from the editor that was active when the styles editor opened.</summary>
+        CurrentQuery,
     }
 }

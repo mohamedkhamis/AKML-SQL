@@ -9,6 +9,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         public string Key     => "Editor";
         public string Display => "Editor › Productivity";
         public string Title   => "Editor Productivity";
+        public string Help    => "Toggle editor productivity aids such as occurrence highlighting, bracket matching, named regions, sticky scroll, the code minimap, and the Document Outline panel.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {

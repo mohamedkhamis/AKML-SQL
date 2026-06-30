@@ -1,21 +1,9 @@
 SELECT
-    productid, CASE
-    status
-    WHEN
-    'A'
-    THEN
-    'Active'
-    WHEN
-    'D'
-    THEN
-    'Discontinued'
-    WHEN
-    'P'
-    THEN
-    'Pending'
-    ELSE
-    'Unknown'
-    END
-    AS
-    status_text
-FROM products;
+    productid,
+    CASE status
+        WHEN 'A' THEN 'Active'
+        WHEN 'D' THEN 'Discontinued'
+        WHEN 'P' THEN 'Pending'
+        ELSE 'Unknown'
+        END AS status_text
+FROM   products;

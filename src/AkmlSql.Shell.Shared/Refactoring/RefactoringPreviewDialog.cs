@@ -21,6 +21,7 @@ namespace AkmlSql.Shell.Shared.Refactoring
         private readonly RefactorPreviewResponse _response;
         private readonly string _originalName;
         private readonly string _newName;
+        private readonly string _applyButtonText;
 
         private SplitContainer _splitContainer = null!;
         private TreeView _treeView = null!;
@@ -60,11 +61,13 @@ namespace AkmlSql.Shell.Shared.Refactoring
         /// <param name="response">The preview response from the engine containing all proposed changes.</param>
         /// <param name="originalName">The original identifier name (for display in title/diff).</param>
         /// <param name="newName">The new identifier name (for display in title/diff).</param>
-        public RefactoringPreviewDialog(RefactorPreviewResponse response, string originalName, string newName)
+        public RefactoringPreviewDialog(RefactorPreviewResponse response, string originalName, string newName,
+            string applyButtonText = "Generate Script")
         {
             _response = response ?? throw new ArgumentNullException(nameof(response));
             _originalName = originalName ?? string.Empty;
             _newName = newName ?? string.Empty;
+            _applyButtonText = string.IsNullOrWhiteSpace(applyButtonText) ? "Generate Script" : applyButtonText;
 
             BuildLayout();
             PopulateTree();
@@ -104,7 +107,7 @@ namespace AkmlSql.Shell.Shared.Refactoring
 
             _generateScriptButton = new Button
             {
-                Text = "Generate Script",
+                Text = _applyButtonText,
                 Dock = DockStyle.Right,
                 Width = 120,
                 Margin = new Padding(4),

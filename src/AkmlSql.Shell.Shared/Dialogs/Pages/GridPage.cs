@@ -9,6 +9,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         public string Key     => "Grid";
         public string Display => "Queries › Query Results";
         public string Title   => "Results Grid";
+        public string Help    => "Controls how query results appear in the grid, including aggregate statistics, NULL highlighting, row numbers, and frozen headers. Also sets whether 15+ digit numbers are exported to Excel as text to avoid rounding.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {

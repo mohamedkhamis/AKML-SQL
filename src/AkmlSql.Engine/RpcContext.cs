@@ -42,6 +42,14 @@ namespace AkmlSql.Engine
         public SchemaMetadataService? SchemaMetadata { get; init; }
 
         /// <summary>
+        /// Spec 030 — Phase 5. The per-session persistent-connection registry shared by the
+        /// ExecuteQuery / ApplyChanges / ConnectionChanged handlers. Non-required so existing test
+        /// contexts (which don't exercise execution) still construct; <c>EngineComposition.Build</c>
+        /// assigns it before handler registration. Callers null-guard (<c>SessionConnections?.</c>).
+        /// </summary>
+        public Execution.SessionConnectionRegistry? SessionConnections { get; init; }
+
+        /// <summary>
         /// Returns the cached <see cref="AppSettings"/>. Calls <see cref="SettingsLoader"/> exactly once
         /// on first invocation; subsequent calls return the same instance until
         /// <see cref="InvalidateSettings"/> is called. Thread-safe via the internal lock.

@@ -46,6 +46,13 @@
     --akml-chat-userbubble: Canvas;
     --akml-chat-assistantbubble: ButtonFace;
     --akml-chat-systembubble: Canvas;
+    /* Syntax */
+    --akml-syntax-keyword: LinkText;
+    --akml-syntax-string: GrayText;
+    --akml-syntax-number: GrayText;
+    --akml-syntax-comment: GrayText;
+    --akml-syntax-function: LinkText;
+    --akml-syntax-tablecolumn: LinkText;
     /* IconBadge */
     --akml-iconbadge-table: LinkText;
     --akml-iconbadge-view: LinkText;
@@ -79,16 +86,24 @@
     --akml-scalar-spacing-s: 8px;
     --akml-scalar-spacing-m: 12px;
     --akml-scalar-spacing-l: 16px;
+    /* Radius (theme-invariant scalars in DIU) */
+    --akml-scalar-radius-xs: 6px;
+    --akml-scalar-radius-s: 8px;
+    --akml-scalar-radius-m: 12px;
+    --akml-scalar-radius-pill: 999px;
     /* Typography (theme-invariant; split into family/size/weight) */
     --akml-type-chrome-family: "Segoe UI";
-    --akml-type-chrome-size: 12px;
+    --akml-type-chrome-size: 14px;
     --akml-type-chrome-weight: 400;
     --akml-type-chrometitle-family: "Segoe UI";
     --akml-type-chrometitle-size: 14px;
     --akml-type-chrometitle-weight: 600;
     --akml-type-editor-family: Consolas;
-    --akml-type-editor-size: 12px;
+    --akml-type-editor-size: 13px;
     --akml-type-editor-weight: 400;
+    --akml-type-editorgrid-family: Consolas;
+    --akml-type-editorgrid-size: 12px;
+    --akml-type-editorgrid-weight: 400;
     --akml-type-iconbadge-family: "Segoe UI";
     --akml-type-iconbadge-size: 9px;
     --akml-type-iconbadge-weight: 600;

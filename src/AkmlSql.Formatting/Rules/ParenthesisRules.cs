@@ -26,7 +26,12 @@ public class ParenthesisRules : IRuleSet
         ApplyIndentContents(nodes, paren, parenPairs);
         ApplySpaceInside(nodes, paren, parenPairs);
         ApplyCollapseShort(nodes, paren, parenPairs);
-        ApplyRemoveRedundant(nodes, paren, parenPairs);
+        // ApplyRemoveRedundant is FORCE-DISABLED (spec 030 T011): it peels exactly one paren
+        // layer per format (only the innermost pair of "((a))" wraps a single token), so it is
+        // non-idempotent — and with Stage-6 validation on, the peeled output fails the semantic
+        // compare and Format silently returns the ORIGINAL (the option disabled formatting
+        // entirely). Re-enable only after a rebuild with a fixpoint loop + semantic guards.
+        // The profile option stays in the schema for round-trip compatibility.
         ApplyCreateTableColumns(nodes, paren, parenPairs);
         ApplyProcedureParameters(nodes, paren, parenPairs);
         ApplySubqueryStyle(nodes, paren, parenPairs);
@@ -80,8 +85,12 @@ public class ParenthesisRules : IRuleSet
             }
             else
             {
-                // Move open paren to new line
-                if (node.PrecedingBreak == BreakType.None)
+                // Move open paren to a new line — but NEVER a function-call paren, which must hug
+                // its name. openOnSameLine=false targets STRUCTURAL parens (subqueries, CTE bodies,
+                // and the DDL column/parameter lists owned by their own passes); a call like SUM(...)
+                // was otherwise stranded as "SUM" + newline + "(...)" at column 0 (spec 030 T009,
+                // see tests/format-parity/golden/02|04-*__aligned-left-bracket.sql).
+                if (node.PrecedingBreak == BreakType.None && !IsFunctionCallParen(nodes, i))
                 {
                     node.PrecedingBreak = BreakType.NewLine;
                     node.PrecedingSpaces = 0;
@@ -89,6 +98,35 @@ public class ParenthesisRules : IRuleSet
             }
         }
     }
+
+    /// <summary>
+    /// True when the left paren at <paramref name="i"/> is a function-call paren: it hugs a
+    /// preceding identifier with no gap (e.g. <c>SUM(...)</c>, <c>DATEADD(...)</c>) and that
+    /// identifier is not a DDL object name (<c>CREATE TABLE foo(...)</c>, whose column-list paren
+    /// the DDL passes own). Mirrors the function-call heuristic in
+    /// <c>ControlFlowRules.ApplyFunctionCallParameters</c> so the openOnSameLine=false path leaves
+    /// call parens attached to their name.
+    /// </summary>
+    private static bool IsFunctionCallParen(List<LayoutNode> nodes, int i)
+    {
+        if (i < 1) return false;
+        if (nodes[i].PrecedingSpaces > 0 || nodes[i].PrecedingBreak != BreakType.None) return false;
+        var prev = nodes[i - 1];
+        if (prev.IsInNoformatRegion || !IsFunctionNameToken(prev.TokenType)) return false;
+        return !ParenHeuristics.IsDdlObjectName(nodes, i - 1);
+    }
+
+    /// <summary>
+    /// True when <paramref name="t"/> can stand as the name of a function call. Plain identifiers
+    /// cover user functions and most built-ins (e.g. <c>SUM</c>, <c>DATEADD</c>), but some built-in
+    /// functions are tokenized as their own KEYWORD types and would otherwise be stranded onto a
+    /// new line under openOnSameLine=false (spec 030 FIX 2: <c>COALESCE(...)</c>, <c>CONVERT(...)</c>).
+    /// Deliberately excludes ambiguous positional keywords like <c>LEFT</c>/<c>RIGHT</c> (JOIN modifiers).
+    /// </summary>
+    private static bool IsFunctionNameToken(TSqlTokenType t) =>
+        t == TSqlTokenType.Identifier
+        || t is TSqlTokenType.Coalesce or TSqlTokenType.Convert
+            or TSqlTokenType.NullIf;
 
     /// <summary>
     /// closeOnNewLine: controls whether closing parenthesis is on its own line.
@@ -326,10 +364,25 @@ public class ParenthesisRules : IRuleSet
                 if (openParen < 0 || !parenPairs.TryGetValue(openParen, out int closeParen))
                     continue;
 
-                // Put each column definition on a new line (after each comma)
+                // Put each column definition on a new line — only after TOP-LEVEL commas.
+                // Commas nested in type/identity arguments ("decimal(18, 2)", "identity(1, 1)")
+                // are not column boundaries (same depth fix as DdlRules.
+                // ApplyCreateTableColumnsOnNewLine — this pass duplicates its break loop).
+                int parenDepth = 0;
                 for (int j = openParen + 1; j < closeParen; j++)
                 {
-                    if (nodes[j].TokenType == TSqlTokenType.Comma && j + 1 < closeParen)
+                    if (nodes[j].TokenType == TSqlTokenType.LeftParenthesis)
+                    {
+                        parenDepth++;
+                        continue;
+                    }
+                    if (nodes[j].TokenType == TSqlTokenType.RightParenthesis)
+                    {
+                        parenDepth--;
+                        continue;
+                    }
+
+                    if (parenDepth == 0 && nodes[j].TokenType == TSqlTokenType.Comma && j + 1 < closeParen)
                     {
                         var next = nodes[j + 1];
                         if (next.PrecedingBreak == BreakType.None)
@@ -391,10 +444,24 @@ public class ParenthesisRules : IRuleSet
             if (openParen < 0 || !parenPairs.TryGetValue(openParen, out int closeParen))
                 continue;
 
-            // Put each parameter on a new line (after each comma)
+            // Put each parameter on a new line — only after TOP-LEVEL commas.
+            // Commas nested in type/default arguments ("decimal(10, 2)", "GETDATE()")
+            // are not parameter boundaries and must not trigger a break.
+            int parenDepth = 0;
             for (int j = openParen + 1; j < closeParen; j++)
             {
-                if (nodes[j].TokenType == TSqlTokenType.Comma && j + 1 < closeParen)
+                if (nodes[j].TokenType == TSqlTokenType.LeftParenthesis)
+                {
+                    parenDepth++;
+                    continue;
+                }
+                if (nodes[j].TokenType == TSqlTokenType.RightParenthesis)
+                {
+                    parenDepth--;
+                    continue;
+                }
+
+                if (parenDepth == 0 && nodes[j].TokenType == TSqlTokenType.Comma && j + 1 < closeParen)
                 {
                     var next = nodes[j + 1];
                     if (next.PrecedingBreak == BreakType.None)

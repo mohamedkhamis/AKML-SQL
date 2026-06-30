@@ -1,8 +1,7 @@
-with monthly_sales (year_num, month_num, region, total_amount) as (
-    select year(orderdate), month(orderdate), region, sum(amount)
-    from orders
-    group by year(orderdate), month(orderdate), region
-)
-select year_num, month_num, region, total_amount
-from monthly_sales
-where total_amount > 1000;
+WITH monthly_sales(year_num, month_num, region, total_amount
+) AS (
+    SELECT YEAR(orderdate), MONTH(orderdate), region, SUM(amount)
+    FROM   orders
+    GROUP BY YEAR(orderdate), MONTH(orderdate), region
+    )
+SELECT year_num, month_num, region, total_amount FROM monthly_sales WHERE total_amount > 1000;

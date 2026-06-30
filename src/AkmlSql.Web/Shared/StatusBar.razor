@@ -12,11 +12,18 @@
 @inject IConnectionStore Connections
 @inject ISchemaCacheStore SchemaCache
 @inject ISchemaSync SchemaSync
+@inject ISqlConnectionService SqlConn
+@inject IConnectionManagerController ConnManager
 
 <div class="akml-status">
     <span class="akml-status-pill @PillClass" data-testid="status-pill">@PillLabel</span>
     <span class="akml-status-text">@StatusText</span>
     <span class="akml-status-spacer"></span>
+    <button type="button" class="akml-status-conn" @onclick="@(() => ConnManager.Open())"
+            aria-label="Manage SQL connection" title="@ConnTooltip" data-testid="status-connection">
+        <span class="akml-status-conn-icon">🔌</span>
+        <span>@ConnLabel</span>
+    </button>
     @if (!string.IsNullOrEmpty(Bridge.EngineVersion))
     {
         <span class="akml-status-text">Engine @Bridge.EngineVersion</span>
@@ -38,19 +45,42 @@
     }
     .akml-status-pill {
         padding: 1px var(--akml-scalar-spacing-xs);
-        border-radius: 2px;
+        border-radius: var(--akml-scalar-radius-xs);
         color: var(--akml-text-onaccent);
         font-size: 11px;
     }
     .akml-status-pill-live { background-color: var(--akml-status-success); }
     .akml-status-pill-cached { background-color: var(--akml-status-info); }
-    .akml-status-pill-offline { background-color: var(--akml-text-secondary); }
-    .akml-status-pill-disconnected { background-color: var(--akml-text-secondary); }
+    .akml-status-pill-offline { background-color: var(--akml-border-strong); }
+    .akml-status-pill-disconnected { background-color: var(--akml-border-strong); }
     .akml-status-pill-connecting { background-color: var(--akml-status-info); }
     .akml-status-pill-reconnecting { background-color: var(--akml-status-warning); }
     .akml-status-pill-failed { background-color: var(--akml-status-danger); }
     .akml-status-text { flex: 0 0 auto; }
     .akml-status-spacer { flex: 1 1 auto; }
+
+    /* Clickable connection indicator — the third entry point into the connection manager
+       (alongside the command palette + Settings). Token-styled button reset. */
+    .akml-status-conn {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background: none;
+        border: 1px solid transparent;
+        border-radius: var(--akml-scalar-radius-xs);
+        padding: 1px var(--akml-scalar-spacing-xs);
+        color: var(--akml-text-secondary);
+        font-family: inherit;
+        font-size: var(--akml-type-chrome-size);
+        cursor: pointer;
+    }
+    .akml-status-conn:hover {
+        background-color: var(--akml-surface-hover);
+        color: var(--akml-text-primary);
+        border-color: var(--akml-border-default);
+    }
+    .akml-status-conn-icon { font-size: 11px; }
 </style>
 
 @code {
@@ -73,6 +103,7 @@
         Bridge.StateChanged += OnStateChanged;
         Bridge.RetryScheduled += OnRetryScheduled;
         SchemaSync.ChecksumDrifted += OnChecksumDrifted;
+        SqlConn.StateChanged += OnSqlConnChanged;
         _countdownTimer = new System.Threading.Timer(_ => TickCountdown(), null,
             System.Threading.Timeout.Infinite, System.Threading.Timeout.Infinite);
     }
@@ -156,6 +187,16 @@
 
     private void TickCountdown() => InvokeAsync(StateHasChanged);
 
+    // SQL-connection indicator: reflects ISqlConnectionService (the SQL session), distinct from the
+    // bridge/cache pill above. Clicking opens the connection manager.
+    private void OnSqlConnChanged() => InvokeAsync(StateHasChanged);
+
+    private string ConnLabel => SqlConn.IsConnected ? $"{SqlConn.Server}/{SqlConn.Database}" : "Connect";
+
+    private string ConnTooltip => SqlConn.IsConnected
+        ? $"Connected to {SqlConn.Server} / {SqlConn.Database} — click to manage connections"
+        : "Not connected to SQL Server — click to connect";
+
     private string PillLabel => _state switch
     {
         Availability.Live => "Live",
@@ -194,6 +235,7 @@
         Bridge.StateChanged -= OnStateChanged;
         Bridge.RetryScheduled -= OnRetryScheduled;
         SchemaSync.ChecksumDrifted -= OnChecksumDrifted;
+        SqlConn.StateChanged -= OnSqlConnChanged;
         _countdownTimer?.Dispose();
     }
 }

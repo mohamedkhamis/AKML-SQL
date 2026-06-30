@@ -5,47 +5,54 @@
 */
 :root {
     /* Surface */
-    --akml-surface-canvas: #f0f0f0;
+    --akml-surface-canvas: #f1f5f9;
     --akml-surface-panel: #ffffff;
     --akml-surface-elevated: #ffffff;
-    --akml-surface-sidebar: #ffffff;
+    --akml-surface-sidebar: #f8fafc;
     --akml-surface-input: #ffffff;
-    --akml-surface-inputreadonly: #f8f8f8;
-    --akml-surface-hover: #f0f0f0;
-    --akml-surface-selection: rgba(0, 120, 212, 0.122);
-    --akml-surface-selectionstrong: #0078d4;
+    --akml-surface-inputreadonly: #f8fafc;
+    --akml-surface-hover: #f1f5f9;
+    --akml-surface-selection: rgba(37, 99, 235, 0.122);
+    --akml-surface-selectionstrong: #2563eb;
     /* Text */
-    --akml-text-primary: #1e1e1e;
-    --akml-text-secondary: #555555;
-    --akml-text-disabled: #a0a0a0;
-    --akml-text-placeholder: #a0a0a0;
-    --akml-text-link: #0078d4;
+    --akml-text-primary: #0f172a;
+    --akml-text-secondary: #475569;
+    --akml-text-disabled: #94a3b8;
+    --akml-text-placeholder: #94a3b8;
+    --akml-text-link: #2563eb;
     --akml-text-onaccent: #ffffff;
     --akml-text-ondanger: #ffffff;
     /* Border */
-    --akml-border-default: #cccccc;
-    --akml-border-strong: #999999;
-    --akml-border-subtle: #eaeaea;
-    --akml-border-focus: #0078d4;
-    --akml-border-splitter: #cccccc;
+    --akml-border-default: #e2e8f0;
+    --akml-border-strong: #cbd5e1;
+    --akml-border-subtle: #e2e8f0;
+    --akml-border-focus: #2563eb;
+    --akml-border-splitter: #e2e8f0;
     /* Accent */
-    --akml-accent-primary: #0078d4;
-    --akml-accent-primaryhover: #106ebe;
-    --akml-accent-primarypressed: #005a9e;
+    --akml-accent-primary: #2563eb;
+    --akml-accent-primaryhover: #1e40af;
+    --akml-accent-primarypressed: #1e40af;
     /* Status */
-    --akml-status-success: #2ecc71;
-    --akml-status-warning: #f39c12;
-    --akml-status-danger: #e74c3c;
-    --akml-status-info: #0078d4;
+    --akml-status-success: #16a34a;
+    --akml-status-warning: #ea580c;
+    --akml-status-danger: #dc2626;
+    --akml-status-info: #2563eb;
     /* Editor */
-    --akml-editor-marginbackground: #fbfbfb;
-    --akml-editor-spinnerstroke: #0078d4;
+    --akml-editor-marginbackground: #f8fafc;
+    --akml-editor-spinnerstroke: #2563eb;
     --akml-editor-popupbackground: #ffffff;
-    --akml-editor-popupborder: #cccccc;
+    --akml-editor-popupborder: #e2e8f0;
     /* Chat */
-    --akml-chat-userbubble: #e5f1fb;
-    --akml-chat-assistantbubble: #f5f5f5;
-    --akml-chat-systembubble: #fff8e1;
+    --akml-chat-userbubble: #dbeafe;
+    --akml-chat-assistantbubble: #f1f5f9;
+    --akml-chat-systembubble: #fef3c7;
+    /* Syntax */
+    --akml-syntax-keyword: #2563eb;
+    --akml-syntax-string: #16a34a;
+    --akml-syntax-number: #ea580c;
+    --akml-syntax-comment: #64748b;
+    --akml-syntax-function: #9333ea;
+    --akml-syntax-tablecolumn: #0891c2;
     /* IconBadge */
     --akml-iconbadge-table: #e5c04b;
     --akml-iconbadge-view: #56b6c2;
@@ -69,26 +76,34 @@
     --akml-tabcolor-pink: #e91e63;
     --akml-tabcolor-gray: #808a99;
     /* History */
-    --akml-history-openicon: #2ecc71;
-    --akml-history-closedicon: #e74c3c;
-    --akml-history-star-active: #f39c12;
-    --akml-history-star-inactive: #cccccc;
-    --akml-history-matchhighlight: rgba(255, 248, 220, 0.302);
+    --akml-history-openicon: #16a34a;
+    --akml-history-closedicon: #dc2626;
+    --akml-history-star-active: #ea580c;
+    --akml-history-star-inactive: #e2e8f0;
+    --akml-history-matchhighlight: rgba(254, 240, 138, 0.302);
     /* Spacing (theme-invariant scalars in DIU) */
     --akml-scalar-spacing-xs: 4px;
     --akml-scalar-spacing-s: 8px;
     --akml-scalar-spacing-m: 12px;
     --akml-scalar-spacing-l: 16px;
+    /* Radius (theme-invariant scalars in DIU) */
+    --akml-scalar-radius-xs: 6px;
+    --akml-scalar-radius-s: 8px;
+    --akml-scalar-radius-m: 12px;
+    --akml-scalar-radius-pill: 999px;
     /* Typography (theme-invariant; split into family/size/weight) */
     --akml-type-chrome-family: "Segoe UI";
-    --akml-type-chrome-size: 12px;
+    --akml-type-chrome-size: 14px;
     --akml-type-chrome-weight: 400;
     --akml-type-chrometitle-family: "Segoe UI";
     --akml-type-chrometitle-size: 14px;
     --akml-type-chrometitle-weight: 600;
     --akml-type-editor-family: Consolas;
-    --akml-type-editor-size: 12px;
+    --akml-type-editor-size: 13px;
     --akml-type-editor-weight: 400;
+    --akml-type-editorgrid-family: Consolas;
+    --akml-type-editorgrid-size: 12px;
+    --akml-type-editorgrid-weight: 400;
     --akml-type-iconbadge-family: "Segoe UI";
     --akml-type-iconbadge-size: 9px;
     --akml-type-iconbadge-weight: 600;

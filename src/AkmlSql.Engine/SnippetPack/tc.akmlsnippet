@@ -1,0 +1,27 @@
+{
+  "metadata": {
+    "id": "builtin-tc",
+    "shortcode": "tc",
+    "name": "TRY CATCH",
+    "description": "TRY/CATCH error handling block",
+    "author": "AKML SQL",
+    "version": "1.0",
+    "category": "Control",
+    "tags": [ "try", "catch", "error" ],
+    "context": [ "global" ],
+    "surroundsWith": false
+  },
+  "variables": [],
+  "body": [
+    "BEGIN TRY",
+    "    $CURSOR$",
+    "END TRY",
+    "BEGIN CATCH",
+    "    SELECT",
+    "        ERROR_NUMBER()    AS ErrorNumber,",
+    "        ERROR_MESSAGE()   AS ErrorMessage,",
+    "        ERROR_SEVERITY()  AS ErrorSeverity,",
+    "        ERROR_STATE()     AS ErrorState;",
+    "END CATCH;"
+  ]
+}

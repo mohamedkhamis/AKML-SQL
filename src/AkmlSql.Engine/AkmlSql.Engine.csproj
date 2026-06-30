@@ -57,6 +57,18 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Spec 030 T041 (FR-031): ship the built-in snippet pack next to the engine binary so
+         SnippetRequestHandler loads it from <AppContext.BaseDirectory>/snippets at runtime. The data
+         files live in SnippetPack/ (kept distinct from the Snippets/ source-code folder so the glob is
+         case-safe) and Link into the output as snippets/ to match the runtime path. The installer ships
+         the whole engine publish output recursively (AkmlSqlSetup.iss), so they ride along; hot-swap too. -->
+    <Content Include="SnippetPack\*.akmlsnippet" Link="snippets\%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Spec 021 M0.2 T012: expose internal types (TypedHandlerAdapter) to the engine tests. -->
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
       <_Parameter1>AkmlSql.Engine.Tests</_Parameter1>

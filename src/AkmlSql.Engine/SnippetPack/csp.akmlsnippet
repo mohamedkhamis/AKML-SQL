@@ -1,0 +1,24 @@
+{
+  "metadata": {
+    "id": "builtin-csp",
+    "shortcode": "csp",
+    "name": "CREATE PROCEDURE",
+    "description": "CREATE OR ALTER PROCEDURE <schema>.<name>",
+    "author": "AKML SQL",
+    "version": "1.0",
+    "category": "DDL",
+    "tags": [ "create", "procedure", "sproc" ],
+    "context": [ "global" ],
+    "surroundsWith": false
+  },
+  "variables": [],
+  "body": [
+    "CREATE OR ALTER PROCEDURE $CURSOR$",
+    "AS",
+    "BEGIN",
+    "    SET NOCOUNT ON;",
+    "",
+    "END;",
+    "GO"
+  ]
+}

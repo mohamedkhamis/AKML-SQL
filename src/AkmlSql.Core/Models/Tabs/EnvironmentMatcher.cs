@@ -10,26 +10,54 @@ namespace AkmlSql.Core.Models.Tabs
     /// </summary>
     public static class EnvironmentMatcher
     {
-        /// <summary>The only currently supported match target value.</summary>
+        /// <summary>Match target value for rules that match against the server name.</summary>
         public const string MatchTargetServerName = "serverName";
 
         /// <summary>
-        /// Tests <paramref name="serverName"/> against each rule in order.
+        /// Match target value for rules that match against the connected database name,
+        /// regardless of which server it lives on ("database-on-any-server", FR-038).
+        /// </summary>
+        public const string MatchTargetDatabase = "database";
+
+        /// <summary>
+        /// Tests <paramref name="serverName"/> against each server-name rule in order.
+        /// Database-target rules are skipped (no database name is available).
         /// Returns the first matching rule, or <c>null</c> if none match.
         /// Rules must be pre-sorted by <see cref="EnvironmentRule.Order"/> ascending.
         /// </summary>
         public static EnvironmentRule? Match(IReadOnlyList<EnvironmentRule> rules, string? serverName)
+            => Match(rules, serverName, null);
+
+        /// <summary>
+        /// Tests a connection against each rule in order. A rule with
+        /// <see cref="MatchTargetDatabase"/> is evaluated against <paramref name="databaseName"/>
+        /// (regardless of the server, i.e. "database-on-any-server"); any other rule is
+        /// evaluated against <paramref name="serverName"/>.
+        /// Returns the first matching rule, or <c>null</c> if none match.
+        /// Rules must be pre-sorted by <see cref="EnvironmentRule.Order"/> ascending.
+        /// </summary>
+        public static EnvironmentRule? Match(IReadOnlyList<EnvironmentRule> rules, string? serverName, string? databaseName)
         {
-            if (string.IsNullOrWhiteSpace(serverName) || rules == null)
+            if (rules == null)
                 return null;
 
             foreach (var rule in rules)
             {
-                if (!string.Equals(rule.MatchTarget, MatchTargetServerName, StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                if (MatchesPattern(rule.Pattern, serverName!))
-                    return rule;
+                if (string.Equals(rule.MatchTarget, MatchTargetDatabase, StringComparison.OrdinalIgnoreCase))
+                {
+                    // Database rule: match against the database name on any server.
+                    // Prefer DatabaseName (the dedicated db-pattern field) over Pattern so that
+                    // ColoringRule.DatabaseName is honoured; fall back to Pattern for rules
+                    // constructed without a dedicated DatabaseName (backward compatibility).
+                    var dbPattern = string.IsNullOrEmpty(rule.DatabaseName) ? rule.Pattern : rule.DatabaseName;
+                    if (!string.IsNullOrWhiteSpace(databaseName) && MatchesPattern(dbPattern, databaseName!))
+                        return rule;
+                }
+                else if (string.Equals(rule.MatchTarget, MatchTargetServerName, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!string.IsNullOrWhiteSpace(serverName) && MatchesPattern(rule.Pattern, serverName!))
+                        return rule;
+                }
             }
 
             return null;

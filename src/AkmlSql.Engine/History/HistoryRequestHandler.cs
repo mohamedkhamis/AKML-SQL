@@ -261,6 +261,26 @@ public class HistoryRequestHandler(HistoryDatabase database)
                     });
                 }
 
+                case HistoryActions.RemoveOlderThan:
+                {
+                    if (actionRequest.EntryIds.Length == 0)
+                    {
+                        return CreateActionResponse(request.RequestId, new HistoryActionResponse
+                        {
+                            Success = false,
+                            Error = "EntryIds required for RemoveOlderThan"
+                        });
+                    }
+
+                    var removed = await _database.DeleteEntriesOlderThanAsync(
+                        actionRequest.EntryIds[0], actionRequest.KeepFavorites ?? true);
+                    return CreateActionResponse(request.RequestId, new HistoryActionResponse
+                    {
+                        Success = true,
+                        DeletedCount = removed
+                    });
+                }
+
                 case HistoryActions.Export:
                 {
                     if (string.IsNullOrEmpty(actionRequest.ExportPath))

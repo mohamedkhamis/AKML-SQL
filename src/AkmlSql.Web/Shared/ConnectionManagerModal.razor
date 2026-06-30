@@ -1,0 +1,592 @@
+@*
+    Phase 4 (web connection manager) — the app-global "Connect to SQL Server" modal. Hosted once
+    in MainLayout; opened by IConnectionManagerController.Open() (command palette / Settings /
+    StatusBar). Two panes: saved-connections list (left) + connect form (right). Actions:
+    Test / Save / Delete / Connect.
+
+    Conventions mirror CommandPalette.razor: scrim @onclick=Close + data-testid; panel role=dialog
+    aria-modal=true aria-label + @onclick:stopPropagation; chrome from --akml-* tokens ONLY; classes
+    prefixed akml-connmgr-*; scrim reuses the existing @keyframes akml-cmd-fade in app.css. Esc and
+    focus management follow the gold-standard pattern, but because this is a multi-field form the Esc
+    handler is on the PANEL div (@onkeydown), and focus/Tab-trap use a dedicated JS module
+    (akml-connection-manager.js) rather than the palette module (which owns the global Ctrl+P).
+
+    SECURITY: Connect/Test route through ISqlConnectionService, whose ValidateTarget enforces the
+    loopback-only SSRF guard before any IPC. No password is ever persisted — SQL-auth rows store
+    only the login username; the password stays a transient field re-prompted at Connect/Test.
+*@
+@using System.Threading
+@using AkmlSql.Web.Services
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
+@inject IConnectionManagerController Controller
+@inject ISavedSqlConnectionStore Store
+@inject ISqlConnectionService SqlConn
+@inject IJSRuntime JS
+
+@if (_open)
+{
+    <div class="akml-connmgr-scrim" @onclick="Close" data-testid="connection-manager-scrim">
+        <div class="akml-connmgr-panel" role="dialog" aria-modal="true" aria-label="Connection manager"
+             tabindex="-1" @ref="_panelRef" @onkeydown="OnPanelKeyDown"
+             @onclick:stopPropagation="true" data-testid="connection-manager">
+
+            <div class="akml-connmgr-header">
+                <span class="akml-connmgr-title">Connect to SQL Server</span>
+                <button type="button" class="akml-connmgr-close" @onclick="Close"
+                        aria-label="Close" data-testid="conn-close-btn">✕</button>
+            </div>
+
+            <div class="akml-connmgr-body">
+                <!-- LEFT: saved-connections list -->
+                <div class="akml-connmgr-list-pane">
+                    <div class="akml-connmgr-list-head">
+                        <span>Saved connections</span>
+                        <button type="button" class="akml-connmgr-newbtn" @onclick="NewConnection"
+                                data-testid="conn-new-btn">＋ New</button>
+                    </div>
+                    @if (_saved.Count == 0)
+                    {
+                        <p class="akml-connmgr-empty" data-testid="conn-list-empty">
+                            No saved connections — fill the form and Save.
+                        </p>
+                    }
+                    else
+                    {
+                        <ul class="akml-connmgr-list" data-testid="conn-list">
+                            @foreach (var c in _saved)
+                            {
+                                <li class="akml-connmgr-row @(c.Id == _selectedId ? "selected" : "")"
+                                    @onclick="@(() => SelectSaved(c))" data-testid="conn-row" data-conn-id="@c.Id">
+                                    <span class="akml-connmgr-row-name">@c.Name</span>
+                                    <span class="akml-connmgr-row-sub">@c.Server / @c.Database</span>
+                                    <span class="akml-connmgr-row-badge">@(c.WindowsAuth ? "Win" : "SQL")</span>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </div>
+
+                <!-- RIGHT: connect form -->
+                <div class="akml-connmgr-form-pane">
+                    <div class="akml-connmgr-field">
+                        <label for="conn-name">Display name</label>
+                        <input id="conn-name" class="akml-connmgr-input" @bind="_name" @bind:event="oninput"
+                               placeholder="e.g. Local master" data-testid="conn-name-input" />
+                    </div>
+                    <div class="akml-connmgr-field">
+                        <label for="conn-server">Server</label>
+                        <input id="conn-server" class="akml-connmgr-input" @bind="_server" @bind:event="oninput"
+                               placeholder="localhost or server\instance" data-testid="conn-server-input" />
+                    </div>
+                    <div class="akml-connmgr-field">
+                        <label for="conn-database">Database</label>
+                        <input id="conn-database" class="akml-connmgr-input" @bind="_database" @bind:event="oninput"
+                               placeholder="master" data-testid="conn-database-input" />
+                    </div>
+                    <div class="akml-connmgr-field">
+                        <span class="akml-connmgr-field-label">Authentication</span>
+                        <label class="akml-connmgr-radio">
+                            <input type="radio" name="connauth" checked="@_windowsAuth"
+                                   @onchange="@(() => _windowsAuth = true)" data-testid="conn-auth-windows" />
+                            Windows authentication
+                        </label>
+                        <label class="akml-connmgr-radio">
+                            <input type="radio" name="connauth" checked="@(!_windowsAuth)"
+                                   @onchange="@(() => _windowsAuth = false)" data-testid="conn-auth-sql" />
+                            SQL Server authentication
+                        </label>
+                    </div>
+                    @if (!_windowsAuth)
+                    {
+                        <div class="akml-connmgr-field">
+                            <label for="conn-login">Login</label>
+                            <input id="conn-login" class="akml-connmgr-input" @bind="_login" @bind:event="oninput"
+                                   data-testid="conn-login-input" />
+                        </div>
+                        <div class="akml-connmgr-field">
+                            <label for="conn-password">Password</label>
+                            <input id="conn-password" class="akml-connmgr-input" type="password"
+                                   @bind="_password" @bind:event="oninput" data-testid="conn-password-input" />
+                            <span class="akml-connmgr-hint">Not saved — re-entered each time you connect.</span>
+                        </div>
+                    }
+
+                    <!-- Remote / Azure AD: DISABLED in this build (engine is loopback-scoped). -->
+                    <div class="akml-connmgr-field akml-connmgr-future" data-testid="conn-remote-future"
+                         title="Disabled in this build — the engine connects under its own Windows identity and is loopback-scoped.">
+                        <label class="akml-connmgr-radio akml-connmgr-disabled">
+                            <input type="radio" name="connauth-future" disabled />
+                            Remote server / Azure AD
+                            <span class="akml-connmgr-badge-future">Future</span>
+                        </label>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(_message))
+                    {
+                        <p class="akml-connmgr-msg @(_messageIsError ? "error" : "ok")" data-testid="conn-message">@_message</p>
+                    }
+                </div>
+            </div>
+
+            <div class="akml-connmgr-footer">
+                <button type="button" class="akml-connmgr-btn" @onclick="TestAsync"
+                        disabled="@_busy" data-testid="conn-test-btn">Test</button>
+                <button type="button" class="akml-connmgr-btn" @onclick="SaveAsync"
+                        disabled="@_busy" data-testid="conn-save-btn">Save</button>
+                <button type="button" class="akml-connmgr-btn" @onclick="DeleteAsync"
+                        disabled="@(_busy || string.IsNullOrEmpty(_selectedId))" data-testid="conn-delete-btn">Delete</button>
+                <span class="akml-connmgr-footer-spacer"></span>
+                <button type="button" class="akml-connmgr-btn akml-connmgr-btn-primary" @onclick="ConnectAsync"
+                        disabled="@_busy" data-testid="conn-connect-btn">Connect</button>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    /* Phase 4 connection manager — chrome from --akml-* tokens only; akml-connmgr-* prefixed
+       classes (no CSS isolation in this project). The scrim reuses the akml-cmd-fade keyframe
+       defined in wwwroot/css/app.css (a Razor style block can't host @@keyframes — nested-brace
+       mis-parse), so we never redefine it here. */
+    .akml-connmgr-scrim {
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
+        background-color: rgba(0, 0, 0, 0.45);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: var(--akml-scalar-spacing-l);
+        animation: akml-cmd-fade 120ms ease-out;
+    }
+
+    .akml-connmgr-panel {
+        width: 720px;
+        max-width: calc(100vw - 32px);
+        height: 500px;
+        max-height: calc(100vh - 64px);
+        display: flex;
+        flex-direction: column;
+        background-color: var(--akml-surface-panel);
+        border: 1px solid var(--akml-border-strong);
+        border-radius: var(--akml-scalar-radius-m);
+        box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+        color: var(--akml-text-primary);
+        font-family: var(--akml-type-chrome-family);
+        font-size: var(--akml-type-chrome-size);
+        overflow: hidden;
+        outline: none;
+    }
+
+    .akml-connmgr-header {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: var(--akml-scalar-spacing-s) var(--akml-scalar-spacing-l);
+        border-bottom: 1px solid var(--akml-border-default);
+        background-color: var(--akml-surface-sidebar);
+    }
+    .akml-connmgr-title { font-weight: 600; }
+    .akml-connmgr-close {
+        background: none; border: none; color: var(--akml-text-secondary);
+        font-size: 14px; cursor: pointer; padding: 2px 6px; border-radius: var(--akml-scalar-radius-xs);
+    }
+    .akml-connmgr-close:hover { background-color: var(--akml-surface-hover); color: var(--akml-text-primary); }
+
+    .akml-connmgr-body {
+        display: grid;
+        grid-template-columns: 240px 1fr;
+        gap: 1px;
+        flex: 1 1 auto;
+        min-height: 0;
+        background-color: var(--akml-border-default); /* shows through the 1px gap as a divider */
+    }
+
+    .akml-connmgr-list-pane {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        background-color: var(--akml-surface-sidebar);
+    }
+    .akml-connmgr-list-head {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: var(--akml-scalar-spacing-s) var(--akml-scalar-spacing-m);
+        color: var(--akml-text-secondary);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        font-weight: 600;
+    }
+    .akml-connmgr-newbtn {
+        background: none; border: none; color: var(--akml-text-link);
+        cursor: pointer; font-size: 12px; padding: 0;
+    }
+    .akml-connmgr-newbtn:hover { text-decoration: underline; }
+    .akml-connmgr-empty {
+        padding: var(--akml-scalar-spacing-m);
+        color: var(--akml-text-secondary);
+        font-style: italic;
+        font-size: 12px;
+    }
+    .akml-connmgr-list {
+        list-style: none; padding: 0; margin: 0;
+        overflow-y: auto; min-height: 0; flex: 1 1 auto;
+    }
+    .akml-connmgr-row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        grid-template-areas: "name badge" "sub badge";
+        column-gap: var(--akml-scalar-spacing-xs);
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-m);
+        cursor: pointer;
+        border-bottom: 1px solid var(--akml-border-subtle);
+    }
+    .akml-connmgr-row:hover { background-color: var(--akml-surface-hover); }
+    .akml-connmgr-row.selected {
+        background-color: var(--akml-surface-selection);
+        box-shadow: inset 2px 0 0 0 var(--akml-accent-primary);
+    }
+    .akml-connmgr-row-name { grid-area: name; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .akml-connmgr-row-sub {
+        grid-area: sub; color: var(--akml-text-secondary); font-size: 11px;
+        font-family: var(--akml-type-editor-family);
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .akml-connmgr-row-badge {
+        grid-area: badge; align-self: center;
+        font-size: 10px; padding: 0 4px; border-radius: var(--akml-scalar-radius-xs);
+        background-color: var(--akml-surface-hover); color: var(--akml-text-secondary);
+    }
+
+    .akml-connmgr-form-pane {
+        display: flex;
+        flex-direction: column;
+        gap: var(--akml-scalar-spacing-s);
+        padding: var(--akml-scalar-spacing-l);
+        overflow-y: auto;
+        min-height: 0;
+        background-color: var(--akml-surface-panel);
+    }
+    .akml-connmgr-field { display: flex; flex-direction: column; gap: 2px; }
+    .akml-connmgr-field > label,
+    .akml-connmgr-field-label { color: var(--akml-text-secondary); font-size: 12px; }
+    .akml-connmgr-input {
+        box-sizing: border-box;
+        background-color: var(--akml-surface-input, var(--akml-surface-canvas));
+        color: var(--akml-text-primary);
+        border: 1px solid var(--akml-border-default);
+        border-radius: var(--akml-scalar-radius-xs);
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s);
+        font-family: inherit; font-size: 13px;
+        outline: none;
+    }
+    .akml-connmgr-input:focus { border-color: var(--akml-border-focus, var(--akml-accent-primary)); }
+    .akml-connmgr-radio { display: block; color: var(--akml-text-primary); font-size: 13px; margin-top: 2px; }
+    .akml-connmgr-hint { color: var(--akml-text-secondary); font-size: 11px; font-style: italic; }
+
+    .akml-connmgr-future { margin-top: var(--akml-scalar-spacing-xs); }
+    .akml-connmgr-disabled { color: var(--akml-text-placeholder); cursor: not-allowed; }
+    .akml-connmgr-badge-future {
+        margin-left: var(--akml-scalar-spacing-xs);
+        font-size: 10px; padding: 0 4px; border-radius: var(--akml-scalar-radius-xs);
+        background-color: var(--akml-surface-hover); color: var(--akml-text-secondary);
+        text-transform: uppercase; letter-spacing: 0.04em;
+    }
+
+    .akml-connmgr-msg { font-size: 12px; margin: var(--akml-scalar-spacing-xs) 0 0; }
+    .akml-connmgr-msg.error { color: var(--akml-status-danger); }
+    .akml-connmgr-msg.ok { color: var(--akml-status-success); }
+
+    .akml-connmgr-footer {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        gap: var(--akml-scalar-spacing-s);
+        padding: var(--akml-scalar-spacing-s) var(--akml-scalar-spacing-l);
+        border-top: 1px solid var(--akml-border-default);
+        background-color: var(--akml-surface-sidebar);
+    }
+    .akml-connmgr-footer-spacer { flex: 1 1 auto; }
+    .akml-connmgr-btn {
+        font-family: var(--akml-type-chrome-family); font-size: var(--akml-type-chrome-size);
+        background-color: var(--akml-surface-panel); color: var(--akml-text-primary);
+        border: 1px solid var(--akml-border-default); border-radius: var(--akml-scalar-radius-xs);
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-m); cursor: pointer;
+    }
+    .akml-connmgr-btn:hover:not(:disabled) { background-color: var(--akml-surface-hover); }
+    .akml-connmgr-btn:disabled { opacity: 0.5; cursor: default; }
+    .akml-connmgr-btn-primary { border-color: var(--akml-accent-primary); }
+</style>
+
+@code {
+    private bool _open;
+    private bool _busy;
+    private bool _focusOnNextRender;
+
+    private ElementReference _panelRef;
+    private IJSObjectReference? _module;
+
+    // Saved-connection list + the currently-selected saved row (null = unsaved "new" form).
+    private List<SavedSqlConnection> _saved = new();
+    private string? _selectedId;
+
+    // Form state. Password is transient — never persisted.
+    private string _name = string.Empty;
+    private string _server = "localhost";
+    private string _database = "master";
+    private bool _windowsAuth = true;
+    private string _login = string.Empty;
+    private string _password = string.Empty;
+
+    private string? _message;
+    private bool _messageIsError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Controller.OpenRequested += OnOpenRequested;
+        SqlConn.StateChanged += OnSqlStateChanged;
+        _module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/akml-connection-manager.js");
+    }
+
+    private void OnOpenRequested() => InvokeAsync(async () =>
+    {
+        // Re-entrant guard: opening while already open must not reset the form.
+        if (_open) return;
+        _message = null;
+        await ReloadAsync();
+        // Pre-fill from the active (most-recently-used) saved row, if any.
+        var activeId = await Store.GetActiveIdAsync();
+        var active = string.IsNullOrEmpty(activeId) ? null : _saved.FirstOrDefault(c => c.Id == activeId);
+        if (active != null) SelectSaved(active);
+        else NewConnection();
+        _open = true;
+        _focusOnNextRender = true;
+        StateHasChanged();
+    });
+
+    private void OnSqlStateChanged() => InvokeAsync(StateHasChanged);
+
+    private async Task ReloadAsync()
+    {
+        _saved = (await Store.ListAsync()).ToList();
+    }
+
+    private void NewConnection()
+    {
+        _selectedId = null;
+        _name = string.Empty;
+        _server = "localhost";
+        _database = "master";
+        _windowsAuth = true;
+        _login = string.Empty;
+        _password = string.Empty;
+        _message = null;
+    }
+
+    private void SelectSaved(SavedSqlConnection c)
+    {
+        _selectedId = c.Id;
+        _name = c.Name;
+        _server = c.Server;
+        _database = c.Database;
+        _windowsAuth = c.WindowsAuth;
+        _login = c.Login ?? string.Empty;
+        _password = string.Empty;   // never stored — re-prompt for SQL auth
+        _message = null;
+    }
+
+    private async Task TestAsync()
+    {
+        // Passwords are never stored, so a saved SQL-auth connection loads with an empty password.
+        // Require one rather than silently testing with "" (which always fails confusingly).
+        if (!_windowsAuth && string.IsNullOrEmpty(_password))
+        {
+            SetMessage("Enter the SQL password to test this connection (passwords are never stored).", isError: true);
+            return;
+        }
+        _busy = true;
+        _message = null;
+        StateHasChanged();
+        try
+        {
+            var (ok, error) = await SqlConn.TestAsync(_server, _database, _windowsAuth,
+                _windowsAuth ? null : _login, _windowsAuth ? null : _password, CancellationToken.None);
+            SetMessage(ok ? "Connection test succeeded." : (error ?? "Connection test failed."), isError: !ok);
+        }
+        finally
+        {
+            _busy = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        _message = null;
+        try
+        {
+            // Default the display name to the server/db if the user left it blank.
+            var name = string.IsNullOrWhiteSpace(_name) ? $"{_server} / {_database}" : _name.Trim();
+            if (_selectedId == null)
+            {
+                var record = new SavedSqlConnection
+                {
+                    Name = name,
+                    Server = _server.Trim(),
+                    Database = _database.Trim(),
+                    WindowsAuth = _windowsAuth,
+                    Login = _windowsAuth ? null : (string.IsNullOrWhiteSpace(_login) ? null : _login.Trim()),
+                };
+                await Store.AddAsync(record);
+                _selectedId = record.Id;
+            }
+            else
+            {
+                var record = new SavedSqlConnection
+                {
+                    Id = _selectedId,
+                    Name = name,
+                    Server = _server.Trim(),
+                    Database = _database.Trim(),
+                    WindowsAuth = _windowsAuth,
+                    Login = _windowsAuth ? null : (string.IsNullOrWhiteSpace(_login) ? null : _login.Trim()),
+                };
+                await Store.UpdateAsync(record);
+            }
+            await Store.SetActiveIdAsync(_selectedId);
+            await ReloadAsync();
+            _name = name;
+            SetMessage("Saved.", isError: false);
+        }
+        catch (Exception ex)
+        {
+            SetMessage(ex.Message, isError: true);
+        }
+        _busy = false;
+        StateHasChanged();
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (string.IsNullOrEmpty(_selectedId)) return;
+        _busy = true;
+        _message = null;
+        try
+        {
+            await Store.RemoveAsync(_selectedId!);
+            await ReloadAsync();
+            NewConnection();
+            SetMessage("Deleted.", isError: false);
+        }
+        catch (Exception ex)
+        {
+            SetMessage(ex.Message, isError: true);
+        }
+        _busy = false;
+        StateHasChanged();
+    }
+
+    private async Task ConnectAsync()
+    {
+        if (!_windowsAuth && string.IsNullOrEmpty(_password))
+        {
+            SetMessage("Enter the SQL password to connect (passwords are never stored).", isError: true);
+            return;
+        }
+        _busy = true;
+        _message = null;
+        StateHasChanged();
+        try
+        {
+            var (ok, error) = await SqlConn.ConnectAsync(_server, _database, _windowsAuth,
+                _windowsAuth ? null : _login, _windowsAuth ? null : _password, CancellationToken.None);
+            if (ok)
+            {
+                // Persist LastConnectedAt + remember this as the active saved row when it maps to one.
+                if (!string.IsNullOrEmpty(_selectedId))
+                {
+                    try
+                    {
+                        var existing = await Store.GetAsync(_selectedId!);
+                        if (existing != null)
+                        {
+                            existing.LastConnectedAt = DateTimeOffset.UtcNow;
+                            await Store.UpdateAsync(existing);
+                            await Store.SetActiveIdAsync(existing.Id);
+                        }
+                    }
+                    catch { /* best-effort metadata update — connect already succeeded */ }
+                }
+                Close();   // MainLayout's StateChanged owner starts SchemaSync on SqlConn.SessionId.
+                return;
+            }
+            SetMessage(error ?? "Connect failed.", isError: true);
+        }
+        finally
+        {
+            _busy = false;
+            StateHasChanged();
+        }
+    }
+
+    private void SetMessage(string message, bool isError)
+    {
+        _message = message;
+        _messageIsError = isError;
+    }
+
+    private void OnPanelKeyDown(KeyboardEventArgs e)
+    {
+        // Esc cancels (deliberate-click Connect; Esc/scrim-click are the only dismiss paths).
+        if (e.Key == "Escape") Close();
+    }
+
+    private void Close()
+    {
+        if (!_open) return;
+        _open = false;
+        StateHasChanged();
+        if (_module != null)
+        {
+            _ = _module.InvokeVoidAsync("restoreFocus");
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focusOnNextRender && _open)
+        {
+            _focusOnNextRender = false;
+            if (_module != null)
+            {
+                try
+                {
+                    await _module.InvokeVoidAsync("stashFocus");
+                    // Prefer the first form field (#conn-name) over the header Close button so SR
+                    // users don't enter the connect dialog on "Close".
+                    await _module.InvokeVoidAsync("focusFirst", _panelRef, "#conn-name");
+                    await _module.InvokeVoidAsync("trapTab", _panelRef);
+                }
+                catch (JSDisconnectedException) { /* tab closing — ignore */ }
+                catch (Microsoft.JSInterop.JSException) { /* element not in DOM yet — harmless */ }
+            }
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Controller.OpenRequested -= OnOpenRequested;
+        SqlConn.StateChanged -= OnSqlStateChanged;
+        try
+        {
+            if (_module != null) await _module.DisposeAsync();
+        }
+        catch (JSDisconnectedException) { /* tab closing */ }
+    }
+}

@@ -19,6 +19,22 @@ public abstract class HeavyweightOperationBase
 
     // ── Shared text utilities ────────────────────────────────────────────────
 
+    /// <summary>
+    /// Spec 030 (review): returns an end offset that excludes a trailing statement terminator. If the
+    /// span <c>[start, end)</c> ends with optional whitespace then a <c>;</c>, the returned end points
+    /// just before the <c>;</c> so replacing <c>[start, newEnd)</c> leaves the <c>;</c> in the document
+    /// (a statement-replacing refactor must not swallow the terminator).
+    /// </summary>
+    protected internal static int TrimTrailingTerminator(string docText, int start, int end)
+    {
+        int limit = Math.Min(end, docText.Length);
+        int probe = limit;
+        while (probe > start && char.IsWhiteSpace(docText[probe - 1])) probe--;
+        if (probe > start && docText[probe - 1] == ';')
+            return probe - 1; // exclude the ';'
+        return limit;
+    }
+
     protected internal static (int line, int col) OffsetToLineCol(string text, int offset)
     {
         int line = 1, col = 1;
@@ -79,6 +95,25 @@ public abstract class HeavyweightOperationBase
         }
         return sb.ToString();
     }
+
+    /// <summary>
+    /// Appends a substituted parameter value to <paramref name="sb"/> during token-aware inlining,
+    /// inserting a single separating space when the value's leading operator character would FUSE
+    /// with a trailing operator character already in the buffer. Without this, a binding adjacent to
+    /// an operator with no whitespace (e.g. <c>5-@x</c> with <c>@x = -1</c>) emits <c>5--1</c> — a
+    /// <c>--</c> line comment that silently truncates the statement (also guards <c>/*</c>, <c>+-</c>).
+    /// A space is semantically inert in every scalar position, unlike wrapping parens which is invalid
+    /// in some spots (e.g. EXEC arguments). Positive literals never trip this, so goldens are unchanged.
+    /// </summary>
+    protected internal static void AppendSubstitutedValue(StringBuilder sb, string value)
+    {
+        if (string.IsNullOrEmpty(value)) return;
+        if (sb.Length > 0 && IsOperatorChar(sb[sb.Length - 1]) && IsOperatorChar(value[0]))
+            sb.Append(' ');
+        sb.Append(value);
+    }
+
+    private static bool IsOperatorChar(char c) => "+-*/%=<>!~&|^".IndexOf(c) >= 0;
 
     /// <summary>
     /// Applies a pre-filtered list of changes directly to a text string (no FilePath filtering).

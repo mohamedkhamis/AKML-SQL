@@ -265,6 +265,19 @@ namespace AkmlSql.Core.Config
         [JsonPropertyName("joinOptions")]
         public JoinOptionsSettings JoinOptions { get; set; } = new();
 
+        [JsonPropertyName("aliasOptions")]
+        public AliasOptionsSettings AliasOptions { get; set; } = new();
+
+        [JsonPropertyName("connectionScope")]
+        public ConnectionScopeSettings ConnectionScope { get; set; } = new();
+
+        /// <summary>
+        /// Spec 030 T077 / FR-043 — special-character handling for the editor (auto-close
+        /// matching characters, auto-add parentheses after functions). Surfaced in Options by T080.
+        /// </summary>
+        [JsonPropertyName("specialCharOptions")]
+        public SpecialCharacterSettings SpecialCharOptions { get; set; } = new();
+
         /// <summary>Master switch — disabling this suppresses all IntelliSense features.</summary>
         public bool Enabled { get; set; } = true;
         /// <summary>Show completion list automatically while typing (no Ctrl+Space required).</summary>
@@ -309,12 +322,20 @@ namespace AkmlSql.Core.Config
         public KeywordCaseOption KeywordCase { get; set; } = KeywordCaseOption.Upper;
         /// <summary>Whether to disable native SSMS IntelliSense to avoid conflicts.</summary>
         public bool DisableNativeIntelliSense { get; set; } = true;
-        /// <summary>Use Space key to commit the selected completion item (SQL Prompt style).</summary>
-        public bool SpaceCommits { get; set; } = true;
+        /// <summary>Use Space key to commit the selected completion item (SQL Prompt style).
+        /// Default OFF: with it on, typing a prefix then pressing space replaced the typed text with
+        /// the highlighted item — surprising, since SSMS users expect space to insert a literal space.
+        /// Opt in for SQL-Prompt-style space-commit. (Dot-commit + Tab/Enter-commit are unaffected.)</summary>
+        public bool SpaceCommits { get; set; } = false;
         /// <summary>Use Dot key to commit the selected completion item.</summary>
         public bool DotCommits { get; set; } = true;
         /// <summary>Show snippet shortcuts (sel, ssf, ins, etc.) in the completion popup. Default disabled.</summary>
         public bool SnippetsInCompletion { get; set; } = false;
+
+        /// <summary>Spec 029. When true (default), AKML offers to store a SQL Server-auth password
+        /// (DPAPI-encrypted, per server+login) so the out-of-process engine can load schema/IntelliSense
+        /// for SQL-auth connections. Set false to disable the prompt and storage entirely.</summary>
+        public bool EnableSqlAuthCredentials { get; set; } = true;
     }
 
     public enum ColumnSuggestionScope { All, ReferencedOnly }
@@ -340,8 +361,10 @@ namespace AkmlSql.Core.Config
     /// <summary>How object names are formatted when inserted from the suggestion list.</summary>
     public class QualificationSettings
     {
+        // Always = SQL Prompt's default: committing a table from the suggestion list inserts
+        // the owner-qualified name ("dbo.Customers") so the user never types the schema.
         [JsonPropertyName("schemaMode")]
-        public SchemaQualifyMode SchemaMode { get; set; } = SchemaQualifyMode.NonDefaultOnly;
+        public SchemaQualifyMode SchemaMode { get; set; } = SchemaQualifyMode.Always;
 
         [JsonPropertyName("bracketMode")]
         public BracketMode BracketMode { get; set; } = BracketMode.WhenRequired;
@@ -368,6 +391,106 @@ namespace AkmlSql.Core.Config
     {
         [JsonPropertyName("matchByColumnName")]
         public bool MatchByColumnName { get; set; } = true;
+    }
+
+    /// <summary>
+    /// Spec 030 T077 / FR-043 — special-character handling in the editor. Exposed via
+    /// <see cref="IntelliSenseSettings.SpecialCharOptions"/> and surfaced in Options by T080.
+    /// </summary>
+    public class SpecialCharacterSettings
+    {
+        /// <summary>
+        /// Auto-close matching characters: typing an opening <c>(</c>, <c>[</c>, <c>'</c>, etc.
+        /// inserts the matching close character. SQL Prompt default: on.
+        /// </summary>
+        [JsonPropertyName("autoCloseCharacters")]
+        public bool AutoCloseCharacters { get; set; } = true;
+
+        /// <summary>
+        /// Add parentheses automatically after inserting a function from the completion list.
+        /// SQL Prompt default: on.
+        /// </summary>
+        [JsonPropertyName("addParentheses")]
+        public bool AddParentheses { get; set; } = true;
+    }
+
+    /// <summary>
+    /// Spec 030 T035 / FR-015 — automatic alias generation policy. Controls how aliases suggested
+    /// after a table name in FROM/JOIN (and FK-assisted JOIN inserts) are formed and rendered.
+    /// </summary>
+    public class AliasOptionsSettings
+    {
+        /// <summary>Insert the <c>AS</c> keyword (<c>Orders AS o</c> vs <c>Orders o</c>). SQL Prompt default: on.</summary>
+        [JsonPropertyName("includeAs")]
+        public bool IncludeAs { get; set; } = true;
+
+        /// <summary>
+        /// User-defined object→alias overrides, keyed by (bare) object name, case-insensitive —
+        /// e.g. <c>{"Orders":"ord"}</c>. When the table matches, its alias is offered first.
+        /// </summary>
+        [JsonPropertyName("objectAliasMap")]
+        public Dictionary<string, string> ObjectAliasMap { get; set; } = new();
+
+        /// <summary>
+        /// Prefixes stripped from a table name before generating an alias — e.g. <c>["tbl_","tb_"]</c>
+        /// so <c>tbl_Orders</c> generates <c>o</c>/<c>od</c> rather than <c>t</c>/<c>to</c>.
+        /// </summary>
+        [JsonPropertyName("prefixesToIgnore")]
+        public string[] PrefixesToIgnore { get; set; } = [];
+    }
+
+    /// <summary>
+    /// Spec 030 T036 / FR-016 — suggestion connection scope. Limits the object suggestion list to
+    /// chosen databases/schemas and (forward-looking) toggles linked-server objects. Empty lists mean
+    /// "no restriction" so the default has zero behavioural impact (matches the AliasOptions pattern).
+    /// Pushed onto the engine per request via <c>CompletionHandler</c>; the Options UI pairs with T082.
+    /// </summary>
+    public class ConnectionScopeSettings
+    {
+        /// <summary>
+        /// Databases the suggestion list is limited to (bare names, case-insensitive). Empty = all.
+        /// The schema cache is single-database, so the only honest effect is: when the connected
+        /// database is NOT in a non-empty list, its object/schema suggestions are suppressed.
+        /// </summary>
+        [JsonPropertyName("databases")]
+        public string[] Databases { get; set; } = [];
+
+        /// <summary>Schemas the object suggestion list is limited to (case-insensitive). Empty = all.</summary>
+        [JsonPropertyName("schemas")]
+        public string[] Schemas { get; set; } = [];
+
+        /// <summary>
+        /// Include linked-server objects in suggestions. Forward-looking: the schema cache does not
+        /// load linked-server objects today, so this is honored only where such loading exists (none
+        /// yet) — it is threaded through the completion path but currently has no observable effect.
+        /// Default off.
+        /// </summary>
+        [JsonPropertyName("includeLinkedServers")]
+        public bool IncludeLinkedServers { get; set; }
+
+        /// <summary>
+        /// True when the supplied connected-database name is in scope: the allow-list is empty
+        /// (no restriction), the name is unknown (don't suppress), or the list contains it
+        /// (case-insensitive). Used by <c>CompletionHandler</c> to decide whether to suppress
+        /// the connected database's object suggestions.
+        /// </summary>
+        public bool IncludesDatabase(string? databaseName)
+        {
+            if (Databases is null || Databases.Length == 0) return true;
+            if (string.IsNullOrEmpty(databaseName)) return true;
+            foreach (var d in Databases)
+                if (string.Equals(d, databaseName, StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
+        }
+
+        /// <summary>True when the schema is in scope: an empty allow-list (all) or a case-insensitive match.</summary>
+        public bool IncludesSchema(string schemaName)
+        {
+            if (Schemas is null || Schemas.Length == 0) return true;
+            foreach (var s in Schemas)
+                if (string.Equals(s, schemaName, StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
+        }
     }
 
     /// <summary>Settings for the in-memory schema cache.</summary>
@@ -521,6 +644,42 @@ namespace AkmlSql.Core.Config
         /// </summary>
         [JsonPropertyName("applyFixOnAllOccurrencesShortcut")]
         public string ApplyFixOnAllOccurrencesShortcut { get; set; } = "Shift+Click";
+
+        /// <summary>
+        /// Spec 030 T053 — user-level per-rule overrides set from the Manage Rules dialog.
+        /// Keyed by rule id (e.g. "PE001"). Applied by <c>CaSettingsLoader</c> over the built-in
+        /// rule defaults and BELOW any project <c>.casettings</c> (project-local wins). Empty by
+        /// default, so the global baseline is the rules' own defaults.
+        /// The setter normalises the comparer to <see cref="StringComparer.OrdinalIgnoreCase"/> so that
+        /// hand-edited config.json entries with lowercase rule ids (e.g. "pe001") are treated identically
+        /// to the engine's canonical uppercase ids ("PE001"). System.Text.Json always calls the setter
+        /// with a freshly-constructed ordinal dictionary, so the normalisation happens on every deserialise.
+        /// </summary>
+        [JsonPropertyName("ruleOverrides")]
+        public Dictionary<string, RuleOverride> RuleOverrides
+        {
+            get => _ruleOverrides;
+            set => _ruleOverrides = value == null
+                ? new Dictionary<string, RuleOverride>(StringComparer.OrdinalIgnoreCase)
+                : new Dictionary<string, RuleOverride>(value, StringComparer.OrdinalIgnoreCase);
+        }
+
+        private Dictionary<string, RuleOverride> _ruleOverrides = new(StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Spec 030 T053 — a single global per-rule override (enable/severity), persisted in
+    /// <c>config.json</c> under <c>codeAnalysis.ruleOverrides</c>. Severity is a string matching the
+    /// <c>.casettings</c> convention: "error", "warning", "information", "hint", or "ignore"
+    /// (empty = leave the rule's default severity, only the enable flag applies).
+    /// </summary>
+    public class RuleOverride
+    {
+        [JsonPropertyName("enabled")]
+        public bool Enabled { get; set; } = true;
+
+        [JsonPropertyName("severity")]
+        public string Severity { get; set; } = string.Empty;
     }
 
     /// <summary>Settings for the refactoring engine.</summary>
@@ -568,6 +727,15 @@ namespace AkmlSql.Core.Config
 
         [JsonPropertyName("deduplication")]
         public bool Deduplication { get; set; } = true;
+
+        /// <summary>
+        /// Spec 030 T075 / FR-040 — when <c>true</c>, history retention purging is disabled: all
+        /// entries and version snapshots are kept regardless of <see cref="RetentionDays"/> /
+        /// <see cref="MaxEntries"/>, and the engine's <c>HistoryRetentionService</c> skips every purge
+        /// and does not schedule its timer. Default <c>false</c> (auto-trim on, the prior behaviour).
+        /// </summary>
+        [JsonPropertyName("disableAutoTrim")]
+        public bool DisableAutoTrim { get; set; }
 
         [JsonPropertyName("shortcut")]
         public string Shortcut { get; set; } = "Ctrl+Alt+H";
@@ -627,6 +795,15 @@ namespace AkmlSql.Core.Config
 
         [JsonPropertyName("matchTarget")]
         public string MatchTarget { get; set; } = Models.Tabs.EnvironmentMatcher.MatchTargetServerName;
+
+        /// <summary>
+        /// Spec 030 T077 / FR-043 — database name this rule matches against when
+        /// <see cref="MatchTarget"/> targets the database. Empty string = no database
+        /// restriction (server-name matching only, the prior behaviour). Additive and
+        /// backward-compatible: absent in existing configs and ignored by the server-name matcher.
+        /// </summary>
+        [JsonPropertyName("databaseName")]
+        public string DatabaseName { get; set; } = string.Empty;
 
         [JsonPropertyName("color")]
         public string Color { get; set; } = string.Empty;

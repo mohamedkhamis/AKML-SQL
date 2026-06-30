@@ -14,6 +14,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         public string Key     => "Labs";
         public string Display => "Miscellaneous › Labs";
         public string Title   => "Labs";
+        public string Help    => "Enable or disable experimental features such as ghost-text AI completion, parallel schema-cache loading, and shared snippet sync. These features are unstable and may change or be removed without notice.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {

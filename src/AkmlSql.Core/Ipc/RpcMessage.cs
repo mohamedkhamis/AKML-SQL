@@ -101,6 +101,10 @@ namespace AkmlSql.Core.Ipc
         public const int RequestAnalyze = 25;
         public const int AnalysisSettingsChanged = 26;
 
+        // Shell → Engine (Spec 030 T052: Manage Rules dialog — request the full rule catalog.
+        //   Pairs with response 133.)
+        public const int ListAnalysisRules = 33;
+
         // Shell → Engine (Wildcard Expansion)
         public const int WildcardExpansion = 27;
 
@@ -118,6 +122,9 @@ namespace AkmlSql.Core.Ipc
         // Engine → Shell (Code Analysis)
         public const int AnalysisResult = 125;
 
+        // Engine → Shell (Spec 030 T052: ListAnalysisRules result — pairs with request 33)
+        public const int ListAnalysisRulesResult = 133;
+
         // Engine → Shell (Wildcard Expansion)
         public const int WildcardExpansionResult = 127;
 
@@ -126,6 +133,13 @@ namespace AkmlSql.Core.Ipc
 
         // Engine → Shell (Spec 020 T031: ProfileExportSqlPrompt result — pairs with request 29)
         public const int ProfileExportSqlPromptResult = 129;
+
+        // Engine → Shell (Spec 030 T020: DuplicateProfile result — pairs with request 32)
+        public const int DuplicateProfileResult = 132;
+
+        // Shell → Engine (Spec 030 T020: Format Styles editor New/Copy — server-side duplicate of
+        //   a stored profile by name via ProfileManager.Duplicate. Pairs with response 132.)
+        public const int DuplicateProfile = 32;
 
         // Shell → Engine (Refactoring — heavyweight preview/apply)
         public const int RequestRefactorPreview = 30;
@@ -164,6 +178,9 @@ namespace AkmlSql.Core.Ipc
         public const int FindInvalidObjects = 90;
         public const int FindUnusedVariables = 91;
         public const int EncryptedObjectDecryption = 92;
+
+        // Shell → Engine (Spec 029: SQL-auth credential validation)
+        public const int TestSqlConnection = 93;
 
         // Shell → Engine (AI Assistance — Phase 9)
         public const int AiTextToSql = 70;
@@ -224,6 +241,9 @@ namespace AkmlSql.Core.Ipc
         public const int FindUnusedVariablesResult = 191;
         public const int EncryptedObjectDecryptionResult = 192;
 
+        // Engine → Shell (Spec 029)
+        public const int TestSqlConnectionResult = 193;
+
         // Spec 021 (web edition) M3 — WebSocket bridge handshake.
         // See specs/021-web-edition/contracts/rpc-handshake.md.
         public const int HandshakeRequest = 200;
@@ -265,5 +285,20 @@ namespace AkmlSql.Core.Ipc
         public const int SchemaPhaseAResponse = 209;
         public const int SchemaPhaseBRequest = 210;
         public const int SchemaPhaseBResponse = 211;
+
+        // Spec 030 — Phase 5 (web edition) query execution + virtualized results grid + inline CRUD.
+        // Kept in the 200+ web-bridge band (212+ was free; the named-pipe shell does not use these).
+        //   • ExecuteQuery (212) → ExecuteQueryResult (213): run a SELECT/batch on the persistent
+        //     per-session SqlConnection and stream back row data (SAFE string?[][] encoding) + per-column
+        //     provenance for CRUD eligibility.
+        //   • ExecuteCancel (214): NOTIFICATION (RequestId=0, no paired result) — signal the per-session
+        //     CancellationTokenSource for a QueryId (cancels a queued execute; mirrors AiStreamCancel=78).
+        //   • ApplyChanges (215) → ApplyChangesResult (216): commit grid edits (parameterized
+        //     UPDATE/INSERT/DELETE) inside one transaction on the SAME persistent connection.
+        public const int ExecuteQuery = 212;
+        public const int ExecuteQueryResult = 213;
+        public const int ExecuteCancel = 214;
+        public const int ApplyChanges = 215;
+        public const int ApplyChangesResult = 216;
     }
 }

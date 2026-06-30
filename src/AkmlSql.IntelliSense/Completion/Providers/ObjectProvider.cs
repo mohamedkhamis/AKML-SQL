@@ -26,8 +26,36 @@ public class ObjectProvider : ICompletionProvider
     /// <summary>
     /// Controls how object names are qualified in <see cref="InsertText"/>.
     /// Set by <see cref="CompletionEngine"/> before each request.
+    /// Default <see cref="SchemaQualifyMode.Always"/> (SQL Prompt parity).
     /// </summary>
-    public SchemaQualifyMode SchemaQualifyMode { get; set; } = SchemaQualifyMode.NonDefaultOnly;
+    public SchemaQualifyMode SchemaQualifyMode { get; set; } = SchemaQualifyMode.Always;
+
+    /// <summary>
+    /// Controls whether inserted identifier names are wrapped in square brackets.
+    /// Set by <see cref="CompletionEngine"/> before each request.
+    /// Default <see cref="BracketMode.WhenRequired"/>.
+    /// </summary>
+    public BracketMode BracketMode { get; set; } = BracketMode.WhenRequired;
+
+    /// <summary>
+    /// Spec 030 T036 / FR-016 — suggestion connection scope. <see cref="ScopeSchemas"/> limits the
+    /// unqualified object + schema-name list to the named schemas (case-insensitive; empty = all).
+    /// <see cref="ObjectsInScope"/> is false when the connected database is excluded from a non-empty
+    /// database allow-list — its cache-derived object suggestions are then suppressed entirely.
+    /// <see cref="IncludeLinkedServers"/> is threaded for forward compatibility but currently inert
+    /// (the schema cache loads no linked-server objects). Set by <see cref="CompletionEngine"/> per request.
+    /// </summary>
+    public ISet<string> ScopeSchemas { get; set; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>False ⇒ suppress this database's cache-derived object/schema suggestions (FR-016).</summary>
+    public bool ObjectsInScope { get; set; } = true;
+
+    /// <summary>Forward-looking linked-server inclusion (no cache data today); stored, currently inert.</summary>
+    public bool IncludeLinkedServers { get; set; }
+
+    /// <summary>True when the schema is in scope: an empty allow-list (all) or a case-insensitive match.</summary>
+    private bool SchemaInScope(string schemaName) =>
+        ScopeSchemas.Count == 0 || ScopeSchemas.Contains(schemaName);
 
     private static readonly HashSet<ClauseType> ObjectClauseTypes =
     [
@@ -166,6 +194,12 @@ public class ObjectProvider : ICompletionProvider
 
         if (context.PrecedingDot && !string.IsNullOrEmpty(context.DotPrefix))
         {
+            // FR-016 (T036): when the connected database is out of scope, suppress its objects even
+            // for an explicit schema/database prefix. (Schema-scope is NOT applied to an explicit
+            // prefix — typing "hr." is a deliberate request for that schema's objects.)
+            if (!ObjectsInScope)
+                yield break;
+
             // T047: Multi-part name completion
             foreach (var item in GetDotQualifiedCompletions(context, cache))
                 yield return item;
@@ -189,45 +223,68 @@ public class ObjectProvider : ICompletionProvider
         // references to FK-join against, so JoinProvider wouldn't run anyway.
         var skipFkTables = context.ClauseType == ClauseType.JoinTable && fkRelated.Count > 0;
 
-        // First, yield objects from default schema (dbo) with higher priority.
-        // When SchemaMode is Always, dbo objects also get the "dbo." prefix in InsertText.
-        bool qualifyDbo = SchemaQualifyMode == SchemaQualifyMode.Always;
-        foreach (var obj in GetFilteredObjects(cache, "dbo", allowedTypes))
+        // FR-016 (T036): suppress this database's cache-derived object + schema-name suggestions
+        // when the connected database is excluded from the database allow-list. The schema scope
+        // (below) then narrows the list to the in-scope schemas. CTEs (above) and system procs
+        // (EXEC, below) are not the connected database's user objects and are unaffected.
+        if (ObjectsInScope)
         {
-            if (skipFkTables && fkRelated.ContainsKey(obj.FullName))
-                continue;
-            yield return ToCompletionItem(obj, sortPriorityBase: 100, includeSchema: qualifyDbo, fkRelated: fkRelated);
-        }
-
-        // Yield objects from non-dbo schemas, schema-qualified.
-        // NonDefaultOnly and Always both qualify non-dbo objects; Never skips the prefix.
-        bool qualifyNonDbo = SchemaQualifyMode != SchemaQualifyMode.Never;
-        foreach (var schema in cache.Schemas.Values)
-        {
-            if (schema.SchemaName.Equals("dbo", StringComparison.OrdinalIgnoreCase))
+            // First, yield objects from default schema (dbo) with higher priority.
+            // When SchemaMode is Always, dbo objects also get the "dbo." prefix in InsertText —
+            // but only when the statement has no join. Bug #2 (2026-06-14): re-selecting a table in
+            // a single-table FROM should insert "dbo.martyrs"; once a join is involved, qualification
+            // is noise (aliases carry the disambiguation), so dbo stays bare. A join is present when
+            // the cursor is at a JOIN target, or ≥2 tables are already referenced (JOIN or comma-join).
+            bool statementHasJoin =
+                context.ClauseType == ClauseType.JoinTable ||
+                context.AvailableAliases.Count >= 2;
+            if (SchemaInScope("dbo"))
             {
-                continue;
+                bool qualifyDbo = SchemaQualifyMode == SchemaQualifyMode.Always && !statementHasJoin;
+                foreach (var obj in GetFilteredObjects(cache, "dbo", allowedTypes))
+                {
+                    if (skipFkTables && fkRelated.ContainsKey(obj.FullName))
+                        continue;
+                    yield return ToCompletionItem(obj, sortPriorityBase: 100, includeSchema: qualifyDbo, fkRelated: fkRelated);
+                }
             }
 
-            foreach (var obj in GetFilteredObjects(cache, schema.SchemaName, allowedTypes))
+            // Yield objects from non-dbo schemas, schema-qualified.
+            // NonDefaultOnly and Always both qualify non-dbo objects; Never skips the prefix.
+            bool qualifyNonDbo = SchemaQualifyMode != SchemaQualifyMode.Never;
+            foreach (var schema in cache.Schemas.Values)
             {
-                if (skipFkTables && fkRelated.ContainsKey(obj.FullName))
+                if (schema.SchemaName.Equals("dbo", StringComparison.OrdinalIgnoreCase))
+                {
                     continue;
-                yield return ToCompletionItem(obj, sortPriorityBase: 200, includeSchema: qualifyNonDbo, fkRelated: fkRelated);
-            }
-        }
+                }
 
-        // Yield schema names as completions
-        foreach (var schemaName in cache.GetSchemaNames())
-        {
-            yield return new CompletionItem
+                if (!SchemaInScope(schema.SchemaName))
+                    continue;
+
+                foreach (var obj in GetFilteredObjects(cache, schema.SchemaName, allowedTypes))
+                {
+                    if (skipFkTables && fkRelated.ContainsKey(obj.FullName))
+                        continue;
+                    yield return ToCompletionItem(obj, sortPriorityBase: 200, includeSchema: qualifyNonDbo, fkRelated: fkRelated);
+                }
+            }
+
+            // Yield schema names as completions (in-scope schemas only).
+            foreach (var schemaName in cache.GetSchemaNames())
             {
-                DisplayText = schemaName,
-                InsertText = schemaName,
-                ObjectType = (int)CompletionObjectType.Schema,
-                SecondaryText = "Schema",
-                SortPriority = 300
-            };
+                if (!SchemaInScope(schemaName))
+                    continue;
+
+                yield return new CompletionItem
+                {
+                    DisplayText = schemaName,
+                    InsertText = schemaName,
+                    ObjectType = (int)CompletionObjectType.Schema,
+                    SecondaryText = "Schema",
+                    SortPriority = 300
+                };
+            }
         }
 
         // Yield system stored procedures in EXEC context — gated on IncludeSystemObjects.
@@ -288,7 +345,7 @@ public class ObjectProvider : ICompletionProvider
         return result;
     }
 
-    private static IEnumerable<CompletionItem> GetDotQualifiedCompletions(CursorContext context, DatabaseCache cache)
+    private IEnumerable<CompletionItem> GetDotQualifiedCompletions(CursorContext context, DatabaseCache cache)
     {
         var prefix = context.DotPrefix;
 
@@ -363,14 +420,15 @@ public class ObjectProvider : ICompletionProvider
             .ThenBy(o => o.ObjectName, StringComparer.OrdinalIgnoreCase);
     }
 
-    private static CompletionItem ToCompletionItem(
+    private CompletionItem ToCompletionItem(
         DatabaseObject obj,
         int sortPriorityBase,
         bool includeSchema = false,
         Dictionary<string, string>? fkRelated = null)
     {
         var displayText = includeSchema ? obj.FullName : obj.ObjectName;
-        var insertText = includeSchema ? obj.FullName : obj.ObjectName;
+        var rawInsertText = includeSchema ? obj.FullName : obj.ObjectName;
+        var insertText = ApplyBrackets(rawInsertText, BracketMode);
 
         var completionType = MapObjectType(obj.ObjectType);
 
@@ -433,6 +491,159 @@ public class ObjectProvider : ICompletionProvider
             DbObjectType.Sequence => CompletionObjectType.Table,
             _ => CompletionObjectType.Table
         };
+    }
+
+    /// <summary>
+    /// Applies square-bracket escaping to an identifier according to <paramref name="mode"/>.
+    /// <list type="bullet">
+    ///   <item><see cref="BracketMode.Always"/>: always returns <c>[identifier]</c>.</item>
+    ///   <item><see cref="BracketMode.Never"/>: always returns the bare identifier.</item>
+    ///   <item><see cref="BracketMode.WhenRequired"/> (default): brackets only the parts
+    ///         that are not valid regular identifiers (spaces, hyphens, leading digit,
+    ///         other special chars) or that are T-SQL reserved words — mirrors the
+    ///         "safe-by-default" convention for SQL Prompt parity. Bracketing applies
+    ///         QUOTENAME <c>']'</c>-doubling.</item>
+    /// </list>
+    /// When the input already contains brackets (e.g. schema-qualified <c>[dbo].[Table]</c>)
+    /// the result is returned as-is for <c>Always</c> (already bracketed) and stripped of
+    /// brackets for <c>Never</c>.
+    /// </summary>
+    public static string ApplyBrackets(string identifier, BracketMode mode)
+    {
+        if (string.IsNullOrEmpty(identifier)) return identifier;
+
+        switch (mode)
+        {
+            case BracketMode.Always:
+                // If the identifier is already fully bracketed (e.g. "[Name]"), leave it.
+                // If it is schema-qualified (e.g. "dbo.Table"), bracket each part.
+                return BracketEachPart(identifier);
+
+            case BracketMode.Never:
+                // Strip any existing brackets from each part.
+                return StripBracketsEachPart(identifier);
+
+            default: // WhenRequired
+                // Bracket only the dot-separated parts that actually require quoting
+                // (spaces, hyphens, leading digit, other special chars, or reserved words).
+                // Parts that are valid regular identifiers are left bare.
+                return BracketRequiredParts(identifier);
+        }
+    }
+
+    /// <summary>Brackets each dot-separated part of a (possibly schema-qualified) identifier.</summary>
+    private static string BracketEachPart(string identifier)
+    {
+        var parts = identifier.Split('.');
+        for (int i = 0; i < parts.Length; i++)
+        {
+            var part = parts[i];
+            // Already bracketed — leave as-is.
+            if (part.StartsWith("[", System.StringComparison.Ordinal) &&
+                part.EndsWith("]", System.StringComparison.Ordinal))
+                continue;
+            // QUOTENAME semantics: double any embedded ']' so the result is valid T-SQL.
+            parts[i] = "[" + part.Replace("]", "]]") + "]";
+        }
+        return string.Join(".", parts);
+    }
+
+    /// <summary>
+    /// Brackets only the dot-separated parts that require quoting (used for
+    /// <see cref="BracketMode.WhenRequired"/>), applying the same QUOTENAME
+    /// <c>']'</c>-doubling rule as <see cref="BracketEachPart"/>.
+    /// </summary>
+    private static string BracketRequiredParts(string identifier)
+    {
+        var parts = identifier.Split('.');
+        for (int i = 0; i < parts.Length; i++)
+        {
+            var part = parts[i];
+            // Already bracketed — leave as-is.
+            if (part.StartsWith("[", System.StringComparison.Ordinal) &&
+                part.EndsWith("]", System.StringComparison.Ordinal))
+                continue;
+            if (NeedsBracketing(part))
+                parts[i] = "[" + part.Replace("]", "]]") + "]";
+        }
+        return string.Join(".", parts);
+    }
+
+    /// <summary>
+    /// Regular-identifier pattern per T-SQL rules: first char a letter, <c>_</c>,
+    /// <c>@</c>, or <c>#</c>; subsequent chars letters, digits, <c>_</c>, <c>@</c>,
+    /// <c>#</c>, or <c>$</c>.
+    /// </summary>
+    private static readonly System.Text.RegularExpressions.Regex RegularIdentifier =
+        new(@"^[A-Za-z_@#][A-Za-z0-9_@#$]*$",
+            System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>
+    /// Returns true when <paramref name="name"/> is NOT a valid regular identifier
+    /// (e.g. contains spaces, hyphens, leads with a digit, or other special chars)
+    /// OR is a T-SQL reserved word — i.e. it must be bracketed to be valid.
+    /// </summary>
+    private static bool NeedsBracketing(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return false;
+        if (!RegularIdentifier.IsMatch(name)) return true;
+        return ReservedWords.Contains(name);
+    }
+
+    /// <summary>
+    /// T-SQL reserved keywords that cannot be used as an unquoted identifier.
+    /// (ISO/Transact-SQL reserved word list — not the full keyword set.)
+    /// </summary>
+    private static readonly System.Collections.Generic.HashSet<string> ReservedWords =
+        new(System.StringComparer.OrdinalIgnoreCase)
+        {
+            "ADD", "ALL", "ALTER", "AND", "ANY", "AS", "ASC", "AUTHORIZATION",
+            "BACKUP", "BEGIN", "BETWEEN", "BREAK", "BROWSE", "BULK", "BY",
+            "CASCADE", "CASE", "CHECK", "CHECKPOINT", "CLOSE", "CLUSTERED",
+            "COALESCE", "COLLATE", "COLUMN", "COMMIT", "COMPUTE", "CONSTRAINT",
+            "CONTAINS", "CONTAINSTABLE", "CONTINUE", "CONVERT", "CREATE", "CROSS",
+            "CURRENT", "CURRENT_DATE", "CURRENT_TIME", "CURRENT_TIMESTAMP",
+            "CURRENT_USER", "CURSOR", "DATABASE", "DBCC", "DEALLOCATE", "DECLARE",
+            "DEFAULT", "DELETE", "DENY", "DESC", "DISK", "DISTINCT", "DISTRIBUTED",
+            "DOUBLE", "DROP", "DUMP", "ELSE", "END", "ERRLVL", "ESCAPE", "EXCEPT",
+            "EXEC", "EXECUTE", "EXISTS", "EXIT", "EXTERNAL", "FETCH", "FILE",
+            "FILLFACTOR", "FOR", "FOREIGN", "FREETEXT", "FREETEXTTABLE", "FROM",
+            "FULL", "FUNCTION", "GOTO", "GRANT", "GROUP", "HAVING", "HOLDLOCK",
+            "IDENTITY", "IDENTITY_INSERT", "IDENTITYCOL", "IF", "IN", "INDEX",
+            "INNER", "INSERT", "INTERSECT", "INTO", "IS", "JOIN", "KEY", "KILL",
+            "LEFT", "LIKE", "LINENO", "LOAD", "MERGE", "NATIONAL", "NOCHECK",
+            "NONCLUSTERED", "NOT", "NULL", "NULLIF", "OF", "OFF", "OFFSETS", "ON",
+            "OPEN", "OPENDATASOURCE", "OPENQUERY", "OPENROWSET", "OPENXML",
+            "OPTION", "OR", "ORDER", "OUTER", "OVER", "PERCENT", "PIVOT", "PLAN",
+            "PRECISION", "PRIMARY", "PRINT", "PROC", "PROCEDURE", "PUBLIC",
+            "RAISERROR", "READ", "READTEXT", "RECONFIGURE", "REFERENCES",
+            "REPLICATION", "RESTORE", "RESTRICT", "RETURN", "REVERT", "REVOKE",
+            "RIGHT", "ROLLBACK", "ROWCOUNT", "ROWGUIDCOL", "RULE", "SAVE",
+            "SCHEMA", "SECURITYAUDIT", "SELECT", "SEMANTICKEYPHRASETABLE",
+            "SEMANTICSIMILARITYDETAILSTABLE", "SEMANTICSIMILARITYTABLE",
+            "SESSION_USER", "SET", "SETUSER", "SHUTDOWN", "SOME", "STATISTICS",
+            "SYSTEM_USER", "TABLE", "TABLESAMPLE", "TEXTSIZE", "THEN", "TO", "TOP",
+            "TRAN", "TRANSACTION", "TRIGGER", "TRUNCATE", "TRY_CONVERT", "TSEQUAL",
+            "UNION", "UNIQUE", "UNPIVOT", "UPDATE", "UPDATETEXT", "USE", "USER",
+            "VALUES", "VARYING", "VIEW", "WAITFOR", "WHEN", "WHERE", "WHILE",
+            "WITH", "WITHIN", "WRITETEXT"
+        };
+
+    /// <summary>Strips square brackets from each dot-separated part of an identifier.</summary>
+    private static string StripBracketsEachPart(string identifier)
+    {
+        var parts = identifier.Split('.');
+        for (int i = 0; i < parts.Length; i++)
+        {
+            var part = parts[i];
+            if (part.StartsWith("[", System.StringComparison.Ordinal) &&
+                part.EndsWith("]", System.StringComparison.Ordinal) &&
+                part.Length >= 2)
+            {
+                parts[i] = part.Substring(1, part.Length - 2);
+            }
+        }
+        return string.Join(".", parts);
     }
 
     private static string FormatRowCount(long count)

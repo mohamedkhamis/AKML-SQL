@@ -108,6 +108,7 @@ namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
             commands.Add(Cmd("akml.toggleBrackets", "Toggle Square Brackets", "Format", CommandIds.CmdToggleBrackets));
             commands.Add(Cmd("akml.toggleAs", "Toggle AS Keyword", "Format", CommandIds.CmdToggleAs));
             commands.Add(Cmd("akml.editProfile", "Edit Format Profile", "Format", CommandIds.CmdEditProfile));
+            commands.Add(Cmd("akml.disableFormattingForSelection", "Disable Formatting for Selection", "Format", CommandIds.CmdDisableFormattingForSelection));
 
             // Refactoring — Lightweight
             commands.Add(Cmd("akml.expandInsertColumns", "Expand INSERT Column List", "Refactoring", CommandIds.CmdExpandInsertColumns));
@@ -127,9 +128,17 @@ namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
             commands.Add(Cmd("akml.convertTempToTableVar", "Convert #Temp to @TableVar", "Refactoring", CommandIds.CmdConvertTempToTableVar));
             commands.Add(Cmd("akml.convertTableVarToTemp", "Convert @TableVar to #Temp", "Refactoring", CommandIds.CmdConvertTableVarToTemp));
             commands.Add(Cmd("akml.parameterizeValues", "Parameterize Literal Values", "Refactoring", CommandIds.CmdParameterizeValues));
+            // Spec 030 T067 — editor-context refactor commands
+            commands.Add(Cmd("akml.inlineExec", "Inline EXEC", "Refactoring", CommandIds.CmdInlineExec));
+            commands.Add(Cmd("akml.insertToUpdate", "Convert INSERT to UPDATE", "Refactoring", CommandIds.CmdInsertToUpdate));
+            commands.Add(Cmd("akml.inlineStoredProcedure", "Inline Stored Procedure", "Refactoring", CommandIds.CmdInlineStoredProcedure));
+            commands.Add(Cmd("akml.scriptAsAlter", "Script as ALTER", "Refactoring", CommandIds.CmdScriptAsAlter));
+            commands.Add(Cmd("akml.findInvalidObjects", "Find Invalid Objects", "Refactoring", CommandIds.CmdShowFindInvalidObjects));
 
             // Analysis
             commands.Add(Cmd("akml.bulkAnalysis", "Run Bulk Code Analysis", "Analysis", CommandIds.CmdBulkAnalysis));
+            commands.Add(Cmd("akml.manageRules", "Manage Code Analysis Rules", "Analysis", CommandIds.CmdManageCodeAnalysisRules));
+            commands.Add(Cmd("akml.toggleCodeAnalysis", "Toggle Code Analysis", "Analysis", CommandIds.CmdToggleCodeAnalysis));
 
             // History
             commands.Add(Cmd("akml.historyPanel", "Show SQL History", "History", CommandIds.CmdHistoryPanel, "Ctrl+Alt+H"));
@@ -154,6 +163,10 @@ namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
             commands.Add(Cmd("akml.gridExport", "Export Grid to File", "Grid", CommandIds.CmdGridExport));
             commands.Add(Cmd("akml.crudGeneration", "Generate CRUD Scripts", "Grid", CommandIds.CmdCrudGeneration));
             commands.Add(Cmd("akml.documentOutline", "Document Outline", "Editor", CommandIds.CmdDocumentOutline));
+
+            // Snippets — Spec 030 T044/T045
+            commands.Add(Cmd("akml.snippetCreateFromSelection", "Create Snippet from Selection", "Snippets", CommandIds.CmdSnippetCreateFromSelection));
+            commands.Add(Cmd("akml.snippetSurroundWith", "Surround Selection With Snippet", "Snippets", CommandIds.CmdSnippetSurroundWith, "Ctrl+K, Ctrl+S"));
 
             // Command Palette itself
             commands.Add(Cmd("akml.commandPalette", "Command Palette", "General", CommandIds.CmdCommandPalette, "Ctrl+Shift+P"));

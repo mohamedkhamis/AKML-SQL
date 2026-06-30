@@ -5,6 +5,9 @@ using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Engine.Refactoring;
 using AkmlSql.Engine.Refactoring.Operations;
 using AkmlSql.Engine.Refactoring.Operations.Lightweight;
+using AkmlSql.Engine.Schema;
+using AkmlSql.Engine.Server;
+using AkmlSql.Formatting.Actions;
 using AkmlSql.Formatting.Pipeline;
 using AkmlSql.Formatting.Profiles;
 using AkmlSql.Formatting.Selection;
@@ -116,15 +119,30 @@ public class FormatRequestHandler(ProfileManager profileManager)
         }
     }
 
+    // Spec 030: one-arg delegator preserved for call sites without schema/session access
+    // (e.g. the web edition's offline path). Schema-aware actions (ExpandWildcards /
+    // QualifyObjectNames) gracefully warn "schema cache not available" under this path.
     public FormatActionResponse HandleFormatAction(FormatActionRequest request)
+        => HandleFormatAction(request, null, null);
+
+    public FormatActionResponse HandleFormatAction(
+        FormatActionRequest request, SchemaCacheManager? schemaCache, SessionManager? sessions)
     {
         try
         {
             var sw = System.Diagnostics.Stopwatch.StartNew();
             var actionType = (FormatActionType)request.ActionType;
 
-            // Actions 0-8 are handled by the formatter pipeline (existing logic)
-            // Actions 9-15 are new lightweight refactoring operations
+            // Spec 030: standalone format actions (types 0-8) → the IFormatAction classes. These were
+            // never dispatched (only 9-17 were), so the shell's casing/semicolons/brackets/AS commands
+            // returned "not supported here". ExpandWildcards/QualifyObjectNames are deliberately NOT
+            // resolved here — they fall through to the schema-aware lightweight switch below.
+            var formatAction = ResolveFormatAction(actionType);
+            if (formatAction != null)
+                return RunFormatAction(formatAction, actionType, request);
+
+            // Actions 9-17 (plus schema-aware ExpandWildcards/QualifyObjectNames) are lightweight
+            // refactoring operations.
             ILightweightOperation? op = actionType switch
             {
                 FormatActionType.ExpandInsertColumns    => new ExpandInsertColumnsOperation(),
@@ -136,6 +154,8 @@ public class FormatRequestHandler(ProfileManager profileManager)
                 FormatActionType.ReplaceDeprecatedSyntax => new ReplaceDeprecatedSyntaxOperation(),
                 FormatActionType.ConvertSpExecutesql    => new ConvertSpExecutesqlOperation(),
                 FormatActionType.Unformat               => new UnformatOperation(),
+                FormatActionType.ExpandWildcards        => new ExpandWildcardsOperation(),
+                FormatActionType.QualifyObjectNames     => new QualifyObjectNamesOperation(),
                 _ => null
             };
 
@@ -149,8 +169,18 @@ public class FormatRequestHandler(ProfileManager profileManager)
                 };
             }
 
-            // Build a minimal RefactoringContext (no schema cache, no session for lightweight ops)
+            // Build the RefactoringContext. Populate the schema cache GENERICALLY for ALL lightweight
+            // ops — same idiom as RefactoringEngine.BuildContext (GetCache's first param is named
+            // serverName but is the SessionId by convention). Schema-independent ops simply ignore it.
             var parser = new Parser.TsqlParserService();
+            DatabaseCache? cache = null;
+            if (sessions != null && !string.IsNullOrEmpty(request.SessionId))
+            {
+                var session = sessions.GetSession(request.SessionId);
+                if (session != null)
+                    cache = schemaCache?.GetCache(request.SessionId, session.DatabaseName);
+            }
+
             var ctx = new RefactoringContext
             {
                 DocumentText    = request.Text,
@@ -158,7 +188,8 @@ public class FormatRequestHandler(ProfileManager profileManager)
                 Tokens          = parser.GetTokenStream(request.Text),
                 SelectionStart  = request.SelectionStart,
                 SelectionLength = request.SelectionLength,
-                SessionId       = request.SessionId ?? string.Empty
+                SessionId       = request.SessionId ?? string.Empty,
+                SchemaCache     = cache
             };
 
             var (modifiedText, warnings) = op.Apply(ctx);
@@ -182,6 +213,56 @@ public class FormatRequestHandler(ProfileManager profileManager)
                 FormattedText = request.Text,
                 ErrorMessage  = ex.Message
             };
+        }
+    }
+
+    // Spec 030: maps a standalone format-action type to its IFormatAction implementation.
+    // Returns null for the refactoring-operation types (9-17), which the caller dispatches separately.
+    private static IFormatAction? ResolveFormatAction(FormatActionType type) => type switch
+    {
+        FormatActionType.CasingOnly           => new CasingOnlyAction(),
+        FormatActionType.InsertSemicolons     => new InsertSemicolonsAction(),
+        FormatActionType.RemoveSemicolons     => new RemoveSemicolonsAction(),
+        // ExpandWildcards / QualifyObjectNames are intentionally absent — they are schema-aware
+        // lightweight operations dispatched through the ILightweightOperation switch (spec 030).
+        FormatActionType.AddSquareBrackets    => new ToggleBracketsAction(),
+        FormatActionType.RemoveSquareBrackets => new ToggleBracketsAction(),
+        FormatActionType.AddAsKeyword         => new ToggleAsKeywordAction(),
+        FormatActionType.RemoveAsKeyword      => new ToggleAsKeywordAction(),
+        _ => null
+    };
+
+    private FormatActionResponse RunFormatAction(IFormatAction action, FormatActionType actionType, FormatActionRequest request)
+    {
+        var profile = LoadProfile(request.ProfileName);
+
+        // The Toggle* actions choose add-vs-remove from these profile flags. Set them to match the
+        // explicit action, then restore so a shared/cached profile instance is not mutated.
+        bool savedBrackets = profile.FormatActions.AddSquareBrackets;
+        bool savedAs = profile.FormatActions.AddAsKeyword;
+        try
+        {
+            if (actionType == FormatActionType.AddSquareBrackets) profile.FormatActions.AddSquareBrackets = true;
+            else if (actionType == FormatActionType.RemoveSquareBrackets) profile.FormatActions.AddSquareBrackets = false;
+            if (actionType == FormatActionType.AddAsKeyword) profile.FormatActions.AddAsKeyword = true;
+            else if (actionType == FormatActionType.RemoveAsKeyword) profile.FormatActions.AddAsKeyword = false;
+
+            var r = action.Execute(request.Text, profile);
+            var messages = r.Diagnostics.Select(d => d.Message).ToArray();
+            return new FormatActionResponse
+            {
+                Success       = r.Success,
+                FormattedText = r.FormattedText,
+                WasModified   = r.WasModified,
+                ElapsedMs     = r.ElapsedMs,
+                Warnings      = messages.Length > 0 ? messages : null,
+                ErrorMessage  = r.Success ? null : (messages.FirstOrDefault() ?? "Format action failed")
+            };
+        }
+        finally
+        {
+            profile.FormatActions.AddSquareBrackets = savedBrackets;
+            profile.FormatActions.AddAsKeyword = savedAs;
         }
     }
 
@@ -236,6 +317,25 @@ public class FormatRequestHandler(ProfileManager profileManager)
         {
             Log.Error(ex, "Profile delete failed");
             return new ProfileDeleteResponse { Success = false, ErrorMessage = ex.Message };
+        }
+    }
+
+    /// <summary>
+    /// Spec 030 T020 — server-side duplicate of a stored profile (Format Styles editor New/Copy).
+    /// <see cref="ProfileManager.Duplicate"/> loads the source's persisted values, clones them with
+    /// a fresh identity + <c>BasedOn</c> link, and saves under the new name.
+    /// </summary>
+    public DuplicateProfileResponse HandleDuplicateProfile(DuplicateProfileRequest request)
+    {
+        try
+        {
+            var copy = profileManager.Duplicate(request.SourceName, request.NewName);
+            return new DuplicateProfileResponse { Success = true, NewName = copy.Metadata.Name };
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Profile duplicate failed ({Source} -> {New})", request.SourceName, request.NewName);
+            return new DuplicateProfileResponse { Success = false, ErrorMessage = ex.Message };
         }
     }
 
