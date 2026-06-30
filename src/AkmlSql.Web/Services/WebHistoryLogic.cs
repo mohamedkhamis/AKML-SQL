@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using AkmlSql.Core.Ipc.Messages;
 
@@ -14,29 +13,20 @@ namespace AkmlSql.Web.Services;
 /// </summary>
 public static class WebHistoryLogic
 {
-    public const string BucketToday = "Today";
-    public const string BucketThisWeek = "This Week";
-    public const string BucketTwoMonths = "Two Months Ago";
-    public const string BucketOlder = "Older";
+    // Mirror the shared Core bucket labels so existing web consumers/tests keep their names while
+    // the classification itself lives in AkmlSql.Core.Models.History.HistoryDateBucket.
+    public const string BucketToday = AkmlSql.Core.Models.History.HistoryDateBucket.Today;
+    public const string BucketThisWeek = AkmlSql.Core.Models.History.HistoryDateBucket.ThisWeek;
+    public const string BucketTwoMonths = AkmlSql.Core.Models.History.HistoryDateBucket.TwoMonths;
+    public const string BucketOlder = AkmlSql.Core.Models.History.HistoryDateBucket.Older;
 
     /// <summary>
     /// Classifies an ISO-8601 timestamp into one of four contiguous buckets relative to <paramref name="now"/>:
     /// Today (same calendar day), This Week (the prior six days), Two Months Ago (7–59 days back),
-    /// Older (60+ days, or an unparseable value). Mirrors the desktop taxonomy.
+    /// Older (60+ days, or an unparseable value). Delegates to the shared Core bucketing helper.
     /// </summary>
-    public static string DateBucket(string? executedAtIso, DateTime now)
-    {
-        if (DateTime.TryParse(executedAtIso, CultureInfo.InvariantCulture,
-                DateTimeStyles.RoundtripKind, out var dt))
-        {
-            var d = dt.ToLocalTime().Date;
-            var today = now.Date;
-            if (d == today) return BucketToday;
-            if (d > today.AddDays(-7)) return BucketThisWeek;
-            if (d > today.AddDays(-60)) return BucketTwoMonths;
-        }
-        return BucketOlder;
-    }
+    public static string DateBucket(string? executedAtIso, DateTime now) =>
+        AkmlSql.Core.Models.History.HistoryDateBucket.Of(executedAtIso, now);
 
     /// <summary>Distinct, case-insensitive, sorted server and database names present in the entries
     /// (for the source/server filter menu) — empty values dropped. Mirrors the desktop

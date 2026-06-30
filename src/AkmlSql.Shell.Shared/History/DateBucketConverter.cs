@@ -24,34 +24,11 @@ namespace AkmlSql.Shell.Shared.History
     /// </summary>
     internal sealed class DateBucketConverter : IValueConverter
     {
-        internal const string Today = "Today";
-        internal const string ThisWeek = "This Week";
-        internal const string TwoMonthsAgo = "Two Months Ago";
-        internal const string Older = "Older";
-
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
-            if (value is string iso && DateTime.TryParse(iso, CultureInfo.InvariantCulture,
-                DateTimeStyles.RoundtripKind, out var dt))
-            {
-                var local = dt.ToLocalTime();
-                var today = DateTime.Today;
-
-                if (local.Date == today)
-                    return Today;
-
-                // "This Week" = within the last 7 days (excluding today, which is handled above).
-                if (local.Date > today.AddDays(-7))
-                    return ThisWeek;
-
-                // "Two Months Ago" = older than a week but within the last ~60 days.
-                if (local.Date > today.AddDays(-60))
-                    return TwoMonthsAgo;
-
-                return Older;
-            }
-
-            return Older;
+            // Delegate the bucket classification to the shared, edition-independent Core helper so the
+            // web and desktop History surfaces stay in lockstep. now=DateTime.Now → now.Date == today.
+            return AkmlSql.Core.Models.History.HistoryDateBucket.Of(value as string, DateTime.Now);
         }
 
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)

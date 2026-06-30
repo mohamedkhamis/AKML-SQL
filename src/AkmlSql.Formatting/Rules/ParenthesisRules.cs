@@ -113,7 +113,7 @@ public class ParenthesisRules : IRuleSet
         if (nodes[i].PrecedingSpaces > 0 || nodes[i].PrecedingBreak != BreakType.None) return false;
         var prev = nodes[i - 1];
         if (prev.IsInNoformatRegion || !IsFunctionNameToken(prev.TokenType)) return false;
-        return !IsDdlObjectName(nodes, i - 1);
+        return !ParenHeuristics.IsDdlObjectName(nodes, i - 1);
     }
 
     /// <summary>
@@ -127,24 +127,6 @@ public class ParenthesisRules : IRuleSet
         t == TSqlTokenType.Identifier
         || t is TSqlTokenType.Coalesce or TSqlTokenType.Convert
             or TSqlTokenType.NullIf;
-
-    /// <summary>
-    /// True when the identifier at <paramref name="nameEnd"/> is the (possibly multi-part) name of a
-    /// DDL object — walking back over Identifier/QuotedIdentifier/Dot tokens lands on
-    /// TABLE / PROCEDURE / FUNCTION / TRIGGER / VIEW. Such a name's paren is a column or parameter
-    /// list, not a function call. (Local copy of the same helper in <c>ControlFlowRules</c>.)
-    /// </summary>
-    private static bool IsDdlObjectName(List<LayoutNode> nodes, int nameEnd)
-    {
-        int k = nameEnd;
-        while (k >= 0 && nodes[k].TokenType is TSqlTokenType.Identifier
-            or TSqlTokenType.QuotedIdentifier or TSqlTokenType.Dot)
-        {
-            k--;
-        }
-        return k >= 0 && nodes[k].TokenType is TSqlTokenType.Table or TSqlTokenType.Procedure
-            or TSqlTokenType.Function or TSqlTokenType.Trigger or TSqlTokenType.View;
-    }
 
     /// <summary>
     /// closeOnNewLine: controls whether closing parenthesis is on its own line.

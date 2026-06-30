@@ -603,13 +603,8 @@
             ? Array.Empty<HistoryPreviewHighlighter.Segment>()
             : HistoryPreviewHighlighter.BuildSegments(_previewSql, _search);
 
-    private static string DisplayName(HistoryEntryDto e)
-    {
-        if (!string.IsNullOrWhiteSpace(e.TabTitle)) return e.TabTitle!;
-        var sql = System.Text.RegularExpressions.Regex.Replace(e.SqlText ?? string.Empty, @"\s+", " ").Trim();
-        if (sql.Length == 0) return "(Untitled query)";
-        return sql.Length > 60 ? sql[..60] + "…" : sql;
-    }
+    private static string DisplayName(HistoryEntryDto e) =>
+        AkmlSql.Core.Models.History.HistoryDisplayName.Of(e.TabTitle, e.SqlText);
 
     private static string ServerDb(HistoryEntryDto e)
     {

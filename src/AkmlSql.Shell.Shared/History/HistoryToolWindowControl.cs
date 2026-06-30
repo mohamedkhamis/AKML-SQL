@@ -1352,8 +1352,8 @@ namespace AkmlSql.Shell.Shared.History
             if (string.IsNullOrEmpty(sqlText)) return;
 
             // (a) Tokenize ALWAYS (coloring is not gated on search). Spans cover every character so
-            //     the concatenated Run text equals sqlText verbatim.
-            var tokens = SqlPreviewTokenizer.Tokenize(sqlText);
+            //     the concatenated Run text equals sqlText verbatim. Shared Core tokenizer.
+            var tokens = AkmlSql.Core.Text.SqlPreviewTokenizer.Tokenize(sqlText);
 
             // (b) Search-match regions (background only). Empty when no search / no match.
             var regions = new List<HighlightRegion>();
@@ -1422,20 +1422,19 @@ namespace AkmlSql.Shell.Shared.History
         }
 
         /// <summary>Emits one preview Run with a live-bound foreground (token colour) and optional match background.</summary>
-        private void EmitRun(string text, SqlTokenKind kind, bool highlighted)
+        private void EmitRun(string text, string kind, bool highlighted)
         {
             if (_codePreviewTextBlock == null || text.Length == 0) return;
 
             var run = new Run(text);
 
-            // Foreground: theme-aware per token kind (NO hardcoded blue).
-            string fgKey = kind switch
-            {
-                SqlTokenKind.Keyword => ThemeTokens.AccentPrimary,
-                SqlTokenKind.String => ThemeTokens.StatusSuccess,
-                SqlTokenKind.Comment => ThemeTokens.TextSecondary,
-                _ => ThemeTokens.TextPrimary
-            };
+            // Foreground: theme-aware per token kind (NO hardcoded blue). Kinds are the shared
+            // AkmlSql.Core.Text.SqlPreviewTokenizer constants.
+            string fgKey;
+            if (kind == AkmlSql.Core.Text.SqlPreviewTokenizer.KindKeyword) fgKey = ThemeTokens.AccentPrimary;
+            else if (kind == AkmlSql.Core.Text.SqlPreviewTokenizer.KindString) fgKey = ThemeTokens.StatusSuccess;
+            else if (kind == AkmlSql.Core.Text.SqlPreviewTokenizer.KindComment) fgKey = ThemeTokens.TextSecondary;
+            else fgKey = ThemeTokens.TextPrimary;
             run.SetResourceReference(TextElement.ForegroundProperty, fgKey);
 
             // Background: search-match highlight (live-bound) only on matched sub-spans.
@@ -2161,154 +2160,7 @@ namespace AkmlSql.Shell.Shared.History
         private static string QueryDisplayName(HistoryEntryDto entry)
         {
             if (entry == null) return "Preview";
-            if (!string.IsNullOrWhiteSpace(entry.TabTitle)) return entry.TabTitle!;
-
-            var sql = entry.SqlText ?? string.Empty;
-            var collapsed = Regex.Replace(sql, @"\s+", " ").Trim();
-            if (collapsed.Length == 0) return "(Untitled query)";
-            return collapsed.Length > 60 ? collapsed.Substring(0, 60) + "…" : collapsed;
-        }
-
-        // ================================================================
-        // SQL preview tokenizer (lightweight, for syntax-color foreground)
-        // ================================================================
-
-        /// <summary>Token classification for the preview syntax colourer.</summary>
-        private enum SqlTokenKind
-        {
-            Default,
-            Keyword,
-            String,
-            Comment
-        }
-
-        /// <summary>A contiguous span of preview text + its classification.</summary>
-        private readonly struct SqlToken
-        {
-            public readonly int Start;
-            public readonly int Length;
-            public readonly SqlTokenKind Kind;
-
-            public SqlToken(int start, int length, SqlTokenKind kind)
-            {
-                Start = start;
-                Length = length;
-                Kind = kind;
-            }
-        }
-
-        /// <summary>
-        /// Lightweight T-SQL tokenizer for the read-only preview. Emits CONTIGUOUS spans covering every
-        /// character (so concatenated spans equal the input verbatim) classifying string literals,
-        /// line/block comments, and a fixed keyword set; everything else is <see cref="SqlTokenKind.Default"/>.
-        /// Intentionally simple — it colours for readability, it is not a parser.
-        /// </summary>
-        private static class SqlPreviewTokenizer
-        {
-            private static readonly HashSet<string> Keywords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-            {
-                "SELECT", "FROM", "WHERE", "INSERT", "UPDATE", "DELETE", "INTO", "VALUES", "SET",
-                "JOIN", "INNER", "LEFT", "RIGHT", "FULL", "OUTER", "CROSS", "ON", "AS", "AND", "OR",
-                "NOT", "NULL", "IS", "IN", "EXISTS", "BETWEEN", "LIKE", "GROUP", "BY", "ORDER", "HAVING",
-                "DISTINCT", "TOP", "UNION", "ALL", "CASE", "WHEN", "THEN", "ELSE", "END", "CREATE",
-                "ALTER", "DROP", "TABLE", "VIEW", "INDEX", "PROCEDURE", "PROC", "FUNCTION", "TRIGGER",
-                "DATABASE", "SCHEMA", "PRIMARY", "KEY", "FOREIGN", "REFERENCES", "CONSTRAINT", "DEFAULT",
-                "CHECK", "UNIQUE", "DECLARE", "BEGIN", "COMMIT", "ROLLBACK", "TRANSACTION", "TRAN",
-                "RETURN", "EXEC", "EXECUTE", "WITH", "OVER", "PARTITION", "ASC", "DESC", "INT", "BIGINT",
-                "VARCHAR", "NVARCHAR", "CHAR", "NCHAR", "BIT", "DATE", "DATETIME", "DATETIME2", "DECIMAL",
-                "NUMERIC", "FLOAT", "MONEY", "UNIQUEIDENTIFIER", "IDENTITY", "OUTPUT", "MERGE", "USING",
-                "GO", "IF", "WHILE", "TRY", "CATCH", "THROW", "CAST", "CONVERT", "COALESCE", "ISNULL",
-                "COUNT", "SUM", "AVG", "MIN", "MAX", "GETDATE", "ROW_NUMBER", "RANK", "DENSE_RANK"
-            };
-
-            public static List<SqlToken> Tokenize(string text)
-            {
-                var tokens = new List<SqlToken>();
-                if (string.IsNullOrEmpty(text)) return tokens;
-
-                int i = 0;
-                int n = text.Length;
-
-                void EmitDefault(int from, int to)
-                {
-                    if (to > from) tokens.Add(new SqlToken(from, to - from, SqlTokenKind.Default));
-                }
-
-                int runStart = 0; // start of the current Default run
-
-                while (i < n)
-                {
-                    char c = text[i];
-
-                    // Line comment: -- ... to end of line
-                    if (c == '-' && i + 1 < n && text[i + 1] == '-')
-                    {
-                        EmitDefault(runStart, i);
-                        int start = i;
-                        i += 2;
-                        while (i < n && text[i] != '\n') i++;
-                        tokens.Add(new SqlToken(start, i - start, SqlTokenKind.Comment));
-                        runStart = i;
-                        continue;
-                    }
-
-                    // Block comment: /* ... */
-                    if (c == '/' && i + 1 < n && text[i + 1] == '*')
-                    {
-                        EmitDefault(runStart, i);
-                        int start = i;
-                        i += 2;
-                        while (i < n && !(text[i] == '*' && i + 1 < n && text[i + 1] == '/')) i++;
-                        if (i < n) i += 2; // consume closing */
-                        tokens.Add(new SqlToken(start, i - start, SqlTokenKind.Comment));
-                        runStart = i;
-                        continue;
-                    }
-
-                    // String literal: '...' with '' escape.
-                    if (c == '\'')
-                    {
-                        EmitDefault(runStart, i);
-                        int start = i;
-                        i++;
-                        while (i < n)
-                        {
-                            if (text[i] == '\'')
-                            {
-                                if (i + 1 < n && text[i + 1] == '\'') { i += 2; continue; } // escaped quote
-                                i++;
-                                break;
-                            }
-                            i++;
-                        }
-                        tokens.Add(new SqlToken(start, i - start, SqlTokenKind.String));
-                        runStart = i;
-                        continue;
-                    }
-
-                    // Identifier / keyword word.
-                    if (char.IsLetter(c) || c == '_' || c == '@' || c == '#')
-                    {
-                        int start = i;
-                        while (i < n && (char.IsLetterOrDigit(text[i]) || text[i] == '_' || text[i] == '@' || text[i] == '#'))
-                            i++;
-                        var word = text.Substring(start, i - start);
-                        if (Keywords.Contains(word))
-                        {
-                            EmitDefault(runStart, start);
-                            tokens.Add(new SqlToken(start, i - start, SqlTokenKind.Keyword));
-                            runStart = i;
-                        }
-                        // else: leave inside the Default run (will be flushed later)
-                        continue;
-                    }
-
-                    i++; // ordinary character — stays in the Default run
-                }
-
-                EmitDefault(runStart, n);
-                return tokens;
-            }
+            return AkmlSql.Core.Models.History.HistoryDisplayName.Of(entry.TabTitle, entry.SqlText);
         }
 
         // ================================================================
@@ -2316,20 +2168,6 @@ namespace AkmlSql.Shell.Shared.History
         // ================================================================
 
         #region Value Converters
-
-        /// <summary>Converts IsOpen bool to open/closed folder icon.</summary>
-        private class OpenClosedIconConverter : IValueConverter
-        {
-            public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-            {
-                return value is true ? "\U0001F4C2" : "\U0001F4D5"; // open folder vs closed book
-            }
-
-            public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-            {
-                throw new NotSupportedException();
-            }
-        }
 
         /// <summary>Converts IsOpen bool to a theme-aware brush via Status.Success / Status.Danger.</summary>
         private class OpenClosedColorConverter : IValueConverter
@@ -2347,30 +2185,16 @@ namespace AkmlSql.Shell.Shared.History
         }
 
         /// <summary>
-        /// Converts the full HistoryEntryDto to a display name:
-        /// TabTitle if set, otherwise first 60 chars of SQL with whitespace collapsed.
+        /// Converts the full HistoryEntryDto to a display name (shared Core helper):
+        /// TabTitle if set, otherwise first 60 chars of SQL with whitespace collapsed, otherwise
+        /// "(Untitled query)". The "right-click to rename" hint remains the row TextBlock tooltip.
         /// </summary>
         private class QueryNameConverter : IValueConverter
         {
             public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
             {
                 if (value is HistoryEntryDto entry)
-                {
-                    if (!string.IsNullOrWhiteSpace(entry.TabTitle))
-                        return entry.TabTitle;
-
-                    var sql = entry.SqlText ?? string.Empty;
-                    var collapsed = System.Text.RegularExpressions.Regex.Replace(sql, @"\s+", " ").Trim();
-                    if (collapsed.Length > 0)
-                    {
-                        if (collapsed.Length > 60)
-                            return collapsed.Substring(0, 60) + "...";
-                        return collapsed;
-                    }
-
-                    // No custom name and no SQL — show a discoverable placeholder
-                    return "(Untitled query \u2014 right-click to rename)";
-                }
+                    return AkmlSql.Core.Models.History.HistoryDisplayName.Of(entry.TabTitle, entry.SqlText);
                 return "";
             }
 

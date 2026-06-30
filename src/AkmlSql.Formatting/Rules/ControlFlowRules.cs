@@ -1416,7 +1416,7 @@ public class ControlFlowRules : IRuleSet
             // list (with depth-blind comma breaks splitting "identity(1, 1)" args). Walk back
             // over the multi-part name; a preceding TABLE/PROC/FUNCTION/TRIGGER/VIEW keyword
             // means the DDL passes own this paren's layout.
-            if (IsDdlObjectName(nodes, i - 1)) continue;
+            if (ParenHeuristics.IsDdlObjectName(nodes, i - 1)) continue;
 
             int close = FindMatchingParen(nodes, i);
             if (close < 0) continue;
@@ -1484,23 +1484,6 @@ public class ControlFlowRules : IRuleSet
         }
     }
 
-    /// <summary>
-    /// True when the identifier at <paramref name="nameEnd"/> is the (possibly multi-part) name
-    /// of a DDL object — i.e. walking back over Identifier/QuotedIdentifier/Dot tokens lands on
-    /// TABLE / PROCEDURE / FUNCTION / TRIGGER / VIEW. Such a name's paren is a column or
-    /// parameter list owned by the DDL layout passes, not a function call.
-    /// </summary>
-    private static bool IsDdlObjectName(List<LayoutNode> nodes, int nameEnd)
-    {
-        int k = nameEnd;
-        while (k >= 0 && nodes[k].TokenType is TSqlTokenType.Identifier
-            or TSqlTokenType.QuotedIdentifier or TSqlTokenType.Dot)
-        {
-            k--;
-        }
-        return k >= 0 && nodes[k].TokenType is TSqlTokenType.Table or TSqlTokenType.Procedure
-            or TSqlTokenType.Function or TSqlTokenType.Trigger or TSqlTokenType.View;
-    }
 
     // -----------------------------------------------------------------------
     // T084 — IN-list alignment

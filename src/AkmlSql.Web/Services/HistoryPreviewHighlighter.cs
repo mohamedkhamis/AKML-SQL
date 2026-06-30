@@ -12,87 +12,19 @@ namespace AkmlSql.Web.Services;
 /// </summary>
 public static class HistoryPreviewHighlighter
 {
-    public const string KindKeyword = "keyword";
-    public const string KindString = "string";
-    public const string KindComment = "comment";
-    public const string KindDefault = "default";
+    // Mirror the shared Core kind constants so existing web consumers/tests keep their names while
+    // the classification itself lives in AkmlSql.Core.Text.SqlPreviewTokenizer (const-from-const).
+    public const string KindKeyword = AkmlSql.Core.Text.SqlPreviewTokenizer.KindKeyword;
+    public const string KindString = AkmlSql.Core.Text.SqlPreviewTokenizer.KindString;
+    public const string KindComment = AkmlSql.Core.Text.SqlPreviewTokenizer.KindComment;
+    public const string KindDefault = AkmlSql.Core.Text.SqlPreviewTokenizer.KindDefault;
 
     public readonly record struct Segment(string Text, string Kind, bool Hit);
 
-    private static readonly HashSet<string> Keywords = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "SELECT","FROM","WHERE","INSERT","UPDATE","DELETE","INTO","VALUES","SET","JOIN","INNER","LEFT",
-        "RIGHT","FULL","OUTER","CROSS","ON","AS","AND","OR","NOT","NULL","IS","IN","EXISTS","BETWEEN",
-        "LIKE","GROUP","BY","ORDER","HAVING","DISTINCT","TOP","UNION","ALL","CASE","WHEN","THEN","ELSE",
-        "END","CREATE","ALTER","DROP","TABLE","VIEW","INDEX","PROCEDURE","PROC","FUNCTION","TRIGGER",
-        "DATABASE","SCHEMA","PRIMARY","KEY","FOREIGN","REFERENCES","CONSTRAINT","DEFAULT","CHECK",
-        "UNIQUE","DECLARE","BEGIN","COMMIT","ROLLBACK","TRANSACTION","TRAN","RETURN","EXEC","EXECUTE",
-        "WITH","OVER","PARTITION","ASC","DESC","INT","BIGINT","VARCHAR","NVARCHAR","CHAR","NCHAR","BIT",
-        "DATE","DATETIME","DATETIME2","DECIMAL","NUMERIC","FLOAT","MONEY","UNIQUEIDENTIFIER","IDENTITY",
-        "OUTPUT","MERGE","USING","GO","IF","WHILE","TRY","CATCH","THROW","CAST","CONVERT","COALESCE",
-        "ISNULL","COUNT","SUM","AVG","MIN","MAX","GETDATE","ROW_NUMBER","RANK","DENSE_RANK",
-    };
-
-    private readonly record struct Token(int Start, int Length, string Kind);
-
-    /// <summary>Tokenizes SQL into contiguous spans covering every character.</summary>
-    public static IReadOnlyList<(int Start, int Length, string Kind)> Tokenize(string text)
-    {
-        var tokens = new List<(int, int, string)>();
-        if (string.IsNullOrEmpty(text)) return tokens;
-
-        int i = 0, n = text.Length, runStart = 0;
-        void EmitDefault(int from, int to) { if (to > from) tokens.Add((from, to - from, KindDefault)); }
-
-        while (i < n)
-        {
-            char c = text[i];
-            if (c == '-' && i + 1 < n && text[i + 1] == '-')               // line comment
-            {
-                EmitDefault(runStart, i);
-                int s = i; i += 2;
-                while (i < n && text[i] != '\n') i++;
-                tokens.Add((s, i - s, KindComment)); runStart = i; continue;
-            }
-            if (c == '/' && i + 1 < n && text[i + 1] == '*')               // block comment
-            {
-                EmitDefault(runStart, i);
-                int s = i; i += 2;
-                while (i < n && !(text[i] == '*' && i + 1 < n && text[i + 1] == '/')) i++;
-                if (i < n) i += 2;
-                tokens.Add((s, i - s, KindComment)); runStart = i; continue;
-            }
-            if (c == '\'')                                                 // string literal
-            {
-                EmitDefault(runStart, i);
-                int s = i; i++;
-                while (i < n)
-                {
-                    if (text[i] == '\'')
-                    {
-                        if (i + 1 < n && text[i + 1] == '\'') { i += 2; continue; }
-                        i++; break;
-                    }
-                    i++;
-                }
-                tokens.Add((s, i - s, KindString)); runStart = i; continue;
-            }
-            if (char.IsLetter(c) || c == '_' || c == '@' || c == '#')      // word / keyword
-            {
-                int s = i;
-                while (i < n && (char.IsLetterOrDigit(text[i]) || text[i] == '_' || text[i] == '@' || text[i] == '#')) i++;
-                if (Keywords.Contains(text.Substring(s, i - s)))
-                {
-                    EmitDefault(runStart, s);
-                    tokens.Add((s, i - s, KindKeyword)); runStart = i;
-                }
-                continue;
-            }
-            i++;
-        }
-        EmitDefault(runStart, n);
-        return tokens;
-    }
+    /// <summary>Tokenizes SQL into contiguous spans covering every character. Delegates to the shared
+    /// Core tokenizer; kept here so <see cref="BuildSegments"/> and existing tests have a stable entry.</summary>
+    public static IReadOnlyList<(int Start, int Length, string Kind)> Tokenize(string text) =>
+        AkmlSql.Core.Text.SqlPreviewTokenizer.Tokenize(text);
 
     // Prefix filters whose value targets metadata (server/db/name/flags) rather than the SQL body —
     // their value never appears in the preview, so it must NOT become a highlight term. The "sql:"
