@@ -580,28 +580,60 @@ public sealed class HistoryDatabase : IDisposable
         string dataSql;
         if (filter.Deduplicate)
         {
+            // Deduplicated view: one representative row per content_hash = the MOST RECENT execution,
+            // chosen deterministically by ROW_NUMBER (latest executed_at, id as tiebreak). Every scalar
+            // column therefore comes from that single latest row. This replaces the prior
+            // GROUP-BY-with-bare-columns query, where SQLite (with several MAX() aggregates present)
+            // pulled name/status/row-count/duration from an ARBITRARY row in the group — so a repeated
+            // query could show a stale status or the wrong duration. exec_count is the total executions;
+            // favourite/open are "any version" (MAX over the partition, matching the FavoritesOnly
+            // filter); and the display name is the latest NON-NULL tab_title so a rename survives later
+            // re-executions. The {whereClause} filters live INSIDE the windowed subquery so
+            // COUNT()/ROW_NUMBER() see the filtered set; only `rn = 1` is applied outside.
             dataSql = $@"
                 SELECT
-                    MAX(h.id) as id,
-                    substr(h.sql_text, 1, 500) as sql_text,
-                    h.server,
-                    h.database_name,
-                    h.username,
-                    MAX(h.executed_at) as executed_at,
-                    h.duration_ms,
-                    h.row_count,
-                    h.status,
-                    h.error_msg,
-                    h.source,
-                    h.tab_title,
-                    h.is_favorite,
-                    COUNT(*) as exec_count,
-                    h.content_hash,
-                    MAX(h.is_open) as is_open
-                FROM {fromClause}
-                {whereClause}
-                GROUP BY h.content_hash
-                ORDER BY MAX(h.executed_at) DESC
+                    ranked.id,
+                    substr(ranked.sql_text, 1, 500) as sql_text,
+                    ranked.server,
+                    ranked.database_name,
+                    ranked.username,
+                    ranked.executed_at,
+                    ranked.duration_ms,
+                    ranked.row_count,
+                    ranked.status,
+                    ranked.error_msg,
+                    ranked.source,
+                    (SELECT t.tab_title FROM history t
+                       WHERE t.content_hash = ranked.content_hash AND t.tab_title IS NOT NULL
+                       ORDER BY t.executed_at DESC, t.id DESC LIMIT 1) as tab_title,
+                    ranked.is_favorite,
+                    ranked.exec_count,
+                    ranked.content_hash,
+                    ranked.is_open
+                FROM (
+                    SELECT
+                        h.id,
+                        h.sql_text,
+                        h.server,
+                        h.database_name,
+                        h.username,
+                        h.executed_at,
+                        h.duration_ms,
+                        h.row_count,
+                        h.status,
+                        h.error_msg,
+                        h.source,
+                        h.content_hash,
+                        COUNT(*)           OVER (PARTITION BY h.content_hash) as exec_count,
+                        MAX(h.is_favorite) OVER (PARTITION BY h.content_hash) as is_favorite,
+                        MAX(h.is_open)     OVER (PARTITION BY h.content_hash) as is_open,
+                        ROW_NUMBER()       OVER (PARTITION BY h.content_hash
+                                                 ORDER BY h.executed_at DESC, h.id DESC) as rn
+                    FROM {fromClause}
+                    {whereClause}
+                ) AS ranked
+                WHERE ranked.rn = 1
+                ORDER BY ranked.executed_at DESC
                 LIMIT @limit OFFSET @offset";
         }
         else
