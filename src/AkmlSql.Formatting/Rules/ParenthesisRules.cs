@@ -85,14 +85,53 @@ public class ParenthesisRules : IRuleSet
             }
             else
             {
-                // Move open paren to new line
-                if (node.PrecedingBreak == BreakType.None)
+                // Move open paren to a new line — but NEVER a function-call paren, which must hug
+                // its name. openOnSameLine=false targets STRUCTURAL parens (subqueries, CTE bodies,
+                // and the DDL column/parameter lists owned by their own passes); a call like SUM(...)
+                // was otherwise stranded as "SUM" + newline + "(...)" at column 0 (spec 030 T009,
+                // see tests/format-parity/golden/02|04-*__aligned-left-bracket.sql).
+                if (node.PrecedingBreak == BreakType.None && !IsFunctionCallParen(nodes, i))
                 {
                     node.PrecedingBreak = BreakType.NewLine;
                     node.PrecedingSpaces = 0;
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// True when the left paren at <paramref name="i"/> is a function-call paren: it hugs a
+    /// preceding identifier with no gap (e.g. <c>SUM(...)</c>, <c>DATEADD(...)</c>) and that
+    /// identifier is not a DDL object name (<c>CREATE TABLE foo(...)</c>, whose column-list paren
+    /// the DDL passes own). Mirrors the function-call heuristic in
+    /// <c>ControlFlowRules.ApplyFunctionCallParameters</c> so the openOnSameLine=false path leaves
+    /// call parens attached to their name.
+    /// </summary>
+    private static bool IsFunctionCallParen(List<LayoutNode> nodes, int i)
+    {
+        if (i < 1) return false;
+        if (nodes[i].PrecedingSpaces > 0 || nodes[i].PrecedingBreak != BreakType.None) return false;
+        var prev = nodes[i - 1];
+        if (prev.IsInNoformatRegion || prev.TokenType != TSqlTokenType.Identifier) return false;
+        return !IsDdlObjectName(nodes, i - 1);
+    }
+
+    /// <summary>
+    /// True when the identifier at <paramref name="nameEnd"/> is the (possibly multi-part) name of a
+    /// DDL object — walking back over Identifier/QuotedIdentifier/Dot tokens lands on
+    /// TABLE / PROCEDURE / FUNCTION / TRIGGER / VIEW. Such a name's paren is a column or parameter
+    /// list, not a function call. (Local copy of the same helper in <c>ControlFlowRules</c>.)
+    /// </summary>
+    private static bool IsDdlObjectName(List<LayoutNode> nodes, int nameEnd)
+    {
+        int k = nameEnd;
+        while (k >= 0 && nodes[k].TokenType is TSqlTokenType.Identifier
+            or TSqlTokenType.QuotedIdentifier or TSqlTokenType.Dot)
+        {
+            k--;
+        }
+        return k >= 0 && nodes[k].TokenType is TSqlTokenType.Table or TSqlTokenType.Procedure
+            or TSqlTokenType.Function or TSqlTokenType.Trigger or TSqlTokenType.View;
     }
 
     /// <summary>

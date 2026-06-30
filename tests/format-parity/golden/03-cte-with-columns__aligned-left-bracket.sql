@@ -1,15 +1,9 @@
-WITH monthly_sales
-    (year_num, month_num, region, total_amount
+WITH monthly_sales(year_num, month_num, region, total_amount
 ) AS
     (
-    SELECT YEAR
-    (orderdate), MONTH
-    (orderdate), region, SUM
-    (amount)
+    SELECT YEAR(orderdate), MONTH(orderdate), region, SUM(amount)
     FROM   orders
-    GROUP BY YEAR
-    (orderdate), MONTH
-    (orderdate), region
+    GROUP BY YEAR(orderdate), MONTH(orderdate), region
 )
 SELECT year_num, month_num, region, total_amount
 FROM   monthly_sales
