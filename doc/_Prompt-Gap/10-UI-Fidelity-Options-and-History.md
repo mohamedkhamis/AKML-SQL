@@ -2,11 +2,19 @@
 
 > **Provenance.** Generated 2026-07-02 by a 6-agent workflow (business-scope refresh + SQL History & Options UI-fidelity deep-dives, each adversarially verified, then synthesized). Anchored on the existing `doc/_Prompt-Gap` audit (re-audited 2026-06-23) and refreshed against branch `030-closure-followups`. **AI features excluded by request.** Parity bar = SSMS 22 / VS 2026 desktop. Reference image: `doc/_Prompt-Gap/SQL History Redgate.png` (Redgate's actual SQL History window). No Options reference screenshot was available.
 
-> **Implementation update (2026-07-02).** The two **High**-priority items from §5 are now built and verified (TDD; 30/30 Shell tests pass; SSMS 22 extension compiles clean):
-> - **SQL History open/closed folder toggles** — `HistoryViewModel.ToggleOpenFilter(bool)` (3-state, mutually-exclusive cycle; `ClearFilters` now resets `IsOpenFilter`) wired to two line-art folder toggle buttons in the toolbar with accent active-state. Tests: `HistoryOpenFilterToggleTests`.
-> - **Options "Inserted Code › Special characters" pane** — new `SpecialCharactersPage` consolidating bracket-identifier policy (moved from Qualification) + add-parentheses & auto-close (moved from IntelliSense); registered in all four places (builder dict / nav tree / page list / Reset switch). Tests: `SpecialCharactersPageTests`.
+> **Implementation update (2026-07-02).** The two **High**-priority items from §5 are built and verified (TDD; SSMS 22 extension compiles clean):
+> - **SQL History open/closed folder toggles** — `HistoryViewModel.ToggleOpenFilter(bool)` (3-state, mutually-exclusive cycle; `ClearFilters` now resets `IsOpenFilter`) wired to two line-art folder toggle buttons in the toolbar with accent active-state. Tests: `HistoryOpenFilterToggleTests`. *(committed `80e93ff`)*
+> - **Options "Inserted Code › Special characters" pane** — new `SpecialCharactersPage` consolidating bracket-identifier policy (moved from Qualification) + add-parentheses & auto-close (moved from IntelliSense); registered in all four places (builder dict / nav tree / page list / Reset switch). Tests: `SpecialCharactersPageTests`. *(committed `80e93ff`)*
 >
-> Remaining §5 items (Medium/Low) are still open. Nothing has been committed.
+> **Medium/Low batch (2026-07-02, UI surfaces; TDD; 34/34 Shell tests pass; SSMS 22 clean):**
+> - **History — consistent absolute timestamps**: new testable `HistoryTimeFormat.Absolute` (culture short-date + `HH:mm`) applied to the preview header, version rows, and list rows (were three different formats). Test: `HistoryTimeFormatTests`.
+> - **History — row label**: dropped the `server→database` suffix (`ServerLabelConverter` shows server only; DB stays in the right-pane metadata bar).
+> - **History — empty / disconnected states**: `HistoryViewModel.IsDisconnected` + a centered overlay that shows "History unavailable — engine not connected" vs "No queries found" instead of a silent blank list. Test: `Search_WhenEngineNotConnected_FlagsIsDisconnected`.
+> - **Options — nav grouping** (report §4 rec #2): Aliases moved under **Inserted Code**, Join conditions under **Suggestions** (SQL Prompt layout); "Miscellaneous › Main" renamed to **Application** (removes the false "Main" parity signal). Test: `OptionsNavStructureTests`.
+>
+> **Screenshot addendum.** Real SQL Prompt Options screenshots were captured from the Redgate docs and saved to this folder: `SQL Prompt Options - Special characters Redgate.png` and `SQL Prompt Options - bottom bar Redgate.png`. They **validate the new Special-characters pane** (title, Brackets group, add-parentheses, closing-characters, per-page "Restore Defaults") and the global chrome (Restore all defaults / Import… / Export… bottom-left). They also reveal three refinements SQL Prompt makes that AKML does not yet mirror (deferred follow-ups): (1) brackets is a single **checkbox** "Enclose identifiers within square brackets" — confirms AKML's `Always`/`Never` dropdown values are inert; (2) parentheses label is "…function **or data type**"; (3) auto-close is **five per-character checkboxes** (single quote / double quote / comment / parenthesis / square bracket), not one toggle — needs a settings-model + engine expansion.
+>
+> **Still open** (out of this UI-focused batch): the Special-characters refinements above; Options "Connections & memory" pane, clickable "?" help, ranked/transparency/definition-box toggles, settings-folder relocate; and all engine-deep (Formatting/Refactoring/IntelliSense) and edge-of-scope platform-breadth items.
 
 ## 1. Executive summary
 

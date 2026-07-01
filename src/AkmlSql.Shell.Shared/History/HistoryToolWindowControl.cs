@@ -62,6 +62,11 @@ namespace AkmlSql.Shell.Shared.History
         private TextBlock? _statusCountLabel;
         private TextBlock? _statusLoadingLabel;
 
+        // Centered placeholder overlaid on the query list — distinguishes a pipe-down engine
+        // ("History unavailable") from a genuinely empty result ("No queries found").
+        private StackPanel? _emptyStateOverlay;
+        private TextBlock? _emptyStateText;
+
         // Infinite-scroll guard — prevents duplicate LoadMore fires while one is in flight.
         private bool _loadMoreInFlight;
 
@@ -122,7 +127,12 @@ namespace AkmlSql.Shell.Shared.History
                     UpdateFavoritesStarVisual();
                 else if (args.PropertyName == nameof(HistoryViewModel.IsOpenFilter))
                     UpdateOpenFilterVisual();
+                else if (args.PropertyName == nameof(HistoryViewModel.IsLoading)
+                      || args.PropertyName == nameof(HistoryViewModel.IsDisconnected)
+                      || args.PropertyName == nameof(HistoryViewModel.TotalCount))
+                    UpdateEmptyState();
             };
+            _viewModel.Entries.CollectionChanged += (_, __) => UpdateEmptyState();
 
             Content = mainGrid;
         }
@@ -697,9 +707,67 @@ namespace AkmlSql.Shell.Shared.History
             _queryListView.AddHandler(ScrollViewer.ScrollChangedEvent,
                 new ScrollChangedEventHandler(OnQueryListScrollChanged));
 
-            dock.Children.Add(_queryListView);
+            // Overlay a centered empty/disconnected placeholder on top of the list so a pipe-down
+            // engine or a no-results search reads clearly instead of a silent blank list.
+            var listGrid = new Grid();
+            listGrid.Children.Add(_queryListView);
+            listGrid.Children.Add(BuildEmptyStateOverlay());
+            dock.Children.Add(listGrid);
 
+            UpdateEmptyState();
             return dock;
+        }
+
+        /// <summary>Builds the centered, non-interactive placeholder shown over an empty query list.</summary>
+        private FrameworkElement BuildEmptyStateOverlay()
+        {
+            _emptyStateText = new TextBlock
+            {
+                Text = "No queries found.",
+                FontSize = 12,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                TextAlignment = TextAlignment.Center,
+                TextWrapping = TextWrapping.Wrap
+            };
+            _emptyStateText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+
+            _emptyStateOverlay = new StackPanel
+            {
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                MaxWidth = 240,
+                Margin = new Thickness(16),
+                IsHitTestVisible = false,
+                Visibility = Visibility.Collapsed
+            };
+            _emptyStateOverlay.Children.Add(_emptyStateText);
+            return _emptyStateOverlay;
+        }
+
+        /// <summary>
+        /// Shows the centered placeholder over the query list: a distinct "engine not connected"
+        /// message when the pipe is down, or "No queries found" for a genuinely empty result.
+        /// Hidden while a search is loading or when the list has entries.
+        /// </summary>
+        private void UpdateEmptyState()
+        {
+            if (_emptyStateOverlay == null || _emptyStateText == null) return;
+
+            if (_viewModel.IsLoading)
+            {
+                _emptyStateOverlay.Visibility = Visibility.Collapsed;
+                return;
+            }
+            if (_viewModel.IsDisconnected)
+            {
+                _emptyStateText.Text = "History unavailable — the AKML engine is not connected.";
+                _emptyStateOverlay.Visibility = Visibility.Visible;
+                return;
+            }
+            _emptyStateText.Text = "No queries found.";
+            _emptyStateOverlay.Visibility = _viewModel.Entries.Count == 0
+                ? Visibility.Visible
+                : Visibility.Collapsed;
         }
 
         /// <summary>
@@ -855,7 +923,7 @@ namespace AkmlSql.Shell.Shared.History
             var connText = new FrameworkElementFactory(typeof(TextBlock));
             connText.SetBinding(TextBlock.TextProperty, new MultiBinding
             {
-                Converter = new ServerArrowDatabaseConverter(),
+                Converter = new ServerLabelConverter(),
                 Bindings =
                 {
                     new Binding(nameof(HistoryEntryDto.Server)),
@@ -1389,8 +1457,7 @@ namespace AkmlSql.Shell.Shared.History
                 if (DateTime.TryParse(entry.ExecutedAt, CultureInfo.InvariantCulture,
                     DateTimeStyles.RoundtripKind, out var dt))
                 {
-                    _codePreviewHeaderTimestamp.Text = dt.ToLocalTime()
-                        .ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.CurrentCulture);
+                    _codePreviewHeaderTimestamp.Text = HistoryTimeFormat.Absolute(dt.ToLocalTime());
                 }
                 else
                 {
@@ -1665,8 +1732,7 @@ namespace AkmlSql.Shell.Shared.History
                         if (DateTime.TryParse(version.SavedAt, CultureInfo.InvariantCulture,
                             DateTimeStyles.RoundtripKind, out var savedDt))
                         {
-                            timestampText = savedDt.ToLocalTime()
-                                .ToString("MMM dd, HH:mm", CultureInfo.CurrentCulture);
+                            timestampText = HistoryTimeFormat.Absolute(savedDt.ToLocalTime());
                         }
 
                         var itemPanel = new StackPanel { Margin = new Thickness(4, 4, 4, 4) };
@@ -2139,15 +2205,19 @@ namespace AkmlSql.Shell.Shared.History
         }
 
         /// <summary>Formats Server -> Database for the connection line.</summary>
-        private class ServerArrowDatabaseConverter : IMultiValueConverter
+        /// <summary>
+        /// Renders the compact list-row connection label as just the server\instance \u2014 SQL Prompt
+        /// shows only the server here; the database is surfaced in the right-pane metadata bar, so
+        /// the old "server\u2192database" suffix made the rows busier than the reference. Falls back to the
+        /// database name when no server is recorded.
+        /// </summary>
+        private class ServerLabelConverter : IMultiValueConverter
         {
             public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
             {
                 var server = values.Length > 0 ? values[0] as string : null;
                 var database = values.Length > 1 ? values[1] as string : null;
 
-                if (!string.IsNullOrEmpty(server) && !string.IsNullOrEmpty(database))
-                    return $"{server}\u2192{database}";
                 if (!string.IsNullOrEmpty(server))
                     return server;
                 if (!string.IsNullOrEmpty(database))
@@ -2177,7 +2247,7 @@ namespace AkmlSql.Shell.Shared.History
                     if (elapsed.TotalHours < 24) return local.ToString("HH:mm", CultureInfo.CurrentCulture);
                     if (local.Date == DateTime.Today.AddDays(-1))
                         return "Yesterday " + local.ToString("HH:mm", CultureInfo.CurrentCulture);
-                    return local.ToString("yyyy-MM-dd HH:mm", CultureInfo.CurrentCulture);
+                    return HistoryTimeFormat.Absolute(local);
                 }
                 return value?.ToString() ?? "";
             }
@@ -2278,7 +2348,7 @@ namespace AkmlSql.Shell.Shared.History
                         return local.ToString("HH:mm:ss", CultureInfo.CurrentCulture);
                     if (local.Date == DateTime.Today.AddDays(-1))
                         return "Yesterday " + local.ToString("HH:mm", CultureInfo.CurrentCulture);
-                    return local.ToString("yyyy-MM-dd HH:mm", CultureInfo.CurrentCulture);
+                    return HistoryTimeFormat.Absolute(local);
                 }
                 return value?.ToString() ?? "";
             }

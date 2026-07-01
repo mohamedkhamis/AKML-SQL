@@ -440,20 +440,22 @@ namespace AkmlSql.Shell.Shared.Dialogs
             // (Queries ▸ Execution Warnings, Query Results, Miscellaneous ▸ Labs) were authored
             // in earlier specs and are already wired to GridPage / SafetyPage / LabsPage / GeneralPage.
 
+            // Grouping mirrors SQL Prompt (report §4 rec #2): Join conditions live under Suggestions,
+            // Aliases under Inserted Code.
             AddTreeGroup("Suggestions", expanded: true,
                 ("Behavior", "IntelliSense"),
                 ("Types of suggestion", "SuggestionTypes"),
                 ("Tooltips", "CompletionPolish"),
-                ("Aliases", "Aliases"),
                 ("Connections", "ConnectionScope"),
+                ("Join conditions", "JoinOptions"),
                 ("Database", "Schema Cache"));
 
             // Inserted Code group introduced in Phase 2 (C.2-C.4).
             AddTreeGroup("Inserted Code", expanded: false,
                 ("Qualification", "Qualification"),
+                ("Aliases", "Aliases"),
                 ("Special characters", "SpecialCharacters"),
-                ("INSERT statements", "InsertOptions"),
-                ("JOIN completion", "JoinOptions"));
+                ("INSERT statements", "InsertOptions"));
 
             AddTreeGroup("Format", expanded: false,
                 ("Styles", "Formatting"));
@@ -477,7 +479,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             AddTreeLeaf("AI Assistance", "AI Assistance");
 
             AddTreeGroup("Miscellaneous", expanded: false,
-                ("Main", "General"),
+                ("Application", "General"),
                 ("Labs", "Labs"));
 
             _navTree.SelectedItemChanged += OnNavSelectionChanged;
@@ -1004,17 +1006,17 @@ namespace AkmlSql.Shell.Shared.Dialogs
             // search results.
             var pages = new (string Key, string Display)[]
             {
-                ("General",       "Miscellaneous › Main"),
+                ("General",       "Miscellaneous › Application"),
                 ("IntelliSense",  "Suggestions › Behavior"),
                 ("SuggestionTypes", "Suggestions › Types of suggestion"),
                 ("CompletionPolish", "Suggestions › Tooltips"),
-                ("Aliases",       "Suggestions › Aliases"),
+                ("Aliases",       "Inserted Code › Aliases"),
                 ("ConnectionScope", "Suggestions › Connections"),
                 ("Schema Cache",  "Suggestions › Database"),
                 ("Qualification", "Inserted Code › Qualification"),
                 ("SpecialCharacters", "Inserted Code › Special characters"),
                 ("InsertOptions", "Inserted Code › INSERT statements"),
-                ("JoinOptions",   "Inserted Code › JOIN completion"),
+                ("JoinOptions",   "Suggestions › Join conditions"),
                 ("Formatting",    "Format › Styles"),
                 ("Snippets",      "Snippets"),
                 ("Code Analysis", "Code Analysis"),

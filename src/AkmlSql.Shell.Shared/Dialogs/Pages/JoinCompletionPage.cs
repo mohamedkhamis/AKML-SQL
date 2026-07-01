@@ -17,7 +17,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
     internal sealed class JoinCompletionPage : IPageBuilder
     {
         public string Key     => "JoinOptions";
-        public string Display => "Inserted Code › JOIN completion";
+        public string Display => "Suggestions › Join conditions";
         public string Title   => "JOIN completion";
         public string Help    => "Controls how JOIN completion suggests ON conditions, including whether to fall back to matching column names when no foreign key links the two tables.";
 

@@ -32,6 +32,7 @@ namespace AkmlSql.Shell.Shared.History
         private DateTime? _dateTo;
         private bool _favoritesOnly;
         private bool? _isOpenFilter;
+        private bool _isDisconnected;
         private int _totalCount;
         private bool _isLoading;
         private int _currentOffset;
@@ -137,6 +138,17 @@ namespace AkmlSql.Shell.Shared.History
         {
             get => _isOpenFilter;
             set => SetField(ref _isOpenFilter, value);
+        }
+
+        /// <summary>
+        /// True when the last search could not run because the out-of-process engine was not
+        /// connected. Drives the "History unavailable" affordance so a pipe-down state is not
+        /// silently indistinguishable from a genuinely empty result.
+        /// </summary>
+        public bool IsDisconnected
+        {
+            get => _isDisconnected;
+            set => SetField(ref _isDisconnected, value);
         }
 
         /// <summary>Total number of matching entries across all pages.</summary>
@@ -351,9 +363,11 @@ namespace AkmlSql.Shell.Shared.History
             if (client == null || !client.IsConnected)
             {
                 Log.Debug("HistoryViewModel: engine not connected, cannot search");
+                IsDisconnected = true;
                 return;
             }
 
+            IsDisconnected = false;
             IsLoading = true;
 
             try

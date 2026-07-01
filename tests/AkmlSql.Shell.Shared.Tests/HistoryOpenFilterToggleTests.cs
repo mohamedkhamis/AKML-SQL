@@ -61,5 +61,19 @@ namespace AkmlSql.Shell.Shared.Tests
 
             Assert.Null(vm.IsOpenFilter);
         }
+
+        [StaFact]
+        public void Search_WhenEngineNotConnected_FlagsIsDisconnected()
+        {
+            var vm = new HistoryViewModel();
+            Assert.False(vm.IsDisconnected);
+
+            // ClearFilters runs a search synchronously; with no engine attached in tests it must
+            // flag the disconnected state (drives the "History unavailable" affordance) rather than
+            // silently returning an empty list.
+            vm.ClearFiltersCommand.Execute(null);
+
+            Assert.True(vm.IsDisconnected);
+        }
     }
 }
