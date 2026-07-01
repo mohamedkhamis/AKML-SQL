@@ -10,7 +10,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         public string Key     => "IntelliSense";
         public string Display => "Suggestions › Behavior";
         public string Title   => "IntelliSense";
-        public string Help    => "Controls AKML SQL completion behavior — auto-triggering, fuzzy matching, suggestion count and trigger delay, keyword casing, column/PK/FK detail badges, FK-assisted JOIN and alias generation, special-character handling, commit keys, snippets, and SQL-auth credentials used for IntelliSense.";
+        public string Help    => "Controls AKML SQL completion behavior — auto-triggering, fuzzy matching, suggestion count and trigger delay, keyword casing, column/PK/FK detail badges, FK-assisted JOIN and alias generation, commit keys, snippets, and SQL-auth credentials used for IntelliSense. Bracket, parenthesis, and closing-character handling has moved to Inserted Code › Special characters.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {
@@ -87,19 +87,8 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 "Recommended to avoid conflicts with AKML SQL IntelliSense");
             ctx.RegisterSearch("Disable native SSMS IntelliSense", "Recommended to avoid conflicts with AKML SQL IntelliSense", "Toggle", rowDisableNative);
 
-            // Spec 030 T080 (FR-043) — special-character handling.
-            ctx.Rows.AddGroupSeparator(panel);
-            ctx.Rows.AddGroupHeader(panel, "Special characters");
-
-            var (rowAutoClose, chkAutoClose) = ctx.Rows.AddToggle(panel,
-                "Auto-close matching characters",
-                "Typing an opening bracket, brace, or quote inserts the matching closing character");
-            ctx.RegisterSearch("Auto-close matching characters", "Typing an opening bracket, brace, or quote inserts the matching closing character", "Toggle", rowAutoClose);
-
-            var (rowAddParens, chkAddParens) = ctx.Rows.AddToggle(panel,
-                "Add parentheses after functions",
-                "Automatically add parentheses when a function is inserted from the completion list");
-            ctx.RegisterSearch("Add parentheses after functions", "Automatically add parentheses when a function is inserted from the completion list", "Toggle", rowAddParens);
+            // Spec 030 T080 (FR-043) — special-character handling (bracket / parenthesis /
+            // auto-close) consolidated onto the Inserted Code › Special characters page.
 
             // Spec 030 T078 (FR-042) — completion commit keys.
             ctx.Rows.AddGroupSeparator(panel);
@@ -143,7 +132,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 sldMaxSugg, lblMaxSugg, sldTrigDelay, lblTrigDelay, cboCase,
                 chkDataTypes, chkNullable, chkPkFk,
                 chkJoin, chkAlias, chkDisableNative, chkSqlCreds,
-                chkAutoClose, chkAddParens, chkSpaceCommit, chkDotCommit, chkSnippets);
+                chkSpaceCommit, chkDotCommit, chkSnippets);
         }
     }
 
@@ -165,8 +154,6 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         private readonly CheckBox _autoAlias;
         private readonly CheckBox _disableNativeIs;
         private readonly CheckBox _enableSqlAuthCreds;
-        private readonly CheckBox _autoCloseChars;
-        private readonly CheckBox _addParentheses;
         private readonly CheckBox _spaceCommits;
         private readonly CheckBox _dotCommits;
         private readonly CheckBox _snippetsInCompletion;
@@ -175,7 +162,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             Slider sldMaxSugg, TextBlock lblMaxSugg, Slider sldTrigDelay, TextBlock lblTrigDelay, ComboBox cboCase,
             CheckBox dataTypes, CheckBox nullable, CheckBox pkFk,
             CheckBox join, CheckBox alias, CheckBox disableNative, CheckBox sqlCreds,
-            CheckBox autoCloseChars, CheckBox addParentheses, CheckBox spaceCommits, CheckBox dotCommits, CheckBox snippetsInCompletion)
+            CheckBox spaceCommits, CheckBox dotCommits, CheckBox snippetsInCompletion)
         {
             _enabled = enabled;
             _autoTrigger = autoTrig;
@@ -193,8 +180,6 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             _autoAlias = alias;
             _disableNativeIs = disableNative;
             _enableSqlAuthCreds = sqlCreds;
-            _autoCloseChars = autoCloseChars;
-            _addParentheses = addParentheses;
             _spaceCommits = spaceCommits;
             _dotCommits = dotCommits;
             _snippetsInCompletion = snippetsInCompletion;
@@ -214,8 +199,6 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             _joinAssist.IsChecked = i.JoinAssist;
             _disableNativeIs.IsChecked = i.DisableNativeIntelliSense;
             _enableSqlAuthCreds.IsChecked = i.EnableSqlAuthCredentials;
-            _autoCloseChars.IsChecked = i.SpecialCharOptions.AutoCloseCharacters;
-            _addParentheses.IsChecked = i.SpecialCharOptions.AddParentheses;
             _spaceCommits.IsChecked = i.SpaceCommits;
             _dotCommits.IsChecked = i.DotCommits;
             _snippetsInCompletion.IsChecked = i.SnippetsInCompletion;
@@ -239,8 +222,6 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             settings.IntelliSense.JoinAssist = _joinAssist.IsChecked == true;
             settings.IntelliSense.DisableNativeIntelliSense = _disableNativeIs.IsChecked == true;
             settings.IntelliSense.EnableSqlAuthCredentials = _enableSqlAuthCreds.IsChecked == true;
-            settings.IntelliSense.SpecialCharOptions.AutoCloseCharacters = _autoCloseChars.IsChecked == true;
-            settings.IntelliSense.SpecialCharOptions.AddParentheses = _addParentheses.IsChecked == true;
             settings.IntelliSense.SpaceCommits = _spaceCommits.IsChecked == true;
             settings.IntelliSense.DotCommits = _dotCommits.IsChecked == true;
             settings.IntelliSense.SnippetsInCompletion = _snippetsInCompletion.IsChecked == true;

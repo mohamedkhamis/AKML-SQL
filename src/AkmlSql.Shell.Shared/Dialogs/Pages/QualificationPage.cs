@@ -5,18 +5,18 @@ using AkmlSql.Core.Config;
 namespace AkmlSql.Shell.Shared.Dialogs.Pages
 {
     /// <summary>
-    /// Inserted Code › Qualification &amp; Brackets (Phase 2 C.2). Surfaces
-    /// <see cref="QualificationSettings"/>. <c>SchemaMode</c> is read by
-    /// <c>CompletionEngine</c> (A.2). <c>BracketMode</c> is recorded but full
-    /// bracket policy is deferred — current engine matches the
-    /// <c>WhenRequired</c> default.
+    /// Inserted Code › Qualification (Phase 2 C.2). Surfaces the schema-qualification and
+    /// column-qualification parts of <see cref="QualificationSettings"/>. <c>SchemaMode</c>
+    /// is read by <c>CompletionEngine</c> (A.2). Bracket policy (<c>BracketMode</c>) moved
+    /// to the Inserted Code › Special characters page (report §4 rec #1) so SQL Prompt's
+    /// single special-characters pane is mirrored.
     /// </summary>
     internal sealed class QualificationPage : IPageBuilder
     {
         public string Key     => "Qualification";
-        public string Display => "Inserted Code › Qualification & Brackets";
-        public string Title   => "Qualification & Brackets";
-        public string Help    => "Controls how completion-inserted code is qualified: whether object names carry their schema prefix, when identifiers are wrapped in square brackets, and whether column references are prefixed with their table name or alias.";
+        public string Display => "Inserted Code › Qualification";
+        public string Title   => "Qualification";
+        public string Help    => "Controls how completion-inserted code is qualified: whether object names carry their schema prefix, and whether column references are prefixed with their table name or alias. Bracket-identifier policy lives on Inserted Code › Special characters.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {
@@ -29,15 +29,6 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             ctx.RegisterSearch("Qualify object names with schema", "Schema qualification policy for inserted object names", "Dropdown", rowSchema);
 
             ctx.Rows.AddGroupSeparator(panel);
-            ctx.Rows.AddGroupHeader(panel, "Brackets");
-
-            var (rowBracket, cboBracket) = ctx.Rows.AddDropdown(panel,
-                "Bracket identifiers",
-                new[] { "Always", "When required", "Never" },
-                "When to wrap inserted identifiers in [square brackets]: always, only when needed (reserved words / spaces), or never.");
-            ctx.RegisterSearch("Bracket identifiers", "Bracket policy for inserted identifiers", "Dropdown", rowBracket);
-
-            ctx.Rows.AddGroupSeparator(panel);
             ctx.Rows.AddGroupHeader(panel, "Columns");
 
             var (rowQualifyCols, chkQualifyCols) = ctx.Rows.AddToggle(panel,
@@ -45,20 +36,18 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 "Insert column references as 'alias.Column' or 'Table.Column' instead of bare 'Column'.");
             ctx.RegisterSearch("Qualify columns with table name or alias", "Insert column references with their table or alias prefix", "Toggle", rowQualifyCols);
 
-            return new QualificationControls(cboSchema, cboBracket, chkQualifyCols);
+            return new QualificationControls(cboSchema, chkQualifyCols);
         }
     }
 
     internal sealed class QualificationControls : IPageControls
     {
         private readonly ComboBox _schemaMode;
-        private readonly ComboBox _bracketMode;
         private readonly CheckBox _qualifyColumns;
 
-        public QualificationControls(ComboBox schemaMode, ComboBox bracketMode, CheckBox qualifyColumns)
+        public QualificationControls(ComboBox schemaMode, CheckBox qualifyColumns)
         {
             _schemaMode = schemaMode;
-            _bracketMode = bracketMode;
             _qualifyColumns = qualifyColumns;
         }
 
@@ -72,13 +61,6 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 SchemaQualifyMode.Never           => 2,
                 _ => 1,
             };
-            _bracketMode.SelectedIndex = q.BracketMode switch
-            {
-                BracketMode.Always       => 0,
-                BracketMode.WhenRequired => 1,
-                BracketMode.Never        => 2,
-                _ => 1,
-            };
             _qualifyColumns.IsChecked = q.QualifyColumnsWithTableOrAlias;
         }
 
@@ -90,12 +72,6 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 0 => SchemaQualifyMode.Always,
                 2 => SchemaQualifyMode.Never,
                 _ => SchemaQualifyMode.NonDefaultOnly,
-            };
-            q.BracketMode = _bracketMode.SelectedIndex switch
-            {
-                0 => BracketMode.Always,
-                2 => BracketMode.Never,
-                _ => BracketMode.WhenRequired,
             };
             q.QualifyColumnsWithTableOrAlias = _qualifyColumns.IsChecked == true;
         }

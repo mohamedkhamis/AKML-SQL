@@ -72,6 +72,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             ["Aliases"] = new AliasesPage(),
             ["ConnectionScope"] = new ConnectionScopePage(),
             ["Qualification"] = new QualificationPage(),
+            ["SpecialCharacters"] = new SpecialCharactersPage(),
             ["InsertOptions"] = new InsertStatementsPage(),
             ["JoinOptions"] = new JoinCompletionPage(),
             ["Labs"] = new LabsPage(),
@@ -449,7 +450,8 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
             // Inserted Code group introduced in Phase 2 (C.2-C.4).
             AddTreeGroup("Inserted Code", expanded: false,
-                ("Qualification & Brackets", "Qualification"),
+                ("Qualification", "Qualification"),
+                ("Special characters", "SpecialCharacters"),
                 ("INSERT statements", "InsertOptions"),
                 ("JOIN completion", "JoinOptions"));
 
@@ -1009,7 +1011,8 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 ("Aliases",       "Suggestions › Aliases"),
                 ("ConnectionScope", "Suggestions › Connections"),
                 ("Schema Cache",  "Suggestions › Database"),
-                ("Qualification", "Inserted Code › Qualification & Brackets"),
+                ("Qualification", "Inserted Code › Qualification"),
+                ("SpecialCharacters", "Inserted Code › Special characters"),
                 ("InsertOptions", "Inserted Code › INSERT statements"),
                 ("JoinOptions",   "Inserted Code › JOIN completion"),
                 ("Formatting",    "Format › Styles"),
@@ -1598,7 +1601,17 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 case "CompletionPolish": _settings.CompletionPolish = defaults.CompletionPolish; break;
                 case "Aliases": _settings.IntelliSense.AliasOptions = defaults.IntelliSense.AliasOptions; break;
                 case "ConnectionScope": _settings.IntelliSense.ConnectionScope = defaults.IntelliSense.ConnectionScope; break;
-                case "Qualification": _settings.IntelliSense.Qualification = defaults.IntelliSense.Qualification; break;
+                case "Qualification":
+                    // Reset only schema + column qualification; BracketMode now belongs to the
+                    // Special characters page, so leave it untouched here.
+                    _settings.IntelliSense.Qualification.SchemaMode = defaults.IntelliSense.Qualification.SchemaMode;
+                    _settings.IntelliSense.Qualification.QualifyColumnsWithTableOrAlias = defaults.IntelliSense.Qualification.QualifyColumnsWithTableOrAlias;
+                    break;
+                case "SpecialCharacters":
+                    // Consolidated pane owns both special-char toggles and the bracket-identifier policy.
+                    _settings.IntelliSense.SpecialCharOptions = defaults.IntelliSense.SpecialCharOptions;
+                    _settings.IntelliSense.Qualification.BracketMode = defaults.IntelliSense.Qualification.BracketMode;
+                    break;
                 case "InsertOptions": _settings.IntelliSense.InsertOptions = defaults.IntelliSense.InsertOptions; break;
                 case "JoinOptions": _settings.IntelliSense.JoinOptions = defaults.IntelliSense.JoinOptions; break;
                 case "Labs": _settings.Labs = defaults.Labs; break;

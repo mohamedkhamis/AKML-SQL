@@ -53,6 +53,11 @@ namespace AkmlSql.Shell.Shared.History
         private Button? _favoritesStarButton;
         private TextBlock? _favoritesStarGlyph;
 
+        // Toolbar open/closed folder toggles — mirror HistoryViewModel.IsOpenFilter
+        // (SQL Prompt's two folder icons: open-queries-only / closed-queries-only).
+        private Path? _openFilterGlyph;
+        private Path? _closedFilterGlyph;
+
         // Status bar elements
         private TextBlock? _statusCountLabel;
         private TextBlock? _statusLoadingLabel;
@@ -115,6 +120,8 @@ namespace AkmlSql.Shell.Shared.History
             {
                 if (args.PropertyName == nameof(HistoryViewModel.FavoritesOnly))
                     UpdateFavoritesStarVisual();
+                else if (args.PropertyName == nameof(HistoryViewModel.IsOpenFilter))
+                    UpdateOpenFilterVisual();
             };
 
             Content = mainGrid;
@@ -257,6 +264,20 @@ namespace AkmlSql.Shell.Shared.History
             iconStack.Children.Add(_favoritesStarButton);
             UpdateFavoritesStarVisual();
 
+            // Open / closed query filter toggles \u2014 SQL Prompt's two folder icons. Each cycles
+            // HistoryViewModel.IsOpenFilter (null \u2192 this state \u2192 null) and re-runs the search;
+            // open and closed are mutually exclusive.
+            _openFilterGlyph = BuildFolderIcon(open: true);
+            var openFilterButton = CreateToolbarIconButton(_openFilterGlyph, "Show open queries only",
+                (_, __) => _viewModel.ToggleOpenFilter(open: true));
+            iconStack.Children.Add(openFilterButton);
+
+            _closedFilterGlyph = BuildFolderIcon(open: false);
+            var closedFilterButton = CreateToolbarIconButton(_closedFilterGlyph, "Show closed queries only",
+                (_, __) => _viewModel.ToggleOpenFilter(open: false));
+            iconStack.Children.Add(closedFilterButton);
+            UpdateOpenFilterVisual();
+
             // Source/server menu \u2014 small dropdown over Servers / Databases.
             var sourceButton = CreateToolbarIconButton(BuildSourceIcon(), "Source / Server", null);
             sourceButton.ContextMenu = BuildSourceMenu();
@@ -293,6 +314,20 @@ namespace AkmlSql.Shell.Shared.History
             if (_favoritesStarGlyph == null) return;
             _favoritesStarGlyph.SetResourceReference(TextBlock.ForegroundProperty,
                 _viewModel.FavoritesOnly ? ThemeTokens.StatusWarning : ThemeTokens.TextSecondary);
+        }
+
+        /// <summary>
+        /// Reflects <see cref="HistoryViewModel.IsOpenFilter"/> onto the two folder-toggle colours:
+        /// the active state (open or closed) is drawn in the accent colour, the rest in the muted
+        /// secondary colour. Kept in sync via the ViewModel's PropertyChanged (so a ClearFilters reset
+        /// also clears the highlight).
+        /// </summary>
+        private void UpdateOpenFilterVisual()
+        {
+            _openFilterGlyph?.SetResourceReference(Shape.StrokeProperty,
+                _viewModel.IsOpenFilter == true ? ThemeTokens.AccentPrimary : ThemeTokens.TextSecondary);
+            _closedFilterGlyph?.SetResourceReference(Shape.StrokeProperty,
+                _viewModel.IsOpenFilter == false ? ThemeTokens.AccentPrimary : ThemeTokens.TextSecondary);
         }
 
         /// <summary>Builds the Servers / Databases dropdown for the toolbar source/server button.</summary>
@@ -503,6 +538,33 @@ namespace AkmlSql.Shell.Shared.History
             AddSide(12);
 
             return canvas;
+        }
+
+        /// <summary>
+        /// Line-art folder glyph for the open/closed query filter toggles. <paramref name="open"/>
+        /// draws an open folder (tab + splayed front panel); otherwise a plain closed folder.
+        /// Stroke colour is theme-driven and recoloured to the accent when the toggle is active
+        /// (see <see cref="UpdateOpenFilterVisual"/>).
+        /// </summary>
+        private static Path BuildFolderIcon(bool open)
+        {
+            var data = open
+                ? "M 2,10.5 L 2,4 L 5,4 L 6.5,5.5 L 12,5.5 M 2,10.5 L 13.5,10.5 L 15,6 L 3.5,6 Z"
+                : "M 1.5,3.5 L 5,3.5 L 6.5,5 L 12.5,5 L 12.5,10.5 L 1.5,10.5 Z";
+            var path = new Path
+            {
+                Data = Geometry.Parse(data),
+                StrokeThickness = 1.3,
+                Stretch = Stretch.None,
+                Width = 17,
+                Height = 14,
+                VerticalAlignment = VerticalAlignment.Center,
+                StrokeLineJoin = PenLineJoin.Round,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round
+            };
+            path.SetResourceReference(Shape.StrokeProperty, ThemeTokens.TextSecondary);
+            return path;
         }
 
         // ================================================================

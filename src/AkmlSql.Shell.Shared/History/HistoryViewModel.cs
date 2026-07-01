@@ -281,6 +281,21 @@ namespace AkmlSql.Shell.Shared.History
             CommandManager.InvalidateRequerySuggested();
         }
 
+        /// <summary>
+        /// Cycles the open/closed tab filter behind the toolbar's two folder toggles and
+        /// re-runs the search. <paramref name="open"/> is the button that was clicked
+        /// (true = "open only", false = "closed only"). Clicking the button for the state
+        /// that is already active clears the filter back to "all"; clicking the other button
+        /// switches straight to it. Open and closed are mutually exclusive — mirrors the
+        /// Redgate SQL History behaviour (report §3 rec #1).
+        /// </summary>
+        public void ToggleOpenFilter(bool open)
+        {
+            IsOpenFilter = (IsOpenFilter == open) ? (bool?)null : open;
+            if (SearchCommand.CanExecute(null))
+                SearchCommand.Execute(null);
+        }
+
         #endregion
 
         #region Search Methods
@@ -308,6 +323,7 @@ namespace AkmlSql.Shell.Shared.History
                 DateFrom = null;
                 DateTo = null;
                 FavoritesOnly = false;
+                IsOpenFilter = null;
 
                 await SearchInternalAsync(resetOffset: true);
             }
