@@ -240,6 +240,9 @@ public class AnalysisEngine(TsqlParserService parser, RuleRegistry registry, CaS
             Column = d.Column,
             Description = meta.Description,
             ReferenceUrl = meta.ReferenceUrl,
+            // Spec 030 T054 (FR-027) — carry the rule's auto-fixable flag so the shell can colour the
+            // quick-fix lightbulb (orange = auto-fix, blue = advisory). Unknown rules → false.
+            AutoFixable = meta.AutoFixable,
             FixActions = d.FixActions.Select(f => new FixActionInfo
             {
                 Label = f.Label,

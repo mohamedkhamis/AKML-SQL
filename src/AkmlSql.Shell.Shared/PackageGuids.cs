@@ -139,5 +139,7 @@ namespace AkmlSql.Shell.Shared
         public const int CmdSnippetCreateFromSelection   = 0x091B;
         // Spec 030 T045 — Surround With snippet (FR-034); bound to Ctrl+K, Ctrl+S.
         public const int CmdSnippetSurroundWith          = 0x091C;
+        // Spec 030 T087 — Bulk Format… wizard launcher (FR-046).
+        public const int CmdBulkFormat                   = 0x091D;
     }
 }

@@ -109,6 +109,7 @@ namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
             commands.Add(Cmd("akml.toggleAs", "Toggle AS Keyword", "Format", CommandIds.CmdToggleAs));
             commands.Add(Cmd("akml.editProfile", "Edit Format Profile", "Format", CommandIds.CmdEditProfile));
             commands.Add(Cmd("akml.disableFormattingForSelection", "Disable Formatting for Selection", "Format", CommandIds.CmdDisableFormattingForSelection));
+            commands.Add(Cmd("akml.bulkFormat", "Bulk Format...", "Format", CommandIds.CmdBulkFormat));
 
             // Refactoring — Lightweight
             commands.Add(Cmd("akml.expandInsertColumns", "Expand INSERT Column List", "Refactoring", CommandIds.CmdExpandInsertColumns));

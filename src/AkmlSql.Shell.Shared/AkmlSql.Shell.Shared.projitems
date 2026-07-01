@@ -224,6 +224,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Productivity\Grid\GridContextMenuWiring.cs" />
     <!-- Phase 8 US3 — Command Palette -->
     <Compile Include="$(MSBuildThisFileDirectory)Productivity\CommandPalette\CommandRegistry.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\CommandPalette\DbObjectProvider.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Productivity\CommandPalette\FuzzyMatcher.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Productivity\CommandPalette\CommandPaletteViewModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Productivity\CommandPalette\CommandPaletteWindow.cs" />
@@ -257,6 +258,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Editor\Adornments\MinimapAdornment.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\Adornments\MinimapAdornmentProvider.cs" />
     <!-- Phase 8 US14 — CRUD Generation & Script As -->
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\BulkFormatCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Productivity\CrudGenerationCommand.cs" />
     <!-- Phase 8 US15 — Connection Aliases -->
     <Compile Include="$(MSBuildThisFileDirectory)Productivity\ConnectionAliasManager.cs" />

@@ -132,6 +132,8 @@ namespace AkmlSql.VS2026
                 // Spec 030 T044/T045 — Create Snippet from Selection + Surround With
                 TryInitCommand("CreateFromSelectionCommand", () => AkmlSql.Shell.Shared.Snippets.CreateFromSelectionCommand.Initialize(this, commandService));
                 TryInitCommand("SurroundWithCommand", () => AkmlSql.Shell.Shared.Snippets.SurroundWithCommand.Initialize(this, commandService));
+                // Spec 030 T087 — Bulk Format wizard (FR-046)
+                TryInitCommand("BulkFormatCommand", () => AkmlSql.Shell.Shared.Productivity.BulkFormatCommand.Initialize(this, commandService));
                 TryInitCommand("BookmarkCommands", () => AkmlSql.Shell.Shared.Navigation.BookmarkCommands.Initialize(this, commandService));
                 TryInitCommand("SplitTableCommand", () => SplitTableCommand.Initialize(this, commandService));
 

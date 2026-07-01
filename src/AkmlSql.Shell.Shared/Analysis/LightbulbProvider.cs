@@ -92,7 +92,7 @@ namespace AkmlSql.Shell.Shared.Analysis
                 foreach (var fix in issue.FixActions)
                 {
                     if (fix.FixType != (int)FixType.Suppress)
-                        actions.Add(new FixAction(_buffer, fix, issue.RuleId));
+                        actions.Add(new FixAction(_buffer, fix, issue.RuleId, issue.AutoFixable));
                 }
 
                 if (!string.IsNullOrEmpty(issue.RuleId))
