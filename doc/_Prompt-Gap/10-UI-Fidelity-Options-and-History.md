@@ -15,6 +15,13 @@
 > **Screenshot addendum.** Real SQL Prompt Options screenshots were captured from the Redgate docs and saved to this folder: `SQL Prompt Options - Special characters Redgate.png` and `SQL Prompt Options - bottom bar Redgate.png`. They **validate the new Special-characters pane** (title, Brackets group, add-parentheses, closing-characters, per-page "Restore Defaults") and the global chrome (Restore all defaults / Import… / Export… bottom-left). They also reveal three refinements SQL Prompt makes that AKML does not yet mirror (deferred follow-ups): (1) brackets is a single **checkbox** "Enclose identifiers within square brackets" — confirms AKML's `Always`/`Never` dropdown values are inert; (2) parentheses label is "…function **or data type**"; (3) auto-close is **five per-character checkboxes** (single quote / double quote / comment / parenthesis / square bracket), not one toggle — needs a settings-model + engine expansion.
 >
 > **Still open** (out of this UI-focused batch): the Special-characters refinements above; Options "Connections & memory" pane, clickable "?" help, ranked/transparency/definition-box toggles, settings-folder relocate; and all engine-deep (Formatting/Refactoring/IntelliSense) and edge-of-scope platform-breadth items.
+>
+> **Special-characters wiring batch (2026-07-02, third pass; TDD; 45/45 Shell tests; SSMS 22 clean):**
+> - **Auto-close characters is now REAL behavior**, not an inert toggle: new unit-tested `AutoClosePairs` decision logic (word/quote guards, `/*`→`*/`, per-char gating) + `CompletionController` TYPECHAR glue with type-over via a tracking point. `SpecialCharacterSettings` gained SQL Prompt's five per-character toggles (screenshot defaults: single ✓ double ✗ comment ✓ paren ✗ square ✓); the pane shows master + five checkboxes with SQL Prompt's exact labels.
+> - **Add-parentheses is now wired**: committing a Function completion appends `()` with the caret inside (guarded when parens already present); label matches SQL Prompt ("…when inserting a function or data type").
+> - **Ctrl-transparency toggle added** (Suggestions › Behavior): the behavior already existed always-on in two places (`CompletionController.UpdatePopupCtrlTransparency`, `AkmlCompletionPopup.OnCtrlPollTick`) — both now honor `IntelliSense.CtrlTransparentPopups`; closes the §2.1 "transparent-on-Ctrl" ❌ row honestly.
+> - **CORRECTION to this report**: the claim that BracketMode "Always/Never are a dead control" (§4 mapping + rec #3 + §5 backlog) was **wrong** — `CompletionHandler.cs:70` → `CompletionEngine.BracketMode` → `ObjectProvider.ApplyBrackets` implements all three modes. The dropdown is honest and a superset of SQL Prompt's checkbox; no action needed.
+> - **Runtime caveat**: `AutoClosePairs` decisions and all Options round-trips are unit-tested, but the TYPECHAR buffer glue (type-over, caret-between-parens) needs an in-SSMS smoke test.
 
 ## 1. Executive summary
 
@@ -128,7 +135,7 @@ Adversarial folding applied: **Snippets removed** from the "AKML-only additions"
 | §3.1 Inserted code ▸ Objects & statements | `InsertStatementsPage.cs:23` (INSERT) + `:36` (EXEC) | **partial** | No ALTER-expansion group |
 | §3.2 Inserted code ▸ Qualification | `QualificationPage.cs:25-46` | **partial** | Single-mode; no per-object-kind qualify scope |
 | §3.3 Inserted code ▸ Aliases | `AliasesPage.cs` (`:28`/`:36`/`:45`); Display "Suggestions › Aliases" `:20`, nav under **Suggestions** `:442-448` | **divergent** | SQL Prompt groups Aliases under **Inserted code** — grouping swapped |
-| §3.4 Inserted code ▸ Special characters | No dedicated pane — auto-close + add-parens `IntelliSensePage.cs:92-102`; brackets `QualificationPage.cs:32-38` | **divergent** | SQL Prompt has one pane; AKML scatters. Bracket engine honors WhenRequired only (`:9-13`) — Always/Never are a dead control |
+| §3.4 Inserted code ▸ Special characters | `SpecialCharactersPage.cs` (consolidated 2026-07-02: brackets + add-parens + per-char auto-close) | **match** (was divergent) | ~~Bracket Always/Never are a dead control~~ **CORRECTED**: BracketMode was always fully wired (`CompletionHandler.cs:70` → `ApplyBrackets`); auto-close + add-parens behaviors wired in the third pass |
 | §4 Format ▸ Styles | `FormattingPage.cs:24-34` (+ triggers/safety `:37-76`); CRUD via editor + `:150-176` | **match** | Format-time actions remain profile-level (as designed) |
 | §5 Tabs ▸ Color | `TabsPage.cs:18-105`; CRUD `:1696-1835` | **match** | Minor: Tabs nav-ordered after Queries (SQL Prompt places it before) |
 | §6 Queries ▸ History | `HistoryPage.cs:17-56` (7 knobs) | **match** | Richer than SQL Prompt (retention + auto-trim) |
@@ -152,7 +159,7 @@ Adversarial folding applied: **Snippets removed** from the "AKML-only additions"
 |---|----------------|----------|--------|
 | 1 | **Consolidate a dedicated "Inserted code ▸ Special characters" pane** — currently scattered across `IntelliSensePage.cs:92-102` (auto-close + add-parens) and `QualificationPage.cs:32-38` (brackets); biggest organizational divergence | **High** | M |
 | 2 | **Un-swap Aliases and Join grouping** — nest Aliases under Inserted code and Join under Suggestions (nav-order + Display-string change: `AliasesPage.cs:20`, `SettingsWindow.cs:442-448`/`:451-454`) | **Medium** | S |
-| 3 | **Wire or hide the inert Bracket "Always/Never" options** — engine honors WhenRequired only (`QualificationPage.cs:9-13`, `:34-38`); dead control today | **Medium** | S |
+| 3 | ~~Wire or hide the inert Bracket "Always/Never" options~~ **RESOLVED as incorrect** — the engine has always honored all three modes (`CompletionHandler.cs:70` → `ObjectProvider.ApplyBrackets`); no change needed | ~~Medium~~ | — |
 | 4 | **Rename "Miscellaneous ▸ Main" → "General"/"Application"** (`SettingsWindow.cs:479`) — removes the false parity signal vs SQL Prompt's Main/Behavior pane | **Medium** | S |
 | 5 | **Provide (or clearly consolidate) a "Connections & memory" pane** — currently split between `IntelliSensePage.cs:124-140` and `SchemaCachePage.cs` | **Medium** | M |
 | 6 | **Upgrade per-page help to a clickable "?" affordance** with friendly-name links (`SettingsWindow.cs:1228-1246`) | **Low** | M |
@@ -170,7 +177,7 @@ Adversarial folding applied: **Snippets removed** from the "AKML-only additions"
 | Absolute `M/d/yyyy HH:mm` timestamps (rows/versions/header) | SQL History | **Medium** | S | Prominent format mismatch vs the reference |
 | Disconnected-engine + empty-result affordances | SQL History | **Medium** | M | Out-of-process pipe-down silently shows a blank list — a failure mode Redgate lacks |
 | Un-swap Aliases / Join grouping | Options | **Medium** | S | Realigns nav to SQL Prompt at near-zero cost |
-| Wire or hide inert Bracket Always/Never | Options | **Medium** | S | Dead control = "settings-lie" |
+| ~~Wire or hide inert Bracket Always/Never~~ **RESOLVED as incorrect** (BracketMode was always fully wired) | Options | — | — | Corrected in the third pass; see §4 |
 | Rename "Miscellaneous ▸ Main" → General/Application | Options | **Medium** | S | Removes false parity signal |
 | Provide/consolidate "Connections & memory" pane | Options | **Medium** | M | Improves discoverability of connection settings |
 | Expand/Qualify inert in batch/CLI (no schema cache) | Formatting | **Medium** | M | Live-editor only; batch path returns schema-stub |

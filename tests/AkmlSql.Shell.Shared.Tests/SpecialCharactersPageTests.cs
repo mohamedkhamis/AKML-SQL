@@ -42,6 +42,56 @@ namespace AkmlSql.Shell.Shared.Tests
         }
 
         [StaFact]
+        public void PerCharacterAutoCloseToggles_RoundTripThroughTheDialog()
+        {
+            // Flip every per-character toggle away from its default
+            // (single ✓ / double ✗ / comment ✓ / paren ✗ / square ✓ per the SQL Prompt reference).
+            var settings = new AppSettings();
+            var sc = settings.IntelliSense.SpecialCharOptions;
+            sc.CloseSingleQuote = false;
+            sc.CloseDoubleQuote = true;
+            sc.CloseCommentMark = false;
+            sc.CloseParenthesis = true;
+            sc.CloseSquareBracket = false;
+
+            var dialog = new SettingsWindow(settings);
+            _ = dialog.TestBuildWindowForRenderTest();
+
+            // The five checkboxes must actually exist on the SpecialCharacters page (search-index
+            // registration proves the rows were built — a pure value round-trip would pass
+            // vacuously if no control owned these settings).
+            Assert.Equal("SpecialCharacters", PageKeyForSearchLabel(dialog, "Single quotation mark ( ' )"));
+            Assert.Equal("SpecialCharacters", PageKeyForSearchLabel(dialog, "Double quotation mark ( \" )"));
+            Assert.Equal("SpecialCharacters", PageKeyForSearchLabel(dialog, "Comment mark ( */ )"));
+            Assert.Equal("SpecialCharacters", PageKeyForSearchLabel(dialog, "Parenthesis )"));
+            Assert.Equal("SpecialCharacters", PageKeyForSearchLabel(dialog, "Square bracket ]"));
+
+            var saved = dialog.GetSettings().IntelliSense.SpecialCharOptions;
+            Assert.False(saved.CloseSingleQuote);
+            Assert.True(saved.CloseDoubleQuote);
+            Assert.False(saved.CloseCommentMark);
+            Assert.True(saved.CloseParenthesis);
+            Assert.False(saved.CloseSquareBracket);
+        }
+
+        [StaFact]
+        public void CtrlTransparentPopupsToggle_RoundTripsThroughTheDialog()
+        {
+            // SQL Prompt's "Make popups transparent when the Ctrl key is held down"
+            // (Suggestions › Behavior). Default true — flip to false and round-trip.
+            var settings = new AppSettings();
+            settings.IntelliSense.CtrlTransparentPopups = false;
+
+            var dialog = new SettingsWindow(settings);
+            _ = dialog.TestBuildWindowForRenderTest();
+
+            // The toggle must exist on the Suggestions › Behavior (IntelliSense) page — see the
+            // vacuous-round-trip note above.
+            Assert.Equal("IntelliSense", PageKeyForSearchLabel(dialog, "Make popups transparent when Ctrl is held"));
+            Assert.False(dialog.GetSettings().IntelliSense.CtrlTransparentPopups);
+        }
+
+        [StaFact]
         public void SpecialCharacterSettings_AreRelocatedOffTheirOldPages()
         {
             var dialog = new SettingsWindow(new AppSettings());
@@ -49,8 +99,9 @@ namespace AkmlSql.Shell.Shared.Tests
 
             // The three consolidated settings must now be attributed to the
             // SpecialCharacters page in the search index, not their old homes.
-            Assert.Equal("SpecialCharacters", PageKeyForSearchLabel(dialog, "Add parentheses after functions"));
-            Assert.Equal("SpecialCharacters", PageKeyForSearchLabel(dialog, "Auto-close matching characters"));
+            // (Labels follow SQL Prompt's wording per the reference screenshot.)
+            Assert.Equal("SpecialCharacters", PageKeyForSearchLabel(dialog, "Add parentheses ( ) when inserting a function or data type"));
+            Assert.Equal("SpecialCharacters", PageKeyForSearchLabel(dialog, "Automatically insert the corresponding closing character"));
             Assert.Equal("SpecialCharacters", PageKeyForSearchLabel(dialog, "Bracket identifiers"));
         }
 

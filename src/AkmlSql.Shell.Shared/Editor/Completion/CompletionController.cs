@@ -140,6 +140,14 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                             return VSConstants.S_OK; // Don't insert space
                         }
 
+                        // Auto-close type-over: typing the closer we just auto-inserted skips over
+                        // it instead of doubling it (') → move past the existing )').
+                        if (TryTypeOverAutoClosed(typedChar))
+                        {
+                            UpdatePopupCtrlTransparency();
+                            return VSConstants.S_OK;
+                        }
+
                         // Suppress native IntelliSense BEFORE letting VS handle the keystroke —
                         // but only while AKML completion is enabled; when disabled (FR-012) we hand
                         // off to the host's native IntelliSense instead of suppressing it.
@@ -153,6 +161,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                         if (akmlCompletionOn) SuppressNativeIntelliSense();
 
                         HandleTypedChar(typedChar);
+                        HandleAutoClose(typedChar);
                         UpdatePopupCtrlTransparency();
                         return result;
                     }
@@ -516,6 +525,88 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         /// <summary>IntelliSense master switch (FR-012). False ⇒ no AKML completion at all.</summary>
         private bool CompletionEnabled() => IntelliSenseSettings().Enabled;
 
+        // ─── Auto-close characters (Inserted Code › Special characters) ─────
+        // Pairing decisions live in AutoClosePairs (unit-tested); this is the buffer glue.
+        // _autoClosePoint tracks the auto-inserted closer so typing the same character at that
+        // exact spot types OVER it instead of doubling it. Positive tracking keeps the point on
+        // the closer as the user types content between the pair.
+        private ITrackingPoint _autoClosePoint;
+        private char _autoCloseChar;
+
+        private void HandleAutoClose(char typedChar)
+        {
+            try
+            {
+                var i = IntelliSenseSettings();
+                if (!i.Enabled) return;
+
+                var snapshot = _textView.TextBuffer.CurrentSnapshot;
+                var caretPos = _textView.Caret.Position.BufferPosition.Position;
+
+                // The caret must sit directly after the char VS just inserted; anything else
+                // (overtype selections, undo replays) is left alone.
+                if (caretPos < 1 || caretPos > snapshot.Length || snapshot[caretPos - 1] != typedChar)
+                    return;
+
+                var prev = caretPos >= 2 ? snapshot[caretPos - 2] : '\0';
+                var next = caretPos < snapshot.Length ? snapshot[caretPos] : '\0';
+
+                var closer = AutoClosePairs.TryGetCloser(typedChar, prev, next, i.SpecialCharOptions);
+                if (closer == null) return;
+
+                _textView.TextBuffer.Insert(caretPos, closer);
+                var newSnapshot = _textView.TextBuffer.CurrentSnapshot;
+                _textView.Caret.MoveTo(new SnapshotPoint(newSnapshot, caretPos));
+
+                if (closer.Length == 1)
+                {
+                    _autoClosePoint = newSnapshot.CreateTrackingPoint(caretPos, PointTrackingMode.Positive);
+                    _autoCloseChar = closer[0];
+                }
+                else
+                {
+                    _autoClosePoint = null; // "*/" — no single type-over char
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "Auto-close failed");
+                _autoClosePoint = null;
+            }
+        }
+
+        /// <summary>
+        /// True when <paramref name="typedChar"/> matches an auto-inserted closer sitting directly
+        /// at the caret — the caret is moved past it and the keystroke should be swallowed.
+        /// </summary>
+        private bool TryTypeOverAutoClosed(char typedChar)
+        {
+            try
+            {
+                if (_autoClosePoint == null || typedChar != _autoCloseChar) return false;
+
+                var snapshot = _textView.TextBuffer.CurrentSnapshot;
+                var caretPos = _textView.Caret.Position.BufferPosition.Position;
+                var trackedPos = _autoClosePoint.GetPosition(snapshot);
+
+                if (caretPos != trackedPos || caretPos >= snapshot.Length || snapshot[caretPos] != typedChar)
+                {
+                    // Caret moved elsewhere or the closer was edited away — disarm.
+                    _autoClosePoint = null;
+                    return false;
+                }
+
+                _textView.Caret.MoveTo(new SnapshotPoint(snapshot, caretPos + 1));
+                _autoClosePoint = null;
+                return true;
+            }
+            catch
+            {
+                _autoClosePoint = null;
+                return false;
+            }
+        }
+
         /// <summary>Auto-trigger (typing) gate (FR-012). Requires Enabled AND AutoTrigger.</summary>
         private bool AutoTriggerEnabled()
         {
@@ -781,7 +872,32 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                     }
 
                     default:
-                        _textView.TextBuffer.Replace(span, item.InsertText);
+                    {
+                        var insertText = item.InsertText;
+                        int caretBetweenParens = -1;
+
+                        // Special characters › "Add parentheses ( ) when inserting a function or
+                        // data type": committed functions get () appended with the caret inside,
+                        // unless the insert text already carries parens or one follows the caret.
+                        if (item.ObjectType == 5 // Function
+                            && IntelliSenseSettings().SpecialCharOptions.AddParentheses
+                            && !insertText.EndsWith("(") && !insertText.EndsWith(")"))
+                        {
+                            var nextCh = caretPos < snapshot.Length ? snapshot[caretPos] : '\0';
+                            if (nextCh != '(')
+                            {
+                                insertText += "()";
+                                caretBetweenParens = start + insertText.Length - 1;
+                            }
+                        }
+
+                        _textView.TextBuffer.Replace(span, insertText);
+                        if (caretBetweenParens >= 0)
+                        {
+                            var parenSnapshot = _textView.TextBuffer.CurrentSnapshot;
+                            if (caretBetweenParens <= parenSnapshot.Length)
+                                _textView.Caret.MoveTo(new SnapshotPoint(parenSnapshot, caretBetweenParens));
+                        }
                         DismissPopup();
 
                         // Table/View commit → auto-trigger column completion after dot
@@ -796,6 +912,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                             }
                         }
                         return;
+                    }
                 }
             }
             catch (Exception ex)
@@ -1236,6 +1353,16 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         {
             if (_adornment.IsPopupVisible)
             {
+                // Suggestions › Behavior › "Make popups transparent when Ctrl is held" — also
+                // propagated to the popup's own Ctrl poll timer so both transparency paths obey it.
+                bool enabled = IntelliSenseSettings().CtrlTransparentPopups;
+                _adornment.Popup.CtrlTransparencyEnabled = enabled;
+                if (!enabled)
+                {
+                    _adornment.PopupOpacity = 1.0;
+                    return;
+                }
+
                 bool ctrlDown = (System.Windows.Input.Keyboard.Modifiers
                                  & System.Windows.Input.ModifierKeys.Control) != 0;
                 _adornment.PopupOpacity = ctrlDown ? 0.3 : 1.0;

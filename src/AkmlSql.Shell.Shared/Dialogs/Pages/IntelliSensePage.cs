@@ -69,6 +69,11 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 "Show primary key and foreign key badges");
             ctx.RegisterSearch("Show PK/FK indicators", "Show primary key and foreign key badges", "Toggle", rowPkFk);
 
+            var (rowCtrlTransparent, chkCtrlTransparent) = ctx.Rows.AddToggle(panel,
+                "Make popups transparent when Ctrl is held",
+                "Hold Ctrl to see the code underneath the completion popup (SQL Prompt style)");
+            ctx.RegisterSearch("Make popups transparent when Ctrl is held", "Hold Ctrl to see the code underneath the completion popup", "Toggle", rowCtrlTransparent);
+
             ctx.Rows.AddGroupSeparator(panel);
             ctx.Rows.AddGroupHeader(panel, "Assistance");
 
@@ -130,7 +135,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
 
             return new IntelliSenseControls(chkEnabled, chkAutoTrig, chkAfterDot, chkFuzzy,
                 sldMaxSugg, lblMaxSugg, sldTrigDelay, lblTrigDelay, cboCase,
-                chkDataTypes, chkNullable, chkPkFk,
+                chkDataTypes, chkNullable, chkPkFk, chkCtrlTransparent,
                 chkJoin, chkAlias, chkDisableNative, chkSqlCreds,
                 chkSpaceCommit, chkDotCommit, chkSnippets);
         }
@@ -150,6 +155,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         private readonly CheckBox _showDataTypes;
         private readonly CheckBox _showNullability;
         private readonly CheckBox _showPkFk;
+        private readonly CheckBox _ctrlTransparentPopups;
         private readonly CheckBox _joinAssist;
         private readonly CheckBox _autoAlias;
         private readonly CheckBox _disableNativeIs;
@@ -160,7 +166,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
 
         public IntelliSenseControls(CheckBox enabled, CheckBox autoTrig, CheckBox afterDot, CheckBox fuzzy,
             Slider sldMaxSugg, TextBlock lblMaxSugg, Slider sldTrigDelay, TextBlock lblTrigDelay, ComboBox cboCase,
-            CheckBox dataTypes, CheckBox nullable, CheckBox pkFk,
+            CheckBox dataTypes, CheckBox nullable, CheckBox pkFk, CheckBox ctrlTransparentPopups,
             CheckBox join, CheckBox alias, CheckBox disableNative, CheckBox sqlCreds,
             CheckBox spaceCommits, CheckBox dotCommits, CheckBox snippetsInCompletion)
         {
@@ -176,6 +182,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             _showDataTypes = dataTypes;
             _showNullability = nullable;
             _showPkFk = pkFk;
+            _ctrlTransparentPopups = ctrlTransparentPopups;
             _joinAssist = join;
             _autoAlias = alias;
             _disableNativeIs = disableNative;
@@ -195,6 +202,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             _showDataTypes.IsChecked = i.ShowDataTypes;
             _showNullability.IsChecked = i.ShowNullability;
             _showPkFk.IsChecked = i.ShowPkFk;
+            _ctrlTransparentPopups.IsChecked = i.CtrlTransparentPopups;
             _autoAlias.IsChecked = i.AutoAlias;
             _joinAssist.IsChecked = i.JoinAssist;
             _disableNativeIs.IsChecked = i.DisableNativeIntelliSense;
@@ -218,6 +226,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             settings.IntelliSense.ShowDataTypes = _showDataTypes.IsChecked == true;
             settings.IntelliSense.ShowNullability = _showNullability.IsChecked == true;
             settings.IntelliSense.ShowPkFk = _showPkFk.IsChecked == true;
+            settings.IntelliSense.CtrlTransparentPopups = _ctrlTransparentPopups.IsChecked == true;
             settings.IntelliSense.AutoAlias = _autoAlias.IsChecked == true;
             settings.IntelliSense.JoinAssist = _joinAssist.IsChecked == true;
             settings.IntelliSense.DisableNativeIntelliSense = _disableNativeIs.IsChecked == true;
