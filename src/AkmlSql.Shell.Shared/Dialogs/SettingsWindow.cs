@@ -1235,19 +1235,21 @@ namespace AkmlSql.Shell.Shared.Dialogs
                     }
                 };
 
-                var helpButton = new Border
+                // A real Button (not a Border) so the help affordance is keyboard-focusable,
+                // Space/Enter-invokable, and visible to assistive tech (PR #248 review finding #8).
+                var helpButton = new Button
                 {
                     Width = 18,
                     Height = 18,
-                    CornerRadius = new CornerRadius(9),
-                    BorderBrush = _theme.FgAccent,
-                    BorderThickness = new Thickness(1),
                     Background = _theme.Transparent,
+                    BorderBrush = _theme.FgAccent,
                     Cursor = Cursors.Hand,
                     Margin = new Thickness(0, 0, 12, 0),
                     VerticalAlignment = VerticalAlignment.Center,
                     ToolTip = "What's on this page?",
-                    Child = new TextBlock
+                    FocusVisualStyle = FocusVisualStyles.HighStakes,
+                    Template = BuildHelpButtonTemplate(),
+                    Content = new TextBlock
                     {
                         Text = "?",
                         FontSize = 11,
@@ -1257,8 +1259,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
                         VerticalAlignment = VerticalAlignment.Center
                     }
                 };
+                System.Windows.Automation.AutomationProperties.SetName(helpButton, "Page help");
                 var capturedHelp = helpBlock;
-                helpButton.MouseLeftButtonUp += (_, _) =>
+                helpButton.Click += (_, _) =>
                     capturedHelp.Visibility = capturedHelp.Visibility == Visibility.Visible
                         ? Visibility.Collapsed
                         : Visibility.Visible;
@@ -1297,6 +1300,26 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
         // Add* row helpers + ComboBox theming + zebra striping migrated to
         // RowFactory in Pages/RowFactory.cs (Phase 2 B.1+, cleanup in B.17).
+
+        /// <summary>
+        /// Circular chromeless template for the page-header "?" help button: a 9px-radius Border
+        /// (TemplateBinding background/border) wrapping the centered content.
+        /// </summary>
+        private static ControlTemplate BuildHelpButtonTemplate()
+        {
+            var border = new FrameworkElementFactory(typeof(Border));
+            border.SetValue(Border.CornerRadiusProperty, new CornerRadius(9));
+            border.SetValue(Border.BorderThicknessProperty, new Thickness(1));
+            border.SetValue(Border.BorderBrushProperty, new TemplateBindingExtension(Control.BorderBrushProperty));
+            border.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Control.BackgroundProperty));
+
+            var content = new FrameworkElementFactory(typeof(ContentPresenter));
+            content.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+            content.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            border.AppendChild(content);
+
+            return new ControlTemplate(typeof(Button)) { VisualTree = border };
+        }
 
         private Button MakeButton(string text, double width)
         {

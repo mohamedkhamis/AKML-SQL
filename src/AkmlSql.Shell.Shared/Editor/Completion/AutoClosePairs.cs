@@ -14,10 +14,11 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
     {
         /// <summary>
         /// Returns the closing text to insert after the caret, or null when nothing should be
-        /// inserted. <paramref name="prev"/> is the character before the one just typed and
-        /// <paramref name="next"/> the character after the caret ('\0' at buffer edges).
+        /// inserted. <paramref name="prev"/> is the character before the one just typed,
+        /// <paramref name="prev2"/> the one before that, and <paramref name="next"/> the character
+        /// after the caret ('\0' at buffer edges).
         /// </summary>
-        public static string? TryGetCloser(char typed, char prev, char next, SpecialCharacterSettings settings)
+        public static string? TryGetCloser(char typed, char prev, char prev2, char next, SpecialCharacterSettings settings)
         {
             if (!settings.AutoCloseCharacters) return null;
 
@@ -31,8 +32,14 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                     // Word guard on BOTH sides: the apostrophe in "don't" (prev = letter) and a
                     // quote typed directly before a word must both stay a lone quote. A doubled
                     // quote (prev/next already a quote) is a T-SQL escape — leave it alone too.
-                    return settings.CloseSingleQuote && !IsWordOrQuote(prev, '\'') && !IsWordOrQuote(next, '\'')
-                        ? "'" : null;
+                    // Carve-out: the T-SQL Unicode-literal prefix N'…' (either case) auto-closes
+                    // when the N starts a word (prev2 is not a word char) — "= N'" closes, the
+                    // trailing n of "don'" / "in'" does not.
+                    if (!settings.CloseSingleQuote || IsWordOrQuote(next, '\'')) return null;
+                    if (IsWordOrQuote(prev, '\'')
+                        && !(char.ToUpperInvariant(prev) == 'N' && !IsWordOrQuote(prev2, '\'')))
+                        return null;
+                    return "'";
                 case '"':
                     return settings.CloseDoubleQuote && !IsWordOrQuote(prev, '"') && !IsWordOrQuote(next, '"')
                         ? "\"" : null;
@@ -46,8 +53,10 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             }
         }
 
+        // Matches CompletionController.IsIdentifierChar so auto-close and completion-span logic
+        // agree on word boundaries at the same caret position.
         private static bool IsIdentifierChar(char c)
-            => char.IsLetterOrDigit(c) || c == '_' || c == '@' || c == '#' || c == '$';
+            => char.IsLetterOrDigit(c) || c == '_' || c == '@' || c == '#';
 
         private static bool IsWordOrQuote(char c, char quote)
             => IsIdentifierChar(c) || c == quote;

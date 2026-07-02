@@ -70,13 +70,18 @@ namespace AkmlSql.Shell.Shared.Tests
 
                 var pageKey = leaf.Tag as string ?? leaf.Header?.ToString() ?? "(unknown)";
 
-                // (a) A "?" help button exists in the header.
-                bool hasHelpButton = false;
-                foreach (var tb in EnumerateTextBlocks(window))
+                // (a) A "?" help affordance exists AND is a real, keyboard-reachable Button
+                // (PR #248 review finding #8: a mouse-only Border regressed FR-044 help access
+                // for keyboard and screen-reader users).
+                Button? helpButton = null;
+                foreach (var btn in EnumerateElements<Button>(window))
                 {
-                    if (tb.Text == "?") { hasHelpButton = true; break; }
+                    if (btn.Content is TextBlock tb && tb.Text == "?") { helpButton = btn; break; }
                 }
-                Assert.True(hasHelpButton, $"Page '{pageKey}' has no '?' help button in its header.");
+                Assert.True(helpButton != null, $"Page '{pageKey}' has no '?' help Button in its header.");
+                Assert.True(helpButton!.Focusable, $"Page '{pageKey}' help button is not keyboard-focusable.");
+                Assert.False(string.IsNullOrEmpty(System.Windows.Automation.AutomationProperties.GetName(helpButton)),
+                    $"Page '{pageKey}' help button has no AutomationProperties.Name for assistive tech.");
 
                 // (b) The help block itself starts collapsed (shown on demand via the "?").
                 var helpBlock = FindByName(window, "PageHelpBlock");
@@ -155,14 +160,14 @@ namespace AkmlSql.Shell.Shared.Tests
             }
         }
 
-        private static IEnumerable<TextBlock> EnumerateTextBlocks(DependencyObject root)
+        private static IEnumerable<T> EnumerateElements<T>(DependencyObject root) where T : DependencyObject
         {
             foreach (object child in LogicalTreeHelper.GetChildren(root))
             {
-                if (child is TextBlock tb) yield return tb;
+                if (child is T match) yield return match;
                 if (child is DependencyObject dep)
                 {
-                    foreach (var nested in EnumerateTextBlocks(dep))
+                    foreach (var nested in EnumerateElements<T>(dep))
                         yield return nested;
                 }
             }

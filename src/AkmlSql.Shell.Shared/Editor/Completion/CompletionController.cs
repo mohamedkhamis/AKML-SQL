@@ -70,6 +70,10 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             // Subscribe to selection changes for QuickInfo debounce
             _adornment.Popup.SelectionChanged += OnCompletionSelectionChanged;
 
+            // Auto-close type-over lifecycle: disarm pairs the caret leaves (same lifetime as the
+            // view, matching the other ctor subscriptions).
+            _textView.Caret.PositionChanged += OnCaretPositionChangedAutoClose;
+
             // Wildcard popup: double-click commits (same as Tab/Enter) — SQL Prompt parity.
             _adornment.WildcardPopup.CommitRequested += CommitWildcardExpansion;
 
@@ -144,6 +148,13 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                         // it instead of doubling it (') → move past the existing )').
                         if (TryTypeOverAutoClosed(typedChar))
                         {
+                            // Mirror HandleTypedChar's ')' arm — the keystroke is swallowed and the
+                            // buffer never changes, so nothing else dismisses the popups.
+                            if (typedChar == ')')
+                            {
+                                DismissPopup();
+                                DismissSignatureHelp();
+                            }
                             UpdatePopupCtrlTransparency();
                             return VSConstants.S_OK;
                         }
@@ -529,11 +540,50 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
 
         // ─── Auto-close characters (Inserted Code › Special characters) ─────
         // Pairing decisions live in AutoClosePairs (unit-tested); this is the buffer glue.
-        // _autoClosePoint tracks the auto-inserted closer so typing the same character at that
-        // exact spot types OVER it instead of doubling it. Positive tracking keeps the point on
-        // the closer as the user types content between the pair.
-        private ITrackingPoint _autoClosePoint;
-        private char _autoCloseChar;
+        // Each armed entry tracks one auto-inserted closer: Open marks where the caret sat when the
+        // pair was created (Negative tracking — stays put as content is typed at it), Close follows
+        // the closer itself (Positive tracking). A STACK supports nested pairs ("['|']" must type
+        // over ' then ]), and OnCaretPositionChangedAutoClose disarms entries the caret leaves so a
+        // stale point can never swallow a genuinely intended closer typed there later.
+        private readonly List<(ITrackingPoint Open, ITrackingPoint Close, char Closer)> _autoCloseStack = new();
+
+        private void ArmTypeOver(ITextSnapshot snapshot, int position, char closer)
+        {
+            _autoCloseStack.Add((
+                snapshot.CreateTrackingPoint(position, PointTrackingMode.Negative),
+                snapshot.CreateTrackingPoint(position, PointTrackingMode.Positive),
+                closer));
+        }
+
+        /// <summary>
+        /// Disarms auto-close entries whose pair region the caret has left (clicked away, arrowed
+        /// out, jumped elsewhere). Entries nest, so popping from the top until the caret is back
+        /// inside a region keeps exactly the still-relevant pairs armed.
+        /// </summary>
+        private void OnCaretPositionChangedAutoClose(object sender, CaretPositionChangedEventArgs e)
+        {
+            try
+            {
+                if (_autoCloseStack.Count == 0) return;
+                var snapshot = _textView.TextBuffer.CurrentSnapshot;
+                var caretPos = e.NewPosition.BufferPosition.Position;
+
+                while (_autoCloseStack.Count > 0)
+                {
+                    var top = _autoCloseStack[_autoCloseStack.Count - 1];
+                    var openPos = top.Open.GetPosition(snapshot);
+                    var closePos = top.Close.GetPosition(snapshot);
+                    if (caretPos < openPos || caretPos > closePos)
+                        _autoCloseStack.RemoveAt(_autoCloseStack.Count - 1);
+                    else
+                        break;
+                }
+            }
+            catch
+            {
+                _autoCloseStack.Clear();
+            }
+        }
 
         private void HandleAutoClose(char typedChar)
         {
@@ -551,60 +601,58 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                     return;
 
                 var prev = caretPos >= 2 ? snapshot[caretPos - 2] : '\0';
+                var prev2 = caretPos >= 3 ? snapshot[caretPos - 3] : '\0';
                 var next = caretPos < snapshot.Length ? snapshot[caretPos] : '\0';
 
-                var closer = AutoClosePairs.TryGetCloser(typedChar, prev, next, i.SpecialCharOptions);
+                var closer = AutoClosePairs.TryGetCloser(typedChar, prev, prev2, next, i.SpecialCharOptions);
                 if (closer == null) return;
 
                 _textView.TextBuffer.Insert(caretPos, closer);
                 var newSnapshot = _textView.TextBuffer.CurrentSnapshot;
                 _textView.Caret.MoveTo(new SnapshotPoint(newSnapshot, caretPos));
 
+                // Multi-char closers ("*/") have no single type-over key — insert only, no arming
+                // (and, unlike the old single-slot field, no clobbering of an outer armed pair).
                 if (closer.Length == 1)
-                {
-                    _autoClosePoint = newSnapshot.CreateTrackingPoint(caretPos, PointTrackingMode.Positive);
-                    _autoCloseChar = closer[0];
-                }
-                else
-                {
-                    _autoClosePoint = null; // "*/" — no single type-over char
-                }
+                    ArmTypeOver(newSnapshot, caretPos, closer[0]);
             }
             catch (Exception ex)
             {
                 Log.Debug(ex, "Auto-close failed");
-                _autoClosePoint = null;
+                _autoCloseStack.Clear();
             }
         }
 
         /// <summary>
-        /// True when <paramref name="typedChar"/> matches an auto-inserted closer sitting directly
-        /// at the caret — the caret is moved past it and the keystroke should be swallowed.
+        /// True when <paramref name="typedChar"/> matches the innermost armed closer sitting
+        /// directly at the caret — the caret is moved past it and the keystroke should be swallowed.
         /// </summary>
         private bool TryTypeOverAutoClosed(char typedChar)
         {
             try
             {
-                if (_autoClosePoint == null || typedChar != _autoCloseChar) return false;
+                if (_autoCloseStack.Count == 0) return false;
+                var top = _autoCloseStack[_autoCloseStack.Count - 1];
+                if (typedChar != top.Closer) return false;
 
                 var snapshot = _textView.TextBuffer.CurrentSnapshot;
                 var caretPos = _textView.Caret.Position.BufferPosition.Position;
-                var trackedPos = _autoClosePoint.GetPosition(snapshot);
 
-                if (caretPos != trackedPos || caretPos >= snapshot.Length || snapshot[caretPos] != typedChar)
+                if (caretPos != top.Close.GetPosition(snapshot)
+                    || caretPos >= snapshot.Length
+                    || snapshot[caretPos] != typedChar)
                 {
-                    // Caret moved elsewhere or the closer was edited away — disarm.
-                    _autoClosePoint = null;
+                    // Not at the closer (the caret-move handler owns disarming) — insert normally.
                     return false;
                 }
 
+                _autoCloseStack.RemoveAt(_autoCloseStack.Count - 1);
                 _textView.Caret.MoveTo(new SnapshotPoint(snapshot, caretPos + 1));
-                _autoClosePoint = null;
                 return true;
             }
             catch
             {
-                _autoClosePoint = null;
+                _autoCloseStack.Clear();
                 return false;
             }
         }
@@ -658,11 +706,26 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             }, null, DebounceMs, Timeout.Infinite);
         }
 
+        // Latched once per popup show: keeps the per-keystroke paths (Exec fall-through,
+        // selection-changed) free of settings reads AND gives a freshly shown popup the correct
+        // flags (its Ctrl poll previously ran on a stale default until the next TYPECHAR).
+        // Options is modal, so the values cannot change while a popup is open.
+        private bool _showDefinitionBoxLatched = true;
+
+        private void LatchPopupSettings()
+        {
+            var snapshot = SettingsSnapshot();
+            _adornment.Popup.CtrlTransparencyEnabled = snapshot.IntelliSense.CtrlTransparentPopups;
+            _showDefinitionBoxLatched = snapshot.CompletionPolish.ShowObjectDefinitionBox;
+        }
+
         [MethodImpl(MethodImplOptions.NoInlining)]
         private void FetchAndShowCompletions()
         {
             try
             {
+                LatchPopupSettings();
+
                 var caretPos = _textView.Caret.Position.BufferPosition.Position;
                 var docText = _textView.TextBuffer.CurrentSnapshot.GetText();
 
@@ -875,31 +938,11 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
 
                     default:
                     {
-                        var insertText = item.InsertText;
-                        int caretBetweenParens = -1;
-
-                        // Special characters › "Add parentheses ( ) when inserting a function or
-                        // data type": committed functions get () appended with the caret inside,
-                        // unless the insert text already carries parens or one follows the caret.
-                        if (item.ObjectType == 5 // Function
-                            && IntelliSenseSettings().SpecialCharOptions.AddParentheses
-                            && !insertText.EndsWith("(") && !insertText.EndsWith(")"))
-                        {
-                            var nextCh = caretPos < snapshot.Length ? snapshot[caretPos] : '\0';
-                            if (nextCh != '(')
-                            {
-                                insertText += "()";
-                                caretBetweenParens = start + insertText.Length - 1;
-                            }
-                        }
+                        var insertText = ApplyFunctionParens(item, snapshot, caretPos, start, item.InsertText,
+                            out int caretBetweenParens);
 
                         _textView.TextBuffer.Replace(span, insertText);
-                        if (caretBetweenParens >= 0)
-                        {
-                            var parenSnapshot = _textView.TextBuffer.CurrentSnapshot;
-                            if (caretBetweenParens <= parenSnapshot.Length)
-                                _textView.Caret.MoveTo(new SnapshotPoint(parenSnapshot, caretBetweenParens));
-                        }
+                        MoveCaretIntoParens(caretBetweenParens);
                         DismissPopup();
 
                         // Table/View commit → auto-trigger column completion after dot
@@ -922,6 +965,42 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 Log.Debug(ex, "Failed to commit completion");
                 DismissPopup();
             }
+        }
+
+        /// <summary>
+        /// Special characters › "Add parentheses ( ) when inserting a function or data type":
+        /// appends <c>()</c> to a committed Function item unless the insert text already carries
+        /// parens or one follows the caret. Shared by the Enter/Tab/double-click and space-key
+        /// commit paths so the same item commits identically regardless of gesture.
+        /// <paramref name="caretBetweenParens"/> is the caret position inside the pair, or -1.
+        /// </summary>
+        private string ApplyFunctionParens(CompletionItemModel item, ITextSnapshot snapshot,
+            int caretPos, int start, string insertText, out int caretBetweenParens)
+        {
+            caretBetweenParens = -1;
+            if (item.ObjectType != 5) return insertText; // Function
+            if (!IntelliSenseSettings().SpecialCharOptions.AddParentheses) return insertText;
+            if (insertText.EndsWith("(") || insertText.EndsWith(")")) return insertText;
+
+            var nextCh = caretPos < snapshot.Length ? snapshot[caretPos] : '\0';
+            if (nextCh == '(') return insertText;
+
+            caretBetweenParens = start + insertText.Length + 1;
+            return insertText + "()";
+        }
+
+        /// <summary>
+        /// Moves the caret between the parens appended by <see cref="ApplyFunctionParens"/> and
+        /// arms type-over for the closing paren, so the user's natural closing ')' keystroke skips
+        /// it instead of doubling it (consistent with HandleAutoClose-inserted closers).
+        /// </summary>
+        private void MoveCaretIntoParens(int caretBetweenParens)
+        {
+            if (caretBetweenParens < 0) return;
+            var snapshot = _textView.TextBuffer.CurrentSnapshot;
+            if (caretBetweenParens > snapshot.Length) return;
+            _textView.Caret.MoveTo(new SnapshotPoint(snapshot, caretBetweenParens));
+            ArmTypeOver(snapshot, caretBetweenParens, ')');
         }
 
         private void CommitItemBeforeDot(CompletionItemModel item)
@@ -1173,9 +1252,13 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                     return;
                 }
 
-                // Replace: partial text + space → insertText + space
+                // Replace: partial text + space → insertText + space. Functions get the same
+                // add-parens treatment as the Enter/Tab commit path (PR #248 review finding #7).
                 var span = new Span(start, beforeSpace - start); // exclude the space itself
-                _textView.TextBuffer.Replace(span, item.InsertText);
+                var insertText = ApplyFunctionParens(item, snapshot, beforeSpace, start, item.InsertText,
+                    out int caretBetweenParens);
+                _textView.TextBuffer.Replace(span, insertText);
+                MoveCaretIntoParens(caretBetweenParens);
                 DismissPopup();
 
                 // Auto-trigger for keywords that expect objects (FROM, JOIN, etc.)
@@ -1355,11 +1438,9 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         {
             if (_adornment.IsPopupVisible)
             {
-                // Suggestions › Behavior › "Make popups transparent when Ctrl is held" — also
-                // propagated to the popup's own Ctrl poll timer so both transparency paths obey it.
-                bool enabled = IntelliSenseSettings().CtrlTransparentPopups;
-                _adornment.Popup.CtrlTransparencyEnabled = enabled;
-                if (!enabled)
+                // Suggestions › Behavior › "Make popups transparent when Ctrl is held" — the flag
+                // is latched onto the popup at show time (LatchPopupSettings); no settings read here.
+                if (!_adornment.Popup.CtrlTransparencyEnabled)
                 {
                     _adornment.PopupOpacity = 1.0;
                     return;
@@ -1394,9 +1475,10 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 return;
             }
 
-            // Suggestions › Tooltips › "Show the object definition box" — when off, never
-            // fetch QuickInfo or show the definition panel.
-            if (!SettingsSnapshot().CompletionPolish.ShowObjectDefinitionBox)
+            // Suggestions › Tooltips › "Show the object definition box" — when off, never fetch
+            // QuickInfo or show the definition panel. Latched at popup show; no settings read on
+            // this per-arrow-key path.
+            if (!_showDefinitionBoxLatched)
             {
                 CancelQuickInfo();
                 return;

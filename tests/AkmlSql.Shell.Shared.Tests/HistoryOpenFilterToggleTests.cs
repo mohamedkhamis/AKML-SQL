@@ -63,6 +63,19 @@ namespace AkmlSql.Shell.Shared.Tests
         }
 
         [StaFact]
+        public void ToggleOpenFilter_IgnoredWhileSearchIsLoading()
+        {
+            // PR #248 review finding: clicking a folder toggle while a search is in flight used to
+            // flip IsOpenFilter (painting the button active) without re-running the search — an
+            // active-looking filter over an unfiltered list. While loading, the click is a no-op.
+            var vm = new HistoryViewModel { IsLoading = true };
+
+            vm.ToggleOpenFilter(open: true);
+
+            Assert.Null(vm.IsOpenFilter);
+        }
+
+        [StaFact]
         public void Search_WhenEngineNotConnected_FlagsIsDisconnected()
         {
             var vm = new HistoryViewModel();

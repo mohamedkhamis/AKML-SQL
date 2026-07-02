@@ -303,6 +303,11 @@ namespace AkmlSql.Shell.Shared.History
         /// </summary>
         public void ToggleOpenFilter(bool open)
         {
+            // A search is in flight — mutating the filter now would paint the toggle active
+            // without re-running the search (active-looking filter over an unfiltered list).
+            // Ignore the click, like a disabled button.
+            if (IsLoading) return;
+
             IsOpenFilter = (IsOpenFilter == open) ? (bool?)null : open;
             if (SearchCommand.CanExecute(null))
                 SearchCommand.Execute(null);

@@ -745,6 +745,25 @@ namespace AkmlSql.Shell.Shared.History
         }
 
         /// <summary>
+        /// Pure decision for the centered placeholder over the query list (extracted for tests):
+        /// whether to show it and which message. See <see cref="UpdateEmptyState"/>.
+        /// </summary>
+        internal static bool ShouldShowEmptyOverlay(bool isLoading, bool isDisconnected, int entryCount, out string message)
+        {
+            message = string.Empty;
+            if (isLoading) return false;
+
+            // Never draw the overlay on top of visible rows — when the engine dies after a
+            // successful load, the stale list stays readable (PR #248 review finding #6).
+            if (entryCount > 0) return false;
+
+            message = isDisconnected
+                ? "History unavailable — the AKML engine is not connected."
+                : "No queries found.";
+            return true;
+        }
+
+        /// <summary>
         /// Shows the centered placeholder over the query list: a distinct "engine not connected"
         /// message when the pipe is down, or "No queries found" for a genuinely empty result.
         /// Hidden while a search is loading or when the list has entries.
@@ -753,21 +772,10 @@ namespace AkmlSql.Shell.Shared.History
         {
             if (_emptyStateOverlay == null || _emptyStateText == null) return;
 
-            if (_viewModel.IsLoading)
-            {
-                _emptyStateOverlay.Visibility = Visibility.Collapsed;
-                return;
-            }
-            if (_viewModel.IsDisconnected)
-            {
-                _emptyStateText.Text = "History unavailable — the AKML engine is not connected.";
-                _emptyStateOverlay.Visibility = Visibility.Visible;
-                return;
-            }
-            _emptyStateText.Text = "No queries found.";
-            _emptyStateOverlay.Visibility = _viewModel.Entries.Count == 0
-                ? Visibility.Visible
-                : Visibility.Collapsed;
+            var show = ShouldShowEmptyOverlay(
+                _viewModel.IsLoading, _viewModel.IsDisconnected, _viewModel.Entries.Count, out var message);
+            if (show) _emptyStateText.Text = message;
+            _emptyStateOverlay.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         }
 
         /// <summary>

@@ -28,6 +28,16 @@
 > - **Clickable "?" help** (rec #6): every page header now has a circular accent "?" button that toggles the help block (collapsed by default) — replaces the always-visible paragraph, matching SQL Prompt's on-demand help affordance.
 > - **"Show the object definition box" toggle** (§2.1 gap): new `CompletionPolish.ShowObjectDefinitionBox` (default on) surfaced on Suggestions › Tooltips and gated at `CompletionController.OnCompletionSelectionChanged` — off suppresses the QuickInfo fetch and panel entirely.
 > - Still deferred with rationale: **ranked-suggestions toggle** (needs engine usage-history ranking — feature work, not wiring) and **settings-folder relocate** (config-path plumbing is shared with the out-of-process engine; risky to move casually).
+>
+> **PR #248 review remediation (2026-07-02, fifth pass; TDD; 55/55 Shell tests; SSMS 22 clean).** An 8-angle adversarially-verified review of the PR surfaced 8 findings; all fixed:
+> 1. Type-over now mirrors `HandleTypedChar`'s `')'` dismissals (popup + signature help no longer linger; a follow-up Enter can't commit a stale item).
+> 2/7. Add-parens commits arm type-over (no more `GETDATE())`) and the **space-key commit path** applies the same parens via a shared `ApplyFunctionParens` helper.
+> 3. Type-over tracking is now a **stack** (nested pairs work) with **caret-move disarm** (`Caret.PositionChanged` pops entries the caret leaves — a stale point can never swallow an intended closer; `/*` no longer clobbers an outer pair).
+> 4. `AutoClosePairs` takes `prev2` and carves out the **`N'…'` Unicode-literal prefix** ("don't"/"in'" still guarded); `$` removed from its identifier set to match `CompletionController`.
+> 5. Transparency + definition-box flags are **latched at popup show** (`LatchPopupSettings`) — fixes the stale default-true flag on Ctrl+Space-opened popups AND removes the new per-keystroke/per-arrow-key settings reads.
+> 6. The History empty/disconnected overlay never draws over visible rows (pure `ShouldShowEmptyOverlay`, unit-tested).
+> 8. The "?" help affordance is a real focusable `Button` (circular template, `AutomationProperties.Name`, Space/Enter) — keyboard/AT access restored.
+> Plus: `ToggleOpenFilter` ignores clicks while a search is loading (no active-looking-but-unapplied filter). Not fixed (acknowledged): the `ResetPageToDefaultsCore` field-list fragility and test-helper duplication (tracked as cleanup), and the review confirmed `Cache.PersistPath` is a dead setting.
 
 ## 1. Executive summary
 
