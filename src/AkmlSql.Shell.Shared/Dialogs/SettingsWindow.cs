@@ -71,6 +71,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             ["CompletionPolish"] = new CompletionPolishPage(),
             ["Aliases"] = new AliasesPage(),
             ["ConnectionScope"] = new ConnectionScopePage(),
+            ["ConnectionsMemory"] = new ConnectionsMemoryPage(),
             ["Qualification"] = new QualificationPage(),
             ["SpecialCharacters"] = new SpecialCharactersPage(),
             ["InsertOptions"] = new InsertStatementsPage(),
@@ -476,6 +477,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
             AddTreeLeaf("Code Analysis", "Code Analysis");
             AddTreeLeaf("Snippets", "Snippets");
+            AddTreeLeaf("Connections & Memory", "ConnectionsMemory");
             AddTreeLeaf("AI Assistance", "AI Assistance");
 
             AddTreeGroup("Miscellaneous", expanded: false,
@@ -1013,6 +1015,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 ("Aliases",       "Inserted Code › Aliases"),
                 ("ConnectionScope", "Suggestions › Connections"),
                 ("Schema Cache",  "Suggestions › Database"),
+                ("ConnectionsMemory", "Connections & Memory"),
                 ("Qualification", "Inserted Code › Qualification"),
                 ("SpecialCharacters", "Inserted Code › Special characters"),
                 ("InsertOptions", "Inserted Code › INSERT statements"),
@@ -1193,7 +1196,8 @@ namespace AkmlSql.Shell.Shared.Dialogs
         {
             var header = new Grid { Margin = new Thickness(0, 0, 0, 14) };
             header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); // "?" help button
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); // Restore link
 
             var title = new TextBlock
             {
@@ -1205,6 +1209,63 @@ namespace AkmlSql.Shell.Shared.Dialogs
             Grid.SetColumn(title, 0);
             header.Children.Add(title);
 
+            // Spec 030 T083 (FR-044) + SQL Prompt "?" parity — the page help renders as a
+            // collapsed accent-bordered block that this circular "?" button toggles, instead of
+            // an always-visible paragraph. Uniform across pages because IPageBuilder.Help is a
+            // required member.
+            Border? helpBlock = null;
+            if (!string.IsNullOrEmpty(help))
+            {
+                helpBlock = new Border
+                {
+                    Name = "PageHelpBlock",
+                    BorderBrush = _theme.FgAccent,
+                    BorderThickness = new Thickness(2, 0, 0, 0),
+                    Background = _theme.Panel,
+                    Padding = new Thickness(10, 8, 10, 8),
+                    Margin = new Thickness(0, 0, 0, 12),
+                    Visibility = Visibility.Collapsed,
+                    Child = new TextBlock
+                    {
+                        Text = help,
+                        Foreground = _theme.FgSecondary,
+                        FontSize = 12,
+                        TextWrapping = TextWrapping.Wrap,
+                        LineHeight = 18
+                    }
+                };
+
+                var helpButton = new Border
+                {
+                    Width = 18,
+                    Height = 18,
+                    CornerRadius = new CornerRadius(9),
+                    BorderBrush = _theme.FgAccent,
+                    BorderThickness = new Thickness(1),
+                    Background = _theme.Transparent,
+                    Cursor = Cursors.Hand,
+                    Margin = new Thickness(0, 0, 12, 0),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    ToolTip = "What's on this page?",
+                    Child = new TextBlock
+                    {
+                        Text = "?",
+                        FontSize = 11,
+                        FontWeight = FontWeights.Bold,
+                        Foreground = _theme.FgAccent,
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        VerticalAlignment = VerticalAlignment.Center
+                    }
+                };
+                var capturedHelp = helpBlock;
+                helpButton.MouseLeftButtonUp += (_, _) =>
+                    capturedHelp.Visibility = capturedHelp.Visibility == Visibility.Visible
+                        ? Visibility.Collapsed
+                        : Visibility.Visible;
+                Grid.SetColumn(helpButton, 1);
+                header.Children.Add(helpButton);
+            }
+
             var restoreLink = new TextBlock
             {
                 Text = "Restore Defaults",
@@ -1215,7 +1276,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 VerticalAlignment = VerticalAlignment.Center
             };
             restoreLink.MouseLeftButtonUp += (s, e) => OnResetThisPageClick(s, new RoutedEventArgs());
-            Grid.SetColumn(restoreLink, 1);
+            Grid.SetColumn(restoreLink, 2);
             header.Children.Add(restoreLink);
 
             panel.Children.Add(header);
@@ -1228,26 +1289,9 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 Margin = new Thickness(0, 0, 0, 12)
             });
 
-            // Spec 030 T083 (FR-044) — page-specific help block, accent-left-bordered, beneath the
-            // header. Uniform across pages because IPageBuilder.Help is a required member.
-            if (!string.IsNullOrEmpty(help))
+            if (helpBlock != null)
             {
-                panel.Children.Add(new Border
-                {
-                    BorderBrush = _theme.FgAccent,
-                    BorderThickness = new Thickness(2, 0, 0, 0),
-                    Background = _theme.Panel,
-                    Padding = new Thickness(10, 8, 10, 8),
-                    Margin = new Thickness(0, 0, 0, 12),
-                    Child = new TextBlock
-                    {
-                        Text = help,
-                        Foreground = _theme.FgSecondary,
-                        FontSize = 12,
-                        TextWrapping = TextWrapping.Wrap,
-                        LineHeight = 18
-                    }
-                });
+                panel.Children.Add(helpBlock);
             }
         }
 
@@ -1598,7 +1642,28 @@ namespace AkmlSql.Shell.Shared.Dialogs
                     _settings.TelemetryEnabled = defaults.TelemetryEnabled;
                     _settings.Theme = defaults.Theme;
                     break;
-                case "IntelliSense": _settings.IntelliSense = defaults.IntelliSense; break;
+                case "IntelliSense":
+                    // Field-scoped to what the Suggestions › Behavior page owns — replacing the
+                    // whole IntelliSense object would also reset sub-objects owned by other pages
+                    // (Qualification, Aliases, SpecialCharOptions, ConnectionScope, SQL-auth creds).
+                    _settings.IntelliSense.Enabled = defaults.IntelliSense.Enabled;
+                    _settings.IntelliSense.AutoTrigger = defaults.IntelliSense.AutoTrigger;
+                    _settings.IntelliSense.AfterDot = defaults.IntelliSense.AfterDot;
+                    _settings.IntelliSense.FuzzyMatch = defaults.IntelliSense.FuzzyMatch;
+                    _settings.IntelliSense.MaxSuggestions = defaults.IntelliSense.MaxSuggestions;
+                    _settings.IntelliSense.TriggerDelayMs = defaults.IntelliSense.TriggerDelayMs;
+                    _settings.IntelliSense.KeywordCase = defaults.IntelliSense.KeywordCase;
+                    _settings.IntelliSense.ShowDataTypes = defaults.IntelliSense.ShowDataTypes;
+                    _settings.IntelliSense.ShowNullability = defaults.IntelliSense.ShowNullability;
+                    _settings.IntelliSense.ShowPkFk = defaults.IntelliSense.ShowPkFk;
+                    _settings.IntelliSense.CtrlTransparentPopups = defaults.IntelliSense.CtrlTransparentPopups;
+                    _settings.IntelliSense.AutoAlias = defaults.IntelliSense.AutoAlias;
+                    _settings.IntelliSense.JoinAssist = defaults.IntelliSense.JoinAssist;
+                    _settings.IntelliSense.DisableNativeIntelliSense = defaults.IntelliSense.DisableNativeIntelliSense;
+                    _settings.IntelliSense.SpaceCommits = defaults.IntelliSense.SpaceCommits;
+                    _settings.IntelliSense.DotCommits = defaults.IntelliSense.DotCommits;
+                    _settings.IntelliSense.SnippetsInCompletion = defaults.IntelliSense.SnippetsInCompletion;
+                    break;
                 case "SuggestionTypes": _settings.IntelliSense.SuggestionTypes = defaults.IntelliSense.SuggestionTypes; break;
                 case "CompletionPolish": _settings.CompletionPolish = defaults.CompletionPolish; break;
                 case "Aliases": _settings.IntelliSense.AliasOptions = defaults.IntelliSense.AliasOptions; break;
@@ -1617,7 +1682,19 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 case "InsertOptions": _settings.IntelliSense.InsertOptions = defaults.IntelliSense.InsertOptions; break;
                 case "JoinOptions": _settings.IntelliSense.JoinOptions = defaults.IntelliSense.JoinOptions; break;
                 case "Labs": _settings.Labs = defaults.Labs; break;
-                case "Schema Cache": _settings.Cache = defaults.Cache; break;
+                case "Schema Cache":
+                    // Reset only the refresh-behavior fields; storage/memory belongs to the
+                    // Connections & Memory page.
+                    _settings.Cache.AutoRefresh = defaults.Cache.AutoRefresh;
+                    _settings.Cache.DetectDdl = defaults.Cache.DetectDdl;
+                    _settings.Cache.RefreshIntervalSeconds = defaults.Cache.RefreshIntervalSeconds;
+                    break;
+                case "ConnectionsMemory":
+                    _settings.IntelliSense.EnableSqlAuthCredentials = defaults.IntelliSense.EnableSqlAuthCredentials;
+                    _settings.Cache.MaxDatabases = defaults.Cache.MaxDatabases;
+                    _settings.Cache.LazyLoadColumns = defaults.Cache.LazyLoadColumns;
+                    _settings.Cache.PersistToDisk = defaults.Cache.PersistToDisk;
+                    break;
                 case "Formatting": _settings.Formatter = defaults.Formatter; break;
                 case "Snippets": _settings.Snippets = defaults.Snippets; break;
                 case "Code Analysis": _settings.CodeAnalysis = defaults.CodeAnalysis; break;

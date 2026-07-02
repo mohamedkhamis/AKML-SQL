@@ -30,6 +30,11 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 "Bold the next-expected parameter in function-signature popups");
             ctx.RegisterSearch("Highlight the active parameter in signature help", "Bold the next-expected parameter in function-signature popups", "Toggle", rowParam);
 
+            var (rowDefBox, chkDefBox) = ctx.Rows.AddToggle(panel,
+                "Show the object definition box",
+                "Show the definition panel (columns, details, script) beside the completion popup when an item is selected");
+            ctx.RegisterSearch("Show the object definition box", "Show the definition panel beside the completion popup when an item is selected", "Toggle", rowDefBox);
+
             ctx.Rows.AddGroupSeparator(panel);
             ctx.Rows.AddGroupHeader(panel, "Object scripting");
 
@@ -52,7 +57,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 "Initial ordering of columns in the Column Picker popup");
             ctx.RegisterSearch("Column Picker default sort", "Initial ordering of columns in the Column Picker popup", "Dropdown", rowSort);
 
-            return new CompletionPolishControls(chkMsDesc, chkParam, chkDecrypt, chkTempTable, cboSort);
+            return new CompletionPolishControls(chkMsDesc, chkParam, chkDefBox, chkDecrypt, chkTempTable, cboSort);
         }
     }
 
@@ -60,15 +65,18 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
     {
         private readonly CheckBox _msDescription;
         private readonly CheckBox _parameterHighlight;
+        private readonly CheckBox _showDefinitionBox;
         private readonly CheckBox _encryptedDecryption;
         private readonly CheckBox _tempTableIntellisense;
         private readonly ComboBox _columnPickerSort;
 
         public CompletionPolishControls(CheckBox msDescription, CheckBox parameterHighlight,
-            CheckBox encryptedDecryption, CheckBox tempTableIntellisense, ComboBox columnPickerSort)
+            CheckBox showDefinitionBox, CheckBox encryptedDecryption, CheckBox tempTableIntellisense,
+            ComboBox columnPickerSort)
         {
             _msDescription = msDescription;
             _parameterHighlight = parameterHighlight;
+            _showDefinitionBox = showDefinitionBox;
             _encryptedDecryption = encryptedDecryption;
             _tempTableIntellisense = tempTableIntellisense;
             _columnPickerSort = columnPickerSort;
@@ -79,6 +87,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             var c = settings.CompletionPolish;
             _msDescription.IsChecked = c.EnableMsDescription;
             _parameterHighlight.IsChecked = c.EnableParameterHighlight;
+            _showDefinitionBox.IsChecked = c.ShowObjectDefinitionBox;
             _encryptedDecryption.IsChecked = c.EnableEncryptedDecryption;
             _tempTableIntellisense.IsChecked = c.EnableTempTableIntellisense;
             _columnPickerSort.SelectedIndex = (int)c.ColumnPickerDefaultSort;
@@ -88,6 +97,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         {
             settings.CompletionPolish.EnableMsDescription = _msDescription.IsChecked == true;
             settings.CompletionPolish.EnableParameterHighlight = _parameterHighlight.IsChecked == true;
+            settings.CompletionPolish.ShowObjectDefinitionBox = _showDefinitionBox.IsChecked == true;
             settings.CompletionPolish.EnableEncryptedDecryption = _encryptedDecryption.IsChecked == true;
             settings.CompletionPolish.EnableTempTableIntellisense = _tempTableIntellisense.IsChecked == true;
             settings.CompletionPolish.ColumnPickerDefaultSort =

@@ -22,6 +22,12 @@
 > - **Ctrl-transparency toggle added** (Suggestions › Behavior): the behavior already existed always-on in two places (`CompletionController.UpdatePopupCtrlTransparency`, `AkmlCompletionPopup.OnCtrlPollTick`) — both now honor `IntelliSense.CtrlTransparentPopups`; closes the §2.1 "transparent-on-Ctrl" ❌ row honestly.
 > - **CORRECTION to this report**: the claim that BracketMode "Always/Never are a dead control" (§4 mapping + rec #3 + §5 backlog) was **wrong** — `CompletionHandler.cs:70` → `CompletionEngine.BracketMode` → `ObjectProvider.ApplyBrackets` implements all three modes. The dropdown is honest and a superset of SQL Prompt's checkbox; no action needed.
 > - **Runtime caveat**: `AutoClosePairs` decisions and all Options round-trips are unit-tested, but the TYPECHAR buffer glue (type-over, caret-between-parens) needs an in-SSMS smoke test.
+>
+> **Options batch 4 (2026-07-02, fourth pass; TDD; 48/48 Shell + 579 Core tests; SSMS 22 clean):**
+> - **"Connections & Memory" pane** (rec #5): new top-level `ConnectionsMemoryPage` mirroring SQL Prompt's §9 pane — SQL-auth credential settings moved off Suggestions › Behavior, and the schema-cache storage/memory knobs (max cached DBs, lazy column load, persist-to-disk) moved off Suggestions › Database (which keeps refresh behavior). Field-scoped Reset cases added; the pre-existing whole-object `IntelliSense` reset leak (which nuked other pages' sub-settings) fixed along the way.
+> - **Clickable "?" help** (rec #6): every page header now has a circular accent "?" button that toggles the help block (collapsed by default) — replaces the always-visible paragraph, matching SQL Prompt's on-demand help affordance.
+> - **"Show the object definition box" toggle** (§2.1 gap): new `CompletionPolish.ShowObjectDefinitionBox` (default on) surfaced on Suggestions › Tooltips and gated at `CompletionController.OnCompletionSelectionChanged` — off suppresses the QuickInfo fetch and panel entirely.
+> - Still deferred with rationale: **ranked-suggestions toggle** (needs engine usage-history ranking — feature work, not wiring) and **settings-folder relocate** (config-path plumbing is shared with the out-of-process engine; risky to move casually).
 
 ## 1. Executive summary
 

@@ -505,7 +505,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         private AkmlSql.Core.Config.AppSettings _settingsCache;
         private DateTime _settingsCacheUtc;
 
-        private AkmlSql.Core.Config.IntelliSenseSettings IntelliSenseSettings()
+        private AkmlSql.Core.Config.AppSettings SettingsSnapshot()
         {
             if (_settingsCache == null || (DateTime.UtcNow - _settingsCacheUtc).TotalSeconds > 2)
             {
@@ -519,8 +519,10 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 }
                 _settingsCacheUtc = DateTime.UtcNow;
             }
-            return _settingsCache.IntelliSense;
+            return _settingsCache;
         }
+
+        private AkmlSql.Core.Config.IntelliSenseSettings IntelliSenseSettings() => SettingsSnapshot().IntelliSense;
 
         /// <summary>IntelliSense master switch (FR-012). False ⇒ no AKML completion at all.</summary>
         private bool CompletionEnabled() => IntelliSenseSettings().Enabled;
@@ -1387,6 +1389,14 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         private void OnCompletionSelectionChanged(object sender, CompletionItemModel item)
         {
             if (item == null || !_adornment.Popup.IsOpen)
+            {
+                CancelQuickInfo();
+                return;
+            }
+
+            // Suggestions › Tooltips › "Show the object definition box" — when off, never
+            // fetch QuickInfo or show the definition panel.
+            if (!SettingsSnapshot().CompletionPolish.ShowObjectDefinitionBox)
             {
                 CancelQuickInfo();
                 return;

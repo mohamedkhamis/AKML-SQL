@@ -1276,6 +1276,14 @@ namespace AkmlSql.Core.Config
         [JsonPropertyName("enableParameterHighlight")]
         public bool EnableParameterHighlight { get; set; } = true;
 
+        /// <summary>
+        /// Show the object definition box beside the completion popup when an item is selected
+        /// (SQL Prompt's "Display object definitions"). Off suppresses the QuickInfo fetch and the
+        /// panel entirely. Default on — matches the previous hard-wired behavior.
+        /// </summary>
+        [JsonPropertyName("showObjectDefinitionBox")]
+        public bool ShowObjectDefinitionBox { get; set; } = true;
+
         // ── Encrypted object decryption ──
 
         /// <summary>

@@ -65,6 +65,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\CompletionPolishPage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\AliasesPage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\ConnectionScopePage.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\ConnectionsMemoryPage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\QualificationPage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\SpecialCharactersPage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\InsertStatementsPage.cs" />
