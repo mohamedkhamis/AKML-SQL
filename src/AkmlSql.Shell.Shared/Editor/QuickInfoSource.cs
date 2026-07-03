@@ -1,13 +1,14 @@
 using System;
-using System.Collections.Generic;
-using System.ComponentModel.Composition;
 using System.Diagnostics;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Navigation;
+using System.ComponentModel.Composition;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Shell.Shared.Analysis;
@@ -18,23 +19,21 @@ using Microsoft.VisualStudio.Text;
 using Microsoft.VisualStudio.Utilities;
 using Serilog;
 
-#pragma warning disable CS0618 // IQuickInfoSource/IQuickInfoSourceProvider are obsolete but SSMS 22's editor does not invoke the async replacement (IAsyncQuickInfoSource) — see the cache-and-retrigger note below.
-
 namespace AkmlSql.Shell.Shared.Editor
 {
     /// <summary>
     /// T067: MEF-exported provider that creates QuickInfoSource instances for T-SQL buffers.
     /// </summary>
-    [Export(typeof(IQuickInfoSourceProvider))]
+    [Export(typeof(IAsyncQuickInfoSourceProvider))]
     // SSMS 22 query editor reports content type "SQL"; register all three so quick-info fires in SSMS.
     [ContentType("SQL Server Tools")]
     [ContentType("SQL")]
     [ContentType("T-SQL")]
     [Name("AkmlSqlQuickInfoSource")]
     [Order(Before = "default")]
-    internal class QuickInfoSourceProvider : IQuickInfoSourceProvider
+    internal class QuickInfoSourceProvider : IAsyncQuickInfoSourceProvider
     {
-        public IQuickInfoSource TryCreateQuickInfoSource(ITextBuffer textBuffer)
+        public IAsyncQuickInfoSource TryCreateQuickInfoSource(ITextBuffer textBuffer)
         {
             return new QuickInfoSource(textBuffer);
         }
@@ -45,26 +44,17 @@ namespace AkmlSql.Shell.Shared.Editor
     /// to the engine (whose <c>QuickInfoHandler</c> resolves the identifier against the live,
     /// continuously-synced session document) and renders the metadata.
     /// <para>
-    /// The MEF <see cref="IQuickInfoSource"/> contract is synchronous (<see
-    /// cref="AugmentQuickInfoSession"/> returns <c>out ITrackingSpan</c>) but the IPC is async, so
-    /// this uses the <b>cache-and-retrigger</b> bridge: the first pass fires the request on a
-    /// background thread and returns no content; when the response lands it is cached and
-    /// <see cref="IQuickInfoSession.Recalculate"/> re-enters this method, where the cached response
-    /// is rendered. This never blocks the UI thread (vs. <c>JoinableTaskFactory.Run</c>, which would
-    /// freeze the editor on every hover). Migrating to <c>IAsyncQuickInfoSource</c> was rejected —
-    /// the SSMS 22 editor does not invoke it.
+    /// Implements the async MEF quick-info contract (<see cref="IAsyncQuickInfoSource"/>). SSMS 22's
+    /// editor no longer supports the legacy synchronous <c>IQuickInfoSource</c> — it emits a
+    /// "uses API that is no longer supported" warning at load — so this awaits the async IPC directly
+    /// inside <see cref="GetQuickInfoItemAsync"/>, replacing the earlier cache-and-retrigger bridge
+    /// the synchronous contract required.
     /// </para>
     /// </summary>
-    internal class QuickInfoSource : IQuickInfoSource
+    internal class QuickInfoSource : IAsyncQuickInfoSource
     {
         private readonly ITextBuffer _buffer;
         private readonly string? _sessionId;
-        private readonly object _gate = new object();
-        // offset -> response that arrived from the engine and is awaiting render on the retrigger pass.
-        private readonly Dictionary<int, QuickInfoResponse> _cache = new Dictionary<int, QuickInfoResponse>();
-        // offsets with an IPC request currently in flight (so we don't fire twice).
-        private readonly HashSet<int> _pending = new HashSet<int>();
-        private int _cacheGeneration;   // bumped on edit so a slow fetch can't write a stale entry
         private bool _disposed;
 
         // Spec 030 T055 (FR-028) — the AnalysisController for this buffer; its CurrentIssues feeds the
@@ -76,8 +66,6 @@ namespace AkmlSql.Shell.Shared.Editor
         {
             _buffer = buffer;
             buffer.Properties.TryGetProperty("AkmlSqlSessionId", out _sessionId);
-            // Metadata can change as the document is edited — drop any cached/pending hovers.
-            buffer.Changed += OnBufferChanged;
             buffer.Properties.TryGetProperty(typeof(AnalysisController), out _analysisController);
         }
 
@@ -91,35 +79,32 @@ namespace AkmlSql.Shell.Shared.Editor
             return controller?.CurrentIssues ?? Array.Empty<CodeIssueInfo>();
         }
 
-        private void OnBufferChanged(object sender, TextContentChangedEventArgs e)
+        /// <summary>
+        /// Invoked on the UI thread by the async quick-info broker. The trigger point, modifier state
+        /// and word span are captured up front (UI-thread work); the object-metadata path then awaits
+        /// the engine off-thread and marshals back before building content.
+        /// </summary>
+        public async Task<QuickInfoItem?> GetQuickInfoItemAsync(IAsyncQuickInfoSession session, CancellationToken cancellationToken)
         {
-            lock (_gate) { _cache.Clear(); _pending.Clear(); _cacheGeneration++; }
-        }
-
-        public void AugmentQuickInfoSession(IQuickInfoSession session, IList<object> quickInfoContent, out ITrackingSpan applicableToSpan)
-        {
-            applicableToSpan = null;
             if (_disposed || string.IsNullOrEmpty(_sessionId))
-                return;
+                return null;
 
             try
             {
                 var snapshot = _buffer.CurrentSnapshot;
                 var point = session.GetTriggerPoint(snapshot);
                 if (point == null)
-                    return;
+                    return null;
 
                 int position = point.Value.Position;
 
                 // Spec 030 T055 (FR-028) — Ctrl held: show the analysis issue's rule description +
                 // reference link for the squiggle under the cursor, instead of object metadata. When
                 // Ctrl is down we stay in "issue mode": if no issue covers the position, show nothing
-                // (rather than falling back to the object-metadata hover).
+                // (rather than falling back to the object-metadata hover). This path is fully
+                // synchronous, so it stays on the UI thread where the WPF panel is built.
                 if ((Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
-                {
-                    TryRenderIssueDetails(snapshot, position, quickInfoContent, out applicableToSpan);
-                    return;
-                }
+                    return TryBuildIssueItem(snapshot, position);
 
                 // Word span under the cursor (also what the tooltip applies to).
                 int start = position;
@@ -127,92 +112,41 @@ namespace AkmlSql.Shell.Shared.Editor
                 int end = position;
                 while (end < snapshot.Length && IsIdentifierChar(snapshot[end])) end++;
                 if (start == end)
-                    return;
+                    return null;
 
-                applicableToSpan = snapshot.CreateTrackingSpan(start, end - start, SpanTrackingMode.EdgeInclusive);
+                var applicableToSpan = snapshot.CreateTrackingSpan(start, end - start, SpanTrackingMode.EdgeInclusive);
 
-                QuickInfoResponse? ready = null;
-                bool fire = false;
-                lock (_gate)
-                {
-                    if (_cache.TryGetValue(position, out var cached))
-                    {
-                        ready = cached;            // retrigger pass — render below
-                        _cache.Remove(position);
-                    }
-                    else if (!_pending.Contains(position))
-                    {
-                        _pending.Add(position);    // first pass — fetch
-                        fire = true;
-                    }
-                    // else: in flight, render nothing this pass
-                }
+                var client = EngineLifecycle.Manager?.Client;
+                if (client == null || !client.IsConnected)
+                    return null;
 
-                if (ready != null)
-                {
-                    Render(ready, quickInfoContent);
-                    return;
-                }
-                if (fire)
-                    FetchAndRetrigger(session, position);
+                var response = await client.SendRequestAsync<QuickInfoResponse, QuickInfoRequest>(
+                    MessageTypes.RequestQuickInfo,
+                    new QuickInfoRequest { SessionId = _sessionId, CursorOffset = position },
+                    timeoutMs: 1500).ConfigureAwait(false);
+
+                var text = BuildText(response);
+                if (string.IsNullOrEmpty(text))
+                    return null;
+
+                return new QuickInfoItem(applicableToSpan, text);
+            }
+            catch (OperationCanceledException)
+            {
+                return null;
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "QuickInfo: augment failed");
+                Log.Debug(ex, "QuickInfo: augment failed");
+                return null;
             }
         }
 
-        private void FetchAndRetrigger(IQuickInfoSession session, int position)
+        private static string? BuildText(QuickInfoResponse? response)
         {
-            int generation;
-            lock (_gate) { generation = _cacheGeneration; }
+            if (response == null)
+                return null;
 
-            _ = System.Threading.Tasks.Task.Run(async () =>
-            {
-                try
-                {
-                    var client = EngineLifecycle.Manager?.Client;
-                    if (client == null || !client.IsConnected)
-                    {
-                        lock (_gate) { _pending.Remove(position); }
-                        return;
-                    }
-
-                    var response = await client.SendRequestAsync<QuickInfoResponse, QuickInfoRequest>(
-                        MessageTypes.RequestQuickInfo,
-                        new QuickInfoRequest { SessionId = _sessionId, CursorOffset = position },
-                        timeoutMs: 1500).ConfigureAwait(false);
-
-                    bool hasContent = response != null
-                        && (!string.IsNullOrEmpty(response.Header)
-                            || (response.Details != null && response.Details.Length > 0)
-                            || !string.IsNullOrEmpty(response.Description));
-
-                    bool store;
-                    lock (_gate)
-                    {
-                        _pending.Remove(position);
-                        // Drop a response whose generation has moved on (edit landed mid-fetch) so a
-                        // stale hover can't linger in the cache for the same offset.
-                        store = hasContent && generation == _cacheGeneration;
-                        if (store) _cache[position] = response!;
-                    }
-                    if (!store) return;   // nothing to show / superseded — don't re-trigger
-
-                    await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-                    if (!_disposed && !session.IsDismissed)
-                        session.Recalculate();   // re-enters AugmentQuickInfoSession, where the cache renders
-                }
-                catch (Exception ex)
-                {
-                    lock (_gate) { _pending.Remove(position); }
-                    Log.Debug(ex, "QuickInfo: fetch failed");
-                }
-            });
-        }
-
-        private static void Render(QuickInfoResponse response, IList<object> quickInfoContent)
-        {
             var sb = new StringBuilder();
             if (!string.IsNullOrEmpty(response.Header))
             {
@@ -234,23 +168,22 @@ namespace AkmlSql.Shell.Shared.Editor
                 sb.AppendLine().Append(response.Description);
 
             var text = sb.ToString().TrimEnd();
-            if (text.Length > 0)
-                quickInfoContent.Add(text);
+            return text.Length > 0 ? text : null;
         }
 
         /// <summary>
-        /// Spec 030 T055 (FR-028) — renders the analysis issue(s) whose span covers <paramref name="position"/>
-        /// as a themed popup (rule id + description + optional reference link). No-op (and no
-        /// <paramref name="applicableToSpan"/>) when no issue covers the position.
+        /// Spec 030 T055 (FR-028) — builds a <see cref="QuickInfoItem"/> for the analysis issue(s) whose
+        /// span covers <paramref name="position"/> (rule id + description + optional reference link).
+        /// Returns <c>null</c> when no issue covers the position.
         /// </summary>
-        private void TryRenderIssueDetails(ITextSnapshot snapshot, int position, IList<object> quickInfoContent, out ITrackingSpan applicableToSpan)
+        private QuickInfoItem? TryBuildIssueItem(ITextSnapshot snapshot, int position)
         {
-            applicableToSpan = null;
             var issues = GetCurrentIssues();
             if (issues.Length == 0)
-                return;
+                return null;
 
-            bool any = false;
+            StackPanel container = null;
+            ITrackingSpan applicableToSpan = null;
             foreach (var issue in issues)
             {
                 int start = Math.Max(0, Math.Min(issue.StartOffset, snapshot.Length));
@@ -258,13 +191,15 @@ namespace AkmlSql.Shell.Shared.Editor
                 if (position < start || position > end)
                     continue;
 
-                if (!any)
+                if (container == null)
                 {
+                    container = new StackPanel();
                     applicableToSpan = snapshot.CreateTrackingSpan(start, end - start, SpanTrackingMode.EdgeInclusive);
-                    any = true;
                 }
-                quickInfoContent.Add(BuildIssuePanel(issue));
+                container.Children.Add(BuildIssuePanel(issue));
             }
+
+            return container == null ? null : new QuickInfoItem(applicableToSpan, container);
         }
 
         /// <summary>Builds the WPF content for one issue: a UIElement (not a string) so the reference
@@ -342,11 +277,7 @@ namespace AkmlSql.Shell.Shared.Editor
 
         public void Dispose()
         {
-            if (_disposed) return;
             _disposed = true;
-            _buffer.Changed -= OnBufferChanged;
         }
     }
 }
-
-#pragma warning restore CS0618

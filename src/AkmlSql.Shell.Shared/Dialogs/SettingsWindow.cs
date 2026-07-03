@@ -355,7 +355,10 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 Padding = new Thickness(0, 12, 0, 0)
             };
 
-            var panel = new StackPanel();
+            // DockPanel so the title/underline/search stay pinned and the nav tree fills the rest
+            // inside a ScrollViewer — otherwise a plain StackPanel gives the tree unbounded height and
+            // the lower groups get clipped (no scrollbar) once several are expanded.
+            var panel = new DockPanel { LastChildFill = true };
 
             // Title label — SQL Prompt style ("AKML SQL Options")
             var title = new TextBlock
@@ -366,18 +369,23 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 Foreground = _theme.FgPrimary,
                 Margin = new Thickness(16, 0, 16, 14)
             };
+            DockPanel.SetDock(title, Dock.Top);
             panel.Children.Add(title);
 
             // Title underline
-            panel.Children.Add(new Border
+            var titleRule = new Border
             {
                 Height = 1,
                 Background = _theme.Sep,
                 Margin = new Thickness(12, 0, 12, 10)
-            });
+            };
+            DockPanel.SetDock(titleRule, Dock.Top);
+            panel.Children.Add(titleRule);
 
             // ── Search box (Visual Studio Options-style, but better) ──
-            panel.Children.Add(BuildSearchBox());
+            var searchBox = BuildSearchBox();
+            DockPanel.SetDock(searchBox, Dock.Top);
+            panel.Children.Add(searchBox);
 
             // TreeView for navigation
             _navTree = new TreeView
@@ -486,7 +494,15 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
             _navTree.SelectedItemChanged += OnNavSelectionChanged;
 
-            panel.Children.Add(_navTree);
+            // Fill child: the tree scrolls when expanded groups overflow the sidebar height.
+            var navScroller = new ScrollViewer
+            {
+                Content = _navTree,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                Padding = new Thickness(0, 0, 0, 8)
+            };
+            panel.Children.Add(navScroller);
             sidebar.Child = panel;
             return sidebar;
         }
