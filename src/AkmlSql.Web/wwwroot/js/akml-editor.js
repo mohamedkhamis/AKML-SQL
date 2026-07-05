@@ -3,27 +3,29 @@
 // not know that the underlying editor is CM6 -- it could be swapped for Monaco or any
 // other editor by replacing this file.
 //
-// CodeMirror is loaded lazily from the official ESM CDN. The release build switches to a
-// vendored copy under wwwroot/lib/codemirror/ (T054 bundle-size audit will lock the
-// version) by replacing the import URL with a relative path.
-
-const CM_BASE = 'https://esm.sh/@codemirror';
+// CodeMirror 6 is loaded from a locally-vendored bundle (wwwroot/lib/codemirror/akml-cm.js),
+// NOT a CDN. This keeps the web edition working on-prem / offline / behind a strict CSP — the
+// esm.sh CDN was unreliable (500s / firewall blocks) and required loosening script-src.
+// The bundle is produced by src/AkmlSql.Web/tools/codemirror (npm install && npm run build); it
+// re-exports each package as a namespace matching the shape destructured below. It MUST stay one
+// bundle so @codemirror/state is a single shared instance (per-package files would break facets).
+// Resolved relative to this module's URL (/js/akml-editor.js -> /lib/codemirror/akml-cm.js) so it
+// is independent of the app's <base href>.
+const CM_BUNDLE_URL = new URL('../lib/codemirror/akml-cm.js', import.meta.url).href;
 let _cmModulesPromise = null;
 
 function loadCm() {
     if (_cmModulesPromise) return _cmModulesPromise;
-    _cmModulesPromise = Promise.all([
-        import(`${CM_BASE}/state@6`),
-        import(`${CM_BASE}/view@6`),
-        import(`${CM_BASE}/commands@6`),
-        import(`${CM_BASE}/language@6`),
-        import(`${CM_BASE}/lang-sql@6`),
-        import(`${CM_BASE}/autocomplete@6`),
-        import(`${CM_BASE}/search@6`),
-        import(`${CM_BASE}/lint@6`),
-        import('https://esm.sh/@lezer/highlight@1'),   // `tags` for the token-driven syntax theme
-    ]).then(([state, view, commands, language, langSql, autocomplete, search, lint, highlight]) => ({
-        state, view, commands, language, langSql, autocomplete, search, lint, highlight,
+    _cmModulesPromise = import(CM_BUNDLE_URL).then(m => ({
+        state: m.state,
+        view: m.view,
+        commands: m.commands,
+        language: m.language,
+        langSql: m.langSql,
+        autocomplete: m.autocomplete,
+        search: m.search,
+        lint: m.lint,
+        highlight: m.highlight,   // `tags` for the token-driven syntax theme
     }));
     return _cmModulesPromise;
 }

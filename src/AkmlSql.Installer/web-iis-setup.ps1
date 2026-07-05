@@ -118,8 +118,11 @@ try {
     if ($Mode -eq 'Lan') {
         $bridgeConnectSrc += "wss: "
     }
+    # CodeMirror is vendored locally (wwwroot/lib/codemirror/akml-cm.js), so script-src no longer
+    # needs the esm.sh CDN — everything loads from 'self'. 'wasm-unsafe-eval' stays for the Blazor
+    # WASM runtime; style-src keeps 'unsafe-inline' for CodeMirror's injected editor styles.
     $csp = "default-src 'self'; " +
-           "script-src 'self' 'wasm-unsafe-eval' https://esm.sh; " +
+           "script-src 'self' 'wasm-unsafe-eval'; " +
            "style-src 'self' 'unsafe-inline'; " +
            "img-src 'self' data:; " +
            "connect-src 'self' " +
