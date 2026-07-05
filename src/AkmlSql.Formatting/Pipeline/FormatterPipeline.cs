@@ -41,6 +41,7 @@ public class FormatterPipeline
         // chokepoint that catches every collapse path. See spec 030 T009 (#1).
         NormalizeUnarySignSpacing(nodes);
         NormalizeSemicolonSpacing(nodes);
+        NormalizeMergeWhenLayout(nodes, profile.Dml.MergeWhenOnNewLine);
 
         // Alias alignment is line GEOMETRY, so it must see the final line shapes — after every
         // rule set's collapse passes (ParenthesisRules re-joins exploded function-call parens
@@ -70,6 +71,42 @@ public class FormatterPipeline
             if (node.TokenType == TSqlTokenType.Semicolon && !node.IsInNoformatRegion
                 && node.PrecedingBreak == BreakType.None)
                 node.PrecedingSpaces = 0;
+        }
+    }
+
+    /// <summary>
+    /// Each MERGE <c>WHEN</c> clause must start its own line at the MERGE statement's indent.
+    /// <c>DmlRules.ApplyMergeWhenOnNewLine</c> breaks them early, but the rule sets' later collapse
+    /// passes re-cram a WHEN onto the preceding SET/VALUES/INSERT clause — this post-collapse pass
+    /// re-asserts the break (the last word on MERGE WHEN geometry). Scoped strictly to WHEN tokens
+    /// inside a MERGE, so it cannot affect any non-MERGE statement (spec 030 T009 — MERGE layout).
+    /// </summary>
+    private static void NormalizeMergeWhenLayout(List<LayoutNode> nodes, bool enabled)
+    {
+        if (!enabled) return;   // honour dml.mergeWhenOnNewLine (same gate as DmlRules)
+        bool inMerge = false;
+        int mergeIndent = 0;
+        int caseDepth = 0;   // a WHEN inside CASE...END is a case branch, NOT a MERGE match clause
+        foreach (var node in nodes)
+        {
+            if (node.IsInNoformatRegion) continue;
+            switch (node.TokenType)
+            {
+                case TSqlTokenType.Merge: inMerge = true; mergeIndent = node.IndentLevel; caseDepth = 0; continue;
+                case TSqlTokenType.Semicolon:
+                case TSqlTokenType.Go: inMerge = false; caseDepth = 0; continue;
+                case TSqlTokenType.Case when inMerge: caseDepth++; continue;
+                case TSqlTokenType.End when inMerge && caseDepth > 0: caseDepth--; continue;
+            }
+            // Force EVERY top-level MERGE match clause onto its own line at the MERGE indent —
+            // unconditionally (not only when currently unbroken), because a collapse may have left
+            // it broken at the wrong indent (crammed under the preceding SET/VALUES clause).
+            if (inMerge && caseDepth == 0 && node.TokenType == TSqlTokenType.When)
+            {
+                node.PrecedingBreak = BreakType.NewLine;
+                node.PrecedingSpaces = 0;
+                node.IndentLevel = mergeIndent;
+            }
         }
     }
 

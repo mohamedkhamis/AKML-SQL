@@ -160,6 +160,7 @@ public class CasingEngine
             TSqlTokenType.Is or TSqlTokenType.Null or
             TSqlTokenType.Insert or TSqlTokenType.Into or TSqlTokenType.Values or
             TSqlTokenType.Update or TSqlTokenType.Set or TSqlTokenType.Delete or
+            TSqlTokenType.Merge or
             TSqlTokenType.Create or TSqlTokenType.Alter or TSqlTokenType.Drop or
             TSqlTokenType.Table or TSqlTokenType.Index or TSqlTokenType.View or
             TSqlTokenType.Procedure or TSqlTokenType.Function or TSqlTokenType.Trigger or

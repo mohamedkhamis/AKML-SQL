@@ -195,31 +195,38 @@ public class SchemaMetadataService
                   AND o.is_ms_shipped = 0
                 GROUP BY s.name, o.object_id, o.name, o.type_desc, o.modify_date";
 
-            await using var cmd = new SqlCommand(query, conn);
-            cmd.CommandTimeout = 10;
-            await using var reader = await cmd.ExecuteReaderAsync(ct);
-
-            while (await reader.ReadAsync(ct))
+            // Scoped so the objects reader is closed before the linked-server command runs on the
+            // same connection (MARS may be off — a second command needs the first reader closed).
+            await using (var cmd = new SqlCommand(query, conn))
             {
-                var schemaName = reader.GetString(0);
-                var objectId = reader.GetInt32(1);
-                var objectName = reader.GetString(2);
-                var typeDesc = reader.GetString(3).Trim();
-                var modifyDate = reader.GetDateTime(4);
-                var rowCount = reader.GetInt64(5);
+                cmd.CommandTimeout = 10;
+                await using var reader = await cmd.ExecuteReaderAsync(ct);
 
-                var entry = cache.Schemas.GetOrAdd(schemaName, _ => new SchemaEntry { SchemaName = schemaName });
-
-                entry.Objects.Add(new DatabaseObject
+                while (await reader.ReadAsync(ct))
                 {
-                    ObjectId = objectId,
-                    SchemaName = schemaName,
-                    ObjectName = objectName,
-                    ObjectType = MapObjectType(typeDesc),
-                    ModifyDate = modifyDate,
-                    ApproxRowCount = rowCount
-                });
+                    var schemaName = reader.GetString(0);
+                    var objectId = reader.GetInt32(1);
+                    var objectName = reader.GetString(2);
+                    var typeDesc = reader.GetString(3).Trim();
+                    var modifyDate = reader.GetDateTime(4);
+                    var rowCount = reader.GetInt64(5);
+
+                    var entry = cache.Schemas.GetOrAdd(schemaName, _ => new SchemaEntry { SchemaName = schemaName });
+
+                    entry.Objects.Add(new DatabaseObject
+                    {
+                        ObjectId = objectId,
+                        SchemaName = schemaName,
+                        ObjectName = objectName,
+                        ObjectType = MapObjectType(typeDesc),
+                        ModifyDate = modifyDate,
+                        ApproxRowCount = rowCount
+                    });
+                }
             }
+
+            // Enumerate linked servers (FR-016). Best-effort — failure here must not fail Phase A.
+            await LoadLinkedServersAsync(conn, cache, ct);
 
             cache.Phase = PopulationPhase.PhaseA;
             cache.LastFullRefresh = DateTime.UtcNow;
@@ -435,6 +442,44 @@ public class SchemaMetadataService
         }
 
         cache.ForeignKeys = fks.Values.ToList();
+    }
+
+    /// <summary>
+    /// FR-016: enumerates linked servers registered on the instance (<c>sys.servers</c> where
+    /// <c>is_linked = 1</c>, which excludes the local server at <c>server_id = 0</c>). Populates
+    /// <see cref="DatabaseCache.LinkedServers"/>. No <c>ORDER BY</c> — the completion provider
+    /// sorts in memory. Best-effort: a permission/other error here is swallowed so Phase A still
+    /// completes with the object list intact.
+    /// </summary>
+    private static async Task LoadLinkedServersAsync(SqlConnection conn, DatabaseCache cache, CancellationToken ct)
+    {
+        try
+        {
+            const string query = "SELECT name, product, provider FROM sys.servers WHERE is_linked = 1";
+            await using var cmd = new SqlCommand(query, conn);
+            cmd.CommandTimeout = 5;
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+
+            var list = new List<LinkedServerInfo>();
+            while (await reader.ReadAsync(ct))
+            {
+                list.Add(new LinkedServerInfo
+                {
+                    Name = reader.GetString(0),
+                    Product = reader.IsDBNull(1) ? null : reader.GetString(1),
+                    Provider = reader.IsDBNull(2) ? null : reader.GetString(2)
+                });
+            }
+
+            cache.LinkedServers = list;
+            if (list.Count > 0)
+                Log.Debug("Phase A loaded {Count} linked server(s) for {Key}", list.Count, cache.CacheKey);
+        }
+        catch (Exception ex)
+        {
+            // Linked-server enumeration is optional metadata — never let it abort Phase A.
+            Log.Debug(ex, "Phase A linked-server enumeration skipped for {Key}", cache.CacheKey);
+        }
     }
 
     private async Task LoadParametersAsync(SqlConnection conn, DatabaseCache cache, Dictionary<int, DatabaseObject> objectIndex, CancellationToken ct)

@@ -315,16 +315,19 @@ public class DmlRules : IRuleSet
             return;
 
         bool inMerge = false;
+        int caseDepth = 0;   // a WHEN inside CASE...END is a case branch, NOT a MERGE match clause
         foreach (var t in nodes)
         {
-            inMerge = t.TokenType switch
+            switch (t.TokenType)
             {
-                TSqlTokenType.Merge => true,
-                TSqlTokenType.Semicolon or TSqlTokenType.Go => false,
-                _ => inMerge
-            };
+                case TSqlTokenType.Merge: inMerge = true; caseDepth = 0; continue;
+                case TSqlTokenType.Semicolon:
+                case TSqlTokenType.Go: inMerge = false; caseDepth = 0; continue;
+                case TSqlTokenType.Case when inMerge: caseDepth++; continue;
+                case TSqlTokenType.End when inMerge && caseDepth > 0: caseDepth--; continue;
+            }
 
-            if (!inMerge || t.TokenType != TSqlTokenType.When) continue;
+            if (!inMerge || caseDepth > 0 || t.TokenType != TSqlTokenType.When) continue;
             if (t.PrecedingBreak != BreakType.None) continue;
             t.PrecedingBreak = BreakType.NewLine;
             t.IndentLevel = 0;

@@ -103,7 +103,8 @@ public class CompletionEngine
     /// from the session's database name; default true (no restriction).
     /// </summary>
     public bool DatabaseInScope { get; set; } = true;
-    /// <summary>Forward-looking linked-server inclusion (no cache data today); threaded, currently inert.</summary>
+    /// <summary>When true, linked servers loaded into the schema cache are surfaced as
+    /// object-reference completions (FR-016). Pushed into <c>ObjectProvider</c> per request.</summary>
     public bool IncludeLinkedServers { get; set; }
 
     public CompletionEngine(TsqlParserService parserService)

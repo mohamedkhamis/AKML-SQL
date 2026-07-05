@@ -42,15 +42,21 @@ public class ObjectProvider : ICompletionProvider
     /// unqualified object + schema-name list to the named schemas (case-insensitive; empty = all).
     /// <see cref="ObjectsInScope"/> is false when the connected database is excluded from a non-empty
     /// database allow-list — its cache-derived object suggestions are then suppressed entirely.
-    /// <see cref="IncludeLinkedServers"/> is threaded for forward compatibility but currently inert
-    /// (the schema cache loads no linked-server objects). Set by <see cref="CompletionEngine"/> per request.
+    /// <see cref="IncludeLinkedServers"/>, when true, surfaces the cache's linked servers
+    /// (populated from <c>sys.servers</c> in Phase A) as top-level object-reference suggestions.
+    /// Set by <see cref="CompletionEngine"/> per request.
     /// </summary>
     public ISet<string> ScopeSchemas { get; set; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>False ⇒ suppress this database's cache-derived object/schema suggestions (FR-016).</summary>
     public bool ObjectsInScope { get; set; } = true;
 
-    /// <summary>Forward-looking linked-server inclusion (no cache data today); stored, currently inert.</summary>
+    /// <summary>
+    /// True ⇒ emit a suggestion for each linked server in the cache (FR-016). Governed solely by
+    /// this flag — independent of <see cref="ObjectsInScope"/>, since a linked server is a separate
+    /// server-level axis, not one of the connected database's user objects. When false, or when the
+    /// cache holds no linked servers, behavior is identical to omitting this feature entirely.
+    /// </summary>
     public bool IncludeLinkedServers { get; set; }
 
     /// <summary>True when the schema is in scope: an empty allow-list (all) or a case-insensitive match.</summary>
@@ -287,12 +293,78 @@ public class ObjectProvider : ICompletionProvider
             }
         }
 
+        // FR-016 — linked-server suggestions. Emitted in object-reference clauses (FROM/JOIN/
+        // DELETE/UPDATE), where a four-part "server.database.schema.object" name can begin. This is
+        // deliberately OUTSIDE the ObjectsInScope gate above: a linked server is a distinct
+        // server-level axis, not one of the connected database's user objects, so it is governed
+        // only by IncludeLinkedServers. When the flag is off or no linked servers are loaded, this
+        // block is a no-op and the result set is byte-for-byte what it was before the feature.
+        if (IncludeLinkedServers &&
+            cache.LinkedServers.Count > 0 &&
+            context.ClauseType is ClauseType.From or ClauseType.JoinTable or ClauseType.JoinOn
+                or ClauseType.UpdateTable or ClauseType.Delete)
+        {
+            foreach (var ls in cache.LinkedServers.OrderBy(l => l.Name, StringComparer.OrdinalIgnoreCase))
+                yield return ToLinkedServerItem(ls);
+        }
+
         // Yield system stored procedures in EXEC context — gated on IncludeSystemObjects.
         // SystemProcDictionary contains ms-shipped system procs not present in the user schema cache.
         if (IncludeSystemObjects && context.ClauseType == ClauseType.Exec)
         {
             foreach (var item in SystemProcDictionary.GetCompletionItems())
                 yield return item;
+        }
+    }
+
+    /// <summary>
+    /// Builds a completion item for a linked server. Typed as <see cref="CompletionObjectType.Database"/>
+    /// (the closest existing server-level concept — no host icon-map changes needed). The insert text
+    /// is bracketed as a single whole identifier per <see cref="BracketMode"/> — NOT via
+    /// <see cref="ApplyBrackets"/>, whose dot-splitting would mangle names like <c>10.0.0.5</c> or
+    /// <c>SERVER\INSTANCE</c> into multiple bracketed parts. Sorts below local objects and schema names.
+    /// </summary>
+    private CompletionItem ToLinkedServerItem(LinkedServerInfo ls)
+    {
+        var secondaryText = string.IsNullOrWhiteSpace(ls.Product)
+            ? "Linked Server"
+            : $"Linked Server ({ls.Product})";
+
+        return new CompletionItem
+        {
+            DisplayText = ls.Name,
+            InsertText = BracketWholeName(ls.Name, BracketMode),
+            ObjectType = (int)CompletionObjectType.Database,
+            SecondaryText = secondaryText,
+            SourceObject = ls.Name,
+            SortPriority = 400 // below local objects (100/200) and schema names (300)
+        };
+    }
+
+    /// <summary>
+    /// Brackets an identifier treated as a single whole token (no dot-part splitting), applying
+    /// QUOTENAME <c>']'</c>-doubling. Used for linked-server names, which are one identifier even when
+    /// they embed dots or backslashes. Mirrors the <see cref="BracketMode"/> semantics of
+    /// <see cref="ApplyBrackets"/> but never treats a <c>.</c> as a name separator.
+    /// </summary>
+    private static string BracketWholeName(string name, BracketMode mode)
+    {
+        if (string.IsNullOrEmpty(name)) return name;
+
+        bool alreadyBracketed =
+            name.StartsWith("[", System.StringComparison.Ordinal) &&
+            name.EndsWith("]", System.StringComparison.Ordinal) &&
+            name.Length >= 2;
+
+        switch (mode)
+        {
+            case BracketMode.Always:
+                return alreadyBracketed ? name : "[" + name.Replace("]", "]]") + "]";
+            case BracketMode.Never:
+                return alreadyBracketed ? name.Substring(1, name.Length - 2) : name;
+            default: // WhenRequired
+                if (alreadyBracketed) return name;
+                return NeedsBracketing(name) ? "[" + name.Replace("]", "]]") + "]" : name;
         }
     }
 
