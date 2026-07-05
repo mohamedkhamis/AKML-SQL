@@ -131,6 +131,13 @@ try {
                "https://generativelanguage.googleapis.com https://*.openai.azure.com " +
                "http://localhost:11434 http://127.0.0.1:11434 " +
                "http://localhost:1234 http://127.0.0.1:1234;"
+    # Remove any pre-existing CSP header first so a re-run (installer re-run or the "Repair AKML SQL
+    # Web hosting" shortcut) doesn't fail with "Cannot add duplicate collection entry ...
+    # 'Content-Security-Policy'": Remove-Website above does NOT clear the site's <location> block in
+    # applicationHost.config, so the header survives and Add- would create a duplicate.
+    Remove-WebConfigurationProperty -PSPath "MACHINE/WEBROOT/APPHOST/AkmlSqlWeb" `
+        -Filter "system.webServer/httpProtocol/customHeaders" `
+        -Name "." -AtElement @{name = 'Content-Security-Policy'} -ErrorAction SilentlyContinue
     Add-WebConfigurationProperty -PSPath "MACHINE/WEBROOT/APPHOST/AkmlSqlWeb" `
         -Filter "system.webServer/httpProtocol/customHeaders" `
         -Name "." -Value @{name = 'Content-Security-Policy'; value = $csp}
