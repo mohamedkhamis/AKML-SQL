@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel.Composition;
 using System.Diagnostics;
 using System.Text;
 using System.Threading;
@@ -8,7 +9,6 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Navigation;
-using System.ComponentModel.Composition;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Shell.Shared.Analysis;
@@ -123,7 +123,7 @@ namespace AkmlSql.Shell.Shared.Editor
                 var response = await client.SendRequestAsync<QuickInfoResponse, QuickInfoRequest>(
                     MessageTypes.RequestQuickInfo,
                     new QuickInfoRequest { SessionId = _sessionId, CursorOffset = position },
-                    timeoutMs: 1500).ConfigureAwait(false);
+                    timeoutMs: 1500, ct: cancellationToken).ConfigureAwait(false);
 
                 var text = BuildText(response);
                 if (string.IsNullOrEmpty(text))
