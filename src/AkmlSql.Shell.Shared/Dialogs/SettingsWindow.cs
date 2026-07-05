@@ -449,6 +449,11 @@ namespace AkmlSql.Shell.Shared.Dialogs
             // (Queries ▸ Execution Warnings, Query Results, Miscellaneous ▸ Labs) were authored
             // in earlier specs and are already wired to GridPage / SafetyPage / LabsPage / GeneralPage.
 
+            // General is the landing page (first node) so the theme / dark-mode selector is the first
+            // thing shown when Options opens. It also carries updates, paths and version info. This
+            // replaces the old "Miscellaneous ▸ Application" placement (removed below).
+            AddTreeLeaf("General", "General");
+
             // Grouping mirrors SQL Prompt (report §4 rec #2): Join conditions live under Suggestions,
             // Aliases under Inserted Code.
             AddTreeGroup("Suggestions", expanded: true,
@@ -488,8 +493,8 @@ namespace AkmlSql.Shell.Shared.Dialogs
             AddTreeLeaf("Connections & Memory", "ConnectionsMemory");
             AddTreeLeaf("AI Assistance", "AI Assistance");
 
+            // "Application" moved to the top-level "General" landing leaf; Labs stays under Miscellaneous.
             AddTreeGroup("Miscellaneous", expanded: false,
-                ("Application", "General"),
                 ("Labs", "Labs"));
 
             _navTree.SelectedItemChanged += OnNavSelectionChanged;

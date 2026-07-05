@@ -20,9 +20,9 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {
-            // Spec 030 T021 / FR-006 — see + switch the active formatting style.
-            ctx.Rows.AddGroupHeader(panel, "Active style");
-
+            // Spec 030 T021 / FR-006 — see + switch the active formatting style. The page title
+            // ("SQL Formatting") already frames this lead section, so no redundant "Active style"
+            // group header above the "Active style" dropdown (it read as duplicated text).
             var (rowActive, cboActive) = ctx.Rows.AddDropdown(panel,
                 "Active style",
                 System.Array.Empty<string>(),
