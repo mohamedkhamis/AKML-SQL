@@ -47,8 +47,72 @@ public class LinkedServerCompletionTests
         return cache;
     }
 
+    /// <summary>A dbo schema with <paramref name="objectCount"/> tables plus the supplied linked
+    /// servers — used to exercise the suggestion cap (linked servers must survive it).</summary>
+    private static DatabaseCache MakeCacheWithManyObjects(int objectCount, params LinkedServerInfo[] linkedServers)
+    {
+        var cache = new DatabaseCache { CacheKey = "test:testdb" };
+        var entry = new SchemaEntry { SchemaName = "dbo" };
+        for (int i = 0; i < objectCount; i++)
+        {
+            entry.Objects.Add(new DatabaseObject
+            {
+                ObjectId = i + 1,
+                SchemaName = "dbo",
+                ObjectName = $"Table{i:D3}",
+                ObjectType = DbObjectType.Table,
+                ApproxRowCount = 1,
+                ColumnsLoaded = true
+            });
+        }
+        cache.Schemas.TryAdd("dbo", entry);
+        cache.LinkedServers = linkedServers.ToList();
+        return cache;
+    }
+
     private static bool IsLinkedServerItem(Core.Ipc.Messages.CompletionItem i) =>
         i.SecondaryText.StartsWith("Linked Server", StringComparison.Ordinal);
+
+    // ── (d) Linked servers survive the DEFAULT suggestion cap ─────────────────
+
+    [Fact]
+    public void LinkedServers_SurviveDefaultSuggestionCap_WithManyObjects()
+    {
+        // Regression: linked servers sort last (priority 400). With the default 50-item cap and more
+        // than 50 higher-priority objects, they were silently truncated on a bare FROM. They must be
+        // pinned past the cap. Uses the DEFAULT cap (no SetMaxSuggestions) unlike CreateEngine().
+        var engine = new CompletionEngine(_parserService);
+        engine.IncludeLinkedServers = true;
+
+        var cache = MakeCacheWithManyObjects(60,
+            new LinkedServerInfo { Name = "PRODLINK", Product = "SQL Server" });
+
+        var sql = "SELECT * FROM ";
+        var response = engine.GetCompletions(sql, sql.Length, cache);
+
+        Assert.True(response.IsIncomplete);   // >50 candidates → the cap is engaged
+        Assert.Contains(response.Items, i =>
+            i.DisplayText.Equals("PRODLINK", StringComparison.Ordinal) && IsLinkedServerItem(i));
+    }
+
+    // ── (e) A dot after a linked server must not offer LOCAL schemas ──────────
+
+    [Fact]
+    public void DotAfterLinkedServer_DoesNotSuggestLocalSchemas()
+    {
+        // Regression: "server." fell through to the "unknown prefix -> all local schema names" branch,
+        // suggesting the LOCAL server's schemas for a REMOTE catalog we cannot resolve. Suppress instead.
+        var engine = CreateEngine();
+        engine.IncludeLinkedServers = true;
+
+        var cache = MakeCache(new LinkedServerInfo { Name = "PRODLINK", Product = "SQL Server" });
+
+        var sql = "SELECT * FROM PRODLINK.";
+        var response = engine.GetCompletions(sql, sql.Length, cache);
+
+        Assert.DoesNotContain(response.Items, i => i.SecondaryText == "Schema");
+        Assert.DoesNotContain(response.Items, i => i.DisplayText.Equals("dbo", StringComparison.OrdinalIgnoreCase));
+    }
 
     // ── (a) Flag ON + linked servers present ⇒ they appear ────────────────────
 

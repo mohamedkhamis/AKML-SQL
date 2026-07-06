@@ -421,6 +421,17 @@ public class ObjectProvider : ICompletionProvider
     {
         var prefix = context.DotPrefix;
 
+        // A linked-server-qualified prefix (e.g. "PRODLINK." or "PRODLINK.db.") addresses a REMOTE
+        // catalog we do not cache, so we cannot resolve its databases/schemas/objects. Suppress
+        // rather than fall through to the "unknown prefix -> all LOCAL schema names" branch below,
+        // which would actively mislead with this server's local schemas.
+        foreach (var ls in cache.LinkedServers)
+        {
+            if (string.Equals(prefix, ls.Name, StringComparison.OrdinalIgnoreCase) ||
+                prefix.StartsWith(ls.Name + ".", StringComparison.OrdinalIgnoreCase))
+                yield break;
+        }
+
         // Check if prefix contains a dot (database.schema scenario)
         var dotIndex = prefix.IndexOf('.');
         if (dotIndex >= 0)

@@ -138,6 +138,11 @@ public class CompletionEngine
         _maxSuggestions = max;
     }
 
+    // Linked-server suggestions are the only items typed as CompletionObjectType.Database
+    // (see ObjectProvider.ToLinkedServerItem); used to pin them past the suggestion cap.
+    private static bool IsLinkedServerItem(CompletionItem item)
+        => item.ObjectType == (int)CompletionObjectType.Database;
+
     public CompletionResponse GetCompletions(string documentText, int cursorOffset, DatabaseCache? cache)
         => GetCompletions(documentText, cursorOffset, cache, sessionId: string.Empty);
 
@@ -387,11 +392,28 @@ public class CompletionEngine
                     .ToList();
             }
 
-            // Truncate
+            // Truncate — but never drop the (few, deliberate) linked-server suggestions behind the
+            // cap. They rank below local objects/schemas by design (SortPriority 400), so in a
+            // database with more than _maxSuggestions higher-priority objects a bare "FROM " would
+            // otherwise silently hide every linked server. CompletionObjectType.Database is emitted
+            // ONLY by ObjectProvider.ToLinkedServerItem, so it uniquely identifies them here.
             var isIncomplete = allItems.Count > _maxSuggestions;
             if (isIncomplete)
             {
-                allItems = allItems.Take(_maxSuggestions).ToList();
+                var pinned = allItems.Where(IsLinkedServerItem).ToList();
+                if (pinned.Count == 0 || pinned.Count >= _maxSuggestions)
+                {
+                    allItems = allItems.Take(_maxSuggestions).ToList();
+                }
+                else
+                {
+                    allItems = allItems.Where(i => !IsLinkedServerItem(i))
+                        .Take(_maxSuggestions - pinned.Count)
+                        .Concat(pinned)
+                        .OrderBy(i => i.SortPriority)
+                        .ThenBy(i => i.DisplayText, StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+                }
             }
 
             return new CompletionResponse

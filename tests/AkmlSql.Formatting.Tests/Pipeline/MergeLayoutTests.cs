@@ -44,6 +44,34 @@ public class MergeLayoutTests
     }
 
     [Fact]
+    public void Merge_ContextualKeywords_AreUppercased()
+    {
+        // USING / MATCHED / TARGET / SOURCE tokenize as identifiers, but in their MERGE clause slots
+        // they are keywords and must follow the keyword casing option (SQL Prompt parity).
+        var outp = Fmt("merge into dbo.t as t using dbo.s as s on t.id = s.id " +
+                       "when matched then update set t.v = s.v " +
+                       "when not matched by target then insert (id) values (s.id) " +
+                       "when not matched by source then delete;");
+        Assert.Contains("USING", outp, StringComparison.Ordinal);
+        Assert.Contains("WHEN MATCHED", outp, StringComparison.Ordinal);
+        Assert.Contains("BY TARGET", outp, StringComparison.Ordinal);
+        Assert.Contains("BY SOURCE", outp, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Merge_ColumnNamedLikeAKeyword_IsNotCasedAsKeyword()
+    {
+        // A column that merely happens to be named "target" (here in the UPDATE SET) must NOT be
+        // uppercased — only the real "BY TARGET" clause slot is a keyword. Guards the position-aware
+        // casing (prev/prev2 + caseDepth) against false positives.
+        var outp = Fmt("merge into dbo.t as t using dbo.s as s on t.id = s.id " +
+                       "when matched then update set target = s.v;");
+        Assert.Contains("USING", outp, StringComparison.Ordinal);        // real keyword cased
+        Assert.Contains("WHEN MATCHED", outp, StringComparison.Ordinal); // real keyword cased
+        Assert.DoesNotContain("TARGET", outp, StringComparison.Ordinal); // no "BY TARGET" here -> column stays as-is
+    }
+
+    [Fact]
     public void Merge_EachMatchClause_StartsItsOwnLine()
     {
         var outp = Fmt("merge into dbo.t as t using dbo.s as s on t.id = s.id " +
