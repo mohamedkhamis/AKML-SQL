@@ -304,7 +304,9 @@ public class ObjectProvider : ICompletionProvider
             context.ClauseType is ClauseType.From or ClauseType.JoinTable or ClauseType.JoinOn
                 or ClauseType.UpdateTable or ClauseType.Delete)
         {
-            foreach (var ls in cache.LinkedServers.OrderBy(l => l.Name, StringComparer.OrdinalIgnoreCase))
+            // No OrderBy here — CompletionEngine re-sorts the merged list by SortPriority then
+            // DisplayText, which reproduces this order, so a per-request sort would be wasted work.
+            foreach (var ls in cache.LinkedServers)
                 yield return ToLinkedServerItem(ls);
         }
 
@@ -347,6 +349,14 @@ public class ObjectProvider : ICompletionProvider
     /// they embed dots or backslashes. Mirrors the <see cref="BracketMode"/> semantics of
     /// <see cref="ApplyBrackets"/> but never treats a <c>.</c> as a name separator.
     /// </summary>
+    /// <summary>
+    /// QUOTENAME semantics: wrap <paramref name="part"/> in brackets, doubling any embedded
+    /// <c>']'</c> so the result is a valid T-SQL delimited identifier. Single home for the escaping
+    /// rule shared by <see cref="BracketWholeName"/>, <see cref="BracketEachPart"/>, and
+    /// <see cref="BracketRequiredParts"/>.
+    /// </summary>
+    private static string QuoteName(string part) => "[" + part.Replace("]", "]]") + "]";
+
     private static string BracketWholeName(string name, BracketMode mode)
     {
         if (string.IsNullOrEmpty(name)) return name;
@@ -359,12 +369,12 @@ public class ObjectProvider : ICompletionProvider
         switch (mode)
         {
             case BracketMode.Always:
-                return alreadyBracketed ? name : "[" + name.Replace("]", "]]") + "]";
+                return alreadyBracketed ? name : QuoteName(name);
             case BracketMode.Never:
                 return alreadyBracketed ? name.Substring(1, name.Length - 2) : name;
             default: // WhenRequired
                 if (alreadyBracketed) return name;
-                return NeedsBracketing(name) ? "[" + name.Replace("]", "]]") + "]" : name;
+                return NeedsBracketing(name) ? QuoteName(name) : name;
         }
     }
 
@@ -625,8 +635,7 @@ public class ObjectProvider : ICompletionProvider
             if (part.StartsWith("[", System.StringComparison.Ordinal) &&
                 part.EndsWith("]", System.StringComparison.Ordinal))
                 continue;
-            // QUOTENAME semantics: double any embedded ']' so the result is valid T-SQL.
-            parts[i] = "[" + part.Replace("]", "]]") + "]";
+            parts[i] = QuoteName(part);
         }
         return string.Join(".", parts);
     }
@@ -634,7 +643,7 @@ public class ObjectProvider : ICompletionProvider
     /// <summary>
     /// Brackets only the dot-separated parts that require quoting (used for
     /// <see cref="BracketMode.WhenRequired"/>), applying the same QUOTENAME
-    /// <c>']'</c>-doubling rule as <see cref="BracketEachPart"/>.
+    /// <c>']'</c>-doubling rule (via <see cref="QuoteName"/>) as <see cref="BracketEachPart"/>.
     /// </summary>
     private static string BracketRequiredParts(string identifier)
     {
@@ -647,7 +656,7 @@ public class ObjectProvider : ICompletionProvider
                 part.EndsWith("]", System.StringComparison.Ordinal))
                 continue;
             if (NeedsBracketing(part))
-                parts[i] = "[" + part.Replace("]", "]]") + "]";
+                parts[i] = QuoteName(part);
         }
         return string.Join(".", parts);
     }

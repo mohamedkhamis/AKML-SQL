@@ -84,28 +84,19 @@ public class FormatterPipeline
     private static void NormalizeMergeWhenLayout(List<LayoutNode> nodes, bool enabled)
     {
         if (!enabled) return;   // honour dml.mergeWhenOnNewLine (same gate as DmlRules)
-        bool inMerge = false;
-        int mergeIndent = 0;
-        int caseDepth = 0;   // a WHEN inside CASE...END is a case branch, NOT a MERGE match clause
+        var scope = new MergeScopeTracker();
         foreach (var node in nodes)
         {
             if (node.IsInNoformatRegion) continue;
-            switch (node.TokenType)
-            {
-                case TSqlTokenType.Merge: inMerge = true; mergeIndent = node.IndentLevel; caseDepth = 0; continue;
-                case TSqlTokenType.Semicolon:
-                case TSqlTokenType.Go: inMerge = false; caseDepth = 0; continue;
-                case TSqlTokenType.Case when inMerge: caseDepth++; continue;
-                case TSqlTokenType.End when inMerge && caseDepth > 0: caseDepth--; continue;
-            }
+            if (scope.Advance(node)) continue;
             // Force EVERY top-level MERGE match clause onto its own line at the MERGE indent —
             // unconditionally (not only when currently unbroken), because a collapse may have left
             // it broken at the wrong indent (crammed under the preceding SET/VALUES clause).
-            if (inMerge && caseDepth == 0 && node.TokenType == TSqlTokenType.When)
+            if (scope.InMerge && scope.CaseDepth == 0 && node.TokenType == TSqlTokenType.When)
             {
                 node.PrecedingBreak = BreakType.NewLine;
                 node.PrecedingSpaces = 0;
-                node.IndentLevel = mergeIndent;
+                node.IndentLevel = scope.MergeIndent;
             }
         }
     }

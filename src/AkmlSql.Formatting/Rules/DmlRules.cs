@@ -314,20 +314,11 @@ public class DmlRules : IRuleSet
         if (!dml.MergeWhenOnNewLine)
             return;
 
-        bool inMerge = false;
-        int caseDepth = 0;   // a WHEN inside CASE...END is a case branch, NOT a MERGE match clause
+        var scope = new Pipeline.MergeScopeTracker();
         foreach (var t in nodes)
         {
-            switch (t.TokenType)
-            {
-                case TSqlTokenType.Merge: inMerge = true; caseDepth = 0; continue;
-                case TSqlTokenType.Semicolon:
-                case TSqlTokenType.Go: inMerge = false; caseDepth = 0; continue;
-                case TSqlTokenType.Case when inMerge: caseDepth++; continue;
-                case TSqlTokenType.End when inMerge && caseDepth > 0: caseDepth--; continue;
-            }
-
-            if (!inMerge || caseDepth > 0 || t.TokenType != TSqlTokenType.When) continue;
+            if (scope.Advance(t)) continue;
+            if (!scope.InMerge || scope.CaseDepth > 0 || t.TokenType != TSqlTokenType.When) continue;
             if (t.PrecedingBreak != BreakType.None) continue;
             t.PrecedingBreak = BreakType.NewLine;
             t.IndentLevel = 0;

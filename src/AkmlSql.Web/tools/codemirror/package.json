@@ -5,7 +5,7 @@
   "description": "Vendors CodeMirror 6 into wwwroot/lib/codemirror/akml-cm.js so the web editor loads from 'self' instead of the esm.sh CDN (on-prem / offline / strict-CSP support). Run: npm install && npm run build.",
   "type": "module",
   "scripts": {
-    "build": "esbuild cm-entry.js --bundle --format=esm --minify --legal-comments=none --outfile=../../wwwroot/lib/codemirror/akml-cm.js"
+    "build": "esbuild cm-entry.js --bundle --format=esm --minify --legal-comments=eof --outfile=../../wwwroot/lib/codemirror/akml-cm.js"
   },
   "dependencies": {
     "@codemirror/state": "^6",

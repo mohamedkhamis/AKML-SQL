@@ -168,8 +168,7 @@ public class CasingEngine
         if (keywordMode == "AsIs")
             return;
 
-        bool inMerge = false;
-        int caseDepth = 0;   // a CASE...END inside a MERGE action must not be mistaken for a match clause
+        var scope = new MergeScopeTracker();
         string prev = "";    // uppercased text of the previous significant (non-trivia) token
         string prev2 = "";   // and the one before it
 
@@ -183,13 +182,11 @@ public class CasingEngine
 
             var upper = node.FormattedText.ToUpperInvariant();
 
-            // State transitions (mirror DmlRules.ApplyMergeWhenOnNewLine's scope tracking).
-            if (tt == TSqlTokenType.Merge) { inMerge = true; caseDepth = 0; prev2 = prev; prev = upper; continue; }
-            if (tt is TSqlTokenType.Semicolon or TSqlTokenType.Go) { inMerge = false; caseDepth = 0; prev2 = prev; prev = upper; continue; }
-            if (tt == TSqlTokenType.Case && inMerge) { caseDepth++; prev2 = prev; prev = upper; continue; }
-            if (tt == TSqlTokenType.End && inMerge && caseDepth > 0) { caseDepth--; prev2 = prev; prev = upper; continue; }
+            // Shared MERGE-scope tracking (inMerge / caseDepth + join-hint guard). Advance returns
+            // true for scope-control tokens (MERGE / ; / GO / CASE / END) — still advance prev/prev2.
+            if (scope.Advance(node)) { prev2 = prev; prev = upper; continue; }
 
-            if (inMerge && caseDepth == 0)
+            if (scope.InMerge && scope.CaseDepth == 0)
             {
                 // USING is the MERGE source keyword; MATCHED only right after WHEN/NOT; TARGET/SOURCE
                 // only in the "MATCHED BY TARGET/SOURCE" slot (prev == BY AND prev2 == MATCHED — this
