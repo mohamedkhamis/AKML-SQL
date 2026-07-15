@@ -42,6 +42,12 @@ public static class FormatterHonoringTable
         "caseExpressions.collapseCaseExpressionsShorterThan",
         "operators.between.placeOnNewLine",
         "operators.in.placeFirstValueOnNewLine",
+        // Task 7 schema-completeness closure (SC-004) — confirmed live-rendered, not gated
+        // behind an unrelated default-off flag:
+        "lists.alignItemsAcrossClauses",   // ListRules.ApplyAlignItemsAcrossClauses (ListRules.cs:254-257)
+        "lists.indentListItems",           // ListRules.ApplyIndentListItems (ListRules.cs:117-120)
+        "lists.alignAliases",              // ListRules.AlignAliases (ListRules.cs:201-204) + AlignmentCalculator.cs:45
+        "ddl.placeFirstProcedureParameterOnNewLine", // DdlRules.cs:344-345 (always | auto-if->1-param | never)
         // n/a rows (hold by construction with the user's values):
         "whitespace.newLines.preserveExistingEmptyLinesBetweenStatements",
         "whitespace.newLines.preserveExistingEmptyLinesAfterBatchSeparator",

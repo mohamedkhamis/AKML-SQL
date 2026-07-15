@@ -77,6 +77,12 @@ internal static partial class RedgateOptionMap
         Add("caseExpressions.collapseCaseExpressionsShorterThan", "80", (p, v) => p.Case.CollapseThreshold = I(v, 80));
 
         // ----- operators -----
+        AddUnsupported("operators.comparison.align", "false",
+            "AKML has no column-alignment model for comparison operators (=, <, >, ...) across multiple lines; Operators.Alignment governs AND/OR keyword placement, a different construct.");
+        AddUnsupported("operators.comparison.addSpacesAround", "true",
+            "AKML's Whitespace.SpaceAroundOperators governs spacing for BOTH comparison and arithmetic operators jointly (WhitespaceRules.IsArithmeticOrComparisonOperator); mapping this key alone would collide with operators.arithmetic.addSpacesAround whenever a style file sets the two independently.");
+        AddUnsupported("operators.arithmetic.addSpacesAround", "true",
+            "Same joint field as operators.comparison.addSpacesAround (Whitespace.SpaceAroundOperators) — no independent per-category toggle exists, so mapping both keys risks one silently overwriting the other.");
         Add("operators.andOr.alignment", "leftAligned", (p, v) => p.Operators.Alignment = v.Trim().ToLowerInvariant() switch
         {
             "rightaligned" => "rightAligned",

@@ -51,7 +51,17 @@ internal static partial class RedgateOptionMap
         });
 
         // ----- lists -----
+        AddUnsupported("lists.placeFirstItemOnNewLine", "never",
+            "AKML's list layout controls whether SUBSEQUENT items break (placeSubsequentItemsOnNewLines / oneItemPerLine); there is no independent control for whether the FIRST item in a list breaks off the clause keyword. Revisit if phase-3 list layout adds a distinct first-item control.");
+        Add("lists.placeSubsequentItemsOnNewLines", "always", (p, v) => p.List.PlaceSubsequentItemsOnNewLines = NormalizePlacement(v));
+        AddUnsupported("lists.alignSubsequentItemsWithFirstItem", "true",
+            "AKML has no column-alignment control for continuation list items relative to the first item's column; IndentListItems only controls indent LEVEL, not alignment to a specific column.");
+        Add("lists.alignItemsAcrossClauses", "true", (p, v) => p.List.AlignItemsAcrossClauses = B(v));
+        Add("lists.indentListItems", "true", (p, v) => p.List.IndentListItems = B(v));
         Add("lists.alignItemsToTabStops", "false", (p, v) => p.List.AlignItemsToTabStops = B(v));
+        Add("lists.alignAliases", "false", (p, v) => p.List.AlignAliases = B(v));
+        AddUnsupported("lists.alignComments", "false",
+            "AKML has no column-alignment model for trailing comments across list items; comments are preserved in place but never padded to a shared column.");
         Add("lists.placeCommasBeforeItems", "false", (p, v) => p.List.CommaPosition = B(v) ? "leading" : "trailing");
         Add("lists.addSpaceBeforeComma", "false", (p, v) => p.List.SpaceBeforeComma = B(v));
         Add("lists.addSpaceAfterComma", "true", (p, v) => { p.Whitespace.SpaceAfterComma = B(v); p.List.SpaceAfterListComma = B(v); });

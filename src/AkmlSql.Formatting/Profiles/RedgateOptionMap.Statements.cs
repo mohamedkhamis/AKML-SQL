@@ -15,7 +15,18 @@ internal static partial class RedgateOptionMap
         Add("dml.collapseStatementsShorterThan", "80", (p, v) => p.Dml.CollapseThreshold = I(v, 80));
         Add("dml.collapseShortSubqueries", "false", (p, v) => p.Dml.CollapseShortSubqueries = B(v));
         Add("dml.collapseSubqueriesShorterThan", "80", (p, v) => p.Dml.SubqueryCollapseThreshold = I(v, 80));
-        Add("dml.placeInsertTableOnNewLine", "false", (_, _) => { }); // consumed by INSERT layout in phase 3; stored implicitly false
+        AddUnsupported("dml.placeInsertTableOnNewLine", "false",
+            "AKML keeps the INSERT target table on the INSERT INTO line; placing it on its own line is not modeled.");
+        AddUnsupported("dml.clauses.clauseAlignment", "leftAligned",
+            "AKML's Dml.RightAlignClauses is a boolean (left/right) with no representation for the third Redgate arm 'toFirstListItem'; mapping would silently collapse that arm to true or false. Needs a real 3-state field before this can be wired (dead field today — not consulted by any layout rule).");
+        AddUnsupported("dml.clauses.clauseIndentation", "0",
+            "Type mismatch: Redgate's clauseIndentation is an integer spaces-count (0-8); AKML's Dml.ClauseIndentation is a 3-value string enum (none/indented/rightAligned) designed against an older SQL Prompt XML shape and is not consulted by any layout rule (dead field). Needs a new integer field before this can be wired.");
+        AddUnsupported("dml.listItems.placeFromTableOnNewLine", "never",
+            "AKML's Dml.FromOnNewLine is a plain boolean (always/never); Redgate's tri-state adds 'ifMultiple' (break only when there are multiple tables), which has no distinct representation and would silently collapse to always or never.");
+        AddUnsupported("dml.listItems.placeWhereConditionOnNewLine", "never",
+            "AKML's Dml.WhereOnNewLine is a plain boolean (always/never); Redgate's tri-state adds 'ifMultiple' (break only when there are multiple conditions), which has no distinct representation.");
+        AddUnsupported("dml.listItems.placeGroupByAndOrderByOnNewLine", "never",
+            "AKML models GROUP BY and ORDER BY as two independent booleans (Dml.GroupByOnNewLine / Dml.OrderByOnNewLine), while Redgate controls both with one tri-state key (always/never/ifMultiple); neither the joint control nor the 'ifMultiple' arm can be represented faithfully.");
 
         // ----- ddl -----
         Add("ddl.parenthesisStyle", "compactSimple", (p, v) => p.Ddl.ParenthesisStyle = NormalizeParenStyle(v));
@@ -27,6 +38,17 @@ internal static partial class RedgateOptionMap
             "always" => "always",
             "iflongerormultiplecolumns" => "ifLongerOrMultipleColumns",
             _ => "ifLongerThanWrap",
+        });
+        AddUnsupported("ddl.indentClauses", "false",
+            "AKML has no DDL-clause indentation control; the equivalent DML field (Dml.ClauseIndentation) is itself a dead, type-mismatched field (see dml.clauses.clauseIndentation) so there is nothing safe to reuse.");
+        // ddl.placeFirstProcedureParameterOnNewLine maps to the LIVE Ddl.FirstParameterOnNewLine
+        // field consulted unconditionally by DdlRules.cs:344-345 (always | auto-if->1-param | never) —
+        // exact match to Redgate's always/never/ifMultipleItems tri-state.
+        Add("ddl.placeFirstProcedureParameterOnNewLine", "ifMultipleItems", (p, v) => p.Ddl.FirstParameterOnNewLine = v.Trim().ToLowerInvariant() switch
+        {
+            "always" => "always",
+            "never" => "never",
+            _ => "auto", // ifMultipleItems
         });
         Add("ddl.collapseShortStatements", "false", (p, v) => p.Ddl.CollapseShortDdl = B(v));
         Add("ddl.collapseStatementsShorterThan", "80", (p, v) => p.Ddl.CollapseThreshold = I(v, 80));
@@ -60,7 +82,10 @@ internal static partial class RedgateOptionMap
             p.Declare.AlignDataTypes = B(v);
             p.Declare.AlignDefaultValues = B(v);
         });
+        AddUnsupported("variables.addSpaceBetweenDataTypeAndPrecision", "false",
+            "AKML's Whitespace.SpaceBeforeParentheses is a single global 'space before any parenthesis' toggle already claimed by parentheses.addSpacesAroundParentheses; reusing it here for the DECLARE/SET-scoped data-type-precision case would collide whenever the two settings differ. No scoped field exists.");
+        AddUnsupported("variables.placeAssignedValueOnNewLineIfLongerThanMaxLineLength", "true",
+            "AKML's DECLARE/SET layout (DeclareRules) only implements one-declaration-per-line expansion and data-type/default-value column alignment; there is no line-length-triggered wrap for the assigned value. Revisit if phase-3 adds wrap-aware DECLARE/SET layout.");
         Add("variables.placeEqualsSignOnNewLine", "false", (p, v) => p.Declare.EqualsOnNewLine = B(v));
-        Add("variables.placeAssignedValueOnNewLineIfLongerThanMaxLineLength", "true", (_, _) => { }); // phase-3 DECLARE/SET wrap behavior; no distinct field needed — wrap pass consults MaxLineWidth
     }
 }

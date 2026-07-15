@@ -31,6 +31,14 @@ public sealed class RedgateStyleImportResult
 /// </summary>
 public static class RedgateJsonStyleImporter
 {
+    /// <summary>
+    /// Spec 031 Task 7 (SC-004) — every Redgate option path this importer knows how to classify
+    /// (mapped or explicitly unsupported), i.e. <c>RedgateOptionMap.Entries.Keys</c>. Exposed
+    /// publicly so the schema-completeness test (and any future consumer) can walk the vendored
+    /// Redgate schema without needing <c>InternalsVisibleTo</c> access to <see cref="RedgateOptionMap"/>.
+    /// </summary>
+    public static IReadOnlyCollection<string> KnownOptionPaths => RedgateOptionMap.Entries.Keys;
+
     public static RedgateStyleImportResult Import(string jsonContent, string? fallbackName = null)
     {
         ArgumentNullException.ThrowIfNull(jsonContent);

@@ -26,6 +26,9 @@ public class RedgateJsonStyleImporterTests
         Assert.Equal(65, result.Options.Count);
         Assert.All(result.Options, o => Assert.False(string.IsNullOrEmpty(o.Status)));
         Assert.DoesNotContain(result.Options, o => o.Status == RedgateOptionStatus.Unknown);
+        // SC-001: the fixture is a real-world Redgate export — none of its keys may classify
+        // as unsupported (every key it exercises must be a genuinely modeled AKML option).
+        Assert.DoesNotContain(result.Options, o => o.Status == RedgateOptionStatus.Unsupported);
     }
 
     [Fact]
