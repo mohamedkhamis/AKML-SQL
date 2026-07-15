@@ -19,5 +19,9 @@ namespace AkmlSql.Core.Ipc.Messages
 
         [Key(4)]
         public string? ErrorMessage { get; set; }
+
+        /// <summary>Spec 031 FR-007 — per-option classifications. Null from pre-031 engines.</summary>
+        [Key(5)]
+        public ProfileImportOptionReport[]? OptionReports { get; set; }
     }
 }
