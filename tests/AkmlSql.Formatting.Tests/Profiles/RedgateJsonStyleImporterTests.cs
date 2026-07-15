@@ -18,7 +18,7 @@ public class RedgateJsonStyleImporterTests
         Assert.Equal("SQL Prompt Import", result.Profile.Metadata.BasedOn);
     }
 
-    [Fact(Skip = "Un-skip in Task 6 when the mapping table is complete")]
+    [Fact]
     public void Import_classifies_every_leaf_key_in_the_file()
     {
         var result = RedgateJsonStyleImporter.Import(UserStyleJson);
@@ -139,6 +139,43 @@ public class RedgateJsonStyleImporterTests
         Assert.False(p.Declare.AlignDataTypes);            // alignDataTypesAndValues=false
         Assert.False(p.Declare.AlignDefaultValues);
         Assert.True(p.Declare.EqualsOnNewLine);
+    }
+
+    [Fact]
+    public void Join_insert_function_case_operators_map_from_user_style()
+    {
+        var p = RedgateJsonStyleImporter.Import(UserStyleJson).Profile;
+
+        Assert.Equal("toTable", p.Join.AlignJoinKeyword);
+        Assert.False(p.Join.IndentJoin);
+        Assert.False(p.Join.OnConditionNewLine);
+        Assert.Equal("indent", p.Join.OnConditionIndent);
+
+        Assert.Equal("expandedSimple", p.InsertStatements.Columns.ParenthesisStyle);
+        Assert.False(p.InsertStatements.Columns.IndentContents);
+        Assert.Equal("always", p.InsertStatements.Columns.PlaceSubsequentItemsOnNewLines); // omitted -> Redgate section default
+        Assert.Equal("expandedSimple", p.InsertStatements.Values.ParenthesisStyle);
+        Assert.True(p.InsertStatements.Values.IndentContents);
+        Assert.Equal("always", p.InsertStatements.Values.PlaceSubsequentItemsOnNewLines);
+
+        Assert.Equal("never", p.FunctionCalls.PlaceParametersOnNewLine);
+        Assert.True(p.FunctionCalls.SpaceAroundParentheses);
+        Assert.True(p.FunctionCalls.SpaceAroundArgumentList);
+        Assert.True(p.FunctionCalls.SpaceBetweenEmptyParentheses);
+
+        Assert.Equal("never", p.Case.FirstWhenOnNewLine);
+        Assert.Equal("toFirstItem", p.Case.WhenAlignment);
+        Assert.True(p.Case.ThenOnNewLine);
+        Assert.Equal("toWhen", p.Case.ThenAlignment);
+        Assert.False(p.Case.EndOnNewLine);
+        Assert.True(p.Case.CollapseShortCase);
+        Assert.Equal(110, p.Case.CollapseThreshold);
+
+        Assert.Equal("toFirstListItem", p.Operators.Alignment);
+        Assert.False(p.Operators.BetweenOnNewLine);
+        Assert.Equal("rightAlignedToBetween", p.Operators.BetweenAndAlignment);
+        Assert.Equal("never", p.InStatements.PlaceItemsOnNewLine);   // placeFirstValueOnNewLine=never
+        Assert.True(p.InStatements.SpaceAroundContents);
     }
 
     [Fact]
