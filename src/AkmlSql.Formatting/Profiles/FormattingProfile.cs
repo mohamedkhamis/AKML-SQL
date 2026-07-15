@@ -512,6 +512,15 @@ public class DdlOptions
     /// </summary>
     [JsonPropertyName("parenthesisStyle")]
     public string ParenthesisStyle { get; set; } = "";
+
+    /// <summary>
+    /// Spec 031 FR-022 — indent contents of DDL-scoped parentheses (e.g. CREATE TABLE column
+    /// lists / procedure signatures) when <see cref="ParenthesisStyle"/> is construct-scoped.
+    /// Distinct from the global <see cref="ParenthesisOptions.IndentContents"/> — Redgate's
+    /// <c>ddl.indentParenthesesContents</c> only governs DDL constructs, not every parenthesis.
+    /// </summary>
+    [JsonPropertyName("indentParenContents")]
+    public bool IndentParenContents { get; set; }
 }
 
 public class ControlFlowOptions

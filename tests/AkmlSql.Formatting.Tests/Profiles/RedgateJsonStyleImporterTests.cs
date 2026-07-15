@@ -105,6 +105,42 @@ public class RedgateJsonStyleImporterTests
     }
 
     [Fact]
+    public void Dml_ddl_controlflow_cte_variables_map_from_user_style()
+    {
+        var p = RedgateJsonStyleImporter.Import(UserStyleJson).Profile;
+
+        Assert.True(p.Dml.NewLineAfterDistinctTop);
+        Assert.True(p.Dml.CollapseShortStatements);        // FR-003: threshold present, bool absent
+        Assert.Equal(160, p.Dml.CollapseThreshold);
+        Assert.True(p.Dml.CollapseShortSubqueries);        // FR-003
+        Assert.Equal(78, p.Dml.SubqueryCollapseThreshold);
+
+        Assert.Equal("expandedToStatement", p.Ddl.ParenthesisStyle);
+        Assert.True(p.Ddl.ConstraintsOnNewLine);
+        Assert.Equal("ifLongerOrMultipleColumns", p.Ddl.ConstraintColumnsOnNewLine);
+        Assert.True(p.Ddl.CollapseShortDdl);
+        Assert.Equal(75, p.Ddl.CollapseThreshold);
+        Assert.True(p.Ddl.AlignDataTypes);                 // omitted alignDataTypesAndConstraints -> default true
+
+        Assert.True(p.ControlFlow.IndentBeginEndKeywords);
+        Assert.True(p.ControlFlow.CollapseShortIfElse);    // FR-003
+        Assert.Equal(35, p.ControlFlow.CollapseThreshold);
+        Assert.True(p.ControlFlow.IndentBetweenBeginEnd);  // omitted indentContentsOfStatements -> default true
+        Assert.True(p.ControlFlow.BeginOnNewLine);         // omitted placeBeginAndEndOnNewLine -> default true
+
+        Assert.Equal("expandedToStatement", p.Cte.ParenthesisStyle);
+        Assert.True(p.Cte.PlaceNameOnNewLine);
+        Assert.True(p.Cte.IndentName);
+        Assert.Equal("rightAligned", p.Cte.ColumnAlignment);
+        Assert.False(p.Cte.AsOnNewLine);                   // placeAsOnNewLine=false (Redgate default true)
+        Assert.True(p.Cte.CteBodyIndent);                  // indentContents=true
+
+        Assert.False(p.Declare.AlignDataTypes);            // alignDataTypesAndValues=false
+        Assert.False(p.Declare.AlignDefaultValues);
+        Assert.True(p.Declare.EqualsOnNewLine);
+    }
+
+    [Fact]
     public void Unknown_key_is_reported_not_dropped()
     {
         var result = RedgateJsonStyleImporter.Import("""{ "whitespace": { "notARealOption": true } }""");
