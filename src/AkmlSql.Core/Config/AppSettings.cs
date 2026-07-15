@@ -568,7 +568,7 @@ namespace AkmlSql.Core.Config
 
         /// <summary>Name of the active formatting profile (<c>.akmlstyle</c> file).</summary>
         [JsonPropertyName("activeProfile")]
-        public string ActiveProfile { get; set; } = "Default";
+        public string ActiveProfile { get; set; } = "Khamis Style";
 
         [JsonPropertyName("formatOnPaste")]
         public bool FormatOnPaste { get; set; }

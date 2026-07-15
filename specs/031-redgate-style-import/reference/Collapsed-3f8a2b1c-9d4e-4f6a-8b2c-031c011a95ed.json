@@ -1,0 +1,44 @@
+{
+  "metadata": {
+    "id": "3f8a2b1c-9d4e-4f6a-8b2c-031c011a95ed",
+    "name": "Collapsed"
+  },
+  "whitespace": {
+    "wrapLinesLongerThan": 200
+  },
+  "casing": {
+    "reservedKeywords": "uppercase",
+    "builtInFunctions": "uppercase",
+    "builtInDataTypes": "uppercase"
+  },
+  "dml": {
+    "collapseShortStatements": true,
+    "collapseStatementsShorterThan": 200,
+    "collapseShortSubqueries": true,
+    "collapseSubqueriesShorterThan": 160
+  },
+  "ddl": {
+    "collapseShortStatements": true,
+    "collapseStatementsShorterThan": 160
+  },
+  "controlFlow": {
+    "collapseShortStatements": true,
+    "collapseStatementsShorterThan": 120
+  },
+  "parentheses": {
+    "collapseShortParenthesisContents": true,
+    "collapseParenthesesShorterThan": 160
+  },
+  "caseExpressions": {
+    "collapseShortCaseExpressions": true,
+    "collapseCaseExpressionsShorterThan": 160
+  },
+  "functionCalls": {
+    "placeArgumentsOnNewLines": "never"
+  },
+  "operators": {
+    "in": {
+      "placeFirstValueOnNewLine": "never"
+    }
+  }
+}

@@ -47,6 +47,9 @@ public class FormatParityTests
         "aligned-left-bracket",
         "leading-commas",
         "minimalist",
+        // Spec 031 addendum: Redgate-import-derived built-ins (BuiltInStyleGenerationTests.cs).
+        "khamis-style",
+        "collapsed",
     };
 
     public static IEnumerable<object[]> CorpusStyleMatrix()

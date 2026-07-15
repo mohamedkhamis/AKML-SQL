@@ -19,4 +19,17 @@
     </AssemblyAttribute>
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Spec 031 addendum: ship the built-in formatting styles next to the assembly so
+         ProfileManager.CreateDefault() (assemblyDir/profiles) finds them at runtime. Verified via
+         an actual `dotnet publish` that no such rule previously existed; the six pre-existing
+         built-ins were never reaching any build output. Wildcard covers current and future
+         BuiltIn/*.akmlstyle files without per-file entries. Same Content+Link+CopyToPublishDirectory
+         idiom as AkmlSql.Engine's SnippetPack (see AkmlSql.Engine.csproj). -->
+    <Content Include="Profiles\BuiltIn\*.akmlstyle" Link="profiles\%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>

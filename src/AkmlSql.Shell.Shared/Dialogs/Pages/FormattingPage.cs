@@ -124,7 +124,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
 
             // Seed the dropdown synchronously with the persisted active style so it is never empty,
             // then fill the full list from the engine (custom + built-in) asynchronously.
-            var active = string.IsNullOrWhiteSpace(f.ActiveProfile) ? "Default" : f.ActiveProfile;
+            var active = string.IsNullOrWhiteSpace(f.ActiveProfile) ? "Khamis Style" : f.ActiveProfile;
             SetItems(new[] { active }, active);
             _ = PopulateProfilesAsync(active);
         }

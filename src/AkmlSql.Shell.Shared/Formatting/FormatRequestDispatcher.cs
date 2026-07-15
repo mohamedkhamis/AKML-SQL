@@ -93,7 +93,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             {
                 SessionId = sessionId,
                 Text = originalSql,
-                ProfileName = settings?.Formatter?.ActiveProfile ?? "Default",
+                ProfileName = settings?.Formatter?.ActiveProfile ?? "Khamis Style",
             };
 
             try
