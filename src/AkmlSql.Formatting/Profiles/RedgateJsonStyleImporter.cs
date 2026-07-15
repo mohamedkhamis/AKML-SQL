@@ -156,6 +156,8 @@ internal static partial class RedgateOptionMap
             profile.Dml.CollapseShortStatements = true;
         if (fileValues.ContainsKey("dml.collapseSubqueriesShorterThan") && !fileValues.ContainsKey("dml.collapseShortSubqueries"))
             profile.Dml.CollapseShortSubqueries = true;
+        if (fileValues.ContainsKey("ddl.collapseStatementsShorterThan") && !fileValues.ContainsKey("ddl.collapseShortStatements"))
+            profile.Ddl.CollapseShortDdl = true;
         if (fileValues.ContainsKey("controlFlow.collapseStatementsShorterThan") && !fileValues.ContainsKey("controlFlow.collapseShortStatements"))
             profile.ControlFlow.CollapseShortIfElse = true;
     }

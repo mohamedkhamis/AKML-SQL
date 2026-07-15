@@ -116,6 +116,7 @@ public class RedgateJsonStyleImporterTests
         Assert.Equal(78, p.Dml.SubqueryCollapseThreshold);
 
         Assert.Equal("expandedToStatement", p.Ddl.ParenthesisStyle);
+        Assert.True(p.Ddl.IndentParenContents);
         Assert.True(p.Ddl.ConstraintsOnNewLine);
         Assert.Equal("ifLongerOrMultipleColumns", p.Ddl.ConstraintColumnsOnNewLine);
         Assert.True(p.Ddl.CollapseShortDdl);
@@ -138,6 +139,34 @@ public class RedgateJsonStyleImporterTests
         Assert.False(p.Declare.AlignDataTypes);            // alignDataTypesAndValues=false
         Assert.False(p.Declare.AlignDefaultValues);
         Assert.True(p.Declare.EqualsOnNewLine);
+    }
+
+    [Fact]
+    public void Threshold_quirk_respects_explicit_false_and_ddl_case()
+    {
+        // Explicit false + threshold present -> collapse stays DISABLED (quirk must not override).
+        var p = RedgateJsonStyleImporter.Import("""
+            { "dml": { "collapseShortStatements": false, "collapseStatementsShorterThan": 160 } }
+            """).Profile;
+        Assert.False(p.Dml.CollapseShortStatements);
+        Assert.Equal(160, p.Dml.CollapseThreshold);
+
+        // DDL threshold without its bool -> enabled (FR-003 applies to ddl too).
+        var p2 = RedgateJsonStyleImporter.Import("""
+            { "ddl": { "collapseStatementsShorterThan": 75 } }
+            """).Profile;
+        Assert.True(p2.Ddl.CollapseShortDdl);
+        Assert.Equal(75, p2.Ddl.CollapseThreshold);
+    }
+
+    [Fact]
+    public void ConstraintColumns_switch_arms_map_correctly()
+    {
+        var always = RedgateJsonStyleImporter.Import("""{ "ddl": { "placeConstraintColumnsOnNewLines": "always" } }""").Profile;
+        Assert.Equal("always", always.Ddl.ConstraintColumnsOnNewLine);
+
+        var wrap = RedgateJsonStyleImporter.Import("""{ "ddl": { "placeConstraintColumnsOnNewLines": "ifLongerThanMaxLineLength" } }""").Profile;
+        Assert.Equal("ifLongerThanWrap", wrap.Ddl.ConstraintColumnsOnNewLine);
     }
 
     [Fact]
