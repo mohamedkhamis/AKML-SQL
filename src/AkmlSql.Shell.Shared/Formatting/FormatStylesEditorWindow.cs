@@ -351,18 +351,28 @@ namespace AkmlSql.Shell.Shared.Formatting
             };
             if (dialog.ShowDialog(this) != true) return;
 
-            // FR-008 — collision check against the client-side list before sending. Best-effort:
-            // peek the JSON "metadata.name" field the same way the engine's
-            // RedgateJsonStyleImporter derives the resulting profile name, so a re-import is
-            // caught even when the file's name on disk doesn't match the style's internal name
-            // (e.g. spec fixtures named "<name>-<guid>.json"). Falls back to the file stem when
-            // the name can't be peeked (XML style files, or JSON without a metadata.name) — that
-            // still catches the common case where Export's own "<name>.sqlpromptstylev2" naming
-            // is re-imported unchanged.
-            var incomingName = TryPeekStyleName(dialog.FileName)
-                ?? System.IO.Path.GetFileNameWithoutExtension(dialog.FileName);
-            var existing = _viewModel.Profiles.FirstOrDefault(p =>
-                !p.IsReadOnly && string.Equals(p.Name, incomingName, StringComparison.OrdinalIgnoreCase));
+            var stem = System.IO.Path.GetFileNameWithoutExtension(dialog.FileName);
+            var peekedName = TryPeekStyleName(dialog.FileName, out var kind);
+
+            // Legacy XML exports carry no internal style name — for an untargeted import the
+            // engine's SqlPromptImporter hardcodes "Imported from SQL Prompt", so consecutive
+            // XML imports would silently overwrite each other while a stem-based collision
+            // check sees nothing. Name XML imports after the file instead (TargetProfileName
+            // drives SqlPromptImporter's profile name). JSON must NOT get a target name: the
+            // Task 8 handler overrides metadata.name with TargetProfileName when present,
+            // which would break JSON naming (the internal metadata.name must win).
+            string? targetName = kind == StyleFileKind.Xml ? stem : null;
+
+            // FR-008 — collision check against the client-side list before sending.
+            // JSON: the peeked metadata.name (the engine derives the profile name from it),
+            // falling back to the stem when the file has none. XML: the stem we just chose as
+            // the target name. Unrecognized/malformed content: skip the confirmation — the
+            // engine rejects it with a clear error and nothing is saved.
+            string? collisionName = kind == StyleFileKind.Unknown ? null : (peekedName ?? stem);
+            var existing = collisionName == null
+                ? null
+                : _viewModel.Profiles.FirstOrDefault(p =>
+                    !p.IsReadOnly && string.Equals(p.Name, collisionName, StringComparison.OrdinalIgnoreCase));
             if (existing != null)
             {
                 var confirm = MessageBox.Show(
@@ -379,7 +389,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                 }
             }
 
-            var response = await _viewModel.ImportProfileAsync(dialog.FileName);
+            var response = await _viewModel.ImportProfileAsync(dialog.FileName, targetName);
 
             // Engine rejects built-in collisions; custom collisions overwrite by ProfileManager
             // semantics, so the confirm above (against the client-side list) is the only gate.
@@ -388,7 +398,9 @@ namespace AkmlSql.Shell.Shared.Formatting
                 AfterCreate(response.ProfileName, BuildImportSummary(response));
                 if (_viewModel.SetActiveProfile(response.ProfileName))
                     UpdateStatusBarActiveStyle(response.ProfileName); // FR-011 — import + set active
-                ShowImportSummaryDialog(response);                    // FR-012
+                else
+                    SetStatus(_viewModel.LastError ?? "Imported, but could not set active style.");
+                ShowImportSummaryDialog(response);                    // FR-012 — import itself succeeded
             }
             else
             {
@@ -406,17 +418,33 @@ namespace AkmlSql.Shell.Shared.Formatting
             return $"Imported '{r.ProfileName}' — {mapped} mapped, {pending} pending render, {unsupported} unsupported, {unknown} unknown";
         }
 
+        /// <summary>Sniffed content kind of a style file, from its first non-whitespace char.</summary>
+        private enum StyleFileKind
+        {
+            /// <summary>Neither JSON nor XML (or unreadable/oversized/malformed) — the engine rejects it.</summary>
+            Unknown,
+            /// <summary>Modern Redgate JSON style (<c>{</c>).</summary>
+            Json,
+            /// <summary>Legacy XML style (<c>&lt;</c>) — has no internal name; caller supplies one.</summary>
+            Xml,
+        }
+
         /// <summary>
         /// Best-effort client-side peek at a SQL Prompt JSON style file's <c>metadata.name</c> —
         /// mirrors <c>RedgateJsonStyleImporter</c>'s name derivation (engine-side, spec 031 Task 8)
         /// closely enough to predict the resulting profile name before sending the import over
-        /// IPC. Returns null for anything that isn't recognisably JSON, or JSON without a
-        /// <c>metadata.name</c> string — callers fall back to the file name in that case. Never
-        /// throws; a real parse failure is surfaced by <see cref="FormatStylesEditorViewModel.ImportProfileAsync"/>
-        /// once the file is actually sent.
+        /// IPC. <paramref name="kind"/> reports the sniffed content kind (same first-char sniff
+        /// the engine's HandleProfileImport uses) so the caller can name legacy XML imports and
+        /// skip the overwrite confirmation for content the engine will reject anyway. Returns
+        /// null for anything that isn't JSON with a <c>metadata.name</c> string. Never throws;
+        /// a real parse failure is surfaced by
+        /// <see cref="FormatStylesEditorViewModel.ImportProfileAsync"/> once the file is sent
+        /// (<paramref name="kind"/> resets to <see cref="StyleFileKind.Unknown"/> on failure so
+        /// malformed content never triggers a pointless confirmation).
         /// </summary>
-        private static string? TryPeekStyleName(string filePath)
+        private static string? TryPeekStyleName(string filePath, out StyleFileKind kind)
         {
+            kind = StyleFileKind.Unknown;
             try
             {
                 var bytes = System.IO.File.ReadAllBytes(filePath);
@@ -424,13 +452,16 @@ namespace AkmlSql.Shell.Shared.Formatting
 
                 var text = System.Text.Encoding.UTF8.GetString(bytes)
                     .TrimStart((char)0xFEFF, ' ', '\t', '\r', '\n');
-                if (text.Length == 0 || text[0] != '{') return null; // XML or unrecognized
+                if (text.Length == 0) return null;
+                if (text[0] == '<') { kind = StyleFileKind.Xml; return null; }
+                if (text[0] != '{') return null; // unrecognized — engine rejects with a clear error
 
                 using var doc = JsonDocument.Parse(text, new JsonDocumentOptions
                 {
                     AllowTrailingCommas = true,
                     CommentHandling = JsonCommentHandling.Skip,
                 });
+                kind = StyleFileKind.Json;
 
                 foreach (var prop in doc.RootElement.EnumerateObject())
                 {
@@ -451,6 +482,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             catch (Exception ex)
             {
                 Log.Debug(ex, "FormatStylesEditor: TryPeekStyleName failed for {Path}", filePath);
+                kind = StyleFileKind.Unknown; // malformed — engine will reject; no confirmation
                 return null;
             }
         }

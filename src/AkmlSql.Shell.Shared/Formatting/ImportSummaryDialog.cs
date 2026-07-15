@@ -125,12 +125,16 @@ namespace AkmlSql.Shell.Shared.Formatting
                 FontFamily = Typography.UiFont,
                 FontSize = Typography.Small,
                 ItemsSource = reports,
+                ItemContainerStyle = BuildRowStyle(),
             };
             listView.SetResourceReference(Control.BackgroundProperty, ThemeTokens.SurfaceInput);
             listView.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
             listView.SetResourceReference(Control.BorderBrushProperty, ThemeTokens.BorderDefault);
 
-            var gridView = new GridView();
+            var gridView = new GridView
+            {
+                ColumnHeaderContainerStyle = BuildColumnHeaderStyle(),
+            };
             gridView.Columns.Add(new GridViewColumn
             {
                 Header = "Path",
@@ -158,6 +162,76 @@ namespace AkmlSql.Shell.Shared.Formatting
             listView.View = gridView;
 
             return listView;
+        }
+
+        /// <summary>
+        /// Theme-aware <see cref="GridViewColumnHeader"/> style. The Aero2 default header
+        /// template paints its own light gradient chrome and ignores the Background property —
+        /// the same dark-theme trap class as the repo's documented ComboBox retemplating fix —
+        /// so the header is retemplated to a plain Border that template-binds
+        /// Background/BorderBrush/Padding. Trade-off: the default template's resize gripper
+        /// (PART_HeaderGripper) is dropped, so columns are fixed-width — acceptable for a
+        /// read-only report. Theme tokens flow via <see cref="DynamicResourceExtension"/>
+        /// setters (the repo's established Style idiom — see EditorToolbar/ObjectDefinitionPanel).
+        /// </summary>
+        private static Style BuildColumnHeaderStyle()
+        {
+            var template = new ControlTemplate(typeof(GridViewColumnHeader));
+            var border = new FrameworkElementFactory(typeof(Border));
+            border.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Control.BackgroundProperty));
+            border.SetValue(Border.BorderBrushProperty, new TemplateBindingExtension(Control.BorderBrushProperty));
+            border.SetValue(Border.BorderThicknessProperty, new TemplateBindingExtension(Control.BorderThicknessProperty));
+            border.SetValue(Border.PaddingProperty, new TemplateBindingExtension(Control.PaddingProperty));
+
+            var content = new FrameworkElementFactory(typeof(ContentPresenter));
+            content.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Left);
+            content.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            content.SetValue(ContentPresenter.RecognizesAccessKeyProperty, true);
+            border.AppendChild(content);
+            template.VisualTree = border;
+
+            var style = new Style(typeof(GridViewColumnHeader));
+            style.Setters.Add(new Setter(Control.TemplateProperty, template));
+            style.Setters.Add(new Setter(Control.BackgroundProperty, new DynamicResourceExtension(ThemeTokens.SurfaceInput)));
+            style.Setters.Add(new Setter(Control.ForegroundProperty, new DynamicResourceExtension(ThemeTokens.TextPrimary)));
+            style.Setters.Add(new Setter(Control.BorderBrushProperty, new DynamicResourceExtension(ThemeTokens.BorderDefault)));
+            style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0, 0, 1, 1)));
+            style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(Spacing.Sm, Spacing.Xs, Spacing.Sm, Spacing.Xs)));
+            style.Setters.Add(new Setter(Control.FontFamilyProperty, Typography.UiFont));
+            style.Setters.Add(new Setter(Control.FontSizeProperty, Typography.Small));
+            style.Setters.Add(new Setter(Control.FontWeightProperty, Typography.WeightSemiBold));
+            return style;
+        }
+
+        /// <summary>
+        /// Theme-aware <see cref="ListViewItem"/> container style — mirrors
+        /// <c>HistoryToolWindowControl.CreateQueryItemContainerStyle</c> (the repo's shipped
+        /// ListView row pattern): transparent base so the ListView's SurfaceInput shows
+        /// through, SurfaceSelection on select, SurfaceHover on hover-not-selected. Foreground
+        /// stays TextPrimary in every state (selected-row text must never drop to a muted
+        /// token — the repo's documented high-contrast selection rule).
+        /// </summary>
+        private static Style BuildRowStyle()
+        {
+            var style = new Style(typeof(ListViewItem));
+            style.Setters.Add(new Setter(Control.BackgroundProperty, System.Windows.Media.Brushes.Transparent));
+            style.Setters.Add(new Setter(Control.ForegroundProperty, new DynamicResourceExtension(ThemeTokens.TextPrimary)));
+            style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0)));
+            style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(2, 1, 2, 1)));
+            style.Setters.Add(new Setter(Control.HorizontalContentAlignmentProperty, HorizontalAlignment.Stretch));
+
+            var selected = new Trigger { Property = ListViewItem.IsSelectedProperty, Value = true };
+            selected.Setters.Add(new Setter(Control.BackgroundProperty, new DynamicResourceExtension(ThemeTokens.SurfaceSelection)));
+            selected.Setters.Add(new Setter(Control.ForegroundProperty, new DynamicResourceExtension(ThemeTokens.TextPrimary)));
+            style.Triggers.Add(selected);
+
+            var hover = new MultiTrigger();
+            hover.Conditions.Add(new Condition(UIElement.IsMouseOverProperty, true));
+            hover.Conditions.Add(new Condition(ListViewItem.IsSelectedProperty, false));
+            hover.Setters.Add(new Setter(Control.BackgroundProperty, new DynamicResourceExtension(ThemeTokens.SurfaceHover)));
+            style.Triggers.Add(hover);
+
+            return style;
         }
     }
 }
