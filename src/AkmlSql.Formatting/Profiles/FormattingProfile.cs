@@ -88,6 +88,10 @@ public class WhitespaceOptions
     [JsonPropertyName("maxLineWidth")]
     public int MaxLineWidth { get; set; } = 120;
 
+    /// <summary>Spec 031 FR-020 — master gate for long-line wrapping; when false, MaxLineWidth is not enforced. Redgate whitespace.wrapLongLines.</summary>
+    [JsonPropertyName("wrapLongLines")]
+    public bool WrapLongLines { get; set; } = true;
+
     [JsonPropertyName("lineBreakBeforeClause")]
     public bool LineBreakBeforeClause { get; set; } = true;
 

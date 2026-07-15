@@ -84,6 +84,27 @@ public class RedgateJsonStyleImporterTests
     }
 
     [Fact]
+    public void Non_default_enum_arms_map_correctly()
+    {
+        var p = RedgateJsonStyleImporter.Import("""
+            { "whitespace": { "wrapLongLines": false },
+              "lists": { "commaAlignment": "beforeItem" } }
+            """).Profile;
+        Assert.False(p.Whitespace.WrapLongLines);
+        Assert.Equal("beforeItem", p.List.CommaAlignment);
+
+        var p2 = RedgateJsonStyleImporter.Import("""{ "lists": { "commaAlignment": "toStatement" } }""").Profile;
+        Assert.Equal("toStatement", p2.List.CommaAlignment);
+    }
+
+    [Fact]
+    public void AlignMultilineComments_false_leaves_comment_defaults()
+    {
+        var p = RedgateJsonStyleImporter.Import("""{ "whitespace": { "newLines": { "alignMultilineCommentsMatchingPatterns": false } } }""").Profile;
+        Assert.Equal("preserve", p.Comments.MultilineFormatting);
+    }
+
+    [Fact]
     public void Unknown_key_is_reported_not_dropped()
     {
         var result = RedgateJsonStyleImporter.Import("""{ "whitespace": { "notARealOption": true } }""");

@@ -30,7 +30,7 @@ internal static partial class RedgateOptionMap
             _ => "spaces",
         });
         Add("whitespace.numberOfSpacesInTabs", "4", (p, v) => p.Whitespace.TabSize = I(v, 4));
-        Add("whitespace.wrapLongLines", "true", (_, _) => { }); // gate consumed with wrapLinesLongerThan below
+        Add("whitespace.wrapLongLines", "true", (p, v) => p.Whitespace.WrapLongLines = B(v));
         Add("whitespace.wrapLinesLongerThan", "120", (p, v) => p.Whitespace.MaxLineWidth = I(v, 120));
         Add("whitespace.whiteSpaceBeforeSemiColon", "none", (p, v) => p.Whitespace.SemicolonPlacement = v.Trim().ToLowerInvariant() switch
         {
