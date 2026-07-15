@@ -179,6 +179,24 @@ public class RedgateJsonStyleImporterTests
     }
 
     [Fact]
+    public void Join_placeOnNewLine_false_is_stored_and_mapped()
+    {
+        var result = RedgateJsonStyleImporter.Import("""{ "joinStatements": { "join": { "placeOnNewLine": false } } }""");
+        Assert.False(result.Profile.Join.OnNewLine);
+        var report = Assert.Single(result.Options);
+        Assert.Equal(RedgateOptionStatus.Mapped, report.Status);
+    }
+
+    [Fact]
+    public void Unrepresentable_keys_classify_unsupported_with_reason()
+    {
+        var result = RedgateJsonStyleImporter.Import("""{ "operators": { "andOr": { "placeOnNewLine": "never" } } }""");
+        var report = Assert.Single(result.Options);
+        Assert.Equal(RedgateOptionStatus.Unsupported, report.Status);
+        Assert.False(string.IsNullOrWhiteSpace(report.Reason));
+    }
+
+    [Fact]
     public void Threshold_quirk_respects_explicit_false_and_ddl_case()
     {
         // Explicit false + threshold present -> collapse stays DISABLED (quirk must not override).

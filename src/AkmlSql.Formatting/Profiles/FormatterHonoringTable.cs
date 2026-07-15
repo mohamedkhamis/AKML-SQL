@@ -31,6 +31,7 @@ public static class FormatterHonoringTable
         "cte.indentContents",
         "cte.placeAsOnNewLine",
         "variables.alignDataTypesAndValues",
+        "joinStatements.join.placeOnNewLine",
         "joinStatements.join.indentJoinTable",
         "joinStatements.on.placeOnNewLine",
         "joinStatements.on.keywordAlignment",
