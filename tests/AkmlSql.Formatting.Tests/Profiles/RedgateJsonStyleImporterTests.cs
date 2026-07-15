@@ -44,8 +44,43 @@ public class RedgateJsonStyleImporterTests
         Assert.True(result.Success);
         Assert.Equal("my-style-file", result.Profile.Metadata.Name);
         Assert.Empty(result.Options); // no file keys to classify
-        // NOTE: Task 4 Step 1 extends this test with Redgate-default spot-checks
-        // (TabStyle "spaces", MaxLineWidth 120, SemicolonPlacement "none") once the mapping table exists.
+        Assert.Equal("spaces", result.Profile.Whitespace.TabStyle);
+        Assert.Equal(120, result.Profile.Whitespace.MaxLineWidth);
+        Assert.Equal("none", result.Profile.Whitespace.SemicolonPlacement);
+    }
+
+    [Fact]
+    public void Whitespace_lists_parens_casing_map_from_user_style()
+    {
+        var p = RedgateJsonStyleImporter.Import(UserStyleJson).Profile;
+
+        Assert.Equal("tabsWhenPossible", p.Whitespace.TabStyle);      // tabsIfPossible
+        Assert.Equal(2, p.Whitespace.TabSize);
+        Assert.Equal(200, p.Whitespace.MaxLineWidth);
+        Assert.Equal("spaceBefore", p.Whitespace.SemicolonPlacement);
+        Assert.Equal(2, p.Whitespace.EmptyLineBetweenStatements);
+        Assert.Equal(1, p.Whitespace.EmptyLinesAfterBatchSeparator);  // omitted -> Redgate default
+        Assert.False(p.Whitespace.PreserveEmptyLines);
+        Assert.False(p.Whitespace.PreserveEmptyLinesAfterBatch);
+        Assert.Equal("normaliseIndent", p.Comments.MultilineFormatting); // alignMultilineCommentsMatchingPatterns=true
+        Assert.True(p.Comments.RecognizeCommonPatterns);
+
+        Assert.True(p.List.AlignItemsToTabStops);
+        Assert.Equal("leading", p.List.CommaPosition);
+        Assert.True(p.List.SpaceBeforeComma);
+        Assert.Equal("toList", p.List.CommaAlignment);
+        Assert.True(p.Whitespace.SpaceAfterComma);                    // omitted -> Redgate default true
+
+        Assert.Equal("expandedToStatement", p.Parenthesis.Style);
+        Assert.True(p.Parenthesis.IndentContents);
+        Assert.True(p.Parenthesis.CollapseShort);
+        Assert.Equal(100, p.Parenthesis.CollapseThreshold);
+        Assert.True(p.Parenthesis.SpaceInside);
+
+        Assert.Equal("UPPERCASE", p.Casing.ReservedKeywords);
+        Assert.Equal("UPPERCASE", p.Casing.BuiltInFunctions);
+        Assert.Equal("UPPERCASE", p.Casing.BuiltInDataTypes);
+        Assert.True(p.Casing.SyncWithDatabase);                       // useObjectDefinitionCase
     }
 
     [Fact]
