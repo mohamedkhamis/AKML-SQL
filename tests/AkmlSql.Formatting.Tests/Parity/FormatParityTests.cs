@@ -1,6 +1,4 @@
 using System.IO;
-using System.Text;
-using AkmlSql.Formatting.Pipeline;
 using AkmlSql.Formatting.Profiles;
 using Xunit;
 
@@ -11,7 +9,8 @@ namespace AkmlSql.Formatting.Tests.Parity;
 ///
 /// <para>
 /// Enumerates <c>tests/format-parity/corpus/*.sql</c> and runs each input through
-/// <see cref="FormatterPipeline"/> using each of the AKML built-in styles. Compares the
+/// <see cref="AkmlSql.Formatting.Pipeline.FormatterPipeline"/> using each of the AKML built-in
+/// styles (via <see cref="ParityHarness.Format"/>). Compares the
 /// normalised output against the matching golden file at
 /// <c>tests/format-parity/golden/&lt;input-stem&gt;__&lt;style&gt;.sql</c>.
 /// </para>
@@ -82,14 +81,13 @@ public class FormatParityTests
         var profileJson = File.ReadAllText(stylePath);
         var profile = ProfileSerializer.Deserialize(profileJson);
 
-        // Skip stage-7 idempotency so a single (input, style) pass produces deterministic output
-        // even for inputs that wouldn't otherwise re-parse identically. Stage 6 (semantic) still
-        // runs — if it rejects, we capture the original input as the golden, which is the
-        // expected pipeline behaviour and will be visible in the golden file for review.
-        profile.Metadata.EnableIdempotencyCheck = false;
-
-        var result = new FormatterPipeline().Format(inputSql, profile);
-        var actual = Normalise(result.FormattedText);
+        // ParityHarness.Format disables stage-7 idempotency so a single (input, style) pass
+        // produces deterministic output even for inputs that wouldn't otherwise re-parse
+        // identically. Stage 6 (semantic) still runs — if it rejects, we capture the original
+        // input as the golden, which is the expected pipeline behaviour and will be visible in
+        // the golden file for review.
+        var formatted = ParityHarness.Format(inputSql, profile);
+        var actual = ParityHarness.Normalise(formatted);
 
         var shouldUpdate = string.Equals(
             Environment.GetEnvironmentVariable(GoldenEnvVar), "1", StringComparison.Ordinal);
@@ -106,39 +104,8 @@ public class FormatParityTests
             return;
         }
 
-        var expected = Normalise(File.ReadAllText(goldenPath));
+        var expected = ParityHarness.Normalise(File.ReadAllText(goldenPath));
         Assert.Equal(expected, actual);
-    }
-
-    /// <summary>
-    /// SC-007 / Q1 clarification normalisation:
-    /// 1) Strip trailing whitespace from every line
-    /// 2) Normalise <c>\r\n</c> + <c>\r</c> to <c>\n</c>
-    /// 3) Drop UTF-8 BOM if present
-    ///
-    /// Must be idempotent — <c>Normalise(Normalise(x)) == Normalise(x)</c> — because the golden
-    /// file is the captured normalised output and is itself normalised on read in compare mode.
-    /// </summary>
-    private static string Normalise(string text)
-    {
-        if (text == null) return string.Empty;
-
-        // 3) UTF-8 BOM (U+FEFF) — strip if leading
-        if (text.Length > 0 && text[0] == '﻿') text = text[1..];
-
-        // 2) line endings
-        text = text.Replace("\r\n", "\n").Replace("\r", "\n");
-
-        // 1) trailing whitespace per line — preserve the original trailing-newline structure by
-        // joining trimmed segments with \n (so N segments produce N-1 separators, matching split).
-        var lines = text.Split('\n');
-        var sb = new StringBuilder(text.Length);
-        for (int i = 0; i < lines.Length; i++)
-        {
-            sb.Append(lines[i].TrimEnd());
-            if (i < lines.Length - 1) sb.Append('\n');
-        }
-        return sb.ToString();
     }
 
     private static string FindRepoRoot()
