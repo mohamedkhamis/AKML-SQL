@@ -1,10 +1,12 @@
 #nullable enable
 using System;
 using System.ComponentModel;
+using System.Linq;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Shell.Shared.StatusBar;
 using AkmlSql.Shell.Shared.Ui.Theme;
 using Microsoft.VisualStudio.PlatformUI;
@@ -230,6 +232,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             toolbar.Children.Add(MakeToolbarButton("New", OnNewStyleAsync));
             toolbar.Children.Add(MakeToolbarButton("Copy", OnCopyStyleAsync));
             toolbar.Children.Add(MakeToolbarButton("Set Active", OnSetActiveAsync));
+            toolbar.Children.Add(MakeToolbarButton("Import…", OnImportAsync));
             toolbar.Children.Add(MakeToolbarButton("Export", OnExportAsync));
             Grid.SetRow(toolbar, 1);
             panel.Children.Add(toolbar);
@@ -331,6 +334,143 @@ namespace AkmlSql.Shell.Shared.Formatting
                 SetStatus($"Exported '{name}'");
             else
                 SetStatus(_viewModel.LastError ?? "Export failed.");
+        }
+
+        /// <summary>
+        /// Spec 031 FR-010/FR-011/FR-012 — imports a SQL Prompt style file (JSON or legacy XML)
+        /// via <see cref="FormatStylesEditorViewModel.ImportProfileAsync"/>, selects + activates
+        /// the resulting style, and shows a per-option summary dialog.
+        /// </summary>
+        private async System.Threading.Tasks.Task OnImportAsync()
+        {
+            var dialog = new Microsoft.Win32.OpenFileDialog
+            {
+                Title = "Import SQL Prompt style",
+                Filter = "SQL Prompt style (*.json;*.sqlpromptstylev2)|*.json;*.sqlpromptstylev2|All files (*.*)|*.*",
+                CheckFileExists = true,
+            };
+            if (dialog.ShowDialog(this) != true) return;
+
+            // FR-008 — collision check against the client-side list before sending. Best-effort:
+            // peek the JSON "metadata.name" field the same way the engine's
+            // RedgateJsonStyleImporter derives the resulting profile name, so a re-import is
+            // caught even when the file's name on disk doesn't match the style's internal name
+            // (e.g. spec fixtures named "<name>-<guid>.json"). Falls back to the file stem when
+            // the name can't be peeked (XML style files, or JSON without a metadata.name) — that
+            // still catches the common case where Export's own "<name>.sqlpromptstylev2" naming
+            // is re-imported unchanged.
+            var incomingName = TryPeekStyleName(dialog.FileName)
+                ?? System.IO.Path.GetFileNameWithoutExtension(dialog.FileName);
+            var existing = _viewModel.Profiles.FirstOrDefault(p =>
+                !p.IsReadOnly && string.Equals(p.Name, incomingName, StringComparison.OrdinalIgnoreCase));
+            if (existing != null)
+            {
+                var confirm = MessageBox.Show(
+                    this,
+                    $"Style '{existing.Name}' already exists. Overwrite?",
+                    "AKML SQL",
+                    MessageBoxButton.OKCancel,
+                    MessageBoxImage.Warning,
+                    MessageBoxResult.Cancel);
+                if (confirm != MessageBoxResult.OK)
+                {
+                    SetStatus("Import cancelled.");
+                    return;
+                }
+            }
+
+            var response = await _viewModel.ImportProfileAsync(dialog.FileName);
+
+            // Engine rejects built-in collisions; custom collisions overwrite by ProfileManager
+            // semantics, so the confirm above (against the client-side list) is the only gate.
+            if (response != null && response.Success && response.ProfileName != null)
+            {
+                AfterCreate(response.ProfileName, BuildImportSummary(response));
+                if (_viewModel.SetActiveProfile(response.ProfileName))
+                    UpdateStatusBarActiveStyle(response.ProfileName); // FR-011 — import + set active
+                ShowImportSummaryDialog(response);                    // FR-012
+            }
+            else
+            {
+                SetStatus(_viewModel.LastError ?? "Import failed.");
+            }
+        }
+
+        private static string BuildImportSummary(ProfileImportResponse r)
+        {
+            var reports = r.OptionReports ?? Array.Empty<ProfileImportOptionReport>();
+            int mapped = reports.Count(x => x.Status == "mapped");
+            int pending = reports.Count(x => x.Status == "mapped-pending-render");
+            int unsupported = reports.Count(x => x.Status == "unsupported");
+            int unknown = reports.Count(x => x.Status == "unknown");
+            return $"Imported '{r.ProfileName}' — {mapped} mapped, {pending} pending render, {unsupported} unsupported, {unknown} unknown";
+        }
+
+        /// <summary>
+        /// Best-effort client-side peek at a SQL Prompt JSON style file's <c>metadata.name</c> —
+        /// mirrors <c>RedgateJsonStyleImporter</c>'s name derivation (engine-side, spec 031 Task 8)
+        /// closely enough to predict the resulting profile name before sending the import over
+        /// IPC. Returns null for anything that isn't recognisably JSON, or JSON without a
+        /// <c>metadata.name</c> string — callers fall back to the file name in that case. Never
+        /// throws; a real parse failure is surfaced by <see cref="FormatStylesEditorViewModel.ImportProfileAsync"/>
+        /// once the file is actually sent.
+        /// </summary>
+        private static string? TryPeekStyleName(string filePath)
+        {
+            try
+            {
+                var bytes = System.IO.File.ReadAllBytes(filePath);
+                if (bytes.Length == 0 || bytes.Length > 1024 * 1024) return null;
+
+                var text = System.Text.Encoding.UTF8.GetString(bytes)
+                    .TrimStart((char)0xFEFF, ' ', '\t', '\r', '\n');
+                if (text.Length == 0 || text[0] != '{') return null; // XML or unrecognized
+
+                using var doc = JsonDocument.Parse(text, new JsonDocumentOptions
+                {
+                    AllowTrailingCommas = true,
+                    CommentHandling = JsonCommentHandling.Skip,
+                });
+
+                foreach (var prop in doc.RootElement.EnumerateObject())
+                {
+                    if (!string.Equals(prop.Name, "metadata", StringComparison.OrdinalIgnoreCase)) continue;
+                    if (prop.Value.ValueKind != JsonValueKind.Object) return null;
+
+                    foreach (var metaProp in prop.Value.EnumerateObject())
+                    {
+                        if (!string.Equals(metaProp.Name, "name", StringComparison.OrdinalIgnoreCase)) continue;
+                        if (metaProp.Value.ValueKind != JsonValueKind.String) return null;
+                        var name = metaProp.Value.GetString();
+                        return string.IsNullOrWhiteSpace(name) ? null : name;
+                    }
+                    return null;
+                }
+                return null;
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "FormatStylesEditor: TryPeekStyleName failed for {Path}", filePath);
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Spec 031 FR-012 — shows the per-option import summary. Owner is set explicitly to
+        /// this window (not via the usual DTE-HWND pattern) because this dialog is nested inside
+        /// an already-open AKML modal: WPF only disables/centres-over the actual <see
+        /// cref="Window.Owner"/>, and the DTE main window is one level too far out for that.
+        /// </summary>
+        private void ShowImportSummaryDialog(ProfileImportResponse response)
+        {
+            var dialog = new ImportSummaryDialog(
+                response.ProfileName ?? "(unknown)",
+                BuildImportSummary(response),
+                response.OptionReports)
+            {
+                Owner = this,
+            };
+            dialog.ShowDialog();
         }
 
         /// <summary>Selects the newly created style in the list + reports status.</summary>

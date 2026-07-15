@@ -515,6 +515,49 @@ namespace AkmlSql.Shell.Shared.Formatting
             }
         }
 
+        /// <summary>
+        /// Spec 031 FR-010/FR-011 — imports a SQL Prompt style file (JSON or legacy XML) via the
+        /// ProfileImport IPC. Returns the full response (option reports included) or null on
+        /// transport failure; LastError is set on any failure path.
+        /// </summary>
+        public async Task<ProfileImportResponse?> ImportProfileAsync(string filePath, string? targetName = null)
+        {
+            const long MaxImportBytes = 1024 * 1024; // FR-010 — 1 MB cap, mirrors snippet import
+
+            var client = EngineLifecycle.Manager?.Client;
+            if (client == null || !client.IsConnected)
+            {
+                LastError = "Engine not connected.";
+                return null;
+            }
+            try
+            {
+                var info = new FileInfo(filePath);
+                if (!info.Exists) { LastError = "File not found."; return null; }
+                if (info.Length > MaxImportBytes) { LastError = "Style file exceeds the 1 MB import limit."; return null; }
+
+                var bytes = File.ReadAllBytes(filePath); // UTF-8 (BOM tolerated engine-side by Encoding.UTF8.GetString)
+                var response = await client.SendRequestAsync<ProfileImportResponse, ProfileImportRequest>(
+                    MessageTypes.ProfileImport,
+                    new ProfileImportRequest { SourceFormat = "sqlprompt", FileContent = bytes, TargetProfileName = targetName },
+                    timeoutMs: 5000).ConfigureAwait(false);
+
+                if (response == null || !response.Success)
+                {
+                    LastError = response?.ErrorMessage ?? "Import failed.";
+                    return response;
+                }
+                await RefreshProfilesAsync().ConfigureAwait(false);
+                return response;
+            }
+            catch (Exception ex)
+            {
+                LastError = ex.Message;
+                Log.Warning(ex, "FormatStylesEditor: import {Path} failed", filePath);
+                return null;
+            }
+        }
+
         /// <summary>Re-fetches the profile list (after New/Copy create a profile).</summary>
         public Task RefreshProfilesAsync() => LoadProfilesAsync(CancellationToken.None);
 
