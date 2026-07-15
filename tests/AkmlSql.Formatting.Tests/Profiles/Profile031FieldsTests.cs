@@ -55,6 +55,13 @@ public class Profile031FieldsTests
         Assert.Equal("toWhen", back.Case.ThenAlignment);
         Assert.Equal("rightAlignedToBetween", back.Operators.BetweenAndAlignment);
         Assert.True(back.InStatements.SpaceAroundContents);
+        Assert.Equal("expandedToStatement", back.Ddl.ParenthesisStyle);
+        Assert.Equal("expandedToStatement", back.Cte.ParenthesisStyle);
+        Assert.True(back.Dml.NewLineAfterDistinctTop);
+        Assert.Equal("expandedSimple", back.InsertStatements.Values.ParenthesisStyle);
+        Assert.True(back.Cte.IndentName);
+        Assert.True(back.FunctionCalls.SpaceAroundParentheses);
+        Assert.True(back.FunctionCalls.SpaceAroundArgumentList);
     }
 
     [Fact]

@@ -283,7 +283,11 @@ public class ParenthesisOptions
     [JsonPropertyName("subqueryStyle")]
     public string SubqueryStyle { get; set; } = "indent";
 
-    /// <summary>Spec 031 FR-022 — Redgate 9-value style; empty = legacy OpenOnSameLine/CloseOnNewLine govern.</summary>
+    /// <summary>
+    /// Spec 031 FR-022 — Redgate 9-value style; empty = legacy OpenOnSameLine/CloseOnNewLine govern.
+    /// compactSimple | compactToStatement | compactIndented | compactRightAligned | expandedSimple |
+    /// expandedSplit | expandedToStatement | expandedIndented | expandedRightAligned; empty = inherit/legacy.
+    /// </summary>
     [JsonPropertyName("style")]
     public string Style { get; set; } = "";
 }
@@ -419,7 +423,7 @@ public class JoinOptions
 
     /// <summary>
     /// Accepted values: "right" (default), "none", "left", "indentedFromFrom".
-    /// Spec 031 FR-024 adds "toTable" as an accepted alias — the importer normalises it to
+    /// Spec 031 FR-028 adds "toTable" as an accepted alias — the importer normalises it to
     /// "left" (see <c>SqlPromptImporter.OptionMap["AlignJoinKeyword"]</c>) since AKML's layout
     /// engine does not (yet) distinguish "align to table" from generic left-alignment.
     /// </summary>
@@ -497,7 +501,11 @@ public class DdlOptions
     [JsonPropertyName("constraintColumnsOnNewLine")]
     public string ConstraintColumnsOnNewLine { get; set; } = "ifLongerOrMultipleColumns";
 
-    /// <summary>Spec 031 FR-022 — construct-scoped paren style; empty = inherit Parenthesis.Style.</summary>
+    /// <summary>
+    /// Spec 031 FR-022 — construct-scoped paren style; empty = inherit Parenthesis.Style.
+    /// compactSimple | compactToStatement | compactIndented | compactRightAligned | expandedSimple |
+    /// expandedSplit | expandedToStatement | expandedIndented | expandedRightAligned; empty = inherit/legacy.
+    /// </summary>
     [JsonPropertyName("parenthesisStyle")]
     public string ParenthesisStyle { get; set; } = "";
 }
@@ -633,7 +641,11 @@ public class CteOptions
     [JsonPropertyName("asOnNewLine")]
     public bool AsOnNewLine { get; set; }
 
-    /// <summary>Spec 031 FR-022 — construct-scoped paren style; empty = inherit Parenthesis.Style.</summary>
+    /// <summary>
+    /// Spec 031 FR-022 — construct-scoped paren style; empty = inherit Parenthesis.Style.
+    /// compactSimple | compactToStatement | compactIndented | compactRightAligned | expandedSimple |
+    /// expandedSplit | expandedToStatement | expandedIndented | expandedRightAligned; empty = inherit/legacy.
+    /// </summary>
     [JsonPropertyName("parenthesisStyle")]
     public string ParenthesisStyle { get; set; } = "";
 
@@ -865,7 +877,11 @@ public class InsertStatementsOptions
 
 public class InsertParenOptions
 {
-    /// <summary>Redgate 9-value parenthesis style; empty string = inherit <c>Parenthesis.Style</c>.</summary>
+    /// <summary>
+    /// Redgate 9-value parenthesis style; empty string = inherit <c>Parenthesis.Style</c>.
+    /// compactSimple | compactToStatement | compactIndented | compactRightAligned | expandedSimple |
+    /// expandedSplit | expandedToStatement | expandedIndented | expandedRightAligned; empty = inherit/legacy.
+    /// </summary>
     [JsonPropertyName("parenthesisStyle")]
     public string ParenthesisStyle { get; set; } = "";
 
