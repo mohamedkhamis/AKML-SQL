@@ -77,23 +77,46 @@
                     <div class="akml-connmgr-field">
                         <label for="conn-server">Server</label>
                         <input id="conn-server" class="akml-connmgr-input" @bind="_server" @bind:event="oninput"
+                               @onchange="OnServerChanged"
                                placeholder="localhost or server\instance" data-testid="conn-server-input" />
                     </div>
                     <div class="akml-connmgr-field">
                         <label for="conn-database">Database</label>
-                        <input id="conn-database" class="akml-connmgr-input" @bind="_database" @bind:event="oninput"
-                               placeholder="master" data-testid="conn-database-input" />
+                        <div class="akml-connmgr-db-row">
+                            <select id="conn-database" class="akml-connmgr-input akml-connmgr-select"
+                                    @bind="_database" disabled="@_dbLoading" data-testid="conn-database-select">
+                                @* Always keep the current value selectable — a saved/typed DB may not be
+                                   in the freshly-loaded list (or the list may not be loaded yet). *@
+                                @if (!string.IsNullOrEmpty(_database) &&
+                                     !_databases.Contains(_database, StringComparer.OrdinalIgnoreCase))
+                                {
+                                    <option value="@_database">@_database</option>
+                                }
+                                @foreach (var db in _databases)
+                                {
+                                    <option value="@db">@db</option>
+                                }
+                            </select>
+                            <button type="button" class="akml-connmgr-btn akml-connmgr-db-refresh"
+                                    @onclick="LoadDatabasesAsync" disabled="@(_busy || _dbLoading)"
+                                    title="Load the database list from the server"
+                                    data-testid="conn-database-refresh">@(_dbLoading ? "…" : "⟳")</button>
+                        </div>
+                        @if (!string.IsNullOrEmpty(_dbMessage))
+                        {
+                            <span class="akml-connmgr-hint" data-testid="conn-database-hint">@_dbMessage</span>
+                        }
                     </div>
                     <div class="akml-connmgr-field">
                         <span class="akml-connmgr-field-label">Authentication</span>
                         <label class="akml-connmgr-radio">
                             <input type="radio" name="connauth" checked="@_windowsAuth"
-                                   @onchange="@(() => _windowsAuth = true)" data-testid="conn-auth-windows" />
+                                   @onchange="@(() => SetAuth(true))" data-testid="conn-auth-windows" />
                             Windows authentication
                         </label>
                         <label class="akml-connmgr-radio">
                             <input type="radio" name="connauth" checked="@(!_windowsAuth)"
-                                   @onchange="@(() => _windowsAuth = false)" data-testid="conn-auth-sql" />
+                                   @onchange="@(() => SetAuth(false))" data-testid="conn-auth-sql" />
                             SQL Server authentication
                         </label>
                     </div>
@@ -286,6 +309,14 @@
         outline: none;
     }
     .akml-connmgr-input:focus { border-color: var(--akml-border-focus, var(--akml-accent-primary)); }
+    /* Database dropdown + its inline refresh button share one row. */
+    .akml-connmgr-db-row { display: flex; gap: var(--akml-scalar-spacing-xs); align-items: stretch; }
+    .akml-connmgr-select { flex: 1 1 auto; min-width: 0; cursor: pointer; }
+    .akml-connmgr-select:disabled { opacity: 0.6; cursor: default; }
+    .akml-connmgr-db-refresh {
+        flex: 0 0 auto; min-width: 32px; text-align: center;
+        padding-left: var(--akml-scalar-spacing-s); padding-right: var(--akml-scalar-spacing-s);
+    }
     .akml-connmgr-radio { display: block; color: var(--akml-text-primary); font-size: 13px; margin-top: 2px; }
     .akml-connmgr-hint { color: var(--akml-text-secondary); font-size: 11px; font-style: italic; }
 
@@ -343,6 +374,12 @@
     private string _login = string.Empty;
     private string _password = string.Empty;
 
+    // Database dropdown (spec 030). _databases is the list fetched from the server; the current
+    // _database is always kept selectable even when absent from (or ahead of) the fetched list.
+    private List<string> _databases = new();
+    private bool _dbLoading;
+    private string? _dbMessage;
+
     private string? _message;
     private bool _messageIsError;
 
@@ -367,6 +404,12 @@
         _open = true;
         _focusOnNextRender = true;
         StateHasChanged();
+
+        // Best-effort pre-populate the database dropdown. Windows auth needs no password, so the
+        // common localhost/Windows default "just works"; SQL auth waits for the user to enter a
+        // password and click refresh. Failures land in _dbMessage, never blocking the dialog.
+        if (_windowsAuth)
+            await LoadDatabasesAsync();
     });
 
     private void OnSqlStateChanged() => InvokeAsync(StateHasChanged);
@@ -386,6 +429,7 @@
         _login = string.Empty;
         _password = string.Empty;
         _message = null;
+        ClearDatabaseList();
     }
 
     private void SelectSaved(SavedSqlConnection c)
@@ -398,6 +442,64 @@
         _login = c.Login ?? string.Empty;
         _password = string.Empty;   // never stored — re-prompt for SQL auth
         _message = null;
+        ClearDatabaseList();
+    }
+
+    // Drops any server-specific database list so a stale list from a different server/auth is never
+    // shown. The current _database stays selected (rendered as a synthetic option in the dropdown).
+    private void ClearDatabaseList()
+    {
+        _databases.Clear();
+        _dbMessage = null;
+    }
+
+    private void SetAuth(bool windows)
+    {
+        if (_windowsAuth == windows) return;
+        _windowsAuth = windows;
+        ClearDatabaseList();   // accessible-database set depends on the identity/login
+    }
+
+    // Server edited (on blur/change) — the previous list belongs to a different host, so drop it.
+    private void OnServerChanged() => ClearDatabaseList();
+
+    /// <summary>
+    /// Fetches the server's databases into the dropdown. SQL auth needs the password first (same as
+    /// Test/Connect). Best-effort: on failure the current value stays selectable and a hint explains.
+    /// </summary>
+    private async Task LoadDatabasesAsync()
+    {
+        if (!_windowsAuth && string.IsNullOrEmpty(_password))
+        {
+            _dbMessage = "Enter the SQL password, then refresh the database list.";
+            return;
+        }
+
+        _dbLoading = true;
+        _dbMessage = null;
+        StateHasChanged();
+        try
+        {
+            var (ok, dbs, error) = await SqlConn.ListDatabasesAsync(
+                _server, _windowsAuth,
+                _windowsAuth ? null : _login, _windowsAuth ? null : _password,
+                CancellationToken.None);
+
+            if (ok)
+            {
+                _databases = dbs.ToList();
+                _dbMessage = _databases.Count == 0 ? "No accessible databases on this server." : null;
+            }
+            else
+            {
+                _dbMessage = error;
+            }
+        }
+        finally
+        {
+            _dbLoading = false;
+            StateHasChanged();
+        }
     }
 
     private async Task TestAsync()

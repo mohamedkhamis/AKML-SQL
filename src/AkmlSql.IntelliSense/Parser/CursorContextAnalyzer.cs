@@ -63,6 +63,28 @@ public class CursorContext
     /// per-connection database list cache) can look it up without static state.
     /// </summary>
     public string SessionId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// When <see cref="ClauseType"/> is <see cref="ClauseType.JoinOn"/>, the key into
+    /// <see cref="AvailableAliases"/> (alias when present, else the bare table name) of the table
+    /// being joined on the CURRENT JOIN — the table reference between the owning <c>JOIN</c> keyword
+    /// and the <c>ON</c> that holds the cursor. Providers scope ON-clause suggestions to predicates
+    /// that involve this table, so a third table already in scope never contributes a predicate that
+    /// ignores the join being written.
+    /// <para>
+    /// Empty when the target cannot be resolved (<c>MERGE … ON</c>, <c>CREATE INDEX … ON</c>, an
+    /// aliasless derived table, or a malformed fragment). Consumers must treat empty as "unknown"
+    /// and fall back to their unscoped behaviour.
+    /// </para>
+    /// </summary>
+    public string CurrentJoinTargetAlias { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The <c>schema.table</c> name behind <see cref="CurrentJoinTargetAlias"/> when the join target
+    /// is a real table; empty for derived tables and unresolved targets.
+    /// </summary>
+    public string CurrentJoinTargetFullName { get; set; } = string.Empty;
+
     public Dictionary<string, string> AvailableAliases { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, List<string>> AvailableCtes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
@@ -263,7 +285,11 @@ public class CursorContextAnalyzer
                 case TSqlTokenType.From: return ClauseType.From;
                 case TSqlTokenType.Where: return ClauseType.Where;
                 case TSqlTokenType.Join: return ClauseType.JoinTable;
-                case TSqlTokenType.On: return ClauseType.JoinOn;
+                case TSqlTokenType.On:
+                    // `i` is the ON that owns the cursor. Resolve the table it joins so
+                    // providers can scope ON-clause suggestions to that table.
+                    ResolveCurrentJoinTarget(tokens, i, context);
+                    return ClauseType.JoinOn;
                 case TSqlTokenType.Having: return ClauseType.Having;
                 case TSqlTokenType.Delete: return ClauseType.Delete;
                 case TSqlTokenType.Create:
@@ -474,6 +500,159 @@ public class CursorContextAnalyzer
             context.AvailableAliases[tableName] = $"{schemaName}.{tableName}";
         return ClauseType.AlterTableColumn;
     }
+
+    /// <summary>
+    /// Given the index of the <c>ON</c> that classified the cursor as <see cref="ClauseType.JoinOn"/>,
+    /// walks back to the <c>JOIN</c> keyword that owns it and parses the table reference between the
+    /// two, populating <see cref="CursorContext.CurrentJoinTargetAlias"/> and
+    /// <see cref="CursorContext.CurrentJoinTargetFullName"/>.
+    /// <para>
+    /// Leaves both empty (target unknown) when the <c>ON</c> has no owning <c>JOIN</c> in scope —
+    /// <c>MERGE … ON</c>, <c>CREATE INDEX … ON</c>, a preceding statement, or a malformed fragment —
+    /// and when the target is an aliasless derived table. Parenthesis depth is tracked so a JOIN
+    /// nested inside a derived table never claims ownership of an outer ON.
+    /// </para>
+    /// </summary>
+    private static void ResolveCurrentJoinTarget(
+        IList<TSqlParserToken> tokens, int onIndex, CursorContext context)
+    {
+        // 1) Back to the owning JOIN, at paren depth 0.
+        int depth = 0;
+        int joinIndex = -1;
+        for (int i = onIndex - 1; i >= 0; i--)
+        {
+            var t = tokens[i];
+            if (IsWhitespaceOrComment(t)) continue;
+
+            if (t.TokenType == TSqlTokenType.RightParenthesis) { depth++; continue; }
+            if (t.TokenType == TSqlTokenType.LeftParenthesis) { if (depth > 0) depth--; continue; }
+            if (depth > 0) continue;
+
+            if (t.TokenType == TSqlTokenType.Join) { joinIndex = i; break; }
+
+            // Anything that proves this ON is not a JOIN's ON (or that we have left the
+            // current join): give up rather than attribute a stale table to the cursor.
+            if (t.TokenType is TSqlTokenType.Semicolon or TSqlTokenType.On or TSqlTokenType.From
+                            or TSqlTokenType.Where or TSqlTokenType.Select or TSqlTokenType.Merge
+                            or TSqlTokenType.Create)
+                return;
+        }
+        if (joinIndex < 0) return;
+
+        // 2) Forward from JOIN to ON: `(derived) [AS] alias` | `[db.][schema.]table [[AS] alias]`.
+        int j = joinIndex + 1;
+        while (j < onIndex && IsWhitespaceOrComment(tokens[j])) j++;
+        if (j >= onIndex) return;
+
+        if (tokens[j].TokenType == TSqlTokenType.LeftParenthesis)
+        {
+            // A derived table contributes only its alias — there is no schema.table behind it.
+            j = SkipParenGroup(tokens, j, onIndex);
+            context.CurrentJoinTargetAlias = ReadAlias(tokens, j, onIndex) ?? string.Empty;
+            return;
+        }
+
+        if (!IsIdentifierToken(tokens[j]))
+            return;
+
+        // Multi-part name: consume `part [. part]*`, tolerating the omitted-schema form `db..table`.
+        var parts = new List<string> { TrimIdentifier(tokens[j].Text) };
+        j++;
+        while (true)
+        {
+            int resume = j;
+            while (j < onIndex && IsWhitespaceOrComment(tokens[j])) j++;
+            if (j < onIndex && tokens[j].TokenType == TSqlTokenType.Dot)
+            {
+                j++;
+                while (j < onIndex && IsWhitespaceOrComment(tokens[j])) j++;
+                if (j < onIndex && IsIdentifierToken(tokens[j]))
+                {
+                    parts.Add(TrimIdentifier(tokens[j].Text));
+                    j++;
+                    continue;
+                }
+                if (j < onIndex && tokens[j].TokenType == TSqlTokenType.Dot)
+                {
+                    // `db..Table` — the elided schema is an empty part; the next loop pass
+                    // consumes this second dot and the table name behind it.
+                    parts.Add(string.Empty);
+                    continue;
+                }
+            }
+            j = resume;
+            break;
+        }
+
+        var table = parts[parts.Count - 1];
+        var schema = parts.Count >= 2 && parts[parts.Count - 2].Length > 0
+            ? parts[parts.Count - 2]
+            : "dbo";
+        if (table.Length == 0) return;
+
+        // Step over a trailing parenthesised group so the alias behind it is still found:
+        // a table-valued function (`dbo.fn(1) f`) or a legacy table hint (`t (NOLOCK)`).
+        int afterName = j;
+        while (afterName < onIndex && IsWhitespaceOrComment(tokens[afterName])) afterName++;
+        if (afterName < onIndex && tokens[afterName].TokenType == TSqlTokenType.LeftParenthesis)
+            j = SkipParenGroup(tokens, afterName, onIndex);
+
+        // AvailableAliases keys on the alias when present, else the bare table name —
+        // mirror that convention exactly so providers can index straight into it.
+        context.CurrentJoinTargetAlias = ReadAlias(tokens, j, onIndex) ?? table;
+        context.CurrentJoinTargetFullName = $"{schema}.{table}";
+    }
+
+    /// <summary>
+    /// Reads an optional `[AS] alias` starting at <paramref name="start"/>, stopping before
+    /// <paramref name="end"/>. Returns null when the next real token is not an identifier (a table
+    /// hint such as <c>WITH (NOLOCK)</c>, or the ON itself). <c>AS</c> is matched by text because
+    /// ScriptDom tokenizes it as a keyword in some positions and an identifier in others.
+    /// </summary>
+    private static string? ReadAlias(IList<TSqlParserToken> tokens, int start, int end)
+    {
+        int k = start;
+        while (k < end && IsWhitespaceOrComment(tokens[k])) k++;
+        if (k < end && string.Equals(tokens[k].Text, "AS", StringComparison.OrdinalIgnoreCase))
+        {
+            k++;
+            while (k < end && IsWhitespaceOrComment(tokens[k])) k++;
+        }
+        if (k < end && IsIdentifierToken(tokens[k]))
+            return TrimIdentifier(tokens[k].Text);
+        return null;
+    }
+
+    /// <summary>
+    /// Identifier tokens as they appear in a table reference. Double-quoted names arrive as
+    /// <see cref="TSqlTokenType.AsciiStringOrQuotedIdentifier"/> — the tokenizer cannot know whether
+    /// <c>QUOTED_IDENTIFIER</c> is on — and between JOIN and ON such a token is always an identifier.
+    /// </summary>
+    private static bool IsIdentifierToken(TSqlParserToken t) =>
+        t.TokenType is TSqlTokenType.Identifier
+                    or TSqlTokenType.QuotedIdentifier
+                    or TSqlTokenType.AsciiStringOrQuotedIdentifier;
+
+    /// <summary>
+    /// Given <paramref name="openIndex"/> pointing at a <c>(</c>, returns the index just past its
+    /// matching <c>)</c>, or <paramref name="end"/> if the group is unterminated before it. Used to
+    /// step over a derived table's body or a trailing argument/hint list while scanning a table
+    /// reference between JOIN and ON.
+    /// </summary>
+    private static int SkipParenGroup(IList<TSqlParserToken> tokens, int openIndex, int end)
+    {
+        int depth = 1;
+        int i = openIndex + 1;
+        while (i < end && depth > 0)
+        {
+            if (tokens[i].TokenType == TSqlTokenType.LeftParenthesis) depth++;
+            else if (tokens[i].TokenType == TSqlTokenType.RightParenthesis) depth--;
+            i++;
+        }
+        return i;
+    }
+
+    private static string TrimIdentifier(string text) => text.Trim('[', ']', '"');
 
     private static bool IsWhitespaceOrComment(TSqlParserToken t)
     {

@@ -3,27 +3,29 @@
 // not know that the underlying editor is CM6 -- it could be swapped for Monaco or any
 // other editor by replacing this file.
 //
-// CodeMirror is loaded lazily from the official ESM CDN. The release build switches to a
-// vendored copy under wwwroot/lib/codemirror/ (T054 bundle-size audit will lock the
-// version) by replacing the import URL with a relative path.
-
-const CM_BASE = 'https://esm.sh/@codemirror';
+// CodeMirror 6 is loaded from a locally-vendored bundle (wwwroot/lib/codemirror/akml-cm.js),
+// NOT a CDN. This keeps the web edition working on-prem / offline / behind a strict CSP — the
+// esm.sh CDN was unreliable (500s / firewall blocks) and required loosening script-src.
+// The bundle is produced by src/AkmlSql.Web/tools/codemirror (npm install && npm run build); it
+// re-exports each package as a namespace matching the shape destructured below. It MUST stay one
+// bundle so @codemirror/state is a single shared instance (per-package files would break facets).
+// Resolved relative to this module's URL (/js/akml-editor.js -> /lib/codemirror/akml-cm.js) so it
+// is independent of the app's <base href>.
+const CM_BUNDLE_URL = new URL('../lib/codemirror/akml-cm.js', import.meta.url).href;
 let _cmModulesPromise = null;
 
 function loadCm() {
     if (_cmModulesPromise) return _cmModulesPromise;
-    _cmModulesPromise = Promise.all([
-        import(`${CM_BASE}/state@6`),
-        import(`${CM_BASE}/view@6`),
-        import(`${CM_BASE}/commands@6`),
-        import(`${CM_BASE}/language@6`),
-        import(`${CM_BASE}/lang-sql@6`),
-        import(`${CM_BASE}/autocomplete@6`),
-        import(`${CM_BASE}/search@6`),
-        import(`${CM_BASE}/lint@6`),
-        import('https://esm.sh/@lezer/highlight@1'),   // `tags` for the token-driven syntax theme
-    ]).then(([state, view, commands, language, langSql, autocomplete, search, lint, highlight]) => ({
-        state, view, commands, language, langSql, autocomplete, search, lint, highlight,
+    _cmModulesPromise = import(CM_BUNDLE_URL).then(m => ({
+        state: m.state,
+        view: m.view,
+        commands: m.commands,
+        language: m.language,
+        langSql: m.langSql,
+        autocomplete: m.autocomplete,
+        search: m.search,
+        lint: m.lint,
+        highlight: m.highlight,   // `tags` for the token-driven syntax theme
     }));
     return _cmModulesPromise;
 }
@@ -322,6 +324,53 @@ export async function create(hostElementId, initialText, dotNetRef) {
         { key: 'Escape', run: dismissGhost },
     ]));
 
+    // ── Spec 030 — expand "SELECT *" on Tab (SQL Prompt parity) ──────────────────────────────────
+    // When the caret sits right after a wildcard ('*' or 'alias.*') inside a SELECT, Tab asks the
+    // engine (via .NET ExpandWildcardFromJs) for the FROM tables' columns and replaces the wildcard
+    // with the column list. Returns false (falls through to accept-completion / snippet / indent)
+    // whenever it isn't a wildcard, so ordinary Tab is unaffected.
+    function detectWildcardAtCaret(state) {
+        const sel = state.selection.main;
+        if (!sel.empty) return null;                                  // bare caret only, not a range
+        const pos = sel.head;
+        if (pos === 0) return null;
+        if (state.doc.sliceString(pos - 1, pos) !== '*') return null; // caret must be just after '*'
+        // Cheap SELECT-context gate (the engine still validates the actual star node): a SELECT must
+        // appear before the caret in the current statement (nothing after the last ';' rules it out).
+        const head = state.doc.sliceString(0, pos);
+        const stmt = head.slice(head.lastIndexOf(';') + 1);
+        if (!/\bSELECT\b/i.test(stmt)) return null;
+        return { caretOffset: pos };
+    }
+
+    function expandWildcard(view) {
+        if (!dotNetRef) return false;
+        // An open completion popup owns Tab (accept the highlighted item) — don't steal it.
+        if (cm.autocomplete.completionStatus(view.state) === 'active') return false;
+        if (!detectWildcardAtCaret(view.state)) return false;         // not a wildcard → normal Tab
+
+        const pos = view.state.selection.main.head;
+        dotNetRef.invokeMethodAsync('ExpandWildcardFromJs', pos, view.state.doc.toString())
+            .then(res => {
+                if (!res || !res.ok) return;
+                const inst = _instances.get(hostElementId);
+                if (!inst) return;
+                const end = res.spanStart + res.spanLength;
+                if (end > inst.view.state.doc.length) return;         // document moved under us
+                inst.view.dispatch({
+                    changes: { from: res.spanStart, to: end, insert: res.text },
+                    selection: { anchor: res.spanStart + res.text.length },
+                    userEvent: 'input.complete',
+                });
+            })
+            .catch(() => { /* best-effort — a failed expansion just leaves the '*' in place */ });
+        return true;   // handled — swallow the Tab (the expansion is applied asynchronously)
+    }
+
+    const wildcardKeymap = cm.state.Prec.highest(cm.view.keymap.of([
+        { key: 'Tab', run: expandWildcard },
+    ]));
+
     // ── Spec 030 (web Phase 1) — Quick Info on hover ─────────────────────────────────────────
     // CM6 hoverTooltip extension: asks the .NET IQuickInfoService for the object/column under the
     // hovered position and renders a small themed tooltip. Returns null = no tooltip.
@@ -517,6 +566,7 @@ export async function create(hostElementId, initialText, dotNetRef) {
             cm.view.lineNumbers(),
             cm.view.highlightActiveLine(),
             ghostKeymap,
+            wildcardKeymap,   // Tab-expand SELECT * (falls through when not a wildcard)
             cm.view.keymap.of([
                 ...cm.commands.defaultKeymap,
                 ...cm.commands.historyKeymap,

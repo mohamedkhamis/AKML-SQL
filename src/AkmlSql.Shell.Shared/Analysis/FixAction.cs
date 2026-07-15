@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Shell.Shared.Ipc;
+using Microsoft.VisualStudio.Imaging;
 using Microsoft.VisualStudio.Imaging.Interop;
 using Microsoft.VisualStudio.Language.Intellisense;
 using Microsoft.VisualStudio.Text;
@@ -13,17 +14,26 @@ namespace AkmlSql.Shell.Shared.Analysis
     /// <summary>
     /// Applies a transform/insert/remove fix from a <see cref="FixActionInfo"/> to an <see cref="ITextBuffer"/>.
     /// </summary>
-    internal sealed class FixAction(ITextBuffer buffer, FixActionInfo fix, string ruleId) : ISuggestedAction
+    /// <remarks>
+    /// Spec 030 T054 (FR-027): <paramref name="autoFixable"/> comes from the issue's
+    /// <see cref="CodeIssueInfo.AutoFixable"/> flag (engine RuleMetadataCatalog). It only drives the
+    /// lightbulb icon colour — an auto-fixable rule shows the orange quick-fix lightbulb
+    /// (<see cref="KnownMonikers.IntellisenseLightBulb"/>); an advisory rule shows the neutral/blue
+    /// info icon (<see cref="KnownMonikers.StatusInformation"/>).
+    /// </remarks>
+    internal sealed class FixAction(ITextBuffer buffer, FixActionInfo fix, string ruleId, bool autoFixable = false) : ISuggestedAction
     {
         private readonly ITextBuffer   _buffer = buffer ?? throw new ArgumentNullException(nameof(buffer));
         private readonly FixActionInfo _fix = fix    ?? throw new ArgumentNullException(nameof(fix));
         private readonly string        _ruleId = ruleId ?? string.Empty;
+        private readonly bool          _autoFixable = autoFixable;
 
         public string  DisplayText      => _fix.Label;
         public bool    HasActionSets    => false;
         public bool    HasPreview       => false;
         public string  IconAutomationText => null;
-        public ImageMoniker IconMoniker => default;
+        public ImageMoniker IconMoniker =>
+            _autoFixable ? KnownMonikers.IntellisenseLightBulb : KnownMonikers.StatusInformation;
         public string  InputGestureText  => null;
 
         public void Dispose() { }
@@ -69,7 +79,8 @@ namespace AkmlSql.Shell.Shared.Analysis
         public bool   HasActionSets       => false;
         public bool   HasPreview          => false;
         public string IconAutomationText  => null;
-        public ImageMoniker IconMoniker   => default;
+        // Advisory action (no code transform) → neutral/blue info lightbulb (FR-027).
+        public ImageMoniker IconMoniker   => KnownMonikers.StatusInformation;
         public string InputGestureText    => null;
 
         public void Dispose() { }
@@ -114,7 +125,8 @@ namespace AkmlSql.Shell.Shared.Analysis
         public bool   HasActionSets       => false;
         public bool   HasPreview          => false;
         public string IconAutomationText  => null;
-        public ImageMoniker IconMoniker   => default;
+        // Advisory action (no code transform) → neutral/blue info lightbulb (FR-027).
+        public ImageMoniker IconMoniker   => KnownMonikers.StatusInformation;
         public string InputGestureText    => null;
 
         public void Dispose() { }

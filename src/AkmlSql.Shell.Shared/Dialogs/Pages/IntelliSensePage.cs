@@ -10,7 +10,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         public string Key     => "IntelliSense";
         public string Display => "Suggestions › Behavior";
         public string Title   => "IntelliSense";
-        public string Help    => "Controls AKML SQL completion behavior — auto-triggering, fuzzy matching, suggestion count and trigger delay, keyword casing, column/PK/FK detail badges, FK-assisted JOIN and alias generation, special-character handling, commit keys, snippets, and SQL-auth credentials used for IntelliSense.";
+        public string Help    => "Controls AKML SQL completion behavior — auto-triggering, fuzzy matching, suggestion count and trigger delay, keyword casing, column/PK/FK detail badges, popup Ctrl-transparency, FK-assisted JOIN and alias generation, commit keys, and snippets. Special-character handling lives on Inserted Code › Special characters; SQL-auth credentials on Connections & Memory.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {
@@ -69,6 +69,11 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 "Show primary key and foreign key badges");
             ctx.RegisterSearch("Show PK/FK indicators", "Show primary key and foreign key badges", "Toggle", rowPkFk);
 
+            var (rowCtrlTransparent, chkCtrlTransparent) = ctx.Rows.AddToggle(panel,
+                "Make popups transparent when Ctrl is held",
+                "Hold Ctrl to see the code underneath the completion popup (SQL Prompt style)");
+            ctx.RegisterSearch("Make popups transparent when Ctrl is held", "Hold Ctrl to see the code underneath the completion popup", "Toggle", rowCtrlTransparent);
+
             ctx.Rows.AddGroupSeparator(panel);
             ctx.Rows.AddGroupHeader(panel, "Assistance");
 
@@ -87,19 +92,8 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 "Recommended to avoid conflicts with AKML SQL IntelliSense");
             ctx.RegisterSearch("Disable native SSMS IntelliSense", "Recommended to avoid conflicts with AKML SQL IntelliSense", "Toggle", rowDisableNative);
 
-            // Spec 030 T080 (FR-043) — special-character handling.
-            ctx.Rows.AddGroupSeparator(panel);
-            ctx.Rows.AddGroupHeader(panel, "Special characters");
-
-            var (rowAutoClose, chkAutoClose) = ctx.Rows.AddToggle(panel,
-                "Auto-close matching characters",
-                "Typing an opening bracket, brace, or quote inserts the matching closing character");
-            ctx.RegisterSearch("Auto-close matching characters", "Typing an opening bracket, brace, or quote inserts the matching closing character", "Toggle", rowAutoClose);
-
-            var (rowAddParens, chkAddParens) = ctx.Rows.AddToggle(panel,
-                "Add parentheses after functions",
-                "Automatically add parentheses when a function is inserted from the completion list");
-            ctx.RegisterSearch("Add parentheses after functions", "Automatically add parentheses when a function is inserted from the completion list", "Toggle", rowAddParens);
+            // Spec 030 T080 (FR-043) — special-character handling (bracket / parenthesis /
+            // auto-close) consolidated onto the Inserted Code › Special characters page.
 
             // Spec 030 T078 (FR-042) — completion commit keys.
             ctx.Rows.AddGroupSeparator(panel);
@@ -120,30 +114,14 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 "Include snippet shortcuts (sel, ssf, ins, …) in the completion popup");
             ctx.RegisterSearch("Show snippets in the completion list", "Include snippet shortcuts (sel, ssf, ins, …) in the completion popup", "Toggle", rowSnippets);
 
-            ctx.Rows.AddGroupSeparator(panel);
-            ctx.Rows.AddGroupHeader(panel, "SQL authentication");
-
-            var (rowSqlCreds, chkSqlCreds) = ctx.Rows.AddToggle(panel,
-                "Use SQL Server-auth credentials for IntelliSense",
-                "When on (default), AKML reuses the SQL password SSMS already holds for the connection — or a stored one — so SQL-auth windows get IntelliSense with no prompt. Off: SQL-auth windows are skipped. Windows / Azure AD connections are unaffected either way.");
-            ctx.RegisterSearch("Use SQL Server-auth credentials for IntelliSense", "Reuse the SSMS-held or stored SQL password so SQL-auth windows get IntelliSense", "Toggle", rowSqlCreds);
-
-            var (rowManageCreds, btnManageCreds) = ctx.Rows.AddButton(panel,
-                "Saved SQL passwords",
-                "Manage…",
-                "View and remove the SQL passwords AKML has stored (DPAPI-encrypted, per server + login).");
-            ctx.RegisterSearch("Saved SQL passwords", "View and remove stored SQL passwords", "Button", rowManageCreds);
-            btnManageCreds.Click += (_, _) =>
-            {
-                try { new Editor.SqlCredentialManagerDialog().ShowDialog(); }
-                catch { /* opening the manager is non-critical */ }
-            };
+            // SQL-authentication credential settings moved to the Connections & Memory page
+            // (SQL Prompt's "Connections & memory" pane).
 
             return new IntelliSenseControls(chkEnabled, chkAutoTrig, chkAfterDot, chkFuzzy,
                 sldMaxSugg, lblMaxSugg, sldTrigDelay, lblTrigDelay, cboCase,
-                chkDataTypes, chkNullable, chkPkFk,
-                chkJoin, chkAlias, chkDisableNative, chkSqlCreds,
-                chkAutoClose, chkAddParens, chkSpaceCommit, chkDotCommit, chkSnippets);
+                chkDataTypes, chkNullable, chkPkFk, chkCtrlTransparent,
+                chkJoin, chkAlias, chkDisableNative,
+                chkSpaceCommit, chkDotCommit, chkSnippets);
         }
     }
 
@@ -161,21 +139,19 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         private readonly CheckBox _showDataTypes;
         private readonly CheckBox _showNullability;
         private readonly CheckBox _showPkFk;
+        private readonly CheckBox _ctrlTransparentPopups;
         private readonly CheckBox _joinAssist;
         private readonly CheckBox _autoAlias;
         private readonly CheckBox _disableNativeIs;
-        private readonly CheckBox _enableSqlAuthCreds;
-        private readonly CheckBox _autoCloseChars;
-        private readonly CheckBox _addParentheses;
         private readonly CheckBox _spaceCommits;
         private readonly CheckBox _dotCommits;
         private readonly CheckBox _snippetsInCompletion;
 
         public IntelliSenseControls(CheckBox enabled, CheckBox autoTrig, CheckBox afterDot, CheckBox fuzzy,
             Slider sldMaxSugg, TextBlock lblMaxSugg, Slider sldTrigDelay, TextBlock lblTrigDelay, ComboBox cboCase,
-            CheckBox dataTypes, CheckBox nullable, CheckBox pkFk,
-            CheckBox join, CheckBox alias, CheckBox disableNative, CheckBox sqlCreds,
-            CheckBox autoCloseChars, CheckBox addParentheses, CheckBox spaceCommits, CheckBox dotCommits, CheckBox snippetsInCompletion)
+            CheckBox dataTypes, CheckBox nullable, CheckBox pkFk, CheckBox ctrlTransparentPopups,
+            CheckBox join, CheckBox alias, CheckBox disableNative,
+            CheckBox spaceCommits, CheckBox dotCommits, CheckBox snippetsInCompletion)
         {
             _enabled = enabled;
             _autoTrigger = autoTrig;
@@ -189,12 +165,10 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             _showDataTypes = dataTypes;
             _showNullability = nullable;
             _showPkFk = pkFk;
+            _ctrlTransparentPopups = ctrlTransparentPopups;
             _joinAssist = join;
             _autoAlias = alias;
             _disableNativeIs = disableNative;
-            _enableSqlAuthCreds = sqlCreds;
-            _autoCloseChars = autoCloseChars;
-            _addParentheses = addParentheses;
             _spaceCommits = spaceCommits;
             _dotCommits = dotCommits;
             _snippetsInCompletion = snippetsInCompletion;
@@ -210,12 +184,10 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             _showDataTypes.IsChecked = i.ShowDataTypes;
             _showNullability.IsChecked = i.ShowNullability;
             _showPkFk.IsChecked = i.ShowPkFk;
+            _ctrlTransparentPopups.IsChecked = i.CtrlTransparentPopups;
             _autoAlias.IsChecked = i.AutoAlias;
             _joinAssist.IsChecked = i.JoinAssist;
             _disableNativeIs.IsChecked = i.DisableNativeIntelliSense;
-            _enableSqlAuthCreds.IsChecked = i.EnableSqlAuthCredentials;
-            _autoCloseChars.IsChecked = i.SpecialCharOptions.AutoCloseCharacters;
-            _addParentheses.IsChecked = i.SpecialCharOptions.AddParentheses;
             _spaceCommits.IsChecked = i.SpaceCommits;
             _dotCommits.IsChecked = i.DotCommits;
             _snippetsInCompletion.IsChecked = i.SnippetsInCompletion;
@@ -235,12 +207,10 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             settings.IntelliSense.ShowDataTypes = _showDataTypes.IsChecked == true;
             settings.IntelliSense.ShowNullability = _showNullability.IsChecked == true;
             settings.IntelliSense.ShowPkFk = _showPkFk.IsChecked == true;
+            settings.IntelliSense.CtrlTransparentPopups = _ctrlTransparentPopups.IsChecked == true;
             settings.IntelliSense.AutoAlias = _autoAlias.IsChecked == true;
             settings.IntelliSense.JoinAssist = _joinAssist.IsChecked == true;
             settings.IntelliSense.DisableNativeIntelliSense = _disableNativeIs.IsChecked == true;
-            settings.IntelliSense.EnableSqlAuthCredentials = _enableSqlAuthCreds.IsChecked == true;
-            settings.IntelliSense.SpecialCharOptions.AutoCloseCharacters = _autoCloseChars.IsChecked == true;
-            settings.IntelliSense.SpecialCharOptions.AddParentheses = _addParentheses.IsChecked == true;
             settings.IntelliSense.SpaceCommits = _spaceCommits.IsChecked == true;
             settings.IntelliSense.DotCommits = _dotCommits.IsChecked == true;
             settings.IntelliSense.SnippetsInCompletion = _snippetsInCompletion.IsChecked == true;

@@ -32,6 +32,7 @@ namespace AkmlSql.Shell.Shared.History
         private DateTime? _dateTo;
         private bool _favoritesOnly;
         private bool? _isOpenFilter;
+        private bool _isDisconnected;
         private int _totalCount;
         private bool _isLoading;
         private int _currentOffset;
@@ -137,6 +138,17 @@ namespace AkmlSql.Shell.Shared.History
         {
             get => _isOpenFilter;
             set => SetField(ref _isOpenFilter, value);
+        }
+
+        /// <summary>
+        /// True when the last search could not run because the out-of-process engine was not
+        /// connected. Drives the "History unavailable" affordance so a pipe-down state is not
+        /// silently indistinguishable from a genuinely empty result.
+        /// </summary>
+        public bool IsDisconnected
+        {
+            get => _isDisconnected;
+            set => SetField(ref _isDisconnected, value);
         }
 
         /// <summary>Total number of matching entries across all pages.</summary>
@@ -281,6 +293,26 @@ namespace AkmlSql.Shell.Shared.History
             CommandManager.InvalidateRequerySuggested();
         }
 
+        /// <summary>
+        /// Cycles the open/closed tab filter behind the toolbar's two folder toggles and
+        /// re-runs the search. <paramref name="open"/> is the button that was clicked
+        /// (true = "open only", false = "closed only"). Clicking the button for the state
+        /// that is already active clears the filter back to "all"; clicking the other button
+        /// switches straight to it. Open and closed are mutually exclusive — mirrors the
+        /// Redgate SQL History behaviour (report §3 rec #1).
+        /// </summary>
+        public void ToggleOpenFilter(bool open)
+        {
+            // A search is in flight — mutating the filter now would paint the toggle active
+            // without re-running the search (active-looking filter over an unfiltered list).
+            // Ignore the click, like a disabled button.
+            if (IsLoading) return;
+
+            IsOpenFilter = (IsOpenFilter == open) ? (bool?)null : open;
+            if (SearchCommand.CanExecute(null))
+                SearchCommand.Execute(null);
+        }
+
         #endregion
 
         #region Search Methods
@@ -308,6 +340,7 @@ namespace AkmlSql.Shell.Shared.History
                 DateFrom = null;
                 DateTo = null;
                 FavoritesOnly = false;
+                IsOpenFilter = null;
 
                 await SearchInternalAsync(resetOffset: true);
             }
@@ -335,9 +368,11 @@ namespace AkmlSql.Shell.Shared.History
             if (client == null || !client.IsConnected)
             {
                 Log.Debug("HistoryViewModel: engine not connected, cannot search");
+                IsDisconnected = true;
                 return;
             }
 
+            IsDisconnected = false;
             IsLoading = true;
 
             try

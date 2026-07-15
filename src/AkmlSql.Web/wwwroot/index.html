@@ -16,13 +16,9 @@
     <!-- Global base + focus rings (token-driven). Loaded AFTER the theme link so it can
          reference the --akml-* custom properties whichever variant is active. -->
     <link rel="stylesheet" href="css/app.css" />
-    <script type="module">
-        import { apply } from './js/akml-theme.js';
-        // Apply 'system' immediately so the page picks the right mode before Blazor
-        // boots. The Blazor ThemeService re-applies later with the user's stored
-        // preference (if any) once IndexedDB is reachable.
-        apply('system');
-    </script>
+    <!-- External (not inline) so the CSP script-src needs no 'unsafe-inline'/hash. Applies the
+         boot theme before Blazor renders; see js/akml-theme-boot.js. -->
+    <script type="module" src="js/akml-theme-boot.js"></script>
 </head>
 <body>
     <div id="app">Loading AKML SQL…</div>

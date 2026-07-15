@@ -52,8 +52,13 @@ Source: "..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\*"; \
     Flags: ignoreversion recursesubdirs createallsubdirs; \
     Components: web
 
-; PowerShell helpers (bundled, invoked at install time then removed).
-Source: "web-iis-setup.ps1"; DestDir: "{tmp}"; Flags: deleteafterinstall; Components: web\iis
+; PowerShell helpers. web-iis-setup.ps1 + web-iis-repair.ps1 are installed PERMANENTLY under
+; {app}\Support so the "Repair AKML SQL Web hosting" Start-menu shortcut can re-provision the IIS
+; site after a first install where IIS was not yet functional (web-iis-setup.ps1 exits 0 even on
+; failure, so such installs silently leave no site). The other helpers are bundled to {tmp} and
+; removed after install.
+Source: "web-iis-setup.ps1"; DestDir: "{app}\Support"; Flags: ignoreversion; Components: web\iis
+Source: "web-iis-repair.ps1"; DestDir: "{app}\Support"; Flags: ignoreversion; Components: web\iis
 Source: "web-tls-setup.ps1"; DestDir: "{tmp}"; Flags: deleteafterinstall; Components: web
 Source: "web-firewall.ps1"; DestDir: "{tmp}"; Flags: deleteafterinstall; Components: web
 Source: "web-config-bridge.ps1"; DestDir: "{tmp}"; Flags: deleteafterinstall; Components: web
@@ -62,7 +67,7 @@ Source: "web-config-bridge.ps1"; DestDir: "{tmp}"; Flags: deleteafterinstall; Co
 ; FR-004 -- web-iis-setup.ps1 receives the IIS port (the static-bundle site).
 ; Skipped when "Don't host" was selected (only runs for the web\iis component).
 Filename: "powershell.exe"; \
-    Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{tmp}\web-iis-setup.ps1"" -Port {code:GetIisPort} -PhysicalPath ""{app}\Web"" -Mode {code:GetBridgeMode}"; \
+    Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\Support\web-iis-setup.ps1"" -Port {code:GetIisPort} -PhysicalPath ""{app}\Web"" -Mode {code:GetBridgeMode}"; \
     StatusMsg: "Provisioning IIS site for AKML SQL Web..."; \
     Components: web\iis; \
     Flags: runhidden
@@ -114,6 +119,21 @@ Filename: "powershell.exe"; \
 
 ; Note: cert + IIS site removal is done in Web_Uninstall (CurUninstallStepChanged / usUninstall)
 ; so we can inspect the install-summary file for the cert thumbprint.
+
+[Icons]
+; Closure follow-up: a Start-menu shortcut to re-provision the IIS site if it is missing (e.g. the
+; first install ran before IIS was fully enabled). web-iis-repair.ps1 self-elevates and reads the
+; port / mode / web-root persisted at install, so no arguments are needed. Only for IIS installs.
+Name: "{group}\Repair AKML SQL Web hosting"; \
+    Filename: "powershell.exe"; \
+    Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\Support\web-iis-repair.ps1"""; \
+    WorkingDir: "{app}\Support"; \
+    Comment: "Recreate the AKML SQL Web IIS site if it is missing"; \
+    Components: web\iis
+
+[UninstallDelete]
+; Remove the Support helpers dir (scripts installed there) on uninstall.
+Type: filesandordirs; Name: "{app}\Support"
 
 [Code]
 { ─── Integration ───────────────────────────────────────────────────────────
@@ -449,6 +469,19 @@ begin
       port. Without this WebBridgePort is 0 at uninstall and the binding leaks. }
     RegWriteDWordValue(HKLM, 'Software\AKML SQL\Web', 'BridgePort', WebBridgePort);
 
+    { Closure follow-up: persist the IIS hosting settings so "Repair AKML SQL Web hosting"
+      (web-iis-repair.ps1) can recreate the site with no arguments after a first install where IIS
+      was not yet functional. Only meaningful when IIS hosting was chosen. }
+    if WizardIsComponentSelected('web\iis') then
+    begin
+        RegWriteDWordValue(HKLM, 'Software\AKML SQL\Web', 'IisPort', WebIisPort);
+        RegWriteStringValue(HKLM, 'Software\AKML SQL\Web', 'WebRoot', ExpandConstant('{app}\Web'));
+        if IsLanExposed() then
+            RegWriteStringValue(HKLM, 'Software\AKML SQL\Web', 'IisMode', 'Lan')
+        else
+            RegWriteStringValue(HKLM, 'Software\AKML SQL\Web', 'IisMode', 'Localhost');
+    end;
+
     { Spec 025 (M3 bridge closure) T008 / FR-027 -- write the Bridge section into the engine
       config.json so EngineHost.RunAsync starts a WebSocketTransport alongside the named pipe.
       Receives the BRIDGE port (not the IIS port). Idempotent on re-run. }
@@ -614,6 +647,22 @@ begin
     finally
         summary.Free;
     end;
+
+    { Closure follow-up: beyond the summary file + wizard page, pop a VISIBLE dialog in interactive
+      installs when IIS hosting was requested but the site was not created (IIS not fully ready at
+      install). The summary text is easy to miss; this points the user straight at the repair
+      shortcut instead of leaving them to discover the missing site themselves. Silent installs are
+      unaffected (the summary file still records it). }
+    if (not WizardSilent) and WizardIsComponentSelected('web\iis')
+       and (not FileExists(appdata + '\iis-site.ok')) then
+        MsgBox('AKML SQL Web hosting could not be set up automatically.' + #13#10 + #13#10 +
+               'IIS hosting was selected, but the "AkmlSqlWeb" site could not be created -- usually ' +
+               'because IIS was not fully installed at the time. The web files are in place and the ' +
+               'rest of setup completed.' + #13#10 + #13#10 +
+               'To finish: make sure IIS (with Management Tools) is enabled, then run ' +
+               '"Repair AKML SQL Web hosting" from the Start menu.' + #13#10 + #13#10 +
+               'Details: ' + appdata + '\install.log',
+               mbInformation, MB_OK);
 end;
 
 procedure Web_Uninstall();

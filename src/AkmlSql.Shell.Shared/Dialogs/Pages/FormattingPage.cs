@@ -20,9 +20,9 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {
-            // Spec 030 T021 / FR-006 — see + switch the active formatting style.
-            ctx.Rows.AddGroupHeader(panel, "Active style");
-
+            // Spec 030 T021 / FR-006 — see + switch the active formatting style. The page title
+            // ("SQL Formatting") already frames this lead section, so no redundant "Active style"
+            // group header above the "Active style" dropdown (it read as duplicated text).
             var (rowActive, cboActive) = ctx.Rows.AddDropdown(panel,
                 "Active style",
                 System.Array.Empty<string>(),
@@ -178,14 +178,11 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         private void SetItems(System.Collections.Generic.IEnumerable<string> names, string selectName)
         {
             _activeStyle.Items.Clear();
+            // Plain string items — RowFactory's ComboBox template/ItemContainerStyle own all
+            // theming. Wrapping in ComboBoxItem/TextBlock breaks the closed-face rendering
+            // (VisualBrush snapshot) and dark-theme item colors; see RowFactory.StyleComboBox.
             foreach (var name in names)
-            {
-                _activeStyle.Items.Add(new ComboBoxItem
-                {
-                    Content = new TextBlock { Text = name },
-                    Foreground = _activeStyle.Foreground,
-                });
-            }
+                _activeStyle.Items.Add(name);
             SelectByName(selectName);
         }
 
@@ -193,9 +190,8 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         {
             for (int i = 0; i < _activeStyle.Items.Count; i++)
             {
-                if (_activeStyle.Items[i] is ComboBoxItem item
-                    && item.Content is TextBlock tb
-                    && string.Equals(tb.Text, name, StringComparison.OrdinalIgnoreCase))
+                if (_activeStyle.Items[i] is string s
+                    && string.Equals(s, name, StringComparison.OrdinalIgnoreCase))
                 {
                     _activeStyle.SelectedIndex = i;
                     return;
@@ -206,9 +202,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
 
         private string? SelectedName()
         {
-            if (_activeStyle.SelectedItem is ComboBoxItem item && item.Content is TextBlock tb)
-                return tb.Text;
-            return null;
+            return _activeStyle.SelectedItem as string;
         }
     }
 }

@@ -272,6 +272,44 @@ public class AnalysisEngineIntegrationTests
         Assert.Empty(response.Issues);
     }
 
+    // ── AutoFixable flag (T054 / FR-027) ─────────────────────────────────────
+
+    [Fact]
+    public async Task AnalyzeAsync_SetsAutoFixableTrue_ForAutoFixableRule()
+    {
+        // BP004 (`= NULL`) is catalogued as auto-fixable in RuleMetadataCatalog.
+        var response = await AnalyzeAsync("SELECT 1 WHERE Col = NULL");
+        var bp004 = response.Issues.FirstOrDefault(i => i.RuleId == "BP004");
+        Assert.NotNull(bp004);
+        Assert.True(bp004.AutoFixable);
+        Assert.True(RuleMetadataCatalog.Get("BP004").AutoFixable); // guards the fixture assumption
+    }
+
+    [Fact]
+    public async Task AnalyzeAsync_SetsAutoFixableFalse_ForAdvisoryRule()
+    {
+        // PE003 (DELETE without WHERE) is catalogued as advisory (no auto-fix).
+        var response = await AnalyzeAsync("DELETE FROM dbo.Orders");
+        var pe003 = response.Issues.FirstOrDefault(i => i.RuleId == "PE003");
+        Assert.NotNull(pe003);
+        Assert.False(pe003.AutoFixable);
+        Assert.False(RuleMetadataCatalog.Get("PE003").AutoFixable); // guards the fixture assumption
+    }
+
+    [Fact]
+    public void CodeIssueInfo_AutoFixable_RoundTripsThroughMessagePack()
+    {
+        var original = new CodeIssueInfo { RuleId = "BP004", AutoFixable = true };
+        var bytes = MessagePack.MessagePackSerializer.Serialize(original);
+        var restored = MessagePack.MessagePackSerializer.Deserialize<CodeIssueInfo>(bytes);
+        Assert.True(restored.AutoFixable);
+
+        var advisory = new CodeIssueInfo { RuleId = "PE003", AutoFixable = false };
+        var restoredAdvisory = MessagePack.MessagePackSerializer.Deserialize<CodeIssueInfo>(
+            MessagePack.MessagePackSerializer.Serialize(advisory));
+        Assert.False(restoredAdvisory.AutoFixable);
+    }
+
     // ── Batch caching (incremental analysis) ─────────────────────────────────
 
     [Fact]

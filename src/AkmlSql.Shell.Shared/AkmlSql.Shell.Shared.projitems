@@ -12,6 +12,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\AkmlCompletionPopup.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\ObjectDefinitionPanel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\WildcardExpansionPopup.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\AutoClosePairs.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\CompletionController.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\KeyboardHook.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\CompletionItemModel.cs" />
@@ -41,7 +42,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\AboutDialog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\SettingsWindow.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\LogViewerDialog.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\PageTheme.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\PageTheme.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\IPageBuilder.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\PageContext.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\RowFactory.cs" />
@@ -64,7 +65,9 @@
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\CompletionPolishPage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\AliasesPage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\ConnectionScopePage.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\ConnectionsMemoryPage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\QualificationPage.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\SpecialCharactersPage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\InsertStatementsPage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\JoinCompletionPage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\LabsPage.cs" />
@@ -88,6 +91,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\Spacing.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\ThemePalette.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\ThemeRegistry.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\ComboBoxTheming.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\ThemeMigrationManager.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\HostThemeWatcher.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\FocusVisualStyles.cs" />
@@ -164,6 +168,7 @@
     <!-- Phase 7 — SQL History: execution capture, search, and tool window -->
     <Compile Include="$(MSBuildThisFileDirectory)History\ExecutionCapture.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)History\HistoryViewModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)History\HistoryTimeFormat.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)History\DateBucketConverter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)History\HistoryToolWindowControl.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)History\HistoryDiffWindow.cs" />
@@ -224,6 +229,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Productivity\Grid\GridContextMenuWiring.cs" />
     <!-- Phase 8 US3 — Command Palette -->
     <Compile Include="$(MSBuildThisFileDirectory)Productivity\CommandPalette\CommandRegistry.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\CommandPalette\DbObjectProvider.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Productivity\CommandPalette\FuzzyMatcher.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Productivity\CommandPalette\CommandPaletteViewModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Productivity\CommandPalette\CommandPaletteWindow.cs" />
@@ -257,6 +263,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Editor\Adornments\MinimapAdornment.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\Adornments\MinimapAdornmentProvider.cs" />
     <!-- Phase 8 US14 — CRUD Generation & Script As -->
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\BulkFormatCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Productivity\CrudGenerationCommand.cs" />
     <!-- Phase 8 US15 — Connection Aliases -->
     <Compile Include="$(MSBuildThisFileDirectory)Productivity\ConnectionAliasManager.cs" />

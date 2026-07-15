@@ -103,7 +103,8 @@ public class CompletionEngine
     /// from the session's database name; default true (no restriction).
     /// </summary>
     public bool DatabaseInScope { get; set; } = true;
-    /// <summary>Forward-looking linked-server inclusion (no cache data today); threaded, currently inert.</summary>
+    /// <summary>When true, linked servers loaded into the schema cache are surfaced as
+    /// object-reference completions (FR-016). Pushed into <c>ObjectProvider</c> per request.</summary>
     public bool IncludeLinkedServers { get; set; }
 
     public CompletionEngine(TsqlParserService parserService)
@@ -136,6 +137,12 @@ public class CompletionEngine
     {
         _maxSuggestions = max;
     }
+
+    // Linked-server suggestions carry an explicit flag (set only by ObjectProvider.ToLinkedServerItem);
+    // used to pin them past the suggestion cap. ObjectType cannot discriminate here —
+    // DatabaseProvider also emits Database-typed items for USE-clause completion.
+    private static bool IsLinkedServerItem(CompletionItem item)
+        => item.IsLinkedServer;
 
     public CompletionResponse GetCompletions(string documentText, int cursorOffset, DatabaseCache? cache)
         => GetCompletions(documentText, cursorOffset, cache, sessionId: string.Empty);
@@ -386,11 +393,28 @@ public class CompletionEngine
                     .ToList();
             }
 
-            // Truncate
+            // Truncate — but never drop the (few, deliberate) linked-server suggestions behind the
+            // cap. They rank below local objects/schemas by design (SortPriority 400), so in a
+            // database with more than _maxSuggestions higher-priority objects a bare "FROM " would
+            // otherwise silently hide every linked server. The explicit IsLinkedServer flag (set
+            // only by ObjectProvider.ToLinkedServerItem) identifies them here.
             var isIncomplete = allItems.Count > _maxSuggestions;
             if (isIncomplete)
             {
-                allItems = allItems.Take(_maxSuggestions).ToList();
+                var pinned = allItems.Where(IsLinkedServerItem).ToList();
+                if (pinned.Count == 0 || pinned.Count >= _maxSuggestions)
+                {
+                    allItems = allItems.Take(_maxSuggestions).ToList();
+                }
+                else
+                {
+                    allItems = allItems.Where(i => !IsLinkedServerItem(i))
+                        .Take(_maxSuggestions - pinned.Count)
+                        .Concat(pinned)
+                        .OrderBy(i => i.SortPriority)
+                        .ThenBy(i => i.DisplayText, StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+                }
             }
 
             return new CompletionResponse

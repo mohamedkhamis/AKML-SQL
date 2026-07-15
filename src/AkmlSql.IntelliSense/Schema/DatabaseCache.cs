@@ -36,6 +36,14 @@ public class DatabaseCache
     /// <summary>All foreign key relationships in this database. Indexed by <see cref="RebuildFkIndex"/>.</summary>
     public List<ForeignKey> ForeignKeys { get; set; } = [];
 
+    /// <summary>
+    /// Linked servers registered on the connected instance (<c>sys.servers</c> where
+    /// <c>is_linked = 1</c>), populated in Phase A. Empty when none exist, when the
+    /// enumeration query failed, or before Phase A runs. Consumed by <c>ObjectProvider</c>
+    /// when the IntelliSense connection scope enables linked-server suggestions (FR-016).
+    /// </summary>
+    public List<LinkedServerInfo> LinkedServers { get; set; } = [];
+
     /// <summary>UTC timestamp of the last complete Phase A + B refresh cycle.</summary>
     public DateTime LastFullRefresh { get; set; }
 

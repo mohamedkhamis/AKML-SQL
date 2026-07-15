@@ -4,8 +4,11 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
 using AkmlSql.Core.Models.Productivity;
+using AkmlSql.Shell.Shared.Refactoring;
 using Microsoft.VisualStudio.Shell;
+using Microsoft.VisualStudio.Text.Editor;
 using Serilog;
 
 namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
@@ -22,9 +25,39 @@ namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
         private readonly double _usageWeight = 0.7;
         private readonly double _matchWeight = 0.3;
 
+        // Spec 030 T086 / FR-045 — active-editor context for the DB-object provider. Resolved once at
+        // construction (while the SQL editor is still the active text view, before the palette steals
+        // focus): the session id targets the live connection/schema cache, the view is the insertion
+        // target when a DB object is selected.
+        private readonly IWpfTextView? _activeView;
+        private readonly string? _sessionId;
+
+        // Monotonic generation stamp so a slow async DB-object search that returns after the user has
+        // typed further (or cleared the box) is dropped instead of polluting the current result list.
+        private int _searchGeneration;
+
+        // Debounce window before firing the DB-object IPC on each keystroke.
+        private const int DbSearchDebounceMs = 150;
+
         public CommandPaletteViewModel()
         {
             FilteredCommands = new ObservableCollection<CommandEntry>();
+
+            // Capture the active editor before the palette window is shown.
+            try
+            {
+                var ctx = RefactorCommandHelper.TryGetActiveEditor();
+                if (ctx != null)
+                {
+                    _activeView = ctx.View;
+                    _sessionId = ctx.SessionId;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "CommandPaletteViewModel: failed to resolve active editor for DB-object search");
+            }
+
             RefreshFilteredCommands();
         }
 
@@ -109,6 +142,17 @@ namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
         {
             try
             {
+                // Spec 030 T086 — DB-object results insert the schema-qualified name at the caret in the
+                // active editor rather than executing a command. They are not registry commands, so their
+                // usage count is not tracked.
+                if (DbObjectProvider.IsDbObject(entry.Id))
+                {
+                    InsertDbObjectAtCaret(DbObjectProvider.GetInsertText(entry.Id));
+                    CommandExecuted?.Invoke(entry.Id);
+                    CloseRequested?.Invoke();
+                    return;
+                }
+
                 // Increment usage count
                 CommandRegistry.IncrementUsage(entry.Id);
 
@@ -179,10 +223,99 @@ namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
 
                 // Reset selection to first item
                 SelectedIndex = FilteredCommands.Count > 0 ? 0 : -1;
+
+                // Spec 030 T086 — fire a debounced DB-object search that appends matches when they return.
+                var generation = ++_searchGeneration;
+                _ = SearchDbObjectsAsync(generation, _searchText);
             }
             catch (Exception ex)
             {
                 Log.Warning(ex, "CommandPaletteViewModel: failed to refresh filtered commands");
+            }
+        }
+
+        /// <summary>
+        /// Spec 030 T086 / FR-045. Debounced, off-UI-thread query for database objects matching the
+        /// current search text. Appends matches to <see cref="FilteredCommands"/> on the UI thread, but
+        /// only if this call is still the newest (generation) and the search text has not changed — so a
+        /// stale response never pollutes a later result set. Degrades silently (no DB objects) when the
+        /// engine/connection is unavailable.
+        /// </summary>
+        private async Task SearchDbObjectsAsync(int generation, string query)
+        {
+            try
+            {
+                // No editor resolved → no session to target and nowhere to insert; skip entirely.
+                if (_activeView == null || string.IsNullOrEmpty(_sessionId))
+                    return;
+
+                if (string.IsNullOrWhiteSpace(query) || query.Trim().Length < DbObjectProvider.MinChars)
+                    return;
+
+                // Debounce: coalesce bursts of keystrokes. Bail early if superseded during the wait.
+                await Task.Delay(DbSearchDebounceMs).ConfigureAwait(false);
+                if (generation != _searchGeneration)
+                    return;
+
+                var entries = await DbObjectProvider.SearchAsync(_sessionId, query).ConfigureAwait(false);
+                if (entries.Count == 0)
+                    return;
+
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+
+                // Re-check freshness now that we are back on the UI thread: another keystroke may have
+                // bumped the generation (and already cleared/rebuilt the list) while we were awaiting.
+                if (generation != _searchGeneration || !string.Equals(query, _searchText, StringComparison.Ordinal))
+                    return;
+
+                foreach (var entry in entries)
+                {
+                    FilteredCommands.Add(entry);
+                }
+
+                if (SelectedIndex < 0 && FilteredCommands.Count > 0)
+                    SelectedIndex = 0;
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "CommandPaletteViewModel: DB-object search failed");
+            }
+        }
+
+        /// <summary>
+        /// Inserts the schema-qualified object name at the caret (replacing any active selection) in the
+        /// editor captured when the palette opened. Must run on the UI thread.
+        /// </summary>
+        private void InsertDbObjectAtCaret(string qualifiedName)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
+            var view = _activeView;
+            if (view == null || string.IsNullOrEmpty(qualifiedName))
+                return;
+
+            try
+            {
+                using (var edit = view.TextBuffer.CreateEdit())
+                {
+                    if (!view.Selection.IsEmpty)
+                    {
+                        int start = view.Selection.Start.Position.Position;
+                        int length = view.Selection.End.Position.Position - start;
+                        edit.Replace(start, length, qualifiedName);
+                    }
+                    else
+                    {
+                        edit.Insert(view.Caret.Position.BufferPosition.Position, qualifiedName);
+                    }
+                    edit.Apply();
+                }
+
+                try { view.VisualElement?.Focus(); } catch { /* focus is best-effort */ }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "CommandPaletteViewModel: failed to insert DB object '{Name}'", qualifiedName);
             }
         }
 
@@ -300,6 +433,7 @@ namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
                 "akml.toggleAs" => CommandIds.CmdToggleAs,
                 "akml.editProfile" => CommandIds.CmdEditProfile,
                 "akml.disableFormattingForSelection" => CommandIds.CmdDisableFormattingForSelection,
+                "akml.bulkFormat" => CommandIds.CmdBulkFormat,
                 "akml.expandInsertColumns" => CommandIds.CmdExpandInsertColumns,
                 "akml.expandExecParameters" => CommandIds.CmdExpandExecParameters,
                 "akml.expandUpdateColumns" => CommandIds.CmdExpandUpdateColumns,

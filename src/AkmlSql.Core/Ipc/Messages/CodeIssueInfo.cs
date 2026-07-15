@@ -26,5 +26,13 @@ namespace AkmlSql.Core.Ipc.Messages
         /// Rendered as a clickable link in the issue-details popup. Empty when none is configured.
         /// </summary>
         [Key(9)] public string ReferenceUrl { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Spec 030 T054 (FR-027) — true when the offending rule ships a deterministic auto-fix
+        /// (sourced from the engine's RuleMetadataCatalog). Drives the quick-fix lightbulb colour
+        /// in the shell: auto-fixable ⇒ orange fix lightbulb, advisory ⇒ neutral/blue info icon.
+        /// Additive/back-compatible: older engines that omit this key deserialize to <c>false</c>.
+        /// </summary>
+        [Key(10)] public bool AutoFixable { get; set; }
     }
 }

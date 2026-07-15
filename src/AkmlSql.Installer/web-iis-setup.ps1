@@ -118,8 +118,11 @@ try {
     if ($Mode -eq 'Lan') {
         $bridgeConnectSrc += "wss: "
     }
+    # CodeMirror is vendored locally (wwwroot/lib/codemirror/akml-cm.js), so script-src no longer
+    # needs the esm.sh CDN -- everything loads from 'self'. 'wasm-unsafe-eval' stays for the Blazor
+    # WASM runtime; style-src keeps 'unsafe-inline' for CodeMirror's injected editor styles.
     $csp = "default-src 'self'; " +
-           "script-src 'self' 'wasm-unsafe-eval' https://esm.sh; " +
+           "script-src 'self' 'wasm-unsafe-eval'; " +
            "style-src 'self' 'unsafe-inline'; " +
            "img-src 'self' data:; " +
            "connect-src 'self' " +
@@ -128,6 +131,13 @@ try {
                "https://generativelanguage.googleapis.com https://*.openai.azure.com " +
                "http://localhost:11434 http://127.0.0.1:11434 " +
                "http://localhost:1234 http://127.0.0.1:1234;"
+    # Remove any pre-existing CSP header first so a re-run (installer re-run or the "Repair AKML SQL
+    # Web hosting" shortcut) doesn't fail with "Cannot add duplicate collection entry ...
+    # 'Content-Security-Policy'": Remove-Website above does NOT clear the site's <location> block in
+    # applicationHost.config, so the header survives and Add- would create a duplicate.
+    Remove-WebConfigurationProperty -PSPath "MACHINE/WEBROOT/APPHOST/AkmlSqlWeb" `
+        -Filter "system.webServer/httpProtocol/customHeaders" `
+        -Name "." -AtElement @{name = 'Content-Security-Policy'} -ErrorAction SilentlyContinue
     Add-WebConfigurationProperty -PSPath "MACHINE/WEBROOT/APPHOST/AkmlSqlWeb" `
         -Filter "system.webServer/httpProtocol/customHeaders" `
         -Name "." -Value @{name = 'Content-Security-Policy'; value = $csp}

@@ -1,13 +1,12 @@
-#nullable enable
+﻿#nullable enable
 using System.Windows.Media;
-using AkmlSql.Shell.Shared.Ui.Theme;
 
-namespace AkmlSql.Shell.Shared.Dialogs.Pages
+namespace AkmlSql.Shell.Shared.Ui.Theme
 {
     /// <summary>
     /// Holds all frozen brushes for a single Options-dialog theme variant.
     /// Lifted from the previous nested <c>SettingsWindow.ThemeBrushSet</c> so that
-    /// per-page builders (<see cref="IPageBuilder"/>) can take it as a constructor
+    /// per-page builders (<see cref="Dialogs.Pages.IPageBuilder"/>) can take it as a constructor
     /// parameter without depending on <c>SettingsWindow</c> internals.
     ///
     /// Brushes flow from <see cref="ThemePalette"/> via the semantic tokens in

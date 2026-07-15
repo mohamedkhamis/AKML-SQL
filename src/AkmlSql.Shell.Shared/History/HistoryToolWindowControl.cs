@@ -53,9 +53,19 @@ namespace AkmlSql.Shell.Shared.History
         private Button? _favoritesStarButton;
         private TextBlock? _favoritesStarGlyph;
 
+        // Toolbar open/closed folder toggles — mirror HistoryViewModel.IsOpenFilter
+        // (SQL Prompt's two folder icons: open-queries-only / closed-queries-only).
+        private Path? _openFilterGlyph;
+        private Path? _closedFilterGlyph;
+
         // Status bar elements
         private TextBlock? _statusCountLabel;
         private TextBlock? _statusLoadingLabel;
+
+        // Centered placeholder overlaid on the query list — distinguishes a pipe-down engine
+        // ("History unavailable") from a genuinely empty result ("No queries found").
+        private StackPanel? _emptyStateOverlay;
+        private TextBlock? _emptyStateText;
 
         // Infinite-scroll guard — prevents duplicate LoadMore fires while one is in flight.
         private bool _loadMoreInFlight;
@@ -115,7 +125,14 @@ namespace AkmlSql.Shell.Shared.History
             {
                 if (args.PropertyName == nameof(HistoryViewModel.FavoritesOnly))
                     UpdateFavoritesStarVisual();
+                else if (args.PropertyName == nameof(HistoryViewModel.IsOpenFilter))
+                    UpdateOpenFilterVisual();
+                else if (args.PropertyName == nameof(HistoryViewModel.IsLoading)
+                      || args.PropertyName == nameof(HistoryViewModel.IsDisconnected)
+                      || args.PropertyName == nameof(HistoryViewModel.TotalCount))
+                    UpdateEmptyState();
             };
+            _viewModel.Entries.CollectionChanged += (_, __) => UpdateEmptyState();
 
             Content = mainGrid;
         }
@@ -257,6 +274,20 @@ namespace AkmlSql.Shell.Shared.History
             iconStack.Children.Add(_favoritesStarButton);
             UpdateFavoritesStarVisual();
 
+            // Open / closed query filter toggles \u2014 SQL Prompt's two folder icons. Each cycles
+            // HistoryViewModel.IsOpenFilter (null \u2192 this state \u2192 null) and re-runs the search;
+            // open and closed are mutually exclusive.
+            _openFilterGlyph = BuildFolderIcon(open: true);
+            var openFilterButton = CreateToolbarIconButton(_openFilterGlyph, "Show open queries only",
+                (_, __) => _viewModel.ToggleOpenFilter(open: true));
+            iconStack.Children.Add(openFilterButton);
+
+            _closedFilterGlyph = BuildFolderIcon(open: false);
+            var closedFilterButton = CreateToolbarIconButton(_closedFilterGlyph, "Show closed queries only",
+                (_, __) => _viewModel.ToggleOpenFilter(open: false));
+            iconStack.Children.Add(closedFilterButton);
+            UpdateOpenFilterVisual();
+
             // Source/server menu \u2014 small dropdown over Servers / Databases.
             var sourceButton = CreateToolbarIconButton(BuildSourceIcon(), "Source / Server", null);
             sourceButton.ContextMenu = BuildSourceMenu();
@@ -293,6 +324,20 @@ namespace AkmlSql.Shell.Shared.History
             if (_favoritesStarGlyph == null) return;
             _favoritesStarGlyph.SetResourceReference(TextBlock.ForegroundProperty,
                 _viewModel.FavoritesOnly ? ThemeTokens.StatusWarning : ThemeTokens.TextSecondary);
+        }
+
+        /// <summary>
+        /// Reflects <see cref="HistoryViewModel.IsOpenFilter"/> onto the two folder-toggle colours:
+        /// the active state (open or closed) is drawn in the accent colour, the rest in the muted
+        /// secondary colour. Kept in sync via the ViewModel's PropertyChanged (so a ClearFilters reset
+        /// also clears the highlight).
+        /// </summary>
+        private void UpdateOpenFilterVisual()
+        {
+            _openFilterGlyph?.SetResourceReference(Shape.StrokeProperty,
+                _viewModel.IsOpenFilter == true ? ThemeTokens.AccentPrimary : ThemeTokens.TextSecondary);
+            _closedFilterGlyph?.SetResourceReference(Shape.StrokeProperty,
+                _viewModel.IsOpenFilter == false ? ThemeTokens.AccentPrimary : ThemeTokens.TextSecondary);
         }
 
         /// <summary>Builds the Servers / Databases dropdown for the toolbar source/server button.</summary>
@@ -505,6 +550,33 @@ namespace AkmlSql.Shell.Shared.History
             return canvas;
         }
 
+        /// <summary>
+        /// Line-art folder glyph for the open/closed query filter toggles. <paramref name="open"/>
+        /// draws an open folder (tab + splayed front panel); otherwise a plain closed folder.
+        /// Stroke colour is theme-driven and recoloured to the accent when the toggle is active
+        /// (see <see cref="UpdateOpenFilterVisual"/>).
+        /// </summary>
+        private static Path BuildFolderIcon(bool open)
+        {
+            var data = open
+                ? "M 2,10.5 L 2,4 L 5,4 L 6.5,5.5 L 12,5.5 M 2,10.5 L 13.5,10.5 L 15,6 L 3.5,6 Z"
+                : "M 1.5,3.5 L 5,3.5 L 6.5,5 L 12.5,5 L 12.5,10.5 L 1.5,10.5 Z";
+            var path = new Path
+            {
+                Data = Geometry.Parse(data),
+                StrokeThickness = 1.3,
+                Stretch = Stretch.None,
+                Width = 17,
+                Height = 14,
+                VerticalAlignment = VerticalAlignment.Center,
+                StrokeLineJoin = PenLineJoin.Round,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round
+            };
+            path.SetResourceReference(Shape.StrokeProperty, ThemeTokens.TextSecondary);
+            return path;
+        }
+
         // ================================================================
         // ROW 1: Two-region grid (left master+versions | splitter | right preview)
         // ================================================================
@@ -635,9 +707,75 @@ namespace AkmlSql.Shell.Shared.History
             _queryListView.AddHandler(ScrollViewer.ScrollChangedEvent,
                 new ScrollChangedEventHandler(OnQueryListScrollChanged));
 
-            dock.Children.Add(_queryListView);
+            // Overlay a centered empty/disconnected placeholder on top of the list so a pipe-down
+            // engine or a no-results search reads clearly instead of a silent blank list.
+            var listGrid = new Grid();
+            listGrid.Children.Add(_queryListView);
+            listGrid.Children.Add(BuildEmptyStateOverlay());
+            dock.Children.Add(listGrid);
 
+            UpdateEmptyState();
             return dock;
+        }
+
+        /// <summary>Builds the centered, non-interactive placeholder shown over an empty query list.</summary>
+        private FrameworkElement BuildEmptyStateOverlay()
+        {
+            _emptyStateText = new TextBlock
+            {
+                Text = "No queries found.",
+                FontSize = 12,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                TextAlignment = TextAlignment.Center,
+                TextWrapping = TextWrapping.Wrap
+            };
+            _emptyStateText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+
+            _emptyStateOverlay = new StackPanel
+            {
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                MaxWidth = 240,
+                Margin = new Thickness(16),
+                IsHitTestVisible = false,
+                Visibility = Visibility.Collapsed
+            };
+            _emptyStateOverlay.Children.Add(_emptyStateText);
+            return _emptyStateOverlay;
+        }
+
+        /// <summary>
+        /// Pure decision for the centered placeholder over the query list (extracted for tests):
+        /// whether to show it and which message. See <see cref="UpdateEmptyState"/>.
+        /// </summary>
+        internal static bool ShouldShowEmptyOverlay(bool isLoading, bool isDisconnected, int entryCount, out string message)
+        {
+            message = string.Empty;
+            if (isLoading) return false;
+
+            // Never draw the overlay on top of visible rows — when the engine dies after a
+            // successful load, the stale list stays readable (PR #248 review finding #6).
+            if (entryCount > 0) return false;
+
+            message = isDisconnected
+                ? "History unavailable — the AKML engine is not connected."
+                : "No queries found.";
+            return true;
+        }
+
+        /// <summary>
+        /// Shows the centered placeholder over the query list: a distinct "engine not connected"
+        /// message when the pipe is down, or "No queries found" for a genuinely empty result.
+        /// Hidden while a search is loading or when the list has entries.
+        /// </summary>
+        private void UpdateEmptyState()
+        {
+            if (_emptyStateOverlay == null || _emptyStateText == null) return;
+
+            var show = ShouldShowEmptyOverlay(
+                _viewModel.IsLoading, _viewModel.IsDisconnected, _viewModel.Entries.Count, out var message);
+            if (show) _emptyStateText.Text = message;
+            _emptyStateOverlay.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         }
 
         /// <summary>
@@ -793,7 +931,7 @@ namespace AkmlSql.Shell.Shared.History
             var connText = new FrameworkElementFactory(typeof(TextBlock));
             connText.SetBinding(TextBlock.TextProperty, new MultiBinding
             {
-                Converter = new ServerArrowDatabaseConverter(),
+                Converter = new ServerLabelConverter(),
                 Bindings =
                 {
                     new Binding(nameof(HistoryEntryDto.Server)),
@@ -1327,8 +1465,7 @@ namespace AkmlSql.Shell.Shared.History
                 if (DateTime.TryParse(entry.ExecutedAt, CultureInfo.InvariantCulture,
                     DateTimeStyles.RoundtripKind, out var dt))
                 {
-                    _codePreviewHeaderTimestamp.Text = dt.ToLocalTime()
-                        .ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.CurrentCulture);
+                    _codePreviewHeaderTimestamp.Text = HistoryTimeFormat.Absolute(dt.ToLocalTime());
                 }
                 else
                 {
@@ -1603,8 +1740,7 @@ namespace AkmlSql.Shell.Shared.History
                         if (DateTime.TryParse(version.SavedAt, CultureInfo.InvariantCulture,
                             DateTimeStyles.RoundtripKind, out var savedDt))
                         {
-                            timestampText = savedDt.ToLocalTime()
-                                .ToString("MMM dd, HH:mm", CultureInfo.CurrentCulture);
+                            timestampText = HistoryTimeFormat.Absolute(savedDt.ToLocalTime());
                         }
 
                         var itemPanel = new StackPanel { Margin = new Thickness(4, 4, 4, 4) };
@@ -2076,16 +2212,19 @@ namespace AkmlSql.Shell.Shared.History
             }
         }
 
-        /// <summary>Formats Server -> Database for the connection line.</summary>
-        private class ServerArrowDatabaseConverter : IMultiValueConverter
+        /// <summary>
+        /// Renders the compact list-row connection label as just the server\instance \u2014 SQL Prompt
+        /// shows only the server here; the database is surfaced in the right-pane metadata bar, so
+        /// the old "server\u2192database" suffix made the rows busier than the reference. Falls back to the
+        /// database name when no server is recorded.
+        /// </summary>
+        private class ServerLabelConverter : IMultiValueConverter
         {
             public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
             {
                 var server = values.Length > 0 ? values[0] as string : null;
                 var database = values.Length > 1 ? values[1] as string : null;
 
-                if (!string.IsNullOrEmpty(server) && !string.IsNullOrEmpty(database))
-                    return $"{server}\u2192{database}";
                 if (!string.IsNullOrEmpty(server))
                     return server;
                 if (!string.IsNullOrEmpty(database))
@@ -2115,7 +2254,7 @@ namespace AkmlSql.Shell.Shared.History
                     if (elapsed.TotalHours < 24) return local.ToString("HH:mm", CultureInfo.CurrentCulture);
                     if (local.Date == DateTime.Today.AddDays(-1))
                         return "Yesterday " + local.ToString("HH:mm", CultureInfo.CurrentCulture);
-                    return local.ToString("yyyy-MM-dd HH:mm", CultureInfo.CurrentCulture);
+                    return HistoryTimeFormat.Absolute(local);
                 }
                 return value?.ToString() ?? "";
             }
@@ -2216,7 +2355,7 @@ namespace AkmlSql.Shell.Shared.History
                         return local.ToString("HH:mm:ss", CultureInfo.CurrentCulture);
                     if (local.Date == DateTime.Today.AddDays(-1))
                         return "Yesterday " + local.ToString("HH:mm", CultureInfo.CurrentCulture);
-                    return local.ToString("yyyy-MM-dd HH:mm", CultureInfo.CurrentCulture);
+                    return HistoryTimeFormat.Absolute(local);
                 }
                 return value?.ToString() ?? "";
             }

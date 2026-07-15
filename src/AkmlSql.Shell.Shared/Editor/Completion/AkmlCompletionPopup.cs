@@ -261,8 +261,21 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             }
         }
 
+        /// <summary>
+        /// Gate for the Ctrl-held transparency poll (Suggestions › Behavior ›
+        /// "Make popups transparent when Ctrl is held"). Set by CompletionController from
+        /// settings; false pins the popup fully opaque.
+        /// </summary>
+        public bool CtrlTransparencyEnabled { get; set; } = true;
+
         private void OnCtrlPollTick(object sender, EventArgs e)
         {
+            if (!CtrlTransparencyEnabled)
+            {
+                if (Math.Abs(Opacity - 1.0) > 0.001) Opacity = 1.0;
+                return;
+            }
+
             // Use Keyboard.IsKeyDown so we read the live OS modifier state — the popup itself
             // is non-focusable so KeyDown events don't reach it directly.
             var ctrlHeld = Keyboard.IsKeyDown(Key.LeftCtrl) || Keyboard.IsKeyDown(Key.RightCtrl);

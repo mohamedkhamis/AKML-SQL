@@ -182,6 +182,9 @@ namespace AkmlSql.Core.Ipc
         // Shell → Engine (Spec 029: SQL-auth credential validation)
         public const int TestSqlConnection = 93;
 
+        // Web/Shell → Engine (Spec 030: Connect dialog database dropdown — enumerate sys.databases)
+        public const int ListDatabases = 94;
+
         // Shell → Engine (AI Assistance — Phase 9)
         public const int AiTextToSql = 70;
         public const int AiExplain = 71;
@@ -243,6 +246,9 @@ namespace AkmlSql.Core.Ipc
 
         // Engine → Shell (Spec 029)
         public const int TestSqlConnectionResult = 193;
+
+        // Engine → Web/Shell (Spec 030: Connect dialog database dropdown)
+        public const int ListDatabasesResult = 194;
 
         // Spec 021 (web edition) M3 — WebSocket bridge handshake.
         // See specs/021-web-edition/contracts/rpc-handshake.md.

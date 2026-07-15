@@ -32,6 +32,16 @@ namespace AkmlSql.Core.Ipc.Messages
 
         [Key(5)]
         public int SortPriority { get; set; }
+
+        /// <summary>
+        /// True only for linked-server suggestions (set by <c>ObjectProvider.ToLinkedServerItem</c>).
+        /// Explicit discriminator for the truncation pinning in <c>CompletionEngine</c> —
+        /// <see cref="ObjectType"/> cannot serve: <see cref="CompletionObjectType.Database"/> is also
+        /// used for USE-clause database suggestions and is purely an icon hint for the hosts.
+        /// Additive/back-compatible: older peers that omit this key deserialize to <c>false</c>.
+        /// </summary>
+        [Key(6)]
+        public bool IsLinkedServer { get; set; }
     }
 
     public enum CompletionObjectType

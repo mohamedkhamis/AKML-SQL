@@ -332,6 +332,13 @@ namespace AkmlSql.Core.Config
         /// <summary>Show snippet shortcuts (sel, ssf, ins, etc.) in the completion popup. Default disabled.</summary>
         public bool SnippetsInCompletion { get; set; } = false;
 
+        /// <summary>
+        /// Make the completion popup (and its definition panel) semi-transparent while the Ctrl key
+        /// is held, so the code underneath stays readable — SQL Prompt's "Make popups transparent
+        /// when the Ctrl key is held down". Default on (matches prior always-on behavior).
+        /// </summary>
+        public bool CtrlTransparentPopups { get; set; } = true;
+
         /// <summary>Spec 029. When true (default), AKML offers to store a SQL Server-auth password
         /// (DPAPI-encrypted, per server+login) so the out-of-process engine can load schema/IntelliSense
         /// for SQL-auth connections. Set false to disable the prompt and storage entirely.</summary>
@@ -400,8 +407,8 @@ namespace AkmlSql.Core.Config
     public class SpecialCharacterSettings
     {
         /// <summary>
-        /// Auto-close matching characters: typing an opening <c>(</c>, <c>[</c>, <c>'</c>, etc.
-        /// inserts the matching close character. SQL Prompt default: on.
+        /// Auto-close matching characters: master switch over the per-character toggles below.
+        /// SQL Prompt default: on.
         /// </summary>
         [JsonPropertyName("autoCloseCharacters")]
         public bool AutoCloseCharacters { get; set; } = true;
@@ -412,6 +419,32 @@ namespace AkmlSql.Core.Config
         /// </summary>
         [JsonPropertyName("addParentheses")]
         public bool AddParentheses { get; set; } = true;
+
+        // Per-character auto-close toggles mirroring SQL Prompt's "Inserted code › Special
+        // characters" pane ("Automatically insert the corresponding closing character when you
+        // type any of the following"). Defaults match the SQL Prompt reference screenshot in
+        // doc/_Prompt-Gap: single quote / comment / square bracket on, double quote / parenthesis
+        // off. All are further gated by <see cref="AutoCloseCharacters"/>.
+
+        /// <summary>Typing <c>'</c> inserts the closing <c>'</c>.</summary>
+        [JsonPropertyName("closeSingleQuote")]
+        public bool CloseSingleQuote { get; set; } = true;
+
+        /// <summary>Typing <c>"</c> inserts the closing <c>"</c>.</summary>
+        [JsonPropertyName("closeDoubleQuote")]
+        public bool CloseDoubleQuote { get; set; } = false;
+
+        /// <summary>Typing <c>/*</c> inserts the closing <c>*/</c>.</summary>
+        [JsonPropertyName("closeCommentMark")]
+        public bool CloseCommentMark { get; set; } = true;
+
+        /// <summary>Typing <c>(</c> inserts the closing <c>)</c>.</summary>
+        [JsonPropertyName("closeParenthesis")]
+        public bool CloseParenthesis { get; set; } = false;
+
+        /// <summary>Typing <c>[</c> inserts the closing <c>]</c>.</summary>
+        [JsonPropertyName("closeSquareBracket")]
+        public bool CloseSquareBracket { get; set; } = true;
     }
 
     /// <summary>
@@ -460,10 +493,9 @@ namespace AkmlSql.Core.Config
         public string[] Schemas { get; set; } = [];
 
         /// <summary>
-        /// Include linked-server objects in suggestions. Forward-looking: the schema cache does not
-        /// load linked-server objects today, so this is honored only where such loading exists (none
-        /// yet) — it is threaded through the completion path but currently has no observable effect.
-        /// Default off.
+        /// Include linked servers in IntelliSense suggestions (FR-016). When on, linked servers
+        /// enumerated from <c>sys.servers</c> during schema Phase A are offered as top-level
+        /// object-reference completions. Default off.
         /// </summary>
         [JsonPropertyName("includeLinkedServers")]
         public bool IncludeLinkedServers { get; set; }
@@ -1243,6 +1275,14 @@ namespace AkmlSql.Core.Config
         /// <summary>US19 / FR-097 — bold the next-expected parameter in function-signature popups.</summary>
         [JsonPropertyName("enableParameterHighlight")]
         public bool EnableParameterHighlight { get; set; } = true;
+
+        /// <summary>
+        /// Show the object definition box beside the completion popup when an item is selected
+        /// (SQL Prompt's "Display object definitions"). Off suppresses the QuickInfo fetch and the
+        /// panel entirely. Default on — matches the previous hard-wired behavior.
+        /// </summary>
+        [JsonPropertyName("showObjectDefinitionBox")]
+        public bool ShowObjectDefinitionBox { get; set; } = true;
 
         // ── Encrypted object decryption ──
 

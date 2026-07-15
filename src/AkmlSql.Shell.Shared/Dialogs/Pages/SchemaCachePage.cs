@@ -10,7 +10,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         public string Key     => "Schema Cache";
         public string Display => "Suggestions › Database";
         public string Title   => "Schema Cache";
-        public string Help    => "Controls how the database schema cache is kept current and stored: background auto-refresh interval, immediate DDL-change detection, and storage limits such as the number of cached databases, lazy-loading of column metadata, and persisting the cache to disk.";
+        public string Help    => "Controls how the database schema cache is kept current: background auto-refresh interval and immediate DDL-change detection. Storage and memory limits (cached-database count, lazy column loading, persist-to-disk) live on the Connections & Memory page.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {
@@ -31,25 +31,9 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 "Trigger immediate cache refresh when DDL statements are executed");
             ctx.RegisterSearch("Detect DDL changes", "Trigger immediate cache refresh when DDL statements are executed", "Toggle", rowDdl);
 
-            ctx.Rows.AddGroupSeparator(panel);
-            ctx.Rows.AddGroupHeader(panel, "Storage");
+            // Storage / memory rows moved to ConnectionsMemoryPage (SQL Prompt "Connections & memory").
 
-            var (rowMax, sldMax, lblMax) = ctx.Rows.AddSlider(panel,
-                "Max cached databases", 1, 50, 10,
-                "Number of database caches kept in memory before LRU eviction");
-            ctx.RegisterSearch("Max cached databases", "Number of database caches kept in memory before LRU eviction", "Slider", rowMax);
-
-            var (rowLazy, chkLazy) = ctx.Rows.AddToggle(panel,
-                "Lazy-load column metadata",
-                "Load columns and foreign keys in background (Phase B)");
-            ctx.RegisterSearch("Lazy-load column metadata", "Load columns and foreign keys in background (Phase B)", "Toggle", rowLazy);
-
-            var (rowPersist, chkPersist) = ctx.Rows.AddToggle(panel,
-                "Persist cache to disk",
-                "Save schema cache to disk for faster startup on reconnect");
-            ctx.RegisterSearch("Persist cache to disk", "Save schema cache to disk for faster startup on reconnect", "Toggle", rowPersist);
-
-            return new SchemaCacheControls(chkAuto, sldRefresh, lblRefresh, chkDdl, sldMax, lblMax, chkLazy, chkPersist);
+            return new SchemaCacheControls(chkAuto, sldRefresh, lblRefresh, chkDdl);
         }
     }
 
@@ -59,22 +43,13 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         private readonly Slider _refreshInterval;
         private readonly TextBlock _refreshIntervalLabel;
         private readonly CheckBox _detectDdl;
-        private readonly Slider _maxDatabases;
-        private readonly TextBlock _maxDatabasesLabel;
-        private readonly CheckBox _lazyLoadColumns;
-        private readonly CheckBox _persistToDisk;
 
-        public SchemaCacheControls(CheckBox auto, Slider sldRefresh, TextBlock lblRefresh,
-            CheckBox detectDdl, Slider sldMax, TextBlock lblMax, CheckBox lazyLoad, CheckBox persist)
+        public SchemaCacheControls(CheckBox auto, Slider sldRefresh, TextBlock lblRefresh, CheckBox detectDdl)
         {
             _autoRefresh = auto;
             _refreshInterval = sldRefresh;
             _refreshIntervalLabel = lblRefresh;
             _detectDdl = detectDdl;
-            _maxDatabases = sldMax;
-            _maxDatabasesLabel = lblMax;
-            _lazyLoadColumns = lazyLoad;
-            _persistToDisk = persist;
         }
 
         public void Load(AppSettings settings)
@@ -82,22 +57,15 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             var c = settings.Cache;
             _autoRefresh.IsChecked = c.AutoRefresh;
             _detectDdl.IsChecked = c.DetectDdl;
-            _lazyLoadColumns.IsChecked = c.LazyLoadColumns;
-            _persistToDisk.IsChecked = c.PersistToDisk;
             _refreshInterval.Value = c.RefreshIntervalSeconds;
             _refreshIntervalLabel.Text = c.RefreshIntervalSeconds.ToString(CultureInfo.InvariantCulture);
-            _maxDatabases.Value = c.MaxDatabases;
-            _maxDatabasesLabel.Text = c.MaxDatabases.ToString(CultureInfo.InvariantCulture);
         }
 
         public void Save(AppSettings settings)
         {
             settings.Cache.AutoRefresh = _autoRefresh.IsChecked == true;
             settings.Cache.DetectDdl = _detectDdl.IsChecked == true;
-            settings.Cache.LazyLoadColumns = _lazyLoadColumns.IsChecked == true;
-            settings.Cache.PersistToDisk = _persistToDisk.IsChecked == true;
             settings.Cache.RefreshIntervalSeconds = (int)_refreshInterval.Value;
-            settings.Cache.MaxDatabases = (int)_maxDatabases.Value;
         }
 
         public void Reset(AppSettings defaults) => Load(defaults);

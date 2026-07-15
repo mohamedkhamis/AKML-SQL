@@ -17,7 +17,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
     internal sealed class AliasesPage : IPageBuilder
     {
         public string Key     => "Aliases";
-        public string Display => "Suggestions › Aliases";
+        public string Display => "Inserted Code › Aliases";
         public string Title   => "Aliases";
         public string Help    => "Control how AKML SQL generates table aliases in completions and JOINs: the include-AS style, a custom map that forces a specific alias for named objects, and naming prefixes to strip before an alias is derived. These apply when alias generation is on (Suggestions › Behavior › Tables Alias).";
 

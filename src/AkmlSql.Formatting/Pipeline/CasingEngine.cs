@@ -67,6 +67,12 @@ public class CasingEngine
         // Wire up CamelCaseDictionary setting from profile
         UseCamelCaseDictionary = profile.Casing.CamelCaseDictionary;
 
+        // MERGE contextual keywords (USING / MATCHED / TARGET / SOURCE) tokenize as identifiers, not
+        // keyword tokens, so the per-node keyword casing below leaves them AsIs. Case them here in a
+        // position-aware pre-pass so they follow the ReservedKeywords option like MERGE/WHEN/BY do,
+        // without ever touching a column/alias that merely happens to be named "source"/"target".
+        ApplyMergeContextualKeywordCasing(nodes, profile.Casing.ReservedKeywords);
+
         foreach (var node in nodes)
         {
             if (node.IsInNoformatRegion)
@@ -150,6 +156,64 @@ public class CasingEngine
         return "AsIs";
     }
 
+    /// <summary>
+    /// Cases the MERGE match-clause contextual keywords that ScriptDom emits as identifiers
+    /// (USING, MATCHED, TARGET, SOURCE) so they follow the keyword casing option, matching SQL
+    /// Prompt (which renders <c>USING</c>, <c>WHEN MATCHED</c>, <c>BY TARGET</c>). Position-aware:
+    /// only fires inside a MERGE statement and only in the exact clause slot, so a column or alias
+    /// named "source"/"target"/"matched" elsewhere is never re-cased.
+    /// </summary>
+    private static void ApplyMergeContextualKeywordCasing(List<LayoutNode> nodes, string keywordMode)
+    {
+        if (keywordMode == "AsIs")
+            return;
+
+        // MERGE contextual keywords can only occur inside a MERGE statement — bail before the
+        // per-token pass (and its per-token ToUpperInvariant allocation) when the script has none.
+        bool hasMerge = false;
+        foreach (var n in nodes)
+        {
+            if (n.TokenType == TSqlTokenType.Merge) { hasMerge = true; break; }
+        }
+        if (!hasMerge)
+            return;
+
+        var scope = new MergeScopeTracker();
+        string prev = "";    // uppercased text of the previous significant (non-trivia) token
+        string prev2 = "";   // and the one before it
+
+        foreach (var node in nodes)
+        {
+            if (node.IsInNoformatRegion)
+                continue;
+            var tt = node.TokenType;
+            if (tt is TSqlTokenType.WhiteSpace or TSqlTokenType.SingleLineComment or TSqlTokenType.MultilineComment)
+                continue;
+
+            var upper = node.FormattedText.ToUpperInvariant();
+
+            // Shared MERGE-scope tracking (inMerge / caseDepth + join-hint guard). Advance returns
+            // true for scope-control tokens (MERGE / ; / GO / CASE / END) — still advance prev/prev2.
+            if (scope.Advance(node)) { prev2 = prev; prev = upper; continue; }
+
+            if (scope.InMerge && scope.CaseDepth == 0)
+            {
+                // USING is the MERGE source keyword; MATCHED only right after WHEN/NOT; TARGET/SOURCE
+                // only in the "MATCHED BY TARGET/SOURCE" slot (prev == BY AND prev2 == MATCHED — this
+                // is what separates the merge clause from a GROUP BY / ORDER BY column named "source").
+                bool isMergeKeyword =
+                    upper == "USING" ||
+                    (upper == "MATCHED" && (prev == "WHEN" || prev == "NOT")) ||
+                    ((upper == "TARGET" || upper == "SOURCE") && prev == "BY" && prev2 == "MATCHED");
+                if (isMergeKeyword)
+                    node.FormattedText = ApplyCasingMode(node.FormattedText, keywordMode);
+            }
+
+            prev2 = prev;
+            prev = upper;
+        }
+    }
+
     private static bool IsKeywordToken(TSqlTokenType tokenType)
     {
         return tokenType switch
@@ -160,6 +224,7 @@ public class CasingEngine
             TSqlTokenType.Is or TSqlTokenType.Null or
             TSqlTokenType.Insert or TSqlTokenType.Into or TSqlTokenType.Values or
             TSqlTokenType.Update or TSqlTokenType.Set or TSqlTokenType.Delete or
+            TSqlTokenType.Merge or
             TSqlTokenType.Create or TSqlTokenType.Alter or TSqlTokenType.Drop or
             TSqlTokenType.Table or TSqlTokenType.Index or TSqlTokenType.View or
             TSqlTokenType.Procedure or TSqlTokenType.Function or TSqlTokenType.Trigger or

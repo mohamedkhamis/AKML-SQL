@@ -63,6 +63,19 @@ public class JoinOnFkProvider : ICompletionProvider
         foreach (var key in context.AvailableAliases.Keys)
             aliasOrder[key] = aliasIdx++;
 
+        // Every predicate must involve the table being joined on the CURRENT line. Without this,
+        // a third table already in scope pairs with a fourth and we suggest `a.x = b.y` while the
+        // user is writing `JOIN c ON |` — a predicate that doesn't even mention `c`.
+        // The target is unknown for contexts the analyzer can't attribute to a JOIN (and for
+        // CursorContexts built directly, e.g. in tests); there we keep the unscoped behaviour.
+        var target = context.CurrentJoinTargetAlias;
+        bool scoped = !string.IsNullOrEmpty(target) && context.AvailableAliases.ContainsKey(target);
+
+        bool InvolvesTarget(string leftAlias, string rightAlias) =>
+            !scoped
+            || target.Equals(leftAlias, StringComparison.OrdinalIgnoreCase)
+            || target.Equals(rightAlias, StringComparison.OrdinalIgnoreCase);
+
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         // Pass 1: table-to-table FK predicates. For each canonical pair, look up
@@ -72,6 +85,7 @@ public class JoinOnFkProvider : ICompletionProvider
             foreach (var (rightAlias, rightFullName) in context.AvailableAliases)
             {
                 if (aliasOrder[leftAlias] >= aliasOrder[rightAlias]) continue;
+                if (!InvolvesTarget(leftAlias, rightAlias)) continue;
 
                 // Skip CTE participants — covered by passes 2/3 below where CTE
                 // column projections are taken into account.
@@ -121,6 +135,7 @@ public class JoinOnFkProvider : ICompletionProvider
             foreach (var (rightAlias, _) in context.AvailableAliases)
             {
                 if (aliasOrder[leftAlias] >= aliasOrder[rightAlias]) continue;
+                if (!InvolvesTarget(leftAlias, rightAlias)) continue;
 
                 var leftSources  = ResolveSourceTables(leftAlias, context);
                 var rightSources = ResolveSourceTables(rightAlias, context);
@@ -210,6 +225,7 @@ public class JoinOnFkProvider : ICompletionProvider
                 foreach (var (rightAlias, rightFullName) in context.AvailableAliases)
                 {
                     if (aliasOrder[leftAlias] >= aliasOrder[rightAlias]) continue;
+                    if (!InvolvesTarget(leftAlias, rightAlias)) continue;
 
                     bool leftIsCte  = context.AvailableCtes.ContainsKey(leftAlias);
                     bool rightIsCte = context.AvailableCtes.ContainsKey(rightAlias);
