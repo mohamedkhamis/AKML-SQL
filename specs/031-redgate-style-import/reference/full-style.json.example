@@ -1,0 +1,168 @@
+{
+    "whitespace": {
+      "spacesOrTabs": "Spaces/Tabs/TabsIfPossible",
+      "numberOfSpacesInTabs": int,
+      "wrapLongLines": bool,
+      "wrapLinesLongerThan": int,
+      "whiteSpaceBeforeSemiColon": "None/SpaceBefore/NewLineBefore",
+      "newLines": {
+        "preserveExistingEmptyLinesBetweenStatements": bool,
+        "preserveExistingEmptyLinesAfterBatchSeparator": bool,
+        "emptyLinesBetweenStatements": int,
+        "emptyLinesAfterBatchSeparator": int
+      }
+    },
+    "lists": {
+      "placeFirstItemOnNewLine": "Always/Never/IfSubsequentItems",
+      "placeSubsequentItemsOnNewLines": "Always/Never/IfLongerThanMaxLineLength",
+      "alignSubsequentItemsWithFirstItem": bool,
+      "alignItemsAcrossClauses": bool,
+      "indentListItems": bool,
+      "alignItemsToTabStops": bool,
+      "alignAliases": bool,
+      "alignComments": bool,
+      "placeCommasBeforeItems": bool,
+      "addSpaceBeforeComma": bool,
+      "addSpaceAfterComma": bool,
+      "commaAlignment": "BeforeItem/ToList/ToStatement"
+  },
+  "parentheses": {
+      "parenthesisStyle": "CompactSimple/CompactToStatement/CompactIndented/CompactRightAligned/ExpandedSimple/ExpandedSplit/ExpandedToStatement/ExpandedIndented/ExpandedRightAligned",
+      "indentParenthesesContents": bool,
+      "collapseShortParenthesisContents": bool,
+      "collapseParenthesesShorterThan": int,
+      "addSpacesAroundParentheses": bool,
+      "addSpacesInsideParentheses": bool
+  },
+  "casing": {
+    "reservedKeywords": "LeaveAsIs/Lowercase/Uppercase/LowerCamelCase/UpperCamelCase",
+    "builtInFunctions": "LeaveAsIs/Lowercase/Uppercase/LowerCamelCase/UpperCamelCase",
+    "builtInDataTypes": "LeaveAsIs/Lowercase/Uppercase/LowerCamelCase/UpperCamelCase",
+    "globalVariables": "LeaveAsIs/Lowercase/Uppercase/LowerCamelCase/UpperCamelCase",
+    "useObjectDefinitionCase": bool
+  },
+  "dml": {
+    "placeInsertTableOnNewLine": bool,
+    "placeDistinctAndTopClausesOnNewLine": bool,
+    "addNewLineAfterDistinctAndTopClauses": bool,
+    "collapseShortStatements": bool,
+    "collapseStatementsShorterThan": int,
+    "collapseShortSubqueries": bool,
+    "collapseSubqueriesShorterThan": int,
+    "clauses": {
+      "clauseAlignment": "LeftAligned/RightAligned/ToFirstListItem",
+      "clauseIndentation": int
+    },
+    "listItems": {
+      "placeFromTableOnNewLine": "Always/Never/IfMultiple",
+      "placeWhereConditionOnNewLine": "Always/Never/IfMultiple",
+      "placeGroupByAndOrderByOnNewLine": "Always/Never/IfMultiple"
+    }
+  },
+  "ddl": {
+    "parenthesisStyle": "CompactSimple/CompactToStatement/CompactIndented/CompactRightAligned/ExpandedSimple/ExpandedSplit/ExpandedToStatement/ExpandedIndented/ExpandedRightAligned",
+    "indentParenthesesContents": bool,
+    "alignDataTypesAndConstraints": bool,
+    "placeConstraintsOnNewLines": bool,
+    "placeConstraintColumnsOnNewLines": "Always/IfLongerThanMaxLineLength/IfLongerOrMultipleColumns",
+    "indentClauses": bool,
+    "placeFirstProcedureParameterOnNewLine": "Always/Never/IfMultipleItems",
+    "collapseShortStatements": bool,
+    "collapseStatementsShorterThan": int
+  },
+  "controlFlow": {
+    "placeBeginAndEndOnNewLine": bool,
+    "indentBeginAndEndKeywords": bool,
+    "indentContentsOfStatements": bool,
+    "collapseShortStatements": bool,
+    "collapseStatementsShorterThan": int
+  },
+  "cte": {
+    "parenthesisStyle": "CompactSimple/CompactToStatement/CompactIndented/CompactRightAligned/ExpandedSimple/ExpandedSplit/ExpandedToStatement/ExpandedIndented/ExpandedRightAligned",
+    "indentContents": bool,
+    "placeNameOnNewLine": bool,
+    "indentName": bool,
+    "placeColumnsOnNewLine": bool,
+    "columnAlignment": "Indented/LeftAligned/RightAligned",
+    "placeAsOnNewLine": bool,
+    "asAlignment": "Indented/LeftAligned/RightAligned"
+  },
+  "variables": {
+    "alignDataTypesAndValues": bool,
+    "addSpaceBetweenDataTypeAndPrecision": bool,
+    "placeAssignedValueOnNewLineIfLongerThanMaxLineLength": bool,
+    "placeEqualsSignOnNewLine": bool
+  },
+  "joinStatements": {
+    "join": {
+      "placeOnNewLine" : bool,
+      "keywordAlignment": "ToFrom/RightAlignedToFrom/ToTable/Indented",
+      "insertEmptyLineBetweenJoinClauses": bool,
+      "placeJoinTableOnNewLine": bool,
+      "indentJoinTable": bool
+    },
+    "on": {
+      "placeOnNewLine": bool,
+      "keywordAlignment": "ToJoin/RightAlignedToJoin/RightAlignedToInner/ToTable/Indented",
+      "placeConditionOnNewLine": bool,
+      "conditionAlignment": "ToOnKeyword/ToInner/ToTable/Indented"
+    }
+  },
+  "insertStatements": {
+    "columns": {
+      "parenthesisStyle": "CompactSimple/CompactToStatement/CompactIndented/CompactRightAligned/ExpandedSimple/ExpandedSplit/ExpandedToStatement/ExpandedIndented/ExpandedRightAligned",
+      "indentContents": bool,
+      "placeSubsequentColumnsOnNewLines": "Always/Never/IfLongerThanMaxLineLength"
+    },
+    "values": {
+      "parenthesisStyle": "CompactSimple/CompactToStatement/CompactIndented/CompactRightAligned/ExpandedSimple/ExpandedSplit/ExpandedToStatement/ExpandedIndented/ExpandedRightAligned",
+      "indentContents": bool,
+      "placeSubsequentValuesOnNewLines": "Always/Never/IfLongerThanMaxLineLength"
+    }
+  },
+  "functionCalls": {
+    "placeArgumentsOnNewLines": "Always/Never/IfLongerThanMaxLineLength",
+    "addSpacesAroundParentheses": bool,
+    "addSpacesAroundArgumentList": bool,
+    "addSpaceBetweenEmptyParentheses": bool
+  },
+  "caseExpressions": {
+    "placeExpressionOnNewLine" : bool,
+    "placeFirstWhenOnNewLine": "Always/Never/IfInputExpression",
+    "whenAlignment": "IndentedFromCase/ToCase/ToFirstItem",
+    "placeThenOnNewLine": bool,
+    "thenAlignment": "IndentedFromWhen/ToWhen/ToWhenExpression",
+    "placeElseOnNewLine": bool,
+    "alignElseToWhen": bool,
+    "placeEndOnNewLine": bool,
+    "endAlignment": "ToCase/ToWhen/RightAlignedToWhen",
+    "collapseShortCaseExpressions": bool,
+    "collapseCaseExpressionsShorterThan": int
+  },
+  "operators": {
+    "comparison": {
+      "align": bool,
+      "addSpacesAround": bool
+    },
+    "arithmetic": {
+      "addSpacesAround": bool
+    },
+    "andOr": {
+      "placeOnNewLine": "Always/Never/IfLongerThanMaxLineLength",
+      "alignment": "LeftAligned/RightAligned/BeforeFirstListItem/ToFirstListItem/Indented",
+      "placeKeywordBeforeCondition": bool
+    },
+    "between": {
+      "placeOnNewLine": bool,
+      "placeAndKeywordOnNewLine": bool,
+      "andAlignment": "ToBetween/RightAlignedToBetween/ToBeginningOfExpression"
+    },
+    "in": {
+      "placeOpeningPatenthesisOnNewLine": bool,
+      "alignment": "LeftAligned/RightAligned/Indented",
+      "placeFirstValueOnNewLine": "Always/Never/IfLongerThanMaxLineLength/IfSubsequentValues",
+      "placeSubsequentValuesOnNewLines": "Always/Never/IfLongerThanMaxLineLength",
+      "addSpaceAroundInContents": bool
+    }
+  }
+}
