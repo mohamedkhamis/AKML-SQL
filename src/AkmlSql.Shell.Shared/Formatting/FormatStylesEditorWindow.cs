@@ -354,20 +354,28 @@ namespace AkmlSql.Shell.Shared.Formatting
             var stem = System.IO.Path.GetFileNameWithoutExtension(dialog.FileName);
             var peekedName = TryPeekStyleName(dialog.FileName, out var kind);
 
-            // Legacy XML exports carry no internal style name — for an untargeted import the
-            // engine's SqlPromptImporter hardcodes "Imported from SQL Prompt", so consecutive
-            // XML imports would silently overwrite each other while a stem-based collision
-            // check sees nothing. Name XML imports after the file instead (TargetProfileName
-            // drives SqlPromptImporter's profile name). JSON must NOT get a target name: the
-            // Task 8 handler overrides metadata.name with TargetProfileName when present,
-            // which would break JSON naming (the internal metadata.name must win).
-            string? targetName = kind == StyleFileKind.Xml ? stem : null;
+            // Three-way naming rule (the engine falls back to a hardcoded name whenever it
+            // can't derive one, so consecutive fallback imports would silently overwrite each
+            // other while the collision check sees nothing):
+            //  - JSON WITH metadata.name  → no targetName; the internal metadata.name must win
+            //    (the Task 8 handler overrides metadata.name with TargetProfileName when
+            //    present, which would break JSON naming).
+            //  - JSON WITHOUT metadata.name → targetName = file stem; otherwise the engine
+            //    fallback-names it "Imported style" and every unnamed JSON import collides.
+            //  - XML (never has an internal name) → targetName = file stem; otherwise
+            //    SqlPromptImporter hardcodes "Imported from SQL Prompt" with the same problem.
+            string? targetName = kind switch
+            {
+                StyleFileKind.Xml => stem,
+                StyleFileKind.Json when string.IsNullOrWhiteSpace(peekedName) => stem,
+                _ => null,
+            };
 
             // FR-008 — collision check against the client-side list before sending.
             // JSON: the peeked metadata.name (the engine derives the profile name from it),
-            // falling back to the stem when the file has none. XML: the stem we just chose as
-            // the target name. Unrecognized/malformed content: skip the confirmation — the
-            // engine rejects it with a clear error and nothing is saved.
+            // falling back to the stem exactly when the stem is what we pass as targetName.
+            // XML: the stem we just chose as the target name. Unrecognized/malformed content:
+            // skip the confirmation — the engine rejects it with a clear error, nothing saved.
             string? collisionName = kind == StyleFileKind.Unknown ? null : (peekedName ?? stem);
             var existing = collisionName == null
                 ? null

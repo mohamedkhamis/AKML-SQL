@@ -500,17 +500,38 @@ ErrorMessage  string?
 **Request** (`ProfileImportRequest`):
 ```
 SourceFormat       string    "sqlprompt" | "sqlpromptstylev2" | "akmlstyle" | "akml"
-FileContent        byte[]    Raw file bytes (UTF-8)
+FileContent        byte[]    Raw file bytes (UTF-8; a leading BOM is tolerated)
 TargetProfileName  string?   Override name for the imported profile
 ```
+
+For the `"sqlprompt"` / `"sqlpromptstylev2"` formats the engine sniffs the content by its
+first non-whitespace character (BOM-tolerant): `{` routes to the Redgate JSON style importer
+(modern SQL Prompt 10.5+ one-file-per-style format, spec 031); `<` routes to the legacy XML
+importer (AKML's spec-020 export shape). Anything else fails with a clear error.
+
+**Failure semantics**: on any parse failure the response is `Success = false` and **nothing
+is saved**. Importing under a built-in profile name also fails (`Success = false`, error
+message mentions "built-in"). When `TargetProfileName` is set it overrides the style's
+internal `metadata.name` (JSON) or names the profile (XML, which has no internal name).
+Successful JSON imports additionally preserve a verbatim `<name>.source.json` copy beside
+the saved profile for lossless re-export.
 
 **Response** (`ProfileImportResponse`):
 ```
 Success              bool
 MappedOptionsCount   int      Number of options successfully mapped (-1 for native format)
 UnmappedOptionsCount int      Number of options not mappable
-UnmappedOptions      string[] Names of options that could not be mapped
+UnmappedOptions      string[] Names of options that could not be mapped (legacy XML path)
 ErrorMessage         string?
+OptionReports        ProfileImportOptionReport[]?   Key(5) — per-option classification
+                                                    (spec 031, JSON path; null from pre-031
+                                                    engines and on the XML path)
+    Path    string   Redgate option path, e.g. "lists.placeCommasBeforeItems"
+    Value   string   The file's value for that option, as text
+    Status  string   "mapped" | "mapped-pending-render" | "unsupported" | "unknown"
+    Reason  string?  Why the option is not (fully) honoured; null for "mapped"
+ProfileName          string?  Key(6) — final saved profile name (post TargetProfileName
+                              override); null on failure or from pre-031 engines
 ```
 
 ---
