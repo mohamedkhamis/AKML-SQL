@@ -1,0 +1,1 @@
+select o.orderid, c.companyname, e.lastname, s.companyname as shipper from dbo.orders o inner join dbo.customers c on c.customerid = o.customerid left outer join dbo.employees e on e.employeeid = o.employeeid inner join dbo.shippers s on s.shipperid = o.shipvia where o.shipcountry = 'Mexico';

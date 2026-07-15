@@ -1,0 +1,1 @@
+with recentorders as (select o.orderid, o.customerid, o.orderdate from dbo.orders o where o.orderdate >= '1998-01-01') select r.customerid, count(*) as cnt from recentorders r group by r.customerid having count(*) > 3 order by cnt desc;
