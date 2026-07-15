@@ -32,7 +32,7 @@
 - `tests/AkmlSql.Formatting.Tests/Parity/RedgateParityTests.cs` (Phase 2 driver)
 - `tests/format-parity/corpus/sp031-*.sql` (20 files, Phase 2)
 - `specs/031-redgate-style-import/runbook-goldens.md` (Phase 2, user-facing)
-- Test fixture copies: `tests/AkmlSql.Formatting.Tests/Fixtures/MohamedKhamis-style.json`, `tests/AkmlSql.Formatting.Tests/Fixtures/full-style.json.example` (copied from `specs/031-redgate-style-import/reference/`)
+- Test fixture copies: `tests/AkmlSql.Formatting.Tests/Fixtures/MohamedKhamis-style.json`, `tests/AkmlSql.Formatting.Tests/Fixtures/formattingstyle-schema.json` (copied from `specs/031-redgate-style-import/reference/`; full-style.json.example is a non-JSON template — not usable as an import fixture)
 
 **Modify**
 - `src/AkmlSql.Formatting/Profiles/FormattingProfile.cs` — new fields + `InsertStatementsOptions` section (design §2)
@@ -1302,18 +1302,21 @@ git commit -m "feat(031): Redgate mapping — join/insert/functionCalls/case/ope
 
 ---
 
-### Task 7: Schema completeness — `full-style.json.example` (SC-004)
+### Task 7: Schema completeness — vendored Redgate schema walk (SC-004)
+
+> **Amended during execution (Task 3/6 findings):** `full-style.json.example` is a schema-shaped TEMPLATE (`"numberOfSpacesInTabs": int`), NOT parseable JSON — it cannot be imported. The completeness gate instead walks the real draft-07 `formattingstyle-schema.json` and asserts every leaf option path is present in `RedgateOptionMap.Entries` (mapped or unsupported). SC-004's intent (zero unknown at the vendored schema version) is unchanged.
 
 **Files:**
-- Create: `tests/AkmlSql.Formatting.Tests/Fixtures/full-style.json.example` (copy from `specs/031-redgate-style-import/reference/`), `tests/AkmlSql.Formatting.Tests/Profiles/RedgateSchemaCompletenessTests.cs`
-- Modify: `src/AkmlSql.Formatting/Profiles/RedgateOptionMap.*.cs` (add any keys the test exposes)
+- Create: `tests/AkmlSql.Formatting.Tests/Fixtures/formattingstyle-schema.json` (copy from `specs/031-redgate-style-import/reference/`), `tests/AkmlSql.Formatting.Tests/Profiles/RedgateSchemaCompletenessTests.cs`
+- Modify: `src/AkmlSql.Formatting/Profiles/RedgateOptionMap.*.cs` (add any keys the test exposes), `src/AkmlSql.Formatting/Profiles/RedgateJsonStyleImporter.cs` (public `KnownOptionPaths` accessor if tests can't see internals)
 
-**Interfaces:** none new — this task mechanically completes `RedgateOptionMap.Entries`.
+**Interfaces:** `RedgateJsonStyleImporter.KnownOptionPaths : IReadOnlyCollection<string>` (public, = `RedgateOptionMap.Entries.Keys`) — added only if the test project lacks `InternalsVisibleTo` for `AkmlSql.Formatting`.
 
 - [ ] **Step 1: Write the test**
 
 ```csharp
 // tests/AkmlSql.Formatting.Tests/Profiles/RedgateSchemaCompletenessTests.cs
+using System.Text.Json;
 using AkmlSql.Formatting.Profiles;
 using Xunit;
 
@@ -1322,17 +1325,44 @@ namespace AkmlSql.Formatting.Tests.Profiles;
 public class RedgateSchemaCompletenessTests
 {
     [Fact]
-    public void Every_key_in_full_style_example_is_mapped_or_explicitly_unsupported()
+    public void Every_schema_leaf_key_is_mapped_or_explicitly_unsupported()
     {
-        var json = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "full-style.json.example"));
-        var result = RedgateJsonStyleImporter.Import(json);
+        var json = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "formattingstyle-schema.json"));
+        using var doc = JsonDocument.Parse(json);
+        var leaves = new List<string>();
+        CollectLeaves(doc.RootElement.GetProperty("properties"), "", leaves);
 
-        Assert.True(result.Success);
-        var unknown = result.Options.Where(o => o.Status == RedgateOptionStatus.Unknown).Select(o => o.Path).ToList();
-        Assert.True(unknown.Count == 0, "Unknown keys (add to RedgateOptionMap as mapped or AddUnsupported with a reason):\n" + string.Join("\n", unknown));
-        // Every unsupported entry must explain itself:
-        Assert.All(result.Options.Where(o => o.Status == RedgateOptionStatus.Unsupported),
-            o => Assert.False(string.IsNullOrWhiteSpace(o.Reason)));
+        var missing = leaves
+            .Where(p => !p.StartsWith("metadata", StringComparison.OrdinalIgnoreCase))
+            .Where(p => !RedgateJsonStyleImporter.KnownOptionPaths.Contains(p, StringComparer.OrdinalIgnoreCase))
+            .ToList();
+
+        Assert.True(leaves.Count > 60, $"Schema walk looks broken — only {leaves.Count} leaves found.");
+        Assert.True(missing.Count == 0,
+            "Schema keys not classified (add Add(...) or AddUnsupported(...) with a reason):\n" + string.Join("\n", missing));
+    }
+
+    private static void CollectLeaves(JsonElement properties, string prefix, List<string> into)
+    {
+        foreach (var prop in properties.EnumerateObject())
+        {
+            var path = prefix.Length == 0 ? prop.Name : $"{prefix}.{prop.Name}";
+            if (prop.Value.ValueKind == JsonValueKind.Object && prop.Value.TryGetProperty("properties", out var nested))
+                CollectLeaves(nested, path, into);
+            else
+                into.Add(path);
+        }
+    }
+
+    [Fact]
+    public void Every_unsupported_entry_has_a_reason()
+    {
+        // Import a synthetic file containing ONLY unsupported keys? Simpler: reasons are enforced at
+        // registration — assert via a representative unsupported key end-to-end:
+        var result = RedgateJsonStyleImporter.Import("""{ "cte": { "asAlignment": "indented" } }""");
+        var report = Assert.Single(result.Options);
+        Assert.Equal(RedgateOptionStatus.Unsupported, report.Status);
+        Assert.False(string.IsNullOrWhiteSpace(report.Reason));
     }
 
     [Fact]
@@ -1360,7 +1390,7 @@ For each listed key, consult its `description`/`default` in `specs/031-redgate-s
 
 ```bash
 git add src/AkmlSql.Formatting/Profiles/ tests/AkmlSql.Formatting.Tests/
-git commit -m "feat(031): full Redgate schema coverage — zero unknown on full-style.json.example (SC-004)"
+git commit -m "feat(031): full Redgate schema coverage — every schema leaf mapped or unsupported (SC-004)"
 ```
 
 ---
