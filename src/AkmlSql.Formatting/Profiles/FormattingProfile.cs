@@ -60,6 +60,9 @@ public class FormattingProfile
     [JsonPropertyName("declare")]
     public DeclareOptions Declare { get; set; } = new();
 
+    [JsonPropertyName("insertStatements")]
+    public InsertStatementsOptions InsertStatements { get; set; } = new();
+
     [JsonPropertyName("formatActions")]
     public FormatActionConfig FormatActions { get; set; } = new();
 
@@ -148,6 +151,14 @@ public class WhitespaceOptions
 
     [JsonPropertyName("lineBreakAfterSemicolon")]
     public bool LineBreakAfterSemicolon { get; set; } = true;
+
+    /// <summary>Spec 031 FR-033 — none | spaceBefore | newLineBefore. Gates NormalizeSemicolonSpacing in phase 3.</summary>
+    [JsonPropertyName("semicolonPlacement")]
+    public string SemicolonPlacement { get; set; } = "none";
+
+    /// <summary>Spec 031 FR-034 — blank lines after a GO batch separator.</summary>
+    [JsonPropertyName("emptyLinesAfterBatchSeparator")]
+    public int EmptyLinesAfterBatchSeparator { get; set; } = 1;
 }
 
 public class CasingOptions
@@ -226,6 +237,18 @@ public class ListOptions
     /// </summary>
     [JsonPropertyName("placeSubsequentItemsOnNewLines")]
     public string PlaceSubsequentItemsOnNewLines { get; set; } = "always";
+
+    /// <summary>Spec 031 FR-021 — space between an item and its following comma.</summary>
+    [JsonPropertyName("spaceBeforeComma")]
+    public bool SpaceBeforeComma { get; set; }
+
+    /// <summary>Spec 031 FR-021 — leading-comma column: beforeItem | toList | toStatement.</summary>
+    [JsonPropertyName("commaAlignment")]
+    public string CommaAlignment { get; set; } = "beforeItem";
+
+    /// <summary>Spec 031 FR-020 — round alignment columns up to the next tab stop.</summary>
+    [JsonPropertyName("alignItemsToTabStops")]
+    public bool AlignItemsToTabStops { get; set; }
 }
 
 public class ParenthesisOptions
@@ -259,6 +282,10 @@ public class ParenthesisOptions
 
     [JsonPropertyName("subqueryStyle")]
     public string SubqueryStyle { get; set; } = "indent";
+
+    /// <summary>Spec 031 FR-022 — Redgate 9-value style; empty = legacy OpenOnSameLine/CloseOnNewLine govern.</summary>
+    [JsonPropertyName("style")]
+    public string Style { get; set; } = "";
 }
 
 public class DmlOptions
@@ -364,6 +391,10 @@ public class DmlOptions
     /// </summary>
     [JsonPropertyName("valuesFormat")]
     public string ValuesFormat { get; set; } = "onePerLine";
+
+    /// <summary>Spec 031 FR-023 — break AFTER DISTINCT/TOP so the select list starts on the next line.</summary>
+    [JsonPropertyName("newLineAfterDistinctTop")]
+    public bool NewLineAfterDistinctTop { get; set; }
 }
 
 public class JoinOptions
@@ -386,6 +417,12 @@ public class JoinOptions
     [JsonPropertyName("emptyLineBeforeJoin")]
     public bool EmptyLineBeforeJoin { get; set; }
 
+    /// <summary>
+    /// Accepted values: "right" (default), "none", "left", "indentedFromFrom".
+    /// Spec 031 FR-024 adds "toTable" as an accepted alias — the importer normalises it to
+    /// "left" (see <c>SqlPromptImporter.OptionMap["AlignJoinKeyword"]</c>) since AKML's layout
+    /// engine does not (yet) distinguish "align to table" from generic left-alignment.
+    /// </summary>
     [JsonPropertyName("alignJoinKeyword")]
     public string AlignJoinKeyword { get; set; } = "right";
 
@@ -459,6 +496,10 @@ public class DdlOptions
     /// </summary>
     [JsonPropertyName("constraintColumnsOnNewLine")]
     public string ConstraintColumnsOnNewLine { get; set; } = "ifLongerOrMultipleColumns";
+
+    /// <summary>Spec 031 FR-022 — construct-scoped paren style; empty = inherit Parenthesis.Style.</summary>
+    [JsonPropertyName("parenthesisStyle")]
+    public string ParenthesisStyle { get; set; } = "";
 }
 
 public class ControlFlowOptions
@@ -486,6 +527,10 @@ public class ControlFlowOptions
 
     [JsonPropertyName("tryCatchOnNewLine")]
     public bool TryCatchOnNewLine { get; set; } = true;
+
+    /// <summary>Spec 031 FR-025 — indent the BEGIN/END keywords themselves one level from IF/WHILE/ELSE.</summary>
+    [JsonPropertyName("indentBeginEndKeywords")]
+    public bool IndentBeginEndKeywords { get; set; }
 }
 
 public class CaseOptions
@@ -552,6 +597,10 @@ public class CaseOptions
     // T008: "" = unset → indent END one level from CASE (legacy "indented" intent), matching the
     // parity golden; an explicit "toCase"/"indented" still wins.
     public string EndAlignment { get; set; } = "";
+
+    /// <summary>Spec 031 FR-031 — line-start THEN column: indentedFromWhen | toWhen | toWhenExpression.</summary>
+    [JsonPropertyName("thenAlignment")]
+    public string ThenAlignment { get; set; } = "indentedFromWhen";
 }
 
 public class CteOptions
@@ -583,6 +632,22 @@ public class CteOptions
     /// </summary>
     [JsonPropertyName("asOnNewLine")]
     public bool AsOnNewLine { get; set; }
+
+    /// <summary>Spec 031 FR-022 — construct-scoped paren style; empty = inherit Parenthesis.Style.</summary>
+    [JsonPropertyName("parenthesisStyle")]
+    public string ParenthesisStyle { get; set; } = "";
+
+    /// <summary>Spec 031 FR-026 — CTE name on the line after WITH.</summary>
+    [JsonPropertyName("placeNameOnNewLine")]
+    public bool PlaceNameOnNewLine { get; set; }
+
+    /// <summary>Spec 031 FR-026 — indent the CTE name one level from WITH (with PlaceNameOnNewLine).</summary>
+    [JsonPropertyName("indentName")]
+    public bool IndentName { get; set; }
+
+    /// <summary>Spec 031 FR-026 — indented | leftAligned | rightAligned.</summary>
+    [JsonPropertyName("columnAlignment")]
+    public string ColumnAlignment { get; set; } = "leftAligned";
 }
 
 public class ExpressionOptions
@@ -616,6 +681,8 @@ public class OperatorsOptions
     /// "inlineWithStatement" (default — keep operators inline with the clause keyword),
     /// "indentedFromStatement" (indent one level past the clause keyword),
     /// "rightAligned" (right-align operators to a common column).
+    /// Spec 031 FR-032 adds two Redgate list-alignment variants: "toFirstListItem" (align to
+    /// the column of the first list item) and "beforeFirstListItem" (sit one column left of it).
     /// </summary>
     [JsonPropertyName("alignment")]
     public string Alignment { get; set; } = "inlineWithStatement";
@@ -636,6 +703,10 @@ public class OperatorsOptions
     /// </summary>
     [JsonPropertyName("andBetweenOnNewLine")]
     public bool AndBetweenOnNewLine { get; set; }
+
+    /// <summary>Spec 031 FR-032 — wrapped BETWEEN's AND: toBetween | rightAlignedToBetween | toBeginningOfExpression.</summary>
+    [JsonPropertyName("betweenAndAlignment")]
+    public string BetweenAndAlignment { get; set; } = "toBetween";
 }
 
 /// <summary>
@@ -665,6 +736,10 @@ public class InStatementsOptions
     /// </summary>
     [JsonPropertyName("placeItemsOnNewLine")]
     public string PlaceItemsOnNewLine { get; set; } = "ifLongerThanWrap";
+
+    /// <summary>Spec 031 FR-032 — spaces just inside IN-list parens.</summary>
+    [JsonPropertyName("spaceAroundContents")]
+    public bool SpaceAroundContents { get; set; }
 }
 
 /// <summary>
@@ -688,6 +763,18 @@ public class FunctionCallsOptions
     /// </summary>
     [JsonPropertyName("indentParameters")]
     public bool IndentParameters { get; set; } = true;
+
+    /// <summary>Spec 031 FR-030 — space between function name and '('.</summary>
+    [JsonPropertyName("spaceAroundParentheses")]
+    public bool SpaceAroundParentheses { get; set; }
+
+    /// <summary>Spec 031 FR-030 — spaces just inside call parens, around the arguments.</summary>
+    [JsonPropertyName("spaceAroundArgumentList")]
+    public bool SpaceAroundArgumentList { get; set; }
+
+    /// <summary>Spec 031 FR-030 — '( )' for zero-argument calls.</summary>
+    [JsonPropertyName("spaceBetweenEmptyParentheses")]
+    public bool SpaceBetweenEmptyParentheses { get; set; }
 }
 
 /// <summary>
@@ -748,6 +835,46 @@ public class DeclareOptions
     /// </summary>
     [JsonPropertyName("alignDefaultValues")]
     public bool AlignDefaultValues { get; set; }
+
+    /// <summary>Spec 031 FR-027 — '=' leads the continuation line in DECLARE/SET breaks.</summary>
+    [JsonPropertyName("equalsOnNewLine")]
+    public bool EqualsOnNewLine { get; set; }
+}
+
+/// <summary>
+/// Spec 031 FR-029 — Redgate insertStatements section: per-construct parenthesis style,
+/// content indent, and per-item line placement for the INSERT column list and VALUES tuples.
+/// Supersedes the dead <c>DmlOptions.InsertColumnListFormat</c>/<c>ValuesFormat</c> fields.
+/// </summary>
+public class InsertStatementsOptions
+{
+    [JsonPropertyName("columns")]
+    public InsertParenOptions Columns { get; set; } = new()
+    {
+        IndentContents = true,
+        PlaceSubsequentItemsOnNewLines = "always",
+    };
+
+    [JsonPropertyName("values")]
+    public InsertParenOptions Values { get; set; } = new()
+    {
+        IndentContents = false,
+        PlaceSubsequentItemsOnNewLines = "never",
+    };
+}
+
+public class InsertParenOptions
+{
+    /// <summary>Redgate 9-value parenthesis style; empty string = inherit <c>Parenthesis.Style</c>.</summary>
+    [JsonPropertyName("parenthesisStyle")]
+    public string ParenthesisStyle { get; set; } = "";
+
+    [JsonPropertyName("indentContents")]
+    public bool IndentContents { get; set; }
+
+    /// <summary>always | never | ifLongerThanWrap</summary>
+    [JsonPropertyName("placeSubsequentItemsOnNewLines")]
+    public string PlaceSubsequentItemsOnNewLines { get; set; } = "never";
 }
 
 public class FormatActionConfig
