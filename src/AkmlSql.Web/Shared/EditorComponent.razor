@@ -18,6 +18,7 @@
 @inject IQuickInfoService QuickInfo
 @inject ISignatureHelpService SignatureHelp
 @inject IGotoDefinitionService GotoDefinition
+@inject IWildcardExpansionService Wildcard
 
 <div @ref="_host" id="@HostId" class="akml-editor" data-testid="sql-editor"></div>
 
@@ -335,6 +336,80 @@
         catch { return new DefinitionDto { Found = false, Message = "Could not retrieve the definition." }; }
     }
 
+    /// <summary>Spec 030 — JS-invokable "expand SELECT *" (Tab after a <c>*</c>). Locates the wildcard
+    /// at the caret (bare <c>*</c> or <c>alias.*</c>), asks the engine to enumerate the FROM tables'
+    /// columns, and returns the replacement text + the span to overwrite. Returns null when not
+    /// connected, not a wildcard, or the engine can't expand it — the JS side then leaves Tab alone.
+    /// The column layout mirrors the desktop: first column on the <c>*</c>'s line, the rest wrapped
+    /// and aligned to the <c>*</c>'s indent; columns are qualified only when more than one source
+    /// table is expanded (or the user wrote <c>alias.*</c>).</summary>
+    [JSInvokable]
+    public async Task<WildcardExpandDto?> ExpandWildcardFromJs(int caretOffset, string? documentText)
+    {
+        try
+        {
+            var doc = documentText ?? string.Empty;
+            if (!SqlConn.IsConnected) return null;
+
+            // Locate the '*' at or adjacent to the caret (mirrors desktop DetectWildcardAtCursor).
+            int starPos = -1;
+            if (caretOffset > 0 && caretOffset <= doc.Length && doc[caretOffset - 1] == '*') starPos = caretOffset - 1;
+            else if (caretOffset >= 0 && caretOffset < doc.Length && doc[caretOffset] == '*') starPos = caretOffset;
+            if (starPos < 0) return null;
+
+            // Qualified wildcard "identifier.*" — the replacement span also covers "identifier.".
+            string? qualifier = null;
+            int spanStart = starPos;
+            if (starPos >= 2 && doc[starPos - 1] == '.')
+            {
+                int idEnd = starPos - 2;
+                int idStart = idEnd;
+                while (idStart > 0 && IsIdentifierChar(doc[idStart - 1])) idStart--;
+                if (idStart <= idEnd)
+                {
+                    qualifier = doc.Substring(idStart, idEnd - idStart + 1);
+                    spanStart = idStart;
+                }
+            }
+            int spanLength = starPos - spanStart + 1;   // include the '*' itself
+
+            var resp = await Wildcard.GetAsync(new WildcardExpansionRequest
+            {
+                SessionId = SqlConn.SessionId,
+                CursorOffset = caretOffset,
+                DocumentText = doc,
+                Qualifier = qualifier,
+            }, CancellationToken.None);
+
+            if (resp == null || !resp.Success || resp.Tables == null || resp.Tables.Length == 0) return null;
+
+            var columns = resp.Tables
+                .SelectMany(t => (t.Columns ?? System.Array.Empty<WildcardColumn>())
+                    .Select(c => (t.Qualifier, c.ColumnName)))
+                .ToList();
+            if (columns.Count == 0) return null;
+
+            // Qualify the columns when the user wrote "alias.*", or when > 1 source table is expanded
+            // (a bare * over a join) so the emitted list is unambiguous.
+            bool useQualifier = qualifier != null
+                || columns.Select(c => c.Qualifier).Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1;
+
+            // Indent wrapped columns to the '*'s column (spaces from the line start).
+            int lineStart = doc.LastIndexOf('\n', System.Math.Min(System.Math.Max(0, spanStart - 1), System.Math.Max(0, doc.Length - 1)));
+            int indentChars = lineStart < 0 ? spanStart : spanStart - (lineStart + 1);
+            string indent = new string(' ', System.Math.Max(0, indentChars));
+
+            var parts = columns.Select(c => useQualifier ? c.Qualifier + "." + c.ColumnName : c.ColumnName).ToList();
+            string text = parts.Count == 1 ? parts[0] : string.Join(",\n" + indent, parts);
+
+            return new WildcardExpandDto { Ok = true, SpanStart = spanStart, SpanLength = spanLength, Text = text };
+        }
+        catch { return null; }
+    }
+
+    private static bool IsIdentifierChar(char c)
+        => char.IsLetterOrDigit(c) || c == '_' || c == '$' || c == '#' || c == '@';
+
     private static string ToCmType(int objectType) => objectType switch
     {
         (int)CompletionObjectType.Table     => "class",
@@ -400,6 +475,16 @@
         public string ObjectType { get; set; } = string.Empty;
         public string Definition { get; set; } = string.Empty;
         public string Message { get; set; } = string.Empty;
+    }
+
+    /// <summary>Spec 030 — result of <see cref="ExpandWildcardFromJs"/>: the text to insert and the
+    /// document span (the <c>*</c> or <c>alias.*</c>) it replaces. Ok=false is returned as null.</summary>
+    public sealed class WildcardExpandDto
+    {
+        public bool Ok { get; set; }
+        public int SpanStart { get; set; }
+        public int SpanLength { get; set; }
+        public string Text { get; set; } = string.Empty;
     }
 
     public async Task<string> GetTextAsync()

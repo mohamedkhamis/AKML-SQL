@@ -57,20 +57,7 @@ public class SchemaMetadataService
                 "ListDatabasesAsync: opened connection — {ConnDesc}, @@SERVERNAME='{ActualServer}'",
                 connDesc, actualServer);
 
-            await using var cmd = conn.CreateCommand();
-            cmd.CommandText = @"
-                SELECT name
-                FROM sys.databases
-                WHERE state = 0 AND HAS_DBACCESS(name) = 1
-                ORDER BY
-                    CASE WHEN name IN ('master','tempdb','model','msdb') THEN 1 ELSE 0 END,
-                    name;";
-            cmd.CommandTimeout = 5;
-            await using var reader = await cmd.ExecuteReaderAsync(ct);
-            while (await reader.ReadAsync(ct))
-            {
-                databases.Add(reader.GetString(0));
-            }
+            databases = await QueryDatabaseNamesAsync(conn, ct);
 
             Log.Information(
                 "ListDatabasesAsync: returned {Count} databases from '{ActualServer}' ({ConnDesc})",
@@ -93,6 +80,32 @@ public class SchemaMetadataService
             Log.Warning(ex, "ListDatabasesAsync failed ({ConnDesc})", connDesc);
         }
         return databases;
+    }
+
+    /// <summary>
+    /// Single home for the sys.databases projection shared by USE-completion
+    /// (<see cref="ListDatabasesAsync"/>) and the connect-dialog dropdown
+    /// (<c>ListDatabasesHandler</c>): online (state = 0), accessible (HAS_DBACCESS) catalogs,
+    /// user databases before the system four, then by name. Throws on failure — each caller owns
+    /// its connection, logging, and error semantics.
+    /// </summary>
+    internal static async Task<List<string>> QueryDatabaseNamesAsync(SqlConnection conn, CancellationToken ct)
+    {
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            SELECT name
+            FROM sys.databases
+            WHERE state = 0 AND HAS_DBACCESS(name) = 1
+            ORDER BY
+                CASE WHEN name IN ('master','tempdb','model','msdb') THEN 1 ELSE 0 END,
+                name;";
+        cmd.CommandTimeout = 5;
+
+        var names = new List<string>();
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+            names.Add(reader.GetString(0));
+        return names;
     }
 
     public async Task<PermissionLevel> ProbePermissionsAsync(string connectionString, CancellationToken ct)

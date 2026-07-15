@@ -1,4 +1,4 @@
-#nullable enable
+﻿#nullable enable
 using System;
 using System.Globalization;
 using System.Windows;
@@ -27,54 +27,81 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
     internal sealed class RowFactory
     {
         private readonly PageTheme _theme;
-        private int _zebraIndex;
+
+        // SQL Prompt indents the controls under a group header (~20px in the reference
+        // screenshots). Set by AddGroupHeader; no explicit reset exists because SettingsWindow
+        // constructs a fresh RowFactory per page build.
+        private double _groupIndent;
 
         public RowFactory(PageTheme theme)
         {
             _theme = theme;
         }
 
-        /// <summary>Resets the zebra-striping counter. Call at the start of each page build.</summary>
-        public void ResetZebra() => _zebraIndex = 0;
-
         /// <summary>
-        /// Wraps content in a zebra-striped <see cref="Border"/>. Alternates between
-        /// transparent and <see cref="PageTheme.InputReadOnly"/>.
+        /// Wraps content in a row <see cref="Border"/>. Rows are flat — the SQL Prompt reference
+        /// pages have no zebra striping — but the Border wrapper stays: SettingsWindow.FlashRow
+        /// animates its Background and the search index targets it. Rows under a group header are
+        /// indented to match the reference layout.
         /// </summary>
         public Border WrapZebraRow(UIElement content)
         {
-            var bg = (_zebraIndex++ % 2 == 0) ? _theme.InputReadOnly : _theme.Transparent;
             return new Border
             {
-                Background = bg,
-                Padding = new Thickness(12, 8, 12, 8),
+                Background = _theme.Transparent,
+                Padding = new Thickness(12 + _groupIndent, 8, 12, 8),
                 Margin = new Thickness(-12, 0, -12, 0),
                 Child = content
             };
         }
 
-        /// <summary>Section header inside a page (bold, foreground primary).</summary>
+        /// <summary>
+        /// Section header inside a page — SQL Prompt style: a plain-weight label with a 1px rule
+        /// filling the rest of the line ("Brackets ───────"). Rows added after the header are
+        /// indented until the next page build resets the factory.
+        /// </summary>
         public void AddGroupHeader(StackPanel panel, string text)
         {
-            panel.Children.Add(new TextBlock
+            var header = new DockPanel { LastChildFill = true, Margin = new Thickness(0, 16, 0, 8) };
+
+            var label = new TextBlock
             {
                 Text = text,
                 FontSize = 12,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = _theme.FgPrimary,
-                Margin = new Thickness(0, 8, 0, 6)
-            });
-        }
+                Foreground = _theme.FgPrimary
+            };
+            DockPanel.SetDock(label, Dock.Left);
+            header.Children.Add(label);
 
-        public void AddGroupSeparator(StackPanel panel)
-        {
-            panel.Children.Add(new Border
+            header.Children.Add(new Border
             {
                 Height = 1,
                 Background = _theme.Sep,
-                Margin = new Thickness(0, 14, 0, 10)
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(8, 2, 0, 0)
             });
+
+            panel.Children.Add(header);
+            _groupIndent = 20;
         }
+
+        /// <summary>Vertical whitespace between groups — the group header's inline rule (SQL
+        /// Prompt style) replaced the old full-width separator line.</summary>
+        public void AddGroupSeparator(StackPanel panel)
+        {
+            panel.Children.Add(new Border { Height = 0, Margin = new Thickness(0, 6, 0, 0) });
+        }
+
+        /// <summary>Secondary description line under a control — plain weight (the SQL Prompt
+        /// reference uses no italics).</summary>
+        private TextBlock MakeDescription(string description) => new TextBlock
+        {
+            Text = description,
+            Foreground = _theme.FgSecondary,
+            FontSize = 11,
+            Margin = new Thickness(0, 2, 0, 0),
+            TextWrapping = TextWrapping.Wrap
+        };
 
         public (Border Row, CheckBox Control) AddToggle(StackPanel panel, string label, string description = "")
         {
@@ -94,15 +121,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             });
             if (!string.IsNullOrEmpty(description))
             {
-                contentPanel.Children.Add(new TextBlock
-                {
-                    Text = description,
-                    Foreground = _theme.FgSecondary,
-                    FontSize = 11,
-                    FontStyle = FontStyles.Italic,
-                    Margin = new Thickness(0, 2, 0, 0),
-                    TextWrapping = TextWrapping.Wrap
-                });
+                contentPanel.Children.Add(MakeDescription(description));
             }
 
             cb.Content = contentPanel;
@@ -130,15 +149,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             contentPanel.Children.Add(new TextBlock { Text = label, Foreground = _theme.FgPrimary, FontSize = 13 });
             if (!string.IsNullOrEmpty(description))
             {
-                contentPanel.Children.Add(new TextBlock
-                {
-                    Text = description,
-                    Foreground = _theme.FgSecondary,
-                    FontSize = 11,
-                    FontStyle = FontStyles.Italic,
-                    Margin = new Thickness(0, 2, 0, 0),
-                    TextWrapping = TextWrapping.Wrap
-                });
+                contentPanel.Children.Add(MakeDescription(description));
             }
 
             var dock = new DockPanel { LastChildFill = true };
@@ -155,7 +166,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             StackPanel panel, string label, double min, double max, double defaultValue,
             string description = "", bool largeRange = false)
         {
-            var container = new StackPanel { Margin = new Thickness(0, 0, 0, 12) };
+            var container = new StackPanel { Margin = new Thickness(_groupIndent, 0, 0, 12) };
 
             var headerRow = new DockPanel { Margin = new Thickness(0, 0, 0, 4) };
             var valueLabel = new TextBlock
@@ -196,14 +207,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
 
             if (!string.IsNullOrEmpty(description))
             {
-                container.Children.Add(new TextBlock
-                {
-                    Text = description,
-                    Foreground = _theme.FgSecondary,
-                    FontSize = 11,
-                    FontStyle = FontStyles.Italic,
-                    Margin = new Thickness(0, 2, 0, 0)
-                });
+                container.Children.Add(MakeDescription(description));
             }
 
             panel.Children.Add(container);
@@ -212,7 +216,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
 
         public (StackPanel Row, ComboBox Control) AddDropdown(StackPanel panel, string label, string[] items, string description = "")
         {
-            var container = new StackPanel { Margin = new Thickness(0, 0, 0, 12) };
+            var container = new StackPanel { Margin = new Thickness(_groupIndent, 0, 0, 12) };
 
             container.Children.Add(new TextBlock
             {
@@ -222,29 +226,24 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 Margin = new Thickness(0, 0, 0, 4)
             });
 
+            // Layout/focus properties only — StyleComboBox owns ALL painting (the combo's own
+            // template ignores Background/BorderBrush/Padding; Foreground is set by the styler).
             var combo = new ComboBox
             {
-                Background = _theme.Input,
-                Foreground = _theme.FgPrimary,
-                BorderBrush = _theme.ComboBorder,
-                BorderThickness = new Thickness(1),
                 FontSize = 13,
                 Height = 28,
-                Padding = new Thickness(6, 4, 6, 4),
                 MaxWidth = 300,
                 HorizontalAlignment = HorizontalAlignment.Left,
                 FocusVisualStyle = FocusVisualStyles.HighStakes
             };
             StyleComboBox(combo);
 
+            // Plain string items — NEVER pre-built ComboBoxItem/TextBlock content. A UIElement as
+            // item content makes WPF render the closed selection box as a Rectangle+VisualBrush
+            // snapshot (blurry, and unreadable over the light face) and breaks keyboard type-ahead;
+            // a local Foreground on the item would beat the ItemContainerStyle triggers.
             foreach (var item in items)
-            {
-                combo.Items.Add(new ComboBoxItem
-                {
-                    Content = new TextBlock { Text = item },
-                    Foreground = _theme.FgPrimary
-                });
-            }
+                combo.Items.Add(item);
             if (combo.Items.Count > 0)
                 combo.SelectedIndex = 0;
 
@@ -252,14 +251,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
 
             if (!string.IsNullOrEmpty(description))
             {
-                container.Children.Add(new TextBlock
-                {
-                    Text = description,
-                    Foreground = _theme.FgSecondary,
-                    FontSize = 11,
-                    FontStyle = FontStyles.Italic,
-                    Margin = new Thickness(0, 2, 0, 0)
-                });
+                container.Children.Add(MakeDescription(description));
             }
 
             panel.Children.Add(container);
@@ -268,7 +260,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
 
         public (StackPanel Row, TextBox Control) AddTextInput(StackPanel panel, string label, string description = "", bool isPassword = false)
         {
-            var container = new StackPanel { Margin = new Thickness(0, 0, 0, 12) };
+            var container = new StackPanel { Margin = new Thickness(_groupIndent, 0, 0, 12) };
 
             container.Children.Add(new TextBlock
             {
@@ -298,14 +290,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
 
             if (!string.IsNullOrEmpty(description))
             {
-                container.Children.Add(new TextBlock
-                {
-                    Text = description,
-                    Foreground = _theme.FgSecondary,
-                    FontSize = 11,
-                    FontStyle = FontStyles.Italic,
-                    Margin = new Thickness(0, 2, 0, 0)
-                });
+                container.Children.Add(MakeDescription(description));
             }
 
             panel.Children.Add(container);
@@ -320,7 +305,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         public (StackPanel Row, TextBox Control) AddMultilineTextInput(
             StackPanel panel, string label, string description = "", double height = 90)
         {
-            var container = new StackPanel { Margin = new Thickness(0, 0, 0, 12) };
+            var container = new StackPanel { Margin = new Thickness(_groupIndent, 0, 0, 12) };
 
             container.Children.Add(new TextBlock
             {
@@ -353,15 +338,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
 
             if (!string.IsNullOrEmpty(description))
             {
-                container.Children.Add(new TextBlock
-                {
-                    Text = description,
-                    Foreground = _theme.FgSecondary,
-                    FontSize = 11,
-                    FontStyle = FontStyles.Italic,
-                    Margin = new Thickness(0, 2, 0, 0),
-                    TextWrapping = TextWrapping.Wrap
-                });
+                container.Children.Add(MakeDescription(description));
             }
 
             panel.Children.Add(container);
@@ -370,7 +347,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
 
         public (StackPanel Row, TextBox Control) AddReadOnlyField(StackPanel panel, string label, string value)
         {
-            var container = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
+            var container = new StackPanel { Margin = new Thickness(_groupIndent, 0, 0, 8) };
 
             container.Children.Add(new TextBlock
             {
@@ -403,7 +380,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
 
         public DockPanel AddInfoRow(StackPanel panel, string label, string value)
         {
-            var row = new DockPanel { Margin = new Thickness(0, 2, 0, 6) };
+            var row = new DockPanel { Margin = new Thickness(_groupIndent, 2, 0, 6) };
             row.Children.Add(new TextBlock
             {
                 Text = label + ":",
@@ -423,121 +400,8 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             return row;
         }
 
-        // ─── ComboBox theming (mirrors SettingsWindow.StyleComboBox) ─────────
-
-        private void StyleComboBox(ComboBox combo)
-        {
-            combo.Background = _theme.Input;
-            combo.Foreground = _theme.FgPrimary;
-            combo.BorderBrush = _theme.ComboBorder;
-            combo.SetValue(TextElement.ForegroundProperty, _theme.FgPrimary);
-
-            combo.Resources[SystemColors.WindowBrushKey] = _theme.Input;
-            combo.Resources[SystemColors.WindowTextBrushKey] = _theme.FgPrimary;
-            combo.Resources[SystemColors.HighlightBrushKey] = _theme.Selected;
-            combo.Resources[SystemColors.HighlightTextBrushKey] = _theme.SelectedText;
-            combo.Resources[SystemColors.ControlBrushKey] = _theme.Input;
-            combo.Resources[SystemColors.ControlTextBrushKey] = _theme.FgPrimary;
-            combo.Resources[SystemColors.InactiveSelectionHighlightBrushKey] = _theme.Selected;
-            combo.Resources[SystemColors.InactiveSelectionHighlightTextBrushKey] = _theme.SelectedText;
-            combo.Resources[SystemColors.ActiveBorderBrushKey] = _theme.ComboBorder;
-            combo.Resources[SystemColors.InactiveBorderBrushKey] = _theme.ComboBorder;
-
-            var theme = _theme;
-            combo.Loaded += (s, e) => ThemeComboBoxVisualTree((ComboBox)s!, theme);
-            combo.DropDownOpened += (s, e) => ThemeComboBoxPopup((ComboBox)s!, theme);
-
-            var itemStyle = new Style(typeof(ComboBoxItem));
-            itemStyle.Setters.Add(new Setter(Control.BackgroundProperty, _theme.Input));
-            itemStyle.Setters.Add(new Setter(Control.ForegroundProperty, _theme.FgPrimary));
-            itemStyle.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0)));
-            itemStyle.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(6, 4, 6, 4)));
-            itemStyle.Setters.Add(new Setter(TextElement.ForegroundProperty, _theme.FgPrimary));
-
-            var hoverTrigger = new Trigger { Property = ComboBoxItem.IsHighlightedProperty, Value = true };
-            hoverTrigger.Setters.Add(new Setter(Control.BackgroundProperty, _theme.Selected));
-            hoverTrigger.Setters.Add(new Setter(Control.ForegroundProperty, _theme.SelectedText));
-            hoverTrigger.Setters.Add(new Setter(TextElement.ForegroundProperty, _theme.SelectedText));
-            itemStyle.Triggers.Add(hoverTrigger);
-
-            // Selected ComboBoxItem: accent background with on-accent text.
-            // SelectedText maps to ThemeTokens.TextOnAccent — the canonical
-            // token for "text on a coloured background", which is what we need
-            // here too. Using the token instead of a hardcoded Colors.White keeps
-            // the appearance consistent if a future theme uses a non-white
-            // on-accent foreground (e.g. high-contrast / blue-tinted variants).
-            var selectedTrigger = new Trigger { Property = ComboBoxItem.IsSelectedProperty, Value = true };
-            selectedTrigger.Setters.Add(new Setter(Control.BackgroundProperty, _theme.FgAccent));
-            selectedTrigger.Setters.Add(new Setter(Control.ForegroundProperty, _theme.SelectedText));
-            selectedTrigger.Setters.Add(new Setter(TextElement.ForegroundProperty, _theme.SelectedText));
-            itemStyle.Triggers.Add(selectedTrigger);
-
-            combo.ItemContainerStyle = itemStyle;
-        }
-
-        private static void ThemeComboBoxVisualTree(ComboBox combo, PageTheme theme)
-        {
-            try
-            {
-                var toggleButton = FindChild<ToggleButton>(combo);
-                if (toggleButton != null)
-                {
-                    toggleButton.Background = theme.Input;
-                    toggleButton.BorderBrush = theme.ComboBorder;
-                    toggleButton.Foreground = theme.FgPrimary;
-                    toggleButton.SetValue(TextElement.ForegroundProperty, theme.FgPrimary);
-
-                    toggleButton.Resources[SystemColors.ControlBrushKey] = theme.Input;
-                    toggleButton.Resources[SystemColors.ControlTextBrushKey] = theme.FgPrimary;
-                    toggleButton.Resources[SystemColors.ControlLightBrushKey] = theme.Input;
-                    toggleButton.Resources[SystemColors.ControlDarkBrushKey] = theme.ComboBorder;
-
-                    var arrow = FindChild<System.Windows.Shapes.Path>(toggleButton);
-                    if (arrow != null) arrow.Fill = theme.FgSecondary;
-                }
-
-                var contentSite = FindChild<ContentPresenter>(combo);
-                if (contentSite != null)
-                    contentSite.SetValue(TextElement.ForegroundProperty, theme.FgPrimary);
-
-                ThemeComboBoxPopup(combo, theme);
-            }
-            catch { /* non-fatal */ }
-        }
-
-        private static void ThemeComboBoxPopup(ComboBox combo, PageTheme theme)
-        {
-            try
-            {
-                var popup = FindChild<Popup>(combo);
-                if (popup?.Child is Border popupBorder)
-                {
-                    popupBorder.Background = theme.Input;
-                    popupBorder.BorderBrush = theme.ComboBorder;
-                    popupBorder.SetValue(TextElement.ForegroundProperty, theme.FgPrimary);
-
-                    popupBorder.Resources[SystemColors.WindowBrushKey] = theme.Input;
-                    popupBorder.Resources[SystemColors.WindowTextBrushKey] = theme.FgPrimary;
-                    popupBorder.Resources[SystemColors.HighlightBrushKey] = theme.Selected;
-                    popupBorder.Resources[SystemColors.HighlightTextBrushKey] = theme.SelectedText;
-                    popupBorder.Resources[SystemColors.ControlBrushKey] = theme.Input;
-                    popupBorder.Resources[SystemColors.ControlTextBrushKey] = theme.FgPrimary;
-                }
-            }
-            catch { /* non-fatal */ }
-        }
-
-        private static T? FindChild<T>(DependencyObject parent) where T : DependencyObject
-        {
-            int count = VisualTreeHelper.GetChildrenCount(parent);
-            for (int i = 0; i < count; i++)
-            {
-                var child = VisualTreeHelper.GetChild(parent, i);
-                if (child is T found) return found;
-                var result = FindChild<T>(child);
-                if (result != null) return result;
-            }
-            return null;
-        }
+        /// <summary>Themes the dropdown via the shared helper — the stock Aero2 face cannot be
+        /// dark-themed without retemplating; see <see cref="Ui.Theme.ComboBoxTheming"/>.</summary>
+        private void StyleComboBox(ComboBox combo) => Ui.Theme.ComboBoxTheming.Apply(combo, _theme);
     }
 }

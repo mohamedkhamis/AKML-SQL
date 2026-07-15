@@ -249,7 +249,7 @@ namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
                 if (_activeView == null || string.IsNullOrEmpty(_sessionId))
                     return;
 
-                if (string.IsNullOrWhiteSpace(query) || query.Trim().Length < 2)
+                if (string.IsNullOrWhiteSpace(query) || query.Trim().Length < DbObjectProvider.MinChars)
                     return;
 
                 // Debounce: coalesce bursts of keystrokes. Bail early if superseded during the wait.

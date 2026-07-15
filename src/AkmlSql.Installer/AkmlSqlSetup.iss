@@ -778,6 +778,24 @@ begin
   end;
 end;
 
+// The AKML engine/updater/analyzer are HEADLESS out-of-process helpers deployed under {app}.
+// The engine in particular is spawned by the shell but OUTLIVES it — it can linger as an orphan
+// after SSMS/VS close — keeping Engine\*.dll memory-mapped. If any is still alive when Inno starts
+// copying files, replacement fails with "DeleteFile failed; code 5. Access is denied." They hold no
+// user state, so terminate them silently. MUST run AFTER the IDE hosts are closed: a live shell
+// would otherwise immediately respawn the engine and re-lock the files.
+procedure TerminateAkmlBackgroundProcesses;
+var
+  ResultCode: Integer;
+begin
+  if IsProcessRunning('AkmlSql.Engine.exe') then
+    Exec('taskkill.exe', '/F /T /IM AkmlSql.Engine.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  if IsProcessRunning('AkmlSql.Updater.exe') then
+    Exec('taskkill.exe', '/F /IM AkmlSql.Updater.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  if IsProcessRunning('AkmlSql.Analyzer.exe') then
+    Exec('taskkill.exe', '/F /IM AkmlSql.Analyzer.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;
+
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   I: Integer;
@@ -826,6 +844,13 @@ begin
       Result := 'Please close the running applications and try again.';
     end;
   end;
+
+  // Now that the IDE hosts are handled, terminate the headless AKML helpers that would otherwise
+  // keep Engine\*.dll locked (DeleteFile code 5) — including an orphaned engine left running after
+  // the hosts already exited (that path leaves RunningList empty, skips the prompt, and reaches here
+  // with Result=''). Only when we are actually proceeding (Result=''), never on the manual-close abort.
+  if Result = '' then
+    TerminateAkmlBackgroundProcesses;
 
   // MEF cache clearing is done in ssPostInstall (after files are deployed),
   // not here. Clearing before deployment is unnecessary and wasteful.

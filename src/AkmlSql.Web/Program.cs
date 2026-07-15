@@ -85,6 +85,7 @@ builder.Services.AddSingleton<ICompletionService, CompletionService>();
 builder.Services.AddSingleton<ISignatureHelpService, SignatureHelpService>();
 builder.Services.AddSingleton<IQuickInfoService, QuickInfoService>();
 builder.Services.AddSingleton<IGotoDefinitionService, GotoDefinitionService>();
+builder.Services.AddSingleton<IWildcardExpansionService, WildcardExpansionService>();
 
 // M5 schema-cache + snippet + refactoring services.
 //   ISchemaCacheStore     T107 -- IndexedDB persistence with composite (server, db) key.

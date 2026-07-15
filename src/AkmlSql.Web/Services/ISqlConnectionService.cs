@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using AkmlSql.Core.Ipc;
@@ -49,6 +50,16 @@ public interface ISqlConnectionService
     /// </summary>
     Task<(bool Ok, string? Error)> TestAsync(
         string server, string database, bool windowsAuth, string? user, string? password, CancellationToken ct);
+
+    /// <summary>
+    /// Spec 030 — enumerate the user-accessible databases on <paramref name="server"/> so the connect
+    /// dialog can offer a dropdown. Runs the SAME identifier + loopback (SSRF) guard as
+    /// <see cref="ConnectAsync"/>/<see cref="TestAsync"/> FIRST (the engine opens the connection under
+    /// its own identity), then round-trips a <c>ListDatabases</c> request against <c>master</c>. Does
+    /// NOT change the active session. Returns the sorted names on success; a message on failure.
+    /// </summary>
+    Task<(bool Ok, IReadOnlyList<string> Databases, string? Error)> ListDatabasesAsync(
+        string server, bool windowsAuth, string? user, string? password, CancellationToken ct);
 
     /// <summary>Clears the local connected state. (The engine session lingers harmlessly.)</summary>
     Task DisconnectAsync();
@@ -164,6 +175,41 @@ internal sealed class SqlConnectionService : ISqlConnectionService
         {
             _diagnostics.Log(DiagnosticLevel.Warn, "sql-connect", $"TestSqlConnection send failed: {ex.Message}");
             return (false, "Could not reach the engine: " + ex.Message);
+        }
+    }
+
+    public async Task<(bool Ok, IReadOnlyList<string> Databases, string? Error)> ListDatabasesAsync(
+        string server, bool windowsAuth, string? user, string? password, CancellationToken ct)
+    {
+        // SECURITY: identical loopback/identifier guard as Connect/Test, run FIRST — the engine opens
+        // this connection under its own identity, so an unguarded server is an SSRF/confused-deputy
+        // lever. Enumerate against "master" (always present, and the guard requires a non-empty db).
+        var (ok, error) = ValidateTarget(server, "master");
+        if (!ok) return (false, Array.Empty<string>(), error);
+
+        if (_bridge.State != BridgeState.Open)
+            return (false, Array.Empty<string>(), "Pair an engine first (Engine connections → Add), then list databases.");
+
+        var connStr = BuildConnectionString(server.Trim(), "master", windowsAuth, user, password);
+
+        try
+        {
+            var response = await _bridge.SendAsync<ListDatabasesRequest, ListDatabasesResponse>(
+                MessageTypes.ListDatabases,
+                new ListDatabasesRequest { ConnectionString = connStr },
+                ct).ConfigureAwait(false);
+
+            if (response == null)
+                return (false, Array.Empty<string>(), "The engine did not return a database list.");
+            if (response.Ok)
+                return (true, response.Databases ?? new List<string>(), null);
+            return (false, Array.Empty<string>(),
+                string.IsNullOrEmpty(response.ErrorMessage) ? "Could not list databases." : response.ErrorMessage);
+        }
+        catch (Exception ex)
+        {
+            _diagnostics.Log(DiagnosticLevel.Warn, "sql-connect", $"ListDatabases send failed: {ex.Message}");
+            return (false, Array.Empty<string>(), "Could not reach the engine: " + ex.Message);
         }
     }
 

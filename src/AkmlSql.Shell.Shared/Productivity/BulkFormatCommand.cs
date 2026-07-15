@@ -121,13 +121,43 @@ namespace AkmlSql.Shell.Shared.Productivity
         }
 
         /// <summary>
-        /// Returns the formatting profile names for the wizard's dropdown — the file names (sans
-        /// extension) of the <c>*.akmlstyle</c> profiles under <c>%AppData%/AKML SQL/profiles</c>,
-        /// always including "Default". Mirrors <c>EditProfileCommand</c>'s profiles directory.
+        /// Returns the formatting profile names for the wizard's dropdown, always including
+        /// "Default" (the engine resolves an empty/unknown profile name to the default profile).
+        /// Prefers the engine's <c>ProfileList</c> IPC — the authoritative source, whose
+        /// <c>ProfileManager.List()</c> also sees the built-in profiles shipped next to the engine
+        /// that no %AppData% scan can find — mirroring <c>FormattingPage.PopulateProfilesAsync</c>.
+        /// Falls back to the on-disk <c>*.akmlstyle</c> scan under <c>%AppData%/AKML SQL/profiles</c>
+        /// (mirrors <c>EditProfileCommand</c>) when the engine is not connected.
         /// </summary>
         private static string[] GetAvailableProfiles()
         {
             var names = new List<string> { "Default" };
+
+            try
+            {
+                var client = EngineLifecycle.Manager?.Client;
+                if (client != null && client.IsConnected)
+                {
+                    var response = ThreadHelper.JoinableTaskFactory.Run(() =>
+                        client.SendRequestAsync<ProfileListResponse, ProfileListRequest>(
+                            MessageTypes.ProfileList, new ProfileListRequest(), timeoutMs: 3000));
+                    foreach (var profile in response?.Profiles ?? Array.Empty<ProfileInfo>())
+                    {
+                        if (!string.IsNullOrWhiteSpace(profile.Name) &&
+                            !names.Contains(profile.Name, StringComparer.OrdinalIgnoreCase))
+                        {
+                            names.Add(profile.Name);
+                        }
+                    }
+                    if (names.Count > 1)
+                        return names.ToArray();
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "BulkFormat: profile list IPC failed — falling back to the on-disk scan");
+            }
+
             try
             {
                 var profilesDir = Path.Combine(Constants.AppDataPath, "profiles");

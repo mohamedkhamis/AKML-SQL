@@ -68,6 +68,14 @@ public class ColumnProvider : ICompletionProvider
         ClauseType.Having
     ];
 
+    // JOIN ON re-ranking (see the bare-column path). Column tiers are PK 10 / FK 20 / other 30,
+    // +5 when qualified. A non-target KEY column is the likely other side of the predicate, so it
+    // only slips behind the target's matching tier (20+5 = 25 still beats the target's plain 30);
+    // a non-target plain column sinks below every column of the target. Neither displaces the
+    // whole-predicate suggestions JoinOnFkProvider emits at 5–10.
+    private const int NonTargetKeyDemotion = 5;
+    private const int NonTargetColumnDemotion = 25;
+
     public bool CanHandle(CursorContext context, DatabaseCache? cache)
     {
         if (cache == null)
@@ -142,8 +150,22 @@ public class ColumnProvider : ICompletionProvider
         bool multiTable = context.AvailableAliases.Count > 1;
         var seenColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+        // In an ON clause the user is reaching for the columns of the table being joined on the
+        // current line. The other in-scope tables still belong — a predicate has two sides, and the
+        // other side is almost always one of their KEY columns — so their keys are nudged just below
+        // the target's matching tier while their remaining columns sink well beneath it.
+        // An unresolved target disables the reordering entirely.
+        var joinTarget = context.ClauseType == ClauseType.JoinOn
+            ? context.CurrentJoinTargetAlias
+            : string.Empty;
+        bool demoteNonTarget = !string.IsNullOrEmpty(joinTarget) &&
+                               context.AvailableAliases.ContainsKey(joinTarget);
+
         foreach (var (alias, fullTableName) in context.AvailableAliases)
         {
+            bool isNonTarget = demoteNonTarget &&
+                               !joinTarget.Equals(alias, StringComparison.OrdinalIgnoreCase);
+
             // CTE branch: if the alias resolves to a CTE in scope, yield its
             // projected columns and skip the schema-cache lookup. The continue
             // applies regardless of column count — a token-recovered CTE with
@@ -163,7 +185,7 @@ public class ColumnProvider : ICompletionProvider
                         ObjectType    = (int)CompletionObjectType.Column,
                         SecondaryText = "(CTE column) • " + alias,
                         SourceObject  = alias,
-                        SortPriority  = 30
+                        SortPriority  = 30 + (isNonTarget ? NonTargetColumnDemotion : 0)
                     };
                 }
                 continue;
@@ -185,7 +207,7 @@ public class ColumnProvider : ICompletionProvider
                         ObjectType    = (int)CompletionObjectType.Column,
                         SecondaryText = "(temp table column) • " + alias,
                         SourceObject  = fullTableName,
-                        SortPriority  = 30
+                        SortPriority  = 30 + (isNonTarget ? NonTargetColumnDemotion : 0)
                     };
                 }
                 continue;
@@ -225,10 +247,15 @@ public class ColumnProvider : ICompletionProvider
                 var bareDisplay = column.ColumnName;
                 var qualifiedDisplay = $"{alias}.{column.ColumnName}";
 
+                bool isKeyColumn = column.IsPrimaryKey || fkColumnNames.Contains(column.ColumnName);
+
                 int priority;
                 if (column.IsPrimaryKey) priority = 10;
-                else if (fkColumnNames.Contains(column.ColumnName)) priority = 20;
+                else if (isKeyColumn) priority = 20;
                 else priority = 30;
+
+                if (isNonTarget)
+                    priority += isKeyColumn ? NonTargetKeyDemotion : NonTargetColumnDemotion;
 
                 // Bare form: the default. In single-table queries that's the only
                 // thing the user normally wants. In multi-table queries we skip it

@@ -1,7 +1,8 @@
-#nullable enable
+﻿#nullable enable
 using System;
 using System.Windows;
 using AkmlSql.Core.Config;
+using AkmlSql.Shell.Shared.Ui.Theme;
 
 namespace AkmlSql.Shell.Shared.Dialogs.Pages
 {

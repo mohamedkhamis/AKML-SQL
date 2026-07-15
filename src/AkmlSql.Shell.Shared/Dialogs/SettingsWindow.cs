@@ -1,4 +1,4 @@
-#nullable enable
+﻿#nullable enable
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -321,7 +321,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             dock.Children.Add(btnOk);
 
             // ─── Left side: Restore All Defaults, Import, Export ───
-            var btnResetAll = MakeButton("Restore All Defaults", 140);
+            var btnResetAll = MakeButton("Restore all defaults", 140);
             btnResetAll.Click += OnResetAllClick;
             DockPanel.SetDock(btnResetAll, Dock.Left);
             dock.Children.Add(btnResetAll);
@@ -421,6 +421,14 @@ namespace AkmlSql.Shell.Shared.Dialogs
             mouseOverTrigger.Setters.Add(new Setter(Control.BackgroundProperty, _theme.TreeHover));
             itemStyle.Triggers.Add(mouseOverTrigger);
 
+            // SQL Prompt's nav has no expander chevrons — a flat, permanently-expanded list with
+            // bold groups and indented leaves. Replace the default TreeViewItem template with
+            // header + always-visible children (groups stay expanded; leaves have no children so
+            // their ItemsPresenter renders nothing). The hover/selected triggers above flow into
+            // the header via TemplateBinding. NOTE: the style's explicit Foreground setter must
+            // stay — WindowChromeTests reflects it to prove nav text is visible per theme.
+            itemStyle.Setters.Add(new Setter(Control.TemplateProperty, BuildNavItemTemplate()));
+
             // Use implicit style by type so the style cascades to TreeViewItems at every depth.
             // (TreeView.ItemContainerStyle only applies to direct children, breaking nested items.)
             _navTree.Resources[typeof(TreeViewItem)] = itemStyle;
@@ -456,7 +464,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
             // Grouping mirrors SQL Prompt (report §4 rec #2): Join conditions live under Suggestions,
             // Aliases under Inserted Code.
-            AddTreeGroup("Suggestions", expanded: true,
+            AddTreeGroup("Suggestions",
                 ("Behavior", "IntelliSense"),
                 ("Types of suggestion", "SuggestionTypes"),
                 ("Tooltips", "CompletionPolish"),
@@ -465,27 +473,27 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 ("Database", "Schema Cache"));
 
             // Inserted Code group introduced in Phase 2 (C.2-C.4).
-            AddTreeGroup("Inserted Code", expanded: false,
+            AddTreeGroup("Inserted Code",
                 ("Qualification", "Qualification"),
                 ("Aliases", "Aliases"),
                 ("Special characters", "SpecialCharacters"),
                 ("INSERT statements", "InsertOptions"));
 
-            AddTreeGroup("Format", expanded: false,
+            AddTreeGroup("Format",
                 ("Styles", "Formatting"));
 
-            AddTreeGroup("Editor", expanded: false,
+            AddTreeGroup("Editor",
                 ("Productivity", "Editor"),
                 ("Navigation", "Navigation"),
                 ("Refactoring", "Refactoring"));   // moved from "Inserted Code"
 
-            AddTreeGroup("Queries", expanded: false,
+            AddTreeGroup("Queries",
                 ("History", "History"),
                 ("Execution Warnings", "Safety"),
                 ("Query Results", "Grid"),
                 ("Execution", "Execution"));
 
-            AddTreeGroup("Tabs", expanded: false,
+            AddTreeGroup("Tabs",
                 ("Color", "Tabs & UI"));
 
             AddTreeLeaf("Code Analysis", "Code Analysis");
@@ -494,35 +502,63 @@ namespace AkmlSql.Shell.Shared.Dialogs
             AddTreeLeaf("AI Assistance", "AI Assistance");
 
             // "Application" moved to the top-level "General" landing leaf; Labs stays under Miscellaneous.
-            AddTreeGroup("Miscellaneous", expanded: false,
+            AddTreeGroup("Miscellaneous",
                 ("Labs", "Labs"));
 
             _navTree.SelectedItemChanged += OnNavSelectionChanged;
 
             // Fill child: the tree scrolls when expanded groups overflow the sidebar height.
-            var navScroller = new ScrollViewer
-            {
-                Content = _navTree,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                Padding = new Thickness(0, 0, 0, 8)
-            };
-            panel.Children.Add(navScroller);
+            // Fill child: the tree scrolls ITSELF — TreeView's control template already hosts a
+            // ScrollViewer, and the DockPanel fill slot constrains its height. Wrapping it in a
+            // second ScrollViewer (the previous layout) gave the tree unbounded height, so the
+            // inner ScrollViewer never scrolled yet still swallowed every mouse-wheel event —
+            // with all groups permanently expanded the nav was wheel-dead.
+            ScrollViewer.SetHorizontalScrollBarVisibility(_navTree, ScrollBarVisibility.Disabled);
+            _navTree.Margin = new Thickness(0, 0, 0, 8);
+            panel.Children.Add(_navTree);
             sidebar.Child = panel;
             return sidebar;
+        }
+
+        /// <summary>
+        /// Chevron-free nav item template (SQL Prompt style): a header Border that TemplateBinds
+        /// Background/Padding (so the style's hover/selected triggers still render) above an
+        /// always-visible, indented ItemsPresenter. Groups can no longer collapse — neither can
+        /// SQL Prompt's.
+        /// </summary>
+        private static ControlTemplate BuildNavItemTemplate()
+        {
+            var headerBorder = new FrameworkElementFactory(typeof(Border), "headerBorder");
+            headerBorder.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Control.BackgroundProperty));
+            headerBorder.SetValue(Border.PaddingProperty, new TemplateBindingExtension(Control.PaddingProperty));
+
+            var headerContent = new FrameworkElementFactory(typeof(ContentPresenter));
+            headerContent.SetValue(ContentPresenter.ContentSourceProperty, "Header");
+            headerBorder.AppendChild(headerContent);
+
+            var childrenHost = new FrameworkElementFactory(typeof(ItemsPresenter));
+            childrenHost.SetValue(FrameworkElement.MarginProperty, new Thickness(16, 0, 0, 0));
+
+            var root = new FrameworkElementFactory(typeof(StackPanel));
+            root.AppendChild(headerBorder);
+            root.AppendChild(childrenHost);
+
+            var template = new ControlTemplate(typeof(TreeViewItem)) { VisualTree = root };
+            template.Seal();
+            return template;
         }
 
         /// <summary>
         /// Adds a non-selectable parent group with one or more leaf children.
         /// Each leaf is a tuple of (display label, page key in <see cref="_pages"/>).
         /// </summary>
-        private void AddTreeGroup(string header, bool expanded, params (string Label, string PageKey)[] children)
+        private void AddTreeGroup(string header, params (string Label, string PageKey)[] children)
         {
             var parent = new TreeViewItem
             {
                 Header = header,
                 Tag = null, // null = not a page, just a group
-                IsExpanded = expanded,
+                IsExpanded = true, // always-expanded contract — the chevron-free nav template renders children unconditionally
                 FontWeight = FontWeights.SemiBold
             };
 
@@ -1024,48 +1060,50 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
         private void BuildPages()
         {
-            // (Key, Display) for each page in navigation order. The key matches an
-            // IPageBuilder in _pageBuilders; Display is the breadcrumb shown in
-            // search results.
-            var pages = new (string Key, string Display)[]
+            // Page keys in navigation order; each matches an IPageBuilder in _pageBuilders.
+            // The breadcrumb (search results + page header band) comes from the page's own
+            // IPageBuilder.Display — the single source, no parallel display list to maintain.
+            var pages = new[]
             {
-                ("General",       "Miscellaneous › Application"),
-                ("IntelliSense",  "Suggestions › Behavior"),
-                ("SuggestionTypes", "Suggestions › Types of suggestion"),
-                ("CompletionPolish", "Suggestions › Tooltips"),
-                ("Aliases",       "Inserted Code › Aliases"),
-                ("ConnectionScope", "Suggestions › Connections"),
-                ("Schema Cache",  "Suggestions › Database"),
-                ("ConnectionsMemory", "Connections & Memory"),
-                ("Qualification", "Inserted Code › Qualification"),
-                ("SpecialCharacters", "Inserted Code › Special characters"),
-                ("InsertOptions", "Inserted Code › INSERT statements"),
-                ("JoinOptions",   "Suggestions › Join conditions"),
-                ("Formatting",    "Format › Styles"),
-                ("Snippets",      "Snippets"),
-                ("Code Analysis", "Code Analysis"),
-                ("Refactoring",   "Editor › Refactoring"),
-                ("History",       "Queries › History"),
-                ("Tabs & UI",     "Tabs › Color"),
-                ("Safety",        "Queries › Execution Warnings"),
-                ("AI Assistance", "AI Assistance"),
-                ("Grid",          "Queries › Query Results"),
-                ("Editor",        "Editor › Productivity"),
-                ("Execution",     "Queries › Execution"),
-                ("Navigation",    "Editor › Navigation"),
-                ("Labs",          "Miscellaneous › Labs"),
+                "General",
+                "IntelliSense",
+                "SuggestionTypes",
+                "CompletionPolish",
+                "Aliases",
+                "ConnectionScope",
+                "Schema Cache",
+                "ConnectionsMemory",
+                "Qualification",
+                "SpecialCharacters",
+                "InsertOptions",
+                "JoinOptions",
+                "Formatting",
+                "Snippets",
+                "Code Analysis",
+                "Refactoring",
+                "History",
+                "Tabs & UI",
+                "Safety",
+                "AI Assistance",
+                "Grid",
+                "Editor",
+                "Execution",
+                "Navigation",
+                "Labs",
             };
 
-            foreach (var (key, display) in pages)
+            foreach (var key in pages)
             {
-                _currentPageKey = key;
-                _currentPageDisplay = display;
-
                 if (!_pageBuilders.TryGetValue(key, out var pageBuilder))
                     continue;
 
+                _currentPageKey = key;
+                _currentPageDisplay = pageBuilder.Display;
+
                 var hostPanel = CreatePagePanel();
-                AddPageHeader(hostPanel, pageBuilder.Title, pageBuilder.Help);
+                // The header shows the page's breadcrumb ("Inserted Code › Special characters"),
+                // not the short Title — SQL Prompt's band names the full location.
+                AddPageHeader(hostPanel, pageBuilder.Display, pageBuilder.Help);
                 var ctx = new PageContext(_theme, _settings, new RowFactory(_theme), RegisterSearchEntry);
                 var controls = pageBuilder.Build(hostPanel, ctx);
                 _pageControlsByKey[key] = controls;
@@ -1186,7 +1224,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
         //  UI Builder Helpers
         // ═══════════════════════════════════════════════════════════════════════
 
-        // Zebra striping moved to RowFactory.WrapZebraRow / ResetZebra (Phase 2 B.1+).
+        // Row construction moved to RowFactory.WrapZebraRow (Phase 2 B.1+).
 
         private StackPanel CreatePagePanel()
         {
@@ -1210,22 +1248,25 @@ namespace AkmlSql.Shell.Shared.Dialogs
         }
 
         /// <summary>
-        /// SQL Prompt-style page header: blue accent title on the left, "Restore Defaults"
-        /// link on the right, and a thin separator underline.
+        /// SQL Prompt-style page header: a full-width band (SurfaceElevated with a 1px bottom
+        /// border) carrying the bold "Group › Page" breadcrumb on the left and the "?" help
+        /// button + "Restore Defaults" push button on the right — matching the Redgate reference
+        /// (doc/_Prompt-Gap/SQL Prompt Options - Special characters Redgate.png).
         /// </summary>
         private void AddPageHeader(StackPanel panel, string text, string help)
         {
-            var header = new Grid { Margin = new Thickness(0, 0, 0, 14) };
+            var header = new Grid();
             header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); // "?" help button
-            header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); // Restore link
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); // Restore Defaults button
 
             var title = new TextBlock
             {
                 Text = text,
-                FontSize = 16,
+                FontSize = 13,
                 FontWeight = FontWeights.Bold,
-                Foreground = _theme.FgAccent
+                Foreground = _theme.FgPrimary,
+                VerticalAlignment = VerticalAlignment.Center
             };
             Grid.SetColumn(title, 0);
             header.Children.Add(title);
@@ -1290,27 +1331,34 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 header.Children.Add(helpButton);
             }
 
-            var restoreLink = new TextBlock
-            {
-                Text = "Restore Defaults",
-                FontSize = 11,
-                Foreground = _theme.FgAccent,
-                TextDecorations = TextDecorations.Underline,
-                Cursor = Cursors.Hand,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            restoreLink.MouseLeftButtonUp += (s, e) => OnResetThisPageClick(s, new RoutedEventArgs());
-            Grid.SetColumn(restoreLink, 2);
-            header.Children.Add(restoreLink);
+            // Push button, not a link — the reference shows a standard button in the band.
+            // Chrome and hover behavior come from MakeButton; only the band's size deltas are
+            // overridden (auto width — the 11px label plus padding exceeds MakeButton's fixed 90).
+            // Content stays an explicit TextBlock: WindowChromeTests enumerates the logical tree
+            // for a TextBlock whose Text is exactly "Restore Defaults".
+            var restoreButton = MakeButton("Restore Defaults", 90);
+            restoreButton.Content = new TextBlock { Text = "Restore Defaults" };
+            restoreButton.Height = 22;
+            restoreButton.FontSize = 11;
+            restoreButton.Padding = new Thickness(10, 0, 10, 0);
+            restoreButton.Width = double.NaN;
+            restoreButton.MinWidth = 90;
+            restoreButton.VerticalAlignment = VerticalAlignment.Center;
+            restoreButton.Click += OnResetThisPageClick;
+            Grid.SetColumn(restoreButton, 2);
+            header.Children.Add(restoreButton);
 
-            panel.Children.Add(header);
-
-            // Underline separator
+            // The band stretches edge-to-edge over CreatePagePanel's 24/18 page margin (same
+            // negative-margin technique as WrapZebraRow); its bottom border doubles as the old
+            // standalone underline separator.
             panel.Children.Add(new Border
             {
-                Height = 1,
-                Background = _theme.Sep,
-                Margin = new Thickness(0, 0, 0, 12)
+                Background = _theme.Button,
+                BorderBrush = _theme.Sep,
+                BorderThickness = new Thickness(0, 0, 0, 1),
+                Padding = new Thickness(24, 8, 12, 8),
+                Margin = new Thickness(-24, -18, -24, 14),
+                Child = header
             });
 
             if (helpBlock != null)

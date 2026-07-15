@@ -71,7 +71,7 @@ public class LinkedServerCompletionTests
     }
 
     private static bool IsLinkedServerItem(Core.Ipc.Messages.CompletionItem i) =>
-        i.SecondaryText.StartsWith("Linked Server", StringComparison.Ordinal);
+        i.IsLinkedServer && i.SecondaryText.StartsWith("Linked Server", StringComparison.Ordinal);
 
     // ── (d) Linked servers survive the DEFAULT suggestion cap ─────────────────
 

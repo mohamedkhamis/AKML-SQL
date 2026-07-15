@@ -331,6 +331,9 @@ namespace AkmlSql.Shell.Shared.Ui
                                 VerticalAlignment = VerticalAlignment.Center,
                                 Tag = opt.Key,
                             };
+                            // Retemplate for the active theme — the stock Aero2 face stays light
+                            // regardless of Background, unreadable/mismatched under dark theme.
+                            Theme.ComboBoxTheming.Apply(comboBox);
                             foreach (var choice in opt.Choices)
                             {
                                 comboBox.Items.Add(choice);
@@ -497,6 +500,7 @@ namespace AkmlSql.Shell.Shared.Ui
                         break;
                     case OptionKind.Choice:
                         var combo = new ComboBox { Width = 160, VerticalAlignment = VerticalAlignment.Center, Tag = opt.Key };
+                        Theme.ComboBoxTheming.Apply(combo); // themed face/popup (stock Aero2 stays light)
                         foreach (var c in opt.Choices) combo.Items.Add(c);
                         combo.SelectedItem = _viewModel.GetOption(opt.Key)?.ToString() ?? "";
                         if (combo.SelectedItem == null && combo.Items.Count > 0) combo.SelectedIndex = 0;

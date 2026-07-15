@@ -2212,7 +2212,6 @@ namespace AkmlSql.Shell.Shared.History
             }
         }
 
-        /// <summary>Formats Server -> Database for the connection line.</summary>
         /// <summary>
         /// Renders the compact list-row connection label as just the server\instance \u2014 SQL Prompt
         /// shows only the server here; the database is surfaced in the right-pane metadata bar, so

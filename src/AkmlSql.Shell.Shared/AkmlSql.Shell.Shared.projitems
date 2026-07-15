@@ -42,7 +42,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\AboutDialog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\SettingsWindow.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\LogViewerDialog.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\PageTheme.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\PageTheme.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\IPageBuilder.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\PageContext.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\RowFactory.cs" />
@@ -91,6 +91,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\Spacing.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\ThemePalette.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\ThemeRegistry.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\ComboBoxTheming.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\ThemeMigrationManager.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\HostThemeWatcher.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\FocusVisualStyles.cs" />

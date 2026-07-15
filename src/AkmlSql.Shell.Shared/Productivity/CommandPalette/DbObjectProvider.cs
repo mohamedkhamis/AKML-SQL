@@ -33,7 +33,10 @@ namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
 
         private const int MaxResults = 50;
         private const int TimeoutMs = 5000;
-        private const int MinChars = 2;
+
+        /// <summary>Minimum search-text length before a DB-object query is worth sending. Shared with
+        /// <see cref="CommandPaletteViewModel"/>'s pre-debounce guard so the two cannot drift.</summary>
+        internal const int MinChars = 2;
 
         /// <summary>
         /// Queries the engine for database objects matching <paramref name="searchText"/>. Runs the IPC

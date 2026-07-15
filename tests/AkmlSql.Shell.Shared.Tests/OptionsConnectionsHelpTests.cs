@@ -161,17 +161,7 @@ namespace AkmlSql.Shell.Shared.Tests
         }
 
         private static IEnumerable<T> EnumerateElements<T>(DependencyObject root) where T : DependencyObject
-        {
-            foreach (object child in LogicalTreeHelper.GetChildren(root))
-            {
-                if (child is T match) yield return match;
-                if (child is DependencyObject dep)
-                {
-                    foreach (var nested in EnumerateElements<T>(dep))
-                        yield return nested;
-                }
-            }
-        }
+            => LogicalTree.Descendants<T>(root);
 
         private static FrameworkElement? FindByName(DependencyObject root, string name)
         {

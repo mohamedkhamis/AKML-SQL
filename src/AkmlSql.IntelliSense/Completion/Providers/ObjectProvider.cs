@@ -339,16 +339,11 @@ public class ObjectProvider : ICompletionProvider
             ObjectType = (int)CompletionObjectType.Database,
             SecondaryText = secondaryText,
             SourceObject = ls.Name,
-            SortPriority = 400 // below local objects (100/200) and schema names (300)
+            SortPriority = 400, // below local objects (100/200) and schema names (300)
+            IsLinkedServer = true
         };
     }
 
-    /// <summary>
-    /// Brackets an identifier treated as a single whole token (no dot-part splitting), applying
-    /// QUOTENAME <c>']'</c>-doubling. Used for linked-server names, which are one identifier even when
-    /// they embed dots or backslashes. Mirrors the <see cref="BracketMode"/> semantics of
-    /// <see cref="ApplyBrackets"/> but never treats a <c>.</c> as a name separator.
-    /// </summary>
     /// <summary>
     /// QUOTENAME semantics: wrap <paramref name="part"/> in brackets, doubling any embedded
     /// <c>']'</c> so the result is a valid T-SQL delimited identifier. Single home for the escaping
@@ -357,6 +352,12 @@ public class ObjectProvider : ICompletionProvider
     /// </summary>
     private static string QuoteName(string part) => "[" + part.Replace("]", "]]") + "]";
 
+    /// <summary>
+    /// Brackets an identifier treated as a single whole token (no dot-part splitting), applying
+    /// QUOTENAME <c>']'</c>-doubling. Used for linked-server names, which are one identifier even when
+    /// they embed dots or backslashes. Mirrors the <see cref="BracketMode"/> semantics of
+    /// <see cref="ApplyBrackets"/> but never treats a <c>.</c> as a name separator.
+    /// </summary>
     private static string BracketWholeName(string name, BracketMode mode)
     {
         if (string.IsNullOrEmpty(name)) return name;

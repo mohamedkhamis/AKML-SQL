@@ -168,6 +168,16 @@ public class CasingEngine
         if (keywordMode == "AsIs")
             return;
 
+        // MERGE contextual keywords can only occur inside a MERGE statement — bail before the
+        // per-token pass (and its per-token ToUpperInvariant allocation) when the script has none.
+        bool hasMerge = false;
+        foreach (var n in nodes)
+        {
+            if (n.TokenType == TSqlTokenType.Merge) { hasMerge = true; break; }
+        }
+        if (!hasMerge)
+            return;
+
         var scope = new MergeScopeTracker();
         string prev = "";    // uppercased text of the previous significant (non-trivia) token
         string prev2 = "";   // and the one before it
