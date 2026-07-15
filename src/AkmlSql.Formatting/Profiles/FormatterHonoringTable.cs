@@ -46,7 +46,7 @@ public static class FormatterHonoringTable
         // behind an unrelated default-off flag:
         "lists.alignItemsAcrossClauses",   // ListRules.ApplyAlignItemsAcrossClauses (ListRules.cs:254-257)
         "lists.indentListItems",           // ListRules.ApplyIndentListItems (ListRules.cs:117-120)
-        "lists.alignAliases",              // ListRules.AlignAliases (ListRules.cs:201-204) + AlignmentCalculator.cs:45
+        "lists.alignAliases",              // ListRules.AlignAliases (ListRules.cs:201-204), invoked from FormatterPipeline post-collapse
         "ddl.placeFirstProcedureParameterOnNewLine", // DdlRules.cs:344-345 (always | auto-if->1-param | never)
         // n/a rows (hold by construction with the user's values):
         "whitespace.newLines.preserveExistingEmptyLinesBetweenStatements",
