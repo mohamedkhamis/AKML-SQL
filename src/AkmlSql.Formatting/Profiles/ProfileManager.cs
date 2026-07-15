@@ -15,6 +15,13 @@ public class ProfileManager
     private readonly string _customProfilesPath;
 
     /// <summary>
+    /// Spec 031 FR-006 — directory where custom (non-built-in) profile files are written.
+    /// Exposed so callers can place sibling artifacts next to a saved profile
+    /// (e.g. <c>&lt;name&gt;.source.json</c>, the verbatim import source).
+    /// </summary>
+    public string CustomProfilesPath => _customProfilesPath;
+
+    /// <summary>
     /// Creates a new <see cref="ProfileManager"/>.
     /// </summary>
     /// <param name="builtInProfilesPath">
@@ -315,8 +322,10 @@ public class ProfileManager
 
     /// <summary>
     /// Removes invalid filename characters from a profile name and prevents path traversal.
+    /// Public so callers can derive sibling artifact filenames (e.g. Spec 031's
+    /// <c>&lt;name&gt;.source.json</c>) using the exact same sanitization the profile file itself uses.
     /// </summary>
-    private static string SanitizeFileName(string name)
+    public static string SanitizeFileName(string name)
     {
         // Strip directory separators and path traversal sequences first
         var stripped = name.Replace("..", "").Replace("/", "").Replace("\\", "");

@@ -506,17 +506,95 @@ public class FormatRequestHandler(ProfileManager profileManager)
 
             if (sourceFormat is "sqlprompt" or "sqlpromptstylev2")
             {
-                var importResult = SqlPromptImporter.Import(content, request.TargetProfileName);
+                // Spec 031 FR-004 — sniff content: modern Redgate styles are JSON; the XML shape
+                // is AKML's own spec-020 export. Sniffing is scoped to this branch on purpose —
+                // the akmlstyle branch below always receives AKML's own JSON serialization.
+                // U+FEFF: Encoding.UTF8.GetString keeps a BOM as a leading char and it is NOT
+                // char.IsWhiteSpace, so strip it explicitly (spec edge case: BOM'd files decode correctly).
+                // The trimmed copy is also what gets handed to the JSON/XML parsers below — both
+                // JsonDocument.Parse(string) and XDocument.Parse(string) throw on a leading U+FEFF
+                // *character* (as opposed to raw UTF-8 BOM bytes), so parsing the untrimmed content
+                // would fail every BOM'd import. The verbatim ".source.json" write further down still
+                // uses the original untrimmed `content` — that copy must stay byte-for-byte faithful.
+                var trimmedContent = content.TrimStart((char)0xFEFF, ' ', '\t', '\r', '\n');
+                var firstChar = trimmedContent.FirstOrDefault();
 
-                // Save the imported profile
+                if (firstChar == '{')
+                {
+                    var jsonResult = RedgateJsonStyleImporter.Import(trimmedContent, fallbackName: request.TargetProfileName);
+                    if (!jsonResult.Success)
+                    {
+                        // FR-005 — visible failure, nothing saved.
+                        return new ProfileImportResponse
+                        {
+                            Success = false,
+                            ErrorMessage = $"Style file is not valid SQL Prompt JSON: {jsonResult.ParseError}",
+                        };
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(request.TargetProfileName))
+                        jsonResult.Profile.Metadata.Name = request.TargetProfileName;
+
+                    // FR-008 — built-in names cannot be shadowed by import.
+                    if (profileManager.List().Any(p =>
+                            p.IsBuiltIn && string.Equals(p.Name, jsonResult.Profile.Metadata.Name, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        return new ProfileImportResponse
+                        {
+                            Success = false,
+                            ErrorMessage = $"'{jsonResult.Profile.Metadata.Name}' is a built-in style name. Re-import with a different target name.",
+                        };
+                    }
+
+                    profileManager.Save(jsonResult.Profile);
+
+                    // FR-006 — preserve the verbatim source beside the profile for lossless re-import.
+                    var sourcePath = Path.Combine(profileManager.CustomProfilesPath,
+                        ProfileManager.SanitizeFileName(jsonResult.Profile.Metadata.Name) + ".source.json");
+                    File.WriteAllText(sourcePath, content);
+
+                    return new ProfileImportResponse
+                    {
+                        Success = true,
+                        ProfileName = jsonResult.Profile.Metadata.Name,
+                        MappedOptionsCount = jsonResult.MappedCount,
+                        UnmappedOptionsCount = jsonResult.UnsupportedCount + jsonResult.UnknownCount,
+                        OptionReports = jsonResult.Options
+                            .Select(o => new ProfileImportOptionReport { Path = o.Path, Value = o.Value, Status = o.Status, Reason = o.Reason })
+                            .ToArray(),
+                    };
+                }
+
+                if (firstChar != '<')
+                {
+                    return new ProfileImportResponse
+                    {
+                        Success = false,
+                        ErrorMessage = "Style file is neither JSON ('{') nor XML ('<').",
+                    };
+                }
+
+                var importResult = SqlPromptImporter.Import(trimmedContent, request.TargetProfileName);
+
+                // FR-005 — the legacy importer records parse errors in UnmappedOptions without failing; surface them.
+                var parseError = importResult.UnmappedOptions.FirstOrDefault(o => o.StartsWith("Parse error:", StringComparison.Ordinal));
+                if (parseError != null || (importResult.MappedCount == 0 && importResult.UnmappedCount == 0))
+                {
+                    return new ProfileImportResponse
+                    {
+                        Success = false,
+                        ErrorMessage = parseError ?? "No options found in the XML style file.",
+                    };
+                }
+
                 profileManager.Save(importResult.Profile);
-
                 return new ProfileImportResponse
                 {
                     Success = true,
+                    ProfileName = importResult.Profile.Metadata.Name,
                     MappedOptionsCount = importResult.MappedCount,
                     UnmappedOptionsCount = importResult.UnmappedCount,
-                    UnmappedOptions = importResult.UnmappedOptions.ToArray()
+                    UnmappedOptions = importResult.UnmappedOptions.ToArray(),
                 };
             }
 
