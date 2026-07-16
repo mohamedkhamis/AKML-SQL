@@ -92,6 +92,24 @@ public class ProfileImportHandlerTests : IDisposable
     }
 
     [Fact]
+    public void Oversized_content_fails_and_saves_nothing()
+    {
+        // 1 MB + 1 byte — one over the server-side cap (mirrors SnippetRequestHandler's 1 MB limit).
+        var oversized = new byte[1024 * 1024 + 1];
+        Array.Fill(oversized, (byte)' ');
+
+        var response = _handler.HandleProfileImport(new ProfileImportRequest
+        {
+            SourceFormat = "sqlprompt",
+            FileContent = oversized,
+        });
+
+        Assert.False(response.Success);
+        Assert.Contains("size", response.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(CustomDirFiles());
+    }
+
+    [Fact]
     public void BuiltIn_name_collision_fails_with_clear_error()
     {
         Directory.CreateDirectory(Path.Combine(_dir, "builtin"));

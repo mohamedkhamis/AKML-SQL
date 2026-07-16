@@ -350,13 +350,23 @@ export async function create(hostElementId, initialText, dotNetRef) {
         if (!detectWildcardAtCaret(view.state)) return false;         // not a wildcard → normal Tab
 
         const pos = view.state.selection.main.head;
-        dotNetRef.invokeMethodAsync('ExpandWildcardFromJs', pos, view.state.doc.toString())
+        // Snapshot the keypress-time document (CM6 Text is immutable, so this is a cheap reference).
+        // The engine computes spanStart/spanLength against THIS text; the guard below re-verifies the
+        // span against the live document after the async round-trip.
+        const docAtRequest = view.state.doc;
+        dotNetRef.invokeMethodAsync('ExpandWildcardFromJs', pos, docAtRequest.toString())
             .then(res => {
                 if (!res || !res.ok) return;
                 const inst = _instances.get(hostElementId);
                 if (!inst) return;
                 const end = res.spanStart + res.spanLength;
-                if (end > inst.view.state.doc.length) return;         // document moved under us
+                if (end > docAtRequest.length) return;                // engine span outside its own snapshot
+                const doc = inst.view.state.doc;
+                if (end > doc.length) return;                         // document shrank under us
+                // Stale-document guard: the expansion replaces the exact text the engine saw at
+                // [spanStart, end). If the user typed during the round-trip and that span no longer
+                // matches, dispatching would clobber their edit — abort silently instead.
+                if (doc.sliceString(res.spanStart, end) !== docAtRequest.sliceString(res.spanStart, end)) return;
                 inst.view.dispatch({
                     changes: { from: res.spanStart, to: end, insert: res.text },
                     selection: { anchor: res.spanStart + res.text.length },

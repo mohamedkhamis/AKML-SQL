@@ -11,8 +11,8 @@ Modern SQL Prompt (10.5+) persists each formatting style as a single **JSON** fi
 
 A field-by-field audit of the target style (60+ options) against the formatting engine found three tiers:
 
-- **30 of 65 already honored** — casing, all collapse thresholds, leading commas, ON-clause placement, CASE first-WHEN/THEN breaks, function-args/IN/BETWEEN inline modes, wrap width, tab size, DDL constraint breaks.
-- **14 of 65 partially honored or modeled-but-dead** — a field exists but its semantics are incomplete for this style's value (e.g. `tabsIfPossible` imports but renders as spaces; CASE `toFirstItem` degrades to `toCase`; AND/OR `toFirstListItem` silently no-ops), or the field is never read by layout code at all (`Ddl.ConstraintColumnsOnNewLine`, INSERT values format).
+- **29 of 65 already honored** — casing, all collapse thresholds, leading commas, ON-clause placement, CASE first-WHEN/THEN breaks, function-args/IN/BETWEEN inline modes, wrap width, tab size, DDL constraint breaks.
+- **15 of 65 partially honored or modeled-but-dead** — a field exists but its semantics are incomplete for this style's value (e.g. `tabsIfPossible` imports but renders as spaces; CASE `toFirstItem` degrades to `toCase`; AND/OR `toFirstListItem` silently no-ops), or the field is never read by layout code at all (`Ddl.ConstraintColumnsOnNewLine`, INSERT values format).
 - **19 of 65 unrepresentable** — and these define the style's visual identity: tab-stop alignment (`alignItemsToTabStops`), the leading-comma gutter with space-before-comma, Redgate's 9-value parenthesis styles (`expandedToStatement` / `expandedSimple`) with per-construct overrides, CTE name/column layout, space-before-semicolon (actively stripped today), newline after DISTINCT/TOP, function-call spacing, BETWEEN's AND right-alignment, and IN-list inner spacing. (The remaining 2 of 65 hold by construction; `useObjectDefinitionCase` — the schema-cache → CasingEngine bridge was never connected — counts among the partials.)
 
 The canonical option reference is Redgate's own `formattingstyle-schema.json` + `full-style.json.example` (shipped with the SQL Prompt ADS extension; copies vendored into this spec's `reference/` folder). Verification ground truth is a golden corpus formatted by the user's live SQL Prompt 11 install (the ADS CLI formatter on this machine is expired and is not used). The existing parity harness (`tests/format-parity/`, byte-exact after trailing-whitespace/LF/BOM normalization, capture/compare modes) is reused unchanged.
@@ -175,7 +175,7 @@ Status legend — **wired**: honored today; **partial**: field exists, semantics
 | 23 | dml.collapseStatementsShorterThan | 160 | wired | Collapse short DML (threshold-present ⇒ enabled) |
 | 24 | dml.collapseSubqueriesShorterThan | 78 | wired | Collapse short subqueries (⇒ enabled) |
 | 25 | ddl.parenthesisStyle | expandedToStatement | partial | DDL-scoped paren style (FR-022) |
-| 26 | ddl.indentParenthesesContents | true | wired | Column defs indented (+ aligned types, omitted-key default) |
+| 26 | ddl.indentParenthesesContents | true | dead | Column defs indented (+ aligned types, omitted-key default) |
 | 27 | ddl.placeConstraintsOnNewLines | true | wired | Constraints on own lines |
 | 28 | ddl.placeConstraintColumnsOnNewLines | ifLongerOrMultipleColumns | dead | Composite/long keys expand; single-column stay inline (FR-024) |
 | 29 | ddl.collapseShortStatements | true | wired | Collapse short DDL |

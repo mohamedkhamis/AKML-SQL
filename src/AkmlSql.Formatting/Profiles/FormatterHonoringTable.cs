@@ -23,7 +23,9 @@ public static class FormatterHonoringTable
         "casing.builtInDataTypes",
         "dml.collapseStatementsShorterThan",
         "dml.collapseSubqueriesShorterThan",
-        "ddl.indentParenthesesContents",
+        // ddl.indentParenthesesContents intentionally NOT here — its DdlOptions.IndentParenContents
+        // field is stored but unread until phase 3 wires DdlRules; the global
+        // parentheses.indentParenthesesContents entry above is what renders today.
         "ddl.placeConstraintsOnNewLines",
         "ddl.collapseShortStatements",
         "ddl.collapseStatementsShorterThan",

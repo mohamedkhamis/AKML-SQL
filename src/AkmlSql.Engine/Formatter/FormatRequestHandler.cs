@@ -501,6 +501,16 @@ public class FormatRequestHandler(ProfileManager profileManager)
     {
         try
         {
+            const int MaxImportBytes = 1024 * 1024; // mirror SnippetRequestHandler's 1 MB server-side cap
+            if (request.FileContent is { Length: > MaxImportBytes })
+            {
+                return new ProfileImportResponse
+                {
+                    Success = false,
+                    ErrorMessage = "Import content exceeds maximum allowed size (1 MB).",
+                };
+            }
+
             var sourceFormat = request.SourceFormat.ToLowerInvariant();
             var content = Encoding.UTF8.GetString(request.FileContent);
 
@@ -549,8 +559,10 @@ public class FormatRequestHandler(ProfileManager profileManager)
                     profileManager.Save(jsonResult.Profile);
 
                     // FR-006 — preserve the verbatim source beside the profile for lossless re-import.
-                    var sourcePath = Path.Combine(profileManager.CustomProfilesPath,
-                        ProfileManager.SanitizeFileName(jsonResult.Profile.Metadata.Name) + ".source.json");
+                    // GetCustomArtifactPath pairs SanitizeFileName with ValidatePathWithinBase (the
+                    // same two-layer invariant Save/Delete enforce).
+                    var sourcePath = profileManager.GetCustomArtifactPath(
+                        jsonResult.Profile.Metadata.Name, ".source.json");
                     File.WriteAllText(sourcePath, content);
 
                     return new ProfileImportResponse

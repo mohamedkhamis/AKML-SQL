@@ -407,4 +407,18 @@ public class ProfileManagerTests : IDisposable
         var profile = new FormattingProfile { Metadata = { Name = "../.." } };
         Assert.Throws<ArgumentException>(() => _manager.Save(profile));
     }
+
+    // ── GetCustomArtifactPath (SanitizeFileName + ValidatePathWithinBase pairing) ─────
+
+    [Fact]
+    public void GetCustomArtifactPath_HostileTraversalName_StaysInsideCustomDir()
+    {
+        // SanitizeFileName strips "..", "/" and "\" so "..\..\evil" collapses to "evil";
+        // ValidatePathWithinBase then confirms the canonical path is under the custom dir.
+        var path = _manager.GetCustomArtifactPath("..\\..\\evil", ".source.json");
+
+        Assert.StartsWith(Path.GetFullPath(_customDir), Path.GetFullPath(path),
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("evil.source.json", Path.GetFileName(path));
+    }
 }

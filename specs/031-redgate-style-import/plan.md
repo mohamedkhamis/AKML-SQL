@@ -1743,7 +1743,7 @@ dotnet publish src/AkmlSql.Engine/AkmlSql.Engine.csproj -c Release -r win-x64
 
 Expected: all three build clean (warnings ok, errors none).
 
-- [ ] **Step 4: Manual smoke (SSMS 22)** — deploy the FULL engine publish + extension per `doc/deployment.md`, then: Tools → AKML SQL → Format Styles → Import… → pick `specs/031-redgate-style-import/reference/MohamedKhamis-2cd71422-30f2-4360-800f-240f2897fd3e.json` → expect status `Imported 'MohamedKhamis' — 32 mapped, 33 pending render, 0 unsupported, 0 unknown` (the 32 = 30 wired contract rows + 2 holds-by-construction; 65 total), style selected + active, and Ctrl+K,Ctrl+D formatting a scratch query with UPPERCASE keywords + leading commas. Re-import → overwrite prompt appears. Import a `.txt` renamed to `.json` containing garbage → clear error, no new style.
+- [ ] **Step 4: Manual smoke (SSMS 22)** — deploy the FULL engine publish + extension per `doc/deployment.md`, then: Tools → AKML SQL → Format Styles → Import… → pick `specs/031-redgate-style-import/reference/MohamedKhamis-2cd71422-30f2-4360-800f-240f2897fd3e.json` → expect status `Imported 'MohamedKhamis' — 31 mapped, 34 pending render, 0 unsupported, 0 unknown` (the 31 = 29 wired contract rows + 2 holds-by-construction; 65 total), style selected + active, and Ctrl+K,Ctrl+D formatting a scratch query with UPPERCASE keywords + leading commas. Re-import → overwrite prompt appears. Import a `.txt` renamed to `.json` containing garbage → clear error, no new style.
 
 - [ ] **Step 5: Commit checkpoint**
 

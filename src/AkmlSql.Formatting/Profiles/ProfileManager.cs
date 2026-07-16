@@ -206,6 +206,18 @@ public class ProfileManager
     }
 
     /// <summary>
+    /// Builds a validated path for a sibling artifact of a custom profile (e.g. "&lt;name&gt;.source.json").
+    /// Pairs SanitizeFileName with the canonical ValidatePathWithinBase check — the same two-layer
+    /// invariant Save/Delete use — so external callers cannot accidentally reintroduce a single-layer write.
+    /// </summary>
+    public string GetCustomArtifactPath(string profileName, string suffix)
+    {
+        var path = Path.Combine(_customProfilesPath, SanitizeFileName(profileName) + suffix);
+        ValidatePathWithinBase(path, _customProfilesPath);
+        return path;
+    }
+
+    /// <summary>
     /// Returns all built-in profiles.
     /// </summary>
     public IReadOnlyList<FormattingProfile> GetBuiltIn()
