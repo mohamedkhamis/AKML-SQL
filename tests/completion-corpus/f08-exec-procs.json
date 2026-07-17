@@ -1,0 +1,662 @@
+[
+  {
+    "id": "EXEC-001",
+    "family": "exec-procs",
+    "doc": "EXEC |",
+    "expect": {
+      "mustContain": ["usp_GetCustomerOrders", "usp_UpdateProductPrice"],
+      "mustNotContain": ["NoSuchProc", "CustomerName"],
+      "minCount": 2
+    },
+    "note": "bare EXEC with empty prefix suggests dbo stored procedures, not columns"
+  },
+  {
+    "id": "EXEC-002",
+    "family": "exec-procs",
+    "doc": "exec |",
+    "expect": {
+      "mustContain": ["usp_GetCustomerOrders", "sp_helpdiagrams"],
+      "mustNotContain": ["OrderDate"],
+      "minCount": 2
+    },
+    "note": "lowercase exec keyword still triggers proc completion"
+  },
+  {
+    "id": "EXEC-003",
+    "family": "exec-procs",
+    "doc": "EXECUTE |",
+    "expect": {
+      "mustContain": ["usp_UpdateProductPrice", "usp_GetCustomerOrders"],
+      "mustNotContain": ["Quantity"],
+      "minCount": 2
+    },
+    "note": "full EXECUTE keyword variant suggests procs"
+  },
+  {
+    "id": "EXEC-004",
+    "family": "exec-procs",
+    "doc": "Exec   |",
+    "expect": {
+      "mustContain": ["usp_GetCustomerOrders"],
+      "mustNotContain": ["ProductName"],
+      "minCount": 1
+    },
+    "note": "mixed-case Exec with extra whitespace before caret"
+  },
+  {
+    "id": "EXEC-005",
+    "family": "exec-procs",
+    "doc": "-- run customer report\nEXEC |",
+    "expect": {
+      "mustContain": ["usp_GetCustomerOrders", "usp_UpdateProductPrice"],
+      "mustNotContain": ["vw_CustomerOrders"],
+      "minCount": 2
+    },
+    "note": "multi-line: comment line then EXEC; views must not be offered at proc position"
+  },
+  {
+    "id": "EXEC-006",
+    "family": "exec-procs",
+    "doc": "EXEC u|",
+    "expect": {
+      "mustContain": ["usp_GetCustomerOrders", "usp_UpdateProductPrice"],
+      "mustNotContain": ["sp_helpdiagrams"],
+      "minCount": 2
+    },
+    "note": "1-char prefix u filters out sp_* procs"
+  },
+  {
+    "id": "EXEC-007",
+    "family": "exec-procs",
+    "doc": "EXEC usp|",
+    "expect": {
+      "mustContain": ["usp_GetCustomerOrders", "usp_UpdateProductPrice"],
+      "mustNotContain": ["sp_creatediagram"],
+      "minCount": 2
+    },
+    "note": "3-char prefix usp keeps only usp_* procs"
+  },
+  {
+    "id": "EXEC-008",
+    "family": "exec-procs",
+    "doc": "exec usp_G|",
+    "expect": {
+      "mustContain": ["usp_GetCustomerOrders"],
+      "mustNotContain": ["usp_UpdateProductPrice", "sp_helpdiagrams"],
+      "minCount": 1
+    },
+    "note": "longer prefix usp_G narrows to the Get proc only"
+  },
+  {
+    "id": "EXEC-009",
+    "family": "exec-procs",
+    "doc": "EXEC USP_UP|",
+    "expect": {
+      "mustContain": ["usp_UpdateProductPrice"],
+      "mustNotContain": ["usp_GetCustomerOrders"],
+      "minCount": 1
+    },
+    "note": "uppercase prefix must match usp_UpdateProductPrice case-insensitively"
+  },
+  {
+    "id": "EXEC-010",
+    "family": "exec-procs",
+    "doc": "EXEC sp_|",
+    "expect": {
+      "mustContain": ["sp_creatediagram", "sp_helpdiagrams"],
+      "mustNotContain": ["usp_GetCustomerOrders"],
+      "minCount": 2
+    },
+    "note": "sp_ prefix surfaces the diagram procs and filters usp_* out"
+  },
+  {
+    "id": "EXEC-011",
+    "family": "exec-procs",
+    "doc": "EXEC s|",
+    "expect": {
+      "mustContain": ["sp_helpdiagrams"],
+      "mustNotContain": ["usp_UpdateProductPrice"],
+      "minCount": 1
+    },
+    "note": "single char s prefix keeps sp_* procs and drops usp_*"
+  },
+  {
+    "id": "EXEC-012",
+    "family": "exec-procs",
+    "doc": "EXEC dbo.|",
+    "expect": {
+      "mustContain": ["usp_GetCustomerOrders", "usp_UpdateProductPrice", "sp_helpdiagrams"],
+      "mustNotContain": ["usp_MarkInvoicePaid"],
+      "minCount": 3
+    },
+    "note": "dbo. qualifier scopes to dbo procs; Sales proc must not leak in"
+  },
+  {
+    "id": "EXEC-013",
+    "family": "exec-procs",
+    "doc": "exec dbo.usp_|",
+    "expect": {
+      "mustContain": ["usp_GetCustomerOrders", "usp_UpdateProductPrice"],
+      "mustNotContain": ["usp_MarkInvoicePaid", "sp_creatediagram"],
+      "minCount": 2
+    },
+    "note": "schema-qualified + usp_ prefix: dbo usp procs only"
+  },
+  {
+    "id": "EXEC-014",
+    "family": "exec-procs",
+    "doc": "EXECUTE dbo.usp_G|",
+    "expect": {
+      "mustContain": ["usp_GetCustomerOrders"],
+      "mustNotContain": ["usp_UpdateProductPrice"],
+      "minCount": 1
+    },
+    "note": "EXECUTE + dbo qualifier + 5-char prefix narrows to one proc"
+  },
+  {
+    "id": "EXEC-015",
+    "family": "exec-procs",
+    "doc": "EXEC dbo.sp_c|",
+    "expect": {
+      "mustContain": ["sp_creatediagram"],
+      "mustNotContain": ["sp_helpdiagrams", "usp_GetCustomerOrders"],
+      "minCount": 1
+    },
+    "note": "sp_c prefix under dbo keeps sp_creatediagram, drops sp_helpdiagrams"
+  },
+  {
+    "id": "EXEC-016",
+    "family": "exec-procs",
+    "doc": "EXEC Northwind_AutoTest.dbo.|",
+    "expect": {
+      "mustContain": ["usp_GetCustomerOrders", "usp_UpdateProductPrice"],
+      "mustNotContain": ["usp_MarkInvoicePaid"],
+      "minCount": 2
+    },
+    "note": "three-part database.schema. qualifier resolves dbo procs"
+  },
+  {
+    "id": "EXEC-017",
+    "family": "exec-procs",
+    "doc": "EXEC Sales.|",
+    "expect": {
+      "mustContain": ["usp_MarkInvoicePaid"],
+      "mustNotContain": ["usp_GetCustomerOrders", "sp_helpdiagrams"],
+      "minCount": 1
+    },
+    "note": "Sales. qualifier shows only Sales procs; dbo procs must not leak"
+  },
+  {
+    "id": "EXEC-018",
+    "family": "exec-procs",
+    "doc": "exec sales.usp_|",
+    "expect": {
+      "mustContain": ["usp_MarkInvoicePaid"],
+      "mustNotContain": ["usp_UpdateProductPrice"],
+      "minCount": 1
+    },
+    "note": "lowercase schema name sales must match Sales case-insensitively"
+  },
+  {
+    "id": "EXEC-019",
+    "family": "exec-procs",
+    "doc": "EXECUTE Sales.usp_M|",
+    "expect": {
+      "mustContain": ["usp_MarkInvoicePaid"],
+      "mustNotContain": ["usp_GetCustomerOrders"],
+      "minCount": 1
+    },
+    "note": "EXECUTE + Sales qualifier + usp_M prefix"
+  },
+  {
+    "id": "EXEC-020",
+    "family": "exec-procs",
+    "doc": "EXEC Northwind_AutoTest.Sales.|",
+    "expect": {
+      "mustContain": ["usp_MarkInvoicePaid"],
+      "mustNotContain": ["Invoices", "usp_GetCustomerOrders"],
+      "minCount": 1
+    },
+    "note": "three-part Sales qualifier: procs only, not the Invoices table"
+  },
+  {
+    "id": "EXEC-021",
+    "family": "exec-procs",
+    "doc": "EXEC Sales.u|",
+    "expect": {
+      "mustContain": ["usp_MarkInvoicePaid"],
+      "mustNotContain": ["Invoices"],
+      "minCount": 1
+    },
+    "note": "1-char prefix under Sales schema at EXEC position"
+  },
+  {
+    "id": "EXEC-022",
+    "family": "exec-procs",
+    "doc": "EXEC dbo.usp_GetCustomerOrders |",
+    "expect": {
+      "mustContain": ["@CustomerID", "@FromDate", "@ToDate"],
+      "mustNotContain": ["@ProductID", "@InvoiceID"],
+      "minCount": 3
+    },
+    "note": "empty prefix after proc name suggests that proc's parameters only"
+  },
+  {
+    "id": "EXEC-023",
+    "family": "exec-procs",
+    "doc": "EXEC dbo.usp_GetCustomerOrders @|",
+    "expect": {
+      "mustContain": ["@CustomerID", "@FromDate", "@ToDate"],
+      "mustNotContain": ["@NewPrice", "@diagramname"],
+      "minCount": 3
+    },
+    "note": "@ trigger after proc name lists its three params, not other procs' params"
+  },
+  {
+    "id": "EXEC-024",
+    "family": "exec-procs",
+    "doc": "exec usp_GetCustomerOrders @|",
+    "expect": {
+      "mustContain": ["@CustomerID", "@FromDate"],
+      "mustNotContain": ["@ProductID"],
+      "minCount": 2
+    },
+    "note": "unqualified proc name still resolves params for @ completion"
+  },
+  {
+    "id": "EXEC-025",
+    "family": "exec-procs",
+    "doc": "EXEC dbo.usp_UpdateProductPrice |",
+    "expect": {
+      "mustContain": ["@ProductID", "@NewPrice"],
+      "mustNotContain": ["@CustomerID", "@InvoiceID"],
+      "minCount": 2
+    },
+    "note": "params scoped to usp_UpdateProductPrice; other procs' params absent"
+  },
+  {
+    "id": "EXEC-026",
+    "family": "exec-procs",
+    "doc": "EXECUTE dbo.usp_UpdateProductPrice @|",
+    "expect": {
+      "mustContain": ["@ProductID", "@NewPrice"],
+      "mustNotContain": ["@FromDate"],
+      "minCount": 2
+    },
+    "note": "EXECUTE variant with @ trigger for update-price params"
+  },
+  {
+    "id": "EXEC-027",
+    "family": "exec-procs",
+    "doc": "EXEC Sales.usp_MarkInvoicePaid |",
+    "expect": {
+      "mustContain": ["@InvoiceID"],
+      "mustNotContain": ["@CustomerID", "@NewPrice"],
+      "minCount": 1
+    },
+    "note": "Sales proc single param; dbo procs' params must not appear"
+  },
+  {
+    "id": "EXEC-028",
+    "family": "exec-procs",
+    "doc": "exec Sales.usp_MarkInvoicePaid @|",
+    "expect": {
+      "mustContain": ["@InvoiceID"],
+      "mustNotContain": ["@ProductID", "@ToDate"],
+      "minCount": 1
+    },
+    "note": "@ trigger on Sales proc scopes to @InvoiceID"
+  },
+  {
+    "id": "EXEC-029",
+    "family": "exec-procs",
+    "doc": "EXEC dbo.sp_creatediagram @|",
+    "expect": {
+      "mustContain": ["@diagramname", "@owner_id", "@version"],
+      "mustNotContain": ["@CustomerID"],
+      "minCount": 3
+    },
+    "note": "sp_creatediagram params suggested; unrelated proc params absent"
+  },
+  {
+    "id": "EXEC-030",
+    "family": "exec-procs",
+    "doc": "EXEC dbo.usp_GetCustomerOrders\n    @|",
+    "expect": {
+      "mustContain": ["@CustomerID", "@FromDate", "@ToDate"],
+      "mustNotContain": ["@InvoiceID"],
+      "minCount": 3
+    },
+    "note": "multi-line: params on continuation line still scoped to the proc"
+  },
+  {
+    "id": "EXEC-031",
+    "family": "exec-procs",
+    "doc": "EXECUTE dbo.usp_UpdateProductPrice\n\t@P|",
+    "expect": {
+      "mustContain": ["@ProductID"],
+      "mustNotContain": ["@NewPrice", "@CustomerID"],
+      "minCount": 1
+    },
+    "note": "multi-line with tab indent; @P prefix filters @NewPrice out"
+  },
+  {
+    "id": "EXEC-032",
+    "family": "exec-procs",
+    "doc": "EXEC dbo.usp_GetCustomerOrders @C|",
+    "expect": {
+      "mustContain": ["@CustomerID"],
+      "mustNotContain": ["@FromDate", "@ToDate"],
+      "minCount": 1
+    },
+    "note": "@C prefix keeps only @CustomerID"
+  },
+  {
+    "id": "EXEC-033",
+    "family": "exec-procs",
+    "doc": "EXEC dbo.usp_GetCustomerOrders @F|",
+    "expect": {
+      "mustContain": ["@FromDate"],
+      "mustNotContain": ["@CustomerID", "@ToDate"],
+      "minCount": 1
+    },
+    "note": "@F prefix keeps only @FromDate"
+  },
+  {
+    "id": "EXEC-034",
+    "family": "exec-procs",
+    "doc": "exec dbo.usp_GetCustomerOrders @to|",
+    "expect": {
+      "mustContain": ["@ToDate"],
+      "mustNotContain": ["@FromDate"],
+      "minCount": 1
+    },
+    "note": "lowercase @to prefix matches @ToDate case-insensitively"
+  },
+  {
+    "id": "EXEC-035",
+    "family": "exec-procs",
+    "doc": "EXEC dbo.usp_UpdateProductPrice @N|",
+    "expect": {
+      "mustContain": ["@NewPrice"],
+      "mustNotContain": ["@ProductID"],
+      "minCount": 1
+    },
+    "note": "@N prefix keeps only @NewPrice"
+  },
+  {
+    "id": "EXEC-036",
+    "family": "exec-procs",
+    "doc": "EXEC Sales.usp_MarkInvoicePaid @In|",
+    "expect": {
+      "mustContain": ["@InvoiceID"],
+      "mustNotContain": ["@ProductID"],
+      "minCount": 1
+    },
+    "note": "@In prefix on the Sales proc param"
+  },
+  {
+    "id": "EXEC-037",
+    "family": "exec-procs",
+    "doc": "EXEC dbo.sp_creatediagram @d|",
+    "expect": {
+      "mustContain": ["@diagramname", "@definition"],
+      "mustNotContain": ["@owner_id", "@version"],
+      "minCount": 2
+    },
+    "note": "@d prefix keeps the two d-params and filters the rest"
+  },
+  {
+    "id": "EXEC-038",
+    "family": "exec-procs",
+    "doc": "EXEC dbo.usp_GetCustomerOrders @FRO|",
+    "expect": {
+      "mustContain": ["@FromDate"],
+      "mustNotContain": ["@CustomerID"],
+      "minCount": 1
+    },
+    "note": "uppercase 3-char prefix @FRO matches @FromDate case-insensitively"
+  },
+  {
+    "id": "EXEC-039",
+    "family": "exec-procs",
+    "doc": "EXEC dbo.usp_GetCustomerOrders @CustomerID = 5, |",
+    "expect": {
+      "mustContain": ["@FromDate", "@ToDate"],
+      "mustNotContain": ["@ProductID", "@InvoiceID"],
+      "minCount": 2
+    },
+    "note": "after a named param and comma, remaining params of the same proc appear"
+  },
+  {
+    "id": "EXEC-040",
+    "family": "exec-procs",
+    "doc": "EXEC dbo.usp_GetCustomerOrders @CustomerID = 5, @|",
+    "expect": {
+      "mustContain": ["@FromDate", "@ToDate"],
+      "mustNotContain": ["@NewPrice"],
+      "minCount": 2
+    },
+    "note": "@ trigger after named-param comma stays scoped to the proc"
+  },
+  {
+    "id": "EXEC-041",
+    "family": "exec-procs",
+    "doc": "exec dbo.usp_GetCustomerOrders @CustomerID = 5, @F|",
+    "expect": {
+      "mustContain": ["@FromDate"],
+      "mustNotContain": ["@ToDate", "@CustomerID"],
+      "minCount": 1
+    },
+    "note": "@F prefix in second named-param slot filters to @FromDate"
+  },
+  {
+    "id": "EXEC-042",
+    "family": "exec-procs",
+    "doc": "EXEC dbo.usp_UpdateProductPrice @ProductID = 10, @N|",
+    "expect": {
+      "mustContain": ["@NewPrice"],
+      "mustNotContain": ["@CustomerID"],
+      "minCount": 1
+    },
+    "note": "named param continuation for the update-price proc"
+  },
+  {
+    "id": "EXEC-043",
+    "family": "exec-procs",
+    "doc": "EXEC dbo.usp_GetCustomerOrders @CustomerID = 1, @FromDate = '2024-01-01', @|",
+    "expect": {
+      "mustContain": ["@ToDate"],
+      "mustNotContain": ["@NewPrice", "@InvoiceID"],
+      "minCount": 1
+    },
+    "note": "third named-param slot after two supplied values"
+  },
+  {
+    "id": "EXEC-044",
+    "family": "exec-procs",
+    "doc": "EXEC dbo.usp_GetCustomerOrders\n    @CustomerID = 42,\n    @|",
+    "expect": {
+      "mustContain": ["@FromDate", "@ToDate"],
+      "mustNotContain": ["@ProductID"],
+      "minCount": 2
+    },
+    "note": "multi-line named-param style; param scoping survives line breaks"
+  },
+  {
+    "id": "EXEC-045",
+    "family": "exec-procs",
+    "doc": "EXECUTE  dbo.usp_UpdateProductPrice  @ProductID = 7 , |",
+    "expect": {
+      "mustContain": ["@NewPrice"],
+      "mustNotContain": ["@FromDate"],
+      "minCount": 1
+    },
+    "note": "irregular spacing around comma; remaining param still offered"
+  },
+  {
+    "id": "EXEC-046",
+    "family": "exec-procs",
+    "doc": "exec dbo.usp_UpdateProductPrice\n@ProductID = 3,\n@|",
+    "expect": {
+      "mustContain": ["@NewPrice"],
+      "mustNotContain": ["@ToDate"],
+      "minCount": 1
+    },
+    "note": "multi-line unindented named params; second slot scoped correctly"
+  },
+  {
+    "id": "EXEC-047",
+    "family": "exec-procs",
+    "doc": "SELECT CustomerID, CustomerName FROM dbo.Customers;\nEXEC |",
+    "expect": {
+      "mustContain": ["usp_GetCustomerOrders", "usp_UpdateProductPrice"],
+      "mustNotContain": ["CustomerName"],
+      "minCount": 2
+    },
+    "note": "prior ;-terminated SELECT; EXEC position offers procs, not the previous statement's columns"
+  },
+  {
+    "id": "EXEC-048",
+    "family": "exec-procs",
+    "doc": "SELECT c.CustomerID FROM dbo.Customers c;\nEXEC dbo.usp_GetCustomerOrders @|",
+    "expect": {
+      "mustContain": ["@CustomerID", "@FromDate"],
+      "mustNotContain": ["@ProductID"],
+      "minCount": 2
+    },
+    "note": "prior aliased statement does not disturb param completion in the new statement"
+  },
+  {
+    "id": "EXEC-049",
+    "family": "exec-procs",
+    "doc": "UPDATE dbo.Products SET Price = 9.99 WHERE ProductID = 1;\nexec dbo.usp_UpdateProductPrice @|",
+    "expect": {
+      "mustContain": ["@ProductID", "@NewPrice"],
+      "mustNotContain": ["@CustomerID"],
+      "minCount": 2
+    },
+    "note": "prior UPDATE statement; params scoped to the proc in the second statement"
+  },
+  {
+    "id": "EXEC-050",
+    "family": "exec-procs",
+    "doc": "SELECT OrderID FROM dbo.Orders;\nEXEC Sales.|",
+    "expect": {
+      "mustContain": ["usp_MarkInvoicePaid"],
+      "mustNotContain": ["usp_GetCustomerOrders", "OrderID"],
+      "minCount": 1
+    },
+    "note": "prior statement then Sales-qualified proc completion; dbo procs and prior columns absent"
+  },
+  {
+    "id": "EXEC-051",
+    "family": "exec-procs",
+    "doc": "EXEC dbo.usp_UpdateProductPrice @ProductID = 1, @NewPrice = 5.00;\nEXEC dbo.usp_GetCustomerOrders @|",
+    "expect": {
+      "mustContain": ["@CustomerID", "@ToDate"],
+      "mustNotContain": ["@NewPrice", "@ProductID"],
+      "minCount": 2
+    },
+    "note": "params from the earlier EXEC statement must not leak into the second proc's param list"
+  },
+  {
+    "id": "EXEC-052",
+    "family": "exec-procs",
+    "doc": "DECLARE @custId int = 5;\nEXEC dbo.usp_GetCustomerOrders @CustomerID = @|",
+    "expect": {
+      "mustContain": ["@custId"],
+      "mustNotContain": ["@ProductID"],
+      "minCount": 1
+    },
+    "note": "value position of a named param offers the declared local variable"
+  },
+  {
+    "id": "EXEC-053",
+    "family": "exec-procs",
+    "doc": "EXEC sp_helpdiagrams;\nEXEC dbo.usp_|",
+    "expect": {
+      "mustContain": ["usp_GetCustomerOrders", "usp_UpdateProductPrice"],
+      "mustNotContain": ["usp_MarkInvoicePaid"],
+      "minCount": 2
+    },
+    "note": "prior parameterless EXEC statement; second EXEC completes dbo usp_* procs"
+  },
+  {
+    "id": "EXEC-054",
+    "family": "exec-procs",
+    "doc": "EXEC dbo.NoSuchProc @|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["@CustomerID", "@ProductID", "@InvoiceID"],
+      "minCount": 0
+    },
+    "note": "negative: unknown proc must not surface real params of other procs"
+  },
+  {
+    "id": "EXEC-055",
+    "family": "exec-procs",
+    "doc": "EXEC usp_GetFake|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["usp_GetCustomerOrders"],
+      "minCount": 0
+    },
+    "note": "negative: prefix usp_GetFake matches no real proc; usp_GetCustomerOrders is prefix-filtered out"
+  },
+  {
+    "id": "EXEC-056",
+    "family": "exec-procs",
+    "doc": "EXEC dbo.usp_GetCustomerOrders @Fake|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["@CustomerID", "@FromDate"],
+      "minCount": 0
+    },
+    "note": "negative: @Fake prefix matches none of the proc's real params"
+  },
+  {
+    "id": "EXEC-057",
+    "family": "exec-procs",
+    "doc": "EXEC Sales.sp_|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["sp_creatediagram", "sp_helpdiagrams"],
+      "minCount": 0
+    },
+    "note": "negative: dbo's sp_* procs must not appear under the Sales schema qualifier"
+  },
+  {
+    "id": "EXEC-058",
+    "family": "exec-procs",
+    "doc": "/* mark invoice as settled */\nEXEC Sales.usp_MarkInvoicePaid @|",
+    "expect": {
+      "mustContain": ["@InvoiceID"],
+      "mustNotContain": ["@CustomerID"],
+      "minCount": 1
+    },
+    "note": "multi-line: block comment before EXEC does not break param scoping"
+  },
+  {
+    "id": "EXEC-059",
+    "family": "exec-procs",
+    "doc": "BEGIN\n    EXEC |\nEND",
+    "expect": {
+      "mustContain": ["usp_GetCustomerOrders", "usp_UpdateProductPrice"],
+      "mustNotContain": ["CustomerName"],
+      "minCount": 2
+    },
+    "note": "multi-line: EXEC inside a BEGIN/END block still completes procs"
+  },
+  {
+    "id": "EXEC-060",
+    "family": "exec-procs",
+    "doc": "EXEC\tdbo.usp_UpdateProductPrice @Pro|",
+    "expect": {
+      "mustContain": ["@ProductID"],
+      "mustNotContain": ["@NewPrice"],
+      "minCount": 1
+    },
+    "note": "tab between EXEC and proc name; 3-char @Pro prefix filters to @ProductID"
+  }
+]

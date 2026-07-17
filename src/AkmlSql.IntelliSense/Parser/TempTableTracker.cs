@@ -14,6 +14,14 @@ public class TempTableTracker
     /// Track all temp tables declared in the script visible at the cursor offset.
     /// Returns a dictionary of temp table name → column names.
     /// </summary>
+    /// <summary>
+    /// Spec 032 F3: for `SELECT * INTO #t FROM src` shapes, the source tables per temp
+    /// table — populated by the latest <see cref="TrackTempTables"/> call so the engine
+    /// can star-expand empty column lists from the schema cache.
+    /// </summary>
+    public Dictionary<string, List<(string Schema, string Table)>> StarSources { get; } =
+        new(StringComparer.OrdinalIgnoreCase);
+
     public Dictionary<string, List<string>> TrackTempTables(TSqlScript? script, int cursorOffset)
     {
         var result = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
@@ -23,22 +31,29 @@ public class TempTableTracker
             return result;
         }
 
-        foreach (var batch in script.Batches)
+        // Spec 032 F2: when the trailing statement is mid-edit, the parsed extent shrinks
+        // and the cursor falls outside every batch — which used to drop ALL definitions.
+        // Definitions BEFORE the caret are what matter: fall back to the last batch.
+        var containing = script.Batches.FirstOrDefault(b =>
+            cursorOffset >= b.StartOffset && cursorOffset <= b.StartOffset + b.FragmentLength)
+            ?? script.Batches.LastOrDefault();
+        if (containing == null)
         {
-            if (cursorOffset < batch.StartOffset ||
-                cursorOffset > batch.StartOffset + batch.FragmentLength)
-            {
-                continue;
-            }
+            return result;
+        }
 
-            var visitor = new TempTableVisitor(cursorOffset);
-            batch.Accept(visitor);
+        var visitor = new TempTableVisitor(cursorOffset);
+        containing.Accept(visitor);
 
-            foreach (var (name, columns) in visitor.TempTables)
-            {
-                // Later declarations overwrite earlier ones (e.g., drop and recreate)
-                result[name] = columns;
-            }
+        foreach (var (name, columns) in visitor.TempTables)
+        {
+            // Later declarations overwrite earlier ones (e.g., drop and recreate)
+            result[name] = columns;
+        }
+
+        foreach (var (name, srcList) in visitor.StarSources)
+        {
+            StarSources[name] = srcList;
         }
 
         return result;
@@ -47,6 +62,10 @@ public class TempTableTracker
     private class TempTableVisitor(int cursorOffset) : TSqlFragmentVisitor
     {
         public List<(string Name, List<string> Columns)> TempTables { get; } = [];
+
+        /// <summary>Spec 032 F3: source tables of `SELECT * INTO #t FROM src` definitions.</summary>
+        public Dictionary<string, List<(string Schema, string Table)>> StarSources { get; } =
+            new(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
         /// Handle CREATE TABLE #tempName (col1 type1, col2 type2, ...)
@@ -133,12 +152,36 @@ public class TempTableTracker
                         break;
 
                     case SelectStarExpression:
-                        // SELECT * INTO #temp — can't resolve columns without schema info
+                        // SELECT * INTO #temp — no schema info HERE; record the FROM sources
+                        // so the engine can star-expand from the cache (spec 032 F3).
+                        if (querySpec.FromClause != null)
+                        {
+                            var sources = StarSources.TryGetValue(tableName, out var existing)
+                                ? existing
+                                : StarSources[tableName] = [];
+                            foreach (var tref in querySpec.FromClause.TableReferences)
+                                CollectNamedSources(tref, sources);
+                        }
                         break;
                 }
             }
 
             TempTables.Add((tableName, columns));
+        }
+
+        private static void CollectNamedSources(
+            Microsoft.SqlServer.TransactSql.ScriptDom.TableReference tref, List<(string, string)> sources)
+        {
+            switch (tref)
+            {
+                case NamedTableReference named when named.SchemaObject?.BaseIdentifier?.Value is { } name:
+                    sources.Add((named.SchemaObject?.SchemaIdentifier?.Value ?? "dbo", name));
+                    return;
+                case JoinTableReference join:
+                    CollectNamedSources(join.FirstTableReference, sources);
+                    CollectNamedSources(join.SecondTableReference, sources);
+                    return;
+            }
         }
 
         private static string? GetTableName(SchemaObjectName? schemaObjectName)

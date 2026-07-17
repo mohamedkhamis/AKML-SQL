@@ -3,6 +3,7 @@ using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Engine.Parser;
 using AkmlSql.Engine.Schema;
 using AkmlSql.Engine.Schema.Models;
+using Microsoft.SqlServer.TransactSql.ScriptDom;
 using Serilog;
 
 namespace AkmlSql.Engine.Completion.Providers;
@@ -48,8 +49,13 @@ public class ColumnProvider : ICompletionProvider
         ClauseType.Having,
         ClauseType.OrderBy,
         ClauseType.UpdateSet,
-        ClauseType.InsertColumns,
-        ClauseType.AlterTableColumn
+        ClauseType.InsertColumnList, // Spec 032 C1 — replaces InsertColumns here: columns exist only once a target is known
+        ClauseType.AlterTableColumn,
+        // Spec 032 B6 — CASE arms are expression positions; columns stay available there.
+        ClauseType.CaseStart,
+        ClauseType.CaseWhen,
+        ClauseType.CaseThen,
+        ClauseType.CaseElse
     ];
 
     /// <summary>
@@ -242,6 +248,25 @@ public class ColumnProvider : ICompletionProvider
 
             foreach (var column in dbObject.Columns)
             {
+                // Spec 032 C1/H2 side of INSERT: IDENTITY/computed columns can't receive
+                // values — never offer them in an INSERT column list.
+                if (context.ClauseType == ClauseType.InsertColumnList &&
+                    (column.IsIdentity || column.IsComputed))
+                {
+                    continue;
+                }
+
+                // Spec 032 H2 (FR-027): IDENTITY/computed columns are not assignable —
+                // exclude them at UPDATE SET *target* positions (right after SET or a
+                // comma). Value-side positions (after '=' / an operator) keep them:
+                // READING an identity column in the assigned expression is legal.
+                if (context.ClauseType == ClauseType.UpdateSet &&
+                    (column.IsIdentity || column.IsComputed) &&
+                    context.PrecedingToken?.TokenType is TSqlTokenType.Set or TSqlTokenType.Comma)
+                {
+                    continue;
+                }
+
                 // Qualify with alias when multiple tables are in scope so the user
                 // can disambiguate. Single-table queries get plain column names.
                 var bareDisplay = column.ColumnName;
@@ -298,7 +323,11 @@ public class ColumnProvider : ICompletionProvider
                         SourceObject = dbObject.FullName,
                         // Qualified items rank slightly lower than bare so that in
                         // single-table queries the bare form stays the default.
-                        SortPriority = priority + 5
+                        SortPriority = priority + 5,
+                        // Spec 032 FR-026 (H1): fuzzy filtering must match the COLUMN, not
+                        // the alias/table decoration — otherwise a typed prefix that matches
+                        // the alias floods the list with that table's unrelated columns.
+                        FilterText = column.ColumnName
                     };
                 }
             }
@@ -380,7 +409,14 @@ public class ColumnProvider : ICompletionProvider
         // the column list is empty (token-based CTE fallback gives names without
         // columns when the parser can't recover); silent no-result is correct
         // there, schema-cache lookup is not.
-        if (context.AvailableCtes.TryGetValue(context.DotPrefix, out var cteCols))
+        // Spec 032 E1: an alias OVER a CTE (`FROM cte x` … `x.|`) resolves through
+        // AvailableAliases to `dbo.cte` — strip the schema and re-check the CTE registry,
+        // exactly like the temp-table branch below. The RAW prefix stays first: derived
+        // aliases map to a `(derived:d)` placeholder, but their projections are keyed by
+        // the alias itself.
+        if (context.AvailableCtes.TryGetValue(context.DotPrefix, out var cteCols) ||
+            (context.AvailableAliases.TryGetValue(context.DotPrefix, out var cteResolved) &&
+             context.AvailableCtes.TryGetValue(BareTableName(cteResolved), out cteCols)))
         {
             foreach (var colName in cteCols)
             {

@@ -1,0 +1,552 @@
+[
+  {
+    "id": "KW-001",
+    "family": "keywords",
+    "doc": "|",
+    "expect": {
+      "mustContain": ["SELECT", "INSERT", "UPDATE", "DELETE"],
+      "mustNotContain": ["ASC", "THEN"],
+      "minCount": 4
+    },
+    "note": "empty doc: statement-start keywords offered, clause-internal keywords absent"
+  },
+  {
+    "id": "KW-002",
+    "family": "keywords",
+    "doc": "sel|",
+    "expect": {
+      "mustContain": ["SELECT"],
+      "mustNotContain": ["INSERT", "DELETE"],
+      "minCount": 1
+    },
+    "note": "lowercase 3-char prefix at statement start filters to SELECT"
+  },
+  {
+    "id": "KW-003",
+    "family": "keywords",
+    "doc": "  I|",
+    "expect": {
+      "mustContain": ["INSERT"],
+      "mustNotContain": ["UPDATE", "SELECT"],
+      "minCount": 1
+    },
+    "note": "leading whitespace + 1-char prefix; non-matching keywords filtered out"
+  },
+  {
+    "id": "KW-004",
+    "family": "keywords",
+    "doc": "SELECT * FROM dbo.Customers;\n|",
+    "expect": {
+      "mustContain": ["SELECT", "INSERT", "UPDATE"],
+      "mustNotContain": ["ASC", "THEN"],
+      "minCount": 3
+    },
+    "note": "new statement after semicolon-terminated statement gets statement-start keywords"
+  },
+  {
+    "id": "KW-005",
+    "family": "keywords",
+    "doc": "DECLARE @n int;\nSEL|",
+    "expect": {
+      "mustContain": ["SELECT"],
+      "mustNotContain": ["SET", "DELETE"],
+      "minCount": 1
+    },
+    "note": "3-char prefix on second statement after DECLARE; SET does not match SEL"
+  },
+  {
+    "id": "KW-006",
+    "family": "keywords",
+    "doc": "uPd|",
+    "expect": {
+      "mustContain": ["UPDATE"],
+      "mustNotContain": ["UNION", "DELETE"],
+      "minCount": 1
+    },
+    "note": "mixed-case prefix matches UPDATE case-insensitively; UNION shares U but not uPd"
+  },
+  {
+    "id": "KW-007",
+    "family": "keywords",
+    "doc": "EXEC dbo.usp_GetCustomerOrders @CustomerID = 1;\nDEL|",
+    "expect": {
+      "mustContain": ["DELETE"],
+      "mustNotContain": ["DECLARE"],
+      "minCount": 1
+    },
+    "note": "after semicolon-terminated EXEC; DECLARE shares DE but fails DEL prefix"
+  },
+  {
+    "id": "KW-008",
+    "family": "keywords",
+    "doc": "-- fetch active customers\n|",
+    "expect": {
+      "mustContain": ["SELECT", "UPDATE", "DELETE"],
+      "mustNotContain": ["DESC"],
+      "minCount": 3
+    },
+    "note": "caret on line after a line comment is statement start, not inside comment"
+  },
+  {
+    "id": "KW-009",
+    "family": "keywords",
+    "doc": "SELECT |",
+    "expect": {
+      "mustContain": ["DISTINCT", "TOP"],
+      "mustNotContain": ["VALUES"],
+      "minCount": 2
+    },
+    "note": "immediately after SELECT: DISTINCT and TOP offered, VALUES is not valid here"
+  },
+  {
+    "id": "KW-010",
+    "family": "keywords",
+    "doc": "SELECT DIS|",
+    "expect": {
+      "mustContain": ["DISTINCT"],
+      "mustNotContain": ["TOP", "DESC"],
+      "minCount": 1
+    },
+    "note": "3-char prefix after SELECT filters to DISTINCT; TOP/DESC fail prefix"
+  },
+  {
+    "id": "KW-011",
+    "family": "keywords",
+    "doc": "select to|",
+    "expect": {
+      "mustContain": ["TOP"],
+      "mustNotContain": ["DISTINCT"],
+      "minCount": 1
+    },
+    "note": "lowercase doc + 2-char prefix matches TOP case-insensitively"
+  },
+  {
+    "id": "KW-012",
+    "family": "keywords",
+    "doc": "SELECT   D|",
+    "expect": {
+      "mustContain": ["DISTINCT"],
+      "mustNotContain": ["DELETE", "TOP"],
+      "minCount": 1
+    },
+    "note": "extra spaces + 1-char prefix; DELETE matches D but is invalid after SELECT"
+  },
+  {
+    "id": "KW-013",
+    "family": "keywords",
+    "doc": "SELECT\n    |",
+    "expect": {
+      "mustContain": ["DISTINCT", "TOP"],
+      "mustNotContain": ["ASC"],
+      "minCount": 2
+    },
+    "note": "newline+indent after SELECT keeps the after-SELECT keyword context"
+  },
+  {
+    "id": "KW-014",
+    "family": "keywords",
+    "doc": "UPDATE dbo.Products SET Price = 9.99 WHERE ProductID = 5; SELECT DI|",
+    "expect": {
+      "mustContain": ["DISTINCT"],
+      "mustNotContain": ["SET", "DELETE"],
+      "minCount": 1
+    },
+    "note": "prior semicolon-terminated UPDATE must not leak SET into the new SELECT context"
+  },
+  {
+    "id": "KW-015",
+    "family": "keywords",
+    "doc": "SELECT DISTINCT |",
+    "expect": {
+      "mustContain": ["TOP"],
+      "mustNotContain": ["DISTINCT", "VALUES"],
+      "minCount": 1
+    },
+    "note": "TOP may follow DISTINCT; a second DISTINCT is invalid"
+  },
+  {
+    "id": "KW-016",
+    "family": "keywords",
+    "doc": "SELECT CustomerID, CustomerName |",
+    "expect": {
+      "mustContain": ["FROM"],
+      "mustNotContain": ["SET", "VALUES"],
+      "minCount": 1
+    },
+    "note": "after select list the FROM keyword is expected; DML keywords are not"
+  },
+  {
+    "id": "KW-017",
+    "family": "keywords",
+    "doc": "SELECT * F|",
+    "expect": {
+      "mustContain": ["FROM"],
+      "mustNotContain": ["FULL"],
+      "minCount": 1
+    },
+    "note": "1-char prefix after star; FULL matches F but a join variant is invalid before FROM"
+  },
+  {
+    "id": "KW-018",
+    "family": "keywords",
+    "doc": "select p.ProductName, p.Price fro|",
+    "expect": {
+      "mustContain": ["FROM"],
+      "mustNotContain": ["FULL"],
+      "minCount": 1
+    },
+    "note": "lowercase 3-char prefix filters to FROM; FULL fails the fro prefix"
+  },
+  {
+    "id": "KW-019",
+    "family": "keywords",
+    "doc": "SELECT\n    OrderID,\n    OrderDate\n|",
+    "expect": {
+      "mustContain": ["FROM"],
+      "mustNotContain": ["VALUES", "SET"],
+      "minCount": 1
+    },
+    "note": "multi-line select list; FROM expected at start of next line"
+  },
+  {
+    "id": "KW-020",
+    "family": "keywords",
+    "doc": "SELECT * FROM dbo.Customers |",
+    "expect": {
+      "mustContain": ["WHERE", "ORDER", "INNER", "GROUP"],
+      "mustNotContain": ["VALUES"],
+      "minCount": 4
+    },
+    "note": "after FROM table: clause and join keywords offered; VALUES is not"
+  },
+  {
+    "id": "KW-021",
+    "family": "keywords",
+    "doc": "SELECT * FROM dbo.Orders o W|",
+    "expect": {
+      "mustContain": ["WHERE"],
+      "mustNotContain": ["WHEN"],
+      "minCount": 1
+    },
+    "note": "1-char prefix after aliased FROM; WHEN matches W but no CASE is open"
+  },
+  {
+    "id": "KW-022",
+    "family": "keywords",
+    "doc": "SELECT * FROM Sales.Invoices inv ORD|",
+    "expect": {
+      "mustContain": ["ORDER"],
+      "mustNotContain": ["OrderID", "OrderDate"],
+      "minCount": 1
+    },
+    "note": "keyword position after alias: bare columns matching ORD prefix would be a scoping bug"
+  },
+  {
+    "id": "KW-023",
+    "family": "keywords",
+    "doc": "SELECT c.CustomerName FROM dbo.Customers c GROUP |",
+    "expect": {
+      "mustContain": ["BY"],
+      "mustNotContain": ["ORDER", "HAVING"],
+      "minCount": 1
+    },
+    "note": "only BY may follow GROUP"
+  },
+  {
+    "id": "KW-024",
+    "family": "keywords",
+    "doc": "SELECT Country FROM dbo.Suppliers GROUP BY Country |",
+    "expect": {
+      "mustContain": ["HAVING", "ORDER"],
+      "mustNotContain": ["WHERE"],
+      "minCount": 2
+    },
+    "note": "after GROUP BY column: HAVING/ORDER valid, WHERE is not allowed after GROUP BY"
+  },
+  {
+    "id": "KW-025",
+    "family": "keywords",
+    "doc": "SELECT ProductID FROM dbo.Products;\nSELECT * FROM dbo.Shippers |",
+    "expect": {
+      "mustContain": ["WHERE", "ORDER"],
+      "mustNotContain": ["VALUES", "SET"],
+      "minCount": 2
+    },
+    "note": "second statement after semicolon gets its own after-FROM keyword context"
+  },
+  {
+    "id": "KW-026",
+    "family": "keywords",
+    "doc": "SELECT * FROM dbo.Orders o INNER |",
+    "expect": {
+      "mustContain": ["JOIN"],
+      "mustNotContain": ["OUTER", "ON"],
+      "minCount": 1
+    },
+    "note": "only JOIN may follow INNER; INNER OUTER is invalid"
+  },
+  {
+    "id": "KW-027",
+    "family": "keywords",
+    "doc": "SELECT * FROM dbo.Orders o LEFT |",
+    "expect": {
+      "mustContain": ["JOIN", "OUTER"],
+      "mustNotContain": ["INNER"],
+      "minCount": 2
+    },
+    "note": "LEFT may be followed by JOIN or OUTER, never INNER"
+  },
+  {
+    "id": "KW-028",
+    "family": "keywords",
+    "doc": "select * from dbo.Products p right |",
+    "expect": {
+      "mustContain": ["JOIN", "OUTER"],
+      "mustNotContain": ["LEFT"],
+      "minCount": 2
+    },
+    "note": "lowercase doc: RIGHT is followed by JOIN or OUTER"
+  },
+  {
+    "id": "KW-029",
+    "family": "keywords",
+    "doc": "SELECT * FROM dbo.Customers c FULL |",
+    "expect": {
+      "mustContain": ["JOIN", "OUTER"],
+      "mustNotContain": ["INNER"],
+      "minCount": 2
+    },
+    "note": "FULL is followed by JOIN or OUTER"
+  },
+  {
+    "id": "KW-030",
+    "family": "keywords",
+    "doc": "SELECT * FROM dbo.Orders o CROSS |",
+    "expect": {
+      "mustContain": ["JOIN", "APPLY"],
+      "mustNotContain": ["OUTER", "ON"],
+      "minCount": 2
+    },
+    "note": "CROSS is followed by JOIN or APPLY, not OUTER"
+  },
+  {
+    "id": "KW-031",
+    "family": "keywords",
+    "doc": "SELECT * FROM dbo.Orders o LEFT OUTER |",
+    "expect": {
+      "mustContain": ["JOIN"],
+      "mustNotContain": ["APPLY", "OUTER"],
+      "minCount": 1
+    },
+    "note": "LEFT OUTER must be completed by JOIN; LEFT OUTER APPLY is invalid"
+  },
+  {
+    "id": "KW-032",
+    "family": "keywords",
+    "doc": "SELECT o.OrderID, c.CustomerName\nFROM dbo.Orders o\nINNER J|",
+    "expect": {
+      "mustContain": ["JOIN"],
+      "mustNotContain": ["OUTER"],
+      "minCount": 1
+    },
+    "note": "multi-line query, 1-char prefix after INNER; OUTER fails the J prefix"
+  },
+  {
+    "id": "KW-033",
+    "family": "keywords",
+    "doc": "SELECT * FROM dbo.Orders o INNER JOIN dbo.Customers c |",
+    "expect": {
+      "mustContain": ["ON"],
+      "mustNotContain": ["WHERE", "VALUES"],
+      "minCount": 1
+    },
+    "note": "after joined table + alias the ON keyword is required before WHERE is legal"
+  },
+  {
+    "id": "KW-034",
+    "family": "keywords",
+    "doc": "SELECT * FROM dbo.Products ORDER BY Price |",
+    "expect": {
+      "mustContain": ["ASC", "DESC"],
+      "mustNotContain": ["CustomerName", "WHERE"],
+      "minCount": 2
+    },
+    "note": "after ORDER BY column: ASC/DESC; unreferenced-table column would be a scoping bug"
+  },
+  {
+    "id": "KW-035",
+    "family": "keywords",
+    "doc": "SELECT * FROM dbo.Orders ORDER BY OrderDate DE|",
+    "expect": {
+      "mustContain": ["DESC"],
+      "mustNotContain": ["ASC", "DELETE"],
+      "minCount": 1
+    },
+    "note": "2-char prefix; DELETE matches DE but a DML keyword is invalid inside ORDER BY"
+  },
+  {
+    "id": "KW-036",
+    "family": "keywords",
+    "doc": "select CustomerID from dbo.Customers order by CustomerID a|",
+    "expect": {
+      "mustContain": ["ASC"],
+      "mustNotContain": ["AND", "DESC"],
+      "minCount": 1
+    },
+    "note": "lowercase 1-char prefix; AND matches a but is invalid after an ORDER BY key"
+  },
+  {
+    "id": "KW-037",
+    "family": "keywords",
+    "doc": "SELECT * FROM dbo.Employees;\nSELECT LastName FROM dbo.Employees ORDER BY LastName |",
+    "expect": {
+      "mustContain": ["ASC", "DESC"],
+      "mustNotContain": ["ProductName", "WHERE"],
+      "minCount": 2
+    },
+    "note": "prior semicolon statement; sort-direction keywords in the second statement"
+  },
+  {
+    "id": "KW-038",
+    "family": "keywords",
+    "doc": "SELECT * FROM dbo.Shippers ORDER BY ShipperName ASC, Phone |",
+    "expect": {
+      "mustContain": ["ASC", "DESC"],
+      "mustNotContain": ["HAVING"],
+      "minCount": 2
+    },
+    "note": "second sort key also takes ASC/DESC; HAVING cannot follow ORDER BY"
+  },
+  {
+    "id": "KW-039",
+    "family": "keywords",
+    "doc": "SELECT * FROM dbo.Categories ORDER |",
+    "expect": {
+      "mustContain": ["BY"],
+      "mustNotContain": ["ASC", "DESC"],
+      "minCount": 1
+    },
+    "note": "only BY may follow ORDER; direction keywords come after the sort column"
+  },
+  {
+    "id": "KW-040",
+    "family": "keywords",
+    "doc": "SELECT cust.CustomerName FROM dbo.Customers cust WHERE cust.Country = 'Mexico' |",
+    "expect": {
+      "mustContain": ["AND", "OR", "ORDER"],
+      "mustNotContain": ["VALUES"],
+      "minCount": 3
+    },
+    "note": "after a complete WHERE condition: AND/OR continue it, ORDER starts the next clause"
+  },
+  {
+    "id": "KW-041",
+    "family": "keywords",
+    "doc": "SELECT * FROM dbo.Products WHERE Price BETWEEN 10 |",
+    "expect": {
+      "mustContain": ["AND"],
+      "mustNotContain": ["OR", "BETWEEN"],
+      "minCount": 1
+    },
+    "note": "BETWEEN low bound must be followed by AND, never OR"
+  },
+  {
+    "id": "KW-042",
+    "family": "keywords",
+    "doc": "SELECT * FROM dbo.Employees WHERE Notes IS |",
+    "expect": {
+      "mustContain": ["NULL", "NOT"],
+      "mustNotContain": ["AND"],
+      "minCount": 2
+    },
+    "note": "IS is followed by NULL or NOT NULL"
+  },
+  {
+    "id": "KW-043",
+    "family": "keywords",
+    "doc": "SELECT CASE WHEN Price > 20 | FROM dbo.Products",
+    "expect": {
+      "mustContain": ["THEN"],
+      "mustNotContain": ["ELSE", "VALUES"],
+      "minCount": 1
+    },
+    "note": "CASE WHEN condition requires THEN; ELSE is invalid before the first THEN"
+  },
+  {
+    "id": "KW-044",
+    "family": "keywords",
+    "doc": "SELECT CASE WHEN Price > 20 THEN 'High' | END AS PriceBand FROM dbo.Products",
+    "expect": {
+      "mustContain": ["ELSE", "WHEN"],
+      "mustNotContain": ["THEN"],
+      "minCount": 2
+    },
+    "note": "after a THEN result: ELSE or another WHEN; a second THEN is invalid here"
+  },
+  {
+    "id": "KW-045",
+    "family": "keywords",
+    "doc": "SELECT p.ProductName\nFROM dbo.Products p\nWHERE p.CategoryID = 3\n  A|",
+    "expect": {
+      "mustContain": ["AND"],
+      "mustNotContain": ["ASC", "APPLY"],
+      "minCount": 1
+    },
+    "note": "multi-line WHERE continuation; ASC matches the A prefix but is invalid in WHERE"
+  },
+  {
+    "id": "KW-046",
+    "family": "keywords",
+    "doc": "INSERT |",
+    "expect": {
+      "mustContain": ["INTO"],
+      "mustNotContain": ["VALUES", "FROM"],
+      "minCount": 1
+    },
+    "note": "INTO follows INSERT; VALUES only becomes valid after the target table"
+  },
+  {
+    "id": "KW-047",
+    "family": "keywords",
+    "doc": "INSERT INTO dbo.Shippers (ShipperName, Phone) |",
+    "expect": {
+      "mustContain": ["VALUES", "SELECT"],
+      "mustNotContain": ["SET", "UPDATE"],
+      "minCount": 2
+    },
+    "note": "after the insert column list: VALUES or INSERT...SELECT; SET belongs to UPDATE"
+  },
+  {
+    "id": "KW-048",
+    "family": "keywords",
+    "doc": "UPDATE dbo.Products |",
+    "expect": {
+      "mustContain": ["SET"],
+      "mustNotContain": ["VALUES", "FROM"],
+      "minCount": 1
+    },
+    "note": "SET must follow the UPDATE target; FROM only comes after SET"
+  },
+  {
+    "id": "KW-049",
+    "family": "keywords",
+    "doc": "DELETE |",
+    "expect": {
+      "mustContain": ["FROM"],
+      "mustNotContain": ["SET", "VALUES"],
+      "minCount": 1
+    },
+    "note": "FROM follows DELETE; UPDATE/INSERT keywords are out of context"
+  },
+  {
+    "id": "KW-050",
+    "family": "keywords",
+    "doc": "SELECT CustomerID FROM dbo.Customers\nUNION |",
+    "expect": {
+      "mustContain": ["SELECT", "ALL"],
+      "mustNotContain": ["DISTINCT", "VALUES"],
+      "minCount": 2
+    },
+    "note": "UNION is followed by ALL or SELECT; T-SQL has no UNION DISTINCT"
+  }
+]

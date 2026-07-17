@@ -45,7 +45,13 @@ public enum ProfileOrigin { BuiltIn, User, SqlPromptImport }
 internal sealed class ProfileStore : IProfileStore
 {
     private const string ActiveIdKey = "_active";
-    private static readonly string[] BuiltInIds = { "builtin.default", "builtin.ansi" };
+
+    // Spec 032 J3 (FR-031): the web edition ships the SAME product built-ins as the
+    // desktop (Khamis Style + Collapsed, from the embedded spec-031 .akmlstyle
+    // definitions), with Khamis Style active by default. builtin.default/ansi stay for
+    // persisted references.
+    private static readonly string[] BuiltInIds = { "builtin.khamis", "builtin.collapsed", "builtin.default", "builtin.ansi" };
+    private const string DefaultActiveId = "builtin.khamis";
 
     private readonly IIndexedDbAdapter _store;
     private readonly Dictionary<string, ProfileRecord> _builtIns;
@@ -125,11 +131,17 @@ internal sealed class ProfileStore : IProfileStore
     public async Task<string> GetActiveIdAsync()
     {
         var v = await _store.GetAsync(StoreNames.Profiles, ActiveIdKey).ConfigureAwait(false);
-        return string.IsNullOrEmpty(v) ? "builtin.default" : v!;
+        if (string.IsNullOrEmpty(v)) return DefaultActiveId;
+
+        // Spec 032 J3: a persisted active id that no longer resolves (deleted user
+        // profile, renamed built-in) falls back to the product default.
+        if (_builtIns.ContainsKey(v!)) return v!;
+        var stored = await _store.GetAsync(StoreNames.Profiles, v!).ConfigureAwait(false);
+        return string.IsNullOrEmpty(stored) ? DefaultActiveId : v!;
     }
 
     public Task SetActiveIdAsync(string id) =>
-        _store.SetAsync(StoreNames.Profiles, ActiveIdKey, id ?? "builtin.default");
+        _store.SetAsync(StoreNames.Profiles, ActiveIdKey, id ?? DefaultActiveId);
 
     // ── Built-in profiles ────────────────────────────────────────────────────
 
@@ -167,17 +179,42 @@ internal sealed class ProfileStore : IProfileStore
 
     private static Dictionary<string, ProfileRecord> BuildBuiltInProfiles()
     {
-        // We synthesise the built-ins programmatically rather than shipping JSON resources
-        // so the web-edition bundle does not need MSBuild EmbeddedResource gymnastics.
-        // Future tasks can swap this for a resource-loader if the profile zoo grows.
         var defaultProfile = CreateBuiltInProfile("default");
         var ansiProfile = CreateBuiltInProfile("ansi");
 
-        return new Dictionary<string, ProfileRecord>(StringComparer.Ordinal)
+        var builtIns = new Dictionary<string, ProfileRecord>(StringComparer.Ordinal);
+
+        // Spec 032 J3: the product defaults, read from the SAME embedded .akmlstyle
+        // definitions the desktop ships (AkmlSql.Formatting/Profiles/BuiltIn) — the
+        // campaign formatted with POCO defaults because the web had no Khamis Style.
+        var khamis = LoadEmbeddedBuiltIn("khamis-style.akmlstyle");
+        if (khamis != null)
+            builtIns["builtin.khamis"] = new("builtin.khamis", khamis.Metadata.Name, ProfileOrigin.BuiltIn, khamis);
+        var collapsed = LoadEmbeddedBuiltIn("collapsed.akmlstyle");
+        if (collapsed != null)
+            builtIns["builtin.collapsed"] = new("builtin.collapsed", collapsed.Metadata.Name, ProfileOrigin.BuiltIn, collapsed);
+
+        builtIns["builtin.default"] = new("builtin.default", defaultProfile.Metadata.Name, ProfileOrigin.BuiltIn, defaultProfile);
+        builtIns["builtin.ansi"] = new("builtin.ansi", ansiProfile.Metadata.Name, ProfileOrigin.BuiltIn, ansiProfile);
+        return builtIns;
+    }
+
+    private static FormattingProfile? LoadEmbeddedBuiltIn(string fileName)
+    {
+        try
         {
-            ["builtin.default"] = new("builtin.default", defaultProfile.Metadata.Name, ProfileOrigin.BuiltIn, defaultProfile),
-            ["builtin.ansi"] = new("builtin.ansi", ansiProfile.Metadata.Name, ProfileOrigin.BuiltIn, ansiProfile),
-        };
+            var assembly = typeof(FormattingProfile).Assembly;
+            using var stream = assembly.GetManifestResourceStream($"AkmlSql.Formatting.Profiles.BuiltIn.{fileName}");
+            if (stream == null) return null;
+            using var reader = new StreamReader(stream);
+            return ProfileSerializer.Deserialize(reader.ReadToEnd());
+        }
+        catch
+        {
+            // Missing/corrupt resource must never break web boot — the synthesized
+            // built-ins below remain available.
+            return null;
+        }
     }
 
     private sealed class PersistedProfile

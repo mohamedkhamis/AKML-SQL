@@ -44,14 +44,59 @@ public class CompletionEngineTests
     public void GetCompletions_InString_ReturnsKeywords()
     {
         // Inside string literals, the engine still provides keyword completions
-        // to support dynamic SQL authoring scenarios.
+        // to support dynamic SQL authoring scenarios. Spec 032 D: expression positions
+        // now also carry built-in functions (ObjectType 5) from the same keyword catalog.
         var engine = CreateEngine();
 
         var sql = "SELECT 'hello ";
         var response = engine.GetCompletions(sql, sql.Length, null);
 
         Assert.NotEmpty(response.Items);
-        Assert.All(response.Items, item => Assert.Equal(3, item.ObjectType)); // All keywords
+        Assert.All(response.Items, item => Assert.True(item.ObjectType is 3 or 5,
+            $"expected keyword/built-in items only, got ObjectType {item.ObjectType} ({item.DisplayText})"));
+    }
+
+    // ── FilterText scoring (spec 032 T006, FR-026) ────────────────────────
+
+    private sealed class StubProvider : Engine.Completion.ICompletionProvider
+    {
+        private readonly CompletionItem[] _items;
+        public StubProvider(params CompletionItem[] items) => _items = items;
+        public string Name => "Stub";
+        public bool CanHandle(CursorContext context, DatabaseCache? cache) => true;
+        public IEnumerable<CompletionItem> GetCompletions(CursorContext context, DatabaseCache? cache) => _items;
+    }
+
+    [Fact]
+    public void FuzzyFilter_scores_FilterText_when_set()
+    {
+        var engine = CreateEngine();
+        engine.IncludeKeywords = false;
+        // Display is alias-qualified ("x.OrderID") — a typed prefix "Ord" does not
+        // prefix-match the display, but must match via FilterText = "OrderID".
+        engine.RegisterProvider(new StubProvider(
+            new CompletionItem { DisplayText = "x.OrderID", InsertText = "x.OrderID", FilterText = "OrderID" }));
+
+        var sql = "SELECT Ord";
+        var response = engine.GetCompletions(sql, sql.Length, null);
+
+        Assert.Contains(response.Items, i => i.DisplayText == "x.OrderID");
+    }
+
+    [Fact]
+    public void FuzzyFilter_falls_back_to_DisplayText_when_FilterText_null()
+    {
+        var engine = CreateEngine();
+        engine.IncludeKeywords = false;
+        engine.RegisterProvider(new StubProvider(
+            new CompletionItem { DisplayText = "OrderDate", InsertText = "OrderDate" },
+            new CompletionItem { DisplayText = "CustomerName", InsertText = "CustomerName" }));
+
+        var sql = "SELECT Ord";
+        var response = engine.GetCompletions(sql, sql.Length, null);
+
+        Assert.Contains(response.Items, i => i.DisplayText == "OrderDate");
+        Assert.DoesNotContain(response.Items, i => i.DisplayText == "CustomerName");
     }
 
     // ── SetMaxSuggestions ─────────────────────────────────────────────────

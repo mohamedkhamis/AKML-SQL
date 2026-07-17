@@ -1,0 +1,882 @@
+[
+  {
+    "id": "INS-001",
+    "family": "insert",
+    "doc": "INSERT INTO |",
+    "expect": {
+      "mustContain": ["Customers", "Orders", "Products"],
+      "mustNotContain": ["Quantity", "usp_GetCustomerOrders"],
+      "minCount": 5
+    },
+    "note": "bare table completion after INSERT INTO; columns and procs must not appear in table position"
+  },
+  {
+    "id": "INS-002",
+    "family": "insert",
+    "doc": "INSERT INTO Cust|",
+    "expect": {
+      "mustContain": ["Customers"],
+      "mustNotContain": ["Orders", "Products"],
+      "minCount": 1
+    },
+    "note": "4-char prefix filters table list to Customers"
+  },
+  {
+    "id": "INS-003",
+    "family": "insert",
+    "doc": "insert into ord|",
+    "expect": {
+      "mustContain": ["Orders", "OrderDetails"],
+      "mustNotContain": ["Customers"],
+      "minCount": 2
+    },
+    "note": "lowercase keywords + 3-char lowercase prefix matches Orders and OrderDetails case-insensitively"
+  },
+  {
+    "id": "INS-004",
+    "family": "insert",
+    "doc": "INSERT INTO dbo.|",
+    "expect": {
+      "mustContain": ["Customers", "Employees", "Shippers"],
+      "mustNotContain": ["Invoices"],
+      "minCount": 5
+    },
+    "note": "dbo.-qualified table completion must not leak Sales schema objects"
+  },
+  {
+    "id": "INS-005",
+    "family": "insert",
+    "doc": "INSERT INTO Sales.|",
+    "expect": {
+      "mustContain": ["Invoices"],
+      "mustNotContain": ["Customers", "Orders"],
+      "minCount": 1
+    },
+    "note": "Sales.-qualified completion scoped to Sales schema only"
+  },
+  {
+    "id": "INS-006",
+    "family": "insert",
+    "doc": "INSERT INTO dbo.Pro|",
+    "expect": {
+      "mustContain": ["Products"],
+      "mustNotContain": ["Customers", "Invoices"],
+      "minCount": 1
+    },
+    "note": "schema-qualified 3-char prefix filter on dbo tables"
+  },
+  {
+    "id": "INS-007",
+    "family": "insert",
+    "doc": "INSERT |",
+    "expect": {
+      "mustContain": ["INTO"],
+      "mustNotContain": ["Quantity"],
+      "minCount": 1
+    },
+    "note": "after INSERT keyword the INTO keyword must be offered"
+  },
+  {
+    "id": "INS-008",
+    "family": "insert",
+    "doc": "INSERT INTO S|",
+    "expect": {
+      "mustContain": ["Shippers", "Suppliers"],
+      "mustNotContain": ["Customers"],
+      "minCount": 2
+    },
+    "note": "1-char prefix keeps both S-tables"
+  },
+  {
+    "id": "INS-009",
+    "family": "insert",
+    "doc": "-- bulk load shippers\nINSERT INTO |",
+    "expect": {
+      "mustContain": ["Shippers", "Customers"],
+      "mustNotContain": ["ShipperName", "Quantity"],
+      "minCount": 5
+    },
+    "note": "leading comment line must not break table completion; columns absent in table position"
+  },
+  {
+    "id": "INS-010",
+    "family": "insert",
+    "doc": "SELECT CustomerID FROM dbo.Customers;\nINSERT INTO |",
+    "expect": {
+      "mustContain": ["Orders", "Products"],
+      "mustNotContain": ["CustomerID"],
+      "minCount": 5
+    },
+    "note": "prior ;-terminated SELECT; new INSERT sees tables, not the previous statement's columns"
+  },
+  {
+    "id": "INS-011",
+    "family": "insert",
+    "doc": "INSERT INTO [dbo].[Cust|",
+    "expect": {
+      "mustContain": ["Customers"],
+      "mustNotContain": ["Orders"],
+      "minCount": 1
+    },
+    "note": "bracketed schema + bracketed table prefix completion"
+  },
+  {
+    "id": "INS-012",
+    "family": "insert",
+    "doc": "INSERT INTO Northwind_AutoTest.dbo.|",
+    "expect": {
+      "mustContain": ["Orders", "Customers"],
+      "mustNotContain": ["Invoices"],
+      "minCount": 3
+    },
+    "note": "three-part name resolves to dbo tables only"
+  },
+  {
+    "id": "INS-013",
+    "family": "insert",
+    "doc": "INSERT INTO dbo.Customers (|",
+    "expect": {
+      "mustContain": ["CustomerName", "ContactName", "City"],
+      "mustNotContain": ["OrderID", "ProductName"],
+      "minCount": 3
+    },
+    "note": "column list scoped to Customers; other tables' columns must not appear"
+  },
+  {
+    "id": "INS-014",
+    "family": "insert",
+    "doc": "INSERT INTO Customers (Cont|",
+    "expect": {
+      "mustContain": ["ContactName"],
+      "mustNotContain": ["Country", "Phone"],
+      "minCount": 1
+    },
+    "note": "prefix Cont filters Customers columns; Country fails prefix, Phone is not a Customers column"
+  },
+  {
+    "id": "INS-015",
+    "family": "insert",
+    "doc": "INSERT INTO dbo.Orders (|",
+    "expect": {
+      "mustContain": ["CustomerID", "EmployeeID", "OrderDate", "ShipperID"],
+      "mustNotContain": ["Quantity", "ProductName"],
+      "minCount": 3
+    },
+    "note": "Orders insert column list; OrderDetails/Products columns must not leak"
+  },
+  {
+    "id": "INS-016",
+    "family": "insert",
+    "doc": "insert into dbo.orderdetails (|",
+    "expect": {
+      "mustContain": ["OrderID", "ProductID", "Quantity"],
+      "mustNotContain": ["CustomerName"],
+      "minCount": 3
+    },
+    "note": "all-lowercase table name resolves case-insensitively to OrderDetails columns"
+  },
+  {
+    "id": "INS-017",
+    "family": "insert",
+    "doc": "INSERT INTO Products (Pro|",
+    "expect": {
+      "mustContain": ["ProductName"],
+      "mustNotContain": ["Price", "ContactName"],
+      "minCount": 1
+    },
+    "note": "3-char prefix inside Products column list; Price fails prefix"
+  },
+  {
+    "id": "INS-018",
+    "family": "insert",
+    "doc": "INSERT INTO dbo.Products (ProductName, |",
+    "expect": {
+      "mustContain": ["SupplierID", "CategoryID", "Unit", "Price"],
+      "mustNotContain": ["CategoryName", "Quantity"],
+      "minCount": 3
+    },
+    "note": "second slot of column list still scoped to Products; Categories column must not appear"
+  },
+  {
+    "id": "INS-019",
+    "family": "insert",
+    "doc": "INSERT INTO Sales.Invoices (|",
+    "expect": {
+      "mustContain": ["OrderID", "InvoiceDate", "TotalAmount", "Paid"],
+      "mustNotContain": ["CustomerName", "ProductID"],
+      "minCount": 3
+    },
+    "note": "Sales-schema target column list scoping"
+  },
+  {
+    "id": "INS-020",
+    "family": "insert",
+    "doc": "INSERT INTO Sales.Invoices (OrderID, InvoiceDate, |",
+    "expect": {
+      "mustContain": ["TotalAmount", "Paid"],
+      "mustNotContain": ["OrderDate", "Quantity"],
+      "minCount": 2
+    },
+    "note": "third slot in Invoices column list; Orders columns must not leak via the OrderID FK"
+  },
+  {
+    "id": "INS-021",
+    "family": "insert",
+    "doc": "INSERT INTO dbo.Employees (|",
+    "expect": {
+      "mustContain": ["LastName", "FirstName", "BirthDate", "Notes"],
+      "mustNotContain": ["OrderDate", "City"],
+      "minCount": 3
+    },
+    "note": "Employees insert column list scoping"
+  },
+  {
+    "id": "INS-022",
+    "family": "insert",
+    "doc": "INSERT INTO Employees (F|",
+    "expect": {
+      "mustContain": ["FirstName"],
+      "mustNotContain": ["LastName", "Phone"],
+      "minCount": 1
+    },
+    "note": "1-char prefix in Employees column list"
+  },
+  {
+    "id": "INS-023",
+    "family": "insert",
+    "doc": "INSERT INTO dbo.Shippers (|",
+    "expect": {
+      "mustContain": ["ShipperName", "Phone"],
+      "mustNotContain": ["SupplierName", "City"],
+      "minCount": 2
+    },
+    "note": "Shippers column list; Suppliers columns are the classic near-name confusion"
+  },
+  {
+    "id": "INS-024",
+    "family": "insert",
+    "doc": "INSERT INTO Suppliers (|",
+    "expect": {
+      "mustContain": ["SupplierName", "ContactName", "City", "Phone"],
+      "mustNotContain": ["ShipperName", "Unit"],
+      "minCount": 4
+    },
+    "note": "unqualified Suppliers resolves via default schema; Shippers columns absent"
+  },
+  {
+    "id": "INS-025",
+    "family": "insert",
+    "doc": "INSERT INTO dbo.Categories (|",
+    "expect": {
+      "mustContain": ["CategoryName", "Description"],
+      "mustNotContain": ["ProductName", "Notes"],
+      "minCount": 2
+    },
+    "note": "Categories column list scoping"
+  },
+  {
+    "id": "INS-026",
+    "family": "insert",
+    "doc": "INSERT INTO dbo.Customers\n(|",
+    "expect": {
+      "mustContain": ["CustomerName", "Address", "PostalCode"],
+      "mustNotContain": ["ShipperName"],
+      "minCount": 3
+    },
+    "note": "column list paren on its own line still binds to the target table"
+  },
+  {
+    "id": "INS-027",
+    "family": "insert",
+    "doc": "INSERT INTO dbo.Orders (\n    CustomerID,\n    |",
+    "expect": {
+      "mustContain": ["EmployeeID", "OrderDate", "ShipperID"],
+      "mustNotContain": ["ProductID", "Quantity"],
+      "minCount": 2
+    },
+    "note": "multi-line column list, one column per line, second slot"
+  },
+  {
+    "id": "INS-028",
+    "family": "insert",
+    "doc": "UPDATE dbo.Products SET Price = 10 WHERE ProductID = 1;\nINSERT INTO dbo.Customers (|",
+    "expect": {
+      "mustContain": ["CustomerName", "City"],
+      "mustNotContain": ["ProductName", "Price"],
+      "minCount": 3
+    },
+    "note": "prior ;-terminated UPDATE on Products must not bleed Products columns into the Customers column list"
+  },
+  {
+    "id": "INS-029",
+    "family": "insert",
+    "doc": "INSERT dbo.Orders (|",
+    "expect": {
+      "mustContain": ["CustomerID", "OrderDate"],
+      "mustNotContain": ["InvoiceDate"],
+      "minCount": 3
+    },
+    "note": "INSERT without INTO is valid T-SQL; column list still scopes to Orders"
+  },
+  {
+    "id": "INS-030",
+    "family": "insert",
+    "doc": "INSERT INTO [dbo].[Customers] (|",
+    "expect": {
+      "mustContain": ["CustomerName", "Country"],
+      "mustNotContain": ["TotalAmount", "ProductName"],
+      "minCount": 3
+    },
+    "note": "fully bracketed target name resolves to Customers columns"
+  },
+  {
+    "id": "INS-031",
+    "family": "insert",
+    "doc": "INSERT INTO dbo.Customers (CustomerName, ContactName, Addr|",
+    "expect": {
+      "mustContain": ["Address"],
+      "mustNotContain": ["City", "Phone"],
+      "minCount": 1
+    },
+    "note": "4-char prefix in fourth slot of Customers column list"
+  },
+  {
+    "id": "INS-032",
+    "family": "insert",
+    "doc": "INSERT INTO SALES.INVOICES (pa|",
+    "expect": {
+      "mustContain": ["Paid"],
+      "mustNotContain": ["ProductName", "Phone"],
+      "minCount": 1
+    },
+    "note": "ALL-CAPS schema.table with lowercase prefix must match Paid case-insensitively"
+  },
+  {
+    "id": "INS-033",
+    "family": "insert",
+    "doc": "INSERT INTO vw_CustomerOrders (|",
+    "expect": {
+      "mustContain": ["CustomerName", "OrderDate"],
+      "mustNotContain": ["ProductName", "TotalAmount"],
+      "minCount": 2
+    },
+    "note": "insert into a view scopes to the view's columns"
+  },
+  {
+    "id": "INS-034",
+    "family": "insert",
+    "doc": "INSERT INTO dbo.NoSuchTable (|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["CustomerID", "ProductName", "OrderDate"],
+      "minCount": 0
+    },
+    "note": "negative: nonexistent target table must not dump real schema columns"
+  },
+  {
+    "id": "INS-035",
+    "family": "insert",
+    "doc": "INSERT INTO Orders(|",
+    "expect": {
+      "mustContain": ["CustomerID", "OrderDate"],
+      "mustNotContain": ["Quantity"],
+      "minCount": 3
+    },
+    "note": "no space between table name and open paren"
+  },
+  {
+    "id": "INS-036",
+    "family": "insert",
+    "doc": "INSERT   INTO    dbo.Products   (|",
+    "expect": {
+      "mustContain": ["ProductName", "Unit", "Price"],
+      "mustNotContain": ["Description", "LastName"],
+      "minCount": 3
+    },
+    "note": "excess whitespace between tokens must not break target binding"
+  },
+  {
+    "id": "INS-037",
+    "family": "insert",
+    "doc": "INSERT INTO dbo.Suppliers (\tSupplierName,\t|",
+    "expect": {
+      "mustContain": ["ContactName", "City"],
+      "mustNotContain": ["CustomerName", "ShipperName"],
+      "minCount": 2
+    },
+    "note": "tab-separated column list, second slot scoped to Suppliers"
+  },
+  {
+    "id": "INS-038",
+    "family": "insert",
+    "doc": "INSERT INTO dbo.Orders (CustomerID, OrderDate) VALUES (1, |",
+    "expect": {
+      "mustContain": ["GETDATE"],
+      "mustNotContain": ["ProductName", "SupplierName"],
+      "minCount": 1
+    },
+    "note": "VALUES expression slot offers built-in functions; unrelated tables' columns absent"
+  },
+  {
+    "id": "INS-039",
+    "family": "insert",
+    "doc": "INSERT INTO Sales.Invoices (OrderID, InvoiceDate, TotalAmount, Paid) VALUES (10, |",
+    "expect": {
+      "mustContain": ["GETDATE"],
+      "mustNotContain": ["CustomerName"],
+      "minCount": 1
+    },
+    "note": "second VALUES slot for a Sales-schema target"
+  },
+  {
+    "id": "INS-040",
+    "family": "insert",
+    "doc": "INSERT INTO dbo.Employees (FirstName, LastName, BirthDate)\nVALUES ('Nancy', 'Davolio', |",
+    "expect": {
+      "mustContain": ["GETDATE"],
+      "mustNotContain": ["ProductName", "City"],
+      "minCount": 1
+    },
+    "note": "VALUES on its own line; datetime slot offers GETDATE"
+  },
+  {
+    "id": "INS-041",
+    "family": "insert",
+    "doc": "INSERT INTO dbo.Products (ProductName, Price) VALUES (|",
+    "expect": {
+      "mustContain": ["GETDATE"],
+      "mustNotContain": ["ShipperName"],
+      "minCount": 1
+    },
+    "note": "first VALUES slot immediately after open paren"
+  },
+  {
+    "id": "INS-042",
+    "family": "insert",
+    "doc": "INSERT INTO dbo.Shippers (ShipperName, Phone) VALUES ('Spee|', '555-0100')",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["ShipperName"],
+      "minCount": 0
+    },
+    "note": "caret inside a string literal in VALUES: no completions"
+  },
+  {
+    "id": "INS-043",
+    "family": "insert",
+    "doc": "INSERT INTO dbo.Categories (CategoryName, Description) |",
+    "expect": {
+      "mustContain": ["VALUES", "SELECT"],
+      "mustNotContain": ["ProductName"],
+      "minCount": 2
+    },
+    "note": "after closed column list the VALUES/SELECT keywords must be offered"
+  },
+  {
+    "id": "INS-044",
+    "family": "insert",
+    "doc": "insert into dbo.OrderDetails (OrderID, ProductID, Quantity) val|",
+    "expect": {
+      "mustContain": ["VALUES"],
+      "mustNotContain": ["Quantity"],
+      "minCount": 1
+    },
+    "note": "3-char lowercase prefix filters to the VALUES keyword"
+  },
+  {
+    "id": "INS-045",
+    "family": "insert",
+    "doc": "INSERT INTO dbo.Shippers (ShipperName, Phone) VALUES ('Speedy Express', '555-0100'), (|",
+    "expect": {
+      "mustContain": ["GETDATE"],
+      "mustNotContain": ["CustomerName"],
+      "minCount": 1
+    },
+    "note": "second row of a multi-row VALUES constructor"
+  },
+  {
+    "id": "INS-046",
+    "family": "insert",
+    "doc": "DELETE FROM dbo.OrderDetails WHERE Quantity = 0;\nINSERT INTO dbo.OrderDetails (OrderID, ProductID, Quantity) VALUES (|",
+    "expect": {
+      "mustContain": ["GETDATE"],
+      "mustNotContain": ["CustomerName", "LastName"],
+      "minCount": 1
+    },
+    "note": "prior ;-terminated DELETE; VALUES slot still completes normally"
+  },
+  {
+    "id": "INS-047",
+    "family": "insert",
+    "doc": "INSERT INTO dbo.Orders DEFAULT |",
+    "expect": {
+      "mustContain": ["VALUES"],
+      "mustNotContain": ["OrderDate"],
+      "minCount": 1
+    },
+    "note": "DEFAULT VALUES form: only the VALUES keyword makes sense here"
+  },
+  {
+    "id": "INS-048",
+    "family": "insert",
+    "doc": "INSERT INTO Sales.Invoices (OrderID) SELECT | FROM dbo.Orders",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate", "CustomerID"],
+      "mustNotContain": ["TotalAmount", "InvoiceDate"],
+      "minCount": 3
+    },
+    "note": "INSERT...SELECT: select list scopes to the FROM source, not the insert target"
+  },
+  {
+    "id": "INS-049",
+    "family": "insert",
+    "doc": "INSERT INTO Sales.Invoices (OrderID) SELECT o.| FROM dbo.Orders o",
+    "expect": {
+      "mustContain": ["OrderID", "CustomerID", "ShipperID"],
+      "mustNotContain": ["Paid", "ProductName"],
+      "minCount": 3
+    },
+    "note": "alias-qualified select list in INSERT...SELECT; target columns must not leak into o."
+  },
+  {
+    "id": "INS-050",
+    "family": "insert",
+    "doc": "INSERT INTO dbo.Customers (CustomerName, City, Country) SELECT SupplierName, City, Country FROM |",
+    "expect": {
+      "mustContain": ["Suppliers", "Customers", "Orders"],
+      "mustNotContain": ["Quantity"],
+      "minCount": 5
+    },
+    "note": "FROM position of INSERT...SELECT offers tables"
+  },
+  {
+    "id": "INS-051",
+    "family": "insert",
+    "doc": "INSERT INTO dbo.Customers (CustomerName, City) SELECT s.SupplierName, s.| FROM dbo.Suppliers s",
+    "expect": {
+      "mustContain": ["City", "Country", "Phone"],
+      "mustNotContain": ["CustomerName", "OrderDate"],
+      "minCount": 3
+    },
+    "note": "s. scopes to Suppliers; insert-target Customers columns absent"
+  },
+  {
+    "id": "INS-052",
+    "family": "insert",
+    "doc": "INSERT INTO Sales.Invoices (OrderID, InvoiceDate, TotalAmount, Paid)\nSELECT OrderID, GETDATE(), 0, 0 FROM dbo.Orders WHERE |",
+    "expect": {
+      "mustContain": ["CustomerID", "OrderDate"],
+      "mustNotContain": ["TotalAmount", "Quantity"],
+      "minCount": 2
+    },
+    "note": "WHERE of the source SELECT scopes to Orders, not to the Invoices target"
+  },
+  {
+    "id": "INS-053",
+    "family": "insert",
+    "doc": "INSERT INTO dbo.Products (ProductName) SELECT Cat| FROM dbo.Categories",
+    "expect": {
+      "mustContain": ["CategoryName"],
+      "mustNotContain": ["Price"],
+      "minCount": 1
+    },
+    "note": "3-char prefix in source select list filters Categories columns"
+  },
+  {
+    "id": "INS-054",
+    "family": "insert",
+    "doc": "INSERT INTO dbo.OrderDetails\n    (OrderID, ProductID, Quantity)\nSELECT\n    o.OrderID,\n    p.ProductID,\n    |\nFROM dbo.Orders o CROSS JOIN dbo.Products p",
+    "expect": {
+      "mustContain": ["ProductName", "OrderDate"],
+      "mustNotContain": ["Quantity", "CustomerName"],
+      "minCount": 2
+    },
+    "note": "multi-line INSERT...SELECT with two sources; target-only column Quantity must not appear bare in select list"
+  },
+  {
+    "id": "INS-055",
+    "family": "insert",
+    "doc": "INSERT INTO dbo.Employees (FirstName, LastName)\nSELECT FirstName, LastName FROM dbo.Employees WHERE Birth|",
+    "expect": {
+      "mustContain": ["BirthDate"],
+      "mustNotContain": ["OrderDate"],
+      "minCount": 1
+    },
+    "note": "prefix-filtered WHERE in self-sourced INSERT...SELECT"
+  },
+  {
+    "id": "INS-056",
+    "family": "insert",
+    "doc": "INSERT INTO Sales.Invoices (OrderID, TotalAmount)\nSELECT o.OrderID, 100 FROM dbo.Orders o INNER JOIN dbo.Customers c ON o.CustomerID = c.|",
+    "expect": {
+      "mustContain": ["CustomerID", "CustomerName"],
+      "mustNotContain": ["OrderDate", "TotalAmount"],
+      "minCount": 2
+    },
+    "note": "ON clause alias c. scopes to Customers inside INSERT...SELECT"
+  },
+  {
+    "id": "INS-057",
+    "family": "insert",
+    "doc": "INSERT dbo.Categories (CategoryName) SELECT DISTINCT | FROM dbo.Suppliers",
+    "expect": {
+      "mustContain": ["SupplierName", "City"],
+      "mustNotContain": ["CategoryName", "ProductID"],
+      "minCount": 2
+    },
+    "note": "after DISTINCT the select list scopes to Suppliers; target column CategoryName absent"
+  },
+  {
+    "id": "INS-058",
+    "family": "insert",
+    "doc": "INSERT INTO dbo.Orders (CustomerID) SELECT CustomerID FROM dbo.|",
+    "expect": {
+      "mustContain": ["fn_OrdersByCustomer", "Orders", "Customers"],
+      "mustNotContain": ["Invoices"],
+      "minCount": 3
+    },
+    "note": "dbo. in source FROM offers tables and the TVF; Sales objects absent"
+  },
+  {
+    "id": "INS-059",
+    "family": "insert",
+    "doc": "INSERT INTO dbo.Products (ProductName, SupplierID)\nSELECT s.SupplierName, s.SupplierID\nFROM dbo.Suppliers s\nWHERE s.|",
+    "expect": {
+      "mustContain": ["Country", "City", "Phone"],
+      "mustNotContain": ["ProductName", "Unit"],
+      "minCount": 3
+    },
+    "note": "multi-line INSERT...SELECT; WHERE alias scopes to Suppliers, not the Products target"
+  },
+  {
+    "id": "INS-060",
+    "family": "insert",
+    "doc": "SELECT * FROM dbo.Shippers;\nINSERT INTO dbo.Shippers (ShipperName, Phone)\nSELECT ShipperName, Phone FROM dbo.Shippers WHERE |",
+    "expect": {
+      "mustContain": ["ShipperID", "ShipperName"],
+      "mustNotContain": ["CustomerID"],
+      "minCount": 2
+    },
+    "note": "prior ;-terminated SELECT then a self-copy INSERT...SELECT; WHERE scopes to Shippers"
+  },
+  {
+    "id": "INS-061",
+    "family": "insert",
+    "doc": "INSERT INTO dbo.Orders (CustomerID, OrderDate) SELECT CustomerID, OrderDate FROM dbo.vw_|",
+    "expect": {
+      "mustContain": ["vw_CustomerOrders", "vw_ProductCatalog"],
+      "mustNotContain": ["Customers"],
+      "minCount": 2
+    },
+    "note": "vw_ prefix in source FROM filters to views"
+  },
+  {
+    "id": "INS-062",
+    "family": "insert",
+    "doc": "INSERT INTO dbo.Products (ProductName, Price) SELECT | FROM dbo.vw_ProductCatalog",
+    "expect": {
+      "mustContain": ["ProductName", "Price", "CategoryName", "SupplierName"],
+      "mustNotContain": ["Unit", "SupplierID"],
+      "minCount": 3
+    },
+    "note": "view as source: only view columns, not base-table Products columns like Unit/SupplierID"
+  },
+  {
+    "id": "INS-063",
+    "family": "insert",
+    "doc": "INSERT INTO dbo.Categories (CategoryName)\nSELECT c.C| FROM dbo.Categories c",
+    "expect": {
+      "mustContain": ["CategoryName"],
+      "mustNotContain": ["City", "CustomerName"],
+      "minCount": 1
+    },
+    "note": "1-char prefix on alias c.; C-columns of other tables must not appear"
+  },
+  {
+    "id": "INS-064",
+    "family": "insert",
+    "doc": "INSERT INTO Sales.Invoices (OrderID, InvoiceDate, TotalAmount, Paid)\nSELECT od.OrderID, GETDATE(), SUM(od.Quantity), 0\nFROM dbo.OrderDetails od\nGROUP BY od.|",
+    "expect": {
+      "mustContain": ["OrderID", "ProductID"],
+      "mustNotContain": ["TotalAmount", "CustomerName"],
+      "minCount": 2
+    },
+    "note": "GROUP BY alias in INSERT...SELECT scopes to OrderDetails"
+  },
+  {
+    "id": "INS-065",
+    "family": "insert",
+    "doc": "INSERT INTO dbo.Customers (CustomerName)\nSELECT SupplierName FROM dbo.Suppliers\nUNION ALL\nSELECT | FROM dbo.Shippers",
+    "expect": {
+      "mustContain": ["ShipperName", "Phone"],
+      "mustNotContain": ["SupplierName", "CustomerName"],
+      "minCount": 2
+    },
+    "note": "UNION second branch of INSERT...SELECT scopes to Shippers only"
+  },
+  {
+    "id": "INS-066",
+    "family": "insert",
+    "doc": "INSERT INTO dbo.OrderDetails (OrderID, ProductID, Quantity)\nSELECT o.OrderID, 1, 1 FROM dbo.Orders o WHERE o.OrderDate > '2024-01-01' AND o.Ship|",
+    "expect": {
+      "mustContain": ["ShipperID"],
+      "mustNotContain": ["ShipperName"],
+      "minCount": 1
+    },
+    "note": "Ship prefix under alias o: ShipperID belongs to Orders, ShipperName belongs to Shippers and must not appear"
+  },
+  {
+    "id": "INS-067",
+    "family": "insert",
+    "doc": "INSERT INTO dbo.Orders (CustomerID)\nSELECT CustomerID FROM dbo.fn_|",
+    "expect": {
+      "mustContain": ["fn_OrdersByCustomer"],
+      "mustNotContain": ["Orders"],
+      "minCount": 1
+    },
+    "note": "fn_ prefix after FROM filters to the table-valued function"
+  },
+  {
+    "id": "INS-068",
+    "family": "insert",
+    "doc": "SELECT 1;\nINSER|",
+    "expect": {
+      "mustContain": ["INSERT"],
+      "mustNotContain": ["CustomerID"],
+      "minCount": 1
+    },
+    "note": "statement-start keyword prefix after a prior ;-terminated statement"
+  },
+  {
+    "id": "INS-069",
+    "family": "insert",
+    "doc": "INSERT INTO dbo.Orders (CustomerID) EXEC |",
+    "expect": {
+      "mustContain": ["usp_GetCustomerOrders", "usp_UpdateProductPrice"],
+      "mustNotContain": ["Orders"],
+      "minCount": 2
+    },
+    "note": "INSERT...EXEC source position offers procedures, not tables"
+  },
+  {
+    "id": "INS-070",
+    "family": "insert",
+    "doc": "INSERT INTO dbo.Orders (CustomerID) EXEC dbo.usp_Get|",
+    "expect": {
+      "mustContain": ["usp_GetCustomerOrders"],
+      "mustNotContain": ["usp_UpdateProductPrice"],
+      "minCount": 1
+    },
+    "note": "proc prefix filter in INSERT...EXEC"
+  },
+  {
+    "id": "INS-071",
+    "family": "insert",
+    "doc": "INSERT INTO dbo.Customers (CustomerName) -- remember City too|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["City"],
+      "minCount": 0
+    },
+    "note": "caret inside a trailing line comment: no completions"
+  },
+  {
+    "id": "INS-072",
+    "family": "insert",
+    "doc": "INSERT INTO dbo.Orders /* target |  */ (CustomerID)",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["CustomerID", "Orders"],
+      "minCount": 0
+    },
+    "note": "caret inside a block comment mid-statement: no completions"
+  },
+  {
+    "id": "INS-073",
+    "family": "insert",
+    "doc": "INSERT INTO /* the target */ |",
+    "expect": {
+      "mustContain": ["Orders", "Customers"],
+      "mustNotContain": ["Quantity"],
+      "minCount": 5
+    },
+    "note": "completions return immediately after a closed block comment in table position"
+  },
+  {
+    "id": "INS-074",
+    "family": "insert",
+    "doc": "INSERT INTO dbo.Emp|",
+    "expect": {
+      "mustContain": ["Employees"],
+      "mustNotContain": ["Customers"],
+      "minCount": 1
+    },
+    "note": "3-char schema-qualified table prefix"
+  },
+  {
+    "id": "INS-075",
+    "family": "insert",
+    "doc": "Insert Into dbo.Customers (cUsT|",
+    "expect": {
+      "mustContain": ["CustomerName"],
+      "mustNotContain": ["City", "ContactName"],
+      "minCount": 1
+    },
+    "note": "MiXeD-case keywords and prefix must match Customers columns case-insensitively"
+  },
+  {
+    "id": "INS-076",
+    "family": "insert",
+    "doc": "INSERT INTO dbo.Categories (CategoryName) VALUES ('Beverages');\nINSERT INTO dbo.Shippers (|",
+    "expect": {
+      "mustContain": ["ShipperName", "Phone"],
+      "mustNotContain": ["CategoryName", "Description"],
+      "minCount": 2
+    },
+    "note": "prior ;-terminated INSERT must not bleed Categories columns into the new Shippers column list"
+  },
+  {
+    "id": "INS-077",
+    "family": "insert",
+    "doc": "SELECT p.ProductName FROM dbo.Products p;\nINSERT INTO dbo.Customers (|",
+    "expect": {
+      "mustContain": ["CustomerName", "Address"],
+      "mustNotContain": ["ProductName", "Unit"],
+      "minCount": 3
+    },
+    "note": "alias from a previous ;-terminated statement must not scope the new INSERT column list"
+  },
+  {
+    "id": "INS-078",
+    "family": "insert",
+    "doc": "INSERT INTO dbo.Suppliers (SupplierName, ContactName, City, Country, Phone)\nVALUES ('Exotic Liquids', 'Charlotte Cooper', 'London', 'UK', |",
+    "expect": {
+      "mustContain": ["GETDATE"],
+      "mustNotContain": ["CustomerName", "ShipperName"],
+      "minCount": 1
+    },
+    "note": "fifth VALUES slot on a wrapped line still completes expressions"
+  },
+  {
+    "id": "INS-079",
+    "family": "insert",
+    "doc": "INSERT INTO dbo.Categories ( CategoryName , Description )   |",
+    "expect": {
+      "mustContain": ["VALUES", "SELECT"],
+      "mustNotContain": ["CategoryName"],
+      "minCount": 2
+    },
+    "note": "spaced-out closed column list; column suggestions after the closing paren would be a bug"
+  },
+  {
+    "id": "INS-080",
+    "family": "insert",
+    "doc": "INSERT INTO dbo.Orders (CustomerID, OrderDate)\nSELECT CustomerID, GETDATE() FROM Northwind_AutoTest.dbo.Cus|",
+    "expect": {
+      "mustContain": ["Customers"],
+      "mustNotContain": ["Invoices"],
+      "minCount": 1
+    },
+    "note": "three-part prefix in the source FROM of an INSERT...SELECT"
+  }
+]

@@ -30,6 +30,11 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
+    <!-- Spec 032 J3: ALSO embed the two product-default styles so the Blazor WASM web
+         edition (no filesystem) can surface the same built-ins as the desktop
+         (ProfileStore reads them via GetManifestResourceStream) — reuse, not re-definition. -->
+    <EmbeddedResource Include="Profiles\BuiltIn\khamis-style.akmlstyle" />
+    <EmbeddedResource Include="Profiles\BuiltIn\collapsed.akmlstyle" />
   </ItemGroup>
 
 </Project>

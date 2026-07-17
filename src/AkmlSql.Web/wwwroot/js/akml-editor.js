@@ -76,11 +76,17 @@ export async function create(hostElementId, initialText, dotNetRef) {
     //      replace text starts at the word boundary, CM fuzzy-filters by prefix.
     //   2. Caret is right after whitespace following an SQL keyword that
     //      grammatically expects an expression next (WHERE / AND / OR / FROM /
-    //      JOIN / ON / SET / HAVING / SELECT / GROUP BY / ORDER BY): show the
-    //      full candidate list anchored at the caret, no replacement range.
-    //      This is the case the user reported -- typing "... AND " (trailing
-    //      space) should suggest columns / tables without forcing Ctrl+Space.
-    //   3. context.explicit === true (Ctrl+Space) overrides everything.
+    //      JOIN / ON / SET / HAVING / SELECT / GROUP BY / ORDER BY, and — spec
+    //      032 FR-002 — the DML verbs UPDATE / INSERT [INTO] / DELETE [FROM] /
+    //      EXEC(UTE)): show the full candidate list anchored at the caret, no
+    //      replacement range. This is the case the user reported -- typing
+    //      "... AND " (trailing space) should suggest columns / tables without
+    //      forcing Ctrl+Space.
+    //   3. Caret is right after a member-access dot (`o.` / `dbo.` / `[Sales].` /
+    //      `"dbo".`) — spec 032 FR-001: the single most common completion gesture.
+    //      The leading char class requires an identifier START (letter/_/]/"),
+    //      so numeric literals (`3.`) never trigger.
+    //   4. context.explicit === true (Ctrl+Space) overrides everything.
     //
     // PR #236 review: regex hoisted above updateListener (was previously below
     // the listener and worked only because the closure binding resolved at
@@ -89,7 +95,8 @@ export async function create(hostElementId, initialText, dotNetRef) {
     // `in` intentionally omitted: typing "WHERE x IN " almost always wants a
     // subquery / value list, not a column name; the false-positive popup was
     // more noise than help.
-    const POST_KEYWORD_TRIGGER = /\b(?:where|and|or|from|join|on|set|having|select|group\s+by|order\s+by|by|when|then|else)\s+$/i;
+    const POST_KEYWORD_TRIGGER = /\b(?:where|and|or|from|join|on|set|having|select|group\s+by|order\s+by|by|when|then|else|update|insert(?:\s+into)?|into|delete(?:\s+from)?|exec(?:ute)?)\s+$/i;
+    const DOT_MEMBER_TRIGGER = /(?:[A-Za-z_\]"][\w$]*|\]|")\.$/;
 
     const updateListener = cm.view.EditorView.updateListener.of((update) => {
         if (!update.docChanged || !dotNetRef) return;
@@ -127,7 +134,9 @@ export async function create(hostElementId, initialText, dotNetRef) {
                 const pos = update.state.selection.main.head;
                 const line = update.state.doc.lineAt(pos);
                 const lineUpToCaret = line.text.slice(0, pos - line.from);
-                if (POST_KEYWORD_TRIGGER.test(lineUpToCaret)) {
+                // Spec 032 FR-001: '.' is a non-word char, so activateOnTyping never fires
+                // for member access — this manual open is the ONLY dot-trigger path.
+                if (POST_KEYWORD_TRIGGER.test(lineUpToCaret) || DOT_MEMBER_TRIGGER.test(lineUpToCaret)) {
                     cm.autocomplete.startCompletion(update.view);
                 }
             }
@@ -137,19 +146,25 @@ export async function create(hostElementId, initialText, dotNetRef) {
     const completionSource = async (context) => {
         if (!dotNetRef) return null;
 
-        const word = context.matchBefore(/[\w]+/);
+        // Spec 032 FR-005 (C5): include '@'/'#' in the replace span so accepting
+        // '@CustomerID' over a typed '@C' (or '#t' over '#') replaces the whole
+        // sigil token instead of doubling it ('@@CustomerID').
+        const word = context.matchBefore(/[@#\w]+/);
         const wordValid = word && (word.from !== word.to || context.explicit);
 
-        // Detect "after a trigger keyword + whitespace" by looking at the line text
-        // leading up to the caret. Cheaper than scanning the whole document.
+        // Detect "after a trigger keyword + whitespace" or "after a member-access
+        // dot" (spec 032 FR-001) by looking at the line text leading up to the
+        // caret. Cheaper than scanning the whole document.
         let postKeyword = false;
+        let dotMember = false;
         if (!wordValid) {
             const lineUpToCaret = context.state.doc.lineAt(context.pos)
                 .text.slice(0, context.pos - context.state.doc.lineAt(context.pos).from);
             postKeyword = POST_KEYWORD_TRIGGER.test(lineUpToCaret);
+            dotMember = DOT_MEMBER_TRIGGER.test(lineUpToCaret);
         }
 
-        if (!wordValid && !postKeyword && !context.explicit) return null;
+        if (!wordValid && !postKeyword && !dotMember && !context.explicit) return null;
 
         try {
             // Pass the LIVE document text so the offline smart GROUP BY action parses what the
@@ -381,6 +396,16 @@ export async function create(hostElementId, initialText, dotNetRef) {
         { key: 'Tab', run: expandWildcard },
     ]));
 
+    // Spec 032 (FR-003, campaign finding 3) — Tab accepts the highlighted completion. CM6's
+    // completion keymap deliberately ships NO Tab binding, so without this Tab fell through to
+    // indentWithTab while the popup was open. acceptCompletion returns false when no completion
+    // is active, preserving the chain: ghost-accept → completion-accept → wildcard-expand → indent.
+    // Registered between ghostKeymap and wildcardKeymap in the extensions list (same Prec class;
+    // earlier registration wins).
+    const completionAcceptKeymap = cm.state.Prec.highest(cm.view.keymap.of([
+        { key: 'Tab', run: cm.autocomplete.acceptCompletion },
+    ]));
+
     // ── Spec 030 (web Phase 1) — Quick Info on hover ─────────────────────────────────────────
     // CM6 hoverTooltip extension: asks the .NET IQuickInfoService for the object/column under the
     // hovered position and renders a small themed tooltip. Returns null = no tooltip.
@@ -567,7 +592,9 @@ export async function create(hostElementId, initialText, dotNetRef) {
     const navKeymap = cm.view.keymap.of([
         { key: 'F12', run: gotoDefinition },
         { key: 'Escape', run: dismissSignature },   // also clears a stray signature tooltip
-        { key: 'Mod-Enter', run: runExecute },      // Spec 030 Phase 5 — Execute query.
+        // Mod-Enter moved into the main keymap AHEAD of defaultKeymap (spec 032 FR-004):
+        // registered here (after the defaultKeymap spread) it was shadowed by defaultKeymap's
+        // own Mod-Enter → insertBlankLine, leaving no keyboard execute at all (campaign finding 4).
     ]);
 
     const state = cm.state.EditorState.create({
@@ -576,8 +603,12 @@ export async function create(hostElementId, initialText, dotNetRef) {
             cm.view.lineNumbers(),
             cm.view.highlightActiveLine(),
             ghostKeymap,
+            completionAcceptKeymap,   // Spec 032 FR-003 — Tab accepts an open completion (falls through when closed)
             wildcardKeymap,   // Tab-expand SELECT * (falls through when not a wildcard)
             cm.view.keymap.of([
+                // Spec 032 FR-004 — must precede defaultKeymap's own Mod-Enter (insertBlankLine),
+                // which otherwise shadows it: this is the only working keyboard execute.
+                { key: 'Mod-Enter', run: runExecute },
                 ...cm.commands.defaultKeymap,
                 ...cm.commands.historyKeymap,
                 ...cm.search.searchKeymap,

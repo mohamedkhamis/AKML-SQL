@@ -1,0 +1,1322 @@
+[
+  {
+    "id": "SELCOL-001",
+    "family": "select-columns",
+    "doc": "SELECT | FROM dbo.Customers",
+    "expect": {
+      "mustContain": ["CustomerID", "CustomerName", "City"],
+      "mustNotContain": ["ProductName", "InvoiceID"],
+      "minCount": 2
+    },
+    "note": "Bare select list scoped to Customers; Products/Invoices columns must not leak"
+  },
+  {
+    "id": "SELCOL-002",
+    "family": "select-columns",
+    "doc": "select | from dbo.Orders",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate", "ShipperID"],
+      "mustNotContain": ["Quantity", "ProductName"],
+      "minCount": 2
+    },
+    "note": "Lowercase keywords; Orders columns only"
+  },
+  {
+    "id": "SELCOL-003",
+    "family": "select-columns",
+    "doc": "Select | From dbo.Products",
+    "expect": {
+      "mustContain": ["ProductID", "ProductName", "Price", "Unit"],
+      "mustNotContain": ["CategoryName", "CustomerName"],
+      "minCount": 3
+    },
+    "note": "Mixed keyword casing; CategoryName belongs to Categories not Products"
+  },
+  {
+    "id": "SELCOL-004",
+    "family": "select-columns",
+    "doc": "SELECT   |   FROM dbo.Employees",
+    "expect": {
+      "mustContain": ["EmployeeID", "LastName", "FirstName"],
+      "mustNotContain": ["CustomerName", "OrderDate"],
+      "minCount": 2
+    },
+    "note": "Extra whitespace around caret; Employees scope"
+  },
+  {
+    "id": "SELCOL-005",
+    "family": "select-columns",
+    "doc": "SELECT | FROM Sales.Invoices",
+    "expect": {
+      "mustContain": ["InvoiceID", "TotalAmount", "Paid"],
+      "mustNotContain": ["CustomerName", "ProductName"],
+      "minCount": 2
+    },
+    "note": "Non-dbo schema table in FROM; Invoices columns suggested"
+  },
+  {
+    "id": "SELCOL-006",
+    "family": "select-columns",
+    "doc": "SELECT | FROM dbo.Categories",
+    "expect": {
+      "mustContain": ["CategoryID", "CategoryName", "Description"],
+      "mustNotContain": ["ProductName", "Price"],
+      "minCount": 2
+    },
+    "note": "Categories scope; FK-related Products columns must not appear"
+  },
+  {
+    "id": "SELCOL-007",
+    "family": "select-columns",
+    "doc": "SELECT | FROM dbo.Shippers",
+    "expect": {
+      "mustContain": ["ShipperID", "ShipperName", "Phone"],
+      "mustNotContain": ["CustomerName", "OrderDate"],
+      "minCount": 2
+    },
+    "note": "Small table bare select list"
+  },
+  {
+    "id": "SELCOL-008",
+    "family": "select-columns",
+    "doc": "SELECT | FROM dbo.Suppliers",
+    "expect": {
+      "mustContain": ["SupplierID", "SupplierName", "ContactName"],
+      "mustNotContain": ["ProductName", "Quantity"],
+      "minCount": 2
+    },
+    "note": "Suppliers scope; referencing Products columns must be absent"
+  },
+  {
+    "id": "SELCOL-009",
+    "family": "select-columns",
+    "doc": "SELECT | FROM dbo.vw_CustomerOrders",
+    "expect": {
+      "mustContain": ["CustomerID", "CustomerName", "OrderDate"],
+      "mustNotContain": ["ContactName", "Quantity"],
+      "minCount": 2
+    },
+    "note": "View in FROM: view columns suggested, base-table-only columns absent"
+  },
+  {
+    "id": "SELCOL-010",
+    "family": "select-columns",
+    "doc": "SELECT | FROM dbo.vw_ProductCatalog",
+    "expect": {
+      "mustContain": ["ProductID", "CategoryName", "SupplierName"],
+      "mustNotContain": ["Unit", "Quantity"],
+      "minCount": 2
+    },
+    "note": "View columns only; Unit is Products-only so absence catches base-table leakage"
+  },
+  {
+    "id": "SELCOL-011",
+    "family": "select-columns",
+    "doc": "SELECT | FROM Customers",
+    "expect": {
+      "mustContain": ["CustomerID", "Country"],
+      "mustNotContain": ["ProductName"],
+      "minCount": 2
+    },
+    "note": "Schema-less table reference still resolves to dbo.Customers"
+  },
+  {
+    "id": "SELCOL-012",
+    "family": "select-columns",
+    "doc": "SELECT |\nFROM dbo.OrderDetails",
+    "expect": {
+      "mustContain": ["OrderDetailID", "OrderID", "ProductID", "Quantity"],
+      "mustNotContain": ["OrderDate", "ProductName"],
+      "minCount": 3
+    },
+    "note": "Multi-line doc; caret on line before FROM"
+  },
+  {
+    "id": "SELCOL-013",
+    "family": "select-columns",
+    "doc": "SELECT c.| FROM dbo.Customers c",
+    "expect": {
+      "mustContain": ["CustomerID", "CustomerName", "City"],
+      "mustNotContain": ["OrderID", "ProductName"],
+      "minCount": 3
+    },
+    "note": "Alias dot completion, empty prefix"
+  },
+  {
+    "id": "SELCOL-014",
+    "family": "select-columns",
+    "doc": "SELECT o.| FROM dbo.Orders o",
+    "expect": {
+      "mustContain": ["OrderID", "CustomerID", "OrderDate"],
+      "mustNotContain": ["CustomerName", "Quantity"],
+      "minCount": 3
+    },
+    "note": "Orders alias; CustomerName belongs to Customers not Orders"
+  },
+  {
+    "id": "SELCOL-015",
+    "family": "select-columns",
+    "doc": "SELECT p.| FROM dbo.Products p",
+    "expect": {
+      "mustContain": ["ProductName", "Price", "Unit"],
+      "mustNotContain": ["CategoryName", "SupplierName"],
+      "minCount": 3
+    },
+    "note": "Products alias; FK-referenced table columns must not appear"
+  },
+  {
+    "id": "SELCOL-016",
+    "family": "select-columns",
+    "doc": "SELECT e.| FROM dbo.Employees e",
+    "expect": {
+      "mustContain": ["LastName", "FirstName", "BirthDate"],
+      "mustNotContain": ["CustomerName", "OrderID"],
+      "minCount": 3
+    },
+    "note": "Employees alias dot completion"
+  },
+  {
+    "id": "SELCOL-017",
+    "family": "select-columns",
+    "doc": "SELECT inv.| FROM Sales.Invoices inv",
+    "expect": {
+      "mustContain": ["InvoiceID", "InvoiceDate", "Paid"],
+      "mustNotContain": ["CustomerID", "ProductID"],
+      "minCount": 3
+    },
+    "note": "Alias over Sales-schema table"
+  },
+  {
+    "id": "SELCOL-018",
+    "family": "select-columns",
+    "doc": "SELECT od.| FROM dbo.OrderDetails od",
+    "expect": {
+      "mustContain": ["OrderDetailID", "Quantity"],
+      "mustNotContain": ["OrderDate", "Price"],
+      "minCount": 2
+    },
+    "note": "OrderDetails alias; Orders/Products columns absent"
+  },
+  {
+    "id": "SELCOL-019",
+    "family": "select-columns",
+    "doc": "SELECT s.| FROM dbo.Shippers s",
+    "expect": {
+      "mustContain": ["ShipperID", "ShipperName", "Phone"],
+      "mustNotContain": ["SupplierName", "City"],
+      "minCount": 3
+    },
+    "note": "Shippers alias; Suppliers columns must not appear"
+  },
+  {
+    "id": "SELCOL-020",
+    "family": "select-columns",
+    "doc": "SELECT sup.| FROM dbo.Suppliers sup",
+    "expect": {
+      "mustContain": ["SupplierName", "City", "Phone"],
+      "mustNotContain": ["ShipperName", "ProductName"],
+      "minCount": 3
+    },
+    "note": "Three-letter alias on Suppliers"
+  },
+  {
+    "id": "SELCOL-021",
+    "family": "select-columns",
+    "doc": "SELECT vco.| FROM dbo.vw_CustomerOrders vco",
+    "expect": {
+      "mustContain": ["CustomerName", "OrderID", "ShipperID"],
+      "mustNotContain": ["Address", "Quantity"],
+      "minCount": 3
+    },
+    "note": "View alias dot completion; Address is base-table-only"
+  },
+  {
+    "id": "SELCOL-022",
+    "family": "select-columns",
+    "doc": "SELECT cat.| FROM dbo.Categories AS cat",
+    "expect": {
+      "mustContain": ["CategoryID", "CategoryName"],
+      "mustNotContain": ["ProductID", "Price"],
+      "minCount": 2
+    },
+    "note": "AS-introduced alias resolves for dot completion"
+  },
+  {
+    "id": "SELCOL-023",
+    "family": "select-columns",
+    "doc": "SELECT o.|\nFROM dbo.Orders o\nWHERE o.OrderDate > '2024-01-01'",
+    "expect": {
+      "mustContain": ["OrderID", "EmployeeID"],
+      "mustNotContain": ["LastName", "Quantity"],
+      "minCount": 2
+    },
+    "note": "Multi-line doc with trailing WHERE; caret in select list"
+  },
+  {
+    "id": "SELCOL-024",
+    "family": "select-columns",
+    "doc": "select c.| from dbo.Customers as c",
+    "expect": {
+      "mustContain": ["ContactName", "PostalCode"],
+      "mustNotContain": ["SupplierName", "OrderID"],
+      "minCount": 2
+    },
+    "note": "Lowercase everything plus AS alias"
+  },
+  {
+    "id": "SELCOL-025",
+    "family": "select-columns",
+    "doc": "SELECT Customers.| FROM dbo.Customers",
+    "expect": {
+      "mustContain": ["CustomerID", "City"],
+      "mustNotContain": ["OrderID", "ProductName"],
+      "minCount": 2
+    },
+    "note": "Table name itself as qualifier when no alias declared"
+  },
+  {
+    "id": "SELCOL-026",
+    "family": "select-columns",
+    "doc": "SELECT x.| FROM dbo.Products x",
+    "expect": {
+      "mustContain": ["ProductID", "SupplierID"],
+      "mustNotContain": ["SupplierName", "CategoryName"],
+      "minCount": 2
+    },
+    "note": "Single-letter non-mnemonic alias still binds to Products"
+  },
+  {
+    "id": "SELCOL-027",
+    "family": "select-columns",
+    "doc": "SELECT i.| FROM Sales.Invoices AS i",
+    "expect": {
+      "mustContain": ["TotalAmount", "Paid", "OrderID"],
+      "mustNotContain": ["OrderDate", "CustomerID"],
+      "minCount": 3
+    },
+    "note": "AS alias on Sales.Invoices; Orders columns absent despite FK"
+  },
+  {
+    "id": "SELCOL-028",
+    "family": "select-columns",
+    "doc": "SELECT c.| FROM dbo.Customers c JOIN dbo.Orders o ON o.CustomerID = c.CustomerID",
+    "expect": {
+      "mustContain": ["CustomerName", "City"],
+      "mustNotContain": ["OrderDate", "EmployeeID"],
+      "minCount": 2
+    },
+    "note": "Two-table join: alias c scoped to Customers only"
+  },
+  {
+    "id": "SELCOL-029",
+    "family": "select-columns",
+    "doc": "SELECT o.| FROM dbo.Customers c JOIN dbo.Orders o ON o.CustomerID = c.CustomerID",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["CustomerName", "ContactName"],
+      "minCount": 2
+    },
+    "note": "Same join, other alias: o scoped to Orders only"
+  },
+  {
+    "id": "SELCOL-030",
+    "family": "select-columns",
+    "doc": "SELECT od.| FROM dbo.Orders o JOIN dbo.OrderDetails od ON od.OrderID = o.OrderID JOIN dbo.Products p ON p.ProductID = od.ProductID",
+    "expect": {
+      "mustContain": ["OrderDetailID", "Quantity"],
+      "mustNotContain": ["ProductName", "OrderDate"],
+      "minCount": 2
+    },
+    "note": "Three-table join; middle alias scoped to OrderDetails"
+  },
+  {
+    "id": "SELCOL-031",
+    "family": "select-columns",
+    "doc": "SELECT p.| FROM dbo.Orders o JOIN dbo.OrderDetails od ON od.OrderID = o.OrderID JOIN dbo.Products p ON p.ProductID = od.ProductID",
+    "expect": {
+      "mustContain": ["ProductName", "Price", "Unit"],
+      "mustNotContain": ["Quantity", "OrderDate"],
+      "minCount": 3
+    },
+    "note": "Three-table join; last alias scoped to Products"
+  },
+  {
+    "id": "SELCOL-032",
+    "family": "select-columns",
+    "doc": "SELECT | FROM dbo.Customers c JOIN dbo.Orders o ON o.CustomerID = c.CustomerID",
+    "expect": {
+      "mustContain": ["CustomerName", "OrderDate"],
+      "mustNotContain": ["ProductName", "Quantity"],
+      "minCount": 2
+    },
+    "note": "Unqualified select list in a join sees both tables' columns"
+  },
+  {
+    "id": "SELCOL-033",
+    "family": "select-columns",
+    "doc": "SELECT e.|\nFROM dbo.Orders o\nJOIN dbo.Employees e ON e.EmployeeID = o.EmployeeID",
+    "expect": {
+      "mustContain": ["LastName", "FirstName", "BirthDate"],
+      "mustNotContain": ["OrderDate", "CustomerID"],
+      "minCount": 3
+    },
+    "note": "Multi-line join; e scoped to Employees"
+  },
+  {
+    "id": "SELCOL-034",
+    "family": "select-columns",
+    "doc": "SELECT s.| FROM dbo.Orders o INNER JOIN dbo.Shippers s ON s.ShipperID = o.ShipperID",
+    "expect": {
+      "mustContain": ["ShipperName", "Phone"],
+      "mustNotContain": ["OrderDate", "CustomerID"],
+      "minCount": 2
+    },
+    "note": "INNER JOIN variant; s scoped to Shippers"
+  },
+  {
+    "id": "SELCOL-035",
+    "family": "select-columns",
+    "doc": "SELECT inv.| FROM Sales.Invoices inv JOIN dbo.Orders o ON o.OrderID = inv.OrderID",
+    "expect": {
+      "mustContain": ["InvoiceDate", "TotalAmount", "Paid"],
+      "mustNotContain": ["OrderDate", "CustomerID"],
+      "minCount": 3
+    },
+    "note": "Cross-schema join; inv scoped to Sales.Invoices"
+  },
+  {
+    "id": "SELCOL-036",
+    "family": "select-columns",
+    "doc": "SELECT sup.| FROM dbo.Products p LEFT JOIN dbo.Suppliers sup ON sup.SupplierID = p.SupplierID",
+    "expect": {
+      "mustContain": ["SupplierName", "Country"],
+      "mustNotContain": ["ProductName", "Price"],
+      "minCount": 2
+    },
+    "note": "LEFT JOIN alias scoping"
+  },
+  {
+    "id": "SELCOL-037",
+    "family": "select-columns",
+    "doc": "SELECT c.CustomerName, o.| FROM dbo.Customers c JOIN dbo.Orders o ON o.CustomerID = c.CustomerID",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["City", "ContactName"],
+      "minCount": 2
+    },
+    "note": "Second select-list item after comma, alias-qualified"
+  },
+  {
+    "id": "SELCOL-038",
+    "family": "select-columns",
+    "doc": "SELECT o.OrderID, | FROM dbo.Orders o JOIN dbo.Shippers sh ON sh.ShipperID = o.ShipperID",
+    "expect": {
+      "mustContain": ["OrderDate", "ShipperName"],
+      "mustNotContain": ["ProductName", "InvoiceID"],
+      "minCount": 2
+    },
+    "note": "Unqualified second item sees both joined tables"
+  },
+  {
+    "id": "SELCOL-039",
+    "family": "select-columns",
+    "doc": "select p.ProductName,\n       cat.|\nfrom dbo.Products p\njoin dbo.Categories cat on cat.CategoryID = p.CategoryID",
+    "expect": {
+      "mustContain": ["CategoryName", "Description"],
+      "mustNotContain": ["Price", "Unit"],
+      "minCount": 2
+    },
+    "note": "Multi-line lowercase join; cat scoped to Categories"
+  },
+  {
+    "id": "SELCOL-040",
+    "family": "select-columns",
+    "doc": "SELECT vpc.| FROM dbo.vw_ProductCatalog vpc JOIN dbo.Categories c ON c.CategoryName = vpc.CategoryName",
+    "expect": {
+      "mustContain": ["ProductName", "SupplierName", "Price"],
+      "mustNotContain": ["Description", "Unit"],
+      "minCount": 3
+    },
+    "note": "View joined to table; vpc limited to view columns"
+  },
+  {
+    "id": "SELCOL-041",
+    "family": "select-columns",
+    "doc": "SELECT c2.| FROM dbo.Customers c1 JOIN dbo.Customers c2 ON c2.City = c1.City",
+    "expect": {
+      "mustContain": ["CustomerID", "City"],
+      "mustNotContain": ["OrderID", "ProductName"],
+      "minCount": 2
+    },
+    "note": "Self-join; second alias resolves independently"
+  },
+  {
+    "id": "SELCOL-042",
+    "family": "select-columns",
+    "doc": "SELECT o.| FROM dbo.Customers c, dbo.Orders o WHERE o.CustomerID = c.CustomerID",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["ContactName", "Address"],
+      "minCount": 2
+    },
+    "note": "Old-style comma join still binds aliases"
+  },
+  {
+    "id": "SELCOL-043",
+    "family": "select-columns",
+    "doc": "SELECT c.Cust| FROM dbo.Customers c",
+    "expect": {
+      "mustContain": ["CustomerID", "CustomerName"],
+      "mustNotContain": ["ContactName", "City"],
+      "minCount": 2
+    },
+    "note": "4-char prefix filter after alias dot"
+  },
+  {
+    "id": "SELCOL-044",
+    "family": "select-columns",
+    "doc": "SELECT c.C| FROM dbo.Customers c",
+    "expect": {
+      "mustContain": ["CustomerID", "ContactName", "City", "Country"],
+      "mustNotContain": ["Address", "PostalCode"],
+      "minCount": 4
+    },
+    "note": "1-char prefix keeps all C-columns, drops the rest"
+  },
+  {
+    "id": "SELCOL-045",
+    "family": "select-columns",
+    "doc": "SELECT o.Order| FROM dbo.Orders o",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["CustomerID", "ShipperID"],
+      "minCount": 2
+    },
+    "note": "5-char prefix on Orders"
+  },
+  {
+    "id": "SELCOL-046",
+    "family": "select-columns",
+    "doc": "SELECT p.Pr| FROM dbo.Products p",
+    "expect": {
+      "mustContain": ["ProductID", "ProductName", "Price"],
+      "mustNotContain": ["Unit", "SupplierID"],
+      "minCount": 3
+    },
+    "note": "2-char prefix matches Product*/Price"
+  },
+  {
+    "id": "SELCOL-047",
+    "family": "select-columns",
+    "doc": "SELECT Prod| FROM dbo.Products",
+    "expect": {
+      "mustContain": ["ProductID", "ProductName"],
+      "mustNotContain": ["Price", "Unit"],
+      "minCount": 2
+    },
+    "note": "Unqualified prefix filter, no alias"
+  },
+  {
+    "id": "SELCOL-048",
+    "family": "select-columns",
+    "doc": "SELECT e.B| FROM dbo.Employees e",
+    "expect": {
+      "mustContain": ["BirthDate"],
+      "mustNotContain": ["LastName", "Notes"],
+      "minCount": 1
+    },
+    "note": "1-char prefix narrows to a single Employees column"
+  },
+  {
+    "id": "SELCOL-049",
+    "family": "select-columns",
+    "doc": "SELECT inv.T| FROM Sales.Invoices inv",
+    "expect": {
+      "mustContain": ["TotalAmount"],
+      "mustNotContain": ["InvoiceID", "Paid"],
+      "minCount": 1
+    },
+    "note": "Prefix filter on Sales-schema alias"
+  },
+  {
+    "id": "SELCOL-050",
+    "family": "select-columns",
+    "doc": "SELECT sup.Con| FROM dbo.Suppliers sup",
+    "expect": {
+      "mustContain": ["ContactName"],
+      "mustNotContain": ["Country", "City"],
+      "minCount": 1
+    },
+    "note": "Con matches ContactName but not Country (Cou)"
+  },
+  {
+    "id": "SELCOL-051",
+    "family": "select-columns",
+    "doc": "SELECT s.Ship| FROM dbo.Shippers s",
+    "expect": {
+      "mustContain": ["ShipperID", "ShipperName"],
+      "mustNotContain": ["Phone"],
+      "minCount": 2
+    },
+    "note": "Prefix filter keeps both Shipper* columns"
+  },
+  {
+    "id": "SELCOL-052",
+    "family": "select-columns",
+    "doc": "SELECT Cat| FROM dbo.Categories",
+    "expect": {
+      "mustContain": ["CategoryID", "CategoryName"],
+      "mustNotContain": ["Description"],
+      "minCount": 2
+    },
+    "note": "Unqualified 3-char prefix on Categories"
+  },
+  {
+    "id": "SELCOL-053",
+    "family": "select-columns",
+    "doc": "select c.cust| from dbo.Customers c",
+    "expect": {
+      "mustContain": ["CustomerID", "CustomerName"],
+      "mustNotContain": ["ContactName"],
+      "minCount": 2
+    },
+    "note": "Lowercase prefix matches PascalCase columns case-insensitively"
+  },
+  {
+    "id": "SELCOL-054",
+    "family": "select-columns",
+    "doc": "SELECT C.CUST| FROM dbo.Customers C",
+    "expect": {
+      "mustContain": ["CustomerID", "CustomerName"],
+      "mustNotContain": ["City"],
+      "minCount": 2
+    },
+    "note": "UPPERCASE prefix and alias match case-insensitively"
+  },
+  {
+    "id": "SELCOL-055",
+    "family": "select-columns",
+    "doc": "SELECT p.pRoDuCt| FROM dbo.Products p",
+    "expect": {
+      "mustContain": ["ProductID", "ProductName"],
+      "mustNotContain": ["Price"],
+      "minCount": 2
+    },
+    "note": "MiXeD-case prefix still matches Product* columns"
+  },
+  {
+    "id": "SELCOL-056",
+    "family": "select-columns",
+    "doc": "SELECT o.O| FROM dbo.Orders o",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["CustomerID", "EmployeeID"],
+      "minCount": 2
+    },
+    "note": "1-char prefix on Orders alias"
+  },
+  {
+    "id": "SELCOL-057",
+    "family": "select-columns",
+    "doc": "SELECT od.Q| FROM dbo.OrderDetails od",
+    "expect": {
+      "mustContain": ["Quantity"],
+      "mustNotContain": ["OrderID", "ProductID"],
+      "minCount": 1
+    },
+    "note": "1-char prefix narrows OrderDetails to Quantity"
+  },
+  {
+    "id": "SELCOL-058",
+    "family": "select-columns",
+    "doc": "SELECT\n    c.Co|\nFROM dbo.Customers c",
+    "expect": {
+      "mustContain": ["ContactName", "Country"],
+      "mustNotContain": ["City", "Address"],
+      "minCount": 2
+    },
+    "note": "Multi-line doc; 2-char prefix keeps Co* only (City is Ci*)"
+  },
+  {
+    "id": "SELCOL-059",
+    "family": "select-columns",
+    "doc": "SELECT vpc.Sup| FROM dbo.vw_ProductCatalog vpc",
+    "expect": {
+      "mustContain": ["SupplierName"],
+      "mustNotContain": ["ProductName", "Price"],
+      "minCount": 1
+    },
+    "note": "Prefix filter over view alias columns"
+  },
+  {
+    "id": "SELCOL-060",
+    "family": "select-columns",
+    "doc": "SELECT e.Last| FROM dbo.Employees AS e",
+    "expect": {
+      "mustContain": ["LastName"],
+      "mustNotContain": ["FirstName", "BirthDate"],
+      "minCount": 1
+    },
+    "note": "AS alias plus 4-char prefix"
+  },
+  {
+    "id": "SELCOL-061",
+    "family": "select-columns",
+    "doc": "SELECT i.Inv| FROM Sales.Invoices i",
+    "expect": {
+      "mustContain": ["InvoiceID", "InvoiceDate"],
+      "mustNotContain": ["TotalAmount", "Paid"],
+      "minCount": 2
+    },
+    "note": "3-char prefix keeps only Invoice* columns"
+  },
+  {
+    "id": "SELCOL-062",
+    "family": "select-columns",
+    "doc": "SELECT c.CustomerN| FROM dbo.Customers c",
+    "expect": {
+      "mustContain": ["CustomerName"],
+      "mustNotContain": ["CustomerID"],
+      "minCount": 1
+    },
+    "note": "Long prefix disambiguates between CustomerID and CustomerName"
+  },
+  {
+    "id": "SELCOL-063",
+    "family": "select-columns",
+    "doc": "SELECT TOP (5) | FROM dbo.Customers",
+    "expect": {
+      "mustContain": ["CustomerID", "CustomerName"],
+      "mustNotContain": ["ProductName", "OrderID"],
+      "minCount": 2
+    },
+    "note": "TOP (n) before caret must not break column scoping"
+  },
+  {
+    "id": "SELCOL-064",
+    "family": "select-columns",
+    "doc": "SELECT TOP 10 | FROM dbo.Orders",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["Quantity", "CustomerName"],
+      "minCount": 2
+    },
+    "note": "Parenthesis-less TOP form"
+  },
+  {
+    "id": "SELCOL-065",
+    "family": "select-columns",
+    "doc": "SELECT TOP (5) c.| FROM dbo.Customers c",
+    "expect": {
+      "mustContain": ["City", "Country"],
+      "mustNotContain": ["OrderDate", "ProductID"],
+      "minCount": 2
+    },
+    "note": "TOP plus alias dot completion"
+  },
+  {
+    "id": "SELCOL-066",
+    "family": "select-columns",
+    "doc": "select top (100) p.| from dbo.Products p",
+    "expect": {
+      "mustContain": ["ProductName", "Price"],
+      "mustNotContain": ["CategoryName", "SupplierName"],
+      "minCount": 2
+    },
+    "note": "Lowercase TOP variant with alias"
+  },
+  {
+    "id": "SELCOL-067",
+    "family": "select-columns",
+    "doc": "SELECT TOP (5) PERCENT | FROM dbo.Products",
+    "expect": {
+      "mustContain": ["ProductID", "Unit"],
+      "mustNotContain": ["CustomerID", "InvoiceID"],
+      "minCount": 2
+    },
+    "note": "TOP PERCENT form; select list still scoped to Products"
+  },
+  {
+    "id": "SELCOL-068",
+    "family": "select-columns",
+    "doc": "SELECT TOP (3) WITH TIES o.| FROM dbo.Orders o ORDER BY o.OrderDate",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["ShipperName", "CustomerName"],
+      "minCount": 2
+    },
+    "note": "TOP WITH TIES; caret in select list before ORDER BY"
+  },
+  {
+    "id": "SELCOL-069",
+    "family": "select-columns",
+    "doc": "SELECT TOP (5) Cust| FROM dbo.Customers",
+    "expect": {
+      "mustContain": ["CustomerID", "CustomerName"],
+      "mustNotContain": ["ContactName", "City"],
+      "minCount": 2
+    },
+    "note": "TOP combined with prefix filter"
+  },
+  {
+    "id": "SELCOL-070",
+    "family": "select-columns",
+    "doc": "SELECT TOP (20)\n    |\nFROM dbo.vw_CustomerOrders",
+    "expect": {
+      "mustContain": ["CustomerName", "OrderDate"],
+      "mustNotContain": ["Quantity", "ContactName"],
+      "minCount": 2
+    },
+    "note": "Multi-line TOP over a view"
+  },
+  {
+    "id": "SELCOL-071",
+    "family": "select-columns",
+    "doc": "SELECT TOP (1) inv.| FROM Sales.Invoices inv",
+    "expect": {
+      "mustContain": ["InvoiceID", "Paid"],
+      "mustNotContain": ["OrderDate", "CustomerID"],
+      "minCount": 2
+    },
+    "note": "TOP over Sales-schema alias"
+  },
+  {
+    "id": "SELCOL-072",
+    "family": "select-columns",
+    "doc": "SELECT TOP (5) e.F| FROM dbo.Employees e",
+    "expect": {
+      "mustContain": ["FirstName"],
+      "mustNotContain": ["LastName", "Photo"],
+      "minCount": 1
+    },
+    "note": "TOP plus 1-char prefix"
+  },
+  {
+    "id": "SELCOL-073",
+    "family": "select-columns",
+    "doc": "SELECT COUNT(|) FROM dbo.Orders",
+    "expect": {
+      "mustContain": ["OrderID", "CustomerID"],
+      "mustNotContain": ["ProductName", "Quantity"],
+      "minCount": 2
+    },
+    "note": "Caret inside aggregate call still scoped to FROM table"
+  },
+  {
+    "id": "SELCOL-074",
+    "family": "select-columns",
+    "doc": "SELECT SUM(od.|) FROM dbo.OrderDetails od",
+    "expect": {
+      "mustContain": ["Quantity", "OrderID"],
+      "mustNotContain": ["ProductName", "Price"],
+      "minCount": 2
+    },
+    "note": "Alias dot inside SUM; Products columns absent"
+  },
+  {
+    "id": "SELCOL-075",
+    "family": "select-columns",
+    "doc": "SELECT p.Price * | FROM dbo.Products p",
+    "expect": {
+      "mustContain": ["Price", "ProductID"],
+      "mustNotContain": ["TotalAmount", "Quantity"],
+      "minCount": 2
+    },
+    "note": "Right-hand side of arithmetic operator in select list"
+  },
+  {
+    "id": "SELCOL-076",
+    "family": "select-columns",
+    "doc": "SELECT od.Quantity * p.| FROM dbo.OrderDetails od JOIN dbo.Products p ON p.ProductID = od.ProductID",
+    "expect": {
+      "mustContain": ["Price", "ProductID"],
+      "mustNotContain": ["Quantity", "OrderID"],
+      "minCount": 2
+    },
+    "note": "Expression across two aliases; p scoped to Products"
+  },
+  {
+    "id": "SELCOL-077",
+    "family": "select-columns",
+    "doc": "SELECT UPPER(c.|) FROM dbo.Customers c",
+    "expect": {
+      "mustContain": ["CustomerName", "City"],
+      "mustNotContain": ["OrderID", "Price"],
+      "minCount": 2
+    },
+    "note": "Alias dot inside scalar function call"
+  },
+  {
+    "id": "SELCOL-078",
+    "family": "select-columns",
+    "doc": "SELECT YEAR(o.|) FROM dbo.Orders o",
+    "expect": {
+      "mustContain": ["OrderDate", "OrderID"],
+      "mustNotContain": ["BirthDate", "InvoiceDate"],
+      "minCount": 2
+    },
+    "note": "Datetime function argument; other tables' date columns absent"
+  },
+  {
+    "id": "SELCOL-079",
+    "family": "select-columns",
+    "doc": "SELECT CASE WHEN inv.| THEN 1 ELSE 0 END FROM Sales.Invoices inv",
+    "expect": {
+      "mustContain": ["Paid", "TotalAmount"],
+      "mustNotContain": ["OrderDate", "CustomerID"],
+      "minCount": 2
+    },
+    "note": "Alias dot inside CASE WHEN in the select list"
+  },
+  {
+    "id": "SELCOL-080",
+    "family": "select-columns",
+    "doc": "SELECT CONCAT(e.FirstName, ' ', e.|) FROM dbo.Employees e",
+    "expect": {
+      "mustContain": ["LastName", "FirstName"],
+      "mustNotContain": ["CustomerName", "ContactName"],
+      "minCount": 2
+    },
+    "note": "Later argument of CONCAT; same alias completes again"
+  },
+  {
+    "id": "SELCOL-081",
+    "family": "select-columns",
+    "doc": "SELECT\n    od.Quantity * p.Price AS LineTotal,\n    p.|\nFROM dbo.OrderDetails od\nJOIN dbo.Products p ON p.ProductID = od.ProductID",
+    "expect": {
+      "mustContain": ["ProductName", "Unit"],
+      "mustNotContain": ["Quantity", "OrderDetailID"],
+      "minCount": 2
+    },
+    "note": "Multi-line expression select list; second item scoped to p"
+  },
+  {
+    "id": "SELCOL-082",
+    "family": "select-columns",
+    "doc": "SELECT ISNULL(c.|, 'n/a') FROM dbo.Customers c",
+    "expect": {
+      "mustContain": ["City", "Country"],
+      "mustNotContain": ["Phone", "ProductName"],
+      "minCount": 2
+    },
+    "note": "First argument of ISNULL; Phone belongs to Shippers/Suppliers"
+  },
+  {
+    "id": "SELCOL-083",
+    "family": "select-columns",
+    "doc": "SELECT DATEDIFF(day, o.|, GETDATE()) FROM dbo.Orders o",
+    "expect": {
+      "mustContain": ["OrderDate"],
+      "mustNotContain": ["InvoiceDate", "BirthDate"],
+      "minCount": 1
+    },
+    "note": "Middle argument of DATEDIFF; only Orders columns in scope"
+  },
+  {
+    "id": "SELCOL-084",
+    "family": "select-columns",
+    "doc": "SELECT CAST(inv.| AS int) FROM Sales.Invoices inv",
+    "expect": {
+      "mustContain": ["TotalAmount", "InvoiceID"],
+      "mustNotContain": ["Price", "Quantity"],
+      "minCount": 2
+    },
+    "note": "Alias dot inside CAST expression"
+  },
+  {
+    "id": "SELCOL-085",
+    "family": "select-columns",
+    "doc": "SELECT c.City AS Town, c.| FROM dbo.Customers c",
+    "expect": {
+      "mustContain": ["Country", "PostalCode"],
+      "mustNotContain": ["OrderID", "ShipperName"],
+      "minCount": 2
+    },
+    "note": "Item after an AS-aliased column completes normally"
+  },
+  {
+    "id": "SELCOL-086",
+    "family": "select-columns",
+    "doc": "SELECT p.Price AS UnitPrice, p.Pr| FROM dbo.Products p",
+    "expect": {
+      "mustContain": ["ProductID", "ProductName"],
+      "mustNotContain": ["Unit", "SupplierID"],
+      "minCount": 2
+    },
+    "note": "Prefix filter on second item after AS alias"
+  },
+  {
+    "id": "SELCOL-087",
+    "family": "select-columns",
+    "doc": "SELECT o.OrderID AS Id, o.OrderDate AS PlacedOn, | FROM dbo.Orders o",
+    "expect": {
+      "mustContain": ["CustomerID", "ShipperID"],
+      "mustNotContain": ["ProductName", "InvoiceID"],
+      "minCount": 2
+    },
+    "note": "Third unqualified item after two AS aliases"
+  },
+  {
+    "id": "SELCOL-088",
+    "family": "select-columns",
+    "doc": "SELECT\n    e.EmployeeID AS Id,\n    e.|\nFROM dbo.Employees e",
+    "expect": {
+      "mustContain": ["FirstName", "LastName", "Notes"],
+      "mustNotContain": ["CustomerID", "OrderDate"],
+      "minCount": 3
+    },
+    "note": "Multi-line AS-aliased list; alias dot on second line"
+  },
+  {
+    "id": "SELCOL-089",
+    "family": "select-columns",
+    "doc": "SELECT c.CustomerName FullName, c.| FROM dbo.Customers c",
+    "expect": {
+      "mustContain": ["Address", "City"],
+      "mustNotContain": ["SupplierName", "Quantity"],
+      "minCount": 2
+    },
+    "note": "Column alias without AS keyword does not break the next item"
+  },
+  {
+    "id": "SELCOL-090",
+    "family": "select-columns",
+    "doc": "SELECT sup.SupplierName AS Vendor, sup.C| FROM dbo.Suppliers sup",
+    "expect": {
+      "mustContain": ["ContactName", "City", "Country"],
+      "mustNotContain": ["Address", "Phone"],
+      "minCount": 3
+    },
+    "note": "1-char prefix after AS-aliased first item"
+  },
+  {
+    "id": "SELCOL-091",
+    "family": "select-columns",
+    "doc": "SELECT inv.TotalAmount AS Amount, inv.| FROM Sales.Invoices inv",
+    "expect": {
+      "mustContain": ["InvoiceDate", "Paid"],
+      "mustNotContain": ["OrderDate", "Price"],
+      "minCount": 2
+    },
+    "note": "AS alias then dot completion on Sales.Invoices"
+  },
+  {
+    "id": "SELCOL-092",
+    "family": "select-columns",
+    "doc": "SELECT vco.OrderID AS RefNo, vco.| FROM dbo.vw_CustomerOrders vco",
+    "expect": {
+      "mustContain": ["CustomerName", "OrderDate", "ShipperID"],
+      "mustNotContain": ["Address", "Quantity"],
+      "minCount": 3
+    },
+    "note": "View alias with AS-aliased first column"
+  },
+  {
+    "id": "SELCOL-093",
+    "family": "select-columns",
+    "doc": "SELECT ProductName FROM dbo.Products;\nSELECT | FROM dbo.Customers",
+    "expect": {
+      "mustContain": ["CustomerID", "CustomerName"],
+      "mustNotContain": ["ProductName", "Unit"],
+      "minCount": 2
+    },
+    "note": "Second statement scoped to Customers; first statement's table must not leak"
+  },
+  {
+    "id": "SELCOL-094",
+    "family": "select-columns",
+    "doc": "SELECT p.ProductID FROM dbo.Products p;\nSELECT c.| FROM dbo.Customers c",
+    "expect": {
+      "mustContain": ["CustomerName", "City"],
+      "mustNotContain": ["ProductName", "Price"],
+      "minCount": 2
+    },
+    "note": "Alias in second statement independent of first statement's alias p"
+  },
+  {
+    "id": "SELCOL-095",
+    "family": "select-columns",
+    "doc": "SELECT o.OrderID FROM dbo.Orders o;\nSELECT | FROM dbo.Shippers",
+    "expect": {
+      "mustContain": ["ShipperID", "ShipperName"],
+      "mustNotContain": ["OrderDate", "CustomerID"],
+      "minCount": 2
+    },
+    "note": "Prior Orders statement must not contribute columns to Shippers scope"
+  },
+  {
+    "id": "SELCOL-096",
+    "family": "select-columns",
+    "doc": "UPDATE dbo.Products SET Price = 10 WHERE ProductID = 1;\nSELECT | FROM dbo.Categories",
+    "expect": {
+      "mustContain": ["CategoryID", "CategoryName", "Description"],
+      "mustNotContain": ["Price", "ProductName"],
+      "minCount": 2
+    },
+    "note": "Prior UPDATE statement; SELECT scoped only to Categories"
+  },
+  {
+    "id": "SELCOL-097",
+    "family": "select-columns",
+    "doc": "SELECT x.ProductName FROM dbo.Products x;\nSELECT x.| FROM dbo.Employees x",
+    "expect": {
+      "mustContain": ["FirstName", "LastName"],
+      "mustNotContain": ["ProductName", "Price"],
+      "minCount": 2
+    },
+    "note": "Same alias reused across statements must rebind to Employees"
+  },
+  {
+    "id": "SELCOL-098",
+    "family": "select-columns",
+    "doc": "INSERT INTO dbo.Shippers (ShipperName, Phone) VALUES ('A', '1');\nSELECT s.| FROM dbo.Suppliers s",
+    "expect": {
+      "mustContain": ["SupplierName", "ContactName"],
+      "mustNotContain": ["ShipperName"],
+      "minCount": 2
+    },
+    "note": "Prior INSERT into Shippers; s binds to Suppliers only"
+  },
+  {
+    "id": "SELCOL-099",
+    "family": "select-columns",
+    "doc": "SELECT 1;\nSELECT CustomerID FROM dbo.Customers;\nSELECT o.| FROM dbo.Orders o",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["CustomerName", "ContactName"],
+      "minCount": 2
+    },
+    "note": "Two prior statements; third statement scoped to Orders"
+  },
+  {
+    "id": "SELCOL-100",
+    "family": "select-columns",
+    "doc": "SELECT LastName FROM dbo.Employees;\nSELECT c.Co| FROM dbo.Customers c",
+    "expect": {
+      "mustContain": ["ContactName", "Country"],
+      "mustNotContain": ["LastName", "City"],
+      "minCount": 2
+    },
+    "note": "Prior statement plus prefix filter in the new statement"
+  },
+  {
+    "id": "SELCOL-101",
+    "family": "select-columns",
+    "doc": "SELECT TOP (5) ProductName FROM dbo.Products;\nSELECT TOP (5) | FROM Sales.Invoices",
+    "expect": {
+      "mustContain": ["InvoiceID", "TotalAmount"],
+      "mustNotContain": ["ProductName", "Unit"],
+      "minCount": 2
+    },
+    "note": "TOP in both statements; second scoped to Sales.Invoices"
+  },
+  {
+    "id": "SELCOL-102",
+    "family": "select-columns",
+    "doc": "SELECT CategoryName FROM dbo.Categories; SELECT | FROM dbo.Shippers",
+    "expect": {
+      "mustContain": ["ShipperName", "Phone"],
+      "mustNotContain": ["CategoryName", "Description"],
+      "minCount": 2
+    },
+    "note": "Two statements on one line separated by semicolon"
+  },
+  {
+    "id": "SELCOL-103",
+    "family": "select-columns",
+    "doc": "SELECT c.CustomerName FROM dbo.Customers c JOIN dbo.Orders o ON o.CustomerID = c.CustomerID;\nSELECT p.| FROM dbo.Products p",
+    "expect": {
+      "mustContain": ["ProductName", "Price"],
+      "mustNotContain": ["CustomerName", "OrderDate"],
+      "minCount": 2
+    },
+    "note": "Prior join statement's aliases must not bleed into new statement"
+  },
+  {
+    "id": "SELCOL-104",
+    "family": "select-columns",
+    "doc": "DELETE FROM dbo.OrderDetails WHERE Quantity = 0;\nSELECT od.| FROM dbo.OrderDetails od",
+    "expect": {
+      "mustContain": ["Quantity", "OrderDetailID"],
+      "mustNotContain": ["OrderDate", "ProductName"],
+      "minCount": 2
+    },
+    "note": "Prior DELETE; fresh alias in second statement over the same table"
+  },
+  {
+    "id": "SELCOL-105",
+    "family": "select-columns",
+    "doc": "SELECT DISTINCT | FROM dbo.Customers",
+    "expect": {
+      "mustContain": ["Country", "City"],
+      "mustNotContain": ["OrderID", "ProductName"],
+      "minCount": 2
+    },
+    "note": "DISTINCT before caret; column scoping unaffected"
+  },
+  {
+    "id": "SELCOL-106",
+    "family": "select-columns",
+    "doc": "SELECT DISTINCT c.| FROM dbo.Customers c",
+    "expect": {
+      "mustContain": ["Country", "City"],
+      "mustNotContain": ["OrderDate"],
+      "minCount": 2
+    },
+    "note": "DISTINCT plus alias dot completion"
+  },
+  {
+    "id": "SELCOL-107",
+    "family": "select-columns",
+    "doc": "SELECT DISTINCT o.C| FROM dbo.Orders o",
+    "expect": {
+      "mustContain": ["CustomerID"],
+      "mustNotContain": ["OrderID", "OrderDate"],
+      "minCount": 1
+    },
+    "note": "DISTINCT plus 1-char prefix narrows to CustomerID"
+  },
+  {
+    "id": "SELCOL-108",
+    "family": "select-columns",
+    "doc": "SELECT\t|\tFROM dbo.Orders",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["Quantity"],
+      "minCount": 2
+    },
+    "note": "Tab characters as whitespace around the caret"
+  },
+  {
+    "id": "SELCOL-109",
+    "family": "select-columns",
+    "doc": "SELECT c.|    FROM    dbo.Customers    c",
+    "expect": {
+      "mustContain": ["CustomerID", "Address"],
+      "mustNotContain": ["SupplierID", "OrderID"],
+      "minCount": 2
+    },
+    "note": "Irregular run-of-spaces whitespace; alias still resolves"
+  },
+  {
+    "id": "SELCOL-110",
+    "family": "select-columns",
+    "doc": "SELECT c.CustomerID, |, c.Country FROM dbo.Customers c",
+    "expect": {
+      "mustContain": ["CustomerName", "City"],
+      "mustNotContain": ["ProductName", "InvoiceID"],
+      "minCount": 2
+    },
+    "note": "Caret in the middle of the select list between existing items"
+  },
+  {
+    "id": "SELCOL-111",
+    "family": "select-columns",
+    "doc": "SELECT o.OrderID,| FROM dbo.Orders o",
+    "expect": {
+      "mustContain": ["OrderDate", "CustomerID"],
+      "mustNotContain": ["ProductName"],
+      "minCount": 2
+    },
+    "note": "Caret immediately after comma with no space"
+  },
+  {
+    "id": "SELCOL-112",
+    "family": "select-columns",
+    "doc": "SELECT Invoices.| FROM Sales.Invoices",
+    "expect": {
+      "mustContain": ["InvoiceID", "Paid"],
+      "mustNotContain": ["OrderDate", "CustomerID"],
+      "minCount": 2
+    },
+    "note": "Bare table name qualifier for a Sales-schema table without alias"
+  },
+  {
+    "id": "SELCOL-113",
+    "family": "select-columns",
+    "doc": "SELECT v.Ord| FROM dbo.vw_CustomerOrders v",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["CustomerID", "ShipperID"],
+      "minCount": 2
+    },
+    "note": "Prefix filter over view alias keeps Order* only"
+  },
+  {
+    "id": "SELCOL-114",
+    "family": "select-columns",
+    "doc": "SELECT\n    o.OrderID,\n    c.CustomerName,\n    s.|\nFROM dbo.Orders o\nJOIN dbo.Customers c ON c.CustomerID = o.CustomerID\nJOIN dbo.Shippers s ON s.ShipperID = o.ShipperID",
+    "expect": {
+      "mustContain": ["ShipperName", "Phone"],
+      "mustNotContain": ["OrderDate", "ContactName"],
+      "minCount": 2
+    },
+    "note": "Multi-line three-table join; third alias scoped to Shippers"
+  },
+  {
+    "id": "SELCOL-115",
+    "family": "select-columns",
+    "doc": "SELECT Ship| FROM dbo.Orders o JOIN dbo.Shippers s ON s.ShipperID = o.ShipperID",
+    "expect": {
+      "mustContain": ["ShipperID", "ShipperName"],
+      "mustNotContain": ["OrderDate", "Phone"],
+      "minCount": 2
+    },
+    "note": "Unqualified prefix across joined tables keeps Ship* only"
+  },
+  {
+    "id": "SELCOL-116",
+    "family": "select-columns",
+    "doc": "SELECT c.PostalCode, c.| FROM dbo.Customers c WHERE c.Country = 'Germany'",
+    "expect": {
+      "mustContain": ["City", "Address"],
+      "mustNotContain": ["SupplierName", "Phone"],
+      "minCount": 2
+    },
+    "note": "Select-list completion with trailing WHERE clause present"
+  },
+  {
+    "id": "SELCOL-117",
+    "family": "select-columns",
+    "doc": "SeLeCt | FrOm dbo.Products",
+    "expect": {
+      "mustContain": ["ProductName", "Unit"],
+      "mustNotContain": ["CategoryName", "CustomerID"],
+      "minCount": 2
+    },
+    "note": "Mixed-case keywords must still be recognized as a SELECT context"
+  },
+  {
+    "id": "SELCOL-118",
+    "family": "select-columns",
+    "doc": "SELECT cust_1.| FROM dbo.Customers cust_1",
+    "expect": {
+      "mustContain": ["CustomerID", "ContactName"],
+      "mustNotContain": ["OrderID"],
+      "minCount": 2
+    },
+    "note": "Alias containing an underscore and digit resolves"
+  },
+  {
+    "id": "SELCOL-119",
+    "family": "select-columns",
+    "doc": "SELECT | FROM [dbo].[Employees]",
+    "expect": {
+      "mustContain": ["EmployeeID", "Photo", "Notes"],
+      "mustNotContain": ["CustomerName"],
+      "minCount": 2
+    },
+    "note": "Bracketed schema and table in FROM still scope the select list"
+  },
+  {
+    "id": "SELCOL-120",
+    "family": "select-columns",
+    "doc": "SET NOCOUNT ON;\nSELECT\n    p.ProductName,\n    p.Price * 1.1 AS NewPrice,\n    p.|\nFROM dbo.Products p",
+    "expect": {
+      "mustContain": ["Unit", "CategoryID", "SupplierID"],
+      "mustNotContain": ["CategoryName", "SupplierName"],
+      "minCount": 3
+    },
+    "note": "Prior SET statement, multi-line expression list, alias dot on later line"
+  }
+]

@@ -1,0 +1,442 @@
+[
+  {
+    "id": "CASE-001",
+    "family": "casing-prefix",
+    "doc": "SELECT * FROM cust|",
+    "expect": {
+      "mustContain": ["Customers"],
+      "mustNotContain": ["Orders", "Products"],
+      "minCount": 1
+    },
+    "note": "lowercase 4-char prefix after FROM must match Customers case-insensitively"
+  },
+  {
+    "id": "CASE-002",
+    "family": "casing-prefix",
+    "doc": "select * from CUST|",
+    "expect": {
+      "mustContain": ["Customers"],
+      "mustNotContain": ["Categories", "CustomerID"],
+      "minCount": 1
+    },
+    "note": "UPPER prefix with lowercase keywords; CustomerID absent proves table-only FROM scope"
+  },
+  {
+    "id": "CASE-003",
+    "family": "casing-prefix",
+    "doc": "Select * From CuStOm|",
+    "expect": {
+      "mustContain": ["Customers"],
+      "mustNotContain": ["Categories", "Suppliers"],
+      "minCount": 1
+    },
+    "note": "MiXeD-case 6-char prefix must still match Customers"
+  },
+  {
+    "id": "CASE-004",
+    "family": "casing-prefix",
+    "doc": "SELECT cust| FROM dbo.Customers",
+    "expect": {
+      "mustContain": ["CustomerID", "CustomerName"],
+      "mustNotContain": ["ContactName", "OrderID"],
+      "minCount": 2
+    },
+    "note": "lowercase column prefix in select list; ContactName in scope but fails prefix, OrderID out of scope"
+  },
+  {
+    "id": "CASE-005",
+    "family": "casing-prefix",
+    "doc": "SELECT CONT| FROM dbo.Customers",
+    "expect": {
+      "mustContain": ["ContactName"],
+      "mustNotContain": ["Country", "CustomerID"],
+      "minCount": 1
+    },
+    "note": "UPPER prefix CONT matches ContactName only; Country (coun) must be filtered out"
+  },
+  {
+    "id": "CASE-006",
+    "family": "casing-prefix",
+    "doc": "SELECT c.cUsT| FROM dbo.Customers c",
+    "expect": {
+      "mustContain": ["CustomerID", "CustomerName"],
+      "mustNotContain": ["ContactName", "ProductName"],
+      "minCount": 2
+    },
+    "note": "mixed-case prefix after alias dot filters case-insensitively"
+  },
+  {
+    "id": "CASE-007",
+    "family": "casing-prefix",
+    "doc": "SELECT cust.| FROM dbo.Customers AS Cust",
+    "expect": {
+      "mustContain": ["CustomerID", "CustomerName", "City"],
+      "mustNotContain": ["OrderID", "ProductID"],
+      "minCount": 3
+    },
+    "note": "alias defined as Cust, referenced lowercase cust. with empty prefix; alias resolution must be case-insensitive"
+  },
+  {
+    "id": "CASE-008",
+    "family": "casing-prefix",
+    "doc": "SELECT O.orderD| FROM dbo.Orders o",
+    "expect": {
+      "mustContain": ["OrderDate"],
+      "mustNotContain": ["OrderID", "OrderDetailID"],
+      "minCount": 1
+    },
+    "note": "alias defined lowercase o, referenced UPPER O; mixed prefix orderD matches only OrderDate"
+  },
+  {
+    "id": "CASE-009",
+    "family": "casing-prefix",
+    "doc": "select ProductName from prod|",
+    "expect": {
+      "mustContain": ["Products"],
+      "mustNotContain": ["vw_ProductCatalog", "Suppliers"],
+      "minCount": 1
+    },
+    "note": "lowercase prefix prod matches Products; vw_ProductCatalog does not start with prod"
+  },
+  {
+    "id": "CASE-010",
+    "family": "casing-prefix",
+    "doc": "SELECT * FROM s|",
+    "expect": {
+      "mustContain": ["Shippers", "Suppliers"],
+      "mustNotContain": ["Customers", "Orders"],
+      "minCount": 2
+    },
+    "note": "1-char lowercase prefix must include both s-tables"
+  },
+  {
+    "id": "CASE-011",
+    "family": "casing-prefix",
+    "doc": "SELECT P| FROM dbo.Products",
+    "expect": {
+      "mustContain": ["ProductID", "ProductName", "Price"],
+      "mustNotContain": ["CategoryName", "Unit"],
+      "minCount": 3
+    },
+    "note": "1-char UPPER prefix; Unit fails prefix, CategoryName belongs to Categories not Products"
+  },
+  {
+    "id": "CASE-012",
+    "family": "casing-prefix",
+    "doc": "SELECT prod.pRi| FROM dbo.Products prod",
+    "expect": {
+      "mustContain": ["Price"],
+      "mustNotContain": ["ProductID", "ProductName"],
+      "minCount": 1
+    },
+    "note": "3-char mixed prefix pRi via word alias prod matches Price only"
+  },
+  {
+    "id": "CASE-013",
+    "family": "casing-prefix",
+    "doc": "SELECT ProductName\nFROM dbo.Products\n\tWHERE pri|",
+    "expect": {
+      "mustContain": ["Price"],
+      "mustNotContain": ["ProductName", "CategoryID"],
+      "minCount": 1
+    },
+    "note": "multi-line with tab indent; lowercase 3-char prefix in WHERE matches Price"
+  },
+  {
+    "id": "CASE-014",
+    "family": "casing-prefix",
+    "doc": "SELECT o.OrderID\nFROM dbo.Orders o\nJOIN CUSTOM|",
+    "expect": {
+      "mustContain": ["Customers"],
+      "mustNotContain": ["Categories", "OrderDetails"],
+      "minCount": 1
+    },
+    "note": "multi-line; UPPER prefix after JOIN matches Customers case-insensitively"
+  },
+  {
+    "id": "CASE-015",
+    "family": "casing-prefix",
+    "doc": "SELECT e.FIRST|\nFROM dbo.Employees e",
+    "expect": {
+      "mustContain": ["FirstName"],
+      "mustNotContain": ["LastName", "BirthDate"],
+      "minCount": 1
+    },
+    "note": "multi-line; UPPER prefix FIRST after alias dot matches FirstName"
+  },
+  {
+    "id": "CASE-016",
+    "family": "casing-prefix",
+    "doc": "SELECT * FROM dbo.Orders;\nselect * from ship|",
+    "expect": {
+      "mustContain": ["Shippers"],
+      "mustNotContain": ["Suppliers", "Orders"],
+      "minCount": 1
+    },
+    "note": "prior ;-terminated statement; lowercase prefix ship in new statement matches Shippers, not Suppliers"
+  },
+  {
+    "id": "CASE-017",
+    "family": "casing-prefix",
+    "doc": "SELECT OrderID FROM dbo.Orders;\nSELECT SUPP| FROM dbo.Suppliers",
+    "expect": {
+      "mustContain": ["SupplierID", "SupplierName"],
+      "mustNotContain": ["OrderID", "ShipperName"],
+      "minCount": 2
+    },
+    "note": "prior statement; UPPER prefix scoped to second statement's Suppliers; OrderID must not leak across ;"
+  },
+  {
+    "id": "CASE-018",
+    "family": "casing-prefix",
+    "doc": "SELECT c.City FROM dbo.Customers c;\nSELECT o.cust| FROM dbo.Orders o",
+    "expect": {
+      "mustContain": ["CustomerID"],
+      "mustNotContain": ["CustomerName", "City"],
+      "minCount": 1
+    },
+    "note": "prior statement with alias c; o.cust in new statement sees Orders.CustomerID only, not Customers columns"
+  },
+  {
+    "id": "CASE-019",
+    "family": "casing-prefix",
+    "doc": "SELECT * FROM dbo.cUsT|",
+    "expect": {
+      "mustContain": ["Customers"],
+      "mustNotContain": ["Invoices", "Suppliers"],
+      "minCount": 1
+    },
+    "note": "mixed-case prefix after dbo. schema qualifier; Sales.Invoices must not appear under dbo"
+  },
+  {
+    "id": "CASE-020",
+    "family": "casing-prefix",
+    "doc": "SELECT * FROM sales.inv|",
+    "expect": {
+      "mustContain": ["Invoices"],
+      "mustNotContain": ["Customers", "Orders"],
+      "minCount": 1
+    },
+    "note": "schema name typed lowercase sales; case-insensitive schema resolution plus lowercase prefix"
+  },
+  {
+    "id": "CASE-021",
+    "family": "casing-prefix",
+    "doc": "EXEC dbo.usp_get|",
+    "expect": {
+      "mustContain": ["usp_GetCustomerOrders"],
+      "mustNotContain": ["usp_UpdateProductPrice", "usp_MarkInvoicePaid"],
+      "minCount": 1
+    },
+    "note": "lowercase proc prefix after EXEC dbo. matches usp_GetCustomerOrders"
+  },
+  {
+    "id": "CASE-022",
+    "family": "casing-prefix",
+    "doc": "SELECT * FROM Sales.Invoices;\nexec USP_UPDATE|",
+    "expect": {
+      "mustContain": ["usp_UpdateProductPrice"],
+      "mustNotContain": ["usp_GetCustomerOrders", "usp_MarkInvoicePaid"],
+      "minCount": 1
+    },
+    "note": "prior ;-terminated statement; ALL-CAPS proc prefix after lowercase exec"
+  },
+  {
+    "id": "CASE-023",
+    "family": "casing-prefix",
+    "doc": "SELECT dbo.fn_ORDERITEM|",
+    "expect": {
+      "mustContain": ["fn_OrderItemCount"],
+      "mustNotContain": ["fn_OrdersByCustomer", "usp_UpdateProductPrice"],
+      "minCount": 1
+    },
+    "note": "UPPER-tail prefix on scalar function in SELECT expression position"
+  },
+  {
+    "id": "CASE-024",
+    "family": "casing-prefix",
+    "doc": "SELECT * FROM dbo.Fn_Orders|",
+    "expect": {
+      "mustContain": ["fn_OrdersByCustomer"],
+      "mustNotContain": ["fn_OrderItemCount", "Customers"],
+      "minCount": 1
+    },
+    "note": "mixed-case TVF prefix after FROM; fn_OrderItemCount fails the fn_orders prefix"
+  },
+  {
+    "id": "CASE-025",
+    "family": "casing-prefix",
+    "doc": "SELECT * FROM VW_|",
+    "expect": {
+      "mustContain": ["vw_CustomerOrders", "vw_ProductCatalog"],
+      "mustNotContain": ["Customers", "Products"],
+      "minCount": 2
+    },
+    "note": "UPPER VW_ prefix must match both lowercase-named views"
+  },
+  {
+    "id": "CASE-026",
+    "family": "casing-prefix",
+    "doc": "select * from vw_product|",
+    "expect": {
+      "mustContain": ["vw_ProductCatalog"],
+      "mustNotContain": ["vw_CustomerOrders", "Products"],
+      "minCount": 1
+    },
+    "note": "all-lowercase long view prefix filters to vw_ProductCatalog only"
+  },
+  {
+    "id": "CASE-027",
+    "family": "casing-prefix",
+    "doc": "SELECT S.SupplierName\nFROM dbo.Suppliers AS S\nWHERE s.co|",
+    "expect": {
+      "mustContain": ["ContactName", "Country"],
+      "mustNotContain": ["City", "Address"],
+      "minCount": 2
+    },
+    "note": "multi-line; alias defined UPPER S, referenced lowercase s; 2-char prefix co matches ContactName and Country, not City"
+  },
+  {
+    "id": "CASE-028",
+    "family": "casing-prefix",
+    "doc": "SELECT ProductName,   uni| FROM dbo.Products",
+    "expect": {
+      "mustContain": ["Unit"],
+      "mustNotContain": ["Price", "ProductID"],
+      "minCount": 1
+    },
+    "note": "extra run of spaces before prefix; lowercase uni matches Unit"
+  },
+  {
+    "id": "CASE-029",
+    "family": "casing-prefix",
+    "doc": "SELECT Ord.| FROM dbo.Orders AS ORD",
+    "expect": {
+      "mustContain": ["OrderID", "CustomerID", "OrderDate"],
+      "mustNotContain": ["ProductName", "Quantity"],
+      "minCount": 3
+    },
+    "note": "alias defined ORD, referenced Ord. with empty prefix; full Orders column list expected"
+  },
+  {
+    "id": "CASE-030",
+    "family": "casing-prefix",
+    "doc": "SELECT * FROM dbo.Customers c JOIN o|",
+    "expect": {
+      "mustContain": ["Orders", "OrderDetails"],
+      "mustNotContain": ["Products", "Shippers"],
+      "minCount": 2
+    },
+    "note": "1-char lowercase table prefix after JOIN matches both o-tables"
+  },
+  {
+    "id": "CASE-031",
+    "family": "casing-prefix",
+    "doc": "UPDATE dbo.Products SET Price = 10 WHERE ProductID = 1;\nEXEC Sales.Usp_Mark|",
+    "expect": {
+      "mustContain": ["usp_MarkInvoicePaid"],
+      "mustNotContain": ["usp_UpdateProductPrice", "usp_GetCustomerOrders"],
+      "minCount": 1
+    },
+    "note": "prior ;-terminated UPDATE; mixed-case proc prefix under Sales schema"
+  },
+  {
+    "id": "CASE-032",
+    "family": "casing-prefix",
+    "doc": "exec dbo.USP_GETCUSTOMERORDERS @|",
+    "expect": {
+      "mustContain": ["@CustomerID", "@FromDate", "@ToDate"],
+      "mustNotContain": ["@ProductID", "@NewPrice"],
+      "minCount": 3
+    },
+    "note": "proc name typed ALL-CAPS; parameter list must still resolve case-insensitively at bare @"
+  },
+  {
+    "id": "CASE-033",
+    "family": "casing-prefix",
+    "doc": "INSERT INTO dbo.shippers (ship|)",
+    "expect": {
+      "mustContain": ["ShipperID", "ShipperName"],
+      "mustNotContain": ["Phone", "SupplierName"],
+      "minCount": 2
+    },
+    "note": "table typed lowercase shippers; insert column-list prefix ship filters out Phone"
+  },
+  {
+    "id": "CASE-034",
+    "family": "casing-prefix",
+    "doc": "update DBO.EMPLOYEES set last|",
+    "expect": {
+      "mustContain": ["LastName"],
+      "mustNotContain": ["FirstName", "CustomerName"],
+      "minCount": 1
+    },
+    "note": "schema and table typed ALL-CAPS; SET column prefix last matches LastName"
+  },
+  {
+    "id": "CASE-035",
+    "family": "casing-prefix",
+    "doc": "DELETE od FROM dbo.OrderDetails OD WHERE od.qua|",
+    "expect": {
+      "mustContain": ["Quantity"],
+      "mustNotContain": ["ProductName", "OrderDate"],
+      "minCount": 1
+    },
+    "note": "alias defined UPPER OD, used lowercase od twice; qua matches Quantity only"
+  },
+  {
+    "id": "CASE-036",
+    "family": "casing-prefix",
+    "doc": "SELECT CategoryName\nFROM dbo.Categories;\n\nselect p.CAT|\nfrom dbo.Products p",
+    "expect": {
+      "mustContain": ["CategoryID"],
+      "mustNotContain": ["CategoryName", "Description"],
+      "minCount": 1
+    },
+    "note": "prior ;-terminated statement plus blank line; p.CAT sees Products.CategoryID, not Categories columns"
+  },
+  {
+    "id": "CASE-037",
+    "family": "casing-prefix",
+    "doc": "SELECT CustomerName FROM dbo.Customers ORDER BY cou|",
+    "expect": {
+      "mustContain": ["Country"],
+      "mustNotContain": ["City", "ContactName"],
+      "minCount": 1
+    },
+    "note": "lowercase prefix cou in ORDER BY matches Country; ContactName (con) filtered"
+  },
+  {
+    "id": "CASE-038",
+    "family": "casing-prefix",
+    "doc": "SELECT * FROM northwind_autotest.dbo.ORD|",
+    "expect": {
+      "mustContain": ["Orders", "OrderDetails"],
+      "mustNotContain": ["Invoices", "Products"],
+      "minCount": 2
+    },
+    "note": "three-part name with lowercase database and UPPER prefix; both must resolve case-insensitively"
+  },
+  {
+    "id": "CASE-039",
+    "family": "casing-prefix",
+    "doc": "SELECT customerN| FROM dbo.Customers",
+    "expect": {
+      "mustContain": ["CustomerName"],
+      "mustNotContain": ["CustomerID", "ContactName"],
+      "minCount": 1
+    },
+    "note": "long 9-char mixed prefix customerN narrows to CustomerName, excluding CustomerID"
+  },
+  {
+    "id": "CASE-040",
+    "family": "casing-prefix",
+    "doc": "SELECT o.CustomerID, COUNT(*)\nFROM dbo.Orders o\nGROUP BY o.CUSTOMERID\nHAVING COUNT(*) > 5\nORDER BY o.cUs|",
+    "expect": {
+      "mustContain": ["CustomerID"],
+      "mustNotContain": ["CustomerName", "OrderDetailID"],
+      "minCount": 1
+    },
+    "note": "multi-line GROUP BY/HAVING doc; ALL-CAPS earlier reference plus cUs prefix in ORDER BY both resolve to CustomerID"
+  }
+]

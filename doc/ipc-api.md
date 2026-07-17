@@ -185,17 +185,25 @@ CursorOffset  int      Zero-based character offset in the document
 TriggerChar   string?  Character that triggered completion (e.g. ".")
 ```
 
-**Response** (`CompletionResponse`):
+**Response** (`CompletionResponse`) — actual wire DTO (`AkmlSql.Core/Ipc/Messages/CompletionResponse.cs`, MessagePack keys in parentheses):
 ```
-Items  CompletionItem[]
-    Label         string   Display text
-    InsertText    string   Text to insert
-    Kind          int      1=Keyword, 2=Table, 3=Column, 4=Procedure, 5=Function,
-                           6=View, 7=Alias, 8=Snippet, 9=Parameter
-    Detail        string?  Type info / row count / description
-    SortText      string   Used for ordering within the list
-    FilterText    string   Used for fuzzy matching
-    Documentation string?  Extended hover documentation
+Items         CompletionItem[] (0)
+IsIncomplete  bool             (1)   true when the list was truncated at the suggestion cap
+
+CompletionItem
+    DisplayText    string  (0)   Display text (may be alias/schema-qualified, e.g. "o.OrderID")
+    InsertText     string  (1)   Text to insert on accept
+    ObjectType     int     (2)   CompletionObjectType: 0=Table 1=View 2=Column 3=Keyword 4=Snippet
+                                 5=Function 6=Procedure 7=Schema 8=Database 9=Variable 10=Alias
+                                 11=Parameter 12=SmartAction
+    SecondaryText  string  (3)   Type info / row count / description
+    SourceObject   string  (4)   Owning object's full name
+    SortPriority   int     (5)   Ascending — lower ranks first
+    IsLinkedServer bool    (6)   Pins linked-server items past the suggestion cap
+    FilterText     string? (7)   Spec 032 (FR-026): the text fuzzy matching scores against when
+                                 it differs from DisplayText (e.g. the bare column name of a
+                                 qualified item). Null → filter on DisplayText. Additive field;
+                                 pre-032 peers omit it and deserialize to null.
 ```
 
 ---

@@ -1,0 +1,662 @@
+[
+  {
+    "id": "SCHQ-001",
+    "family": "schema-qualified",
+    "doc": "SELECT * FROM dbo.|",
+    "expect": {
+      "mustContain": ["Customers", "Orders", "Products"],
+      "mustNotContain": ["Invoices", "usp_MarkInvoicePaid"],
+      "minCount": 5
+    },
+    "note": "Empty prefix after dbo. lists dbo tables; Sales objects must not leak in"
+  },
+  {
+    "id": "SCHQ-002",
+    "family": "schema-qualified",
+    "doc": "select * from dbo.|",
+    "expect": {
+      "mustContain": ["Customers", "Suppliers", "Employees"],
+      "mustNotContain": ["Invoices"],
+      "minCount": 5
+    },
+    "note": "Lowercase keywords and schema name still resolve dbo objects"
+  },
+  {
+    "id": "SCHQ-003",
+    "family": "schema-qualified",
+    "doc": "SELECT * FROM DBO.|",
+    "expect": {
+      "mustContain": ["Orders", "Shippers"],
+      "mustNotContain": ["Invoices"],
+      "minCount": 3
+    },
+    "note": "Uppercase DBO. must match schema case-insensitively"
+  },
+  {
+    "id": "SCHQ-004",
+    "family": "schema-qualified",
+    "doc": "SELECT TOP (10) * FROM dbo.|",
+    "expect": {
+      "mustContain": ["vw_CustomerOrders", "vw_ProductCatalog", "Categories"],
+      "mustNotContain": ["Invoices"],
+      "minCount": 5
+    },
+    "note": "Views appear alongside tables after dbo. in FROM position"
+  },
+  {
+    "id": "SCHQ-005",
+    "family": "schema-qualified",
+    "doc": "SELECT * FROM dbo.fn_|",
+    "expect": {
+      "mustContain": ["fn_OrdersByCustomer"],
+      "mustNotContain": ["usp_GetCustomerOrders", "Invoices"],
+      "minCount": 1
+    },
+    "note": "TVF completes after FROM dbo. with fn_ prefix; procs must not appear in FROM"
+  },
+  {
+    "id": "SCHQ-006",
+    "family": "schema-qualified",
+    "doc": "SELECT *\nFROM dbo.|",
+    "expect": {
+      "mustContain": ["Categories", "Shippers", "OrderDetails"],
+      "mustNotContain": ["Invoices"],
+      "minCount": 5
+    },
+    "note": "Multi-line doc: caret after dbo. on second line still schema-scoped"
+  },
+  {
+    "id": "SCHQ-007",
+    "family": "schema-qualified",
+    "doc": "SELECT * FROM dbo.Orders o JOIN dbo.|",
+    "expect": {
+      "mustContain": ["Customers", "OrderDetails", "Employees"],
+      "mustNotContain": ["Invoices"],
+      "minCount": 5
+    },
+    "note": "dbo. after JOIN offers dbo tables, not Sales objects"
+  },
+  {
+    "id": "SCHQ-008",
+    "family": "schema-qualified",
+    "doc": "SELECT  *   FROM   dbo.|",
+    "expect": {
+      "mustContain": ["Products", "Suppliers"],
+      "mustNotContain": ["usp_MarkInvoicePaid"],
+      "minCount": 3
+    },
+    "note": "Irregular whitespace before dbo. must not break schema resolution"
+  },
+  {
+    "id": "SCHQ-009",
+    "family": "schema-qualified",
+    "doc": "SELECT * FROM dbo.C|",
+    "expect": {
+      "mustContain": ["Customers", "Categories"],
+      "mustNotContain": ["Orders", "Invoices"],
+      "minCount": 2
+    },
+    "note": "1-char prefix C filters to Customers/Categories within dbo"
+  },
+  {
+    "id": "SCHQ-010",
+    "family": "schema-qualified",
+    "doc": "SELECT * FROM dbo.Cust|",
+    "expect": {
+      "mustContain": ["Customers"],
+      "mustNotContain": ["Categories", "Invoices"],
+      "minCount": 1
+    },
+    "note": "Longer prefix Cust excludes Categories"
+  },
+  {
+    "id": "SCHQ-011",
+    "family": "schema-qualified",
+    "doc": "SELECT * FROM dbo.Ord|",
+    "expect": {
+      "mustContain": ["Orders", "OrderDetails"],
+      "mustNotContain": ["Products", "Invoices"],
+      "minCount": 2
+    },
+    "note": "3-char prefix Ord matches both Orders and OrderDetails"
+  },
+  {
+    "id": "SCHQ-012",
+    "family": "schema-qualified",
+    "doc": "SELECT * FROM dbo.vw_|",
+    "expect": {
+      "mustContain": ["vw_CustomerOrders", "vw_ProductCatalog"],
+      "mustNotContain": ["Customers", "Invoices"],
+      "minCount": 2
+    },
+    "note": "vw_ prefix filters to the two dbo views only"
+  },
+  {
+    "id": "SCHQ-013",
+    "family": "schema-qualified",
+    "doc": "SELECT * FROM dbo.S|",
+    "expect": {
+      "mustContain": ["Shippers", "Suppliers"],
+      "mustNotContain": ["Customers"],
+      "minCount": 2
+    },
+    "note": "1-char prefix S in dbo matches Shippers and Suppliers"
+  },
+  {
+    "id": "SCHQ-014",
+    "family": "schema-qualified",
+    "doc": "select * from dbo.prod|",
+    "expect": {
+      "mustContain": ["Products"],
+      "mustNotContain": ["OrderDetails"],
+      "minCount": 1
+    },
+    "note": "Lowercase prefix prod matches Products case-insensitively"
+  },
+  {
+    "id": "SCHQ-015",
+    "family": "schema-qualified",
+    "doc": "SELECT * FROM dbo.eMpl|",
+    "expect": {
+      "mustContain": ["Employees"],
+      "mustNotContain": ["Orders"],
+      "minCount": 1
+    },
+    "note": "Mixed-case prefix eMpl matches Employees case-insensitively"
+  },
+  {
+    "id": "SCHQ-016",
+    "family": "schema-qualified",
+    "doc": "SELECT * FROM dbo.o|",
+    "expect": {
+      "mustContain": ["Orders", "OrderDetails"],
+      "mustNotContain": ["Customers"],
+      "minCount": 2
+    },
+    "note": "Lowercase 1-char prefix o matches Order* tables"
+  },
+  {
+    "id": "SCHQ-017",
+    "family": "schema-qualified",
+    "doc": "SELECT * FROM Sales.|",
+    "expect": {
+      "mustContain": ["Invoices"],
+      "mustNotContain": ["Customers", "Orders", "vw_ProductCatalog"],
+      "minCount": 1
+    },
+    "note": "Sales. scopes to Sales schema only; dbo objects must not leak"
+  },
+  {
+    "id": "SCHQ-018",
+    "family": "schema-qualified",
+    "doc": "select * from sales.|",
+    "expect": {
+      "mustContain": ["Invoices"],
+      "mustNotContain": ["Products"],
+      "minCount": 1
+    },
+    "note": "Lowercase sales. resolves the Sales schema case-insensitively"
+  },
+  {
+    "id": "SCHQ-019",
+    "family": "schema-qualified",
+    "doc": "SELECT * FROM SALES.|",
+    "expect": {
+      "mustContain": ["Invoices"],
+      "mustNotContain": ["Customers"],
+      "minCount": 1
+    },
+    "note": "Uppercase SALES. resolves the Sales schema case-insensitively"
+  },
+  {
+    "id": "SCHQ-020",
+    "family": "schema-qualified",
+    "doc": "SELECT * FROM Sales.Inv|",
+    "expect": {
+      "mustContain": ["Invoices"],
+      "mustNotContain": ["InvoiceID", "Customers"],
+      "minCount": 1
+    },
+    "note": "Prefix Inv in Sales matches the table; columns must not appear in table position"
+  },
+  {
+    "id": "SCHQ-021",
+    "family": "schema-qualified",
+    "doc": "SELECT * FROM Sales.I|",
+    "expect": {
+      "mustContain": ["Invoices"],
+      "mustNotContain": ["Orders"],
+      "minCount": 1
+    },
+    "note": "1-char prefix I in Sales schema"
+  },
+  {
+    "id": "SCHQ-022",
+    "family": "schema-qualified",
+    "doc": "EXEC Sales.|",
+    "expect": {
+      "mustContain": ["usp_MarkInvoicePaid"],
+      "mustNotContain": ["usp_GetCustomerOrders", "usp_UpdateProductPrice"],
+      "minCount": 1
+    },
+    "note": "EXEC Sales. offers only Sales-schema procs, not dbo procs"
+  },
+  {
+    "id": "SCHQ-023",
+    "family": "schema-qualified",
+    "doc": "EXEC Sales.usp|",
+    "expect": {
+      "mustContain": ["usp_MarkInvoicePaid"],
+      "mustNotContain": ["usp_GetCustomerOrders"],
+      "minCount": 1
+    },
+    "note": "Prefix usp after EXEC Sales. still excludes dbo procs"
+  },
+  {
+    "id": "SCHQ-024",
+    "family": "schema-qualified",
+    "doc": "SELECT *\nFROM Sales.|",
+    "expect": {
+      "mustContain": ["Invoices"],
+      "mustNotContain": ["Employees", "Shippers"],
+      "minCount": 1
+    },
+    "note": "Multi-line doc: Sales. on second line scoped to Sales objects"
+  },
+  {
+    "id": "SCHQ-025",
+    "family": "schema-qualified",
+    "doc": "SELECT * FROM [dbo].[|",
+    "expect": {
+      "mustContain": ["Customers", "Orders"],
+      "mustNotContain": ["Invoices"],
+      "minCount": 5
+    },
+    "note": "Bracketed schema with open bracket and empty prefix lists dbo objects"
+  },
+  {
+    "id": "SCHQ-026",
+    "family": "schema-qualified",
+    "doc": "SELECT * FROM [dbo].[Cust|",
+    "expect": {
+      "mustContain": ["Customers"],
+      "mustNotContain": ["Categories", "Invoices"],
+      "minCount": 1
+    },
+    "note": "Bracketed prefix [Cust filters to Customers"
+  },
+  {
+    "id": "SCHQ-027",
+    "family": "schema-qualified",
+    "doc": "SELECT * FROM [dbo].[Ord|",
+    "expect": {
+      "mustContain": ["Orders", "OrderDetails"],
+      "mustNotContain": ["Products"],
+      "minCount": 2
+    },
+    "note": "Bracketed prefix [Ord matches Orders and OrderDetails"
+  },
+  {
+    "id": "SCHQ-028",
+    "family": "schema-qualified",
+    "doc": "SELECT * FROM [Sales].[|",
+    "expect": {
+      "mustContain": ["Invoices"],
+      "mustNotContain": ["Customers", "Orders"],
+      "minCount": 1
+    },
+    "note": "Bracketed [Sales].[ scopes to Sales schema objects"
+  },
+  {
+    "id": "SCHQ-029",
+    "family": "schema-qualified",
+    "doc": "SELECT * FROM [Sales].[Inv|",
+    "expect": {
+      "mustContain": ["Invoices"],
+      "mustNotContain": ["Suppliers"],
+      "minCount": 1
+    },
+    "note": "Bracketed prefix inside Sales schema"
+  },
+  {
+    "id": "SCHQ-030",
+    "family": "schema-qualified",
+    "doc": "SELECT * FROM [dbo].[vw_|",
+    "expect": {
+      "mustContain": ["vw_CustomerOrders", "vw_ProductCatalog"],
+      "mustNotContain": ["Invoices"],
+      "minCount": 2
+    },
+    "note": "Bracketed vw_ prefix filters to dbo views"
+  },
+  {
+    "id": "SCHQ-031",
+    "family": "schema-qualified",
+    "doc": "SELECT * FROM [dbo].[S|",
+    "expect": {
+      "mustContain": ["Shippers", "Suppliers"],
+      "mustNotContain": ["Customers", "Invoices"],
+      "minCount": 2
+    },
+    "note": "Bracketed 1-char prefix S in dbo"
+  },
+  {
+    "id": "SCHQ-032",
+    "family": "schema-qualified",
+    "doc": "SELECT i.| FROM Sales.Invoices i",
+    "expect": {
+      "mustContain": ["InvoiceID", "TotalAmount", "Paid"],
+      "mustNotContain": ["CustomerName", "ProductName"],
+      "minCount": 5
+    },
+    "note": "Alias i bound to Sales.Invoices exposes its columns only"
+  },
+  {
+    "id": "SCHQ-033",
+    "family": "schema-qualified",
+    "doc": "SELECT inv.| FROM Sales.Invoices AS inv",
+    "expect": {
+      "mustContain": ["InvoiceDate", "OrderID"],
+      "mustNotContain": ["OrderDate", "ProductName"],
+      "minCount": 5
+    },
+    "note": "AS-declared alias to Sales.Invoices; OrderDate belongs to Orders and must not leak"
+  },
+  {
+    "id": "SCHQ-034",
+    "family": "schema-qualified",
+    "doc": "SELECT * FROM Sales.Invoices i WHERE i.|",
+    "expect": {
+      "mustContain": ["Paid", "TotalAmount"],
+      "mustNotContain": ["Price", "City"],
+      "minCount": 5
+    },
+    "note": "WHERE-clause alias to Sales.Invoices; Products/Customers columns excluded"
+  },
+  {
+    "id": "SCHQ-035",
+    "family": "schema-qualified",
+    "doc": "SELECT i.To| FROM Sales.Invoices i",
+    "expect": {
+      "mustContain": ["TotalAmount"],
+      "mustNotContain": ["Paid", "InvoiceID"],
+      "minCount": 1
+    },
+    "note": "Prefix To on Sales.Invoices alias filters to TotalAmount only"
+  },
+  {
+    "id": "SCHQ-036",
+    "family": "schema-qualified",
+    "doc": "SELECT o.OrderID, i.|\nFROM dbo.Orders o\nJOIN Sales.Invoices i ON i.OrderID = o.OrderID",
+    "expect": {
+      "mustContain": ["InvoiceID", "Paid", "TotalAmount"],
+      "mustNotContain": ["CustomerID", "OrderDate"],
+      "minCount": 5
+    },
+    "note": "Multi-line cross-schema join; i. is scoped to Invoices, not Orders columns"
+  },
+  {
+    "id": "SCHQ-037",
+    "family": "schema-qualified",
+    "doc": "SELECT x.| FROM [Sales].[Invoices] x",
+    "expect": {
+      "mustContain": ["InvoiceID", "InvoiceDate", "Paid"],
+      "mustNotContain": ["ShipperName", "SupplierName"],
+      "minCount": 5
+    },
+    "note": "Alias to bracketed [Sales].[Invoices] still resolves Invoices columns"
+  },
+  {
+    "id": "SCHQ-038",
+    "family": "schema-qualified",
+    "doc": "SELECT * FROM Sales.Invoices i ORDER BY i.|",
+    "expect": {
+      "mustContain": ["InvoiceDate", "TotalAmount"],
+      "mustNotContain": ["OrderDate"],
+      "minCount": 5
+    },
+    "note": "ORDER BY alias to Sales.Invoices; Orders.OrderDate must not leak"
+  },
+  {
+    "id": "SCHQ-039",
+    "family": "schema-qualified",
+    "doc": "UPDATE Sales.Invoices SET |",
+    "expect": {
+      "mustContain": ["Paid", "TotalAmount", "InvoiceDate"],
+      "mustNotContain": ["CustomerName", "ProductID"],
+      "minCount": 3
+    },
+    "note": "SET list scoped to schema-qualified update target Sales.Invoices"
+  },
+  {
+    "id": "SCHQ-040",
+    "family": "schema-qualified",
+    "doc": "SELECT * FROM dbo.Customers;\nSELECT * FROM Sales.|",
+    "expect": {
+      "mustContain": ["Invoices"],
+      "mustNotContain": ["Customers", "Orders"],
+      "minCount": 1
+    },
+    "note": "Prior ;-terminated statement; Sales. in new statement still scoped to Sales schema"
+  },
+  {
+    "id": "SCHQ-041",
+    "family": "schema-qualified",
+    "doc": "SELECT * FROM Sales.Invoices i;\nSELECT * FROM dbo.|",
+    "expect": {
+      "mustContain": ["Orders", "Customers"],
+      "mustNotContain": ["Invoices"],
+      "minCount": 5
+    },
+    "note": "Prior statement used Sales; dbo. in the next statement must not include Sales objects"
+  },
+  {
+    "id": "SCHQ-042",
+    "family": "schema-qualified",
+    "doc": "EXEC dbo.usp_UpdateProductPrice @ProductID = 1, @NewPrice = 9.99;\nEXEC Sales.|",
+    "expect": {
+      "mustContain": ["usp_MarkInvoicePaid"],
+      "mustNotContain": ["usp_UpdateProductPrice", "usp_GetCustomerOrders"],
+      "minCount": 1
+    },
+    "note": "Second EXEC after semicolon scoped to Sales procs only"
+  },
+  {
+    "id": "SCHQ-043",
+    "family": "schema-qualified",
+    "doc": "SELECT * FROM dbo.Products;\nSELECT * FROM dbo.Cat|",
+    "expect": {
+      "mustContain": ["Categories"],
+      "mustNotContain": ["Customers", "Products"],
+      "minCount": 1
+    },
+    "note": "Prefix Cat after prior statement filters to Categories"
+  },
+  {
+    "id": "SCHQ-044",
+    "family": "schema-qualified",
+    "doc": "SELECT i.Paid FROM Sales.Invoices i;\nSELECT c.| FROM dbo.Customers c",
+    "expect": {
+      "mustContain": ["CustomerName", "City", "Country"],
+      "mustNotContain": ["InvoiceID", "Paid"],
+      "minCount": 5
+    },
+    "note": "Alias c in new statement; prior statement's Invoices columns must not leak"
+  },
+  {
+    "id": "SCHQ-045",
+    "family": "schema-qualified",
+    "doc": "UPDATE Sales.Invoices SET Paid = 1 WHERE InvoiceID = 5;\nSELECT * FROM dbo.|",
+    "expect": {
+      "mustContain": ["Orders", "Employees"],
+      "mustNotContain": ["Invoices"],
+      "minCount": 5
+    },
+    "note": "dbo. after a prior Sales UPDATE statement stays dbo-scoped"
+  },
+  {
+    "id": "SCHQ-046",
+    "family": "schema-qualified",
+    "doc": "SELECT * FROM dbo.vw_CustomerOrders;\nSELECT * FROM [dbo].[vw_|",
+    "expect": {
+      "mustContain": ["vw_ProductCatalog", "vw_CustomerOrders"],
+      "mustNotContain": ["Invoices"],
+      "minCount": 2
+    },
+    "note": "Bracketed vw_ prefix in second statement lists both dbo views"
+  },
+  {
+    "id": "SCHQ-047",
+    "family": "schema-qualified",
+    "doc": "EXEC dbo.|",
+    "expect": {
+      "mustContain": ["usp_GetCustomerOrders", "usp_UpdateProductPrice"],
+      "mustNotContain": ["usp_MarkInvoicePaid", "Customers"],
+      "minCount": 2
+    },
+    "note": "EXEC dbo. offers dbo procs; Sales procs and tables must not appear"
+  },
+  {
+    "id": "SCHQ-048",
+    "family": "schema-qualified",
+    "doc": "exec dbo.usp_G|",
+    "expect": {
+      "mustContain": ["usp_GetCustomerOrders"],
+      "mustNotContain": ["usp_UpdateProductPrice"],
+      "minCount": 1
+    },
+    "note": "Lowercase exec with prefix usp_G filters to usp_GetCustomerOrders"
+  },
+  {
+    "id": "SCHQ-049",
+    "family": "schema-qualified",
+    "doc": "EXECUTE dbo.usp_|",
+    "expect": {
+      "mustContain": ["usp_GetCustomerOrders", "usp_UpdateProductPrice"],
+      "mustNotContain": ["usp_MarkInvoicePaid"],
+      "minCount": 2
+    },
+    "note": "EXECUTE long form; usp_ prefix lists both dbo user procs"
+  },
+  {
+    "id": "SCHQ-050",
+    "family": "schema-qualified",
+    "doc": "EXEC [dbo].[usp_|",
+    "expect": {
+      "mustContain": ["usp_GetCustomerOrders", "usp_UpdateProductPrice"],
+      "mustNotContain": ["usp_MarkInvoicePaid"],
+      "minCount": 2
+    },
+    "note": "Bracketed EXEC target prefix stays dbo-scoped"
+  },
+  {
+    "id": "SCHQ-051",
+    "family": "schema-qualified",
+    "doc": "DECLARE @pid int = 10;\nEXEC dbo.usp_Upd|",
+    "expect": {
+      "mustContain": ["usp_UpdateProductPrice"],
+      "mustNotContain": ["usp_GetCustomerOrders"],
+      "minCount": 1
+    },
+    "note": "EXEC on second line after DECLARE; prefix usp_Upd filters to one proc"
+  },
+  {
+    "id": "SCHQ-052",
+    "family": "schema-qualified",
+    "doc": "SELECT dbo.| FROM dbo.Orders",
+    "expect": {
+      "mustContain": ["fn_OrderItemCount"],
+      "mustNotContain": ["usp_MarkInvoicePaid", "Invoices"],
+      "minCount": 1
+    },
+    "note": "dbo. in select list offers scalar functions; Sales objects excluded"
+  },
+  {
+    "id": "SCHQ-053",
+    "family": "schema-qualified",
+    "doc": "SELECT dbo.fn_| FROM dbo.Orders o",
+    "expect": {
+      "mustContain": ["fn_OrderItemCount"],
+      "mustNotContain": ["usp_GetCustomerOrders"],
+      "minCount": 1
+    },
+    "note": "fn_ prefix in select list matches the scalar function, not procs"
+  },
+  {
+    "id": "SCHQ-054",
+    "family": "schema-qualified",
+    "doc": "SELECT OrderID, dbo.fn_Or| FROM dbo.Orders",
+    "expect": {
+      "mustContain": ["fn_OrderItemCount"],
+      "mustNotContain": ["usp_UpdateProductPrice"],
+      "minCount": 1
+    },
+    "note": "Longer fn_Or prefix in an expression position"
+  },
+  {
+    "id": "SCHQ-055",
+    "family": "schema-qualified",
+    "doc": "SELECT * FROM dbo.Orders o WHERE dbo.fn|",
+    "expect": {
+      "mustContain": ["fn_OrderItemCount"],
+      "mustNotContain": ["Invoices"],
+      "minCount": 1
+    },
+    "note": "Schema-qualified function completion inside WHERE"
+  },
+  {
+    "id": "SCHQ-056",
+    "family": "schema-qualified",
+    "doc": "SELECT * FROM Northwind_AutoTest.dbo.|",
+    "expect": {
+      "mustContain": ["Customers", "Orders"],
+      "mustNotContain": ["Invoices"],
+      "minCount": 5
+    },
+    "note": "Three-part name: db.dbo. lists dbo objects only"
+  },
+  {
+    "id": "SCHQ-057",
+    "family": "schema-qualified",
+    "doc": "SELECT * FROM Northwind_AutoTest.Sales.|",
+    "expect": {
+      "mustContain": ["Invoices"],
+      "mustNotContain": ["Customers", "Products"],
+      "minCount": 1
+    },
+    "note": "Three-part name with Sales schema stays Sales-scoped"
+  },
+  {
+    "id": "SCHQ-058",
+    "family": "schema-qualified",
+    "doc": "SELECT * FROM Northwind_AutoTest.dbo.Prod|",
+    "expect": {
+      "mustContain": ["Products"],
+      "mustNotContain": ["Orders", "Invoices"],
+      "minCount": 1
+    },
+    "note": "Three-part name with prefix filter"
+  },
+  {
+    "id": "SCHQ-059",
+    "family": "schema-qualified",
+    "doc": "SELECT * FROM Marketing.|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["Customers", "Orders", "Invoices"],
+      "minCount": 0
+    },
+    "note": "Negative: nonexistent schema must not fall back to listing all objects"
+  },
+  {
+    "id": "SCHQ-060",
+    "family": "schema-qualified",
+    "doc": "INSERT INTO Sales.|",
+    "expect": {
+      "mustContain": ["Invoices"],
+      "mustNotContain": ["Customers", "Orders"],
+      "minCount": 1
+    },
+    "note": "INSERT INTO Sales. offers Sales tables only"
+  }
+]

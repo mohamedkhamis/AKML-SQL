@@ -32,20 +32,28 @@ public class CteResolver
                 cursorOffset > batch.StartOffset + batch.FragmentLength)
                 continue;
 
-            var visitor = new CteVisitor();
-            batch.Accept(visitor);
-
-            foreach (var cte in visitor.Ctes)
+            // Spec 032 E3: statement-scoped (a CTE is not visible past its statement's ';').
+            foreach (var statement in batch.Statements)
             {
-                var qe = cte.QueryExpression;
-                if (qe != null &&
-                    cursorOffset > qe.StartOffset &&
-                    cursorOffset <= qe.StartOffset + qe.FragmentLength)
+                if (cursorOffset < statement.StartOffset ||
+                    cursorOffset > statement.StartOffset + statement.FragmentLength)
                     continue;
 
-                var sources = new List<(string, string)>();
-                CollectNamedTablesFromQuery(qe, sources);
-                result[cte.ExpressionName.Value] = sources;
+                var visitor = new CteVisitor();
+                statement.Accept(visitor);
+
+                foreach (var cte in visitor.Ctes)
+                {
+                    var qe = cte.QueryExpression;
+                    if (qe != null &&
+                        cursorOffset > qe.StartOffset &&
+                        cursorOffset <= qe.StartOffset + qe.FragmentLength)
+                        continue;
+
+                    var sources = new List<(string, string)>();
+                    CollectNamedTablesFromQuery(qe, sources);
+                    result[cte.ExpressionName.Value] = sources;
+                }
             }
         }
 
@@ -118,24 +126,65 @@ public class CteResolver
                 continue;
             }
 
-            var visitor = new CteVisitor();
-            batch.Accept(visitor);
-
-            // T072: Resolve CTEs in order (later CTEs can reference earlier ones).
-            // Exclude the CTE whose own QueryExpression contains the cursor — a
-            // non-recursive CTE can't reference itself, so suggesting its name as
-            // a FROM target inside its own body would be misleading.
-            foreach (var cte in visitor.Ctes)
+            // Spec 032 E3: statement-scoped, mirroring AliasResolver — CTEs from a
+            // previous statement in the batch must not leak past their ';'.
+            foreach (var statement in batch.Statements)
             {
-                var qe = cte.QueryExpression;
-                if (qe != null &&
-                    cursorOffset > qe.StartOffset &&
-                    cursorOffset <= qe.StartOffset + qe.FragmentLength)
+                if (cursorOffset < statement.StartOffset ||
+                    cursorOffset > statement.StartOffset + statement.FragmentLength)
                 {
                     continue;
                 }
-                var columns = ResolveCteColumns(cte, result);
-                result[cte.ExpressionName.Value] = columns;
+
+                var visitor = new CteVisitor();
+                statement.Accept(visitor);
+
+                // Spec 032 (CTE-011): when the cursor sits INSIDE some CTE's body, only
+                // EARLIER CTEs are referenceable there — a later sibling's name must not
+                // leak backwards into this body.
+                int visibilityLimit = int.MaxValue;
+                foreach (var cte in visitor.Ctes)
+                {
+                    var body = cte.QueryExpression;
+                    if (body != null &&
+                        cursorOffset > body.StartOffset &&
+                        cursorOffset <= body.StartOffset + body.FragmentLength)
+                    {
+                        visibilityLimit = cte.StartOffset;
+                        break;
+                    }
+                }
+
+                // T072: Resolve CTEs in order (later CTEs can reference earlier ones).
+                // Exclude the CTE whose own QueryExpression contains the cursor — a
+                // non-recursive CTE can't reference itself. Spec 032 E5: a RECURSIVE
+                // CTE (set-operator body) IS visible inside its own body, exposing the
+                // anchor member's projection.
+                foreach (var cte in visitor.Ctes)
+                {
+                    if (cte.StartOffset > visibilityLimit)
+                    {
+                        continue;
+                    }
+                    var qe = cte.QueryExpression;
+                    if (qe != null &&
+                        cursorOffset > qe.StartOffset &&
+                        cursorOffset <= qe.StartOffset + qe.FragmentLength)
+                    {
+                        if (qe is BinaryQueryExpression recursiveBody)
+                        {
+                            var anchorColumns = new List<string>();
+                            if (cte.Columns.Count > 0)
+                                anchorColumns.AddRange(cte.Columns.Select(c => c.Value));
+                            else
+                                InferColumnsFromQuery(recursiveBody.FirstQueryExpression, anchorColumns, result);
+                            result[cte.ExpressionName.Value] = anchorColumns;
+                        }
+                        continue;
+                    }
+                    var columns = ResolveCteColumns(cte, result);
+                    result[cte.ExpressionName.Value] = columns;
+                }
             }
         }
 
@@ -169,8 +218,10 @@ public class CteResolver
 
     /// <summary>
     /// T072: Infer column names from a query expression, handling nested CTE references.
+    /// Internal (spec 032 A4): also used by <see cref="AliasResolver"/> to enumerate
+    /// derived-table projections.
     /// </summary>
-    private static void InferColumnsFromQuery(
+    internal static void InferColumnsFromQuery(
         QueryExpression? queryExpression,
         List<string> columns,
         Dictionary<string, List<string>> resolvedCtes)

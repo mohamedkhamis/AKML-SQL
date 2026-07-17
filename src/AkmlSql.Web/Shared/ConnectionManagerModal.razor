@@ -106,6 +106,12 @@
                         {
                             <span class="akml-connmgr-hint" data-testid="conn-database-hint">@_dbMessage</span>
                         }
+                        @* Spec 032 FR-033: the engine enumerates databases under ITS service
+                           account — databases it lacks grants for are silently absent, which
+                           surprised even the campaign (the sandbox needed a grant to appear). *@
+                        <span class="akml-connmgr-hint" data-testid="conn-database-scope-hint">
+                            Lists databases the engine's service account can access.
+                        </span>
                     </div>
                     <div class="akml-connmgr-field">
                         <span class="akml-connmgr-field-label">Authentication</span>
@@ -443,6 +449,14 @@
         _password = string.Empty;   // never stored — re-prompt for SQL auth
         _message = null;
         ClearDatabaseList();
+
+        // Spec 032 FR-033 (campaign finding 6): SEED the option list with the saved
+        // database so the dropdown deterministically DISPLAYS it. Relying only on the
+        // synthetic fallback option raced Blazor's bind/render order and the select
+        // showed the browser default ("master") while the BOUND value was correct —
+        // display and target must never diverge.
+        if (!string.IsNullOrWhiteSpace(c.Database))
+            _databases.Add(c.Database);
     }
 
     // Drops any server-specific database list so a stale list from a different server/auth is never

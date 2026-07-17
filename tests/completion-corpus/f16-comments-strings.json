@@ -1,0 +1,552 @@
+[
+  {
+    "id": "CMST-001",
+    "family": "comments-strings",
+    "doc": "SELECT CustomerID FROM dbo.Customers -- TODO check Cust| later",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["CustomerID", "CustomerName"],
+      "minCount": 0
+    },
+    "note": "Caret inside trailing line comment with schema-name prefix; nothing should be suggested."
+  },
+  {
+    "id": "CMST-002",
+    "family": "comments-strings",
+    "doc": "-- SELECT Ord| FROM dbo.Orders",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["OrderID", "OrderDate", "Orders"],
+      "minCount": 0
+    },
+    "note": "Entire doc is a line comment containing SQL; caret prefix Ord must not surface Orders items."
+  },
+  {
+    "id": "CMST-003",
+    "family": "comments-strings",
+    "doc": "SELECT o.OrderID\nFROM dbo.Orders o\n-- join to cust|\nWHERE o.OrderID > 10",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["Customers", "CustomerID"],
+      "minCount": 0
+    },
+    "note": "Multi-line doc, caret inside a line comment sandwiched between real clauses."
+  },
+  {
+    "id": "CMST-004",
+    "family": "comments-strings",
+    "doc": "select p.ProductName from dbo.Products p -- price is p.Pr|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["Price", "ProductID"],
+      "minCount": 0
+    },
+    "note": "Lowercase keywords; alias.prefix pattern inside a line comment must stay dead."
+  },
+  {
+    "id": "CMST-005",
+    "family": "comments-strings",
+    "doc": "SELECT * FROM dbo.Shippers -- |",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["ShipperName", "Phone"],
+      "minCount": 0
+    },
+    "note": "Empty prefix right inside a trailing line comment; explicit invoke should yield nothing."
+  },
+  {
+    "id": "CMST-006",
+    "family": "comments-strings",
+    "doc": "SELECT CategoryID FROM dbo.Categories;\n-- next: query supp|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["Suppliers", "SupplierName"],
+      "minCount": 0
+    },
+    "note": "Prior ;-terminated statement, then a comment-only line; caret in comment gets no items."
+  },
+  {
+    "id": "CMST-007",
+    "family": "comments-strings",
+    "doc": "-- FROM dbo.|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["Customers", "Orders", "Products"],
+      "minCount": 0
+    },
+    "note": "dbo. dot-trigger text inside a line comment must not produce schema object completions."
+  },
+  {
+    "id": "CMST-008",
+    "family": "comments-strings",
+    "doc": "SELECT e.FirstName, -- e.La|\n  e.EmployeeID\nFROM dbo.Employees e",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["LastName", "BirthDate"],
+      "minCount": 0
+    },
+    "note": "Line comment interrupting a multi-line select list; alias dot-prefix in comment is inert."
+  },
+  {
+    "id": "CMST-009",
+    "family": "comments-strings",
+    "doc": "SELECT c.CustomerName FROM dbo.Customers c -- c.|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["CustomerID", "Country"],
+      "minCount": 0
+    },
+    "note": "Alias dot with empty prefix inside line comment; live alias c must not leak columns."
+  },
+  {
+    "id": "CMST-010",
+    "family": "comments-strings",
+    "doc": "Select ShipperID From dbo.Shippers Where -- filter on Ph|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["Phone", "ShipperName"],
+      "minCount": 0
+    },
+    "note": "Mixed-case keywords, partial WHERE followed by comment; Ph prefix inside comment yields nothing."
+  },
+  {
+    "id": "CMST-011",
+    "family": "comments-strings",
+    "doc": "SELECT 1\n--|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["Customers", "Orders"],
+      "minCount": 0
+    },
+    "note": "Caret immediately after the two dashes at end of doc; already inside the comment."
+  },
+  {
+    "id": "CMST-012",
+    "family": "comments-strings",
+    "doc": "UPDATE dbo.Products SET Price = 10 WHERE ProductID = 1;\nSELECT SupplierName FROM dbo.Suppliers -- verify supplier Cou|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["Country", "City"],
+      "minCount": 0
+    },
+    "note": "Prior ;-terminated UPDATE, second statement with trailing comment; caret in comment is dead."
+  },
+  {
+    "id": "CMST-013",
+    "family": "comments-strings",
+    "doc": "SELECT /* Cust| */ CustomerID FROM dbo.Customers",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["CustomerID", "CustomerName"],
+      "minCount": 0
+    },
+    "note": "Caret inside block comment in select-list position with column-name prefix."
+  },
+  {
+    "id": "CMST-014",
+    "family": "comments-strings",
+    "doc": "/* query the Ord| table */ SELECT OrderID FROM dbo.Orders",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["Orders", "OrderID"],
+      "minCount": 0
+    },
+    "note": "Leading block comment before the statement; Ord prefix inside it stays empty."
+  },
+  {
+    "id": "CMST-015",
+    "family": "comments-strings",
+    "doc": "/*\n  author: khamis\n  touches dbo.Prod|\n*/\nSELECT ProductID FROM dbo.Products",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["Products", "ProductName"],
+      "minCount": 0
+    },
+    "note": "Multi-line header block comment; dbo.Prod inside it must not trigger object completion."
+  },
+  {
+    "id": "CMST-016",
+    "family": "comments-strings",
+    "doc": "SELECT OrderID FROM dbo.Orders /* WHERE Order| */",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["OrderID", "OrderDate"],
+      "minCount": 0
+    },
+    "note": "Block comment containing WHERE-clause text after a complete statement; Order prefix inert."
+  },
+  {
+    "id": "CMST-017",
+    "family": "comments-strings",
+    "doc": "SELECT City FROM dbo.Customers\n/* TODO add filter on Coun|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["Country", "City"],
+      "minCount": 0
+    },
+    "note": "Unclosed block comment at EOF; caret is still inside the comment region."
+  },
+  {
+    "id": "CMST-018",
+    "family": "comments-strings",
+    "doc": "SELECT i.InvoiceID FROM Sales.Invoices i /* i.To| */",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["TotalAmount", "Paid"],
+      "minCount": 0
+    },
+    "note": "Alias dot-prefix for Sales.Invoices inside a block comment; no column leak."
+  },
+  {
+    "id": "CMST-019",
+    "family": "comments-strings",
+    "doc": "SELECT * FROM dbo.Employees /* | */",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["FirstName", "LastName"],
+      "minCount": 0
+    },
+    "note": "Empty prefix in the middle of a block comment; explicit invoke returns nothing."
+  },
+  {
+    "id": "CMST-020",
+    "family": "comments-strings",
+    "doc": "SELECT s.SupplierName /*\n s.Con|\n*/ FROM dbo.Suppliers s",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["ContactName", "Country"],
+      "minCount": 0
+    },
+    "note": "Block comment spanning lines inside the select list; alias prefix on its own line is inert."
+  },
+  {
+    "id": "CMST-021",
+    "family": "comments-strings",
+    "doc": "DELETE FROM dbo.OrderDetails WHERE OrderDetailID = 5;\n/* next batch: Ord| */",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["Orders", "OrderDetails"],
+      "minCount": 0
+    },
+    "note": "Prior ;-terminated DELETE then a block comment; Ord prefix inside comment yields nothing."
+  },
+  {
+    "id": "CMST-022",
+    "family": "comments-strings",
+    "doc": "SELECT Phone FROM dbo.Shippers /* -- Ship| */",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["ShipperName", "ShipperID"],
+      "minCount": 0
+    },
+    "note": "Line-comment marker nested in a block comment must not confuse masking; still no items."
+  },
+  {
+    "id": "CMST-023",
+    "family": "comments-strings",
+    "doc": "SELECT CategoryName FROM dbo.Categories /* Desc|*/",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["Description", "CategoryID"],
+      "minCount": 0
+    },
+    "note": "Caret one character before the closing */ is still inside the block comment."
+  },
+  {
+    "id": "CMST-024",
+    "family": "comments-strings",
+    "doc": "SELECT * FROM /* dbo.Cust| */ dbo.Customers",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["Customers"],
+      "minCount": 0
+    },
+    "note": "Block comment in FROM position containing a table prefix; must not complete table names."
+  },
+  {
+    "id": "CMST-025",
+    "family": "comments-strings",
+    "doc": "SELECT * FROM dbo.Customers WHERE CustomerName LIKE 'Cust|%'",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["CustomerID", "CustomerName"],
+      "minCount": 0
+    },
+    "note": "Caret inside a LIKE string literal whose text is a real column prefix; no leak."
+  },
+  {
+    "id": "CMST-026",
+    "family": "comments-strings",
+    "doc": "SELECT * FROM dbo.Products WHERE Unit = 'Pro|'",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["ProductID", "ProductName"],
+      "minCount": 0
+    },
+    "note": "Caret inside an equality string literal; Pro prefix must not surface Products columns."
+  },
+  {
+    "id": "CMST-027",
+    "family": "comments-strings",
+    "doc": "SELECT * FROM dbo.Orders WHERE OrderDate > '|'",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["OrderID", "OrderDate"],
+      "minCount": 0
+    },
+    "note": "Empty string literal with caret between the quotes; nothing suggested."
+  },
+  {
+    "id": "CMST-028",
+    "family": "comments-strings",
+    "doc": "SELECT * FROM dbo.Suppliers WHERE City = N'Supp|'",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["SupplierName", "SupplierID"],
+      "minCount": 0
+    },
+    "note": "N-prefixed unicode string literal; caret inside must be masked like a plain string."
+  },
+  {
+    "id": "CMST-029",
+    "family": "comments-strings",
+    "doc": "SELECT * FROM dbo.Employees WHERE LastName = 'O''Last|'",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["LastName", "FirstName"],
+      "minCount": 0
+    },
+    "note": "Escaped doubled quote inside the literal; caret after it is still inside the string."
+  },
+  {
+    "id": "CMST-030",
+    "family": "comments-strings",
+    "doc": "INSERT INTO dbo.Shippers (ShipperName, Phone) VALUES ('SELECT Ship|', '555')",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["ShipperName", "ShipperID"],
+      "minCount": 0
+    },
+    "note": "String literal containing the SELECT keyword; caret inside VALUES string stays dead."
+  },
+  {
+    "id": "CMST-031",
+    "family": "comments-strings",
+    "doc": "SELECT 'line one\nOrd|line two' AS lit FROM dbo.Orders",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["OrderID", "OrderDate"],
+      "minCount": 0
+    },
+    "note": "String literal spanning a newline; caret on the second physical line is still in-string."
+  },
+  {
+    "id": "CMST-032",
+    "family": "comments-strings",
+    "doc": "SELECT CategoryName FROM dbo.Categories;\nSELECT * FROM dbo.Customers WHERE City = 'Cust|'",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["CustomerID", "CustomerName"],
+      "minCount": 0
+    },
+    "note": "Prior ;-terminated statement; caret inside a string in the second statement gets nothing."
+  },
+  {
+    "id": "CMST-033",
+    "family": "comments-strings",
+    "doc": "PRINT 'checking dbo.|'",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["Customers", "Orders"],
+      "minCount": 0
+    },
+    "note": "dbo. dot-trigger text inside a PRINT string must not fire schema object completion."
+  },
+  {
+    "id": "CMST-034",
+    "family": "comments-strings",
+    "doc": "EXEC Sales.usp_MarkInvoicePaid @InvoiceID = '1|'",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["@InvoiceID"],
+      "minCount": 0
+    },
+    "note": "Caret inside a string argument of an EXEC; parameter names must not be offered in-string."
+  },
+  {
+    "id": "CMST-035",
+    "family": "comments-strings",
+    "doc": "select c.ContactName from dbo.Customers c where c.Country = 'c.Cou|'",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["Country", "ContactName"],
+      "minCount": 0
+    },
+    "note": "Lowercase doc; alias-dot text embedded in a string literal must not resolve alias columns."
+  },
+  {
+    "id": "CMST-036",
+    "family": "comments-strings",
+    "doc": "UPDATE dbo.Products SET Unit = 'Un|it' WHERE ProductID = 3",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["Unit", "Price"],
+      "minCount": 0
+    },
+    "note": "Caret mid-word inside a string in UPDATE SET; no target-table column leak."
+  },
+  {
+    "id": "CMST-037",
+    "family": "comments-strings",
+    "doc": "SELECT /* pick columns */ | FROM dbo.Customers",
+    "expect": {
+      "mustContain": ["CustomerID", "CustomerName", "City"],
+      "mustNotContain": ["ProductName", "OrderID"],
+      "minCount": 1
+    },
+    "note": "Caret after a closed block comment in select-list position; completions must return."
+  },
+  {
+    "id": "CMST-038",
+    "family": "comments-strings",
+    "doc": "SELECT CustomerID FROM dbo.Customers -- only active\nWHERE Cou|",
+    "expect": {
+      "mustContain": ["Country"],
+      "mustNotContain": ["SupplierName"],
+      "minCount": 1
+    },
+    "note": "Line after a trailing line comment; 3-char prefix filtering works again in WHERE."
+  },
+  {
+    "id": "CMST-039",
+    "family": "comments-strings",
+    "doc": "SELECT * FROM dbo.Orders /* join later */ WHERE |",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate", "CustomerID"],
+      "mustNotContain": ["ProductName", "InvoiceID"],
+      "minCount": 1
+    },
+    "note": "Caret after a mid-statement block comment; WHERE scope sees Orders columns only."
+  },
+  {
+    "id": "CMST-040",
+    "family": "comments-strings",
+    "doc": "SELECT /* cols */o.| FROM dbo.Orders o",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate", "ShipperID"],
+      "mustNotContain": ["ProductID", "CustomerName"],
+      "minCount": 1
+    },
+    "note": "Alias dot immediately adjacent to the closing */; completion must fire normally."
+  },
+  {
+    "id": "CMST-041",
+    "family": "comments-strings",
+    "doc": "-- report query\nSELECT | FROM dbo.Products",
+    "expect": {
+      "mustContain": ["ProductName", "Price", "Unit"],
+      "mustNotContain": ["CategoryName"],
+      "minCount": 1
+    },
+    "note": "Statement on the line after a full-line comment; select-list completion is live."
+  },
+  {
+    "id": "CMST-042",
+    "family": "comments-strings",
+    "doc": "SELECT * FROM dbo.Customers WHERE Country = 'Germany' AND |",
+    "expect": {
+      "mustContain": ["City", "CustomerName", "PostalCode"],
+      "mustNotContain": ["OrderDate"],
+      "minCount": 1
+    },
+    "note": "Caret after a properly closed string literal; completions resume in the WHERE clause."
+  },
+  {
+    "id": "CMST-043",
+    "family": "comments-strings",
+    "doc": "SELECT c.CustomerName FROM dbo.Customers c WHERE c.City = 'Berlin' AND c.|",
+    "expect": {
+      "mustContain": ["Country", "PostalCode", "ContactName"],
+      "mustNotContain": ["OrderID", "ProductName"],
+      "minCount": 1
+    },
+    "note": "Alias dot after an earlier string literal; alias resolution unaffected by the string."
+  },
+  {
+    "id": "CMST-044",
+    "family": "comments-strings",
+    "doc": "SELECT p.ProductName FROM dbo.Products p; -- first batch\nSELECT | FROM dbo.Categories",
+    "expect": {
+      "mustContain": ["CategoryID", "CategoryName"],
+      "mustNotContain": ["ProductName", "Price"],
+      "minCount": 1
+    },
+    "note": "Prior ;-terminated statement ending in a comment; new statement scopes to Categories only."
+  },
+  {
+    "id": "CMST-045",
+    "family": "comments-strings",
+    "doc": "SELECT * FROM /* main table */ dbo.|",
+    "expect": {
+      "mustContain": ["Customers", "Orders", "Products"],
+      "mustNotContain": ["Invoices"],
+      "minCount": 1
+    },
+    "note": "Schema-qualified object completion right after a block comment in FROM; Sales objects absent."
+  },
+  {
+    "id": "CMST-046",
+    "family": "comments-strings",
+    "doc": "-- lookup shippers\nSELECT S| FROM dbo.Shippers",
+    "expect": {
+      "mustContain": ["ShipperID", "ShipperName"],
+      "mustNotContain": ["SupplierName"],
+      "minCount": 1
+    },
+    "note": "1-char prefix after a leading comment line; same-letter column from Suppliers must not leak."
+  },
+  {
+    "id": "CMST-047",
+    "family": "comments-strings",
+    "doc": "SELECT e.FirstName,\n/*\n  include surname\n*/\ne.|\nFROM dbo.Employees e",
+    "expect": {
+      "mustContain": ["LastName", "BirthDate", "EmployeeID"],
+      "mustNotContain": ["ContactName"],
+      "minCount": 1
+    },
+    "note": "Alias dot on the line after a multi-line block comment; Employees columns return."
+  },
+  {
+    "id": "CMST-048",
+    "family": "comments-strings",
+    "doc": "SELECT * FROM dbo.Employees WHERE LastName = 'O''Brien' AND Fir|",
+    "expect": {
+      "mustContain": ["FirstName"],
+      "mustNotContain": ["InvoiceDate"],
+      "minCount": 1
+    },
+    "note": "Doubled-quote escape closed correctly; completion after the literal must still work."
+  },
+  {
+    "id": "CMST-049",
+    "family": "comments-strings",
+    "doc": "SELECT o.OrderID FROM dbo.Orders o; -- done with orders\nSELECT c.| FROM dbo.Customers c",
+    "expect": {
+      "mustContain": ["CustomerID", "City"],
+      "mustNotContain": ["OrderID", "OrderDate"],
+      "minCount": 1
+    },
+    "note": "Prior ;-terminated statement plus comment; new alias c resolves and old scope does not bleed."
+  },
+  {
+    "id": "CMST-050",
+    "family": "comments-strings",
+    "doc": "SELECT o.OrderID /* join to customers */\nFROM dbo.Orders o\nJOIN dbo.Customers c ON c.CustomerID = o.Cus|",
+    "expect": {
+      "mustContain": ["CustomerID"],
+      "mustNotContain": ["CustomerName"],
+      "minCount": 1
+    },
+    "note": "Comment earlier in doc; o.Cus in ON clause must offer Orders.CustomerID, not Customers.CustomerName."
+  }
+]

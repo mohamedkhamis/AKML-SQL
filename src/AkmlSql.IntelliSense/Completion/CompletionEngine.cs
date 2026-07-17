@@ -123,6 +123,7 @@ public class CompletionEngine
         RegisterProvider(_joinProvider);
         RegisterProvider(_joinOnFkProvider);
         RegisterProvider(new VariableProvider());
+        RegisterProvider(new ParameterProvider()); // Spec 032 C3 — @params in EXEC argument positions
         RegisterProvider(new SnippetProvider());
         RegisterProvider(_aliasProvider);
     }
@@ -144,6 +145,67 @@ public class CompletionEngine
     private static bool IsLinkedServerItem(CompletionItem item)
         => item.IsLinkedServer;
 
+    /// <summary>
+    /// Spec 032 G1 — when an unterminated <c>[</c> or <c>"</c> sits at the caret, the lexer
+    /// fuses everything to EOF into one token, destroying context analysis for the whole
+    /// statement. Virtually close the delimiter AT the caret for the context-tokenization
+    /// pass only (the session document is untouched; offsets before the caret are unchanged).
+    /// </summary>
+    public static string NeutralizeOpenDelimiterAtCaret(string text, int caret)
+    {
+        if (caret <= 0 || caret > text.Length) return text;
+
+        for (int i = caret - 1; i >= 0; i--)
+        {
+            char c = text[i];
+            // A closer / line break / statement boundary / string quote before any opener:
+            // nothing open at the caret.
+            if (c is ']' or '\n' or '\r' or ';' or '\'') return text;
+            if (c == '[')
+            {
+                // NEVER produce an empty `[]` — ScriptDom's LEXER stops dead on it and
+                // truncates the entire remaining token stream. Insert a dummy identifier
+                // (recognized and skipped by the alias/CTE extractors) instead.
+                bool alreadyClosed = caret < text.Length && text[caret] == ']';
+                bool emptySoFar = i == caret - 1; // nothing typed between '[' and caret
+                if (!emptySoFar && !alreadyClosed) return text.Insert(caret, "]");
+                if (!emptySoFar) return text; // `[Cust|]` — closed, content present: fine as-is
+                return alreadyClosed
+                    ? text.Insert(caret, "__akml_dummy__")        // `[|]`
+                    : text.Insert(caret, "__akml_dummy__]");      // `[|` at end
+            }
+            if (c == '"')
+            {
+                // Odd number of double-quotes before the caret → this one opens.
+                int quotes = 0;
+                for (int q = 0; q < caret; q++)
+                    if (text[q] == '"') quotes++;
+                return quotes % 2 == 1 ? text.Insert(caret, "\"") : text;
+            }
+        }
+
+        return text;
+    }
+
+    /// <summary>Spec 032 F3 — fills empty temp-table column lists from their recorded
+    /// `SELECT * INTO` source tables via the schema cache.</summary>
+    private static void ExpandTempStarColumns(CursorContext context, TempTableTracker tracker, DatabaseCache? cache)
+    {
+        if (cache == null || tracker.StarSources.Count == 0) return;
+
+        foreach (var (tmpName, sources) in tracker.StarSources)
+        {
+            if (!context.AvailableTempTables.TryGetValue(tmpName, out var columns) || columns.Count > 0)
+                continue;
+            foreach (var (srcSchema, srcTable) in sources)
+            {
+                var srcObject = cache.FindObject(srcSchema, srcTable);
+                if (srcObject != null)
+                    columns.AddRange(srcObject.Columns.Select(col => col.ColumnName));
+            }
+        }
+    }
+
     public CompletionResponse GetCompletions(string documentText, int cursorOffset, DatabaseCache? cache)
         => GetCompletions(documentText, cursorOffset, cache, sessionId: string.Empty);
 
@@ -151,8 +213,11 @@ public class CompletionEngine
     {
         try
         {
-            // Fast tier: tokenize for context analysis
-            var tokens = _parserService.GetTokenStream(documentText);
+            // Fast tier: tokenize for context analysis. Spec 032 G1: an unterminated `[` or
+            // `"` at the caret fuses the rest of the statement into one token, destroying the
+            // stream — virtually close it (context-side only; the document is untouched).
+            var contextText = NeutralizeOpenDelimiterAtCaret(documentText, cursorOffset);
+            var tokens = _parserService.GetTokenStream(contextText);
             var context = _contextAnalyzer.Analyze(tokens, cursorOffset);
             context.SessionId = sessionId ?? string.Empty;
 
@@ -166,8 +231,10 @@ public class CompletionEngine
                 return new CompletionResponse { Items = [] };
             }
 
-            // Full tier: parse for alias resolution (if available)
-            var script = _parserService.ParseWithSuffix(documentText, out _);
+            // Full tier: parse for alias resolution (if available). Spec 032 A1/E6:
+            // the cursor-aware overload additionally repairs broken-at-caret documents
+            // (subquery/CTE body being typed inside parens) so the AST path keeps working.
+            var script = _parserService.ParseWithSuffix(documentText, cursorOffset, out _);
             if (script != null)
             {
                 // Use the scope-aware resolver so completion respects FROM-clause
@@ -176,7 +243,9 @@ public class CompletionEngine
                 // (which lives inside the CTE body). Without this, ColumnProvider
                 // gets multi-alias context, qualifies CTE columns as `cte.Col`, and
                 // filters them out when the user types a bare partial.
-                var aliases = _aliasResolver.ResolveAliasesInCursorScope(script, cursorOffset);
+                // Spec 032 A3/A4: includeOuterScopes merges ancestor scopes (correlated
+                // subqueries see outer aliases; inner wins) and covers UPDATE/DELETE/MERGE.
+                var aliases = _aliasResolver.ResolveAliasesInCursorScope(script, cursorOffset, includeOuterScopes: true);
                 foreach (var (alias, tableRef) in aliases)
                     context.AvailableAliases[alias] = tableRef.FullName;
 
@@ -186,6 +255,28 @@ public class CompletionEngine
                 var astCtes = cteResolver.ResolveCtes(script, cursorOffset);
                 foreach (var (name, columns) in astCtes)
                     context.AvailableCtes[name] = columns;
+
+                // Spec 032 A4: derived-table projections serve `d.|` like CTE columns
+                // (the alias map itself only holds a `(derived:d)` placeholder). E4: their
+                // source tables register too so `SELECT *` bodies star-expand via the cache.
+                var derivedProjections = _aliasResolver.ResolveDerivedTableProjections(
+                    script, cursorOffset, out var derivedSources);
+                foreach (var (alias, columns) in derivedProjections)
+                {
+                    if (!context.AvailableCtes.ContainsKey(alias))
+                        context.AvailableCtes[alias] = columns;
+                }
+                foreach (var (alias, srcList) in derivedSources)
+                {
+                    if (!context.AvailableCteSources.ContainsKey(alias))
+                        context.AvailableCteSources[alias] = srcList;
+                }
+
+                // Spec 032 C4: DECLAREd variables visible at the caret — VariableTracker's
+                // first caller ever (it was dead code); VariableProvider consumes the result.
+                var variables = new VariableTracker().TrackVariables(script, cursorOffset);
+                foreach (var (name, typeName) in variables)
+                    context.AvailableVariables[name] = typeName;
 
                 // Source-table tracking lets JoinOnFkProvider look up real FK
                 // relationships between two CTEs via the underlying tables their
@@ -199,6 +290,10 @@ public class CompletionEngine
                 var tempTracker = new TempTableTracker();
                 foreach (var (tmpName, tmpColumns) in tempTracker.TrackTempTables(script, cursorOffset))
                     context.AvailableTempTables[tmpName] = tmpColumns;
+
+                // Spec 032 F3: `SELECT * INTO #t` records no columns — expand the star
+                // from the schema cache via the recorded source tables.
+                ExpandTempStarColumns(context, tempTracker, cache);
             }
 
             // Spec 030: a #temp declared before the cursor is lost when the tail is mid-edit (the full
@@ -221,9 +316,11 @@ public class CompletionEngine
                 var tempPrefixScript = _parserService.ParseWithSuffix(tempPrefix, out _);
                 if (tempPrefixScript != null)
                 {
-                    foreach (var (tmpName, tmpColumns) in new TempTableTracker().TrackTempTables(tempPrefixScript, tempPrefix.Length))
+                    var prefixTempTracker = new TempTableTracker();
+                    foreach (var (tmpName, tmpColumns) in prefixTempTracker.TrackTempTables(tempPrefixScript, tempPrefix.Length))
                         if (!context.AvailableTempTables.ContainsKey(tmpName))
                             context.AvailableTempTables[tmpName] = tmpColumns;
+                    ExpandTempStarColumns(context, prefixTempTracker, cache); // spec 032 F3
                 }
             }
 
@@ -298,17 +395,36 @@ public class CompletionEngine
             // CTE fallback — runs whenever the AST missed CTEs (e.g. the user is
             // typing inside an incomplete second CTE, so the batch doesn't parse).
             // Extracts CTE names from the token stream so they show up in FROM/JOIN
-            // completion even while the SQL is unfinished.
+            // completion even while the SQL is unfinished. Spec 032 E6: explicit
+            // column lists (`WITH x (OID, CID)`) are kept, not discarded.
             if (context.AvailableCtes.Count == 0)
             {
-                var fallbackCtes = TokenBasedCteExtractor.Extract(tokens, cursorOffset);
-                foreach (var name in fallbackCtes)
+                var fallbackCtes = TokenBasedCteExtractor.ExtractWithColumns(tokens, cursorOffset);
+                foreach (var (name, columns) in fallbackCtes)
                     if (!context.AvailableCtes.ContainsKey(name))
-                        context.AvailableCtes[name] = [];
+                        context.AvailableCtes[name] = columns;
 
                 if (fallbackCtes.Count > 0)
                     Log.Debug("CTE fallback: extracted {Count} CTEs from tokens: {Names}",
-                        fallbackCtes.Count, string.Join(", ", fallbackCtes));
+                        fallbackCtes.Count, string.Join(", ", fallbackCtes.Keys));
+            }
+
+            // Spec 032 E4: a CTE (or derived table / SELECT*-INTO temp) whose body is
+            // `SELECT *` exposes zero columns even though its source tables are tracked —
+            // expand the stars from the schema cache at completion time.
+            if (cache != null)
+            {
+                foreach (var (name, columns) in context.AvailableCtes)
+                {
+                    if (columns.Count > 0) continue;
+                    if (!context.AvailableCteSources.TryGetValue(name, out var starSources)) continue;
+                    foreach (var (srcSchema, srcTable) in starSources)
+                    {
+                        var srcObject = cache.FindObject(srcSchema, srcTable);
+                        if (srcObject != null)
+                            columns.AddRange(srcObject.Columns.Select(col => col.ColumnName));
+                    }
+                }
             }
 
             Log.Debug(
@@ -374,11 +490,13 @@ public class CompletionEngine
                 }
             }
 
-            // Apply fuzzy filter if partial text
+            // Apply fuzzy filter if partial text. Spec 032 FR-026: score against FilterText when a
+            // provider set it (the matchable text, e.g. the bare column name of an "alias.Column"
+            // display item) so table/alias decorations can't flood prefix matches; null → DisplayText.
             if (!string.IsNullOrEmpty(context.PartialText))
             {
                 allItems = allItems
-                    .Select(item => (item, score: FuzzyMatcher.Score(context.PartialText, item.DisplayText)))
+                    .Select(item => (item, score: FuzzyMatcher.Score(context.PartialText, item.FilterText ?? item.DisplayText)))
                     .Where(x => x.score > 0)
                     .OrderByDescending(x => x.score)
                     .ThenBy(x => x.item.SortPriority)

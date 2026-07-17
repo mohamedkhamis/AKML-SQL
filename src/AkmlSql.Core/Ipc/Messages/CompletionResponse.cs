@@ -42,6 +42,16 @@ namespace AkmlSql.Core.Ipc.Messages
         /// </summary>
         [Key(6)]
         public bool IsLinkedServer { get; set; }
+
+        /// <summary>
+        /// The text fuzzy filtering scores against, when it differs from <see cref="DisplayText"/>
+        /// (e.g. the bare column name for an <c>alias.Column</c> display item, so a typed prefix
+        /// matches the column instead of the alias/table decoration). Null → filter on
+        /// <see cref="DisplayText"/> (pre-032 behavior). Additive/back-compatible: older peers
+        /// omit this key and deserialize to <c>null</c>. Spec 032 FR-026.
+        /// </summary>
+        [Key(7)]
+        public string? FilterText { get; set; }
     }
 
     public enum CompletionObjectType

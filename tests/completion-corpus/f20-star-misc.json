@@ -1,0 +1,442 @@
+[
+  {
+    "id": "STAR-001",
+    "family": "star-and-misc",
+    "doc": "SELECT *, | FROM dbo.Customers",
+    "expect": {
+      "mustContain": ["CustomerName", "City", "Country"],
+      "mustNotContain": ["ProductName", "OrderDate"],
+      "minCount": 1
+    },
+    "note": "column completion after star plus comma stays scoped to Customers"
+  },
+  {
+    "id": "STAR-002",
+    "family": "star-and-misc",
+    "doc": "SELECT * FROM |",
+    "expect": {
+      "mustContain": ["Customers", "Orders", "Products"],
+      "mustNotContain": ["CustomerName"],
+      "minCount": 3
+    },
+    "note": "FROM position after SELECT * offers tables, not columns"
+  },
+  {
+    "id": "STAR-003",
+    "family": "star-and-misc",
+    "doc": "SELECT c.| FROM dbo.Customers c",
+    "expect": {
+      "mustContain": ["CustomerID", "ContactName", "PostalCode"],
+      "mustNotContain": ["OrderID", "SupplierName"],
+      "minCount": 3
+    },
+    "note": "alias-dot in select list scoped to Customers columns only"
+  },
+  {
+    "id": "STAR-004",
+    "family": "star-and-misc",
+    "doc": "SELECT o.*, c.| FROM dbo.Orders o JOIN dbo.Customers c ON c.CustomerID = o.CustomerID",
+    "expect": {
+      "mustContain": ["CustomerName", "Country"],
+      "mustNotContain": ["OrderDate", "ShipperID"],
+      "minCount": 2
+    },
+    "note": "after o.* the c. qualifier must still scope to Customers, not the star's table"
+  },
+  {
+    "id": "STAR-005",
+    "family": "star-and-misc",
+    "doc": "SELECT TOP (10) | FROM dbo.Products",
+    "expect": {
+      "mustContain": ["ProductName", "Price", "Unit"],
+      "mustNotContain": ["CategoryName", "ContactName"],
+      "minCount": 3
+    },
+    "note": "column completion works right after TOP (n)"
+  },
+  {
+    "id": "STAR-006",
+    "family": "star-and-misc",
+    "doc": "SELECT DISTINCT | FROM dbo.Customers",
+    "expect": {
+      "mustContain": ["Country", "City"],
+      "mustNotContain": ["Price", "LastName"],
+      "minCount": 2
+    },
+    "note": "column completion works right after DISTINCT"
+  },
+  {
+    "id": "STAR-007",
+    "family": "star-and-misc",
+    "doc": "select distinct Cou| from dbo.Customers",
+    "expect": {
+      "mustContain": ["Country"],
+      "mustNotContain": ["CustomerID", "ProductName"],
+      "minCount": 1
+    },
+    "note": "lowercase keywords with 3-char prefix after DISTINCT filters to Country"
+  },
+  {
+    "id": "STAR-008",
+    "family": "star-and-misc",
+    "doc": "SELECT TOP 5 e.| FROM dbo.Employees e",
+    "expect": {
+      "mustContain": ["LastName", "FirstName", "BirthDate"],
+      "mustNotContain": ["CustomerName"],
+      "minCount": 3
+    },
+    "note": "unparenthesized TOP followed by alias-dot scoped to Employees"
+  },
+  {
+    "id": "STAR-009",
+    "family": "star-and-misc",
+    "doc": "SELECT CustomerID, CustomerName\nFROM dbo.Customers\nUNION\nSELECT o.| FROM dbo.Orders o",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["ContactName", "CustomerName"],
+      "minCount": 2
+    },
+    "note": "UNION second branch alias scopes to Orders, first-branch Customers columns must not leak"
+  },
+  {
+    "id": "STAR-010",
+    "family": "star-and-misc",
+    "doc": "SELECT ProductID FROM dbo.Products UNION ALL SELECT | FROM dbo.OrderDetails",
+    "expect": {
+      "mustContain": ["OrderDetailID", "Quantity"],
+      "mustNotContain": ["ProductName", "Price"],
+      "minCount": 2
+    },
+    "note": "UNION ALL second branch bare select list scoped to OrderDetails only"
+  },
+  {
+    "id": "STAR-011",
+    "family": "star-and-misc",
+    "doc": "SELECT OrderID FROM dbo.Orders UNION SELECT InvoiceID FROM |",
+    "expect": {
+      "mustContain": ["Orders", "Customers", "Shippers"],
+      "mustNotContain": ["TotalAmount"],
+      "minCount": 3
+    },
+    "note": "FROM position in UNION second branch offers tables, not columns"
+  },
+  {
+    "id": "STAR-012",
+    "family": "star-and-misc",
+    "doc": "SELECT c.CustomerID FROM dbo.Customers c UNION SELECT x.| FROM dbo.Orders x",
+    "expect": {
+      "mustContain": ["OrderID", "EmployeeID"],
+      "mustNotContain": ["CustomerName", "ContactName"],
+      "minCount": 2
+    },
+    "note": "second-branch alias x binds to Orders; first-branch c/Customers must not bleed in"
+  },
+  {
+    "id": "STAR-013",
+    "family": "star-and-misc",
+    "doc": "SELECT * FROM dbo.Products;\nSELECT | FROM dbo.Customers",
+    "expect": {
+      "mustContain": ["CustomerName", "Address"],
+      "mustNotContain": ["ProductName", "Unit"],
+      "minCount": 2
+    },
+    "note": "prior semicolon-terminated star statement must not leak Products columns into next statement"
+  },
+  {
+    "id": "STAR-014",
+    "family": "star-and-misc",
+    "doc": "SELECT p.ProductID, p.Price FROM dbo.Products p;\nSELECT cust.| FROM dbo.Customers cust",
+    "expect": {
+      "mustContain": ["CustomerID", "City"],
+      "mustNotContain": ["ProductName", "Price"],
+      "minCount": 2
+    },
+    "note": "long alias in second statement scoped to Customers; earlier statement's Products columns absent"
+  },
+  {
+    "id": "STAR-015",
+    "family": "star-and-misc",
+    "doc": "SELECT o.OrderID FROM dbo.Orders o;\nSELECT o.| FROM dbo.OrderDetails o",
+    "expect": {
+      "mustContain": ["OrderDetailID", "Quantity"],
+      "mustNotContain": ["OrderDate", "ShipperID"],
+      "minCount": 2
+    },
+    "note": "alias o redefined after semicolon must rebind to OrderDetails, not stale Orders"
+  },
+  {
+    "id": "STAR-016",
+    "family": "star-and-misc",
+    "doc": "SELECT TOP (5) * FROM |",
+    "expect": {
+      "mustContain": ["Orders", "Shippers", "vw_ProductCatalog"],
+      "mustNotContain": ["OrderDate"],
+      "minCount": 3
+    },
+    "note": "FROM after TOP (n) star offers tables and views"
+  },
+  {
+    "id": "STAR-017",
+    "family": "star-and-misc",
+    "doc": "Select Distinct s.| From dbo.Suppliers s",
+    "expect": {
+      "mustContain": ["SupplierName", "Phone", "Country"],
+      "mustNotContain": ["ShipperName"],
+      "minCount": 3
+    },
+    "note": "mixed-case keywords; DISTINCT alias-dot scoped to Suppliers"
+  },
+  {
+    "id": "STAR-018",
+    "family": "star-and-misc",
+    "doc": "SELECT sh.| FROM dbo.Shippers sh",
+    "expect": {
+      "mustContain": ["ShipperID", "ShipperName", "Phone"],
+      "mustNotContain": ["SupplierName"],
+      "minCount": 3
+    },
+    "note": "two-char alias scoped to Shippers; similarly-named Suppliers columns absent"
+  },
+  {
+    "id": "STAR-019",
+    "family": "star-and-misc",
+    "doc": "SELECT * FROM dbo.Orders WHERE |",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate", "CustomerID"],
+      "mustNotContain": ["ProductName"],
+      "minCount": 3
+    },
+    "note": "WHERE after SELECT * still resolves Orders columns"
+  },
+  {
+    "id": "STAR-020",
+    "family": "star-and-misc",
+    "doc": "SELECT c.* FROM dbo.Customers c JOIN dbo.Orders o ON o.CustomerID = c.CustomerID WHERE o.|",
+    "expect": {
+      "mustContain": ["OrderDate", "ShipperID"],
+      "mustNotContain": ["CustomerName", "ContactName"],
+      "minCount": 2
+    },
+    "note": "c.* projection does not affect o. scoping in WHERE"
+  },
+  {
+    "id": "STAR-021",
+    "family": "star-and-misc",
+    "doc": "SELECT TOP (25)\n    p.ProductName,\n    p.|\nFROM dbo.Products p",
+    "expect": {
+      "mustContain": ["Price", "Unit", "SupplierID"],
+      "mustNotContain": ["SupplierName"],
+      "minCount": 3
+    },
+    "note": "multi-line TOP select list, alias-dot on continuation line"
+  },
+  {
+    "id": "STAR-022",
+    "family": "star-and-misc",
+    "doc": "SELECT *, C| FROM dbo.Customers",
+    "expect": {
+      "mustContain": ["City", "Country"],
+      "mustNotContain": ["Address", "PostalCode"],
+      "minCount": 2
+    },
+    "note": "1-char prefix after star+comma filters Customers columns to C-names"
+  },
+  {
+    "id": "STAR-023",
+    "family": "star-and-misc",
+    "doc": "SELECT DISTINCT TOP (10) | FROM dbo.Orders",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["InvoiceID"],
+      "minCount": 2
+    },
+    "note": "combined DISTINCT TOP still yields Orders column completion"
+  },
+  {
+    "id": "STAR-024",
+    "family": "star-and-misc",
+    "doc": "SELECT i.*, | FROM Sales.Invoices i",
+    "expect": {
+      "mustContain": ["InvoiceDate", "TotalAmount", "Paid"],
+      "mustNotContain": ["OrderDate"],
+      "minCount": 3
+    },
+    "note": "bare column position after alias.* scoped to Sales.Invoices"
+  },
+  {
+    "id": "STAR-025",
+    "family": "star-and-misc",
+    "doc": "SELECT CustomerID FROM dbo.vw_CustomerOrders UNION SELECT | FROM dbo.Customers",
+    "expect": {
+      "mustContain": ["CustomerID", "CustomerName"],
+      "mustNotContain": ["OrderDate", "ShipperID"],
+      "minCount": 2
+    },
+    "note": "view in first branch must not leak its extra columns into Customers-scoped second branch"
+  },
+  {
+    "id": "STAR-026",
+    "family": "star-and-misc",
+    "doc": "SELECT v.| FROM dbo.vw_ProductCatalog v",
+    "expect": {
+      "mustContain": ["ProductName", "CategoryName", "SupplierName"],
+      "mustNotContain": ["Unit", "CategoryID"],
+      "minCount": 3
+    },
+    "note": "view alias exposes only view columns, not base Products columns"
+  },
+  {
+    "id": "STAR-027",
+    "family": "star-and-misc",
+    "doc": "SELECT Phone FROM dbo.Shippers\nUNION\nSELECT Phone FROM dbo.Suppliers\nUNION\nSELECT | FROM dbo.Customers",
+    "expect": {
+      "mustContain": ["PostalCode", "Address"],
+      "mustNotContain": ["ShipperName", "SupplierName"],
+      "minCount": 2
+    },
+    "note": "third UNION branch scoped to Customers; earlier branches' tables must not leak"
+  },
+  {
+    "id": "STAR-028",
+    "family": "star-and-misc",
+    "doc": "SELECT * FROM dbo.Products ORDER BY |",
+    "expect": {
+      "mustContain": ["Price", "ProductName"],
+      "mustNotContain": ["TotalAmount"],
+      "minCount": 2
+    },
+    "note": "ORDER BY after SELECT * resolves Products columns"
+  },
+  {
+    "id": "STAR-029",
+    "family": "star-and-misc",
+    "doc": "SELECT ord.| FROM dbo.Orders AS ord",
+    "expect": {
+      "mustContain": ["OrderID", "EmployeeID"],
+      "mustNotContain": ["InvoiceID"],
+      "minCount": 2
+    },
+    "note": "AS-introduced alias resolves to Orders columns"
+  },
+  {
+    "id": "STAR-030",
+    "family": "star-and-misc",
+    "doc": "EXEC dbo.usp_UpdateProductPrice @ProductID = 1, @NewPrice = 9.99;\nSELECT | FROM dbo.Products",
+    "expect": {
+      "mustContain": ["ProductName", "Price"],
+      "mustNotContain": ["CustomerName", "@NewPrice"],
+      "minCount": 2
+    },
+    "note": "prior EXEC statement's parameters must not appear in the next SELECT list"
+  },
+  {
+    "id": "STAR-031",
+    "family": "star-and-misc",
+    "doc": "select top (3) c.co| from dbo.Customers c",
+    "expect": {
+      "mustContain": ["Country", "ContactName"],
+      "mustNotContain": ["City", "CustomerID"],
+      "minCount": 2
+    },
+    "note": "lowercase 2-char prefix after alias-dot matches case-insensitively"
+  },
+  {
+    "id": "STAR-032",
+    "family": "star-and-misc",
+    "doc": "SELECT d.| FROM (SELECT OrderID, OrderDate FROM dbo.Orders) d",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["ShipperID", "EmployeeID"],
+      "minCount": 2
+    },
+    "note": "derived table exposes only projected columns, not the rest of Orders"
+  },
+  {
+    "id": "STAR-033",
+    "family": "star-and-misc",
+    "doc": "SELECT * FROM (SELECT ProductID, ProductName FROM dbo.Products) AS d WHERE d.|",
+    "expect": {
+      "mustContain": ["ProductID", "ProductName"],
+      "mustNotContain": ["Price", "Unit"],
+      "minCount": 2
+    },
+    "note": "outer SELECT * with derived table: WHERE d. limited to derived projection"
+  },
+  {
+    "id": "STAR-034",
+    "family": "star-and-misc",
+    "doc": "SELECT\n    o.OrderID,\n    o.*,\n    |\nFROM dbo.Orders o\nJOIN dbo.Shippers s ON s.ShipperID = o.ShipperID",
+    "expect": {
+      "mustContain": ["ShipperName", "OrderDate"],
+      "mustNotContain": ["ProductName"],
+      "minCount": 2
+    },
+    "note": "multi-line select list mixing explicit column, alias.*, then bare position over a 2-table join"
+  },
+  {
+    "id": "STAR-035",
+    "family": "star-and-misc",
+    "doc": "SELECT City FROM dbo.Customers UNION SELECT Ci| FROM dbo.Suppliers",
+    "expect": {
+      "mustContain": ["City"],
+      "mustNotContain": ["CustomerName"],
+      "minCount": 1
+    },
+    "note": "prefix filtering inside UNION second branch scoped to Suppliers"
+  },
+  {
+    "id": "STAR-036",
+    "family": "star-and-misc",
+    "doc": "SELECT TOP (10) p.Price * 2 AS DoublePrice, p.| FROM dbo.Products p",
+    "expect": {
+      "mustContain": ["ProductName", "CategoryID"],
+      "mustNotContain": ["CategoryName"],
+      "minCount": 2
+    },
+    "note": "alias-dot after an expression with AS alias still scoped to Products"
+  },
+  {
+    "id": "STAR-037",
+    "family": "star-and-misc",
+    "doc": "SELECT SupplierID FROM dbo.Suppliers;\nSELECT EmployeeID FROM dbo.Employees UNION SELECT | FROM dbo.Orders",
+    "expect": {
+      "mustContain": ["OrderID", "CustomerID"],
+      "mustNotContain": ["SupplierName", "LastName"],
+      "minCount": 2
+    },
+    "note": "prior statement plus UNION: last branch scoped to Orders only"
+  },
+  {
+    "id": "STAR-038",
+    "family": "star-and-misc",
+    "doc": "SELECT DISTINCT o.| FROM dbo.Orders o WHERE o.OrderDate > '2024-01-01'",
+    "expect": {
+      "mustContain": ["ShipperID", "EmployeeID"],
+      "mustNotContain": ["InvoiceDate"],
+      "minCount": 2
+    },
+    "note": "DISTINCT with alias-dot and trailing WHERE clause resolves Orders columns"
+  },
+  {
+    "id": "STAR-039",
+    "family": "star-and-misc",
+    "doc": "SELECT * FROM dbo.Categories;\nSELECT TOP (5) | FROM dbo.Categories",
+    "expect": {
+      "mustContain": ["CategoryName", "Description"],
+      "mustNotContain": ["ProductName"],
+      "minCount": 2
+    },
+    "note": "TOP position in a fresh statement after a semicolon-terminated star query"
+  },
+  {
+    "id": "STAR-040",
+    "family": "star-and-misc",
+    "doc": "SELECT TOP (100) * FROM dbo.vw_CustomerOrders WHERE |",
+    "expect": {
+      "mustContain": ["CustomerName", "OrderDate", "Country"],
+      "mustNotContain": ["ContactName", "Address"],
+      "minCount": 3
+    },
+    "note": "TOP star over a view: WHERE offers view columns, not base-table extras"
+  }
+]

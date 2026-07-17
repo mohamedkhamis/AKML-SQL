@@ -1,0 +1,772 @@
+[
+  {
+    "id": "SUBQ-001",
+    "family": "subqueries",
+    "doc": "SELECT * FROM dbo.Customers WHERE CustomerID IN (SELECT | FROM dbo.Orders)",
+    "expect": {
+      "mustContain": ["OrderID", "CustomerID", "OrderDate"],
+      "mustNotContain": ["Quantity", "Photo"],
+      "minCount": 3
+    },
+    "note": "bare select list inside IN subquery scopes to Orders; unrelated tables' columns absent"
+  },
+  {
+    "id": "SUBQ-002",
+    "family": "subqueries",
+    "doc": "SELECT * FROM dbo.Customers WHERE CustomerID IN (SELECT O| FROM dbo.Orders)",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["OrderDetailID"],
+      "minCount": 2
+    },
+    "note": "1-char prefix O filters Orders columns; OrderDetailID matches prefix but its table is not in scope"
+  },
+  {
+    "id": "SUBQ-003",
+    "family": "subqueries",
+    "doc": "SELECT * FROM dbo.Customers c WHERE c.CustomerID IN (SELECT o.| FROM dbo.Orders o)",
+    "expect": {
+      "mustContain": ["OrderID", "CustomerID", "EmployeeID"],
+      "mustNotContain": ["CustomerName", "ContactName"],
+      "minCount": 3
+    },
+    "note": "alias o binds Orders inside subquery; Customers columns must not appear under o."
+  },
+  {
+    "id": "SUBQ-004",
+    "family": "subqueries",
+    "doc": "select * from dbo.Products where CategoryID in (select | from dbo.Categories)",
+    "expect": {
+      "mustContain": ["CategoryID", "CategoryName"],
+      "mustNotContain": ["Quantity", "Photo"],
+      "minCount": 2
+    },
+    "note": "lower-case keywords; bare inner select list scopes to Categories"
+  },
+  {
+    "id": "SUBQ-005",
+    "family": "subqueries",
+    "doc": "SELECT * FROM dbo.Orders WHERE CustomerID IN (SELECT Cus| FROM dbo.Customers)",
+    "expect": {
+      "mustContain": ["CustomerID", "CustomerName"],
+      "mustNotContain": ["CategoryName", "ContactName"],
+      "minCount": 2
+    },
+    "note": "3-char prefix Cus filters Customers columns; ContactName fails the prefix, CategoryName fails scope"
+  },
+  {
+    "id": "SUBQ-006",
+    "family": "subqueries",
+    "doc": "SELECT ProductName FROM dbo.Products WHERE SupplierID NOT IN (SELECT s.| FROM dbo.Suppliers s)",
+    "expect": {
+      "mustContain": ["SupplierID", "SupplierName", "City"],
+      "mustNotContain": ["ProductName", "Price"],
+      "minCount": 3
+    },
+    "note": "NOT IN subquery alias s binds Suppliers; outer Products columns absent under s."
+  },
+  {
+    "id": "SUBQ-007",
+    "family": "subqueries",
+    "doc": "SELECT * FROM dbo.Customers WHERE CustomerID IN (SELECT CustomerID FROM |)",
+    "expect": {
+      "mustContain": ["Orders", "Customers", "vw_CustomerOrders"],
+      "mustNotContain": ["NoSuchTable"],
+      "minCount": 3
+    },
+    "note": "FROM position inside subquery offers tables and views"
+  },
+  {
+    "id": "SUBQ-008",
+    "family": "subqueries",
+    "doc": "SELECT * FROM dbo.Products WHERE CategoryID IN (SELECT CategoryID FROM Cat|)",
+    "expect": {
+      "mustContain": ["Categories"],
+      "mustNotContain": ["Customers", "Orders"],
+      "minCount": 1
+    },
+    "note": "table prefix Cat inside subquery FROM; non-matching table names filtered out"
+  },
+  {
+    "id": "SUBQ-009",
+    "family": "subqueries",
+    "doc": "SELECT CustomerName\nFROM dbo.Customers\nWHERE CustomerID IN (\n    SELECT o.Cust| FROM dbo.Orders o\n)",
+    "expect": {
+      "mustContain": ["CustomerID"],
+      "mustNotContain": ["CustomerName"],
+      "minCount": 1
+    },
+    "note": "multi-line; prefix Cust under o. matches only Orders.CustomerID; CustomerName appearing would indicate outer-table bleed"
+  },
+  {
+    "id": "SUBQ-010",
+    "family": "subqueries",
+    "doc": "SELECT * FROM dbo.Orders WHERE OrderID IN (SELECT i.| FROM Sales.Invoices i)",
+    "expect": {
+      "mustContain": ["InvoiceID", "OrderID", "TotalAmount"],
+      "mustNotContain": ["OrderDate", "CustomerID"],
+      "minCount": 3
+    },
+    "note": "Sales schema alias i binds Sales.Invoices; Orders-only columns absent under i."
+  },
+  {
+    "id": "SUBQ-011",
+    "family": "subqueries",
+    "doc": "SELECT * FROM dbo.Customers WHERE CustomerID IN (SELECT CustomerID FROM dbo.Orders WHERE |)",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate", "ShipperID"],
+      "mustNotContain": ["Quantity", "Photo"],
+      "minCount": 3
+    },
+    "note": "bare WHERE inside IN subquery scopes to Orders; tables absent from the doc contribute nothing"
+  },
+  {
+    "id": "SUBQ-012",
+    "family": "subqueries",
+    "doc": "SELECT * FROM dbo.Employees WHERE EmployeeID IN (SELECT e.| FROM dbo.Orders e)",
+    "expect": {
+      "mustContain": ["OrderID", "EmployeeID", "CustomerID"],
+      "mustNotContain": ["LastName", "FirstName"],
+      "minCount": 3
+    },
+    "note": "alias e binds Orders inside the subquery even though the outer table is Employees"
+  },
+  {
+    "id": "SUBQ-013",
+    "family": "subqueries",
+    "doc": "SELECT c.CustomerName FROM dbo.Customers c WHERE EXISTS (SELECT 1 FROM dbo.Orders o WHERE o.|)",
+    "expect": {
+      "mustContain": ["CustomerID", "OrderID", "OrderDate"],
+      "mustNotContain": ["CustomerName", "Country"],
+      "minCount": 3
+    },
+    "note": "EXISTS inner alias o scopes to Orders only"
+  },
+  {
+    "id": "SUBQ-014",
+    "family": "subqueries",
+    "doc": "SELECT c.CustomerName FROM dbo.Customers c WHERE EXISTS (SELECT 1 FROM dbo.Orders o WHERE o.CustomerID = c.|)",
+    "expect": {
+      "mustContain": ["CustomerID", "CustomerName", "Country"],
+      "mustNotContain": ["OrderDate", "ShipperID"],
+      "minCount": 3
+    },
+    "note": "outer alias c is visible inside the correlated subquery and scopes to Customers"
+  },
+  {
+    "id": "SUBQ-015",
+    "family": "subqueries",
+    "doc": "SELECT p.ProductName FROM dbo.Products p WHERE NOT EXISTS (SELECT 1 FROM dbo.OrderDetails od WHERE od.| = p.ProductID)",
+    "expect": {
+      "mustContain": ["ProductID", "OrderID", "Quantity"],
+      "mustNotContain": ["ProductName", "Price"],
+      "minCount": 3
+    },
+    "note": "NOT EXISTS inner alias od binds OrderDetails"
+  },
+  {
+    "id": "SUBQ-016",
+    "family": "subqueries",
+    "doc": "SELECT p.ProductName FROM dbo.Products p WHERE NOT EXISTS (SELECT 1 FROM dbo.OrderDetails od WHERE od.ProductID = p.Pro|)",
+    "expect": {
+      "mustContain": ["ProductID", "ProductName"],
+      "mustNotContain": ["Quantity"],
+      "minCount": 2
+    },
+    "note": "outer alias p with 3-char prefix Pro used inside the correlated subquery"
+  },
+  {
+    "id": "SUBQ-017",
+    "family": "subqueries",
+    "doc": "SELECT c.CustomerName, (SELECT COUNT(*) FROM dbo.Orders o WHERE o.CustomerID = c.CustomerID AND o.|) FROM dbo.Customers c",
+    "expect": {
+      "mustContain": ["OrderDate", "ShipperID", "EmployeeID"],
+      "mustNotContain": ["ContactName", "Address"],
+      "minCount": 3
+    },
+    "note": "correlated scalar subquery in select list; o scopes to Orders"
+  },
+  {
+    "id": "SUBQ-018",
+    "family": "subqueries",
+    "doc": "SELECT e.LastName, (SELECT MAX(o.|) FROM dbo.Orders o WHERE o.EmployeeID = e.EmployeeID) FROM dbo.Employees e",
+    "expect": {
+      "mustContain": ["OrderDate", "OrderID"],
+      "mustNotContain": ["LastName", "BirthDate"],
+      "minCount": 2
+    },
+    "note": "inner alias inside aggregate argument scopes to Orders, not outer Employees"
+  },
+  {
+    "id": "SUBQ-019",
+    "family": "subqueries",
+    "doc": "select c.CustomerName\nfrom dbo.Customers c\nwhere exists (\n  select 1 from dbo.Orders o\n  where o.CustomerID = c.CustomerID\n    and o.Ord|\n)",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["OrderDetailID"],
+      "minCount": 2
+    },
+    "note": "multi-line lower-case correlated EXISTS; prefix Ord under o.; OrderDetailID matches prefix but its table is not in scope"
+  },
+  {
+    "id": "SUBQ-020",
+    "family": "subqueries",
+    "doc": "SELECT s.SupplierName FROM dbo.Suppliers s WHERE s.SupplierID IN (SELECT p.SupplierID FROM dbo.Products p WHERE p.Price > 10 AND s.| IS NOT NULL)",
+    "expect": {
+      "mustContain": ["SupplierID", "SupplierName", "Country"],
+      "mustNotContain": ["ProductName", "Unit"],
+      "minCount": 3
+    },
+    "note": "outer alias s referenced inside a correlated IN subquery still scopes to Suppliers"
+  },
+  {
+    "id": "SUBQ-021",
+    "family": "subqueries",
+    "doc": "SELECT o.OrderID FROM dbo.Orders o WHERE EXISTS (SELECT 1 FROM Sales.Invoices inv WHERE inv.OrderID = o.OrderID AND inv.|)",
+    "expect": {
+      "mustContain": ["Paid", "TotalAmount", "InvoiceDate"],
+      "mustNotContain": ["OrderDate", "CustomerID"],
+      "minCount": 3
+    },
+    "note": "inner alias inv binds Sales.Invoices in correlated EXISTS"
+  },
+  {
+    "id": "SUBQ-022",
+    "family": "subqueries",
+    "doc": "SELECT c.ContactName FROM dbo.Customers c WHERE EXISTS (SELECT 1 FROM dbo.Orders x WHERE x.O|)",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["OrderDetailID"],
+      "minCount": 2
+    },
+    "note": "1-char prefix under nonstandard alias x bound to Orders"
+  },
+  {
+    "id": "SUBQ-023",
+    "family": "subqueries",
+    "doc": "SELECT o.CustomerID, COUNT(*) FROM dbo.Orders o GROUP BY o.CustomerID HAVING COUNT(*) > (SELECT AVG(od.|) FROM dbo.OrderDetails od)",
+    "expect": {
+      "mustContain": ["Quantity", "ProductID"],
+      "mustNotContain": ["ShipperID", "EmployeeID"],
+      "minCount": 2
+    },
+    "note": "subquery in HAVING; od scopes to OrderDetails, not the outer Orders alias"
+  },
+  {
+    "id": "SUBQ-024",
+    "family": "subqueries",
+    "doc": "SELECT c.CustomerName FROM dbo.Customers c WHERE EXISTS (SELECT 1 FROM dbo.Orders o WHERE o.CustomerID = c.CustomerID AND EXISTS (SELECT 1 FROM dbo.OrderDetails od WHERE od.OrderID = o.|))",
+    "expect": {
+      "mustContain": ["OrderID", "CustomerID"],
+      "mustNotContain": ["OrderDetailID", "ContactName"],
+      "minCount": 2
+    },
+    "note": "middle-level alias o visible from doubly-nested EXISTS; od and c columns must not appear under o."
+  },
+  {
+    "id": "SUBQ-025",
+    "family": "subqueries",
+    "doc": "SELECT d.| FROM (SELECT OrderID, OrderDate FROM dbo.Orders) d",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["ShipperID", "EmployeeID"],
+      "minCount": 2
+    },
+    "note": "derived table exposes only projected columns; non-projected Orders columns must not leak"
+  },
+  {
+    "id": "SUBQ-026",
+    "family": "subqueries",
+    "doc": "SELECT d.| FROM (SELECT * FROM dbo.Products) d",
+    "expect": {
+      "mustContain": ["ProductID", "ProductName", "Price"],
+      "mustNotContain": ["CategoryName", "CustomerID"],
+      "minCount": 3
+    },
+    "note": "star-projected derived table exposes all Products columns; other tables' columns absent"
+  },
+  {
+    "id": "SUBQ-027",
+    "family": "subqueries",
+    "doc": "SELECT * FROM (SELECT CustomerID, City, Country FROM dbo.Customers) AS cust WHERE cust.|",
+    "expect": {
+      "mustContain": ["CustomerID", "City", "Country"],
+      "mustNotContain": ["ContactName", "PostalCode"],
+      "minCount": 3
+    },
+    "note": "AS-aliased derived table used in WHERE exposes only its projection"
+  },
+  {
+    "id": "SUBQ-028",
+    "family": "subqueries",
+    "doc": "SELECT o.OrderID, dp.| FROM dbo.Orders o INNER JOIN (SELECT OrderID, Quantity FROM dbo.OrderDetails) dp ON dp.OrderID = o.OrderID",
+    "expect": {
+      "mustContain": ["OrderID", "Quantity"],
+      "mustNotContain": ["ProductID", "OrderDate"],
+      "minCount": 2
+    },
+    "note": "derived table joined to base table; dp shows only projected OrderDetails columns"
+  },
+  {
+    "id": "SUBQ-029",
+    "family": "subqueries",
+    "doc": "SELECT d.OrderID FROM (SELECT | FROM dbo.Orders) d",
+    "expect": {
+      "mustContain": ["OrderID", "CustomerID", "OrderDate"],
+      "mustNotContain": ["ProductName", "Quantity"],
+      "minCount": 3
+    },
+    "note": "caret inside derived-table select list scopes to Orders"
+  },
+  {
+    "id": "SUBQ-030",
+    "family": "subqueries",
+    "doc": "SELECT x.ProductID FROM (SELECT p.| FROM dbo.Products p) x",
+    "expect": {
+      "mustContain": ["ProductID", "ProductName", "Unit"],
+      "mustNotContain": ["SupplierName", "CategoryName"],
+      "minCount": 3
+    },
+    "note": "inner alias p inside derived table body binds Products"
+  },
+  {
+    "id": "SUBQ-031",
+    "family": "subqueries",
+    "doc": "SELECT agg.|\nFROM (\n    SELECT CustomerID, OrderDate\n    FROM dbo.Orders\n) agg",
+    "expect": {
+      "mustContain": ["CustomerID", "OrderDate"],
+      "mustNotContain": ["OrderID", "ShipperID"],
+      "minCount": 2
+    },
+    "note": "multi-line derived table; OrderID is not projected so it must not appear under agg."
+  },
+  {
+    "id": "SUBQ-032",
+    "family": "subqueries",
+    "doc": "SELECT dt.Ord| FROM (SELECT OrderID, OrderDate, ShipperID FROM dbo.Orders) dt",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["ShipperID", "OrderDetailID"],
+      "minCount": 2
+    },
+    "note": "prefix Ord on derived-table alias; ShipperID is projected but prefix-mismatched"
+  },
+  {
+    "id": "SUBQ-033",
+    "family": "subqueries",
+    "doc": "SELECT v.| FROM (SELECT ProductID, ProductName, CategoryName FROM dbo.vw_ProductCatalog) v",
+    "expect": {
+      "mustContain": ["ProductID", "ProductName", "CategoryName"],
+      "mustNotContain": ["SupplierName", "Price"],
+      "minCount": 3
+    },
+    "note": "derived table over a view exposes only the projected view columns"
+  },
+  {
+    "id": "SUBQ-034",
+    "family": "subqueries",
+    "doc": "SELECT a.CustomerID, b.| FROM (SELECT CustomerID FROM dbo.Customers) a CROSS JOIN (SELECT OrderID, OrderDate FROM dbo.Orders) b",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["CustomerID", "CustomerName"],
+      "minCount": 2
+    },
+    "note": "two derived tables; sibling derived table a's columns must not appear under b."
+  },
+  {
+    "id": "SUBQ-035",
+    "family": "subqueries",
+    "doc": "SELECT d.| FROM (SELECT c.CustomerName, o.OrderID FROM dbo.Customers c JOIN dbo.Orders o ON o.CustomerID = c.CustomerID) d",
+    "expect": {
+      "mustContain": ["CustomerName", "OrderID"],
+      "mustNotContain": ["OrderDate", "ContactName"],
+      "minCount": 2
+    },
+    "note": "derived table over a join exposes exactly the two projected columns"
+  },
+  {
+    "id": "SUBQ-036",
+    "family": "subqueries",
+    "doc": "SELECT outerq.| FROM (SELECT innerq.ProductID FROM (SELECT ProductID, Price FROM dbo.Products) innerq) outerq",
+    "expect": {
+      "mustContain": ["ProductID"],
+      "mustNotContain": ["Price", "ProductName"],
+      "minCount": 1
+    },
+    "note": "nested derived tables; Price projected only at the inner level must not escape to outerq"
+  },
+  {
+    "id": "SUBQ-037",
+    "family": "subqueries",
+    "doc": "SELECT d.OrderID FROM (SELECT OrderID FROM dbo.Orders WHERE |) d",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate", "CustomerID"],
+      "mustNotContain": ["Quantity", "InvoiceID"],
+      "minCount": 3
+    },
+    "note": "bare WHERE inside derived table body scopes to Orders"
+  },
+  {
+    "id": "SUBQ-038",
+    "family": "subqueries",
+    "doc": "SELECT d.OrderID FROM (SELECT o.OrderID, o.OrderDate FROM dbo.Orders o) d WHERE o.|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["OrderDate", "CustomerID"],
+      "minCount": 0
+    },
+    "note": "inner alias o must not be resolvable outside its derived table"
+  },
+  {
+    "id": "SUBQ-039",
+    "family": "subqueries",
+    "doc": "SELECT p.ProductName FROM dbo.Products p;\nSELECT * FROM dbo.Customers c WHERE c.CustomerID IN (SELECT o.| FROM dbo.Orders o)",
+    "expect": {
+      "mustContain": ["OrderID", "CustomerID"],
+      "mustNotContain": ["ProductName", "Unit"],
+      "minCount": 2
+    },
+    "note": "prior ;-terminated statement; its Products scope must not bleed into subquery alias o"
+  },
+  {
+    "id": "SUBQ-040",
+    "family": "subqueries",
+    "doc": "SELECT o.ProductName FROM dbo.Products o;\nSELECT c.CustomerName FROM dbo.Customers c WHERE EXISTS (SELECT 1 FROM dbo.Orders o WHERE o.|)",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["ProductName", "Price"],
+      "minCount": 2
+    },
+    "note": "alias o reused across statements; it must rebind to Orders in the current statement"
+  },
+  {
+    "id": "SUBQ-041",
+    "family": "subqueries",
+    "doc": "UPDATE dbo.Products SET Price = 1 WHERE ProductID = 5;\nSELECT d.| FROM (SELECT CategoryID, CategoryName FROM dbo.Categories) d",
+    "expect": {
+      "mustContain": ["CategoryID", "CategoryName"],
+      "mustNotContain": ["Price", "Description"],
+      "minCount": 2
+    },
+    "note": "derived table after a prior UPDATE; Price from prior statement scope and non-projected Description absent"
+  },
+  {
+    "id": "SUBQ-042",
+    "family": "subqueries",
+    "doc": "SELECT * FROM dbo.Shippers;\nSELECT o.OrderID\nFROM dbo.Orders o\nWHERE o.ShipperID IN (\n    SELECT s.| FROM dbo.Shippers s\n)",
+    "expect": {
+      "mustContain": ["ShipperID", "ShipperName", "Phone"],
+      "mustNotContain": ["OrderDate", "CustomerName"],
+      "minCount": 3
+    },
+    "note": "multi-line with prior statement; s binds Shippers in the current subquery"
+  },
+  {
+    "id": "SUBQ-043",
+    "family": "subqueries",
+    "doc": "EXEC dbo.usp_GetCustomerOrders @CustomerID = 1;\nSELECT 1;\nSELECT c.CustomerName FROM dbo.Customers c WHERE c.Country IN (SELECT s.Cou| FROM dbo.Suppliers s)",
+    "expect": {
+      "mustContain": ["Country"],
+      "mustNotContain": ["ContactName", "City"],
+      "minCount": 1
+    },
+    "note": "two prior ;-terminated statements; 3-char prefix Cou under s. matches only Suppliers.Country"
+  },
+  {
+    "id": "SUBQ-044",
+    "family": "subqueries",
+    "doc": "SELECT TOP (5) * FROM dbo.Orders;\nSELECT * FROM dbo.Customers WHERE CustomerID IN (SELECT CustomerID FROM Ord|)",
+    "expect": {
+      "mustContain": ["Orders", "OrderDetails"],
+      "mustNotContain": ["OrderDate"],
+      "minCount": 2
+    },
+    "note": "table completion with prefix inside subquery FROM; OrderDate is a column matching the prefix and must not appear in FROM position"
+  },
+  {
+    "id": "SUBQ-045",
+    "family": "subqueries",
+    "doc": "DELETE FROM dbo.OrderDetails WHERE Quantity = 0; SELECT p.ProductName FROM dbo.Products p WHERE p.ProductID IN (SELECT od.| FROM dbo.OrderDetails od)",
+    "expect": {
+      "mustContain": ["ProductID", "Quantity", "OrderID"],
+      "mustNotContain": ["ProductName", "Price"],
+      "minCount": 3
+    },
+    "note": "prior statement on the same line; od binds OrderDetails in the current subquery"
+  },
+  {
+    "id": "SUBQ-046",
+    "family": "subqueries",
+    "doc": "SELECT CategoryName FROM dbo.Categories;\nSELECT * FROM dbo.Products WHERE CategoryID IN (SELECT cat.CategoryID FROM dbo.Categories cat WHERE cat.|",
+    "expect": {
+      "mustContain": ["CategoryID", "CategoryName", "Description"],
+      "mustNotContain": ["ProductName", "Unit"],
+      "minCount": 3
+    },
+    "note": "unterminated subquery at end of doc after a prior statement; cat binds Categories"
+  },
+  {
+    "id": "SUBQ-047",
+    "family": "subqueries",
+    "doc": "UPDATE dbo.Products SET Price = Price * 1.1 WHERE SupplierID IN (SELECT s.| FROM dbo.Suppliers s WHERE s.Country = 'UK')",
+    "expect": {
+      "mustContain": ["SupplierID", "SupplierName"],
+      "mustNotContain": ["Price", "ProductName"],
+      "minCount": 2
+    },
+    "note": "IN subquery inside UPDATE WHERE; s binds Suppliers, not the update target"
+  },
+  {
+    "id": "SUBQ-048",
+    "family": "subqueries",
+    "doc": "DELETE FROM dbo.OrderDetails WHERE OrderID IN (SELECT o.OrderID FROM dbo.Orders o WHERE o.|)",
+    "expect": {
+      "mustContain": ["OrderDate", "ShipperID", "CustomerID"],
+      "mustNotContain": ["Quantity", "OrderDetailID"],
+      "minCount": 3
+    },
+    "note": "IN subquery inside DELETE WHERE; o binds Orders, delete-target columns absent under o."
+  },
+  {
+    "id": "SUBQ-049",
+    "family": "subqueries",
+    "doc": "UPDATE p SET p.Price = 0 FROM dbo.Products p WHERE EXISTS (SELECT 1 FROM dbo.OrderDetails od WHERE od.ProductID = p.|)",
+    "expect": {
+      "mustContain": ["ProductID", "Price", "CategoryID"],
+      "mustNotContain": ["Quantity", "OrderDetailID"],
+      "minCount": 3
+    },
+    "note": "aliased UPDATE target referenced from a correlated subquery scopes to Products"
+  },
+  {
+    "id": "SUBQ-050",
+    "family": "subqueries",
+    "doc": "DELETE FROM dbo.Shippers WHERE ShipperID NOT IN (SELECT o.Ship| FROM dbo.Orders o)",
+    "expect": {
+      "mustContain": ["ShipperID"],
+      "mustNotContain": ["ShipperName"],
+      "minCount": 1
+    },
+    "note": "prefix Ship under o. matches only Orders.ShipperID; ShipperName appearing would mean delete-target bleed"
+  },
+  {
+    "id": "SUBQ-051",
+    "family": "subqueries",
+    "doc": "UPDATE dbo.Products SET Price = (SELECT MAX(od.|) FROM dbo.OrderDetails od)",
+    "expect": {
+      "mustContain": ["Quantity", "ProductID", "OrderID"],
+      "mustNotContain": ["Price", "Unit"],
+      "minCount": 3
+    },
+    "note": "scalar subquery in SET value; od binds OrderDetails, not the update target"
+  },
+  {
+    "id": "SUBQ-052",
+    "family": "subqueries",
+    "doc": "INSERT INTO dbo.Shippers (ShipperName, Phone) SELECT s.SupplierName, s.Phone FROM dbo.Suppliers s WHERE s.SupplierID IN (SELECT p.| FROM dbo.Products p)",
+    "expect": {
+      "mustContain": ["SupplierID", "ProductID", "CategoryID"],
+      "mustNotContain": ["SupplierName", "ShipperName"],
+      "minCount": 3
+    },
+    "note": "subquery inside INSERT ... SELECT; p binds Products only"
+  },
+  {
+    "id": "SUBQ-053",
+    "family": "subqueries",
+    "doc": "SELECT * FROM dbo.Products WHERE Price > ALL (SELECT i.| FROM Sales.Invoices i)",
+    "expect": {
+      "mustContain": ["TotalAmount", "InvoiceID", "Paid"],
+      "mustNotContain": ["Price", "ProductName"],
+      "minCount": 3
+    },
+    "note": "ALL comparison subquery; i binds Sales.Invoices"
+  },
+  {
+    "id": "SUBQ-054",
+    "family": "subqueries",
+    "doc": "SELECT * FROM dbo.Products p WHERE p.Price > ANY (SELECT pr.Price FROM dbo.Products pr WHERE pr.|)",
+    "expect": {
+      "mustContain": ["ProductID", "Price", "CategoryID"],
+      "mustNotContain": ["Quantity", "TotalAmount"],
+      "minCount": 3
+    },
+    "note": "same table under two aliases; inner alias pr resolves to Products"
+  },
+  {
+    "id": "SUBQ-055",
+    "family": "subqueries",
+    "doc": "SELECT * FROM dbo.Orders WHERE OrderDate = (SELECT MAX(o2.|) FROM dbo.Orders o2)",
+    "expect": {
+      "mustContain": ["OrderDate", "OrderID"],
+      "mustNotContain": ["InvoiceDate", "BirthDate"],
+      "minCount": 2
+    },
+    "note": "self-referencing scalar subquery with numeric-suffixed alias o2; other tables' datetime columns absent"
+  },
+  {
+    "id": "SUBQ-056",
+    "family": "subqueries",
+    "doc": "select * from dbo.Customers where Country = (select TOP 1 s.C| from dbo.Suppliers s)",
+    "expect": {
+      "mustContain": ["City", "Country", "ContactName"],
+      "mustNotContain": ["CustomerName", "CategoryName"],
+      "minCount": 3
+    },
+    "note": "1-char prefix C under s.; CustomerName matches the prefix but belongs to the outer table"
+  },
+  {
+    "id": "SUBQ-057",
+    "family": "subqueries",
+    "doc": "SELECT * FROM dbo.Customers WHERE CustomerID IN (SELECT o.CustomerID FROM dbo.Orders o WHERE o.OrderID IN (SELECT od.| FROM dbo.OrderDetails od))",
+    "expect": {
+      "mustContain": ["OrderID", "ProductID", "Quantity"],
+      "mustNotContain": ["OrderDate", "CustomerName"],
+      "minCount": 3
+    },
+    "note": "innermost subquery alias od binds OrderDetails"
+  },
+  {
+    "id": "SUBQ-058",
+    "family": "subqueries",
+    "doc": "SELECT CustomerName\nFROM dbo.Customers\nWHERE CustomerID IN (\n  SELECT CustomerID FROM dbo.Orders\n  WHERE OrderID IN (\n    SELECT OrderID FROM |\n  )\n)",
+    "expect": {
+      "mustContain": ["OrderDetails", "Orders"],
+      "mustNotContain": ["NoSuchTable"],
+      "minCount": 2
+    },
+    "note": "multi-line doubly-nested subquery; FROM position offers tables"
+  },
+  {
+    "id": "SUBQ-059",
+    "family": "subqueries",
+    "doc": "SELECT * FROM dbo.Products WHERE ProductID IN (SELECT d.| FROM (SELECT ProductID, Quantity FROM dbo.OrderDetails) d)",
+    "expect": {
+      "mustContain": ["ProductID", "Quantity"],
+      "mustNotContain": ["OrderDetailID", "ProductName"],
+      "minCount": 2
+    },
+    "note": "derived table inside IN subquery exposes only its projection"
+  },
+  {
+    "id": "SUBQ-060",
+    "family": "subqueries",
+    "doc": "SELECT 1 WHERE EXISTS (SELECT 1 FROM dbo.Orders o WHERE EXISTS (SELECT 1 FROM dbo.OrderDetails od WHERE od.OrderID = o.OrderID AND EXISTS (SELECT 1 FROM dbo.Products p WHERE p.| = od.ProductID)))",
+    "expect": {
+      "mustContain": ["ProductID", "ProductName", "Price"],
+      "mustNotContain": ["Quantity", "OrderDate"],
+      "minCount": 3
+    },
+    "note": "triple-nested EXISTS; innermost alias p binds Products"
+  },
+  {
+    "id": "SUBQ-061",
+    "family": "subqueries",
+    "doc": "SELECT (SELECT COUNT(*) FROM dbo.Orders), c.| FROM dbo.Customers c",
+    "expect": {
+      "mustContain": ["CustomerID", "CustomerName", "City"],
+      "mustNotContain": ["OrderDate", "ShipperID"],
+      "minCount": 3
+    },
+    "note": "after a completed sibling subquery, c. must scope to Customers with no Orders leak outward"
+  },
+  {
+    "id": "SUBQ-062",
+    "family": "subqueries",
+    "doc": "SELECT *\nFROM (\tSELECT OrderID, OrderDate FROM dbo.Orders ) d\nWHERE d.O|",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["OrderDetailID"],
+      "minCount": 2
+    },
+    "note": "tab-indented multi-line derived table; 1-char prefix on the derived alias in WHERE"
+  },
+  {
+    "id": "SUBQ-063",
+    "family": "subqueries",
+    "doc": "SELECT c.CustomerID FROM dbo.Customers c ORDER BY (SELECT MAX(o.|) FROM dbo.Orders o WHERE o.CustomerID = c.CustomerID)",
+    "expect": {
+      "mustContain": ["OrderDate", "OrderID"],
+      "mustNotContain": ["CustomerName", "City"],
+      "minCount": 2
+    },
+    "note": "correlated subquery in ORDER BY; o scopes to Orders"
+  },
+  {
+    "id": "SUBQ-064",
+    "family": "subqueries",
+    "doc": "SELECT c.CustomerName, oa.OrderID FROM dbo.Customers c CROSS APPLY (SELECT o.OrderID FROM dbo.Orders o WHERE o.CustomerID = c.|) oa",
+    "expect": {
+      "mustContain": ["CustomerID", "CustomerName"],
+      "mustNotContain": ["OrderDate", "ShipperID"],
+      "minCount": 2
+    },
+    "note": "outer alias c visible inside CROSS APPLY body and scopes to Customers"
+  },
+  {
+    "id": "SUBQ-065",
+    "family": "subqueries",
+    "doc": "SELECT c.CustomerName, oa.| FROM dbo.Customers c OUTER APPLY (SELECT o.OrderID, o.OrderDate FROM dbo.Orders o WHERE o.CustomerID = c.CustomerID) oa",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["ShipperID", "CustomerName"],
+      "minCount": 2
+    },
+    "note": "OUTER APPLY alias exposes only the projected columns"
+  },
+  {
+    "id": "SUBQ-066",
+    "family": "subqueries",
+    "doc": "SELECT d.| FROM (SELECT CustomerID, COUNT(*) AS OrderCount FROM dbo.Orders GROUP BY CustomerID) d",
+    "expect": {
+      "mustContain": ["CustomerID"],
+      "mustNotContain": ["OrderID", "OrderDate"],
+      "minCount": 1
+    },
+    "note": "aggregated derived table; only the grouped projection column asserted (computed alias not a schema name)"
+  },
+  {
+    "id": "SUBQ-067",
+    "family": "subqueries",
+    "doc": "SELECT  *  FROM   dbo.Customers   WHERE  CustomerID  IN  ( SELECT   | FROM dbo.Orders )",
+    "expect": {
+      "mustContain": ["OrderID", "CustomerID"],
+      "mustNotContain": ["Quantity", "Paid"],
+      "minCount": 2
+    },
+    "note": "irregular whitespace; bare inner select list scopes to Orders"
+  },
+  {
+    "id": "SUBQ-068",
+    "family": "subqueries",
+    "doc": "SELECT P.PRODUCTNAME FROM DBO.PRODUCTS P WHERE P.CATEGORYID IN (SELECT CAT.| FROM DBO.CATEGORIES CAT)",
+    "expect": {
+      "mustContain": ["CategoryID", "CategoryName", "Description"],
+      "mustNotContain": ["ProductName", "Price"],
+      "minCount": 3
+    },
+    "note": "all-uppercase doc; case-insensitive alias CAT binds Categories"
+  },
+  {
+    "id": "SUBQ-069",
+    "family": "subqueries",
+    "doc": "SELECT * FROM dbo.Employees;\nSELECT emp.|\nFROM (\n\tSELECT EmployeeID, LastName\n\tFROM dbo.Employees\n) emp",
+    "expect": {
+      "mustContain": ["EmployeeID", "LastName"],
+      "mustNotContain": ["FirstName", "Notes"],
+      "minCount": 2
+    },
+    "note": "prior statement saw full Employees; the derived table must still expose only its projected columns"
+  },
+  {
+    "id": "SUBQ-070",
+    "family": "subqueries",
+    "doc": "SELECT * FROM dbo.Customers WHERE CustomerID IN (SELECT v.| FROM dbo.vw_CustomerOrders v)",
+    "expect": {
+      "mustContain": ["CustomerID", "OrderID", "OrderDate"],
+      "mustNotContain": ["ContactName", "Address"],
+      "minCount": 3
+    },
+    "note": "view-backed subquery alias v; outer base-table-only columns absent under v."
+  }
+]

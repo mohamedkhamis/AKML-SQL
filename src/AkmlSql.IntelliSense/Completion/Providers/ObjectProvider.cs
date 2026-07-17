@@ -73,8 +73,18 @@ public class ObjectProvider : ICompletionProvider
         ClauseType.Alter,
         ClauseType.Delete,
         ClauseType.InsertColumns,
+        ClauseType.InsertTarget, // Spec 032 C2 — insertable objects only (filter below)
         ClauseType.UpdateSet,
         ClauseType.JoinOn
+        // NOT InsertColumnList — that position is columns-only (ColumnProvider).
+    ];
+
+    // Spec 032 C2: valid INSERT targets — never procedures or functions.
+    private static readonly HashSet<DbObjectType> InsertTargetObjectTypes =
+    [
+        DbObjectType.Table,
+        DbObjectType.View,
+        DbObjectType.Synonym
     ];
 
     private static readonly HashSet<DbObjectType> FromJoinObjectTypes =
@@ -89,6 +99,18 @@ public class ObjectProvider : ICompletionProvider
     private static readonly HashSet<DbObjectType> ExecObjectTypes =
     [
         DbObjectType.Procedure
+    ];
+
+    // Spec 032 D: JOIN ON positions additionally admit scalar UDFs (predicates like
+    // `ON dbo.fn_OrderItemCount(o.OrderID) > 0`) — FromJoinObjectTypes excluded them.
+    private static readonly HashSet<DbObjectType> JoinOnObjectTypes =
+    [
+        DbObjectType.Table,
+        DbObjectType.View,
+        DbObjectType.TableFunction,
+        DbObjectType.InlineFunction,
+        DbObjectType.Synonym,
+        DbObjectType.ScalarFunction
     ];
 
     public bool CanHandle(CursorContext context, DatabaseCache? cache)
@@ -159,9 +181,61 @@ public class ObjectProvider : ICompletionProvider
             return false;
         var prev = context.PrecedingToken;
         if (prev == null) return false;
+
+        // Spec 032 H3: `CROSS APPLY |` — APPLY lexes as an Identifier, which used to read
+        // as "a completed table target" and suppressed all object suggestions (zero items
+        // for `CROSS APPLY fn_|`). It's the operator, not a target.
+        if (string.Equals(prev.Text, "APPLY", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        // Spec 032 B7: `UPDATE TOP (10) |` — the `)` closes a TOP row-limit group, not a
+        // completed derived-table target; tables are still expected at the caret.
+        if (prev.TokenType == TSqlTokenType.RightParenthesis && ClosesTopGroup(context))
+            return false;
+
         return prev.TokenType is TSqlTokenType.Identifier
             or TSqlTokenType.QuotedIdentifier
             or TSqlTokenType.RightParenthesis;
+    }
+
+    /// <summary>Spec 032 B7 — true when the `)` immediately before the caret closes a
+    /// balanced group whose opener is preceded by <c>TOP</c>.</summary>
+    private static bool ClosesTopGroup(CursorContext context)
+    {
+        var tokens = SmartGroupByContextExtensions.GetTokens(context);
+        if (tokens == null) return false;
+
+        // Find the ')' that is the last non-trivia token before the caret.
+        int closeIndex = -1;
+        for (int i = 0; i < tokens.Count; i++)
+        {
+            var t = tokens[i];
+            if (t.Offset >= context.CursorOffset) break;
+            if (t.TokenType is TSqlTokenType.WhiteSpace
+                or TSqlTokenType.SingleLineComment
+                or TSqlTokenType.MultilineComment) continue;
+            closeIndex = t.TokenType == TSqlTokenType.RightParenthesis ? i : -1;
+        }
+
+        if (closeIndex < 0) return false;
+
+        int depth = 1;
+        int j = closeIndex - 1;
+        while (j >= 0 && depth > 0)
+        {
+            if (tokens[j].TokenType == TSqlTokenType.RightParenthesis) depth++;
+            else if (tokens[j].TokenType == TSqlTokenType.LeftParenthesis) depth--;
+            j--;
+        }
+
+        while (j >= 0 && tokens[j].TokenType is TSqlTokenType.WhiteSpace
+                   or TSqlTokenType.SingleLineComment
+                   or TSqlTokenType.MultilineComment)
+        {
+            j--;
+        }
+
+        return j >= 0 && tokens[j].TokenType == TSqlTokenType.Top;
     }
 
     public IEnumerable<CompletionItem> GetCompletions(CursorContext context, DatabaseCache? cache)
@@ -182,6 +256,27 @@ public class ObjectProvider : ICompletionProvider
                     ObjectType = (int)CompletionObjectType.Table,
                     SecondaryText = "CTE",
                     SortPriority = 50 // above dbo tables (100) and non-dbo (200)
+                };
+            }
+        }
+
+        // Spec 032 F1: temp-table NAMES in table positions — AvailableTempTables was
+        // consumed only by ColumnProvider, so `FROM #|` never offered `#t` at all.
+        if (!context.PrecedingDot &&
+            context.AvailableTempTables.Count > 0 &&
+            context.ClauseType is ClauseType.From or ClauseType.JoinTable or ClauseType.JoinOn
+                or ClauseType.InsertTarget or ClauseType.InsertColumns
+                or ClauseType.UpdateTable or ClauseType.Delete)
+        {
+            foreach (var tempName in context.AvailableTempTables.Keys)
+            {
+                yield return new CompletionItem
+                {
+                    DisplayText = tempName,
+                    InsertText = tempName,
+                    ObjectType = (int)CompletionObjectType.Table,
+                    SecondaryText = "Temp table",
+                    SortPriority = 50 // same tier as CTEs — defined-in-script beats catalog
                 };
             }
         }
@@ -493,7 +588,11 @@ public class ObjectProvider : ICompletionProvider
         return clauseType switch
         {
             ClauseType.Exec => ExecObjectTypes,
-            ClauseType.From or ClauseType.JoinTable or ClauseType.JoinOn or ClauseType.Delete or ClauseType.UpdateTable => FromJoinObjectTypes,
+            ClauseType.JoinOn => JoinOnObjectTypes, // Spec 032 D — scalar UDFs valid in ON predicates
+            ClauseType.From or ClauseType.JoinTable or ClauseType.Delete or ClauseType.UpdateTable => FromJoinObjectTypes,
+            // Spec 032 C2: INSERT positions take insertable objects only — offering
+            // procs/functions as INSERT targets was the campaign's insert-family failure.
+            ClauseType.InsertTarget or ClauseType.InsertColumns => InsertTargetObjectTypes,
             _ => null // null means all types allowed
         };
     }
@@ -567,7 +666,10 @@ public class ObjectProvider : ICompletionProvider
             ObjectType = (int)completionType,
             SecondaryText = secondaryText,
             SourceObject = obj.FullName,
-            SortPriority = sortPriority
+            SortPriority = sortPriority,
+            // Spec 032 FR-026 (H1): filter on the object NAME — a schema-qualified display
+            // ("dbo.Products") lets any prefix subsequence-match through the "dbo." part.
+            FilterText = includeSchema ? obj.ObjectName : null
         };
     }
 

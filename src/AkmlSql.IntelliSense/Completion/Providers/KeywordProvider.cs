@@ -70,7 +70,11 @@ public class KeywordProvider(
             yield break;
         }
 
-        var keywords = KeywordDictionary.GetKeywordsForClause(context.ClauseType);
+        // Spec 032 B3: join qualifiers get a qualifier-specific set (the dictionary's
+        // JoinQualifier fallback is just ["JOIN"]). PrecedingToken IS the qualifier.
+        var keywords = context.ClauseType == ClauseType.JoinQualifier
+            ? JoinQualifierKeywords(context)
+            : KeywordDictionary.GetKeywordsForClause(context.ClauseType);
 
         // If the clause-specific list is empty (e.g., Exec), fall back to nothing
         // The general keyword list is already handled by GetKeywordsForClause for Unknown
@@ -100,6 +104,33 @@ public class KeywordProvider(
                 SecondaryText = "Keyword",
                 SortPriority = priority
             };
+        }
+
+        // Spec 032 D: built-in scalar functions in expression positions. The ~130-entry
+        // catalog was referenced only by GetAllKeywords — no provider ever emitted it
+        // per-clause, so `WHERE OrderDate >= |` / `SET Price = |` / `VALUES (|` offered no
+        // built-ins at all. Ranked below clause keywords; columns (10–30) stay on top.
+        if (ExpressionClauseTypes.Contains(context.ClauseType))
+        {
+            foreach (var fn in KeywordDictionary.ScalarFunctions)
+            {
+                if (!seen.Add(fn))
+                {
+                    continue;
+                }
+
+                yield return new CompletionItem
+                {
+                    DisplayText = fn,
+                    InsertText = fn,
+                    ObjectType = (int)CompletionObjectType.Function,
+                    SecondaryText = "Built-in Function",
+                    // Two tiers: the everyday functions stay above the 50-item cap even in
+                    // busy contexts (but BELOW compound keywords at 510 — "IS NULL" etc. must
+                    // survive the cap too); the long tail is reachable by typing a prefix.
+                    SortPriority = CommonFunctions.Contains(fn) ? 512 : 520
+                };
+            }
         }
 
         // Also include version-specific keywords if applicable
@@ -146,6 +177,50 @@ public class KeywordProvider(
                 };
             }
         }
+    }
+
+    // Spec 032 D: the everyday built-ins users reach for constantly — ranked above the
+    // long tail so they survive the suggestion cap in busy expression contexts.
+    private static readonly HashSet<string> CommonFunctions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        // Keep this list TIGHT (~20): it must fit under the 50-item suggestion cap after
+        // columns + clause keywords + snippets; the long tail stays prefix-reachable at 520.
+        "GETDATE", "DATEADD", "DATEDIFF", "YEAR", "MONTH", "DAY",
+        "ISNULL", "COALESCE", "NULLIF", "IIF",
+        "LEN", "UPPER", "LOWER", "TRIM", "SUBSTRING", "REPLACE", "CHARINDEX", "CONCAT",
+        "ROUND", "ABS", "NEWID",
+    };
+
+    // Spec 032 D: positions where an expression is being written — built-ins are valid here.
+    private static readonly HashSet<ClauseType> ExpressionClauseTypes =
+    [
+        ClauseType.Select,
+        ClauseType.Where,
+        ClauseType.Having,
+        ClauseType.UpdateSet,
+        ClauseType.InsertValues,
+        ClauseType.OrderBy,
+        ClauseType.GroupBy,
+        ClauseType.JoinOn,
+        ClauseType.CaseStart,
+        ClauseType.CaseWhen,
+        ClauseType.CaseThen,
+        ClauseType.CaseElse
+    ];
+
+    /// <summary>Spec 032 B3 — the keyword set for a join-qualifier position, per qualifier.</summary>
+    private static IReadOnlyList<string> JoinQualifierKeywords(CursorContext context)
+    {
+        return context.PrecedingToken?.TokenType switch
+        {
+            Microsoft.SqlServer.TransactSql.ScriptDom.TSqlTokenType.Inner => ["JOIN"],
+            Microsoft.SqlServer.TransactSql.ScriptDom.TSqlTokenType.Left
+                or Microsoft.SqlServer.TransactSql.ScriptDom.TSqlTokenType.Right
+                or Microsoft.SqlServer.TransactSql.ScriptDom.TSqlTokenType.Full => ["JOIN", "OUTER JOIN"],
+            Microsoft.SqlServer.TransactSql.ScriptDom.TSqlTokenType.Cross => ["JOIN", "APPLY"],
+            Microsoft.SqlServer.TransactSql.ScriptDom.TSqlTokenType.Outer => ["JOIN"],
+            _ => ["JOIN"]
+        };
     }
 
     /// <summary>True when the token immediately before the cursor is the <c>IS</c> predicate keyword.</summary>

@@ -1,0 +1,772 @@
+[
+  {
+    "id": "DEL-001",
+    "family": "delete",
+    "doc": "DELETE FROM |",
+    "expect": {
+      "mustContain": ["Customers", "Orders", "Products"],
+      "mustNotContain": ["CustomerName"],
+      "minCount": 5
+    },
+    "note": "bare DELETE FROM offers tables, not columns"
+  },
+  {
+    "id": "DEL-002",
+    "family": "delete",
+    "doc": "DELETE FROM C|",
+    "expect": {
+      "mustContain": ["Customers", "Categories"],
+      "mustNotContain": ["Orders", "CategoryName"],
+      "minCount": 2
+    },
+    "note": "1-char prefix filters table list; CategoryName is a column and must not appear at table position"
+  },
+  {
+    "id": "DEL-003",
+    "family": "delete",
+    "doc": "delete from cus|",
+    "expect": {
+      "mustContain": ["Customers"],
+      "mustNotContain": ["Categories", "Orders"],
+      "minCount": 1
+    },
+    "note": "lowercase 3-char prefix matches Customers case-insensitively"
+  },
+  {
+    "id": "DEL-004",
+    "family": "delete",
+    "doc": "DELETE FROM Ord|",
+    "expect": {
+      "mustContain": ["Orders", "OrderDetails"],
+      "mustNotContain": ["OrderDate", "Customers"],
+      "minCount": 2
+    },
+    "note": "Ord prefix keeps both Order tables; OrderDate column matching the prefix must not leak into table position"
+  },
+  {
+    "id": "DEL-005",
+    "family": "delete",
+    "doc": "DELETE FROM dbo.|",
+    "expect": {
+      "mustContain": ["Customers", "Orders", "Shippers"],
+      "mustNotContain": ["Invoices"],
+      "minCount": 5
+    },
+    "note": "dbo. qualifier must exclude Sales.Invoices"
+  },
+  {
+    "id": "DEL-006",
+    "family": "delete",
+    "doc": "DELETE FROM dbo.Sup|",
+    "expect": {
+      "mustContain": ["Suppliers"],
+      "mustNotContain": ["Shippers", "Customers"],
+      "minCount": 1
+    },
+    "note": "schema-qualified 3-char prefix; Shippers does not match Sup"
+  },
+  {
+    "id": "DEL-007",
+    "family": "delete",
+    "doc": "DELETE FROM Sales.|",
+    "expect": {
+      "mustContain": ["Invoices"],
+      "mustNotContain": ["Customers", "Orders"],
+      "minCount": 1
+    },
+    "note": "Sales. qualifier scopes to Sales schema objects only"
+  },
+  {
+    "id": "DEL-008",
+    "family": "delete",
+    "doc": "DELETE FROM Sales.In|",
+    "expect": {
+      "mustContain": ["Invoices"],
+      "mustNotContain": ["InvoiceID", "Orders"],
+      "minCount": 1
+    },
+    "note": "prefix under Sales.; InvoiceID column matching In must not appear at table position"
+  },
+  {
+    "id": "DEL-009",
+    "family": "delete",
+    "doc": "Delete From Northwind_AutoTest.dbo.|",
+    "expect": {
+      "mustContain": ["Orders", "Products"],
+      "mustNotContain": ["Invoices"],
+      "minCount": 3
+    },
+    "note": "three-part name completion under db.dbo. with mixed keyword casing"
+  },
+  {
+    "id": "DEL-010",
+    "family": "delete",
+    "doc": "DELETE |",
+    "expect": {
+      "mustContain": ["Customers", "Orders"],
+      "mustNotContain": ["NoSuchTable"],
+      "minCount": 2
+    },
+    "note": "FROM-less DELETE target position still offers tables"
+  },
+  {
+    "id": "DEL-011",
+    "family": "delete",
+    "doc": "DELETE   FROM   |",
+    "expect": {
+      "mustContain": ["Employees", "Shippers"],
+      "mustNotContain": ["LastName"],
+      "minCount": 3
+    },
+    "note": "extra whitespace between keywords does not break table completion"
+  },
+  {
+    "id": "DEL-012",
+    "family": "delete",
+    "doc": "DELETE FROM\n    |",
+    "expect": {
+      "mustContain": ["Orders", "Customers"],
+      "mustNotContain": ["OrderID"],
+      "minCount": 3
+    },
+    "note": "multi-line: table position on indented next line after FROM"
+  },
+  {
+    "id": "DEL-013",
+    "family": "delete",
+    "doc": "DELETE TOP (5) FROM |",
+    "expect": {
+      "mustContain": ["Orders", "OrderDetails"],
+      "mustNotContain": ["Quantity"],
+      "minCount": 3
+    },
+    "note": "TOP (n) clause before FROM still yields table completion"
+  },
+  {
+    "id": "DEL-014",
+    "family": "delete",
+    "doc": "delete from EMPL|",
+    "expect": {
+      "mustContain": ["Employees"],
+      "mustNotContain": ["Customers", "EmployeeID"],
+      "minCount": 1
+    },
+    "note": "UPPER prefix matches Employees case-insensitively; EmployeeID column must not appear at table position"
+  },
+  {
+    "id": "DEL-015",
+    "family": "delete",
+    "doc": "DELETE FROM Orders WHERE |",
+    "expect": {
+      "mustContain": ["OrderID", "CustomerID", "OrderDate"],
+      "mustNotContain": ["ProductName", "CustomerName"],
+      "minCount": 3
+    },
+    "note": "WHERE scoped to Orders target only"
+  },
+  {
+    "id": "DEL-016",
+    "family": "delete",
+    "doc": "DELETE FROM Customers WHERE |",
+    "expect": {
+      "mustContain": ["CustomerID", "CustomerName", "City"],
+      "mustNotContain": ["OrderID", "ProductName"],
+      "minCount": 3
+    },
+    "note": "WHERE scoped to Customers; other tables' columns absent"
+  },
+  {
+    "id": "DEL-017",
+    "family": "delete",
+    "doc": "DELETE FROM Customers WHERE Cus|",
+    "expect": {
+      "mustContain": ["CustomerID", "CustomerName"],
+      "mustNotContain": ["ContactName", "City"],
+      "minCount": 2
+    },
+    "note": "3-char prefix filters Customers columns to Cust* only"
+  },
+  {
+    "id": "DEL-018",
+    "family": "delete",
+    "doc": "DELETE FROM Products WHERE P|",
+    "expect": {
+      "mustContain": ["ProductID", "ProductName", "Price"],
+      "mustNotContain": ["Phone", "PostalCode"],
+      "minCount": 3
+    },
+    "note": "1-char prefix; Phone/PostalCode match P but belong to unscoped tables"
+  },
+  {
+    "id": "DEL-019",
+    "family": "delete",
+    "doc": "delete from dbo.Employees where |",
+    "expect": {
+      "mustContain": ["EmployeeID", "LastName", "FirstName"],
+      "mustNotContain": ["CustomerName"],
+      "minCount": 3
+    },
+    "note": "all-lowercase keywords with schema-qualified target"
+  },
+  {
+    "id": "DEL-020",
+    "family": "delete",
+    "doc": "DELETE FROM Sales.Invoices WHERE |",
+    "expect": {
+      "mustContain": ["InvoiceID", "TotalAmount", "Paid"],
+      "mustNotContain": ["OrderDate", "ProductID"],
+      "minCount": 3
+    },
+    "note": "Sales-schema target WHERE scoping; Orders/OrderDetails columns absent"
+  },
+  {
+    "id": "DEL-021",
+    "family": "delete",
+    "doc": "DELETE FROM Sales.Invoices WHERE Tot|",
+    "expect": {
+      "mustContain": ["TotalAmount"],
+      "mustNotContain": ["InvoiceID", "Paid"],
+      "minCount": 1
+    },
+    "note": "3-char prefix narrows Invoices columns to TotalAmount"
+  },
+  {
+    "id": "DEL-022",
+    "family": "delete",
+    "doc": "DELETE FROM Shippers WHERE Ph|",
+    "expect": {
+      "mustContain": ["Phone"],
+      "mustNotContain": ["ShipperID", "ShipperName"],
+      "minCount": 1
+    },
+    "note": "prefix filter on small table; non-matching columns excluded"
+  },
+  {
+    "id": "DEL-023",
+    "family": "delete",
+    "doc": "DELETE FROM OrderDetails\nWHERE |",
+    "expect": {
+      "mustContain": ["OrderDetailID", "OrderID", "Quantity"],
+      "mustNotContain": ["OrderDate", "ProductName"],
+      "minCount": 3
+    },
+    "note": "multi-line: WHERE on second line scoped to OrderDetails"
+  },
+  {
+    "id": "DEL-024",
+    "family": "delete",
+    "doc": "DELETE FROM Orders WHERE OrderDate < GETDATE() AND |",
+    "expect": {
+      "mustContain": ["OrderID", "ShipperID"],
+      "mustNotContain": ["InvoiceID", "Quantity"],
+      "minCount": 2
+    },
+    "note": "after AND, still scoped to Orders target"
+  },
+  {
+    "id": "DEL-025",
+    "family": "delete",
+    "doc": "delete dbo.Categories where cat|",
+    "expect": {
+      "mustContain": ["CategoryID", "CategoryName"],
+      "mustNotContain": ["Description", "ProductName"],
+      "minCount": 2
+    },
+    "note": "FROM-less schema-qualified DELETE target; lowercase 3-char prefix"
+  },
+  {
+    "id": "DEL-026",
+    "family": "delete",
+    "doc": "DELETE TOP (10) FROM Orders WHERE |",
+    "expect": {
+      "mustContain": ["OrderID", "EmployeeID"],
+      "mustNotContain": ["ProductID"],
+      "minCount": 2
+    },
+    "note": "TOP clause does not disturb WHERE scoping"
+  },
+  {
+    "id": "DEL-027",
+    "family": "delete",
+    "doc": "DELETE FROM dbo.Suppliers WHERE Co|",
+    "expect": {
+      "mustContain": ["ContactName", "Country"],
+      "mustNotContain": ["City", "Phone"],
+      "minCount": 2
+    },
+    "note": "Co prefix keeps ContactName and Country; City does not match"
+  },
+  {
+    "id": "DEL-028",
+    "family": "delete",
+    "doc": "DELETE FROM Orders WHERE Orders.|",
+    "expect": {
+      "mustContain": ["OrderID", "CustomerID"],
+      "mustNotContain": ["ProductName"],
+      "minCount": 2
+    },
+    "note": "full table name used as column qualifier in WHERE"
+  },
+  {
+    "id": "DEL-029",
+    "family": "delete",
+    "doc": "Delete From dbo.Products\nWhere Price > 10 And |",
+    "expect": {
+      "mustContain": ["ProductID", "CategoryID", "Unit"],
+      "mustNotContain": ["TotalAmount"],
+      "minCount": 3
+    },
+    "note": "multi-line mixed-casing; compound predicate stays scoped to Products"
+  },
+  {
+    "id": "DEL-030",
+    "family": "delete",
+    "doc": "DELETE Employees WHERE La|",
+    "expect": {
+      "mustContain": ["LastName"],
+      "mustNotContain": ["FirstName", "CustomerName"],
+      "minCount": 1
+    },
+    "note": "FROM-less DELETE target must still resolve for WHERE column scoping"
+  },
+  {
+    "id": "DEL-031",
+    "family": "delete",
+    "doc": "DELETE o FROM Orders o WHERE o.|",
+    "expect": {
+      "mustContain": ["OrderID", "CustomerID", "OrderDate"],
+      "mustNotContain": ["ProductName", "InvoiceID"],
+      "minCount": 3
+    },
+    "note": "canonical aliased DELETE; o. resolves to Orders"
+  },
+  {
+    "id": "DEL-032",
+    "family": "delete",
+    "doc": "DELETE o FROM dbo.Orders o WHERE o.Or|",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["OrderDetailID"],
+      "minCount": 2
+    },
+    "note": "alias plus 2-char prefix; OrderDetailID matches prefix but belongs to unscoped OrderDetails"
+  },
+  {
+    "id": "DEL-033",
+    "family": "delete",
+    "doc": "DELETE c FROM Customers c WHERE c.|",
+    "expect": {
+      "mustContain": ["CustomerID", "City", "Country"],
+      "mustNotContain": ["OrderID"],
+      "minCount": 3
+    },
+    "note": "aliased DELETE on Customers; Orders columns absent"
+  },
+  {
+    "id": "DEL-034",
+    "family": "delete",
+    "doc": "delete p from dbo.Products p where p.|",
+    "expect": {
+      "mustContain": ["ProductID", "Price", "Unit"],
+      "mustNotContain": ["CategoryName", "SupplierName"],
+      "minCount": 3
+    },
+    "note": "all-lowercase aliased DELETE; FK-referenced tables' columns must not leak"
+  },
+  {
+    "id": "DEL-035",
+    "family": "delete",
+    "doc": "DELETE od FROM OrderDetails od WHERE od.|",
+    "expect": {
+      "mustContain": ["OrderDetailID", "Quantity"],
+      "mustNotContain": ["OrderDate", "ProductName"],
+      "minCount": 3
+    },
+    "note": "two-char alias resolves to OrderDetails only"
+  },
+  {
+    "id": "DEL-036",
+    "family": "delete",
+    "doc": "DELETE inv FROM Sales.Invoices inv WHERE inv.|",
+    "expect": {
+      "mustContain": ["InvoiceID", "TotalAmount", "Paid"],
+      "mustNotContain": ["OrderDate"],
+      "minCount": 3
+    },
+    "note": "aliased DELETE on Sales-schema table"
+  },
+  {
+    "id": "DEL-037",
+    "family": "delete",
+    "doc": "DELETE o FROM Orders o WHERE |",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["ProductName", "Quantity"],
+      "minCount": 2
+    },
+    "note": "bare WHERE in aliased DELETE still offers target columns"
+  },
+  {
+    "id": "DEL-038",
+    "family": "delete",
+    "doc": "DELETE o FROM Orders AS o WHERE o.|",
+    "expect": {
+      "mustContain": ["OrderID", "EmployeeID"],
+      "mustNotContain": ["Quantity"],
+      "minCount": 3
+    },
+    "note": "AS keyword variant of alias declaration"
+  },
+  {
+    "id": "DEL-039",
+    "family": "delete",
+    "doc": "DELETE ord\nFROM dbo.Orders AS ord\nWHERE ord.|",
+    "expect": {
+      "mustContain": ["OrderID", "CustomerID"],
+      "mustNotContain": ["ProductID"],
+      "minCount": 3
+    },
+    "note": "multi-line aliased DELETE with 3-char alias name"
+  },
+  {
+    "id": "DEL-040",
+    "family": "delete",
+    "doc": "DELETE tgt FROM Suppliers tgt WHERE tgt.Su|",
+    "expect": {
+      "mustContain": ["SupplierID", "SupplierName"],
+      "mustNotContain": ["ContactName", "ShipperName"],
+      "minCount": 2
+    },
+    "note": "unusual alias name plus prefix; ShipperName from unscoped Shippers absent"
+  },
+  {
+    "id": "DEL-041",
+    "family": "delete",
+    "doc": "DELETE e FROM Employees e WHERE e.B|",
+    "expect": {
+      "mustContain": ["BirthDate"],
+      "mustNotContain": ["LastName", "Photo"],
+      "minCount": 1
+    },
+    "note": "1-char prefix on alias narrows to BirthDate"
+  },
+  {
+    "id": "DEL-042",
+    "family": "delete",
+    "doc": "DELETE s FROM Shippers s WHERE s.|",
+    "expect": {
+      "mustContain": ["ShipperID", "ShipperName", "Phone"],
+      "mustNotContain": ["SupplierName"],
+      "minCount": 3
+    },
+    "note": "s alias scoped to Shippers; similarly-named Suppliers columns absent"
+  },
+  {
+    "id": "DEL-043",
+    "family": "delete",
+    "doc": "DELETE od FROM OrderDetails od INNER JOIN Orders o ON od.OrderID = o.OrderID WHERE o.|",
+    "expect": {
+      "mustContain": ["OrderDate", "CustomerID"],
+      "mustNotContain": ["Quantity", "ProductID"],
+      "minCount": 3
+    },
+    "note": "DELETE with JOIN; o. gives Orders columns, not the delete target's"
+  },
+  {
+    "id": "DEL-044",
+    "family": "delete",
+    "doc": "DELETE od FROM OrderDetails od INNER JOIN Orders o ON od.|",
+    "expect": {
+      "mustContain": ["OrderID", "ProductID"],
+      "mustNotContain": ["OrderDate", "CustomerID"],
+      "minCount": 3
+    },
+    "note": "ON clause in DELETE join; od. scoped to OrderDetails"
+  },
+  {
+    "id": "DEL-045",
+    "family": "delete",
+    "doc": "DELETE od FROM OrderDetails od JOIN Products p ON od.ProductID = p.ProductID WHERE p.Pr|",
+    "expect": {
+      "mustContain": ["ProductID", "ProductName", "Price"],
+      "mustNotContain": ["Quantity"],
+      "minCount": 3
+    },
+    "note": "joined-table alias plus 2-char prefix in DELETE WHERE"
+  },
+  {
+    "id": "DEL-046",
+    "family": "delete",
+    "doc": "DELETE i\nFROM Sales.Invoices i\nJOIN dbo.Orders o ON i.OrderID = o.OrderID\nWHERE o.|",
+    "expect": {
+      "mustContain": ["OrderDate", "CustomerID"],
+      "mustNotContain": ["InvoiceDate", "TotalAmount"],
+      "minCount": 3
+    },
+    "note": "multi-line cross-schema DELETE join; o. must not show Invoices columns"
+  },
+  {
+    "id": "DEL-047",
+    "family": "delete",
+    "doc": "DELETE o FROM Orders o LEFT JOIN Customers c ON o.CustomerID = c.CustomerID WHERE c.|",
+    "expect": {
+      "mustContain": ["CustomerName", "Country", "City"],
+      "mustNotContain": ["OrderDate"],
+      "minCount": 3
+    },
+    "note": "LEFT JOIN alias in DELETE; c. scoped to Customers"
+  },
+  {
+    "id": "DEL-048",
+    "family": "delete",
+    "doc": "DELETE od FROM OrderDetails od JOIN |",
+    "expect": {
+      "mustContain": ["Orders", "Products"],
+      "mustNotContain": ["Quantity"],
+      "minCount": 3
+    },
+    "note": "JOIN inside DELETE offers tables, not columns"
+  },
+  {
+    "id": "DEL-049",
+    "family": "delete",
+    "doc": "DELETE od FROM OrderDetails od JOIN Ord|",
+    "expect": {
+      "mustContain": ["Orders", "OrderDetails"],
+      "mustNotContain": ["Customers"],
+      "minCount": 2
+    },
+    "note": "prefix-filtered table completion at JOIN inside DELETE"
+  },
+  {
+    "id": "DEL-050",
+    "family": "delete",
+    "doc": "DELETE p FROM Products p INNER JOIN Categories cat ON p.CategoryID = cat.CategoryID WHERE cat.|",
+    "expect": {
+      "mustContain": ["CategoryID", "CategoryName", "Description"],
+      "mustNotContain": ["ProductName"],
+      "minCount": 3
+    },
+    "note": "3-char alias on joined Categories; delete-target columns absent under cat."
+  },
+  {
+    "id": "DEL-051",
+    "family": "delete",
+    "doc": "DELETE od FROM OrderDetails od JOIN Orders o ON od.OrderID = o.OrderID WHERE |",
+    "expect": {
+      "mustContain": ["Quantity", "OrderDate"],
+      "mustNotContain": ["ProductName"],
+      "minCount": 2
+    },
+    "note": "bare WHERE with join sees both scoped tables but not unjoined Products"
+  },
+  {
+    "id": "DEL-052",
+    "family": "delete",
+    "doc": "DELETE o\nFROM Orders o\nJOIN Employees e ON o.EmployeeID = e.EmployeeID\nWHERE e.La|",
+    "expect": {
+      "mustContain": ["LastName"],
+      "mustNotContain": ["FirstName", "OrderDate"],
+      "minCount": 1
+    },
+    "note": "multi-line DELETE join with 2-char prefix on joined alias"
+  },
+  {
+    "id": "DEL-053",
+    "family": "delete",
+    "doc": "DELETE FROM Orders WHERE CustomerID IN (SELECT | FROM Customers)",
+    "expect": {
+      "mustContain": ["CustomerID", "CustomerName", "Country"],
+      "mustNotContain": ["ProductName"],
+      "minCount": 3
+    },
+    "note": "subquery select list scoped to Customers; Products never in scope"
+  },
+  {
+    "id": "DEL-054",
+    "family": "delete",
+    "doc": "DELETE FROM Orders WHERE CustomerID IN (SELECT c.| FROM Customers c)",
+    "expect": {
+      "mustContain": ["CustomerID", "Country"],
+      "mustNotContain": ["OrderID", "OrderDate"],
+      "minCount": 3
+    },
+    "note": "alias-qualified inner subquery; c. must not show outer Orders columns"
+  },
+  {
+    "id": "DEL-055",
+    "family": "delete",
+    "doc": "DELETE FROM OrderDetails WHERE OrderID IN (SELECT OrderID FROM Orders WHERE |)",
+    "expect": {
+      "mustContain": ["OrderDate", "ShipperID"],
+      "mustNotContain": ["CustomerName", "ProductName"],
+      "minCount": 2
+    },
+    "note": "inner subquery WHERE offers Orders columns; unjoined tables absent"
+  },
+  {
+    "id": "DEL-056",
+    "family": "delete",
+    "doc": "DELETE FROM Products WHERE ProductID NOT IN (SELECT od.Pro| FROM OrderDetails od)",
+    "expect": {
+      "mustContain": ["ProductID"],
+      "mustNotContain": ["ProductName", "Price"],
+      "minCount": 1
+    },
+    "note": "od. prefix inside NOT IN subquery; OrderDetails has ProductID but no ProductName"
+  },
+  {
+    "id": "DEL-057",
+    "family": "delete",
+    "doc": "DELETE FROM Orders WHERE EXISTS (SELECT 1 FROM |)",
+    "expect": {
+      "mustContain": ["Customers", "OrderDetails"],
+      "mustNotContain": ["NoSuchTable"],
+      "minCount": 3
+    },
+    "note": "FROM inside EXISTS subquery offers tables"
+  },
+  {
+    "id": "DEL-058",
+    "family": "delete",
+    "doc": "DELETE FROM Sales.Invoices WHERE OrderID IN (SELECT o.Order| FROM Orders o)",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["OrderDetailID"],
+      "minCount": 2
+    },
+    "note": "5-char prefix on inner alias; OrderDetailID matches prefix but is out of scope"
+  },
+  {
+    "id": "DEL-059",
+    "family": "delete",
+    "doc": "SELECT * FROM Products;\nDELETE FROM Customers WHERE |",
+    "expect": {
+      "mustContain": ["CustomerID", "City"],
+      "mustNotContain": ["ProductName", "Price"],
+      "minCount": 2
+    },
+    "note": "prior ;-terminated SELECT must not leak Products columns into new DELETE scope"
+  },
+  {
+    "id": "DEL-060",
+    "family": "delete",
+    "doc": "SELECT p.ProductName FROM Products p;\nDELETE FROM Orders WHERE |",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["ProductName"],
+      "minCount": 2
+    },
+    "note": "alias p from earlier statement is out of scope after semicolon"
+  },
+  {
+    "id": "DEL-061",
+    "family": "delete",
+    "doc": "UPDATE Customers SET City = 'Cairo' WHERE CustomerID = 1;\nDELETE o FROM Orders o WHERE o.|",
+    "expect": {
+      "mustContain": ["OrderID", "CustomerID"],
+      "mustNotContain": ["City", "CustomerName"],
+      "minCount": 2
+    },
+    "note": "aliased DELETE after prior UPDATE statement; Customers columns must not leak"
+  },
+  {
+    "id": "DEL-062",
+    "family": "delete",
+    "doc": "SELECT c.CustomerName FROM Customers c;\nDELETE FROM Products WHERE c.|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["CustomerName", "CustomerID"],
+      "minCount": 0
+    },
+    "note": "alias c died at the semicolon; c. must not resolve to Customers columns"
+  },
+  {
+    "id": "DEL-063",
+    "family": "delete",
+    "doc": "DELETE FROM Shippers WHERE ShipperID = 3;\nDELETE FROM |",
+    "expect": {
+      "mustContain": ["Orders", "Customers"],
+      "mustNotContain": ["ShipperName"],
+      "minCount": 3
+    },
+    "note": "second DELETE after complete first one; table position, no column carry-over"
+  },
+  {
+    "id": "DEL-064",
+    "family": "delete",
+    "doc": "INSERT INTO Categories (CategoryName) VALUES ('X');\ndelete from Categories where |",
+    "expect": {
+      "mustContain": ["CategoryID", "CategoryName", "Description"],
+      "mustNotContain": ["ProductName"],
+      "minCount": 3
+    },
+    "note": "lowercase DELETE after prior INSERT; scoped to Categories"
+  },
+  {
+    "id": "DEL-065",
+    "family": "delete",
+    "doc": "SELECT * FROM Employees;\nSELECT * FROM Suppliers;\nDELETE e FROM Employees e WHERE e.|",
+    "expect": {
+      "mustContain": ["EmployeeID", "LastName"],
+      "mustNotContain": ["SupplierName", "ContactName"],
+      "minCount": 2
+    },
+    "note": "two prior statements; e. scoped only to the current DELETE's Employees"
+  },
+  {
+    "id": "DEL-066",
+    "family": "delete",
+    "doc": "EXEC dbo.usp_UpdateProductPrice @ProductID = 5, @NewPrice = 9.99;\nDELETE FROM Products WHERE Pri|",
+    "expect": {
+      "mustContain": ["Price"],
+      "mustNotContain": ["ProductID", "ProductName"],
+      "minCount": 1
+    },
+    "note": "prior EXEC statement; Pri prefix keeps only Price (Pro* columns filtered)"
+  },
+  {
+    "id": "DEL-067",
+    "family": "delete",
+    "doc": "DELETE FROM Orders WHERE zz.|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["OrderID", "CustomerID"],
+      "minCount": 0
+    },
+    "note": "negative: undeclared alias zz must not yield any schema columns"
+  },
+  {
+    "id": "DEL-068",
+    "family": "delete",
+    "doc": "DELETE FROM NoSuchTable WHERE |",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["OrderID", "CustomerName"],
+      "minCount": 0
+    },
+    "note": "negative: nonexistent target table yields no real-table columns"
+  },
+  {
+    "id": "DEL-069",
+    "family": "delete",
+    "doc": "DELETE FROM Customers WHERE City = 'Lon|don'",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["City", "CustomerID"],
+      "minCount": 0
+    },
+    "note": "negative: caret inside string literal expects no completions"
+  },
+  {
+    "id": "DEL-070",
+    "family": "delete",
+    "doc": "DELETE FROM Orders -- purge old rows\nWHERE |",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["ProductName"],
+      "minCount": 2
+    },
+    "note": "multi-line: completions resume on the line after a trailing -- comment"
+  }
+]

@@ -13,6 +13,7 @@
 @inject ISchemaCacheStore SchemaCache
 @inject ISchemaSync SchemaSync
 @inject ISqlConnectionService SqlConn
+@inject ISavedSqlConnectionStore SavedSqlConnections
 @inject IConnectionManagerController ConnManager
 
 <div class="akml-status">
@@ -50,6 +51,7 @@
         font-size: 11px;
     }
     .akml-status-pill-live { background-color: var(--akml-status-success); }
+    .akml-status-pill-bridgeonly { background-color: var(--akml-status-warning); }
     .akml-status-pill-cached { background-color: var(--akml-status-info); }
     .akml-status-pill-offline { background-color: var(--akml-border-strong); }
     .akml-status-pill-disconnected { background-color: var(--akml-border-strong); }
@@ -86,8 +88,11 @@
 @code {
     /// <summary>The user-facing IntelliSense-availability states (FR-023), derived from bridge
     /// state + cache presence. Connecting / Reconnecting / Failed surface directly (with the
-    /// reconnect countdown) only when no cache softens them to Cached.</summary>
-    private enum Availability { Live, Cached, Offline, Disconnected, Connecting, Reconnecting, Failed }
+    /// reconnect countdown) only when no cache softens them to Cached.
+    /// Spec 032 (FR-032, campaign finding 5): BridgeOnly = engine bridge up but NO SQL session —
+    /// after an F5 reload the bridge auto-reconnects while the SQL session is gone, and the old
+    /// binary state showed a full-green "Live" while completions silently degraded.</summary>
+    private enum Availability { Live, BridgeOnly, Cached, Offline, Disconnected, Connecting, Reconnecting, Failed }
 
     private BridgeState _bridgeState = BridgeState.Disconnected;
     private bool _cachePresent;
@@ -112,6 +117,7 @@
     {
         await ProbeCacheAsync();
         Recompute();
+        await TryAutoRestoreSqlConnectionAsync(); // spec 032 FR-032
     }
 
     /// <summary>Probe whether a schema snapshot exists for the active connection's (server, db).
@@ -143,6 +149,7 @@
             if (newState != BridgeState.Reconnecting) _nextRetryAt = null;
             await ProbeCacheAsync();
             Recompute();
+            await TryAutoRestoreSqlConnectionAsync(); // spec 032 FR-032 — bridge may open after first render
             StateHasChanged();
         });
     }
@@ -165,12 +172,45 @@
     {
         _state = _bridgeState switch
         {
-            BridgeState.Open => Availability.Live,
+            // Spec 032 FR-032: "Live" requires BOTH the bridge AND a SQL session — the
+            // pill must never claim full IntelliSense while SessionId-less requests
+            // degrade to keywords+snippets.
+            BridgeState.Open => SqlConn.IsConnected ? Availability.Live : Availability.BridgeOnly,
             BridgeState.Connecting => _cachePresent ? Availability.Cached : Availability.Connecting,
             BridgeState.Reconnecting => _cachePresent ? Availability.Cached : Availability.Reconnecting,
             BridgeState.Failed => _cachePresent ? Availability.Cached : Availability.Failed,
             _ /* Disconnected */ => _cachePresent ? Availability.Cached : Availability.Offline,
         };
+    }
+
+    /// <summary>
+    /// Spec 032 FR-032 (auto-restore): once per page load, when the bridge is up but no SQL
+    /// session exists, silently reconnect the most-recently-used SAVED connection — Windows
+    /// auth only (no password is at rest by design; SQL-auth rows keep the honest BridgeOnly
+    /// pill and a one-click connect). ConnectAsync re-runs the loopback/SSRF guard itself.
+    /// Non-blocking and best-effort: any failure just leaves the honest BridgeOnly state.
+    /// </summary>
+    private bool _restoreAttempted;
+
+    private async Task TryAutoRestoreSqlConnectionAsync()
+    {
+        if (_restoreAttempted || _bridgeState != BridgeState.Open || SqlConn.IsConnected) return;
+        _restoreAttempted = true;
+
+        try
+        {
+            var activeId = await SavedSqlConnections.GetActiveIdAsync();
+            if (string.IsNullOrEmpty(activeId)) return;
+            var saved = await SavedSqlConnections.GetAsync(activeId!);
+            if (saved == null || !saved.WindowsAuth) return;
+
+            await SqlConn.ConnectAsync(saved.Server, saved.Database, windowsAuth: true,
+                user: null, password: null, System.Threading.CancellationToken.None);
+        }
+        catch
+        {
+            // Best-effort — the BridgeOnly pill remains and the Connect button is one click away.
+        }
     }
 
     private void OnRetryScheduled(DateTimeOffset? nextRetryAt)
@@ -188,8 +228,13 @@
     private void TickCountdown() => InvokeAsync(StateHasChanged);
 
     // SQL-connection indicator: reflects ISqlConnectionService (the SQL session), distinct from the
-    // bridge/cache pill above. Clicking opens the connection manager.
-    private void OnSqlConnChanged() => InvokeAsync(StateHasChanged);
+    // bridge/cache pill above. Clicking opens the connection manager. Spec 032: the pill itself
+    // now also depends on the SQL session (Live vs BridgeOnly) — recompute, don't just repaint.
+    private void OnSqlConnChanged() => InvokeAsync(() =>
+    {
+        Recompute();
+        StateHasChanged();
+    });
 
     private string ConnLabel => SqlConn.IsConnected ? $"{SqlConn.Server}/{SqlConn.Database}" : "Connect";
 
@@ -200,6 +245,7 @@
     private string PillLabel => _state switch
     {
         Availability.Live => "Live",
+        Availability.BridgeOnly => "Live · no SQL",
         Availability.Cached => "Cached",
         Availability.Offline => "Offline",
         Availability.Connecting => "Connecting",
@@ -213,6 +259,7 @@
     private string StatusText => _state switch
     {
         Availability.Live => "Live IntelliSense available.",
+        Availability.BridgeOnly => "Engine connected — connect to SQL Server for schema-aware IntelliSense.",
         Availability.Cached => "Engine offline — IntelliSense served from the local schema cache.",
         Availability.Offline => "Offline — keyword-only IntelliSense; formatter / analyser run in-browser.",
         Availability.Connecting => "Handshaking with engine…",
