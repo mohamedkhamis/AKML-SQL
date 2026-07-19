@@ -3,6 +3,10 @@ using Xunit;
 
 namespace AkmlSql.Core.Tests
 {
+    // Serialised with ConfigManagerTests / SqlCredentialStoreTests: those set the process-global
+    // AKML_APP_DATA_ROOT override, and this class reads Constants AppData paths — the collection
+    // guarantees the override window never overlaps a path assertion here.
+    [Collection("AkmlSql real AppData")]
     public class ConstantsTests
     {
         [Fact] public void ProductName()

@@ -71,6 +71,16 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 "Controls what data is sent to the AI provider");
             ctx.RegisterSearch("Privacy mode", "Controls what data is sent to the AI provider", "Dropdown", rowPrivacy);
 
+            // Cloud-provider consent gate. The engine refuses to send prompts/schema to a NON-LOCAL
+            // provider (Anthropic, OpenAI, Gemini, …) until the user consents here — otherwise AI
+            // Chat and every AI feature fail with "CONSENT_REQUIRED: Data will be sent to your AI
+            // provider. Please confirm in settings." Local providers (Ollama, LM Studio) never need
+            // this. Unchecked = consent withheld (privacy-first default).
+            const string consentTip = "Required before a cloud provider (Anthropic, OpenAI, Gemini) receives your prompts and schema. Local providers (Ollama, LM Studio) never need this. Leave off to block cloud AI.";
+            var (rowConsent, chkConsent) = ctx.Rows.AddToggle(panel,
+                "Consent to cloud AI data sharing", consentTip);
+            ctx.RegisterSearch("Consent to cloud AI data sharing", consentTip, "Toggle", rowConsent);
+
             ctx.Rows.AddGroupSeparator(panel);
             ctx.Rows.AddGroupHeader(panel, "Parameters");
 
@@ -131,7 +141,8 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
 
             return new AiAssistanceControls(cboProvider, txtModel, txtApiKey, txtEndpoint, cboPrivacy,
                 sldMax, lblMax, sldTemp, lblTemp, sldTimeout, lblTimeout, sldRetries, lblRetries,
-                chkTextToSql, chkExplain, chkFix, chkOptimize, chkIndex, chkChat, chkInline, chkAutoFix);
+                chkTextToSql, chkExplain, chkFix, chkOptimize, chkIndex, chkChat, chkInline, chkAutoFix,
+                chkConsent);
         }
     }
 
@@ -142,6 +153,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         private readonly TextBox _apiKey;
         private readonly TextBox _endpoint;
         private readonly ComboBox _privacy;
+        private readonly CheckBox _cloudConsent;
         private readonly Slider _maxTokens;
         private readonly TextBlock _maxTokensLabel;
         private readonly Slider _temperature;
@@ -164,13 +176,15 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             Slider sldMax, TextBlock lblMax, Slider sldTemp, TextBlock lblTemp,
             Slider sldTimeout, TextBlock lblTimeout, Slider sldRetries, TextBlock lblRetries,
             CheckBox textToSql, CheckBox explain, CheckBox fix, CheckBox optimize,
-            CheckBox idx, CheckBox chat, CheckBox inline, CheckBox autoFix)
+            CheckBox idx, CheckBox chat, CheckBox inline, CheckBox autoFix,
+            CheckBox cloudConsent)
         {
             _provider = provider;
             _model = model;
             _apiKey = apiKey;
             _endpoint = endpoint;
             _privacy = privacy;
+            _cloudConsent = cloudConsent;
             _maxTokens = sldMax;
             _maxTokensLabel = lblMax;
             _temperature = sldTemp;
@@ -214,6 +228,8 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 "disabled"  => 4,
                 _           => 0, // schemaOnly
             };
+            // Stored as "consent required?"; the checkbox shows "consent granted?" (the inverse).
+            _cloudConsent.IsChecked = !ai.PrivacyConsentRequired;
             _maxTokens.Value = ai.MaxTokens;
             _maxTokensLabel.Text = ai.MaxTokens.ToString(CultureInfo.InvariantCulture);
             _temperature.Value = (int)(ai.Temperature * 10);
@@ -257,6 +273,8 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 4 => "disabled",
                 _ => "schemaOnly",
             };
+            // Unchecked → consent withheld → the engine keeps requiring it (privacy-first default).
+            settings.Ai.PrivacyConsentRequired = _cloudConsent.IsChecked != true;
             settings.Ai.MaxTokens = (int)_maxTokens.Value;
             settings.Ai.Temperature = (int)_temperature.Value / 10.0;
             settings.Ai.Timeout = (int)_timeout.Value;
