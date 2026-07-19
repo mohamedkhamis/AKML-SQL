@@ -63,7 +63,11 @@
         </div>
 
         <div class="akml-chat-composer">
-            <textarea class="akml-chat-input" @bind="_pending" placeholder="Ask anything about your SQL..." rows="3"
+            @* oninput (not the default onchange): the browser only fires change on blur, so a
+               default bind would keep Send disabled while typing and make Ctrl+Enter read an
+               empty prompt (silent no-op). *@
+            <textarea class="akml-chat-input" @bind="_pending" @bind:event="oninput"
+                      placeholder="Ask anything about your SQL..." rows="3"
                       @onkeydown="OnKeyDown" disabled="@_busy"></textarea>
             <button class="akml-tool-button" @onclick="SendAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_pending))">
                 Send
