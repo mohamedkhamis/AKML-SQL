@@ -58,7 +58,7 @@ public static class AiProviderFactory
             "anthropic" => CreateAnthropicClient(apiKey, settings.Model),
             "openai" => CreateOpenAiClient(apiKey, settings.Model, null),
             "azure" => CreateAzureClient(apiKey, settings.Model, settings.Endpoint),
-            "gemini" => CreateGeminiClient(apiKey, settings.Model),
+            "gemini" => CreateGeminiClient(apiKey, settings.Model, settings.Timeout),
             "ollama" => CreateOllamaClient(settings.Model, settings.Endpoint),
             "lmstudio" => CreateOpenAiClient(apiKey, settings.Model, settings.Endpoint),
             "custom" => CreateOpenAiClient(apiKey, settings.Model, settings.Endpoint),
@@ -195,13 +195,14 @@ public static class AiProviderFactory
     /// <summary>
     /// Creates a Google Gemini client via the <see cref="GeminiChatClientAdapter"/>.
     /// </summary>
-    private static IChatClient CreateGeminiClient(string apiKey, string model)
+    private static IChatClient CreateGeminiClient(string apiKey, string model, int timeoutSeconds)
     {
         RequireApiKey(apiKey, "Gemini");
         RequireModel(model, "Gemini");
         RequireModelFamily(model, "gemini", "Gemini");
 
-        return new GeminiChatClientAdapter(apiKey, model);
+        // The provider timeout bounds the SDK's internal retry deadline too — see the adapter.
+        return new GeminiChatClientAdapter(apiKey, model, timeoutSeconds);
     }
 
     /// <summary>

@@ -20,16 +20,24 @@ namespace AkmlSql.Engine.Ai.Providers;
 /// </summary>
 public sealed class GeminiChatClientAdapter : IChatClient
 {
+    private const int DefaultTimeoutSeconds = 90;   // mirrors AiSettings.Timeout default
+
     private readonly GenerativeModel _model;
     private readonly string _modelName;
+    private readonly Mscc.GenerativeAI.Types.RequestOptions _requestOptions;
+
+    /// <summary>The per-request deadline handed to the SDK (retry logic included).</summary>
+    public TimeSpan RequestTimeout { get; }
 
     /// <summary>
     /// Initialises a new Gemini adapter.
     /// </summary>
     /// <param name="apiKey">Google AI Studio API key.</param>
     /// <param name="modelName">Model identifier (e.g. "gemini-2.0-flash", "gemini-1.5-pro").</param>
+    /// <param name="timeoutSeconds">Overall per-request deadline (defaults to the 90 s
+    /// provider-timeout default when unset or nonsense).</param>
     /// <exception cref="ArgumentException">Thrown when <paramref name="apiKey"/> or <paramref name="modelName"/> is empty.</exception>
-    public GeminiChatClientAdapter(string apiKey, string modelName)
+    public GeminiChatClientAdapter(string apiKey, string modelName, int timeoutSeconds = DefaultTimeoutSeconds)
     {
         if (string.IsNullOrWhiteSpace(apiKey))
             throw new ArgumentException("Gemini API key is required.", nameof(apiKey));
@@ -39,6 +47,20 @@ public sealed class GeminiChatClientAdapter : IChatClient
         _modelName = modelName;
         var googleAi = new GoogleAI(apiKey);
         _model = googleAi.GenerativeModel(model: modelName);
+
+        // Bound the SDK's internal retry logic. Left to its defaults it honours Google's
+        // RetryInfo hints (58 s waits on a quota-exhausted key) under a ~2-minute deadline, so
+        // a single GenerateContent call outlived the provider timeout AND the shell's IPC wait
+        // — the user saw a timeout instead of the provider's actual quota error. Retry policy
+        // belongs to AiPipelineServices.ExecuteWithBackoffAsync, not the SDK.
+        if (timeoutSeconds <= 0) timeoutSeconds = DefaultTimeoutSeconds;
+        RequestTimeout = TimeSpan.FromSeconds(timeoutSeconds);
+        _requestOptions = new Mscc.GenerativeAI.Types.RequestOptions(
+            new Mscc.GenerativeAI.Types.Retry { Maximum = 1, Timeout = RequestTimeout },
+            timeout: RequestTimeout,
+            baseUrl: null,
+            apiVersion: null,
+            proxy: null);
     }
 
     /// <inheritdoc />
@@ -73,7 +95,7 @@ public sealed class GeminiChatClientAdapter : IChatClient
             // Apply generation config from ChatOptions
             request.GenerationConfig = BuildGenerationConfig(options);
 
-            var response = await _model.GenerateContent(request, cancellationToken: cancellationToken);
+            var response = await _model.GenerateContent(request, _requestOptions, cancellationToken);
 
             return MapResponse(response);
         }
@@ -109,8 +131,8 @@ public sealed class GeminiChatClientAdapter : IChatClient
 
         request.GenerationConfig = BuildGenerationConfig(options);
 
-        // Use Gemini's streaming API
-        var stream = _model.GenerateContentStream(request);
+        // Use Gemini's streaming API (same bounded request options as the buffered path)
+        var stream = _model.GenerateContentStream(request, _requestOptions, cancellationToken);
 
         await foreach (var chunk in stream.WithCancellation(cancellationToken))
         {
