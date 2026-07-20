@@ -34,13 +34,6 @@
       "column": 5
     },
     {
-      "ruleId": "PE002",
-      "severity": "Warning",
-      "message": "Object 'orders' has no schema prefix — use 'dbo.orders' to avoid schema resolution overhead",
-      "line": 3,
-      "column": 10
-    },
-    {
       "ruleId": "ST001",
       "severity": "Hint",
       "message": "SQL keyword 'group' is not uppercase — use consistent ALL_CAPS keywords",
@@ -67,13 +60,6 @@
       "message": "SQL keyword 'from' is not uppercase — use consistent ALL_CAPS keywords",
       "line": 7,
       "column": 1
-    },
-    {
-      "ruleId": "PE002",
-      "severity": "Warning",
-      "message": "Object 'monthly_sales' has no schema prefix — use 'dbo.monthly_sales' to avoid schema resolution overhead",
-      "line": 7,
-      "column": 6
     },
     {
       "ruleId": "ST001",

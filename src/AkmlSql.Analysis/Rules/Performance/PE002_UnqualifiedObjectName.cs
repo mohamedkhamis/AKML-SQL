@@ -13,12 +13,42 @@ public sealed class Pe002UnqualifiedObjectName : IAnalysisRule
 
     public IEnumerable<AnalysisDiagnostic> Analyze(AnalysisContext ctx)
     {
-        var visitor = new Visitor(ctx);
+        // Two passes on purpose: ScriptDom does NOT visit in syntax order here —
+        // SelectStatement.AcceptChildren walks the QueryExpression BEFORE the WITH clause,
+        // so a single-pass visitor sees 'FROM MyCte' before the CTE's declaration.
+        var cteNames = CteNameCollector.Collect(ctx.CurrentBatch);
+        var visitor = new Visitor(ctx, cteNames);
         ctx.CurrentBatch.Accept(visitor);
         return visitor.Diagnostics;
     }
 
-    private sealed class Visitor(AnalysisContext ctx) : TSqlFragmentVisitor
+    /// <summary>
+    /// Collects every CTE name in the batch. A CTE reference has no schema BY DEFINITION —
+    /// 'dbo.MyCte' would break the query, so PE002 flagging one is a false positive (the
+    /// spike corpus had even baked PE002-on-DirectReports into 04-cte.expected.json).
+    /// Batch-wide rather than per-statement scoping is deliberate: a table shadowed by a
+    /// same-named CTE in another statement is skipped too — a conservative false-negative
+    /// over a guaranteed-wrong "add dbo." suggestion.
+    /// </summary>
+    private sealed class CteNameCollector : TSqlFragmentVisitor
+    {
+        private readonly HashSet<string> _names = new(StringComparer.OrdinalIgnoreCase);
+
+        public static HashSet<string> Collect(TSqlFragment fragment)
+        {
+            var collector = new CteNameCollector();
+            fragment.Accept(collector);
+            return collector._names;
+        }
+
+        public override void Visit(CommonTableExpression node)
+        {
+            var name = node.ExpressionName?.Value;
+            if (!string.IsNullOrEmpty(name)) _names.Add(name!);
+        }
+    }
+
+    private sealed class Visitor(AnalysisContext ctx, HashSet<string> cteNames) : TSqlFragmentVisitor
     {
         public List<AnalysisDiagnostic> Diagnostics { get; } = [];
 
@@ -38,6 +68,9 @@ public sealed class Pe002UnqualifiedObjectName : IAnalysisRule
 
             // Skip temp tables (#..., ##...) and table variables (@...)
             if (tableName.StartsWith("#") || tableName.StartsWith("@")) return;
+
+            // Skip CTE references — they cannot carry a schema prefix
+            if (cteNames.Contains(tableName!)) return;
 
             var insertPos = schemaObj.StartOffset;
 
