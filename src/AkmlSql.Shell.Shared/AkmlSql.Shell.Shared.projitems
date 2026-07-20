@@ -140,6 +140,8 @@
     <Compile Include="$(MSBuildThisFileDirectory)Analysis\FixAction.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Analysis\LightbulbProvider.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Analysis\ManageRulesCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Analysis\WarningGlyph.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Analysis\WarningGlyphMenu.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Analysis\ManageRulesDialog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Analysis\ToggleCodeAnalysisCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Analysis\RefactoringAction.cs" />
