@@ -24,8 +24,24 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             ctx.RegisterSearch("AI Provider", "Select the AI provider for SQL assistance features", "Dropdown", rowProvider);
 
             var (rowModel, txtModel) = ctx.Rows.AddTextInput(panel,
-                "Model", "e.g. gpt-4o, claude-sonnet-4-20250514, gemini-pro");
-            ctx.RegisterSearch("Model", "e.g. gpt-4o, claude-sonnet-4-20250514, gemini-pro", "Text", rowModel);
+                "Model", "e.g. gpt-4o, claude-sonnet-4-6, gemini-flash-latest");
+            ctx.RegisterSearch("Model", "e.g. gpt-4o, claude-sonnet-4-6, gemini-flash-latest", "Text", rowModel);
+
+            // Provider switch: auto-correct an obviously foreign model. "claude-sonnet-5" left
+            // behind on an Anthropic → Gemini switch reached Google's API verbatim and died with
+            // a raw 404 in the chat panel. Empty or foreign-family text gets the new provider's
+            // default; custom/unrecognised names are the user's business and stay untouched.
+            // (Safe during Load: the provider combo is set BEFORE the stored model overwrites
+            // whatever this writes.)
+            cboProvider.SelectionChanged += (_, _) =>
+            {
+                var suggested = AiModelFamily.DefaultModelFor(cboProvider.SelectedItem as string);
+                if (suggested == null) return;
+                var current = (txtModel.Text ?? string.Empty).Trim();
+                var family = AiModelFamily.Detect(current);
+                if (current.Length == 0 || (family != null && family != AiModelFamily.Detect(suggested)))
+                    txtModel.Text = suggested;
+            };
 
             var (rowApiKey, txtApiKey) = ctx.Rows.AddTextInput(panel,
                 "API Key", "Your API key for the selected provider", isPassword: true);
@@ -46,7 +62,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                         "  • Anthropic (Claude): console.anthropic.com → API Keys" +
                         "  —  example model: claude-sonnet-4-6\n" +
                         "  • Google (Gemini): aistudio.google.com → Get API Key" +
-                        "  —  example model: gemini-2.0-flash\n" +
+                        "  —  example model: gemini-flash-latest\n" +
                         "  • OpenAI: platform.openai.com → API Keys" +
                         "  —  example model: gpt-4o\n\n" +
                         "Keys are stored encrypted with Windows DPAPI and never written in plain text.",

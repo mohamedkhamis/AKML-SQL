@@ -115,6 +115,7 @@ public static class AiProviderFactory
     {
         RequireApiKey(apiKey, "Anthropic");
         RequireModel(model, "Anthropic");
+        RequireModelFamily(model, "anthropic", "Anthropic");
 
         var client = new AnthropicClient(apiKey);
         // AnthropicClient.Messages implements IChatClient (Anthropic.SDK 5.10.0+)
@@ -150,8 +151,10 @@ public static class AiProviderFactory
         }
         else
         {
-            // Standard OpenAI API
+            // Standard OpenAI API. Only this branch is family-guarded: custom endpoints
+            // (LM Studio, vLLM, proxies) legitimately serve foreign model ids.
             RequireApiKey(apiKey, "OpenAI");
+            RequireModelFamily(model, "openai", "OpenAI");
             chatClient = new OpenAI.Chat.ChatClient(model, new ApiKeyCredential(apiKey));
         }
 
@@ -196,6 +199,7 @@ public static class AiProviderFactory
     {
         RequireApiKey(apiKey, "Gemini");
         RequireModel(model, "Gemini");
+        RequireModelFamily(model, "gemini", "Gemini");
 
         return new GeminiChatClientAdapter(apiKey, model);
     }
@@ -242,6 +246,32 @@ public static class AiProviderFactory
                 $"{providerName} requires an API key. Set 'ai.apiKey' in config.json or the AKML SQL settings dialog.");
         }
     }
+
+    /// <summary>
+    /// Refuses an obvious cross-provider model mismatch for the first-party clouds — e.g.
+    /// provider=Gemini with model=claude-sonnet-5 previously went to Google's API verbatim and
+    /// the user saw Google's raw 404 JSON in the chat panel. Unrecognised model names pass
+    /// (local models, fine-tunes); custom/local providers never call this.
+    /// </summary>
+    private static void RequireModelFamily(string model, string expectedFamily, string providerName)
+    {
+        var family = AiModelFamily.Detect(model);
+        if (family != null && family != expectedFamily)
+        {
+            throw new InvalidOperationException(
+                $"Model '{model}' is a {FamilyDisplayName(family)} model, but the AI provider is set to '{providerName}'. " +
+                $"Use a {providerName} model (e.g. \"{AiModelFamily.DefaultModelFor(expectedFamily)}\") " +
+                "or change the provider in Options → AI Assistance.");
+        }
+    }
+
+    private static string FamilyDisplayName(string family) => family switch
+    {
+        "anthropic" => "Anthropic (Claude)",
+        "openai" => "OpenAI (GPT)",
+        "gemini" => "Google (Gemini)",
+        _ => family,
+    };
 
     /// <summary>
     /// Validates that a model name is specified.
