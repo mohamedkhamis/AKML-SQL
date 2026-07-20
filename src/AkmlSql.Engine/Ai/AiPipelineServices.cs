@@ -62,11 +62,18 @@ public sealed class AiPipelineServices : IDisposable
 
     /// <summary>
     /// Executes <paramref name="action"/> with exponential backoff on HTTP 429 (rate-limited)
-    /// responses. Lifted verbatim from <c>AiRequestHandler.ExecuteWithRetryAsync</c>.
+    /// responses. Retries are bounded by BOTH <paramref name="maxRetries"/> and
+    /// <paramref name="retryBudget"/> (wall-clock across attempts + delays): a quota-exhausted
+    /// key returns 429 for every attempt, and unbounded retrying once ground for 318 s — past
+    /// the provider timeout AND the shell's IPC wait, so the user saw "A task was canceled"
+    /// instead of the provider's actual "You exceeded your current quota" message. When the
+    /// budget is spent the last provider error is rethrown untouched.
     /// </summary>
     public static async Task<T> ExecuteWithBackoffAsync<T>(
-        Func<Task<T>> action, int maxRetries, CancellationToken ct)
+        Func<Task<T>> action, int maxRetries, CancellationToken ct, TimeSpan? retryBudget = null)
     {
+        var budget = retryBudget ?? System.Threading.Timeout.InfiniteTimeSpan;
+        var sw = System.Diagnostics.Stopwatch.StartNew();
         var attempt = 0;
         while (true)
         {
@@ -76,10 +83,16 @@ public sealed class AiPipelineServices : IDisposable
             }
             catch (HttpRequestException ex) when (
                 attempt < maxRetries &&
-                ex.StatusCode == HttpStatusCode.TooManyRequests)
+                ex.StatusCode == HttpStatusCode.TooManyRequests &&
+                (budget == System.Threading.Timeout.InfiniteTimeSpan || sw.Elapsed < budget))
             {
                 attempt++;
                 var delayMs = Math.Min((int)Math.Pow(2, attempt) * 1000, MaxBackoffMs);
+                if (budget != System.Threading.Timeout.InfiniteTimeSpan)
+                {
+                    var remainingMs = (budget - sw.Elapsed).TotalMilliseconds;
+                    delayMs = Math.Min(delayMs, Math.Max(0, (int)remainingMs));
+                }
                 Log.Warning("AI request rate-limited (429), retry {Attempt}/{MaxRetries} after {DelayMs}ms",
                     attempt, maxRetries, delayMs);
                 await Task.Delay(delayMs, ct);
@@ -103,9 +116,13 @@ public sealed class AiPipelineServices : IDisposable
         try
         {
             using var primaryClient = AiProviderFactory.Create(settings);
+            // Retry budget = the configured provider timeout: retries must never make one
+            // logical request outlive the deadline the rest of the pipeline (and the shell's
+            // IPC wait, provider timeout + margin) is built around.
             var response = await ExecuteWithBackoffAsync(
                 () => primaryClient.GetResponseAsync(messages, options, ct),
-                settings.Retries, ct);
+                settings.Retries, ct,
+                retryBudget: TimeSpan.FromSeconds(Math.Max(30, settings.Timeout)));
             return (response, false);
         }
         catch (Exception ex) when (

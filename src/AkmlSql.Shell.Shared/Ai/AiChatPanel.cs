@@ -267,7 +267,7 @@ namespace AkmlSql.Shell.Shared.Ai
             catch (Exception ex)
             {
                 Log.Error(ex, "AiChatPanel: failed to send message");
-                AddAssistantMessage($"Error: {ex.Message}");
+                AddAssistantMessage($"Error: {AiIpcTimeouts.DescribeFailure(ex, ConfigManager.Load())}");
             }
             finally
             {

@@ -21,5 +21,21 @@ namespace AkmlSql.Shell.Shared.Ai
             if (providerSec <= 0) providerSec = DefaultProviderTimeoutSec;
             return (providerSec + MarginSec) * 1000;
         }
+
+        /// <summary>
+        /// User-facing text for a failed AI request. A timed-out IPC wait surfaces as the bare
+        /// "A task was canceled" — useless to the user; say it timed out, for how long, and
+        /// where to look. Provider errors (quota, key, model) keep their original message.
+        /// </summary>
+        public static string DescribeFailure(System.Exception ex, AppSettings? settings)
+        {
+            if (ex is System.OperationCanceledException)
+            {
+                var waitedSec = ForAiRequestMs(settings) / 1000;
+                return $"The AI request timed out after {waitedSec}s — the provider may be slow or rate-limited. " +
+                       "See AKML SQL → View Logs for the provider's last error.";
+            }
+            return ex.Message;
+        }
     }
 }
