@@ -1,4 +1,4 @@
-#nullable enable
+﻿#nullable enable
 using System;
 using System.Collections.Generic;
 using System.Windows;
@@ -239,7 +239,8 @@ namespace AkmlSql.Shell.Shared.Ai
                 };
 
                 var response = await manager.Client.SendRequestAsync<AiChatResponse, AiChatRequest>(
-                    MessageTypes.AiChat, request, timeoutMs: 30000);
+                    MessageTypes.AiChat, request,
+                    timeoutMs: AiIpcTimeouts.ForAiRequestMs(ConfigManager.Load()));
 
                 if (response.Success && !string.IsNullOrEmpty(response.Response))
                 {
@@ -325,9 +326,12 @@ namespace AkmlSql.Shell.Shared.Ai
         }
 
         /// <summary>
-        /// Creates a message bubble (Border containing a TextBlock) for the conversation.
-        /// User messages right-align with <see cref="ThemeTokens.ChatUserBubble"/> background;
-        /// assistant messages left-align with <see cref="ThemeTokens.ChatAssistantBubble"/>.
+        /// Creates a message bubble (Border containing the text plus a per-message copy button)
+        /// for the conversation. User messages right-align with
+        /// <see cref="ThemeTokens.ChatUserBubble"/> background; assistant messages left-align
+        /// with <see cref="ThemeTokens.ChatAssistantBubble"/>. The copy button exists because
+        /// bubbles are TextBlocks — not selectable — so without it a chat message cannot be
+        /// copied at all (web-edition parity; the code-action buttons only copy their SQL).
         /// </summary>
         private static Border CreateMessageBubble(string text, bool isUser)
         {
@@ -340,9 +344,38 @@ namespace AkmlSql.Shell.Shared.Ai
             };
             textBlock.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPrimary);
 
+            var copyButton = new Button
+            {
+                Content = "⧉",
+                Tag = text,
+                ToolTip = "Copy message",
+                FontSize = 11,
+                Padding = new Thickness(4, 0, 4, 2),
+                Margin = new Thickness(Spacing.Sm, 0, 0, 0),
+                BorderThickness = new Thickness(0),
+                Background = Brushes.Transparent,
+                Cursor = Cursors.Hand,
+                VerticalAlignment = VerticalAlignment.Top,
+                Opacity = 0.55,
+                FocusVisualStyle = FocusVisualStyles.HighStakes
+            };
+            copyButton.SetResourceReference(Button.ForegroundProperty, ThemeTokens.TextSecondary);
+            System.Windows.Automation.AutomationProperties.SetName(copyButton, "Copy message");
+            copyButton.MouseEnter += (s, _) => ((Button)s).Opacity = 1.0;
+            copyButton.MouseLeave += (s, _) => ((Button)s).Opacity = 0.55;
+            copyButton.Click += OnCopyMessageClick;
+
+            var layout = new Grid();
+            layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            layout.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            Grid.SetColumn(textBlock, 0);
+            Grid.SetColumn(copyButton, 1);
+            layout.Children.Add(textBlock);
+            layout.Children.Add(copyButton);
+
             var bubble = new Border
             {
-                Child = textBlock,
+                Child = layout,
                 Padding = new Thickness(10, Spacing.Sm, 10, Spacing.Sm),
                 Margin = new Thickness(
                     isUser ? 60 : Spacing.Sm,  // Left margin
@@ -359,6 +392,39 @@ namespace AkmlSql.Shell.Shared.Ai
                 isUser ? ThemeTokens.ChatUserBubble : ThemeTokens.ChatAssistantBubble);
 
             return bubble;
+        }
+
+        /// <summary>
+        /// Copies the whole message text of a bubble to the clipboard and shows a transient
+        /// "Copied" state on its button (reverts after 1.5 s).
+        /// </summary>
+        private static void OnCopyMessageClick(object sender, RoutedEventArgs e)
+        {
+            if (!(sender is Button button) || !(button.Tag is string message))
+                return;
+
+            try
+            {
+                Clipboard.SetText(message);
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "AiChatPanel: failed to copy message to clipboard");
+                return;
+            }
+
+            var original = button.Content;
+            button.Content = "✓ Copied";
+            var timer = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromMilliseconds(1500)
+            };
+            timer.Tick += (_, __) =>
+            {
+                timer.Stop();
+                button.Content = original;
+            };
+            timer.Start();
         }
 
         /// <summary>

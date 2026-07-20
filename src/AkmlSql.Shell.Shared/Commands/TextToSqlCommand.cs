@@ -1,4 +1,4 @@
-#nullable enable
+﻿#nullable enable
 using System;
 using System.ComponentModel.Design;
 using System.Windows.Forms;
@@ -160,7 +160,8 @@ namespace AkmlSql.Shell.Shared.Commands
                 };
 
                 var response = await manager.Client.SendRequestAsync<AiTextToSqlResponse, AiTextToSqlRequest>(
-                    MessageTypes.AiTextToSql, request, timeoutMs: 60000);
+                    MessageTypes.AiTextToSql, request,
+                    timeoutMs: Ai.AiIpcTimeouts.ForAiRequestMs(ConfigManager.Load()));
 
                 if (!response.Success || string.IsNullOrEmpty(response.GeneratedSql))
                 {
