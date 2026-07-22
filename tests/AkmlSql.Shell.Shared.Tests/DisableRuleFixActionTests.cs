@@ -14,6 +14,7 @@ namespace AkmlSql.Shell.Shared.Tests
     /// so the lightbulb action silently did nothing across restarts.
     /// Runs against an isolated AKML_APP_DATA_ROOT so the real user config is never touched.
     /// </summary>
+    [Collection("AkmlSql AppData isolation")]
     public sealed class DisableRuleFixActionTests : IDisposable
     {
         private const string AppDataRootEnvVar = "AKML_APP_DATA_ROOT";

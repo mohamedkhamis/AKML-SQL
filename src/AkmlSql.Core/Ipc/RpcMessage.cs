@@ -141,6 +141,24 @@ namespace AkmlSql.Core.Ipc
         //   a stored profile by name via ProfileManager.Duplicate. Pairs with response 132.)
         public const int DuplicateProfile = 32;
 
+        // Shell → Engine (Spec 033: Format Styles editor load-on-select — read one stored profile.
+        //   Returns the .akmlstyle file text VERBATIM (never re-serialized: serialization bumps
+        //   metadata.modified and drops unknown nested fields) plus the directory-derived
+        //   read-only flag. Pairs with response 134.)
+        public const int ProfileGet = 34;
+
+        // Engine → Shell (Spec 033: ProfileGet result — pairs with request 34)
+        public const int ProfileGetResult = 134;
+
+        // Shell → Engine (Spec 033: Format Styles editor Rename — atomic engine-side rename of a
+        //   CUSTOM profile: file name + JSON metadata.name + the .source.json import sidecar move
+        //   in one transaction. Never touches config.json — updating Formatter.ActiveProfile
+        //   after renaming the active style is the shell caller's job. Pairs with response 135.)
+        public const int ProfileRename = 35;
+
+        // Engine → Shell (Spec 033: ProfileRename result — pairs with request 35)
+        public const int ProfileRenameResult = 135;
+
         // Shell → Engine (Refactoring — heavyweight preview/apply)
         public const int RequestRefactorPreview = 30;
         public const int RequestRefactorApply = 31;

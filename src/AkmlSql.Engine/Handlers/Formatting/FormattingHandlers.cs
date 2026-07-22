@@ -144,4 +144,33 @@ namespace AkmlSql.Engine.Handlers.Formatting
         public Task<DuplicateProfileResponse> HandleAsync(DuplicateProfileRequest request, RpcContext ctx, CancellationToken ct)
             => Task.FromResult(_inner.HandleDuplicateProfile(request));
     }
+
+    /// <summary>
+    /// Spec 033 — Format Styles editor load-on-select: raw profile read. Routes
+    /// <see cref="MessageTypes.ProfileGet"/> (34) to
+    /// <see cref="FormatRequestHandler.HandleProfileGet"/>, responds on 134.
+    /// </summary>
+    public sealed class ProfileGetHandler : IRpcRequestHandler<ProfileGetRequest, ProfileGetResponse>
+    {
+        private readonly FormatRequestHandler _inner;
+        public ProfileGetHandler(FormatRequestHandler inner) => _inner = inner ?? throw new ArgumentNullException(nameof(inner));
+        public int RequestMessageType => MessageTypes.ProfileGet;
+        public int ResponseMessageType => MessageTypes.ProfileGetResult;
+        public Task<ProfileGetResponse> HandleAsync(ProfileGetRequest request, RpcContext ctx, CancellationToken ct)
+            => Task.FromResult(_inner.HandleProfileGet(request));
+    }
+
+    /// <summary>
+    /// Spec 033 — Format Styles editor Rename. Routes <see cref="MessageTypes.ProfileRename"/>
+    /// (35) to <see cref="FormatRequestHandler.HandleProfileRename"/>, responds on 135.
+    /// </summary>
+    public sealed class ProfileRenameHandler : IRpcRequestHandler<ProfileRenameRequest, ProfileRenameResponse>
+    {
+        private readonly FormatRequestHandler _inner;
+        public ProfileRenameHandler(FormatRequestHandler inner) => _inner = inner ?? throw new ArgumentNullException(nameof(inner));
+        public int RequestMessageType => MessageTypes.ProfileRename;
+        public int ResponseMessageType => MessageTypes.ProfileRenameResult;
+        public Task<ProfileRenameResponse> HandleAsync(ProfileRenameRequest request, RpcContext ctx, CancellationToken ct)
+            => Task.FromResult(_inner.HandleProfileRename(request));
+    }
 }

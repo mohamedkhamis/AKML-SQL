@@ -1,6 +1,6 @@
 # T059 — Format Styles editor VSCT wire (runbook)
 
-**Status**: Ready for a focused session. `FormatStylesEditorWindow.Launch()` exists; no menu entry in any host points to it.
+**Status**: DONE — superseded. Commit `17e294c` wired "Format Styles..." (`cmdFormatStyles` 0x0916) in both remaining hosts (SSMS 22 + VS 2026); spec 033 later added the SSMS DTE-menu entry, the Command Palette entry, and the Options-page launch button. This runbook is kept for historical reference only.
 **Spec**: 020 / US3 / T059
 **Originating PR**: the spec-020 close-out PR that landed Phase C (T031) + Phase D (T044–T048).
 **Estimated effort**: 2–3 hours of mechanical work + per-host MSBuild verification.

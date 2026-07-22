@@ -16,7 +16,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         public string Key     => "Formatting";
         public string Display => "Format › Styles";
         public string Title   => "SQL Formatting";
-        public string Help    => "Choose the active formatting style and control when Format SQL runs (on paste, save, or delimiter), plus safety options like bulk-format confirmation, backups, --noformat regions, and semantic validation.";
+        public string Help    => "Choose the active formatting style, open the Edit Formatting Styles window to change how styles lay out SQL, and control when Format SQL runs (on paste, save, or delimiter) plus safety options like bulk-format confirmation, backups, --noformat regions, and semantic validation.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {
@@ -29,11 +29,20 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 "The formatting style Format SQL applies. Edit styles in Format Styles editor.");
             ctx.RegisterSearch("Active style", "The formatting style Format SQL applies", "Dropdown", rowActive);
 
+            // Spec 033 (T038 / US4) — the SQL Prompt-exact launcher: all layout/casing editing
+            // happens in the dedicated window; this page only selects + launches.
+            var (rowEdit, btnEdit) = ctx.Rows.AddButton(panel,
+                "Formatting styles",
+                "Edit formatting styles…",
+                "Open the Edit Formatting Styles window (layout, casing, lists, parentheses…)");
+            ctx.RegisterSearch("Edit formatting styles", "Open the Edit Formatting Styles window", "Button", rowEdit);
+
             var (rowShowProfile, chkShowProfile) = ctx.Rows.AddToggle(panel,
                 "Show active style in status bar", "Display the active formatting style in the status bar");
             ctx.RegisterSearch("Show active style in status bar", "Display the active formatting style in the status bar", "Toggle", rowShowProfile);
 
             ctx.Rows.AddGroupSeparator(panel);
+            ctx.Rows.AddGroupHeader(panel, "Behavior");
             ctx.Rows.AddGroupHeader(panel, "Triggers");
 
             var (rowEnabled, chkEnabled) = ctx.Rows.AddToggle(panel,
@@ -75,8 +84,26 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 "Re-parse formatted SQL to verify it is semantically equivalent");
             ctx.RegisterSearch("Validate formatting preserves semantics", "Re-parse formatted SQL to verify it is semantically equivalent", "Toggle", rowSemantic);
 
-            return new FormattingControls(cboActive, chkShowProfile, chkEnabled, chkPaste, chkSave, chkDelim,
+            var controls = new FormattingControls(cboActive, chkShowProfile, chkEnabled, chkPaste, chkSave, chkDelim,
                 chkBulk, chkBackups, chkNoFmt, chkSemantic);
+
+            // Launch() is modal — when it returns, re-read the on-disk active style so a
+            // Set-Active done inside the window survives the Options OK/Apply save path
+            // (FormattingControls.Save writes the dropdown selection unconditionally).
+            btnEdit.Click += (_, _) =>
+            {
+                try
+                {
+                    Formatting.FormatStylesEditorWindow.Launch();
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning(ex, "FormattingPage: Format Styles editor launch failed");
+                }
+                controls.RefreshActiveStyleFromDisk();
+            };
+
+            return controls;
         }
     }
 
@@ -146,6 +173,28 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         }
 
         public void Reset(AppSettings defaults) => Load(defaults);
+
+        /// <summary>
+        /// Spec 033 (T038 / US4 scenario 2+3) — re-seeds the dropdown from the CURRENT on-disk
+        /// <c>Formatter.ActiveProfile</c> and repopulates the list. Called after the modal
+        /// styles editor closes so its Set-Active / create / rename / delete results are
+        /// reflected here — and so the Options save path persists the fresh name instead of
+        /// clobbering it with a stale selection.
+        /// </summary>
+        internal void RefreshActiveStyleFromDisk()
+        {
+            try
+            {
+                var f = ConfigManager.Load().Formatter;
+                var active = string.IsNullOrWhiteSpace(f.ActiveProfile) ? "Khamis Style" : f.ActiveProfile;
+                SetItems(new[] { active }, active);
+                _ = PopulateProfilesAsync(active);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "FormattingPage: active-style refresh failed");
+            }
+        }
 
         private async System.Threading.Tasks.Task PopulateProfilesAsync(string active)
         {

@@ -29,7 +29,7 @@ specs/                                 # Specify framework feature specs
 - **Installer**: Inno Setup 7 Pascal Script
 - **Tests**: xunit 2.x, Microsoft.NET.Test.Sdk 17.x
 - **Logging**: Serilog 4.x + Serilog.Sinks.File 6.x
-- **JSON**: System.Text.Json 8.x (netstandard2.0 polyfill)
+- **JSON**: System.Text.Json 9.x (netstandard2.0 polyfill; net10.0 targets use the inbox STJ)
 
 ## VS SDK Versions (Critical)
 
@@ -292,7 +292,7 @@ See [doc/progress.md](doc/progress.md) for the full development progress log —
 
 - Formatter pipeline gap closures (T074–T084) — 11 layout rules against the 7-stage pipeline
 - Parity corpus + tests (T071–T073) — needs Redgate SQL Prompt install for golden generation
-- Format Styles editor menu wire + Options dialog re-skin (T044–T048, T059) — VSCT edits across 6 hosts
+- ~~Format Styles editor menu wire + Options dialog re-skin (T044–T048, T059)~~ — SHIPPED (commit 17e294c wired "Format Styles..." in both hosts; T044–T048 closed as already-satisfied by SettingsWindow). Spec 033 then promoted the window to a full editor (load/save/rename/delete, schema v2 hierarchy + enum dropdowns, Options launcher button)
 - Manual product-running audits (T098–T100, T105) — DPI / a11y / screenshot review / quickstart end-to-end
 
 ## Git Rules (MANDATORY)

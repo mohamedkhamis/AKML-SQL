@@ -80,6 +80,10 @@
     <Compile Include="$(MSBuildThisFileDirectory)Ipc\PipeRpcClient.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ipc\EngineProcessManager.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ipc\EngineLifecycle.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ipc\RpcClientAccessor.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\ProfileJsonMerger.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatStylesSchemaModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\StyleNameDialog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\TextViewCreationListener.cs" />
     <!-- CompletionCommandHandler.cs and CompletionSource.cs DELETED — replaced by Editor/Completion/ -->
     <Compile Include="$(MSBuildThisFileDirectory)Editor\ContentTypeDetector.cs" />
@@ -111,11 +115,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatOnDelimiterHandler.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\BulkFormatWizard.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\BulkFormatProgressDialog.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Ui\ProfileEditorDialog.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Ui\ProfileEditorViewModel.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Ui\OptionCategoryTreeBuilder.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Ui\SqlPreviewRenderer.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Commands\EditProfileCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatActionHelper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\CasingOnlyCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\InsertSemicolonsCommand.cs" />

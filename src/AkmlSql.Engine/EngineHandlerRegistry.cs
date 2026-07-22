@@ -164,6 +164,8 @@ internal static class EngineHandlerRegistry
         router.Register(new Handlers.Formatting.ProfileExportSqlPromptHandler(formatHandler));
         router.Register(new Handlers.Formatting.StyleEditorSchemaHandler(formatHandler));
         router.Register(new Handlers.Formatting.DuplicateProfileHandler(formatHandler));
+        router.Register(new Handlers.Formatting.ProfileGetHandler(formatHandler));
+        router.Register(new Handlers.Formatting.ProfileRenameHandler(formatHandler));
 
         // === Bulk Formatting (2 typed) ===
         router.Register(new Handlers.Formatting.BulkFormatHandler(formatHandler));

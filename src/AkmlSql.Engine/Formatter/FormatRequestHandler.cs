@@ -295,6 +295,12 @@ public class FormatRequestHandler(ProfileManager profileManager)
     {
         try
         {
+            // Spec 033 hardening — mirror the 1 MB import cap (see HandleProfileImport).
+            // Save previously accepted unbounded JSON from the pipe.
+            const int maxProfileJsonChars = 1024 * 1024;
+            if (request.ProfileJson != null && request.ProfileJson.Length > maxProfileJsonChars)
+                return new ProfileSaveResponse { Success = false, ErrorMessage = "Profile JSON exceeds the 1 MB limit." };
+
             var profile = ProfileSerializer.Deserialize(request.ProfileJson);
             profileManager.Save(profile);
             return new ProfileSaveResponse { Success = true };
@@ -306,17 +312,73 @@ public class FormatRequestHandler(ProfileManager profileManager)
         }
     }
 
+    /// <summary>
+    /// Spec 033 — Format Styles editor load-on-select. Returns the stored .akmlstyle file text
+    /// VERBATIM via <see cref="ProfileManager.TryReadRaw"/> (re-serializing would bump
+    /// <c>metadata.modified</c> and drop unknown nested fields), plus the directory-derived
+    /// read-only flag. Never creates or modifies anything.
+    /// </summary>
+    public ProfileGetResponse HandleProfileGet(ProfileGetRequest request)
+    {
+        try
+        {
+            if (!profileManager.TryReadRaw(request.Name, out var json, out var isBuiltIn))
+                return new ProfileGetResponse
+                {
+                    Success = false,
+                    ErrorMessage = $"Profile '{request.Name}' was not found."
+                };
+
+            return new ProfileGetResponse
+            {
+                Success = true,
+                Name = request.Name,
+                ProfileJson = json,
+                IsBuiltIn = isBuiltIn
+            };
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Profile get failed ({Name})", request.Name);
+            return new ProfileGetResponse { Success = false, ErrorMessage = ex.Message };
+        }
+    }
+
     public ProfileDeleteResponse HandleProfileDelete(ProfileDeleteRequest request)
     {
         try
         {
-            profileManager.Delete(request.Name);
-            return new ProfileDeleteResponse { Success = true };
+            // Spec 033 fix — Delete's bool was previously discarded, so deleting a
+            // nonexistent profile reported Success=true.
+            var deleted = profileManager.Delete(request.Name);
+            return deleted
+                ? new ProfileDeleteResponse { Success = true }
+                : new ProfileDeleteResponse { Success = false, ErrorMessage = $"Profile '{request.Name}' was not found." };
         }
         catch (Exception ex)
         {
             Log.Error(ex, "Profile delete failed");
             return new ProfileDeleteResponse { Success = false, ErrorMessage = ex.Message };
+        }
+    }
+
+    /// <summary>
+    /// Spec 033 — atomic engine-side rename of a custom profile (filename + JSON metadata.name
+    /// + .source.json sidecar in one transaction via <see cref="ProfileManager.Rename"/>).
+    /// Never touches config.json: after renaming the ACTIVE style, the shell caller updates
+    /// <c>Formatter.ActiveProfile</c> itself or formatting silently falls back to defaults.
+    /// </summary>
+    public ProfileRenameResponse HandleProfileRename(ProfileRenameRequest request)
+    {
+        try
+        {
+            var finalName = profileManager.Rename(request.OldName, request.NewName);
+            return new ProfileRenameResponse { Success = true, NewName = finalName };
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Profile rename failed ({Old} -> {New})", request.OldName, request.NewName);
+            return new ProfileRenameResponse { Success = false, ErrorMessage = ex.Message };
         }
     }
 

@@ -127,7 +127,7 @@ namespace AkmlSql.Shell.Shared.Productivity
         /// <c>ProfileManager.List()</c> also sees the built-in profiles shipped next to the engine
         /// that no %AppData% scan can find — mirroring <c>FormattingPage.PopulateProfilesAsync</c>.
         /// Falls back to the on-disk <c>*.akmlstyle</c> scan under <c>%AppData%/AKML SQL/profiles</c>
-        /// (mirrors <c>EditProfileCommand</c>) when the engine is not connected.
+        /// (the shared shell-command convention) when the engine is not connected.
         /// </summary>
         private static string[] GetAvailableProfiles()
         {

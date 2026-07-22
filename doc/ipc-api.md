@@ -86,6 +86,8 @@ class RpcMessage {
 | Shell→Engine | `RequestStyleEditorSchema` | 28 |
 | Shell→Engine | `RequestRefactorPreview` | 30 |
 | Shell→Engine | `RequestRefactorApply` | 31 |
+| Shell→Engine | `ProfileGet` | 34 |
+| Shell→Engine | `ProfileRename` | 35 |
 | Engine→Shell | `CompletionResult` | 101 |
 | Engine→Shell | `SignatureHelpResult` | 102 |
 | Engine→Shell | `QuickInfoResult` | 103 |
@@ -110,6 +112,8 @@ class RpcMessage {
 | Engine→Shell | `StyleEditorSchemaResult` | 128 |
 | Engine→Shell | `RefactorPreviewResult` | 130 |
 | Engine→Shell | `RefactorApplyResult` | 131 |
+| Engine→Shell | `ProfileGetResult` | 134 |
+| Engine→Shell | `ProfileRenameResult` | 135 |
 | Shell→Engine | `HandshakeRequest` | 200 |
 | Engine→Shell | `HandshakeResponse` | 201 |
 | Shell→Engine | `SchemaIdentifyRequest` | 202 |
@@ -452,9 +456,49 @@ The JSON-string payload (rather than a typed MessagePack object) keeps the wire 
 
 **Effect**: Engine builds the schema once (lazy, via reflection over `FormattingProfile`) and caches it for the process lifetime. Short-circuit path returns within ~5 ms; full-payload path is ~30 ms p95 including IPC.
 
+**Schema v2 (spec 033)**: `SchemaVersion` is now `2`. The JSON body additionally populates `parentId` on every group row (5-category hierarchy: `global` / `statements` / `clauses` / `expressions` / `other` — category ids travel ONLY as `parentId` values, never as group rows), plus per-setting `description`, `allowedEnumValues` (exact stored spellings, default included) and `min`/`max` for ranged ints, all sourced from `[SettingMeta]` attributes on the profile POCOs. The previously-opaque `insertStatements.columns`/`values` blobs are flattened into six multi-segment setting ids. All v2 fields are optional for clients: a v1 consumer renders flat with free-text enum boxes. Contract: `specs/033-format-styles-window/contracts/style-editor-schema-v2.md`.
+
 ---
 
 ## Profile Management Messages
+
+### `ProfileGet` (34) → `ProfileGetResult` (134) — spec 033
+
+Returns one stored profile's `.akmlstyle` file text **verbatim** (never re-serialized: serialization bumps `metadata.modified` and drops unknown fields nested inside option groups). This is the Format Styles editor's load-on-select read and the merge base for its edit-saves.
+
+**Request** (`ProfileGetRequest`):
+```
+Name  string  Key(0)  Display name; resolved custom-first then built-in, OrdinalIgnoreCase.
+```
+
+**Response** (`ProfileGetResponse`):
+```
+Success       bool     Key(0)  False when the name resolves to no file (nothing is ever created).
+ErrorMessage  string?  Key(1)  Populated iff Success == false.
+Name          string?  Key(2)  Resolved display name.
+ProfileJson   string?  Key(3)  Raw stored file text, verbatim.
+IsBuiltIn     bool     Key(4)  True iff resolved from the built-in dir with no custom shadow
+                               (directory-derived — the JSON's own isBuiltIn field is untrusted).
+```
+
+### `ProfileRename` (35) → `ProfileRenameResult` (135) — spec 033
+
+Atomically renames a **custom** profile engine-side: rewrites `metadata.name` (+`modified`) via a raw JsonNode edit, writes the new file atomically, deletes the old one, and moves the `<name>.source.json` import sidecar. Built-in sources, and collisions with any custom or built-in name (OrdinalIgnoreCase), are rejected; case-only renames are allowed. **Never touches config.json** — after renaming the active style, the shell updates `Formatter.ActiveProfile` itself.
+
+**Request** (`ProfileRenameRequest`):
+```
+OldName  string  Key(0)
+NewName  string  Key(1)  Engine-side sanitized.
+```
+
+**Response** (`ProfileRenameResponse`):
+```
+Success       bool     Key(0)
+ErrorMessage  string?  Key(1)
+NewName       string?  Key(2)  Final (sanitized/trimmed) name actually persisted.
+```
+
+**Behavior fixes shipped with spec 033**: `ProfileDelete` (16) now returns `Success=false` when the named profile does not exist (it previously discarded the delete result and always reported success), and `ProfileSave` (15) rejects `ProfileJson` payloads over 1 MB (mirroring the import cap).
 
 ### `ProfileList` → `ProfileListResult`
 

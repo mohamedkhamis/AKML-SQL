@@ -28,8 +28,8 @@ namespace AkmlSql.Shell.Shared.Formatting
     /// </list>
     ///
     /// <para>
-    /// Programmatic WPF only (no XAML) — matches the established pattern in
-    /// <see cref="Ui.ProfileEditorDialog"/>. Chrome flows from <see cref="ThemeRegistry"/>
+    /// Programmatic WPF only (no XAML) — the established shell-dialog pattern.
+    /// Chrome flows from <see cref="ThemeRegistry"/>
     /// via <c>SetResourceReference</c>; brushes are pre-frozen at palette-build time so no
     /// per-call allocation is needed. Owner is set from the DTE HWND so the dialog
     /// centres on the host's main window.
@@ -46,6 +46,17 @@ namespace AkmlSql.Shell.Shared.Formatting
         private Border? _previewWarningBar;
         private TextBlock? _previewWarningText;
         private TextBlock? _statusText;
+
+        // Spec 033 (T016) — editing UX state
+        private Button? _saveBtn;
+        private Border? _readOnlyHint;
+        private FormatSettingNode? _currentSettingNode;
+        private bool _suppressSelectionChanged;
+        private bool _closeConfirmed;
+
+        // Spec 033 (T025 / FR-014, closes spec-020 T069) — in-window preview-sample editing
+        private CheckBox? _editSampleToggle;
+        private bool _editingSample;
 
         private static System.Windows.Media.SolidColorBrush Freeze(System.Windows.Media.SolidColorBrush b)
         {
@@ -70,6 +81,9 @@ namespace AkmlSql.Shell.Shared.Formatting
 
             BuildUi();
             DataContext = _viewModel;
+
+            // Spec 033 — the VM asks the window what to do with unsaved edits on style switch.
+            _viewModel.DirtyDecisionHandler = PromptStyleSwitchDecisionAsync;
 
             _viewModel.PropertyChanged += OnViewModelPropertyChanged;
             Loaded += OnLoaded;
@@ -181,6 +195,36 @@ namespace AkmlSql.Shell.Shared.Formatting
             Grid.SetColumn(_statusText, 0);
             footerGrid.Children.Add(_statusText);
 
+            var footerButtons = new StackPanel { Orientation = Orientation.Horizontal };
+
+            // Spec 033 (T016) — Save persists the loaded style via merge-save. Enabled only
+            // when a loaded, editable style has unsaved edits.
+            _saveBtn = new Button
+            {
+                Content = "Save",
+                Padding = new Thickness(Spacing.Lg, Spacing.Sm, Spacing.Lg, Spacing.Sm),
+                MinWidth = 80,
+                Margin = new Thickness(0, 0, Spacing.Sm, 0),
+                IsEnabled = false,
+                FontFamily = Typography.UiFont,
+                FontSize = Typography.Body,
+            };
+            _saveBtn.Click += async (_, _) =>
+            {
+                try
+                {
+                    SetStatus(await _viewModel.SaveAsync()
+                        ? $"Saved '{_viewModel.LoadedProfileName}'."
+                        : _viewModel.LastError ?? "Save failed.");
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning(ex, "FormatStylesEditor: save failed");
+                    SetStatus(ex.Message);
+                }
+            };
+            footerButtons.Children.Add(_saveBtn);
+
             var closeBtn = new Button
             {
                 Content = "Close",
@@ -191,8 +235,10 @@ namespace AkmlSql.Shell.Shared.Formatting
                 FontSize = Typography.Body,
             };
             closeBtn.Click += (_, _) => Close();
-            Grid.SetColumn(closeBtn, 1);
-            footerGrid.Children.Add(closeBtn);
+            footerButtons.Children.Add(closeBtn);
+
+            Grid.SetColumn(footerButtons, 1);
+            footerGrid.Children.Add(footerButtons);
 
             footer.Child = footerGrid;
             Grid.SetRow(footer, 2);
@@ -229,8 +275,10 @@ namespace AkmlSql.Shell.Shared.Formatting
                 Orientation = Orientation.Horizontal,
                 Margin = new Thickness(Spacing.Sm, 0, Spacing.Sm, Spacing.Sm),
             };
-            toolbar.Children.Add(MakeToolbarButton("New", OnNewStyleAsync));
+            toolbar.Children.Add(MakeToolbarButton("New…", OnNewStyleAsync));
             toolbar.Children.Add(MakeToolbarButton("Copy", OnCopyStyleAsync));
+            toolbar.Children.Add(MakeToolbarButton("Rename…", OnRenameStyleAsync));
+            toolbar.Children.Add(MakeToolbarButton("Delete", OnDeleteStyleAsync));
             toolbar.Children.Add(MakeToolbarButton("Set Active", OnSetActiveAsync));
             toolbar.Children.Add(MakeToolbarButton("Import…", OnImportAsync));
             toolbar.Children.Add(MakeToolbarButton("Export", OnExportAsync));
@@ -248,12 +296,60 @@ namespace AkmlSql.Shell.Shared.Formatting
             _styleList.SetResourceReference(Control.BackgroundProperty, ThemeTokens.SurfaceInput);
             _styleList.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
             _styleList.SetResourceReference(Control.BorderBrushProperty, ThemeTokens.BorderDefault);
-            _styleList.ItemsSource = _viewModel.Profiles;
-            _styleList.SelectionChanged += (_, _) =>
+            // Spec 033 (T036) — sectioned list: "Your styles" first, then "Built-in styles",
+            // names A→Z within each; group headers via a code-built template.
+            var view = new System.Windows.Data.ListCollectionView(_viewModel.Profiles);
+            view.GroupDescriptions!.Add(new System.Windows.Data.PropertyGroupDescription(nameof(StyleListItem.Section)));
+            view.SortDescriptions.Add(new System.ComponentModel.SortDescription(
+                nameof(StyleListItem.Section), System.ComponentModel.ListSortDirection.Descending)); // "Your…" > "Built-in…"
+            view.SortDescriptions.Add(new System.ComponentModel.SortDescription(
+                nameof(StyleListItem.Name), System.ComponentModel.ListSortDirection.Ascending));
+            _styleList.ItemsSource = view;
+
+            var groupHeaderTemplate = new DataTemplate();
+            var headerFactory = new FrameworkElementFactory(typeof(TextBlock));
+            headerFactory.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding("Name"));
+            headerFactory.SetValue(TextBlock.FontWeightProperty, Typography.WeightSemiBold);
+            headerFactory.SetValue(TextBlock.FontSizeProperty, (double)Typography.Small);
+            headerFactory.SetValue(FrameworkElement.MarginProperty, new Thickness(4, 6, 4, 2));
+            headerFactory.SetValue(UIElement.OpacityProperty, 0.75);
+            groupHeaderTemplate.VisualTree = headerFactory;
+            _styleList.GroupStyle.Add(new GroupStyle { HeaderTemplate = groupHeaderTemplate });
+
+            // Spec 033 (T036) — per-style context menu; enablement follows the selected item.
+            var menu = new ContextMenu();
+            var miSetActive = MakeMenuItem("Set Active", OnSetActiveAsync);
+            var miCopy = MakeMenuItem("Copy", OnCopyStyleAsync);
+            var miRename = MakeMenuItem("Rename…", OnRenameStyleAsync);
+            var miDelete = MakeMenuItem("Delete", OnDeleteStyleAsync);
+            var miExport = MakeMenuItem("Export…", OnExportAsync);
+            menu.Items.Add(miSetActive);
+            menu.Items.Add(miCopy);
+            menu.Items.Add(miRename);
+            menu.Items.Add(miDelete);
+            menu.Items.Add(new Separator());
+            menu.Items.Add(miExport);
+            _styleList.ContextMenu = menu;
+            _styleList.ContextMenuOpening += (_, e) =>
             {
-                if (_styleList.SelectedItem is StyleListItem item)
+                if (_styleList?.SelectedItem is not StyleListItem selected)
                 {
-                    _viewModel.SelectedProfileName = item.Name;
+                    e.Handled = true; // nothing selected — no menu
+                    return;
+                }
+                miRename.IsEnabled = !selected.IsReadOnly;
+                miDelete.IsEnabled = !selected.IsReadOnly && !selected.IsActive;
+                miSetActive.IsEnabled = !selected.IsActive;
+            };
+
+            _styleList.SelectionChanged += async (_, _) => await OnStyleSelectionChangedAsync();
+            // Spec 033 — double-clicking a read-only built-in copies it (Redgate behavior).
+            _styleList.MouseDoubleClick += async (_, _) =>
+            {
+                if (_styleList?.SelectedItem is StyleListItem { IsReadOnly: true })
+                {
+                    try { await OnCopyStyleAsync(); }
+                    catch (Exception ex) { Log.Warning(ex, "FormatStylesEditor: double-click copy failed"); SetStatus(ex.Message); }
                 }
             };
             Grid.SetRow(_styleList, 2);
@@ -287,10 +383,209 @@ namespace AkmlSql.Shell.Shared.Formatting
         private string? SelectedStyle()
             => (_styleList?.SelectedItem as StyleListItem)?.Name ?? _viewModel.SelectedProfileName;
 
+        /// <summary>
+        /// Spec 033 (T016) — guarded load-on-select. Delegates to
+        /// <see cref="FormatStylesEditorViewModel.SelectProfileAsync"/> (dirty prompt +
+        /// ProfileGet + working-value overlay); on cancel/failure the previous visual
+        /// selection is restored so the list never lies about what is loaded.
+        /// </summary>
+        private async System.Threading.Tasks.Task OnStyleSelectionChangedAsync()
+        {
+            if (_suppressSelectionChanged || _styleList?.SelectedItem is not StyleListItem item) return;
+
+            var previous = _viewModel.LoadedProfileName;
+            bool ok;
+            try
+            {
+                ok = await _viewModel.SelectProfileAsync(item.Name);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "FormatStylesEditor: style selection failed");
+                ok = false;
+            }
+
+            if (!ok)
+            {
+                SetStatus(_viewModel.LastError ?? $"Could not load '{item.Name}'.");
+                RestoreListSelection(previous);
+                return;
+            }
+
+            UpdateReadOnlyState();
+            UpdateSaveButtonState();
+            RefreshVisibleSettingControls();
+            SetStatus(_viewModel.IsSelectedReadOnly
+                ? $"'{item.Name}' is built-in (read-only) — copy this style to edit it."
+                : $"Loaded '{item.Name}'.");
+        }
+
+        /// <summary>Re-points the list selection at <paramref name="name"/> (or clears it) without re-triggering the load.</summary>
+        private void RestoreListSelection(string? name)
+        {
+            if (_styleList == null) return;
+            _suppressSelectionChanged = true;
+            try
+            {
+                _styleList.SelectedItem = name == null
+                    ? null
+                    : _viewModel.Profiles.FirstOrDefault(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
+            }
+            finally
+            {
+                _suppressSelectionChanged = false;
+            }
+        }
+
+        /// <summary>Re-renders the right-top controls so they show the freshly-loaded style's values.</summary>
+        private void RefreshVisibleSettingControls()
+        {
+            if (_currentSettingNode != null) UpdateRightTopForSetting(_currentSettingNode);
+        }
+
+        private void UpdateSaveButtonState()
+        {
+            if (_saveBtn != null)
+                _saveBtn.IsEnabled = _viewModel.IsDirty && !_viewModel.IsSelectedReadOnly;
+        }
+
+        private void UpdateReadOnlyState()
+        {
+            if (_settingControlsHost != null)
+                _settingControlsHost.IsEnabled = !_viewModel.IsSelectedReadOnly;
+            if (_readOnlyHint != null)
+                _readOnlyHint.Visibility = _viewModel.IsSelectedReadOnly ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        /// <summary>Save / Discard / Cancel prompt for unsaved edits (style switch + window close).</summary>
+        private System.Threading.Tasks.Task<StyleSwitchDecision> PromptStyleSwitchDecisionAsync()
+        {
+            var result = MessageBox.Show(
+                this,
+                $"Save changes to '{_viewModel.LoadedProfileName ?? "this style"}'?",
+                "AKML SQL — Format Styles",
+                MessageBoxButton.YesNoCancel,
+                MessageBoxImage.Question);
+
+            return System.Threading.Tasks.Task.FromResult(result switch
+            {
+                MessageBoxResult.Yes => StyleSwitchDecision.Save,
+                MessageBoxResult.No => StyleSwitchDecision.Discard,
+                _ => StyleSwitchDecision.Cancel,
+            });
+        }
+
+        /// <summary>Spec 033 — closing over unsaved edits prompts; Save defers the close until the write lands.</summary>
+        protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+        {
+            if (!_closeConfirmed && _viewModel.IsDirty && !_viewModel.IsSelectedReadOnly)
+            {
+                var result = MessageBox.Show(
+                    this,
+                    $"Save changes to '{_viewModel.LoadedProfileName ?? "this style"}' before closing?",
+                    "AKML SQL — Format Styles",
+                    MessageBoxButton.YesNoCancel,
+                    MessageBoxImage.Question);
+
+                if (result == MessageBoxResult.Cancel)
+                {
+                    e.Cancel = true;
+                    return;
+                }
+                if (result == MessageBoxResult.Yes)
+                {
+                    e.Cancel = true;
+                    _ = SaveThenCloseAsync();
+                    return;
+                }
+            }
+            base.OnClosing(e);
+        }
+
+        private async System.Threading.Tasks.Task SaveThenCloseAsync()
+        {
+            try
+            {
+                if (await _viewModel.SaveAsync())
+                {
+                    _closeConfirmed = true;
+                    Close();
+                }
+                else
+                {
+                    SetStatus(_viewModel.LastError ?? "Save failed — the window stays open.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "FormatStylesEditor: save-then-close failed");
+                SetStatus(ex.Message);
+            }
+        }
+
+        private MenuItem MakeMenuItem(string header, Func<System.Threading.Tasks.Task> onClick)
+        {
+            var item = new MenuItem { Header = header };
+            item.Click += async (_, _) =>
+            {
+                try { await onClick(); }
+                catch (Exception ex) { Log.Warning(ex, "FormatStylesEditor: menu action '{Action}' failed", header); SetStatus(ex.Message); }
+            };
+            return item;
+        }
+
         private async System.Threading.Tasks.Task OnNewStyleAsync()
         {
-            var created = await _viewModel.NewProfileAsync();
-            AfterCreate(created, "New style created");
+            // Spec 033 (T035) — New Style… with a chosen name + based-on style.
+            var candidates = _viewModel.Profiles.Select(p => p.Name).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
+            if (candidates.Count == 0) candidates.Add("Default");
+            var (accepted, name, basedOn) = StyleNameDialog.ShowNewStyle(this, candidates, SelectedStyle() ?? "Default");
+            if (!accepted) return;
+
+            var created = await _viewModel.CreateStyleAsync(name, basedOn);
+            AfterCreate(created, $"Created '{created}' based on '{basedOn}'.");
+        }
+
+        private async System.Threading.Tasks.Task OnRenameStyleAsync()
+        {
+            var current = SelectedStyle();
+            if (string.IsNullOrEmpty(current)) { SetStatus("Select a style to rename."); return; }
+            var item = _viewModel.Profiles.FirstOrDefault(p => string.Equals(p.Name, current, StringComparison.OrdinalIgnoreCase));
+            if (item?.IsReadOnly == true) { SetStatus("Built-in styles cannot be renamed."); return; }
+
+            var (accepted, newName) = StyleNameDialog.ShowRename(this, current!);
+            if (!accepted || string.Equals(newName, current, StringComparison.Ordinal)) return;
+
+            var wasActive = item?.IsActive == true;
+            var finalName = await _viewModel.RenameSelectedAsync(newName);
+            if (finalName == null)
+            {
+                SetStatus(_viewModel.LastError ?? "Rename failed.");
+                return;
+            }
+
+            RestoreListSelection(finalName);
+            if (wasActive) UpdateStatusBarActiveStyle(finalName);
+            SetStatus($"Renamed '{current}' to '{finalName}'.");
+        }
+
+        private async System.Threading.Tasks.Task OnDeleteStyleAsync()
+        {
+            var current = SelectedStyle();
+            if (string.IsNullOrEmpty(current)) { SetStatus("Select a style to delete."); return; }
+
+            var confirm = MessageBox.Show(
+                this,
+                $"Delete style '{current}'? This cannot be undone.",
+                "AKML SQL — Format Styles",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning,
+                MessageBoxResult.No);
+            if (confirm != MessageBoxResult.Yes) return;
+
+            SetStatus(await _viewModel.DeleteSelectedAsync()
+                ? $"Deleted '{current}'."
+                : _viewModel.LastError ?? "Delete failed.");
         }
 
         private async System.Threading.Tasks.Task OnCopyStyleAsync()
@@ -301,20 +596,22 @@ namespace AkmlSql.Shell.Shared.Formatting
             AfterCreate(created, $"Copied '{source}'");
         }
 
-        private System.Threading.Tasks.Task OnSetActiveAsync()
+        private async System.Threading.Tasks.Task OnSetActiveAsync()
         {
             var name = SelectedStyle();
-            if (string.IsNullOrEmpty(name)) { SetStatus("Select a style to make active."); return System.Threading.Tasks.Task.CompletedTask; }
+            if (string.IsNullOrEmpty(name)) { SetStatus("Select a style to make active."); return; }
             if (_viewModel.SetActiveProfile(name!))
             {
                 SetStatus($"Active style: {name}");
                 UpdateStatusBarActiveStyle(name!);
+                // Spec 033 (T036) — the ✔ marker is computed at list-load time; refresh so it moves.
+                await _viewModel.RefreshProfilesAsync();
+                RestoreListSelection(name);
             }
             else
             {
                 SetStatus(_viewModel.LastError ?? "Could not set active style.");
             }
-            return System.Threading.Tasks.Task.CompletedTask;
         }
 
         private async System.Threading.Tasks.Task OnExportAsync()
@@ -553,54 +850,47 @@ namespace AkmlSql.Shell.Shared.Formatting
 
         private static DataTemplate BuildStyleListItemTemplate()
         {
-            // Programmatic DataTemplate. Renders: [lock-glyph if read-only]  Name  [Built-in badge]
-            const string xaml = @"
-<DataTemplate xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation'
-              xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml'>
-  <Grid Margin='4,3,4,3'>
-    <Grid.ColumnDefinitions>
-      <ColumnDefinition Width='Auto' />
-      <ColumnDefinition Width='*' />
-      <ColumnDefinition Width='Auto' />
-    </Grid.ColumnDefinitions>
-    <TextBlock Grid.Column='0' Text='&#x1F512; ' Margin='0,0,4,0'
-               Visibility='{Binding IsReadOnly, Converter={StaticResource BoolToVisibilityConverter}}' />
-    <TextBlock Grid.Column='1' Text='{Binding Name}' VerticalAlignment='Center' />
-    <TextBlock Grid.Column='2' Text='{Binding Kind}' Margin='6,0,0,0' Opacity='0.6'
-               FontSize='10' VerticalAlignment='Center' />
-  </Grid>
-</DataTemplate>";
-            try
-            {
-                // The {StaticResource BoolToVisibilityConverter} will fail without the converter
-                // resource. Fall back to a code-built template if XAML parse fails.
-                using var stream = new System.IO.MemoryStream(System.Text.Encoding.UTF8.GetBytes(xaml));
-                return (DataTemplate)System.Windows.Markup.XamlReader.Load(stream);
-            }
-            catch
-            {
-                // Code-built fallback — simpler, no converter dependency.
-                var template = new DataTemplate(typeof(StyleListItem));
-                var stackFactory = new FrameworkElementFactory(typeof(StackPanel));
-                stackFactory.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
-                stackFactory.SetValue(FrameworkElement.MarginProperty, new Thickness(4, 3, 4, 3));
+            // Spec 033 (T036) — CODE-BUILT template (the old XAML-string variant referenced an
+            // unregistered BoolToVisibilityConverter, so XamlReader always threw and the
+            // fallback silently dropped the lock glyph). Renders:
+            //   [✔ if active] [🔒 if read-only]  Name  [Kind badge]
+            // Uses WPF's built-in BooleanToVisibilityConverter instances — no resources needed.
+            var boolToVis = new System.Windows.Controls.BooleanToVisibilityConverter();
 
-                var nameFactory = new FrameworkElementFactory(typeof(TextBlock));
-                nameFactory.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding("Name"));
-                nameFactory.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
-                stackFactory.AppendChild(nameFactory);
+            var template = new DataTemplate(typeof(StyleListItem));
+            var stackFactory = new FrameworkElementFactory(typeof(StackPanel));
+            stackFactory.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
+            stackFactory.SetValue(FrameworkElement.MarginProperty, new Thickness(4, 3, 4, 3));
 
-                var kindFactory = new FrameworkElementFactory(typeof(TextBlock));
-                kindFactory.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding("Kind"));
-                kindFactory.SetValue(FrameworkElement.MarginProperty, new Thickness(6, 0, 0, 0));
-                kindFactory.SetValue(UIElement.OpacityProperty, 0.6);
-                kindFactory.SetValue(TextBlock.FontSizeProperty, 10.0);
-                kindFactory.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
-                stackFactory.AppendChild(kindFactory);
+            var activeFactory = new FrameworkElementFactory(typeof(TextBlock));
+            activeFactory.SetValue(TextBlock.TextProperty, "✔ ");
+            activeFactory.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
+            activeFactory.SetBinding(UIElement.VisibilityProperty,
+                new System.Windows.Data.Binding(nameof(StyleListItem.IsActive)) { Converter = boolToVis });
+            stackFactory.AppendChild(activeFactory);
 
-                template.VisualTree = stackFactory;
-                return template;
-            }
+            var lockFactory = new FrameworkElementFactory(typeof(TextBlock));
+            lockFactory.SetValue(TextBlock.TextProperty, "\U0001F512 ");
+            lockFactory.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
+            lockFactory.SetBinding(UIElement.VisibilityProperty,
+                new System.Windows.Data.Binding(nameof(StyleListItem.IsReadOnly)) { Converter = boolToVis });
+            stackFactory.AppendChild(lockFactory);
+
+            var nameFactory = new FrameworkElementFactory(typeof(TextBlock));
+            nameFactory.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding(nameof(StyleListItem.Name)));
+            nameFactory.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
+            stackFactory.AppendChild(nameFactory);
+
+            var kindFactory = new FrameworkElementFactory(typeof(TextBlock));
+            kindFactory.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding(nameof(StyleListItem.Kind)));
+            kindFactory.SetValue(FrameworkElement.MarginProperty, new Thickness(6, 0, 0, 0));
+            kindFactory.SetValue(UIElement.OpacityProperty, 0.6);
+            kindFactory.SetValue(TextBlock.FontSizeProperty, 10.0);
+            kindFactory.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
+            stackFactory.AppendChild(kindFactory);
+
+            template.VisualTree = stackFactory;
+            return template;
         }
 
         // -----------------------------------------------------------------
@@ -634,14 +924,9 @@ namespace AkmlSql.Shell.Shared.Formatting
             _settingsTree.SetResourceReference(Control.BackgroundProperty, ThemeTokens.SurfaceInput);
             _settingsTree.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
             _settingsTree.SetResourceReference(Control.BorderBrushProperty, ThemeTokens.BorderDefault);
-            _settingsTree.SelectedItemChanged += (_, e) =>
-            {
-                if (e.NewValue is FormatSettingNode setting)
-                {
-                    _viewModel.SelectedSettingId = setting.Id;
-                    UpdateRightTopForSetting(setting);
-                }
-            };
+            // (Spec 033 cleanup: the old SelectedItemChanged handler was dead code — SelectedItem
+            // is always a TreeViewItem, never a FormatSettingNode; the per-node Selected event
+            // wired in RebuildSettingsTreeFromSchema is the live path.)
             Grid.SetRow(_settingsTree, 1);
             panel.Children.Add(_settingsTree);
 
@@ -689,7 +974,36 @@ namespace AkmlSql.Shell.Shared.Formatting
             _settingControlsEmpty.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
             _settingControlsHost.Children.Add(_settingControlsEmpty);
             topScroll.Content = _settingControlsHost;
-            topBorder.Child = topScroll;
+
+            // Spec 033 (T016) — read-only hint shown while a built-in style is loaded.
+            _readOnlyHint = new Border
+            {
+                Visibility = Visibility.Collapsed,
+                Padding = new Thickness(Spacing.Sm),
+                Margin = new Thickness(0, 0, 0, Spacing.Sm),
+                CornerRadius = new CornerRadius(3),
+            };
+            _readOnlyHint.SetResourceReference(Panel.BackgroundProperty, ThemeTokens.SurfacePanel);
+            _readOnlyHint.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.BorderDefault);
+            _readOnlyHint.BorderThickness = new Thickness(1);
+            var readOnlyHintText = new TextBlock
+            {
+                Text = "This built-in style is read-only — use Copy to create an editable version.",
+                TextWrapping = TextWrapping.Wrap,
+                FontFamily = Typography.UiFont,
+                FontSize = Typography.Small,
+            };
+            readOnlyHintText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+            _readOnlyHint.Child = readOnlyHintText;
+
+            var topStack = new Grid();
+            topStack.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            topStack.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            Grid.SetRow(_readOnlyHint, 0);
+            topStack.Children.Add(_readOnlyHint);
+            Grid.SetRow(topScroll, 1);
+            topStack.Children.Add(topScroll);
+            topBorder.Child = topStack;
             Grid.SetRow(topBorder, 0);
             panel.Children.Add(topBorder);
 
@@ -765,11 +1079,55 @@ namespace AkmlSql.Shell.Shared.Formatting
                 ToolTip = _viewModel.HasCurrentQuery ? null : "No active SQL editor when this dialog opened.",
             };
             rbCurrent.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
-            rbSample.Checked += (_, _) => _viewModel.PreviewSourceMode = FormatPreviewSource.Sample;
-            rbCurrent.Checked += (_, _) => _viewModel.PreviewSourceMode = FormatPreviewSource.CurrentQuery;
+            rbSample.Checked += (_, _) =>
+            {
+                _viewModel.PreviewSourceMode = FormatPreviewSource.Sample;
+                if (_editSampleToggle != null) _editSampleToggle.IsEnabled = true;
+            };
+            rbCurrent.Checked += (_, _) =>
+            {
+                _viewModel.PreviewSourceMode = FormatPreviewSource.CurrentQuery;
+                // Sample editing only applies to the Sample source.
+                if (_editSampleToggle != null)
+                {
+                    _editSampleToggle.IsChecked = false;
+                    _editSampleToggle.IsEnabled = false;
+                }
+            };
+
+            // Spec 033 (T025 / FR-014) — edit the persisted preview sample in place. While
+            // checked, the preview box shows the RAW sample (editable, persisted atomically
+            // via the PreviewSample setter on every change); unchecking restores the live
+            // formatted preview.
+            _editSampleToggle = new CheckBox
+            {
+                Content = "Edit sample",
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(Spacing.Md, 0, 0, 0),
+                FontFamily = Typography.UiFont,
+                FontSize = Typography.Small,
+                ToolTip = "Edit the sample SQL the preview formats. Changes persist across sessions.",
+            };
+            _editSampleToggle.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
+            _editSampleToggle.Checked += (_, _) =>
+            {
+                if (_previewTextBox == null) return;
+                _editingSample = true;
+                _previewTextBox.IsReadOnly = false;
+                _previewTextBox.Text = _viewModel.PreviewSample;
+            };
+            _editSampleToggle.Unchecked += (_, _) =>
+            {
+                if (_previewTextBox == null) return;
+                _editingSample = false;
+                _previewTextBox.IsReadOnly = true;
+                _previewTextBox.Text = _viewModel.PreviewText;
+            };
+
             sourceStack.Children.Add(sourceLabel);
             sourceStack.Children.Add(rbSample);
             sourceStack.Children.Add(rbCurrent);
+            sourceStack.Children.Add(_editSampleToggle);
             sourceBar.Child = sourceStack;
             Grid.SetRow(sourceBar, 0);
             bottomStack.Children.Add(sourceBar);
@@ -811,6 +1169,13 @@ namespace AkmlSql.Shell.Shared.Formatting
                 Text = "// Live preview will appear after the schema loads and a profile is selected.",
             };
             _previewTextBox.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
+            // Spec 033 (T025) — while the Edit-sample toggle is on, edits ARE the sample:
+            // the PreviewSample setter persists atomically and re-queues the debounced preview.
+            _previewTextBox.TextChanged += (_, _) =>
+            {
+                if (_editingSample && _previewTextBox != null)
+                    _viewModel.PreviewSample = _previewTextBox.Text;
+            };
             Grid.SetRow(_previewTextBox, 2);
             bottomStack.Children.Add(_previewTextBox);
 
@@ -833,74 +1198,72 @@ namespace AkmlSql.Shell.Shared.Formatting
 
             try
             {
-                using var doc = JsonDocument.Parse(schemaJson);
-                var root = doc.RootElement;
-                if (!root.TryGetProperty("groups", out var groupsEl) || !root.TryGetProperty("settings", out var settingsEl))
+                // Spec 033 (T022) — parsing lives in the testable FormatStylesSchemaModel;
+                // this method only renders WPF nodes from the model.
+                var model = FormatStylesSchemaModel.Parse(schemaJson);
+
+                if (model.Categorized)
                 {
-                    return;
-                }
-
-                // Index settings by group for one-pass tree construction
-                var settingsByGroup = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.List<FormatSettingNode>>(StringComparer.Ordinal);
-                foreach (var s in settingsEl.EnumerateArray())
-                {
-                    var groupId = s.TryGetProperty("groupId", out var g) ? g.GetString() ?? string.Empty : string.Empty;
-                    if (!settingsByGroup.TryGetValue(groupId, out var list))
+                    // v2 — SQL Prompt's 2-level hierarchy (FR-012): categories expanded,
+                    // groups collapsed so the five-category overview stays readable.
+                    foreach (var category in model.Categories)
                     {
-                        list = new System.Collections.Generic.List<FormatSettingNode>();
-                        settingsByGroup[groupId] = list;
-                    }
-                    list.Add(new FormatSettingNode
-                    {
-                        Id = s.TryGetProperty("id", out var idEl) ? idEl.GetString() ?? string.Empty : string.Empty,
-                        DisplayName = s.TryGetProperty("displayName", out var nameEl) ? nameEl.GetString() ?? string.Empty : string.Empty,
-                        Type = s.TryGetProperty("type", out var typeEl) ? typeEl.GetString() ?? "Other" : "Other",
-                        Status = s.TryGetProperty("status", out var statusEl) ? statusEl.GetString() ?? "Implemented" : "Implemented",
-                        SqlPromptKey = s.TryGetProperty("sqlPromptKey", out var spEl) && spEl.ValueKind != JsonValueKind.Null ? spEl.GetString() : null,
-                        DefaultJson = s.TryGetProperty("default", out var defEl) ? defEl.GetRawText() : "null",
-                    });
-                }
-
-                foreach (var g in groupsEl.EnumerateArray())
-                {
-                    var groupId = g.TryGetProperty("id", out var idEl) ? idEl.GetString() ?? string.Empty : string.Empty;
-                    var displayName = g.TryGetProperty("displayName", out var nameEl) ? nameEl.GetString() ?? groupId : groupId;
-
-                    var groupNode = new TreeViewItem
-                    {
-                        Header = displayName,
-                        IsExpanded = true,
-                    };
-                    groupNode.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
-
-                    if (settingsByGroup.TryGetValue(groupId, out var children))
-                    {
-                        foreach (var child in children)
+                        var categoryNode = new TreeViewItem
                         {
-                            var childNode = new TreeViewItem { Header = BuildSettingNodeHeader(child) };
-                            childNode.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
-                            childNode.Tag = child;
-                            childNode.Selected += (_, e) =>
-                            {
-                                // TreeView's SelectedItem is the data; but our items hold UIElements
-                                // as Header. Track via Tag so SelectedItemChanged sees the data.
-                                if (childNode.Tag is FormatSettingNode node)
-                                {
-                                    _viewModel.SelectedSettingId = node.Id;
-                                    UpdateRightTopForSetting(node);
-                                }
-                                e.Handled = true;
-                            };
-                            groupNode.Items.Add(childNode);
-                        }
+                            Header = category.DisplayName,
+                            IsExpanded = true,
+                            FontWeight = Typography.WeightSemiBold,
+                        };
+                        categoryNode.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
+                        foreach (var group in category.Groups)
+                            categoryNode.Items.Add(BuildGroupNode(group, expanded: false));
+                        _settingsTree.Items.Add(categoryNode);
                     }
-                    _settingsTree.Items.Add(groupNode);
+                }
+                else
+                {
+                    // v1 schema (older engine) — flat rendering, unchanged behavior.
+                    foreach (var group in model.FlatGroups)
+                        _settingsTree.Items.Add(BuildGroupNode(group, expanded: true));
                 }
             }
             catch (Exception ex)
             {
                 Log.Warning(ex, "FormatStylesEditor: failed to parse schema JSON");
             }
+        }
+
+        private TreeViewItem BuildGroupNode(FormatStylesSchemaModel.Group group, bool expanded)
+        {
+            var groupNode = new TreeViewItem
+            {
+                Header = group.DisplayName,
+                IsExpanded = expanded,
+                // Counteract the semi-bold category FontWeight (inherited property).
+                FontWeight = FontWeights.Normal,
+            };
+            groupNode.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
+
+            foreach (var child in group.Settings)
+            {
+                var childNode = new TreeViewItem { Header = BuildSettingNodeHeader(child) };
+                childNode.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
+                childNode.Tag = child;
+                childNode.Selected += (_, e) =>
+                {
+                    // TreeView's SelectedItem is the data; but our items hold UIElements
+                    // as Header. Track via Tag so SelectedItemChanged sees the data.
+                    if (childNode.Tag is FormatSettingNode node)
+                    {
+                        _viewModel.SelectedSettingId = node.Id;
+                        UpdateRightTopForSetting(node);
+                    }
+                    e.Handled = true;
+                };
+                groupNode.Items.Add(childNode);
+            }
+
+            return groupNode;
         }
 
         private FrameworkElement BuildSettingNodeHeader(FormatSettingNode setting)
@@ -966,6 +1329,8 @@ namespace AkmlSql.Shell.Shared.Formatting
         {
             if (_settingControlsHost == null) return;
 
+            _currentSettingNode = setting; // spec 033 — re-rendered after each style load
+
             _settingControlsHost.Children.Clear();
 
             // Header — setting name + Unsupported badge (if applicable)
@@ -1005,6 +1370,21 @@ namespace AkmlSql.Shell.Shared.Formatting
             metaText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
             _settingControlsHost.Children.Add(metaText);
 
+            // Spec 033 (T023) — schema-v2 per-setting description (absent on v1 engines).
+            if (!string.IsNullOrWhiteSpace(setting.Description))
+            {
+                var descText = new TextBlock
+                {
+                    Text = setting.Description,
+                    FontFamily = Typography.UiFont,
+                    FontSize = Typography.Body,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 0, 0, Spacing.Md),
+                };
+                descText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+                _settingControlsHost.Children.Add(descText);
+            }
+
             // Type-driven control
             var isDisabled = string.Equals(setting.Status, "Unsupported", StringComparison.OrdinalIgnoreCase);
             var currentValue = _viewModel.GetWorkingValue(setting.Id);
@@ -1043,6 +1423,8 @@ namespace AkmlSql.Shell.Shared.Formatting
                 case "Int":
                 {
                     var initial = currentValue?.ToString() ?? setting.DefaultJson.Trim('"');
+
+                    var row = new StackPanel { Orientation = Orientation.Horizontal };
                     var textBox = new TextBox
                     {
                         Text = initial,
@@ -1056,24 +1438,85 @@ namespace AkmlSql.Shell.Shared.Formatting
                     textBox.SetResourceReference(Control.BackgroundProperty, ThemeTokens.SurfaceInput);
                     textBox.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
                     textBox.SetResourceReference(Control.BorderBrushProperty, ThemeTokens.BorderDefault);
+                    row.Children.Add(textBox);
+
+                    // Spec 033 (T023) — visible range hint when the v2 schema declares one.
+                    if (setting.Min != null || setting.Max != null)
+                    {
+                        var rangeHint = new TextBlock
+                        {
+                            Text = $"({setting.Min?.ToString() ?? "…"} – {setting.Max?.ToString() ?? "…"})",
+                            FontFamily = Typography.UiFont,
+                            FontSize = Typography.Small,
+                            VerticalAlignment = VerticalAlignment.Center,
+                            Margin = new Thickness(Spacing.Sm, 0, 0, 0),
+                        };
+                        rangeHint.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+                        row.Children.Add(rangeHint);
+                    }
+
                     if (!isDisabled)
                     {
+                        // Semantic invalid-input red is intentionally hardcoded (theme-independent).
+                        var invalidBrush = Freeze(new SolidColorBrush(System.Windows.Media.Color.FromRgb(0xE5, 0x14, 0x00)));
                         textBox.TextChanged += (_, _) =>
                         {
-                            if (int.TryParse(textBox.Text, out var n))
+                            var valid = int.TryParse(textBox.Text, out var n)
+                                        && (setting.Min == null || n >= setting.Min)
+                                        && (setting.Max == null || n <= setting.Max);
+                            if (valid)
                             {
-                                _viewModel.SetWorkingValue(setting.Id, n);
+                                textBox.SetResourceReference(Control.BorderBrushProperty, ThemeTokens.BorderDefault);
+                                textBox.ToolTip = null;
+                                _viewModel.SetWorkingValue(setting.Id, int.Parse(textBox.Text));
+                            }
+                            else
+                            {
+                                // Rejected before preview/save — the last valid value stays effective.
+                                textBox.BorderBrush = invalidBrush;
+                                textBox.ToolTip = setting.Min != null || setting.Max != null
+                                    ? $"Enter a whole number between {setting.Min?.ToString() ?? "-∞"} and {setting.Max?.ToString() ?? "∞"}."
+                                    : "Enter a whole number.";
                             }
                         };
                     }
-                    return textBox;
+                    return row;
                 }
                 case "Enum":
                 {
                     var initial = currentValue?.ToString() ?? setting.DefaultJson.Trim('"');
-                    // No AllowedEnumValues at this schema level yet — use a free-text TextBox,
-                    // but mark string fields visually with a non-numeric width so they look
-                    // different from Int controls.
+
+                    // Spec 033 (T023) — v2 schemas carry AllowedEnumValues: render a themed
+                    // ComboBox (plain-string items per the ComboBoxTheming contract; the
+                    // selected entry persists verbatim, exact spelling). v1 schemas keep the
+                    // legacy free-text TextBox.
+                    if (setting.AllowedEnumValues is { Count: > 0 } allowed)
+                    {
+                        var combo = new ComboBox
+                        {
+                            Width = 240,
+                            HorizontalAlignment = HorizontalAlignment.Left,
+                            IsEnabled = !isDisabled,
+                            FontFamily = Typography.UiFont,
+                            FontSize = Typography.Body,
+                        };
+                        foreach (var v in allowed) combo.Items.Add(v);
+                        // An imported profile may hold a value outside the declared set —
+                        // surface it as a selectable extra rather than lying about the state.
+                        if (!allowed.Contains(initial, StringComparer.Ordinal)) combo.Items.Insert(0, initial);
+                        combo.SelectedItem = initial;
+                        Ui.Theme.ComboBoxTheming.Apply(combo);
+                        if (!isDisabled)
+                        {
+                            combo.SelectionChanged += (_, _) =>
+                            {
+                                if (combo.SelectedItem is string s)
+                                    _viewModel.SetWorkingValue(setting.Id, s);
+                            };
+                        }
+                        return combo;
+                    }
+
                     var textBox = new TextBox
                     {
                         Text = initial,
@@ -1145,16 +1588,18 @@ namespace AkmlSql.Shell.Shared.Formatting
             else if (e.PropertyName == nameof(FormatStylesEditorViewModel.PreviewText) && _previewTextBox != null)
             {
                 // Marshal to UI thread — preview refresh fires from a background Task.
+                // Spec 033 (T025): while the user is editing the sample, the box shows the RAW
+                // sample — a formatted-preview refresh must not clobber their typing.
                 if (!System.Windows.Application.Current.Dispatcher.CheckAccess())
                 {
                     System.Windows.Application.Current.Dispatcher.BeginInvoke(new Action(() =>
                     {
-                        _previewTextBox.Text = _viewModel.PreviewText;
+                        if (!_editingSample) _previewTextBox.Text = _viewModel.PreviewText;
                     }));
                 }
                 else
                 {
-                    _previewTextBox.Text = _viewModel.PreviewText;
+                    if (!_editingSample) _previewTextBox.Text = _viewModel.PreviewText;
                 }
             }
             else if (e.PropertyName == nameof(FormatStylesEditorViewModel.PreviewValidationError))
@@ -1168,6 +1613,13 @@ namespace AkmlSql.Shell.Shared.Formatting
                 {
                     UpdatePreviewWarningBar();
                 }
+            }
+            else if (e.PropertyName == nameof(FormatStylesEditorViewModel.IsDirty)
+                     || e.PropertyName == nameof(FormatStylesEditorViewModel.IsSelectedReadOnly))
+            {
+                // Spec 033 — both flip on the UI thread (SetWorkingValue / SelectProfileAsync).
+                UpdateSaveButtonState();
+                UpdateReadOnlyState();
             }
         }
 
@@ -1275,5 +1727,11 @@ namespace AkmlSql.Shell.Shared.Formatting
         public string Status { get; set; } = "Implemented";
         public string? SqlPromptKey { get; set; }
         public string DefaultJson { get; set; } = "null";
+
+        // Spec 033 (T022) — schema-v2 enrichment; all null when talking to a v1 engine.
+        public string? Description { get; set; }
+        public System.Collections.Generic.List<string>? AllowedEnumValues { get; set; }
+        public int? Min { get; set; }
+        public int? Max { get; set; }
     }
 }

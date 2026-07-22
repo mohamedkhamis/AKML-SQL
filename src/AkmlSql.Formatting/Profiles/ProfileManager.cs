@@ -84,6 +84,44 @@ public class ProfileManager
     }
 
     /// <summary>
+    /// Spec 033 (ProfileGet) — reads the stored profile file text VERBATIM, custom-first then
+    /// built-in, without deserializing. Serializing a loaded profile bumps
+    /// <c>Metadata.Modified</c> and drops unknown fields nested inside option groups, so the
+    /// raw text is the only faithful merge base for edit-save flows.
+    /// </summary>
+    /// <param name="name">Profile display name (same resolution semantics as <see cref="Load"/>).</param>
+    /// <param name="json">The exact file text, or empty when not found.</param>
+    /// <param name="isBuiltIn">
+    /// True only when the name resolved from the built-in directory with no custom shadow —
+    /// derived from the resolving directory, never from the JSON's own <c>isBuiltIn</c> field
+    /// (a custom file claiming built-in status must stay editable).
+    /// </param>
+    /// <returns>True when a stored profile with the given name exists.</returns>
+    public bool TryReadRaw(string name, out string json, out bool isBuiltIn)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        json = string.Empty;
+        isBuiltIn = false;
+
+        var customFile = GetCustomFilePath(name);
+        if (File.Exists(customFile))
+        {
+            json = File.ReadAllText(customFile);
+            return true;
+        }
+
+        var builtInFile = GetBuiltInFilePath(name);
+        if (File.Exists(builtInFile))
+        {
+            json = File.ReadAllText(builtInFile);
+            isBuiltIn = true;
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Saves a profile to the custom profiles directory.
     /// Uses atomic write (temp file + rename) to prevent corruption.
     /// Built-in profiles cannot be overwritten.
@@ -178,6 +216,92 @@ public class ProfileManager
 
         File.Delete(customFile);
         return true;
+    }
+
+    /// <summary>
+    /// Spec 033 (ProfileRename) — renames a CUSTOM profile: rewrites <c>metadata.name</c>
+    /// (+<c>modified</c>) via a raw JsonNode edit (no full round-trip, so unknown nested
+    /// fields survive), writes the new file atomically, removes the old one, and moves the
+    /// <c>&lt;name&gt;.source.json</c> import sidecar. <c>List()</c> keys on the JSON name
+    /// while <c>Load()</c> resolves by filename — this keeps them consistent in one operation.
+    /// </summary>
+    /// <returns>The final display name persisted in the profile metadata.</returns>
+    /// <exception cref="InvalidOperationException">Built-in source, or name collision.</exception>
+    /// <exception cref="FileNotFoundException">No custom profile with <paramref name="oldName"/>.</exception>
+    public string Rename(string oldName, string newName)
+    {
+        ArgumentNullException.ThrowIfNull(oldName);
+        ArgumentNullException.ThrowIfNull(newName);
+
+        var finalName = newName.Trim();
+        var sanitizedNew = SanitizeFileName(finalName); // throws on empty/hostile
+        var sanitizedOld = SanitizeFileName(oldName);
+
+        var oldFile = GetCustomFilePath(oldName);
+        ValidatePathWithinBase(oldFile, _customProfilesPath);
+        if (!File.Exists(oldFile))
+        {
+            if (File.Exists(GetBuiltInFilePath(oldName)))
+                throw new InvalidOperationException($"Cannot rename built-in profile '{oldName}'. Duplicate it first.");
+            throw new FileNotFoundException($"Profile '{oldName}' not found.", oldName);
+        }
+
+        // NTFS File.Exists is case-insensitive: a case-only rename would see its own source as
+        // the "existing" target — allow it; everything else collides.
+        var caseOnly = string.Equals(sanitizedOld, sanitizedNew, StringComparison.OrdinalIgnoreCase);
+        if (!caseOnly)
+        {
+            if (File.Exists(GetCustomFilePath(finalName)))
+                throw new InvalidOperationException($"A profile named '{finalName}' already exists.");
+            if (File.Exists(GetBuiltInFilePath(finalName)))
+                throw new InvalidOperationException($"'{finalName}' is a built-in style name and cannot be used.");
+        }
+
+        var newFile = GetCustomFilePath(finalName);
+        ValidatePathWithinBase(newFile, _customProfilesPath);
+
+        // Rewrite metadata.name/modified on the RAW text (never Deserialize→Serialize: that
+        // bumps nothing we want and drops unknown nested fields).
+        var root = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(oldFile)) as System.Text.Json.Nodes.JsonObject
+                   ?? throw new InvalidOperationException($"Profile '{oldName}' is not a JSON object.");
+        if (root["metadata"] is not System.Text.Json.Nodes.JsonObject metadata)
+        {
+            metadata = new System.Text.Json.Nodes.JsonObject();
+            root["metadata"] = metadata;
+        }
+        metadata["name"] = finalName;
+        metadata["modified"] = DateTime.UtcNow;
+        var updated = root.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+
+        if (caseOnly)
+        {
+            // Direct move fixes the filename casing; then rewrite content atomically in place.
+            if (!string.Equals(oldFile, newFile, StringComparison.Ordinal))
+                File.Move(oldFile, newFile);
+            var tmp = newFile + ".tmp";
+            File.WriteAllText(tmp, updated);
+            File.Move(tmp, newFile, overwrite: true);
+        }
+        else
+        {
+            // New name appears complete before the old disappears — a crash in between leaves
+            // both files present (recoverable), never zero.
+            var tmp = newFile + ".tmp";
+            File.WriteAllText(tmp, updated);
+            File.Move(tmp, newFile, overwrite: true);
+            File.Delete(oldFile);
+        }
+
+        // Move the verbatim import sidecar so lossless re-import keeps working (spec 031).
+        var oldSidecar = Path.Combine(_customProfilesPath, sanitizedOld + ".source.json");
+        if (File.Exists(oldSidecar))
+        {
+            var newSidecar = GetCustomArtifactPath(finalName, ".source.json");
+            if (!string.Equals(oldSidecar, newSidecar, StringComparison.Ordinal))
+                File.Move(oldSidecar, newSidecar);
+        }
+
+        return finalName;
     }
 
     /// <summary>

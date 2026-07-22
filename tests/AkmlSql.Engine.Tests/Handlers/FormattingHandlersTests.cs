@@ -136,6 +136,118 @@ public sealed class FormattingHandlersTests : IDisposable
             (new ProfileImportHandler(_inner).RequestMessageType, new ProfileImportHandler(_inner).ResponseMessageType));
         Assert.Equal((MessageTypes.RequestStyleEditorSchema, MessageTypes.StyleEditorSchemaResult),
             (new StyleEditorSchemaHandler(_inner).RequestMessageType, new StyleEditorSchemaHandler(_inner).ResponseMessageType));
+        Assert.Equal((MessageTypes.ProfileGet, MessageTypes.ProfileGetResult),
+            (new ProfileGetHandler(_inner).RequestMessageType, new ProfileGetHandler(_inner).ResponseMessageType));
+        Assert.Equal((MessageTypes.ProfileRename, MessageTypes.ProfileRenameResult),
+            (new ProfileRenameHandler(_inner).RequestMessageType, new ProfileRenameHandler(_inner).ResponseMessageType));
+    }
+
+    // ── Spec 033 (T006): ProfileGet handler + ProfileSave 1 MB cap ────────────────────
+
+    [Fact]
+    public async Task ProfileGetHandler_returns_raw_text_for_stored_profile()
+    {
+        const string raw = "{\"metadata\":{\"name\":\"GetMe\"},\"whitespace\":{\"futureKey\":1},\"rootExtra\":true}";
+        File.WriteAllText(Path.Combine(_customDir, "GetMe.akmlstyle"), raw);
+
+        var router = new RpcRouter();
+        router.Register(new ProfileGetHandler(_inner));
+        var ctx = CreateContext();
+
+        await using var transport = new InProcessTransport();
+        transport.RequestReceived += (msg, ct) => router.RouteAsync(msg, ctx, ct);
+        await transport.StartAsync(CancellationToken.None);
+
+        var response = await transport.SendAsync(new RpcMessage
+        {
+            MessageType = MessageTypes.ProfileGet,
+            RequestId = 7,
+            Payload = MessagePackSerializer.Serialize(new ProfileGetRequest { Name = "GetMe" }),
+        }, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.Equal(MessageTypes.ProfileGetResult, response!.MessageType);
+        var typed = MessagePackSerializer.Deserialize<ProfileGetResponse>(response.Payload!);
+        Assert.True(typed.Success);
+        Assert.Equal("GetMe", typed.Name);
+        Assert.Equal(raw, typed.ProfileJson); // VERBATIM — unknown nested + root keys intact
+        Assert.False(typed.IsBuiltIn);
+    }
+
+    [Fact]
+    public void ProfileGetHandler_unknown_name_fails_without_creating_anything()
+    {
+        var response = _inner.HandleProfileGet(new ProfileGetRequest { Name = "NoSuchStyle" });
+
+        Assert.False(response.Success);
+        Assert.Contains("NoSuchStyle", response.ErrorMessage);
+        Assert.Null(response.ProfileJson);
+        Assert.Empty(Directory.GetFiles(_customDir));
+        Assert.Empty(Directory.GetFiles(_builtInDir));
+    }
+
+    [Fact]
+    public void ProfileGetHandler_builtin_reports_read_only()
+    {
+        File.WriteAllText(Path.Combine(_builtInDir, "Default.akmlstyle"),
+            "{\"metadata\":{\"name\":\"Default\"}}");
+
+        var response = _inner.HandleProfileGet(new ProfileGetRequest { Name = "Default" });
+
+        Assert.True(response.Success);
+        Assert.True(response.IsBuiltIn);
+    }
+
+    [Fact]
+    public void ProfileSaveHandler_rejects_json_over_1MB_without_writing()
+    {
+        var oversized = "{\"metadata\":{\"name\":\"Big\"},\"pad\":\"" + new string('x', 1024 * 1024) + "\"}";
+
+        var response = _inner.HandleProfileSave(new ProfileSaveRequest { Name = "Big", ProfileJson = oversized });
+
+        Assert.False(response.Success);
+        Assert.Contains("1 MB", response.ErrorMessage);
+        Assert.Empty(Directory.GetFiles(_customDir));
+    }
+
+    // ── Spec 033 (T029): ProfileRename handler + ProfileDelete honesty fix ───────────
+
+    [Fact]
+    public void ProfileRenameHandler_renames_custom_profile()
+    {
+        File.WriteAllText(Path.Combine(_customDir, "OldName.akmlstyle"),
+            "{\"metadata\":{\"name\":\"OldName\"}}");
+
+        var response = _inner.HandleProfileRename(new ProfileRenameRequest { OldName = "OldName", NewName = "NewName" });
+
+        Assert.True(response.Success, response.ErrorMessage);
+        Assert.Equal("NewName", response.NewName);
+        Assert.False(File.Exists(Path.Combine(_customDir, "OldName.akmlstyle")));
+        Assert.True(File.Exists(Path.Combine(_customDir, "NewName.akmlstyle")));
+    }
+
+    [Fact]
+    public void ProfileRenameHandler_rejects_builtin_and_collision()
+    {
+        File.WriteAllText(Path.Combine(_builtInDir, "Default.akmlstyle"), "{\"metadata\":{\"name\":\"Default\"}}");
+        File.WriteAllText(Path.Combine(_customDir, "Mine.akmlstyle"), "{\"metadata\":{\"name\":\"Mine\"}}");
+
+        var builtin = _inner.HandleProfileRename(new ProfileRenameRequest { OldName = "Default", NewName = "X" });
+        Assert.False(builtin.Success);
+        Assert.Contains("built-in", builtin.ErrorMessage);
+
+        var collision = _inner.HandleProfileRename(new ProfileRenameRequest { OldName = "Mine", NewName = "Default" });
+        Assert.False(collision.Success);
+        Assert.True(File.Exists(Path.Combine(_customDir, "Mine.akmlstyle"))); // untouched on failure
+    }
+
+    [Fact]
+    public void ProfileDeleteHandler_reports_failure_for_nonexistent_profile()
+    {
+        var response = _inner.HandleProfileDelete(new ProfileDeleteRequest { Name = "Ghost" });
+
+        Assert.False(response.Success);
+        Assert.Contains("Ghost", response.ErrorMessage);
     }
 
     [Fact]
