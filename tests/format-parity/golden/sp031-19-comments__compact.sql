@@ -1,10 +1,9 @@
 -- daily revenue rollup
-select o.orderdate, sum(o.freight) as freight from dbo.orders o group by o.orderdate;
+SELECT o.orderdate, SUM(o.freight) AS freight FROM dbo.orders o GROUP BY o.orderdate;
 /*******************************
  * legacy calculation block    *
  * kept for reference          *
  *******************************/
 /* multi
    line
-   note */
-select 1;
+   note */SELECT 1;
