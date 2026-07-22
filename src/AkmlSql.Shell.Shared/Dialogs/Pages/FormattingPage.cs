@@ -41,9 +41,10 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 "Show active style in status bar", "Display the active formatting style in the status bar");
             ctx.RegisterSearch("Show active style in status bar", "Display the active formatting style in the status bar", "Toggle", rowShowProfile);
 
+            // Spec 033 (US4) — the trigger toggles live under "Behavior" (SQL Prompt-exact
+            // mockup); "Safety & Validation" remains its own group below.
             ctx.Rows.AddGroupSeparator(panel);
             ctx.Rows.AddGroupHeader(panel, "Behavior");
-            ctx.Rows.AddGroupHeader(panel, "Triggers");
 
             var (rowEnabled, chkEnabled) = ctx.Rows.AddToggle(panel,
                 "Enable SQL formatter", "Master switch for all formatting features");
@@ -149,9 +150,21 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             _respectNoformat.IsChecked = f.RespectNoformat;
             _semanticValidation.IsChecked = f.SemanticValidation;
 
-            // Seed the dropdown synchronously with the persisted active style so it is never empty,
-            // then fill the full list from the engine (custom + built-in) asynchronously.
-            var active = string.IsNullOrWhiteSpace(f.ActiveProfile) ? "Khamis Style" : f.ActiveProfile;
+            SeedActiveStyle(f.ActiveProfile);
+        }
+
+        /// <summary>The shipped default when config carries no active style (single source:
+        /// the <see cref="FormatterSettings.ActiveProfile"/> initializer).</summary>
+        private static readonly string DefaultActiveProfile = new FormatterSettings().ActiveProfile;
+
+        /// <summary>
+        /// Seeds the dropdown synchronously with the persisted active style so it is never
+        /// empty, then fills the full list from the engine (custom + built-in) asynchronously.
+        /// Shared by <see cref="Load"/> and <see cref="RefreshActiveStyleFromDisk"/>.
+        /// </summary>
+        private void SeedActiveStyle(string? persisted)
+        {
+            var active = string.IsNullOrWhiteSpace(persisted) ? DefaultActiveProfile : persisted!;
             SetItems(new[] { active }, active);
             _ = PopulateProfilesAsync(active);
         }
@@ -185,10 +198,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         {
             try
             {
-                var f = ConfigManager.Load().Formatter;
-                var active = string.IsNullOrWhiteSpace(f.ActiveProfile) ? "Khamis Style" : f.ActiveProfile;
-                SetItems(new[] { active }, active);
-                _ = PopulateProfilesAsync(active);
+                SeedActiveStyle(ConfigManager.Load().Formatter.ActiveProfile);
             }
             catch (Exception ex)
             {

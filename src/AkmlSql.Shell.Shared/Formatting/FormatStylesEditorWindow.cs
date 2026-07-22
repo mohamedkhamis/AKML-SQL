@@ -54,15 +54,23 @@ namespace AkmlSql.Shell.Shared.Formatting
         private bool _suppressSelectionChanged;
         private bool _closeConfirmed;
 
-        // Spec 033 (T025 / FR-014, closes spec-020 T069) — in-window preview-sample editing
+        // Spec 033 (T025 / FR-014, closes spec-020 T069) — in-window preview-sample editing.
+        // Editing mode is DERIVED from the toggle (no shadow flag to desync); edits commit in
+        // one batch on toggle-off / close instead of per keystroke (each PreviewSample set is
+        // ~5 synchronous filesystem ops on the dispatcher thread plus a discarded preview run).
         private CheckBox? _editSampleToggle;
-        private bool _editingSample;
+        private bool EditingSample => _editSampleToggle?.IsChecked == true;
 
         private static System.Windows.Media.SolidColorBrush Freeze(System.Windows.Media.SolidColorBrush b)
         {
             b.Freeze();
             return b;
         }
+
+        // Semantic invalid-input red (theme-independent per CLAUDE.md); hoisted — control
+        // builders run on every tree-node click.
+        private static readonly System.Windows.Media.SolidColorBrush InvalidInputBrush =
+            Freeze(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xE5, 0x14, 0x00)));
 
         public FormatStylesEditorWindow(FormatStylesEditorViewModel viewModel)
         {
@@ -301,7 +309,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             var view = new System.Windows.Data.ListCollectionView(_viewModel.Profiles);
             view.GroupDescriptions!.Add(new System.Windows.Data.PropertyGroupDescription(nameof(StyleListItem.Section)));
             view.SortDescriptions.Add(new System.ComponentModel.SortDescription(
-                nameof(StyleListItem.Section), System.ComponentModel.ListSortDirection.Descending)); // "Your…" > "Built-in…"
+                nameof(StyleListItem.IsReadOnly), System.ComponentModel.ListSortDirection.Ascending)); // editable first — robust to section-label rewording
             view.SortDescriptions.Add(new System.ComponentModel.SortDescription(
                 nameof(StyleListItem.Name), System.ComponentModel.ListSortDirection.Ascending));
             _styleList.ItemsSource = view;
@@ -412,8 +420,8 @@ namespace AkmlSql.Shell.Shared.Formatting
                 return;
             }
 
-            UpdateReadOnlyState();
-            UpdateSaveButtonState();
+            // (Save-button + read-only visuals sync via the IsDirty/IsSelectedReadOnly
+            // PropertyChanged handler — no direct calls needed here.)
             RefreshVisibleSettingControls();
             SetStatus(_viewModel.IsSelectedReadOnly
                 ? $"'{item.Name}' is built-in (read-only) — copy this style to edit it."
@@ -457,46 +465,51 @@ namespace AkmlSql.Shell.Shared.Formatting
                 _readOnlyHint.Visibility = _viewModel.IsSelectedReadOnly ? Visibility.Visible : Visibility.Collapsed;
         }
 
-        /// <summary>Save / Discard / Cancel prompt for unsaved edits (style switch + window close).</summary>
-        private System.Threading.Tasks.Task<StyleSwitchDecision> PromptStyleSwitchDecisionAsync()
+        /// <summary>The ONE Save / Discard / Cancel prompt (style switch + window close share it).</summary>
+        private StyleSwitchDecision PromptSaveDecision(string message)
         {
             var result = MessageBox.Show(
                 this,
-                $"Save changes to '{_viewModel.LoadedProfileName ?? "this style"}'?",
+                message,
                 "AKML SQL — Format Styles",
                 MessageBoxButton.YesNoCancel,
                 MessageBoxImage.Question);
 
-            return System.Threading.Tasks.Task.FromResult(result switch
+            return result switch
             {
                 MessageBoxResult.Yes => StyleSwitchDecision.Save,
                 MessageBoxResult.No => StyleSwitchDecision.Discard,
                 _ => StyleSwitchDecision.Cancel,
-            });
+            };
+        }
+
+        private System.Threading.Tasks.Task<StyleSwitchDecision> PromptStyleSwitchDecisionAsync() =>
+            System.Threading.Tasks.Task.FromResult(
+                PromptSaveDecision($"Save changes to '{_viewModel.LoadedProfileName ?? "this style"}'?"));
+
+        /// <summary>Persists the in-box sample text if the Edit-sample toggle is active.</summary>
+        private void CommitSampleEdit()
+        {
+            if (_previewTextBox != null)
+                _viewModel.PreviewSample = _previewTextBox.Text; // setter persists atomically + queues one preview
         }
 
         /// <summary>Spec 033 — closing over unsaved edits prompts; Save defers the close until the write lands.</summary>
         protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
         {
+            if (EditingSample) CommitSampleEdit(); // sample edits survive close without per-keystroke writes
+
             if (!_closeConfirmed && _viewModel.IsDirty && !_viewModel.IsSelectedReadOnly)
             {
-                var result = MessageBox.Show(
-                    this,
-                    $"Save changes to '{_viewModel.LoadedProfileName ?? "this style"}' before closing?",
-                    "AKML SQL — Format Styles",
-                    MessageBoxButton.YesNoCancel,
-                    MessageBoxImage.Question);
-
-                if (result == MessageBoxResult.Cancel)
+                switch (PromptSaveDecision($"Save changes to '{_viewModel.LoadedProfileName ?? "this style"}' before closing?"))
                 {
-                    e.Cancel = true;
-                    return;
-                }
-                if (result == MessageBoxResult.Yes)
-                {
-                    e.Cancel = true;
-                    _ = SaveThenCloseAsync();
-                    return;
+                    case StyleSwitchDecision.Cancel:
+                        e.Cancel = true;
+                        return;
+                    case StyleSwitchDecision.Save:
+                        e.Cancel = true;
+                        _ = SaveThenCloseAsync();
+                        return;
                 }
             }
             base.OnClosing(e);
@@ -1112,14 +1125,13 @@ namespace AkmlSql.Shell.Shared.Formatting
             _editSampleToggle.Checked += (_, _) =>
             {
                 if (_previewTextBox == null) return;
-                _editingSample = true;
                 _previewTextBox.IsReadOnly = false;
                 _previewTextBox.Text = _viewModel.PreviewSample;
             };
             _editSampleToggle.Unchecked += (_, _) =>
             {
                 if (_previewTextBox == null) return;
-                _editingSample = false;
+                CommitSampleEdit(); // one persist + one preview refresh for the whole edit session
                 _previewTextBox.IsReadOnly = true;
                 _previewTextBox.Text = _viewModel.PreviewText;
             };
@@ -1169,13 +1181,6 @@ namespace AkmlSql.Shell.Shared.Formatting
                 Text = "// Live preview will appear after the schema loads and a profile is selected.",
             };
             _previewTextBox.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
-            // Spec 033 (T025) — while the Edit-sample toggle is on, edits ARE the sample:
-            // the PreviewSample setter persists atomically and re-queues the debounced preview.
-            _previewTextBox.TextChanged += (_, _) =>
-            {
-                if (_editingSample && _previewTextBox != null)
-                    _viewModel.PreviewSample = _previewTextBox.Text;
-            };
             Grid.SetRow(_previewTextBox, 2);
             bottomStack.Children.Add(_previewTextBox);
 
@@ -1251,11 +1256,9 @@ namespace AkmlSql.Shell.Shared.Formatting
                 childNode.Tag = child;
                 childNode.Selected += (_, e) =>
                 {
-                    // TreeView's SelectedItem is the data; but our items hold UIElements
-                    // as Header. Track via Tag so SelectedItemChanged sees the data.
+                    // TreeView's SelectedItem is the TreeViewItem; the data rides in Tag.
                     if (childNode.Tag is FormatSettingNode node)
                     {
-                        _viewModel.SelectedSettingId = node.Id;
                         UpdateRightTopForSetting(node);
                     }
                     e.Handled = true;
@@ -1399,9 +1402,12 @@ namespace AkmlSql.Shell.Shared.Formatting
         /// </summary>
         private FrameworkElement BuildControlForSetting(FormatSettingNode setting, object? currentValue, bool isDisabled)
         {
-            switch (setting.Type)
+            // Control choice comes from FormatStylesSchemaModel.ControlKindFor — the single
+            // source of truth the degrade tests assert against (spec 033 simplify pass: the
+            // window previously mirrored the decision inline, letting the two drift).
+            switch (FormatStylesSchemaModel.ControlKindFor(setting))
             {
-                case "Bool":
+                case FormatStylesSchemaModel.ControlKind.CheckBox:
                 {
                     var initial = currentValue is bool b ? b : ParseBool(setting.DefaultJson);
                     var checkBox = new CheckBox
@@ -1420,7 +1426,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                     }
                     return checkBox;
                 }
-                case "Int":
+                case FormatStylesSchemaModel.ControlKind.IntBox:
                 {
                     var initial = currentValue?.ToString() ?? setting.DefaultJson.Trim('"');
 
@@ -1457,8 +1463,6 @@ namespace AkmlSql.Shell.Shared.Formatting
 
                     if (!isDisabled)
                     {
-                        // Semantic invalid-input red is intentionally hardcoded (theme-independent).
-                        var invalidBrush = Freeze(new SolidColorBrush(System.Windows.Media.Color.FromRgb(0xE5, 0x14, 0x00)));
                         textBox.TextChanged += (_, _) =>
                         {
                             var valid = int.TryParse(textBox.Text, out var n)
@@ -1473,7 +1477,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                             else
                             {
                                 // Rejected before preview/save — the last valid value stays effective.
-                                textBox.BorderBrush = invalidBrush;
+                                textBox.BorderBrush = InvalidInputBrush;
                                 textBox.ToolTip = setting.Min != null || setting.Max != null
                                     ? $"Enter a whole number between {setting.Min?.ToString() ?? "-∞"} and {setting.Max?.ToString() ?? "∞"}."
                                     : "Enter a whole number.";
@@ -1482,41 +1486,42 @@ namespace AkmlSql.Shell.Shared.Formatting
                     }
                     return row;
                 }
-                case "Enum":
+                case FormatStylesSchemaModel.ControlKind.EnumComboBox:
                 {
+                    // Spec 033 (T023) — v2 schemas carry AllowedEnumValues: themed ComboBox
+                    // (plain-string items per the ComboBoxTheming contract; the selected entry
+                    // persists verbatim, exact spelling).
                     var initial = currentValue?.ToString() ?? setting.DefaultJson.Trim('"');
+                    var allowed = setting.AllowedEnumValues!;
 
-                    // Spec 033 (T023) — v2 schemas carry AllowedEnumValues: render a themed
-                    // ComboBox (plain-string items per the ComboBoxTheming contract; the
-                    // selected entry persists verbatim, exact spelling). v1 schemas keep the
-                    // legacy free-text TextBox.
-                    if (setting.AllowedEnumValues is { Count: > 0 } allowed)
+                    var combo = new ComboBox
                     {
-                        var combo = new ComboBox
+                        Width = 240,
+                        HorizontalAlignment = HorizontalAlignment.Left,
+                        IsEnabled = !isDisabled,
+                        FontFamily = Typography.UiFont,
+                        FontSize = Typography.Body,
+                    };
+                    foreach (var v in allowed) combo.Items.Add(v);
+                    // An imported profile may hold a value outside the declared set —
+                    // surface it as a selectable extra rather than lying about the state.
+                    if (!allowed.Contains(initial, StringComparer.Ordinal)) combo.Items.Insert(0, initial);
+                    combo.SelectedItem = initial;
+                    Ui.Theme.ComboBoxTheming.Apply(combo);
+                    if (!isDisabled)
+                    {
+                        combo.SelectionChanged += (_, _) =>
                         {
-                            Width = 240,
-                            HorizontalAlignment = HorizontalAlignment.Left,
-                            IsEnabled = !isDisabled,
-                            FontFamily = Typography.UiFont,
-                            FontSize = Typography.Body,
+                            if (combo.SelectedItem is string s)
+                                _viewModel.SetWorkingValue(setting.Id, s);
                         };
-                        foreach (var v in allowed) combo.Items.Add(v);
-                        // An imported profile may hold a value outside the declared set —
-                        // surface it as a selectable extra rather than lying about the state.
-                        if (!allowed.Contains(initial, StringComparer.Ordinal)) combo.Items.Insert(0, initial);
-                        combo.SelectedItem = initial;
-                        Ui.Theme.ComboBoxTheming.Apply(combo);
-                        if (!isDisabled)
-                        {
-                            combo.SelectionChanged += (_, _) =>
-                            {
-                                if (combo.SelectedItem is string s)
-                                    _viewModel.SetWorkingValue(setting.Id, s);
-                            };
-                        }
-                        return combo;
                     }
-
+                    return combo;
+                }
+                case FormatStylesSchemaModel.ControlKind.EnumTextBox:
+                {
+                    // v1-schema degrade — no AllowedEnumValues: legacy free-text box.
+                    var initial = currentValue?.ToString() ?? setting.DefaultJson.Trim('"');
                     var textBox = new TextBox
                     {
                         Text = initial,
@@ -1594,12 +1599,12 @@ namespace AkmlSql.Shell.Shared.Formatting
                 {
                     System.Windows.Application.Current.Dispatcher.BeginInvoke(new Action(() =>
                     {
-                        if (!_editingSample) _previewTextBox.Text = _viewModel.PreviewText;
+                        if (!EditingSample) _previewTextBox.Text = _viewModel.PreviewText;
                     }));
                 }
                 else
                 {
-                    if (!_editingSample) _previewTextBox.Text = _viewModel.PreviewText;
+                    if (!EditingSample) _previewTextBox.Text = _viewModel.PreviewText;
                 }
             }
             else if (e.PropertyName == nameof(FormatStylesEditorViewModel.PreviewValidationError))

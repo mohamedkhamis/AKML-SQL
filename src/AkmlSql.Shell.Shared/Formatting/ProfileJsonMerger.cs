@@ -25,6 +25,8 @@ namespace AkmlSql.Shell.Shared.Formatting
     /// </summary>
     internal static class ProfileJsonMerger
     {
+        private static readonly JsonSerializerOptions IndentedJson = new JsonSerializerOptions { WriteIndented = true };
+
         /// <param name="baseJson">The profile's raw stored JSON (ProfileGet verbatim text).</param>
         /// <param name="workingValues">Editor values keyed by dotted setting id.</param>
         /// <param name="schemaDefaults">Schema default per setting id (the effective value for paths absent from the base).</param>
@@ -66,8 +68,21 @@ namespace AkmlSql.Shell.Shared.Formatting
                 SetValueAt(root, segments, ToJsonValue(kvp.Value));
             }
 
-            return root.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+            return root.ToJsonString(IndentedJson);
         }
+
+        /// <summary>
+        /// JsonElement → CLR scalar, the ONE coercion used by seeding, overlay, and merge
+        /// comparison (int-vs-double policy must never diverge between them — it is the oracle
+        /// for dirty tracking and default elision). Null for non-primitive kinds.
+        /// </summary>
+        internal static object? ReadScalar(JsonElement element) => element.ValueKind switch
+        {
+            JsonValueKind.True or JsonValueKind.False => element.GetBoolean(),
+            JsonValueKind.Number => element.TryGetInt32(out var i) ? (object)i : element.GetDouble(),
+            JsonValueKind.String => element.GetString(),
+            _ => null,
+        };
 
         private static bool TryGetValueAt(JsonObject root, string[] segments, out object? value)
         {
@@ -81,18 +96,14 @@ namespace AkmlSql.Shell.Shared.Formatting
 
             if (current is not JsonValue jv) return false;
             var element = jv.GetValue<JsonElement>();
-            value = element.ValueKind switch
-            {
-                JsonValueKind.True or JsonValueKind.False => element.GetBoolean(),
-                JsonValueKind.Number => element.TryGetInt32(out var i) ? (object)i : element.GetDouble(),
-                JsonValueKind.String => element.GetString(),
-                _ => null,
-            };
+            value = ReadScalar(element);
             return element.ValueKind is JsonValueKind.True or JsonValueKind.False
                 or JsonValueKind.Number or JsonValueKind.String;
         }
 
-        private static void SetValueAt(JsonObject root, string[] segments, JsonNode? value)
+        /// <summary>Writes a value at a dotted path, creating intermediate objects. Shared with
+        /// the preview path's <c>BuildProfileJson</c> so save and preview nest identically.</summary>
+        internal static void SetValueAt(JsonObject root, string[] segments, JsonNode? value)
         {
             var current = root;
             for (var i = 0; i < segments.Length - 1; i++)
@@ -127,7 +138,8 @@ namespace AkmlSql.Shell.Shared.Formatting
 
         private static bool IsNumeric(object o) => o is int || o is long || o is double || o is float || o is short;
 
-        private static JsonNode? ToJsonValue(object? value) => value switch
+        /// <summary>CLR scalar → JsonNode, shared with the preview path (see <see cref="SetValueAt"/>).</summary>
+        internal static JsonNode? ToJsonValue(object? value) => value switch
         {
             null => null,
             bool b => JsonValue.Create(b),

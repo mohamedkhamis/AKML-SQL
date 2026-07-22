@@ -15,26 +15,9 @@ namespace AkmlSql.Shell.Shared.Tests
     /// Runs against an isolated AKML_APP_DATA_ROOT so the real user config is never touched.
     /// </summary>
     [Collection("AkmlSql AppData isolation")]
-    public sealed class DisableRuleFixActionTests : IDisposable
+    public sealed class DisableRuleFixActionTests : AppDataIsolatedTest
     {
-        private const string AppDataRootEnvVar = "AKML_APP_DATA_ROOT";
-        private readonly string _priorRoot;
-        private readonly string _tempRoot;
-
-        public DisableRuleFixActionTests()
-        {
-            _priorRoot = Environment.GetEnvironmentVariable(AppDataRootEnvVar);
-            _tempRoot = Path.Combine(Path.GetTempPath(), "akmlsql-disablerule-test-" + Guid.NewGuid());
-            Environment.SetEnvironmentVariable(AppDataRootEnvVar, _tempRoot);
-        }
-
-        public void Dispose()
-        {
-            Environment.SetEnvironmentVariable(AppDataRootEnvVar, _priorRoot);
-            try { if (Directory.Exists(_tempRoot)) Directory.Delete(_tempRoot, recursive: true); }
-            catch (IOException) { }
-            catch (UnauthorizedAccessException) { }
-        }
+        public DisableRuleFixActionTests() : base("akmlsql-disablerule-test-") { }
 
         [Fact]
         public void Invoke_persists_the_disable_into_config_ruleOverrides()

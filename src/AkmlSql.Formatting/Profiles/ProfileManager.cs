@@ -64,23 +64,15 @@ public class ProfileManager
     {
         ArgumentNullException.ThrowIfNull(name);
 
-        var customFile = GetCustomFilePath(name);
-        if (File.Exists(customFile))
-        {
-            var json = File.ReadAllText(customFile);
-            return ProfileSerializer.Deserialize(json);
-        }
+        // Re-expressed over TryReadRaw (spec 033 simplify pass) so the custom-first resolution
+        // lives in exactly one place — the doc-comment promise of identical semantics is now
+        // structural rather than parallel-copy.
+        if (!TryReadRaw(name, out var json, out var isBuiltIn))
+            throw new FileNotFoundException($"Profile '{name}' not found.", name);
 
-        var builtInFile = GetBuiltInFilePath(name);
-        if (File.Exists(builtInFile))
-        {
-            var json = File.ReadAllText(builtInFile);
-            var profile = ProfileSerializer.Deserialize(json);
-            profile.Metadata.IsBuiltIn = true;
-            return profile;
-        }
-
-        throw new FileNotFoundException($"Profile '{name}' not found.", name);
+        var profile = ProfileSerializer.Deserialize(json);
+        if (isBuiltIn) profile.Metadata.IsBuiltIn = true;
+        return profile;
     }
 
     /// <summary>
@@ -149,10 +141,7 @@ public class ProfileManager
         ValidatePathWithinBase(filePath, _customProfilesPath);
         var json = ProfileSerializer.Serialize(profile);
 
-        // Atomic write: write to temp then rename
-        var tempPath = filePath + ".tmp";
-        File.WriteAllText(tempPath, json);
-        File.Move(tempPath, filePath, overwrite: true);
+        WriteAtomic(filePath, json);
     }
 
     /// <summary>
@@ -271,29 +260,26 @@ public class ProfileManager
         }
         metadata["name"] = finalName;
         metadata["modified"] = DateTime.UtcNow;
-        var updated = root.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        var updated = root.ToJsonString(IndentedJson);
 
         if (caseOnly)
         {
             // Direct move fixes the filename casing; then rewrite content atomically in place.
             if (!string.Equals(oldFile, newFile, StringComparison.Ordinal))
                 File.Move(oldFile, newFile);
-            var tmp = newFile + ".tmp";
-            File.WriteAllText(tmp, updated);
-            File.Move(tmp, newFile, overwrite: true);
+            WriteAtomic(newFile, updated);
         }
         else
         {
             // New name appears complete before the old disappears — a crash in between leaves
             // both files present (recoverable), never zero.
-            var tmp = newFile + ".tmp";
-            File.WriteAllText(tmp, updated);
-            File.Move(tmp, newFile, overwrite: true);
+            WriteAtomic(newFile, updated);
             File.Delete(oldFile);
         }
 
         // Move the verbatim import sidecar so lossless re-import keeps working (spec 031).
-        var oldSidecar = Path.Combine(_customProfilesPath, sanitizedOld + ".source.json");
+        // GetCustomArtifactPath owns the sanitize + ValidatePathWithinBase pairing for both ends.
+        var oldSidecar = GetCustomArtifactPath(oldName, ".source.json");
         if (File.Exists(oldSidecar))
         {
             var newSidecar = GetCustomArtifactPath(finalName, ".source.json");
@@ -302,6 +288,20 @@ public class ProfileManager
         }
 
         return finalName;
+    }
+
+    private static readonly System.Text.Json.JsonSerializerOptions IndentedJson =
+        new() { WriteIndented = true };
+
+    /// <summary>
+    /// The corruption-prevention idiom this class advertises as a design decision, in ONE
+    /// place: write to a sibling temp file, then atomically move over the destination.
+    /// </summary>
+    private static void WriteAtomic(string path, string text)
+    {
+        var tempPath = path + ".tmp";
+        File.WriteAllText(tempPath, text);
+        File.Move(tempPath, path, overwrite: true);
     }
 
     /// <summary>
@@ -386,10 +386,7 @@ public class ProfileManager
         if (!string.IsNullOrEmpty(dir))
             Directory.CreateDirectory(dir);
 
-        // Atomic write
-        var tempPath = destinationPath + ".tmp";
-        File.WriteAllText(tempPath, json);
-        File.Move(tempPath, destinationPath, overwrite: true);
+        WriteAtomic(destinationPath, json);
     }
 
     /// <summary>

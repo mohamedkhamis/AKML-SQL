@@ -17,6 +17,10 @@ namespace AkmlSql.Engine.Formatter;
 
 public class FormatRequestHandler(ProfileManager profileManager)
 {
+    /// <summary>One profile-payload size cap shared by save and import (mirrors
+    /// SnippetRequestHandler's 1 MB server-side cap) — the two limits must never drift.</summary>
+    private const int MaxProfileJsonBytes = 1024 * 1024;
+
     private readonly FormatterPipeline _pipeline = new();
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _bulkSessions = new();
 
@@ -295,10 +299,8 @@ public class FormatRequestHandler(ProfileManager profileManager)
     {
         try
         {
-            // Spec 033 hardening — mirror the 1 MB import cap (see HandleProfileImport).
-            // Save previously accepted unbounded JSON from the pipe.
-            const int maxProfileJsonChars = 1024 * 1024;
-            if (request.ProfileJson != null && request.ProfileJson.Length > maxProfileJsonChars)
+            // Spec 033 hardening — Save previously accepted unbounded JSON from the pipe.
+            if (request.ProfileJson != null && request.ProfileJson.Length > MaxProfileJsonBytes)
                 return new ProfileSaveResponse { Success = false, ErrorMessage = "Profile JSON exceeds the 1 MB limit." };
 
             var profile = ProfileSerializer.Deserialize(request.ProfileJson);
@@ -563,8 +565,7 @@ public class FormatRequestHandler(ProfileManager profileManager)
     {
         try
         {
-            const int MaxImportBytes = 1024 * 1024; // mirror SnippetRequestHandler's 1 MB server-side cap
-            if (request.FileContent is { Length: > MaxImportBytes })
+            if (request.FileContent is { Length: > MaxProfileJsonBytes })
             {
                 return new ProfileImportResponse
                 {

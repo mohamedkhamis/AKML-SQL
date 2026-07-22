@@ -31,10 +31,11 @@ namespace AkmlSql.Shell.Shared.Formatting
     /// </para>
     ///
     /// <para>
-    /// Edit / Save / Export / Live-preview wiring is intentionally not implemented in this
-    /// Tier-2 slice — the panels render data but don't yet mutate it. Adding those panels
-    /// is a follow-up commit; the view-model exposes the hooks
-    /// (<see cref="SelectedSettingId"/>, <see cref="SelectedProfileName"/>) ready for them.
+    /// Spec 033 promoted this from a browser to a full editor: <see cref="SelectProfileAsync"/>
+    /// loads a style's stored values (raw ProfileGet text as the merge base),
+    /// <see cref="SaveAsync"/> persists via <see cref="ProfileJsonMerger"/> + ProfileSave, and
+    /// the lifecycle operations (rename/delete/create) keep the shell-owned
+    /// <c>Formatter.ActiveProfile</c> pointer consistent.
     /// </para>
     /// </summary>
     internal sealed class FormatStylesEditorViewModel : INotifyPropertyChanged
@@ -55,6 +56,13 @@ namespace AkmlSql.Shell.Shared.Formatting
         {
             _rpc = rpc ?? throw new ArgumentNullException(nameof(rpc));
         }
+
+        /// <summary>
+        /// Test seam beside <see cref="IRpcClientAccessor"/>: replaces the ThreadHelper
+        /// main-thread switch, which requires a live VS JoinableTaskContext. Null (production)
+        /// uses ThreadHelper directly — and fails fast if the switch genuinely breaks.
+        /// </summary>
+        internal Func<Task>? MainThreadSwitchOverride { get; set; }
 
         public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -127,13 +135,6 @@ namespace AkmlSql.Shell.Shared.Formatting
         /// edits. Null (headless/tests without a handler) behaves as Discard.
         /// </summary>
         public Func<Task<StyleSwitchDecision>>? DirtyDecisionHandler { get; set; }
-
-        private string? _selectedSettingId;
-        public string? SelectedSettingId
-        {
-            get => _selectedSettingId;
-            set { _selectedSettingId = value; OnPropertyChanged(); }
-        }
 
         private string _previewText = string.Empty;
         public string PreviewText
@@ -329,13 +330,7 @@ namespace AkmlSql.Shell.Shared.Formatting
 
                     if (s.TryGetProperty("default", out var defEl))
                     {
-                        var value = defEl.ValueKind switch
-                        {
-                            JsonValueKind.True or JsonValueKind.False => defEl.GetBoolean(),
-                            JsonValueKind.Number => defEl.TryGetInt32(out var i) ? (object)i : defEl.GetDouble(),
-                            JsonValueKind.String => defEl.GetString()!,
-                            _ => (object?)null,
-                        };
+                        var value = ProfileJsonMerger.ReadScalar(defEl);
                         _workingValues[id!] = value;
                         _schemaDefaults[id!] = value; // spec 033 — merge-save's implicit-default oracle
                     }
@@ -361,32 +356,11 @@ namespace AkmlSql.Shell.Shared.Formatting
             {
                 var segments = kvp.Key.Split('.');
                 if (segments.Length < 2 || segments[0].Length == 0) continue;
-
-                var current = root;
-                for (var i = 0; i < segments.Length - 1; i++)
-                {
-                    if (current[segments[i]] is not JsonObject next)
-                    {
-                        next = new JsonObject();
-                        current[segments[i]] = next;
-                    }
-                    current = next;
-                }
-                current[segments[segments.Length - 1]] = ToJsonValue(kvp.Value);
+                // Shared with the save path — preview and persisted JSON must nest identically.
+                ProfileJsonMerger.SetValueAt(root, segments, ProfileJsonMerger.ToJsonValue(kvp.Value));
             }
             return root.ToJsonString();
         }
-
-        private static JsonNode? ToJsonValue(object? value) => value switch
-        {
-            null => null,
-            bool b => JsonValue.Create(b),
-            int i => JsonValue.Create(i),
-            long l => JsonValue.Create(l),
-            double d => JsonValue.Create(d),
-            string s => JsonValue.Create(s),
-            _ => JsonValue.Create(value.ToString()),
-        };
 
         /// <summary>
         /// Fire-and-forget request to refresh the preview. 100 ms debounce + supersession via
@@ -506,8 +480,17 @@ namespace AkmlSql.Shell.Shared.Formatting
                 }
 
                 _workingValues.Clear();
-                var schema = SchemaJson ?? _cachedSchemaJson;
-                if (!string.IsNullOrEmpty(schema)) SeedWorkingValuesFromSchema(schema!);
+                if (!_schemaDefaults.IsEmpty)
+                {
+                    // Cheaper than re-parsing the ~180-setting schema JSON on every selection:
+                    // the defaults captured at seed time ARE the reseed source.
+                    foreach (var kvp in _schemaDefaults) _workingValues[kvp.Key] = kvp.Value;
+                }
+                else
+                {
+                    var schema = SchemaJson ?? _cachedSchemaJson;
+                    if (!string.IsNullOrEmpty(schema)) SeedWorkingValuesFromSchema(schema!);
+                }
                 OverlayProfileValuesFromJson(response.ProfileJson!);
 
                 _loadedProfileJson = response.ProfileJson;
@@ -572,13 +555,9 @@ namespace AkmlSql.Shell.Shared.Formatting
                 {
                     case JsonValueKind.True:
                     case JsonValueKind.False:
-                        _workingValues[path] = prop.Value.GetBoolean();
-                        break;
                     case JsonValueKind.Number:
-                        _workingValues[path] = prop.Value.TryGetInt32(out var i) ? (object)i : prop.Value.GetDouble();
-                        break;
                     case JsonValueKind.String:
-                        _workingValues[path] = prop.Value.GetString();
+                        _workingValues[path] = ProfileJsonMerger.ReadScalar(prop.Value);
                         break;
                     case JsonValueKind.Object:
                         OverlayObject(path, prop.Value);
@@ -985,16 +964,13 @@ namespace AkmlSql.Shell.Shared.Formatting
                 // The IPC await above resumed on a thread-pool thread (ConfigureAwait(false)); without
                 // this switch, Clear()/Add() throw off-dispatcher, which surfaced as New/Copy wrongly
                 // reporting failure after a successful server-side duplicate (spec 030 T020 review).
-                // Guarded (spec 033): outside a VS/SSMS process (headless tests) ThreadHelper has no
-                // JoinableTaskContext — continue on the current thread instead of crashing.
-                try
-                {
+                // Spec 033 simplify pass: the seam replaces the old catch-all guard — swallowing a
+                // REAL switch failure would proceed to mutate the collection off-dispatcher, the
+                // exact bug the switch exists to prevent. Headless tests inject a no-op instead.
+                if (MainThreadSwitchOverride != null)
+                    await MainThreadSwitchOverride().ConfigureAwait(false);
+                else
                     await Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-                }
-                catch (Exception ex)
-                {
-                    Log.Debug(ex, "FormatStylesEditor: main-thread switch unavailable (headless)");
-                }
 
                 Profiles.Clear();
                 if (response?.Profiles == null) return;

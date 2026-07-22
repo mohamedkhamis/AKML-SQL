@@ -19,26 +19,13 @@ namespace AkmlSql.Shell.Shared.Tests
     /// (IsActive) flag is recomputed from config at list load.
     /// </summary>
     [Collection("AkmlSql AppData isolation")]
-    public sealed class FormatStylesLifecycleTests : IDisposable
+    public sealed class FormatStylesLifecycleTests : AppDataIsolatedTest
     {
-        private const string AppDataRootEnvVar = "AKML_APP_DATA_ROOT";
-        private readonly string? _priorRoot;
-        private readonly string _tempRoot;
+        public FormatStylesLifecycleTests() : base("akmlsql-stylelifecycle-test-") { }
 
-        public FormatStylesLifecycleTests()
-        {
-            _priorRoot = Environment.GetEnvironmentVariable(AppDataRootEnvVar);
-            _tempRoot = Path.Combine(Path.GetTempPath(), "akmlsql-stylelifecycle-test-" + Guid.NewGuid());
-            Environment.SetEnvironmentVariable(AppDataRootEnvVar, _tempRoot);
-        }
-
-        public void Dispose()
-        {
-            Environment.SetEnvironmentVariable(AppDataRootEnvVar, _priorRoot);
-            try { if (Directory.Exists(_tempRoot)) Directory.Delete(_tempRoot, recursive: true); }
-            catch (IOException) { }
-            catch (UnauthorizedAccessException) { }
-        }
+        /// <summary>VM with the headless main-thread-switch no-op (no VS JoinableTaskContext here).</summary>
+        private static FormatStylesEditorViewModel Vm(FakeRpcClientAccessor fake) =>
+            new FormatStylesEditorViewModel(fake) { MainThreadSwitchOverride = () => Task.CompletedTask };
 
         private static void SetActiveProfileInConfig(string name)
         {
@@ -65,7 +52,8 @@ namespace AkmlSql.Shell.Shared.Tests
                 new ProfileRenameResponse { Success = true, NewName = "Team Standard v2" });
             fake.Respond(MessageTypes.ProfileList, ListOf(("Team Standard v2", false)));
 
-            var vm = new FormatStylesEditorViewModel(fake) { SelectedProfileName = "Team Standard" };
+            var vm = Vm(fake);
+            vm.SelectedProfileName = "Team Standard";
 
             var final = await vm.RenameSelectedAsync("Team Standard v2");
 
@@ -83,7 +71,8 @@ namespace AkmlSql.Shell.Shared.Tests
             fake.Respond(MessageTypes.ProfileRename, new ProfileRenameResponse { Success = true, NewName = "Other v2" });
             fake.Respond(MessageTypes.ProfileList, ListOf(("Other v2", false), ("Khamis Style", false)));
 
-            var vm = new FormatStylesEditorViewModel(fake) { SelectedProfileName = "Other" };
+            var vm = Vm(fake);
+            vm.SelectedProfileName = "Other";
             await vm.RenameSelectedAsync("Other v2");
 
             Assert.Equal("Khamis Style", ConfigManager.Load().Formatter.ActiveProfile);
@@ -95,7 +84,8 @@ namespace AkmlSql.Shell.Shared.Tests
             SetActiveProfileInConfig("Team Standard");
 
             var fake = new FakeRpcClientAccessor();
-            var vm = new FormatStylesEditorViewModel(fake) { SelectedProfileName = "Team Standard" };
+            var vm = Vm(fake);
+            vm.SelectedProfileName = "Team Standard";
 
             var ok = await vm.DeleteSelectedAsync();
 
@@ -110,7 +100,8 @@ namespace AkmlSql.Shell.Shared.Tests
             SetActiveProfileInConfig("Khamis Style");
 
             var fake = new FakeRpcClientAccessor();
-            var vm = new FormatStylesEditorViewModel(fake) { SelectedProfileName = "Default" };
+            var vm = Vm(fake);
+            vm.SelectedProfileName = "Default";
             vm.Profiles.Add(new StyleListItem { Name = "Default", IsReadOnly = true });
 
             var ok = await vm.DeleteSelectedAsync();
@@ -129,7 +120,8 @@ namespace AkmlSql.Shell.Shared.Tests
             fake.Respond(MessageTypes.ProfileDelete, new ProfileDeleteResponse { Success = true });
             fake.Respond(MessageTypes.ProfileList, ListOf(("Khamis Style", false)));
 
-            var vm = new FormatStylesEditorViewModel(fake) { SelectedProfileName = "Old Style" };
+            var vm = Vm(fake);
+            vm.SelectedProfileName = "Old Style";
 
             var ok = await vm.DeleteSelectedAsync();
 
@@ -148,7 +140,7 @@ namespace AkmlSql.Shell.Shared.Tests
                 new DuplicateProfileResponse { Success = true, NewName = "Mine" });
             fake.Respond(MessageTypes.ProfileList, ListOf(("Mine", false)));
 
-            var vm = new FormatStylesEditorViewModel(fake);
+            var vm = Vm(fake);
 
             var created = await vm.CreateStyleAsync("Mine", "Khamis Style");
 
@@ -168,7 +160,7 @@ namespace AkmlSql.Shell.Shared.Tests
             var fake = new FakeRpcClientAccessor();
             fake.Respond(MessageTypes.ProfileList, ListOf(("Alpha", false), ("Beta", false), ("Default", true)));
 
-            var vm = new FormatStylesEditorViewModel(fake);
+            var vm = Vm(fake);
             await vm.RefreshProfilesAsync();
 
             Assert.False(vm.Profiles.Single(p => p.Name == "Alpha").IsActive);

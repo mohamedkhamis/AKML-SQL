@@ -21,26 +21,9 @@ namespace AkmlSql.Shell.Shared.Tests
     /// Runs under an isolated AKML_APP_DATA_ROOT (shared serialization collection).
     /// </summary>
     [Collection("AkmlSql AppData isolation")]
-    public sealed class FormattingPageTests : IDisposable
+    public sealed class FormattingPageTests : AppDataIsolatedTest
     {
-        private const string AppDataRootEnvVar = "AKML_APP_DATA_ROOT";
-        private readonly string? _priorRoot;
-        private readonly string _tempRoot;
-
-        public FormattingPageTests()
-        {
-            _priorRoot = Environment.GetEnvironmentVariable(AppDataRootEnvVar);
-            _tempRoot = Path.Combine(Path.GetTempPath(), "akmlsql-formattingpage-test-" + Guid.NewGuid());
-            Environment.SetEnvironmentVariable(AppDataRootEnvVar, _tempRoot);
-        }
-
-        public void Dispose()
-        {
-            Environment.SetEnvironmentVariable(AppDataRootEnvVar, _priorRoot);
-            try { if (Directory.Exists(_tempRoot)) Directory.Delete(_tempRoot, recursive: true); }
-            catch (IOException) { }
-            catch (UnauthorizedAccessException) { }
-        }
+        public FormattingPageTests() : base("akmlsql-formattingpage-test-") { }
 
         private static (SettingsWindow Dialog, UIElement Page, FormattingControls Controls) BuildFormattingPage(AppSettings settings)
         {
