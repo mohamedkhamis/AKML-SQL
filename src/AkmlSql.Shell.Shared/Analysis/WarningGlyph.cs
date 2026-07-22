@@ -151,7 +151,7 @@ namespace AkmlSql.Shell.Shared.Analysis
         {
             // Same buffer-properties handshake as the bookmark glyph (split-view safe).
             view.TextBuffer.Properties.GetOrCreateSingletonProperty("AkmlSqlTextView", () => (ITextView)view);
-            return new WarningGlyphFactory(view.TextBuffer);
+            return new WarningGlyphFactory();
         }
     }
 
@@ -165,15 +165,16 @@ namespace AkmlSql.Shell.Shared.Analysis
 
         private static SolidColorBrush Freeze(SolidColorBrush b) { b.Freeze(); return b; }
 
-        private readonly ITextBuffer _buffer;
-
-        public WarningGlyphFactory(ITextBuffer buffer) => _buffer = buffer;
-
         public UIElement? GenerateGlyph(IWpfTextViewLine line, IGlyphTag tag)
         {
             if (tag is not WarningGlyphTag warningTag) return null;
 
-            var glyph = new Ellipse
+            // NO mouse handlers here: the glyph margin routes input through its own mouse
+            // processor chain, so element-level handlers on glyph visuals never fire (verified
+            // in SSMS 22 — clicks were silently dead). Clicks are handled by
+            // WarningGlyphMouseProcessor via IGlyphMouseProcessorProvider, the same mechanism
+            // breakpoint glyphs use.
+            return new Ellipse
             {
                 Width  = 10,
                 Height = 10,
@@ -187,16 +188,6 @@ namespace AkmlSql.Shell.Shared.Analysis
                 Cursor  = Cursors.Hand,
                 ToolTip = BuildTooltip(warningTag.IssuesOnLine),
             };
-
-            glyph.MouseLeftButtonDown += (sender, e) =>
-            {
-                e.Handled = true;
-                var menu = WarningGlyphMenu.Build(_buffer, warningTag.IssuesOnLine);
-                menu.PlacementTarget = (UIElement)sender;
-                menu.IsOpen = true;
-            };
-
-            return glyph;
         }
 
         private static string BuildTooltip(IReadOnlyList<CodeIssueInfo> issues)
@@ -206,6 +197,127 @@ namespace AkmlSql.Shell.Shared.Analysis
                 lines.Add($"{issue.RuleId}: {issue.Message}");
             lines.Add("Click for fixes");
             return string.Join(Environment.NewLine, lines);
+        }
+    }
+
+    /// <summary>
+    /// Click handling for the warning glyphs. The glyph margin does not deliver mouse events to
+    /// glyph visuals — <see cref="IGlyphMouseProcessorProvider"/> is the sanctioned hook (it is
+    /// how breakpoint clicks work): map the click's Y coordinate to a view line, look up that
+    /// line's issues, open the fix menu.
+    /// </summary>
+    [Export(typeof(IGlyphMouseProcessorProvider))]
+    [Name("AkmlSqlWarningGlyphMouseProcessor")]
+    [ContentType("SQL Server Tools")]
+    [ContentType("SQL")]
+    [ContentType("T-SQL")]
+    internal sealed class WarningGlyphMouseProcessorProvider : IGlyphMouseProcessorProvider
+    {
+        public IMouseProcessor GetAssociatedMouseProcessor(
+            IWpfTextViewHost wpfTextViewHost, IWpfTextViewMargin margin)
+            => new WarningGlyphMouseProcessor(wpfTextViewHost, margin);
+    }
+
+    internal sealed class WarningGlyphMouseProcessor : MouseProcessorBase
+    {
+        private readonly IWpfTextViewHost _host;
+        private readonly IWpfTextViewMargin _margin;
+        private IReadOnlyList<CodeIssueInfo>? _pendingIssues;
+        private int _pendingLine;
+
+        public WarningGlyphMouseProcessor(IWpfTextViewHost host, IWpfTextViewMargin margin)
+        {
+            _host   = host;
+            _margin = margin;
+        }
+
+        /// <summary>
+        /// Arm on mouse-DOWN (and swallow it so the margin does nothing else) but open the menu
+        /// on mouse-UP, deferred one dispatcher beat: a ContextMenu opened during the down event
+        /// is dismissed immediately by the margin's ensuing capture/button-up sequence — the
+        /// logs showed "opening fix menu" on every click while the user saw nothing.
+        /// </summary>
+        public override void PreprocessMouseLeftButtonDown(MouseButtonEventArgs e)
+        {
+            try
+            {
+                _pendingIssues = null;
+                if (!TryGetIssuesAt(e, out _pendingLine, out var issues)) return;
+                _pendingIssues = issues;
+                e.Handled = true;
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Warning(ex, "WarningGlyph: glyph-margin mouse-down handling failed");
+            }
+        }
+
+        public override void PreprocessMouseLeftButtonUp(MouseButtonEventArgs e)
+        {
+            try
+            {
+                var issues = _pendingIssues;
+                _pendingIssues = null;
+                if (issues == null) return;
+                e.Handled = true;
+
+                var buffer = _host.TextView.TextBuffer;
+                var line   = _pendingLine;
+                _margin.VisualElement.Dispatcher.BeginInvoke(
+                    new Action(() => OpenMenu(buffer, line, issues)),
+                    System.Windows.Threading.DispatcherPriority.Input);
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Warning(ex, "WarningGlyph: glyph-margin mouse-up handling failed");
+            }
+        }
+
+        private void OpenMenu(ITextBuffer buffer, int lineNumber, IReadOnlyList<CodeIssueInfo> issues)
+        {
+            try
+            {
+                Serilog.Log.Debug("WarningGlyph: opening fix menu for line {Line} ({Count} issue(s))",
+                    lineNumber + 1, issues.Count);
+
+                var openedAt = DateTime.UtcNow;
+                var menu = WarningGlyphMenu.Build(buffer, issues);
+                menu.PlacementTarget = _margin.VisualElement;
+                menu.Placement       = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
+                menu.Closed += (_, __) => Serilog.Log.Debug(
+                    "WarningGlyph: fix menu closed after {Ms}ms",
+                    (int)(DateTime.UtcNow - openedAt).TotalMilliseconds);
+                menu.IsOpen = true;
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Warning(ex, "WarningGlyph: opening the fix menu failed");
+            }
+        }
+
+        private bool TryGetIssuesAt(MouseButtonEventArgs e, out int lineNumber, out IReadOnlyList<CodeIssueInfo> issues)
+        {
+            lineNumber = -1;
+            issues = Array.Empty<CodeIssueInfo>();
+
+            var view = _host.TextView;
+            if (view.IsClosed || view.InLayout) return false;
+
+            var y = e.GetPosition(view.VisualElement).Y + view.ViewportTop;
+            var viewLine = view.TextViewLines.GetTextViewLineContainingYCoordinate(y);
+            if (viewLine == null) return false;
+
+            lineNumber = viewLine.Start.GetContainingLine().LineNumber;
+
+            if (!view.TextBuffer.Properties.TryGetProperty(typeof(AnalysisController), out AnalysisController controller))
+                return false;
+
+            var byLine = WarningGlyphLineIndex.GroupByLine(
+                controller.CurrentIssues, view.TextBuffer.CurrentSnapshot.LineCount);
+            if (!byLine.TryGetValue(lineNumber, out var lineIssues)) return false;
+
+            issues = lineIssues;
+            return true;
         }
     }
 }
