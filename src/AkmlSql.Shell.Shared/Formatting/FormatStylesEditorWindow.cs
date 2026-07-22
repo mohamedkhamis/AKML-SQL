@@ -50,7 +50,12 @@ namespace AkmlSql.Shell.Shared.Formatting
         // Spec 033 (T016) — editing UX state
         private Button? _saveBtn;
         private Border? _readOnlyHint;
-        private FormatSettingNode? _currentSettingNode;
+        // SQL Prompt-parity redesign: the right pane edits a whole settings *group* (SQL Prompt's
+        // "page") at once, not one setting at a time. _currentGroup is the group whose form is
+        // showing; _currentGroupCategory is its parent category (for the breadcrumb title).
+        private FormatStylesSchemaModel.Group? _currentGroup;
+        private string? _currentGroupCategory;
+        private TextBlock? _breadcrumbText;
         private bool _suppressSelectionChanged;
         private bool _closeConfirmed;
 
@@ -72,15 +77,30 @@ namespace AkmlSql.Shell.Shared.Formatting
         private static readonly System.Windows.Media.SolidColorBrush InvalidInputBrush =
             Freeze(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xE5, 0x14, 0x00)));
 
+        // Fixed dark editor palette for the live-preview card — theme-independent in BOTH light and
+        // dark, matching SQL Prompt (its preview renders on a dark editor panel regardless of theme).
+        // CLAUDE.md allows fixed colours for a surface that must read the same in every theme; the
+        // theme-token EditorPopupBackground is white in light theme, so it can't serve here.
+        private static readonly System.Windows.Media.SolidColorBrush PreviewBgBrush =
+            Freeze(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x1E, 0x22, 0x30)));
+        private static readonly System.Windows.Media.SolidColorBrush PreviewTextBrush =
+            Freeze(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xD4, 0xD8, 0xE0)));
+        private static readonly System.Windows.Media.SolidColorBrush PreviewMutedBrush =
+            Freeze(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x8B, 0x93, 0xA5)));
+        private static readonly System.Windows.Media.SolidColorBrush PreviewCaptionBrush =
+            Freeze(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x6A, 0xC4, 0x7A)));
+        private static readonly System.Windows.Media.SolidColorBrush PreviewWarnTextBrush =
+            Freeze(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x24, 0x1A, 0x00)));
+
         public FormatStylesEditorWindow(FormatStylesEditorViewModel viewModel)
         {
             _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
 
             Title = "AKML SQL — Format Styles Editor";
-            Width = 1000;
+            Width = 1060;
             Height = 680;
-            MinWidth = 800;
-            MinHeight = 540;
+            MinWidth = 920;
+            MinHeight = 560;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
             HasHelpButton = false;
 
@@ -134,51 +154,26 @@ namespace AkmlSql.Shell.Shared.Formatting
             Grid.SetRow(header, 0);
             root.Children.Add(header);
 
-            // ── Content (three columns + 2 splitters) ──────────────────────
-            var content = new Grid();
-            content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(240) });
-            content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(5) });   // splitter
-            content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(5) });   // splitter
-            content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(360) });
+            // ── Content: three cards (Styles | Style options | Settings + preview) ──
+            // Column widths mirror SQL Prompt's Edit Formatting Styles editor (fixed left/middle,
+            // flexible right); the two 8px gutter columns double as invisible drag splitters.
+            var content = new Grid { Margin = new Thickness(Spacing.Md, Spacing.Md, Spacing.Md, Spacing.Sm) };
+            content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(250) });       // styles
+            content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Spacing.Sm) }); // gutter/splitter
+            content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(230) });       // style options
+            content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Spacing.Sm) }); // gutter/splitter
+            content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 380 }); // settings + preview
 
-            // Left: style list
             content.Children.Add(BuildLeftPanel());
-
-            // Splitter
-            var leftSplitter = new GridSplitter
-            {
-                Width = 5,
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                VerticalAlignment = VerticalAlignment.Stretch,
-                ShowsPreview = false,
-            };
-            leftSplitter.SetResourceReference(Control.BackgroundProperty, ThemeTokens.BorderSplitter);
-            Grid.SetColumn(leftSplitter, 1);
-            content.Children.Add(leftSplitter);
-
-            // Middle: settings tree
+            content.Children.Add(MakeColumnSplitter(1));
             content.Children.Add(BuildMiddlePanel());
-
-            // Splitter
-            var rightSplitter = new GridSplitter
-            {
-                Width = 5,
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                VerticalAlignment = VerticalAlignment.Stretch,
-                ShowsPreview = false,
-            };
-            rightSplitter.SetResourceReference(Control.BackgroundProperty, ThemeTokens.BorderSplitter);
-            Grid.SetColumn(rightSplitter, 3);
-            content.Children.Add(rightSplitter);
-
-            // Right: controls (top) + preview (bottom)
+            content.Children.Add(MakeColumnSplitter(3));
             content.Children.Add(BuildRightPanel());
 
             Grid.SetRow(content, 1);
             root.Children.Add(content);
 
-            // ── Footer (status + buttons) ──────────────────────────────────
+            // ── Footer: Import/Export (left) · status · Save/Close (right) ──
             var footer = new Border
             {
                 Padding = new Thickness(Spacing.Lg, Spacing.Sm, Spacing.Lg, Spacing.Sm),
@@ -188,8 +183,16 @@ namespace AkmlSql.Shell.Shared.Formatting
             footer.SetResourceReference(Panel.BackgroundProperty, ThemeTokens.SurfacePanel);
 
             var footerGrid = new Grid();
-            footerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            footerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            footerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });          // import/export
+            footerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); // status
+            footerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });          // save/close
+
+            // Import / Export live here (off the crowded style list) — style-file I/O, not per-style edits.
+            var ioButtons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            ioButtons.Children.Add(MakeSecondaryButton("Import…", OnImportAsync));
+            ioButtons.Children.Add(MakeSecondaryButton("Export…", OnExportAsync));
+            Grid.SetColumn(ioButtons, 0);
+            footerGrid.Children.Add(ioButtons);
 
             _statusText = new TextBlock
             {
@@ -197,10 +200,11 @@ namespace AkmlSql.Shell.Shared.Formatting
                 FontFamily = Typography.UiFont,
                 FontSize = Typography.Body,
                 VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, Spacing.Md, 0),
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                Margin = new Thickness(Spacing.Md, 0, Spacing.Md, 0),
             };
             _statusText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
-            Grid.SetColumn(_statusText, 0);
+            Grid.SetColumn(_statusText, 1);
             footerGrid.Children.Add(_statusText);
 
             var footerButtons = new StackPanel { Orientation = Orientation.Horizontal };
@@ -211,7 +215,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             {
                 Content = "Save",
                 Padding = new Thickness(Spacing.Lg, Spacing.Sm, Spacing.Lg, Spacing.Sm),
-                MinWidth = 80,
+                MinWidth = 84,
                 Margin = new Thickness(0, 0, Spacing.Sm, 0),
                 IsEnabled = false,
                 FontFamily = Typography.UiFont,
@@ -237,7 +241,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             {
                 Content = "Close",
                 Padding = new Thickness(Spacing.Lg, Spacing.Sm, Spacing.Lg, Spacing.Sm),
-                MinWidth = 80,
+                MinWidth = 84,
                 IsCancel = true,
                 FontFamily = Typography.UiFont,
                 FontSize = Typography.Body,
@@ -245,7 +249,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             closeBtn.Click += (_, _) => Close();
             footerButtons.Children.Add(closeBtn);
 
-            Grid.SetColumn(footerButtons, 1);
+            Grid.SetColumn(footerButtons, 2);
             footerGrid.Children.Add(footerButtons);
 
             footer.Child = footerGrid;
@@ -255,59 +259,94 @@ namespace AkmlSql.Shell.Shared.Formatting
             Content = root;
         }
 
+        // Invisible drag splitter that lives in an 8px gutter column between two pane cards.
+        private static GridSplitter MakeColumnSplitter(int column)
+        {
+            var splitter = new GridSplitter
+            {
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Stretch,
+                Background = System.Windows.Media.Brushes.Transparent,
+                ShowsPreview = false,
+            };
+            Grid.SetColumn(splitter, column);
+            return splitter;
+        }
+
+        // Wraps a pane's content in the standard card chrome (panel fill + subtle border + radius).
+        private Border MakePaneCard(int column, FrameworkElement child)
+        {
+            var card = new Border
+            {
+                CornerRadius = new CornerRadius(6),
+                BorderThickness = new Thickness(1),
+                Child = child,
+            };
+            card.SetResourceReference(Panel.BackgroundProperty, ThemeTokens.SurfacePanel);
+            card.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.BorderDefault);
+            Grid.SetColumn(card, column);
+            return card;
+        }
+
         // -----------------------------------------------------------------
         // Left panel — style list
         // -----------------------------------------------------------------
         private FrameworkElement BuildLeftPanel()
         {
-            var panel = new Grid();
-            panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // header
-            panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // toolbar (T020)
-            panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            var res = ThemeRegistry.Instance.Resources;
+            var accentBrush = res[ThemeTokens.AccentPrimary] as System.Windows.Media.Brush;
+            var selectionBrush = res[ThemeTokens.SurfaceSelection] as System.Windows.Media.Brush;
+            var selectionStrongBrush = res[ThemeTokens.SurfaceSelectionStrong] as System.Windows.Media.Brush;
+            var textPrimaryBrush = res[ThemeTokens.TextPrimary] as System.Windows.Media.Brush;
 
-            var label = new TextBlock
-            {
-                Text = "Styles",
-                FontFamily = Typography.UiFont,
-                FontSize = Typography.BodyStrong,
-                FontWeight = Typography.WeightSemiBold,
-                Margin = new Thickness(Spacing.Md, Spacing.Md, Spacing.Md, Spacing.Sm),
-            };
-            label.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPrimary);
-            Grid.SetRow(label, 0);
-            panel.Children.Add(label);
+            var panel = new Grid { Margin = new Thickness(Spacing.Sm) };
+            panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                       // header
+            panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });  // list
+            panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                       // + New Style CTA
 
-            // Spec 030 T020 / FR-007 — New / Copy / Set Active / Export toolbar.
-            var toolbar = new WrapPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Margin = new Thickness(Spacing.Sm, 0, Spacing.Sm, Spacing.Sm),
-            };
-            toolbar.Children.Add(MakeToolbarButton("New…", OnNewStyleAsync));
-            toolbar.Children.Add(MakeToolbarButton("Copy", OnCopyStyleAsync));
-            toolbar.Children.Add(MakeToolbarButton("Rename…", OnRenameStyleAsync));
-            toolbar.Children.Add(MakeToolbarButton("Delete", OnDeleteStyleAsync));
-            toolbar.Children.Add(MakeToolbarButton("Set Active", OnSetActiveAsync));
-            toolbar.Children.Add(MakeToolbarButton("Import…", OnImportAsync));
-            toolbar.Children.Add(MakeToolbarButton("Export", OnExportAsync));
-            Grid.SetRow(toolbar, 1);
-            panel.Children.Add(toolbar);
+            var header = MakeSectionHeader("STYLES");
+            Grid.SetRow(header, 0);
+            panel.Children.Add(header);
 
             _styleList = new ListBox
             {
-                Margin = new Thickness(Spacing.Sm, 0, Spacing.Sm, Spacing.Sm),
-                BorderThickness = new Thickness(1),
+                BorderThickness = new Thickness(0),
+                Background = System.Windows.Media.Brushes.Transparent,
                 FontFamily = Typography.UiFont,
                 FontSize = Typography.Body,
                 ItemTemplate = BuildStyleListItemTemplate(),
             };
-            _styleList.SetResourceReference(Control.BackgroundProperty, ThemeTokens.SurfaceInput);
             _styleList.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
-            _styleList.SetResourceReference(Control.BorderBrushProperty, ThemeTokens.BorderDefault);
-            // Spec 033 (T036) — sectioned list: "Your styles" first, then "Built-in styles",
-            // names A→Z within each; group headers via a code-built template.
+            ScrollViewer.SetHorizontalScrollBarVisibility(_styleList, ScrollBarVisibility.Disabled);
+
+            // Themed selection colours; the active style additionally gets an accent-tinted card via
+            // the container style below (SQL Prompt: active = tinted card + accent border + ✔).
+            if (selectionStrongBrush != null) _styleList.Resources[SystemColors.HighlightBrushKey] = selectionStrongBrush;
+            if (textPrimaryBrush != null) _styleList.Resources[SystemColors.HighlightTextBrushKey] = textPrimaryBrush;
+            if (selectionBrush != null) _styleList.Resources[SystemColors.InactiveSelectionHighlightBrushKey] = selectionBrush;
+            if (textPrimaryBrush != null) _styleList.Resources[SystemColors.InactiveSelectionHighlightTextBrushKey] = textPrimaryBrush;
+
+            var itemStyle = new Style(typeof(ListBoxItem));
+            itemStyle.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(Spacing.Xs, Spacing.Xs, Spacing.Xs, Spacing.Xs)));
+            itemStyle.Setters.Add(new Setter(FrameworkElement.MarginProperty, new Thickness(0, 1, 0, 1)));
+            itemStyle.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(1)));
+            itemStyle.Setters.Add(new Setter(Control.BorderBrushProperty, System.Windows.Media.Brushes.Transparent));
+            itemStyle.Setters.Add(new Setter(Control.HorizontalContentAlignmentProperty, HorizontalAlignment.Stretch));
+            var activeTrigger = new System.Windows.DataTrigger
+            {
+                Binding = new System.Windows.Data.Binding(nameof(StyleListItem.IsActive)),
+                Value = true,
+            };
+            if (selectionBrush != null) activeTrigger.Setters.Add(new Setter(Control.BackgroundProperty, selectionBrush));
+            if (accentBrush != null) activeTrigger.Setters.Add(new Setter(Control.BorderBrushProperty, accentBrush));
+            itemStyle.Triggers.Add(activeTrigger);
+            _styleList.ItemContainerStyle = itemStyle;
+
+            // Spec 033 (T036) — sectioned list: "YOUR STYLES" first, then "BUILT-IN STYLES",
+            // names A→Z within each; group headers via a code-built template (upper-cased).
             var view = new System.Windows.Data.ListCollectionView(_viewModel.Profiles);
-            view.GroupDescriptions!.Add(new System.Windows.Data.PropertyGroupDescription(nameof(StyleListItem.Section)));
+            view.GroupDescriptions!.Add(new System.Windows.Data.PropertyGroupDescription(
+                nameof(StyleListItem.Section), new UpperCaseConverter()));
             view.SortDescriptions.Add(new System.ComponentModel.SortDescription(
                 nameof(StyleListItem.IsReadOnly), System.ComponentModel.ListSortDirection.Ascending)); // editable first — robust to section-label rewording
             view.SortDescriptions.Add(new System.ComponentModel.SortDescription(
@@ -319,12 +358,14 @@ namespace AkmlSql.Shell.Shared.Formatting
             headerFactory.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding("Name"));
             headerFactory.SetValue(TextBlock.FontWeightProperty, Typography.WeightSemiBold);
             headerFactory.SetValue(TextBlock.FontSizeProperty, (double)Typography.Small);
-            headerFactory.SetValue(FrameworkElement.MarginProperty, new Thickness(4, 6, 4, 2));
-            headerFactory.SetValue(UIElement.OpacityProperty, 0.75);
+            headerFactory.SetValue(FrameworkElement.MarginProperty, new Thickness(2, 8, 2, 3));
+            if (res[ThemeTokens.TextSecondary] is System.Windows.Media.Brush secBrush)
+                headerFactory.SetValue(TextBlock.ForegroundProperty, secBrush);
             groupHeaderTemplate.VisualTree = headerFactory;
             _styleList.GroupStyle.Add(new GroupStyle { HeaderTemplate = groupHeaderTemplate });
 
-            // Spec 033 (T036) — per-style context menu; enablement follows the selected item.
+            // Per-style ⋮ menu — opened by right-click AND the row's visible ⋮ glyph; enablement
+            // recomputed on every open so it tracks the selected row.
             var menu = new ContextMenu();
             var miSetActive = MakeMenuItem("Set Active", OnSetActiveAsync);
             var miCopy = MakeMenuItem("Copy", OnCopyStyleAsync);
@@ -337,17 +378,19 @@ namespace AkmlSql.Shell.Shared.Formatting
             menu.Items.Add(miDelete);
             menu.Items.Add(new Separator());
             menu.Items.Add(miExport);
+            menu.Opened += (_, _) =>
+            {
+                if (_styleList?.SelectedItem is StyleListItem selected)
+                {
+                    miRename.IsEnabled = !selected.IsReadOnly;
+                    miDelete.IsEnabled = !selected.IsReadOnly && !selected.IsActive;
+                    miSetActive.IsEnabled = !selected.IsActive;
+                }
+            };
             _styleList.ContextMenu = menu;
             _styleList.ContextMenuOpening += (_, e) =>
             {
-                if (_styleList?.SelectedItem is not StyleListItem selected)
-                {
-                    e.Handled = true; // nothing selected — no menu
-                    return;
-                }
-                miRename.IsEnabled = !selected.IsReadOnly;
-                miDelete.IsEnabled = !selected.IsReadOnly && !selected.IsActive;
-                miSetActive.IsEnabled = !selected.IsActive;
+                if (_styleList?.SelectedItem is not StyleListItem) e.Handled = true; // nothing selected — no menu
             };
 
             _styleList.SelectionChanged += async (_, _) => await OnStyleSelectionChangedAsync();
@@ -360,31 +403,113 @@ namespace AkmlSql.Shell.Shared.Formatting
                     catch (Exception ex) { Log.Warning(ex, "FormatStylesEditor: double-click copy failed"); SetStatus(ex.Message); }
                 }
             };
-            Grid.SetRow(_styleList, 2);
+            Grid.SetRow(_styleList, 1);
             panel.Children.Add(_styleList);
 
-            Grid.SetColumn(panel, 0);
-            return panel;
+            var newStyleCta = MakeAccentCtaButton("+ New Style", OnNewStyleAsync);
+            Grid.SetRow(newStyleCta, 2);
+            panel.Children.Add(newStyleCta);
+
+            return MakePaneCard(0, panel);
         }
 
-        private Button MakeToolbarButton(string content, Func<System.Threading.Tasks.Task> onClick)
+        /// <summary>A small all-caps, muted section divider ("STYLES", "STYLE OPTIONS", "LIVE PREVIEW").</summary>
+        private TextBlock MakeSectionHeader(string text)
+        {
+            var t = new TextBlock
+            {
+                Text = text,
+                FontFamily = Typography.UiFont,
+                FontSize = Typography.Small,
+                FontWeight = Typography.WeightSemiBold,
+                Margin = new Thickness(Spacing.Xs, Spacing.Xs, Spacing.Xs, Spacing.Sm),
+            };
+            t.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+            return t;
+        }
+
+        /// <summary>Small footer/secondary button (Import…, Export…).</summary>
+        private Button MakeSecondaryButton(string content, Func<System.Threading.Tasks.Task> onClick)
         {
             var btn = new Button
             {
                 Content = content,
-                Padding = new Thickness(Spacing.Sm, Spacing.Xs, Spacing.Sm, Spacing.Xs),
-                Margin = new Thickness(0, 0, Spacing.Xs, 0),
-                MinWidth = 56,
+                Padding = new Thickness(Spacing.Md, Spacing.Xs, Spacing.Md, Spacing.Xs),
+                Margin = new Thickness(0, 0, Spacing.Sm, 0),
                 FontFamily = Typography.UiFont,
-                FontSize = Typography.Small,
+                FontSize = Typography.Body,
             };
             // async-void click handler is the WPF event idiom; guarded so a faulted task can't crash the host.
             btn.Click += async (_, _) =>
             {
                 try { await onClick(); }
-                catch (Exception ex) { Log.Warning(ex, "FormatStylesEditor: toolbar action '{Action}' failed", content); SetStatus(ex.Message); }
+                catch (Exception ex) { Log.Warning(ex, "FormatStylesEditor: action '{Action}' failed", content); SetStatus(ex.Message); }
             };
             return btn;
+        }
+
+        /// <summary>Outlined accent call-to-action ("+ New Style") — Border-based so the accent
+        /// border/text survive the host's default button chrome.</summary>
+        private FrameworkElement MakeAccentCtaButton(string content, Func<System.Threading.Tasks.Task> onClick)
+        {
+            var border = new Border
+            {
+                CornerRadius = new CornerRadius(4),
+                BorderThickness = new Thickness(1),
+                Padding = new Thickness(Spacing.Sm, Spacing.Xs + 1, Spacing.Sm, Spacing.Xs + 1),
+                Margin = new Thickness(Spacing.Xs, Spacing.Sm, Spacing.Xs, Spacing.Xs),
+                Cursor = System.Windows.Input.Cursors.Hand,
+                Background = System.Windows.Media.Brushes.Transparent,
+                Focusable = true, // keyboard-reachable — this is the only path to "New style"
+            };
+            border.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.AccentPrimary);
+            var label = new TextBlock
+            {
+                Text = content,
+                FontFamily = Typography.UiFont,
+                FontSize = Typography.Body,
+                FontWeight = Typography.WeightSemiBold,
+                HorizontalAlignment = HorizontalAlignment.Center,
+            };
+            label.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.AccentPrimary);
+            border.Child = label;
+
+            async System.Threading.Tasks.Task Invoke()
+            {
+                try { await onClick(); }
+                catch (Exception ex) { Log.Warning(ex, "FormatStylesEditor: action '{Action}' failed", content); SetStatus(ex.Message); }
+            }
+            void Tint() => border.SetResourceReference(Panel.BackgroundProperty, ThemeTokens.SurfaceSelection);
+            void Clear() => border.Background = System.Windows.Media.Brushes.Transparent;
+            border.MouseEnter += (_, _) => Tint();
+            border.MouseLeave += (_, _) => { if (!border.IsKeyboardFocused) Clear(); };
+            border.GotKeyboardFocus += (_, _) => Tint();      // visible focus state
+            border.LostKeyboardFocus += (_, _) => Clear();
+            border.MouseLeftButtonUp += async (_, _) => await Invoke();
+            border.KeyDown += async (_, e) =>
+            {
+                if (e.Key is System.Windows.Input.Key.Enter or System.Windows.Input.Key.Space)
+                {
+                    e.Handled = true;
+                    await Invoke();
+                }
+            };
+            return border;
+        }
+
+        /// <summary>The row's ⋮ glyph opens the shared style context menu against its own row.</summary>
+        private void OnRowMenuGlyphClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            if (sender is not FrameworkElement fe || fe.DataContext is not StyleListItem item || _styleList == null) return;
+            if (!ReferenceEquals(_styleList.SelectedItem, item))
+                _styleList.SelectedItem = item; // acts on its own row — selecting loads the style, same as a row click
+            if (_styleList.ContextMenu is { } menu)
+            {
+                menu.PlacementTarget = fe;
+                menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+                menu.IsOpen = true;
+            }
         }
 
         /// <summary>The currently-selected style name, or null when nothing is selected.</summary>
@@ -445,10 +570,10 @@ namespace AkmlSql.Shell.Shared.Formatting
             }
         }
 
-        /// <summary>Re-renders the right-top controls so they show the freshly-loaded style's values.</summary>
+        /// <summary>Re-renders the current group's form so it shows the freshly-loaded style's values.</summary>
         private void RefreshVisibleSettingControls()
         {
-            if (_currentSettingNode != null) UpdateRightTopForSetting(_currentSettingNode);
+            if (_currentGroup != null) UpdateRightForGroup(_currentGroup, _currentGroupCategory);
         }
 
         private void UpdateSaveButtonState()
@@ -861,49 +986,72 @@ namespace AkmlSql.Shell.Shared.Formatting
             }
         }
 
-        private static DataTemplate BuildStyleListItemTemplate()
+        private DataTemplate BuildStyleListItemTemplate()
         {
-            // Spec 033 (T036) — CODE-BUILT template (the old XAML-string variant referenced an
-            // unregistered BoolToVisibilityConverter, so XamlReader always threw and the
-            // fallback silently dropped the lock glyph). Renders:
-            //   [✔ if active] [🔒 if read-only]  Name  [Kind badge]
-            // Uses WPF's built-in BooleanToVisibilityConverter instances — no resources needed.
+            // Row:  [✔ active] Name [Kind] .......... [⋮]
+            // The ✔ marks the active style (accent-coloured); the ⋮ (docked right) opens the
+            // shared per-style context menu against its own row. Uses WPF's built-in
+            // BooleanToVisibilityConverter — no resources needed.
             var boolToVis = new System.Windows.Controls.BooleanToVisibilityConverter();
+            var accent = ThemeRegistry.Instance.Resources[ThemeTokens.AccentPrimary];
 
             var template = new DataTemplate(typeof(StyleListItem));
-            var stackFactory = new FrameworkElementFactory(typeof(StackPanel));
-            stackFactory.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
-            stackFactory.SetValue(FrameworkElement.MarginProperty, new Thickness(4, 3, 4, 3));
 
-            var activeFactory = new FrameworkElementFactory(typeof(TextBlock));
-            activeFactory.SetValue(TextBlock.TextProperty, "✔ ");
-            activeFactory.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
-            activeFactory.SetBinding(UIElement.VisibilityProperty,
+            var dock = new FrameworkElementFactory(typeof(DockPanel));
+            dock.SetValue(DockPanel.LastChildFillProperty, true);
+            dock.SetValue(FrameworkElement.MarginProperty, new Thickness(2, 2, 0, 2));
+
+            var menuGlyph = new FrameworkElementFactory(typeof(TextBlock));
+            menuGlyph.SetValue(TextBlock.TextProperty, "⋮");
+            menuGlyph.SetValue(DockPanel.DockProperty, Dock.Right);
+            menuGlyph.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
+            menuGlyph.SetValue(TextBlock.FontSizeProperty, (double)Typography.H4);
+            menuGlyph.SetValue(FrameworkElement.MarginProperty, new Thickness(6, 0, 4, 0));
+            menuGlyph.SetValue(UIElement.OpacityProperty, 0.6);
+            menuGlyph.SetValue(FrameworkElement.CursorProperty, System.Windows.Input.Cursors.Hand);
+            menuGlyph.SetValue(FrameworkElement.ToolTipProperty, "Style actions");
+            menuGlyph.AddHandler(UIElement.MouseLeftButtonUpEvent,
+                new System.Windows.Input.MouseButtonEventHandler(OnRowMenuGlyphClick));
+            dock.AppendChild(menuGlyph);
+
+            var stack = new FrameworkElementFactory(typeof(StackPanel));
+            stack.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
+
+            var active = new FrameworkElementFactory(typeof(TextBlock));
+            active.SetValue(TextBlock.TextProperty, "✔ ");
+            active.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
+            if (accent is System.Windows.Media.Brush accentBrush)
+                active.SetValue(TextBlock.ForegroundProperty, accentBrush);
+            active.SetBinding(UIElement.VisibilityProperty,
                 new System.Windows.Data.Binding(nameof(StyleListItem.IsActive)) { Converter = boolToVis });
-            stackFactory.AppendChild(activeFactory);
+            stack.AppendChild(active);
 
-            var lockFactory = new FrameworkElementFactory(typeof(TextBlock));
-            lockFactory.SetValue(TextBlock.TextProperty, "\U0001F512 ");
-            lockFactory.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
-            lockFactory.SetBinding(UIElement.VisibilityProperty,
-                new System.Windows.Data.Binding(nameof(StyleListItem.IsReadOnly)) { Converter = boolToVis });
-            stackFactory.AppendChild(lockFactory);
+            var name = new FrameworkElementFactory(typeof(TextBlock));
+            name.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding(nameof(StyleListItem.Name)));
+            name.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
+            name.SetValue(TextBlock.TextTrimmingProperty, TextTrimming.CharacterEllipsis);
+            stack.AppendChild(name);
 
-            var nameFactory = new FrameworkElementFactory(typeof(TextBlock));
-            nameFactory.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding(nameof(StyleListItem.Name)));
-            nameFactory.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
-            stackFactory.AppendChild(nameFactory);
+            var kind = new FrameworkElementFactory(typeof(TextBlock));
+            kind.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding(nameof(StyleListItem.Kind)));
+            kind.SetValue(FrameworkElement.MarginProperty, new Thickness(6, 1, 0, 0));
+            kind.SetValue(UIElement.OpacityProperty, 0.55);
+            kind.SetValue(TextBlock.FontSizeProperty, 10.0);
+            kind.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
+            stack.AppendChild(kind);
 
-            var kindFactory = new FrameworkElementFactory(typeof(TextBlock));
-            kindFactory.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding(nameof(StyleListItem.Kind)));
-            kindFactory.SetValue(FrameworkElement.MarginProperty, new Thickness(6, 0, 0, 0));
-            kindFactory.SetValue(UIElement.OpacityProperty, 0.6);
-            kindFactory.SetValue(TextBlock.FontSizeProperty, 10.0);
-            kindFactory.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
-            stackFactory.AppendChild(kindFactory);
-
-            template.VisualTree = stackFactory;
+            dock.AppendChild(stack);
+            template.VisualTree = dock;
             return template;
+        }
+
+        /// <summary>Upper-cases the style-list section label ("Your styles" → "YOUR STYLES").</summary>
+        private sealed class UpperCaseConverter : System.Windows.Data.IValueConverter
+        {
+            public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+                => (value as string)?.ToUpperInvariant() ?? value;
+            public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+                => throw new NotSupportedException();
         }
 
         // -----------------------------------------------------------------
@@ -911,82 +1059,78 @@ namespace AkmlSql.Shell.Shared.Formatting
         // -----------------------------------------------------------------
         private FrameworkElement BuildMiddlePanel()
         {
-            var panel = new Grid();
+            var res = ThemeRegistry.Instance.Resources;
+
+            var panel = new Grid { Margin = new Thickness(Spacing.Sm) };
             panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
-            var label = new TextBlock
-            {
-                Text = "Settings",
-                FontFamily = Typography.UiFont,
-                FontSize = Typography.BodyStrong,
-                FontWeight = Typography.WeightSemiBold,
-                Margin = new Thickness(Spacing.Md, Spacing.Md, Spacing.Md, Spacing.Sm),
-            };
-            label.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPrimary);
-            Grid.SetRow(label, 0);
-            panel.Children.Add(label);
+            var header = MakeSectionHeader("STYLE OPTIONS");
+            Grid.SetRow(header, 0);
+            panel.Children.Add(header);
 
             _settingsTree = new TreeView
             {
-                Margin = new Thickness(Spacing.Sm, 0, Spacing.Sm, Spacing.Sm),
-                BorderThickness = new Thickness(1),
+                BorderThickness = new Thickness(0),
+                Background = System.Windows.Media.Brushes.Transparent,
                 FontFamily = Typography.UiFont,
                 FontSize = Typography.Body,
             };
-            _settingsTree.SetResourceReference(Control.BackgroundProperty, ThemeTokens.SurfaceInput);
             _settingsTree.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
-            _settingsTree.SetResourceReference(Control.BorderBrushProperty, ThemeTokens.BorderDefault);
-            // (Spec 033 cleanup: the old SelectedItemChanged handler was dead code — SelectedItem
-            // is always a TreeViewItem, never a FormatSettingNode; the per-node Selected event
-            // wired in RebuildSettingsTreeFromSchema is the live path.)
+            ScrollViewer.SetHorizontalScrollBarVisibility(_settingsTree, ScrollBarVisibility.Disabled);
+
+            // Themed selection: the selected group leaf gets an accent bar + on-accent text
+            // (SQL Prompt look). Groups are the selectable leaves; categories only expand.
+            if (res[ThemeTokens.AccentPrimary] is System.Windows.Media.Brush accent)
+            {
+                _settingsTree.Resources[SystemColors.HighlightBrushKey] = accent;
+                _settingsTree.Resources[SystemColors.InactiveSelectionHighlightBrushKey] = accent;
+            }
+            if (res[ThemeTokens.TextOnAccent] is System.Windows.Media.Brush onAccent)
+            {
+                _settingsTree.Resources[SystemColors.HighlightTextBrushKey] = onAccent;
+                _settingsTree.Resources[SystemColors.InactiveSelectionHighlightTextBrushKey] = onAccent;
+            }
             Grid.SetRow(_settingsTree, 1);
             panel.Children.Add(_settingsTree);
 
-            Grid.SetColumn(panel, 2);
-            return panel;
+            return MakePaneCard(2, panel);
         }
 
         // -----------------------------------------------------------------
-        // Right panel — controls (top, placeholder) + preview (bottom, placeholder)
+        // Right panel — settings form for the selected group (top) + live preview (bottom)
         // -----------------------------------------------------------------
         private FrameworkElement BuildRightPanel()
         {
             var panel = new Grid();
-            panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(60, GridUnitType.Star) });
-            panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(5) }); // splitter
-            panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(40, GridUnitType.Star) });
+            Grid.SetColumn(panel, 4);
+            panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(58, GridUnitType.Star) }); // form
+            panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(Spacing.Sm) });            // splitter
+            panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(42, GridUnitType.Star) }); // preview
 
-            // Top: dynamic controls area — built per-selection by RenderControlsForSetting
-            var topBorder = new Border
-            {
-                Margin = new Thickness(Spacing.Sm, Spacing.Md, Spacing.Md, Spacing.Sm),
-                BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(4),
-                Padding = new Thickness(Spacing.Md),
-            };
-            topBorder.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.BorderDefault);
-            topBorder.SetResourceReference(Panel.BackgroundProperty, ThemeTokens.SurfaceInput);
+            // ── Settings form card ─────────────────────────────────────────
+            var formCard = new Border { CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(1) };
+            formCard.SetResourceReference(Panel.BackgroundProperty, ThemeTokens.SurfacePanel);
+            formCard.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.BorderDefault);
 
-            var topScroll = new ScrollViewer
+            var formGrid = new Grid { Margin = new Thickness(Spacing.Md, Spacing.Sm, Spacing.Md, Spacing.Md) };
+            formGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                       // breadcrumb title
+            formGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                       // read-only hint
+            formGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });  // scrolling form
+
+            // Breadcrumb page title ("Global › Lists") — set by UpdateRightForGroup.
+            _breadcrumbText = new TextBlock
             {
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            };
-            _settingControlsHost = new StackPanel
-            {
-                Orientation = Orientation.Vertical,
-            };
-            _settingControlsEmpty = new TextBlock
-            {
-                Text = "Select a setting from the tree to edit it.",
-                TextWrapping = TextWrapping.Wrap,
+                Text = "Select a category",
                 FontFamily = Typography.UiFont,
-                FontSize = Typography.Body,
+                FontSize = Typography.BodyStrong,
+                FontWeight = Typography.WeightSemiBold,
+                Margin = new Thickness(0, Spacing.Xs, 0, Spacing.Sm),
+                TextTrimming = TextTrimming.CharacterEllipsis,
             };
-            _settingControlsEmpty.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
-            _settingControlsHost.Children.Add(_settingControlsEmpty);
-            topScroll.Content = _settingControlsHost;
+            _breadcrumbText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.AccentPrimary);
+            Grid.SetRow(_breadcrumbText, 0);
+            formGrid.Children.Add(_breadcrumbText);
 
             // Spec 033 (T016) — read-only hint shown while a built-in style is loaded.
             _readOnlyHint = new Border
@@ -995,10 +1139,10 @@ namespace AkmlSql.Shell.Shared.Formatting
                 Padding = new Thickness(Spacing.Sm),
                 Margin = new Thickness(0, 0, 0, Spacing.Sm),
                 CornerRadius = new CornerRadius(3),
+                BorderThickness = new Thickness(1),
             };
-            _readOnlyHint.SetResourceReference(Panel.BackgroundProperty, ThemeTokens.SurfacePanel);
-            _readOnlyHint.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.BorderDefault);
-            _readOnlyHint.BorderThickness = new Thickness(1);
+            _readOnlyHint.SetResourceReference(Panel.BackgroundProperty, ThemeTokens.SurfaceHover);
+            _readOnlyHint.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.BorderSubtle);
             var readOnlyHintText = new TextBlock
             {
                 Text = "This built-in style is read-only — use Copy to create an editable version.",
@@ -1008,67 +1152,76 @@ namespace AkmlSql.Shell.Shared.Formatting
             };
             readOnlyHintText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
             _readOnlyHint.Child = readOnlyHintText;
+            Grid.SetRow(_readOnlyHint, 1);
+            formGrid.Children.Add(_readOnlyHint);
 
-            var topStack = new Grid();
-            topStack.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            topStack.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-            Grid.SetRow(_readOnlyHint, 0);
-            topStack.Children.Add(_readOnlyHint);
-            Grid.SetRow(topScroll, 1);
-            topStack.Children.Add(topScroll);
-            topBorder.Child = topStack;
-            Grid.SetRow(topBorder, 0);
-            panel.Children.Add(topBorder);
+            var formScroll = new ScrollViewer
+            {
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            };
+            _settingControlsHost = new StackPanel { Orientation = Orientation.Vertical };
+            _settingControlsEmpty = new TextBlock
+            {
+                Text = "Select a category on the left to edit its settings.",
+                TextWrapping = TextWrapping.Wrap,
+                FontFamily = Typography.UiFont,
+                FontSize = Typography.Body,
+                Margin = new Thickness(0, Spacing.Sm, 0, 0),
+            };
+            _settingControlsEmpty.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+            _settingControlsHost.Children.Add(_settingControlsEmpty);
+            formScroll.Content = _settingControlsHost;
+            Grid.SetRow(formScroll, 2);
+            formGrid.Children.Add(formScroll);
 
-            // Splitter (horizontal)
+            formCard.Child = formGrid;
+            Grid.SetRow(formCard, 0);
+            panel.Children.Add(formCard);
+
+            // ── Splitter (horizontal, invisible in the 8px gutter row) ─────
             var hSplitter = new GridSplitter
             {
-                Height = 5,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
-                VerticalAlignment = VerticalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Stretch, // fill the 8px gutter row so it stays draggable
                 ResizeDirection = GridResizeDirection.Rows,
                 ShowsPreview = false,
+                Background = System.Windows.Media.Brushes.Transparent,
             };
-            hSplitter.SetResourceReference(Control.BackgroundProperty, ThemeTokens.BorderSplitter);
             Grid.SetRow(hSplitter, 1);
             panel.Children.Add(hSplitter);
 
-            // Bottom: live preview — read-only mono text bound to PreviewText, with an
-            // optional warning bar above it (T070: shown when stage-6 SemanticValidator
-            // rejects the formatted output for the current settings).
-            var bottomBorder = new Border
-            {
-                Margin = new Thickness(Spacing.Sm, Spacing.Sm, Spacing.Md, Spacing.Md),
-                BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(4),
-                Padding = new Thickness(0),
-            };
-            bottomBorder.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.BorderDefault);
-            bottomBorder.SetResourceReference(Panel.BackgroundProperty, ThemeTokens.EditorPopupBackground);
+            // ── Live preview card (fixed dark editor panel in both themes, à la SQL Prompt) ──
+            var previewCard = new Border { CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(1) };
+            previewCard.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.BorderDefault);
+            previewCard.Background = PreviewBgBrush;
 
-            var bottomStack = new Grid();
-            bottomStack.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // T019 source toggle
-            bottomStack.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // warning bar
-            bottomStack.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // preview
+            var previewGrid = new Grid();
+            previewGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                       // header + source controls
+            previewGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                       // warning bar
+            previewGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });  // preview text
+            previewGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                       // caption
+
+            // Header: LIVE PREVIEW (left) + preview-source controls (right).
+            var previewHeader = new Grid { Margin = new Thickness(Spacing.Md, Spacing.Sm, Spacing.Md, Spacing.Xs) };
+            previewHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            previewHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            var previewLabel = new TextBlock
+            {
+                Text = "LIVE PREVIEW",
+                FontFamily = Typography.UiFont,
+                FontSize = Typography.Small,
+                FontWeight = Typography.WeightSemiBold,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            previewLabel.Foreground = PreviewMutedBrush;
+            Grid.SetColumn(previewLabel, 0);
+            previewHeader.Children.Add(previewLabel);
 
             // Spec 030 T019 / FR-008 — preview the active style against the sample OR the SQL from
             // the editor that was open when this dialog launched.
-            var sourceBar = new Border
-            {
-                Padding = new Thickness(Spacing.Md, Spacing.Xs, Spacing.Md, Spacing.Xs),
-                BorderThickness = new Thickness(0, 0, 0, 1),
-            };
-            sourceBar.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.BorderSubtle);
-            var sourceStack = new StackPanel { Orientation = Orientation.Horizontal };
-            var sourceLabel = new TextBlock
-            {
-                Text = "Preview:",
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, Spacing.Sm, 0),
-                FontFamily = Typography.UiFont,
-                FontSize = Typography.Small,
-            };
-            sourceLabel.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+            var sourceStack = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
             var rbSample = new RadioButton
             {
                 Content = "Sample",
@@ -1079,7 +1232,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                 FontFamily = Typography.UiFont,
                 FontSize = Typography.Small,
             };
-            rbSample.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
+            rbSample.Foreground = PreviewTextBrush;
             var rbCurrent = new RadioButton
             {
                 Content = "Current query",
@@ -1091,7 +1244,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                 IsEnabled = _viewModel.HasCurrentQuery,
                 ToolTip = _viewModel.HasCurrentQuery ? null : "No active SQL editor when this dialog opened.",
             };
-            rbCurrent.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
+            rbCurrent.Foreground = PreviewTextBrush;
             rbSample.Checked += (_, _) =>
             {
                 _viewModel.PreviewSourceMode = FormatPreviewSource.Sample;
@@ -1121,7 +1274,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                 FontSize = Typography.Small,
                 ToolTip = "Edit the sample SQL the preview formats. Changes persist across sessions.",
             };
-            _editSampleToggle.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
+            _editSampleToggle.Foreground = PreviewTextBrush;
             _editSampleToggle.Checked += (_, _) =>
             {
                 if (_previewTextBox == null) return;
@@ -1136,23 +1289,24 @@ namespace AkmlSql.Shell.Shared.Formatting
                 _previewTextBox.Text = _viewModel.PreviewText;
             };
 
-            sourceStack.Children.Add(sourceLabel);
             sourceStack.Children.Add(rbSample);
             sourceStack.Children.Add(rbCurrent);
             sourceStack.Children.Add(_editSampleToggle);
-            sourceBar.Child = sourceStack;
-            Grid.SetRow(sourceBar, 0);
-            bottomStack.Children.Add(sourceBar);
+            Grid.SetColumn(sourceStack, 1);
+            previewHeader.Children.Add(sourceStack);
+            Grid.SetRow(previewHeader, 0);
+            previewGrid.Children.Add(previewHeader);
 
             _previewWarningBar = new Border
             {
                 Padding = new Thickness(Spacing.Md, Spacing.Sm, Spacing.Md, Spacing.Sm),
                 Visibility = Visibility.Collapsed,
-                BorderThickness = new Thickness(0, 0, 0, 1),
+                BorderThickness = new Thickness(0, 1, 0, 1),
             };
-            // Amber/yellow is a semantic colour per CLAUDE.md's allow-list — same in both themes.
+            // Amber/yellow is a semantic colour per CLAUDE.md's allow-list. Near-solid fill + fixed
+            // dark text so the strip reads on the dark preview panel in both themes.
             _previewWarningBar.Background = Freeze(new System.Windows.Media.SolidColorBrush(
-                System.Windows.Media.Color.FromArgb(0x40, 0xFB, 0xBF, 0x24)));
+                System.Windows.Media.Color.FromArgb(0xF2, 0xFB, 0xBF, 0x24)));
             _previewWarningBar.BorderBrush = Freeze(new System.Windows.Media.SolidColorBrush(
                 System.Windows.Media.Color.FromArgb(0xFF, 0xFB, 0xBF, 0x24)));
             _previewWarningText = new TextBlock
@@ -1160,11 +1314,11 @@ namespace AkmlSql.Shell.Shared.Formatting
                 TextWrapping = TextWrapping.Wrap,
                 FontFamily = Typography.UiFont,
                 FontSize = Typography.Body,
+                Foreground = PreviewWarnTextBrush,
             };
-            _previewWarningText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPrimary);
             _previewWarningBar.Child = _previewWarningText;
             Grid.SetRow(_previewWarningBar, 1);
-            bottomStack.Children.Add(_previewWarningBar);
+            previewGrid.Children.Add(_previewWarningBar);
 
             _previewTextBox = new TextBox
             {
@@ -1175,20 +1329,30 @@ namespace AkmlSql.Shell.Shared.Formatting
                 FontSize = Typography.Body,
                 BorderThickness = new Thickness(0),
                 Background = System.Windows.Media.Brushes.Transparent,
-                Padding = new Thickness(Spacing.Md),
+                Padding = new Thickness(Spacing.Md, Spacing.Xs, Spacing.Md, Spacing.Xs),
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-                Text = "// Live preview will appear after the schema loads and a profile is selected.",
+                Text = "-- The live preview appears once the schema loads and a style is selected.",
             };
-            _previewTextBox.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
+            _previewTextBox.Foreground = PreviewTextBrush;
             Grid.SetRow(_previewTextBox, 2);
-            bottomStack.Children.Add(_previewTextBox);
+            previewGrid.Children.Add(_previewTextBox);
 
-            bottomBorder.Child = bottomStack;
-            Grid.SetRow(bottomBorder, 2);
-            panel.Children.Add(bottomBorder);
+            var caption = new TextBlock
+            {
+                Text = "Preview updates as you change settings.",
+                FontFamily = Typography.UiFont,
+                FontSize = Typography.Small,
+                Margin = new Thickness(Spacing.Md, Spacing.Xs, Spacing.Md, Spacing.Sm),
+            };
+            caption.Foreground = PreviewCaptionBrush;
+            Grid.SetRow(caption, 3);
+            previewGrid.Children.Add(caption);
 
-            Grid.SetColumn(panel, 4);
+            previewCard.Child = previewGrid;
+            Grid.SetRow(previewCard, 2);
+            panel.Children.Add(previewCard);
+
             return panel;
         }
 
@@ -1200,6 +1364,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             if (_settingsTree == null) return;
 
             _settingsTree.Items.Clear();
+            TreeViewItem? firstLeaf = null;
 
             try
             {
@@ -1209,8 +1374,8 @@ namespace AkmlSql.Shell.Shared.Formatting
 
                 if (model.Categorized)
                 {
-                    // v2 — SQL Prompt's 2-level hierarchy (FR-012): categories expanded,
-                    // groups collapsed so the five-category overview stays readable.
+                    // v2 — SQL Prompt's category → page hierarchy: categories expand; each group
+                    // (page) is a selectable leaf whose whole settings list edits on the right.
                     foreach (var category in model.Categories)
                     {
                         var categoryNode = new TreeViewItem
@@ -1221,73 +1386,51 @@ namespace AkmlSql.Shell.Shared.Formatting
                         };
                         categoryNode.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
                         foreach (var group in category.Groups)
-                            categoryNode.Items.Add(BuildGroupNode(group, expanded: false));
+                        {
+                            var leaf = BuildGroupLeaf(group, category.DisplayName);
+                            categoryNode.Items.Add(leaf);
+                            firstLeaf ??= leaf;
+                        }
                         _settingsTree.Items.Add(categoryNode);
                     }
                 }
                 else
                 {
-                    // v1 schema (older engine) — flat rendering, unchanged behavior.
+                    // v1 schema (older engine) — flat: each group is a top-level leaf.
                     foreach (var group in model.FlatGroups)
-                        _settingsTree.Items.Add(BuildGroupNode(group, expanded: true));
+                    {
+                        var leaf = BuildGroupLeaf(group, null);
+                        _settingsTree.Items.Add(leaf);
+                        firstLeaf ??= leaf;
+                    }
                 }
             }
             catch (Exception ex)
             {
                 Log.Warning(ex, "FormatStylesEditor: failed to parse schema JSON");
             }
+
+            // Open on the first page so the form is never empty (SQL Prompt selects a page by default).
+            if (firstLeaf != null) firstLeaf.IsSelected = true;
         }
 
-        private TreeViewItem BuildGroupNode(FormatStylesSchemaModel.Group group, bool expanded)
+        /// <summary>A selectable settings *group* (SQL Prompt "page"); selecting it renders the
+        /// group's whole settings list as a form on the right, under a "Category › Group" title.</summary>
+        private TreeViewItem BuildGroupLeaf(FormatStylesSchemaModel.Group group, string? categoryDisplay)
         {
-            var groupNode = new TreeViewItem
+            var leaf = new TreeViewItem
             {
                 Header = group.DisplayName,
-                IsExpanded = expanded,
-                // Counteract the semi-bold category FontWeight (inherited property).
-                FontWeight = FontWeights.Normal,
+                FontWeight = FontWeights.Normal, // counteract the inherited semi-bold category weight
+                Tag = group,
             };
-            groupNode.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
-
-            foreach (var child in group.Settings)
+            leaf.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
+            leaf.Selected += (_, e) =>
             {
-                var childNode = new TreeViewItem { Header = BuildSettingNodeHeader(child) };
-                childNode.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
-                childNode.Tag = child;
-                childNode.Selected += (_, e) =>
-                {
-                    // TreeView's SelectedItem is the TreeViewItem; the data rides in Tag.
-                    if (childNode.Tag is FormatSettingNode node)
-                    {
-                        UpdateRightTopForSetting(node);
-                    }
-                    e.Handled = true;
-                };
-                groupNode.Items.Add(childNode);
-            }
-
-            return groupNode;
-        }
-
-        private FrameworkElement BuildSettingNodeHeader(FormatSettingNode setting)
-        {
-            var stack = new StackPanel { Orientation = Orientation.Horizontal };
-
-            var name = new TextBlock
-            {
-                Text = setting.DisplayName,
-                VerticalAlignment = VerticalAlignment.Center,
+                UpdateRightForGroup(group, categoryDisplay);
+                e.Handled = true;
             };
-            name.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPrimary);
-            stack.Children.Add(name);
-
-            // FR-023: unsupported badge — small muted pill adjacent to the label
-            if (string.Equals(setting.Status, "Unsupported", StringComparison.OrdinalIgnoreCase))
-            {
-                stack.Children.Add(BuildUnsupportedBadge());
-            }
-
-            return stack;
+            return leaf;
         }
 
         /// <summary>
@@ -1322,77 +1465,93 @@ namespace AkmlSql.Shell.Shared.Formatting
         }
 
         /// <summary>
-        /// Tier 2b — renders type-appropriate controls for the selected setting in the
-        /// right-top panel. Bool → CheckBox; Int → numeric TextBox; Enum (string) → TextBox
-        /// (free-form, AllowedEnumValues populated as suggestions later). Settings with
-        /// <c>Status == "Unsupported"</c> render disabled per FR-023; their imported value
-        /// is still visible.
+        /// Renders the selected group as a settings form (SQL Prompt "page"): a breadcrumb title
+        /// ("Category › Group") plus one label-left / control-right row per setting. Reused after
+        /// every style load so the controls reflect the freshly-loaded values.
         /// </summary>
-        private void UpdateRightTopForSetting(FormatSettingNode setting)
+        private void UpdateRightForGroup(FormatStylesSchemaModel.Group group, string? categoryDisplay)
         {
             if (_settingControlsHost == null) return;
 
-            _currentSettingNode = setting; // spec 033 — re-rendered after each style load
+            _currentGroup = group;
+            _currentGroupCategory = categoryDisplay;
+
+            if (_breadcrumbText != null)
+                _breadcrumbText.Text = categoryDisplay != null
+                    ? $"{categoryDisplay}  ›  {group.DisplayName}"
+                    : group.DisplayName;
 
             _settingControlsHost.Children.Clear();
 
-            // Header — setting name + Unsupported badge (if applicable)
-            var headerStack = new StackPanel
+            if (group.Settings.Count == 0)
+            {
+                var empty = new TextBlock
+                {
+                    Text = "This category has no editable settings.",
+                    FontFamily = Typography.UiFont,
+                    FontSize = Typography.Body,
+                    Margin = new Thickness(0, Spacing.Sm, 0, 0),
+                };
+                empty.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+                _settingControlsHost.Children.Add(empty);
+                return;
+            }
+
+            var index = 0;
+            foreach (var setting in group.Settings)
+                _settingControlsHost.Children.Add(BuildSettingRow(setting, index++));
+        }
+
+        /// <summary>One form row: setting label (left; +Unsupported badge; description as a tooltip)
+        /// and its type-driven control (right). Alternate rows get a subtle zebra tint.</summary>
+        private FrameworkElement BuildSettingRow(FormatSettingNode setting, int index)
+        {
+            var isDisabled = string.Equals(setting.Status, "Unsupported", StringComparison.OrdinalIgnoreCase);
+            var currentValue = _viewModel.GetWorkingValue(setting.Id);
+
+            var rowBorder = new Border
+            {
+                Padding = new Thickness(Spacing.Sm, Spacing.Xs + 1, Spacing.Sm, Spacing.Xs + 1),
+                CornerRadius = new CornerRadius(3),
+            };
+            if (index % 2 == 1)
+                rowBorder.SetResourceReference(Panel.BackgroundProperty, ThemeTokens.SurfaceCanvas); // zebra
+
+            var row = new Grid();
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(170) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            var labelStack = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
-                Margin = new Thickness(0, 0, 0, Spacing.Sm),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, Spacing.Sm, 0),
             };
-            var nameText = new TextBlock
+            var label = new TextBlock
             {
                 Text = setting.DisplayName,
                 FontFamily = Typography.UiFont,
-                FontSize = Typography.BodyStrong,
-                FontWeight = Typography.WeightSemiBold,
+                FontSize = Typography.Body,
                 VerticalAlignment = VerticalAlignment.Center,
-            };
-            nameText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPrimary);
-            headerStack.Children.Add(nameText);
-            if (string.Equals(setting.Status, "Unsupported", StringComparison.OrdinalIgnoreCase))
-            {
-                headerStack.Children.Add(BuildUnsupportedBadge());
-            }
-            _settingControlsHost.Children.Add(headerStack);
-
-            // Metadata line — Type, ID, SQL Prompt key
-            var metaText = new TextBlock
-            {
-                Text = $"Type: {setting.Type}    ID: {setting.Id}    " +
-                       (setting.SqlPromptKey != null
-                           ? $"SQL Prompt: {setting.SqlPromptKey}"
-                           : "(AKML-only)"),
-                FontFamily = Typography.UiFont,
-                FontSize = Typography.Small,
-                Margin = new Thickness(0, 0, 0, Spacing.Md),
                 TextWrapping = TextWrapping.Wrap,
+                ToolTip = string.IsNullOrWhiteSpace(setting.Description) ? null : setting.Description,
             };
-            metaText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
-            _settingControlsHost.Children.Add(metaText);
+            label.SetResourceReference(TextBlock.ForegroundProperty, isDisabled ? ThemeTokens.TextDisabled : ThemeTokens.TextSecondary);
+            labelStack.Children.Add(label);
+            if (isDisabled) labelStack.Children.Add(BuildUnsupportedBadge());
+            Grid.SetColumn(labelStack, 0);
+            row.Children.Add(labelStack);
 
-            // Spec 033 (T023) — schema-v2 per-setting description (absent on v1 engines).
-            if (!string.IsNullOrWhiteSpace(setting.Description))
-            {
-                var descText = new TextBlock
-                {
-                    Text = setting.Description,
-                    FontFamily = Typography.UiFont,
-                    FontSize = Typography.Body,
-                    TextWrapping = TextWrapping.Wrap,
-                    Margin = new Thickness(0, 0, 0, Spacing.Md),
-                };
-                descText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
-                _settingControlsHost.Children.Add(descText);
-            }
-
-            // Type-driven control
-            var isDisabled = string.Equals(setting.Status, "Unsupported", StringComparison.OrdinalIgnoreCase);
-            var currentValue = _viewModel.GetWorkingValue(setting.Id);
+            // Each control sets its own horizontal alignment (checkbox left; combos/text boxes
+            // stretch to fill the column up to MaxWidth); the row only caps and centres them.
             var control = BuildControlForSetting(setting, currentValue, isDisabled);
-            _settingControlsHost.Children.Add(control);
+            control.VerticalAlignment = VerticalAlignment.Center;
+            control.MaxWidth = 280;
+            Grid.SetColumn(control, 1);
+            row.Children.Add(control);
+
+            rowBorder.Child = row;
+            return rowBorder;
         }
 
         /// <summary>
@@ -1410,11 +1569,12 @@ namespace AkmlSql.Shell.Shared.Formatting
                 case FormatStylesSchemaModel.ControlKind.CheckBox:
                 {
                     var initial = currentValue is bool b ? b : ParseBool(setting.DefaultJson);
+                    // Bare checkbox — the setting name is the row label to its left (SQL Prompt layout).
                     var checkBox = new CheckBox
                     {
-                        Content = setting.DisplayName,
                         IsChecked = initial,
                         IsEnabled = !isDisabled,
+                        HorizontalAlignment = HorizontalAlignment.Left,
                         FontFamily = Typography.UiFont,
                         FontSize = Typography.Body,
                     };
@@ -1430,11 +1590,11 @@ namespace AkmlSql.Shell.Shared.Formatting
                 {
                     var initial = currentValue?.ToString() ?? setting.DefaultJson.Trim('"');
 
-                    var row = new StackPanel { Orientation = Orientation.Horizontal };
+                    var row = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Left };
                     var textBox = new TextBox
                     {
                         Text = initial,
-                        Width = 100,
+                        Width = 72,
                         HorizontalAlignment = HorizontalAlignment.Left,
                         IsEnabled = !isDisabled,
                         FontFamily = Typography.UiFont,
@@ -1496,8 +1656,7 @@ namespace AkmlSql.Shell.Shared.Formatting
 
                     var combo = new ComboBox
                     {
-                        Width = 240,
-                        HorizontalAlignment = HorizontalAlignment.Left,
+                        HorizontalAlignment = HorizontalAlignment.Stretch,
                         IsEnabled = !isDisabled,
                         FontFamily = Typography.UiFont,
                         FontSize = Typography.Body,
@@ -1525,8 +1684,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                     var textBox = new TextBox
                     {
                         Text = initial,
-                        Width = 240,
-                        HorizontalAlignment = HorizontalAlignment.Left,
+                        HorizontalAlignment = HorizontalAlignment.Stretch,
                         IsEnabled = !isDisabled,
                         FontFamily = Typography.UiFont,
                         FontSize = Typography.Body,
@@ -1586,38 +1744,34 @@ namespace AkmlSql.Shell.Shared.Formatting
 
         private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
+            // The VM raises INotifyPropertyChanged from whatever thread it happens to be on:
+            // LoadAsync resumes on a thread-pool thread after its ConfigureAwait(false) awaits, so
+            // its `finally { IsLoading = false; }` fires off-dispatcher; the debounced preview
+            // refresh (PreviewText) fires from a background Task. Every branch below mutates
+            // thread-affine WPF controls, so marshal the whole handler to the window's own
+            // dispatcher once here rather than guarding each branch individually. (Was: the
+            // IsLoading branch wrote _statusText.Text from the pool thread, crashing editor open
+            // with "The calling thread cannot access this object because a different thread owns it".)
+            if (!Dispatcher.CheckAccess())
+            {
+                Dispatcher.BeginInvoke(new Action(() => OnViewModelPropertyChanged(sender, e)));
+                return;
+            }
+
             if (e.PropertyName == nameof(FormatStylesEditorViewModel.IsLoading) && _statusText != null)
             {
                 UpdateStatus(_viewModel.IsLoading ? "Loading…" : (_viewModel.LastError ?? $"{_viewModel.Profiles.Count} style(s)."));
             }
             else if (e.PropertyName == nameof(FormatStylesEditorViewModel.PreviewText) && _previewTextBox != null)
             {
-                // Marshal to UI thread — preview refresh fires from a background Task.
                 // Spec 033 (T025): while the user is editing the sample, the box shows the RAW
                 // sample — a formatted-preview refresh must not clobber their typing.
-                if (!System.Windows.Application.Current.Dispatcher.CheckAccess())
-                {
-                    System.Windows.Application.Current.Dispatcher.BeginInvoke(new Action(() =>
-                    {
-                        if (!EditingSample) _previewTextBox.Text = _viewModel.PreviewText;
-                    }));
-                }
-                else
-                {
-                    if (!EditingSample) _previewTextBox.Text = _viewModel.PreviewText;
-                }
+                if (!EditingSample) _previewTextBox.Text = _viewModel.PreviewText;
             }
             else if (e.PropertyName == nameof(FormatStylesEditorViewModel.PreviewValidationError))
             {
                 // T070 — toggle the warning bar above the preview pane.
-                if (!System.Windows.Application.Current.Dispatcher.CheckAccess())
-                {
-                    System.Windows.Application.Current.Dispatcher.BeginInvoke(new Action(UpdatePreviewWarningBar));
-                }
-                else
-                {
-                    UpdatePreviewWarningBar();
-                }
+                UpdatePreviewWarningBar();
             }
             else if (e.PropertyName == nameof(FormatStylesEditorViewModel.IsDirty)
                      || e.PropertyName == nameof(FormatStylesEditorViewModel.IsSelectedReadOnly))
