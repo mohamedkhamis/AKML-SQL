@@ -450,14 +450,16 @@ namespace AkmlSql.Shell.Shared.Formatting
             };
 
             _styleList.SelectionChanged += async (_, _) => await OnStyleSelectionChangedAsync();
-            // Spec 033 — double-clicking a read-only built-in copies it (Redgate behavior).
+            // Double-click ACTIVATES the style (user-requested, 2026-07-25). This replaces the
+            // earlier spec-033 Redgate behaviour of copying a read-only built-in: "make this the
+            // style I format with" is the action people expect from double-clicking a list row,
+            // and treating a built-in differently from a custom style made the gesture
+            // unpredictable. Copy remains on the ⋮ / right-click menu.
             _styleList.MouseDoubleClick += async (_, _) =>
             {
-                if (_styleList?.SelectedItem is StyleListItem { IsReadOnly: true })
-                {
-                    try { await OnCopyStyleAsync(); }
-                    catch (Exception ex) { Log.Warning(ex, "FormatStylesEditor: double-click copy failed"); SetStatus(ex.Message); }
-                }
+                if (_styleList?.SelectedItem is not StyleListItem item || item.IsActive) return;
+                try { await OnSetActiveAsync(); }
+                catch (Exception ex) { Log.Warning(ex, "FormatStylesEditor: double-click activate failed"); SetStatus(ex.Message); }
             };
             Grid.SetRow(_styleList, 1);
             panel.Children.Add(_styleList);

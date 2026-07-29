@@ -20,14 +20,14 @@ namespace AkmlSql.Shell.Shared.Tests
 
         public ProfileFallbackNoticeTests()
         {
-            FormatRequestDispatcher.ResetProfileFallbackWarnings();
-            FormatRequestDispatcher.ProfileFallbackNotifierOverride = m => _shown.Add(m);
+            FormatFailureNotifier.ResetProfileFallbackWarnings();
+            FormatFailureNotifier.ProfileFallbackNotifierOverride = m => _shown.Add(m);
         }
 
         public void Dispose()
         {
-            FormatRequestDispatcher.ProfileFallbackNotifierOverride = null;
-            FormatRequestDispatcher.ResetProfileFallbackWarnings();
+            FormatFailureNotifier.ProfileFallbackNotifierOverride = null;
+            FormatFailureNotifier.ResetProfileFallbackWarnings();
         }
 
         [Fact]
@@ -36,7 +36,7 @@ namespace AkmlSql.Shell.Shared.Tests
             const string warning = "Formatting style 'Khamis Style' could not be loaded...";
 
             for (var i = 0; i < 25; i++)   // simulates format-on-delimiter typing
-                FormatRequestDispatcher.NotifyProfileFallbackOnce(warning);
+                FormatFailureNotifier.NotifyProfileFallbackOnce(warning);
 
             Assert.Single(_shown);
             Assert.Equal(warning, _shown[0]);
@@ -45,9 +45,9 @@ namespace AkmlSql.Shell.Shared.Tests
         [Fact]
         public void DistinctStyles_EachGetTheirOwnNotice()
         {
-            FormatRequestDispatcher.NotifyProfileFallbackOnce("style 'A' could not be loaded");
-            FormatRequestDispatcher.NotifyProfileFallbackOnce("style 'B' could not be loaded");
-            FormatRequestDispatcher.NotifyProfileFallbackOnce("style 'A' could not be loaded");
+            FormatFailureNotifier.NotifyProfileFallbackOnce("style 'A' could not be loaded");
+            FormatFailureNotifier.NotifyProfileFallbackOnce("style 'B' could not be loaded");
+            FormatFailureNotifier.NotifyProfileFallbackOnce("style 'A' could not be loaded");
 
             Assert.Equal(2, _shown.Count);
         }
@@ -59,7 +59,7 @@ namespace AkmlSql.Shell.Shared.Tests
         public void NoWarning_ShowsNothing(string? warning)
         {
             // The success path passes null here on every single format — it must stay silent.
-            FormatRequestDispatcher.NotifyProfileFallbackOnce(warning);
+            FormatFailureNotifier.NotifyProfileFallbackOnce(warning);
 
             Assert.Empty(_shown);
         }

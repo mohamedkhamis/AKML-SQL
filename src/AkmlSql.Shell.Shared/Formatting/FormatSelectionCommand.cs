@@ -58,7 +58,11 @@ namespace AkmlSql.Shell.Shared.Formatting
                     SessionId = Guid.NewGuid().ToString("N"),
                     Text = fullText,
                     SelectionStart = startOffset,
-                    SelectionEnd = endOffset
+                    SelectionEnd = endOffset,
+                    // Same omission as Format Document had: the engine honours ProfileName here
+                    // (HandleFormatSelection → LoadProfile), so leaving it null formatted the
+                    // selection with POCO defaults instead of the active style.
+                    ProfileName = FormatActionHelper.ResolveActiveProfileName(),
                 };
 
                 System.Threading.Tasks.Task.Run(async () =>

@@ -71,6 +71,54 @@ namespace AkmlSql.Shell.Shared.Formatting
             }
         }
 
+        // ── Profile-fallback notice (spec 033 follow-up) ─────────────────────────────────
+        //
+        // Lives here, not on FormatRequestDispatcher: that dispatcher is currently unreferenced
+        // production code (a deletion candidate), and the LIVE caller is FormatDocumentCommand —
+        // removing the dispatcher must not silently take Format SQL's missing-style notice with it.
+        // Warned-once bookkeeping is process-wide (static) so every format trigger shares it.
+
+        private static readonly object FallbackGate = new object();
+        private static readonly System.Collections.Generic.HashSet<string> WarnedFallbacks =
+            new System.Collections.Generic.HashSet<string>(StringComparer.Ordinal);
+
+        /// <summary>
+        /// Test seam: replaced by unit tests to capture the notice without a live VS shell.
+        /// Null in production, where the message box is shown instead.
+        /// </summary>
+        internal static Action<string>? ProfileFallbackNotifierOverride { get; set; }
+
+        /// <summary>Clears the warned-once set. Test-only — keeps cases independent.</summary>
+        internal static void ResetProfileFallbackWarnings()
+        {
+            lock (FallbackGate) WarnedFallbacks.Clear();
+        }
+
+        /// <summary>Internal (not private) so the dedupe contract is unit-testable without a
+        /// live engine connection — <c>PipeRpcClient</c> is concrete and cannot be faked.</summary>
+        internal static void NotifyProfileFallbackOnce(string? warning)
+        {
+            if (string.IsNullOrWhiteSpace(warning)) return;
+
+            lock (FallbackGate)
+            {
+                if (!WarnedFallbacks.Add(warning!)) return;   // already told them this session
+            }
+
+            Log.Warning("Format: {Warning}", warning);
+
+            var notifier = ProfileFallbackNotifierOverride;
+            if (notifier != null)
+            {
+                notifier(warning!);
+                return;
+            }
+
+            // Fire-and-forget: formatting must not block on a message box.
+            _ = ShowNoticeAsync(warning!);
+        }
+
+
         private static string BuildMessage(bool success, FormatDiagnosticInfo[]? diagnostics)
         {
             var detail = FirstMeaningfulMessage(diagnostics);
