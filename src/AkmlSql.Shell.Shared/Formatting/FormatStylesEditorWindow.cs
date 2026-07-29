@@ -53,6 +53,14 @@ namespace AkmlSql.Shell.Shared.Formatting
         /// <summary>First-class "Set as active" affordance under the style list — activation was
         /// previously reachable only from the per-row ⋮ / right-click menu.</summary>
         private Button? _setActiveButton;
+
+        // Header state line — the window narrates what it is editing and what Format SQL will use.
+        private TextBlock? _headerSubject;
+        private Border? _headerReadOnlyChip;   // fixed label — visibility only
+        private Border? _headerDirtyChip;      // fixed label — visibility only
+        private Border? _headerActiveChip;
+        private TextBlock? _headerActiveChipText;
+        private TextBlock? _stylesHeader;
         private Border? _readOnlyHint;
         // SQL Prompt-parity redesign: the right pane edits a whole settings *group* (SQL Prompt's
         // "page") at once, not one setting at a time. _currentGroup is the group whose form is
@@ -143,18 +151,62 @@ namespace AkmlSql.Shell.Shared.Formatting
             };
             header.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.BorderSubtle);
             header.SetResourceReference(Panel.BackgroundProperty, ThemeTokens.SurfacePanel);
-            var headerStack = new StackPanel { Orientation = Orientation.Horizontal };
-            var headerTitle = new TextBlock
+            // The header states what the window is DOING, rather than repeating its own title.
+            // A user opens this dialog with two questions — "which style am I editing (and have I
+            // changed it?)" and "which style will Format SQL actually use?" — and previously it
+            // answered neither: the edited style was implied only by a list highlight, unsaved work
+            // only by a greyed Save button, and the active style by one small badge inside a
+            // scrollable row. That gap is what made "selecting a style doesn't mark it" feel broken.
+            var headerGrid = new Grid();
+            headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); // subject
+            headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });                      // state chips
+
+            var subjectStack = new StackPanel { Orientation = Orientation.Vertical, VerticalAlignment = VerticalAlignment.Center };
+
+            // "EDITING" labels the style name below it. (Deliberately not repeating the window's
+            // own title — the title bar already says "Format Styles Editor"; a header that echoes it
+            // would spend the most valuable line in the window on nothing.)
+            var eyebrow = new TextBlock
             {
-                Text = "Edit Formatting Styles",
+                Text = "EDITING",
+                FontFamily = Typography.UiFont,
+                FontSize = Typography.Small,
+                FontWeight = Typography.WeightSemiBold,
+                Margin = new Thickness(0, 0, 0, 1),
+            };
+            eyebrow.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+            subjectStack.Children.Add(eyebrow);
+
+            _headerSubject = new TextBlock
+            {
+                Text = "No style selected",
                 FontFamily = Typography.UiFont,
                 FontSize = Typography.H4,
                 FontWeight = Typography.WeightSemiBold,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+            };
+            _headerSubject.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPrimary);
+            subjectStack.Children.Add(_headerSubject);
+
+            Grid.SetColumn(subjectStack, 0);
+            headerGrid.Children.Add(subjectStack);
+
+            var chips = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
                 VerticalAlignment = VerticalAlignment.Center,
             };
-            headerTitle.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPrimary);
-            headerStack.Children.Add(headerTitle);
-            header.Child = headerStack;
+            _headerReadOnlyChip = MakeHeaderChip("Built-in · read-only", accent: false, out _);
+            _headerDirtyChip = MakeHeaderChip("Unsaved changes", accent: true, out _);
+            _headerActiveChip = MakeHeaderChip("Active: —", accent: true, out _headerActiveChipText);
+            _headerActiveChip.ToolTip = "The style Format SQL uses";
+            chips.Children.Add(_headerReadOnlyChip);
+            chips.Children.Add(_headerDirtyChip);
+            chips.Children.Add(_headerActiveChip);
+            Grid.SetColumn(chips, 1);
+            headerGrid.Children.Add(chips);
+
+            header.Child = headerGrid;
             Grid.SetRow(header, 0);
             root.Children.Add(header);
 
@@ -308,9 +360,9 @@ namespace AkmlSql.Shell.Shared.Formatting
             panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });  // list
             panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                       // + New Style CTA
 
-            var header = MakeSectionHeader("STYLES");
-            Grid.SetRow(header, 0);
-            panel.Children.Add(header);
+            _stylesHeader = MakeSectionHeader("STYLES");
+            Grid.SetRow(_stylesHeader, 0);
+            panel.Children.Add(_stylesHeader);
 
             _styleList = new ListBox
             {
@@ -438,6 +490,87 @@ namespace AkmlSql.Shell.Shared.Formatting
             panel.Children.Add(listFooter);
 
             return MakePaneCard(0, panel);
+        }
+
+        /// <summary>
+        /// A compact header status chip. <paramref name="accent"/> chips carry the accent token
+        /// (state the user must notice: unsaved work, which style is active); neutral chips use the
+        /// muted token (context only). Starts collapsed — <see cref="UpdateHeaderState"/> shows it.
+        /// </summary>
+        private Border MakeHeaderChip(string text, bool accent, out TextBlock label)
+        {
+            label = new TextBlock
+            {
+                Text = text,
+                FontFamily = Typography.UiFont,
+                FontSize = Typography.Small,
+                FontWeight = Typography.WeightSemiBold,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            label.SetResourceReference(TextBlock.ForegroundProperty,
+                accent ? ThemeTokens.AccentPrimary : ThemeTokens.TextSecondary);
+
+            var chip = new Border
+            {
+                Child = label,
+                CornerRadius = new CornerRadius(2),
+                BorderThickness = new Thickness(1),
+                Padding = new Thickness(Spacing.Xs, 1, Spacing.Xs, 1),
+                Margin = new Thickness(Spacing.Xs, 0, 0, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+                Visibility = Visibility.Collapsed,
+            };
+            chip.SetResourceReference(Border.BorderBrushProperty,
+                accent ? ThemeTokens.AccentPrimary : ThemeTokens.BorderSubtle);
+            return chip;
+        }
+
+        /// <summary>
+        /// Re-states the header from live view-model state: the style being edited, whether it is a
+        /// read-only built-in, whether it has unsaved edits, and which style Format SQL will use.
+        /// Cheap and idempotent — called from every place that can change any of those.
+        /// </summary>
+        private void UpdateHeaderState()
+        {
+            if (_headerSubject == null) return;
+
+            var editing = _viewModel.LoadedProfileName;
+            _headerSubject.Text = string.IsNullOrEmpty(editing) ? "No style selected" : editing!;
+
+            if (_headerReadOnlyChip != null)
+                _headerReadOnlyChip.Visibility = _viewModel.IsSelectedReadOnly && !string.IsNullOrEmpty(editing)
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+
+            if (_headerDirtyChip != null)
+                _headerDirtyChip.Visibility = _viewModel.IsDirty && !_viewModel.IsSelectedReadOnly
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+
+            // Read the active style from the list the user is looking at (IsActive is computed at
+            // list-load time from Formatter.ActiveProfile) rather than re-reading config here, so
+            // the header can never disagree with the ACTIVE badge in the list.
+            var active = _viewModel.Profiles.FirstOrDefault(p => p.IsActive)?.Name;
+            if (_headerActiveChip != null && _headerActiveChipText != null)
+            {
+                if (string.IsNullOrEmpty(active))
+                {
+                    _headerActiveChip.Visibility = Visibility.Collapsed;
+                }
+                else
+                {
+                    _headerActiveChipText.Text = "Active: " + active;
+                    _headerActiveChip.Visibility = Visibility.Visible;
+                }
+            }
+
+            // "STYLES · 8" — the count is real information (did my new style land? did the engine
+            // return anything at all?), which a static label cannot convey.
+            if (_stylesHeader != null)
+            {
+                var count = _viewModel.Profiles.Count;
+                _stylesHeader.Text = count > 0 ? $"STYLES · {count}" : "STYLES";
+            }
         }
 
         /// <summary>A small all-caps, muted section divider ("STYLES", "STYLE OPTIONS", "LIVE PREVIEW").</summary>
@@ -584,6 +717,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             // (Save-button + read-only visuals sync via the IsDirty/IsSelectedReadOnly
             // PropertyChanged handler — no direct calls needed here.)
             RefreshVisibleSettingControls();
+            UpdateHeaderState();   // the header names the style now being edited
             SetStatus(_viewModel.IsSelectedReadOnly
                 ? $"'{item.Name}' is built-in (read-only) — copy this style to edit it."
                 : $"Loaded '{item.Name}'.");
@@ -789,6 +923,8 @@ namespace AkmlSql.Shell.Shared.Formatting
                     _setActiveButton.IsEnabled = false;
                     _setActiveButton.ToolTip = $"'{name}' is already the active style";
                 }
+
+                UpdateHeaderState();   // "Active: <name>" follows immediately
             }
             else
             {
@@ -1822,6 +1958,8 @@ namespace AkmlSql.Shell.Shared.Formatting
             if (e.PropertyName == nameof(FormatStylesEditorViewModel.IsLoading) && _statusText != null)
             {
                 UpdateStatus(_viewModel.IsLoading ? "Loading…" : (_viewModel.LastError ?? $"{_viewModel.Profiles.Count} style(s)."));
+                // The list (and therefore the active style + count) is settled once loading ends.
+                if (!_viewModel.IsLoading) UpdateHeaderState();
             }
             else if (e.PropertyName == nameof(FormatStylesEditorViewModel.PreviewText) && _previewTextBox != null)
             {
@@ -1840,6 +1978,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                 // Spec 033 — both flip on the UI thread (SetWorkingValue / SelectProfileAsync).
                 UpdateSaveButtonState();
                 UpdateReadOnlyState();
+                UpdateHeaderState();   // dirty / read-only are reported in the header too
             }
         }
 
