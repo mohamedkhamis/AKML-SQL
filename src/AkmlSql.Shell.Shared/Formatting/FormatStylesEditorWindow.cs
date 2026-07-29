@@ -49,6 +49,10 @@ namespace AkmlSql.Shell.Shared.Formatting
 
         // Spec 033 (T016) — editing UX state
         private Button? _saveBtn;
+
+        /// <summary>First-class "Set as active" affordance under the style list — activation was
+        /// previously reachable only from the per-row ⋮ / right-click menu.</summary>
+        private Button? _setActiveButton;
         private Border? _readOnlyHint;
         // SQL Prompt-parity redesign: the right pane edits a whole settings *group* (SQL Prompt's
         // "page") at once, not one setting at a time. _currentGroup is the group whose form is
@@ -406,9 +410,32 @@ namespace AkmlSql.Shell.Shared.Formatting
             Grid.SetRow(_styleList, 1);
             panel.Children.Add(_styleList);
 
-            var newStyleCta = MakeAccentCtaButton("+ New Style", OnNewStyleAsync);
-            Grid.SetRow(newStyleCta, 2);
-            panel.Children.Add(newStyleCta);
+            // Activation used to live ONLY in the per-row ⋮ / right-click menu, so selecting a style
+            // (which merely highlights it) looked like it should have applied — the reported "selecting
+            // Khamis Style doesn't mark it". A first-class button makes the select→activate step
+            // explicit and keeps the ⋮ menu working for users who already know it.
+            var listFooter = new StackPanel { Orientation = Orientation.Vertical };
+
+            _setActiveButton = new Button
+            {
+                Content = "Set as active style",
+                Padding = new Thickness(Spacing.Md, Spacing.Xs, Spacing.Md, Spacing.Xs),
+                Margin = new Thickness(0, 0, 0, Spacing.Xs),
+                FontFamily = Typography.UiFont,
+                FontSize = Typography.Body,
+                IsEnabled = false,   // enabled by OnStyleSelectionChangedAsync for a non-active row
+                ToolTip = "Make the selected style the one Format SQL uses",
+            };
+            _setActiveButton.Click += async (_, _) =>
+            {
+                try { await OnSetActiveAsync(); }
+                catch (Exception ex) { Log.Warning(ex, "FormatStylesEditor: set-active failed"); SetStatus(ex.Message); }
+            };
+            listFooter.Children.Add(_setActiveButton);
+
+            listFooter.Children.Add(MakeAccentCtaButton("+ New Style", OnNewStyleAsync));
+            Grid.SetRow(listFooter, 2);
+            panel.Children.Add(listFooter);
 
             return MakePaneCard(0, panel);
         }
@@ -525,6 +552,15 @@ namespace AkmlSql.Shell.Shared.Formatting
         private async System.Threading.Tasks.Task OnStyleSelectionChangedAsync()
         {
             if (_suppressSelectionChanged || _styleList?.SelectedItem is not StyleListItem item) return;
+
+            // "Set as active" tracks the selection: pointless on the style that is already active.
+            if (_setActiveButton != null)
+            {
+                _setActiveButton.IsEnabled = !item.IsActive;
+                _setActiveButton.ToolTip = item.IsActive
+                    ? $"'{item.Name}' is already the active style"
+                    : $"Make '{item.Name}' the style Format SQL uses";
+            }
 
             var previous = _viewModel.LoadedProfileName;
             bool ok;
@@ -740,11 +776,19 @@ namespace AkmlSql.Shell.Shared.Formatting
             if (string.IsNullOrEmpty(name)) { SetStatus("Select a style to make active."); return; }
             if (_viewModel.SetActiveProfile(name!))
             {
-                SetStatus($"Active style: {name}");
+                SetStatus($"'{name}' is now the active style — Format SQL will use it.");
                 UpdateStatusBarActiveStyle(name!);
-                // Spec 033 (T036) — the ✔ marker is computed at list-load time; refresh so it moves.
+                // Spec 033 (T036) — the ACTIVE badge is computed at list-load time; refresh so it moves.
                 await _viewModel.RefreshProfilesAsync();
                 RestoreListSelection(name);
+
+                // RestoreListSelection suppresses SelectionChanged, so sync the button here or it
+                // would stay enabled on the style that just became active.
+                if (_setActiveButton != null)
+                {
+                    _setActiveButton.IsEnabled = false;
+                    _setActiveButton.ToolTip = $"'{name}' is already the active style";
+                }
             }
             else
             {
@@ -1017,20 +1061,37 @@ namespace AkmlSql.Shell.Shared.Formatting
             var stack = new FrameworkElementFactory(typeof(StackPanel));
             stack.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
 
-            var active = new FrameworkElementFactory(typeof(TextBlock));
-            active.SetValue(TextBlock.TextProperty, "✔ ");
-            active.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
-            if (accent is System.Windows.Media.Brush accentBrush)
-                active.SetValue(TextBlock.ForegroundProperty, accentBrush);
-            active.SetBinding(UIElement.VisibilityProperty,
-                new System.Windows.Data.Binding(nameof(StyleListItem.IsActive)) { Converter = boolToVis });
-            stack.AppendChild(active);
-
             var name = new FrameworkElementFactory(typeof(TextBlock));
             name.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding(nameof(StyleListItem.Name)));
             name.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
             name.SetValue(TextBlock.TextTrimmingProperty, TextTrimming.CharacterEllipsis);
             stack.AppendChild(name);
+
+            // The active style reads as an explicit "ACTIVE" pill rather than the previous bare "✔ "
+            // prefix. A lone check glyph was easy to miss and gave no hint that it means "this is the
+            // style Format SQL will use" — the exact confusion behind "selecting a style doesn't mark
+            // it" (selecting only highlights a row; activating is a separate action).
+            var activeBadge = new FrameworkElementFactory(typeof(Border));
+            activeBadge.SetValue(Border.CornerRadiusProperty, new CornerRadius(2));
+            activeBadge.SetValue(Border.BorderThicknessProperty, new Thickness(1));
+            activeBadge.SetValue(Control.PaddingProperty, new Thickness(4, 0, 4, 0));
+            activeBadge.SetValue(FrameworkElement.MarginProperty, new Thickness(6, 0, 0, 0));
+            activeBadge.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            activeBadge.SetValue(FrameworkElement.ToolTipProperty, "Format SQL uses this style");
+            if (accent is System.Windows.Media.Brush accentBorder)
+                activeBadge.SetValue(Border.BorderBrushProperty, accentBorder);
+            activeBadge.SetBinding(UIElement.VisibilityProperty,
+                new System.Windows.Data.Binding(nameof(StyleListItem.IsActive)) { Converter = boolToVis });
+
+            var activeText = new FrameworkElementFactory(typeof(TextBlock));
+            activeText.SetValue(TextBlock.TextProperty, "ACTIVE");
+            activeText.SetValue(TextBlock.FontSizeProperty, 9.0);
+            activeText.SetValue(TextBlock.FontWeightProperty, Typography.WeightSemiBold);
+            activeText.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
+            if (accent is System.Windows.Media.Brush accentFg)
+                activeText.SetValue(TextBlock.ForegroundProperty, accentFg);
+            activeBadge.AppendChild(activeText);
+            stack.AppendChild(activeBadge);
 
             var kind = new FrameworkElementFactory(typeof(TextBlock));
             kind.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding(nameof(StyleListItem.Kind)));
