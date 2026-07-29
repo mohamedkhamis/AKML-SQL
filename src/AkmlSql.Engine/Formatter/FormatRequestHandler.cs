@@ -28,7 +28,7 @@ public class FormatRequestHandler(ProfileManager profileManager)
     {
         try
         {
-            var profile = LoadProfile(request.ProfileName);
+            var profile = LoadProfile(request.ProfileName, out var fallbackWarning);
             var result = _pipeline.Format(request.Text, profile);
 
             return new FormatResponse
@@ -38,6 +38,7 @@ public class FormatRequestHandler(ProfileManager profileManager)
                 WasModified = result.WasModified,
                 ValidationPassed = result.ValidationPassed,
                 ElapsedMs = result.ElapsedMs,
+                ProfileFallbackWarning = fallbackWarning,
                 Diagnostics = result.Diagnostics.Select(d => new FormatDiagnosticInfo
                 {
                     Severity = (int)d.Severity,
@@ -756,8 +757,19 @@ public class FormatRequestHandler(ProfileManager profileManager)
         }
     }
 
-    private FormattingProfile LoadProfile(string? profileName)
+    private FormattingProfile LoadProfile(string? profileName) => LoadProfile(profileName, out _);
+
+    /// <summary>
+    /// Resolves the requested style, falling back to built-in defaults when it cannot be loaded.
+    /// <paramref name="fallbackWarning"/> is non-null ONLY in that fallback case, so callers can
+    /// tell the user their chosen style did not apply — previously this swallow was silent apart
+    /// from a log line, which is how the shipped default style formatting with POCO defaults went
+    /// unnoticed. An explicitly-empty name still means "defaults by design" (no warning).
+    /// </summary>
+    private FormattingProfile LoadProfile(string? profileName, out string? fallbackWarning)
     {
+        fallbackWarning = null;
+
         if (string.IsNullOrEmpty(profileName))
             return new FormattingProfile(); // Default profile with all defaults
 
@@ -765,9 +777,12 @@ public class FormatRequestHandler(ProfileManager profileManager)
         {
             return profileManager.Load(profileName);
         }
-        catch
+        catch (Exception ex)
         {
-            Log.Warning("Profile {Name} not found, using default", profileName);
+            fallbackWarning =
+                $"Formatting style '{profileName}' could not be loaded, so the built-in defaults were " +
+                $"used instead. Check the style still exists in Format Styles. ({ex.GetType().Name})";
+            Log.Warning(ex, "Profile {Name} not found, using default", profileName);
             return new FormattingProfile();
         }
     }

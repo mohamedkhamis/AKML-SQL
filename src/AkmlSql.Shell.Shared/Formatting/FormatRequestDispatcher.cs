@@ -115,6 +115,14 @@ namespace AkmlSql.Shell.Shared.Formatting
                     return null;
                 }
 
+                // The engine formatted successfully but could NOT load the requested style, so the
+                // output silently used built-in defaults. Surface it — a wrong-style format is
+                // indistinguishable from a correct one to the eye, and FormatFailureNotifier stays
+                // quiet on success by design. Warned once per style per session: a missing style is
+                // a persistent configuration problem, not a per-keystroke event, and this path also
+                // runs on save/paste/delimiter auto-format.
+                NotifyProfileFallbackOnce(response.ProfileFallbackWarning);
+
                 return response.FormattedText;
             }
             catch (OperationCanceledException)
@@ -128,6 +136,51 @@ namespace AkmlSql.Shell.Shared.Formatting
                 Log.Warning(ex, "FormatRequestDispatcher: format dispatch failed ({Trigger})", trigger);
                 return null;
             }
+        }
+
+        // ── Profile-fallback notice (spec 033 follow-up) ─────────────────────────────────
+        //
+        // Warned-once bookkeeping is process-wide (static): the three Format-on-* handlers each
+        // construct their OWN dispatcher, so per-instance state would re-warn per trigger kind.
+
+        private static readonly object FallbackGate = new object();
+        private static readonly System.Collections.Generic.HashSet<string> WarnedFallbacks =
+            new System.Collections.Generic.HashSet<string>(StringComparer.Ordinal);
+
+        /// <summary>
+        /// Test seam: replaced by unit tests to capture the notice without a live VS shell.
+        /// Null in production, where the message box is shown instead.
+        /// </summary>
+        internal static Action<string>? ProfileFallbackNotifierOverride { get; set; }
+
+        /// <summary>Clears the warned-once set. Test-only — keeps cases independent.</summary>
+        internal static void ResetProfileFallbackWarnings()
+        {
+            lock (FallbackGate) WarnedFallbacks.Clear();
+        }
+
+        /// <summary>Internal (not private) so the dedupe contract is unit-testable without a
+        /// live engine connection — <c>PipeRpcClient</c> is concrete and cannot be faked.</summary>
+        internal static void NotifyProfileFallbackOnce(string? warning)
+        {
+            if (string.IsNullOrWhiteSpace(warning)) return;
+
+            lock (FallbackGate)
+            {
+                if (!WarnedFallbacks.Add(warning!)) return;   // already told them this session
+            }
+
+            Log.Warning("FormatRequestDispatcher: {Warning}", warning);
+
+            var notifier = ProfileFallbackNotifierOverride;
+            if (notifier != null)
+            {
+                notifier(warning!);
+                return;
+            }
+
+            // Fire-and-forget: formatting must not block on a message box.
+            _ = FormatFailureNotifier.ShowNoticeAsync(warning!);
         }
 
         /// <summary>

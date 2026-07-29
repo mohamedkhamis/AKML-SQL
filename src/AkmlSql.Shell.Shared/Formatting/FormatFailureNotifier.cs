@@ -35,6 +35,21 @@ namespace AkmlSql.Shell.Shared.Formatting
                 return false;
 
             var message = BuildMessage(success, diagnostics);
+            await ShowNoticeAsync(message).ConfigureAwait(false);
+            return true;
+        }
+
+        /// <summary>
+        /// Shows <paramref name="message"/> in the shell's standard warning message box. Extracted
+        /// from <see cref="NotifyIfPreservedAsync"/> so other format outcomes can reuse the same
+        /// plumbing — notably the profile-fallback notice, which fires on a SUCCESSFUL format (the
+        /// preserve-notifier deliberately returns early there) and therefore needs its own entry
+        /// point rather than a new special case inside the preserve path.
+        /// Never throws: a failure to notify must not fail the format.
+        /// </summary>
+        public static async Task ShowNoticeAsync(string message)
+        {
+            if (string.IsNullOrWhiteSpace(message)) return;
             try
             {
                 await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
@@ -42,7 +57,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                 if (sp == null)
                 {
                     Log.Warning("Format notice: shell service unavailable, message not shown: {Message}", message);
-                    return false;
+                    return;
                 }
                 VsShellUtilities.ShowMessageBox(
                     sp, message, Title,
@@ -54,7 +69,6 @@ namespace AkmlSql.Shell.Shared.Formatting
             {
                 Log.Error(ex, "Format notice: failed to show message box");
             }
-            return true;
         }
 
         private static string BuildMessage(bool success, FormatDiagnosticInfo[]? diagnostics)

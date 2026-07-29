@@ -95,6 +95,8 @@ public class ProfileManager
         json = string.Empty;
         isBuiltIn = false;
 
+        // Tier 1 — exact filename match, custom first (the shadowing precedence both this
+        // method and Load() promise). Fast path: one File.Exists per directory.
         var customFile = GetCustomFilePath(name);
         if (File.Exists(customFile))
         {
@@ -108,6 +110,58 @@ public class ProfileManager
             json = File.ReadAllText(builtInFile);
             isBuiltIn = true;
             return true;
+        }
+
+        // Tier 2 — resolve by the profile's OWN metadata.name. List() reports metadata names,
+        // so a name that came from List() (or from Formatter.ActiveProfile, which the styles
+        // editor writes from that list) is the only key callers ever have — but the shipped
+        // built-ins use kebab-case FILENAMES with Title-Case metadata names
+        // ("khamis-style.akmlstyle" → "Khamis Style"). Tier 1 alone therefore missed every
+        // multi-word built-in, and FormatRequestHandler.LoadProfile swallowed the resulting
+        // FileNotFoundException into POCO defaults — so "Khamis Style" (the shipped default
+        // ActiveProfile) silently never applied. Single-word styles only worked by accident of
+        // case-insensitive filesystems. Same custom-first precedence as tier 1.
+        if (TryReadByMetadataName(_customProfilesPath, name, out json))
+        {
+            return true;
+        }
+
+        if (TryReadByMetadataName(_builtInProfilesPath, name, out json))
+        {
+            isBuiltIn = true;
+            return true;
+        }
+
+        json = string.Empty;
+        return false;
+    }
+
+    /// <summary>
+    /// Scans <paramref name="directory"/> for a profile file whose <c>metadata.name</c> equals
+    /// <paramref name="name"/> (case-insensitive), returning its verbatim text. Only reached when
+    /// the filename-derived lookup misses, so the per-call cost is bounded by the profile count.
+    /// Unreadable/corrupt files are skipped rather than failing the whole resolution.
+    /// </summary>
+    private static bool TryReadByMetadataName(string directory, string name, out string json)
+    {
+        json = string.Empty;
+        if (!Directory.Exists(directory)) return false;
+
+        foreach (var file in Directory.GetFiles(directory, "*" + ProfileExtension))
+        {
+            var metadata = TryLoadMetadata(file, isBuiltIn: false);
+            if (metadata != null && string.Equals(metadata.Name, name, StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    json = File.ReadAllText(file);
+                    return true;
+                }
+                catch (IOException)
+                {
+                    return false;
+                }
+            }
         }
 
         return false;
