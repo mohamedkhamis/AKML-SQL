@@ -50,6 +50,10 @@ namespace AkmlSql.Shell.Shared.Formatting
         // Spec 033 (T016) — editing UX state
         private Button? _saveBtn;
 
+        /// <summary>Footer escape hatch shown when the selected style is a read-only built-in:
+        /// makes an editable copy in one click, so a disabled Save is never a dead end.</summary>
+        private Button? _copyToEditButton;
+
         /// <summary>First-class "Set as active" affordance under the style list — activation was
         /// previously reachable only from the per-row ⋮ / right-click menu.</summary>
         private Button? _setActiveButton;
@@ -276,6 +280,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                 IsEnabled = false,
                 FontFamily = Typography.UiFont,
                 FontSize = Typography.Body,
+                ToolTip = "Select a style first",   // replaced by UpdateSaveButtonState once one loads
             };
             _saveBtn.Click += async (_, _) =>
             {
@@ -292,6 +297,29 @@ namespace AkmlSql.Shell.Shared.Formatting
                 }
             };
             footerButtons.Children.Add(_saveBtn);
+
+            // Every shipped style is a read-only built-in, so on a fresh install the settings form
+            // is disabled for ALL of them and Save can never enable — the editor looks broken until
+            // you discover "Copy" inside the per-row ⋮ menu. This surfaces that one escape route
+            // exactly where the user is looking when Save won't light up. Shown only for read-only
+            // selections; Copy also stays on the ⋮ menu.
+            _copyToEditButton = new Button
+            {
+                Content = "Copy to edit",
+                Padding = new Thickness(Spacing.Lg, Spacing.Sm, Spacing.Lg, Spacing.Sm),
+                MinWidth = 84,
+                Margin = new Thickness(0, 0, Spacing.Sm, 0),
+                Visibility = Visibility.Collapsed,
+                FontFamily = Typography.UiFont,
+                FontSize = Typography.Body,
+                ToolTip = "Built-in styles can't be changed. This makes an editable copy and selects it.",
+            };
+            _copyToEditButton.Click += async (_, _) =>
+            {
+                try { await OnCopyStyleAsync(); }   // AfterCreate selects the (editable) copy
+                catch (Exception ex) { Log.Warning(ex, "FormatStylesEditor: copy-to-edit failed"); SetStatus(ex.Message); }
+            };
+            footerButtons.Children.Add(_copyToEditButton);
 
             var closeBtn = new Button
             {
@@ -720,6 +748,10 @@ namespace AkmlSql.Shell.Shared.Formatting
             // PropertyChanged handler — no direct calls needed here.)
             RefreshVisibleSettingControls();
             UpdateHeaderState();   // the header names the style now being edited
+            // Explicitly re-synced (not left to the INPC handler): IsSelectedReadOnly only raises
+            // PropertyChanged when the VALUE changes, so selecting one built-in after another would
+            // otherwise leave the Save tooltip naming the previously-selected style.
+            UpdateSaveButtonState();
             SetStatus(_viewModel.IsSelectedReadOnly
                 ? $"'{item.Name}' is built-in (read-only) — copy this style to edit it."
                 : $"Loaded '{item.Name}'.");
@@ -750,8 +782,26 @@ namespace AkmlSql.Shell.Shared.Formatting
 
         private void UpdateSaveButtonState()
         {
+            var readOnly = _viewModel.IsSelectedReadOnly;
+            var nothingLoaded = string.IsNullOrEmpty(_viewModel.LoadedProfileName);
+
             if (_saveBtn != null)
-                _saveBtn.IsEnabled = _viewModel.IsDirty && !_viewModel.IsSelectedReadOnly;
+            {
+                _saveBtn.IsEnabled = _viewModel.IsDirty && !readOnly;
+                // A disabled button with no explanation reads as broken. Name the actual reason —
+                // the three are genuinely different situations with different next steps.
+                _saveBtn.ToolTip =
+                    nothingLoaded ? "Select a style first"
+                    : readOnly ? $"'{_viewModel.LoadedProfileName}' is a built-in style and can't be changed — use Copy to edit"
+                    : _viewModel.IsDirty ? $"Save your changes to '{_viewModel.LoadedProfileName}'"
+                    : "No changes to save";
+            }
+
+            // The escape hatch appears exactly when Save is unreachable because of read-only.
+            if (_copyToEditButton != null)
+                _copyToEditButton.Visibility = readOnly && !nothingLoaded
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
         }
 
         private void UpdateReadOnlyState()
