@@ -15,6 +15,21 @@ public class ProfileManager
     private readonly string _customProfilesPath;
 
     /// <summary>
+    /// Number of profile files opened while scanning for a <c>metadata.name</c> match.
+    /// Diagnostic seam: this scan sits on the format request path (the shipped default style
+    /// resolves only through it), so its cost is pinned by tests rather than left to drift.
+    /// </summary>
+    internal int MetadataScanFileReads => _metadataScanFileReads;
+    private int _metadataScanFileReads;
+
+    /// <summary>
+    /// Memo of the file each metadata name last resolved to. Concurrent because format requests
+    /// share one manager and the engine dispatches several at a time.
+    /// </summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, CachedResolution>
+        _nameResolutionCache = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
     /// Spec 031 FR-006 — directory where custom (non-built-in) profile files are written.
     /// Exposed so callers can place sibling artifacts next to a saved profile
     /// (e.g. <c>&lt;name&gt;.source.json</c>, the verbatim import source).
@@ -121,20 +136,103 @@ public class ProfileManager
         // FileNotFoundException into POCO defaults — so "Khamis Style" (the shipped default
         // ActiveProfile) silently never applied. Single-word styles only worked by accident of
         // case-insensitive filesystems. Same custom-first precedence as tier 1.
-        if (TryReadByMetadataName(_customProfilesPath, name, out json))
+        if (TryResolveByMetadataName(name, out json, out isBuiltIn))
         {
-            return true;
-        }
-
-        if (TryReadByMetadataName(_builtInProfilesPath, name, out json))
-        {
-            isBuiltIn = true;
             return true;
         }
 
         json = string.Empty;
+        isBuiltIn = false;
         return false;
     }
+
+    /// <summary>
+    /// Tier-2 resolution with a memo of the file each name last resolved to.
+    ///
+    /// <para>The scan is not the rare path it reads like: the shipped default
+    /// <c>"Khamis Style"</c> lives in <c>khamis-style.akmlstyle</c>, so the filename probe can
+    /// never hit it and every format request paid a full directory scan. The memo is only
+    /// honoured while the resolved file AND both directories are byte-for-byte unchanged, so an
+    /// edit, a delete, or a newly dropped-in style is picked up without a restart.</para>
+    /// </summary>
+    private bool TryResolveByMetadataName(string name, out string json, out bool isBuiltIn)
+    {
+        json = string.Empty;
+        isBuiltIn = false;
+
+        var custom = DirectoryStamp(_customProfilesPath);
+        var builtIn = DirectoryStamp(_builtInProfilesPath);
+
+        if (_nameResolutionCache.TryGetValue(name, out var cached) &&
+            cached.CustomDirStamp == custom && cached.BuiltInDirStamp == builtIn &&
+            TryReadUnchanged(cached.Path, cached.FileStamp, out json))
+        {
+            isBuiltIn = cached.IsBuiltIn;
+            return true;
+        }
+
+        _nameResolutionCache.TryRemove(name, out _);
+
+        // Negative results are deliberately NOT memoised — a style the user drops into the
+        // profiles folder must resolve on the next format, not the next restart.
+        if (TryReadByMetadataName(_customProfilesPath, name, out json, out var customPath))
+        {
+            Memoise(name, customPath, isBuiltIn: false, custom, builtIn);
+            return true;
+        }
+
+        if (TryReadByMetadataName(_builtInProfilesPath, name, out json, out var builtInPath))
+        {
+            isBuiltIn = true;
+            Memoise(name, builtInPath, isBuiltIn: true, custom, builtIn);
+            return true;
+        }
+
+        return false;
+    }
+
+    private void Memoise(string name, string path, bool isBuiltIn, DateTime customDir, DateTime builtInDir)
+    {
+        try
+        {
+            _nameResolutionCache[name] =
+                new CachedResolution(path, isBuiltIn, File.GetLastWriteTimeUtc(path), customDir, builtInDir);
+        }
+        catch (IOException)
+        {
+            // Losing the memo only costs a rescan.
+        }
+    }
+
+    private static DateTime DirectoryStamp(string directory)
+    {
+        try
+        {
+            return Directory.Exists(directory) ? Directory.GetLastWriteTimeUtc(directory) : DateTime.MinValue;
+        }
+        catch (IOException)
+        {
+            return DateTime.MinValue;
+        }
+    }
+
+    private static bool TryReadUnchanged(string path, DateTime stamp, out string json)
+    {
+        json = string.Empty;
+        try
+        {
+            if (!File.Exists(path) || File.GetLastWriteTimeUtc(path) != stamp) return false;
+            json = File.ReadAllText(path);
+            return true;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+    }
+
+    private readonly record struct CachedResolution(
+        string Path, bool IsBuiltIn, DateTime FileStamp, DateTime CustomDirStamp, DateTime BuiltInDirStamp);
 
     /// <summary>
     /// Scans <paramref name="directory"/> for a profile file whose <c>metadata.name</c> equals
@@ -142,29 +240,55 @@ public class ProfileManager
     /// the filename-derived lookup misses, so the per-call cost is bounded by the profile count.
     /// Unreadable/corrupt files are skipped rather than failing the whole resolution.
     /// </summary>
-    private static bool TryReadByMetadataName(string directory, string name, out string json)
+    private bool TryReadByMetadataName(string directory, string name, out string json, out string path)
     {
         json = string.Empty;
+        path = string.Empty;
         if (!Directory.Exists(directory)) return false;
 
         foreach (var file in Directory.GetFiles(directory, "*" + ProfileExtension))
         {
-            var metadata = TryLoadMetadata(file, isBuiltIn: false);
-            if (metadata != null && string.Equals(metadata.Name, name, StringComparison.OrdinalIgnoreCase))
+            System.Threading.Interlocked.Increment(ref _metadataScanFileReads);
+            if (!TryPeekMetadataName(file, out var candidate)) continue;
+            if (!string.Equals(candidate, name, StringComparison.OrdinalIgnoreCase)) continue;
+
+            try
             {
-                try
-                {
-                    json = File.ReadAllText(file);
-                    return true;
-                }
-                catch (IOException)
-                {
-                    return false;
-                }
+                json = File.ReadAllText(file);
+                path = file;
+                return true;
+            }
+            catch (IOException)
+            {
+                return false;
             }
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Reads just <c>metadata.name</c> out of a profile file. The scan only needs that one
+    /// string to decide whether a file is the one being asked for, so it must not pay for
+    /// materialising the whole <see cref="FormattingProfile"/> graph per candidate.
+    /// Unreadable/corrupt files are skipped rather than failing the whole resolution.
+    /// </summary>
+    private static bool TryPeekMetadataName(string filePath, out string? name)
+    {
+        name = null;
+        try
+        {
+            using var stream = File.OpenRead(filePath);
+            using var document = System.Text.Json.JsonDocument.Parse(stream);
+            if (!document.RootElement.TryGetProperty("metadata", out var metadata)) return false;
+            if (!metadata.TryGetProperty("name", out var nameElement)) return false;
+            name = nameElement.GetString();
+            return name != null;
+        }
+        catch (Exception e) when (e is IOException or System.Text.Json.JsonException or UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     /// <summary>
@@ -258,6 +382,7 @@ public class ProfileManager
         }
 
         File.Delete(customFile);
+        _nameResolutionCache.Clear();   // same reason as WriteAtomic — do not trust the clock alone
         return true;
     }
 
@@ -351,11 +476,20 @@ public class ProfileManager
     /// The corruption-prevention idiom this class advertises as a design decision, in ONE
     /// place: write to a sibling temp file, then atomically move over the destination.
     /// </summary>
-    private static void WriteAtomic(string path, string text)
+    /// <summary>
+    /// Every profile write funnels through here (save, rename, import), so it is also where the
+    /// name-resolution memo is dropped. The memo's timestamp check would usually catch a write on
+    /// its own, but "usually" depends on filesystem clock granularity — profiles can sit on a
+    /// redirected AppData share with 2-second resolution, where a save immediately followed by a
+    /// format would fall inside a single tick. Clearing at the choke point removes that class of
+    /// staleness entirely, and cannot be forgotten by a future write path.
+    /// </summary>
+    private void WriteAtomic(string path, string text)
     {
         var tempPath = path + ".tmp";
         File.WriteAllText(tempPath, text);
         File.Move(tempPath, path, overwrite: true);
+        _nameResolutionCache.Clear();
     }
 
     /// <summary>

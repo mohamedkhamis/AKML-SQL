@@ -30,9 +30,18 @@ public partial class TsqlParserService
         return parser.GetTokenStream(reader, out _);
     }
 
+    /// <summary>
+    /// Count of full AST parses performed by this instance. Diagnostic seam only — completion
+    /// escalates through several repair attempts on the keystroke path, and a full parse is the
+    /// single most expensive thing that path does, so the attempt count is worth pinning in tests.
+    /// </summary>
+    internal int ParseCount => _parseCount;
+    private int _parseCount;
+
     /// Full tier: parse to AST (~300ms for 10K lines)
     public TSqlScript? Parse(string sql, out IList<ParseError> errors)
     {
+        System.Threading.Interlocked.Increment(ref _parseCount);
         var parser = GetParser();
         using var reader = new StringReader(sql);
         var fragment = parser.Parse(reader, out errors);
@@ -83,20 +92,30 @@ public partial class TsqlParserService
         var repaired = SuffixCompletionHelper.RepairAtCursor(sql, cursorOffset);
         if (!string.Equals(repaired, sql, StringComparison.Ordinal))
         {
-            var repairedResult = Parse(repaired, out var repairedErrors);
-            if (repairedResult != null && repairedResult.Batches.Count > 0 && repairedErrors.Count == 0)
+            // With the caret at end-of-document — the dominant typing position — RepairAtCursor
+            // reattaches an empty suffix and so returns exactly `suffixed`, which just failed
+            // above. Re-parsing it is a guaranteed-identical failure, not a second chance.
+            if (!string.Equals(repaired, suffixed, StringComparison.Ordinal))
             {
-                errors = repairedErrors;
-                return repairedResult;
+                var repairedResult = Parse(repaired, out var repairedErrors);
+                if (repairedResult != null && repairedResult.Batches.Count > 0 && repairedErrors.Count == 0)
+                {
+                    errors = repairedErrors;
+                    return repairedResult;
+                }
             }
 
             // Caret repair + tail repair combined (e.g. broken at the caret AND incomplete tail).
             var both = SuffixCompletionHelper.AppendDummyTokens(repaired);
-            var bothResult = Parse(both, out var bothErrors);
-            if (bothResult != null && bothResult.Batches.Count > 0 && bothErrors.Count == 0)
+            if (!string.Equals(both, suffixed, StringComparison.Ordinal) &&
+                !string.Equals(both, repaired, StringComparison.Ordinal))
             {
-                errors = bothErrors;
-                return bothResult;
+                var bothResult = Parse(both, out var bothErrors);
+                if (bothResult != null && bothResult.Batches.Count > 0 && bothErrors.Count == 0)
+                {
+                    errors = bothErrors;
+                    return bothResult;
+                }
             }
         }
 

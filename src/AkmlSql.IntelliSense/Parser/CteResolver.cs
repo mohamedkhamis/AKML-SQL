@@ -221,6 +221,20 @@ public class CteResolver
     /// Internal (spec 032 A4): also used by <see cref="AliasResolver"/> to enumerate
     /// derived-table projections.
     /// </summary>
+    /// <summary>
+    /// Adds an AST-derived select-list name, dropping the synthetic identifier that the caret
+    /// repair injects. Every publisher of inferred columns funnels through here: this is the
+    /// AST counterpart to the token path's <c>IsDummyIdentifier</c> guard, without which
+    /// <c>SELECT | FROM T</c> inside a derived table or a recursive CTE anchor offered
+    /// <c>__akml_dummy__</c> to the user as a column.
+    /// </summary>
+    private static void AddInferredColumn(List<string> columns, string? name)
+    {
+        if (string.IsNullOrEmpty(name)) return;
+        if (SuffixCompletionHelper.IsDummyIdentifier(name!)) return;
+        columns.Add(name!);
+    }
+
     internal static void InferColumnsFromQuery(
         QueryExpression? queryExpression,
         List<string> columns,
@@ -236,7 +250,7 @@ public class CteResolver
                         if (scalar.ColumnName != null)
                         {
                             // Aliased: SELECT expr AS alias
-                            columns.Add(scalar.ColumnName.Value);
+                            AddInferredColumn(columns, scalar.ColumnName.Value);
                         }
                         else if (scalar.Expression is ColumnReferenceExpression colRef)
                         {
@@ -245,7 +259,7 @@ public class CteResolver
                             if (identifiers is { Count: > 0 })
                             {
                                 // ReSharper disable once UseIndexFromEndExpression
-                                columns.Add(identifiers[identifiers.Count - 1].Value);
+                                AddInferredColumn(columns, identifiers[identifiers.Count - 1].Value);
                             }
                         }
                         else
