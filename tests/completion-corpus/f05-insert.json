@@ -878,5 +878,27 @@
       "minCount": 1
     },
     "note": "three-part prefix in the source FROM of an INSERT...SELECT"
+  },
+  {
+    "id": "INS-081",
+    "family": "insert",
+    "doc": "INSERT |",
+    "expect": {
+      "mustContain": ["Customers", "Orders"],
+      "mustNotContain": ["CustomerName"],
+      "minCount": 5
+    },
+    "note": "INTO-less INSERT: `INSERT t VALUES (…)` is valid T-SQL, so the insertable-object list rides alongside the keyword position. Every other case in this family types INTO, so this form went untested"
+  },
+  {
+    "id": "INS-082",
+    "family": "insert",
+    "doc": "INSERT Cus|",
+    "expect": {
+      "mustContain": ["Customers"],
+      "mustNotContain": ["Orders", "CustomerName"],
+      "minCount": 1
+    },
+    "note": "INTO-less INSERT with a prefix filters the insertable-object list"
   }
 ]

@@ -768,5 +768,47 @@
       "minCount": 2
     },
     "note": "multi-line: completions resume on the line after a trailing -- comment"
+  },
+  {
+    "id": "DEL-071",
+    "family": "delete",
+    "doc": "DELETE |",
+    "expect": {
+      "mustContain": ["Customers", "Orders"],
+      "mustNotContain": ["CustomerName"],
+      "minCount": 5
+    },
+    "note": "FROM-less DELETE: `DELETE t` is valid T-SQL and must offer tables, not columns. Every other case in this family uses DELETE FROM, so this form went untested"
+  },
+  {
+    "id": "DEL-072",
+    "family": "delete",
+    "doc": "DELETE Cus|",
+    "expect": {
+      "mustContain": ["Customers"],
+      "mustNotContain": ["Orders", "CustomerName"],
+      "minCount": 1
+    },
+    "note": "FROM-less DELETE with a prefix filters the table list"
+  },
+  {
+    "id": "DEL-073",
+    "family": "delete",
+    "doc": "DELETE dbo.|",
+    "expect": {
+      "mustContain": ["Customers", "Orders"],
+      "minCount": 5
+    },
+    "note": "FROM-less DELETE, schema-qualified: offers bare object names under the schema"
+  },
+  {
+    "id": "DEL-074",
+    "family": "delete",
+    "doc": "USE [Northwind]\n\nSELECT * FROM dbo.Customers\nORDER BY CustomerID DESC;\n\nDELETE Cus|",
+    "expect": {
+      "mustContain": ["Customers"],
+      "minCount": 1
+    },
+    "note": "reported script shape: semicolon-less USE header and a completed prior statement before the FROM-less DELETE"
   }
 ]

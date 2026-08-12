@@ -219,12 +219,12 @@ public class CorpusGateTests
     // ── The gate ─────────────────────────────────────────────────────────────
 
     [Fact]
-    public void Corpus_loads_1370_cases_and_exclusions()
+    public void Corpus_loads_1376_cases_and_exclusions()
     {
         var corpusDir = CorpusDir();
         var cases = LoadCases(corpusDir);
         var exclusions = LoadExclusions(corpusDir);
-        Assert.Equal(1370, cases.Count);
+        Assert.Equal(1376, cases.Count);
         // 24 campaign-verifier corpus mistakes + 9 spec-032 additions (engine-gate-only
         // CM6-filter cases that PASSED the live run + FUNC-060 fuzzy-by-design); see exclusions.json.
         Assert.Equal(33, exclusions.Count);

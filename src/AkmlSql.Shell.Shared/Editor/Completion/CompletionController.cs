@@ -1434,7 +1434,12 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             }
         }
 
-        private static bool IsObjectExpectingKeyword(string word)
+        /// <summary>
+        /// Keywords after which a space should open completion in OBJECT mode. Internal so the
+        /// list is directly testable — it is easy to extend the engine's clause analysis and
+        /// forget this shell-side gate, which is exactly how FROM-less DELETE regressed.
+        /// </summary>
+        internal static bool IsObjectExpectingKeyword(string word)
         {
             // Case-insensitive check for SQL keywords that expect object names
             if (string.IsNullOrEmpty(word))
@@ -1448,6 +1453,19 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 // the JOIN keyword next, not table names. Only trigger after full "JOIN".
                 case "INTO":
                 case "UPDATE":
+                // FROM / INTO are optional: `DELETE t` and `INSERT t VALUES (…)` are valid T-SQL
+                // and put a table name directly after the keyword. Without these the shell only
+                // reached object mode via FROM/INTO, so those forms offered nothing. The engine
+                // already serves both positions (ClauseType.Delete; DetectInsertClauseType keeps
+                // bare INSERT on the keyword position *with* the insertable-object list).
+                //
+                // MERGE deliberately stays out: CursorContextAnalyzer knows MERGE only as a
+                // statement boundary, never as a clause, so `MERGE |` falls through to the generic
+                // statement-start keyword list. Forcing object mode there pops ALTER/BACKUP/BEGIN…
+                // where a table name belongs. Add MERGE here only once the engine has a MERGE
+                // clause type — see ObjectExpectingKeywordTests for the pinned expectation.
+                case "DELETE":
+                case "INSERT":
                 case "TABLE":
                 case "VIEW":
                 case "EXEC":

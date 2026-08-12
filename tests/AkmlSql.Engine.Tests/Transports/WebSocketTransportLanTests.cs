@@ -23,6 +23,70 @@ namespace AkmlSql.Engine.Tests.Transports;
 public sealed class WebSocketTransportLanTests
 {
     /// <summary>
+    /// FR-001 / contracts/lan-https-binding-contract.md step 1: the all-interfaces LAN binding
+    /// must be registered with HTTP.SYS's strong wildcard, NOT the literal 0.0.0.0.
+    ///
+    /// <para>Shipping the literal made every AkmlSqlWebEngine service start die with
+    /// <c>HttpListenerException 50 (ERROR_NOT_SUPPORTED)</c> out of <c>AddPrefixCore</c> — HTTP.SYS
+    /// will not accept an IP literal as the host of an HTTPS prefix, even as LocalSystem and even
+    /// with the sslcert already bound to that exact ip:port. The web edition was stuck "Offline"
+    /// as a result. <see cref="LanMode_round_trip_wss_handshake"/> would have caught it, but it is
+    /// still an unimplemented skip, so this string-level check is the real guard.</para>
+    /// </summary>
+    [Theory]
+    [InlineData("0.0.0.0")]
+    [InlineData("::")]
+    [InlineData("*")]
+    [InlineData("+")]
+    public void LanMode_all_interfaces_binds_the_strong_wildcard(string bindAddress)
+    {
+        var prefix = WebSocketTransport.BuildPrefix(new WebSocketTransportOptions
+        {
+            BindAddress = bindAddress,
+            Port = 47291,
+            TlsCertPath = "C:\\certs\\bridge.pfx",
+        });
+
+        Assert.Equal("https://+:47291/", prefix);
+    }
+
+    /// <summary>
+    /// FR-001: a named host stays as configured — narrowing the bridge to one interface is a
+    /// legitimate setup, and HTTP.SYS does accept a hostname (just not an IP literal) for HTTPS.
+    /// </summary>
+    [Fact]
+    public void LanMode_named_host_is_preserved()
+    {
+        var prefix = WebSocketTransport.BuildPrefix(new WebSocketTransportOptions
+        {
+            BindAddress = "sql-box.internal",
+            Port = 8443,
+            TlsCertPath = "C:\\certs\\bridge.pfx",
+        });
+
+        Assert.Equal("https://sql-box.internal:8443/", prefix);
+    }
+
+    /// <summary>
+    /// The loopback path keeps plaintext http:// on 127.0.0.1 — no TLS, no pairing token. The
+    /// existing localhost transport tests depend on this, so the wildcard fix must not touch it.
+    /// </summary>
+    [Theory]
+    [InlineData("127.0.0.1")]
+    [InlineData("::1")]
+    [InlineData("localhost")]
+    public void LoopbackMode_stays_plaintext_on_127_0_0_1(string bindAddress)
+    {
+        var prefix = WebSocketTransport.BuildPrefix(new WebSocketTransportOptions
+        {
+            BindAddress = bindAddress,
+            Port = 47291,
+        });
+
+        Assert.Equal("http://127.0.0.1:47291/", prefix);
+    }
+
+    /// <summary>
     /// FR-002 / contracts/lan-https-binding-contract.md step 2: when the configured
     /// <see cref="WebSocketTransportOptions.TlsCertPath"/> does not exist on disk,
     /// <see cref="WebSocketTransport.StartAsync"/> MUST throw with a clear message
