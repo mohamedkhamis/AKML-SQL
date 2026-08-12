@@ -27,8 +27,15 @@ public class QuerySessionSchemaTests
 
                 Assert.True(await TableExists(conn, "query_sessions"));
                 Assert.True(await ColumnExists(conn, "history", "session_id"));
+                Assert.True(await IndexExists(conn, "IX_qs_session_key"));
                 Assert.True(await IndexExists(conn, "IX_qs_date_ordinal"));
                 Assert.True(await IndexExists(conn, "IX_history_session"));
+
+                // Verify UNIQUE constraint on session_key
+                Assert.True(await IndexIsUnique(conn, "IX_qs_session_key"));
+
+                // Verify UNIQUE constraint on (local_date, ordinal)
+                Assert.True(await IndexIsUnique(conn, "IX_qs_date_ordinal"));
             }
         }
         finally
@@ -89,6 +96,22 @@ public class QuerySessionSchemaTests
         while (await r.ReadAsync())
             if (string.Equals(r.GetString(1), column, System.StringComparison.OrdinalIgnoreCase))
                 return true;
+        return false;
+    }
+
+    private static async Task<bool> IndexIsUnique(SqliteConnection c, string indexName)
+    {
+        // PRAGMA index_list returns: seq, name, unique, origin, partial
+        // For query_sessions table, check if the index on it is marked as unique (column 2 = 1)
+        await using var cmd = new SqliteCommand("PRAGMA index_list(query_sessions);", c);
+        await using var r = await cmd.ExecuteReaderAsync();
+        while (await r.ReadAsync())
+        {
+            var name = r.GetString(1);
+            var unique = r.GetInt32(2);
+            if (string.Equals(name, indexName, System.StringComparison.OrdinalIgnoreCase))
+                return unique == 1;
+        }
         return false;
     }
 
