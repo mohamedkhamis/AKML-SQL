@@ -16,7 +16,7 @@ namespace AkmlSql.Engine.History;
 /// </summary>
 public sealed class HistoryDatabase : IDisposable
 {
-    private const int SchemaVersion = 1;
+    private const int SchemaVersion = 2;   // v2: query_sessions + history.session_id
     private const int MaxSqlTextChars = 1_048_576; // 1 MB
 
     private readonly string _connectionString;
@@ -153,6 +153,42 @@ public sealed class HistoryDatabase : IDisposable
         {
             Log.Warning(ex, "History: is_open column migration failed (non-fatal)");
         }
+
+        // ── Schema v2: query-session grouping ────────────────────────────────
+        // One row per editor-tab query session. The display name lives HERE, not on the
+        // history rows, so a rename is a single UPDATE and survives every later execution.
+        await ExecuteNonQueryAsync(conn, @"
+            CREATE TABLE IF NOT EXISTS query_sessions (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_key   TEXT    NOT NULL,
+                local_date    TEXT    NOT NULL,
+                ordinal       INTEGER NOT NULL,
+                name          TEXT    NOT NULL,
+                name_source   INTEGER NOT NULL,
+                server        TEXT,
+                database_name TEXT,
+                created_at    TEXT    NOT NULL
+            );");
+
+        await ExecuteNonQueryAsync(conn,
+            "CREATE UNIQUE INDEX IF NOT EXISTS IX_qs_session_key ON query_sessions (session_key);");
+        // Backstop for the ordinal race: two shell windows can read the same MAX(ordinal).
+        await ExecuteNonQueryAsync(conn,
+            "CREATE UNIQUE INDEX IF NOT EXISTS IX_qs_date_ordinal ON query_sessions (local_date, ordinal);");
+
+        // Column BEFORE its index — an index cannot reference a column that does not exist yet.
+        try
+        {
+            await ExecuteNonQueryAsync(conn,
+                "ALTER TABLE history ADD COLUMN session_id INTEGER REFERENCES query_sessions(id);");
+        }
+        catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.Message.Contains("duplicate column"))
+        {
+            // Already migrated — expected on every start after the first.
+        }
+
+        await ExecuteNonQueryAsync(conn,
+            "CREATE INDEX IF NOT EXISTS IX_history_session ON history (session_id);");
 
         // Create FTS5 virtual table for full-text search on SQL text
         await ExecuteNonQueryAsync(conn, @"
