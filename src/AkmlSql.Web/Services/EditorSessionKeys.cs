@@ -14,9 +14,17 @@ internal static class EditorSessionKeys
 {
     /// <summary>Returns the persisted session key, minting and persisting a new GUID "N" key on
     /// first use (or after a reset).</summary>
-    internal static async Task<string> GetOrCreateAsync(IEditorSessionStore store)
+    internal static async Task<string> GetOrCreateAsync(IEditorSessionStore store) =>
+        await GetOrCreateAsync(store, await store.RestoreAsync().ConfigureAwait(false)).ConfigureAwait(false);
+
+    /// <summary>Same as <see cref="GetOrCreateAsync(IEditorSessionStore)"/>, but reuses a record the
+    /// caller already restored instead of round-tripping the store again. Editor.razor's
+    /// <c>OnInitializedAsync</c> already calls <c>SessionStore.RestoreAsync()</c> once to seed
+    /// <c>_initialText</c> -- this overload lets it hand that same record over rather than paying for
+    /// a second IndexedDB read on every page load.</summary>
+    internal static async Task<string> GetOrCreateAsync(IEditorSessionStore store, EditorSessionRecord? alreadyRestored)
     {
-        var record = await store.RestoreAsync().ConfigureAwait(false) ?? new EditorSessionRecord();
+        var record = alreadyRestored ?? new EditorSessionRecord();
         if (string.IsNullOrEmpty(record.SessionKey))
         {
             record.SessionKey = Guid.NewGuid().ToString("N");
@@ -51,4 +59,21 @@ internal static class EditorSessionKeys
             ActiveProfileId = activeProfileId,
             SessionKey = sessionKey,
         };
+
+    /// <summary>
+    /// Rewrites the persisted DocumentText via read-modify-write, preserving whatever SessionKey (and
+    /// every other field) is already there. Used by History.razor's "Open in Editor" / "Re-execute"
+    /// actions, which previously did <c>SaveAsync(new EditorSessionRecord { DocumentText = ... })</c>
+    /// -- the identical defect class fixed in <see cref="BuildTextChangeRecord"/>: SaveAsync overwrites
+    /// the WHOLE persisted record, so constructing a fresh one silently dropped SessionKey to null. The
+    /// web has ONE editor, so opening a past query from History is still the same editor session;
+    /// preserving (not minting a fresh key) keeps that continuity. "Reset editor session" remains the
+    /// sole deliberate boundary that starts a new one.
+    /// </summary>
+    internal static async Task SetDocumentTextAsync(IEditorSessionStore store, string documentText)
+    {
+        var record = await store.RestoreAsync().ConfigureAwait(false) ?? new EditorSessionRecord();
+        record.DocumentText = documentText;
+        await store.SaveAsync(record).ConfigureAwait(false);
+    }
 }

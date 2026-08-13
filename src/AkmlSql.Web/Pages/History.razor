@@ -530,7 +530,12 @@
     private async Task OpenInEditorAsync()
     {
         if (_selected == null) return;
-        await SessionStore.SaveAsync(new EditorSessionRecord { DocumentText = _previewSql });
+        // T9 fix-round-1: read-modify-write via EditorSessionKeys.SetDocumentTextAsync, not a fresh
+        // EditorSessionRecord -- SaveAsync overwrites the WHOLE persisted record, so constructing one
+        // from scratch here silently dropped SessionKey to null (the same defect class fixed in
+        // Editor.razor's OnTextChangedAsync). Preserving the key keeps this in the SAME editor
+        // session; "Reset editor session" remains the sole boundary that starts a new one.
+        await EditorSessionKeys.SetDocumentTextAsync(SessionStore, _previewSql);
         await SessionStore.FlushAsync();
         Nav.NavigateTo("/");
     }
@@ -538,7 +543,8 @@
     private async Task ReExecuteAsync()
     {
         if (_selected == null) return;
-        await SessionStore.SaveAsync(new EditorSessionRecord { DocumentText = _previewSql });
+        // T9 fix-round-1: see OpenInEditorAsync above -- same preserve-the-key fix.
+        await EditorSessionKeys.SetDocumentTextAsync(SessionStore, _previewSql);
         await SessionStore.FlushAsync();
         Nav.NavigateTo("/?autorun=1");
     }

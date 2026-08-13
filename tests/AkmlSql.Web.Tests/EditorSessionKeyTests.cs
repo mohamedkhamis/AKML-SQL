@@ -61,6 +61,58 @@ public class EditorSessionKeyTests
         Assert.Equal("SELECT 1;", record.DocumentText);
         Assert.Equal("builtin.ansi", record.ActiveProfileId);
     }
+
+    /// <summary>
+    /// Regression test for fix-round 1: History.razor's OpenInEditorAsync / ReExecuteAsync did the
+    /// identical "rebuild the record and drop the key" as the OnTextChangedAsync bug above --
+    /// <c>SaveAsync(new EditorSessionRecord { DocumentText = _previewSql })</c> silently reset
+    /// SessionKey to null. Since the web has ONE editor, picking "Open in Editor" / "Re-execute" on a
+    /// historical entry is still the SAME editor session, so the fix preserves (not re-mints) the key.
+    /// This pins the exact save those handlers perform via the extracted SetDocumentTextAsync helper.
+    /// </summary>
+    [Fact]
+    public async Task Opening_a_history_entry_in_the_editor_preserves_the_session_key()
+    {
+        var store = new FakeEditorSessionStore();
+        var key = await EditorSessionKeys.GetOrCreateAsync(store);
+
+        // Simulates exactly what History.razor's OpenInEditorAsync / ReExecuteAsync do.
+        await EditorSessionKeys.SetDocumentTextAsync(store, "SELECT * FROM Orders;");
+
+        var afterOpen = await EditorSessionKeys.GetOrCreateAsync(store);
+        Assert.Equal(key, afterOpen);
+    }
+
+    [Fact]
+    public async Task SetDocumentTextAsync_preserves_an_existing_session_key_and_replaces_only_the_text()
+    {
+        var store = new FakeEditorSessionStore();
+        await store.SaveAsync(new EditorSessionRecord { SessionKey = "abc123", DocumentText = "old", ActiveProfileId = "builtin.ansi" });
+
+        await EditorSessionKeys.SetDocumentTextAsync(store, "new text");
+
+        var restored = await store.RestoreAsync();
+        Assert.NotNull(restored);
+        Assert.Equal("abc123", restored!.SessionKey);
+        Assert.Equal("new text", restored.DocumentText);
+        Assert.Equal("builtin.ansi", restored.ActiveProfileId);
+    }
+
+    /// <summary>Covers the GetOrCreateAsync overload Editor.razor's OnInitializedAsync now uses to
+    /// avoid a second RestoreAsync round-trip (fix-round 1, minor finding): passing the already-restored
+    /// record must behave identically to the store-only overload -- mint once, then stay stable.</summary>
+    [Fact]
+    public async Task GetOrCreateAsync_with_a_preloaded_record_mints_once_and_stays_stable()
+    {
+        var store = new FakeEditorSessionStore();
+
+        var preloaded = await store.RestoreAsync();   // null on a fresh store
+        var first = await EditorSessionKeys.GetOrCreateAsync(store, preloaded);
+        Assert.False(string.IsNullOrEmpty(first));
+
+        var second = await EditorSessionKeys.GetOrCreateAsync(store, await store.RestoreAsync());
+        Assert.Equal(first, second);
+    }
 }
 
 /// <summary>In-memory <see cref="IEditorSessionStore"/> fake — mirrors the shape of the real

@@ -550,9 +550,10 @@
             _currentText = restored.DocumentText;
         }
 
-        // T9: get-or-create the persisted query-session grouping key. Reads back the SAME record
-        // RestoreAsync just read (or mints/persists a fresh one on first use / after a reset).
-        _sessionKey = await EditorSessionKeys.GetOrCreateAsync(SessionStore);
+        // T9: get-or-create the persisted query-session grouping key, reusing the SAME record
+        // just restored above (avoids a second IndexedDB round-trip) -- mints/persists a fresh
+        // key on first use or after a reset.
+        _sessionKey = await EditorSessionKeys.GetOrCreateAsync(SessionStore, restored);
 
         // T038: load the active profile.
         var activeId = await ProfileStore.GetActiveIdAsync();
