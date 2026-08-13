@@ -95,6 +95,10 @@ namespace AkmlSql.Shell.Shared.History
                 _documentEvents = _dte.Events.DocumentEvents;
                 _documentEvents.DocumentClosing += OnDocumentClosing;
 
+                // Hook DocumentSaved so a Save/Save-As rename doesn't split one tab's session
+                // (see OnDocumentSaved for how the old→new migration is correlated).
+                _documentEvents.DocumentSaved += OnDocumentSaved;
+
                 // Hook WindowActivated to record the previous tab's SQL on focus change
                 _windowEvents = _dte.Events.WindowEvents;
                 _windowEvents.WindowActivated += OnWindowActivated;
@@ -139,6 +143,7 @@ namespace AkmlSql.Shell.Shared.History
                 if (_documentEvents != null)
                 {
                     _documentEvents.DocumentClosing -= OnDocumentClosing;
+                    _documentEvents.DocumentSaved -= OnDocumentSaved;
                     _documentEvents = null;
                 }
 
@@ -249,6 +254,12 @@ namespace AkmlSql.Shell.Shared.History
                         source = activeDoc.FullName;
                         sessionKey = DocumentSessionKeys.ForDocument(source);
 
+                        // Keep the "last known active path" fresh at every execution, not just on
+                        // window-activation — this is what lets OnDocumentSaved recognize a
+                        // same-tab rename (Save/Save As) even when no window switch happened
+                        // between the last execute and the save.
+                        _lastActiveDocumentPath = source;
+
                         var isSavedFile = !string.IsNullOrEmpty(activeDoc.Path)
                                           && System.IO.File.Exists(activeDoc.FullName);
                         tabTitle = isSavedFile ? activeDoc.Name : null;
@@ -317,6 +328,60 @@ namespace AkmlSql.Shell.Shared.History
             catch (Exception ex)
             {
                 Log.Warning(ex, "ExecutionCapture: error capturing document close snapshot");
+            }
+        }
+
+        /// <summary>
+        /// Fires after a document is saved. If the save changed the document's <c>FullName</c> —
+        /// a Save As, or (more commonly) the FIRST save of an unsaved scratch document whose
+        /// machine-generated temp name gets replaced by the user's chosen path — the session key
+        /// tracked under the OLD name is migrated onto the NEW name, so executions before and
+        /// after the save land in one history entry instead of splitting into two.
+        /// <para>
+        /// Correlation deliberately uses only string comparisons on <see cref="_lastActiveDocumentPath"/>
+        /// (already kept fresh by <see cref="OnAfterCommandExecute"/> and <see cref="OnWindowActivated"/>)
+        /// and <c>_dte.ActiveDocument.FullName</c> — NOT COM/RCW reference identity of the
+        /// <see cref="Document"/> object, which is not something this code can verify. The extra
+        /// "is this document still the active one" check guards against misattributing a background
+        /// Save-All to the wrong tracked session.
+        /// </para>
+        /// </summary>
+        private static void OnDocumentSaved(Document document)
+        {
+            try
+            {
+                ThreadHelper.ThrowIfNotOnUIThread();
+                if (document == null || _dte == null) return;
+
+                var newPath = document.FullName;
+                if (string.IsNullOrEmpty(newPath)) return;
+
+                string? activePath = null;
+                try
+                {
+                    activePath = _dte.ActiveDocument?.FullName;
+                }
+                catch (Exception ex)
+                {
+                    Log.Debug(ex, "ExecutionCapture: failed to read active document while handling DocumentSaved");
+                }
+
+                var oldPath = _lastActiveDocumentPath;
+                if (!string.IsNullOrEmpty(oldPath)
+                    && !string.IsNullOrEmpty(activePath)
+                    && string.Equals(activePath, newPath, StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(oldPath, newPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    DocumentSessionKeys.Rename(oldPath!, newPath);
+                    Log.Debug("ExecutionCapture: migrated session key from '{Old}' to '{New}' after save",
+                        oldPath, newPath);
+                }
+
+                _lastActiveDocumentPath = newPath;
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "ExecutionCapture: error in DocumentSaved hook");
             }
         }
 
