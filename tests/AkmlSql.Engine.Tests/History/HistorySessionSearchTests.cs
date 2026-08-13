@@ -37,7 +37,7 @@ public class HistorySessionSearchTests : IAsyncLifetime
         try { if (File.Exists(path)) File.Delete(path); } catch { /* ignore */ }
     }
 
-    private Task Add(string sql, string sessionKey) =>
+    private Task Add(string sql, string? sessionKey) =>
         _db.InsertEntryAsync(sql, false, "localhost", "Northwind", null, 5, 1,
                      (int)ExecutionStatus.Success, null, null, null, sessionKey);
 
@@ -52,6 +52,7 @@ public class HistorySessionSearchTests : IAsyncLifetime
         var result = await _db.SearchAsync(new HistoryFilter { Deduplicate = true, Limit = 50 });
 
         Assert.Equal(2, result.Entries.Count);
+        Assert.Equal(2, result.TotalCount);  // count query must agree with the rows returned
 
         var a = result.Entries.Single(e => e.TabTitle == "query-01");
         Assert.Equal(3, a.ExecutionCount);   // three executions
@@ -66,5 +67,36 @@ public class HistorySessionSearchTests : IAsyncLifetime
 
         var result = await _db.SearchAsync(new HistoryFilter { Deduplicate = false, Limit = 50 });
         Assert.Equal(2, result.Entries.Count);   // storage unchanged
+    }
+
+    [Fact]
+    public async Task Mixed_session_and_sessionless_rows_CountAndTotalCount_agree()
+    {
+        // Only coverage of the 'hash:' fallback arm of GroupKey: two rows share a session (one
+        // group), and two rows have NO session (session_id IS NULL) with DIFFERENT sql text each,
+        // so they fall back to per-content-hash grouping — one group per distinct hash. Total
+        // distinct groups = 1 (session) + 2 (hash fallback) = 3, exercised in the SAME result set
+        // so the two GroupKey arms are proven to coexist correctly, not just individually.
+        await Add("SELECT 1", "tab-A");
+        await Add("SELECT 1", "tab-A");   // same session, re-run — folds into the session group
+        await Add("SELECT 100", null);    // no session — its own hash-fallback group
+        await Add("SELECT 200", null);    // no session, different text — another hash-fallback group
+
+        var result = await _db.SearchAsync(new HistoryFilter { Deduplicate = true, Limit = 50 });
+
+        Assert.Equal(3, result.Entries.Count);
+        Assert.Equal(3, result.TotalCount);  // count query must agree with the rows returned
+
+        var sessionGroup = result.Entries.Single(e => e.TabTitle == "query-01");
+        Assert.Equal(2, sessionGroup.ExecutionCount);
+        Assert.Equal(1, sessionGroup.VersionCount);
+
+        var hashFallbackGroups = result.Entries.Where(e => e.TabTitle == string.Empty).ToList();
+        Assert.Equal(2, hashFallbackGroups.Count);
+        Assert.All(hashFallbackGroups, e =>
+        {
+            Assert.Equal(1, e.ExecutionCount);
+            Assert.Equal(1, e.VersionCount);
+        });
     }
 }

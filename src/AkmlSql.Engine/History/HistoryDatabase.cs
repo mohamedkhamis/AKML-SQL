@@ -1426,17 +1426,31 @@ public sealed class HistoryDatabase : IDisposable
     }
 
     /// <summary>
-    /// Updates the tab_title (display name) for a history entry.
-    /// Used by the "Rename" feature for closed queries.
+    /// Updates the display name for a history entry. Used by the "Rename" feature for closed queries.
     /// <para>
-    /// The rename is applied to EVERY row sharing the target entry's <c>content_hash</c> (the whole
-    /// deduplication group), not just the single row identified by <paramref name="entryId"/>. The
-    /// display name is a query-level label: the deduplicated search derives it via a window function
-    /// over the filtered partition, so a per-row name would vanish whenever a filter excludes the
-    /// renamed row (e.g. a server filter that hides the exact execution that was renamed). Stamping
-    /// the name on all rows of the group makes it consistent across executions and filters. This
-    /// cannot reintroduce the old "name bleeds across a name filter" bug, because every row of the
-    /// content_hash carries the SAME name. The AFTER UPDATE FTS sync (if any) still fires per row.
+    /// (Task 6 fix-round-1) The deduplicated search reads its display name from
+    /// <c>query_sessions.name</c> via a <c>LEFT JOIN</c> (falling back to a row's own
+    /// <c>tab_title</c> only when it has no session — see <see cref="SearchAsync"/>). Task 5's
+    /// backfill assigns a session to every pre-existing row, so writing <c>history.tab_title</c>
+    /// alone (the pre-fix-round-1 behaviour) was silently invisible: the rename succeeded but
+    /// <c>qs.name</c> always won the COALESCE, so the new name never appeared in the list. This
+    /// method now targets whichever place the read path actually consults:
+    /// </para>
+    /// <para>
+    /// <b>Entry has a session</b> (the common case): renames the SESSION —
+    /// <c>UPDATE query_sessions SET name = @newName, name_source = 2</c>. Renaming necessarily
+    /// renames every execution grouped under that session; that is intended, since they are all the
+    /// same entry in the deduplicated list. <c>name_source = 2</c> (manual) is REQUIRED: it is the
+    /// only value <see cref="QuerySessionStore"/>'s <c>MaybeUpgradeNameAsync</c> precedence rule
+    /// never overwrites, so a later execution carrying a real filename cannot clobber the user's
+    /// chosen name.
+    /// </para>
+    /// <para>
+    /// <b>Entry has no session</b> (legacy/mid-upgrade row with <c>session_id IS NULL</c>): falls
+    /// back to the pre-fix-round-1 behaviour — stamp <c>tab_title</c> on every row sharing the
+    /// target's <c>content_hash</c>, since the deduplicated view's per-row fallback name is a
+    /// window aggregate over that same partition and a single-row stamp would vanish whenever a
+    /// filter excludes the renamed row.
     /// </para>
     /// </summary>
     public async Task UpdateTabTitleAsync(long entryId, string newName)
@@ -1444,13 +1458,36 @@ public sealed class HistoryDatabase : IDisposable
         await using var conn = new SqliteConnection(_connectionString);
         await conn.OpenAsync();
 
-        await using var cmd = new SqliteCommand(
-            "UPDATE history SET tab_title = @name WHERE content_hash = (SELECT content_hash FROM history WHERE id = @id);", conn);
-        cmd.Parameters.AddWithValue("@name", newName);
-        cmd.Parameters.AddWithValue("@id", entryId);
+        long? sessionId;
+        await using (var lookupCmd = new SqliteCommand(
+            "SELECT session_id FROM history WHERE id = @id;", conn))
+        {
+            lookupCmd.Parameters.AddWithValue("@id", entryId);
+            var result = await lookupCmd.ExecuteScalarAsync();
+            sessionId = result == null || result == DBNull.Value ? (long?)null : Convert.ToInt64(result);
+        }
 
-        await cmd.ExecuteNonQueryAsync();
-        Log.Debug("History entry {Id}: tab_title updated to '{Name}' (applied to whole content_hash group)", entryId, newName);
+        if (sessionId.HasValue)
+        {
+            await using var cmd = new SqliteCommand(
+                "UPDATE query_sessions SET name = @name, name_source = 2 WHERE id = @sessionId;", conn);
+            cmd.Parameters.AddWithValue("@name", newName);
+            cmd.Parameters.AddWithValue("@sessionId", sessionId.Value);
+            await cmd.ExecuteNonQueryAsync();
+            Log.Debug(
+                "History entry {Id}: renamed session {SessionId} to '{Name}' (name_source=2/manual)",
+                entryId, sessionId.Value, newName);
+            return;
+        }
+
+        await using var fallbackCmd = new SqliteCommand(
+            "UPDATE history SET tab_title = @name WHERE content_hash = (SELECT content_hash FROM history WHERE id = @id);", conn);
+        fallbackCmd.Parameters.AddWithValue("@name", newName);
+        fallbackCmd.Parameters.AddWithValue("@id", entryId);
+        await fallbackCmd.ExecuteNonQueryAsync();
+        Log.Debug(
+            "History entry {Id}: tab_title updated to '{Name}' (no session; applied to whole content_hash group)",
+            entryId, newName);
     }
 
     /// <summary>
