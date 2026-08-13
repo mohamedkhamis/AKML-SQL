@@ -717,9 +717,15 @@ public sealed class HistoryDatabase : IDisposable
 
         if (!string.IsNullOrEmpty(filter.NameFilter))
         {
-            whereClauses.Add("h.tab_title LIKE '%' || @nameFilter || '%'");
+            whereClauses.Add(
+                "COALESCE((SELECT qs2.name FROM query_sessions qs2 WHERE qs2.id = h.session_id), h.tab_title) " +
+                "LIKE '%' || @nameFilter || '%'");
             parameters.Add(new SqliteParameter("@nameFilter", filter.NameFilter));
         }
+
+        // COALESCE so a NULL session_id degrades to per-content grouping instead of
+        // lumping every ungrouped row together.
+        const string GroupKey = "COALESCE(CAST(h.session_id AS TEXT), 'hash:' || h.content_hash)";
 
         var whereClause = whereClauses.Count > 0
             ? "WHERE " + string.Join(" AND ", whereClauses)
@@ -729,7 +735,7 @@ public sealed class HistoryDatabase : IDisposable
         string countSql;
         if (filter.Deduplicate)
         {
-            countSql = $"SELECT COUNT(DISTINCT h.content_hash) FROM {fromClause} {whereClause}";
+            countSql = $"SELECT COUNT(DISTINCT {GroupKey}) FROM {fromClause} {whereClause}";
         }
         else
         {
@@ -769,7 +775,7 @@ public sealed class HistoryDatabase : IDisposable
                 ? "WHERE " + string.Join(" AND ", whereClauses)
                 : "";
             countSql = filter.Deduplicate
-                ? $"SELECT COUNT(DISTINCT h.content_hash) FROM {fromClause} {whereClause}"
+                ? $"SELECT COUNT(DISTINCT {GroupKey}) FROM {fromClause} {whereClause}"
                 : $"SELECT COUNT(*) FROM {fromClause} {whereClause}";
 
             await using var fallbackCountCmd = new SqliteCommand(countSql, conn);
@@ -782,20 +788,29 @@ public sealed class HistoryDatabase : IDisposable
         string dataSql;
         if (filter.Deduplicate)
         {
-            // Deduplicated view: one representative row per content_hash = the MOST RECENT execution,
-            // chosen deterministically by ROW_NUMBER (latest executed_at, id as tiebreak). Every scalar
+            // Deduplicated view: one representative row per SESSION (falling back to per-content_hash
+            // grouping for legacy rows with no session_id — see GroupKey above), chosen
+            // deterministically by ROW_NUMBER (latest executed_at, id as tiebreak). Every scalar
             // column therefore comes from that single latest row. This replaces the prior
             // GROUP-BY-with-bare-columns query, where SQLite (with several MAX() aggregates present)
             // pulled name/status/row-count/duration from an ARBITRARY row in the group — so a repeated
             // query could show a stale status or the wrong duration. exec_count is the number of
             // executions MATCHING THE CURRENT FILTER (equal to the total when unfiltered, because
-            // COUNT(*) OVER runs after {whereClause}); favourite/open are "any version" (MAX over the
-            // partition, matching the FavoritesOnly filter); and the display name is the latest NON-NULL
-            // tab_title within the filtered partition so a rename survives later re-executions. The
-            // tab_title is a WINDOW column computed INSIDE the ranked subquery so it respects
-            // {whereClause} (a correlated subquery over the bare table would ignore the filters). The
-            // {whereClause} filters live INSIDE the windowed subquery so
-            // COUNT()/ROW_NUMBER() see the filtered set; only `rn = 1` is applied outside.
+            // COUNT(*) OVER runs after {whereClause}); version_count is the number of DISTINCT
+            // content_hash values in the partition; favourite/open are "any version" (MAX over the
+            // partition, matching the FavoritesOnly filter); and the display name comes from the
+            // joined query_sessions row (falling back to the latest row's own tab_title) — the name
+            // now lives in exactly one query_sessions row, so no window function is needed to
+            // reconstruct it across re-executions. The {whereClause} filters live INSIDE the windowed
+            // subquery so COUNT()/ROW_NUMBER() see the filtered set; only `rn = 1` is applied outside.
+            // version_count (distinct content_hash per partition) cannot be COUNT(DISTINCT ...)
+            // OVER(...) — SQLite rejects DISTINCT inside a window aggregate ("DISTINCT is not
+            // supported for window functions"). Standard workaround: DENSE_RANK() over the
+            // partition ordered by content_hash assigns 1..N to the N distinct hashes, then
+            // MAX(that rank) per partition (one level up, since a window function cannot take
+            // another window function as its own argument) recovers the distinct count. Hence
+            // three levels: base (raw window aggregates incl. hash_rank/rn) → ranked (adds
+            // version_count from base.hash_rank) → outer (applies rn = 1 + paging).
             dataSql = $@"
                 SELECT
                     ranked.id,
@@ -809,37 +824,34 @@ public sealed class HistoryDatabase : IDisposable
                     ranked.status,
                     ranked.error_msg,
                     ranked.source,
-                    ranked.tab_title,
+                    ranked.session_name as tab_title,
                     ranked.is_favorite,
                     ranked.exec_count,
+                    ranked.version_count,
                     ranked.content_hash,
                     ranked.is_open
                 FROM (
                     SELECT
-                        h.id,
-                        h.sql_text,
-                        h.server,
-                        h.database_name,
-                        h.username,
-                        h.executed_at,
-                        h.duration_ms,
-                        h.row_count,
-                        h.status,
-                        h.error_msg,
-                        h.source,
-                        h.content_hash,
-                        COUNT(*)           OVER (PARTITION BY h.content_hash) as exec_count,
-                        MAX(h.is_favorite) OVER (PARTITION BY h.content_hash) as is_favorite,
-                        MAX(h.is_open)     OVER (PARTITION BY h.content_hash) as is_open,
-                        FIRST_VALUE(h.tab_title) OVER (
-                            PARTITION BY h.content_hash
-                            ORDER BY (CASE WHEN h.tab_title IS NULL THEN 1 ELSE 0 END), h.executed_at DESC, h.id DESC
-                            ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
-                        ) as tab_title,
-                        ROW_NUMBER()       OVER (PARTITION BY h.content_hash
-                                                 ORDER BY h.executed_at DESC, h.id DESC) as rn
-                    FROM {fromClause}
-                    {whereClause}
+                        base.*,
+                        MAX(base.hash_rank) OVER (PARTITION BY base.group_key) as version_count
+                    FROM (
+                        SELECT
+                            h.id, h.sql_text, h.server, h.database_name, h.username,
+                            h.executed_at, h.duration_ms, h.row_count, h.status, h.error_msg,
+                            h.source, h.content_hash,
+                            COALESCE(qs.name, h.tab_title, '') as session_name,
+                            {GroupKey} as group_key,
+                            COUNT(*)           OVER (PARTITION BY {GroupKey}) as exec_count,
+                            MAX(h.is_favorite) OVER (PARTITION BY {GroupKey}) as is_favorite,
+                            MAX(h.is_open)     OVER (PARTITION BY {GroupKey}) as is_open,
+                            DENSE_RANK()       OVER (PARTITION BY {GroupKey}
+                                                     ORDER BY h.content_hash) as hash_rank,
+                            ROW_NUMBER()       OVER (PARTITION BY {GroupKey}
+                                                     ORDER BY h.executed_at DESC, h.id DESC) as rn
+                        FROM {fromClause}
+                        LEFT JOIN query_sessions qs ON qs.id = h.session_id
+                        {whereClause}
+                    ) AS base
                 ) AS ranked
                 WHERE ranked.rn = 1
                 ORDER BY ranked.executed_at DESC, ranked.id DESC
@@ -881,6 +893,12 @@ public sealed class HistoryDatabase : IDisposable
         dataCmd.Parameters.AddWithValue("@offset", filter.Offset);
 
         await using var reader = await dataCmd.ExecuteReaderAsync();
+        // content_hash/is_open shift by one position in the Deduplicate branch (version_count is
+        // inserted ahead of them), so look them up by name rather than trusting a fixed ordinal
+        // shared across both branches' differently-shaped SELECT lists.
+        var contentHashOrdinal = reader.GetOrdinal("content_hash");
+        var isOpenOrdinal = reader.GetOrdinal("is_open");
+        var versionCountOrdinal = filter.Deduplicate ? reader.GetOrdinal("version_count") : -1;
         while (await reader.ReadAsync())
         {
             entries.Add(new HistoryEntryDto
@@ -899,8 +917,11 @@ public sealed class HistoryDatabase : IDisposable
                 TabTitle = reader.IsDBNull(11) ? null : reader.GetString(11),
                 IsFavorite = reader.GetInt32(12) != 0,
                 ExecutionCount = reader.GetInt32(13),
-                ContentHash = reader.IsDBNull(14) ? null : reader.GetString(14),
-                IsOpen = reader.GetInt32(15) != 0
+                ContentHash = reader.IsDBNull(contentHashOrdinal) ? null : reader.GetString(contentHashOrdinal),
+                IsOpen = reader.GetInt32(isOpenOrdinal) != 0,
+                VersionCount = versionCountOrdinal < 0
+                    ? 1
+                    : (reader.IsDBNull(versionCountOrdinal) ? 1 : reader.GetInt32(versionCountOrdinal))
             });
         }
 

@@ -74,5 +74,9 @@ namespace AkmlSql.Core.Ipc.Messages
         /// <summary>Whether this query's tab is currently open in the editor.</summary>
         [Key(15)]
         public bool IsOpen { get; set; }
+
+        /// <summary>Distinct SQL texts recorded within this query session.</summary>
+        [Key(16)]
+        public int VersionCount { get; set; }
     }
 }
