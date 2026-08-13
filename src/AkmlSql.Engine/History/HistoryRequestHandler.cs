@@ -45,7 +45,8 @@ public class HistoryRequestHandler(HistoryDatabase database)
                 recordRequest.Status,
                 recordRequest.ErrorMessage,
                 recordRequest.Source,
-                recordRequest.TabTitle);
+                recordRequest.TabTitle,
+                sessionKey: recordRequest.SessionKey);
 
             Log.Debug("History record saved: EntryId={EntryId}, Server={Server}, Database={Database}",
                 entryId, recordRequest.Server, recordRequest.Database);
