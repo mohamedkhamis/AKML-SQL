@@ -92,7 +92,7 @@
                                     <span class="akml-hist-name">@rv.DisplayName</span>
                                     <span class="akml-hist-meta">
                                         <span>@rv.RelativeTime</span>
-                                        @if (e.ExecutionCount > 1) { <span class="akml-hist-count"> · ×@e.ExecutionCount</span> }
+                                        @if (!string.IsNullOrEmpty(rv.Meta)) { <span class="akml-hist-count"> · @rv.Meta</span> }
                                         <span class="akml-hist-conn">
                                             <span class="akml-hist-dot" style="color:@(e.IsOpen ? "var(--akml-status-success)" : "var(--akml-status-danger)")">●</span>
                                             @rv.ServerDb
@@ -306,7 +306,7 @@
     // Per-entry derived display values computed once per load (keyed by entry id) so the render tree
     // never re-runs the regex/date/relative-time work per row per render. See RebuildRowViews.
     private readonly Dictionary<long, RowView> _rowViews = new();
-    private sealed record RowView(string DisplayName, string Bucket, string RelativeTime, string ServerDb);
+    private sealed record RowView(string DisplayName, string Meta, string Bucket, string RelativeTime, string ServerDb);
 
     // Cached preview segments — recomputed only when _previewSql or _search changes (SelectAsync,
     // SelectVersion, ClearDetail, OnSearchInput), never inside the render tree.
@@ -499,7 +499,7 @@
         if (await HistorySvc.RenameAsync(entry.Id, name.Trim(), CancellationToken.None))
         {
             // Mirror the desktop (HistoryToolWindowControl: entry.TabTitle = newName) so the right-pane
-            // header (DisplayName(_selected)) updates immediately — _selected is this same reference.
+            // header (DisplayNameFor(_selected)) updates immediately — _selected is this same reference.
             entry.TabTitle = name.Trim();
             await LoadAsync(true);
         }
@@ -621,15 +621,31 @@
         _rowViews.TryGetValue(e.Id, out var v) ? v : BuildRowView(e, DateTime.Now);
 
     private static RowView BuildRowView(HistoryEntryDto e, DateTime now) =>
-        new(DisplayName(e), WebHistoryLogic.DateBucket(e.ExecutedAt, now), RelativeTime(e.ExecutedAt), ServerDb(e));
+        new(DisplayNameFor(e), MetaFor(e.ExecutionCount, e.VersionCount),
+            WebHistoryLogic.DateBucket(e.ExecutedAt, now), RelativeTime(e.ExecutedAt), ServerDb(e));
 
     private void RecomputePreviewSegments() =>
         _previewSegments = _selected == null
             ? Array.Empty<HistoryPreviewHighlighter.Segment>()
             : HistoryPreviewHighlighter.BuildSegments(_previewSql, _search);
 
-    private static string DisplayName(HistoryEntryDto e) =>
-        AkmlSql.Core.Models.History.HistoryDisplayName.Of(e.TabTitle, e.SqlText);
+    /// <summary>
+    /// The session name (query-NN, a saved file name, or the user's rename). The raw-SQL fallback
+    /// now only fires for a row that somehow has no session at all.
+    /// </summary>
+    internal static string DisplayNameFor(HistoryEntryDto e) =>
+        !string.IsNullOrWhiteSpace(e.TabTitle)
+            ? e.TabTitle!
+            : (e.SqlText ?? string.Empty).Trim();
+
+    /// <summary>"×276 · 12 versions". Both halves are omitted when they carry no information.</summary>
+    internal static string MetaFor(int executionCount, int versionCount)
+    {
+        var parts = new List<string>(2);
+        if (executionCount > 1) parts.Add($"×{executionCount}");
+        if (versionCount > 1) parts.Add($"{versionCount} versions");
+        return string.Join(" · ", parts);
+    }
 
     private static string ServerDb(HistoryEntryDto e)
     {

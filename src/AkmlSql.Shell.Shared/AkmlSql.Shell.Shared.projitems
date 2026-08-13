@@ -172,6 +172,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)History\DocumentSessionKeys.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)History\HistoryViewModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)History\HistoryTimeFormat.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)History\HistoryRowDisplay.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)History\DateBucketConverter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)History\HistoryToolWindowControl.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)History\HistoryDiffWindow.cs" />
