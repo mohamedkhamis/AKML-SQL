@@ -320,10 +320,15 @@ namespace AkmlSql.Shell.Shared.History
 
                 if (string.IsNullOrWhiteSpace(content)) return;
 
-                var tabTitle = document.Name;
-                Log.Debug("ExecutionCapture: saving version snapshot on close for '{Name}'", tabTitle);
+                // Key on FullName (history.source), not Name/tab_title: TabTitle is sent only for a
+                // saved document (see OnAfterCommandExecute), so an unsaved scratch tab's tab_title
+                // is NULL and a lookup keyed on it would never find the row to snapshot against.
+                var source = document.FullName;
+                if (string.IsNullOrEmpty(source)) return;
 
-                SaveVersionSnapshot(tabTitle, content);
+                Log.Debug("ExecutionCapture: saving version snapshot on close for '{Source}'", source);
+
+                SaveVersionSnapshot(source, content);
             }
             catch (Exception ex)
             {
@@ -460,9 +465,13 @@ namespace AkmlSql.Shell.Shared.History
                     return;
                 _lastRecordedContentHash = contentHash;
 
-                Log.Debug("ExecutionCapture: saving version snapshot for '{Name}' on tab switch", name);
+                // Key on docPath (history.source), not name/tab_title — see the matching comment in
+                // OnDocumentClosing for why: an unsaved scratch tab's tab_title is NULL.
+                if (string.IsNullOrEmpty(docPath)) return;
 
-                SaveVersionSnapshot(name, content);
+                Log.Debug("ExecutionCapture: saving version snapshot for '{Source}' on tab switch", docPath);
+
+                SaveVersionSnapshot(docPath, content);
             }
             catch (Exception ex)
             {
@@ -533,11 +542,20 @@ namespace AkmlSql.Shell.Shared.History
         }
 
         /// <summary>
-        /// Saves a version snapshot for an existing history entry (by tab title).
+        /// Saves a version snapshot for an existing history entry, found by <paramref name="source"/>
+        /// (the document's full path — matches <c>history.source</c> engine-side).
         /// Used by tab-close and tab-focus-change auto-save triggers.
         /// These record as versions of the existing entry, not new rows in the query list.
+        /// <para>
+        /// Keyed on the document's full path rather than its tab title: <c>TabTitle</c> is sent to
+        /// the engine only for a document actually saved to disk (see
+        /// <see cref="OnAfterCommandExecute"/>), so an unsaved SSMS scratch tab has no <c>tab_title</c>
+        /// to match against. <c>source</c> is always populated (see <see cref="OnAfterCommandExecute"/>'s
+        /// <c>source = activeDoc.FullName</c>), so it is the identifier this lookup can rely on for
+        /// both saved and unsaved documents.
+        /// </para>
         /// </summary>
-        private static void SaveVersionSnapshot(string tabTitle, string sqlText)
+        private static void SaveVersionSnapshot(string source, string sqlText)
         {
             Task.Run(async () =>
             {
@@ -549,7 +567,7 @@ namespace AkmlSql.Shell.Shared.History
                     var request = new HistoryActionRequest
                     {
                         Action = HistoryActions.SaveVersion,
-                        NewName = tabTitle, // reuse NewName field for tab title
+                        NewName = source, // reuse NewName field to carry the source path
                         SqlText = sqlText
                     };
 
@@ -558,7 +576,7 @@ namespace AkmlSql.Shell.Shared.History
                 }
                 catch (Exception ex)
                 {
-                    Log.Debug(ex, "ExecutionCapture: failed to save version snapshot for '{Title}'", tabTitle);
+                    Log.Debug(ex, "ExecutionCapture: failed to save version snapshot for '{Source}'", source);
                 }
             });
         }

@@ -8,6 +8,7 @@
 @using System.Linq
 @using System.Text
 @using AkmlSql.Core.Ipc.Messages
+@using AkmlSql.Core.Models.History
 @using AkmlSql.Web.Services
 @using Microsoft.JSInterop
 @implements IAsyncDisposable
@@ -631,12 +632,13 @@
 
     /// <summary>
     /// The session name (query-NN, a saved file name, or the user's rename). The raw-SQL fallback
-    /// now only fires for a row that somehow has no session at all.
+    /// only fires for a row that somehow has no session at all, and is formatted via the shared
+    /// <see cref="HistoryDisplayName.Of"/> — whitespace collapsed, truncated to ~60 characters — so
+    /// a sessionless row never dumps raw multi-line SQL into the list. Kept in lockstep by hand with
+    /// <c>AkmlSql.Shell.Shared.History.HistoryRowDisplay.DisplayNameFor</c> — see that file's remarks.
     /// </summary>
     internal static string DisplayNameFor(HistoryEntryDto e) =>
-        !string.IsNullOrWhiteSpace(e.TabTitle)
-            ? e.TabTitle!
-            : (e.SqlText ?? string.Empty).Trim();
+        HistoryDisplayName.Of(e.TabTitle, e.SqlText);
 
     /// <summary>"×276 · 12 versions". Both halves are omitted when they carry no information.</summary>
     internal static string MetaFor(int executionCount, int versionCount)

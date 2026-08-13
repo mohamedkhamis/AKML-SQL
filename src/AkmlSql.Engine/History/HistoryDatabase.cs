@@ -101,10 +101,14 @@ public sealed class HistoryDatabase : IDisposable
                 value TEXT NOT NULL
             );");
 
-        // Insert schema_version if not present
+        // Upsert schema_version so an upgraded database always reflects the CURRENT SchemaVersion.
+        // INSERT OR IGNORE (the prior form) only ever wrote the version once, on first creation —
+        // a database created under schema v1 and later opened by this v2 build would keep the
+        // literal string '1' in metadata forever, which would misfire the first time some future
+        // change actually gates behaviour on this value.
         await ExecuteNonQueryAsync(conn, $@"
-            INSERT OR IGNORE INTO metadata (key, value)
-            VALUES ('schema_version', '{SchemaVersion}');");
+            INSERT INTO metadata (key, value) VALUES ('schema_version', '{SchemaVersion}')
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value;");
 
         // Create main history table
         await ExecuteNonQueryAsync(conn, @"
@@ -285,7 +289,24 @@ public sealed class HistoryDatabase : IDisposable
             await using (var r = await cmd.ExecuteReaderAsync())
             {
                 while (await r.ReadAsync())
+                {
+                    // date(substr(executed_at, 1, 19), 'localtime') returns NULL for a row whose
+                    // executed_at is malformed or too short to parse as a date/time. r.GetString(0)
+                    // on a NULL column throws InvalidCastException, which — since the whole backfill
+                    // is one transaction (see BEGIN IMMEDIATE above) — would abort the ENTIRE run and
+                    // leave every other, well-formed group ungrouped too, on every future engine
+                    // start (the migration always retries from scratch, so one bad row permanently
+                    // blocks it). Skip just the bad group instead: it stays session_id IS NULL and
+                    // falls back to per-content-hash grouping in SearchAsync's GroupKey.
+                    if (r.IsDBNull(0))
+                    {
+                        Log.Warning(
+                            "History: skipping backfill group with unparseable executed_at (title='{Title}')",
+                            r.IsDBNull(1) ? "" : r.GetString(1));
+                        continue;
+                    }
                     groups.Add((r.GetString(0), r.GetString(1), r.GetString(2), r.GetString(3)));
+                }
             }
 
             var perDay = new System.Collections.Generic.Dictionary<string, int>(StringComparer.Ordinal);
@@ -859,6 +880,11 @@ public sealed class HistoryDatabase : IDisposable
         }
         else
         {
+            // Non-dedup rows need the same session-name resolution as the dedup branch above
+            // (COALESCE(qs.name, h.tab_title, '')) — otherwise, with Deduplicate off, a row whose
+            // session was renamed keeps showing its pre-rename tab_title, and a row with no
+            // tab_title at all (unsaved scratch tab) falls straight through to raw SQL text
+            // instead of its auto-assigned query-NN session name.
             dataSql = $@"
                 SELECT
                     h.id,
@@ -872,12 +898,13 @@ public sealed class HistoryDatabase : IDisposable
                     h.status,
                     h.error_msg,
                     h.source,
-                    h.tab_title,
+                    COALESCE(qs.name, h.tab_title, '') as tab_title,
                     h.is_favorite,
                     1 as exec_count,
                     h.content_hash,
                     h.is_open
                 FROM {fromClause}
+                LEFT JOIN query_sessions qs ON qs.id = h.session_id
                 {whereClause}
                 ORDER BY h.executed_at DESC
                 LIMIT @limit OFFSET @offset";
@@ -1140,7 +1167,7 @@ public sealed class HistoryDatabase : IDisposable
     /// <para>
     /// Both sides of the comparison are wrapped in SQLite <c>datetime()</c> (as
     /// <see cref="PurgeOldVersionsAsync"/> does): <c>executed_at</c> is NOT uniformly ISO-8601 — most
-    /// rows are ISO 'o' (<see cref="InsertEntryAsync"/>) but <c>SaveVersionByTabTitleAsync</c> rewrites
+    /// rows are ISO 'o' (<see cref="InsertEntryAsync"/>) but <c>SaveVersionBySourceAsync</c> rewrites
     /// it via <c>datetime('now')</c> (space-separated). A raw lexicographic compare would treat a
     /// space-format row as older than any ISO row on the same day (space &lt; 'T'), silently deleting
     /// NEWER entries. <c>datetime()</c> canonicalises both forms so the comparison is by real time.
@@ -1287,7 +1314,12 @@ public sealed class HistoryDatabase : IDisposable
 
         if (!string.IsNullOrEmpty(filter.NameFilter))
         {
-            whereClauses.Add("h.tab_title LIKE '%' || @nameFilter || '%'");
+            // Same name resolution as SearchAsync (:721): NameFilter means the SESSION name, which
+            // falls back to the row's own tab_title only when it has no session. Matching against
+            // the bare column here would silently stop matching any renamed or auto-named session.
+            whereClauses.Add(
+                "COALESCE((SELECT qs2.name FROM query_sessions qs2 WHERE qs2.id = h.session_id), h.tab_title) " +
+                "LIKE '%' || @nameFilter || '%'");
             parameters.Add(new SqliteParameter("@nameFilter", filter.NameFilter));
         }
 
@@ -1494,21 +1526,28 @@ public sealed class HistoryDatabase : IDisposable
     /// Inserts a version snapshot for a history entry (for version history tracking).
     /// </summary>
     /// <summary>
-    /// Finds the most recent history entry by tab title and inserts a version snapshot.
-    /// Used for auto-save on tab close / focus change (records as version, not new entry).
-    /// Returns true if a matching entry was found and a version was saved.
+    /// Finds the most recent history entry by <c>source</c> (the document's full path) and inserts
+    /// a version snapshot. Used for auto-save on tab close / focus change (records as version, not
+    /// a new entry). Returns true if a matching entry was found and a version was saved.
+    /// <para>
+    /// Keyed on <c>source</c>, NOT <c>tab_title</c>: since this branch (F1 fix), the shell sends
+    /// <c>TabTitle</c> only for a document that is actually saved to disk (see
+    /// <c>ExecutionCapture.OnAfterCommandExecute</c>), so an unsaved SSMS scratch tab's <c>tab_title</c>
+    /// is NULL. <c>source</c> carries <c>activeDoc.FullName</c> unconditionally for both saved and
+    /// unsaved documents, so it is the one identifier this lookup can always find a row by.
+    /// </para>
     /// </summary>
-    public async Task<bool> SaveVersionByTabTitleAsync(string tabTitle, string sqlText)
+    public async Task<bool> SaveVersionBySourceAsync(string source, string sqlText)
     {
-        if (string.IsNullOrEmpty(tabTitle) || string.IsNullOrWhiteSpace(sqlText)) return false;
+        if (string.IsNullOrEmpty(source) || string.IsNullOrWhiteSpace(sqlText)) return false;
 
         await using var conn = new SqliteConnection(_connectionString);
         await conn.OpenAsync();
 
-        // Find the most recent entry for this tab
+        // Find the most recent entry for this document
         await using var findCmd = new SqliteCommand(
-            "SELECT id FROM history WHERE tab_title = @title ORDER BY executed_at DESC LIMIT 1", conn);
-        findCmd.Parameters.AddWithValue("@title", tabTitle);
+            "SELECT id FROM history WHERE source = @source ORDER BY executed_at DESC LIMIT 1", conn);
+        findCmd.Parameters.AddWithValue("@source", source);
         var result = await findCmd.ExecuteScalarAsync();
         if (result == null) return false;
 
@@ -1527,7 +1566,7 @@ public sealed class HistoryDatabase : IDisposable
         updateCmd.Parameters.AddWithValue("@id", historyId);
         await updateCmd.ExecuteNonQueryAsync();
 
-        Log.Debug("History: saved version snapshot for tab '{Title}' (entry {Id})", tabTitle, historyId);
+        Log.Debug("History: saved version snapshot for source '{Source}' (entry {Id})", source, historyId);
         return true;
     }
 

@@ -62,7 +62,8 @@ namespace AkmlSql.Core.Ipc.Messages
         public bool IsFavorite { get; set; }
 
         /// <summary>
-        /// Number of executions with the same content hash. Greater than 1 when deduplicated.
+        /// Number of executions in the same query session (falling back to the same content hash
+        /// for legacy rows with no session). Greater than 1 when deduplicated.
         /// </summary>
         [Key(13)]
         public int ExecutionCount { get; set; } = 1;

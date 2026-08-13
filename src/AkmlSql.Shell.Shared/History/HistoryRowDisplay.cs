@@ -1,6 +1,7 @@
 #nullable enable
 using System.Collections.Generic;
 using AkmlSql.Core.Ipc.Messages;
+using AkmlSql.Core.Models.History;
 
 namespace AkmlSql.Shell.Shared.History
 {
@@ -18,12 +19,12 @@ namespace AkmlSql.Shell.Shared.History
     {
         /// <summary>
         /// The session name (query-NN, a saved file name, or the user's rename). The raw-SQL fallback
-        /// only fires for a row that somehow has no session at all.
+        /// only fires for a row that somehow has no session at all, and is formatted via the shared
+        /// <see cref="HistoryDisplayName.Of"/> — whitespace collapsed, truncated to ~60 characters —
+        /// so a sessionless row never dumps raw multi-line SQL into the list.
         /// </summary>
         public static string DisplayNameFor(HistoryEntryDto e) =>
-            !string.IsNullOrWhiteSpace(e.TabTitle)
-                ? e.TabTitle!
-                : (e.SqlText ?? string.Empty).Trim();
+            HistoryDisplayName.Of(e.TabTitle, e.SqlText);
 
         /// <summary>"&#215;276 &#183; 12 versions". Both halves are omitted when they carry no information.</summary>
         public static string MetaFor(int executionCount, int versionCount)

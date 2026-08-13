@@ -13,9 +13,13 @@ namespace AkmlSql.Engine.History;
 internal sealed class QuerySessionStore
 {
     // SQLITE_CONSTRAINT_UNIQUE — the EXTENDED code. The primary code (19) is shared by NOT NULL,
-    // FOREIGN KEY (PRAGMA foreign_keys=ON is set on this connection), CHECK and PRIMARY KEY too,
-    // so matching on the primary code alone would retry-then-swallow a real schema bug instead
-    // of letting it surface.
+    // FOREIGN KEY, CHECK and PRIMARY KEY too, so matching on the primary code alone would
+    // retry-then-swallow a real schema bug instead of letting it surface. (PRAGMA foreign_keys=ON
+    // is per-connection and is only ever set on HistoryDatabase.InitializeCoreAsync's OWN
+    // connection, not this one — GetOrCreateAsync below opens a fresh SqliteConnection and never
+    // issues that pragma itself — but the conclusion above holds regardless of whether FK
+    // enforcement is active on this connection, since the other three constraint kinds still share
+    // code 19.)
     private const int SqliteConstraintUnique = 2067;
     // SQLITE_BUSY / SQLITE_BUSY_SNAPSHOT (primary code). A DEFERRED transaction that reads before
     // writing can be told to promote after a concurrent commit and get BUSY_SNAPSHOT instead of a

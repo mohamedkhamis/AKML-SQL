@@ -27,6 +27,26 @@ public class HistoryRowDisplayTests
             SqlText = "SELECT * FROM dbo.Customers"
         }));
 
+    [Fact]
+    public void Sql_fallback_collapses_whitespace_and_truncates_around_sixty_chars()
+    {
+        // A raw-SQL fallback only fires for a sessionless row; it must never dump multi-line,
+        // untruncated SQL into the list (this regressed when DisplayNameFor stopped routing through
+        // the old HistoryDisplayName.Of and returned the raw 500-char preview verbatim). Must match
+        // AkmlSql.Shell.Shared.Tests.HistoryRowDisplayTests' twin test exactly — same helper contract.
+        var name = AkmlSql.Web.Pages.History.DisplayNameFor(new HistoryEntryDto
+        {
+            TabTitle = null,
+            SqlText = "SELECT   *\r\n  FROM   dbo.Customers\r\n  WHERE   CustomerId  =  @id  -- a comment that pushes this well past sixty characters"
+        });
+
+        Assert.DoesNotContain('\n', name);
+        Assert.DoesNotContain('\r', name);
+        Assert.DoesNotContain("  ", name); // no collapsed-double-space remnants
+        Assert.True(name.Length <= 61, $"expected ~60 chars + ellipsis, got {name.Length}: '{name}'");
+        Assert.EndsWith("…", name);
+    }
+
     [Theory]
     [InlineData(1, 1, "")]                     // single run, single version — no noise
     [InlineData(276, 1, "×276")]

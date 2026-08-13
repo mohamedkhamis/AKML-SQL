@@ -206,6 +206,52 @@ public class HistoryBackfillTests
         finally { CleanupDb(path); }
     }
 
+    /// <summary>
+    /// Minor fix 5 (final review wave): SQLite's <c>date(substr(executed_at, 1, 19), 'localtime')</c>
+    /// returns NULL for a malformed/unparseable executed_at (confirmed empirically — it does not
+    /// throw at the SQL level). Before this fix, the backfill's group-listing loop called
+    /// <c>r.GetString(0)</c> unconditionally on that column, which throws InvalidCastException on a
+    /// NULL value — and because the WHOLE backfill runs inside one transaction, that exception
+    /// aborted the entire run and left every OTHER, well-formed group ungrouped too, on every future
+    /// engine start (the migration always retries from scratch). One bad row must not be able to
+    /// permanently block the rest.
+    /// </summary>
+    [Fact]
+    public async Task Backfill_skips_a_group_with_unparseable_executed_at_but_still_groups_the_rest()
+    {
+        var path = TempDbPath();
+        var cs = $"Data Source={path}";
+        try
+        {
+            await new HistoryDatabase(path).InitializeAsync();
+
+            // A well-formed legacy row that SHOULD get grouped...
+            await InsertLegacy(cs, "SELECT 1", "dwnhdxfq.sql", DateTime.Today.AddDays(-1).AddHours(9));
+
+            // ...alongside one row whose executed_at cannot be parsed as a date/time at all
+            // (simulates truncated/corrupted data).
+            await using (var c = new SqliteConnection(cs))
+            {
+                await c.OpenAsync();
+                await using var cmd = new SqliteCommand(@"
+                    INSERT INTO history (sql_text, truncated, server, database_name, username,
+                                         executed_at, duration_ms, row_count, status, error_msg,
+                                         source, tab_title, content_hash, is_favorite)
+                    VALUES ('SELECT 2', 0, '(local)', 'aqmar', NULL,
+                            'not-a-date', 1, 1, 0, NULL, NULL, NULL, @hash, 0);", c);
+                cmd.Parameters.AddWithValue("@hash", HistoryDatabase.ComputeContentHash("SELECT 2"));
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            await new HistoryDatabase(path).InitializeAsync();   // triggers backfill; must NOT throw
+
+            var (sessions, unassigned) = await Counts(cs);
+            Assert.Equal(1, sessions);      // the well-formed row's group WAS created
+            Assert.Equal(1, unassigned);    // the malformed row stays ungrouped, not blocking the rest
+        }
+        finally { CleanupDb(path); }
+    }
+
     /// <summary>Real (non-scratch) legacy tab titles are trimmed for the session's display name,
     /// matching QuerySessionStore.InsertAsync's `tabTitle!.Trim()` — a stray-whitespace tab_title
     /// should not produce a cosmetically inconsistent session name.</summary>

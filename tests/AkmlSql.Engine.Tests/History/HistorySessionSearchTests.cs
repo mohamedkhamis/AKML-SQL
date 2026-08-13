@@ -37,7 +37,7 @@ public class HistorySessionSearchTests : IAsyncLifetime
         try { if (File.Exists(path)) File.Delete(path); } catch { /* ignore */ }
     }
 
-    private Task Add(string sql, string? sessionKey) =>
+    private Task<long> Add(string sql, string? sessionKey) =>
         _db.InsertEntryAsync(sql, false, "localhost", "Northwind", null, 5, 1,
                      (int)ExecutionStatus.Success, null, null, null, sessionKey);
 
@@ -67,6 +67,40 @@ public class HistorySessionSearchTests : IAsyncLifetime
 
         var result = await _db.SearchAsync(new HistoryFilter { Deduplicate = false, Limit = 50 });
         Assert.Equal(2, result.Entries.Count);   // storage unchanged
+    }
+
+    /// <summary>
+    /// F2 fix (final review wave): before this fix, the non-dedup (Deduplicate=false) branch of
+    /// SearchAsync selected the raw <c>h.tab_title</c> column, which is NULL for an unsaved scratch
+    /// tab (see F1). With dedup switched off, every row for that tab therefore showed as an empty
+    /// name in the shell/web, and a renamed session's rows kept showing their pre-rename tab_title
+    /// instead of the session's current name. The non-dedup branch must LEFT JOIN query_sessions and
+    /// resolve the display name on the exact same COALESCE(qs.name, h.tab_title, '') basis as the
+    /// dedup branch (see <see cref="One_row_per_session_with_run_and_version_counts"/> above).
+    /// </summary>
+    [Fact]
+    public async Task Raw_view_shows_the_session_name_not_null_tab_title()
+    {
+        // tab_title is NULL — the same shape an unsaved scratch tab now records under (F1).
+        await Add("SELECT 1", "tab-A");
+
+        var result = await _db.SearchAsync(new HistoryFilter { Deduplicate = false, Limit = 50 });
+        var entry = Assert.Single(result.Entries);
+        Assert.Equal("query-01", entry.TabTitle);   // the session's auto-assigned name, not ""/null
+    }
+
+    [Fact]
+    public async Task Raw_view_reflects_a_rename_not_the_pre_rename_name()
+    {
+        var id = await Add("SELECT 1", "tab-A");   // auto-named "query-01"
+        await _db.UpdateTabTitleAsync(id, "My Renamed Query");
+
+        // A second execution in the SAME session, after the rename.
+        await Add("SELECT 2", "tab-A");
+
+        var result = await _db.SearchAsync(new HistoryFilter { Deduplicate = false, Limit = 50 });
+        Assert.Equal(2, result.Entries.Count);
+        Assert.All(result.Entries, e => Assert.Equal("My Renamed Query", e.TabTitle));
     }
 
     [Fact]
