@@ -218,6 +218,127 @@ public sealed class HistoryDatabase : IDisposable
             "CREATE INDEX IF NOT EXISTS IX_history_versions_history_id ON history_versions(history_id);");
 
         Log.Information("History database initialized at {ConnectionString}", _connectionString);
+
+        await BackfillSessionsAsync(conn);
+    }
+
+    /// <summary>
+    /// One-time regrouping of rows written before session tracking existed. Those rows carry no
+    /// tab identity, so a session is INFERRED from (local date, tab_title, server, database).
+    /// Nothing is deleted and no column other than session_id is touched.
+    ///
+    /// <para>Idempotent: only rows with session_id IS NULL are considered, so a second run is a
+    /// no-op and never renumbers an existing session.</para>
+    ///
+    /// <para>executed_at is stored as UTC ISO-8601 with 7 fractional digits, which SQLite's date
+    /// functions will not parse; substr(...,1,19) trims it to 'YYYY-MM-DDTHH:MM:SS', which SQLite
+    /// treats as UTC-naive, and 'localtime' then converts it to the user's day.</para>
+    /// </summary>
+    private async Task BackfillSessionsAsync(SqliteConnection conn)
+    {
+        await using (var probe = new SqliteCommand(
+            "SELECT COUNT(*) FROM history WHERE session_id IS NULL", conn))
+        {
+            if (Convert.ToInt32(await probe.ExecuteScalarAsync()) == 0) return;
+        }
+
+        Log.Information("History: backfilling query sessions for legacy rows…");
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+        // BEGIN IMMEDIATE for the same reason as QuerySessionStore.InsertAsync: this transaction
+        // reads (the GROUP BY scan) before it writes, and the history database is SHARED — the
+        // SSMS-paired engine and the web engine both open %AppData%/AKML SQL/history/sqlhistory.db.
+        // A deferred transaction promoted after a concurrent commit fails with BUSY_SNAPSHOT, which
+        // busy_timeout does not retry. Added 2026-08-13 after the Task 3 review surfaced the same
+        // defect one task earlier.
+        await using var tx = conn.BeginTransaction(deferred: false);
+        try
+        {
+            // Ordered so ordinals follow first-execution time within each local day.
+            var groups = new System.Collections.Generic.List<(string Date, string Title, string Server, string Db)>();
+            await using (var cmd = new SqliteCommand(@"
+                SELECT date(substr(executed_at, 1, 19), 'localtime') AS local_date,
+                       COALESCE(tab_title, '')      AS title,
+                       COALESCE(server, '')         AS server,
+                       COALESCE(database_name, '')  AS db
+                  FROM history
+                 WHERE session_id IS NULL
+                 GROUP BY local_date, title, server, db
+                 ORDER BY local_date, MIN(executed_at);", conn, (SqliteTransaction)tx))
+            await using (var r = await cmd.ExecuteReaderAsync())
+            {
+                while (await r.ReadAsync())
+                    groups.Add((r.GetString(0), r.GetString(1), r.GetString(2), r.GetString(3)));
+            }
+
+            var perDay = new System.Collections.Generic.Dictionary<string, int>(StringComparer.Ordinal);
+            var created = 0;
+
+            foreach (var g in groups)
+            {
+                await using (var maxCmd = new SqliteCommand(
+                    "SELECT COALESCE(MAX(ordinal), 0) FROM query_sessions WHERE local_date = @d",
+                    conn, (SqliteTransaction)tx))
+                {
+                    maxCmd.Parameters.AddWithValue("@d", g.Date);
+                    if (!perDay.ContainsKey(g.Date))
+                        perDay[g.Date] = Convert.ToInt32(await maxCmd.ExecuteScalarAsync());
+                }
+
+                var ordinal = ++perDay[g.Date];
+                var isScratch = QuerySessionNamer.IsScratchTabTitle(g.Title);
+                var name = isScratch ? QuerySessionNamer.FormatName(ordinal) : g.Title;
+
+                long sessionId;
+                await using (var ins = new SqliteCommand(@"
+                    INSERT INTO query_sessions
+                        (session_key, local_date, ordinal, name, name_source, server, database_name, created_at)
+                    VALUES (@key, @d, @ord, @name, @src, @server, @db, @created);
+                    SELECT last_insert_rowid();", conn, (SqliteTransaction)tx))
+                {
+                    // Synthetic key: stable, unique, and obviously not a client-issued GUID.
+                    ins.Parameters.AddWithValue("@key",
+                        $"legacy:{g.Date}|{g.Title}|{g.Server}|{g.Db}");
+                    ins.Parameters.AddWithValue("@d", g.Date);
+                    ins.Parameters.AddWithValue("@ord", ordinal);
+                    ins.Parameters.AddWithValue("@name", name);
+                    ins.Parameters.AddWithValue("@src", isScratch ? 0 : 1);
+                    ins.Parameters.AddWithValue("@server", g.Server.Length == 0 ? DBNull.Value : g.Server);
+                    ins.Parameters.AddWithValue("@db", g.Db.Length == 0 ? DBNull.Value : g.Db);
+                    ins.Parameters.AddWithValue("@created",
+                        DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture));
+                    sessionId = Convert.ToInt64(await ins.ExecuteScalarAsync());
+                }
+
+                await using (var upd = new SqliteCommand(@"
+                    UPDATE history
+                       SET session_id = @sid
+                     WHERE session_id IS NULL
+                       AND date(substr(executed_at, 1, 19), 'localtime') = @d
+                       AND COALESCE(tab_title, '')     = @title
+                       AND COALESCE(server, '')        = @server
+                       AND COALESCE(database_name, '') = @db;", conn, (SqliteTransaction)tx))
+                {
+                    upd.Parameters.AddWithValue("@sid", sessionId);
+                    upd.Parameters.AddWithValue("@d", g.Date);
+                    upd.Parameters.AddWithValue("@title", g.Title);
+                    upd.Parameters.AddWithValue("@server", g.Server);
+                    upd.Parameters.AddWithValue("@db", g.Db);
+                    await upd.ExecuteNonQueryAsync();
+                }
+
+                created++;
+            }
+
+            await tx.CommitAsync();
+            Log.Information("History: backfill created {Count} sessions in {Ms} ms",
+                created, stopwatch.ElapsedMilliseconds);
+        }
+        catch (Exception ex)
+        {
+            await tx.RollbackAsync();
+            Log.Error(ex, "History: session backfill failed; legacy rows remain ungrouped");
+        }
     }
 
     /// <summary>
