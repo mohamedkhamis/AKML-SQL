@@ -32,6 +32,13 @@ public sealed class EditorSessionRecord
     public string DocumentText { get; set; } = string.Empty;
     public int CursorOffset { get; set; }
     public string? ActiveProfileId { get; set; }
+
+    /// <summary>
+    /// Query-session grouping key (GUID "N" format), minted by <see cref="EditorSessionKeys"/> on
+    /// first use and persisted alongside the rest of this record so a Blazor circuit reset (full
+    /// page reload) keeps landing in the SAME history session. Null until first minted.
+    /// </summary>
+    public string? SessionKey { get; set; }
     public DateTimeOffset SavedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 

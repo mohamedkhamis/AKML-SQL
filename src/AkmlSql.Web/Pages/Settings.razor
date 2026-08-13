@@ -189,6 +189,10 @@
     private async Task ResetSessionAsync()
     {
         await SessionStore.ClearAsync();
+        // T9: explicit deliberate boundary -- even though ClearAsync already drops the whole
+        // persisted record (SessionKey included), reset the key explicitly so the intent doesn't
+        // silently depend on ClearAsync's scope never narrowing.
+        await EditorSessionKeys.ResetAsync(SessionStore);
         _status = "Editor session cleared. Reload the page to start fresh.";
     }
 }
