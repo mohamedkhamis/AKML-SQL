@@ -323,7 +323,8 @@ public sealed class HistoryDatabase : IDisposable
         int status,
         string? errorMessage,
         string? source,
-        string? tabTitle)
+        string? tabTitle,
+        string? sessionKey = null)
     {
         // Truncate SQL text if over limit
         if (sqlText.Length > MaxSqlTextChars)
@@ -336,6 +337,24 @@ public sealed class HistoryDatabase : IDisposable
         var contentHash = ComputeContentHash(sqlText);
         var executedAt = DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture);
 
+        // Resolve (or create) the query session BEFORE the insert, so session_id is written in
+        // the same statement. A null/empty key means a client that predates session grouping;
+        // the row is stored with session_id NULL and the backfill will infer one later.
+        long? sessionId = null;
+        if (!string.IsNullOrEmpty(sessionKey))
+        {
+            try
+            {
+                sessionId = await new QuerySessionStore(_connectionString)
+                    .GetOrCreateAsync(sessionKey!, DateTime.UtcNow, tabTitle, server, database);
+            }
+            catch (Exception ex)
+            {
+                // History capture is best-effort and must never break query execution.
+                Log.Warning(ex, "History: session resolution failed for key {Key}", sessionKey);
+            }
+        }
+
         await using var conn = new SqliteConnection(_connectionString);
         await conn.OpenAsync();
 
@@ -347,11 +366,11 @@ public sealed class HistoryDatabase : IDisposable
                 INSERT INTO history (
                     sql_text, truncated, server, database_name, username,
                     executed_at, duration_ms, row_count, status, error_msg,
-                    source, tab_title, content_hash, is_favorite
+                    source, tab_title, content_hash, is_favorite, session_id
                 ) VALUES (
                     @sqlText, @truncated, @server, @database, @username,
                     @executedAt, @durationMs, @rowCount, @status, @errorMsg,
-                    @source, @tabTitle, @contentHash, 0
+                    @source, @tabTitle, @contentHash, 0, @sessionId
                 );
                 SELECT last_insert_rowid();";
 
@@ -369,6 +388,7 @@ public sealed class HistoryDatabase : IDisposable
             cmd.Parameters.AddWithValue("@source", (object?)source ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@tabTitle", (object?)tabTitle ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@contentHash", contentHash);
+            cmd.Parameters.AddWithValue("@sessionId", (object?)sessionId ?? DBNull.Value);
 
             var result = await cmd.ExecuteScalarAsync();
             var entryId = Convert.ToInt64(result);
