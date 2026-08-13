@@ -71,17 +71,49 @@ namespace AkmlSql.Shell.Shared.Tests
             Assert.NotEqual(original, afterRenameOldPath);
         }
 
-        /// <summary>Renaming a path with no tracked session is a safe no-op.</summary>
+        /// <summary>
+        /// Renaming a path with no tracked session is a safe no-op: it must not throw, and — the
+        /// part a mere non-blank-key assertion cannot distinguish from a bug — it must not secretly
+        /// link the two never-touched paths to the same session. Proven by asserting both paths
+        /// still resolve to INDEPENDENT, distinct keys afterward (the dictionary-state proxy,
+        /// since <c>Keys</c> has no public inspection surface).
+        /// </summary>
         [Fact]
         public void Rename_with_no_existing_entry_is_a_no_op()
         {
             var oldPath = @"C:\temp\never-touched.sql";
             var newPath = @"C:\temp\also-never-touched.sql";
 
-            DocumentSessionKeys.Rename(oldPath, newPath); // must not throw
+            DocumentSessionKeys.Rename(oldPath, newPath); // must not throw, must not link the two paths
 
-            var key = DocumentSessionKeys.ForDocument(newPath);
-            Assert.False(string.IsNullOrWhiteSpace(key));
+            var keyForOld = DocumentSessionKeys.ForDocument(oldPath);
+            var keyForNew = DocumentSessionKeys.ForDocument(newPath);
+
+            Assert.False(string.IsNullOrWhiteSpace(keyForNew));
+            Assert.NotEqual(keyForOld, keyForNew);
+        }
+
+        /// <summary>
+        /// The regression test for the cross-tab merge: if a Save-As targets a path that a
+        /// DIFFERENT, still-open document already owns (Tab B), migrating Tab A's key onto that
+        /// path would silently fold two unrelated tabs' history into one entry. Tab B's key must
+        /// survive untouched, and the two tabs' keys must remain distinct.
+        /// </summary>
+        [Fact]
+        public void Rename_onto_a_path_owned_by_a_different_open_document_does_not_merge_sessions()
+        {
+            var pathB = @"C:\work\report.sql";
+            var keyB = DocumentSessionKeys.ForDocument(pathB); // Tab B already owns this path
+
+            var pathA = @"C:\temp\scratchA.sql";
+            var keyA = DocumentSessionKeys.ForDocument(pathA); // Tab A, about to Save-As onto pathB
+
+            // Tab A does Save-As -> pathB, overwriting the file Tab B has open.
+            DocumentSessionKeys.Rename(pathA, pathB);
+
+            var stillB = DocumentSessionKeys.ForDocument(pathB);
+            Assert.Equal(keyB, stillB);      // Tab B's session must be untouched by the collision
+            Assert.NotEqual(keyA, stillB);   // Tab A's key must NOT have overwritten Tab B's entry
         }
     }
 }
