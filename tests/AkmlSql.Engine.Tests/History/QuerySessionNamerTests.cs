@@ -24,6 +24,19 @@ public class QuerySessionNamerTests
     [InlineData("SQLQuery17.sql")]
     [InlineData("dwnhdxfq.sql")]   // SSMS random 8-char scratch name — the reported case
     [InlineData("DWNHDXFQ.SQL")]   // matching is case-insensitive
+    // REAL forms observed on a live database (2026-08) — SSMS's actual scratch-tab title has
+    // TWO dots before "sql", not one. A single-dot-only pattern let every one of these through
+    // as a "genuine filename" and made the backfill a near-total no-op (77 of 78 sessions kept
+    // their scratch name). This is the regression this fix exists to close.
+    [InlineData("epxoezf5..sql")]
+    [InlineData("km1kjagk..sql")]
+    [InlineData("vg4kfcdb..sql")]
+    [InlineData("1kloetf1..sql")]
+    [InlineData("mbucdkb4..sql")]
+    // SQLQuery<n> form with the same double-dot shape, and a triple-dot edge case — "one or
+    // more dots" must not silently mean "exactly one or two".
+    [InlineData("SQLQuery3..sql")]
+    [InlineData("dwnhdxfq...sql")]
     public void IsScratchTabTitle_true_for_unsaved_scratch_documents(string? title)
         => Assert.True(QuerySessionNamer.IsScratchTabTitle(title));
 

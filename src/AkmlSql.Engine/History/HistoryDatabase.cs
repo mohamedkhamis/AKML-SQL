@@ -224,6 +224,7 @@ public sealed class HistoryDatabase : IDisposable
         Log.Information("History database initialized at {ConnectionString}", _connectionString);
 
         await BackfillSessionsAsync(conn);
+        await CorrectMisclassifiedScratchNamesAsync(conn);
     }
 
     /// <summary>
@@ -384,6 +385,124 @@ public sealed class HistoryDatabase : IDisposable
             // to get here). Either way: legacy rows are untouched (still session_id IS NULL), so the
             // next InitializeAsync call retries this whole backfill from scratch.
             Log.Error(ex, "History: session backfill failed; legacy rows remain ungrouped");
+        }
+    }
+
+    /// <summary>Metadata key guarding <see cref="CorrectMisclassifiedScratchNamesAsync"/> — see its
+    /// doc comment. Value is informational only (a UTC timestamp); presence of the row is the
+    /// entire guard.</summary>
+    private const string ScratchNameCorrectionFlagKey = "scratch_name_correction_v1";
+
+    /// <summary>
+    /// One-time repair for <c>query_sessions</c> rows created by the PRE-FIX scratch-name regex
+    /// (<c>^(SQLQuery\d+|[a-z0-9]{8})\.sql$</c>, which required EXACTLY one dot before "sql"). Real
+    /// SSMS scratch-tab titles observed on a live database use TWO dots ("epxoezf5..sql"), which
+    /// that regex never matched — so <see cref="BackfillSessionsAsync"/>, run under the old code,
+    /// misclassified every such session as a genuine saved filename (<c>name_source = 1</c>) and
+    /// left it with its meaningless scratch name instead of an auto query-NN name.
+    ///
+    /// <para>
+    /// Simply re-running <see cref="BackfillSessionsAsync"/> after <see cref="QuerySessionNamer"/>'s
+    /// regex was widened does NOT repair this: that method only ever considers <c>history</c> rows
+    /// with <c>session_id IS NULL</c>, and every affected row already has a (wrongly-named) session
+    /// assigned. This pass targets the already-created <c>query_sessions</c> rows directly, using
+    /// the WIDENED (current) <see cref="QuerySessionNamer.IsScratchTabTitle"/> to re-classify names
+    /// that were stored under the old, narrower one.
+    /// </para>
+    ///
+    /// <para>
+    /// Renaming reuses the session's OWN EXISTING <c>ordinal</c> — it is never recomputed. Because
+    /// <c>(local_date, ordinal)</c> is already UNIQUE (<c>IX_qs_date_ordinal</c>), renaming session
+    /// X on day D to <c>query-&lt;X's own ordinal&gt;</c> can never collide with a query-NN session
+    /// already correctly named on that same day, and it preserves the per-day ordering the original
+    /// backfill established (this session was, and remains, the Nth session created that day).
+    /// </para>
+    ///
+    /// <para>
+    /// Only <c>name_source = 1</c> rows are candidates, and only those whose CURRENT stored name
+    /// still matches the (now-widened) scratch pattern — a genuine <c>name_source = 1</c> filename
+    /// like "MonthlyReport.sql" is left untouched. <c>name_source = 2</c> (a user's manual rename)
+    /// is never selected at all, regardless of what its name looks like: those are final. Corrected
+    /// rows are set to <c>name_source = 0</c> (auto), matching what they always should have been.
+    /// </para>
+    ///
+    /// <para>
+    /// Guarded by the <c>metadata</c> row keyed <see cref="ScratchNameCorrectionFlagKey"/>, INSERTed
+    /// in the SAME transaction as the renames — so a crash mid-pass leaves the flag absent (not
+    /// half-written), and the WHOLE pass (not a half-applied one) retries on the next
+    /// <see cref="InitializeAsync"/>, exactly like <see cref="BackfillSessionsAsync"/>'s own
+    /// idempotency story. Once the flag is present, later starts skip the scan entirely — a repaired
+    /// session is never re-examined, so a user's real filename typed with 8 lowercase-alphanumeric
+    /// characters (the documented <see cref="QuerySessionNamer.IsScratchTabTitle"/> false positive)
+    /// that happens to sit at <c>name_source = 1</c> right when this runs is a one-time risk, same as
+    /// it already is for every other consumer of that heuristic — not a new exposure this pass adds.
+    /// </para>
+    /// </summary>
+    private async Task CorrectMisclassifiedScratchNamesAsync(SqliteConnection conn)
+    {
+        await using (var probe = new SqliteCommand(
+            "SELECT COUNT(*) FROM metadata WHERE key = @k;", conn))
+        {
+            probe.Parameters.AddWithValue("@k", ScratchNameCorrectionFlagKey);
+            if (Convert.ToInt32(await probe.ExecuteScalarAsync()) > 0) return;
+        }
+
+        Log.Information("History: checking for query sessions misnamed before the scratch-name regex fix…");
+
+        try
+        {
+            // BEGIN IMMEDIATE for the same reason as BackfillSessionsAsync directly above: this
+            // transaction reads (the name_source = 1 scan) before it writes (the renames + flag
+            // insert), and the history database is SHARED between the SSMS-paired engine and the
+            // web engine. Acquired INSIDE the try for the same reason too — a busy/locked failure to
+            // even open the transaction is exactly the concurrent-migration scenario this guards
+            // against, and must be caught here rather than escape and take down engine startup.
+            await using var tx = conn.BeginTransaction(deferred: false);
+
+            var candidates = new List<(long Id, int Ordinal)>();
+            await using (var cmd = new SqliteCommand(
+                "SELECT id, ordinal, name FROM query_sessions WHERE name_source = 1;",
+                conn, (SqliteTransaction)tx))
+            await using (var r = await cmd.ExecuteReaderAsync())
+            {
+                while (await r.ReadAsync())
+                {
+                    if (QuerySessionNamer.IsScratchTabTitle(r.GetString(2)))
+                        candidates.Add((r.GetInt64(0), r.GetInt32(1)));
+                }
+            }
+
+            foreach (var (id, ordinal) in candidates)
+            {
+                await using var upd = new SqliteCommand(@"
+                    UPDATE query_sessions
+                       SET name = @name, name_source = 0
+                     WHERE id = @id;", conn, (SqliteTransaction)tx);
+                upd.Parameters.AddWithValue("@name", QuerySessionNamer.FormatName(ordinal));
+                upd.Parameters.AddWithValue("@id", id);
+                await upd.ExecuteNonQueryAsync();
+            }
+
+            await using (var flag = new SqliteCommand(
+                "INSERT INTO metadata (key, value) VALUES (@k, @v) " +
+                "ON CONFLICT(key) DO UPDATE SET value = excluded.value;", conn, (SqliteTransaction)tx))
+            {
+                flag.Parameters.AddWithValue("@k", ScratchNameCorrectionFlagKey);
+                flag.Parameters.AddWithValue("@v", DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture));
+                await flag.ExecuteNonQueryAsync();
+            }
+
+            await tx.CommitAsync();
+            Log.Information("History: scratch-name correction renamed {Count} session(s)", candidates.Count);
+        }
+        catch (Exception ex)
+        {
+            // Same rationale as BackfillSessionsAsync's catch: the flag is only written inside the
+            // transaction that also does the renames (see the doc comment above), so any failure
+            // here — including a failed BEGIN IMMEDIATE — leaves the flag absent and every session
+            // untouched, ready for the next InitializeAsync to retry the whole pass. Log-and-continue,
+            // not fatal: this must never block engine startup.
+            Log.Error(ex, "History: scratch-name correction failed; will retry on next start");
         }
     }
 
