@@ -245,15 +245,32 @@ public sealed class HistoryDatabase : IDisposable
         Log.Information("History: backfilling query sessions for legacy rows…");
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
 
-        // BEGIN IMMEDIATE for the same reason as QuerySessionStore.InsertAsync: this transaction
-        // reads (the GROUP BY scan) before it writes, and the history database is SHARED — the
-        // SSMS-paired engine and the web engine both open %AppData%/AKML SQL/history/sqlhistory.db.
-        // A deferred transaction promoted after a concurrent commit fails with BUSY_SNAPSHOT, which
-        // busy_timeout does not retry. Added 2026-08-13 after the Task 3 review surfaced the same
-        // defect one task earlier.
-        await using var tx = conn.BeginTransaction(deferred: false);
         try
         {
+            // BEGIN IMMEDIATE for the same reason as QuerySessionStore.InsertAsync: this transaction
+            // reads (the GROUP BY scan) before it writes, and the history database is SHARED — the
+            // SSMS-paired engine and the web engine both open %AppData%/AKML SQL/history/sqlhistory.db.
+            // A deferred transaction promoted after a concurrent commit fails with BUSY_SNAPSHOT, which
+            // busy_timeout does not retry. Added 2026-08-13 after the Task 3 review surfaced the same
+            // defect one task earlier.
+            //
+            // Acquired INSIDE this try, not before it: BEGIN IMMEDIATE takes the write lock right
+            // away, so it can itself throw SQLITE_BUSY/SQLITE_LOCKED if a concurrent writer already
+            // holds that lock past busy_timeout — the exact scenario BEGIN IMMEDIATE exists to guard
+            // against is also the realistic trigger for this (the SSMS-paired engine and the web
+            // engine both starting against the shared history db at once, both attempting this same
+            // migration). Catching that here — instead of letting it escape InitializeAsync and take
+            // down engine startup — is deliberate and safe: the migration is idempotent (rows stay
+            // session_id IS NULL on any failure here), so the very next engine start simply retries
+            // the whole backfill. This is a self-healing retry, not a silent data-loss swallow.
+            //
+            // No explicit rollback in the catch below: `await using` disposes an uncommitted
+            // SqliteTransaction by rolling it back as the exception unwinds past this scope (same
+            // rationale as QuerySessionStore.InsertAsync — an explicit RollbackAsync after CommitAsync
+            // itself threw would run against an already-completed transaction and raise a second,
+            // masking exception).
+            await using var tx = conn.BeginTransaction(deferred: false);
+
             // Ordered so ordinals follow first-execution time within each local day.
             var groups = new System.Collections.Generic.List<(string Date, string Title, string Server, string Db)>();
             await using (var cmd = new SqliteCommand(@"
@@ -287,7 +304,11 @@ public sealed class HistoryDatabase : IDisposable
 
                 var ordinal = ++perDay[g.Date];
                 var isScratch = QuerySessionNamer.IsScratchTabTitle(g.Title);
-                var name = isScratch ? QuerySessionNamer.FormatName(ordinal) : g.Title;
+                // Trim for display consistency with QuerySessionStore.InsertAsync's `tabTitle!.Trim()`
+                // (a legacy tab_title with stray whitespace would otherwise look cosmetically
+                // inconsistent). Only the DISPLAY name is trimmed; g.Title itself stays untouched so
+                // the later grouping UPDATE's WHERE clause still matches the raw tab_title exactly.
+                var name = isScratch ? QuerySessionNamer.FormatName(ordinal) : g.Title.Trim();
 
                 long sessionId;
                 await using (var ins = new SqliteCommand(@"
@@ -336,7 +357,11 @@ public sealed class HistoryDatabase : IDisposable
         }
         catch (Exception ex)
         {
-            await tx.RollbackAsync();
+            // Covers both a failed BEGIN IMMEDIATE (no transaction was ever opened — including a
+            // busy/locked write-lock acquisition failure, see the comment above) and a failure during
+            // the body (where `await using` has already rolled the transaction back while unwinding
+            // to get here). Either way: legacy rows are untouched (still session_id IS NULL), so the
+            // next InitializeAsync call retries this whole backfill from scratch.
             Log.Error(ex, "History: session backfill failed; legacy rows remain ungrouped");
         }
     }

@@ -1,6 +1,7 @@
 using System;
 using System.Globalization;
 using System.IO;
+using System.Reflection;
 using System.Threading.Tasks;
 using AkmlSql.Engine.History;
 using Microsoft.Data.Sqlite;
@@ -119,6 +120,116 @@ public class HistoryBackfillTests
 
             Assert.Equal(first.Sessions, second.Sessions);   // no renumbering, no duplicates
             Assert.Equal(0, second.Unassigned);
+        }
+        finally { CleanupDb(path); }
+    }
+
+    /// <summary>
+    /// Forces a genuine SQLITE_BUSY on BackfillSessionsAsync's own BEGIN IMMEDIATE by holding the
+    /// write lock from a second connection, and asserts InitializeAsync's whole call chain SWALLOWS
+    /// that failure (does not throw) and leaves the row exactly as it was (still
+    /// <c>session_id IS NULL</c>), ready for the next InitializeAsync to retry.
+    ///
+    /// <para>
+    /// This deliberately invokes the private BackfillSessionsAsync directly (via reflection) rather
+    /// than going through the public InitializeAsync entry point on a pre-populated database. An
+    /// earlier throwaway probe (run before this fix, then deleted) held the write lock across a
+    /// WHOLE InitializeAsync call and found that an EARLIER, unrelated statement throws first: the
+    /// unconditional <c>INSERT OR IGNORE INTO metadata (key, value) VALUES ('schema_version', ...)</c>
+    /// near the top of InitializeCoreAsync also needs the write lock (SQLite must open a write
+    /// context to attempt the insert and detect the conflict, even though the row already exists and
+    /// the statement is a no-op) and is NOT wrapped in any busy-aware catch — confirmed via the
+    /// thrown exception's stack trace pointing at that exact line (HistoryDatabase.cs, the "Insert
+    /// schema_version if not present" step). That is a separate, pre-existing gap outside this fix
+    /// round's scope (only BackfillSessionsAsync's own transaction acquisition was flagged for this
+    /// fix). Going through InitializeAsync here would make this test pass or fail based on THAT
+    /// unrelated statement instead of the one actually being fixed, so instead this test opens its
+    /// own connection and invokes BackfillSessionsAsync on it in isolation.
+    /// </para>
+    ///
+    /// <para>
+    /// The isolated connection uses a short <c>Default Timeout=1</c> (ADO.NET-level retry ceiling),
+    /// NOT the production connection string. A first pass at this test used the production-realistic
+    /// setup (plain connection string + the same <c>PRAGMA busy_timeout=5000</c> InitializeCoreAsync
+    /// issues) and held the external lock for 5.3 seconds before releasing — that consistently let
+    /// BEGIN IMMEDIATE succeed anyway once the lock freed, because Microsoft.Data.Sqlite's own
+    /// managed-level retry ceiling (governed by the connection string's "Default Timeout", which
+    /// defaults to ~30s when unset) turned out to be the operative bound on wall-clock retry
+    /// duration, not the 5000ms PRAGMA value — confirmed empirically: without a "Default Timeout"
+    /// override, a held lock survived past 7+ seconds with BEGIN IMMEDIATE still silently retrying;
+    /// with "Default Timeout=1", it reliably threw SQLITE_BUSY around 5.6s. "Default Timeout=1" here
+    /// is purely a test-time affordance to force the SAME exception type/code deterministically and
+    /// quickly (same technique QuerySessionStoreTests' forced-BUSY test uses); it is not a production
+    /// behavior change.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Backfill_swallows_a_busy_lock_and_leaves_rows_ready_for_the_next_run()
+    {
+        var path = TempDbPath();
+        var cs = $"Data Source={path}";
+        try
+        {
+            await new HistoryDatabase(path).InitializeAsync();
+            await InsertLegacy(cs, "SELECT 1", "dwnhdxfq.sql", DateTime.Today.AddDays(-1).AddHours(9));
+
+            // Hold the write lock from a second connection — BEGIN IMMEDIATE acquires it right
+            // away, same technique as QuerySessionStoreTests' forced-collision test.
+            await using var blocker = new SqliteConnection(cs);
+            await blocker.OpenAsync();
+            var blockerTx = blocker.BeginTransaction(deferred: false);
+
+            // Isolated connection for the direct BackfillSessionsAsync call — short Default Timeout
+            // so the forced SQLITE_BUSY surfaces within a few seconds (see the class doc above).
+            await using var conn = new SqliteConnection($"{cs};Default Timeout=1");
+            await conn.OpenAsync();
+            await using (var pragmaCmd = new SqliteCommand("PRAGMA busy_timeout=5000;", conn))
+                await pragmaCmd.ExecuteNonQueryAsync();
+
+            var backfillMethod = typeof(HistoryDatabase).GetMethod(
+                "BackfillSessionsAsync", BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.NotNull(backfillMethod);
+
+            var db = new HistoryDatabase(path);
+            // Task.Run so BeginTransaction's synchronous busy-wait blocks a background thread, not
+            // this test method's own thread.
+            var backfillTask = Task.Run(() => (Task)backfillMethod!.Invoke(db, new object[] { conn })!);
+
+            await backfillTask;   // must complete WITHOUT throwing, once BEGIN IMMEDIATE gives up
+
+            await blockerTx.RollbackAsync();   // release the lock we no longer need
+
+            var (sessions, unassigned) = await Counts(cs);
+            Assert.Equal(0, sessions);     // nothing was created — the attempt was abandoned
+            Assert.Equal(1, unassigned);   // row untouched, ready for the next InitializeAsync
+        }
+        finally { CleanupDb(path); }
+    }
+
+    /// <summary>Real (non-scratch) legacy tab titles are trimmed for the session's display name,
+    /// matching QuerySessionStore.InsertAsync's `tabTitle!.Trim()` — a stray-whitespace tab_title
+    /// should not produce a cosmetically inconsistent session name.</summary>
+    [Fact]
+    public async Task Backfill_trims_whitespace_from_real_filename_group_names()
+    {
+        var path = TempDbPath();
+        var cs = $"Data Source={path}";
+        try
+        {
+            await new HistoryDatabase(path).InitializeAsync();
+            await InsertLegacy(cs, "SELECT 1", "  MonthlyReport.sql  ", DateTime.Today.AddDays(-1).AddHours(9));
+
+            await new HistoryDatabase(path).InitializeAsync();   // triggers backfill
+
+            var (sessions, unassigned) = await Counts(cs);
+            Assert.Equal(1, sessions);
+            Assert.Equal(0, unassigned);
+
+            await using var c = new SqliteConnection(cs);
+            await c.OpenAsync();
+            await using var cmd = new SqliteCommand("SELECT name FROM query_sessions", c);
+            var name = (string)(await cmd.ExecuteScalarAsync())!;
+            Assert.Equal("MonthlyReport.sql", name);
         }
         finally { CleanupDb(path); }
     }
