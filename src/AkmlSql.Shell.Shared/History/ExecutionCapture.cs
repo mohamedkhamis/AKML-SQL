@@ -234,16 +234,24 @@ namespace AkmlSql.Shell.Shared.History
                     Log.Debug(ex, "ExecutionCapture: failed to detect connection info");
                 }
 
-                // Get source file and tab title
+                // Source file, tab title, and session key.
+                // TabTitle is sent ONLY for a document that is actually saved to disk: an unsaved
+                // SSMS scratch document has a machine-generated name ("dwnhdxfq.sql") that carries
+                // no user intent, and sending it would suppress the query-NN auto name.
                 string? source = null;
                 string? tabTitle = null;
+                string? sessionKey = null;
                 try
                 {
                     var activeDoc = _dte.ActiveDocument;
                     if (activeDoc != null)
                     {
                         source = activeDoc.FullName;
-                        tabTitle = activeDoc.Name;
+                        sessionKey = DocumentSessionKeys.ForDocument(source);
+
+                        var isSavedFile = !string.IsNullOrEmpty(activeDoc.Path)
+                                          && System.IO.File.Exists(activeDoc.FullName);
+                        tabTitle = isSavedFile ? activeDoc.Name : null;
                     }
                 }
                 catch (Exception ex)
@@ -266,7 +274,8 @@ namespace AkmlSql.Shell.Shared.History
                     status: ExecutionStatus.Success,
                     errorMessage: null,
                     source: source,
-                    tabTitle: tabTitle);
+                    tabTitle: tabTitle,
+                    sessionKey: sessionKey);
             }
             catch (Exception ex)
             {
@@ -287,6 +296,10 @@ namespace AkmlSql.Shell.Shared.History
             {
                 ThreadHelper.ThrowIfNotOnUIThread();
                 if (document == null) return;
+
+                // The document is closing regardless of what follows — release its session key now
+                // so reopening the same file starts a brand-new session.
+                DocumentSessionKeys.Forget(document.FullName);
 
                 var textDoc = document.Object("TextDocument") as TextDocument;
                 if (textDoc == null) return;
@@ -509,6 +522,7 @@ namespace AkmlSql.Shell.Shared.History
         /// <param name="errorMessage">Error message if execution failed.</param>
         /// <param name="source">Source file path or identifier.</param>
         /// <param name="tabTitle">Title of the editor tab/window.</param>
+        /// <param name="sessionKey">Per-document session key so the engine groups this tab's executions into one history entry.</param>
         public static void OnExecutionCompleted(
             string sqlText,
             string? server,
@@ -519,7 +533,8 @@ namespace AkmlSql.Shell.Shared.History
             ExecutionStatus status,
             string? errorMessage,
             string? source,
-            string? tabTitle)
+            string? tabTitle,
+            string? sessionKey = null)
         {
             if (!_enabled) return;
 
@@ -577,7 +592,8 @@ namespace AkmlSql.Shell.Shared.History
                         Status = (int)status,
                         ErrorMessage = errorMessage,
                         Source = source,
-                        TabTitle = tabTitle
+                        TabTitle = tabTitle,
+                        SessionKey = sessionKey
                     };
 
                     // Send as notification (RequestId=0) to avoid blocking query execution
