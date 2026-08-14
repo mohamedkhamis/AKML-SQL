@@ -277,6 +277,16 @@ public sealed class HistoryDatabase : IDisposable
             await using var tx = conn.BeginTransaction(deferred: false);
 
             // Ordered so ordinals follow first-execution time within each local day.
+            // Finding 3 (PR #249 review): executed_at is NOT uniformly formatted (see the class
+            // doc on DeleteEntriesOlderThanAsync / SaveVersionBySourceAsync) -- most rows are ISO
+            // 'o' (InsertEntryAsync) but SaveVersionBySourceAsync rewrites to a space-separated
+            // form via datetime('now'). A raw MIN(executed_at) is a lexicographic string compare:
+            // for two rows on the SAME calendar date, a space-format timestamp ALWAYS sorts below
+            // any ISO ('T'-separated) one (' ' 0x20 < 'T' 0x54), regardless of actual time of day
+            // -- so ordinals could be assigned out of true chronological order, breaking the
+            // "query-01 is the day's first session" promise. datetime(substr(executed_at,1,19))
+            // canonicalises both forms (same technique DeleteEntriesOlderThanAsync uses) so the
+            // comparison is by real time, not by which format happened to write the row.
             var groups = new System.Collections.Generic.List<(string Date, string Title, string Server, string Db)>();
             await using (var cmd = new SqliteCommand(@"
                 SELECT date(substr(executed_at, 1, 19), 'localtime') AS local_date,
@@ -286,7 +296,7 @@ public sealed class HistoryDatabase : IDisposable
                   FROM history
                  WHERE session_id IS NULL
                  GROUP BY local_date, title, server, db
-                 ORDER BY local_date, MIN(executed_at);", conn, (SqliteTransaction)tx))
+                 ORDER BY local_date, MIN(datetime(substr(executed_at, 1, 19)));", conn, (SqliteTransaction)tx))
             await using (var r = await cmd.ExecuteReaderAsync())
             {
                 while (await r.ReadAsync())
@@ -315,42 +325,76 @@ public sealed class HistoryDatabase : IDisposable
 
             foreach (var g in groups)
             {
-                await using (var maxCmd = new SqliteCommand(
-                    "SELECT COALESCE(MAX(ordinal), 0) FROM query_sessions WHERE local_date = @d",
-                    conn, (SqliteTransaction)tx))
+                // Synthetic key: stable, unique, and obviously not a client-issued GUID.
+                var sessionKey = $"legacy:{g.Date}|{g.Title}|{g.Server}|{g.Db}";
+
+                // A LATER backfill run can regroup a row into a (local_date, tab_title, server,
+                // database) group a PREVIOUS run already created a session for -- e.g. a fresh
+                // session_id-NULL row that arrives after the first backfill (InsertEntryAsync
+                // stores session_id NULL whenever session resolution fails, or a pre-session
+                // client sends no SessionKey at all). Rebuilding the identical synthetic key would
+                // violate the UNIQUE index on session_key; since the WHOLE backfill is one
+                // transaction, that failure would roll back every OTHER, well-formed group in THIS
+                // run too, and the same collision would recur on every future start, leaving those
+                // rows ungrouped forever (Finding 1, PR #249 review). Look the key up first and
+                // REUSE the existing session instead of re-inserting -- this is not just a
+                // workaround, it is the semantically correct answer: the same (local_date,
+                // tab_title, server, database) IS the same inferred session, so a later row that
+                // falls into it belongs there, not in a session of its own. This also makes the
+                // backfill naturally resumable instead of self-poisoning.
+                long? existingSessionId;
+                await using (var find = new SqliteCommand(
+                    "SELECT id FROM query_sessions WHERE session_key = @key;", conn, (SqliteTransaction)tx))
                 {
-                    maxCmd.Parameters.AddWithValue("@d", g.Date);
-                    if (!perDay.ContainsKey(g.Date))
-                        perDay[g.Date] = Convert.ToInt32(await maxCmd.ExecuteScalarAsync());
+                    find.Parameters.AddWithValue("@key", sessionKey);
+                    var found = await find.ExecuteScalarAsync();
+                    existingSessionId = found == null || found == DBNull.Value ? (long?)null : Convert.ToInt64(found);
                 }
 
-                var ordinal = ++perDay[g.Date];
-                var isScratch = QuerySessionNamer.IsScratchTabTitle(g.Title);
-                // Trim for display consistency with QuerySessionStore.InsertAsync's `tabTitle!.Trim()`
-                // (a legacy tab_title with stray whitespace would otherwise look cosmetically
-                // inconsistent). Only the DISPLAY name is trimmed; g.Title itself stays untouched so
-                // the later grouping UPDATE's WHERE clause still matches the raw tab_title exactly.
-                var name = isScratch ? QuerySessionNamer.FormatName(ordinal) : g.Title.Trim();
-
                 long sessionId;
-                await using (var ins = new SqliteCommand(@"
-                    INSERT INTO query_sessions
-                        (session_key, local_date, ordinal, name, name_source, server, database_name, created_at)
-                    VALUES (@key, @d, @ord, @name, @src, @server, @db, @created);
-                    SELECT last_insert_rowid();", conn, (SqliteTransaction)tx))
+                if (existingSessionId.HasValue)
                 {
-                    // Synthetic key: stable, unique, and obviously not a client-issued GUID.
-                    ins.Parameters.AddWithValue("@key",
-                        $"legacy:{g.Date}|{g.Title}|{g.Server}|{g.Db}");
-                    ins.Parameters.AddWithValue("@d", g.Date);
-                    ins.Parameters.AddWithValue("@ord", ordinal);
-                    ins.Parameters.AddWithValue("@name", name);
-                    ins.Parameters.AddWithValue("@src", isScratch ? 0 : 1);
-                    ins.Parameters.AddWithValue("@server", g.Server.Length == 0 ? DBNull.Value : g.Server);
-                    ins.Parameters.AddWithValue("@db", g.Db.Length == 0 ? DBNull.Value : g.Db);
-                    ins.Parameters.AddWithValue("@created",
-                        DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture));
-                    sessionId = Convert.ToInt64(await ins.ExecuteScalarAsync());
+                    // Reusing an existing session consumes no new ordinal — nothing else changes.
+                    sessionId = existingSessionId.Value;
+                }
+                else
+                {
+                    await using (var maxCmd = new SqliteCommand(
+                        "SELECT COALESCE(MAX(ordinal), 0) FROM query_sessions WHERE local_date = @d",
+                        conn, (SqliteTransaction)tx))
+                    {
+                        maxCmd.Parameters.AddWithValue("@d", g.Date);
+                        if (!perDay.ContainsKey(g.Date))
+                            perDay[g.Date] = Convert.ToInt32(await maxCmd.ExecuteScalarAsync());
+                    }
+
+                    var ordinal = ++perDay[g.Date];
+                    var isScratch = QuerySessionNamer.IsScratchTabTitle(g.Title);
+                    // Trim for display consistency with QuerySessionStore.InsertAsync's `tabTitle!.Trim()`
+                    // (a legacy tab_title with stray whitespace would otherwise look cosmetically
+                    // inconsistent). Only the DISPLAY name is trimmed; g.Title itself stays untouched so
+                    // the later grouping UPDATE's WHERE clause still matches the raw tab_title exactly.
+                    var name = isScratch ? QuerySessionNamer.FormatName(ordinal) : g.Title.Trim();
+
+                    await using (var ins = new SqliteCommand(@"
+                        INSERT INTO query_sessions
+                            (session_key, local_date, ordinal, name, name_source, server, database_name, created_at)
+                        VALUES (@key, @d, @ord, @name, @src, @server, @db, @created);
+                        SELECT last_insert_rowid();", conn, (SqliteTransaction)tx))
+                    {
+                        ins.Parameters.AddWithValue("@key", sessionKey);
+                        ins.Parameters.AddWithValue("@d", g.Date);
+                        ins.Parameters.AddWithValue("@ord", ordinal);
+                        ins.Parameters.AddWithValue("@name", name);
+                        ins.Parameters.AddWithValue("@src", isScratch ? 0 : 1);
+                        ins.Parameters.AddWithValue("@server", g.Server.Length == 0 ? DBNull.Value : g.Server);
+                        ins.Parameters.AddWithValue("@db", g.Db.Length == 0 ? DBNull.Value : g.Db);
+                        ins.Parameters.AddWithValue("@created",
+                            DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture));
+                        sessionId = Convert.ToInt64(await ins.ExecuteScalarAsync());
+                    }
+
+                    created++;
                 }
 
                 await using (var upd = new SqliteCommand(@"
@@ -369,8 +413,6 @@ public sealed class HistoryDatabase : IDisposable
                     upd.Parameters.AddWithValue("@db", g.Db);
                     await upd.ExecuteNonQueryAsync();
                 }
-
-                created++;
             }
 
             await tx.CommitAsync();
@@ -1446,11 +1488,18 @@ public sealed class HistoryDatabase : IDisposable
             ? "WHERE " + string.Join(" AND ", whereClauses)
             : "";
 
+        // Finding 5 (PR #249 review): project the SAME resolved name the NameFilter WHERE clause
+        // above matches against, not the raw h.tab_title column. Since unsaved scratch documents
+        // store tab_title NULL, filtering by the session name (e.g. "query-07") would otherwise
+        // match rows whose exported TabTitle came back empty -- filter and output must agree on
+        // what "name" means.
         var sql = $@"
             SELECT
                 h.id, h.sql_text, h.server, h.database_name, h.username,
                 h.executed_at, h.duration_ms, h.row_count, h.status,
-                h.error_msg, h.source, h.tab_title, h.is_favorite, h.content_hash
+                h.error_msg, h.source,
+                COALESCE((SELECT qs3.name FROM query_sessions qs3 WHERE qs3.id = h.session_id), h.tab_title, '') AS resolved_name,
+                h.is_favorite, h.content_hash
             FROM {fromClause}
             {whereClause}
             ORDER BY h.executed_at DESC";
@@ -1655,6 +1704,33 @@ public sealed class HistoryDatabase : IDisposable
     /// is NULL. <c>source</c> carries <c>activeDoc.FullName</c> unconditionally for both saved and
     /// unsaved documents, so it is the one identifier this lookup can always find a row by.
     /// </para>
+    /// <para>
+    /// Finding 4 (PR #249 review): the "most recent entry" lookup orders by <c>id DESC</c>, NOT
+    /// <c>executed_at DESC</c>. <c>executed_at</c> is not uniformly formatted (see the class doc on
+    /// <see cref="DeleteEntriesOlderThanAsync"/>) -- this very method rewrites it to a
+    /// space-separated form via <c>datetime('now')</c> a few lines below, while a fresh
+    /// <see cref="InsertEntryAsync"/> row is ISO 'o'. Once a row has been snapshotted once (and so
+    /// carries the space format), a raw <c>ORDER BY executed_at DESC</c> stops picking it back up
+    /// on the NEXT snapshot -- a space-format timestamp always sorts lexicographically BELOW any
+    /// ISO ('T'-separated) one sharing the same calendar date, so an older, never-snapshotted ISO
+    /// row would win instead. <c>id</c> (INTEGER PRIMARY KEY AUTOINCREMENT) is insertion order and
+    /// is immune to the format problem entirely.
+    /// </para>
+    /// <para>
+    /// <b>Known remaining limitation</b> (documented, not fixed here): this lookup has no
+    /// session/day scoping. Reopening a saved <c>.sql</c> file mints a NEW query session
+    /// (<see cref="AkmlSql.Shell.Shared.History.DocumentSessionKeys.Forget"/> /
+    /// re-mint on next execution) but does not itself insert a fresh <c>history</c> row -- only an
+    /// actual execution does. If the tab is auto-saved (tab-close / focus-change) BEFORE any
+    /// execution happens in the new session, this lookup still finds and reattaches to the
+    /// PREVIOUS session's newest row for the same <c>source</c>, because <c>id DESC</c> answers
+    /// "the newest row for this path" scoped only by <c>source</c>, not by session. Scoping this
+    /// to "the newest row's own session" would need the caller (<c>ExecutionCapture.SaveVersionSnapshot</c>
+    /// / <see cref="HistoryRequestHandler"/>'s SaveVersion action) to thread a SessionKey through
+    /// <c>HistoryActionRequest</c>, which today only carries <c>NewName</c> (repurposed to carry
+    /// the source path) and <c>SqlText</c> for this action -- adding that field is a real IPC
+    /// surface change, not a same-file fix, so it is left as a follow-up rather than invented here.
+    /// </para>
     /// </summary>
     public async Task<bool> SaveVersionBySourceAsync(string source, string sqlText)
     {
@@ -1663,9 +1739,10 @@ public sealed class HistoryDatabase : IDisposable
         await using var conn = new SqliteConnection(_connectionString);
         await conn.OpenAsync();
 
-        // Find the most recent entry for this document
+        // Find the most recent entry for this document, by id (insertion order) -- see the
+        // Finding 4 remarks above for why executed_at DESC is unsafe here.
         await using var findCmd = new SqliteCommand(
-            "SELECT id FROM history WHERE source = @source ORDER BY executed_at DESC LIMIT 1", conn);
+            "SELECT id FROM history WHERE source = @source ORDER BY id DESC LIMIT 1", conn);
         findCmd.Parameters.AddWithValue("@source", source);
         var result = await findCmd.ExecuteScalarAsync();
         if (result == null) return false;

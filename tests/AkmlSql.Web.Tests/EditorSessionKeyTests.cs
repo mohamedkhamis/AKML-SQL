@@ -32,6 +32,29 @@ public class EditorSessionKeyTests
     }
 
     /// <summary>
+    /// Finding 8 (PR #249 review): Settings.razor's ResetSessionAsync sequence is
+    /// <c>ClearAsync()</c> then <c>EditorSessionKeys.ResetAsync()</c>. The OLD ResetAsync
+    /// unconditionally wrote <c>RestoreAsync() ?? new EditorSessionRecord()</c> back to the store,
+    /// resurrecting an empty record moments after Clear -- reset must leave the store genuinely
+    /// empty, not swap one persisted record for another.
+    /// </summary>
+    [Fact]
+    public async Task Reset_after_clear_leaves_the_store_genuinely_empty()
+    {
+        var store = new FakeEditorSessionStore();
+        var first = await EditorSessionKeys.GetOrCreateAsync(store);
+
+        // Mirrors Settings.razor's ResetSessionAsync sequence exactly.
+        await store.ClearAsync();
+        await EditorSessionKeys.ResetAsync(store);
+
+        Assert.Null(await store.RestoreAsync());   // no resurrected record
+
+        var second = await EditorSessionKeys.GetOrCreateAsync(store);
+        Assert.NotEqual(first, second);
+    }
+
+    /// <summary>
     /// Regression test for a real bug caught during review: Editor.razor's OnTextChangedAsync fires
     /// on every keystroke and previously rebuilt EditorSessionRecord inline WITHOUT SessionKey. Since
     /// SaveAsync overwrites the whole persisted record, that silently wiped the key on the first

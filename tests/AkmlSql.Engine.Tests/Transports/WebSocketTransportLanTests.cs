@@ -32,13 +32,18 @@ public sealed class WebSocketTransportLanTests
     /// with the sslcert already bound to that exact ip:port. The web edition was stuck "Offline"
     /// as a result. <see cref="LanMode_round_trip_wss_handshake"/> would have caught it, but it is
     /// still an unimplemented skip, so this string-level check is the real guard.</para>
+    ///
+    /// <para>Finding 9 (PR #249 review): <c>*</c> (HTTP.SYS's WEAK wildcard) and <c>+</c> (STRONG)
+    /// are ALREADY valid prefix hosts and must be preserved AS-IS, not folded into <c>+</c> --
+    /// only the literal IP forms (<c>0.0.0.0</c>, <c>::</c>) need rewriting. Folding <c>*</c> into
+    /// <c>+</c> changes HTTP.SYS's prefix-registration precedence.</para>
     /// </summary>
     [Theory]
-    [InlineData("0.0.0.0")]
-    [InlineData("::")]
-    [InlineData("*")]
-    [InlineData("+")]
-    public void LanMode_all_interfaces_binds_the_strong_wildcard(string bindAddress)
+    [InlineData("0.0.0.0", "+")]
+    [InlineData("::", "+")]
+    [InlineData("*", "*")]
+    [InlineData("+", "+")]
+    public void LanMode_all_interfaces_binding_maps_to_the_correct_prefix_host(string bindAddress, string expectedHost)
     {
         var prefix = WebSocketTransport.BuildPrefix(new WebSocketTransportOptions
         {
@@ -47,7 +52,7 @@ public sealed class WebSocketTransportLanTests
             TlsCertPath = "C:\\certs\\bridge.pfx",
         });
 
-        Assert.Equal("https://+:47291/", prefix);
+        Assert.Equal($"https://{expectedHost}:47291/", prefix);
     }
 
     /// <summary>

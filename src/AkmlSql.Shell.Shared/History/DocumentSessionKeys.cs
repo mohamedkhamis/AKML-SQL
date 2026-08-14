@@ -56,6 +56,20 @@ namespace AkmlSql.Shell.Shared.History
         /// again; on a collision the renamed document simply mints a fresh key on its next
         /// execution (a safe split, not a merge).
         /// </para>
+        /// <para>
+        /// Finding 7 (PR #249 review): that "retired either way" reasoning depends on
+        /// <paramref name="oldFullName"/> genuinely being the SAME document's own previous path,
+        /// not an unrelated tab's path. The only caller, <c>ExecutionCapture.ApplyDocumentSaved</c>,
+        /// now guarantees that: it only calls this method for a save of the CURRENTLY ACTIVE
+        /// document, so the "old" and "new" paths it passes always describe one document's own
+        /// history across saves. Before that caller-side guard existed, a Save-All firing
+        /// DocumentSaved for an INACTIVE tab could corrupt the tracked "last active path" with that
+        /// tab's own name; a later save of the real active tab would then pass THAT unrelated tab's
+        /// path here as <paramref name="oldFullName"/>, and the collision-decline branch below
+        /// would retire it — silently splitting the inactive tab's history even though it was never
+        /// closed. No change was needed in this method itself; the fix lives entirely in the
+        /// caller's decision about when to invoke it at all.
+        /// </para>
         /// </summary>
         internal static void Rename(string oldFullName, string newFullName)
         {

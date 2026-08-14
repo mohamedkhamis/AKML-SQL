@@ -116,4 +116,101 @@ namespace AkmlSql.Shell.Shared.Tests
             Assert.NotEqual(keyA, stillB);   // Tab A's key must NOT have overwritten Tab B's entry
         }
     }
+
+    /// <summary>
+    /// Finding 6 (PR #249 review): the saved/unsaved decision must be answerable from DTE state
+    /// alone (no filesystem I/O), and it must stay unit-testable as a pure function.
+    /// </summary>
+    public class ExecutionCaptureIsSavedToDiskTests
+    {
+        [Theory]
+        [InlineData(null, false)]
+        [InlineData("", false)]
+        [InlineData(@"C:\Reports\", true)]
+        [InlineData(@"\\server\share\Reports\", true)]
+        public void IsSavedToDisk_reflects_whether_the_document_has_an_on_disk_path(string? path, bool expected)
+            => Assert.Equal(expected, ExecutionCapture.IsSavedToDisk(path));
+    }
+
+    /// <summary>
+    /// Finding 7 (PR #249 review): a save of an INACTIVE tab must be a complete no-op for session-
+    /// key tracking — it must not update <c>_lastActiveDocumentPath</c>, and it must not retire or
+    /// migrate another tab's session key.
+    /// </summary>
+    /// <remarks>
+    /// Every path used here is unique to THIS class (not reused from <see cref="QuerySessionKeyTests"/>
+    /// or elsewhere in this file/assembly): <see cref="DocumentSessionKeys"/>'s backing dictionary is
+    /// process-static, so a collision on a shared literal path across test classes running in the
+    /// same process could contaminate results regardless of xunit's parallelization settings.
+    /// </remarks>
+    public class ApplyDocumentSavedTests
+    {
+        [Fact]
+        public void Save_of_the_active_document_migrates_its_own_key_and_updates_tracking()
+        {
+            var oldPath = @"C:\f7temp\f7-scratch-active.sql";
+            var newPath = @"C:\f7Reports\f7-ActiveSave.sql";
+            var key = DocumentSessionKeys.ForDocument(oldPath);
+
+            var result = ExecutionCapture.ApplyDocumentSaved(
+                lastActiveDocumentPath: oldPath, activePath: newPath, newPath: newPath);
+
+            Assert.Equal(newPath, result);
+            Assert.Equal(key, DocumentSessionKeys.ForDocument(newPath));   // migrated, not re-minted
+        }
+
+        [Fact]
+        public void Save_of_an_inactive_document_does_not_change_the_tracked_path()
+        {
+            var activeTabPath = @"C:\f7temp\f7-tabA-1.sql";
+            var inactiveTabPath = @"C:\f7temp\f7-tabB-1.sql";
+
+            var result = ExecutionCapture.ApplyDocumentSaved(
+                lastActiveDocumentPath: activeTabPath, activePath: activeTabPath, newPath: inactiveTabPath);
+
+            Assert.Equal(activeTabPath, result);   // tracking still points at the ACTIVE tab, not the saved one
+        }
+
+        /// <summary>
+        /// Regression test for the exact Finding 7 sequence: Save-All fires DocumentSaved for tab A
+        /// (active) then tab B (not active); the user then saves A again. Tab B's session key must
+        /// survive unchanged — no migration onto it, no retirement via the collision-decline path.
+        /// </summary>
+        [Fact]
+        public void SaveAll_then_saving_the_active_tab_again_does_not_retire_the_inactive_tabs_key()
+        {
+            var pathA = @"C:\f7temp\f7-tabA-2.sql";
+            var pathB = @"C:\f7temp\f7-tabB-2.sql";
+            DocumentSessionKeys.ForDocument(pathA);
+            var keyB = DocumentSessionKeys.ForDocument(pathB);
+
+            string? lastActive = pathA;   // A is the active tab throughout this sequence
+
+            // Save-All: DocumentSaved(A) -- A is active, a same-path no-op here.
+            lastActive = ExecutionCapture.ApplyDocumentSaved(lastActive, activePath: pathA, newPath: pathA);
+            // Save-All: DocumentSaved(B) -- B is NOT active; must not hijack tracking.
+            lastActive = ExecutionCapture.ApplyDocumentSaved(lastActive, activePath: pathA, newPath: pathB);
+
+            Assert.Equal(pathA, lastActive);   // still A, not corrupted to B by B's save
+
+            // The user now saves A again (still active, still the same path) -- must stay a no-op,
+            // not a Rename(B, A) triggered by a stale tracked path.
+            lastActive = ExecutionCapture.ApplyDocumentSaved(lastActive, activePath: pathA, newPath: pathA);
+
+            Assert.Equal(keyB, DocumentSessionKeys.ForDocument(pathB));   // B's key survives untouched
+        }
+
+        [Fact]
+        public void Same_path_save_of_the_active_document_is_a_no_op()
+        {
+            var path = @"C:\f7Reports\f7-SamePath.sql";
+            var key = DocumentSessionKeys.ForDocument(path);
+
+            var result = ExecutionCapture.ApplyDocumentSaved(
+                lastActiveDocumentPath: path, activePath: path, newPath: path);
+
+            Assert.Equal(path, result);
+            Assert.Equal(key, DocumentSessionKeys.ForDocument(path));
+        }
+    }
 }

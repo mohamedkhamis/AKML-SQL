@@ -260,9 +260,7 @@ namespace AkmlSql.Shell.Shared.History
                         // between the last execute and the save.
                         _lastActiveDocumentPath = source;
 
-                        var isSavedFile = !string.IsNullOrEmpty(activeDoc.Path)
-                                          && System.IO.File.Exists(activeDoc.FullName);
-                        tabTitle = isSavedFile ? activeDoc.Name : null;
+                        tabTitle = IsSavedToDisk(activeDoc.Path) ? activeDoc.Name : null;
                     }
                 }
                 catch (Exception ex)
@@ -350,6 +348,19 @@ namespace AkmlSql.Shell.Shared.History
         /// "is this document still the active one" check guards against misattributing a background
         /// Save-All to the wrong tracked session.
         /// </para>
+        /// <para>
+        /// Finding 7 (PR #249 review): the actual state transition — decide whether to migrate a
+        /// session key and what <see cref="_lastActiveDocumentPath"/> should become next — is
+        /// delegated to <see cref="ApplyDocumentSaved"/>, a pure function of
+        /// (current tracked path, DTE's reported active path, this save's new path). Before this
+        /// fix, <c>_lastActiveDocumentPath = newPath</c> ran UNCONDITIONALLY, even for a save of a
+        /// document that was NOT the active tab (e.g. Save-All firing DocumentSaved for every open
+        /// tab in turn). That let an inactive tab's save silently hijack the tracked path; the
+        /// NEXT save of the real active tab would then see a stale "old path" belonging to the
+        /// OTHER tab and either wrongly migrate that unrelated tab's session key onto itself, or —
+        /// on a name collision — retire it outright via <see cref="DocumentSessionKeys.Rename"/>'s
+        /// collision-decline branch, splitting that tab's history even though it was never closed.
+        /// </para>
         /// </summary>
         private static void OnDocumentSaved(Document document)
         {
@@ -371,23 +382,48 @@ namespace AkmlSql.Shell.Shared.History
                     Log.Debug(ex, "ExecutionCapture: failed to read active document while handling DocumentSaved");
                 }
 
-                var oldPath = _lastActiveDocumentPath;
-                if (!string.IsNullOrEmpty(oldPath)
-                    && !string.IsNullOrEmpty(activePath)
-                    && string.Equals(activePath, newPath, StringComparison.OrdinalIgnoreCase)
-                    && !string.Equals(oldPath, newPath, StringComparison.OrdinalIgnoreCase))
-                {
-                    DocumentSessionKeys.Rename(oldPath!, newPath);
-                    Log.Debug("ExecutionCapture: migrated session key from '{Old}' to '{New}' after save",
-                        oldPath, newPath);
-                }
-
-                _lastActiveDocumentPath = newPath;
+                _lastActiveDocumentPath = ApplyDocumentSaved(_lastActiveDocumentPath, activePath, newPath);
             }
             catch (Exception ex)
             {
                 Log.Debug(ex, "ExecutionCapture: error in DocumentSaved hook");
             }
+        }
+
+        /// <summary>
+        /// Pure decision for <see cref="OnDocumentSaved"/> (Finding 7, PR #249 review). Only a save
+        /// of the CURRENTLY ACTIVE document can migrate a session key or update
+        /// <paramref name="lastActiveDocumentPath"/> — a save of any other (inactive) tab is a
+        /// complete no-op, returning <paramref name="lastActiveDocumentPath"/> unchanged. This is
+        /// what keeps a Save-All (which fires DocumentSaved once per open tab, only one of which is
+        /// active) from corrupting the tracked path with an unrelated tab's name, which is what
+        /// let a later, genuine save of the active tab migrate — or on collision, retire via
+        /// <see cref="DocumentSessionKeys.Rename"/>'s decline branch — that OTHER, still-open tab's
+        /// session key.
+        /// </summary>
+        /// <param name="lastActiveDocumentPath">The currently tracked "last active document" path.</param>
+        /// <param name="activePath"><c>_dte.ActiveDocument.FullName</c> at the moment of the save
+        /// (null/empty if it could not be read).</param>
+        /// <param name="newPath">The saved document's (post-save) <c>FullName</c>.</param>
+        /// <returns>The new value <c>_lastActiveDocumentPath</c> should take.</returns>
+        internal static string? ApplyDocumentSaved(string? lastActiveDocumentPath, string? activePath, string newPath)
+        {
+            if (string.IsNullOrEmpty(activePath)
+                || !string.Equals(activePath, newPath, StringComparison.OrdinalIgnoreCase))
+            {
+                // The saved document is not the active one -- leave tracking untouched entirely.
+                return lastActiveDocumentPath;
+            }
+
+            if (!string.IsNullOrEmpty(lastActiveDocumentPath)
+                && !string.Equals(lastActiveDocumentPath, newPath, StringComparison.OrdinalIgnoreCase))
+            {
+                DocumentSessionKeys.Rename(lastActiveDocumentPath!, newPath);
+                Log.Debug("ExecutionCapture: migrated session key from '{Old}' to '{New}' after save",
+                    lastActiveDocumentPath, newPath);
+            }
+
+            return newPath;
         }
 
         /// <summary>
@@ -480,6 +516,21 @@ namespace AkmlSql.Shell.Shared.History
         }
 
         // ----- Helpers -----
+
+        /// <summary>
+        /// Finding 6 (PR #249 review): is this document saved to disk? Answered entirely from DTE
+        /// state -- <paramref name="path"/> is <c>EnvDTE.Document.Path</c>, which is empty for a
+        /// document that has never been saved. The pre-fix version additionally called
+        /// <c>File.Exists(activeDoc.FullName)</c> here, on the SSMS UI thread
+        /// (<see cref="OnAfterCommandExecute"/> runs under <c>ThreadHelper.ThrowIfNotOnUIThread</c>).
+        /// For a document on a UNC share or a stale mapped drive, that call is a blocking SMB
+        /// round-trip that freezes SSMS after every F5. <c>Path</c> alone is already the signal
+        /// this needs -- an SSMS scratch document that was never saved reports an empty
+        /// <c>Path</c>; anything with a real directory has one, with no filesystem I/O required to
+        /// know it. Extracted as a pure static so the saved/unsaved decision stays unit-testable
+        /// without a live DTE <c>Document</c>.
+        /// </summary>
+        internal static bool IsSavedToDisk(string? path) => !string.IsNullOrEmpty(path);
 
         /// <summary>
         /// Fast check: is this command the Query.Execute command?

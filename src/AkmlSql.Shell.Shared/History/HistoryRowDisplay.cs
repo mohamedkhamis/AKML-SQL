@@ -1,5 +1,4 @@
 #nullable enable
-using System.Collections.Generic;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Core.Models.History;
 
@@ -10,10 +9,13 @@ namespace AkmlSql.Shell.Shared.History
     /// fallback for the rare sessionless row) and the "&#215;N &#183; M versions" meta line.
     /// </summary>
     /// <remarks>
-    /// Deliberately duplicated from the web edition's <c>AkmlSql.Web.Pages.History.DisplayNameFor</c> /
-    /// <c>MetaFor</c> rather than shared via a new assembly: this project is a shared .projitems file
-    /// compiled directly into six different VS-SDK-specific net472 assemblies, and it cannot reference
-    /// AkmlSql.Web's net10.0 Blazor project. Keep both copies in lockstep by hand.
+    /// Finding 10 (PR #249 review): both helpers below are now thin delegations to the shared
+    /// <see cref="AkmlSql.Core.Models.History.HistoryDisplayName"/> (<c>Of</c> / <c>MetaFor</c>) --
+    /// the ACTUAL formatting logic lives there exactly once, not hand-duplicated between this file
+    /// and the web edition's <c>AkmlSql.Web.Pages.History</c>. This wrapper still exists (rather
+    /// than pointing every call site directly at Core) because this project is a shared .projitems
+    /// file compiled directly into six different VS-SDK-specific net472 assemblies and cannot
+    /// reference AkmlSql.Web's net10.0 Blazor project — Core is the one dependency both hosts share.
     /// </remarks>
     internal static class HistoryRowDisplay
     {
@@ -27,12 +29,7 @@ namespace AkmlSql.Shell.Shared.History
             HistoryDisplayName.Of(e.TabTitle, e.SqlText);
 
         /// <summary>"&#215;276 &#183; 12 versions". Both halves are omitted when they carry no information.</summary>
-        public static string MetaFor(int executionCount, int versionCount)
-        {
-            var parts = new List<string>(2);
-            if (executionCount > 1) parts.Add($"×{executionCount}");
-            if (versionCount > 1) parts.Add($"{versionCount} versions");
-            return string.Join(" · ", parts);
-        }
+        public static string MetaFor(int executionCount, int versionCount) =>
+            HistoryDisplayName.MetaFor(executionCount, versionCount);
     }
 }

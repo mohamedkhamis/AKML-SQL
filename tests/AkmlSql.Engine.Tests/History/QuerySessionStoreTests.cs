@@ -296,6 +296,51 @@ public class QuerySessionStoreTests : IAsyncLifetime
         var row = await Read(id);
         Assert.Equal("query-02", row.Name);   // skipped past the blocker's committed ordinal 1
     }
+
+    /// <summary>
+    /// Finding 2 (PR #249 review): the BUSY/LOCKED retry arm must wait between attempts instead of
+    /// hammering the lock immediately. The blocker's write lock is deliberately NEVER released, so
+    /// all 5 attempts exhaust via genuine SQLITE_BUSY (busy_timeout=1s per attempt, confirmed
+    /// empirically to land around ~1.1s per attempt on this machine) and the call throws. That
+    /// makes the measured elapsed time the SUM of five real SQLite busy-waits PLUS the retry
+    /// loop's own backoff between them, with no "an attempt succeeds early once the lock frees"
+    /// ambiguity that would otherwise mask whether the backoff ran at all.
+    /// </summary>
+    [Fact]
+    public async Task Retry_backs_off_between_busy_attempts_instead_of_retrying_instantly()
+    {
+        var now = DateTime.UtcNow;
+        var localDate = QuerySessionNamerProbe.LocalDate(now);
+        var shortTimeoutStore = new QuerySessionStore($"{_cs};Default Timeout=1");
+
+        await using var blocker = new SqliteConnection(_cs);
+        await blocker.OpenAsync();
+        var blockerTx = blocker.BeginTransaction(deferred: false);   // acquires the write lock
+        await using (var blockerCmd = new SqliteCommand(@"
+            INSERT INTO query_sessions
+                (session_key, local_date, ordinal, name, name_source, server, database_name, created_at)
+            VALUES ('blocker2', @d, 1, 'blocker', 0, NULL, NULL, @created);", blocker, blockerTx))
+        {
+            blockerCmd.Parameters.AddWithValue("@d", localDate);
+            blockerCmd.Parameters.AddWithValue("@created", DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture));
+            await blockerCmd.ExecuteNonQueryAsync();
+        }
+        // Deliberately NEVER released for the rest of this test.
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => shortTimeoutStore.GetOrCreateAsync("victim2", now, null, null, null));
+        sw.Stop();
+
+        // Baseline with NO backoff (5 attempts x ~1.1s busy_timeout=1 wait each) lands around
+        // 5.5-5.8s on this machine. The retry loop's own schedule -- 50ms+jitter, 100ms+jitter,
+        // 150ms+jitter, 200ms+jitter for attempts 1..4 -- adds at least another 500ms on top of
+        // that. 5900ms sits between the two: it only passes when the backoff genuinely ran.
+        Assert.True(sw.ElapsedMilliseconds >= 5900,
+            $"expected the exhausted busy retry loop to include its own backoff waits, only took {sw.ElapsedMilliseconds}ms");
+
+        await blockerTx.RollbackAsync();
+    }
 }
 
 /// <summary>Test-only shim so the test can compute the same local-date key the store uses.</summary>

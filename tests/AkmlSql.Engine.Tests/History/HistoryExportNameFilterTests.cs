@@ -60,6 +60,31 @@ public class HistoryExportNameFilterTests : IAsyncLifetime
         finally { TryDelete(outputPath); }
     }
 
+    /// <summary>
+    /// Finding 5 (PR #249 review): the SELECT list must project the SAME resolved name the
+    /// NameFilter WHERE clause matches against, not the raw h.tab_title column. Before this fix,
+    /// filtering by 'query-01' correctly matched the row (see the sibling test above), but the
+    /// EXPORTED TabTitle came back empty (tab_title is NULL for this unsaved-scratch-tab row) --
+    /// filter and output disagreed on what "name" means.
+    /// </summary>
+    [Fact]
+    public async Task Export_projects_the_resolved_session_name_not_the_raw_null_tab_title()
+    {
+        await _db.InsertEntryAsync("SELECT 1", false, "localhost", "Northwind", null, 5, 1,
+            (int)ExecutionStatus.Success, null, source: null, tabTitle: null, sessionKey: "tab-A");
+
+        var outputPath = Path.Combine(Path.GetTempPath(), $"akml-export-{Guid.NewGuid():N}.json");
+        try
+        {
+            await _db.ExportAsync(
+                new HistoryFilter { NameFilter = "query-01" }, ExportFormat.Json, outputPath);
+
+            var json = await File.ReadAllTextAsync(outputPath);
+            Assert.Contains("\"tabTitle\": \"query-01\"", json);
+        }
+        finally { TryDelete(outputPath); }
+    }
+
     [Fact]
     public async Task Export_NameFilter_does_not_match_an_unrelated_session_name()
     {

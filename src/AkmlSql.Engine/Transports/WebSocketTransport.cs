@@ -119,23 +119,34 @@ namespace AkmlSql.Engine.Transports
         ///
         /// <para>A specific host (a real hostname) is passed through untouched — narrowing to one
         /// interface is a legitimate configuration and HTTP.SYS accepts a hostname for HTTPS.</para>
+        ///
+        /// <para>Finding 9 (PR #249 review): only the literal IP forms (<c>0.0.0.0</c>, <c>::</c>)
+        /// are rewritten to <c>+</c>. <c>*</c> (HTTP.SYS's WEAK wildcard) and <c>+</c> (STRONG)
+        /// are ALREADY valid prefix hosts in their own right and must pass through UNCHANGED —
+        /// folding <c>*</c> into <c>+</c> changes prefix-registration precedence (<c>+</c> claims
+        /// the prefix ahead of another service's specific-host registration) or fails with
+        /// ERROR_ALREADY_EXISTS where <c>*</c> previously coexisted with that specific-host
+        /// registration.</para>
         /// </summary>
         internal static string BuildPrefix(WebSocketTransportOptions options)
         {
             if (options.IsLoopback)
                 return $"http://127.0.0.1:{options.Port}/";
 
-            var host = IsAllInterfaces(options.BindAddress) ? "+" : options.BindAddress;
+            var host = NormalizeAllInterfacesHost(options.BindAddress);
             return $"https://{host}:{options.Port}/";
         }
 
         /// <summary>
-        /// True for the spellings that mean "every interface". <c>0.0.0.0</c> is what the
-        /// installer writes for LAN mode; <c>::</c> is its IPv6 equivalent; <c>*</c> and <c>+</c>
-        /// are HTTP.SYS's own wildcards and are already in prefix form.
+        /// Rewrites the literal all-interfaces spellings the installer/config can produce
+        /// (<c>0.0.0.0</c>, and its IPv6 equivalent <c>::</c>) to HTTP.SYS's strong wildcard
+        /// <c>+</c>. <c>*</c> and <c>+</c> are HTTP.SYS's OWN wildcard syntax, already valid as a
+        /// prefix host, and pass through unchanged (see the Finding 9 remarks on
+        /// <see cref="BuildPrefix"/> for why folding <c>*</c> into <c>+</c> is unsafe). Anything
+        /// else (a hostname, or null) also passes through unchanged.
         /// </summary>
-        private static bool IsAllInterfaces(string? bindAddress) =>
-            bindAddress is "0.0.0.0" or "::" or "*" or "+";
+        private static string? NormalizeAllInterfacesHost(string? bindAddress) =>
+            bindAddress is "0.0.0.0" or "::" ? "+" : bindAddress;
 
         private async Task AcceptLoopAsync(CancellationToken ct)
         {

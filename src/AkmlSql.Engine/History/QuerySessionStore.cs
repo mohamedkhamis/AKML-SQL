@@ -61,6 +61,20 @@ internal sealed class QuerySessionStore
         SqliteException? lastError = null;
         for (var attempt = 0; attempt < 5; attempt++)
         {
+            // Finding 2 (PR #249 review): a BUSY/LOCKED failure on the PREVIOUS attempt means
+            // this connection's own busy_timeout has already been exhausted with the lock still
+            // held elsewhere — immediately retrying with no gap re-races the exact contention the
+            // wait just gave up on, and can burn through all 5 attempts before a genuinely slow
+            // competing writer ever releases. Back off with jitter so it gets a real window to
+            // finish. The UNIQUE-constraint arm below is different and deliberately NOT delayed:
+            // by the time it surfaces, the racer's row is already committed and visible, so
+            // FindAsync's re-read resolves it immediately on the next attempt.
+            if (attempt > 0 && lastError != null && IsBusyOrLocked(lastError))
+            {
+                var delayMs = (50 * attempt) + Random.Shared.Next(0, 25);
+                await Task.Delay(delayMs).ConfigureAwait(false);
+            }
+
             try
             {
                 return await InsertAsync(conn, sessionKey, localDate, tabTitle, server, database);
@@ -87,6 +101,9 @@ internal sealed class QuerySessionStore
         ex.SqliteExtendedErrorCode == SqliteConstraintUnique
         || ex.SqliteErrorCode == SqliteBusy
         || ex.SqliteErrorCode == SqliteLocked;
+
+    private static bool IsBusyOrLocked(SqliteException ex) =>
+        ex.SqliteErrorCode == SqliteBusy || ex.SqliteErrorCode == SqliteLocked;
 
     private static async Task<long?> FindAsync(SqliteConnection conn, string sessionKey)
     {

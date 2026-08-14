@@ -34,10 +34,24 @@ internal static class EditorSessionKeys
     }
 
     /// <summary>Clears the persisted session key so the next <see cref="GetOrCreateAsync"/> mints a
-    /// fresh one. Does not touch the rest of the record (document text / caret / active profile).</summary>
+    /// fresh one. Does not touch the rest of the record (document text / caret / active profile).
+    /// <para>
+    /// Finding 8 (PR #249 review): a no-op when there is nothing to clear. Settings.razor's
+    /// ResetSessionAsync calls <see cref="IEditorSessionStore.ClearAsync"/> (which drops the
+    /// persisted record entirely) immediately BEFORE calling this method as an explicit, belt-
+    /// and-suspenders boundary. The old version unconditionally did
+    /// <c>RestoreAsync() ?? new EditorSessionRecord()</c> then <c>SaveAsync</c> — which, right
+    /// after a Clear, resurrected a brand-new (empty) record in the store moments later, defeating
+    /// "reset leaves the store genuinely empty". Only touch the store when a record actually
+    /// exists AND still carries a key to clear; a store with nothing persisted (or a record whose
+    /// key is already null) is left exactly as it was.
+    /// </para>
+    /// </summary>
     internal static async Task ResetAsync(IEditorSessionStore store)
     {
-        var record = await store.RestoreAsync().ConfigureAwait(false) ?? new EditorSessionRecord();
+        var record = await store.RestoreAsync().ConfigureAwait(false);
+        if (record == null || record.SessionKey == null) return;
+
         record.SessionKey = null;
         await store.SaveAsync(record).ConfigureAwait(false);
     }

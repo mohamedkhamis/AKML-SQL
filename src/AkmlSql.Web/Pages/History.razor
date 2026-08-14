@@ -634,20 +634,20 @@
     /// The session name (query-NN, a saved file name, or the user's rename). The raw-SQL fallback
     /// only fires for a row that somehow has no session at all, and is formatted via the shared
     /// <see cref="HistoryDisplayName.Of"/> — whitespace collapsed, truncated to ~60 characters — so
-    /// a sessionless row never dumps raw multi-line SQL into the list. Kept in lockstep by hand with
+    /// a sessionless row never dumps raw multi-line SQL into the list. Mirrored by
     /// <c>AkmlSql.Shell.Shared.History.HistoryRowDisplay.DisplayNameFor</c> — see that file's remarks.
     /// </summary>
     internal static string DisplayNameFor(HistoryEntryDto e) =>
         HistoryDisplayName.Of(e.TabTitle, e.SqlText);
 
-    /// <summary>"×276 · 12 versions". Both halves are omitted when they carry no information.</summary>
-    internal static string MetaFor(int executionCount, int versionCount)
-    {
-        var parts = new List<string>(2);
-        if (executionCount > 1) parts.Add($"×{executionCount}");
-        if (versionCount > 1) parts.Add($"{versionCount} versions");
-        return string.Join(" · ", parts);
-    }
+    /// <summary>
+    /// "×276 · 12 versions". Both halves are omitted when they carry no information. Finding 10
+    /// (PR #249 review): delegates to the shared <see cref="HistoryDisplayName.MetaFor"/> instead
+    /// of hand-duplicating the same List/Join logic that used to live here AND in
+    /// <c>AkmlSql.Shell.Shared.History.HistoryRowDisplay.MetaFor</c>.
+    /// </summary>
+    internal static string MetaFor(int executionCount, int versionCount) =>
+        HistoryDisplayName.MetaFor(executionCount, versionCount);
 
     private static string ServerDb(HistoryEntryDto e)
     {

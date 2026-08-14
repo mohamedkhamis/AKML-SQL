@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Text.RegularExpressions;
 
 namespace AkmlSql.Core.Models.History
@@ -29,6 +30,23 @@ namespace AkmlSql.Core.Models.History
             // low-surrogate partner is at index MaxLength, so cut one char earlier to drop the pair whole.
             var cut = char.IsHighSurrogate(collapsed[MaxLength - 1]) ? MaxLength - 1 : MaxLength;
             return collapsed.Substring(0, cut) + "…";
+        }
+
+        /// <summary>
+        /// Finding 10 (PR #249 review): the "×N runs · M versions" meta line, moved here from two
+        /// hand-duplicated copies (<c>AkmlSql.Shell.Shared.History.HistoryRowDisplay.MetaFor</c> and
+        /// <c>AkmlSql.Web.Pages.History.MetaFor</c>) -- both hosts already reference this assembly
+        /// for <see cref="Of"/>, so there was no reason for the actual formatting logic to live
+        /// twice. Both hosts now delegate their own <c>MetaFor</c> to this one. Each half is
+        /// omitted when it carries no information: exactly one run and exactly one version
+        /// produces an empty string (nothing to say).
+        /// </summary>
+        public static string MetaFor(int executionCount, int versionCount)
+        {
+            var parts = new List<string>(2);
+            if (executionCount > 1) parts.Add($"×{executionCount}");
+            if (versionCount > 1) parts.Add($"{versionCount} versions");
+            return string.Join(" · ", parts);
         }
     }
 }
