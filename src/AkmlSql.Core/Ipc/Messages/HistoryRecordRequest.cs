@@ -52,5 +52,13 @@ namespace AkmlSql.Core.Ipc.Messages
         /// <summary>Title of the editor tab/window where the query was executed.</summary>
         [Key(10)]
         public string? TabTitle { get; set; }
+
+        /// <summary>
+        /// Opaque, client-owned identifier that is stable for the lifetime of ONE editor
+        /// document. Null/empty from clients that predate session grouping — the engine then
+        /// stores the row unassigned and the backfill infers a session on the next start.
+        /// </summary>
+        [Key(11)]
+        public string? SessionKey { get; set; }
     }
 }

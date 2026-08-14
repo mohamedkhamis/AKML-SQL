@@ -16,7 +16,7 @@ namespace AkmlSql.Engine.History;
 /// </summary>
 public sealed class HistoryDatabase : IDisposable
 {
-    private const int SchemaVersion = 1;
+    private const int SchemaVersion = 2;   // v2: query_sessions + history.session_id
     private const int MaxSqlTextChars = 1_048_576; // 1 MB
 
     private readonly string _connectionString;
@@ -101,10 +101,14 @@ public sealed class HistoryDatabase : IDisposable
                 value TEXT NOT NULL
             );");
 
-        // Insert schema_version if not present
+        // Upsert schema_version so an upgraded database always reflects the CURRENT SchemaVersion.
+        // INSERT OR IGNORE (the prior form) only ever wrote the version once, on first creation —
+        // a database created under schema v1 and later opened by this v2 build would keep the
+        // literal string '1' in metadata forever, which would misfire the first time some future
+        // change actually gates behaviour on this value.
         await ExecuteNonQueryAsync(conn, $@"
-            INSERT OR IGNORE INTO metadata (key, value)
-            VALUES ('schema_version', '{SchemaVersion}');");
+            INSERT INTO metadata (key, value) VALUES ('schema_version', '{SchemaVersion}')
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value;");
 
         // Create main history table
         await ExecuteNonQueryAsync(conn, @"
@@ -154,6 +158,42 @@ public sealed class HistoryDatabase : IDisposable
             Log.Warning(ex, "History: is_open column migration failed (non-fatal)");
         }
 
+        // ── Schema v2: query-session grouping ────────────────────────────────
+        // One row per editor-tab query session. The display name lives HERE, not on the
+        // history rows, so a rename is a single UPDATE and survives every later execution.
+        await ExecuteNonQueryAsync(conn, @"
+            CREATE TABLE IF NOT EXISTS query_sessions (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_key   TEXT    NOT NULL,
+                local_date    TEXT    NOT NULL,
+                ordinal       INTEGER NOT NULL,
+                name          TEXT    NOT NULL,
+                name_source   INTEGER NOT NULL,
+                server        TEXT,
+                database_name TEXT,
+                created_at    TEXT    NOT NULL
+            );");
+
+        await ExecuteNonQueryAsync(conn,
+            "CREATE UNIQUE INDEX IF NOT EXISTS IX_qs_session_key ON query_sessions (session_key);");
+        // Backstop for the ordinal race: two shell windows can read the same MAX(ordinal).
+        await ExecuteNonQueryAsync(conn,
+            "CREATE UNIQUE INDEX IF NOT EXISTS IX_qs_date_ordinal ON query_sessions (local_date, ordinal);");
+
+        // Column BEFORE its index — an index cannot reference a column that does not exist yet.
+        try
+        {
+            await ExecuteNonQueryAsync(conn,
+                "ALTER TABLE history ADD COLUMN session_id INTEGER REFERENCES query_sessions(id);");
+        }
+        catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.Message.Contains("duplicate column"))
+        {
+            // Already migrated — expected on every start after the first.
+        }
+
+        await ExecuteNonQueryAsync(conn,
+            "CREATE INDEX IF NOT EXISTS IX_history_session ON history (session_id);");
+
         // Create FTS5 virtual table for full-text search on SQL text
         await ExecuteNonQueryAsync(conn, @"
             CREATE VIRTUAL TABLE IF NOT EXISTS history_fts
@@ -182,6 +222,288 @@ public sealed class HistoryDatabase : IDisposable
             "CREATE INDEX IF NOT EXISTS IX_history_versions_history_id ON history_versions(history_id);");
 
         Log.Information("History database initialized at {ConnectionString}", _connectionString);
+
+        await BackfillSessionsAsync(conn);
+        await CorrectMisclassifiedScratchNamesAsync(conn);
+    }
+
+    /// <summary>
+    /// One-time regrouping of rows written before session tracking existed. Those rows carry no
+    /// tab identity, so a session is INFERRED from (local date, tab_title, server, database).
+    /// Nothing is deleted and no column other than session_id is touched.
+    ///
+    /// <para>Idempotent: only rows with session_id IS NULL are considered, so a second run is a
+    /// no-op and never renumbers an existing session.</para>
+    ///
+    /// <para>executed_at is stored as UTC ISO-8601 with 7 fractional digits, which SQLite's date
+    /// functions will not parse; substr(...,1,19) trims it to 'YYYY-MM-DDTHH:MM:SS', which SQLite
+    /// treats as UTC-naive, and 'localtime' then converts it to the user's day.</para>
+    /// </summary>
+    private async Task BackfillSessionsAsync(SqliteConnection conn)
+    {
+        await using (var probe = new SqliteCommand(
+            "SELECT COUNT(*) FROM history WHERE session_id IS NULL", conn))
+        {
+            if (Convert.ToInt32(await probe.ExecuteScalarAsync()) == 0) return;
+        }
+
+        Log.Information("History: backfilling query sessions for legacy rows…");
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+        try
+        {
+            // BEGIN IMMEDIATE for the same reason as QuerySessionStore.InsertAsync: this transaction
+            // reads (the GROUP BY scan) before it writes, and the history database is SHARED — the
+            // SSMS-paired engine and the web engine both open %AppData%/AKML SQL/history/sqlhistory.db.
+            // A deferred transaction promoted after a concurrent commit fails with BUSY_SNAPSHOT, which
+            // busy_timeout does not retry. Added 2026-08-13 after the Task 3 review surfaced the same
+            // defect one task earlier.
+            //
+            // Acquired INSIDE this try, not before it: BEGIN IMMEDIATE takes the write lock right
+            // away, so it can itself throw SQLITE_BUSY/SQLITE_LOCKED if a concurrent writer already
+            // holds that lock past busy_timeout — the exact scenario BEGIN IMMEDIATE exists to guard
+            // against is also the realistic trigger for this (the SSMS-paired engine and the web
+            // engine both starting against the shared history db at once, both attempting this same
+            // migration). Catching that here — instead of letting it escape InitializeAsync and take
+            // down engine startup — is deliberate and safe: the migration is idempotent (rows stay
+            // session_id IS NULL on any failure here), so the very next engine start simply retries
+            // the whole backfill. This is a self-healing retry, not a silent data-loss swallow.
+            //
+            // No explicit rollback in the catch below: `await using` disposes an uncommitted
+            // SqliteTransaction by rolling it back as the exception unwinds past this scope (same
+            // rationale as QuerySessionStore.InsertAsync — an explicit RollbackAsync after CommitAsync
+            // itself threw would run against an already-completed transaction and raise a second,
+            // masking exception).
+            await using var tx = conn.BeginTransaction(deferred: false);
+
+            // Ordered so ordinals follow first-execution time within each local day.
+            var groups = new System.Collections.Generic.List<(string Date, string Title, string Server, string Db)>();
+            await using (var cmd = new SqliteCommand(@"
+                SELECT date(substr(executed_at, 1, 19), 'localtime') AS local_date,
+                       COALESCE(tab_title, '')      AS title,
+                       COALESCE(server, '')         AS server,
+                       COALESCE(database_name, '')  AS db
+                  FROM history
+                 WHERE session_id IS NULL
+                 GROUP BY local_date, title, server, db
+                 ORDER BY local_date, MIN(executed_at);", conn, (SqliteTransaction)tx))
+            await using (var r = await cmd.ExecuteReaderAsync())
+            {
+                while (await r.ReadAsync())
+                {
+                    // date(substr(executed_at, 1, 19), 'localtime') returns NULL for a row whose
+                    // executed_at is malformed or too short to parse as a date/time. r.GetString(0)
+                    // on a NULL column throws InvalidCastException, which — since the whole backfill
+                    // is one transaction (see BEGIN IMMEDIATE above) — would abort the ENTIRE run and
+                    // leave every other, well-formed group ungrouped too, on every future engine
+                    // start (the migration always retries from scratch, so one bad row permanently
+                    // blocks it). Skip just the bad group instead: it stays session_id IS NULL and
+                    // falls back to per-content-hash grouping in SearchAsync's GroupKey.
+                    if (r.IsDBNull(0))
+                    {
+                        Log.Warning(
+                            "History: skipping backfill group with unparseable executed_at (title='{Title}')",
+                            r.IsDBNull(1) ? "" : r.GetString(1));
+                        continue;
+                    }
+                    groups.Add((r.GetString(0), r.GetString(1), r.GetString(2), r.GetString(3)));
+                }
+            }
+
+            var perDay = new System.Collections.Generic.Dictionary<string, int>(StringComparer.Ordinal);
+            var created = 0;
+
+            foreach (var g in groups)
+            {
+                await using (var maxCmd = new SqliteCommand(
+                    "SELECT COALESCE(MAX(ordinal), 0) FROM query_sessions WHERE local_date = @d",
+                    conn, (SqliteTransaction)tx))
+                {
+                    maxCmd.Parameters.AddWithValue("@d", g.Date);
+                    if (!perDay.ContainsKey(g.Date))
+                        perDay[g.Date] = Convert.ToInt32(await maxCmd.ExecuteScalarAsync());
+                }
+
+                var ordinal = ++perDay[g.Date];
+                var isScratch = QuerySessionNamer.IsScratchTabTitle(g.Title);
+                // Trim for display consistency with QuerySessionStore.InsertAsync's `tabTitle!.Trim()`
+                // (a legacy tab_title with stray whitespace would otherwise look cosmetically
+                // inconsistent). Only the DISPLAY name is trimmed; g.Title itself stays untouched so
+                // the later grouping UPDATE's WHERE clause still matches the raw tab_title exactly.
+                var name = isScratch ? QuerySessionNamer.FormatName(ordinal) : g.Title.Trim();
+
+                long sessionId;
+                await using (var ins = new SqliteCommand(@"
+                    INSERT INTO query_sessions
+                        (session_key, local_date, ordinal, name, name_source, server, database_name, created_at)
+                    VALUES (@key, @d, @ord, @name, @src, @server, @db, @created);
+                    SELECT last_insert_rowid();", conn, (SqliteTransaction)tx))
+                {
+                    // Synthetic key: stable, unique, and obviously not a client-issued GUID.
+                    ins.Parameters.AddWithValue("@key",
+                        $"legacy:{g.Date}|{g.Title}|{g.Server}|{g.Db}");
+                    ins.Parameters.AddWithValue("@d", g.Date);
+                    ins.Parameters.AddWithValue("@ord", ordinal);
+                    ins.Parameters.AddWithValue("@name", name);
+                    ins.Parameters.AddWithValue("@src", isScratch ? 0 : 1);
+                    ins.Parameters.AddWithValue("@server", g.Server.Length == 0 ? DBNull.Value : g.Server);
+                    ins.Parameters.AddWithValue("@db", g.Db.Length == 0 ? DBNull.Value : g.Db);
+                    ins.Parameters.AddWithValue("@created",
+                        DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture));
+                    sessionId = Convert.ToInt64(await ins.ExecuteScalarAsync());
+                }
+
+                await using (var upd = new SqliteCommand(@"
+                    UPDATE history
+                       SET session_id = @sid
+                     WHERE session_id IS NULL
+                       AND date(substr(executed_at, 1, 19), 'localtime') = @d
+                       AND COALESCE(tab_title, '')     = @title
+                       AND COALESCE(server, '')        = @server
+                       AND COALESCE(database_name, '') = @db;", conn, (SqliteTransaction)tx))
+                {
+                    upd.Parameters.AddWithValue("@sid", sessionId);
+                    upd.Parameters.AddWithValue("@d", g.Date);
+                    upd.Parameters.AddWithValue("@title", g.Title);
+                    upd.Parameters.AddWithValue("@server", g.Server);
+                    upd.Parameters.AddWithValue("@db", g.Db);
+                    await upd.ExecuteNonQueryAsync();
+                }
+
+                created++;
+            }
+
+            await tx.CommitAsync();
+            Log.Information("History: backfill created {Count} sessions in {Ms} ms",
+                created, stopwatch.ElapsedMilliseconds);
+        }
+        catch (Exception ex)
+        {
+            // Covers both a failed BEGIN IMMEDIATE (no transaction was ever opened — including a
+            // busy/locked write-lock acquisition failure, see the comment above) and a failure during
+            // the body (where `await using` has already rolled the transaction back while unwinding
+            // to get here). Either way: legacy rows are untouched (still session_id IS NULL), so the
+            // next InitializeAsync call retries this whole backfill from scratch.
+            Log.Error(ex, "History: session backfill failed; legacy rows remain ungrouped");
+        }
+    }
+
+    /// <summary>Metadata key guarding <see cref="CorrectMisclassifiedScratchNamesAsync"/> — see its
+    /// doc comment. Value is informational only (a UTC timestamp); presence of the row is the
+    /// entire guard.</summary>
+    private const string ScratchNameCorrectionFlagKey = "scratch_name_correction_v1";
+
+    /// <summary>
+    /// One-time repair for <c>query_sessions</c> rows created by the PRE-FIX scratch-name regex
+    /// (<c>^(SQLQuery\d+|[a-z0-9]{8})\.sql$</c>, which required EXACTLY one dot before "sql"). Real
+    /// SSMS scratch-tab titles observed on a live database use TWO dots ("epxoezf5..sql"), which
+    /// that regex never matched — so <see cref="BackfillSessionsAsync"/>, run under the old code,
+    /// misclassified every such session as a genuine saved filename (<c>name_source = 1</c>) and
+    /// left it with its meaningless scratch name instead of an auto query-NN name.
+    ///
+    /// <para>
+    /// Simply re-running <see cref="BackfillSessionsAsync"/> after <see cref="QuerySessionNamer"/>'s
+    /// regex was widened does NOT repair this: that method only ever considers <c>history</c> rows
+    /// with <c>session_id IS NULL</c>, and every affected row already has a (wrongly-named) session
+    /// assigned. This pass targets the already-created <c>query_sessions</c> rows directly, using
+    /// the WIDENED (current) <see cref="QuerySessionNamer.IsScratchTabTitle"/> to re-classify names
+    /// that were stored under the old, narrower one.
+    /// </para>
+    ///
+    /// <para>
+    /// Renaming reuses the session's OWN EXISTING <c>ordinal</c> — it is never recomputed. Because
+    /// <c>(local_date, ordinal)</c> is already UNIQUE (<c>IX_qs_date_ordinal</c>), renaming session
+    /// X on day D to <c>query-&lt;X's own ordinal&gt;</c> can never collide with a query-NN session
+    /// already correctly named on that same day, and it preserves the per-day ordering the original
+    /// backfill established (this session was, and remains, the Nth session created that day).
+    /// </para>
+    ///
+    /// <para>
+    /// Only <c>name_source = 1</c> rows are candidates, and only those whose CURRENT stored name
+    /// still matches the (now-widened) scratch pattern — a genuine <c>name_source = 1</c> filename
+    /// like "MonthlyReport.sql" is left untouched. <c>name_source = 2</c> (a user's manual rename)
+    /// is never selected at all, regardless of what its name looks like: those are final. Corrected
+    /// rows are set to <c>name_source = 0</c> (auto), matching what they always should have been.
+    /// </para>
+    ///
+    /// <para>
+    /// Guarded by the <c>metadata</c> row keyed <see cref="ScratchNameCorrectionFlagKey"/>, INSERTed
+    /// in the SAME transaction as the renames — so a crash mid-pass leaves the flag absent (not
+    /// half-written), and the WHOLE pass (not a half-applied one) retries on the next
+    /// <see cref="InitializeAsync"/>, exactly like <see cref="BackfillSessionsAsync"/>'s own
+    /// idempotency story. Once the flag is present, later starts skip the scan entirely — a repaired
+    /// session is never re-examined, so a user's real filename typed with 8 lowercase-alphanumeric
+    /// characters (the documented <see cref="QuerySessionNamer.IsScratchTabTitle"/> false positive)
+    /// that happens to sit at <c>name_source = 1</c> right when this runs is a one-time risk, same as
+    /// it already is for every other consumer of that heuristic — not a new exposure this pass adds.
+    /// </para>
+    /// </summary>
+    private async Task CorrectMisclassifiedScratchNamesAsync(SqliteConnection conn)
+    {
+        await using (var probe = new SqliteCommand(
+            "SELECT COUNT(*) FROM metadata WHERE key = @k;", conn))
+        {
+            probe.Parameters.AddWithValue("@k", ScratchNameCorrectionFlagKey);
+            if (Convert.ToInt32(await probe.ExecuteScalarAsync()) > 0) return;
+        }
+
+        Log.Information("History: checking for query sessions misnamed before the scratch-name regex fix…");
+
+        try
+        {
+            // BEGIN IMMEDIATE for the same reason as BackfillSessionsAsync directly above: this
+            // transaction reads (the name_source = 1 scan) before it writes (the renames + flag
+            // insert), and the history database is SHARED between the SSMS-paired engine and the
+            // web engine. Acquired INSIDE the try for the same reason too — a busy/locked failure to
+            // even open the transaction is exactly the concurrent-migration scenario this guards
+            // against, and must be caught here rather than escape and take down engine startup.
+            await using var tx = conn.BeginTransaction(deferred: false);
+
+            var candidates = new List<(long Id, int Ordinal)>();
+            await using (var cmd = new SqliteCommand(
+                "SELECT id, ordinal, name FROM query_sessions WHERE name_source = 1;",
+                conn, (SqliteTransaction)tx))
+            await using (var r = await cmd.ExecuteReaderAsync())
+            {
+                while (await r.ReadAsync())
+                {
+                    if (QuerySessionNamer.IsScratchTabTitle(r.GetString(2)))
+                        candidates.Add((r.GetInt64(0), r.GetInt32(1)));
+                }
+            }
+
+            foreach (var (id, ordinal) in candidates)
+            {
+                await using var upd = new SqliteCommand(@"
+                    UPDATE query_sessions
+                       SET name = @name, name_source = 0
+                     WHERE id = @id;", conn, (SqliteTransaction)tx);
+                upd.Parameters.AddWithValue("@name", QuerySessionNamer.FormatName(ordinal));
+                upd.Parameters.AddWithValue("@id", id);
+                await upd.ExecuteNonQueryAsync();
+            }
+
+            await using (var flag = new SqliteCommand(
+                "INSERT INTO metadata (key, value) VALUES (@k, @v) " +
+                "ON CONFLICT(key) DO UPDATE SET value = excluded.value;", conn, (SqliteTransaction)tx))
+            {
+                flag.Parameters.AddWithValue("@k", ScratchNameCorrectionFlagKey);
+                flag.Parameters.AddWithValue("@v", DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture));
+                await flag.ExecuteNonQueryAsync();
+            }
+
+            await tx.CommitAsync();
+            Log.Information("History: scratch-name correction renamed {Count} session(s)", candidates.Count);
+        }
+        catch (Exception ex)
+        {
+            // Same rationale as BackfillSessionsAsync's catch: the flag is only written inside the
+            // transaction that also does the renames (see the doc comment above), so any failure
+            // here — including a failed BEGIN IMMEDIATE — leaves the flag absent and every session
+            // untouched, ready for the next InitializeAsync to retry the whole pass. Log-and-continue,
+            // not fatal: this must never block engine startup.
+            Log.Error(ex, "History: scratch-name correction failed; will retry on next start");
+        }
     }
 
     /// <summary>
@@ -287,7 +609,8 @@ public sealed class HistoryDatabase : IDisposable
         int status,
         string? errorMessage,
         string? source,
-        string? tabTitle)
+        string? tabTitle,
+        string? sessionKey = null)
     {
         // Truncate SQL text if over limit
         if (sqlText.Length > MaxSqlTextChars)
@@ -300,6 +623,24 @@ public sealed class HistoryDatabase : IDisposable
         var contentHash = ComputeContentHash(sqlText);
         var executedAt = DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture);
 
+        // Resolve (or create) the query session BEFORE the insert, so session_id is written in
+        // the same statement. A null/empty key means a client that predates session grouping;
+        // the row is stored with session_id NULL and the backfill will infer one later.
+        long? sessionId = null;
+        if (!string.IsNullOrEmpty(sessionKey))
+        {
+            try
+            {
+                sessionId = await new QuerySessionStore(_connectionString)
+                    .GetOrCreateAsync(sessionKey!, DateTime.UtcNow, tabTitle, server, database);
+            }
+            catch (Exception ex)
+            {
+                // History capture is best-effort and must never break query execution.
+                Log.Warning(ex, "History: session resolution failed for key {Key}", sessionKey);
+            }
+        }
+
         await using var conn = new SqliteConnection(_connectionString);
         await conn.OpenAsync();
 
@@ -311,11 +652,11 @@ public sealed class HistoryDatabase : IDisposable
                 INSERT INTO history (
                     sql_text, truncated, server, database_name, username,
                     executed_at, duration_ms, row_count, status, error_msg,
-                    source, tab_title, content_hash, is_favorite
+                    source, tab_title, content_hash, is_favorite, session_id
                 ) VALUES (
                     @sqlText, @truncated, @server, @database, @username,
                     @executedAt, @durationMs, @rowCount, @status, @errorMsg,
-                    @source, @tabTitle, @contentHash, 0
+                    @source, @tabTitle, @contentHash, 0, @sessionId
                 );
                 SELECT last_insert_rowid();";
 
@@ -333,6 +674,7 @@ public sealed class HistoryDatabase : IDisposable
             cmd.Parameters.AddWithValue("@source", (object?)source ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@tabTitle", (object?)tabTitle ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@contentHash", contentHash);
+            cmd.Parameters.AddWithValue("@sessionId", (object?)sessionId ?? DBNull.Value);
 
             var result = await cmd.ExecuteScalarAsync();
             var entryId = Convert.ToInt64(result);
@@ -515,9 +857,15 @@ public sealed class HistoryDatabase : IDisposable
 
         if (!string.IsNullOrEmpty(filter.NameFilter))
         {
-            whereClauses.Add("h.tab_title LIKE '%' || @nameFilter || '%'");
+            whereClauses.Add(
+                "COALESCE((SELECT qs2.name FROM query_sessions qs2 WHERE qs2.id = h.session_id), h.tab_title) " +
+                "LIKE '%' || @nameFilter || '%'");
             parameters.Add(new SqliteParameter("@nameFilter", filter.NameFilter));
         }
+
+        // COALESCE so a NULL session_id degrades to per-content grouping instead of
+        // lumping every ungrouped row together.
+        const string GroupKey = "COALESCE(CAST(h.session_id AS TEXT), 'hash:' || h.content_hash)";
 
         var whereClause = whereClauses.Count > 0
             ? "WHERE " + string.Join(" AND ", whereClauses)
@@ -527,7 +875,7 @@ public sealed class HistoryDatabase : IDisposable
         string countSql;
         if (filter.Deduplicate)
         {
-            countSql = $"SELECT COUNT(DISTINCT h.content_hash) FROM {fromClause} {whereClause}";
+            countSql = $"SELECT COUNT(DISTINCT {GroupKey}) FROM {fromClause} {whereClause}";
         }
         else
         {
@@ -567,7 +915,7 @@ public sealed class HistoryDatabase : IDisposable
                 ? "WHERE " + string.Join(" AND ", whereClauses)
                 : "";
             countSql = filter.Deduplicate
-                ? $"SELECT COUNT(DISTINCT h.content_hash) FROM {fromClause} {whereClause}"
+                ? $"SELECT COUNT(DISTINCT {GroupKey}) FROM {fromClause} {whereClause}"
                 : $"SELECT COUNT(*) FROM {fromClause} {whereClause}";
 
             await using var fallbackCountCmd = new SqliteCommand(countSql, conn);
@@ -580,20 +928,29 @@ public sealed class HistoryDatabase : IDisposable
         string dataSql;
         if (filter.Deduplicate)
         {
-            // Deduplicated view: one representative row per content_hash = the MOST RECENT execution,
-            // chosen deterministically by ROW_NUMBER (latest executed_at, id as tiebreak). Every scalar
+            // Deduplicated view: one representative row per SESSION (falling back to per-content_hash
+            // grouping for legacy rows with no session_id — see GroupKey above), chosen
+            // deterministically by ROW_NUMBER (latest executed_at, id as tiebreak). Every scalar
             // column therefore comes from that single latest row. This replaces the prior
             // GROUP-BY-with-bare-columns query, where SQLite (with several MAX() aggregates present)
             // pulled name/status/row-count/duration from an ARBITRARY row in the group — so a repeated
             // query could show a stale status or the wrong duration. exec_count is the number of
             // executions MATCHING THE CURRENT FILTER (equal to the total when unfiltered, because
-            // COUNT(*) OVER runs after {whereClause}); favourite/open are "any version" (MAX over the
-            // partition, matching the FavoritesOnly filter); and the display name is the latest NON-NULL
-            // tab_title within the filtered partition so a rename survives later re-executions. The
-            // tab_title is a WINDOW column computed INSIDE the ranked subquery so it respects
-            // {whereClause} (a correlated subquery over the bare table would ignore the filters). The
-            // {whereClause} filters live INSIDE the windowed subquery so
-            // COUNT()/ROW_NUMBER() see the filtered set; only `rn = 1` is applied outside.
+            // COUNT(*) OVER runs after {whereClause}); version_count is the number of DISTINCT
+            // content_hash values in the partition; favourite/open are "any version" (MAX over the
+            // partition, matching the FavoritesOnly filter); and the display name comes from the
+            // joined query_sessions row (falling back to the latest row's own tab_title) — the name
+            // now lives in exactly one query_sessions row, so no window function is needed to
+            // reconstruct it across re-executions. The {whereClause} filters live INSIDE the windowed
+            // subquery so COUNT()/ROW_NUMBER() see the filtered set; only `rn = 1` is applied outside.
+            // version_count (distinct content_hash per partition) cannot be COUNT(DISTINCT ...)
+            // OVER(...) — SQLite rejects DISTINCT inside a window aggregate ("DISTINCT is not
+            // supported for window functions"). Standard workaround: DENSE_RANK() over the
+            // partition ordered by content_hash assigns 1..N to the N distinct hashes, then
+            // MAX(that rank) per partition (one level up, since a window function cannot take
+            // another window function as its own argument) recovers the distinct count. Hence
+            // three levels: base (raw window aggregates incl. hash_rank/rn) → ranked (adds
+            // version_count from base.hash_rank) → outer (applies rn = 1 + paging).
             dataSql = $@"
                 SELECT
                     ranked.id,
@@ -607,37 +964,34 @@ public sealed class HistoryDatabase : IDisposable
                     ranked.status,
                     ranked.error_msg,
                     ranked.source,
-                    ranked.tab_title,
+                    ranked.session_name as tab_title,
                     ranked.is_favorite,
                     ranked.exec_count,
+                    ranked.version_count,
                     ranked.content_hash,
                     ranked.is_open
                 FROM (
                     SELECT
-                        h.id,
-                        h.sql_text,
-                        h.server,
-                        h.database_name,
-                        h.username,
-                        h.executed_at,
-                        h.duration_ms,
-                        h.row_count,
-                        h.status,
-                        h.error_msg,
-                        h.source,
-                        h.content_hash,
-                        COUNT(*)           OVER (PARTITION BY h.content_hash) as exec_count,
-                        MAX(h.is_favorite) OVER (PARTITION BY h.content_hash) as is_favorite,
-                        MAX(h.is_open)     OVER (PARTITION BY h.content_hash) as is_open,
-                        FIRST_VALUE(h.tab_title) OVER (
-                            PARTITION BY h.content_hash
-                            ORDER BY (CASE WHEN h.tab_title IS NULL THEN 1 ELSE 0 END), h.executed_at DESC, h.id DESC
-                            ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
-                        ) as tab_title,
-                        ROW_NUMBER()       OVER (PARTITION BY h.content_hash
-                                                 ORDER BY h.executed_at DESC, h.id DESC) as rn
-                    FROM {fromClause}
-                    {whereClause}
+                        base.*,
+                        MAX(base.hash_rank) OVER (PARTITION BY base.group_key) as version_count
+                    FROM (
+                        SELECT
+                            h.id, h.sql_text, h.server, h.database_name, h.username,
+                            h.executed_at, h.duration_ms, h.row_count, h.status, h.error_msg,
+                            h.source, h.content_hash,
+                            COALESCE(qs.name, h.tab_title, '') as session_name,
+                            {GroupKey} as group_key,
+                            COUNT(*)           OVER (PARTITION BY {GroupKey}) as exec_count,
+                            MAX(h.is_favorite) OVER (PARTITION BY {GroupKey}) as is_favorite,
+                            MAX(h.is_open)     OVER (PARTITION BY {GroupKey}) as is_open,
+                            DENSE_RANK()       OVER (PARTITION BY {GroupKey}
+                                                     ORDER BY h.content_hash) as hash_rank,
+                            ROW_NUMBER()       OVER (PARTITION BY {GroupKey}
+                                                     ORDER BY h.executed_at DESC, h.id DESC) as rn
+                        FROM {fromClause}
+                        LEFT JOIN query_sessions qs ON qs.id = h.session_id
+                        {whereClause}
+                    ) AS base
                 ) AS ranked
                 WHERE ranked.rn = 1
                 ORDER BY ranked.executed_at DESC, ranked.id DESC
@@ -645,6 +999,11 @@ public sealed class HistoryDatabase : IDisposable
         }
         else
         {
+            // Non-dedup rows need the same session-name resolution as the dedup branch above
+            // (COALESCE(qs.name, h.tab_title, '')) — otherwise, with Deduplicate off, a row whose
+            // session was renamed keeps showing its pre-rename tab_title, and a row with no
+            // tab_title at all (unsaved scratch tab) falls straight through to raw SQL text
+            // instead of its auto-assigned query-NN session name.
             dataSql = $@"
                 SELECT
                     h.id,
@@ -658,12 +1017,13 @@ public sealed class HistoryDatabase : IDisposable
                     h.status,
                     h.error_msg,
                     h.source,
-                    h.tab_title,
+                    COALESCE(qs.name, h.tab_title, '') as tab_title,
                     h.is_favorite,
                     1 as exec_count,
                     h.content_hash,
                     h.is_open
                 FROM {fromClause}
+                LEFT JOIN query_sessions qs ON qs.id = h.session_id
                 {whereClause}
                 ORDER BY h.executed_at DESC
                 LIMIT @limit OFFSET @offset";
@@ -679,6 +1039,12 @@ public sealed class HistoryDatabase : IDisposable
         dataCmd.Parameters.AddWithValue("@offset", filter.Offset);
 
         await using var reader = await dataCmd.ExecuteReaderAsync();
+        // content_hash/is_open shift by one position in the Deduplicate branch (version_count is
+        // inserted ahead of them), so look them up by name rather than trusting a fixed ordinal
+        // shared across both branches' differently-shaped SELECT lists.
+        var contentHashOrdinal = reader.GetOrdinal("content_hash");
+        var isOpenOrdinal = reader.GetOrdinal("is_open");
+        var versionCountOrdinal = filter.Deduplicate ? reader.GetOrdinal("version_count") : -1;
         while (await reader.ReadAsync())
         {
             entries.Add(new HistoryEntryDto
@@ -697,8 +1063,11 @@ public sealed class HistoryDatabase : IDisposable
                 TabTitle = reader.IsDBNull(11) ? null : reader.GetString(11),
                 IsFavorite = reader.GetInt32(12) != 0,
                 ExecutionCount = reader.GetInt32(13),
-                ContentHash = reader.IsDBNull(14) ? null : reader.GetString(14),
-                IsOpen = reader.GetInt32(15) != 0
+                ContentHash = reader.IsDBNull(contentHashOrdinal) ? null : reader.GetString(contentHashOrdinal),
+                IsOpen = reader.GetInt32(isOpenOrdinal) != 0,
+                VersionCount = versionCountOrdinal < 0
+                    ? 1
+                    : (reader.IsDBNull(versionCountOrdinal) ? 1 : reader.GetInt32(versionCountOrdinal))
             });
         }
 
@@ -917,7 +1286,7 @@ public sealed class HistoryDatabase : IDisposable
     /// <para>
     /// Both sides of the comparison are wrapped in SQLite <c>datetime()</c> (as
     /// <see cref="PurgeOldVersionsAsync"/> does): <c>executed_at</c> is NOT uniformly ISO-8601 — most
-    /// rows are ISO 'o' (<see cref="InsertEntryAsync"/>) but <c>SaveVersionByTabTitleAsync</c> rewrites
+    /// rows are ISO 'o' (<see cref="InsertEntryAsync"/>) but <c>SaveVersionBySourceAsync</c> rewrites
     /// it via <c>datetime('now')</c> (space-separated). A raw lexicographic compare would treat a
     /// space-format row as older than any ISO row on the same day (space &lt; 'T'), silently deleting
     /// NEWER entries. <c>datetime()</c> canonicalises both forms so the comparison is by real time.
@@ -1064,7 +1433,12 @@ public sealed class HistoryDatabase : IDisposable
 
         if (!string.IsNullOrEmpty(filter.NameFilter))
         {
-            whereClauses.Add("h.tab_title LIKE '%' || @nameFilter || '%'");
+            // Same name resolution as SearchAsync (:721): NameFilter means the SESSION name, which
+            // falls back to the row's own tab_title only when it has no session. Matching against
+            // the bare column here would silently stop matching any renamed or auto-named session.
+            whereClauses.Add(
+                "COALESCE((SELECT qs2.name FROM query_sessions qs2 WHERE qs2.id = h.session_id), h.tab_title) " +
+                "LIKE '%' || @nameFilter || '%'");
             parameters.Add(new SqliteParameter("@nameFilter", filter.NameFilter));
         }
 
@@ -1203,17 +1577,31 @@ public sealed class HistoryDatabase : IDisposable
     }
 
     /// <summary>
-    /// Updates the tab_title (display name) for a history entry.
-    /// Used by the "Rename" feature for closed queries.
+    /// Updates the display name for a history entry. Used by the "Rename" feature for closed queries.
     /// <para>
-    /// The rename is applied to EVERY row sharing the target entry's <c>content_hash</c> (the whole
-    /// deduplication group), not just the single row identified by <paramref name="entryId"/>. The
-    /// display name is a query-level label: the deduplicated search derives it via a window function
-    /// over the filtered partition, so a per-row name would vanish whenever a filter excludes the
-    /// renamed row (e.g. a server filter that hides the exact execution that was renamed). Stamping
-    /// the name on all rows of the group makes it consistent across executions and filters. This
-    /// cannot reintroduce the old "name bleeds across a name filter" bug, because every row of the
-    /// content_hash carries the SAME name. The AFTER UPDATE FTS sync (if any) still fires per row.
+    /// (Task 6 fix-round-1) The deduplicated search reads its display name from
+    /// <c>query_sessions.name</c> via a <c>LEFT JOIN</c> (falling back to a row's own
+    /// <c>tab_title</c> only when it has no session — see <see cref="SearchAsync"/>). Task 5's
+    /// backfill assigns a session to every pre-existing row, so writing <c>history.tab_title</c>
+    /// alone (the pre-fix-round-1 behaviour) was silently invisible: the rename succeeded but
+    /// <c>qs.name</c> always won the COALESCE, so the new name never appeared in the list. This
+    /// method now targets whichever place the read path actually consults:
+    /// </para>
+    /// <para>
+    /// <b>Entry has a session</b> (the common case): renames the SESSION —
+    /// <c>UPDATE query_sessions SET name = @newName, name_source = 2</c>. Renaming necessarily
+    /// renames every execution grouped under that session; that is intended, since they are all the
+    /// same entry in the deduplicated list. <c>name_source = 2</c> (manual) is REQUIRED: it is the
+    /// only value <see cref="QuerySessionStore"/>'s <c>MaybeUpgradeNameAsync</c> precedence rule
+    /// never overwrites, so a later execution carrying a real filename cannot clobber the user's
+    /// chosen name.
+    /// </para>
+    /// <para>
+    /// <b>Entry has no session</b> (legacy/mid-upgrade row with <c>session_id IS NULL</c>): falls
+    /// back to the pre-fix-round-1 behaviour — stamp <c>tab_title</c> on every row sharing the
+    /// target's <c>content_hash</c>, since the deduplicated view's per-row fallback name is a
+    /// window aggregate over that same partition and a single-row stamp would vanish whenever a
+    /// filter excludes the renamed row.
     /// </para>
     /// </summary>
     public async Task UpdateTabTitleAsync(long entryId, string newName)
@@ -1221,34 +1609,64 @@ public sealed class HistoryDatabase : IDisposable
         await using var conn = new SqliteConnection(_connectionString);
         await conn.OpenAsync();
 
-        await using var cmd = new SqliteCommand(
-            "UPDATE history SET tab_title = @name WHERE content_hash = (SELECT content_hash FROM history WHERE id = @id);", conn);
-        cmd.Parameters.AddWithValue("@name", newName);
-        cmd.Parameters.AddWithValue("@id", entryId);
+        long? sessionId;
+        await using (var lookupCmd = new SqliteCommand(
+            "SELECT session_id FROM history WHERE id = @id;", conn))
+        {
+            lookupCmd.Parameters.AddWithValue("@id", entryId);
+            var result = await lookupCmd.ExecuteScalarAsync();
+            sessionId = result == null || result == DBNull.Value ? (long?)null : Convert.ToInt64(result);
+        }
 
-        await cmd.ExecuteNonQueryAsync();
-        Log.Debug("History entry {Id}: tab_title updated to '{Name}' (applied to whole content_hash group)", entryId, newName);
+        if (sessionId.HasValue)
+        {
+            await using var cmd = new SqliteCommand(
+                "UPDATE query_sessions SET name = @name, name_source = 2 WHERE id = @sessionId;", conn);
+            cmd.Parameters.AddWithValue("@name", newName);
+            cmd.Parameters.AddWithValue("@sessionId", sessionId.Value);
+            await cmd.ExecuteNonQueryAsync();
+            Log.Debug(
+                "History entry {Id}: renamed session {SessionId} to '{Name}' (name_source=2/manual)",
+                entryId, sessionId.Value, newName);
+            return;
+        }
+
+        await using var fallbackCmd = new SqliteCommand(
+            "UPDATE history SET tab_title = @name WHERE content_hash = (SELECT content_hash FROM history WHERE id = @id);", conn);
+        fallbackCmd.Parameters.AddWithValue("@name", newName);
+        fallbackCmd.Parameters.AddWithValue("@id", entryId);
+        await fallbackCmd.ExecuteNonQueryAsync();
+        Log.Debug(
+            "History entry {Id}: tab_title updated to '{Name}' (no session; applied to whole content_hash group)",
+            entryId, newName);
     }
 
     /// <summary>
     /// Inserts a version snapshot for a history entry (for version history tracking).
     /// </summary>
     /// <summary>
-    /// Finds the most recent history entry by tab title and inserts a version snapshot.
-    /// Used for auto-save on tab close / focus change (records as version, not new entry).
-    /// Returns true if a matching entry was found and a version was saved.
+    /// Finds the most recent history entry by <c>source</c> (the document's full path) and inserts
+    /// a version snapshot. Used for auto-save on tab close / focus change (records as version, not
+    /// a new entry). Returns true if a matching entry was found and a version was saved.
+    /// <para>
+    /// Keyed on <c>source</c>, NOT <c>tab_title</c>: since this branch (F1 fix), the shell sends
+    /// <c>TabTitle</c> only for a document that is actually saved to disk (see
+    /// <c>ExecutionCapture.OnAfterCommandExecute</c>), so an unsaved SSMS scratch tab's <c>tab_title</c>
+    /// is NULL. <c>source</c> carries <c>activeDoc.FullName</c> unconditionally for both saved and
+    /// unsaved documents, so it is the one identifier this lookup can always find a row by.
+    /// </para>
     /// </summary>
-    public async Task<bool> SaveVersionByTabTitleAsync(string tabTitle, string sqlText)
+    public async Task<bool> SaveVersionBySourceAsync(string source, string sqlText)
     {
-        if (string.IsNullOrEmpty(tabTitle) || string.IsNullOrWhiteSpace(sqlText)) return false;
+        if (string.IsNullOrEmpty(source) || string.IsNullOrWhiteSpace(sqlText)) return false;
 
         await using var conn = new SqliteConnection(_connectionString);
         await conn.OpenAsync();
 
-        // Find the most recent entry for this tab
+        // Find the most recent entry for this document
         await using var findCmd = new SqliteCommand(
-            "SELECT id FROM history WHERE tab_title = @title ORDER BY executed_at DESC LIMIT 1", conn);
-        findCmd.Parameters.AddWithValue("@title", tabTitle);
+            "SELECT id FROM history WHERE source = @source ORDER BY executed_at DESC LIMIT 1", conn);
+        findCmd.Parameters.AddWithValue("@source", source);
         var result = await findCmd.ExecuteScalarAsync();
         if (result == null) return false;
 
@@ -1267,7 +1685,7 @@ public sealed class HistoryDatabase : IDisposable
         updateCmd.Parameters.AddWithValue("@id", historyId);
         await updateCmd.ExecuteNonQueryAsync();
 
-        Log.Debug("History: saved version snapshot for tab '{Title}' (entry {Id})", tabTitle, historyId);
+        Log.Debug("History: saved version snapshot for source '{Source}' (entry {Id})", source, historyId);
         return true;
     }
 

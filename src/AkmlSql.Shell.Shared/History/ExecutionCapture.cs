@@ -95,6 +95,10 @@ namespace AkmlSql.Shell.Shared.History
                 _documentEvents = _dte.Events.DocumentEvents;
                 _documentEvents.DocumentClosing += OnDocumentClosing;
 
+                // Hook DocumentSaved so a Save/Save-As rename doesn't split one tab's session
+                // (see OnDocumentSaved for how the old→new migration is correlated).
+                _documentEvents.DocumentSaved += OnDocumentSaved;
+
                 // Hook WindowActivated to record the previous tab's SQL on focus change
                 _windowEvents = _dte.Events.WindowEvents;
                 _windowEvents.WindowActivated += OnWindowActivated;
@@ -139,6 +143,7 @@ namespace AkmlSql.Shell.Shared.History
                 if (_documentEvents != null)
                 {
                     _documentEvents.DocumentClosing -= OnDocumentClosing;
+                    _documentEvents.DocumentSaved -= OnDocumentSaved;
                     _documentEvents = null;
                 }
 
@@ -234,16 +239,30 @@ namespace AkmlSql.Shell.Shared.History
                     Log.Debug(ex, "ExecutionCapture: failed to detect connection info");
                 }
 
-                // Get source file and tab title
+                // Source file, tab title, and session key.
+                // TabTitle is sent ONLY for a document that is actually saved to disk: an unsaved
+                // SSMS scratch document has a machine-generated name ("dwnhdxfq.sql") that carries
+                // no user intent, and sending it would suppress the query-NN auto name.
                 string? source = null;
                 string? tabTitle = null;
+                string? sessionKey = null;
                 try
                 {
                     var activeDoc = _dte.ActiveDocument;
                     if (activeDoc != null)
                     {
                         source = activeDoc.FullName;
-                        tabTitle = activeDoc.Name;
+                        sessionKey = DocumentSessionKeys.ForDocument(source);
+
+                        // Keep the "last known active path" fresh at every execution, not just on
+                        // window-activation — this is what lets OnDocumentSaved recognize a
+                        // same-tab rename (Save/Save As) even when no window switch happened
+                        // between the last execute and the save.
+                        _lastActiveDocumentPath = source;
+
+                        var isSavedFile = !string.IsNullOrEmpty(activeDoc.Path)
+                                          && System.IO.File.Exists(activeDoc.FullName);
+                        tabTitle = isSavedFile ? activeDoc.Name : null;
                     }
                 }
                 catch (Exception ex)
@@ -266,7 +285,8 @@ namespace AkmlSql.Shell.Shared.History
                     status: ExecutionStatus.Success,
                     errorMessage: null,
                     source: source,
-                    tabTitle: tabTitle);
+                    tabTitle: tabTitle,
+                    sessionKey: sessionKey);
             }
             catch (Exception ex)
             {
@@ -288,6 +308,10 @@ namespace AkmlSql.Shell.Shared.History
                 ThreadHelper.ThrowIfNotOnUIThread();
                 if (document == null) return;
 
+                // The document is closing regardless of what follows — release its session key now
+                // so reopening the same file starts a brand-new session.
+                DocumentSessionKeys.Forget(document.FullName);
+
                 var textDoc = document.Object("TextDocument") as TextDocument;
                 if (textDoc == null) return;
 
@@ -296,14 +320,73 @@ namespace AkmlSql.Shell.Shared.History
 
                 if (string.IsNullOrWhiteSpace(content)) return;
 
-                var tabTitle = document.Name;
-                Log.Debug("ExecutionCapture: saving version snapshot on close for '{Name}'", tabTitle);
+                // Key on FullName (history.source), not Name/tab_title: TabTitle is sent only for a
+                // saved document (see OnAfterCommandExecute), so an unsaved scratch tab's tab_title
+                // is NULL and a lookup keyed on it would never find the row to snapshot against.
+                var source = document.FullName;
+                if (string.IsNullOrEmpty(source)) return;
 
-                SaveVersionSnapshot(tabTitle, content);
+                Log.Debug("ExecutionCapture: saving version snapshot on close for '{Source}'", source);
+
+                SaveVersionSnapshot(source, content);
             }
             catch (Exception ex)
             {
                 Log.Warning(ex, "ExecutionCapture: error capturing document close snapshot");
+            }
+        }
+
+        /// <summary>
+        /// Fires after a document is saved. If the save changed the document's <c>FullName</c> —
+        /// a Save As, or (more commonly) the FIRST save of an unsaved scratch document whose
+        /// machine-generated temp name gets replaced by the user's chosen path — the session key
+        /// tracked under the OLD name is migrated onto the NEW name, so executions before and
+        /// after the save land in one history entry instead of splitting into two.
+        /// <para>
+        /// Correlation deliberately uses only string comparisons on <see cref="_lastActiveDocumentPath"/>
+        /// (already kept fresh by <see cref="OnAfterCommandExecute"/> and <see cref="OnWindowActivated"/>)
+        /// and <c>_dte.ActiveDocument.FullName</c> — NOT COM/RCW reference identity of the
+        /// <see cref="Document"/> object, which is not something this code can verify. The extra
+        /// "is this document still the active one" check guards against misattributing a background
+        /// Save-All to the wrong tracked session.
+        /// </para>
+        /// </summary>
+        private static void OnDocumentSaved(Document document)
+        {
+            try
+            {
+                ThreadHelper.ThrowIfNotOnUIThread();
+                if (document == null || _dte == null) return;
+
+                var newPath = document.FullName;
+                if (string.IsNullOrEmpty(newPath)) return;
+
+                string? activePath = null;
+                try
+                {
+                    activePath = _dte.ActiveDocument?.FullName;
+                }
+                catch (Exception ex)
+                {
+                    Log.Debug(ex, "ExecutionCapture: failed to read active document while handling DocumentSaved");
+                }
+
+                var oldPath = _lastActiveDocumentPath;
+                if (!string.IsNullOrEmpty(oldPath)
+                    && !string.IsNullOrEmpty(activePath)
+                    && string.Equals(activePath, newPath, StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(oldPath, newPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    DocumentSessionKeys.Rename(oldPath!, newPath);
+                    Log.Debug("ExecutionCapture: migrated session key from '{Old}' to '{New}' after save",
+                        oldPath, newPath);
+                }
+
+                _lastActiveDocumentPath = newPath;
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "ExecutionCapture: error in DocumentSaved hook");
             }
         }
 
@@ -382,9 +465,13 @@ namespace AkmlSql.Shell.Shared.History
                     return;
                 _lastRecordedContentHash = contentHash;
 
-                Log.Debug("ExecutionCapture: saving version snapshot for '{Name}' on tab switch", name);
+                // Key on docPath (history.source), not name/tab_title — see the matching comment in
+                // OnDocumentClosing for why: an unsaved scratch tab's tab_title is NULL.
+                if (string.IsNullOrEmpty(docPath)) return;
 
-                SaveVersionSnapshot(name, content);
+                Log.Debug("ExecutionCapture: saving version snapshot for '{Source}' on tab switch", docPath);
+
+                SaveVersionSnapshot(docPath, content);
             }
             catch (Exception ex)
             {
@@ -455,11 +542,20 @@ namespace AkmlSql.Shell.Shared.History
         }
 
         /// <summary>
-        /// Saves a version snapshot for an existing history entry (by tab title).
+        /// Saves a version snapshot for an existing history entry, found by <paramref name="source"/>
+        /// (the document's full path — matches <c>history.source</c> engine-side).
         /// Used by tab-close and tab-focus-change auto-save triggers.
         /// These record as versions of the existing entry, not new rows in the query list.
+        /// <para>
+        /// Keyed on the document's full path rather than its tab title: <c>TabTitle</c> is sent to
+        /// the engine only for a document actually saved to disk (see
+        /// <see cref="OnAfterCommandExecute"/>), so an unsaved SSMS scratch tab has no <c>tab_title</c>
+        /// to match against. <c>source</c> is always populated (see <see cref="OnAfterCommandExecute"/>'s
+        /// <c>source = activeDoc.FullName</c>), so it is the identifier this lookup can rely on for
+        /// both saved and unsaved documents.
+        /// </para>
         /// </summary>
-        private static void SaveVersionSnapshot(string tabTitle, string sqlText)
+        private static void SaveVersionSnapshot(string source, string sqlText)
         {
             Task.Run(async () =>
             {
@@ -471,7 +567,7 @@ namespace AkmlSql.Shell.Shared.History
                     var request = new HistoryActionRequest
                     {
                         Action = HistoryActions.SaveVersion,
-                        NewName = tabTitle, // reuse NewName field for tab title
+                        NewName = source, // reuse NewName field to carry the source path
                         SqlText = sqlText
                     };
 
@@ -480,7 +576,7 @@ namespace AkmlSql.Shell.Shared.History
                 }
                 catch (Exception ex)
                 {
-                    Log.Debug(ex, "ExecutionCapture: failed to save version snapshot for '{Title}'", tabTitle);
+                    Log.Debug(ex, "ExecutionCapture: failed to save version snapshot for '{Source}'", source);
                 }
             });
         }
@@ -509,6 +605,7 @@ namespace AkmlSql.Shell.Shared.History
         /// <param name="errorMessage">Error message if execution failed.</param>
         /// <param name="source">Source file path or identifier.</param>
         /// <param name="tabTitle">Title of the editor tab/window.</param>
+        /// <param name="sessionKey">Per-document session key so the engine groups this tab's executions into one history entry.</param>
         public static void OnExecutionCompleted(
             string sqlText,
             string? server,
@@ -519,7 +616,8 @@ namespace AkmlSql.Shell.Shared.History
             ExecutionStatus status,
             string? errorMessage,
             string? source,
-            string? tabTitle)
+            string? tabTitle,
+            string? sessionKey = null)
         {
             if (!_enabled) return;
 
@@ -577,7 +675,8 @@ namespace AkmlSql.Shell.Shared.History
                         Status = (int)status,
                         ErrorMessage = errorMessage,
                         Source = source,
-                        TabTitle = tabTitle
+                        TabTitle = tabTitle,
+                        SessionKey = sessionKey
                     };
 
                     // Send as notification (RequestId=0) to avoid blocking query execution

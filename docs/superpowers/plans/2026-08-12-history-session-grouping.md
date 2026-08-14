@@ -32,9 +32,9 @@ The spec says the shell caches `SessionKey` in a `ConditionalWeakTable` keyed by
 |------|----------------|
 | `src/AkmlSql.Engine/History/QuerySessionNamer.cs` | **New.** Pure functions: local-date key, `query-NN` formatting, scratch-title detection. No I/O — fully unit-testable. |
 | `src/AkmlSql.Engine/History/QuerySessionStore.cs` | **New.** Owns `query_sessions`: get-or-create by `SessionKey`, ordinal assignment with retry, name-precedence updates. |
-| `src/AkmlSql.Engine/History/HistoryDatabase.cs` | Modified. Schema v2 (table, column, indexes), backfill migration, `AddAsync` accepts `sessionKey`, `SearchAsync` groups by `session_id`. |
+| `src/AkmlSql.Engine/History/HistoryDatabase.cs` | Modified. Schema v2 (table, column, indexes), backfill migration, `InsertEntryAsync` accepts `sessionKey`, `SearchAsync` groups by `session_id`. |
 | `src/AkmlSql.Core/Ipc/Messages/HistoryRecordRequest.cs` | Modified. Adds `SessionKey` at `[Key(11)]`. |
-| `src/AkmlSql.Engine/Handlers/History/*` | Modified. Passes `SessionKey` through to `AddAsync`. |
+| `src/AkmlSql.Engine/Handlers/History/*` | Modified. Passes `SessionKey` through to `InsertEntryAsync`. |
 | `src/AkmlSql.Shell.Shared/History/ExecutionCapture.cs` | Modified. Per-document `SessionKey`; `TabTitle` only for saved documents. |
 | `src/AkmlSql.Web/Shared/EditorComponent.razor` + session store | Modified. Persisted `SessionKey`, sent on execute. |
 | `src/AkmlSql.Web/Pages/History.razor`, `src/AkmlSql.Shell.Shared/History/HistoryToolWindowControl.cs` | Modified. Show session name + `×runs · N versions`. |
@@ -522,7 +522,14 @@ namespace AkmlSql.Engine.History;
 /// </summary>
 internal sealed class QuerySessionStore
 {
-    private const int SqliteConstraint = 19;   // SQLITE_CONSTRAINT
+    // CORRECTED 2026-08-13 after the Task 3 review. The original plan matched the PRIMARY code 19
+    // (SQLITE_CONSTRAINT), which is shared with NOT NULL / FOREIGN KEY / CHECK — so a real bug in
+    // any of those was retried 5× and remasked as "could not allocate an ordinal", original
+    // exception discarded. Match the EXTENDED unique code instead, and treat BUSY/LOCKED as
+    // retryable because BEGIN IMMEDIATE can legitimately return them under contention.
+    private const int SqliteConstraintUnique = 2067;  // SQLITE_CONSTRAINT_UNIQUE (extended)
+    private const int SqliteBusy = 5;                 // SQLITE_BUSY
+    private const int SqliteLocked = 6;               // SQLITE_LOCKED
 
     private readonly string _connectionString;
 
@@ -557,7 +564,9 @@ internal sealed class QuerySessionStore
             {
                 return await InsertAsync(conn, sessionKey, localDate, tabTitle, server, database);
             }
-            catch (SqliteException ex) when (ex.SqliteErrorCode == SqliteConstraint)
+            catch (SqliteException ex) when (ex.SqliteExtendedErrorCode == SqliteConstraintUnique
+                                            || ex.SqliteErrorCode == SqliteBusy
+                                            || ex.SqliteErrorCode == SqliteLocked)
             {
                 var raced = await FindAsync(conn, sessionKey);
                 if (raced.HasValue)
@@ -588,7 +597,12 @@ internal sealed class QuerySessionStore
     {
         var isScratch = QuerySessionNamer.IsScratchTabTitle(tabTitle);
 
-        await using var tx = await conn.BeginTransactionAsync();
+        // BEGIN IMMEDIATE, not the default deferred. A deferred transaction that READS MAX(ordinal)
+        // before writing gets SQLITE_BUSY_SNAPSHOT (code 5) on promotion in WAL mode when another
+        // connection committed in between — and busy_timeout deliberately does not retry that. The
+        // original plan used BeginTransactionAsync() (deferred), which let the exact race this loop
+        // exists to absorb escape instead. Corrected 2026-08-13 after the Task 3 review.
+        await using var tx = conn.BeginTransaction(deferred: false);
         try
         {
             await using var maxCmd = new SqliteCommand(
@@ -656,12 +670,12 @@ Expected: PASS — 7 tests.
 ### Task 4: Record executions against a session
 
 **Files:**
-- Modify: `src/AkmlSql.Engine/History/HistoryDatabase.cs:278-345` (`AddAsync`)
+- Modify: `src/AkmlSql.Engine/History/HistoryDatabase.cs:278-345` (`InsertEntryAsync`)
 - Test: `tests/AkmlSql.Engine.Tests/History/HistorySessionRecordingTests.cs`
 
 **Interfaces:**
 - Consumes: `QuerySessionStore.GetOrCreateAsync` (Task 3).
-- Produces: `AddAsync(..., string? tabTitle, string? sessionKey = null)` — a trailing optional parameter, so every existing caller compiles unchanged.
+- Produces: `InsertEntryAsync(..., string? tabTitle, string? sessionKey = null)` — a trailing optional parameter, so every existing caller compiles unchanged.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -691,7 +705,7 @@ public class HistorySessionRecordingTests : IAsyncLifetime
     public Task DisposeAsync() { File.Delete(_path); return Task.CompletedTask; }
 
     private Task<long> Add(string sql, string? sessionKey, string? tabTitle = null) =>
-        _db.AddAsync(sql, false, "localhost", "Northwind", null, 5, 1,
+        _db.InsertEntryAsync(sql, false, "localhost", "Northwind", null, 5, 1,
                      (int)ExecutionStatus.Success, null, null, tabTitle, sessionKey);
 
     [Fact]
@@ -724,11 +738,11 @@ public class HistorySessionRecordingTests : IAsyncLifetime
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `dotnet test tests/AkmlSql.Engine.Tests/AkmlSql.Engine.Tests.csproj --filter "HistorySessionRecordingTests" -v:q --nologo`
-Expected: FAIL — `AddAsync` has no `sessionKey` parameter.
+Expected: FAIL — `InsertEntryAsync` has no `sessionKey` parameter.
 
 - [ ] **Step 3: Write minimal implementation**
 
-Add the parameter at the end of the `AddAsync` signature (`HistoryDatabase.cs:290`):
+Add the parameter at the end of the `InsertEntryAsync` signature (`HistoryDatabase.cs:290`):
 
 ```csharp
         string? tabTitle,
@@ -943,9 +957,21 @@ Add to `HistoryDatabase`, and call `await BackfillSessionsAsync(conn);` as the l
         Log.Information("History: backfilling query sessions for legacy rows…");
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
 
-        await using var tx = await conn.BeginTransactionAsync();
         try
         {
+            // BEGIN IMMEDIATE for the same reason as QuerySessionStore.InsertAsync: this transaction
+            // reads (the GROUP BY scan) before it writes, and the history database is SHARED — the
+            // SSMS-paired engine and the web engine both open %AppData%/AKML SQL/history/sqlhistory.db.
+            // A deferred transaction promoted after a concurrent commit fails with BUSY_SNAPSHOT,
+            // which busy_timeout does not retry.
+            //
+            // The acquisition MUST sit inside this try. BEGIN IMMEDIATE takes the write lock at once,
+            // so it can throw SQLITE_BUSY when the other engine holds it — and InitializeAsync's own
+            // catch only matches corruption, so an escaping busy error would abort engine startup.
+            // Swallowing it is safe and self-healing: the rows keep session_id IS NULL, so the next
+            // start simply retries the whole (idempotent) backfill.
+            // Corrected 2026-08-13 after the Task 5 review.
+            await using var tx = conn.BeginTransaction(deferred: false);
             // Ordered so ordinals follow first-execution time within each local day.
             var groups = new System.Collections.Generic.List<(string Date, string Title, string Server, string Db)>();
             await using (var cmd = new SqliteCommand(@"
@@ -1028,7 +1054,10 @@ Add to `HistoryDatabase`, and call `await BackfillSessionsAsync(conn);` as the l
         }
         catch (Exception ex)
         {
-            await tx.RollbackAsync();
+            // No explicit RollbackAsync: `await using var tx` already rolls back on dispose, and
+            // rolling back an already-committed transaction raises a SECOND exception that masks
+            // this one (the same defect the Task 3 review caught). Log and continue — the backfill
+            // is idempotent, so the next engine start retries it.
             Log.Error(ex, "History: session backfill failed; legacy rows remain ungrouped");
         }
     }
@@ -1082,7 +1111,7 @@ public class HistorySessionSearchTests : IAsyncLifetime
     public Task DisposeAsync() { File.Delete(_path); return Task.CompletedTask; }
 
     private Task Add(string sql, string sessionKey) =>
-        _db.AddAsync(sql, false, "localhost", "Northwind", null, 5, 1,
+        _db.InsertEntryAsync(sql, false, "localhost", "Northwind", null, 5, 1,
                      (int)ExecutionStatus.Success, null, null, null, sessionKey);
 
     [Fact]
@@ -1222,7 +1251,7 @@ Expected: PASS. Existing dedup tests that assert content-hash grouping will need
 - Test: `tests/AkmlSql.Core.Tests/Ipc/HistoryRecordRequestTests.cs`
 
 **Interfaces:**
-- Consumes: `AddAsync(..., sessionKey)` (Task 4).
+- Consumes: `InsertEntryAsync(..., sessionKey)` (Task 4).
 - Produces: `HistoryRecordRequest.SessionKey` at `[Key(11)]`.
 
 - [ ] **Step 1: Write the failing test**
@@ -1298,7 +1327,7 @@ Append to `HistoryRecordRequest` (after `TabTitle`):
         public string? SessionKey { get; set; }
 ```
 
-Then pass it through in the `HistoryRecord` handler's `AddAsync` call:
+Then pass it through in the `HistoryRecord` handler's `InsertEntryAsync` call:
 
 ```csharp
             sessionKey: request.SessionKey);
@@ -1644,7 +1673,15 @@ In `History.razor`'s `@code` block, replace the private `DisplayName` with testa
     }
 ```
 
-Bind the row template to `DisplayNameFor(entry)` and `MetaFor(entry.ExecutionCount, entry.VersionCount)`. Apply the same two helpers in `HistoryToolWindowControl.cs` so both surfaces read identically. The rename handler is unchanged in shape — it already calls `HistoryActions.Rename`, which now updates the session row.
+Bind the row template to `DisplayNameFor(entry)` and `MetaFor(entry.ExecutionCount, entry.VersionCount)`. Apply the same two helpers in `HistoryToolWindowControl.cs` so both surfaces read identically. The rename handler is unchanged in shape — it already calls `HistoryActions.Rename`.
+
+> **CORRECTED 2026-08-13 (Task 6 review).** This section originally claimed `HistoryActions.Rename`
+> "now updates the session row". That was FALSE and it hid a branch-blocking gap: `UpdateTabTitleAsync`
+> writes `history.tab_title`, while the deduplicated query reads `COALESCE(qs.name, h.tab_title, '')`.
+> Because the Task 5 backfill gives every existing row a session, `qs.name` always wins and a user's
+> rename silently never appears. The engine-side fix (rename writes `query_sessions.name` with
+> `name_source = 2` when the row has a session, else falls back to `tab_title`) was folded into Task 6's
+> fix round. No UI change is needed here — this note exists so the false claim is not re-inherited.
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -1694,6 +1731,6 @@ Then in the browser: pair the engine, connect to SQL, execute a query three time
 
 **Placeholder scan:** none — every code step carries real code. Task 9 Step 1 defers `FakeEditorSessionStore` to the existing fake pattern rather than inventing an interface shape blind; that is the one place the implementer must read neighbouring test code first, and it is called out explicitly.
 
-**Type consistency:** `QuerySessionNamer.{LocalDateKey, FormatName, IsScratchTabTitle}`, `QuerySessionStore.GetOrCreateAsync`, `AddAsync(..., sessionKey)`, `HistoryEntry.VersionCount`, `HistoryRecordRequest.SessionKey`, `DocumentSessionKeys.{ForDocument, Forget}`, `EditorSessionKeys.{GetOrCreateAsync, ResetAsync}`, `History.{DisplayNameFor, MetaFor}` — each defined once and referenced with the same name and signature everywhere.
+**Type consistency:** `QuerySessionNamer.{LocalDateKey, FormatName, IsScratchTabTitle}`, `QuerySessionStore.GetOrCreateAsync`, `InsertEntryAsync(..., sessionKey)`, `HistoryEntry.VersionCount`, `HistoryRecordRequest.SessionKey`, `DocumentSessionKeys.{ForDocument, Forget}`, `EditorSessionKeys.{GetOrCreateAsync, ResetAsync}`, `History.{DisplayNameFor, MetaFor}` — each defined once and referenced with the same name and signature everywhere.
 
 **Known risk carried from the spec:** Task 6's `GroupKey` uses `COALESCE(session_id, 'hash:'||content_hash)` so that a row which never got a session degrades to the old behaviour instead of collapsing every unassigned row into one entry. This matters during the window between upgrading the engine and the first restart that runs the backfill.
