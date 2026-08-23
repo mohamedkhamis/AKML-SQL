@@ -14,7 +14,7 @@ namespace AkmlSql.Web.Tests.Bridge;
 /// shows redacted Last12 form for both old and new, dismiss clears it, second drift
 /// queues behind the first.
 /// </summary>
-public sealed class TlsFingerprintMismatchBannerTests : TestContext
+public sealed class TlsFingerprintMismatchBannerTests : BunitContext
 {
     private readonly FakeEngineBridge _bridge;
 
@@ -28,14 +28,14 @@ public sealed class TlsFingerprintMismatchBannerTests : TestContext
     [Fact]
     public void AbsentByDefault_NoEventEverFired()
     {
-        var cut = RenderComponent<TlsFingerprintMismatchBanner>();
+        var cut = Render<TlsFingerprintMismatchBanner>();
         Assert.Empty(cut.FindAll("[data-testid='tls-fingerprint-banner']"));
     }
 
     [Fact]
     public void AppearsOnFirstMismatchEvent_ShowsRedactedThumbprints()
     {
-        var cut = RenderComponent<TlsFingerprintMismatchBanner>();
+        var cut = Render<TlsFingerprintMismatchBanner>();
         // 40-hex-char thumbprints — same shape as real SHA-1 cert hashes.
         _bridge.FireMismatch(new TlsFingerprintMismatch(
             ConnectionName: "Office LAN engine",
@@ -57,7 +57,7 @@ public sealed class TlsFingerprintMismatchBannerTests : TestContext
     [Fact]
     public void DismissClearsTheBanner()
     {
-        var cut = RenderComponent<TlsFingerprintMismatchBanner>();
+        var cut = Render<TlsFingerprintMismatchBanner>();
         _bridge.FireMismatch(new TlsFingerprintMismatch(
             "conn-1",
             "old-thumb-x".PadRight(40, 'a'),
@@ -71,7 +71,7 @@ public sealed class TlsFingerprintMismatchBannerTests : TestContext
     [Fact]
     public void SecondMismatchQueuesBehindFirst_RevealsAfterDismiss()
     {
-        var cut = RenderComponent<TlsFingerprintMismatchBanner>();
+        var cut = Render<TlsFingerprintMismatchBanner>();
 
         _bridge.FireMismatch(new TlsFingerprintMismatch("first",
             "oldA".PadRight(40, '0'), "newA".PadRight(40, '1')));

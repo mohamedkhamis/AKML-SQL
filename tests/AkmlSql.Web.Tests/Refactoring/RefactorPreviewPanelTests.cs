@@ -12,7 +12,7 @@ namespace AkmlSql.Web.Tests.Refactoring;
 /// op output itself is proven by LightweightParityTests; the editor apply round-trip is
 /// interactive.)
 /// </summary>
-public sealed class RefactorPreviewPanelTests : TestContext
+public sealed class RefactorPreviewPanelTests : BunitContext
 {
     [Fact]
     public void Shows_before_and_after_when_changed()
@@ -23,7 +23,7 @@ public sealed class RefactorPreviewPanelTests : TestContext
             Warnings: System.Array.Empty<string>(),
             Changed: true);
 
-        var cut = RenderComponent<RefactorPreviewPanel>(p => p
+        var cut = Render<RefactorPreviewPanel>(p => p
             .Add(x => x.Title, "Remove semicolons")
             .Add(x => x.Preview, preview));
 
@@ -45,7 +45,7 @@ public sealed class RefactorPreviewPanelTests : TestContext
             Warnings: System.Array.Empty<string>(),
             Changed: false);
 
-        var cut = RenderComponent<RefactorPreviewPanel>(p => p
+        var cut = Render<RefactorPreviewPanel>(p => p
             .Add(x => x.Title, "Convert old-style joins")
             .Add(x => x.Preview, preview));
 
@@ -60,7 +60,7 @@ public sealed class RefactorPreviewPanelTests : TestContext
         var raised = false;
         var preview = new LightweightPreview("a", "b", System.Array.Empty<string>(), Changed: true);
 
-        var cut = RenderComponent<RefactorPreviewPanel>(p => p
+        var cut = Render<RefactorPreviewPanel>(p => p
             .Add(x => x.Preview, preview)
             .Add(x => x.OnApply, () => { raised = true; }));
 
@@ -74,7 +74,7 @@ public sealed class RefactorPreviewPanelTests : TestContext
         var cancelled = false;
         var preview = new LightweightPreview("a", "b", System.Array.Empty<string>(), Changed: true);
 
-        var cut = RenderComponent<RefactorPreviewPanel>(p => p
+        var cut = Render<RefactorPreviewPanel>(p => p
             .Add(x => x.Preview, preview)
             .Add(x => x.OnCancel, () => { cancelled = true; }));
 

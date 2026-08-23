@@ -17,9 +17,9 @@ namespace AkmlSql.Web.Tests.Ai;
 /// </summary>
 public sealed class AiPanelTests
 {
-    private static TestContext NewCtx(string provider, bool capable)
+    private static BunitContext NewCtx(string provider, bool capable)
     {
-        var ctx = new TestContext();
+        var ctx = new BunitContext();
         ctx.Services.AddSingleton<IAiPromptService>(new StubPrompts());
         ctx.Services.AddSingleton<IAiPreference>(new StubPreference(provider));
         ctx.Services.AddSingleton<IAiClientFactory>(new StubClient(capable));
@@ -32,7 +32,7 @@ public sealed class AiPanelTests
     public void NoProvider_ShowsAddPrompt()
     {
         using var ctx = NewCtx(provider: "", capable: true);
-        var cut = ctx.RenderComponent<AiPanel>();
+        var cut = ctx.Render<AiPanel>();
         Assert.Contains("No AI provider configured", cut.Markup);
         Assert.DoesNotContain("Explain</button>", cut.Markup);
     }
@@ -41,7 +41,7 @@ public sealed class AiPanelTests
     public void CapableProvider_ShowsFiveActions()
     {
         using var ctx = NewCtx(provider: "ollama", capable: true);
-        var cut = ctx.RenderComponent<AiPanel>();
+        var cut = ctx.Render<AiPanel>();
         Assert.Contains("Explain", cut.Markup);
         Assert.Contains("Fix", cut.Markup);
         Assert.Contains("Optimize", cut.Markup);
@@ -53,7 +53,7 @@ public sealed class AiPanelTests
     public void CorsBlockedProvider_ShowsNoticeNotActions()
     {
         using var ctx = NewCtx(provider: "openai", capable: false);
-        var cut = ctx.RenderComponent<AiPanel>();
+        var cut = ctx.Render<AiPanel>();
         Assert.Contains("can't be used directly from the browser", cut.Markup);
         Assert.DoesNotContain("Index Analysis", cut.Markup);
     }
@@ -62,7 +62,7 @@ public sealed class AiPanelTests
     public void RenderedDom_NeverContainsAnApiKey()
     {
         using var ctx = NewCtx(provider: "ollama", capable: true);
-        var cut = ctx.RenderComponent<AiPanel>();
+        var cut = ctx.Render<AiPanel>();
         Assert.DoesNotContain("sk-", cut.Markup);   // AiPanel handles no key material at all
     }
 

@@ -16,7 +16,7 @@ namespace AkmlSql.Web.Tests.Bridge;
 /// FakeEngineBridge / FakeSchemaSync fakes + real SchemaCacheStore / ConnectionStore over the
 /// in-memory IndexedDB adapter.
 /// </summary>
-public sealed class StatusIndicatorTests : TestContext
+public sealed class StatusIndicatorTests : BunitContext
 {
     private const string Host = "127.0.0.1";
     private const int Portn = 5081;
@@ -82,7 +82,7 @@ public sealed class StatusIndicatorTests : TestContext
         await SeedActiveConnectionAsync();
         _bridge.SetState(BridgeState.Open);
 
-        var cut = RenderComponent<StatusBar>();
+        var cut = Render<StatusBar>();
         cut.WaitForAssertion(() =>
             Assert.Equal("Live · no SQL", cut.Find("[data-testid='status-pill']").TextContent));
     }
@@ -95,7 +95,7 @@ public sealed class StatusIndicatorTests : TestContext
         var sqlConn = (SqlConnectionService)Services.GetRequiredService<ISqlConnectionService>();
         await sqlConn.ConnectAsync("localhost", "Northwind_AutoTest", windowsAuth: true, null, null, default);
 
-        var cut = RenderComponent<StatusBar>();
+        var cut = Render<StatusBar>();
         cut.WaitForAssertion(() =>
             Assert.Equal("Live", cut.Find("[data-testid='status-pill']").TextContent));
     }
@@ -112,7 +112,7 @@ public sealed class StatusIndicatorTests : TestContext
         await savedStore.SetActiveIdAsync(saved.Id);
         _bridge.SetState(BridgeState.Open);
 
-        var cut = RenderComponent<StatusBar>();
+        var cut = Render<StatusBar>();
         cut.WaitForAssertion(() =>
             Assert.Equal("Live", cut.Find("[data-testid='status-pill']").TextContent));
     }
@@ -123,7 +123,7 @@ public sealed class StatusIndicatorTests : TestContext
         await SeedActiveConnectionAsync();
         await SeedCacheAsync();
 
-        var cut = RenderComponent<StatusBar>();
+        var cut = Render<StatusBar>();
         _bridge.SetState(BridgeState.Disconnected);
 
         cut.WaitForAssertion(() =>
@@ -135,7 +135,7 @@ public sealed class StatusIndicatorTests : TestContext
     {
         await SeedActiveConnectionAsync();   // active connection, but NO snapshot cached
 
-        var cut = RenderComponent<StatusBar>();
+        var cut = Render<StatusBar>();
         _bridge.SetState(BridgeState.Disconnected);
 
         cut.WaitForAssertion(() =>
@@ -148,7 +148,7 @@ public sealed class StatusIndicatorTests : TestContext
         await SeedActiveConnectionAsync();
         await SeedCacheAsync();
 
-        var cut = RenderComponent<StatusBar>();
+        var cut = Render<StatusBar>();
         _bridge.SetState(BridgeState.Reconnecting);
 
         cut.WaitForAssertion(() =>
@@ -159,7 +159,7 @@ public sealed class StatusIndicatorTests : TestContext
     public async Task Drift_after_cache_seeded_flips_Offline_to_Cached_in_place()
     {
         await SeedActiveConnectionAsync();
-        var cut = RenderComponent<StatusBar>();
+        var cut = Render<StatusBar>();
         _bridge.SetState(BridgeState.Disconnected);
         cut.WaitForAssertion(() =>
             Assert.Equal("Offline", cut.Find("[data-testid='status-pill']").TextContent));

@@ -48,9 +48,9 @@ public sealed class Pr247_ResultsGridApplyMessageTests
     [Fact]
     public void SuccessfulApply_SurfacesAppliedMessage_EvenAfterPendingEditsCleared()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
         ctx.Services.AddSingleton<IQueryExecutionService>(new OkApplyStub());
-        var cut = ctx.RenderComponent<ResultsGridComponent>();
+        var cut = ctx.Render<ResultsGridComponent>();
 
         cut.InvokeAsync(() => cut.Instance.ShowResult(EditableResult()));
 

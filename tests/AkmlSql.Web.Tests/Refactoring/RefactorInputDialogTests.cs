@@ -12,12 +12,12 @@ namespace AkmlSql.Web.Tests.Refactoring;
 /// (change list + blocking-error gating). The actual bridge preview/apply round-trip is the
 /// US6 E2E path; these cover the deterministic UI.
 /// </summary>
-public sealed class RefactorInputDialogTests : TestContext
+public sealed class RefactorInputDialogTests : BunitContext
 {
     [Fact]
     public void Smart_rename_shows_identifier_and_newname_fields_only()
     {
-        var cut = RenderComponent<RefactorInputDialog>(p => p
+        var cut = Render<RefactorInputDialog>(p => p
             .Add(x => x.Title, "Smart Rename")
             .Add(x => x.NeedsOriginalIdentifier, true)
             .Add(x => x.NeedsNewName, true)
@@ -31,7 +31,7 @@ public sealed class RefactorInputDialogTests : TestContext
     [Fact]
     public void Extract_proc_shows_only_the_unit_name_field()
     {
-        var cut = RenderComponent<RefactorInputDialog>(p => p
+        var cut = Render<RefactorInputDialog>(p => p
             .Add(x => x.Title, "Extract Procedure")
             .Add(x => x.NeedsUnitName, true));
 
@@ -44,7 +44,7 @@ public sealed class RefactorInputDialogTests : TestContext
     public async Task Submit_blocks_and_does_not_raise_when_a_required_field_is_empty()
     {
         var raised = false;
-        var cut = RenderComponent<RefactorInputDialog>(p => p
+        var cut = Render<RefactorInputDialog>(p => p
             .Add(x => x.NeedsOriginalIdentifier, true)
             .Add(x => x.NeedsNewName, true)
             .Add(x => x.OnSubmit, (RefactorInputDialog.RefactorInputs _) => { raised = true; }));
@@ -58,7 +58,7 @@ public sealed class RefactorInputDialogTests : TestContext
     public async Task Submit_raises_with_trimmed_values_when_valid()
     {
         RefactorInputDialog.RefactorInputs? captured = null;
-        var cut = RenderComponent<RefactorInputDialog>(p => p
+        var cut = Render<RefactorInputDialog>(p => p
             .Add(x => x.NeedsOriginalIdentifier, true)
             .Add(x => x.NeedsNewName, true)
             .Add(x => x.OnSubmit, (RefactorInputDialog.RefactorInputs i) => { captured = i; }));
@@ -88,7 +88,7 @@ public sealed class RefactorInputDialogTests : TestContext
             },
         };
 
-        var cut = RenderComponent<RefactorPreviewPanel>(p => p
+        var cut = Render<RefactorPreviewPanel>(p => p
             .Add(x => x.Title, "Smart Rename")
             .Add(x => x.Heavy, heavy));
 
@@ -107,7 +107,7 @@ public sealed class RefactorInputDialogTests : TestContext
             Errors = new[] { "Name collision: 'X' already exists in this scope" },
         };
 
-        var cut = RenderComponent<RefactorPreviewPanel>(p => p
+        var cut = Render<RefactorPreviewPanel>(p => p
             .Add(x => x.Title, "Smart Rename")
             .Add(x => x.Heavy, heavy));
 

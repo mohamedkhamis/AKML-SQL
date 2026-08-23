@@ -12,7 +12,7 @@ namespace AkmlSql.Web.Tests;
 /// <c>navigator.clipboard.writeText</c> (the History page idiom) and shows a transient
 /// "Copied" indicator. Empty turns (the placeholder an in-flight stream renders into) get none.
 /// </summary>
-public sealed class AiChatPanelCopyTests : TestContext
+public sealed class AiChatPanelCopyTests : BunitContext
 {
     private readonly FakeChatHistoryStore _history = new();
 
@@ -41,7 +41,7 @@ public sealed class AiChatPanelCopyTests : TestContext
     [Fact]
     public void Every_nonEmpty_turn_gets_a_copy_button()
     {
-        var cut = RenderComponent<AiChatPanel>();
+        var cut = Render<AiChatPanel>();
 
         Assert.Equal(2, cut.FindAll("button[aria-label='Copy message']").Count);
     }
@@ -49,7 +49,7 @@ public sealed class AiChatPanelCopyTests : TestContext
     [Fact]
     public void Clicking_copy_puts_that_turns_text_on_the_clipboard()
     {
-        var cut = RenderComponent<AiChatPanel>();
+        var cut = Render<AiChatPanel>();
 
         cut.FindAll("button[aria-label='Copy message']")[1].Click();
 
@@ -60,7 +60,7 @@ public sealed class AiChatPanelCopyTests : TestContext
     [Fact]
     public void Copy_shows_a_transient_copied_indicator_on_that_turn_only()
     {
-        var cut = RenderComponent<AiChatPanel>();
+        var cut = Render<AiChatPanel>();
 
         cut.FindAll("button[aria-label='Copy message']")[0].Click();
 

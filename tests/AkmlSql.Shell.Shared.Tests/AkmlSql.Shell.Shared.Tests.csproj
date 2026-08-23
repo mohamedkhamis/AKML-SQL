@@ -16,12 +16,15 @@
 
   <ItemGroup>
     <!-- Test framework: use v2/v17 — xunit.runner.visualstudio v3+ and Test.Sdk v18+ dropped net472 support -->
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
-    <PackageReference Include="xunit" Version="2.9.2" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="4.0.0">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+    <!-- StaFact 3.x depends on xunit.v3.extensibility.core and collides with the pinned xunit v2
+         (CS0433: FactAttribute etc. exist in both xunit.core and xunit.v3.core). 1.1.11 is the
+         latest xunit-v2-compatible release. -->
     <PackageReference Include="Xunit.StaFact" Version="1.1.11" />
   </ItemGroup>
 

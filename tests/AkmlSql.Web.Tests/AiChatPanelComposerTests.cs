@@ -14,7 +14,7 @@ namespace AkmlSql.Web.Tests;
 /// Ctrl+Enter a silent no-op (its guard saw an empty prompt): the chat could not be used at
 /// all from the keyboard. The textarea must bind on <c>oninput</c>.
 /// </summary>
-public sealed class AiChatPanelComposerTests : TestContext
+public sealed class AiChatPanelComposerTests : BunitContext
 {
     private readonly FakeAiClientFactory _client = new();
 
@@ -33,7 +33,7 @@ public sealed class AiChatPanelComposerTests : TestContext
     [Fact]
     public void Typing_enables_send_without_blur()
     {
-        var cut = RenderComponent<AiChatPanel>();
+        var cut = Render<AiChatPanel>();
         Assert.Contains("disabled", SendButtonMarkup(cut));
 
         cut.Find("textarea").Input("What does my query do?");
@@ -44,7 +44,7 @@ public sealed class AiChatPanelComposerTests : TestContext
     [Fact]
     public void Whitespace_only_input_keeps_send_disabled()
     {
-        var cut = RenderComponent<AiChatPanel>();
+        var cut = Render<AiChatPanel>();
 
         cut.Find("textarea").Input("   ");
 
@@ -54,7 +54,7 @@ public sealed class AiChatPanelComposerTests : TestContext
     [Fact]
     public void CtrlEnter_sends_the_text_typed_so_far()
     {
-        var cut = RenderComponent<AiChatPanel>();
+        var cut = Render<AiChatPanel>();
         var textarea = cut.Find("textarea");
 
         textarea.Input("Explain sys.databases");
@@ -70,7 +70,7 @@ public sealed class AiChatPanelComposerTests : TestContext
     [Fact]
     public void Send_click_sends_and_renders_the_reply()
     {
-        var cut = RenderComponent<AiChatPanel>();
+        var cut = Render<AiChatPanel>();
 
         cut.Find("textarea").Input("Explain sys.databases");
         cut.FindAll("button").Single(b => b.TextContent.Trim() == "Send").Click();

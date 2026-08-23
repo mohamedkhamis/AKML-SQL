@@ -24,12 +24,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Bcl.Memory" Version="10.0.5" />
+    <PackageReference Include="Microsoft.Bcl.Memory" Version="10.0.11" />
     <PackageReference Include="Microsoft.Data.SqlClient" Version="7.*" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.*" />
-    <PackageReference Include="Microsoft.SqlServer.TransactSql.ScriptDom" Version="170.*" />
+    <PackageReference Include="Microsoft.SqlServer.TransactSql.ScriptDom" Version="180.102.0" />
     <PackageReference Include="ClosedXML" Version="0.105.*" />
-    <PackageReference Include="MessagePack" Version="2.*" />
+    <PackageReference Include="MessagePack" Version="3.1.8" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.*" />
 
     <!-- Spec 026 (M4 closure) C2: host the web-edition engine as the AkmlSqlWebEngine Windows
@@ -39,10 +39,10 @@
     <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.*" />
 
     <!-- Phase 9: AI Assistance -->
-    <PackageReference Include="Microsoft.Extensions.AI" Version="10.4.1" />
-    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.4.1" />
+    <PackageReference Include="Microsoft.Extensions.AI" Version="10.9.0" />
+    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.9.0" />
     <PackageReference Include="Anthropic.SDK" Version="5.10.0" />
-    <PackageReference Include="OllamaSharp" Version="5.4.25" />
+    <PackageReference Include="OllamaSharp" Version="5.4.30" />
     <PackageReference Include="Mscc.GenerativeAI" Version="3.1.0" />
     <PackageReference Include="Microsoft.ML.Tokenizers" Version="2.0.0" />
     <PackageReference Include="Microsoft.ML.Tokenizers.Data.Cl100kBase" Version="2.0.0" />

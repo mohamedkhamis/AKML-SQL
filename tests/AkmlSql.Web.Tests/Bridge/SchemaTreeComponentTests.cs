@@ -23,7 +23,7 @@ namespace AkmlSql.Web.Tests.Bridge;
 /// already-shipped InMemoryIndexedDbAdapter and the production SchemaCacheStore so
 /// we exercise the same JSON round-trip the browser would in production.
 /// </summary>
-public sealed class SchemaTreeComponentTests : TestContext
+public sealed class SchemaTreeComponentTests : BunitContext
 {
     private const string Server = "127.0.0.1:5081";
     private const string Db = "AdventureWorks";
@@ -81,7 +81,7 @@ public sealed class SchemaTreeComponentTests : TestContext
             FetchedAt = DateTimeOffset.UtcNow,
         });
 
-        var cut = RenderComponent<SchemaTreeComponent>(p => p
+        var cut = Render<SchemaTreeComponent>(p => p
             .Add(c => c.ServerCanonicalIdentity, Server)
             .Add(c => c.DatabaseName, Db));
 
@@ -121,7 +121,7 @@ public sealed class SchemaTreeComponentTests : TestContext
             FetchedAt = DateTimeOffset.UtcNow,
         });
 
-        var cut = RenderComponent<SchemaTreeComponent>(p => p
+        var cut = Render<SchemaTreeComponent>(p => p
             .Add(c => c.ServerCanonicalIdentity, Server)
             .Add(c => c.DatabaseName, Db));
 
@@ -150,7 +150,7 @@ public sealed class SchemaTreeComponentTests : TestContext
             FetchedAt = DateTimeOffset.UtcNow,
         });
 
-        var cut = RenderComponent<SchemaTreeComponent>(p => p
+        var cut = Render<SchemaTreeComponent>(p => p
             .Add(c => c.ServerCanonicalIdentity, Server)
             .Add(c => c.DatabaseName, Db));
 
@@ -192,7 +192,7 @@ public sealed class SchemaTreeComponentTests : TestContext
 
         BridgeFake.SetState(BridgeState.Disconnected);
 
-        var cut = RenderComponent<SchemaTreeComponent>(p => p
+        var cut = Render<SchemaTreeComponent>(p => p
             .Add(c => c.ServerCanonicalIdentity, Server)
             .Add(c => c.DatabaseName, Db));
 
@@ -213,7 +213,7 @@ public sealed class SchemaTreeComponentTests : TestContext
         });
         BridgeFake.SetState(BridgeState.Open);
 
-        var cut = RenderComponent<SchemaTreeComponent>(p => p
+        var cut = Render<SchemaTreeComponent>(p => p
             .Add(c => c.ServerCanonicalIdentity, Server)
             .Add(c => c.DatabaseName, Db));
 
@@ -233,7 +233,7 @@ public sealed class SchemaTreeComponentTests : TestContext
         });
 
         string? captured = null;
-        var cut = RenderComponent<SchemaTreeComponent>(p => p
+        var cut = Render<SchemaTreeComponent>(p => p
             .Add(c => c.ServerCanonicalIdentity, Server)
             .Add(c => c.DatabaseName, Db)
             .Add(c => c.OnObjectClicked, q => { captured = q; }));
@@ -253,7 +253,7 @@ public sealed class SchemaTreeComponentTests : TestContext
     public void EmptyStatePlaceholderWhenNoSnapshot()
     {
         // No seed.
-        var cut = RenderComponent<SchemaTreeComponent>(p => p
+        var cut = Render<SchemaTreeComponent>(p => p
             .Add(c => c.ServerCanonicalIdentity, Server)
             .Add(c => c.DatabaseName, Db));
 
@@ -273,7 +273,7 @@ public sealed class SchemaTreeComponentTests : TestContext
             FetchedAt = DateTimeOffset.UtcNow,
         });
 
-        var cut = RenderComponent<SchemaTreeComponent>(p => p
+        var cut = Render<SchemaTreeComponent>(p => p
             .Add(c => c.ServerCanonicalIdentity, Server)
             .Add(c => c.DatabaseName, Db));
 
