@@ -44,6 +44,17 @@
     <ProjectReference Include="..\AkmlSql.Core\AkmlSql.Core.csproj" />
   </ItemGroup>
 
+  <!-- VSToolsPath fallback probe. The BuildTools .props import (via obj\*.nuget.g.props)
+       normally sets VSToolsPath to the NuGet package's tools dir, but VS's auto-restore
+       intermittently drops the VSSDK packages from project.assets.json — removing that
+       import — while the MSBuild.exe.Config fallback path
+       (C:\Program Files (x86)\MSBuild\Microsoft\VisualStudio\v18.0) has no VSSDK targets
+       on this machine -> MSB4226 on the import below. Probe the NuGet cache directly;
+       only kicks in when the normal resolution points at a location without the targets. -->
+  <PropertyGroup>
+    <VSToolsPath Condition="!Exists('$(VSToolsPath)\VSSDK\Microsoft.VsSDK.targets') and Exists('$(UserProfile)\.nuget\packages\microsoft.vssdk.buildtools\17.14.2142\tools\VSSDK\Microsoft.VsSDK.targets')">$(UserProfile)\.nuget\packages\microsoft.vssdk.buildtools\17.14.2142\tools</VSToolsPath>
+  </PropertyGroup>
+
   <Import Project="..\AkmlSql.Shell.Shared\AkmlSql.Shell.Shared.projitems" Label="Shared" />
   <Import Project="$(VSToolsPath)\VSSDK\Microsoft.VsSDK.targets" />
 
