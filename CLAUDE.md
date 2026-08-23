@@ -1,4 +1,4 @@
-﻿# AKML-SQL Development Guidelines
+# AKML-SQL Development Guidelines
 
 AI-powered SQL development assistance for SSMS 22 and Visual Studio 2026.
 Author: Mohamed Khamis | License: MIT | Version: 1.0.0
@@ -9,22 +9,33 @@ Author: Mohamed Khamis | License: MIT | Version: 1.0.0
 AKML-SQL.slnx                          # Solution file (.slnx format)
 src/
   AkmlSql.Core/                        # Shared library (netstandard2.0 + net10.0)
+  AkmlSql.Engine/                      # Out-of-process engine (net10.0, win-x64): IntelliSense, formatting, analysis, refactoring, AI, history
+  AkmlSql.IntelliSense/                # Shared IntelliSense library (net10.0) — consumed by Engine + Web
+  AkmlSql.Formatting/                  # Formatter pipeline + .akmlstyle profile system (net10.0)
+  AkmlSql.Analysis/                    # Shared analysis rule library (net10.0) — consumed by Engine + Web
+  AkmlSql.AI/                          # Shared AI assistance library (net10.0) — consumed by Engine + Web
+  AkmlSql.Formatter/                   # akmlsql-format CLI (net10.0, win-x64, single-file, trimmed)
+  AkmlSql.Analyzer/                    # CLI static analyzer (net10.0, win-x64, single-file, trimmed)
   AkmlSql.Shell.Shared/                # Shared project (.projitems) for the shell extensions
   AkmlSql.Ssms22/                      # SSMS 22 extension (net472, x64, VS SDK 17.14.x)
   AkmlSql.VS2026/                      # VS 2026 extension (net472, x64, VS SDK 17.14.x)
+  AkmlSql.Web/                         # Blazor WASM web edition (net10.0)
+  AkmlSql.Web.Shared/                  # Web contracts (netstandard2.0)
   AkmlSql.Updater/                     # Self-contained updater (net10.0, win-x64, trimmed)
   AkmlSql.Installer/                   # Inno Setup 7 installer scripts
 tests/
-  AkmlSql.Core.Tests/                  # xunit tests (net10.0)
-doc/                                   # PRD documents (Phase 1, Phase 2)
-specs/                                 # Specify framework feature specs
+  AkmlSql.Core.Tests/                  # xunit tests (net10.0) — one project per src library (11 total) + E2E/Web.E2E/Installer
+  format-parity/                       # SQL Prompt parity corpus + golden outputs
+  completion-corpus/                   # 1,342-case autocomplete corpus + CorpusGateTests ratchet (~97.5% gate)
+doc/                                   # All project documentation (architecture, ipc-api, progress, WEB/ milestone docs)
+specs/                                 # Specify framework feature specs (001–033)
 ```
 
 ## Technologies
 
 - **Shell Extensions**: C# / .NET Framework 4.7.2, LangVersion latest
 - **Core Library**: netstandard2.0 (for shell) + net10.0 (for updater), dual-target
-- **Engine**: .NET 10, self-contained single-file, win-x64, PublishTrimmed (out-of-process IntelliSense)
+- **Engine**: .NET 10, self-contained, win-x64 (out-of-process IntelliSense) — single-file and trimming are OFF: Microsoft.Data.SqlClient native SNI interop is incompatible with single-file extraction
 - **Updater**: .NET 10, self-contained single-file, win-x64, PublishTrimmed
 - **Installer**: Inno Setup 7 Pascal Script
 - **Tests**: xunit 2.x, Microsoft.NET.Test.Sdk 17.x
@@ -40,12 +51,16 @@ specs/                                 # Specify framework feature specs
 
 ## Build Commands
 
-Shell projects MUST be built individually with MSBuild (not `dotnet build`) to avoid VSCT cross-contamination:
+The full solution can be built in one pass (the CTO cross-contamination is fixed — see Build Gotchas):
 
 ```bash
-MSBUILD="/c/Program Files/Microsoft Visual Studio/2022/Enterprise/MSBuild/Current/Bin/MSBuild.exe"
+MSBUILD="/c/Program Files/Microsoft Visual Studio/18/Insiders/MSBuild/Current/Bin/MSBuild.exe"
 
-# Restore then build each project separately
+# Whole solution (restore first, then build)
+"$MSBUILD" AKML-SQL.slnx -t:Restore -v:quiet
+"$MSBUILD" AKML-SQL.slnx -t:Build -p:Configuration=Release -m -v:minimal
+
+# Shell projects may still be built individually with MSBuild (never `dotnet build`)
 "$MSBUILD" "src/AkmlSql.Ssms22/AkmlSql.Ssms22.csproj" -t:Restore -p:Configuration=Release -v:quiet
 "$MSBUILD" "src/AkmlSql.Ssms22/AkmlSql.Ssms22.csproj" -t:Build -p:Configuration=Release -v:minimal
 
@@ -65,7 +80,7 @@ dotnet test tests/AkmlSql.Core.Tests/AkmlSql.Core.Tests.csproj
 ## Build Gotchas
 
 - **Never use `dotnet build` for shell projects** — CodeTaskFactory in VSSDK requires full MSBuild
-- **Never build shell projects via solution** — causes VSCT CTO cross-contamination (all projects look for the last project's .cto file)
+- **CTO cross-contamination root cause (FIXED 2026-08-23)**: `Microsoft.VsSDK.targets` defaults `ResourceManifest`/`CtoFileManifest`/`CtoCacheFile` from `$(IntermediateOutputPath)`, which is still empty when the import is evaluated in an SDK-style project — collapsing all three to drive-root paths (`C:\ctoFiles.json`, `C:\resources.json`, `C:\mergeCto.cache`) shared by every VSSDK project on the machine. Whichever shell project built first left its CTO name in `C:\ctoFiles.json` and the next project read it → `VSSDK1307: Could not read cto data ... AkmlSqlSsms22.cto`. Both shell csprojs now pin the three properties to `$(BaseIntermediateOutputPath)$(Configuration)\$(TargetFramework)\...` right after the VsSDK import. Solution builds (VS or MSBuild `-m`) work again. Symptom of a recurrence: `ctoFiles.json`/`resources.json`/`mergeCto.cache` reappearing at a drive root.
 - **Always clean obj/bin after SDK version changes** — stale NuGet cache causes wrong assembly version references
 - **All shell targets use Schema 2011 v2.0 vsixmanifest** (`<PackageManifest>` root)
 - **VSPackage.resx required for CTO embedding** — SDK-style projects need `VSPackage.resx` with `MergeWithCTO=true`; use `Update=` not `Include=` to avoid duplicate resource errors
@@ -123,7 +138,7 @@ See [docs/ipc-api.md](docs/ipc-api.md) for all 30+ message types.
 | Parser | `TsqlParserService` | Thread-safe `TSql170Parser` wrapper |
 | IntelliSense | `CompletionEngine` | Merges keywords + schema + snippets + functions |
 | Formatter | `FormatRequestHandler` → `FormatterPipeline` | 7-stage formatting pipeline |
-| Analysis | `AnalysisEngine` → `RuleRegistry` | 120+ rules across 8 categories |
+| Analysis | `AnalysisEngine` → `RuleRegistry` | 130+ rules across 8 categories |
 | Snippets | `SnippetRequestHandler` → `SnippetLoader` | Expand/list/save/delete `.akmlsnippet` files |
 | Refactoring | `RefactoringEngine` | Preview + apply (lightweight text + heavyweight schema-aware) |
 | Schema cache | `SchemaCacheManager` → `SchemaMetadataService` | Phase A/B loading via `sys.*` views |
@@ -189,7 +204,7 @@ See [docs/analysis-rules.md](docs/analysis-rules.md) for all rules.
 | Decision | Rationale |
 |----------|-----------|
 | Out-of-process engine | .NET Framework ↔ .NET 10 isolation; crash safety; trimming/AOT |
-| Shared `.projitems` | One source compiled against 6 VS SDK versions without duplication |
+| Shared `.projitems` | One source compiled against both shell hosts (SSMS 22 + VS 2026) without duplication |
 | MessagePack for IPC | ~3× faster + smaller than JSON; strongly typed; binary-safe |
 | `ConcurrentDictionary` for schema cache | Lock-free reads; multiple background writers safe |
 | Phase A / Phase B loading | Phase A < 500ms for first completion; columns/FKs in background |
@@ -277,23 +292,29 @@ The `StrokeDashArray` sum (`10 + 30 = 40`) must be ≥ the ellipse perimeter (`2
 | [doc/ipc-api.md](doc/ipc-api.md) | All IPC message types, request/response schemas, frame format |
 | [doc/configuration.md](doc/configuration.md) | Full `config.json` schema, `.casettings`, logging, persistence markers |
 | [doc/deployment.md](doc/deployment.md) | Build commands, install paths, MEF cache clearing, troubleshooting |
-| [doc/analysis-rules.md](doc/analysis-rules.md) | All 120+ analysis rules with descriptions and severities |
+| [doc/analysis-rules.md](doc/analysis-rules.md) | All 130+ analysis rules with descriptions and severities |
 | [doc/formatting.md](doc/formatting.md) | Formatting pipeline stages, profile schema, all options, SQL Prompt round-trip |
-| [doc/progress.md](doc/progress.md) | Development log through spec 020 — per-phase task tables, clarifications, deferred follow-ups |
+| [doc/progress.md](doc/progress.md) | Development log through spec 033 — per-phase task tables, clarifications, deferred follow-ups |
+| [doc/WEB/](doc/WEB/) | Web edition milestone docs (M0 dispatcher/transport … M6 AI browser) + quickstarts |
 | [docs/wpf-theming.md](docs/wpf-theming.md) | WPF theme token system contributor guide (introduced in spec 016) |
 
 ## Progress and Troubleshooting
 
-See [doc/progress.md](doc/progress.md) for the full development progress log — issues, root causes, fixes, cache clearing procedures, and the per-spec progress tables (most recently spec 020 SQL Prompt visual parity).
+See [doc/progress.md](doc/progress.md) for the full development progress log — issues, root causes, fixes, cache clearing procedures, and the per-spec progress tables (most recently spec 033 Format Styles window promotion).
 
-**Latest merged work**: spec 020 (SQL Prompt visual parity across all surfaces + `.sqlpromptstylev2` round-trip + Format Styles editor) merged to master via PR #235 on 2026-05-15. 77 of 106 spec-020 tasks complete; 29 deferred with rationale in `specs/020-sqlprompt-visual-parity/tasks.md`. Specs 015 → 019 (bug fixes, WPF theme refresh, Options dialog phases 1–2, phase-10 parity-closure design docs) merged together via PR #234.
+**Latest merged work**: specs 021 → 033 merged to master through PR #249 (2026-08). Highlights:
 
-**Open follow-ups** (deferred from spec 020 — see `specs/020-sqlprompt-visual-parity/tasks.md` for the full list):
+- **Specs 021–028 — Web edition (Blazor WASM)**: dispatcher/transport (M0), WASM spike (M1), formatter/analyser MVP (M2), WebSocket LAN transport (M3), IIS installer (M4), IndexedDB schema cache (M5), AI in browser (M6). Shared libraries extracted for engine + web reuse: `AkmlSql.IntelliSense`, `AkmlSql.Analysis`, `AkmlSql.AI` (types keep their original `AkmlSql.Engine.*` namespaces).
+- **Spec 029 — SQL-auth credentials**: DPAPI `SqlCredentialStore` (`%AppData%\AKML SQL\sql-credentials.json`), `AuthMode.SqlPassword` detection, `TestSqlConnection` IPC (93/193), `SqlCredentialDialog`, multi-window auto-resolve.
+- **Spec 030 — SQL Prompt parity closure** (+ history query-session grouping follow-ups: one history entry per query session, `SessionKey` shell→engine over IPC).
+- **Spec 031 — Redgate style import**: `.sqlpromptstylev2` → `.akmlstyle`; built-in "Khamis Style" + "Collapsed" styles ship in the web edition.
+- **Spec 032 — Autocomplete remediation**: completion corpus gate (`tests/completion-corpus`, 1,342 cases, `CorpusGateTests` ratchet) **72.1% → 97.5%**; new `ParameterProvider`; `VariableTracker` wired; `CompletionItem.FilterText` (Key 7); FMTA-006 oscillation root-fixed (977/977 goldens green).
+- **Spec 033 — Format Styles window promotion**: full style editor (load-on-select, dirty tracking, merge-save via `ProfileJsonMerger`, read-only built-ins), profile schema v2 (`parentId` hierarchy + `[SettingMeta]` on all 179 properties), new `ProfileGet` (34/134) + `ProfileRename` (35/135) IPC, Options → Format → Styles launcher page, legacy editor stack deleted.
 
-- Formatter pipeline gap closures (T074–T084) — 11 layout rules against the 7-stage pipeline
-- Parity corpus + tests (T071–T073) — needs Redgate SQL Prompt install for golden generation
-- ~~Format Styles editor menu wire + Options dialog re-skin (T044–T048, T059)~~ — SHIPPED (commit 17e294c wired "Format Styles..." in both hosts; T044–T048 closed as already-satisfied by SettingsWindow). Spec 033 then promoted the window to a full editor (load/save/rename/delete, schema v2 hierarchy + enum dropdowns, Options launcher button)
-- Manual product-running audits (T098–T100, T105) — DPI / a11y / screenshot review / quickstart end-to-end
+**Open follow-ups** (see `doc/progress.md` and the spec tasks files for full lists):
+
+- Spec 032 pending live items: web deploy + keystroke E2E (T013), campaign re-run (T057/T058), desktop smoke (T059), final perf gate (T060), sandbox cleanup (T062). Known pre-existing red, NOT spec-032: `FormatterServiceTests`/`AnalyserServiceTests` sp031-* pending golden baselines; `PerformanceBaselineTests` environmental drift.
+- Spec 033: T044/T045 (final gate + deploy/manual verification) pending user availability.
 
 ## Git Rules (MANDATORY)
 

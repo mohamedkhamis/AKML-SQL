@@ -47,6 +47,21 @@
   <Import Project="..\AkmlSql.Shell.Shared\AkmlSql.Shell.Shared.projitems" Label="Shared" />
   <Import Project="$(VSToolsPath)\VSSDK\Microsoft.VsSDK.targets" />
 
+  <!-- Microsoft.VsSDK.targets defaults ResourceManifest/CtoFileManifest/CtoCacheFile from
+       $(IntermediateOutputPath), which is still EMPTY when this import is evaluated in an
+       SDK-style project (IntermediateOutputPath is only assigned later by
+       Microsoft.NET.DefaultOutputPaths.targets). The defaults therefore collapse to
+       drive-root paths (\ctoFiles.json, \resources.json, \mergeCto.cache) shared by every
+       VSSDK project on the machine: the first shell project to build leaves its CTO name in
+       C:\ctoFiles.json and the next project reads it -> VSSDK1307 "Could not read cto data".
+       Pin all three to this project's real intermediate path (evaluates to
+       obj\<Configuration>\net472\, matching IntermediateOutputPath). -->
+  <PropertyGroup>
+    <ResourceManifest>$(BaseIntermediateOutputPath)$(Configuration)\$(TargetFramework)\resources.json</ResourceManifest>
+    <CtoFileManifest>$(BaseIntermediateOutputPath)$(Configuration)\$(TargetFramework)\ctoFiles.json</CtoFileManifest>
+    <CtoCacheFile>$(BaseIntermediateOutputPath)$(Configuration)\$(TargetFramework)\mergeCto.cache</CtoCacheFile>
+  </PropertyGroup>
+
   <!-- Disable VSIX targets that cause cross-contamination in parallel solution builds.
        We use Inno Setup for deployment, not VSIX containers. VSCT compilation and
        PkgDef generation still work; only VSIX manifest/extension file tasks are skipped. -->
