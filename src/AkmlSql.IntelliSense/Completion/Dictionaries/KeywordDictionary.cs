@@ -538,7 +538,22 @@ public static class KeywordDictionary
             ClauseType.Having      => AfterHaving,
             ClauseType.OrderBy     => AfterOrderBy,
             ClauseType.InsertColumns => AfterInsert,
+            // Spec 032 C1/C2: the split INSERT positions are object/column positions —
+            // no keyword noise (unmapped they'd fall to GeneralKeywords).
+            ClauseType.InsertTarget => [],
+            ClauseType.InsertColumnList => [],
             ClauseType.UpdateSet   => AfterUpdateSet,
+            // Spec 032 US5 (B2–B6, D):
+            ClauseType.OrderKeyword => AfterOrderGroupKeyword,
+            ClauseType.GroupKeyword => AfterOrderGroupKeyword,
+            ClauseType.SetOperator => AfterSetOperator,
+            ClauseType.JoinQualifier => AfterJoinQualifier, // KeywordProvider refines per qualifier
+            ClauseType.Delete => AfterDelete,               // B5 — was falling to GeneralKeywords
+            ClauseType.InsertValues => AfterInsertValues,   // D — was falling to GeneralKeywords
+            ClauseType.CaseStart => AfterCaseStart,
+            ClauseType.CaseWhen => AfterCaseWhen,
+            ClauseType.CaseThen => AfterCaseThen,
+            ClauseType.CaseElse => AfterCaseElse,
             ClauseType.With        => AfterWith,
             ClauseType.Over        => AfterOver,
             ClauseType.Option      => AfterOption,
@@ -706,6 +721,7 @@ public static class KeywordDictionary
 
     private static readonly string[] AfterInsert =
     [
+        "INTO", // Spec 032 C2 — was missing; `INSERT |` must offer INTO
         "VALUES", "SELECT", "DEFAULT VALUES", "OUTPUT", "EXEC", "EXECUTE",
         "TOP"
     ];
@@ -715,6 +731,26 @@ public static class KeywordDictionary
         "WHERE", "FROM", "OUTPUT",
         "OPTION"
     ];
+
+    // ── Spec 032 US5 keyword sets ──────────────────────────────────────────
+
+    private static readonly string[] AfterOrderGroupKeyword = ["BY"];
+
+    private static readonly string[] AfterSetOperator = ["SELECT", "ALL"];
+
+    private static readonly string[] AfterJoinQualifier = ["JOIN"];
+
+    private static readonly string[] AfterDelete = ["FROM", "TOP", "OUTPUT"];
+
+    private static readonly string[] AfterInsertValues = ["DEFAULT", "NULL", "SELECT"];
+
+    private static readonly string[] AfterCaseStart = ["WHEN"];
+
+    private static readonly string[] AfterCaseWhen = ["THEN"];
+
+    private static readonly string[] AfterCaseThen = ["WHEN", "ELSE", "END"];
+
+    private static readonly string[] AfterCaseElse = ["END"];
 
     private static readonly string[] AfterWith =
     [

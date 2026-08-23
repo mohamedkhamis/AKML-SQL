@@ -57,10 +57,16 @@ public sealed class HistoryDedupRepresentativeTests : IDisposable
     }
 
     [Fact]
-    public async Task Deduplicate_DisplayName_IsStickyAcrossReExecution()
+    public async Task Deduplicate_DisplayName_ReflectsLatestExecutionsTabTitle_NotStickyWithoutASession()
     {
-        // Rename a query (older row gets the name), then re-execute it (newer row has no name).
-        // The representative is the newer row, but the display name must persist (latest non-null).
+        // Task 6 (history-session-grouping) behaviour change: the FIRST_VALUE(h.tab_title) window
+        // that made a name "sticky" across re-executions of the same content_hash was deliberately
+        // REMOVED — the display name now comes from the joined query_sessions row for grouped rows,
+        // with a per-row h.tab_title fallback for legacy/ungrouped rows (no session_id). These two
+        // inserts pass no sessionKey, so they fall back to the old per-content-hash partition with
+        // NO session to carry a name: the older row's tab_title ("My Report") no longer bleeds into
+        // the newer, unnamed row. The representative (latest execution) reports its OWN (empty)
+        // name instead of inheriting the older row's.
         var named = await SeedAsync("SELECT 2", status: 0, durationMs: 5, rowCount: 0, tabTitle: "My Report");
         var reRun = await SeedAsync("SELECT 2", status: 0, durationMs: 6, rowCount: 0, tabTitle: null);
         await SetExecutedAtAsync(named, DaysAgo(1));
@@ -69,8 +75,8 @@ public sealed class HistoryDedupRepresentativeTests : IDisposable
         var (entries, _) = await _db.SearchAsync(new HistoryFilter { Deduplicate = true });
 
         var rep = Assert.Single(entries);
-        Assert.Equal(reRun, rep.Id);             // representative is the latest execution
-        Assert.Equal("My Report", rep.TabTitle); // ...but the name survives the re-execution
+        Assert.Equal(reRun, rep.Id);        // representative is still the latest execution
+        Assert.Equal(string.Empty, rep.TabTitle); // no longer inherits the older row's name
         Assert.Equal(2, rep.ExecutionCount);
     }
 

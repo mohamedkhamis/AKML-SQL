@@ -248,7 +248,12 @@ public class FormatterPipeline
                 }
             }
 
-            // Stage 7: Idempotency check — format again and verify identical result
+            // Stage 7: Idempotency check — format again and verify identical result.
+            // Spec 032 J2 (FR-030): the check used to be DETECT-ONLY — it found the
+            // divergence, appended a Warning, and still shipped the divergent first pass
+            // (which the web editor then silently dropped the warning for). Now the
+            // CONVERGED second pass is returned when it differs, is non-empty, and
+            // passes its own semantic re-validation; the Warning stays surfaced.
             if (validationPassed && formatted != sql && profile.Metadata.EnableIdempotencyCheck)
             {
                 var secondPass = FormatInternal(formatted, profile, out var idempotencyError);
@@ -262,11 +267,25 @@ public class FormatterPipeline
                 }
                 else if (secondPass != null && secondPass != formatted)
                 {
-                    diagnostics.Add(new FormatDiagnostic
+                    bool secondPassValid = profile.Metadata.SkipValidation ||
+                        new SemanticValidator().Validate(script, secondPass, diagnostics);
+                    if (!string.IsNullOrWhiteSpace(secondPass) && secondPassValid)
                     {
-                        Severity = DiagnosticSeverity.Warning,
-                        Message = "Idempotency check failed: second format pass produced different output"
-                    });
+                        formatted = secondPass;
+                        diagnostics.Add(new FormatDiagnostic
+                        {
+                            Severity = DiagnosticSeverity.Warning,
+                            Message = "Formatting converged on a second pass (a layout rule is not idempotent); the converged result was returned"
+                        });
+                    }
+                    else
+                    {
+                        diagnostics.Add(new FormatDiagnostic
+                        {
+                            Severity = DiagnosticSeverity.Warning,
+                            Message = "Idempotency check failed: second format pass produced different output"
+                        });
+                    }
                 }
             }
 

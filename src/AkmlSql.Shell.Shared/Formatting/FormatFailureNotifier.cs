@@ -35,6 +35,21 @@ namespace AkmlSql.Shell.Shared.Formatting
                 return false;
 
             var message = BuildMessage(success, diagnostics);
+            await ShowNoticeAsync(message).ConfigureAwait(false);
+            return true;
+        }
+
+        /// <summary>
+        /// Shows <paramref name="message"/> in the shell's standard warning message box. Extracted
+        /// from <see cref="NotifyIfPreservedAsync"/> so other format outcomes can reuse the same
+        /// plumbing — notably the profile-fallback notice, which fires on a SUCCESSFUL format (the
+        /// preserve-notifier deliberately returns early there) and therefore needs its own entry
+        /// point rather than a new special case inside the preserve path.
+        /// Never throws: a failure to notify must not fail the format.
+        /// </summary>
+        public static async Task ShowNoticeAsync(string message)
+        {
+            if (string.IsNullOrWhiteSpace(message)) return;
             try
             {
                 await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
@@ -42,7 +57,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                 if (sp == null)
                 {
                     Log.Warning("Format notice: shell service unavailable, message not shown: {Message}", message);
-                    return false;
+                    return;
                 }
                 VsShellUtilities.ShowMessageBox(
                     sp, message, Title,
@@ -54,8 +69,55 @@ namespace AkmlSql.Shell.Shared.Formatting
             {
                 Log.Error(ex, "Format notice: failed to show message box");
             }
-            return true;
         }
+
+        // ── Profile-fallback notice (spec 033 follow-up) ─────────────────────────────────
+        //
+        // Lives here, not on FormatRequestDispatcher: that dispatcher is currently unreferenced
+        // production code (a deletion candidate), and the LIVE caller is FormatDocumentCommand —
+        // removing the dispatcher must not silently take Format SQL's missing-style notice with it.
+        // Warned-once bookkeeping is process-wide (static) so every format trigger shares it.
+
+        private static readonly object FallbackGate = new object();
+        private static readonly System.Collections.Generic.HashSet<string> WarnedFallbacks =
+            new System.Collections.Generic.HashSet<string>(StringComparer.Ordinal);
+
+        /// <summary>
+        /// Test seam: replaced by unit tests to capture the notice without a live VS shell.
+        /// Null in production, where the message box is shown instead.
+        /// </summary>
+        internal static Action<string>? ProfileFallbackNotifierOverride { get; set; }
+
+        /// <summary>Clears the warned-once set. Test-only — keeps cases independent.</summary>
+        internal static void ResetProfileFallbackWarnings()
+        {
+            lock (FallbackGate) WarnedFallbacks.Clear();
+        }
+
+        /// <summary>Internal (not private) so the dedupe contract is unit-testable without a
+        /// live engine connection — <c>PipeRpcClient</c> is concrete and cannot be faked.</summary>
+        internal static void NotifyProfileFallbackOnce(string? warning)
+        {
+            if (string.IsNullOrWhiteSpace(warning)) return;
+
+            lock (FallbackGate)
+            {
+                if (!WarnedFallbacks.Add(warning!)) return;   // already told them this session
+            }
+
+            Log.Warning("Format: {Warning}", warning);
+
+            var notifier = ProfileFallbackNotifierOverride;
+            if (notifier != null)
+            {
+                notifier(warning!);
+                return;
+            }
+
+            // Fire-and-forget: formatting must not block on a message box.
+            _ = ShowNoticeAsync(warning!);
+        }
+
 
         private static string BuildMessage(bool success, FormatDiagnosticInfo[]? diagnostics)
         {

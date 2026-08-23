@@ -7,45 +7,53 @@ namespace AkmlSql.Core.Tests.Config
 {
     /// <summary>
     /// Tests for ConfigManager.Load() and Save().
-    /// Reads/writes the real %AppData%\AKML SQL\config.json;
-    /// the constructor backs up any pre-existing file and Dispose() restores it.
+    /// Each test runs against an ISOLATED throwaway AppData root (via the <c>AKML_APP_DATA_ROOT</c>
+    /// override) so it never touches — or destroys — the real <c>%AppData%\AKML SQL</c> directory.
+    /// That directory holds product-owned state (sqlhistory.db, logs) that a running SSMS/VS/engine
+    /// process keeps locked; the previous fixture read/wrote the real path and
+    /// <see cref="Save_CreatesDirectoryIfMissing"/> recursively deleted it, so it threw
+    /// <c>IOException: sqlhistory.db is being used by another process</c> (and wiped real history)
+    /// on any machine where the product was running.
+    /// The <c>[Collection]</c> serialises the process-global env-var override against the other
+    /// classes that resolve Constants AppData paths (<c>SqlCredentialStoreTests</c>,
+    /// <c>ConstantsTests</c>) so it can never leak into a parallel test.
     /// </summary>
     [Collection("AkmlSql real AppData")]
     public class ConfigManagerTests : IDisposable
     {
-        private readonly string _configPath = Constants.ConfigFilePath;
-        private readonly string _backupPath;
-        private readonly bool _hadOriginal;
+        private const string AppDataRootEnvVar = "AKML_APP_DATA_ROOT";
+        private readonly string? _priorRoot;
+        private readonly string _tempRoot;
+        private readonly string _configPath;
 
         public ConfigManagerTests()
         {
-            // Store the backup in %TEMP% so tests that delete the config directory don't lose it
-            _backupPath = Path.Combine(Path.GetTempPath(), "akmlsql-config-test-" + Guid.NewGuid() + ".bak");
-            _hadOriginal = File.Exists(_configPath);
-            if (_hadOriginal)
-                File.Copy(_configPath, _backupPath, overwrite: true);
+            // Redirect AKML's AppData resolution to a throwaway temp tree BEFORE reading any
+            // Constants path, so ConfigManager.Save/Load operate on isolated files we fully own.
+            _priorRoot = Environment.GetEnvironmentVariable(AppDataRootEnvVar);
+            _tempRoot = Path.Combine(Path.GetTempPath(), "akmlsql-config-test-" + Guid.NewGuid());
+            Environment.SetEnvironmentVariable(AppDataRootEnvVar, _tempRoot);
+            _configPath = Constants.ConfigFilePath;   // now resolves under _tempRoot\AKML SQL
         }
 
         public void Dispose()
         {
-            // Clean up any leftover .tmp file (maybe read-only from the save-fail test)
-            var tmpPath = _configPath + ".tmp";
-            if (File.Exists(tmpPath))
-            {
-                File.SetAttributes(tmpPath, FileAttributes.Normal);
-                File.Delete(tmpPath);
-            }
+            // Restore the environment FIRST so a leaked override can never poison a later test.
+            Environment.SetEnvironmentVariable(AppDataRootEnvVar, _priorRoot);
 
-            if (_hadOriginal)
+            // Best-effort teardown of the throwaway tree. The write-fail test leaves a read-only
+            // .tmp, so clear attributes before the recursive delete.
+            try
             {
-                Directory.CreateDirectory(Path.GetDirectoryName(_configPath)!);
-                File.Copy(_backupPath, _configPath, overwrite: true);
-                File.Delete(_backupPath);
+                if (Directory.Exists(_tempRoot))
+                {
+                    foreach (var file in Directory.EnumerateFiles(_tempRoot, "*", SearchOption.AllDirectories))
+                        File.SetAttributes(file, FileAttributes.Normal);
+                    Directory.Delete(_tempRoot, recursive: true);
+                }
             }
-            else if (File.Exists(_configPath))
-            {
-                File.Delete(_configPath);
-            }
+            catch (IOException) { /* leave the temp tree for OS %TEMP% cleanup */ }
+            catch (UnauthorizedAccessException) { }
         }
 
         // ── Load ──────────────────────────────────────────────────────────────

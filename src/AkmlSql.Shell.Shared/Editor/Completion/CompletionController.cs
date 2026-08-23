@@ -127,6 +127,62 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
 
         public int Exec(ref Guid pguidCmdGroup, uint nCmdId, uint nCmdexecopt, IntPtr pvaIn, IntPtr pvaOut)
         {
+            // Focus-routing repair (SSMS 22 Quick Find): with the Find box focused, SSMS still
+            // translates editing keys into EDITOR commands and routes them through the view
+            // chain — printable characters reach the find TextBox, but Backspace/Delete arrived
+            // here and the default handler applied them to the DOCUMENT (log-proven:
+            // "BACKSPACE ... focused=TextBox"). Being first in the chain, redirect the editing
+            // action to the actually-focused TextBox and never let it reach the document.
+            // (VisualElement.IsKeyboardFocused, not HasAggregateFocus — the latter is true for
+            // adornment focus too.)
+            if (_textView?.VisualElement != null && !_textView.VisualElement.IsKeyboardFocused
+                && pguidCmdGroup == VSConstants.VSStd2K)
+            {
+                var routedCmd = (VSConstants.VSStd2KCmdID)nCmdId;
+                var focusedBox = System.Windows.Input.Keyboard.FocusedElement
+                    as System.Windows.Controls.Primitives.TextBoxBase;
+
+                if (focusedBox != null &&
+                    (routedCmd == VSConstants.VSStd2KCmdID.BACKSPACE ||
+                     routedCmd == VSConstants.VSStd2KCmdID.DELETE))
+                {
+                    Log.Debug(
+                        "CompletionController: redirecting {Cmd} to the focused {Box} (Quick Find) instead of the document",
+                        routedCmd, focusedBox.GetType().Name);
+                    var editingCommand = routedCmd == VSConstants.VSStd2KCmdID.BACKSPACE
+                        ? System.Windows.Documents.EditingCommands.Backspace
+                        : System.Windows.Documents.EditingCommands.Delete;
+                    editingCommand.Execute(null, focusedBox);
+                    return VSConstants.S_OK;   // handled — the document must not see it
+                }
+
+                if (routedCmd == VSConstants.VSStd2KCmdID.TYPECHAR ||
+                    routedCmd == VSConstants.VSStd2KCmdID.BACKSPACE ||
+                    routedCmd == VSConstants.VSStd2KCmdID.DELETE ||
+                    routedCmd == VSConstants.VSStd2KCmdID.RETURN ||
+                    routedCmd == VSConstants.VSStd2KCmdID.TAB)
+                {
+                    // Editing command without a redirect target: swallowing is strictly safer
+                    // than forwarding — forwarded commands edit the DOCUMENT the user is not
+                    // typing in. TYPECHAR is the exception (never observed routing here; the
+                    // find box receives printable keys directly) — pass it through unchanged.
+                    if (routedCmd == VSConstants.VSStd2KCmdID.TYPECHAR)
+                    {
+                        Log.Debug(
+                            "CompletionController: TYPECHAR without content focus (focused={Focused}) — passing through",
+                            System.Windows.Input.Keyboard.FocusedElement?.GetType().Name ?? "null");
+                        return NextTarget?.Exec(ref pguidCmdGroup, nCmdId, nCmdexecopt, pvaIn, pvaOut)
+                               ?? VSConstants.S_OK;
+                    }
+
+                    Log.Debug(
+                        "CompletionController: swallowing {Cmd} without content focus (focused={Focused}) — protecting the document",
+                        routedCmd,
+                        System.Windows.Input.Keyboard.FocusedElement?.GetType().Name ?? "null");
+                    return VSConstants.S_OK;
+                }
+            }
+
             if (pguidCmdGroup == VSConstants.VSStd2K)
             {
                 var cmdId = (VSConstants.VSStd2KCmdID)nCmdId;
@@ -1378,7 +1434,12 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             }
         }
 
-        private static bool IsObjectExpectingKeyword(string word)
+        /// <summary>
+        /// Keywords after which a space should open completion in OBJECT mode. Internal so the
+        /// list is directly testable — it is easy to extend the engine's clause analysis and
+        /// forget this shell-side gate, which is exactly how FROM-less DELETE regressed.
+        /// </summary>
+        internal static bool IsObjectExpectingKeyword(string word)
         {
             // Case-insensitive check for SQL keywords that expect object names
             if (string.IsNullOrEmpty(word))
@@ -1392,6 +1453,19 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 // the JOIN keyword next, not table names. Only trigger after full "JOIN".
                 case "INTO":
                 case "UPDATE":
+                // FROM / INTO are optional: `DELETE t` and `INSERT t VALUES (…)` are valid T-SQL
+                // and put a table name directly after the keyword. Without these the shell only
+                // reached object mode via FROM/INTO, so those forms offered nothing. The engine
+                // already serves both positions (ClauseType.Delete; DetectInsertClauseType keeps
+                // bare INSERT on the keyword position *with* the insertable-object list).
+                //
+                // MERGE deliberately stays out: CursorContextAnalyzer knows MERGE only as a
+                // statement boundary, never as a clause, so `MERGE |` falls through to the generic
+                // statement-start keyword list. Forcing object mode there pops ALTER/BACKUP/BEGIN…
+                // where a table name belongs. Add MERGE here only once the engine has a MERGE
+                // clause type — see ObjectExpectingKeywordTests for the pinned expectation.
+                case "DELETE":
+                case "INSERT":
                 case "TABLE":
                 case "VIEW":
                 case "EXEC":

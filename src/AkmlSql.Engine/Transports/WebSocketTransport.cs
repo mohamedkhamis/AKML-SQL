@@ -66,17 +66,7 @@ namespace AkmlSql.Engine.Transports
             if (_disposed) throw new ObjectDisposedException(nameof(WebSocketTransport));
             if (_listener != null) throw new InvalidOperationException("WebSocketTransport already started.");
 
-            // HttpListener uses URI prefix notation; "+" binds all interfaces, but we
-            // honour the configured BindAddress for clarity. Loopback uses 127.0.0.1.
-            //
-            // Spec 025 (M3 bridge closure) FR-001..FR-004: non-loopback bindings use
-            // `https://` so WinHTTP terminates TLS via the cert the installer already
-            // bound with `netsh http add sslcert ipport=<addr>:<port> certhash=<thumb>`
-            // (spec 021 T088 -- web-tls-setup.ps1). Loopback path stays `http://` --
-            // it does not need TLS and the existing engine tests rely on that.
-            var host = _options.IsLoopback ? "127.0.0.1" : _options.BindAddress;
-            var scheme = _options.IsLoopback ? "http" : "https";
-            var prefix = $"{scheme}://{host}:{_options.Port}/";
+            var prefix = BuildPrefix(_options);
 
             if (!_options.IsLoopback)
             {
@@ -107,6 +97,56 @@ namespace AkmlSql.Engine.Transports
                 prefix, _options.IsLoopback ? "localhost" : "LAN");
             return Task.CompletedTask;
         }
+
+        /// <summary>
+        /// Builds the <see cref="HttpListener"/> URI prefix for these options.
+        ///
+        /// <para>Spec 025 (M3 bridge closure) FR-001..FR-004: non-loopback bindings use
+        /// <c>https://</c> so HTTP.SYS terminates TLS via the cert the installer bound with
+        /// <c>netsh http add sslcert ipport=&lt;addr&gt;:&lt;port&gt; certhash=&lt;thumb&gt;</c>
+        /// (spec 021 T088 — web-tls-setup.ps1). Loopback stays <c>http://</c>; it needs no TLS
+        /// and the existing engine tests rely on that.</para>
+        ///
+        /// <para>The all-interfaces address MUST become the strong wildcard <c>+</c> rather than
+        /// the literal <c>0.0.0.0</c>. HTTP.SYS refuses an IP literal as the host of an HTTPS
+        /// prefix: <c>HttpListener.Start()</c> throws <c>HttpListenerException 50</c>
+        /// (ERROR_NOT_SUPPORTED) from <c>AddPrefixCore</c> — even running as LocalSystem, and
+        /// even when the sslcert binding for that exact ip:port already exists. An sslcert
+        /// binding on <c>0.0.0.0:&lt;port&gt;</c> is precisely the binding <c>+</c> pairs with.
+        /// Shipping the literal made the AkmlSqlWebEngine service crash on every start, which
+        /// left the web edition permanently "Offline"; the LAN round-trip test that would have
+        /// caught it is still an unimplemented skip.</para>
+        ///
+        /// <para>A specific host (a real hostname) is passed through untouched — narrowing to one
+        /// interface is a legitimate configuration and HTTP.SYS accepts a hostname for HTTPS.</para>
+        ///
+        /// <para>Finding 9 (PR #249 review): only the literal IP forms (<c>0.0.0.0</c>, <c>::</c>)
+        /// are rewritten to <c>+</c>. <c>*</c> (HTTP.SYS's WEAK wildcard) and <c>+</c> (STRONG)
+        /// are ALREADY valid prefix hosts in their own right and must pass through UNCHANGED —
+        /// folding <c>*</c> into <c>+</c> changes prefix-registration precedence (<c>+</c> claims
+        /// the prefix ahead of another service's specific-host registration) or fails with
+        /// ERROR_ALREADY_EXISTS where <c>*</c> previously coexisted with that specific-host
+        /// registration.</para>
+        /// </summary>
+        internal static string BuildPrefix(WebSocketTransportOptions options)
+        {
+            if (options.IsLoopback)
+                return $"http://127.0.0.1:{options.Port}/";
+
+            var host = NormalizeAllInterfacesHost(options.BindAddress);
+            return $"https://{host}:{options.Port}/";
+        }
+
+        /// <summary>
+        /// Rewrites the literal all-interfaces spellings the installer/config can produce
+        /// (<c>0.0.0.0</c>, and its IPv6 equivalent <c>::</c>) to HTTP.SYS's strong wildcard
+        /// <c>+</c>. <c>*</c> and <c>+</c> are HTTP.SYS's OWN wildcard syntax, already valid as a
+        /// prefix host, and pass through unchanged (see the Finding 9 remarks on
+        /// <see cref="BuildPrefix"/> for why folding <c>*</c> into <c>+</c> is unsafe). Anything
+        /// else (a hostname, or null) also passes through unchanged.
+        /// </summary>
+        private static string? NormalizeAllInterfacesHost(string? bindAddress) =>
+            bindAddress is "0.0.0.0" or "::" ? "+" : bindAddress;
 
         private async Task AcceptLoopAsync(CancellationToken ct)
         {

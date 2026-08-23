@@ -91,13 +91,22 @@ public class LineBreakDecider(FormattingProfile profile)
                 or TSqlTokenType.Outer)
                 return new BreakDecision(BreakType.None, 0, 1);
 
+            // Spec 032 J1 (FMTA-006): only break in a genuinely TRACKED join context. Inside
+            // parenthesized bodies the clause tracker is frozen (With/None/Where…) and the
+            // modifier arm below can never fire there — so a bare JOIN that broke on pass 1
+            // (then got rewritten to "INNER JOIN") collapsed on pass 2: the campaign's one
+            // idempotency failure. The goldens bless INLINE joins in frozen scopes
+            // (sp031-10-cte-columns), so both passes now stay inline there.
+            if (currentClause is not (ClauseContext.From or ClauseContext.Join or ClauseContext.JoinOn))
+                return new BreakDecision(BreakType.None, 0, 1);
+
             return join.OnNewLine
                 ? new BreakDecision(BreakType.NewLine, 0, 0)
                 : new BreakDecision(BreakType.None, 0, 1);
         }
 
         // JOIN type modifiers (INNER, LEFT, RIGHT, FULL, CROSS) — break before the modifier
-        if (IsJoinModifier(tokenType, upperText, currentClause))
+        if (IsJoinModifier(tokenType, upperText, currentClause, prevSemanticTokenType))
             return join.OnNewLine
                 ? new BreakDecision(BreakType.NewLine, 0, 0)
                 : new BreakDecision(BreakType.None, 0, 1);
@@ -192,21 +201,21 @@ public class LineBreakDecider(FormattingProfile profile)
         return new BreakDecision(BreakType.None, 0, 1);
     }
 
-    private static bool IsJoinModifier(TSqlTokenType tokenType, string upperText, ClauseContext currentClause)
+    private static bool IsJoinModifier(
+        TSqlTokenType tokenType, string upperText, ClauseContext currentClause,
+        TSqlTokenType? prevSemanticTokenType)
     {
+        // OUTER follows LEFT/RIGHT/FULL, stays on same line; anything else is not a modifier.
+        bool isModifierToken = tokenType is TSqlTokenType.Inner or TSqlTokenType.Left
+            or TSqlTokenType.Right or TSqlTokenType.Full or TSqlTokenType.Cross;
+        if (!isModifierToken) return false;
+
         // These tokens often appear immediately before JOIN. JoinOn is included so a *chained*
         // join (the LEFT/INNER that starts the next join after a prior "... ON <cond>") also breaks.
-        if (currentClause is ClauseContext.From or ClauseContext.Join or ClauseContext.JoinOn)
-        {
-            return tokenType switch
-            {
-                TSqlTokenType.Inner or TSqlTokenType.Left or TSqlTokenType.Right or
-                TSqlTokenType.Full or TSqlTokenType.Cross => true,
-                TSqlTokenType.Outer => false, // OUTER follows LEFT/RIGHT/FULL, stays on same line
-                _ => false,
-            };
-        }
-        return false;
+        // Only a genuinely tracked join context breaks (spec 032 J1: inside parenthesized
+        // bodies the tracker is frozen, and the JOIN arm above stays inline to match — both
+        // passes must make the SAME decision or formatting oscillates, per FMTA-006).
+        return currentClause is ClauseContext.From or ClauseContext.Join or ClauseContext.JoinOn;
     }
 }
 

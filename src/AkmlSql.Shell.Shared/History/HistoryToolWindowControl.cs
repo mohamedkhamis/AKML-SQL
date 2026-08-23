@@ -957,7 +957,8 @@ namespace AkmlSql.Shell.Shared.History
             connDot.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
             line2.AppendChild(connDot);
 
-            // Left (fills): relative time + " \u00B7 " + exec count (separator hidden when count <= 1).
+            // Left (fills): relative time + " \u00B7 " + "\u00D7N \u00B7 M versions" meta (HistoryRowDisplay.MetaFor;
+            // separator + meta both hidden when the meta line is empty \u2014 see MetaVisibilityConverter).
             var leftMeta = new FrameworkElementFactory(typeof(StackPanel));
             leftMeta.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
 
@@ -977,29 +978,17 @@ namespace AkmlSql.Shell.Shared.History
             dotSep.SetValue(TextBlock.FontSizeProperty, 10.0);
             dotSep.SetResourceBinding(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
             dotSep.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
-            dotSep.SetBinding(VisibilityProperty,
-                new Binding(nameof(HistoryEntryDto.ExecutionCount))
-                {
-                    Converter = new ExecCountVisibilityConverter()
-                });
+            dotSep.SetBinding(VisibilityProperty, CreateMetaVisibilityBinding());
             leftMeta.AppendChild(dotSep);
 
-            var execCountText = new FrameworkElementFactory(typeof(TextBlock));
-            execCountText.SetBinding(TextBlock.TextProperty,
-                new Binding(nameof(HistoryEntryDto.ExecutionCount))
-                {
-                    Converter = new ExecCountConverter()
-                });
-            execCountText.SetValue(TextBlock.FontSizeProperty, 10.0);
-            execCountText.SetResourceBinding(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
-            execCountText.SetValue(TextBlock.FontStyleProperty, FontStyles.Italic);
-            execCountText.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
-            execCountText.SetBinding(VisibilityProperty,
-                new Binding(nameof(HistoryEntryDto.ExecutionCount))
-                {
-                    Converter = new ExecCountVisibilityConverter()
-                });
-            leftMeta.AppendChild(execCountText);
+            var metaText = new FrameworkElementFactory(typeof(TextBlock));
+            metaText.SetBinding(TextBlock.TextProperty, CreateMetaTextBinding());
+            metaText.SetValue(TextBlock.FontSizeProperty, 10.0);
+            metaText.SetResourceBinding(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+            metaText.SetValue(TextBlock.FontStyleProperty, FontStyles.Italic);
+            metaText.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            metaText.SetBinding(VisibilityProperty, CreateMetaVisibilityBinding());
+            leftMeta.AppendChild(metaText);
 
             line2.AppendChild(leftMeta); // LastChildFill \u2014 takes remaining width
             contentStack.AppendChild(line2);
@@ -2161,14 +2150,37 @@ namespace AkmlSql.Shell.Shared.History
         // ================================================================
 
         /// <summary>
-        /// Returns the display name for an entry — its TabTitle, else a collapsed 60-char SQL preview,
-        /// else a placeholder. Mirrors <see cref="QueryNameConverter"/> for use by the right-pane filename
-        /// header and the "History for &lt;file&gt;" version-panel header.
+        /// Returns the display name for an entry — its session name (TabTitle, now populated by the
+        /// engine's query-session grouping), else a trimmed raw-SQL fallback for the rare sessionless
+        /// row. Mirrors <see cref="QueryNameConverter"/> for use by the right-pane filename header and
+        /// the "History for &lt;file&gt;" version-panel header.
         /// </summary>
         private static string QueryDisplayName(HistoryEntryDto entry)
         {
             if (entry == null) return "Preview";
-            return AkmlSql.Core.Models.History.HistoryDisplayName.Of(entry.TabTitle, entry.SqlText);
+            return HistoryRowDisplay.DisplayNameFor(entry);
+        }
+
+        /// <summary>
+        /// Fresh MultiBinding (ExecutionCount, VersionCount) → the "×N · M versions" text via
+        /// <see cref="MetaConverter"/>. A new instance per call — WPF Binding/MultiBinding objects
+        /// cannot be shared across multiple target properties.
+        /// </summary>
+        private static MultiBinding CreateMetaTextBinding()
+        {
+            var binding = new MultiBinding { Converter = new MetaConverter() };
+            binding.Bindings.Add(new Binding(nameof(HistoryEntryDto.ExecutionCount)));
+            binding.Bindings.Add(new Binding(nameof(HistoryEntryDto.VersionCount)));
+            return binding;
+        }
+
+        /// <summary>Fresh MultiBinding (ExecutionCount, VersionCount) → Visibility via <see cref="MetaVisibilityConverter"/>.</summary>
+        private static MultiBinding CreateMetaVisibilityBinding()
+        {
+            var binding = new MultiBinding { Converter = new MetaVisibilityConverter() };
+            binding.Bindings.Add(new Binding(nameof(HistoryEntryDto.ExecutionCount)));
+            binding.Bindings.Add(new Binding(nameof(HistoryEntryDto.VersionCount)));
+            return binding;
         }
 
         // ================================================================
@@ -2193,16 +2205,16 @@ namespace AkmlSql.Shell.Shared.History
         }
 
         /// <summary>
-        /// Converts the full HistoryEntryDto to a display name (shared Core helper):
-        /// TabTitle if set, otherwise first 60 chars of SQL with whitespace collapsed, otherwise
-        /// "(Untitled query)". The "right-click to rename" hint remains the row TextBlock tooltip.
+        /// Converts the full HistoryEntryDto to a display name (see <see cref="HistoryRowDisplay"/>):
+        /// TabTitle (the session name) if set, otherwise a trimmed raw-SQL fallback. The "right-click to
+        /// rename" hint remains the row TextBlock tooltip.
         /// </summary>
         private class QueryNameConverter : IValueConverter
         {
             public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
             {
                 if (value is HistoryEntryDto entry)
-                    return AkmlSql.Core.Models.History.HistoryDisplayName.Of(entry.TabTitle, entry.SqlText);
+                    return HistoryRowDisplay.DisplayNameFor(entry);
                 return "";
             }
 
@@ -2460,37 +2472,40 @@ namespace AkmlSql.Shell.Shared.History
             }
         }
 
-        /// <summary>Formats execution count for deduplicated entries.</summary>
-        private class ExecCountConverter : IValueConverter
+        /// <summary>
+        /// Formats the "×N · M versions" meta line (<see cref="HistoryRowDisplay.MetaFor"/>) from a
+        /// two-value MultiBinding over ExecutionCount and VersionCount.
+        /// </summary>
+        private class MetaConverter : IMultiValueConverter
         {
-            public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-            {
-                if (value is int count && count > 1)
-                    return $"Executed {count} times";
-                return "";
-            }
+            public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
+                => HistoryRowDisplay.MetaFor(ExecCountOf(values), VersionCountOf(values));
 
-            public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+            public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture)
             {
                 throw new NotSupportedException();
             }
         }
 
-        /// <summary>Shows execution count only when greater than 1.</summary>
-        private class ExecCountVisibilityConverter : IValueConverter
+        /// <summary>Shows the meta line (and its leading separator) only when it carries information.</summary>
+        private class MetaVisibilityConverter : IMultiValueConverter
         {
-            public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-            {
-                if (value is int count && count > 1)
-                    return Visibility.Visible;
-                return Visibility.Collapsed;
-            }
+            public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
+                => string.IsNullOrEmpty(HistoryRowDisplay.MetaFor(ExecCountOf(values), VersionCountOf(values)))
+                    ? Visibility.Collapsed
+                    : Visibility.Visible;
 
-            public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+            public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture)
             {
                 throw new NotSupportedException();
             }
         }
+
+        private static int ExecCountOf(object[] values) =>
+            values.Length > 0 && values[0] is int ec ? ec : 0;
+
+        private static int VersionCountOf(object[] values) =>
+            values.Length > 1 && values[1] is int vc ? vc : 0;
 
         /// <summary>Converts bool to Visibility.</summary>
         private class BoolToVisibilityConverter : IValueConverter

@@ -49,6 +49,11 @@ namespace AkmlSql.Core.Ipc.Messages
 
         /// <summary>
         /// New display name for a history entry (only used when Action = Rename).
+        /// <para>
+        /// Also reused (only) when Action = SaveVersion to carry the document's full path —
+        /// i.e. <c>history.source</c> — that identifies which entry to snapshot against. NOT the
+        /// tab title: an unsaved document has no meaningful title but always has a source path.
+        /// </para>
         /// </summary>
         [Key(5)]
         public string? NewName { get; set; }

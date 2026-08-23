@@ -1,0 +1,1 @@
+select e.employeeid, e.lastname from dbo.employees e where e.country = 'USA' and e.title = 'Sales Representative' or e.reportsto is null and e.hiredate >= '1993-01-01' and (e.city = 'Seattle' or e.city = 'Tacoma');

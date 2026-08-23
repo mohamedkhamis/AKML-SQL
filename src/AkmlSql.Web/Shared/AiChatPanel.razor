@@ -47,7 +47,16 @@
                 @foreach (var turn in _conversation.Turns)
                 {
                     <div class="akml-chat-turn akml-chat-role-@turn.Role">
-                        <div class="akml-chat-role-label">@(turn.Role == "user" ? "You" : "Assistant")</div>
+                        <div class="akml-chat-role-label">
+                            <span>@(turn.Role == "user" ? "You" : "Assistant")</span>
+                            @if (!string.IsNullOrEmpty(turn.Content))
+                            {
+                                <button type="button" class="akml-chat-copy" title="Copy message"
+                                        aria-label="Copy message" @onclick="() => CopyTurnAsync(turn)">
+                                    @(_copiedTurn == turn ? "✓ Copied" : "⧉")
+                                </button>
+                            }
+                        </div>
                         <pre class="akml-chat-turn-text">@turn.Content</pre>
                     </div>
                 }
@@ -63,7 +72,11 @@
         </div>
 
         <div class="akml-chat-composer">
-            <textarea class="akml-chat-input" @bind="_pending" placeholder="Ask anything about your SQL..." rows="3"
+            @* oninput (not the default onchange): the browser only fires change on blur, so a
+               default bind would keep Send disabled while typing and make Ctrl+Enter read an
+               empty prompt (silent no-op). *@
+            <textarea class="akml-chat-input" @bind="_pending" @bind:event="oninput"
+                      placeholder="Ask anything about your SQL..." rows="3"
                       @onkeydown="OnKeyDown" disabled="@_busy"></textarea>
             <button class="akml-tool-button" @onclick="SendAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_pending))">
                 Send
@@ -102,12 +115,33 @@
         background-color: var(--akml-chat-assistantbubble);
     }
     .akml-chat-role-label {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--akml-scalar-spacing-s);
         font-weight: bold;
         font-size: 12px;
         color: var(--akml-text-secondary);
         margin-bottom: var(--akml-scalar-spacing-xs);
     }
-    .akml-chat-role-user .akml-chat-role-label { color: var(--akml-text-link); }
+    .akml-chat-role-user .akml-chat-role-label > span { color: var(--akml-text-link); }
+    .akml-chat-copy {
+        background: transparent;
+        border: none;
+        border-radius: var(--akml-scalar-radius-xs);
+        color: var(--akml-text-secondary);
+        cursor: pointer;
+        font-size: 12px;
+        line-height: 1;
+        padding: 2px 4px;
+        opacity: 0.55;
+    }
+    .akml-chat-turn:hover .akml-chat-copy,
+    .akml-chat-copy:focus-visible { opacity: 1; }
+    .akml-chat-copy:hover {
+        color: var(--akml-text-primary);
+        background-color: var(--akml-surface-hover);
+    }
     .akml-chat-turn-text {
         font-family: var(--akml-type-editor-family);
         font-size: var(--akml-type-editor-size);
@@ -289,6 +323,33 @@
             }
         }
         return list.ToArray();
+    }
+
+    private const int CopiedIndicatorMs = 1500;
+    private ChatTurn? _copiedTurn;
+    private int _copyStamp;   // a newer copy must not have its indicator cleared by an older timer
+
+    private async Task CopyTurnAsync(ChatTurn turn)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", turn.Content);
+        }
+        catch (Exception ex)
+        {
+            Diagnostics.Log(DiagnosticLevel.Warn, "ai-chat", $"Copy failed: {ex.Message}");
+            return;
+        }
+
+        _copiedTurn = turn;
+        var stamp = ++_copyStamp;
+        StateHasChanged();
+        await Task.Delay(CopiedIndicatorMs);
+        if (stamp == _copyStamp && !_disposed)
+        {
+            _copiedTurn = null;
+            StateHasChanged();
+        }
     }
 
     private async Task ExportAsync()

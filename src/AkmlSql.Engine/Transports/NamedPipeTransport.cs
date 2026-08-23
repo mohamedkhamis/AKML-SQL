@@ -80,16 +80,75 @@ public sealed class NamedPipeTransport : IRpcTransport
 
     private async Task HandleClientAsync(NamedPipeServerStream pipe, CancellationToken ct)
     {
+        // Serializes response frames: concurrent AI dispatches and the serial loop must never
+        // interleave partial frames on the pipe (frame = 8-byte header + payload).
+        using var writeLock = new SemaphoreSlim(1, 1);
+
         while (pipe.IsConnected && !ct.IsCancellationRequested)
         {
             var message = await FrameProtocol.ReadFramedAsync(pipe, ct);
             if (message == null) break;
 
+            if (IsLongRunningType(message.MessageType))
+            {
+                // AI requests run for seconds-to-minutes (a provider call the shell may even
+                // have abandoned — the dispatch token is the pipe-lifetime token, so nothing
+                // cancels the handler when the caller times out). Handling them inline froze
+                // the WHOLE engine: completions, schema-status polls ("Refreshing schema
+                // cache…" forever) and every queued AI request ("A task was canceled") sat
+                // behind one slow call. Dispatch them on the pool; responses correlate by
+                // RequestId on the shell side, so out-of-order delivery is already handled.
+                _ = Task.Run(() => DispatchAndRespondAsync(pipe, message, writeLock, ct), ct);
+            }
+            else
+            {
+                // Fast handlers stay strictly serial — the pre-existing ordering/thread-safety
+                // contract for sessions, history (SQLite) and schema cache is untouched.
+                await DispatchAndRespondAsync(pipe, message, writeLock, ct);
+            }
+        }
+    }
+
+    /// <summary>The AI request family (70–78) — the only handlers that block on provider I/O.</summary>
+    private static bool IsLongRunningType(int messageType) =>
+        messageType >= MessageTypes.AiTextToSql && messageType <= MessageTypes.AiStreamCancel;
+
+    private async Task DispatchAndRespondAsync(
+        NamedPipeServerStream pipe, RpcMessage message, SemaphoreSlim writeLock, CancellationToken ct)
+    {
+        try
+        {
             var response = await DispatchAsync(message, ct);
-            if (response != null)
+            if (response == null) return;
+
+            await writeLock.WaitAsync(ct);
+            try
             {
                 await FrameProtocol.WriteFramedAsync(pipe, response, ct);
             }
+            finally
+            {
+                writeLock.Release();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Shutdown or client disconnect — the read loop observes ct/pipe state itself.
+        }
+        catch (IOException ex)
+        {
+            // Pipe broke while a late AI response was being written; the read loop notices too.
+            Log.Debug(ex, "NamedPipeTransport: pipe closed while writing response for type {Type}",
+                message.MessageType);
+        }
+        catch (ObjectDisposedException)
+        {
+            // Pipe/lock disposed after disconnect while a background AI dispatch was finishing.
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "NamedPipeTransport: background dispatch failed for type {Type}",
+                message.MessageType);
         }
     }
 

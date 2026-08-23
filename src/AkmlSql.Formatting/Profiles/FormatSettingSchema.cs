@@ -53,7 +53,11 @@ public class FormatSettingSchema
         Justification = "Reflection over POCO type properties; clarity over micro-optimization.")]
     public static FormatSettingSchema BuildDefault()
     {
-        var schema = new FormatSettingSchema { SchemaVersion = 1 };
+        // Spec 033 (T021) — v2: category hierarchy (ParentId), SettingMeta-sourced
+        // descriptions/enum values/ranges, and flattened nested option objects. Bumping this
+        // literal invalidates the engine's Cached=true short-circuit and the shell's static
+        // schema cache automatically.
+        var schema = new FormatSettingSchema { SchemaVersion = 2 };
 
         var profileType = typeof(FormattingProfile);
         var defaultInstance = new FormattingProfile();
@@ -75,6 +79,9 @@ public class FormatSettingSchema
             {
                 Id = groupId,
                 DisplayName = groupDisplay,
+                // v2 — five-category hierarchy; unmapped future groups land under "other"
+                // (the schema completeness test flags them so the map stays exhaustive).
+                ParentId = CategoryMap.TryGetValue(groupId, out var category) ? category : CategoryOther,
                 Order = order++,
             });
 
@@ -82,33 +89,94 @@ public class FormatSettingSchema
             var categoryInstance = categoryProp.GetValue(defaultInstance);
             if (categoryInstance == null) continue;
 
-            foreach (var settingProp in categoryProp.PropertyType.GetProperties(BindingFlags.Public | BindingFlags.Instance))
-            {
-                if (!settingProp.CanRead || !settingProp.CanWrite) continue;
-
-                var settingAttr = settingProp.GetCustomAttribute<JsonPropertyNameAttribute>();
-                var settingShortName = settingAttr?.Name ?? LowercaseFirst(settingProp.Name);
-                var settingId = $"{groupId}.{settingShortName}";
-
-                var type = ClassifyType(settingProp.PropertyType);
-                var defaultValue = TryGetDefault(categoryInstance, settingProp);
-                var sqlPromptKey = LookupSqlPromptKey(settingId, settingProp.Name);
-
-                schema.Settings.Add(new FormatSetting
-                {
-                    Id = settingId,
-                    GroupId = groupId,
-                    DisplayName = PrettifyName(settingProp.Name),
-                    Type = type,
-                    Default = defaultValue,
-                    SqlPromptKey = sqlPromptKey,
-                    Status = sqlPromptKey != null ? "Implemented" : "AkmlOnly",
-                });
-            }
+            AddSettingsFrom(schema, groupId, groupId, categoryInstance, depth: 0);
         }
 
         return schema;
     }
+
+    /// <summary>
+    /// v2 — emits one <see cref="FormatSetting"/> per scalar property under
+    /// <paramref name="idPrefix"/>. Class-typed sub-objects (InsertStatementsOptions'
+    /// Columns/Values) recurse into multi-segment ids (<c>insertStatements.columns.*</c>)
+    /// instead of surfacing as opaque "Other" blobs.
+    /// </summary>
+    private static void AddSettingsFrom(FormatSettingSchema schema, string groupId, string idPrefix, object instance, int depth)
+    {
+        if (depth > 2) return; // structural safety net — the profile nests at most one extra level
+
+        foreach (var settingProp in instance.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance))
+        {
+            if (!settingProp.CanRead || !settingProp.CanWrite) continue;
+
+            var settingAttr = settingProp.GetCustomAttribute<JsonPropertyNameAttribute>();
+            var settingShortName = settingAttr?.Name ?? LowercaseFirst(settingProp.Name);
+            var settingId = $"{idPrefix}.{settingShortName}";
+
+            if (settingProp.PropertyType.IsClass && settingProp.PropertyType != typeof(string))
+            {
+                var nested = TryGetDefault(instance, settingProp);
+                if (nested != null) AddSettingsFrom(schema, groupId, settingId, nested, depth + 1);
+                continue;
+            }
+
+            var type = ClassifyType(settingProp.PropertyType);
+            var defaultValue = TryGetDefault(instance, settingProp);
+            var sqlPromptKey = LookupSqlPromptKey(settingId, settingProp.Name);
+            var meta = settingProp.GetCustomAttribute<SettingMetaAttribute>();
+
+            schema.Settings.Add(new FormatSetting
+            {
+                Id = settingId,
+                GroupId = groupId,
+                DisplayName = PrettifyName(settingProp.Name),
+                Type = type,
+                Default = defaultValue,
+                AllowedEnumValues = meta?.AllowedValues is { Length: > 0 } allowed ? [.. allowed] : null,
+                Min = meta != null && meta.Min != SettingMetaAttribute.Unset ? meta.Min : null,
+                Max = meta != null && meta.Max != SettingMetaAttribute.Unset ? meta.Max : null,
+                Description = string.IsNullOrWhiteSpace(meta?.Description) ? null : meta!.Description,
+                SqlPromptKey = sqlPromptKey,
+                Status = sqlPromptKey != null ? "Implemented" : "AkmlOnly",
+            });
+        }
+    }
+
+    // -------------------------------------------------------------------
+    // v2 category hierarchy (spec 033) — mirrors SQL Prompt's Edit Formatting Styles tree.
+    // Category ids travel ONLY as ParentId values on group rows (never as group rows
+    // themselves — a v1 shell rendering rows flatly must not see empty category nodes);
+    // the shell maps id → display name.
+    // -------------------------------------------------------------------
+
+    internal const string CategoryGlobal = "global";
+    internal const string CategoryStatements = "statements";
+    internal const string CategoryClauses = "clauses";
+    internal const string CategoryExpressions = "expressions";
+    internal const string CategoryOther = "other";
+
+    /// <summary>Group id → category id. Every current group MUST appear here (test-enforced).</summary>
+    internal static readonly Dictionary<string, string> CategoryMap = new(StringComparer.Ordinal)
+    {
+        ["whitespace"] = CategoryGlobal,
+        ["list"] = CategoryGlobal,
+        ["parenthesis"] = CategoryGlobal,
+        ["casing"] = CategoryGlobal,
+        ["dml"] = CategoryStatements,
+        ["ddl"] = CategoryStatements,
+        ["cte"] = CategoryStatements,
+        ["controlFlow"] = CategoryStatements,
+        ["declare"] = CategoryStatements,
+        ["join"] = CategoryClauses,
+        ["insertStatements"] = CategoryClauses,
+        ["case"] = CategoryExpressions,
+        ["operators"] = CategoryExpressions,
+        ["inStatements"] = CategoryExpressions,
+        ["functionCalls"] = CategoryExpressions,
+        ["expression"] = CategoryExpressions,
+        ["comments"] = CategoryOther,
+        ["formatActions"] = CategoryOther,
+    };
 
     // -------------------------------------------------------------------
     // Helpers
@@ -164,6 +232,14 @@ public class FormatSettingSchema
         ["functionCalls.indentParameters"]  = "IndentFunctionParameters",
         ["comments.multilineFormatting"]    = "MultilineCommentFormatting",
         ["comments.recognizeCommonPatterns"] = "RecognizeCommonCommentPatterns",
+        // Spec 033 (T021) — flattened insertStatements sub-objects (Redgate modern-JSON
+        // insertStatements.columns/values section; imported by the spec-031 JSON importer).
+        ["insertStatements.columns.parenthesisStyle"] = "InsertColumnsParenthesisStyle",
+        ["insertStatements.columns.indentContents"] = "InsertColumnsIndentContents",
+        ["insertStatements.columns.placeSubsequentItemsOnNewLines"] = "InsertColumnsPlaceSubsequentItemsOnNewLines",
+        ["insertStatements.values.parenthesisStyle"] = "InsertValuesParenthesisStyle",
+        ["insertStatements.values.indentContents"] = "InsertValuesIndentContents",
+        ["insertStatements.values.placeSubsequentItemsOnNewLines"] = "InsertValuesPlaceSubsequentItemsOnNewLines",
     };
 
     /// <summary>

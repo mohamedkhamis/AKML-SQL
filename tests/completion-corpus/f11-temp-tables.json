@@ -1,0 +1,662 @@
+[
+  {
+    "id": "TEMP-001",
+    "family": "temp-tables",
+    "doc": "CREATE TABLE #tmpOrders (OrderID int, OrderDate datetime);\nSELECT * FROM #tmp|",
+    "expect": {
+      "mustContain": ["#tmpOrders"],
+      "mustNotContain": ["Orders", "Customers"],
+      "minCount": 1
+    },
+    "note": "temp table name completes after FROM under #tmp prefix; real tables must not match the # prefix"
+  },
+  {
+    "id": "TEMP-002",
+    "family": "temp-tables",
+    "doc": "CREATE TABLE #tmpProducts (ProductID int, Price numeric(9,2));\nSELECT * FROM |",
+    "expect": {
+      "mustContain": ["#tmpProducts", "Products", "Customers"],
+      "mustNotContain": ["ProductName", "CustomerName"],
+      "minCount": 1
+    },
+    "note": "empty-prefix FROM offers the batch temp table alongside schema tables; columns excluded at table position"
+  },
+  {
+    "id": "TEMP-003",
+    "family": "temp-tables",
+    "doc": "CREATE TABLE #ords (OrderID int, CustomerID int, OrderDate datetime);\nSELECT | FROM #ords",
+    "expect": {
+      "mustContain": ["OrderID", "CustomerID", "OrderDate"],
+      "mustNotContain": ["ProductName", "LastName"],
+      "minCount": 1
+    },
+    "note": "select list scoped to the CREATE TABLE temp definition columns"
+  },
+  {
+    "id": "TEMP-004",
+    "family": "temp-tables",
+    "doc": "SELECT CustomerID, City INTO #custCities FROM dbo.Customers;\nSELECT | FROM #custCities",
+    "expect": {
+      "mustContain": ["CustomerID", "City"],
+      "mustNotContain": ["Country", "PostalCode"],
+      "minCount": 1
+    },
+    "note": "SELECT INTO temp exposes only the projected columns, not the full source Customers table"
+  },
+  {
+    "id": "TEMP-005",
+    "family": "temp-tables",
+    "doc": "SELECT * INTO #allOrders FROM dbo.Orders;\nSELECT | FROM #allOrders",
+    "expect": {
+      "mustContain": ["OrderID", "CustomerID", "OrderDate", "ShipperID"],
+      "mustNotContain": ["ProductName", "Quantity"],
+      "minCount": 1
+    },
+    "note": "SELECT * INTO expands the star to all Orders columns for later completion"
+  },
+  {
+    "id": "TEMP-006",
+    "family": "temp-tables",
+    "doc": "CREATE TABLE #emp (EmployeeID int, LastName varchar(15), FirstName varchar(15));\nSELECT t.| FROM #emp t",
+    "expect": {
+      "mustContain": ["EmployeeID", "LastName", "FirstName"],
+      "mustNotContain": ["BirthDate", "Notes"],
+      "minCount": 1
+    },
+    "note": "alias over temp resolves to the temp definition, not the real Employees table"
+  },
+  {
+    "id": "TEMP-007",
+    "family": "temp-tables",
+    "doc": "SELECT ProductID, ProductName, Price INTO #p FROM dbo.Products;\nSELECT pr.P| FROM #p pr",
+    "expect": {
+      "mustContain": ["ProductID", "ProductName", "Price"],
+      "mustNotContain": ["SupplierID", "Unit"],
+      "minCount": 1
+    },
+    "note": "1-char prefix over aliased SELECT INTO temp columns"
+  },
+  {
+    "id": "TEMP-008",
+    "family": "temp-tables",
+    "doc": "CREATE TABLE #ship (ShipperID int, ShipperName varchar(25));\nINSERT INTO #ship (|",
+    "expect": {
+      "mustContain": ["ShipperID", "ShipperName"],
+      "mustNotContain": ["Phone"],
+      "minCount": 1
+    },
+    "note": "INSERT column list scoped to temp definition; Phone exists only on real Shippers"
+  },
+  {
+    "id": "TEMP-009",
+    "family": "temp-tables",
+    "doc": "CREATE TABLE #inv (InvoiceID int, TotalAmount decimal(9,2), Paid bit);\nUPDATE #inv SET |",
+    "expect": {
+      "mustContain": ["TotalAmount", "Paid", "InvoiceID"],
+      "mustNotContain": ["InvoiceDate", "OrderID"],
+      "minCount": 1
+    },
+    "note": "UPDATE SET scoped to temp columns, not the real Sales.Invoices"
+  },
+  {
+    "id": "TEMP-010",
+    "family": "temp-tables",
+    "doc": "CREATE TABLE #dets (OrderDetailID int, Quantity int);\nDELETE FROM #dets WHERE |",
+    "expect": {
+      "mustContain": ["OrderDetailID", "Quantity"],
+      "mustNotContain": ["ProductID", "OrderID"],
+      "minCount": 1
+    },
+    "note": "DELETE WHERE scoped to the temp definition subset of OrderDetails"
+  },
+  {
+    "id": "TEMP-011",
+    "family": "temp-tables",
+    "doc": "CREATE TABLE #o (OrderID int, CustomerID int);\nSELECT c.CustomerName\nFROM dbo.Customers c\nINNER JOIN #o t ON t.|",
+    "expect": {
+      "mustContain": ["OrderID", "CustomerID"],
+      "mustNotContain": ["CustomerName", "Country"],
+      "minCount": 1
+    },
+    "note": "ON-clause alias t scopes to the temp join target, not Customers"
+  },
+  {
+    "id": "TEMP-012",
+    "family": "temp-tables",
+    "doc": "SELECT OrderID, ProductID, Quantity INTO #od FROM dbo.OrderDetails;\nSELECT p.ProductName FROM #od d JOIN dbo.Products p ON p.| = d.ProductID",
+    "expect": {
+      "mustContain": ["ProductID", "SupplierID"],
+      "mustNotContain": ["Quantity", "OrderDetailID"],
+      "minCount": 1
+    },
+    "note": "real-table alias in a temp join must not absorb the temp's columns"
+  },
+  {
+    "id": "TEMP-013",
+    "family": "temp-tables",
+    "doc": "CREATE TABLE ##globalCache (CategoryID int, CategoryName varchar(25));\nSELECT * FROM ##|",
+    "expect": {
+      "mustContain": ["##globalCache"],
+      "mustNotContain": ["Categories"],
+      "minCount": 1
+    },
+    "note": "global temp table completes after FROM under ## prefix"
+  },
+  {
+    "id": "TEMP-014",
+    "family": "temp-tables",
+    "doc": "CREATE TABLE ##gc (CategoryID int, CategoryName varchar(25));\nSELECT | FROM ##gc",
+    "expect": {
+      "mustContain": ["CategoryID", "CategoryName"],
+      "mustNotContain": ["Description"],
+      "minCount": 1
+    },
+    "note": "global temp columns come from its definition; Description belongs only to real Categories"
+  },
+  {
+    "id": "TEMP-015",
+    "family": "temp-tables",
+    "doc": "CREATE TABLE #a (OrderID int);\nCREATE TABLE #b (ProductID int);\nSELECT * FROM #|",
+    "expect": {
+      "mustContain": ["#a", "#b"],
+      "mustNotContain": ["OrderID"],
+      "minCount": 2
+    },
+    "note": "both batch temp tables offered at FROM; columns excluded at table position"
+  },
+  {
+    "id": "TEMP-016",
+    "family": "temp-tables",
+    "doc": "CREATE TABLE #cust (CustomerID int, CustomerName varchar(50));\nCREATE TABLE #prod (ProductID int, ProductName varchar(50));\nSELECT | FROM #prod",
+    "expect": {
+      "mustContain": ["ProductID", "ProductName"],
+      "mustNotContain": ["CustomerID", "CustomerName"],
+      "minCount": 1
+    },
+    "note": "column scope binds to the referenced temp only, not the sibling temp"
+  },
+  {
+    "id": "TEMP-017",
+    "family": "temp-tables",
+    "doc": "SELECT CustomerID, City INTO #c FROM dbo.Customers;\nSELECT * FROM #c cc WHERE cc.C|",
+    "expect": {
+      "mustContain": ["CustomerID", "City"],
+      "mustNotContain": ["Country", "ContactName"],
+      "minCount": 1
+    },
+    "note": "prefix C matches Country/ContactName on real Customers but they are absent from the temp projection"
+  },
+  {
+    "id": "TEMP-018",
+    "family": "temp-tables",
+    "doc": "CREATE TABLE #s (SupplierID int, SupplierName varchar(50), City varchar(20));\nSELECT * FROM #s ORDER BY |",
+    "expect": {
+      "mustContain": ["SupplierID", "SupplierName", "City"],
+      "mustNotContain": ["Country", "Phone"],
+      "minCount": 1
+    },
+    "note": "ORDER BY scoped to temp definition, not full Suppliers"
+  },
+  {
+    "id": "TEMP-019",
+    "family": "temp-tables",
+    "doc": "SELECT CustomerID, OrderDate INTO #g FROM dbo.Orders;\nSELECT CustomerID, COUNT(*) FROM #g GROUP BY |",
+    "expect": {
+      "mustContain": ["CustomerID", "OrderDate"],
+      "mustNotContain": ["EmployeeID", "ShipperID"],
+      "minCount": 1
+    },
+    "note": "GROUP BY sees the temp projection columns only"
+  },
+  {
+    "id": "TEMP-020",
+    "family": "temp-tables",
+    "doc": "CREATE TABLE #t (OrderID int);\nINSERT INTO #t SELECT | FROM dbo.Orders",
+    "expect": {
+      "mustContain": ["OrderID", "CustomerID", "OrderDate"],
+      "mustNotContain": ["ProductName", "Quantity"],
+      "minCount": 1
+    },
+    "note": "INSERT ... SELECT source list scopes to Orders, not the temp target"
+  },
+  {
+    "id": "TEMP-021",
+    "family": "temp-tables",
+    "doc": "SELECT ProductID, Price INTO #cheap FROM dbo.Products WHERE |",
+    "expect": {
+      "mustContain": ["Price", "ProductID", "CategoryID"],
+      "mustNotContain": ["CategoryName", "OrderID"],
+      "minCount": 1
+    },
+    "note": "WHERE inside the SELECT INTO statement itself scopes to the source Products table"
+  },
+  {
+    "id": "TEMP-022",
+    "family": "temp-tables",
+    "doc": "create table #x (OrderID int, ShipperID int); select | from #x",
+    "expect": {
+      "mustContain": ["OrderID", "ShipperID"],
+      "mustNotContain": ["CustomerID", "OrderDate"],
+      "minCount": 1
+    },
+    "note": "lowercase keywords, single-line doc; temp definition is a subset of Orders columns"
+  },
+  {
+    "id": "TEMP-023",
+    "family": "temp-tables",
+    "doc": "Create Table #Freight (ShipperID int, Phone varchar(15)); Select * From #F|",
+    "expect": {
+      "mustContain": ["#Freight"],
+      "mustNotContain": ["Shippers", "Suppliers"],
+      "minCount": 1
+    },
+    "note": "mixed-case keywords; #F prefix filters to the temp name only"
+  },
+  {
+    "id": "TEMP-024",
+    "family": "temp-tables",
+    "doc": "CREATE TABLE #catx (CategoryID int, CategoryName varchar(25), Description varchar(255));\nSELECT cx.| FROM #catx cx",
+    "expect": {
+      "mustContain": ["CategoryID", "CategoryName", "Description"],
+      "mustNotContain": ["ProductID", "ProductName"],
+      "minCount": 1
+    },
+    "note": "alias dot-completion over the full temp definition"
+  },
+  {
+    "id": "TEMP-025",
+    "family": "temp-tables",
+    "doc": "CREATE TABLE #wide (\n    OrderID int,\n    CustomerID int,\n    EmployeeID int\n);\nSELECT | FROM #wide",
+    "expect": {
+      "mustContain": ["OrderID", "CustomerID", "EmployeeID"],
+      "mustNotContain": ["OrderDate", "ShipperID"],
+      "minCount": 1
+    },
+    "note": "multi-line CREATE TABLE body still yields the temp columns"
+  },
+  {
+    "id": "TEMP-026",
+    "family": "temp-tables",
+    "doc": "SELECT OrderID, TotalAmount AS Price INTO #inv2 FROM Sales.Invoices;\nSELECT | FROM #inv2",
+    "expect": {
+      "mustContain": ["OrderID", "Price"],
+      "mustNotContain": ["TotalAmount", "Paid"],
+      "minCount": 1
+    },
+    "note": "AS-aliased output column renames TotalAmount to Price inside the temp"
+  },
+  {
+    "id": "TEMP-027",
+    "family": "temp-tables",
+    "doc": "SELECT o.OrderID, c.CustomerName INTO #oc FROM dbo.Orders o JOIN dbo.Customers c ON c.CustomerID = o.CustomerID;\nSELECT | FROM #oc",
+    "expect": {
+      "mustContain": ["OrderID", "CustomerName"],
+      "mustNotContain": ["CustomerID", "OrderDate"],
+      "minCount": 1
+    },
+    "note": "multi-source SELECT INTO keeps only the projected columns"
+  },
+  {
+    "id": "TEMP-028",
+    "family": "temp-tables",
+    "doc": "CREATE TABLE #topOrders (OrderID int, CustomerID int);\nSELECT | FROM #topOrders t JOIN dbo.Customers c ON c.CustomerID = t.CustomerID",
+    "expect": {
+      "mustContain": ["OrderID", "CustomerName", "Country"],
+      "mustNotContain": ["ProductName", "Quantity"],
+      "minCount": 1
+    },
+    "note": "select list merges temp columns with joined real-table columns"
+  },
+  {
+    "id": "TEMP-029",
+    "family": "temp-tables",
+    "doc": "CREATE TABLE #ordHist (OrderID int, OrderDate datetime, CustomerID int);\nSELECT Ord| FROM #ordHist",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["CustomerID"],
+      "minCount": 1
+    },
+    "note": "3-char prefix filters temp columns; CustomerID fails the Ord prefix"
+  },
+  {
+    "id": "TEMP-030",
+    "family": "temp-tables",
+    "doc": "SELECT z.| FROM #NoSuchTemp z",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["CustomerID", "OrderID", "ProductName"],
+      "minCount": 0
+    },
+    "note": "negative: alias over an undefined temp table must not surface schema columns"
+  },
+  {
+    "id": "TEMP-031",
+    "family": "temp-tables",
+    "doc": "SELECT * FROM #|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["Customers", "Orders"],
+      "minCount": 0
+    },
+    "note": "negative: no temp tables exist in the batch; # prefix must not match real tables"
+  },
+  {
+    "id": "TEMP-032",
+    "family": "temp-tables",
+    "doc": "SELECT CustomerID, EmployeeID INTO #h FROM dbo.Orders;\nSELECT CustomerID, COUNT(*) FROM #h GROUP BY CustomerID HAVING |",
+    "expect": {
+      "mustContain": ["CustomerID"],
+      "mustNotContain": ["OrderDate", "ShipperID"],
+      "minCount": 1
+    },
+    "note": "HAVING sees the temp projection; unprojected Orders columns are excluded"
+  },
+  {
+    "id": "TEMP-033",
+    "family": "temp-tables",
+    "doc": "CREATE TABLE #log (OrderID int, OrderDate datetime);\nINSERT INTO #log SELECT OrderID, OrderDate FROM dbo.Orders;\nSELECT | FROM #log",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["CustomerID", "EmployeeID"],
+      "minCount": 1
+    },
+    "note": "temp defined two statements earlier still completes after an intervening INSERT"
+  },
+  {
+    "id": "TEMP-034",
+    "family": "temp-tables",
+    "doc": "CREATE TABLE #pr (ProductID int, Price numeric(9,2));\nUPDATE t SET t.| FROM #pr t",
+    "expect": {
+      "mustContain": ["ProductID", "Price"],
+      "mustNotContain": ["ProductName", "Unit"],
+      "minCount": 1
+    },
+    "note": "UPDATE-alias-FROM pattern binds t to the temp target's definition"
+  },
+  {
+    "id": "TEMP-035",
+    "family": "temp-tables",
+    "doc": "SELECT OrderID, Quantity INTO #d FROM dbo.OrderDetails;\nDELETE d FROM #d d WHERE d.|",
+    "expect": {
+      "mustContain": ["OrderID", "Quantity"],
+      "mustNotContain": ["ProductID", "OrderDetailID"],
+      "minCount": 1
+    },
+    "note": "aliased DELETE against a temp scopes WHERE to the temp projection"
+  },
+  {
+    "id": "TEMP-036",
+    "family": "temp-tables",
+    "doc": "CREATE TABLE #ids (CustomerID int);\nSELECT * FROM dbo.Customers WHERE CustomerID IN (SELECT | FROM #ids)",
+    "expect": {
+      "mustContain": ["CustomerID"],
+      "mustNotContain": ["ProductName", "OrderDate"],
+      "minCount": 1
+    },
+    "note": "temp usable inside an IN-subquery; unrelated table columns excluded"
+  },
+  {
+    "id": "TEMP-037",
+    "family": "temp-tables",
+    "doc": "SELECT GETDATE();\nCREATE TABLE #snap (EmployeeID int, LastName varchar(15));\nSELECT e.| FROM #snap e",
+    "expect": {
+      "mustContain": ["EmployeeID", "LastName"],
+      "mustNotContain": ["FirstName", "BirthDate"],
+      "minCount": 1
+    },
+    "note": "unrelated prior statement does not disturb temp alias resolution"
+  },
+  {
+    "id": "TEMP-038",
+    "family": "temp-tables",
+    "doc": "CREATE TABLE #extra (OrderID int);\nSELECT o.OrderID FROM dbo.Orders o JOIN #|",
+    "expect": {
+      "mustContain": ["#extra"],
+      "mustNotContain": ["OrderID"],
+      "minCount": 1
+    },
+    "note": "temp name offered at JOIN target position; columns excluded there"
+  },
+  {
+    "id": "TEMP-039",
+    "family": "temp-tables",
+    "doc": "CREATE TABLE #stage (ProductID int, Quantity int);\nINSERT INTO #st|",
+    "expect": {
+      "mustContain": ["#stage"],
+      "mustNotContain": ["Products", "Shippers"],
+      "minCount": 1
+    },
+    "note": "INSERT target completes temp names under the #st prefix"
+  },
+  {
+    "id": "TEMP-040",
+    "family": "temp-tables",
+    "doc": "CREATE TABLE #fix (Price numeric(9,2), ProductID int);\nUPDATE #|",
+    "expect": {
+      "mustContain": ["#fix"],
+      "mustNotContain": ["Products"],
+      "minCount": 1
+    },
+    "note": "UPDATE target position offers the batch temp table"
+  },
+  {
+    "id": "TEMP-041",
+    "family": "temp-tables",
+    "doc": "CREATE TABLE #old (OrderID int);\nDELETE FROM #o|",
+    "expect": {
+      "mustContain": ["#old"],
+      "mustNotContain": ["Orders", "OrderDetails"],
+      "minCount": 1
+    },
+    "note": "DELETE FROM target with #o prefix; real O-tables must not match the prefix"
+  },
+  {
+    "id": "TEMP-042",
+    "family": "temp-tables",
+    "doc": "CREATE TABLE #pad (   CategoryID   int ,   CategoryName   varchar(25) );   SELECT   |   FROM   #pad",
+    "expect": {
+      "mustContain": ["CategoryID", "CategoryName"],
+      "mustNotContain": ["Description"],
+      "minCount": 1
+    },
+    "note": "irregular whitespace on a single line does not break temp definition parsing"
+  },
+  {
+    "id": "TEMP-043",
+    "family": "temp-tables",
+    "doc": "CREATE TABLE #t1 (OrderID int,\n\tCustomerID int);\nSELECT\n\t|\nFROM #t1",
+    "expect": {
+      "mustContain": ["OrderID", "CustomerID"],
+      "mustNotContain": ["OrderDate"],
+      "minCount": 1
+    },
+    "note": "caret on its own tab-indented line between SELECT and FROM"
+  },
+  {
+    "id": "TEMP-044",
+    "family": "temp-tables",
+    "doc": "create table #results (ProductID int, ProductName varchar(50));\nselect PRODUCTN| from #results",
+    "expect": {
+      "mustContain": ["ProductName"],
+      "mustNotContain": ["ProductID", "Price"],
+      "minCount": 1
+    },
+    "note": "uppercase prefix matches temp column case-insensitively; ProductID fails the PRODUCTN prefix"
+  },
+  {
+    "id": "TEMP-045",
+    "family": "temp-tables",
+    "doc": "SELECT ProductID, ProductName, CategoryName INTO #cat FROM dbo.vw_ProductCatalog;\nSELECT | FROM #cat",
+    "expect": {
+      "mustContain": ["ProductID", "ProductName", "CategoryName"],
+      "mustNotContain": ["SupplierName", "Price"],
+      "minCount": 1
+    },
+    "note": "SELECT INTO from a view projects only the chosen view columns into the temp"
+  },
+  {
+    "id": "TEMP-046",
+    "family": "temp-tables",
+    "doc": "CREATE TABLE #x1 (OrderID int, CustomerID int);\nCREATE TABLE #x2 (OrderID int, ProductID int);\nSELECT a.CustomerID FROM #x1 a JOIN #x2 b ON b.|",
+    "expect": {
+      "mustContain": ["OrderID", "ProductID"],
+      "mustNotContain": ["CustomerID"],
+      "minCount": 1
+    },
+    "note": "temp-to-temp join; b. scopes to #x2 columns only, not #x1's CustomerID"
+  },
+  {
+    "id": "TEMP-047",
+    "family": "temp-tables",
+    "doc": "SELECT OrderID, ShipperID INTO #so FROM dbo.Orders;\nSELECT s.ShipperName FROM dbo.Shippers s JOIN #so t ON |",
+    "expect": {
+      "mustContain": ["ShipperID", "ShipperName"],
+      "mustNotContain": ["ProductID", "CustomerName"],
+      "minCount": 1
+    },
+    "note": "unqualified ON offers columns from both the temp and the joined real table"
+  },
+  {
+    "id": "TEMP-048",
+    "family": "temp-tables",
+    "doc": "SELECT * INTO #bigOrders FROM dbo.Orders;\nSELECT TOP (10) | FROM #bigOrders",
+    "expect": {
+      "mustContain": ["OrderID", "CustomerID", "OrderDate"],
+      "mustNotContain": ["Quantity", "ProductID"],
+      "minCount": 1
+    },
+    "note": "TOP (n) does not disturb the temp column scope"
+  },
+  {
+    "id": "TEMP-049",
+    "family": "temp-tables",
+    "doc": "CREATE TABLE #mini (ShipperID int, ShipperName varchar(25), Phone varchar(15));\nSELECT ShipperID, | FROM #mini",
+    "expect": {
+      "mustContain": ["ShipperName", "Phone"],
+      "mustNotContain": ["OrderID"],
+      "minCount": 1
+    },
+    "note": "completion after a comma in the select list stays temp-scoped"
+  },
+  {
+    "id": "TEMP-050",
+    "family": "temp-tables",
+    "doc": "CREATE TABLE #q (Quantity int, ProductID int);\nSELECT qt.| FROM #q AS qt",
+    "expect": {
+      "mustContain": ["Quantity", "ProductID"],
+      "mustNotContain": ["OrderID", "OrderDetailID"],
+      "minCount": 1
+    },
+    "note": "AS-keyword alias over a temp resolves the same as a bare alias"
+  },
+  {
+    "id": "TEMP-051",
+    "family": "temp-tables",
+    "doc": "CREATE TABLE #upd (ProductID int, Price numeric(9,2));\nINSERT INTO #upd (ProductID, Price) SELECT ProductID, Price FROM dbo.Products;\nUPDATE #upd SET Pr|",
+    "expect": {
+      "mustContain": ["Price", "ProductID"],
+      "mustNotContain": ["ProductName"],
+      "minCount": 1
+    },
+    "note": "ProductName matches the Pr prefix on real Products but is not a temp column"
+  },
+  {
+    "id": "TEMP-052",
+    "family": "temp-tables",
+    "doc": "SELECT EmployeeID, LastName, BirthDate INTO #staff FROM dbo.Employees;\nSELECT * FROM #staff WHERE |",
+    "expect": {
+      "mustContain": ["EmployeeID", "LastName", "BirthDate"],
+      "mustNotContain": ["FirstName", "Notes", "Photo"],
+      "minCount": 1
+    },
+    "note": "WHERE over the temp exposes only the projected Employees columns"
+  },
+  {
+    "id": "TEMP-053",
+    "family": "temp-tables",
+    "doc": "SELECT 1;\nCREATE TABLE #zz (OrderID int);\nSELECT * FROM #z|",
+    "expect": {
+      "mustContain": ["#zz"],
+      "mustNotContain": ["Orders", "Shippers"],
+      "minCount": 1
+    },
+    "note": "temp name completion after a prior trivial statement; #z prefix filter"
+  },
+  {
+    "id": "TEMP-054",
+    "family": "temp-tables",
+    "doc": "CREATE TABLE #direct (CategoryID int, Description varchar(255));\nSELECT #direct.| FROM #direct",
+    "expect": {
+      "mustContain": ["CategoryID", "Description"],
+      "mustNotContain": ["CategoryName"],
+      "minCount": 1
+    },
+    "note": "qualification by the temp table name itself (no alias) yields its columns"
+  },
+  {
+    "id": "TEMP-055",
+    "family": "temp-tables",
+    "doc": "SELECT OrderID, OrderDate INTO #recent FROM dbo.Orders WHERE OrderDate > '2024-01-01';\nSELECT r.O| FROM #recent r",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["CustomerID", "ShipperID"],
+      "minCount": 1
+    },
+    "note": "a WHERE clause on the source does not add unprojected columns to the temp"
+  },
+  {
+    "id": "TEMP-056",
+    "family": "temp-tables",
+    "doc": "SELECT o.OrderID INTO #keep FROM dbo.Orders o;\nSELECT | FROM #keep",
+    "expect": {
+      "mustContain": ["OrderID"],
+      "mustNotContain": ["OrderDate", "CustomerID"],
+      "minCount": 1
+    },
+    "note": "alias-qualified projection strips the alias; only OrderID lands in the temp"
+  },
+  {
+    "id": "TEMP-057",
+    "family": "temp-tables",
+    "doc": "CREATE TABLE #names (FirstName varchar(15), LastName varchar(15), EmployeeID int);\nINSERT INTO #names (First|",
+    "expect": {
+      "mustContain": ["FirstName"],
+      "mustNotContain": ["LastName", "EmployeeID"],
+      "minCount": 1
+    },
+    "note": "prefix inside the INSERT column list filters temp columns"
+  },
+  {
+    "id": "TEMP-058",
+    "family": "temp-tables",
+    "doc": "SELECT CustomerID, Country INTO #geo FROM dbo.Customers;\nSELECT g.Country, COUNT(*) FROM #geo g GROUP BY g.Country ORDER BY g.|",
+    "expect": {
+      "mustContain": ["Country", "CustomerID"],
+      "mustNotContain": ["City", "PostalCode"],
+      "minCount": 1
+    },
+    "note": "ORDER BY alias dot-completion over the temp projection"
+  },
+  {
+    "id": "TEMP-059",
+    "family": "temp-tables",
+    "doc": "CREATE TABLE #dates (OrderDate datetime, OrderID int);\nSELECT * FROM #dates WHERE YEAR(|",
+    "expect": {
+      "mustContain": ["OrderDate", "OrderID"],
+      "mustNotContain": ["InvoiceDate", "BirthDate"],
+      "minCount": 1
+    },
+    "note": "function-argument position still offers temp columns"
+  },
+  {
+    "id": "TEMP-060",
+    "family": "temp-tables",
+    "doc": "CREATE TABLE #sales (OrderID int, TotalAmount decimal(9,2));\nINSERT INTO #sales SELECT OrderID, TotalAmount FROM Sales.Invoices;\nSELECT s.Tot| FROM #sales s JOIN dbo.Orders o ON o.OrderID = s.OrderID",
+    "expect": {
+      "mustContain": ["TotalAmount"],
+      "mustNotContain": ["Paid", "OrderDate"],
+      "minCount": 1
+    },
+    "note": "end-to-end batch (create, populate, join); Tot prefix isolates the temp column"
+  }
+]

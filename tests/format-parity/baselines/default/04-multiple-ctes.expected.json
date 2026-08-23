@@ -34,13 +34,6 @@
       "column": 37
     },
     {
-      "ruleId": "PE002",
-      "severity": "Warning",
-      "message": "Object 'customers' has no schema prefix — use 'dbo.customers' to avoid schema resolution overhead",
-      "line": 2,
-      "column": 42
-    },
-    {
       "ruleId": "ST001",
       "severity": "Hint",
       "message": "SQL keyword 'where' is not uppercase — use consistent ALL_CAPS keywords",
@@ -67,13 +60,6 @@
       "message": "SQL keyword 'from' is not uppercase — use consistent ALL_CAPS keywords",
       "line": 5,
       "column": 39
-    },
-    {
-      "ruleId": "PE002",
-      "severity": "Warning",
-      "message": "Object 'orders' has no schema prefix — use 'dbo.orders' to avoid schema resolution overhead",
-      "line": 5,
-      "column": 44
     },
     {
       "ruleId": "ST001",
@@ -118,13 +104,6 @@
       "column": 6
     },
     {
-      "ruleId": "PE002",
-      "severity": "Warning",
-      "message": "Object 'active_customers' has no schema prefix — use 'dbo.active_customers' to avoid schema resolution overhead",
-      "line": 8,
-      "column": 6
-    },
-    {
       "ruleId": "ST001",
       "severity": "Hint",
       "message": "SQL keyword 'left' is not uppercase — use consistent ALL_CAPS keywords",
@@ -142,13 +121,6 @@
       "ruleId": "NM006",
       "severity": "Info",
       "message": "Single-letter alias 'o' is not descriptive — use a meaningful alias",
-      "line": 9,
-      "column": 11
-    },
-    {
-      "ruleId": "PE002",
-      "severity": "Warning",
-      "message": "Object 'recent_orders' has no schema prefix — use 'dbo.recent_orders' to avoid schema resolution overhead",
       "line": 9,
       "column": 11
     },

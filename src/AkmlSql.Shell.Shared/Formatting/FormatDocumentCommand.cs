@@ -84,7 +84,11 @@ namespace AkmlSql.Shell.Shared.Formatting
                 var request = new FormatRequest
                 {
                     SessionId = Guid.NewGuid().ToString("N"),
-                    Text = documentText
+                    Text = documentText,
+                    // Without this the engine gets null, falls back to new FormattingProfile(), and
+                    // formats with POCO defaults — so Format SQL ignored the active style entirely.
+                    // Resolved per invocation so activating a style takes effect immediately.
+                    ProfileName = FormatActionHelper.ResolveActiveProfileName(),
                 };
 
                 System.Threading.Tasks.Task.Run(async () =>
@@ -93,6 +97,10 @@ namespace AkmlSql.Shell.Shared.Formatting
                     {
                         var response = await client.SendRequestAsync<FormatResponse, FormatRequest>(
                             MessageTypes.FormatDocument, request, timeoutMs: 10000);
+
+                        // A style that cannot be loaded still "succeeds" (with defaults), so this is
+                        // reported outside the preserve branch below — which stays silent on success.
+                        FormatFailureNotifier.NotifyProfileFallbackOnce(response.ProfileFallbackWarning);
 
                         if (response.Success && response.WasModified)
                         {

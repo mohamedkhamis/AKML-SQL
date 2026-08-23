@@ -1,4 +1,4 @@
-#nullable enable
+﻿#nullable enable
 using System;
 using System.ComponentModel.Design;
 using System.Text;
@@ -131,7 +131,8 @@ namespace AkmlSql.Shell.Shared.Commands
                 };
 
                 var response = await manager.Client.SendRequestAsync<AiOptimizeResponse, AiOptimizeRequest>(
-                    MessageTypes.AiOptimize, request, timeoutMs: 60000);
+                    MessageTypes.AiOptimize, request,
+                    timeoutMs: Ai.AiIpcTimeouts.ForAiRequestMs(AkmlSql.Core.Config.ConfigManager.Load()));
 
                 if (!response.Success)
                 {

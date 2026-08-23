@@ -1,0 +1,442 @@
+[
+  {
+    "id": "NEG-001",
+    "family": "negative-controls",
+    "doc": "SELECT x.| FROM dbo.Customers c",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["CustomerID", "CustomerName", "City"],
+      "minCount": 0
+    },
+    "note": "alias x never declared; c is the only alias, so no Customers columns may appear under x"
+  },
+  {
+    "id": "NEG-002",
+    "family": "negative-controls",
+    "doc": "SELECT z.Or| FROM dbo.Orders o",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["OrderID", "OrderDate"],
+      "minCount": 0
+    },
+    "note": "undeclared alias z with 2-char prefix; Orders columns must not leak from alias o"
+  },
+  {
+    "id": "NEG-003",
+    "family": "negative-controls",
+    "doc": "select q.| from dbo.Products p join dbo.Categories cat on p.CategoryID = cat.CategoryID",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["ProductName", "CategoryName", "Price"],
+      "minCount": 0
+    },
+    "note": "lowercase doc; q is undeclared despite two real aliases being in scope"
+  },
+  {
+    "id": "NEG-004",
+    "family": "negative-controls",
+    "doc": "|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["CustomerName", "Quantity", "TotalAmount"],
+      "minCount": 0
+    },
+    "note": "empty document - bare columns must not be offered without any statement context"
+  },
+  {
+    "id": "NEG-005",
+    "family": "negative-controls",
+    "doc": "\n\n   |",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["LastName", "Price", "InvoiceDate"],
+      "minCount": 0
+    },
+    "note": "whitespace-only multi-line doc - no schema columns at a blank statement start"
+  },
+  {
+    "id": "NEG-006",
+    "family": "negative-controls",
+    "doc": "SELECT | FROM dbo.NoSuchTable",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["CustomerName", "ProductName", "OrderID"],
+      "minCount": 0
+    },
+    "note": "FROM references a nonexistent table - no real table's columns may be suggested"
+  },
+  {
+    "id": "NEG-007",
+    "family": "negative-controls",
+    "doc": "SELECT ns.| FROM dbo.NoSuchTable ns",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["CustomerID", "Price", "OrderDate"],
+      "minCount": 0
+    },
+    "note": "alias bound to a fake table - alias-qualified completion must yield no schema columns"
+  },
+  {
+    "id": "NEG-008",
+    "family": "negative-controls",
+    "doc": "SELECT * FROM Ghost.|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["Invoices", "Customers", "Orders"],
+      "minCount": 0
+    },
+    "note": "nonexistent schema qualifier - neither Sales nor dbo objects may appear"
+  },
+  {
+    "id": "NEG-009",
+    "family": "negative-controls",
+    "doc": "SELECT * FROM Sales.|",
+    "expect": {
+      "mustContain": ["Invoices"],
+      "mustNotContain": ["Customers", "Products", "Shippers"],
+      "minCount": 1
+    },
+    "note": "cross-schema leak control - dbo tables must not appear under the Sales schema"
+  },
+  {
+    "id": "NEG-010",
+    "family": "negative-controls",
+    "doc": "SELECT c.| FROM dbo.Customers c JOIN dbo.Orders o ON o.CustomerID = c.CustomerID",
+    "expect": {
+      "mustContain": ["CustomerName", "City", "Country"],
+      "mustNotContain": ["OrderDate", "ShipperID", "EmployeeID"],
+      "minCount": 2
+    },
+    "note": "alias c scoped to Customers - joined Orders columns must not bleed into c"
+  },
+  {
+    "id": "NEG-011",
+    "family": "negative-controls",
+    "doc": "SELECT o.O| FROM dbo.Customers c JOIN dbo.Orders o ON o.CustomerID = c.CustomerID",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["OrderDetailID"],
+      "minCount": 1
+    },
+    "note": "1-char prefix O; OrderDetailID would only appear if OrderDetails leaked into the o scope"
+  },
+  {
+    "id": "NEG-012",
+    "family": "negative-controls",
+    "doc": "SELECT c.CustomerName FROM dbo.Customers c;\nSELECT c.|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["CustomerName", "CustomerID", "City"],
+      "minCount": 0
+    },
+    "note": "alias c from the prior semicolon-terminated statement must not leak into the new statement"
+  },
+  {
+    "id": "NEG-013",
+    "family": "negative-controls",
+    "doc": "SELECT p.ProductName FROM dbo.Products p;\nSELECT | FROM dbo.Employees",
+    "expect": {
+      "mustContain": ["LastName", "FirstName", "BirthDate"],
+      "mustNotContain": ["ProductName", "Price", "Unit"],
+      "minCount": 2
+    },
+    "note": "second statement scoped to Employees - prior statement's Products columns must be absent"
+  },
+  {
+    "id": "NEG-014",
+    "family": "negative-controls",
+    "doc": "SELECT s.SupplierName FROM dbo.Suppliers s;\nSELECT s.| FROM dbo.Shippers s",
+    "expect": {
+      "mustContain": ["ShipperName", "Phone"],
+      "mustNotContain": ["SupplierName", "ContactName", "Country"],
+      "minCount": 1
+    },
+    "note": "alias s rebound to Shippers - stale Suppliers binding must not survive the semicolon"
+  },
+  {
+    "id": "NEG-015",
+    "family": "negative-controls",
+    "doc": "SELECT o.OrderID FROM dbo.Orders o WHERE o.OrderID IN (SELECT od.OrderID FROM dbo.OrderDetails od);\nSELECT od.|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["Quantity", "OrderDetailID", "ProductID"],
+      "minCount": 0
+    },
+    "note": "subquery alias od from the prior statement must not be resolvable in the next statement"
+  },
+  {
+    "id": "NEG-016",
+    "family": "negative-controls",
+    "doc": "SELECT c.Xyz| FROM dbo.Customers c",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["CustomerName", "City"],
+      "minCount": 0
+    },
+    "note": "3-char prefix Xyz matches no Customers column - list must be empty of them"
+  },
+  {
+    "id": "NEG-017",
+    "family": "negative-controls",
+    "doc": "SELECT * FROM dbo.Employees WHERE Zq|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["LastName", "FirstName"],
+      "minCount": 0
+    },
+    "note": "WHERE-position prefix Zq matches nothing in Employees"
+  },
+  {
+    "id": "NEG-018",
+    "family": "negative-controls",
+    "doc": "SELECT v.| FROM dbo.vw_ProductCatalog v",
+    "expect": {
+      "mustContain": ["CategoryName", "SupplierName", "Price"],
+      "mustNotContain": ["Unit", "SupplierID", "CategoryID"],
+      "minCount": 2
+    },
+    "note": "view alias must expose only projected view columns, not base Products columns"
+  },
+  {
+    "id": "NEG-019",
+    "family": "negative-controls",
+    "doc": "SELECT co.Ship| FROM dbo.vw_CustomerOrders co",
+    "expect": {
+      "mustContain": ["ShipperID"],
+      "mustNotContain": ["ShipperName"],
+      "minCount": 1
+    },
+    "note": "prefix Ship on view alias - ShipperName belongs to dbo.Shippers, not the view"
+  },
+  {
+    "id": "NEG-020",
+    "family": "negative-controls",
+    "doc": "SELECT t.| FROM #missing t",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["OrderID", "CustomerName", "ProductName"],
+      "minCount": 0
+    },
+    "note": "temp table #missing was never created in this batch - no columns to offer"
+  },
+  {
+    "id": "NEG-021",
+    "family": "negative-controls",
+    "doc": "EXEC dbo.usp_NoSuchProc @|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["@CustomerID", "@NewPrice", "@InvoiceID"],
+      "minCount": 0
+    },
+    "note": "fake procedure - parameters of real procs must not be suggested"
+  },
+  {
+    "id": "NEG-022",
+    "family": "negative-controls",
+    "doc": "EXEC Sales.usp_GetCustomerOrders @|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["@CustomerID", "@FromDate", "@ToDate"],
+      "minCount": 0
+    },
+    "note": "usp_GetCustomerOrders exists only under dbo - schema-ignored proc resolution is a bug"
+  },
+  {
+    "id": "NEG-023",
+    "family": "negative-controls",
+    "doc": "EXEC dbo.usp_UpdateProductPrice @|",
+    "expect": {
+      "mustContain": ["@ProductID", "@NewPrice"],
+      "mustNotContain": ["@CustomerID", "@InvoiceID"],
+      "minCount": 1
+    },
+    "note": "param scoping - other procs' parameters must not leak into this proc's param list"
+  },
+  {
+    "id": "NEG-024",
+    "family": "negative-controls",
+    "doc": "INSERT INTO dbo.Shippers (|",
+    "expect": {
+      "mustContain": ["ShipperName", "Phone"],
+      "mustNotContain": ["CustomerName", "OrderDate", "ProductName"],
+      "minCount": 1
+    },
+    "note": "INSERT column list scoped to Shippers - other tables' columns absent"
+  },
+  {
+    "id": "NEG-025",
+    "family": "negative-controls",
+    "doc": "insert into dbo.FakeTable (|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["CustomerID", "ProductID"],
+      "minCount": 0
+    },
+    "note": "lowercase INSERT into nonexistent table - no column list may be offered"
+  },
+  {
+    "id": "NEG-026",
+    "family": "negative-controls",
+    "doc": "UPDATE dbo.Products SET | WHERE ProductID = 1",
+    "expect": {
+      "mustContain": ["ProductName", "Price", "Unit"],
+      "mustNotContain": ["CustomerName", "OrderDate"],
+      "minCount": 2
+    },
+    "note": "SET position scoped to Products - unrelated tables' columns must be absent"
+  },
+  {
+    "id": "NEG-027",
+    "family": "negative-controls",
+    "doc": "UPDATE zz SET |",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["ProductName", "Price", "CustomerName"],
+      "minCount": 0
+    },
+    "note": "UPDATE target zz is not a real table or declared alias - no columns to offer"
+  },
+  {
+    "id": "NEG-028",
+    "family": "negative-controls",
+    "doc": "DELETE o FROM dbo.Orders o WHERE o.|",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate", "CustomerID"],
+      "mustNotContain": ["Quantity", "CustomerName"],
+      "minCount": 2
+    },
+    "note": "aliased DELETE - o resolves to Orders only; OrderDetails and Customers columns absent"
+  },
+  {
+    "id": "NEG-029",
+    "family": "negative-controls",
+    "doc": "DELETE FROM dbo.Categories WHERE x.|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["CategoryName", "Description", "CategoryID"],
+      "minCount": 0
+    },
+    "note": "undeclared alias x in DELETE WHERE - Categories columns must not resolve under it"
+  },
+  {
+    "id": "NEG-030",
+    "family": "negative-controls",
+    "doc": "SELECT d.| FROM (SELECT OrderID, OrderDate FROM dbo.Orders) d",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["CustomerID", "ShipperID", "EmployeeID"],
+      "minCount": 1
+    },
+    "note": "derived table exposes only its projected columns, not the full Orders table"
+  },
+  {
+    "id": "NEG-031",
+    "family": "negative-controls",
+    "doc": "SELECT e.LastName\nFROM dbo.Employees e;\n\nSELECT o.|\nFROM dbo.Orders o",
+    "expect": {
+      "mustContain": ["OrderID", "EmployeeID"],
+      "mustNotContain": ["LastName", "FirstName", "BirthDate"],
+      "minCount": 1
+    },
+    "note": "multi-line, prior ;-statement - Employees columns must not leak into the Orders alias"
+  },
+  {
+    "id": "NEG-032",
+    "family": "negative-controls",
+    "doc": "SeLeCt | FrOm dbo.Wrong_Tbl",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["CustomerName", "OrderID"],
+      "minCount": 0
+    },
+    "note": "mixed-case keywords with a fake table - no real columns in the select list"
+  },
+  {
+    "id": "NEG-033",
+    "family": "negative-controls",
+    "doc": "SELECT * FROM BogusDb.dbo.|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["Customers", "Orders", "Products"],
+      "minCount": 0
+    },
+    "note": "unknown database qualifier - current-db tables must not be offered under BogusDb"
+  },
+  {
+    "id": "NEG-034",
+    "family": "negative-controls",
+    "doc": "SELECT o.| FROM dbo.Orders o",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate", "ShipperID"],
+      "mustNotContain": ["InvoiceID", "TotalAmount", "Paid"],
+      "minCount": 2
+    },
+    "note": "FK-neighbor control - Sales.Invoices columns must not leak into the Orders alias"
+  },
+  {
+    "id": "NEG-035",
+    "family": "negative-controls",
+    "doc": "SELECT inv.|\nFROM Sales.Invoices inv",
+    "expect": {
+      "mustContain": ["InvoiceID", "TotalAmount", "Paid"],
+      "mustNotContain": ["OrderDate", "CustomerID"],
+      "minCount": 2
+    },
+    "note": "Sales.Invoices alias - FK-referenced Orders columns must not appear under inv"
+  },
+  {
+    "id": "NEG-036",
+    "family": "negative-controls",
+    "doc": "SELECT p.|;\nSELECT p.ProductName FROM dbo.Products p",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["ProductName", "Price", "Unit"],
+      "minCount": 0
+    },
+    "note": "alias declared only in a LATER statement must not resolve backwards across the semicolon"
+  },
+  {
+    "id": "NEG-037",
+    "family": "negative-controls",
+    "doc": "SELECT Country, COUNT(*) FROM dbo.Customers GROUP BY Qux|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["Country", "City"],
+      "minCount": 0
+    },
+    "note": "GROUP BY prefix Qux matches no Customers column"
+  },
+  {
+    "id": "NEG-038",
+    "family": "negative-controls",
+    "doc": "SELECT *\nFROM dbo.OrderDetails od\nJOIN dbo.Products p ON p.|",
+    "expect": {
+      "mustContain": ["ProductID", "ProductName"],
+      "mustNotContain": ["LastName", "ShipperName", "TotalAmount"],
+      "minCount": 1
+    },
+    "note": "ON-clause join-target scoping - tables outside the query must contribute nothing"
+  },
+  {
+    "id": "NEG-039",
+    "family": "negative-controls",
+    "doc": "SELECT   ab.|    FROM dbo.Orders  o",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["OrderID", "OrderDate"],
+      "minCount": 0
+    },
+    "note": "extra whitespace; ab is undeclared - the o alias's Orders columns must not resolve under ab"
+  },
+  {
+    "id": "NEG-040",
+    "family": "negative-controls",
+    "doc": "UPDATE dbo.Products SET Price = 10 WHERE ProductID = 1;\nSELECT s.ShipperName FROM dbo.Shippers s;\n|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["ShipperName", "Price", "CustomerName"],
+      "minCount": 0
+    },
+    "note": "fresh statement start after two ;-terminated statements - no columns or aliases may carry over"
+  }
+]

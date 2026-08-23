@@ -1,0 +1,992 @@
+[
+  {
+    "id": "WHERE-001",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.Customers c WHERE c.|",
+    "expect": {
+      "mustContain": ["CustomerID", "CustomerName", "Country"],
+      "mustNotContain": ["ProductName", "OrderDate"],
+      "minCount": 1
+    },
+    "note": "alias-dot in WHERE scopes to Customers columns only"
+  },
+  {
+    "id": "WHERE-002",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.Orders o WHERE o.|",
+    "expect": {
+      "mustContain": ["OrderID", "CustomerID", "OrderDate"],
+      "mustNotContain": ["ProductName", "Quantity"],
+      "minCount": 1
+    },
+    "note": "alias-dot in WHERE scopes to Orders columns"
+  },
+  {
+    "id": "WHERE-003",
+    "family": "where-having",
+    "doc": "select * from dbo.Products p where p.|",
+    "expect": {
+      "mustContain": ["ProductID", "Price", "Unit"],
+      "mustNotContain": ["CategoryName", "OrderDate"],
+      "minCount": 1
+    },
+    "note": "lowercase keywords; Products alias-dot in WHERE"
+  },
+  {
+    "id": "WHERE-004",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.Employees e WHERE e.|",
+    "expect": {
+      "mustContain": ["EmployeeID", "LastName", "BirthDate"],
+      "mustNotContain": ["CustomerName", "Price"],
+      "minCount": 1
+    },
+    "note": "Employees alias-dot in WHERE"
+  },
+  {
+    "id": "WHERE-005",
+    "family": "where-having",
+    "doc": "SELECT * FROM Sales.Invoices i WHERE i.|",
+    "expect": {
+      "mustContain": ["InvoiceID", "TotalAmount", "Paid"],
+      "mustNotContain": ["ProductName", "CustomerName"],
+      "minCount": 1
+    },
+    "note": "non-dbo schema table alias-dot in WHERE"
+  },
+  {
+    "id": "WHERE-006",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.Suppliers s WHERE s.|",
+    "expect": {
+      "mustContain": ["SupplierID", "SupplierName", "Phone"],
+      "mustNotContain": ["ProductName", "OrderDate"],
+      "minCount": 1
+    },
+    "note": "Suppliers alias-dot in WHERE"
+  },
+  {
+    "id": "WHERE-007",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.Shippers sh WHERE sh.|",
+    "expect": {
+      "mustContain": ["ShipperID", "ShipperName", "Phone"],
+      "mustNotContain": ["OrderDate", "CustomerName"],
+      "minCount": 1
+    },
+    "note": "two-char alias sh in WHERE"
+  },
+  {
+    "id": "WHERE-008",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.OrderDetails od WHERE od.|",
+    "expect": {
+      "mustContain": ["OrderDetailID", "Quantity", "ProductID"],
+      "mustNotContain": ["CustomerName", "Price"],
+      "minCount": 1
+    },
+    "note": "OrderDetails alias-dot; Price belongs to Products not OrderDetails"
+  },
+  {
+    "id": "WHERE-009",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.vw_CustomerOrders vco WHERE vco.|",
+    "expect": {
+      "mustContain": ["CustomerID", "OrderDate", "Country"],
+      "mustNotContain": ["Quantity", "Price"],
+      "minCount": 1
+    },
+    "note": "view alias-dot in WHERE gives view columns"
+  },
+  {
+    "id": "WHERE-010",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.vw_ProductCatalog pc WHERE pc.|",
+    "expect": {
+      "mustContain": ["ProductID", "CategoryName", "SupplierName"],
+      "mustNotContain": ["Quantity", "OrderDate"],
+      "minCount": 1
+    },
+    "note": "vw_ProductCatalog columns in WHERE"
+  },
+  {
+    "id": "WHERE-011",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.Customers c WHERE c.C|",
+    "expect": {
+      "mustContain": ["City", "Country", "CustomerName"],
+      "mustNotContain": ["Address", "PostalCode"],
+      "minCount": 1
+    },
+    "note": "1-char prefix C filters out non-matching Customers columns"
+  },
+  {
+    "id": "WHERE-012",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.Customers c WHERE c.Cou|",
+    "expect": {
+      "mustContain": ["Country"],
+      "mustNotContain": ["City", "CustomerID"],
+      "minCount": 1
+    },
+    "note": "3-char prefix Cou narrows to Country"
+  },
+  {
+    "id": "WHERE-013",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.Orders o WHERE o.Ord|",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["CustomerID", "ShipperID"],
+      "minCount": 1
+    },
+    "note": "3-char prefix Ord on Orders alias"
+  },
+  {
+    "id": "WHERE-014",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.Products p WHERE p.Pr|",
+    "expect": {
+      "mustContain": ["ProductID", "ProductName", "Price"],
+      "mustNotContain": ["Unit", "CategoryID"],
+      "minCount": 1
+    },
+    "note": "2-char prefix Pr matches three Products columns"
+  },
+  {
+    "id": "WHERE-015",
+    "family": "where-having",
+    "doc": "select ProductName from dbo.Products p where p.u|",
+    "expect": {
+      "mustContain": ["Unit"],
+      "mustNotContain": ["Price", "ProductName"],
+      "minCount": 1
+    },
+    "note": "lowercase 1-char prefix u matches Unit case-insensitively"
+  },
+  {
+    "id": "WHERE-016",
+    "family": "where-having",
+    "doc": "SELECT * FROM Sales.Invoices inv WHERE inv.Tot|",
+    "expect": {
+      "mustContain": ["TotalAmount"],
+      "mustNotContain": ["InvoiceID", "Paid"],
+      "minCount": 1
+    },
+    "note": "3-char prefix on Sales.Invoices alias inv"
+  },
+  {
+    "id": "WHERE-017",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.Employees emp WHERE emp.b|",
+    "expect": {
+      "mustContain": ["BirthDate"],
+      "mustNotContain": ["LastName", "Notes"],
+      "minCount": 1
+    },
+    "note": "lowercase 1-char prefix b matches BirthDate"
+  },
+  {
+    "id": "WHERE-018",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.Suppliers sup WHERE sup.Con|",
+    "expect": {
+      "mustContain": ["ContactName"],
+      "mustNotContain": ["Country", "City"],
+      "minCount": 1
+    },
+    "note": "prefix Con matches ContactName but not Country"
+  },
+  {
+    "id": "WHERE-019",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.OrderDetails d WHERE d.Qua|",
+    "expect": {
+      "mustContain": ["Quantity"],
+      "mustNotContain": ["OrderID", "ProductID"],
+      "minCount": 1
+    },
+    "note": "single-letter alias d with 3-char prefix"
+  },
+  {
+    "id": "WHERE-020",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.Customers WHERE Cust|",
+    "expect": {
+      "mustContain": ["CustomerID", "CustomerName"],
+      "mustNotContain": ["ContactName", "Country"],
+      "minCount": 1
+    },
+    "note": "bare column prefix without alias in WHERE"
+  },
+  {
+    "id": "WHERE-021",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.Customers WHERE |",
+    "expect": {
+      "mustContain": ["CustomerID", "City", "Country"],
+      "mustNotContain": ["ProductName", "Quantity"],
+      "minCount": 1
+    },
+    "note": "empty prefix at bare WHERE offers Customers columns"
+  },
+  {
+    "id": "WHERE-022",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.Orders WHERE |",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate", "CustomerID"],
+      "mustNotContain": ["ProductName", "TotalAmount"],
+      "minCount": 1
+    },
+    "note": "bare WHERE on Orders; TotalAmount belongs to Sales.Invoices"
+  },
+  {
+    "id": "WHERE-023",
+    "family": "where-having",
+    "doc": "select * from dbo.Products where |",
+    "expect": {
+      "mustContain": ["ProductName", "Price", "Unit"],
+      "mustNotContain": ["CustomerName", "OrderDate"],
+      "minCount": 1
+    },
+    "note": "lowercase everything; bare WHERE on Products"
+  },
+  {
+    "id": "WHERE-024",
+    "family": "where-having",
+    "doc": "SELECT * FROM Sales.Invoices WHERE |",
+    "expect": {
+      "mustContain": ["InvoiceID", "InvoiceDate", "Paid"],
+      "mustNotContain": ["ProductName", "City"],
+      "minCount": 1
+    },
+    "note": "bare WHERE on Sales schema table"
+  },
+  {
+    "id": "WHERE-025",
+    "family": "where-having",
+    "doc": "SELECT CustomerName\nFROM dbo.Customers\nWHERE |",
+    "expect": {
+      "mustContain": ["Country", "City", "PostalCode"],
+      "mustNotContain": ["Price", "OrderID"],
+      "minCount": 1
+    },
+    "note": "multi-line doc; WHERE on its own line"
+  },
+  {
+    "id": "WHERE-026",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.Employees WHERE Last|",
+    "expect": {
+      "mustContain": ["LastName"],
+      "mustNotContain": ["FirstName", "BirthDate"],
+      "minCount": 1
+    },
+    "note": "bare 4-char prefix Last on Employees"
+  },
+  {
+    "id": "WHERE-027",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.Shippers WHERE Ph|",
+    "expect": {
+      "mustContain": ["Phone"],
+      "mustNotContain": ["ShipperName", "ShipperID"],
+      "minCount": 1
+    },
+    "note": "2-char prefix Ph on Shippers"
+  },
+  {
+    "id": "WHERE-028",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.vw_ProductCatalog WHERE Cat|",
+    "expect": {
+      "mustContain": ["CategoryName"],
+      "mustNotContain": ["CategoryID", "ProductName"],
+      "minCount": 1
+    },
+    "note": "view has CategoryName but not CategoryID; leak would surface CategoryID"
+  },
+  {
+    "id": "WHERE-029",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.Orders o JOIN dbo.Customers c ON o.CustomerID = c.CustomerID WHERE c.|",
+    "expect": {
+      "mustContain": ["CustomerName", "Country", "City"],
+      "mustNotContain": ["OrderDate", "ShipperID"],
+      "minCount": 1
+    },
+    "note": "joined query; c. scopes to Customers not Orders"
+  },
+  {
+    "id": "WHERE-030",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.Orders o JOIN dbo.Customers c ON o.CustomerID = c.CustomerID WHERE o.|",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate", "ShipperID"],
+      "mustNotContain": ["CustomerName", "Country"],
+      "minCount": 1
+    },
+    "note": "joined query; o. scopes to Orders not Customers"
+  },
+  {
+    "id": "WHERE-031",
+    "family": "where-having",
+    "doc": "SELECT o.OrderID, c.CustomerName\nFROM dbo.Orders o\nJOIN dbo.Customers c ON o.CustomerID = c.CustomerID\nWHERE |",
+    "expect": {
+      "mustContain": ["OrderDate", "CustomerName"],
+      "mustNotContain": ["ProductName", "Quantity"],
+      "minCount": 1
+    },
+    "note": "multi-line join; bare WHERE sees both joined tables' columns"
+  },
+  {
+    "id": "WHERE-032",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.OrderDetails od JOIN dbo.Orders o ON od.OrderID = o.OrderID JOIN dbo.Products p ON od.ProductID = p.ProductID WHERE p.|",
+    "expect": {
+      "mustContain": ["ProductName", "Price", "Unit"],
+      "mustNotContain": ["Quantity", "OrderDate"],
+      "minCount": 1
+    },
+    "note": "three-table join; p. scopes to Products only"
+  },
+  {
+    "id": "WHERE-033",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.OrderDetails od JOIN dbo.Orders o ON od.OrderID = o.OrderID JOIN dbo.Products p ON od.ProductID = p.ProductID WHERE od.|",
+    "expect": {
+      "mustContain": ["Quantity", "OrderDetailID"],
+      "mustNotContain": ["Price", "OrderDate"],
+      "minCount": 1
+    },
+    "note": "three-table join; od. excludes Products and Orders unique columns"
+  },
+  {
+    "id": "WHERE-034",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.Orders o INNER JOIN dbo.Employees e ON o.EmployeeID = e.EmployeeID WHERE e.|",
+    "expect": {
+      "mustContain": ["FirstName", "LastName", "BirthDate"],
+      "mustNotContain": ["OrderDate", "CustomerID"],
+      "minCount": 1
+    },
+    "note": "INNER JOIN; e. scopes to Employees"
+  },
+  {
+    "id": "WHERE-035",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.Products p LEFT JOIN dbo.Categories cat ON p.CategoryID = cat.CategoryID WHERE cat.|",
+    "expect": {
+      "mustContain": ["CategoryName", "Description"],
+      "mustNotContain": ["ProductName", "Price"],
+      "minCount": 1
+    },
+    "note": "LEFT JOIN with 3-char alias cat"
+  },
+  {
+    "id": "WHERE-036",
+    "family": "where-having",
+    "doc": "SELECT * FROM Sales.Invoices i JOIN dbo.Orders o ON i.OrderID = o.OrderID WHERE i.Pa|",
+    "expect": {
+      "mustContain": ["Paid"],
+      "mustNotContain": ["TotalAmount", "OrderDate"],
+      "minCount": 1
+    },
+    "note": "cross-schema join; prefix Pa on Invoices alias"
+  },
+  {
+    "id": "WHERE-037",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.Customers c WHERE x.|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["CustomerName", "CustomerID"],
+      "minCount": 0
+    },
+    "note": "undeclared alias x must not resolve to Customers columns"
+  },
+  {
+    "id": "WHERE-038",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.Orders ord WHERE ORD.|",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["Quantity", "ProductName"],
+      "minCount": 1
+    },
+    "note": "alias referenced in different case resolves case-insensitively"
+  },
+  {
+    "id": "WHERE-039",
+    "family": "where-having",
+    "doc": "SELECT Country, COUNT(*) FROM dbo.Customers GROUP BY |",
+    "expect": {
+      "mustContain": ["Country", "City", "CustomerName"],
+      "mustNotContain": ["ProductName", "OrderDate"],
+      "minCount": 1
+    },
+    "note": "empty prefix after GROUP BY offers table columns"
+  },
+  {
+    "id": "WHERE-040",
+    "family": "where-having",
+    "doc": "SELECT c.Country, COUNT(*) FROM dbo.Customers c GROUP BY c.|",
+    "expect": {
+      "mustContain": ["Country", "City"],
+      "mustNotContain": ["OrderID", "Price"],
+      "minCount": 1
+    },
+    "note": "alias-dot in GROUP BY scopes to Customers"
+  },
+  {
+    "id": "WHERE-041",
+    "family": "where-having",
+    "doc": "SELECT o.CustomerID, COUNT(*) FROM dbo.Orders o GROUP BY o.Cus|",
+    "expect": {
+      "mustContain": ["CustomerID"],
+      "mustNotContain": ["OrderID", "EmployeeID"],
+      "minCount": 1
+    },
+    "note": "3-char prefix in GROUP BY alias-dot"
+  },
+  {
+    "id": "WHERE-042",
+    "family": "where-having",
+    "doc": "SELECT p.CategoryID, AVG(p.Price)\nFROM dbo.Products p\nGROUP BY p.|",
+    "expect": {
+      "mustContain": ["CategoryID", "SupplierID"],
+      "mustNotContain": ["CategoryName", "Quantity"],
+      "minCount": 1
+    },
+    "note": "multi-line GROUP BY; CategoryName belongs to Categories not Products"
+  },
+  {
+    "id": "WHERE-043",
+    "family": "where-having",
+    "doc": "select ShipperID, count(*) from dbo.Orders group by Ship|",
+    "expect": {
+      "mustContain": ["ShipperID"],
+      "mustNotContain": ["ShipperName", "OrderDate"],
+      "minCount": 1
+    },
+    "note": "lowercase; prefix Ship must not pull ShipperName from unjoined Shippers"
+  },
+  {
+    "id": "WHERE-044",
+    "family": "where-having",
+    "doc": "SELECT c.Country, COUNT(o.OrderID) FROM dbo.Orders o JOIN dbo.Customers c ON o.CustomerID = c.CustomerID GROUP BY |",
+    "expect": {
+      "mustContain": ["Country", "OrderDate"],
+      "mustNotContain": ["ProductName", "Quantity"],
+      "minCount": 1
+    },
+    "note": "bare GROUP BY after join sees both tables' columns"
+  },
+  {
+    "id": "WHERE-045",
+    "family": "where-having",
+    "doc": "SELECT i.Paid, SUM(i.TotalAmount) FROM Sales.Invoices i GROUP BY i.|",
+    "expect": {
+      "mustContain": ["Paid", "InvoiceDate"],
+      "mustNotContain": ["OrderDate", "Price"],
+      "minCount": 1
+    },
+    "note": "GROUP BY alias-dot on Sales.Invoices"
+  },
+  {
+    "id": "WHERE-046",
+    "family": "where-having",
+    "doc": "SELECT e.LastName FROM dbo.Employees e GROUP BY e.L|",
+    "expect": {
+      "mustContain": ["LastName"],
+      "mustNotContain": ["FirstName", "Notes"],
+      "minCount": 1
+    },
+    "note": "1-char prefix L in GROUP BY"
+  },
+  {
+    "id": "WHERE-047",
+    "family": "where-having",
+    "doc": "SELECT Country FROM dbo.Suppliers WHERE Country IS NOT NULL GROUP BY Cou|",
+    "expect": {
+      "mustContain": ["Country"],
+      "mustNotContain": ["City", "ContactName"],
+      "minCount": 1
+    },
+    "note": "GROUP BY following a WHERE clause; 3-char prefix"
+  },
+  {
+    "id": "WHERE-048",
+    "family": "where-having",
+    "doc": "SELECT od.ProductID, SUM(od.Quantity) FROM dbo.OrderDetails od GROUP BY od.|",
+    "expect": {
+      "mustContain": ["ProductID", "OrderID"],
+      "mustNotContain": ["ProductName", "TotalAmount"],
+      "minCount": 1
+    },
+    "note": "GROUP BY on OrderDetails; ProductName is a Products column"
+  },
+  {
+    "id": "WHERE-049",
+    "family": "where-having",
+    "doc": "SELECT CustomerID, COUNT(*) FROM dbo.Orders GROUP BY CustomerID HAVING |",
+    "expect": {
+      "mustContain": ["COUNT", "CustomerID"],
+      "mustNotContain": ["ProductName", "Quantity"],
+      "minCount": 1
+    },
+    "note": "HAVING offers aggregates and in-scope columns"
+  },
+  {
+    "id": "WHERE-050",
+    "family": "where-having",
+    "doc": "SELECT CustomerID, COUNT(*) AS Cnt FROM dbo.Orders GROUP BY CustomerID HAVING COU|",
+    "expect": {
+      "mustContain": ["COUNT"],
+      "mustNotContain": ["Country", "CustomerName"],
+      "minCount": 1
+    },
+    "note": "prefix COU in HAVING; Country/CustomerName not in Orders scope"
+  },
+  {
+    "id": "WHERE-051",
+    "family": "where-having",
+    "doc": "SELECT o.CustomerID, SUM(o.OrderID) FROM dbo.Orders o GROUP BY o.CustomerID HAVING SUM(o.|",
+    "expect": {
+      "mustContain": ["OrderID", "CustomerID"],
+      "mustNotContain": ["Quantity", "Price"],
+      "minCount": 1
+    },
+    "note": "alias-dot inside aggregate call in HAVING"
+  },
+  {
+    "id": "WHERE-052",
+    "family": "where-having",
+    "doc": "SELECT p.CategoryID, AVG(p.Price) AS AvgPrice\nFROM dbo.Products p\nGROUP BY p.CategoryID\nHAVING AVG(p.Pr|",
+    "expect": {
+      "mustContain": ["Price"],
+      "mustNotContain": ["Quantity", "CategoryName"],
+      "minCount": 1
+    },
+    "note": "multi-line HAVING; prefix inside AVG scoped to Products"
+  },
+  {
+    "id": "WHERE-053",
+    "family": "where-having",
+    "doc": "SELECT ShipperID FROM dbo.Orders GROUP BY ShipperID HAVING COUNT(*) > 5 AND |",
+    "expect": {
+      "mustContain": ["ShipperID", "COUNT"],
+      "mustNotContain": ["ShipperName", "ProductName"],
+      "minCount": 1
+    },
+    "note": "continuation after AND in HAVING keeps Orders scope"
+  },
+  {
+    "id": "WHERE-054",
+    "family": "where-having",
+    "doc": "select i.OrderID from Sales.Invoices i group by i.OrderID having sum(i.Tot|",
+    "expect": {
+      "mustContain": ["TotalAmount"],
+      "mustNotContain": ["OrderDate", "ProductName"],
+      "minCount": 1
+    },
+    "note": "lowercase HAVING with prefix inside SUM on Invoices"
+  },
+  {
+    "id": "WHERE-055",
+    "family": "where-having",
+    "doc": "SELECT CategoryID, COUNT(*) FROM dbo.Products GROUP BY CategoryID HAVING MA|",
+    "expect": {
+      "mustContain": ["MAX"],
+      "mustNotContain": ["ProductName", "Price"],
+      "minCount": 1
+    },
+    "note": "built-in MAX by 2-char prefix in HAVING; non-matching columns filtered"
+  },
+  {
+    "id": "WHERE-056",
+    "family": "where-having",
+    "doc": "SELECT City FROM dbo.Suppliers GROUP BY City HAVING |",
+    "expect": {
+      "mustContain": ["City", "COUNT"],
+      "mustNotContain": ["ProductName", "OrderDate"],
+      "minCount": 1
+    },
+    "note": "bare HAVING on single-table Suppliers query"
+  },
+  {
+    "id": "WHERE-057",
+    "family": "where-having",
+    "doc": "SELECT e.EmployeeID FROM dbo.Employees e GROUP BY e.EmployeeID HAVING MIN(e.|",
+    "expect": {
+      "mustContain": ["BirthDate", "EmployeeID"],
+      "mustNotContain": ["OrderDate", "Price"],
+      "minCount": 1
+    },
+    "note": "alias-dot inside MIN() in HAVING scoped to Employees"
+  },
+  {
+    "id": "WHERE-058",
+    "family": "where-having",
+    "doc": "SELECT Country\tFROM dbo.Customers\tGROUP BY Country\tHAVING\t|",
+    "expect": {
+      "mustContain": ["Country", "COUNT"],
+      "mustNotContain": ["Price", "Quantity"],
+      "minCount": 1
+    },
+    "note": "tab-separated tokens; caret after HAVING and a tab"
+  },
+  {
+    "id": "WHERE-059",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.Customers ORDER BY |",
+    "expect": {
+      "mustContain": ["CustomerName", "Country", "City"],
+      "mustNotContain": ["ProductName", "OrderDate"],
+      "minCount": 1
+    },
+    "note": "empty prefix after ORDER BY offers Customers columns"
+  },
+  {
+    "id": "WHERE-060",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.Orders o ORDER BY o.|",
+    "expect": {
+      "mustContain": ["OrderDate", "OrderID"],
+      "mustNotContain": ["ProductName", "CustomerName"],
+      "minCount": 1
+    },
+    "note": "alias-dot in ORDER BY scopes to Orders"
+  },
+  {
+    "id": "WHERE-061",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.Products ORDER BY Pri|",
+    "expect": {
+      "mustContain": ["Price"],
+      "mustNotContain": ["ProductID", "Unit"],
+      "minCount": 1
+    },
+    "note": "3-char prefix Pri excludes ProductID (Pro)"
+  },
+  {
+    "id": "WHERE-062",
+    "family": "where-having",
+    "doc": "SELECT ProductName, Price\nFROM dbo.Products\nWHERE Price > 10\nORDER BY |",
+    "expect": {
+      "mustContain": ["Price", "ProductName", "Unit"],
+      "mustNotContain": ["TotalAmount", "OrderDate"],
+      "minCount": 1
+    },
+    "note": "multi-line query; ORDER BY after WHERE keeps Products scope"
+  },
+  {
+    "id": "WHERE-063",
+    "family": "where-having",
+    "doc": "select * from Sales.Invoices i order by i.Inv|",
+    "expect": {
+      "mustContain": ["InvoiceID", "InvoiceDate"],
+      "mustNotContain": ["OrderID", "Paid"],
+      "minCount": 1
+    },
+    "note": "lowercase order by with 3-char prefix on Invoices alias"
+  },
+  {
+    "id": "WHERE-064",
+    "family": "where-having",
+    "doc": "SELECT c.CustomerName, o.OrderDate FROM dbo.Orders o JOIN dbo.Customers c ON o.CustomerID = c.CustomerID ORDER BY c.|",
+    "expect": {
+      "mustContain": ["CustomerName", "Country"],
+      "mustNotContain": ["OrderDate", "ShipperID"],
+      "minCount": 1
+    },
+    "note": "ORDER BY alias-dot in joined query scopes to Customers"
+  },
+  {
+    "id": "WHERE-065",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.Employees ORDER BY LastName, |",
+    "expect": {
+      "mustContain": ["FirstName", "BirthDate", "EmployeeID"],
+      "mustNotContain": ["CustomerName", "Price"],
+      "minCount": 1
+    },
+    "note": "second ORDER BY item after comma"
+  },
+  {
+    "id": "WHERE-066",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.vw_CustomerOrders ORDER BY Ord|",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["OrderDetailID", "Country"],
+      "minCount": 1
+    },
+    "note": "prefix Ord on view; OrderDetailID would leak from OrderDetails table"
+  },
+  {
+    "id": "WHERE-067",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.Shippers sh ORDER BY sh.Ship|",
+    "expect": {
+      "mustContain": ["ShipperID", "ShipperName"],
+      "mustNotContain": ["Phone", "CustomerID"],
+      "minCount": 1
+    },
+    "note": "4-char prefix on Shippers alias in ORDER BY"
+  },
+  {
+    "id": "WHERE-068",
+    "family": "where-having",
+    "doc": "SELECT   *   FROM   dbo.Suppliers   s   ORDER   BY   s.|",
+    "expect": {
+      "mustContain": ["SupplierName", "City", "Country"],
+      "mustNotContain": ["ProductName", "OrderDate"],
+      "minCount": 1
+    },
+    "note": "extra runs of spaces between tokens must not break scoping"
+  },
+  {
+    "id": "WHERE-069",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.Orders WHERE OrderDate < GETD|",
+    "expect": {
+      "mustContain": ["GETDATE"],
+      "mustNotContain": ["OrderID", "OrderDate"],
+      "minCount": 1
+    },
+    "note": "built-in GETDATE by prefix in WHERE comparison"
+  },
+  {
+    "id": "WHERE-070",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.Orders o WHERE YEAR(o.|",
+    "expect": {
+      "mustContain": ["OrderDate", "OrderID"],
+      "mustNotContain": ["InvoiceDate", "Price"],
+      "minCount": 1
+    },
+    "note": "alias-dot inside YEAR() argument scoped to Orders"
+  },
+  {
+    "id": "WHERE-071",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.Orders WHERE DATEDIFF(day, OrderDate, GETDATE()) > 30 AND |",
+    "expect": {
+      "mustContain": ["OrderID", "ShipperID", "EmployeeID"],
+      "mustNotContain": ["ProductName", "Quantity"],
+      "minCount": 1
+    },
+    "note": "column completion after AND following a function-heavy predicate"
+  },
+  {
+    "id": "WHERE-072",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.Customers c WHERE LEN(c.|",
+    "expect": {
+      "mustContain": ["CustomerName", "PostalCode"],
+      "mustNotContain": ["OrderDate", "ProductName"],
+      "minCount": 1
+    },
+    "note": "alias-dot inside LEN() scoped to Customers"
+  },
+  {
+    "id": "WHERE-073",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.Employees WHERE BirthDate <= DATEA|",
+    "expect": {
+      "mustContain": ["DATEADD"],
+      "mustNotContain": ["LastName", "BirthDate"],
+      "minCount": 1
+    },
+    "note": "built-in DATEADD by prefix; non-matching columns filtered out"
+  },
+  {
+    "id": "WHERE-074",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.Products WHERE ISN|",
+    "expect": {
+      "mustContain": ["ISNULL"],
+      "mustNotContain": ["ProductName", "Price"],
+      "minCount": 1
+    },
+    "note": "built-in ISNULL by 3-char prefix at WHERE start"
+  },
+  {
+    "id": "WHERE-075",
+    "family": "where-having",
+    "doc": "select * from dbo.Customers where upper(Cou|",
+    "expect": {
+      "mustContain": ["Country"],
+      "mustNotContain": ["City", "CustomerID"],
+      "minCount": 1
+    },
+    "note": "lowercase; column prefix inside UPPER() call"
+  },
+  {
+    "id": "WHERE-076",
+    "family": "where-having",
+    "doc": "SELECT * FROM Sales.Invoices WHERE InvoiceDate >= DATEADD(month, -1, GET|",
+    "expect": {
+      "mustContain": ["GETDATE"],
+      "mustNotContain": ["InvoiceID", "Paid"],
+      "minCount": 1
+    },
+    "note": "GETDATE nested as DATEADD argument"
+  },
+  {
+    "id": "WHERE-077",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.Products p;\nSELECT * FROM dbo.Customers c WHERE c.|",
+    "expect": {
+      "mustContain": ["CustomerName", "Country"],
+      "mustNotContain": ["ProductName", "Price"],
+      "minCount": 1
+    },
+    "note": "prior ;-terminated statement; Products columns must not leak into c."
+  },
+  {
+    "id": "WHERE-078",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.Orders o WHERE o.OrderDate > '2024-01-01';\nSELECT * FROM dbo.Employees e WHERE e.|",
+    "expect": {
+      "mustContain": ["LastName", "FirstName"],
+      "mustNotContain": ["OrderDate", "OrderID"],
+      "minCount": 1
+    },
+    "note": "second statement's alias scoped to Employees; Orders stays behind the semicolon"
+  },
+  {
+    "id": "WHERE-079",
+    "family": "where-having",
+    "doc": "UPDATE dbo.Products SET Price = 10 WHERE ProductID = 1;\nSELECT * FROM dbo.Shippers WHERE |",
+    "expect": {
+      "mustContain": ["ShipperName", "Phone", "ShipperID"],
+      "mustNotContain": ["Price", "ProductName"],
+      "minCount": 1
+    },
+    "note": "prior UPDATE statement; bare WHERE scopes to Shippers only"
+  },
+  {
+    "id": "WHERE-080",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.Customers;\nSELECT o.ShipperID FROM dbo.Orders o GROUP BY o.|",
+    "expect": {
+      "mustContain": ["ShipperID", "CustomerID", "EmployeeID"],
+      "mustNotContain": ["CustomerName", "Country"],
+      "minCount": 1
+    },
+    "note": "GROUP BY in second statement; Customers columns must not leak"
+  },
+  {
+    "id": "WHERE-081",
+    "family": "where-having",
+    "doc": "DELETE FROM dbo.OrderDetails WHERE Quantity = 0;\nSELECT * FROM Sales.Invoices inv WHERE inv.|",
+    "expect": {
+      "mustContain": ["InvoiceID", "TotalAmount", "Paid"],
+      "mustNotContain": ["Quantity", "OrderDetailID"],
+      "minCount": 1
+    },
+    "note": "prior DELETE; inv. scoped to Sales.Invoices"
+  },
+  {
+    "id": "WHERE-082",
+    "family": "where-having",
+    "doc": "SELECT p.ProductName FROM dbo.Products p;\nSELECT c.CustomerName FROM dbo.Customers c WHERE p.|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["ProductName", "Price"],
+      "minCount": 0
+    },
+    "note": "alias p from the previous ;-terminated statement must not resolve"
+  },
+  {
+    "id": "WHERE-083",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.Products;\nSELECT * FROM dbo.Customers WHERE P|",
+    "expect": {
+      "mustContain": ["PostalCode"],
+      "mustNotContain": ["Price", "ProductName", "ProductID"],
+      "minCount": 1
+    },
+    "note": "prefix P in second statement; Products P-columns would expose a cross-statement leak"
+  },
+  {
+    "id": "WHERE-084",
+    "family": "where-having",
+    "doc": "SELECT COUNT(*) FROM dbo.Orders;\nSELECT * FROM dbo.Suppliers s ORDER BY s.Sup|",
+    "expect": {
+      "mustContain": ["SupplierID", "SupplierName"],
+      "mustNotContain": ["ShipperName", "City"],
+      "minCount": 1
+    },
+    "note": "ORDER BY prefix in second statement after prior aggregate query"
+  },
+  {
+    "id": "WHERE-085",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.Products p WHERE p.Price BETWEEN 5 AND 20 AND p.|",
+    "expect": {
+      "mustContain": ["ProductName", "CategoryID", "Unit"],
+      "mustNotContain": ["Quantity", "TotalAmount"],
+      "minCount": 1
+    },
+    "note": "alias-dot after BETWEEN predicate and AND"
+  },
+  {
+    "id": "WHERE-086",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.Customers WHERE Country IN ('USA', 'UK') AND |",
+    "expect": {
+      "mustContain": ["City", "CustomerName", "PostalCode"],
+      "mustNotContain": ["ProductName", "OrderDate"],
+      "minCount": 1
+    },
+    "note": "bare column after IN-list predicate plus AND"
+  },
+  {
+    "id": "WHERE-087",
+    "family": "where-having",
+    "doc": "SELECT * FROM dbo.Customers c\nWHERE c.CustomerName LIKE 'A%'\n  AND c.Ci|",
+    "expect": {
+      "mustContain": ["City"],
+      "mustNotContain": ["Country", "ContactName"],
+      "minCount": 1
+    },
+    "note": "multi-line indented AND; 2-char prefix Ci"
+  },
+  {
+    "id": "WHERE-088",
+    "family": "where-having",
+    "doc": "Select * From dbo.Orders o Where o.OrderDate >= '2024-01-01' And o.Sh|",
+    "expect": {
+      "mustContain": ["ShipperID"],
+      "mustNotContain": ["ShipperName", "OrderID"],
+      "minCount": 1
+    },
+    "note": "Mixed-case keywords; Sh prefix must not pull Shippers.ShipperName"
+  },
+  {
+    "id": "WHERE-089",
+    "family": "where-having",
+    "doc": "SELECT ProductName FROM dbo.Products WHERE Price > 10 OR |",
+    "expect": {
+      "mustContain": ["ProductName", "Unit", "CategoryID"],
+      "mustNotContain": ["CustomerName", "OrderDate"],
+      "minCount": 1
+    },
+    "note": "column completion after OR keeps Products scope"
+  },
+  {
+    "id": "WHERE-090",
+    "family": "where-having",
+    "doc": "SELECT c.Country, COUNT(*) AS N\nFROM dbo.Customers c\nGROUP BY c.Country\nHAVING COUNT(*) > 1\nORDER BY c.Cou|",
+    "expect": {
+      "mustContain": ["Country"],
+      "mustNotContain": ["City", "ContactName"],
+      "minCount": 1
+    },
+    "note": "multi-line full WHERE/GROUP BY/HAVING/ORDER BY pipeline; prefix in final ORDER BY"
+  }
+]

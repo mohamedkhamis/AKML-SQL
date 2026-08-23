@@ -61,11 +61,37 @@ public sealed class ProfileStoreTests
     }
 
     [Fact]
-    public async Task GetActiveIdAsync_defaults_to_builtin_default()
+    public async Task GetActiveIdAsync_defaults_to_builtin_khamis()
     {
+        // Spec 032 J3 (FR-031): fresh installs get the product default — Khamis Style —
+        // matching the desktop (spec 031), not the POCO-defaults profile the campaign
+        // accidentally formatted with.
         var store = CreateStore();
         var active = await store.GetActiveIdAsync();
-        Assert.Equal("builtin.default", active);
+        Assert.Equal("builtin.khamis", active);
+    }
+
+    [Fact]
+    public async Task ListAsync_includes_khamis_and_collapsed_builtins()
+    {
+        var store = CreateStore();
+        var all = await store.ListAsync();
+
+        Assert.Contains(all, r => r.Id == "builtin.khamis" && r.Origin == ProfileOrigin.BuiltIn);
+        Assert.Contains(all, r => r.Id == "builtin.collapsed" && r.Origin == ProfileOrigin.BuiltIn);
+        Assert.Contains(all, r => r.Id == "builtin.default");
+        Assert.Contains(all, r => r.Id == "builtin.ansi");
+    }
+
+    [Fact]
+    public async Task Dangling_active_id_falls_back_to_khamis()
+    {
+        var store = CreateStore();
+        await store.SetActiveIdAsync("user.deleted-profile");
+
+        var active = await store.GetActiveIdAsync();
+
+        Assert.Equal("builtin.khamis", active);
     }
 
     [Fact]

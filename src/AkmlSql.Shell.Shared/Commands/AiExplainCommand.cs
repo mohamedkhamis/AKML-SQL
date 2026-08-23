@@ -1,6 +1,7 @@
-#nullable enable
+﻿#nullable enable
 using System;
 using System.ComponentModel.Design;
+using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Shell.Shared.Ai;
@@ -118,7 +119,8 @@ namespace AkmlSql.Shell.Shared.Commands
                 };
 
                 var response = await manager.Client.SendRequestAsync<AiExplainResponse, AiExplainRequest>(
-                    MessageTypes.AiExplain, request, timeoutMs: 60000);
+                    MessageTypes.AiExplain, request,
+                    timeoutMs: Ai.AiIpcTimeouts.ForAiRequestMs(ConfigManager.Load()));
 
                 if (!response.Success)
                 {

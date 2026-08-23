@@ -15,6 +15,28 @@ public class ProfileManager
     private readonly string _customProfilesPath;
 
     /// <summary>
+    /// Number of profile files opened while scanning for a <c>metadata.name</c> match.
+    /// Diagnostic seam: this scan sits on the format request path (the shipped default style
+    /// resolves only through it), so its cost is pinned by tests rather than left to drift.
+    /// </summary>
+    internal int MetadataScanFileReads => _metadataScanFileReads;
+    private int _metadataScanFileReads;
+
+    /// <summary>
+    /// Memo of the file each metadata name last resolved to. Concurrent because format requests
+    /// share one manager and the engine dispatches several at a time.
+    /// </summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, CachedResolution>
+        _nameResolutionCache = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Spec 031 FR-006 — directory where custom (non-built-in) profile files are written.
+    /// Exposed so callers can place sibling artifacts next to a saved profile
+    /// (e.g. <c>&lt;name&gt;.source.json</c>, the verbatim import source).
+    /// </summary>
+    public string CustomProfilesPath => _customProfilesPath;
+
+    /// <summary>
     /// Creates a new <see cref="ProfileManager"/>.
     /// </summary>
     /// <param name="builtInProfilesPath">
@@ -57,23 +79,216 @@ public class ProfileManager
     {
         ArgumentNullException.ThrowIfNull(name);
 
+        // Re-expressed over TryReadRaw (spec 033 simplify pass) so the custom-first resolution
+        // lives in exactly one place — the doc-comment promise of identical semantics is now
+        // structural rather than parallel-copy.
+        if (!TryReadRaw(name, out var json, out var isBuiltIn))
+            throw new FileNotFoundException($"Profile '{name}' not found.", name);
+
+        var profile = ProfileSerializer.Deserialize(json);
+        if (isBuiltIn) profile.Metadata.IsBuiltIn = true;
+        return profile;
+    }
+
+    /// <summary>
+    /// Spec 033 (ProfileGet) — reads the stored profile file text VERBATIM, custom-first then
+    /// built-in, without deserializing. Serializing a loaded profile bumps
+    /// <c>Metadata.Modified</c> and drops unknown fields nested inside option groups, so the
+    /// raw text is the only faithful merge base for edit-save flows.
+    /// </summary>
+    /// <param name="name">Profile display name (same resolution semantics as <see cref="Load"/>).</param>
+    /// <param name="json">The exact file text, or empty when not found.</param>
+    /// <param name="isBuiltIn">
+    /// True only when the name resolved from the built-in directory with no custom shadow —
+    /// derived from the resolving directory, never from the JSON's own <c>isBuiltIn</c> field
+    /// (a custom file claiming built-in status must stay editable).
+    /// </param>
+    /// <returns>True when a stored profile with the given name exists.</returns>
+    public bool TryReadRaw(string name, out string json, out bool isBuiltIn)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        json = string.Empty;
+        isBuiltIn = false;
+
+        // Tier 1 — exact filename match, custom first (the shadowing precedence both this
+        // method and Load() promise). Fast path: one File.Exists per directory.
         var customFile = GetCustomFilePath(name);
         if (File.Exists(customFile))
         {
-            var json = File.ReadAllText(customFile);
-            return ProfileSerializer.Deserialize(json);
+            json = File.ReadAllText(customFile);
+            return true;
         }
 
         var builtInFile = GetBuiltInFilePath(name);
         if (File.Exists(builtInFile))
         {
-            var json = File.ReadAllText(builtInFile);
-            var profile = ProfileSerializer.Deserialize(json);
-            profile.Metadata.IsBuiltIn = true;
-            return profile;
+            json = File.ReadAllText(builtInFile);
+            isBuiltIn = true;
+            return true;
         }
 
-        throw new FileNotFoundException($"Profile '{name}' not found.", name);
+        // Tier 2 — resolve by the profile's OWN metadata.name. List() reports metadata names,
+        // so a name that came from List() (or from Formatter.ActiveProfile, which the styles
+        // editor writes from that list) is the only key callers ever have — but the shipped
+        // built-ins use kebab-case FILENAMES with Title-Case metadata names
+        // ("khamis-style.akmlstyle" → "Khamis Style"). Tier 1 alone therefore missed every
+        // multi-word built-in, and FormatRequestHandler.LoadProfile swallowed the resulting
+        // FileNotFoundException into POCO defaults — so "Khamis Style" (the shipped default
+        // ActiveProfile) silently never applied. Single-word styles only worked by accident of
+        // case-insensitive filesystems. Same custom-first precedence as tier 1.
+        if (TryResolveByMetadataName(name, out json, out isBuiltIn))
+        {
+            return true;
+        }
+
+        json = string.Empty;
+        isBuiltIn = false;
+        return false;
+    }
+
+    /// <summary>
+    /// Tier-2 resolution with a memo of the file each name last resolved to.
+    ///
+    /// <para>The scan is not the rare path it reads like: the shipped default
+    /// <c>"Khamis Style"</c> lives in <c>khamis-style.akmlstyle</c>, so the filename probe can
+    /// never hit it and every format request paid a full directory scan. The memo is only
+    /// honoured while the resolved file AND both directories are byte-for-byte unchanged, so an
+    /// edit, a delete, or a newly dropped-in style is picked up without a restart.</para>
+    /// </summary>
+    private bool TryResolveByMetadataName(string name, out string json, out bool isBuiltIn)
+    {
+        json = string.Empty;
+        isBuiltIn = false;
+
+        var custom = DirectoryStamp(_customProfilesPath);
+        var builtIn = DirectoryStamp(_builtInProfilesPath);
+
+        if (_nameResolutionCache.TryGetValue(name, out var cached) &&
+            cached.CustomDirStamp == custom && cached.BuiltInDirStamp == builtIn &&
+            TryReadUnchanged(cached.Path, cached.FileStamp, out json))
+        {
+            isBuiltIn = cached.IsBuiltIn;
+            return true;
+        }
+
+        _nameResolutionCache.TryRemove(name, out _);
+
+        // Negative results are deliberately NOT memoised — a style the user drops into the
+        // profiles folder must resolve on the next format, not the next restart.
+        if (TryReadByMetadataName(_customProfilesPath, name, out json, out var customPath))
+        {
+            Memoise(name, customPath, isBuiltIn: false, custom, builtIn);
+            return true;
+        }
+
+        if (TryReadByMetadataName(_builtInProfilesPath, name, out json, out var builtInPath))
+        {
+            isBuiltIn = true;
+            Memoise(name, builtInPath, isBuiltIn: true, custom, builtIn);
+            return true;
+        }
+
+        return false;
+    }
+
+    private void Memoise(string name, string path, bool isBuiltIn, DateTime customDir, DateTime builtInDir)
+    {
+        try
+        {
+            _nameResolutionCache[name] =
+                new CachedResolution(path, isBuiltIn, File.GetLastWriteTimeUtc(path), customDir, builtInDir);
+        }
+        catch (IOException)
+        {
+            // Losing the memo only costs a rescan.
+        }
+    }
+
+    private static DateTime DirectoryStamp(string directory)
+    {
+        try
+        {
+            return Directory.Exists(directory) ? Directory.GetLastWriteTimeUtc(directory) : DateTime.MinValue;
+        }
+        catch (IOException)
+        {
+            return DateTime.MinValue;
+        }
+    }
+
+    private static bool TryReadUnchanged(string path, DateTime stamp, out string json)
+    {
+        json = string.Empty;
+        try
+        {
+            if (!File.Exists(path) || File.GetLastWriteTimeUtc(path) != stamp) return false;
+            json = File.ReadAllText(path);
+            return true;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+    }
+
+    private readonly record struct CachedResolution(
+        string Path, bool IsBuiltIn, DateTime FileStamp, DateTime CustomDirStamp, DateTime BuiltInDirStamp);
+
+    /// <summary>
+    /// Scans <paramref name="directory"/> for a profile file whose <c>metadata.name</c> equals
+    /// <paramref name="name"/> (case-insensitive), returning its verbatim text. Only reached when
+    /// the filename-derived lookup misses, so the per-call cost is bounded by the profile count.
+    /// Unreadable/corrupt files are skipped rather than failing the whole resolution.
+    /// </summary>
+    private bool TryReadByMetadataName(string directory, string name, out string json, out string path)
+    {
+        json = string.Empty;
+        path = string.Empty;
+        if (!Directory.Exists(directory)) return false;
+
+        foreach (var file in Directory.GetFiles(directory, "*" + ProfileExtension))
+        {
+            System.Threading.Interlocked.Increment(ref _metadataScanFileReads);
+            if (!TryPeekMetadataName(file, out var candidate)) continue;
+            if (!string.Equals(candidate, name, StringComparison.OrdinalIgnoreCase)) continue;
+
+            try
+            {
+                json = File.ReadAllText(file);
+                path = file;
+                return true;
+            }
+            catch (IOException)
+            {
+                return false;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Reads just <c>metadata.name</c> out of a profile file. The scan only needs that one
+    /// string to decide whether a file is the one being asked for, so it must not pay for
+    /// materialising the whole <see cref="FormattingProfile"/> graph per candidate.
+    /// Unreadable/corrupt files are skipped rather than failing the whole resolution.
+    /// </summary>
+    private static bool TryPeekMetadataName(string filePath, out string? name)
+    {
+        name = null;
+        try
+        {
+            using var stream = File.OpenRead(filePath);
+            using var document = System.Text.Json.JsonDocument.Parse(stream);
+            if (!document.RootElement.TryGetProperty("metadata", out var metadata)) return false;
+            if (!metadata.TryGetProperty("name", out var nameElement)) return false;
+            name = nameElement.GetString();
+            return name != null;
+        }
+        catch (Exception e) when (e is IOException or System.Text.Json.JsonException or UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     /// <summary>
@@ -104,10 +319,7 @@ public class ProfileManager
         ValidatePathWithinBase(filePath, _customProfilesPath);
         var json = ProfileSerializer.Serialize(profile);
 
-        // Atomic write: write to temp then rename
-        var tempPath = filePath + ".tmp";
-        File.WriteAllText(tempPath, json);
-        File.Move(tempPath, filePath, overwrite: true);
+        WriteAtomic(filePath, json);
     }
 
     /// <summary>
@@ -170,7 +382,114 @@ public class ProfileManager
         }
 
         File.Delete(customFile);
+        _nameResolutionCache.Clear();   // same reason as WriteAtomic — do not trust the clock alone
         return true;
+    }
+
+    /// <summary>
+    /// Spec 033 (ProfileRename) — renames a CUSTOM profile: rewrites <c>metadata.name</c>
+    /// (+<c>modified</c>) via a raw JsonNode edit (no full round-trip, so unknown nested
+    /// fields survive), writes the new file atomically, removes the old one, and moves the
+    /// <c>&lt;name&gt;.source.json</c> import sidecar. <c>List()</c> keys on the JSON name
+    /// while <c>Load()</c> resolves by filename — this keeps them consistent in one operation.
+    /// </summary>
+    /// <returns>The final display name persisted in the profile metadata.</returns>
+    /// <exception cref="InvalidOperationException">Built-in source, or name collision.</exception>
+    /// <exception cref="FileNotFoundException">No custom profile with <paramref name="oldName"/>.</exception>
+    public string Rename(string oldName, string newName)
+    {
+        ArgumentNullException.ThrowIfNull(oldName);
+        ArgumentNullException.ThrowIfNull(newName);
+
+        var finalName = newName.Trim();
+        var sanitizedNew = SanitizeFileName(finalName); // throws on empty/hostile
+        var sanitizedOld = SanitizeFileName(oldName);
+
+        var oldFile = GetCustomFilePath(oldName);
+        ValidatePathWithinBase(oldFile, _customProfilesPath);
+        if (!File.Exists(oldFile))
+        {
+            if (File.Exists(GetBuiltInFilePath(oldName)))
+                throw new InvalidOperationException($"Cannot rename built-in profile '{oldName}'. Duplicate it first.");
+            throw new FileNotFoundException($"Profile '{oldName}' not found.", oldName);
+        }
+
+        // NTFS File.Exists is case-insensitive: a case-only rename would see its own source as
+        // the "existing" target — allow it; everything else collides.
+        var caseOnly = string.Equals(sanitizedOld, sanitizedNew, StringComparison.OrdinalIgnoreCase);
+        if (!caseOnly)
+        {
+            if (File.Exists(GetCustomFilePath(finalName)))
+                throw new InvalidOperationException($"A profile named '{finalName}' already exists.");
+            if (File.Exists(GetBuiltInFilePath(finalName)))
+                throw new InvalidOperationException($"'{finalName}' is a built-in style name and cannot be used.");
+        }
+
+        var newFile = GetCustomFilePath(finalName);
+        ValidatePathWithinBase(newFile, _customProfilesPath);
+
+        // Rewrite metadata.name/modified on the RAW text (never Deserialize→Serialize: that
+        // bumps nothing we want and drops unknown nested fields).
+        var root = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(oldFile)) as System.Text.Json.Nodes.JsonObject
+                   ?? throw new InvalidOperationException($"Profile '{oldName}' is not a JSON object.");
+        if (root["metadata"] is not System.Text.Json.Nodes.JsonObject metadata)
+        {
+            metadata = new System.Text.Json.Nodes.JsonObject();
+            root["metadata"] = metadata;
+        }
+        metadata["name"] = finalName;
+        metadata["modified"] = DateTime.UtcNow;
+        var updated = root.ToJsonString(IndentedJson);
+
+        if (caseOnly)
+        {
+            // Direct move fixes the filename casing; then rewrite content atomically in place.
+            if (!string.Equals(oldFile, newFile, StringComparison.Ordinal))
+                File.Move(oldFile, newFile);
+            WriteAtomic(newFile, updated);
+        }
+        else
+        {
+            // New name appears complete before the old disappears — a crash in between leaves
+            // both files present (recoverable), never zero.
+            WriteAtomic(newFile, updated);
+            File.Delete(oldFile);
+        }
+
+        // Move the verbatim import sidecar so lossless re-import keeps working (spec 031).
+        // GetCustomArtifactPath owns the sanitize + ValidatePathWithinBase pairing for both ends.
+        var oldSidecar = GetCustomArtifactPath(oldName, ".source.json");
+        if (File.Exists(oldSidecar))
+        {
+            var newSidecar = GetCustomArtifactPath(finalName, ".source.json");
+            if (!string.Equals(oldSidecar, newSidecar, StringComparison.Ordinal))
+                File.Move(oldSidecar, newSidecar);
+        }
+
+        return finalName;
+    }
+
+    private static readonly System.Text.Json.JsonSerializerOptions IndentedJson =
+        new() { WriteIndented = true };
+
+    /// <summary>
+    /// The corruption-prevention idiom this class advertises as a design decision, in ONE
+    /// place: write to a sibling temp file, then atomically move over the destination.
+    /// </summary>
+    /// <summary>
+    /// Every profile write funnels through here (save, rename, import), so it is also where the
+    /// name-resolution memo is dropped. The memo's timestamp check would usually catch a write on
+    /// its own, but "usually" depends on filesystem clock granularity — profiles can sit on a
+    /// redirected AppData share with 2-second resolution, where a save immediately followed by a
+    /// format would fall inside a single tick. Clearing at the choke point removes that class of
+    /// staleness entirely, and cannot be forgotten by a future write path.
+    /// </summary>
+    private void WriteAtomic(string path, string text)
+    {
+        var tempPath = path + ".tmp";
+        File.WriteAllText(tempPath, text);
+        File.Move(tempPath, path, overwrite: true);
+        _nameResolutionCache.Clear();
     }
 
     /// <summary>
@@ -196,6 +515,18 @@ public class ProfileManager
 
         Save(copy);
         return copy;
+    }
+
+    /// <summary>
+    /// Builds a validated path for a sibling artifact of a custom profile (e.g. "&lt;name&gt;.source.json").
+    /// Pairs SanitizeFileName with the canonical ValidatePathWithinBase check — the same two-layer
+    /// invariant Save/Delete use — so external callers cannot accidentally reintroduce a single-layer write.
+    /// </summary>
+    public string GetCustomArtifactPath(string profileName, string suffix)
+    {
+        var path = Path.Combine(_customProfilesPath, SanitizeFileName(profileName) + suffix);
+        ValidatePathWithinBase(path, _customProfilesPath);
+        return path;
     }
 
     /// <summary>
@@ -243,10 +574,7 @@ public class ProfileManager
         if (!string.IsNullOrEmpty(dir))
             Directory.CreateDirectory(dir);
 
-        // Atomic write
-        var tempPath = destinationPath + ".tmp";
-        File.WriteAllText(tempPath, json);
-        File.Move(tempPath, destinationPath, overwrite: true);
+        WriteAtomic(destinationPath, json);
     }
 
     /// <summary>
@@ -315,8 +643,10 @@ public class ProfileManager
 
     /// <summary>
     /// Removes invalid filename characters from a profile name and prevents path traversal.
+    /// Public so callers can derive sibling artifact filenames (e.g. Spec 031's
+    /// <c>&lt;name&gt;.source.json</c>) using the exact same sanitization the profile file itself uses.
     /// </summary>
-    private static string SanitizeFileName(string name)
+    public static string SanitizeFileName(string name)
     {
         // Strip directory separators and path traversal sequences first
         var stripped = name.Replace("..", "").Replace("/", "").Replace("\\", "");

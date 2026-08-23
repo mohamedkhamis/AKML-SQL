@@ -1409,3 +1409,41 @@ Open SQL-auth window → detector `SqlPassword`/not-usable → stored credential
 - **Deferred**: Options-dialog toggle for `enableSqlAuthCredentials` (the config flag works without UI); full "Manage SQL credentials" Options page (the in-dialog "Clear saved password" covers v1).
 
 *Last updated: 2026-06-04*
+
+
+---
+
+## Spec 032 — Autocomplete Campaign Remediation (2026-07-17)
+
+Remediated the ~40 verified root causes from the 2026-07-16 web autocomplete campaign (`doc/web-autocomplete-campaign-2026-07-16.md`). Engine-level corpus gate (1,342 counted cases, `tests/completion-corpus` + `CorpusGateTests` ratchet): **72.1% → 97.5%**; every previously-failing family ≥ 89% (11 of them ≥ 97%, four at 100%).
+
+| Area | Fix |
+|---|---|
+| Scope resolution (A1–A6) | `TokenBasedAliasExtractor` cursor-scope rewrite (innermost-paren + outer merge, two-pass FROM/JOIN-wins, set-operator bounds, multi-part names); `AliasResolver` Update/Delete/Merge scopes + ancestor merge + derived projections; `RepairAtCursor` caret-position parse repair |
+| Clause detection (B1–B7) | Dedicated-token cases (`Exec`, `Order/Group`, join qualifiers, set operators, CASE states), caret-token-is-partial guard, TOP-paren back-scan fixes |
+| INSERT/EXEC/vars (C1–C5) | INSERT target/column-list clause split + target injection; new `ParameterProvider` (@params from Phase-B cache); `VariableTracker` wired (was dead); `@`/`#` in PartialText + web replace-span |
+| Built-ins (D) | `ScalarFunctions` surfaced in expression positions (two-tier ranking under the 50-cap); `AfterInsertValues`/`AfterDelete` keyword sets; scalar UDFs in JOIN ON |
+| CTE (E1–E6) | Alias-over-CTE dot branch; statement scoping (; leak); `SELECT *` star-expansion via sources+cache; recursive self-reference; explicit column lists kept in the token fallback; later-CTE-body repair |
+| Temp tables (F1–F3) | Names offered in table positions; last-batch tracking gate; `SELECT * INTO` source capture + cache expansion |
+| Brackets/quotes (G1–G4) | Caret-local delimiter neutralization (dummy-identifier insert — empty `[]` kills the ScriptDom lexer); PartialText delimiter trim; `"dbo"."|` dot-scoping (string-after-dot = quoted identifier); JOIN schema-qualifier respect |
+| Ranking (H1–H4) | Additive `CompletionItem.FilterText [Key(7)]` scored by the fuzzy filter; IDENTITY/computed excluded as SET targets (position-aware) and INSERT columns; APPLY suppression exemption; keyword tail word-boundary repair |
+| Web editor (I1–I4, C5) | `akml-editor.js`: dot-trigger, DML-keyword triggers, Tab-accept (ghost→completion→wildcard→indent), Mod-Enter execute ahead of defaultKeymap, `@#` span |
+| Formatter (J1–J3) | FMTA-006 oscillation root-fixed (JOIN break only in tracked contexts; goldens bless inline-in-frozen-scopes; 977/977 green, zero regens); Stage-7 converge-and-revalidate returns the second pass; web ships built-in Khamis Style + Collapsed from the embedded spec-031 `.akmlstyle` definitions (default active) |
+| Connection honesty (finding 5/6) | Three-valued pill (Live / Live·no SQL / …); boot auto-restore of the MRU Windows-auth saved connection (loopback guard re-run); DB dropdown seeded with the saved database + service-account hint |
+
+Corpus-gate exclusions grew 24 → 33 (9 spec-032 additions, each documented in `tests/completion-corpus/exclusions.json`: engine-gate-only CM6-filter cases that PASSED the live run, plus FUNC-060 fuzzy-by-design). Known pre-existing red (NOT spec-032): `FormatterServiceTests`/`AnalyserServiceTests` sp031-* pending baselines (spec-031 golden generation), `PerformanceBaselineTests` environmental drift. Pending live items: web deploy + keystroke E2E (T013), campaign re-run (T057/T058), desktop smoke (T059), final perf gate (T060), sandbox cleanup (T062).
+
+## Spec 033 — Format Styles Window Promotion (2026-07-22)
+
+Promoted `FormatStylesEditorWindow` (spec 020) from a preview-only browser into the SQL Prompt-grade dedicated style editor, and made Options → Format → Styles the Redgate-exact launcher page. 42 of 45 tasks done in the implementation session; T044/T045 (final gate + deploy/manual verification) pending user availability.
+
+| Area | Change |
+|---|---|
+| Engine IPC | New `ProfileGet` (34/134) — raw `.akmlstyle` text verbatim + directory-derived read-only flag; new `ProfileRename` (35/135) — atomic rename transaction (filename + `metadata.name` + `.source.json` sidecar, case-only allowed); `ProfileDelete` honesty fix (nonexistent → `Success=false`); `ProfileSave` 1 MB cap |
+| Schema v2 | `SchemaVersion` 1→2: 5-category `parentId` hierarchy (Global/Statements/Clauses/Expressions/Other), `description`/`allowedEnumValues`/`min`/`max` from the new `[SettingMeta]` attribute on all 179 profile properties (NO C# enums exist — values are exact stored spellings sourced engine-first), `insertStatements.columns/values` blobs flattened to 6 typed ids; completeness tests enforce metadata on every future property |
+| Editor window | Load-on-select (real stored values, never defaults), dirty tracking with Save/Discard/Cancel prompts (switch + close), merge-save via `ProfileJsonMerger` (JsonNode overlay preserving metadata/ExtensionData/unknown keys), Save button, read-only built-ins (disabled controls + copy hint + double-click-copies), 2-level tree with v1 degrade, themed enum ComboBoxes (`ComboBoxTheming`), clamped ints with range hints, per-setting descriptions, in-window editable preview sample (closes spec-020 T069), sectioned style list ("Your styles"/"Built-in styles") with ✔ active marker + fixed lock glyph (code-built template replaces the broken XAML-string one), per-style context menu, New…-based-on + Rename… dialogs (`StyleNameDialog`), delete guarded against active/built-in |
+| Options page | "Edit formatting styles…" button + "Behavior" umbrella header; post-close `RefreshActiveStyleFromDisk()` fixes the OK-path ActiveProfile clobber |
+| Testability | `IRpcClientAccessor` seam (six VM call sites) + `FakeRpcClientAccessor`; `FormatStylesSchemaModel` extraction (window itself is unconstructable outside VS — DpiHelper needs IVsSettingsManager); AppData-isolation xunit collection |
+| Cleanup | Deleted the dead legacy editor stack (`ProfileEditorDialog`, `ProfileEditorViewModel`, `OptionCategoryTreeBuilder`, `SqlPreviewRenderer`, `EditProfileCommand`, `CmdEditProfile`); palette entry swapped to `akml.formatStyles`; SSMS DTE-menu gains "Format Styles..."; stale T044-T048/T059-deferred notes corrected in CLAUDE.md/architecture.md/runbook |
+
+Suite counts after implementation: Formatting 998, Engine 1593 (filtered), Core 622, Shell.Shared 112 — all green; both hosts full-MSBuild clean.

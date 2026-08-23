@@ -17,14 +17,32 @@ namespace AkmlSql.Engine.Parser;
 public static class TokenBasedCteExtractor
 {
     public static List<string> Extract(IList<TSqlParserToken> tokens, int cursorOffset)
+        => ExtractWithColumns(tokens, cursorOffset).Keys.ToList();
+
+    /// <summary>
+    /// Spec 032 E6 — like <see cref="Extract"/>, but keeps each CTE's EXPLICIT column list
+    /// (<c>WITH x (OID, CID) AS (…)</c>) instead of discarding it; empty list when the CTE
+    /// has no explicit columns (the AST/prefix passes may fill those in later).
+    /// </summary>
+    public static Dictionary<string, List<string>> ExtractWithColumns(IList<TSqlParserToken> tokens, int cursorOffset)
     {
-        var result = new List<string>();
+        var result = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
         if (tokens == null || tokens.Count == 0) return result;
+
+        // Spec 032 E3: CTEs are statement-scoped — a WITH before the caret's statement's
+        // opening ';' must not leak its names past that boundary (MULTI-081/082).
+        int statementStart = 0;
+        foreach (var t0 in tokens)
+        {
+            if (t0.Offset >= cursorOffset) break;
+            if (t0.TokenType == TSqlTokenType.Semicolon) statementStart = t0.Offset + 1;
+        }
 
         for (int i = 0; i < tokens.Count; i++)
         {
             var t = tokens[i];
             if (t.TokenType != TSqlTokenType.With) continue;
+            if (t.Offset < statementStart) continue;
 
             // Disambiguate: `WITH (NOLOCK)` inside FROM is not a CTE clause — the
             // next non-whitespace token is `(`. `WITH XMLNAMESPACES ...` is also
@@ -41,7 +59,7 @@ public static class TokenBasedCteExtractor
         return result;
     }
 
-    private static void ParseCteList(IList<TSqlParserToken> tokens, int start, int cursorOffset, List<string> result)
+    private static void ParseCteList(IList<TSqlParserToken> tokens, int start, int cursorOffset, Dictionary<string, List<string>> result)
     {
         int j = start;
         while (j < tokens.Count)
@@ -56,7 +74,9 @@ public static class TokenBasedCteExtractor
             j++;
             while (j < tokens.Count && IsWhitespaceOrComment(tokens[j])) j++;
 
-            // Optional column list: `Name (col1, col2) AS (`
+            // Optional column list: `Name (col1, col2) AS (` — spec 032 E6: CAPTURE the
+            // identifiers (depth 1) instead of discarding them.
+            var explicitColumns = new List<string>();
             if (j < tokens.Count && tokens[j].TokenType == TSqlTokenType.LeftParenthesis)
             {
                 int depth = 1; j++;
@@ -64,6 +84,11 @@ public static class TokenBasedCteExtractor
                 {
                     if (tokens[j].TokenType == TSqlTokenType.LeftParenthesis) depth++;
                     else if (tokens[j].TokenType == TSqlTokenType.RightParenthesis) depth--;
+                    else if (depth == 1 &&
+                             tokens[j].TokenType is TSqlTokenType.Identifier or TSqlTokenType.QuotedIdentifier)
+                    {
+                        explicitColumns.Add(tokens[j].Text.Trim('[', ']', '"'));
+                    }
                     j++;
                 }
                 while (j < tokens.Count && IsWhitespaceOrComment(tokens[j])) j++;
@@ -97,9 +122,9 @@ public static class TokenBasedCteExtractor
             // can't reference themselves.
             if (bodyOpenOffset < cursorOffset &&
                 !cursorInThisBody &&
-                !result.Contains(cteName, StringComparer.OrdinalIgnoreCase))
+                !result.ContainsKey(cteName))
             {
-                result.Add(cteName);
+                result[cteName] = explicitColumns;
             }
 
             while (j < tokens.Count && IsWhitespaceOrComment(tokens[j])) j++;

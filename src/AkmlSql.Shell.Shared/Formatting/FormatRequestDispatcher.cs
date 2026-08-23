@@ -93,7 +93,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             {
                 SessionId = sessionId,
                 Text = originalSql,
-                ProfileName = settings?.Formatter?.ActiveProfile ?? "Default",
+                ProfileName = settings?.Formatter?.ActiveProfile ?? "Khamis Style",
             };
 
             try
@@ -114,6 +114,14 @@ namespace AkmlSql.Shell.Shared.Formatting
                         trigger);
                     return null;
                 }
+
+                // The engine formatted successfully but could NOT load the requested style, so the
+                // output silently used built-in defaults. Surface it — a wrong-style format is
+                // indistinguishable from a correct one to the eye, and FormatFailureNotifier stays
+                // quiet on success by design. Warned once per style per session: a missing style is
+                // a persistent configuration problem, not a per-keystroke event, and this path also
+                // runs on save/paste/delimiter auto-format.
+                FormatFailureNotifier.NotifyProfileFallbackOnce(response.ProfileFallbackWarning);
 
                 return response.FormattedText;
             }

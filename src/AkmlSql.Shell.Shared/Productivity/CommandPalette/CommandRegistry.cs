@@ -107,7 +107,9 @@ namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
             commands.Add(Cmd("akml.qualifyNames", "Qualify Object Names", "Format", CommandIds.CmdQualifyNames));
             commands.Add(Cmd("akml.toggleBrackets", "Toggle Square Brackets", "Format", CommandIds.CmdToggleBrackets));
             commands.Add(Cmd("akml.toggleAs", "Toggle AS Keyword", "Format", CommandIds.CmdToggleAs));
-            commands.Add(Cmd("akml.editProfile", "Edit Format Profile", "Format", CommandIds.CmdEditProfile));
+            // Spec 033 (T040) — the dead "akml.editProfile" entry (never-registered
+            // EditProfileCommand) is replaced by the real Format Styles window command.
+            commands.Add(Cmd("akml.formatStyles", "Format Styles...", "Format", CommandIds.CmdFormatStyles));
             commands.Add(Cmd("akml.disableFormattingForSelection", "Disable Formatting for Selection", "Format", CommandIds.CmdDisableFormattingForSelection));
             commands.Add(Cmd("akml.bulkFormat", "Bulk Format...", "Format", CommandIds.CmdBulkFormat));
 

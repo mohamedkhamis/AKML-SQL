@@ -8,6 +8,7 @@
 @using System.Linq
 @using System.Text
 @using AkmlSql.Core.Ipc.Messages
+@using AkmlSql.Core.Models.History
 @using AkmlSql.Web.Services
 @using Microsoft.JSInterop
 @implements IAsyncDisposable
@@ -92,7 +93,7 @@
                                     <span class="akml-hist-name">@rv.DisplayName</span>
                                     <span class="akml-hist-meta">
                                         <span>@rv.RelativeTime</span>
-                                        @if (e.ExecutionCount > 1) { <span class="akml-hist-count"> · ×@e.ExecutionCount</span> }
+                                        @if (!string.IsNullOrEmpty(rv.Meta)) { <span class="akml-hist-count"> · @rv.Meta</span> }
                                         <span class="akml-hist-conn">
                                             <span class="akml-hist-dot" style="color:@(e.IsOpen ? "var(--akml-status-success)" : "var(--akml-status-danger)")">●</span>
                                             @rv.ServerDb
@@ -306,7 +307,7 @@
     // Per-entry derived display values computed once per load (keyed by entry id) so the render tree
     // never re-runs the regex/date/relative-time work per row per render. See RebuildRowViews.
     private readonly Dictionary<long, RowView> _rowViews = new();
-    private sealed record RowView(string DisplayName, string Bucket, string RelativeTime, string ServerDb);
+    private sealed record RowView(string DisplayName, string Meta, string Bucket, string RelativeTime, string ServerDb);
 
     // Cached preview segments — recomputed only when _previewSql or _search changes (SelectAsync,
     // SelectVersion, ClearDetail, OnSearchInput), never inside the render tree.
@@ -499,7 +500,7 @@
         if (await HistorySvc.RenameAsync(entry.Id, name.Trim(), CancellationToken.None))
         {
             // Mirror the desktop (HistoryToolWindowControl: entry.TabTitle = newName) so the right-pane
-            // header (DisplayName(_selected)) updates immediately — _selected is this same reference.
+            // header (DisplayNameFor(_selected)) updates immediately — _selected is this same reference.
             entry.TabTitle = name.Trim();
             await LoadAsync(true);
         }
@@ -530,7 +531,12 @@
     private async Task OpenInEditorAsync()
     {
         if (_selected == null) return;
-        await SessionStore.SaveAsync(new EditorSessionRecord { DocumentText = _previewSql });
+        // T9 fix-round-1: read-modify-write via EditorSessionKeys.SetDocumentTextAsync, not a fresh
+        // EditorSessionRecord -- SaveAsync overwrites the WHOLE persisted record, so constructing one
+        // from scratch here silently dropped SessionKey to null (the same defect class fixed in
+        // Editor.razor's OnTextChangedAsync). Preserving the key keeps this in the SAME editor
+        // session; "Reset editor session" remains the sole boundary that starts a new one.
+        await EditorSessionKeys.SetDocumentTextAsync(SessionStore, _previewSql);
         await SessionStore.FlushAsync();
         Nav.NavigateTo("/");
     }
@@ -538,7 +544,8 @@
     private async Task ReExecuteAsync()
     {
         if (_selected == null) return;
-        await SessionStore.SaveAsync(new EditorSessionRecord { DocumentText = _previewSql });
+        // T9 fix-round-1: see OpenInEditorAsync above -- same preserve-the-key fix.
+        await EditorSessionKeys.SetDocumentTextAsync(SessionStore, _previewSql);
         await SessionStore.FlushAsync();
         Nav.NavigateTo("/?autorun=1");
     }
@@ -615,15 +622,32 @@
         _rowViews.TryGetValue(e.Id, out var v) ? v : BuildRowView(e, DateTime.Now);
 
     private static RowView BuildRowView(HistoryEntryDto e, DateTime now) =>
-        new(DisplayName(e), WebHistoryLogic.DateBucket(e.ExecutedAt, now), RelativeTime(e.ExecutedAt), ServerDb(e));
+        new(DisplayNameFor(e), MetaFor(e.ExecutionCount, e.VersionCount),
+            WebHistoryLogic.DateBucket(e.ExecutedAt, now), RelativeTime(e.ExecutedAt), ServerDb(e));
 
     private void RecomputePreviewSegments() =>
         _previewSegments = _selected == null
             ? Array.Empty<HistoryPreviewHighlighter.Segment>()
             : HistoryPreviewHighlighter.BuildSegments(_previewSql, _search);
 
-    private static string DisplayName(HistoryEntryDto e) =>
-        AkmlSql.Core.Models.History.HistoryDisplayName.Of(e.TabTitle, e.SqlText);
+    /// <summary>
+    /// The session name (query-NN, a saved file name, or the user's rename). The raw-SQL fallback
+    /// only fires for a row that somehow has no session at all, and is formatted via the shared
+    /// <see cref="HistoryDisplayName.Of"/> — whitespace collapsed, truncated to ~60 characters — so
+    /// a sessionless row never dumps raw multi-line SQL into the list. Mirrored by
+    /// <c>AkmlSql.Shell.Shared.History.HistoryRowDisplay.DisplayNameFor</c> — see that file's remarks.
+    /// </summary>
+    internal static string DisplayNameFor(HistoryEntryDto e) =>
+        HistoryDisplayName.Of(e.TabTitle, e.SqlText);
+
+    /// <summary>
+    /// "×276 · 12 versions". Both halves are omitted when they carry no information. Finding 10
+    /// (PR #249 review): delegates to the shared <see cref="HistoryDisplayName.MetaFor"/> instead
+    /// of hand-duplicating the same List/Join logic that used to live here AND in
+    /// <c>AkmlSql.Shell.Shared.History.HistoryRowDisplay.MetaFor</c>.
+    /// </summary>
+    internal static string MetaFor(int executionCount, int versionCount) =>
+        HistoryDisplayName.MetaFor(executionCount, versionCount);
 
     private static string ServerDb(HistoryEntryDto e)
     {

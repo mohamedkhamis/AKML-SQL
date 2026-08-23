@@ -47,6 +47,14 @@ public class JoinProvider : ICompletionProvider
             return false;
         }
 
+        // Spec 032 G4: a typed schema qualifier (`JOIN [Sales].[|`) is a deliberate scope —
+        // FK-join suggestions ignore it and would insert other schemas' tables as broken SQL.
+        // ObjectProvider's dot-qualified path owns this position.
+        if (context.PrecedingDot)
+        {
+            return false;
+        }
+
         if (cache == null)
         {
             return false;

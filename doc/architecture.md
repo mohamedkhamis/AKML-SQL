@@ -287,7 +287,7 @@ A new modal `DialogWindow` in `src/AkmlSql.Shell.Shared/Formatting/`:
 | `FormatStylesEditorWindow.cs` | Three-column shell: style list (left), settings tree (middle), controls + live preview (right). Programmatic WPF only (no XAML) per the `ProfileEditorDialog` pattern. |
 | `FormatStylesEditorViewModel.cs` | Loads profiles via `ProfileList` IPC, schema via `RequestStyleEditorSchema` IPC, holds `_workingValues` overlaying schema defaults. Debounced `QueuePreviewAsync` (100 ms) drives the live preview. |
 
-The editor is launched via `FormatStylesEditorWindow.Launch()`. Menu wiring (Options → Format → Styles → "Edit Formatting Styles…") is deferred to a follow-up session.
+The editor is launched via `FormatStylesEditorWindow.Launch()` from: Tools → AKML SQL → "Format Styles..." (both hosts, `cmdFormatStyles` 0x0916), the SSMS DTE-injected fallback menu, the Command Palette (`akml.formatStyles`), and the Options Format › Styles page's "Edit formatting styles…" button (spec 033). Spec 033 also promoted the window from a preview-only browser to a full editor: load-on-select via `ProfileGet` (34) raw reads, dirty-tracked merge-saves through `ProfileSave` (15) preserving metadata/extension data, rename via `ProfileRename` (35), delete guarded against the active style, and a schema-v2 settings tree (5 SQL Prompt categories, enum dropdowns, per-setting descriptions).
 
 ### SQL Prompt round-trip (US2)
 

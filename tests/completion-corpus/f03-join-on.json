@@ -1,0 +1,992 @@
+[
+  {
+    "id": "JOINON-001",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Orders o JOIN dbo.Customers c ON o.|",
+    "expect": {
+      "mustContain": ["OrderID", "CustomerID", "OrderDate"],
+      "mustNotContain": ["CustomerName", "ProductName"],
+      "minCount": 1
+    },
+    "note": "ON left-side alias o scopes to Orders columns only"
+  },
+  {
+    "id": "JOINON-002",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Orders o JOIN dbo.Customers c ON c.|",
+    "expect": {
+      "mustContain": ["CustomerID", "CustomerName", "Country"],
+      "mustNotContain": ["OrderDate", "ShipperID"],
+      "minCount": 1
+    },
+    "note": "ON join-target alias c scopes to Customers columns, not Orders"
+  },
+  {
+    "id": "JOINON-003",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Products p JOIN dbo.Categories cat ON p.|",
+    "expect": {
+      "mustContain": ["ProductID", "CategoryID", "ProductName"],
+      "mustNotContain": ["CategoryName", "Description"],
+      "minCount": 1
+    },
+    "note": "FK pair Products.CategoryID->Categories: p. shows Products columns"
+  },
+  {
+    "id": "JOINON-004",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Products p JOIN dbo.Categories cat ON cat.|",
+    "expect": {
+      "mustContain": ["CategoryID", "CategoryName"],
+      "mustNotContain": ["ProductName", "SupplierID"],
+      "minCount": 1
+    },
+    "note": "cat. scopes to Categories; Products columns must not leak"
+  },
+  {
+    "id": "JOINON-005",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Products p JOIN dbo.Suppliers s ON s.|",
+    "expect": {
+      "mustContain": ["SupplierID", "SupplierName", "City"],
+      "mustNotContain": ["ProductName", "Price"],
+      "minCount": 1
+    },
+    "note": "FK pair Products.SupplierID->Suppliers: s. shows Suppliers columns"
+  },
+  {
+    "id": "JOINON-006",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.OrderDetails od JOIN dbo.Products p ON od.|",
+    "expect": {
+      "mustContain": ["OrderDetailID", "OrderID", "ProductID", "Quantity"],
+      "mustNotContain": ["ProductName", "Unit"],
+      "minCount": 1
+    },
+    "note": "od. scopes to OrderDetails; Products-only columns excluded"
+  },
+  {
+    "id": "JOINON-007",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.OrderDetails od JOIN dbo.Orders o ON o.|",
+    "expect": {
+      "mustContain": ["OrderID", "CustomerID", "OrderDate"],
+      "mustNotContain": ["Quantity", "OrderDetailID"],
+      "minCount": 1
+    },
+    "note": "FK pair OrderDetails.OrderID->Orders: o. shows Orders columns"
+  },
+  {
+    "id": "JOINON-008",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Orders o JOIN dbo.Employees e ON e.|",
+    "expect": {
+      "mustContain": ["EmployeeID", "LastName", "FirstName"],
+      "mustNotContain": ["OrderDate", "CustomerID"],
+      "minCount": 1
+    },
+    "note": "FK pair Orders.EmployeeID->Employees: e. shows Employees columns"
+  },
+  {
+    "id": "JOINON-009",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Orders o JOIN dbo.Shippers sh ON sh.|",
+    "expect": {
+      "mustContain": ["ShipperID", "ShipperName", "Phone"],
+      "mustNotContain": ["OrderDate", "EmployeeID"],
+      "minCount": 1
+    },
+    "note": "FK pair Orders.ShipperID->Shippers: sh. shows Shippers columns"
+  },
+  {
+    "id": "JOINON-010",
+    "family": "join-on",
+    "doc": "SELECT * FROM Sales.Invoices i JOIN dbo.Orders o ON i.|",
+    "expect": {
+      "mustContain": ["InvoiceID", "OrderID", "TotalAmount", "Paid"],
+      "mustNotContain": ["OrderDate", "CustomerID"],
+      "minCount": 1
+    },
+    "note": "Cross-schema join: i. scopes to Sales.Invoices columns"
+  },
+  {
+    "id": "JOINON-011",
+    "family": "join-on",
+    "doc": "SELECT * FROM Sales.Invoices i JOIN dbo.Orders o ON o.|",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["InvoiceDate", "TotalAmount"],
+      "minCount": 1
+    },
+    "note": "o. in Sales.Invoices join scopes to dbo.Orders columns"
+  },
+  {
+    "id": "JOINON-012",
+    "family": "join-on",
+    "doc": "SELECT o.OrderID\nFROM dbo.Orders o\nJOIN dbo.Customers c\n    ON c.|",
+    "expect": {
+      "mustContain": ["CustomerID", "CustomerName"],
+      "mustNotContain": ["OrderDate", "ProductName"],
+      "minCount": 1
+    },
+    "note": "Multi-line doc with indented ON clause; c. scopes to Customers"
+  },
+  {
+    "id": "JOINON-013",
+    "family": "join-on",
+    "doc": "select * from dbo.orders o join dbo.customers c on o.|",
+    "expect": {
+      "mustContain": ["OrderID", "CustomerID"],
+      "mustNotContain": ["CustomerName", "ContactName"],
+      "minCount": 1
+    },
+    "note": "Lowercase keywords and table names resolve case-insensitively"
+  },
+  {
+    "id": "JOINON-014",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Customers cust LEFT JOIN dbo.Orders ord ON ord.|",
+    "expect": {
+      "mustContain": ["OrderID", "CustomerID", "OrderDate"],
+      "mustNotContain": ["CustomerName", "ContactName"],
+      "minCount": 1
+    },
+    "note": "LEFT JOIN with word-style aliases cust/ord; ord. scopes to Orders"
+  },
+  {
+    "id": "JOINON-015",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Orders o INNER JOIN dbo.Employees e ON o.|",
+    "expect": {
+      "mustContain": ["EmployeeID", "OrderID"],
+      "mustNotContain": ["LastName", "FirstName"],
+      "minCount": 1
+    },
+    "note": "INNER JOIN: o. shows Orders.EmployeeID FK column, not Employees columns"
+  },
+  {
+    "id": "JOINON-016",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.OrderDetails od RIGHT JOIN dbo.Products p ON p.|",
+    "expect": {
+      "mustContain": ["ProductID", "ProductName", "Price"],
+      "mustNotContain": ["Quantity", "OrderDetailID"],
+      "minCount": 1
+    },
+    "note": "RIGHT JOIN target p. scopes to Products columns"
+  },
+  {
+    "id": "JOINON-017",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Orders o FULL OUTER JOIN dbo.Shippers sh ON o.|",
+    "expect": {
+      "mustContain": ["ShipperID", "OrderID"],
+      "mustNotContain": ["ShipperName", "Phone"],
+      "minCount": 1
+    },
+    "note": "FULL OUTER JOIN: o. shows Orders FK column ShipperID, not Shippers columns"
+  },
+  {
+    "id": "JOINON-018",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Employees e1 JOIN dbo.Employees e2 ON e2.|",
+    "expect": {
+      "mustContain": ["EmployeeID", "LastName"],
+      "mustNotContain": ["OrderDate", "CustomerID"],
+      "minCount": 1
+    },
+    "note": "Self-join: second alias e2 resolves to Employees columns"
+  },
+  {
+    "id": "JOINON-019",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Orders o JOIN dbo.Customers c ON o.Cust|",
+    "expect": {
+      "mustContain": ["CustomerID"],
+      "mustNotContain": ["OrderID", "CustomerName"],
+      "minCount": 1
+    },
+    "note": "Prefix Cust on o. matches only Orders.CustomerID; CustomerName is Customers-only"
+  },
+  {
+    "id": "JOINON-020",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Orders o JOIN dbo.Customers c ON c.Cust|",
+    "expect": {
+      "mustContain": ["CustomerID", "CustomerName"],
+      "mustNotContain": ["ContactName", "OrderDate"],
+      "minCount": 1
+    },
+    "note": "Prefix Cust on c. matches CustomerID/CustomerName, filters ContactName"
+  },
+  {
+    "id": "JOINON-021",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Orders o JOIN dbo.Customers c ON c.C|",
+    "expect": {
+      "mustContain": ["CustomerID", "City", "Country"],
+      "mustNotContain": ["Address", "CategoryName"],
+      "minCount": 1
+    },
+    "note": "1-char prefix C on Customers; Address filtered, CategoryName wrong table"
+  },
+  {
+    "id": "JOINON-022",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Products p JOIN dbo.Categories cat ON p.cat|",
+    "expect": {
+      "mustContain": ["CategoryID"],
+      "mustNotContain": ["CategoryName", "ProductName"],
+      "minCount": 1
+    },
+    "note": "Lowercase prefix cat on p. matches CategoryID; CategoryName belongs to cat alias"
+  },
+  {
+    "id": "JOINON-023",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Products p JOIN dbo.Categories cat ON cat.Cat|",
+    "expect": {
+      "mustContain": ["CategoryID", "CategoryName"],
+      "mustNotContain": ["Description", "ProductName"],
+      "minCount": 1
+    },
+    "note": "Prefix Cat on cat. keeps CategoryID/CategoryName, drops Description"
+  },
+  {
+    "id": "JOINON-024",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Orders o JOIN dbo.Employees e ON e.La|",
+    "expect": {
+      "mustContain": ["LastName"],
+      "mustNotContain": ["FirstName", "OrderDate"],
+      "minCount": 1
+    },
+    "note": "2-char prefix La on e. matches only LastName"
+  },
+  {
+    "id": "JOINON-025",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Orders o JOIN dbo.Shippers sh ON sh.Ship|",
+    "expect": {
+      "mustContain": ["ShipperID", "ShipperName"],
+      "mustNotContain": ["Phone", "OrderID"],
+      "minCount": 1
+    },
+    "note": "Prefix Ship on sh. matches both Shippers key and name columns"
+  },
+  {
+    "id": "JOINON-026",
+    "family": "join-on",
+    "doc": "SELECT * FROM Sales.Invoices i JOIN dbo.Orders o ON i.Ord|",
+    "expect": {
+      "mustContain": ["OrderID"],
+      "mustNotContain": ["OrderDate", "InvoiceID"],
+      "minCount": 1
+    },
+    "note": "Prefix Ord on i.: OrderDate matches prefix but belongs to o, not i"
+  },
+  {
+    "id": "JOINON-027",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.OrderDetails od JOIN dbo.Products p ON od.Prod|",
+    "expect": {
+      "mustContain": ["ProductID"],
+      "mustNotContain": ["ProductName", "Quantity"],
+      "minCount": 1
+    },
+    "note": "Prefix Prod on od.: ProductName matches prefix but is a Products column"
+  },
+  {
+    "id": "JOINON-028",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.OrderDetails od JOIN dbo.Products p ON p.Pr|",
+    "expect": {
+      "mustContain": ["ProductID", "ProductName", "Price"],
+      "mustNotContain": ["Quantity", "Unit"],
+      "minCount": 1
+    },
+    "note": "2-char prefix Pr on p. matches three Products columns, filters Unit"
+  },
+  {
+    "id": "JOINON-029",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Orders o JOIN dbo.Customers c ON c.cOnT|",
+    "expect": {
+      "mustContain": ["ContactName"],
+      "mustNotContain": ["Country", "CustomerID"],
+      "minCount": 1
+    },
+    "note": "Mixed-case prefix cOnT matches ContactName case-insensitively, not Country"
+  },
+  {
+    "id": "JOINON-030",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Products p JOIN dbo.Suppliers s ON s.Sup|",
+    "expect": {
+      "mustContain": ["SupplierID", "SupplierName"],
+      "mustNotContain": ["ProductName", "ContactName"],
+      "minCount": 1
+    },
+    "note": "Prefix Sup on s. keeps supplier key/name, filters non-matching ContactName"
+  },
+  {
+    "id": "JOINON-031",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Orders o INNER JOIN dbo.Employees e ON o.Emp|",
+    "expect": {
+      "mustContain": ["EmployeeID"],
+      "mustNotContain": ["OrderID", "LastName"],
+      "minCount": 1
+    },
+    "note": "Prefix Emp on o. matches only the Orders.EmployeeID FK column"
+  },
+  {
+    "id": "JOINON-032",
+    "family": "join-on",
+    "doc": "SELECT p.ProductName\nFROM dbo.Products p\nINNER JOIN dbo.Suppliers s\n    ON s.Supp|",
+    "expect": {
+      "mustContain": ["SupplierID", "SupplierName"],
+      "mustNotContain": ["City", "ProductID"],
+      "minCount": 1
+    },
+    "note": "Multi-line doc, 4-char prefix Supp on join target alias s"
+  },
+  {
+    "id": "JOINON-033",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.OrderDetails od JOIN dbo.Orders o ON o.O|",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["OrderDetailID", "CustomerID"],
+      "minCount": 1
+    },
+    "note": "1-char prefix O on o.: OrderDetailID matches prefix but belongs to od"
+  },
+  {
+    "id": "JOINON-034",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.OrderDetails od JOIN dbo.Orders o ON od.Or|",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDetailID"],
+      "mustNotContain": ["OrderDate", "ProductID"],
+      "minCount": 1
+    },
+    "note": "Prefix Or on od.: OrderDate matches prefix but is an Orders column"
+  },
+  {
+    "id": "JOINON-035",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Customers C JOIN dbo.Orders O ON C.CUST|",
+    "expect": {
+      "mustContain": ["CustomerID", "CustomerName"],
+      "mustNotContain": ["ContactName", "OrderDate"],
+      "minCount": 1
+    },
+    "note": "Uppercase alias and UPPER prefix match schema names case-insensitively"
+  },
+  {
+    "id": "JOINON-036",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Orders o JOIN dbo.Customers c ON o.CustomerID = c.|",
+    "expect": {
+      "mustContain": ["CustomerID", "CustomerName"],
+      "mustNotContain": ["OrderID", "OrderDate"],
+      "minCount": 1
+    },
+    "note": "FK condition RHS: c. scopes to Customers, Orders columns excluded"
+  },
+  {
+    "id": "JOINON-037",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Orders o JOIN dbo.Customers c ON c.CustomerID = o.|",
+    "expect": {
+      "mustContain": ["CustomerID", "OrderID"],
+      "mustNotContain": ["CustomerName", "ContactName"],
+      "minCount": 1
+    },
+    "note": "Reversed FK condition: RHS o. scopes to Orders columns"
+  },
+  {
+    "id": "JOINON-038",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Products p JOIN dbo.Categories cat ON p.CategoryID = cat.|",
+    "expect": {
+      "mustContain": ["CategoryID", "CategoryName"],
+      "mustNotContain": ["ProductName", "Price"],
+      "minCount": 1
+    },
+    "note": "FK condition RHS cat. offers the matching Categories key column"
+  },
+  {
+    "id": "JOINON-039",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.OrderDetails od JOIN dbo.Products p ON od.ProductID = p.|",
+    "expect": {
+      "mustContain": ["ProductID", "ProductName"],
+      "mustNotContain": ["Quantity", "OrderDetailID"],
+      "minCount": 1
+    },
+    "note": "FK condition RHS p. scopes to Products, OrderDetails columns excluded"
+  },
+  {
+    "id": "JOINON-040",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.OrderDetails od JOIN dbo.Orders o ON od.OrderID = o.|",
+    "expect": {
+      "mustContain": ["OrderID", "CustomerID"],
+      "mustNotContain": ["Quantity", "OrderDetailID"],
+      "minCount": 1
+    },
+    "note": "FK condition RHS o. offers Orders.OrderID matching column"
+  },
+  {
+    "id": "JOINON-041",
+    "family": "join-on",
+    "doc": "SELECT * FROM Sales.Invoices i JOIN dbo.Orders o ON i.OrderID = o.|",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["InvoiceID", "Paid"],
+      "minCount": 1
+    },
+    "note": "Cross-schema FK condition RHS: o. scopes to dbo.Orders columns"
+  },
+  {
+    "id": "JOINON-042",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Orders o JOIN dbo.Employees e ON o.EmployeeID = e.|",
+    "expect": {
+      "mustContain": ["EmployeeID", "LastName"],
+      "mustNotContain": ["OrderDate", "ShipperID"],
+      "minCount": 1
+    },
+    "note": "FK condition RHS e. scopes to Employees columns"
+  },
+  {
+    "id": "JOINON-043",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Orders o JOIN dbo.Shippers sh ON o.ShipperID = sh.|",
+    "expect": {
+      "mustContain": ["ShipperID", "ShipperName"],
+      "mustNotContain": ["OrderID", "CustomerID"],
+      "minCount": 1
+    },
+    "note": "FK condition RHS sh. scopes to Shippers columns"
+  },
+  {
+    "id": "JOINON-044",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Products p JOIN dbo.Suppliers s ON p.SupplierID = s.Supplier|",
+    "expect": {
+      "mustContain": ["SupplierID", "SupplierName"],
+      "mustNotContain": ["Country", "ProductID"],
+      "minCount": 1
+    },
+    "note": "Long prefix Supplier on FK condition RHS filters to matching Suppliers columns"
+  },
+  {
+    "id": "JOINON-045",
+    "family": "join-on",
+    "doc": "SELECT i.InvoiceID, o.OrderDate\nFROM Sales.Invoices i\nINNER JOIN dbo.Orders o\n    ON i.OrderID = o.Ord|",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["OrderDetailID", "TotalAmount"],
+      "minCount": 1
+    },
+    "note": "Multi-line FK condition with prefix Ord; OrderDetailID from absent table excluded"
+  },
+  {
+    "id": "JOINON-046",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Orders o JOIN dbo.Customers c ON |",
+    "expect": {
+      "mustContain": ["CustomerID", "CustomerName"],
+      "mustNotContain": ["ProductName", "Quantity"],
+      "minCount": 1
+    },
+    "note": "Bare ON position: current join target Customers columns offered, unrelated tables excluded"
+  },
+  {
+    "id": "JOINON-047",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Products p JOIN dbo.Categories cat ON |",
+    "expect": {
+      "mustContain": ["CategoryID", "CategoryName"],
+      "mustNotContain": ["OrderDate", "CustomerName"],
+      "minCount": 1
+    },
+    "note": "Bare ON: Categories (join target) columns present; Orders/Customers absent"
+  },
+  {
+    "id": "JOINON-048",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.OrderDetails od JOIN dbo.Products p ON |",
+    "expect": {
+      "mustContain": ["ProductID", "ProductName"],
+      "mustNotContain": ["CustomerName", "InvoiceDate"],
+      "minCount": 1
+    },
+    "note": "Bare ON scopes to current target Products; unrelated tables excluded"
+  },
+  {
+    "id": "JOINON-049",
+    "family": "join-on",
+    "doc": "SELECT *\nFROM dbo.Orders o\nLEFT JOIN dbo.Shippers sh ON |",
+    "expect": {
+      "mustContain": ["ShipperID", "ShipperName"],
+      "mustNotContain": ["ProductName", "CategoryName"],
+      "minCount": 1
+    },
+    "note": "Multi-line bare ON after LEFT JOIN: Shippers columns offered"
+  },
+  {
+    "id": "JOINON-050",
+    "family": "join-on",
+    "doc": "SELECT * FROM Sales.Invoices i JOIN dbo.Orders o ON |",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["ProductName", "ShipperName"],
+      "minCount": 1
+    },
+    "note": "Bare ON with cross-schema join: current target Orders columns offered"
+  },
+  {
+    "id": "JOINON-051",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Orders o JOIN dbo.Customers c ON o.CustomerID = |",
+    "expect": {
+      "mustContain": ["CustomerID"],
+      "mustNotContain": ["ProductName", "TotalAmount"],
+      "minCount": 1
+    },
+    "note": "Unqualified RHS of FK equality: matching CustomerID offered, unrelated tables excluded"
+  },
+  {
+    "id": "JOINON-052",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Orders o JOIN dbo.Employees e ON Emp|",
+    "expect": {
+      "mustContain": ["EmployeeID"],
+      "mustNotContain": ["OrderDate", "ProductName"],
+      "minCount": 1
+    },
+    "note": "Bare ON with prefix Emp: EmployeeID matches, non-matching and unrelated names filtered"
+  },
+  {
+    "id": "JOINON-053",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Products p INNER JOIN dbo.Suppliers s ON |",
+    "expect": {
+      "mustContain": ["SupplierID", "SupplierName"],
+      "mustNotContain": ["OrderDate", "Quantity"],
+      "minCount": 1
+    },
+    "note": "Bare ON after INNER JOIN: Suppliers target columns offered"
+  },
+  {
+    "id": "JOINON-054",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Orders o JOIN dbo.Customers c ON o.CustomerID = c.CustomerID JOIN dbo.Employees e ON e.|",
+    "expect": {
+      "mustContain": ["EmployeeID", "LastName", "FirstName"],
+      "mustNotContain": ["CustomerName", "OrderDate"],
+      "minCount": 1
+    },
+    "note": "Second join in chain: e. scopes to Employees only"
+  },
+  {
+    "id": "JOINON-055",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Orders o JOIN dbo.Customers c ON o.CustomerID = c.CustomerID JOIN dbo.Employees e ON e.EmployeeID = o.|",
+    "expect": {
+      "mustContain": ["EmployeeID", "OrderID"],
+      "mustNotContain": ["LastName", "CustomerName"],
+      "minCount": 1
+    },
+    "note": "Second join's ON references earlier alias o: Orders columns still resolvable"
+  },
+  {
+    "id": "JOINON-056",
+    "family": "join-on",
+    "doc": "SELECT o.OrderID\nFROM dbo.Orders o\nJOIN dbo.OrderDetails od ON od.OrderID = o.OrderID\nJOIN dbo.Products p ON p.|",
+    "expect": {
+      "mustContain": ["ProductID", "ProductName"],
+      "mustNotContain": ["Quantity", "OrderDate"],
+      "minCount": 1
+    },
+    "note": "Multi-line 3-table chain: third alias p scopes to Products"
+  },
+  {
+    "id": "JOINON-057",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Orders o JOIN dbo.OrderDetails od ON od.OrderID = o.OrderID JOIN dbo.Products p ON od.|",
+    "expect": {
+      "mustContain": ["ProductID", "OrderDetailID", "Quantity"],
+      "mustNotContain": ["ProductName", "Price"],
+      "minCount": 1
+    },
+    "note": "Later ON referencing middle alias od: OrderDetails columns, not Products"
+  },
+  {
+    "id": "JOINON-058",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Orders o JOIN dbo.Customers c ON o.CustomerID = c.CustomerID JOIN dbo.Employees e ON o.EmployeeID = e.EmployeeID JOIN dbo.Shippers sh ON sh.|",
+    "expect": {
+      "mustContain": ["ShipperID", "ShipperName", "Phone"],
+      "mustNotContain": ["CustomerName", "LastName"],
+      "minCount": 1
+    },
+    "note": "Fourth table in chain: sh. scopes to Shippers columns only"
+  },
+  {
+    "id": "JOINON-059",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Orders o JOIN dbo.Customers c ON o.CustomerID = c.CustomerID JOIN dbo.Employees e ON o.Emp|",
+    "expect": {
+      "mustContain": ["EmployeeID"],
+      "mustNotContain": ["LastName", "OrderID"],
+      "minCount": 1
+    },
+    "note": "Prefix on earlier alias inside a later ON: Orders.EmployeeID only"
+  },
+  {
+    "id": "JOINON-060",
+    "family": "join-on",
+    "doc": "SELECT *\nFROM Sales.Invoices i\nJOIN dbo.Orders o ON i.OrderID = o.OrderID\nJOIN dbo.Customers c ON c.|",
+    "expect": {
+      "mustContain": ["CustomerID", "CustomerName"],
+      "mustNotContain": ["InvoiceID", "OrderDate"],
+      "minCount": 1
+    },
+    "note": "Multi-line chain starting at Sales.Invoices: c. scopes to Customers"
+  },
+  {
+    "id": "JOINON-061",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.OrderDetails od JOIN dbo.Orders o ON od.OrderID = o.OrderID JOIN dbo.Customers c ON o.|",
+    "expect": {
+      "mustContain": ["CustomerID", "OrderID"],
+      "mustNotContain": ["Quantity", "CustomerName"],
+      "minCount": 1
+    },
+    "note": "Third join's ON referencing middle alias o: Orders columns only"
+  },
+  {
+    "id": "JOINON-062",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Orders o JOIN dbo.Customers c ON o.CustomerID = c.CustomerID JOIN dbo.Shippers sh ON |",
+    "expect": {
+      "mustContain": ["ShipperID", "ShipperName"],
+      "mustNotContain": ["ProductName", "Quantity"],
+      "minCount": 1
+    },
+    "note": "Bare ON of second join in chain: current target Shippers columns offered"
+  },
+  {
+    "id": "JOINON-063",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.vw_CustomerOrders v JOIN dbo.Shippers sh ON v.|",
+    "expect": {
+      "mustContain": ["CustomerID", "OrderID", "ShipperID"],
+      "mustNotContain": ["ShipperName", "Phone"],
+      "minCount": 1
+    },
+    "note": "View alias v. offers vw_CustomerOrders columns, not Shippers columns"
+  },
+  {
+    "id": "JOINON-064",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Shippers sh JOIN dbo.vw_CustomerOrders v ON v.ShipperID = sh.|",
+    "expect": {
+      "mustContain": ["ShipperID", "ShipperName"],
+      "mustNotContain": ["OrderDate", "CustomerName"],
+      "minCount": 1
+    },
+    "note": "View-to-table FK-style condition: sh. scopes to Shippers only"
+  },
+  {
+    "id": "JOINON-065",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.OrderDetails od JOIN dbo.Products p ON od.ProductID = p.ProductID AND p.|",
+    "expect": {
+      "mustContain": ["CategoryID", "Price"],
+      "mustNotContain": ["Quantity", "OrderID"],
+      "minCount": 1
+    },
+    "note": "Second ANDed condition: p. still scopes to Products columns"
+  },
+  {
+    "id": "JOINON-066",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Orders JOIN dbo.Customers ON Orders.|",
+    "expect": {
+      "mustContain": ["OrderID", "CustomerID", "OrderDate"],
+      "mustNotContain": ["CustomerName", "ContactName"],
+      "minCount": 1
+    },
+    "note": "Table name as qualifier (no alias): Orders. resolves to Orders columns"
+  },
+  {
+    "id": "JOINON-067",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Orders JOIN dbo.Customers ON Customers.|",
+    "expect": {
+      "mustContain": ["CustomerID", "CustomerName"],
+      "mustNotContain": ["OrderDate", "EmployeeID"],
+      "minCount": 1
+    },
+    "note": "Unaliased join target qualified by table name resolves its columns"
+  },
+  {
+    "id": "JOINON-068",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Products JOIN dbo.Categories ON Categories.|",
+    "expect": {
+      "mustContain": ["CategoryID", "CategoryName", "Description"],
+      "mustNotContain": ["ProductName", "Unit"],
+      "minCount": 1
+    },
+    "note": "Table-name qualifier Categories. excludes Products columns"
+  },
+  {
+    "id": "JOINON-069",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Products JOIN dbo.Categories ON Products.Cat|",
+    "expect": {
+      "mustContain": ["CategoryID"],
+      "mustNotContain": ["CategoryName", "ProductName"],
+      "minCount": 1
+    },
+    "note": "Prefix Cat on table-name qualifier: only Products.CategoryID matches"
+  },
+  {
+    "id": "JOINON-070",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Orders JOIN dbo.Employees e ON Orders.EmployeeID = e.|",
+    "expect": {
+      "mustContain": ["EmployeeID", "LastName"],
+      "mustNotContain": ["OrderDate", "ShipperID"],
+      "minCount": 1
+    },
+    "note": "Mixed table-name and alias qualifiers in one FK condition"
+  },
+  {
+    "id": "JOINON-071",
+    "family": "join-on",
+    "doc": "SELECT OrderID\nFROM dbo.OrderDetails\nJOIN dbo.Orders ON OrderDetails.|",
+    "expect": {
+      "mustContain": ["OrderDetailID", "OrderID", "Quantity"],
+      "mustNotContain": ["OrderDate", "CustomerID"],
+      "minCount": 1
+    },
+    "note": "Multi-line unaliased join: OrderDetails. resolves its own columns only"
+  },
+  {
+    "id": "JOINON-072",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Products p;\nSELECT * FROM dbo.Orders o JOIN dbo.Customers c ON c.|",
+    "expect": {
+      "mustContain": ["CustomerID", "CustomerName"],
+      "mustNotContain": ["ProductName", "Price"],
+      "minCount": 1
+    },
+    "note": "Prior ;-terminated statement: its Products scope must not leak into c."
+  },
+  {
+    "id": "JOINON-073",
+    "family": "join-on",
+    "doc": "SELECT CategoryID FROM dbo.Categories;\nSELECT * FROM dbo.OrderDetails od JOIN dbo.Products p ON od.ProductID = p.|",
+    "expect": {
+      "mustContain": ["ProductID", "ProductName"],
+      "mustNotContain": ["CategoryName", "Description"],
+      "minCount": 1
+    },
+    "note": "FK RHS after a prior statement: Categories columns must not leak"
+  },
+  {
+    "id": "JOINON-074",
+    "family": "join-on",
+    "doc": "SELECT c.CategoryName FROM dbo.Categories c;\nSELECT * FROM dbo.Orders o JOIN dbo.Customers c ON c.|",
+    "expect": {
+      "mustContain": ["CustomerID", "CustomerName"],
+      "mustNotContain": ["CategoryName", "Description"],
+      "minCount": 1
+    },
+    "note": "Alias c reused across statements: current statement binds c to Customers, not Categories"
+  },
+  {
+    "id": "JOINON-075",
+    "family": "join-on",
+    "doc": "UPDATE dbo.Products SET Price = 10 WHERE ProductID = 1;\nSELECT * FROM dbo.Orders o JOIN dbo.Shippers sh ON sh.|",
+    "expect": {
+      "mustContain": ["ShipperID", "ShipperName"],
+      "mustNotContain": ["Price", "ProductName"],
+      "minCount": 1
+    },
+    "note": "Prior UPDATE statement: Products scope must not leak into sh."
+  },
+  {
+    "id": "JOINON-076",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Employees e;\nSELECT * FROM Sales.Invoices i JOIN dbo.Orders o ON i.Or|",
+    "expect": {
+      "mustContain": ["OrderID"],
+      "mustNotContain": ["OrderDate", "LastName"],
+      "minCount": 1
+    },
+    "note": "Prefix on i. after a prior statement: OrderDate belongs to o, LastName to prior statement"
+  },
+  {
+    "id": "JOINON-077",
+    "family": "join-on",
+    "doc": "SELECT 1;\nSELECT * FROM dbo.Suppliers s;\nSELECT * FROM dbo.Products p JOIN dbo.Categories cat ON p.CategoryID = cat.|",
+    "expect": {
+      "mustContain": ["CategoryID", "CategoryName"],
+      "mustNotContain": ["SupplierName", "City"],
+      "minCount": 1
+    },
+    "note": "Two prior statements: only the current join scope feeds cat."
+  },
+  {
+    "id": "JOINON-078",
+    "family": "join-on",
+    "doc": "SELECT TOP (5) * FROM dbo.Customers;\nSELECT * FROM dbo.OrderDetails od JOIN dbo.Orders o ON |",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["CustomerName", "ContactName"],
+      "minCount": 1
+    },
+    "note": "Bare ON after a prior statement: prior Customers columns must not appear"
+  },
+  {
+    "id": "JOINON-079",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Shippers; SELECT * FROM dbo.Orders o JOIN dbo.Employees e ON e.Last|",
+    "expect": {
+      "mustContain": ["LastName"],
+      "mustNotContain": ["ShipperName", "Phone"],
+      "minCount": 1
+    },
+    "note": "Prior statement on the same line: e.Last filters to Employees.LastName"
+  },
+  {
+    "id": "JOINON-080",
+    "family": "join-on",
+    "doc": "SELECT *   FROM   dbo.Orders   o \tJOIN \tdbo.Customers   c   ON   o.|",
+    "expect": {
+      "mustContain": ["OrderID", "CustomerID"],
+      "mustNotContain": ["CustomerName", "City"],
+      "minCount": 1
+    },
+    "note": "Extra spaces and tabs between tokens must not break ON alias resolution"
+  },
+  {
+    "id": "JOINON-081",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Orders o JOIN dbo.Customers c ON o.CustomerID = c.CustomerID AND o.|",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate", "ShipperID"],
+      "mustNotContain": ["CustomerName", "Country"],
+      "minCount": 1
+    },
+    "note": "ANDed second condition referencing left alias o: Orders columns only"
+  },
+  {
+    "id": "JOINON-082",
+    "family": "join-on",
+    "doc": "select o.OrderID\nfrom dbo.Orders as o\ninner join dbo.Customers as c\non c.|",
+    "expect": {
+      "mustContain": ["CustomerID", "Country"],
+      "mustNotContain": ["OrderDate", "EmployeeID"],
+      "minCount": 1
+    },
+    "note": "Lowercase multi-line doc with AS-form aliases; c. scopes to Customers"
+  },
+  {
+    "id": "JOINON-083",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Orders o JOIN dbo.Customers c ON x.|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["OrderID", "CustomerID", "CustomerName"],
+      "minCount": 0
+    },
+    "note": "Negative: undeclared alias x must not resolve to any joined table's columns"
+  },
+  {
+    "id": "JOINON-084",
+    "family": "join-on",
+    "doc": "SELECT p.ProductID FROM dbo.Products p;\nSELECT * FROM dbo.Orders o JOIN dbo.Customers c ON p.|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["ProductID", "ProductName", "Price"],
+      "minCount": 0
+    },
+    "note": "Negative: alias p from the prior ;-terminated statement must not leak into this ON"
+  },
+  {
+    "id": "JOINON-085",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Orders o JOIN dbo.NoSuchTable n ON n.|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["OrderID", "OrderDate"],
+      "minCount": 0
+    },
+    "note": "Negative: alias of nonexistent table must not fall back to Orders columns"
+  },
+  {
+    "id": "JOINON-086",
+    "family": "join-on",
+    "doc": "SELECT * FROM [dbo].[Orders] o JOIN [dbo].[Customers] c ON c.|",
+    "expect": {
+      "mustContain": ["CustomerID", "CustomerName"],
+      "mustNotContain": ["OrderDate", "ShipperID"],
+      "minCount": 1
+    },
+    "note": "Bracketed two-part names in FROM/JOIN still feed ON alias scoping"
+  },
+  {
+    "id": "JOINON-087",
+    "family": "join-on",
+    "doc": "SELECT * FROM dbo.Orders o JOIN Sales.Invoices i ON o.OrderID = i.|",
+    "expect": {
+      "mustContain": ["InvoiceID", "OrderID", "TotalAmount"],
+      "mustNotContain": ["OrderDate", "CustomerID"],
+      "minCount": 1
+    },
+    "note": "FK condition RHS on Sales-schema target: i. scopes to Invoices columns"
+  },
+  {
+    "id": "JOINON-088",
+    "family": "join-on",
+    "doc": "SELECT * FROM Sales.Invoices i JOIN dbo.Orders o ON i.OrderID = o.OrderID AND i.Pa|",
+    "expect": {
+      "mustContain": ["Paid"],
+      "mustNotContain": ["InvoiceDate", "OrderDate"],
+      "minCount": 1
+    },
+    "note": "Prefix Pa on ANDed condition: only Invoices.Paid matches"
+  },
+  {
+    "id": "JOINON-089",
+    "family": "join-on",
+    "doc": "SELECT c.CustomerName,\n       p.ProductName\nFROM dbo.OrderDetails od\nJOIN dbo.Orders o ON od.OrderID = o.OrderID\nJOIN dbo.Customers c ON o.CustomerID = c.CustomerID\nJOIN dbo.Products p ON od.ProductID = p.Produ|",
+    "expect": {
+      "mustContain": ["ProductID", "ProductName"],
+      "mustNotContain": ["Price", "Quantity"],
+      "minCount": 1
+    },
+    "note": "Multi-line 4-table chain with 5-char prefix Produ on the last join target"
+  },
+  {
+    "id": "JOINON-090",
+    "family": "join-on",
+    "doc": "SELECT * FROM Northwind_AutoTest.dbo.Orders o JOIN Northwind_AutoTest.dbo.Customers c ON c.|",
+    "expect": {
+      "mustContain": ["CustomerID", "CustomerName"],
+      "mustNotContain": ["OrderDate", "EmployeeID"],
+      "minCount": 1
+    },
+    "note": "Three-part names in FROM/JOIN still resolve alias scoping in ON"
+  }
+]

@@ -41,6 +41,9 @@ public sealed class StatusIndicatorTests : TestContext
         // entry point). A default SqlConnectionService reports IsConnected=false (renders "Connect")
         // — these tests assert the bridge/cache PILL, not the connection chip.
         Services.AddSingleton<ISqlConnectionService>(new SqlConnectionService(_bridge, new NoopDiagnostics()));
+        // Spec 032 (FR-032): StatusBar injects the saved-SQL-connection store for the boot-time
+        // auto-restore; an empty store means "nothing to restore" in these tests.
+        Services.AddSingleton<ISavedSqlConnectionStore>(new SavedSqlConnectionStore(adapter));
         Services.AddSingleton<IConnectionManagerController>(new ConnectionManagerController());
     }
 
@@ -72,9 +75,41 @@ public sealed class StatusIndicatorTests : TestContext
     }
 
     [Fact]
-    public async Task Open_shows_Live_regardless_of_cache()
+    public async Task Open_without_sql_session_shows_BridgeOnly()
+    {
+        // Spec 032 FR-032 (campaign finding 5): after a reload the bridge auto-reconnects but
+        // the SQL session is gone — the pill must NOT claim full "Live" IntelliSense then.
+        await SeedActiveConnectionAsync();
+        _bridge.SetState(BridgeState.Open);
+
+        var cut = RenderComponent<StatusBar>();
+        cut.WaitForAssertion(() =>
+            Assert.Equal("Live · no SQL", cut.Find("[data-testid='status-pill']").TextContent));
+    }
+
+    [Fact]
+    public async Task Open_with_sql_session_shows_Live()
     {
         await SeedActiveConnectionAsync();
+        _bridge.SetState(BridgeState.Open);
+        var sqlConn = (SqlConnectionService)Services.GetRequiredService<ISqlConnectionService>();
+        await sqlConn.ConnectAsync("localhost", "Northwind_AutoTest", windowsAuth: true, null, null, default);
+
+        var cut = RenderComponent<StatusBar>();
+        cut.WaitForAssertion(() =>
+            Assert.Equal("Live", cut.Find("[data-testid='status-pill']").TextContent));
+    }
+
+    [Fact]
+    public async Task Open_autorestores_saved_windows_auth_connection()
+    {
+        // Spec 032 FR-032 auto-restore: a most-recently-used Windows-auth saved connection
+        // reconnects silently on boot, flipping the pill to full Live.
+        await SeedActiveConnectionAsync();
+        var savedStore = Services.GetRequiredService<ISavedSqlConnectionStore>();
+        var saved = new SavedSqlConnection { Name = "dev", Server = "localhost", Database = "Northwind_AutoTest", WindowsAuth = true };
+        await savedStore.AddAsync(saved);
+        await savedStore.SetActiveIdAsync(saved.Id);
         _bridge.SetState(BridgeState.Open);
 
         var cut = RenderComponent<StatusBar>();

@@ -66,19 +66,28 @@ public class AliasResolver
     }
 
     /// <summary>
-    /// Like <see cref="ResolveAliases"/>, but restricted to the FROM clause of the
-    /// QuerySpecification that immediately contains the cursor. Used by the wildcard
-    /// expansion handler so that <c>SELECT * FROM Cte1</c> sees only <c>Cte1</c> —
-    /// not the tables referenced inside <c>Cte1</c>'s own body, sibling CTE bodies,
-    /// or unrelated subqueries elsewhere in the same statement.
+    /// Like <see cref="ResolveAliases"/>, but restricted to the scope that immediately
+    /// contains the cursor. Used by the wildcard expansion handler so that
+    /// <c>SELECT * FROM Cte1</c> sees only <c>Cte1</c> — not the tables referenced inside
+    /// <c>Cte1</c>'s own body, sibling CTE bodies, or unrelated subqueries elsewhere in
+    /// the same statement.
+    /// <para>
+    /// Spec 032 (A3/A4): scopes now include UPDATE/DELETE/MERGE specifications (their
+    /// FROM clause + target), not just QuerySpecification. With
+    /// <paramref name="includeOuterScopes"/> true (completion), ancestor scopes containing
+    /// the cursor are merged in outer-first so correlated subqueries keep the outer
+    /// aliases and the INNER scope wins on conflicts. The default (false) keeps the
+    /// innermost-scope-only behavior wildcard expansion depends on (`SELECT *` must
+    /// expand the inner FROM only).
+    /// </para>
     /// </summary>
     public Dictionary<string, TableReference> ResolveAliasesInCursorScope(
-        TSqlScript? script, int cursorOffset)
+        TSqlScript? script, int cursorOffset, bool includeOuterScopes = false)
     {
         var aliases = new Dictionary<string, TableReference>(StringComparer.OrdinalIgnoreCase);
         if (script == null) return aliases;
 
-        // Find the smallest QuerySpecification whose extent contains the cursor.
+        // Collect every scope whose extent contains the cursor, in pre-order (outer → inner).
         var finder = new CursorScopeFinder(cursorOffset);
         foreach (var batch in script.Batches)
         {
@@ -88,16 +97,142 @@ public class AliasResolver
             batch.Accept(finder);
         }
 
-        var cursorSpec = finder.Result;
-        if (cursorSpec?.FromClause == null) return aliases;
+        if (finder.Scopes.Count == 0) return aliases;
 
-        // Walk only the immediate TableReferences of this FROM clause. Recurse into
-        // JoinTableReferences (joins are siblings at the same scope) but NOT into
-        // QueryDerivedTables — a derived table's inner FROM is a separate scope.
-        foreach (var tableRef in cursorSpec.FromClause.TableReferences)
-            CollectFromTableRef(tableRef, aliases);
+        var scopes = includeOuterScopes
+            ? (IEnumerable<TSqlFragment>)finder.Scopes
+            : [finder.Scopes[finder.Scopes.Count - 1]];
+
+        // Outer → inner: dictionary overwrite makes the inner scope win on conflicts.
+        foreach (var scope in scopes)
+            CollectScope(scope, aliases);
 
         return aliases;
+    }
+
+    /// <summary>
+    /// Spec 032 (A4) — projected columns of derived tables visible at the cursor, keyed by
+    /// alias. Consumed by <c>CompletionEngine</c>, which registers them alongside CTEs so
+    /// <c>d.|</c> over <c>FROM (SELECT …) d</c> offers the derived projection instead of
+    /// nothing (the alias map itself only carries a <c>(derived:alias)</c> placeholder).
+    /// </summary>
+    public Dictionary<string, List<string>> ResolveDerivedTableProjections(
+        TSqlScript? script, int cursorOffset)
+        => ResolveDerivedTableProjections(script, cursorOffset, out _);
+
+    /// <summary>Overload exposing each derived table's SOURCE tables so a `SELECT *` body
+    /// (zero inferable columns) can be star-expanded from the schema cache (spec 032 E4).</summary>
+    public Dictionary<string, List<string>> ResolveDerivedTableProjections(
+        TSqlScript? script, int cursorOffset,
+        out Dictionary<string, List<(string Schema, string Table)>> sources)
+    {
+        var result = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        sources = new Dictionary<string, List<(string, string)>>(StringComparer.OrdinalIgnoreCase);
+        if (script == null) return result;
+
+        foreach (var batch in script.Batches)
+        {
+            if (cursorOffset < batch.StartOffset ||
+                cursorOffset > batch.StartOffset + batch.FragmentLength)
+                continue;
+
+            foreach (var statement in batch.Statements)
+            {
+                if (cursorOffset < statement.StartOffset ||
+                    cursorOffset > statement.StartOffset + statement.FragmentLength)
+                    continue;
+
+                var visitor = new DerivedTableVisitor();
+                statement.Accept(visitor);
+                foreach (var derived in visitor.DerivedTables)
+                {
+                    var alias = derived.Alias?.Value;
+                    if (string.IsNullOrEmpty(alias) || result.ContainsKey(alias!)) continue;
+
+                    var columns = new List<string>();
+                    CteResolver.InferColumnsFromQuery(derived.QueryExpression, columns, result);
+                    result[alias!] = columns; // empty for `SELECT *` bodies — expanded via sources
+
+                    if (derived.QueryExpression is QuerySpecification { FromClause: not null } qs)
+                    {
+                        var srcList = new List<(string, string)>();
+                        foreach (var tref in qs.FromClause.TableReferences)
+                            CollectNamedSources(tref, srcList);
+                        if (srcList.Count > 0) sources[alias!] = srcList;
+                    }
+                }
+            }
+        }
+
+        return result;
+    }
+
+    private static void CollectNamedSources(ScriptDomTableReference tref, List<(string, string)> sources)
+    {
+        switch (tref)
+        {
+            case NamedTableReference named when named.SchemaObject?.BaseIdentifier?.Value is { } name:
+                sources.Add((named.SchemaObject?.SchemaIdentifier?.Value ?? "dbo", name));
+                return;
+            case JoinTableReference join:
+                CollectNamedSources(join.FirstTableReference, sources);
+                CollectNamedSources(join.SecondTableReference, sources);
+                return;
+        }
+    }
+
+    /// <summary>Collects the aliases a single scope contributes (spec 032 A3).</summary>
+    private static void CollectScope(TSqlFragment scope, Dictionary<string, TableReference> aliases)
+    {
+        switch (scope)
+        {
+            case QuerySpecification qs:
+                if (qs.FromClause == null) return;
+                // Walk only the immediate TableReferences of this FROM clause. Recurse into
+                // JoinTableReferences (joins are siblings at the same scope) but NOT into
+                // QueryDerivedTables — a derived table's inner FROM is a separate scope.
+                foreach (var tableRef in qs.FromClause.TableReferences)
+                    CollectFromTableRef(tableRef, aliases);
+                return;
+
+            case UpdateSpecification u:
+                // Target FIRST, FROM second: in `UPDATE o SET … FROM Orders o` the target is
+                // the bare alias — the FROM mapping must overwrite it (the token-fallback
+                // equivalent of "FROM/JOIN wins", cluster A2).
+                if (u.Target != null) CollectFromTableRef(u.Target, aliases);
+                if (u.FromClause != null)
+                    foreach (var tableRef in u.FromClause.TableReferences)
+                        CollectFromTableRef(tableRef, aliases);
+                return;
+
+            case DeleteSpecification d:
+                if (d.Target != null) CollectFromTableRef(d.Target, aliases);
+                if (d.FromClause != null)
+                    foreach (var tableRef in d.FromClause.TableReferences)
+                        CollectFromTableRef(tableRef, aliases);
+                return;
+
+            case MergeSpecification m:
+                if (m.Target != null) CollectFromTableRef(m.Target, aliases);
+                // ScriptDom quirk: the MERGE target's alias (`MERGE dbo.Orders AS tgt`) lives on
+                // MergeSpecification.TableAlias — NOT on the target NamedTableReference — so the
+                // plain collect registers the bare table name; re-key it under the alias.
+                if (m.TableAlias?.Value is { Length: > 0 } mergeAlias && m.Target is NamedTableReference mergeTarget)
+                {
+                    var targetName = mergeTarget.SchemaObject?.BaseIdentifier?.Value;
+                    if (targetName != null)
+                    {
+                        aliases.Remove(targetName);
+                        aliases[mergeAlias] = new TableReference
+                        {
+                            SchemaName = mergeTarget.SchemaObject?.SchemaIdentifier?.Value ?? "dbo",
+                            TableName = targetName,
+                        };
+                    }
+                }
+                if (m.TableReference != null) CollectFromTableRef(m.TableReference, aliases);
+                return;
+        }
     }
 
     private static void CollectFromTableRef(
@@ -145,18 +280,44 @@ public class AliasResolver
     private class CursorScopeFinder : TSqlFragmentVisitor
     {
         private readonly int _cursor;
-        public QuerySpecification? Result { get; private set; }
+
+        /// <summary>Every scope containing the cursor, in pre-order (outer → inner) —
+        /// the visitor walks parents before children, so append order IS nesting order.
+        /// Spec 032 A3: UPDATE/DELETE/MERGE specifications count as scopes too.</summary>
+        public List<TSqlFragment> Scopes { get; } = [];
+
         public CursorScopeFinder(int cursor) => _cursor = cursor;
+
+        private bool Contains(TSqlFragment node)
+            => _cursor >= node.StartOffset && _cursor <= node.StartOffset + node.FragmentLength;
 
         public override void Visit(QuerySpecification node)
         {
-            if (_cursor >= node.StartOffset && _cursor <= node.StartOffset + node.FragmentLength)
-            {
-                // The default visitor walks children after Visit(). The deepest match
-                // wins because we keep overwriting on each match.
-                Result = node;
-            }
+            if (Contains(node)) Scopes.Add(node);
         }
+
+        public override void Visit(UpdateSpecification node)
+        {
+            if (Contains(node)) Scopes.Add(node);
+        }
+
+        public override void Visit(DeleteSpecification node)
+        {
+            if (Contains(node)) Scopes.Add(node);
+        }
+
+        public override void Visit(MergeSpecification node)
+        {
+            if (Contains(node)) Scopes.Add(node);
+        }
+    }
+
+    /// <summary>Collects every derived table in a statement (spec 032 A4).</summary>
+    private class DerivedTableVisitor : TSqlFragmentVisitor
+    {
+        public List<QueryDerivedTable> DerivedTables { get; } = [];
+
+        public override void Visit(QueryDerivedTable node) => DerivedTables.Add(node);
     }
 
     private class AliasVisitor : TSqlFragmentVisitor

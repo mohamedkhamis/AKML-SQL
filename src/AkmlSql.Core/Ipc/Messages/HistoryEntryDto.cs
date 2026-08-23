@@ -62,7 +62,8 @@ namespace AkmlSql.Core.Ipc.Messages
         public bool IsFavorite { get; set; }
 
         /// <summary>
-        /// Number of executions with the same content hash. Greater than 1 when deduplicated.
+        /// Number of executions in the same query session (falling back to the same content hash
+        /// for legacy rows with no session). Greater than 1 when deduplicated.
         /// </summary>
         [Key(13)]
         public int ExecutionCount { get; set; } = 1;
@@ -74,5 +75,9 @@ namespace AkmlSql.Core.Ipc.Messages
         /// <summary>Whether this query's tab is currently open in the editor.</summary>
         [Key(15)]
         public bool IsOpen { get; set; }
+
+        /// <summary>Distinct SQL texts recorded within this query session.</summary>
+        [Key(16)]
+        public int VersionCount { get; set; }
     }
 }

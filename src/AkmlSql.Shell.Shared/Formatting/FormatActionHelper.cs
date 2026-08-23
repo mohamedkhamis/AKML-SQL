@@ -11,6 +11,36 @@ namespace AkmlSql.Shell.Shared.Formatting
     /// </summary>
     internal static class FormatActionHelper
     {
+        /// <summary>
+        /// The formatting style every format request must be sent with — read FRESH from config on
+        /// each call, never cached.
+        /// <para>
+        /// Format commands previously omitted <c>ProfileName</c> entirely, so the engine received
+        /// null, fell back to <c>new FormattingProfile()</c>, and formatted with POCO defaults no
+        /// matter which style was active — "I picked a style, closed the editor, and Format SQL
+        /// didn't change". Reading fresh (rather than from an <c>AppSettings</c> snapshot captured at
+        /// command construction) is what lets Set Active in the styles editor affect the very next
+        /// format without restarting the IDE. Format is user-initiated, so a config read per invoke
+        /// is not on any hot path.
+        /// </para>
+        /// Never returns null/empty: the engine reads those as "defaults by design" and suppresses
+        /// its missing-style warning, which would quietly restore the original bug.
+        /// </summary>
+        public static string ResolveActiveProfileName()
+        {
+            try
+            {
+                var configured = Core.Config.ConfigManager.Load().Formatter?.ActiveProfile;
+                if (!string.IsNullOrWhiteSpace(configured)) return configured!;
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Format: could not read the active style from config; using the shipped default");
+            }
+
+            return new Core.Config.FormatterSettings().ActiveProfile;
+        }
+
         public static void ApplyFormattedText(IVsTextLines buffer, string formattedText)
         {
             ThreadHelper.ThrowIfNotOnUIThread();

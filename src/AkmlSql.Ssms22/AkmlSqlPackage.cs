@@ -438,6 +438,9 @@ namespace AkmlSql.Ssms22
                     (CommandIds.CmdAbout, "About AKML SQL"),
                     (CommandIds.CmdCheckUpdate, "Check for Updates"),
                     (CommandIds.CmdOptions, "Options"),
+                    // Spec 033 (T039) — was missing from this hardcoded DTE-popup list, so the
+                    // window was invisible in the injected SSMS menu despite the VSCT button.
+                    (CommandIds.CmdFormatStyles, "Format Styles..."),
                     (CommandIds.CmdSendFeedback, "Send Feedback"),
                     (CommandIds.CmdViewLogs, "View Logs"),
                     (CommandIds.CmdRefreshCache, "Refresh Schema Cache"),

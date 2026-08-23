@@ -1,4 +1,4 @@
-#nullable enable
+﻿#nullable enable
 using System;
 using System.ComponentModel.Design;
 using System.Threading;
@@ -206,7 +206,8 @@ namespace AkmlSql.Shell.Shared.Commands
                 };
 
                 var response = await manager.Client.SendRequestAsync<AiFixResponse, AiFixRequest>(
-                    MessageTypes.AiFix, request, timeoutMs: 60000);
+                    MessageTypes.AiFix, request,
+                    timeoutMs: Ai.AiIpcTimeouts.ForAiRequestMs(ConfigManager.Load()));
 
                 if (!response.Success)
                 {

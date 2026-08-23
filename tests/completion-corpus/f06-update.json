@@ -1,0 +1,992 @@
+[
+  {
+    "id": "UPD-001",
+    "family": "update",
+    "doc": "UPDATE |",
+    "expect": {
+      "mustContain": ["Customers", "Orders", "Products"],
+      "mustNotContain": ["usp_GetCustomerOrders", "fn_OrderItemCount"],
+      "minCount": 3
+    },
+    "note": "bare UPDATE offers tables, never procs or scalar functions"
+  },
+  {
+    "id": "UPD-002",
+    "family": "update",
+    "doc": "UPDATE Cus|",
+    "expect": {
+      "mustContain": ["Customers"],
+      "mustNotContain": ["Orders", "Products"],
+      "minCount": 1
+    },
+    "note": "3-char prefix filters target table list"
+  },
+  {
+    "id": "UPD-003",
+    "family": "update",
+    "doc": "update or|",
+    "expect": {
+      "mustContain": ["Orders", "OrderDetails"],
+      "mustNotContain": ["Customers", "Suppliers"],
+      "minCount": 2
+    },
+    "note": "lowercase keyword + 2-char prefix matches case-insensitively"
+  },
+  {
+    "id": "UPD-004",
+    "family": "update",
+    "doc": "UPDATE dbo.|",
+    "expect": {
+      "mustContain": ["Customers", "Products", "Shippers"],
+      "mustNotContain": ["Invoices"],
+      "minCount": 3
+    },
+    "note": "dbo. qualifier scopes out Sales schema objects"
+  },
+  {
+    "id": "UPD-005",
+    "family": "update",
+    "doc": "UPDATE Sales.|",
+    "expect": {
+      "mustContain": ["Invoices"],
+      "mustNotContain": ["Customers", "Orders"],
+      "minCount": 1
+    },
+    "note": "Sales. qualifier scopes out dbo tables"
+  },
+  {
+    "id": "UPD-006",
+    "family": "update",
+    "doc": "UPDATE dbo.Pro|",
+    "expect": {
+      "mustContain": ["Products"],
+      "mustNotContain": ["Customers", "Invoices"],
+      "minCount": 1
+    },
+    "note": "schema-qualified prefix filter on target table"
+  },
+  {
+    "id": "UPD-007",
+    "family": "update",
+    "doc": "UPDATE Northwind_AutoTest.dbo.|",
+    "expect": {
+      "mustContain": ["Orders", "Customers"],
+      "mustNotContain": ["Invoices"],
+      "minCount": 2
+    },
+    "note": "three-part database.schema. target completion"
+  },
+  {
+    "id": "UPD-008",
+    "family": "update",
+    "doc": "UPDATE   Ship|",
+    "expect": {
+      "mustContain": ["Shippers"],
+      "mustNotContain": ["Suppliers"],
+      "minCount": 1
+    },
+    "note": "extra whitespace before prefixed target name"
+  },
+  {
+    "id": "UPD-009",
+    "family": "update",
+    "doc": "UPDATE Sup|",
+    "expect": {
+      "mustContain": ["Suppliers"],
+      "mustNotContain": ["Shippers"],
+      "minCount": 1
+    },
+    "note": "Sup prefix must not match Shippers"
+  },
+  {
+    "id": "UPD-010",
+    "family": "update",
+    "doc": "-- bump prices for spring\nUPDATE |",
+    "expect": {
+      "mustContain": ["Products", "Categories"],
+      "mustNotContain": ["usp_UpdateProductPrice"],
+      "minCount": 2
+    },
+    "note": "leading line comment does not suppress table completion after UPDATE"
+  },
+  {
+    "id": "UPD-011",
+    "family": "update",
+    "doc": "SELECT OrderID FROM dbo.Orders;\nUPDATE E|",
+    "expect": {
+      "mustContain": ["Employees"],
+      "mustNotContain": ["Orders", "OrderID"],
+      "minCount": 1
+    },
+    "note": "prior ;-terminated SELECT does not pollute target completion"
+  },
+  {
+    "id": "UPD-012",
+    "family": "update",
+    "doc": "UPDATE TOP (10) |",
+    "expect": {
+      "mustContain": ["Orders", "Products"],
+      "mustNotContain": ["fn_OrderItemCount"],
+      "minCount": 2
+    },
+    "note": "UPDATE TOP (n) still expects a table target next"
+  },
+  {
+    "id": "UPD-013",
+    "family": "update",
+    "doc": "UPDATE Customers SET |",
+    "expect": {
+      "mustContain": ["CustomerName", "City", "Country"],
+      "mustNotContain": ["OrderID", "ProductName"],
+      "minCount": 3
+    },
+    "note": "SET list scoped to Customers columns only"
+  },
+  {
+    "id": "UPD-014",
+    "family": "update",
+    "doc": "UPDATE dbo.Customers SET C|",
+    "expect": {
+      "mustContain": ["City", "ContactName", "Country", "CustomerName"],
+      "mustNotContain": ["CategoryName", "CategoryID"],
+      "minCount": 4
+    },
+    "note": "1-char prefix in SET; Categories C-columns must not leak"
+  },
+  {
+    "id": "UPD-015",
+    "family": "update",
+    "doc": "update orders set |",
+    "expect": {
+      "mustContain": ["OrderDate", "ShipperID", "CustomerID"],
+      "mustNotContain": ["Quantity", "ProductName"],
+      "minCount": 3
+    },
+    "note": "all-lowercase UPDATE/SET still scopes to Orders columns"
+  },
+  {
+    "id": "UPD-016",
+    "family": "update",
+    "doc": "UPDATE Orders SET Ship|",
+    "expect": {
+      "mustContain": ["ShipperID"],
+      "mustNotContain": ["ShipperName"],
+      "minCount": 1
+    },
+    "note": "Ship prefix: ShipperName belongs to Shippers, not Orders"
+  },
+  {
+    "id": "UPD-017",
+    "family": "update",
+    "doc": "UPDATE Products SET |",
+    "expect": {
+      "mustContain": ["ProductName", "Price", "Unit"],
+      "mustNotContain": ["Quantity", "TotalAmount"],
+      "minCount": 3
+    },
+    "note": "SET list scoped to Products columns"
+  },
+  {
+    "id": "UPD-018",
+    "family": "update",
+    "doc": "UPDATE dbo.Products SET P|",
+    "expect": {
+      "mustContain": ["Price", "ProductName"],
+      "mustNotContain": ["Paid", "Phone", "PostalCode"],
+      "minCount": 2
+    },
+    "note": "P-prefix must exclude P-columns of Invoices/Shippers/Suppliers"
+  },
+  {
+    "id": "UPD-019",
+    "family": "update",
+    "doc": "UPDATE Employees SET |",
+    "expect": {
+      "mustContain": ["FirstName", "LastName", "Notes"],
+      "mustNotContain": ["CustomerName", "OrderDate"],
+      "minCount": 3
+    },
+    "note": "SET list scoped to Employees columns"
+  },
+  {
+    "id": "UPD-020",
+    "family": "update",
+    "doc": "Update Categories Set |",
+    "expect": {
+      "mustContain": ["CategoryName", "Description"],
+      "mustNotContain": ["ProductName", "CategoryID"],
+      "minCount": 2
+    },
+    "note": "mixed-case keywords; identity CategoryID not offered for assignment"
+  },
+  {
+    "id": "UPD-021",
+    "family": "update",
+    "doc": "UPDATE Shippers SET Ph|",
+    "expect": {
+      "mustContain": ["Phone"],
+      "mustNotContain": ["Photo"],
+      "minCount": 1
+    },
+    "note": "Ph prefix: Employees.Photo must not leak into Shippers scope"
+  },
+  {
+    "id": "UPD-022",
+    "family": "update",
+    "doc": "UPDATE Suppliers SET |",
+    "expect": {
+      "mustContain": ["SupplierName", "ContactName", "City"],
+      "mustNotContain": ["CustomerName", "ShipperName"],
+      "minCount": 3
+    },
+    "note": "SET list scoped to Suppliers columns"
+  },
+  {
+    "id": "UPD-023",
+    "family": "update",
+    "doc": "UPDATE OrderDetails SET |",
+    "expect": {
+      "mustContain": ["Quantity", "ProductID", "OrderID"],
+      "mustNotContain": ["OrderDate", "Price"],
+      "minCount": 3
+    },
+    "note": "OrderDetails SET must not show Orders/Products columns"
+  },
+  {
+    "id": "UPD-024",
+    "family": "update",
+    "doc": "UPDATE Sales.Invoices SET |",
+    "expect": {
+      "mustContain": ["Paid", "TotalAmount", "InvoiceDate"],
+      "mustNotContain": ["OrderDate", "Price"],
+      "minCount": 3
+    },
+    "note": "non-dbo schema target: Invoices columns only"
+  },
+  {
+    "id": "UPD-025",
+    "family": "update",
+    "doc": "UPDATE Sales.Invoices SET Tot|",
+    "expect": {
+      "mustContain": ["TotalAmount"],
+      "mustNotContain": ["Paid", "OrderID"],
+      "minCount": 1
+    },
+    "note": "3-char prefix filter inside Sales.Invoices SET list"
+  },
+  {
+    "id": "UPD-026",
+    "family": "update",
+    "doc": "UPDATE dbo.Employees\nSET |",
+    "expect": {
+      "mustContain": ["BirthDate", "Notes", "Photo"],
+      "mustNotContain": ["OrderDate"],
+      "minCount": 3
+    },
+    "note": "multi-line: SET on its own line keeps target scoping"
+  },
+  {
+    "id": "UPD-027",
+    "family": "update",
+    "doc": "UPDATE Products\n   SET  Pr|",
+    "expect": {
+      "mustContain": ["Price", "ProductName"],
+      "mustNotContain": ["Phone"],
+      "minCount": 2
+    },
+    "note": "multi-line with irregular indentation and 2-char prefix"
+  },
+  {
+    "id": "UPD-028",
+    "family": "update",
+    "doc": "update dbo.suppliers set co|",
+    "expect": {
+      "mustContain": ["ContactName", "Country"],
+      "mustNotContain": ["CustomerName"],
+      "minCount": 2
+    },
+    "note": "lowercase schema.table name resolves case-insensitively"
+  },
+  {
+    "id": "UPD-029",
+    "family": "update",
+    "doc": "UPDATE Products SET Price = 9.99;\nUPDATE Customers SET |",
+    "expect": {
+      "mustContain": ["City", "Country", "CustomerName"],
+      "mustNotContain": ["ProductName", "Price", "Unit"],
+      "minCount": 3
+    },
+    "note": "prior ;-terminated UPDATE must not leak Products columns"
+  },
+  {
+    "id": "UPD-030",
+    "family": "update",
+    "doc": "SELECT p.ProductName FROM dbo.Products p;\nUPDATE Shippers SET |",
+    "expect": {
+      "mustContain": ["ShipperName", "Phone"],
+      "mustNotContain": ["ProductName", "SupplierID"],
+      "minCount": 2
+    },
+    "note": "alias and columns of prior statement must not leak into SET"
+  },
+  {
+    "id": "UPD-031",
+    "family": "update",
+    "doc": "UPDATE Products SET Price = |",
+    "expect": {
+      "mustContain": ["Price"],
+      "mustNotContain": ["TotalAmount", "Quantity"],
+      "minCount": 1
+    },
+    "note": "value expression can reference the target's own columns only"
+  },
+  {
+    "id": "UPD-032",
+    "family": "update",
+    "doc": "UPDATE Orders SET OrderDate = GET|",
+    "expect": {
+      "mustContain": ["GETDATE"],
+      "mustNotContain": ["OrderID"],
+      "minCount": 1
+    },
+    "note": "built-in function completion in SET value position"
+  },
+  {
+    "id": "UPD-033",
+    "family": "update",
+    "doc": "UPDATE Products SET Price = Price * |",
+    "expect": {
+      "mustContain": ["Price"],
+      "mustNotContain": ["TotalAmount"],
+      "minCount": 1
+    },
+    "note": "right operand of arithmetic still scoped to Products"
+  },
+  {
+    "id": "UPD-034",
+    "family": "update",
+    "doc": "UPDATE Employees SET Notes = N|",
+    "expect": {
+      "mustContain": ["Notes"],
+      "mustNotContain": ["name"],
+      "minCount": 1
+    },
+    "note": "N prefix in value: sysdiagrams.name must not leak"
+  },
+  {
+    "id": "UPD-035",
+    "family": "update",
+    "doc": "UPDATE Sales.Invoices SET Paid = 1, TotalAmount = |",
+    "expect": {
+      "mustContain": ["TotalAmount"],
+      "mustNotContain": ["Price", "Quantity"],
+      "minCount": 1
+    },
+    "note": "second assignment value stays scoped to Invoices"
+  },
+  {
+    "id": "UPD-036",
+    "family": "update",
+    "doc": "UPDATE dbo.Orders\nSET OrderDate = |",
+    "expect": {
+      "mustContain": ["OrderDate", "GETDATE"],
+      "mustNotContain": ["InvoiceDate"],
+      "minCount": 2
+    },
+    "note": "multi-line value position mixes target columns and built-ins"
+  },
+  {
+    "id": "UPD-037",
+    "family": "update",
+    "doc": "UPDATE Customers SET Country = c|",
+    "expect": {
+      "mustContain": ["City", "Country"],
+      "mustNotContain": ["CategoryName"],
+      "minCount": 2
+    },
+    "note": "1-char value prefix: Categories columns must not match"
+  },
+  {
+    "id": "UPD-038",
+    "family": "update",
+    "doc": "SELECT GETDATE();\nUPDATE Employees SET BirthDate = |",
+    "expect": {
+      "mustContain": ["BirthDate", "GETDATE"],
+      "mustNotContain": ["OrderDate"],
+      "minCount": 2
+    },
+    "note": "prior ;-terminated statement, value position in second statement"
+  },
+  {
+    "id": "UPD-039",
+    "family": "update",
+    "doc": "UPDATE Customers SET City = 'Oslo', |",
+    "expect": {
+      "mustContain": ["Country", "PostalCode", "ContactName"],
+      "mustNotContain": ["OrderID", "ProductName"],
+      "minCount": 3
+    },
+    "note": "comma continues SET column list, still Customers-scoped"
+  },
+  {
+    "id": "UPD-040",
+    "family": "update",
+    "doc": "UPDATE Products SET ProductName = 'X', P|",
+    "expect": {
+      "mustContain": ["Price"],
+      "mustNotContain": ["Paid", "PostalCode"],
+      "minCount": 1
+    },
+    "note": "prefixed second SET column excludes other tables' P-columns"
+  },
+  {
+    "id": "UPD-041",
+    "family": "update",
+    "doc": "UPDATE Orders SET CustomerID = 5, Emp|",
+    "expect": {
+      "mustContain": ["EmployeeID"],
+      "mustNotContain": ["LastName"],
+      "minCount": 1
+    },
+    "note": "3-char prefix on second assignment column"
+  },
+  {
+    "id": "UPD-042",
+    "family": "update",
+    "doc": "UPDATE dbo.Suppliers\nSET City = 'Berlin',\n    |",
+    "expect": {
+      "mustContain": ["Country", "Phone", "ContactName"],
+      "mustNotContain": ["ShipperName", "CustomerID"],
+      "minCount": 3
+    },
+    "note": "multi-line SET list continuation on indented new line"
+  },
+  {
+    "id": "UPD-043",
+    "family": "update",
+    "doc": "update orderdetails set quantity = 3, |",
+    "expect": {
+      "mustContain": ["ProductID", "OrderID"],
+      "mustNotContain": ["Price", "OrderDate"],
+      "minCount": 2
+    },
+    "note": "lowercase doc; remaining OrderDetails columns after comma"
+  },
+  {
+    "id": "UPD-044",
+    "family": "update",
+    "doc": "UPDATE Sales.Invoices SET InvoiceDate = GETDATE(), Pa|",
+    "expect": {
+      "mustContain": ["Paid"],
+      "mustNotContain": ["PostalCode", "Phone"],
+      "minCount": 1
+    },
+    "note": "prefix after function-call assignment and comma"
+  },
+  {
+    "id": "UPD-045",
+    "family": "update",
+    "doc": "UPDATE o SET o.| FROM dbo.Orders o",
+    "expect": {
+      "mustContain": ["OrderDate", "ShipperID", "CustomerID"],
+      "mustNotContain": ["ProductName", "Quantity"],
+      "minCount": 3
+    },
+    "note": "target alias defined later in FROM resolves for SET o."
+  },
+  {
+    "id": "UPD-046",
+    "family": "update",
+    "doc": "UPDATE o SET | FROM dbo.Orders o",
+    "expect": {
+      "mustContain": ["OrderDate", "CustomerID"],
+      "mustNotContain": ["ProductName"],
+      "minCount": 2
+    },
+    "note": "unqualified SET column with aliased target from FROM clause"
+  },
+  {
+    "id": "UPD-047",
+    "family": "update",
+    "doc": "UPDATE c SET c.City = 'Rome' FROM Customers c WHERE c.|",
+    "expect": {
+      "mustContain": ["Country", "CustomerID", "PostalCode"],
+      "mustNotContain": ["OrderDate", "Price"],
+      "minCount": 3
+    },
+    "note": "WHERE alias-dot scoped to the aliased update target"
+  },
+  {
+    "id": "UPD-048",
+    "family": "update",
+    "doc": "UPDATE p SET p.Price = p.| FROM dbo.Products p",
+    "expect": {
+      "mustContain": ["Price", "SupplierID"],
+      "mustNotContain": ["TotalAmount"],
+      "minCount": 2
+    },
+    "note": "alias-dot in assignment value resolves to Products"
+  },
+  {
+    "id": "UPD-049",
+    "family": "update",
+    "doc": "UPDATE o SET o.ShipperID = s.| FROM Orders o JOIN Shippers s ON s.ShipperID = o.ShipperID",
+    "expect": {
+      "mustContain": ["ShipperID", "ShipperName"],
+      "mustNotContain": ["OrderDate", "SupplierName"],
+      "minCount": 2
+    },
+    "note": "source-table alias in value position scoped to Shippers"
+  },
+  {
+    "id": "UPD-050",
+    "family": "update",
+    "doc": "UPDATE o SET o.EmployeeID = 1 FROM Orders o JOIN Customers c ON c.CustomerID = o.CustomerID WHERE c.|",
+    "expect": {
+      "mustContain": ["Country", "City", "CustomerName"],
+      "mustNotContain": ["OrderDate", "EmployeeID"],
+      "minCount": 3
+    },
+    "note": "WHERE c. scoped to joined Customers, not the Orders target"
+  },
+  {
+    "id": "UPD-051",
+    "family": "update",
+    "doc": "UPDATE od\nSET od.Quantity = od.Quantity + 1\nFROM dbo.OrderDetails od\nJOIN dbo.Orders o ON o.OrderID = od.OrderID\nWHERE o.|",
+    "expect": {
+      "mustContain": ["OrderDate", "CustomerID"],
+      "mustNotContain": ["Quantity", "ProductID"],
+      "minCount": 2
+    },
+    "note": "multi-line aliased UPDATE with join; WHERE o. excludes target columns"
+  },
+  {
+    "id": "UPD-052",
+    "family": "update",
+    "doc": "UPDATE i SET i.Paid = 1 FROM Sales.Invoices i WHERE i.|",
+    "expect": {
+      "mustContain": ["InvoiceDate", "TotalAmount", "InvoiceID"],
+      "mustNotContain": ["OrderDate", "Price"],
+      "minCount": 3
+    },
+    "note": "aliased Sales-schema target in WHERE"
+  },
+  {
+    "id": "UPD-053",
+    "family": "update",
+    "doc": "UPDATE o SET o.OrderDate = GETDATE() FROM dbo.Orders o WHERE |",
+    "expect": {
+      "mustContain": ["OrderDate", "CustomerID"],
+      "mustNotContain": ["ProductName", "Quantity"],
+      "minCount": 2
+    },
+    "note": "unqualified WHERE after aliased UPDATE sees Orders columns"
+  },
+  {
+    "id": "UPD-054",
+    "family": "update",
+    "doc": "UPDATE p SET p.CategoryID = 1 FROM Products p JOIN Categories c ON c.|",
+    "expect": {
+      "mustContain": ["CategoryID", "CategoryName"],
+      "mustNotContain": ["ProductName", "Price"],
+      "minCount": 2
+    },
+    "note": "ON-clause alias-dot scoped to current join target Categories"
+  },
+  {
+    "id": "UPD-055",
+    "family": "update",
+    "doc": "UPDATE Prod SET Prod.| FROM dbo.Products Prod",
+    "expect": {
+      "mustContain": ["ProductName", "Price", "Unit"],
+      "mustNotContain": ["CategoryName"],
+      "minCount": 3
+    },
+    "note": "longer alias name (Prod) resolves like a single-letter alias"
+  },
+  {
+    "id": "UPD-056",
+    "family": "update",
+    "doc": "UPDATE c SET c.Co| FROM dbo.Customers c",
+    "expect": {
+      "mustContain": ["ContactName", "Country"],
+      "mustNotContain": ["CategoryName"],
+      "minCount": 2
+    },
+    "note": "2-char prefix after alias dot in SET"
+  },
+  {
+    "id": "UPD-057",
+    "family": "update",
+    "doc": "SELECT s.SupplierName FROM Suppliers s;\nUPDATE p SET p.| FROM Products p",
+    "expect": {
+      "mustContain": ["Price", "ProductName"],
+      "mustNotContain": ["SupplierName", "Address"],
+      "minCount": 2
+    },
+    "note": "prior statement's alias s and Suppliers columns must not leak into p."
+  },
+  {
+    "id": "UPD-058",
+    "family": "update",
+    "doc": "UPDATE e SET e.Notes = 'ok' FROM dbo.Employees e WHERE e.Last|",
+    "expect": {
+      "mustContain": ["LastName"],
+      "mustNotContain": ["FirstName"],
+      "minCount": 1
+    },
+    "note": "prefixed alias-dot completion in WHERE"
+  },
+  {
+    "id": "UPD-059",
+    "family": "update",
+    "doc": "UPDATE o\nSET o.CustomerID = c.CustomerID\nFROM dbo.Orders o\nJOIN dbo.Customers c ON c.CustomerID = o.CustomerID\nJOIN dbo.Shippers sh ON sh.ShipperID = o.ShipperID\nWHERE sh.|",
+    "expect": {
+      "mustContain": ["ShipperName", "Phone"],
+      "mustNotContain": ["CustomerName", "OrderDate"],
+      "minCount": 2
+    },
+    "note": "multi-line two-join UPDATE; third alias sh scoped to Shippers"
+  },
+  {
+    "id": "UPD-060",
+    "family": "update",
+    "doc": "UPDATE o SET Ship| FROM Orders o",
+    "expect": {
+      "mustContain": ["ShipperID"],
+      "mustNotContain": ["ShipperName"],
+      "minCount": 1
+    },
+    "note": "unqualified prefixed SET column via alias target: Orders only"
+  },
+  {
+    "id": "UPD-061",
+    "family": "update",
+    "doc": "UPDATE Customers SET City = 'Oslo' WHERE |",
+    "expect": {
+      "mustContain": ["CustomerID", "Country", "City"],
+      "mustNotContain": ["OrderID", "ProductName"],
+      "minCount": 3
+    },
+    "note": "WHERE scoped to Customers after complete SET assignment"
+  },
+  {
+    "id": "UPD-062",
+    "family": "update",
+    "doc": "UPDATE Products SET Price = 10 WHERE Cat|",
+    "expect": {
+      "mustContain": ["CategoryID"],
+      "mustNotContain": ["CategoryName"],
+      "minCount": 1
+    },
+    "note": "Cat prefix: CategoryName belongs to Categories, not Products"
+  },
+  {
+    "id": "UPD-063",
+    "family": "update",
+    "doc": "UPDATE Orders SET ShipperID = 2 WHERE Orders.|",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate", "CustomerID"],
+      "mustNotContain": ["Quantity"],
+      "minCount": 3
+    },
+    "note": "table-name-qualified column reference in WHERE"
+  },
+  {
+    "id": "UPD-064",
+    "family": "update",
+    "doc": "update employees set notes = '' where |",
+    "expect": {
+      "mustContain": ["EmployeeID", "LastName", "BirthDate"],
+      "mustNotContain": ["CustomerName"],
+      "minCount": 3
+    },
+    "note": "all-lowercase statement, WHERE scoped to Employees"
+  },
+  {
+    "id": "UPD-065",
+    "family": "update",
+    "doc": "UPDATE Sales.Invoices SET Paid = 0 WHERE Inv|",
+    "expect": {
+      "mustContain": ["InvoiceID", "InvoiceDate"],
+      "mustNotContain": ["OrderDate"],
+      "minCount": 2
+    },
+    "note": "prefixed WHERE completion against Sales.Invoices"
+  },
+  {
+    "id": "UPD-066",
+    "family": "update",
+    "doc": "UPDATE dbo.Shippers\nSET Phone = '555'\nWHERE |",
+    "expect": {
+      "mustContain": ["ShipperID", "ShipperName"],
+      "mustNotContain": ["SupplierName", "ContactName"],
+      "minCount": 2
+    },
+    "note": "multi-line UPDATE; WHERE excludes Suppliers columns"
+  },
+  {
+    "id": "UPD-067",
+    "family": "update",
+    "doc": "UPDATE Suppliers SET Phone = NULL WHERE P|",
+    "expect": {
+      "mustContain": ["PostalCode", "Phone"],
+      "mustNotContain": ["Price", "Paid", "Photo"],
+      "minCount": 2
+    },
+    "note": "P prefix in WHERE must exclude other tables' P-columns"
+  },
+  {
+    "id": "UPD-068",
+    "family": "update",
+    "doc": "UPDATE Categories SET Description = 'x' WHERE Categ|",
+    "expect": {
+      "mustContain": ["CategoryID", "CategoryName"],
+      "mustNotContain": ["ProductID"],
+      "minCount": 2
+    },
+    "note": "5-char prefix in WHERE scoped to Categories"
+  },
+  {
+    "id": "UPD-069",
+    "family": "update",
+    "doc": "UPDATE Orders SET ShipperID = 1 WHERE CustomerID IN (SELECT CustomerID FROM Customers WHERE |)",
+    "expect": {
+      "mustContain": ["Country", "City"],
+      "mustNotContain": ["OrderDate", "ShipperID"],
+      "minCount": 2
+    },
+    "note": "subquery WHERE scoped to inner Customers, not outer Orders"
+  },
+  {
+    "id": "UPD-070",
+    "family": "update",
+    "doc": "UPDATE OrderDetails SET Quantity = 0 WHERE Ord|",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDetailID"],
+      "mustNotContain": ["OrderDate"],
+      "minCount": 2
+    },
+    "note": "Ord prefix: Orders.OrderDate must not leak into OrderDetails scope"
+  },
+  {
+    "id": "UPD-071",
+    "family": "update",
+    "doc": "DELETE FROM dbo.OrderDetails WHERE Quantity = 0;\nUPDATE Products SET Unit = 'box' WHERE |",
+    "expect": {
+      "mustContain": ["ProductID", "Price"],
+      "mustNotContain": ["Quantity", "OrderDetailID"],
+      "minCount": 2
+    },
+    "note": "prior ;-terminated DELETE must not leak OrderDetails columns"
+  },
+  {
+    "id": "UPD-072",
+    "family": "update",
+    "doc": "UPDATE dbo.Customers SET Country = 'UK' WHERE City = 'London' AND |",
+    "expect": {
+      "mustContain": ["PostalCode", "ContactName"],
+      "mustNotContain": ["SupplierName"],
+      "minCount": 2
+    },
+    "note": "AND continues the WHERE clause with same scoping"
+  },
+  {
+    "id": "UPD-073",
+    "family": "update",
+    "doc": "UPDATE Employees SET Photo = '' WHERE BirthDate < |",
+    "expect": {
+      "mustContain": ["GETDATE", "BirthDate"],
+      "mustNotContain": ["InvoiceDate"],
+      "minCount": 2
+    },
+    "note": "comparison right side offers built-ins and target columns"
+  },
+  {
+    "id": "UPD-074",
+    "family": "update",
+    "doc": "UPDATE dbo.Orders\nSET OrderDate = GETDATE()\nWHERE OrderDate < GETDATE() AND Emp|",
+    "expect": {
+      "mustContain": ["EmployeeID"],
+      "mustNotContain": ["LastName"],
+      "minCount": 1
+    },
+    "note": "multi-line WHERE continuation with 3-char prefix"
+  },
+  {
+    "id": "UPD-075",
+    "family": "update",
+    "doc": "UPDATE Orders |",
+    "expect": {
+      "mustContain": ["SET"],
+      "mustNotContain": ["ProductName"],
+      "minCount": 1
+    },
+    "note": "after target table the SET keyword is offered"
+  },
+  {
+    "id": "UPD-076",
+    "family": "update",
+    "doc": "UPDATE Customers S|",
+    "expect": {
+      "mustContain": ["SET"],
+      "mustNotContain": ["SupplierName"],
+      "minCount": 1
+    },
+    "note": "S prefix before SET; other tables' S-columns must not appear"
+  },
+  {
+    "id": "UPD-077",
+    "family": "update",
+    "doc": "UPDATE Products SET Price = 5 W|",
+    "expect": {
+      "mustContain": ["WHERE"],
+      "mustNotContain": ["Unit"],
+      "minCount": 1
+    },
+    "note": "WHERE keyword offered after a complete assignment"
+  },
+  {
+    "id": "UPD-078",
+    "family": "update",
+    "doc": "UPDATE Sales.Invoices\nSET Paid = 1\n|",
+    "expect": {
+      "mustContain": ["WHERE"],
+      "mustNotContain": ["ProductName"],
+      "minCount": 1
+    },
+    "note": "multi-line: new line after SET list still offers WHERE continuation"
+  },
+  {
+    "id": "UPD-079",
+    "family": "update",
+    "doc": "SELECT c.CustomerName FROM dbo.Customers c;\nUPDATE Orders SET CustomerID = 1 WHERE |",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["CustomerName", "ContactName"],
+      "minCount": 2
+    },
+    "note": "prior statement's Customers scope must not bleed into Orders WHERE"
+  },
+  {
+    "id": "UPD-080",
+    "family": "update",
+    "doc": "UPDATE Categories SET CategoryName = 'A';\nUPDATE dbo.Products SET Cat|",
+    "expect": {
+      "mustContain": ["CategoryID"],
+      "mustNotContain": ["CategoryName"],
+      "minCount": 1
+    },
+    "note": "back-to-back updates; first target's columns must not leak"
+  },
+  {
+    "id": "UPD-081",
+    "family": "update",
+    "doc": "EXEC dbo.usp_UpdateProductPrice @ProductID = 1, @NewPrice = 9.99;\nUPDATE Products SET |",
+    "expect": {
+      "mustContain": ["Price", "Unit"],
+      "mustNotContain": ["InvoiceDate", "CustomerName"],
+      "minCount": 2
+    },
+    "note": "prior EXEC statement then a fresh UPDATE SET scope"
+  },
+  {
+    "id": "UPD-082",
+    "family": "update",
+    "doc": "INSERT INTO Shippers (ShipperName, Phone) VALUES ('X', '1');\nUPDATE Shippers SET |",
+    "expect": {
+      "mustContain": ["ShipperName", "Phone"],
+      "mustNotContain": ["SupplierName"],
+      "minCount": 2
+    },
+    "note": "prior INSERT then UPDATE on the same table"
+  },
+  {
+    "id": "UPD-083",
+    "family": "update",
+    "doc": "UPDATE o SET o.ShipperID = 1 FROM Orders o;\nUPDATE c SET c.| FROM Customers c",
+    "expect": {
+      "mustContain": ["City", "Country"],
+      "mustNotContain": ["OrderDate", "ShipperID"],
+      "minCount": 2
+    },
+    "note": "alias o from prior ;-terminated update must not shadow c scope"
+  },
+  {
+    "id": "UPD-084",
+    "family": "update",
+    "doc": "SELECT * FROM Sales.Invoices;\nUPDATE Sales.Invoices SET Paid = 1 WHERE Tot|",
+    "expect": {
+      "mustContain": ["TotalAmount"],
+      "mustNotContain": ["ProductName"],
+      "minCount": 1
+    },
+    "note": "prior SELECT statement then prefixed WHERE on Invoices"
+  },
+  {
+    "id": "UPD-085",
+    "family": "update",
+    "doc": "UPDATE [dbo].[Customers] SET |",
+    "expect": {
+      "mustContain": ["City", "CustomerName"],
+      "mustNotContain": ["ProductName"],
+      "minCount": 2
+    },
+    "note": "bracketed schema.table target resolves for SET scoping"
+  },
+  {
+    "id": "UPD-086",
+    "family": "update",
+    "doc": "UPDATE [dbo].[Products] SET Pr|",
+    "expect": {
+      "mustContain": ["Price", "ProductName"],
+      "mustNotContain": ["Paid"],
+      "minCount": 2
+    },
+    "note": "bracketed target with prefixed SET column"
+  },
+  {
+    "id": "UPD-087",
+    "family": "update",
+    "doc": "UPDATE TOP (5) dbo.Orders SET |",
+    "expect": {
+      "mustContain": ["OrderDate", "ShipperID"],
+      "mustNotContain": ["Quantity"],
+      "minCount": 2
+    },
+    "note": "TOP (n) between UPDATE and target does not break SET scoping"
+  },
+  {
+    "id": "UPD-088",
+    "family": "update",
+    "doc": "UPDATE vw_CustomerOrders SET |",
+    "expect": {
+      "mustContain": ["CustomerName", "Country"],
+      "mustNotContain": ["ProductName", "Price"],
+      "minCount": 2
+    },
+    "note": "view as update target: its columns, not other view's"
+  },
+  {
+    "id": "UPD-089",
+    "family": "update",
+    "doc": "UPDATE dbo.vw_ProductCatalog SET |",
+    "expect": {
+      "mustContain": ["ProductName", "Price", "CategoryName"],
+      "mustNotContain": ["Unit", "SupplierID"],
+      "minCount": 3
+    },
+    "note": "view scope must not bleed base-table-only columns (Unit, SupplierID)"
+  },
+  {
+    "id": "UPD-090",
+    "family": "update",
+    "doc": "   update    dbo.orders   set   |",
+    "expect": {
+      "mustContain": ["OrderDate", "CustomerID"],
+      "mustNotContain": ["ProductID", "InvoiceID"],
+      "minCount": 2
+    },
+    "note": "leading and repeated whitespace with lowercase identifiers"
+  }
+]

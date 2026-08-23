@@ -15,6 +15,8 @@ public enum ClauseType
     OrderBy,
     InsertColumns,
     InsertValues,
+    InsertTarget,     // Spec 032 C2: INSERT [INTO] | — expects an insertable object (table/view), never procs/functions
+    InsertColumnList, // Spec 032 C1: INSERT INTO t (| — expects t's columns (target injected into AvailableAliases)
     UpdateSet,
     Delete,
     Create,
@@ -33,7 +35,16 @@ public enum ClauseType
     ForXml,      // After FOR XML — XML output mode
     ForJson,     // After FOR JSON — JSON output mode
     Use,         // After USE keyword — expects a database name (to be inserted as [Name])
-    CreateTableColumnDef // Inside CREATE TABLE ( ) after a column-name identifier — expects a data type
+    CreateTableColumnDef, // Inside CREATE TABLE ( ) after a column-name identifier — expects a data type
+    // Spec 032 US5 (B2–B6) — dedicated-token contexts that previously fell through to From/Unknown:
+    OrderKeyword,  // ORDER |  → BY
+    GroupKeyword,  // GROUP |  → BY
+    SetOperator,   // UNION/INTERSECT/EXCEPT |  → SELECT (and ALL)
+    JoinQualifier, // LEFT/RIGHT/INNER/CROSS/FULL/OUTER |  → JOIN/OUTER JOIN/APPLY (per qualifier)
+    CaseStart,     // CASE |          → WHEN (+ expression for the simple-CASE form)
+    CaseWhen,      // WHEN <cond> |   → THEN (+ expression)
+    CaseThen,      // THEN <value> |  → WHEN/ELSE/END (+ expression)
+    CaseElse       // ELSE <value> |  → END (+ expression)
 }
 
 public class CursorContext
@@ -43,6 +54,14 @@ public class CursorContext
     public TSqlParserToken? PrecedingToken { get; set; }
     public bool PrecedingDot { get; set; }
     public string DotPrefix { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Spec 032 (A6): the full dot-qualifier chain before the caret's segment, outermost
+    /// first — e.g. <c>OtherDb.dbo.|</c> → ["OtherDb", "dbo"]. <see cref="DotPrefix"/>
+    /// remains the NEAREST qualifier (the last element) for existing consumers; providers
+    /// that care about multi-part scoping read the chain. Empty when there is no dot.
+    /// </summary>
+    public List<string> DotPrefixChain { get; set; } = [];
     public string PartialText { get; set; } = string.Empty;
     public bool InComment { get; set; }
     public bool InString { get; set; }
@@ -157,11 +176,18 @@ public class CursorContextAnalyzer
             }
         }
 
-        // Check if in comment or string
+        // Check if in comment or string. Spec 032 G3: a "string" token DIRECTLY after a
+        // member-access dot is a double-quoted IDENTIFIER being typed (`"dbo"."|`), not a
+        // string literal — treating it as InString killed the dot-scoping entirely.
         if (tokenAtCursor != null)
         {
             context.InComment = tokenAtCursor.TokenType is TSqlTokenType.SingleLineComment or TSqlTokenType.MultilineComment;
-            context.InString = tokenAtCursor.TokenType is TSqlTokenType.AsciiStringLiteral or TSqlTokenType.UnicodeStringLiteral;
+
+            var isStringToken = tokenAtCursor.TokenType is TSqlTokenType.AsciiStringLiteral or TSqlTokenType.UnicodeStringLiteral;
+            var isQuotedIdentifierAfterDot = isStringToken &&
+                tokenAtCursor.Text?.StartsWith("\"") == true &&
+                prevToken is { TokenType: TSqlTokenType.Dot };
+            context.InString = isStringToken && !isQuotedIdentifierAfterDot;
         }
 
         if (context.InComment || context.InString)
@@ -173,47 +199,230 @@ public class CursorContextAnalyzer
         // Case 1: cursor is past the dot — tokenAtCursor is after the dot, prevToken IS the dot.
         // Case 2: cursor is immediately after the dot — tokenAtCursor IS the dot itself.
         //   This happens when user types "BomItems." and cursor is at the end with no further text.
+        // Spec 032 (A6): the whole id(.id)* chain is consumed, not just one identifier, so
+        // `db.dbo.|` scopes to dbo (with the chain exposed) instead of ignoring the db part.
         if (prevToken is { TokenType: TSqlTokenType.Dot })
         {
             context.PrecedingDot = true;
-            // Find the identifier before the dot
-            if (tokenIndex >= 2)
-            {
-                var beforeDot = tokens[tokenIndex - 2];
-                if (beforeDot.TokenType is TSqlTokenType.Identifier or TSqlTokenType.QuotedIdentifier)
-                {
-                    context.DotPrefix = beforeDot.Text.Trim('[', ']', '"');
-                }
-            }
+            ExtractDotPrefixChain(tokens, IndexOfBackNonTrivia(tokens, tokenIndex - 1), context);
         }
         else if (tokenAtCursor is { TokenType: TSqlTokenType.Dot })
         {
             // Cursor is right at or immediately after the dot token itself
             context.PrecedingDot = true;
-            if (tokenIndex >= 1)
-            {
-                var beforeDot = tokens[tokenIndex - 1];
-                if (beforeDot.TokenType is TSqlTokenType.Identifier or TSqlTokenType.QuotedIdentifier)
-                {
-                    context.DotPrefix = beforeDot.Text.Trim('[', ']', '"');
-                }
-            }
+            ExtractDotPrefixChain(tokens, tokenIndex, context);
         }
 
         context.PrecedingToken = prevToken;
 
-        // Extract partial text being typed
-        if (tokenAtCursor is { TokenType: TSqlTokenType.Identifier or TSqlTokenType.QuotedIdentifier } &&
-            cursorOffset > tokenAtCursor.Offset)
+        // Extract partial text being typed. Spec 032 C4: Variable tokens included so a
+        // typed `@Cust` produces PartialText "@Cust" — without it VariableProvider (and the
+        // spec-032 ParameterProvider) can never trigger on an @-prefixed caret.
+        // Spec 032 B2-adjacent: word-like KEYWORD tokens count too — a partial like `to|`
+        // lexes as the TO keyword, and with no PartialText nothing filtered (KW-011/015).
+        if (tokenAtCursor != null && cursorOffset > tokenAtCursor.Offset &&
+            (tokenAtCursor.TokenType is TSqlTokenType.Identifier or TSqlTokenType.QuotedIdentifier
+                 or TSqlTokenType.Variable or TSqlTokenType.AsciiStringOrQuotedIdentifier ||
+             IsWordLikeToken(tokenAtCursor)))
         {
             var len = Math.Min(cursorOffset - tokenAtCursor.Offset, tokenAtCursor.Text.Length);
-            context.PartialText = tokenAtCursor.Text.Substring(0, len);
+            // Spec 032 G2: strip opening delimiters — `[Cust` must filter as `Cust`
+            // (FuzzyMatcher can never match a bracketed partial, which blanked the list).
+            context.PartialText = tokenAtCursor.Text.Substring(0, len).TrimStart('[', '"');
         }
 
         // Determine clause type by walking backwards through tokens
         context.ClauseType = DetermineClauseType(tokens, tokenIndex, context);
 
         return context;
+    }
+
+    /// <summary>
+    /// Spec 032 (C1/C2) — classifies the caret's position within an INSERT statement via a
+    /// forward scan from the INSERT keyword: <c>INSERT [INTO] [TOP (n)] name(.name)* [( cols )]</c>.
+    /// Caret inside the column-list parens → <see cref="ClauseType.InsertColumnList"/> with the
+    /// target table injected into <see cref="CursorContext.AvailableAliases"/> (the proven
+    /// ALTER TABLE pattern); caret at the (empty or partially typed) name position after INTO →
+    /// <see cref="ClauseType.InsertTarget"/>; otherwise <see cref="ClauseType.InsertColumns"/>
+    /// (keyword position — VALUES/SELECT/INTO…).
+    /// </summary>
+    private static ClauseType DetectInsertClauseType(
+        IList<TSqlParserToken> tokens, int insertIndex, CursorContext context)
+    {
+        int cursor = context.CursorOffset;
+        static int TokenEnd(TSqlParserToken t) => t.Offset + (t.Text?.Length ?? 0);
+        bool BeforeCursor(int idx) => idx < tokens.Count && TokenEnd(tokens[idx]) <= cursor;
+
+        int f = SkipForwardTrivia(tokens, insertIndex + 1);
+        bool sawInto = false;
+
+        if (BeforeCursor(f) && tokens[f].TokenType == TSqlTokenType.Into)
+        {
+            sawInto = true;
+            f = SkipForwardTrivia(tokens, f + 1);
+        }
+
+        // Optional TOP (n)
+        if (BeforeCursor(f) && tokens[f].TokenType == TSqlTokenType.Top)
+        {
+            f = SkipForwardTrivia(tokens, f + 1);
+            if (BeforeCursor(f) && tokens[f].TokenType == TSqlTokenType.LeftParenthesis)
+            {
+                int depth = 1;
+                f++;
+                while (f < tokens.Count && depth > 0 && TokenEnd(tokens[f]) <= cursor)
+                {
+                    if (tokens[f].TokenType == TSqlTokenType.LeftParenthesis) depth++;
+                    else if (tokens[f].TokenType == TSqlTokenType.RightParenthesis) depth--;
+                    f++;
+                }
+                f = SkipForwardTrivia(tokens, f);
+            }
+        }
+
+        // Multi-part target name, fully typed before the caret.
+        var parts = new List<string>();
+        while (BeforeCursor(f) &&
+               tokens[f].TokenType is TSqlTokenType.Identifier or TSqlTokenType.QuotedIdentifier)
+        {
+            parts.Add(tokens[f].Text.Trim('[', ']', '"'));
+            int k = SkipForwardTrivia(tokens, f + 1);
+            if (k < tokens.Count && tokens[k].TokenType == TSqlTokenType.Dot && TokenEnd(tokens[k]) <= cursor)
+            {
+                f = SkipForwardTrivia(tokens, k + 1);
+                continue;
+            }
+            f = k;
+            break;
+        }
+
+        if (parts.Count == 0)
+        {
+            // Caret at (or typing) the target name. After INTO the position is unambiguous;
+            // bare `INSERT |` keeps the keyword position (AfterInsert now offers INTO) with
+            // ObjectProvider's insertable-object list alongside — matches SSMS.
+            return sawInto ? ClauseType.InsertTarget : ClauseType.InsertColumns;
+        }
+
+        var tableName = parts[parts.Count - 1];
+        var schemaName = parts.Count >= 2 ? parts[parts.Count - 2] : "dbo";
+
+        // Column-list parens after the name, with the caret inside them?
+        if (f < tokens.Count && tokens[f].TokenType == TSqlTokenType.LeftParenthesis && tokens[f].Offset < cursor)
+        {
+            int depth = 1;
+            int close = -1;
+            for (int g = f + 1; g < tokens.Count; g++)
+            {
+                if (tokens[g].TokenType == TSqlTokenType.LeftParenthesis) depth++;
+                else if (tokens[g].TokenType == TSqlTokenType.RightParenthesis && --depth == 0)
+                {
+                    close = g;
+                    break;
+                }
+            }
+
+            if (close < 0 || cursor <= tokens[close].Offset)
+            {
+                if (!context.AvailableAliases.ContainsKey(tableName))
+                    context.AvailableAliases[tableName] = $"{schemaName}.{tableName}";
+                return ClauseType.InsertColumnList;
+            }
+        }
+
+        // Name typed, caret past it (and past any closed column list) → keyword position.
+        return ClauseType.InsertColumns;
+    }
+
+    private static int SkipForwardTrivia(IList<TSqlParserToken> tokens, int start)
+    {
+        while (start < tokens.Count && IsWhitespaceOrComment(tokens[start])) start++;
+        return start;
+    }
+
+    /// <summary>
+    /// Spec 032 B6: true when the WHEN/THEN/ELSE at <paramref name="index"/> belongs to an
+    /// OPEN CASE expression — i.e. walking further back finds an unmatched CASE before any
+    /// MERGE / IF / statement boundary. Closed inner CASE…END pairs are balanced out.
+    /// </summary>
+    private static bool IsInsideCaseExpression(IList<TSqlParserToken> tokens, int index)
+    {
+        int closedCases = 0;
+        for (int j = index - 1; j >= 0; j--)
+        {
+            var t = tokens[j];
+            if (IsWhitespaceOrComment(t)) continue;
+            switch (t.TokenType)
+            {
+                case TSqlTokenType.End:
+                    closedCases++;
+                    continue;
+                case TSqlTokenType.Case:
+                    if (closedCases > 0) { closedCases--; continue; }
+                    return true;
+                case TSqlTokenType.Merge:
+                case TSqlTokenType.If:
+                case TSqlTokenType.Semicolon:
+                    return false;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>Spec 032: a token whose text reads as a word being typed (letters/digits/_,
+    /// starting with a letter or underscore) — keyword tokens like TO/AS/ON qualify.</summary>
+    private static bool IsWordLikeToken(TSqlParserToken token)
+    {
+        var text = token.Text;
+        if (string.IsNullOrEmpty(text)) return false;
+        if (!(char.IsLetter(text[0]) || text[0] == '_')) return false;
+        for (int i = 1; i < text.Length; i++)
+        {
+            if (!(char.IsLetterOrDigit(text[i]) || text[i] == '_')) return false;
+        }
+        return true;
+    }
+
+    /// <summary>Index of the nearest non-trivia token at or before <paramref name="start"/>, or -1.</summary>
+    private static int IndexOfBackNonTrivia(IList<TSqlParserToken> tokens, int start)
+    {
+        int i = start;
+        while (i >= 0 && IsWhitespaceOrComment(tokens[i])) i--;
+        return i;
+    }
+
+    /// <summary>
+    /// Spec 032 (A6): walks the <c>identifier (. identifier)*</c> chain backwards from the
+    /// dot at <paramref name="dotIndex"/>, populating <see cref="CursorContext.DotPrefix"/>
+    /// (nearest qualifier — existing semantics) and <see cref="CursorContext.DotPrefixChain"/>
+    /// (outermost → nearest).
+    /// </summary>
+    private static void ExtractDotPrefixChain(IList<TSqlParserToken> tokens, int dotIndex, CursorContext context)
+    {
+        if (dotIndex < 1 || tokens[dotIndex].TokenType != TSqlTokenType.Dot) return;
+
+        var parts = new List<string>(); // nearest-first while walking back
+        int i = dotIndex;
+        while (i >= 1 && tokens[i].TokenType == TSqlTokenType.Dot)
+        {
+            int idIdx = IndexOfBackNonTrivia(tokens, i - 1);
+            if (idIdx < 0) break;
+            var idToken = tokens[idIdx];
+            // Spec 032 G3: double-quoted names lex as AsciiStringOrQuotedIdentifier —
+            // `"dbo"."|` must keep its dot-scoping.
+            if (idToken.TokenType is not (TSqlTokenType.Identifier
+                or TSqlTokenType.QuotedIdentifier
+                or TSqlTokenType.AsciiStringOrQuotedIdentifier)) break;
+
+            parts.Add(idToken.Text.Trim('[', ']', '"'));
+            i = IndexOfBackNonTrivia(tokens, idIdx - 1); // another dot → keep walking
+            if (i < 0) break;
+        }
+
+        if (parts.Count == 0) return;
+        context.DotPrefix = parts[0];
+        parts.Reverse();
+        context.DotPrefixChain = parts;
     }
 
     /// <summary>
@@ -237,6 +446,16 @@ public class CursorContextAnalyzer
         // us (cursor sits AFTER `WITH ... AS (...)`) and the next thing the user wants
         // is a statement keyword (SELECT/INSERT/...), not the AfterWith table-hints.
         bool sawSiblingParenGroup = false;
+        // Spec 032 B6: once an END is crossed going back, any CASE/WHEN/THEN/ELSE further
+        // back belongs to a CLOSED case expression (or a BEGIN…END block) — suppress the
+        // Case* classifications and keep walking (pre-032 behavior).
+        bool sawEndToken = false;
+
+        // Spec 032: when the CARET's own token happens to lex as a keyword because an
+        // identifier is being typed (`FROM Order|` lexes as TSqlTokenType.Order,
+        // `FROM Exec|` as Exec), the keyword-position cases below must not classify it —
+        // it's a partial identifier, not a completed keyword.
+        bool caretTokenIsPartial = !string.IsNullOrEmpty(context.PartialText);
 
         for (int i = fromIndex; i >= 0; i--)
         {
@@ -245,6 +464,8 @@ public class CursorContextAnalyzer
             {
                 continue;
             }
+
+            bool isCaretToken = i == fromIndex && caretTokenIsPartial;
 
             if (t.TokenType == TSqlTokenType.RightParenthesis)
             {
@@ -330,10 +551,97 @@ public class CursorContextAnalyzer
                         if (tj.TokenType == TSqlTokenType.Identifier ||
                             tj.TokenType == TSqlTokenType.QuotedIdentifier ||
                             tj.TokenType == TSqlTokenType.Dot) continue;
+                        // Spec 032 B7: a balanced (…) preceded by TOP is part of the UPDATE
+                        // target (`UPDATE TOP (5) dbo.Orders SET |`) — without this skip the
+                        // `)` aborted the scan and the caret got the SET-options list.
+                        if (tj.TokenType == TSqlTokenType.RightParenthesis)
+                        {
+                            int depth = 1;
+                            j--;
+                            while (j >= 0 && depth > 0)
+                            {
+                                if (tokens[j].TokenType == TSqlTokenType.RightParenthesis) depth++;
+                                else if (tokens[j].TokenType == TSqlTokenType.LeftParenthesis) depth--;
+                                j--;
+                            }
+                            while (j >= 0 && IsWhitespaceOrComment(tokens[j])) j--;
+                            if (j >= 0 && tokens[j].TokenType == TSqlTokenType.Top) continue; // for-loop steps past TOP
+                            break;
+                        }
                         break; // Hit a keyword or punctuation that can't be part of UPDATE table
                     }
                     return ClauseType.Set;
-                case TSqlTokenType.Execute: return ClauseType.Exec;
+                // Spec 032 B1: `EXEC` lexes as the DEDICATED TSqlTokenType.Exec — the
+                // Identifier-text arm below never sees it. Without this case the walk fell
+                // through to From/Unknown and proc-name completion after `EXEC ` was dead
+                // (clause=Exec fired 7× across the whole 1,500-request campaign).
+                case TSqlTokenType.Exec:
+                    if (isCaretToken) break; // `FROM Exec|` — identifier being typed
+                    return ClauseType.Exec;
+                case TSqlTokenType.Execute:
+                    if (isCaretToken) break;
+                    return ClauseType.Exec;
+
+                // Spec 032 B2: ORDER/GROUP also lex as dedicated tokens — the Identifier-text
+                // arms below are dead for them, so `ORDER |` misclassified as From (tables +
+                // HAVING offered, BY never). After `ORDER BY |` the By case above wins (nearer).
+                case TSqlTokenType.Order:
+                    if (isCaretToken) break; // `FROM Order|` — partial identifier (CTE-039)
+                    return ClauseType.OrderKeyword;
+                case TSqlTokenType.Group:
+                    if (isCaretToken) break;
+                    return ClauseType.GroupKeyword;
+
+                // Spec 032 B4: dedicated set-operator tokens — statement boundary AND a
+                // keyword context (SELECT/ALL).
+                case TSqlTokenType.Union:
+                case TSqlTokenType.Intersect:
+                case TSqlTokenType.Except:
+                    if (isCaretToken) break;
+                    return ClauseType.SetOperator;
+
+                // Spec 032 B3: join qualifiers (dedicated tokens). LEFT( / RIGHT( are the
+                // string functions — when followed by an open paren, keep walking.
+                case TSqlTokenType.Inner:
+                case TSqlTokenType.Left:
+                case TSqlTokenType.Right:
+                case TSqlTokenType.Full:
+                case TSqlTokenType.Cross:
+                case TSqlTokenType.Outer:
+                {
+                    if (isCaretToken) break;
+                    int nf = SkipForwardTrivia(tokens, i + 1);
+                    if (nf < tokens.Count && tokens[nf].TokenType == TSqlTokenType.LeftParenthesis)
+                        break;
+                    // Spec 032 H3: `CROSS/OUTER APPLY |` — APPLY lexes as an Identifier;
+                    // when it's already typed before the caret this is a TABLE/FUNCTION
+                    // position (TVFs valid), not a join-qualifier keyword position.
+                    if (nf < tokens.Count &&
+                        tokens[nf].TokenType == TSqlTokenType.Identifier &&
+                        string.Equals(tokens[nf].Text, "APPLY", StringComparison.OrdinalIgnoreCase) &&
+                        tokens[nf].Offset + (tokens[nf].Text?.Length ?? 0) <= context.CursorOffset)
+                        return ClauseType.JoinTable;
+                    return ClauseType.JoinQualifier;
+                }
+
+                // Spec 032 B6: CASE expression states (suppressed once an END was crossed).
+                case TSqlTokenType.End:
+                    sawEndToken = true;
+                    break;
+                case TSqlTokenType.Case:
+                    if (isCaretToken || sawEndToken) break;
+                    return ClauseType.CaseStart;
+                case TSqlTokenType.When:
+                    // WHEN also belongs to MERGE (WHEN MATCHED) — only a CASE's WHEN counts.
+                    if (isCaretToken || sawEndToken || !IsInsideCaseExpression(tokens, i)) break;
+                    return ClauseType.CaseWhen;
+                case TSqlTokenType.Then:
+                    if (isCaretToken || sawEndToken || !IsInsideCaseExpression(tokens, i)) break;
+                    return ClauseType.CaseThen;
+                case TSqlTokenType.Else:
+                    // ELSE also belongs to IF…ELSE — only a CASE's ELSE counts.
+                    if (isCaretToken || sawEndToken || !IsInsideCaseExpression(tokens, i)) break;
+                    return ClauseType.CaseElse;
                 case TSqlTokenType.Grant: return ClauseType.Grant;
                 case TSqlTokenType.Deny: return ClauseType.Grant;
                 case TSqlTokenType.Revoke: return ClauseType.Grant;
@@ -422,7 +730,10 @@ public class CursorContextAnalyzer
                     }
                     break;
                 case TSqlTokenType.Insert:
-                    return ClauseType.InsertColumns;
+                    // Spec 032 C1/C2: INSERT has three distinct positions (target name /
+                    // column list / keyword). A forward scan disambiguates and injects the
+                    // target table for the column-list case (mirrors the ALTER TABLE path).
+                    return DetectInsertClauseType(tokens, i, context);
                 case TSqlTokenType.Values:
                     return ClauseType.InsertValues;
                 case TSqlTokenType.Update:

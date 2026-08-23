@@ -1,0 +1,992 @@
+[
+  {
+    "id": "MULTI-001",
+    "family": "multi-statement",
+    "doc": "SELECT c.CustomerName FROM dbo.Customers c;\nSELECT p.| FROM dbo.Products p",
+    "expect": {
+      "mustContain": ["ProductName", "Unit", "Price"],
+      "mustNotContain": ["CustomerName", "ContactName", "City"],
+      "minCount": 1
+    },
+    "note": "second statement alias p scoped to Products; first statement's Customers columns must not leak"
+  },
+  {
+    "id": "MULTI-002",
+    "family": "multi-statement",
+    "doc": "SELECT * FROM dbo.Orders o; SELECT e.| FROM dbo.Employees e",
+    "expect": {
+      "mustContain": ["LastName", "FirstName", "BirthDate"],
+      "mustNotContain": ["OrderDate", "ShipperID"],
+      "minCount": 1
+    },
+    "note": "single-line two statements; e scoped to Employees, Orders columns absent"
+  },
+  {
+    "id": "MULTI-003",
+    "family": "multi-statement",
+    "doc": "select s.SupplierName from dbo.Suppliers s;\nselect sh.| from dbo.Shippers sh",
+    "expect": {
+      "mustContain": ["ShipperID", "ShipperName", "Phone"],
+      "mustNotContain": ["SupplierName", "Address", "City"],
+      "minCount": 1
+    },
+    "note": "lower-case keywords; sh scoped to Shippers only"
+  },
+  {
+    "id": "MULTI-004",
+    "family": "multi-statement",
+    "doc": "SELECT o.OrderID FROM dbo.Orders o;\nSELECT c.C| FROM dbo.Customers c",
+    "expect": {
+      "mustContain": ["CustomerName", "City", "Country"],
+      "mustNotContain": ["CategoryName", "CategoryID"],
+      "minCount": 1
+    },
+    "note": "1-char prefix C on Customers alias; C-matching columns from other tables must not appear"
+  },
+  {
+    "id": "MULTI-005",
+    "family": "multi-statement",
+    "doc": "UPDATE dbo.Products SET Price = 10 WHERE ProductID = 1;\nSELECT c.Cus| FROM dbo.Customers c",
+    "expect": {
+      "mustContain": ["CustomerID", "CustomerName"],
+      "mustNotContain": ["Unit", "Price"],
+      "minCount": 1
+    },
+    "note": "prior UPDATE statement; 3-char prefix on new SELECT alias, Products columns must not leak"
+  },
+  {
+    "id": "MULTI-006",
+    "family": "multi-statement",
+    "doc": "EXEC dbo.usp_UpdateProductPrice @ProductID = 5, @NewPrice = 12.50;\nSELECT p.| FROM dbo.Products p",
+    "expect": {
+      "mustContain": ["ProductID", "ProductName", "Unit"],
+      "mustNotContain": ["TotalAmount", "CustomerName"],
+      "minCount": 1
+    },
+    "note": "prior EXEC statement does not disturb alias scoping in the next statement"
+  },
+  {
+    "id": "MULTI-007",
+    "family": "multi-statement",
+    "doc": "INSERT INTO dbo.Shippers (ShipperName, Phone) VALUES ('Speedy', '503-555-0137');\nSELECT s.| FROM dbo.Suppliers s",
+    "expect": {
+      "mustContain": ["SupplierName", "ContactName", "Country"],
+      "mustNotContain": ["ShipperName", "ShipperID"],
+      "minCount": 1
+    },
+    "note": "prior INSERT; s scoped to Suppliers, Shippers columns must not leak"
+  },
+  {
+    "id": "MULTI-008",
+    "family": "multi-statement",
+    "doc": "DELETE FROM dbo.OrderDetails WHERE Quantity = 0;\nSELECT o.| FROM dbo.Orders o",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate", "CustomerID"],
+      "mustNotContain": ["Quantity", "OrderDetailID"],
+      "minCount": 1
+    },
+    "note": "prior DELETE; o scoped to Orders, OrderDetails columns absent"
+  },
+  {
+    "id": "MULTI-009",
+    "family": "multi-statement",
+    "doc": "SELECT c.CustomerName\nFROM dbo.Customers c;\nSELECT i.| FROM Sales.Invoices i",
+    "expect": {
+      "mustContain": ["InvoiceID", "TotalAmount", "Paid"],
+      "mustNotContain": ["CustomerName", "City"],
+      "minCount": 1
+    },
+    "note": "multi-line first statement; i scoped to Sales.Invoices"
+  },
+  {
+    "id": "MULTI-010",
+    "family": "multi-statement",
+    "doc": "SeLeCt * FrOm dbo.Categories;\nSeLeCt p.Pr| FrOm dbo.Products p",
+    "expect": {
+      "mustContain": ["Price", "ProductName", "ProductID"],
+      "mustNotContain": ["Description", "CategoryName"],
+      "minCount": 1
+    },
+    "note": "mixed-case keywords with 2-char prefix; Categories columns must not leak into p scope"
+  },
+  {
+    "id": "MULTI-011",
+    "family": "multi-statement",
+    "doc": "SELECT * FROM dbo.Employees;\nSELECT o.OrderID FROM dbo.Orders o WHERE o.|",
+    "expect": {
+      "mustContain": ["OrderDate", "EmployeeID", "ShipperID"],
+      "mustNotContain": ["LastName", "BirthDate"],
+      "minCount": 1
+    },
+    "note": "WHERE-clause alias completion in second statement; Employees columns absent"
+  },
+  {
+    "id": "MULTI-012",
+    "family": "multi-statement",
+    "doc": "SELECT   1  ;   SELECT   d.|   FROM   dbo.OrderDetails   d",
+    "expect": {
+      "mustContain": ["OrderDetailID", "Quantity", "ProductID"],
+      "mustNotContain": ["OrderDate", "CustomerName"],
+      "minCount": 1
+    },
+    "note": "heavy whitespace around separator; d scoped to OrderDetails"
+  },
+  {
+    "id": "MULTI-013",
+    "family": "multi-statement",
+    "doc": "SELECT TOP (5) * FROM dbo.Products;\nSELECT v.| FROM dbo.vw_CustomerOrders v",
+    "expect": {
+      "mustContain": ["CustomerName", "OrderDate", "ShipperID"],
+      "mustNotContain": ["Unit", "Price"],
+      "minCount": 1
+    },
+    "note": "view alias in second statement; Products columns from first statement absent"
+  },
+  {
+    "id": "MULTI-014",
+    "family": "multi-statement",
+    "doc": "SELECT CustomerID FROM dbo.Customers;\nSELECT pc.| FROM dbo.vw_ProductCatalog pc",
+    "expect": {
+      "mustContain": ["ProductName", "CategoryName", "SupplierName"],
+      "mustNotContain": ["ContactName", "City"],
+      "minCount": 1
+    },
+    "note": "vw_ProductCatalog alias scoping after a prior Customers statement"
+  },
+  {
+    "id": "MULTI-015",
+    "family": "multi-statement",
+    "doc": "SELECT * FROM dbo.Shippers;\nSELECT o.| FROM dbo.Orders o JOIN dbo.Customers c ON o.CustomerID = c.CustomerID",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["ShipperName", "CustomerName"],
+      "minCount": 1
+    },
+    "note": "caret mid-statement with trailing join text; o strictly scoped to Orders"
+  },
+  {
+    "id": "MULTI-016",
+    "family": "multi-statement",
+    "doc": "DELETE FROM dbo.Shippers WHERE ShipperID = 99;\nSELECT c.CustomerName FROM dbo.Customers c WHERE c.Cou|",
+    "expect": {
+      "mustContain": ["Country"],
+      "mustNotContain": ["ShipperName", "PostalCode"],
+      "minCount": 1
+    },
+    "note": "3-char prefix in WHERE of second statement filters to Country"
+  },
+  {
+    "id": "MULTI-017",
+    "family": "multi-statement",
+    "doc": "SELECT 1;\n\tSELECT e.| FROM dbo.Employees e",
+    "expect": {
+      "mustContain": ["Photo", "Notes", "FirstName"],
+      "mustNotContain": ["CustomerName", "ProductName"],
+      "minCount": 1
+    },
+    "note": "tab-indented second statement; e scoped to Employees"
+  },
+  {
+    "id": "MULTI-018",
+    "family": "multi-statement",
+    "doc": "SELECT * FROM Sales.Invoices;\nSELECT p.ProductName FROM dbo.Products p ORDER BY p.|",
+    "expect": {
+      "mustContain": ["Price", "ProductName", "Unit"],
+      "mustNotContain": ["TotalAmount", "InvoiceDate"],
+      "minCount": 1
+    },
+    "note": "ORDER BY alias completion in second statement; Invoices columns absent"
+  },
+  {
+    "id": "MULTI-019",
+    "family": "multi-statement",
+    "doc": "DECLARE @n int; SET @n = 1; SELECT c.| FROM dbo.Customers c",
+    "expect": {
+      "mustContain": ["CustomerID", "City"],
+      "mustNotContain": ["ProductName", "OrderDate"],
+      "minCount": 1
+    },
+    "note": "two prior non-query statements (DECLARE/SET) then alias completion"
+  },
+  {
+    "id": "MULTI-020",
+    "family": "multi-statement",
+    "doc": "SELECT ShipperID FROM dbo.Shippers;\nSELECT o.CustomerID, COUNT(*) FROM dbo.Orders o GROUP BY o.|",
+    "expect": {
+      "mustContain": ["CustomerID", "EmployeeID"],
+      "mustNotContain": ["ShipperName", "Phone"],
+      "minCount": 1
+    },
+    "note": "GROUP BY position in second statement scoped to Orders alias"
+  },
+  {
+    "id": "MULTI-021",
+    "family": "multi-statement",
+    "doc": "SELECT c.CustomerName FROM dbo.Customers c;\nSELECT c.|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["CustomerName", "City", "ContactName"],
+      "minCount": 0
+    },
+    "note": "alias c ended at the semicolon; its columns must not be offered in the new statement"
+  },
+  {
+    "id": "MULTI-022",
+    "family": "multi-statement",
+    "doc": "SELECT o.OrderID FROM dbo.Orders o; SELECT o.| FROM dbo.Products p",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["OrderDate", "OrderID", "ShipperID"],
+      "minCount": 0
+    },
+    "note": "o is only defined in the first statement; second statement defines p, so o. resolves to nothing"
+  },
+  {
+    "id": "MULTI-023",
+    "family": "multi-statement",
+    "doc": "UPDATE c SET City = 'Oslo' FROM dbo.Customers c WHERE c.CustomerID = 3;\nSELECT c.| FROM dbo.Orders o",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["City", "CustomerName", "Address"],
+      "minCount": 0
+    },
+    "note": "aliased UPDATE target alias must not survive past the semicolon"
+  },
+  {
+    "id": "MULTI-024",
+    "family": "multi-statement",
+    "doc": "DELETE o FROM dbo.Orders o WHERE o.OrderID = 10;\nSELECT o.|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["OrderDate", "CustomerID", "ShipperID"],
+      "minCount": 0
+    },
+    "note": "aliased DELETE alias dies at semicolon"
+  },
+  {
+    "id": "MULTI-025",
+    "family": "multi-statement",
+    "doc": "SELECT p.ProductName\nFROM dbo.Products p\nWHERE p.Price > 10;\n\nSELECT p.|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["ProductName", "Unit", "Price"],
+      "minCount": 0
+    },
+    "note": "multi-line first statement plus blank line; p must not leak into the new statement"
+  },
+  {
+    "id": "MULTI-026",
+    "family": "multi-statement",
+    "doc": "SELECT e.LastName FROM dbo.Employees e;\nSELECT * FROM dbo.Orders WHERE e.|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["LastName", "FirstName", "BirthDate"],
+      "minCount": 0
+    },
+    "note": "dead alias e referenced in the WHERE of a later statement must yield no Employees columns"
+  },
+  {
+    "id": "MULTI-027",
+    "family": "multi-statement",
+    "doc": "SELECT c.City FROM dbo.Customers c;\nSELECT * FROM dbo.Customers c2 JOIN dbo.Orders o2 ON o2.CustomerID = c.|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["City", "CustomerName"],
+      "minCount": 0
+    },
+    "note": "second statement defines c2/o2, not c; dead alias c in ON clause resolves to nothing"
+  },
+  {
+    "id": "MULTI-028",
+    "family": "multi-statement",
+    "doc": "SELECT d.OrderID FROM (SELECT OrderID FROM dbo.Orders) d;\nSELECT d.|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["OrderID"],
+      "minCount": 0
+    },
+    "note": "derived-table alias d must not survive into the next statement"
+  },
+  {
+    "id": "MULTI-029",
+    "family": "multi-statement",
+    "doc": "select SU.SupplierName from dbo.Suppliers SU;\nselect SU.| from dbo.Categories c",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["SupplierName", "ContactName", "Phone"],
+      "minCount": 0
+    },
+    "note": "upper-case alias SU from prior statement is dead; only c (Categories) exists here"
+  },
+  {
+    "id": "MULTI-030",
+    "family": "multi-statement",
+    "doc": "SELECT s.ShipperName FROM dbo.Shippers s;\nSELECT 1;\nSELECT s.|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["ShipperName", "Phone", "ShipperID"],
+      "minCount": 0
+    },
+    "note": "three statements; alias from the first must not reach the third"
+  },
+  {
+    "id": "MULTI-031",
+    "family": "multi-statement",
+    "doc": "SELECT c.| FROM dbo.Customers c;\nSELECT p.ProductName FROM dbo.Products p;",
+    "expect": {
+      "mustContain": ["CustomerName", "City", "Country"],
+      "mustNotContain": ["ProductName", "Unit"],
+      "minCount": 1
+    },
+    "note": "caret in FIRST statement; later statement's Products columns must not leak backward"
+  },
+  {
+    "id": "MULTI-032",
+    "family": "multi-statement",
+    "doc": "SELECT o.| FROM dbo.Orders o;\nSELECT d.Quantity FROM dbo.OrderDetails d;",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["Quantity", "OrderDetailID"],
+      "minCount": 1
+    },
+    "note": "backward leak check: OrderDetails columns from the second statement absent in first"
+  },
+  {
+    "id": "MULTI-033",
+    "family": "multi-statement",
+    "doc": "SELECT * FROM dbo.|;\nSELECT i.Paid FROM Sales.Invoices i;",
+    "expect": {
+      "mustContain": ["Customers", "Orders", "Products"],
+      "mustNotContain": ["Invoices", "TotalAmount"],
+      "minCount": 1
+    },
+    "note": "dbo. object completion in first statement; Sales-schema table and columns must not appear"
+  },
+  {
+    "id": "MULTI-034",
+    "family": "multi-statement",
+    "doc": "SELECT c.City FROM dbo.Customers c;\nSELECT e.| FROM dbo.Employees e;\nSELECT s.Phone FROM dbo.Shippers s;",
+    "expect": {
+      "mustContain": ["LastName", "BirthDate", "Notes"],
+      "mustNotContain": ["City", "ShipperName"],
+      "minCount": 1
+    },
+    "note": "caret in the MIDDLE of three statements; neither neighbor's columns leak"
+  },
+  {
+    "id": "MULTI-035",
+    "family": "multi-statement",
+    "doc": "SELECT * FROM dbo.Products p WHERE p.|;\nSELECT c.Country FROM dbo.Customers c;",
+    "expect": {
+      "mustContain": ["Price", "Unit", "CategoryID"],
+      "mustNotContain": ["Country", "CustomerName"],
+      "minCount": 1
+    },
+    "note": "WHERE caret in first statement; second statement's Customers scope must not bleed backward"
+  },
+  {
+    "id": "MULTI-036",
+    "family": "multi-statement",
+    "doc": "select o.Or| from dbo.Orders o;\nselect dd.OrderDetailID from dbo.OrderDetails dd;",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["OrderDetailID"],
+      "minCount": 1
+    },
+    "note": "prefix Or in first statement; OrderDetailID matches the prefix but belongs to the later statement's table"
+  },
+  {
+    "id": "MULTI-037",
+    "family": "multi-statement",
+    "doc": "SELECT x.| FROM dbo.Categories x;\nSELECT x.Quantity FROM dbo.OrderDetails x;",
+    "expect": {
+      "mustContain": ["CategoryID", "CategoryName", "Description"],
+      "mustNotContain": ["Quantity", "OrderDetailID"],
+      "minCount": 1
+    },
+    "note": "same alias x bound to a different table in the later statement; only first binding applies at caret"
+  },
+  {
+    "id": "MULTI-038",
+    "family": "multi-statement",
+    "doc": "SELECT\n    e.EmployeeID,\n    e.|\nFROM dbo.Employees e;\nSELECT * FROM dbo.Suppliers;",
+    "expect": {
+      "mustContain": ["FirstName", "LastName", "Photo"],
+      "mustNotContain": ["SupplierName", "ContactName"],
+      "minCount": 1
+    },
+    "note": "multi-line select list caret in first statement; Suppliers columns from second absent"
+  },
+  {
+    "id": "MULTI-039",
+    "family": "multi-statement",
+    "doc": "SELECT o.OrderID FROM dbo.Orders o;\nSELECT o.| FROM dbo.OrderDetails o",
+    "expect": {
+      "mustContain": ["OrderDetailID", "Quantity", "ProductID"],
+      "mustNotContain": ["OrderDate", "ShipperID", "CustomerID"],
+      "minCount": 1
+    },
+    "note": "alias o rebound to OrderDetails after semicolon; Orders-only columns must not appear"
+  },
+  {
+    "id": "MULTI-040",
+    "family": "multi-statement",
+    "doc": "SELECT o.Quantity FROM dbo.OrderDetails o;\nSELECT o.| FROM dbo.Orders o",
+    "expect": {
+      "mustContain": ["OrderDate", "CustomerID", "ShipperID"],
+      "mustNotContain": ["Quantity", "OrderDetailID"],
+      "minCount": 1
+    },
+    "note": "reverse rebinding: o is Orders in the second statement, OrderDetails columns absent"
+  },
+  {
+    "id": "MULTI-041",
+    "family": "multi-statement",
+    "doc": "SELECT c.CustomerName FROM dbo.Customers c; SELECT c.| FROM dbo.Categories c",
+    "expect": {
+      "mustContain": ["CategoryID", "CategoryName", "Description"],
+      "mustNotContain": ["CustomerName", "City", "Country"],
+      "minCount": 1
+    },
+    "note": "alias c rebound from Customers to Categories on one line"
+  },
+  {
+    "id": "MULTI-042",
+    "family": "multi-statement",
+    "doc": "SELECT s.ShipperName FROM dbo.Shippers s;\nSELECT s.S| FROM dbo.Suppliers s",
+    "expect": {
+      "mustContain": ["SupplierID", "SupplierName"],
+      "mustNotContain": ["ShipperName", "ShipperID"],
+      "minCount": 1
+    },
+    "note": "1-char prefix S; Shipper* names match the prefix but belong to the dead first binding"
+  },
+  {
+    "id": "MULTI-043",
+    "family": "multi-statement",
+    "doc": "SELECT p.Unit FROM dbo.Products p;\nSELECT p.| FROM dbo.vw_ProductCatalog p",
+    "expect": {
+      "mustContain": ["CategoryName", "SupplierName", "ProductName"],
+      "mustNotContain": ["Unit", "SupplierID"],
+      "minCount": 1
+    },
+    "note": "p rebound from Products table to vw_ProductCatalog view; table-only columns absent"
+  },
+  {
+    "id": "MULTI-044",
+    "family": "multi-statement",
+    "doc": "select i.TotalAmount from Sales.Invoices i;\nSELECT i.| FROM dbo.Employees i",
+    "expect": {
+      "mustContain": ["LastName", "FirstName", "BirthDate"],
+      "mustNotContain": ["TotalAmount", "Paid", "InvoiceDate"],
+      "minCount": 1
+    },
+    "note": "mixed casing across statements; i rebound from Sales.Invoices to Employees"
+  },
+  {
+    "id": "MULTI-045",
+    "family": "multi-statement",
+    "doc": "SELECT t.CustomerName FROM dbo.Customers t;\nUPDATE t SET t.| FROM dbo.Products t",
+    "expect": {
+      "mustContain": ["Price", "Unit", "ProductName"],
+      "mustNotContain": ["CustomerName", "City"],
+      "minCount": 1
+    },
+    "note": "alias t rebound in an aliased UPDATE; SET completion uses Products, not the dead Customers binding"
+  },
+  {
+    "id": "MULTI-046",
+    "family": "multi-statement",
+    "doc": "SELECT o.OrderDate FROM dbo.Orders o;\nDELETE o FROM dbo.OrderDetails o WHERE o.|",
+    "expect": {
+      "mustContain": ["Quantity", "OrderDetailID"],
+      "mustNotContain": ["OrderDate", "CustomerID"],
+      "minCount": 1
+    },
+    "note": "aliased DELETE rebinds o to OrderDetails; Orders-only columns absent in WHERE"
+  },
+  {
+    "id": "MULTI-047",
+    "family": "multi-statement",
+    "doc": "SELECT CustomerName FROM dbo.Customers;\nSELECT * FROM |",
+    "expect": {
+      "mustContain": ["Orders", "Products", "vw_CustomerOrders"],
+      "mustNotContain": ["CustomerName", "OrderDate"],
+      "minCount": 1
+    },
+    "note": "FROM in a later statement still sees full schema (tables and views); bare columns do not belong here"
+  },
+  {
+    "id": "MULTI-048",
+    "family": "multi-statement",
+    "doc": "SELECT 1;\nSELECT * FROM dbo.|",
+    "expect": {
+      "mustContain": ["Customers", "Employees", "Shippers"],
+      "mustNotContain": ["Invoices"],
+      "minCount": 1
+    },
+    "note": "dbo. completion after a prior statement; Sales.Invoices must not appear under dbo"
+  },
+  {
+    "id": "MULTI-049",
+    "family": "multi-statement",
+    "doc": "SELECT OrderID FROM dbo.Orders;\nSELECT * FROM Sales.|",
+    "expect": {
+      "mustContain": ["Invoices"],
+      "mustNotContain": ["Customers", "Orders"],
+      "minCount": 1
+    },
+    "note": "Sales. completion in the second statement; dbo tables must not appear under Sales"
+  },
+  {
+    "id": "MULTI-050",
+    "family": "multi-statement",
+    "doc": "SELECT * FROM dbo.Shippers;\nSELECT * FROM dbo.Ord|",
+    "expect": {
+      "mustContain": ["Orders", "OrderDetails"],
+      "mustNotContain": ["OrderDate", "OrderDetailID"],
+      "minCount": 1
+    },
+    "note": "3-char table prefix after FROM; Ord-matching column names are not valid FROM completions"
+  },
+  {
+    "id": "MULTI-051",
+    "family": "multi-statement",
+    "doc": "SELECT * FROM dbo.Categories;\nSELECT * FROM dbo.Products p JOIN dbo.|",
+    "expect": {
+      "mustContain": ["Suppliers", "Categories", "Orders"],
+      "mustNotContain": ["Invoices"],
+      "minCount": 1
+    },
+    "note": "JOIN target completion in second statement sees all dbo tables"
+  },
+  {
+    "id": "MULTI-052",
+    "family": "multi-statement",
+    "doc": "select CategoryName from dbo.Categories;\nselect * from C|",
+    "expect": {
+      "mustContain": ["Customers", "Categories"],
+      "mustNotContain": ["CategoryName", "Country"],
+      "minCount": 1
+    },
+    "note": "1-char table prefix in later statement; C-matching column names must not appear in FROM"
+  },
+  {
+    "id": "MULTI-053",
+    "family": "multi-statement",
+    "doc": "SELECT p.Price\nFROM dbo.Products p;\nSELECT *\nFROM dbo.vw_|",
+    "expect": {
+      "mustContain": ["vw_CustomerOrders", "vw_ProductCatalog"],
+      "mustNotContain": ["Products", "Price"],
+      "minCount": 1
+    },
+    "note": "view-prefix completion in a multi-line later statement"
+  },
+  {
+    "id": "MULTI-054",
+    "family": "multi-statement",
+    "doc": "SELECT 1;\nSELECT * FROM Northwind_AutoTest.dbo.|",
+    "expect": {
+      "mustContain": ["Customers", "Orders"],
+      "mustNotContain": ["Invoices"],
+      "minCount": 1
+    },
+    "note": "three-part name completion in a later statement"
+  },
+  {
+    "id": "MULTI-055",
+    "family": "multi-statement",
+    "doc": "SELECT CustomerID FROM dbo.Customers;\nSELECT * FROM dbo.fn_|",
+    "expect": {
+      "mustContain": ["fn_OrdersByCustomer"],
+      "mustNotContain": ["Customers"],
+      "minCount": 1
+    },
+    "note": "TVF completion after FROM in the second statement; prefix filters out non-matching tables"
+  },
+  {
+    "id": "MULTI-056",
+    "family": "multi-statement",
+    "doc": "DELETE FROM dbo.OrderDetails;\nINSERT INTO dbo.|",
+    "expect": {
+      "mustContain": ["Orders", "Shippers"],
+      "mustNotContain": ["Invoices"],
+      "minCount": 1
+    },
+    "note": "INSERT INTO table completion in the statement after a DELETE"
+  },
+  {
+    "id": "MULTI-057",
+    "family": "multi-statement",
+    "doc": "SELECT * FROM dbo.Customers; |",
+    "expect": {
+      "mustContain": ["SELECT", "INSERT", "UPDATE"],
+      "mustNotContain": ["CustomerName"],
+      "minCount": 1
+    },
+    "note": "statement-start keywords after a semicolon; bare columns of the finished statement must not appear"
+  },
+  {
+    "id": "MULTI-058",
+    "family": "multi-statement",
+    "doc": "SELECT City FROM dbo.Customers;\nS|",
+    "expect": {
+      "mustContain": ["SELECT"],
+      "mustNotContain": ["ShipperName", "SupplierName"],
+      "minCount": 1
+    },
+    "note": "1-char keyword prefix at new statement start; S-matching columns must not be offered"
+  },
+  {
+    "id": "MULTI-059",
+    "family": "multi-statement",
+    "doc": "UPDATE dbo.Products SET Price = 1;\nDEL|",
+    "expect": {
+      "mustContain": ["DELETE"],
+      "mustNotContain": ["Price"],
+      "minCount": 1
+    },
+    "note": "3-char keyword prefix after a prior UPDATE statement"
+  },
+  {
+    "id": "MULTI-060",
+    "family": "multi-statement",
+    "doc": "SELECT 1;\n\n\nIN|",
+    "expect": {
+      "mustContain": ["INSERT"],
+      "mustNotContain": ["InvoiceID", "InvoiceDate"],
+      "minCount": 1
+    },
+    "note": "blank lines between statements; IN-prefixed columns must not appear at statement start"
+  },
+  {
+    "id": "MULTI-061",
+    "family": "multi-statement",
+    "doc": "DELETE FROM dbo.Shippers WHERE ShipperID = 9;\nUPD|",
+    "expect": {
+      "mustContain": ["UPDATE"],
+      "mustNotContain": ["ShipperName"],
+      "minCount": 1
+    },
+    "note": "keyword prefix for a new statement after a completed DELETE"
+  },
+  {
+    "id": "MULTI-062",
+    "family": "multi-statement",
+    "doc": "SELECT TOP (3) * FROM dbo.Employees;|",
+    "expect": {
+      "mustContain": ["SELECT", "INSERT"],
+      "mustNotContain": ["LastName", "FirstName"],
+      "minCount": 1
+    },
+    "note": "caret immediately after the semicolon with no whitespace; new-statement keywords expected"
+  },
+  {
+    "id": "MULTI-063",
+    "family": "multi-statement",
+    "doc": "SELECT * FROM dbo.Orders;\nEXEC |",
+    "expect": {
+      "mustContain": ["usp_GetCustomerOrders", "usp_UpdateProductPrice"],
+      "mustNotContain": ["Customers", "OrderDate"],
+      "minCount": 1
+    },
+    "note": "EXEC in a later statement offers procedures, not tables or columns"
+  },
+  {
+    "id": "MULTI-064",
+    "family": "multi-statement",
+    "doc": "SELECT 1;\nEXEC dbo.usp_|",
+    "expect": {
+      "mustContain": ["usp_GetCustomerOrders", "usp_UpdateProductPrice"],
+      "mustNotContain": ["usp_MarkInvoicePaid"],
+      "minCount": 1
+    },
+    "note": "dbo.usp_ prefix; Sales-schema procedure must not appear under dbo"
+  },
+  {
+    "id": "MULTI-065",
+    "family": "multi-statement",
+    "doc": "SELECT OrderID FROM Sales.Invoices;\nEXEC Sales.|",
+    "expect": {
+      "mustContain": ["usp_MarkInvoicePaid"],
+      "mustNotContain": ["usp_GetCustomerOrders", "usp_UpdateProductPrice"],
+      "minCount": 1
+    },
+    "note": "Sales. proc completion in a later statement; dbo procs excluded"
+  },
+  {
+    "id": "MULTI-066",
+    "family": "multi-statement",
+    "doc": "SELECT * FROM dbo.Customers;\nEXEC dbo.usp_GetCustomerOrders @|",
+    "expect": {
+      "mustContain": ["@CustomerID", "@FromDate", "@ToDate"],
+      "mustNotContain": ["@NewPrice", "@InvoiceID"],
+      "minCount": 1
+    },
+    "note": "parameter completion in the second statement scoped to the named proc"
+  },
+  {
+    "id": "MULTI-067",
+    "family": "multi-statement",
+    "doc": "SELECT 1;\nEXEC dbo.usp_UpdateProductPrice @ProductID = 1, @|",
+    "expect": {
+      "mustContain": ["@NewPrice"],
+      "mustNotContain": ["@CustomerID", "@InvoiceID"],
+      "minCount": 1
+    },
+    "note": "second named parameter of usp_UpdateProductPrice; other procs' params absent"
+  },
+  {
+    "id": "MULTI-068",
+    "family": "multi-statement",
+    "doc": "EXEC dbo.usp_GetCustomerOrders @CustomerID = 1;\nEXEC dbo.usp_UpdateProductPrice @|",
+    "expect": {
+      "mustContain": ["@ProductID", "@NewPrice"],
+      "mustNotContain": ["@FromDate", "@ToDate"],
+      "minCount": 1
+    },
+    "note": "back-to-back EXECs; the prior proc's parameters must not leak into the second proc's list"
+  },
+  {
+    "id": "MULTI-069",
+    "family": "multi-statement",
+    "doc": "select * from dbo.Products;\nexec dbo.Usp_Up|",
+    "expect": {
+      "mustContain": ["usp_UpdateProductPrice"],
+      "mustNotContain": ["usp_GetCustomerOrders"],
+      "minCount": 1
+    },
+    "note": "case-insensitive proc prefix matching in a later exec statement"
+  },
+  {
+    "id": "MULTI-070",
+    "family": "multi-statement",
+    "doc": "SELECT c.CustomerID\nFROM dbo.Customers c;\nEXEC dbo.usp_GetCustomerOrders @Cu|",
+    "expect": {
+      "mustContain": ["@CustomerID"],
+      "mustNotContain": ["@NewPrice", "CustomerName"],
+      "minCount": 1
+    },
+    "note": "param prefix in second statement; dead alias c's columns must not appear"
+  },
+  {
+    "id": "MULTI-071",
+    "family": "multi-statement",
+    "doc": "SELECT * FROM dbo.Products;\nINSERT INTO dbo.Shippers (|",
+    "expect": {
+      "mustContain": ["ShipperName", "Phone"],
+      "mustNotContain": ["ProductName", "Unit"],
+      "minCount": 1
+    },
+    "note": "INSERT column list in second statement scoped to Shippers; prior Products columns absent"
+  },
+  {
+    "id": "MULTI-072",
+    "family": "multi-statement",
+    "doc": "DELETE FROM Sales.Invoices;\nINSERT INTO dbo.Customers (CustomerName, |",
+    "expect": {
+      "mustContain": ["City", "Country", "ContactName"],
+      "mustNotContain": ["InvoiceDate", "TotalAmount"],
+      "minCount": 1
+    },
+    "note": "continuing an INSERT column list after a prior cross-schema DELETE"
+  },
+  {
+    "id": "MULTI-073",
+    "family": "multi-statement",
+    "doc": "SELECT 1;\nINSERT INTO dbo.OrderDetails (OrderID, ProductID, Quantity)\nSELECT o.| FROM dbo.Orders o",
+    "expect": {
+      "mustContain": ["OrderID", "CustomerID"],
+      "mustNotContain": ["Quantity", "OrderDetailID"],
+      "minCount": 1
+    },
+    "note": "INSERT ... SELECT source alias scoped to Orders, not to the insert target"
+  },
+  {
+    "id": "MULTI-074",
+    "family": "multi-statement",
+    "doc": "SELECT * FROM dbo.Employees;\nUPDATE dbo.Customers SET |",
+    "expect": {
+      "mustContain": ["City", "CustomerName", "Country"],
+      "mustNotContain": ["LastName", "FirstName"],
+      "minCount": 1
+    },
+    "note": "UPDATE SET column scoping in the second statement; Employees columns absent"
+  },
+  {
+    "id": "MULTI-075",
+    "family": "multi-statement",
+    "doc": "SELECT ShipperName FROM dbo.Shippers;\nUPDATE dbo.Products SET Pri| = 20 WHERE ProductID = 4",
+    "expect": {
+      "mustContain": ["Price"],
+      "mustNotContain": ["ShipperName", "Phone"],
+      "minCount": 1
+    },
+    "note": "3-char SET column prefix with trailing text after the caret"
+  },
+  {
+    "id": "MULTI-076",
+    "family": "multi-statement",
+    "doc": "SELECT * FROM dbo.Categories;\nUPDATE dbo.Orders SET ShipperID = 2 WHERE |",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate", "CustomerID"],
+      "mustNotContain": ["CategoryName", "Description"],
+      "minCount": 1
+    },
+    "note": "UPDATE WHERE scoping to target table in the second statement"
+  },
+  {
+    "id": "MULTI-077",
+    "family": "multi-statement",
+    "doc": "SELECT 1;\nUPDATE o SET o.ShipperID = 1 FROM dbo.Orders o WHERE o.|",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["ShipperName", "Quantity"],
+      "minCount": 1
+    },
+    "note": "aliased UPDATE ... FROM pattern in second statement; alias o scoped to Orders"
+  },
+  {
+    "id": "MULTI-078",
+    "family": "multi-statement",
+    "doc": "INSERT INTO dbo.Categories (CategoryName) VALUES ('Misc');\nDELETE FROM dbo.Products WHERE |",
+    "expect": {
+      "mustContain": ["ProductID", "Price", "Unit"],
+      "mustNotContain": ["CategoryName", "Description"],
+      "minCount": 1
+    },
+    "note": "DELETE WHERE scoped to Products; the prior INSERT's Categories columns absent"
+  },
+  {
+    "id": "MULTI-079",
+    "family": "multi-statement",
+    "doc": "SELECT * FROM dbo.Suppliers;\nDELETE d FROM dbo.OrderDetails d WHERE d.|",
+    "expect": {
+      "mustContain": ["Quantity", "OrderID", "ProductID"],
+      "mustNotContain": ["SupplierName", "ContactName"],
+      "minCount": 1
+    },
+    "note": "aliased DELETE in second statement; d scoped to OrderDetails"
+  },
+  {
+    "id": "MULTI-080",
+    "family": "multi-statement",
+    "doc": "SELECT e.LastName FROM dbo.Employees e;\nUPDATE c SET c.| FROM dbo.Customers c",
+    "expect": {
+      "mustContain": ["City", "Country", "Address"],
+      "mustNotContain": ["LastName", "Notes"],
+      "minCount": 1
+    },
+    "note": "alias-qualified SET completion in second statement; Employees columns from first absent"
+  },
+  {
+    "id": "MULTI-081",
+    "family": "multi-statement",
+    "doc": "WITH recent AS (SELECT OrderID, OrderDate FROM dbo.Orders) SELECT * FROM recent;\nSELECT * FROM |",
+    "expect": {
+      "mustContain": ["Orders", "Customers"],
+      "mustNotContain": ["recent"],
+      "minCount": 1
+    },
+    "note": "CTE name from the previous statement must not appear in a later FROM"
+  },
+  {
+    "id": "MULTI-082",
+    "family": "multi-statement",
+    "doc": "WITH cte AS (SELECT CustomerID FROM dbo.Customers) SELECT * FROM cte;\nSELECT * FROM c|",
+    "expect": {
+      "mustContain": ["Customers", "Categories"],
+      "mustNotContain": ["cte"],
+      "minCount": 1
+    },
+    "note": "dead CTE name matches the c prefix but must not be offered after the semicolon"
+  },
+  {
+    "id": "MULTI-083",
+    "family": "multi-statement",
+    "doc": "WITH oc AS (SELECT OrderID FROM dbo.Orders) SELECT oc.OrderID FROM oc;\nSELECT oc.|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["OrderID"],
+      "minCount": 0
+    },
+    "note": "CTE alias oc is out of scope in the next statement; its projected column must not appear"
+  },
+  {
+    "id": "MULTI-084",
+    "family": "multi-statement",
+    "doc": "SELECT d.Price FROM (SELECT Price FROM dbo.Products) d;\nSELECT d.| FROM dbo.Employees e",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["Price", "ProductName"],
+      "minCount": 0
+    },
+    "note": "derived-table alias d dead after semicolon; only e (Employees) is in scope"
+  },
+  {
+    "id": "MULTI-085",
+    "family": "multi-statement",
+    "doc": "SELECT 1;\nWITH pc AS (SELECT ProductID, Price FROM dbo.Products)\nSELECT pc.| FROM pc",
+    "expect": {
+      "mustContain": ["ProductID", "Price"],
+      "mustNotContain": ["Unit", "CustomerName"],
+      "minCount": 1
+    },
+    "note": "CTE defined in the SECOND statement works; only projected columns offered"
+  },
+  {
+    "id": "MULTI-086",
+    "family": "multi-statement",
+    "doc": "WITH a AS (SELECT CategoryID FROM dbo.Categories), b AS (SELECT SupplierID FROM dbo.Suppliers) SELECT * FROM a JOIN b ON a.CategoryID = b.SupplierID;\nSELECT * FROM |",
+    "expect": {
+      "mustContain": ["Categories", "Suppliers"],
+      "mustNotContain": ["a", "b"],
+      "minCount": 1
+    },
+    "note": "multiple CTE names from the previous statement must not survive into a later FROM"
+  },
+  {
+    "id": "MULTI-087",
+    "family": "multi-statement",
+    "doc": "SELECT c.City FROM dbo.Customers c;\nUPDATE dbo.Products SET Price = 5 WHERE ProductID = 2;\nSELECT o.| FROM dbo.Orders o",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate", "EmployeeID"],
+      "mustNotContain": ["City", "Price"],
+      "minCount": 1
+    },
+    "note": "third statement after a SELECT and an UPDATE; o scoped to Orders only"
+  },
+  {
+    "id": "MULTI-088",
+    "family": "multi-statement",
+    "doc": "SELECT SupplierName FROM dbo.Suppliers ;  \nSELECT s.Sh| FROM dbo.Shippers s",
+    "expect": {
+      "mustContain": ["ShipperID", "ShipperName"],
+      "mustNotContain": ["SupplierName"],
+      "minCount": 1
+    },
+    "note": "space before semicolon and trailing spaces; Sh prefix on the new Shippers alias"
+  },
+  {
+    "id": "MULTI-089",
+    "family": "multi-statement",
+    "doc": "SELECT 1;;\nSELECT cat.| FROM dbo.Categories cat",
+    "expect": {
+      "mustContain": ["CategoryID", "CategoryName", "Description"],
+      "mustNotContain": ["ProductName", "Unit"],
+      "minCount": 1
+    },
+    "note": "empty statement between semicolons does not break scoping of the following statement"
+  },
+  {
+    "id": "MULTI-090",
+    "family": "multi-statement",
+    "doc": "-- load reference data\nSELECT * FROM dbo.Categories;\n\n-- now inspect orders\nSELECT o.|\nFROM dbo.Orders o\nJOIN dbo.OrderDetails od ON od.OrderID = o.OrderID",
+    "expect": {
+      "mustContain": ["OrderDate", "CustomerID", "ShipperID"],
+      "mustNotContain": ["Quantity", "CategoryName"],
+      "minCount": 1
+    },
+    "note": "realistic commented script; o scoped to Orders despite the join partner and prior statement"
+  }
+]

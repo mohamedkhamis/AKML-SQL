@@ -68,9 +68,11 @@ public static class WebHistoryLogic
     };
 
     /// <summary>Builds the engine write payload from a completed execute + the active connection.
-    /// The engine stamps <c>executed_at</c> and <c>content_hash</c> itself.</summary>
+    /// The engine stamps <c>executed_at</c> and <c>content_hash</c> itself. <paramref name="sessionKey"/>
+    /// is the persisted <see cref="EditorSessionKeys"/> grouping key (see <see cref="HistoryRecordRequest.SessionKey"/>);
+    /// null from callers that don't have one yet, which the engine tolerates.</summary>
     public static HistoryRecordRequest BuildRecordRequest(
-        string sql, ExecuteQueryResult result, string? server, string? database) => new()
+        string sql, ExecuteQueryResult result, string? server, string? database, string? sessionKey = null) => new()
     {
         SqlText = sql ?? string.Empty,
         Truncated = false,
@@ -81,5 +83,6 @@ public static class WebHistoryLogic
         Status = MapStatus(result.Status),
         ErrorMessage = result.ErrorMessage,
         Source = "web",
+        SessionKey = sessionKey,
     };
 }

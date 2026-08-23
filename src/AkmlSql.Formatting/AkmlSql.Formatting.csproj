@@ -19,4 +19,22 @@
     </AssemblyAttribute>
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Spec 031 addendum: ship the built-in formatting styles next to the assembly so
+         ProfileManager.CreateDefault() (assemblyDir/profiles) finds them at runtime. Verified via
+         an actual `dotnet publish` that no such rule previously existed; the six pre-existing
+         built-ins were never reaching any build output. Wildcard covers current and future
+         BuiltIn/*.akmlstyle files without per-file entries. Same Content+Link+CopyToPublishDirectory
+         idiom as AkmlSql.Engine's SnippetPack (see AkmlSql.Engine.csproj). -->
+    <Content Include="Profiles\BuiltIn\*.akmlstyle" Link="profiles\%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <!-- Spec 032 J3: ALSO embed the two product-default styles so the Blazor WASM web
+         edition (no filesystem) can surface the same built-ins as the desktop
+         (ProfileStore reads them via GetManifestResourceStream) — reuse, not re-definition. -->
+    <EmbeddedResource Include="Profiles\BuiltIn\khamis-style.akmlstyle" />
+    <EmbeddedResource Include="Profiles\BuiltIn\collapsed.akmlstyle" />
+  </ItemGroup>
+
 </Project>

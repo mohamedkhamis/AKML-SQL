@@ -1,0 +1,442 @@
+[
+  {
+    "id": "BRKT-001",
+    "family": "brackets-quoted",
+    "doc": "SELECT * FROM [dbo].[Cust|",
+    "expect": {
+      "mustContain": ["Customers"],
+      "mustNotContain": ["Orders", "Invoices"],
+      "minCount": 1
+    },
+    "note": "bracketed 4-char table prefix under [dbo]; Sales.Invoices must not leak, Orders fails prefix"
+  },
+  {
+    "id": "BRKT-002",
+    "family": "brackets-quoted",
+    "doc": "select * from [dbo].[|",
+    "expect": {
+      "mustContain": ["Customers", "Orders", "Products"],
+      "mustNotContain": ["Invoices"],
+      "minCount": 3
+    },
+    "note": "lowercase keywords, empty bracket prefix after [dbo]. lists dbo tables only"
+  },
+  {
+    "id": "BRKT-003",
+    "family": "brackets-quoted",
+    "doc": "SELECT * FROM [Sales].[|",
+    "expect": {
+      "mustContain": ["Invoices"],
+      "mustNotContain": ["Customers", "Products"],
+      "minCount": 1
+    },
+    "note": "empty bracket prefix under [Sales] schema; dbo tables must not appear"
+  },
+  {
+    "id": "BRKT-004",
+    "family": "brackets-quoted",
+    "doc": "SELECT * FROM [Sales].[Inv|",
+    "expect": {
+      "mustContain": ["Invoices"],
+      "mustNotContain": ["InvoiceID", "Customers"],
+      "minCount": 1
+    },
+    "note": "bracketed prefix in Sales schema; column InvoiceID must not appear in table position"
+  },
+  {
+    "id": "BRKT-005",
+    "family": "brackets-quoted",
+    "doc": "SELECT * FROM [Ord|",
+    "expect": {
+      "mustContain": ["Orders", "OrderDetails"],
+      "mustNotContain": ["OrderID", "Products"],
+      "minCount": 2
+    },
+    "note": "schema-less bracketed table prefix; both Order* tables match, columns do not belong here"
+  },
+  {
+    "id": "BRKT-006",
+    "family": "brackets-quoted",
+    "doc": "SELECT [|] FROM dbo.Customers",
+    "expect": {
+      "mustContain": ["CustomerID", "CustomerName", "City"],
+      "mustNotContain": ["OrderID", "ProductName"],
+      "minCount": 3
+    },
+    "note": "caret inside auto-closed brackets in select list scoped to Customers"
+  },
+  {
+    "id": "BRKT-007",
+    "family": "brackets-quoted",
+    "doc": "SELECT c.[Cust| FROM [dbo].[Customers] AS c",
+    "expect": {
+      "mustContain": ["CustomerID", "CustomerName"],
+      "mustNotContain": ["ContactName", "OrderID"],
+      "minCount": 2
+    },
+    "note": "alias-qualified bracketed column prefix; ContactName fails prefix, OrderID wrong table"
+  },
+  {
+    "id": "BRKT-008",
+    "family": "brackets-quoted",
+    "doc": "SELECT [o].[| FROM [dbo].[Orders] [o]",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate", "ShipperID"],
+      "mustNotContain": ["ProductID", "CustomerName"],
+      "minCount": 3
+    },
+    "note": "bracketed alias [o] resolves to Orders; empty bracket column prefix"
+  },
+  {
+    "id": "BRKT-009",
+    "family": "brackets-quoted",
+    "doc": "SELECT * FROM \"C|",
+    "expect": {
+      "mustContain": ["Customers", "Categories"],
+      "mustNotContain": ["Orders"],
+      "minCount": 2
+    },
+    "note": "quoted-identifier 1-char table prefix; C matches Customers and Categories only"
+  },
+  {
+    "id": "BRKT-010",
+    "family": "brackets-quoted",
+    "doc": "SELECT * FROM \"dbo\".\"|",
+    "expect": {
+      "mustContain": ["Orders", "Suppliers"],
+      "mustNotContain": ["Invoices"],
+      "minCount": 2
+    },
+    "note": "quoted schema then quoted empty prefix; scoped to dbo objects"
+  },
+  {
+    "id": "BRKT-011",
+    "family": "brackets-quoted",
+    "doc": "SELECT \"Prod| FROM dbo.Products",
+    "expect": {
+      "mustContain": ["ProductID", "ProductName"],
+      "mustNotContain": ["Price", "CategoryName"],
+      "minCount": 2
+    },
+    "note": "quoted column prefix scoped to Products; Price fails prefix, CategoryName is not a Products column"
+  },
+  {
+    "id": "BRKT-012",
+    "family": "brackets-quoted",
+    "doc": "SELECT o.OrderID\nFROM [dbo].[Orders] o\nJOIN [dbo].[Order|",
+    "expect": {
+      "mustContain": ["OrderDetails", "Orders"],
+      "mustNotContain": ["OrderDate", "Invoices"],
+      "minCount": 2
+    },
+    "note": "multi-line JOIN with bracketed 5-char prefix; column OrderDate must not appear in table position"
+  },
+  {
+    "id": "BRKT-013",
+    "family": "brackets-quoted",
+    "doc": "SELECT *\nFROM [dbo].[Orders] o\nJOIN [dbo].[OrderDetails] od ON od.[|",
+    "expect": {
+      "mustContain": ["OrderID", "ProductID", "Quantity"],
+      "mustNotContain": ["CustomerName", "Price"],
+      "minCount": 3
+    },
+    "note": "multi-line ON clause, bracketed empty prefix on join-target alias od"
+  },
+  {
+    "id": "BRKT-014",
+    "family": "brackets-quoted",
+    "doc": "SELECT * FROM [dbo].[Products] WHERE [Pri|",
+    "expect": {
+      "mustContain": ["Price"],
+      "mustNotContain": ["ProductName", "Quantity"],
+      "minCount": 1
+    },
+    "note": "WHERE-clause bracketed 3-char column prefix; ProductName fails prefix, Quantity wrong table"
+  },
+  {
+    "id": "BRKT-015",
+    "family": "brackets-quoted",
+    "doc": "UPDATE [dbo].[Products] SET [|",
+    "expect": {
+      "mustContain": ["Price", "ProductName", "Unit"],
+      "mustNotContain": ["OrderID", "CustomerName"],
+      "minCount": 3
+    },
+    "note": "UPDATE SET with bracketed empty prefix scoped to bracketed target table"
+  },
+  {
+    "id": "BRKT-016",
+    "family": "brackets-quoted",
+    "doc": "INSERT INTO [dbo].[Shippers] ([|",
+    "expect": {
+      "mustContain": ["ShipperName", "Phone"],
+      "mustNotContain": ["OrderID", "ProductName"],
+      "minCount": 2
+    },
+    "note": "INSERT column list opened with bracket, scoped to bracketed Shippers"
+  },
+  {
+    "id": "BRKT-017",
+    "family": "brackets-quoted",
+    "doc": "SELECT * FROM dbo.Customers c; SELECT * FROM [dbo].[Emp|",
+    "expect": {
+      "mustContain": ["Employees"],
+      "mustNotContain": ["EmployeeID", "Customers"],
+      "minCount": 1
+    },
+    "note": "prior ;-terminated statement, then bracketed table prefix in a new statement"
+  },
+  {
+    "id": "BRKT-018",
+    "family": "brackets-quoted",
+    "doc": "SELECT c.City FROM dbo.Customers c;\nSELECT s.[| FROM [dbo].[Suppliers] s",
+    "expect": {
+      "mustContain": ["SupplierID", "SupplierName", "City"],
+      "mustNotContain": ["CustomerID", "CustomerName"],
+      "minCount": 3
+    },
+    "note": "prior statement's Customers scope must not leak into bracketed column list of second statement"
+  },
+  {
+    "id": "BRKT-019",
+    "family": "brackets-quoted",
+    "doc": "SELECT * FROM [dbo].[vw_|",
+    "expect": {
+      "mustContain": ["vw_CustomerOrders", "vw_ProductCatalog"],
+      "mustNotContain": ["Customers", "usp_GetCustomerOrders"],
+      "minCount": 2
+    },
+    "note": "bracketed view prefix; base tables and procs fail the vw_ prefix"
+  },
+  {
+    "id": "BRKT-020",
+    "family": "brackets-quoted",
+    "doc": "SELECT v.[Cat| FROM [dbo].[vw_ProductCatalog] v",
+    "expect": {
+      "mustContain": ["CategoryName"],
+      "mustNotContain": ["CategoryID", "Description"],
+      "minCount": 1
+    },
+    "note": "bracketed column prefix on view alias; CategoryID is not a vw_ProductCatalog column"
+  },
+  {
+    "id": "BRKT-021",
+    "family": "brackets-quoted",
+    "doc": "SELECT  *  FROM  dbo.[Sup|",
+    "expect": {
+      "mustContain": ["Suppliers"],
+      "mustNotContain": ["SupplierID", "Invoices"],
+      "minCount": 1
+    },
+    "note": "unbracketed schema + bracketed table prefix with extra whitespace"
+  },
+  {
+    "id": "BRKT-022",
+    "family": "brackets-quoted",
+    "doc": "select * from [dbo].[cust|",
+    "expect": {
+      "mustContain": ["Customers"],
+      "mustNotContain": ["Orders"],
+      "minCount": 1
+    },
+    "note": "all-lowercase bracketed prefix must still match Customers case-insensitively"
+  },
+  {
+    "id": "BRKT-023",
+    "family": "brackets-quoted",
+    "doc": "SELECT p.[PROD| FROM [dbo].[Products] p",
+    "expect": {
+      "mustContain": ["ProductID", "ProductName"],
+      "mustNotContain": ["Price", "OrderID"],
+      "minCount": 2
+    },
+    "note": "UPPERCASE bracketed column prefix matches Product* case-insensitively"
+  },
+  {
+    "id": "BRKT-024",
+    "family": "brackets-quoted",
+    "doc": "SELECT * FROM \"oRd|",
+    "expect": {
+      "mustContain": ["Orders", "OrderDetails"],
+      "mustNotContain": ["OrderDate"],
+      "minCount": 2
+    },
+    "note": "mixed-case quoted table prefix; column OrderDate must not appear in table position"
+  },
+  {
+    "id": "BRKT-025",
+    "family": "brackets-quoted",
+    "doc": "SELECT\n    \"Emp|\nFROM dbo.Employees",
+    "expect": {
+      "mustContain": ["EmployeeID"],
+      "mustNotContain": ["LastName", "CustomerID"],
+      "minCount": 1
+    },
+    "note": "multi-line select list with quoted column prefix; only EmployeeID matches Emp"
+  },
+  {
+    "id": "BRKT-026",
+    "family": "brackets-quoted",
+    "doc": "SELECT * FROM [Northwind_AutoTest].[dbo].[Cat|",
+    "expect": {
+      "mustContain": ["Categories"],
+      "mustNotContain": ["CategoryID", "Invoices"],
+      "minCount": 1
+    },
+    "note": "three-part fully bracketed name with 3-char table prefix"
+  },
+  {
+    "id": "BRKT-027",
+    "family": "brackets-quoted",
+    "doc": "SELECT o.OrderID\nFROM dbo.Orders o\nJOIN [Sales].[|",
+    "expect": {
+      "mustContain": ["Invoices"],
+      "mustNotContain": ["Customers", "Orders"],
+      "minCount": 1
+    },
+    "note": "multi-line JOIN into bracketed Sales schema with empty prefix; dbo tables excluded"
+  },
+  {
+    "id": "BRKT-028",
+    "family": "brackets-quoted",
+    "doc": "SELECT * FROM [dbo].[Orders] AS [ord] WHERE [ord].[|",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate", "ShipperID"],
+      "mustNotContain": ["ProductName", "InvoiceID"],
+      "minCount": 3
+    },
+    "note": "bracketed multi-char alias [ord] dereferenced with bracketed empty column prefix in WHERE"
+  },
+  {
+    "id": "BRKT-029",
+    "family": "brackets-quoted",
+    "doc": "SELECT \"inv\".| FROM Sales.Invoices AS \"inv\"",
+    "expect": {
+      "mustContain": ["InvoiceID", "TotalAmount", "Paid"],
+      "mustNotContain": ["OrderDate", "Price"],
+      "minCount": 3
+    },
+    "note": "quoted alias dereference; Invoices columns only, no Orders/Products columns"
+  },
+  {
+    "id": "BRKT-030",
+    "family": "brackets-quoted",
+    "doc": "UPDATE dbo.Products SET Price = 10 WHERE ProductID = 1;\nSELECT * FROM \"Ship|",
+    "expect": {
+      "mustContain": ["Shippers"],
+      "mustNotContain": ["ShipperID", "Products"],
+      "minCount": 1
+    },
+    "note": "prior ;-terminated UPDATE, then quoted table prefix in a fresh statement"
+  },
+  {
+    "id": "BRKT-031",
+    "family": "brackets-quoted",
+    "doc": "SELECT x.[| FROM [dbo].[NoSuchTable] x",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["CustomerID", "OrderID", "ProductID"],
+      "minCount": 0
+    },
+    "note": "negative: alias over a fake bracketed table must not surface real schema columns"
+  },
+  {
+    "id": "BRKT-032",
+    "family": "brackets-quoted",
+    "doc": "SELECT CategoryName FROM dbo.Categories;  SELECT * FROM [dbo].[S|",
+    "expect": {
+      "mustContain": ["Shippers", "Suppliers"],
+      "mustNotContain": ["Customers", "Invoices"],
+      "minCount": 2
+    },
+    "note": "prior ;-terminated statement, then 1-char bracketed table prefix matching two dbo tables"
+  },
+  {
+    "id": "BRKT-033",
+    "family": "brackets-quoted",
+    "doc": "SELECT od.[Q| FROM [dbo].[OrderDetails] od",
+    "expect": {
+      "mustContain": ["Quantity"],
+      "mustNotContain": ["OrderID", "Price"],
+      "minCount": 1
+    },
+    "note": "1-char bracketed column prefix on OrderDetails alias; OrderID fails prefix, Price wrong table"
+  },
+  {
+    "id": "BRKT-034",
+    "family": "brackets-quoted",
+    "doc": "INSERT INTO [dbo].[OrderDetails]\n    ([OrderID], [ProductID], [|",
+    "expect": {
+      "mustContain": ["Quantity"],
+      "mustNotContain": ["CustomerName", "TotalAmount"],
+      "minCount": 1
+    },
+    "note": "multi-line INSERT column list continuing with a new bracketed entry"
+  },
+  {
+    "id": "BRKT-035",
+    "family": "brackets-quoted",
+    "doc": "DELETE FROM [dbo].[Categories] WHERE [Cat|",
+    "expect": {
+      "mustContain": ["CategoryID", "CategoryName"],
+      "mustNotContain": ["Description", "ProductID"],
+      "minCount": 2
+    },
+    "note": "DELETE WHERE with bracketed 3-char column prefix scoped to Categories"
+  },
+  {
+    "id": "BRKT-036",
+    "family": "brackets-quoted",
+    "doc": "SELECT \"Country\", COUNT(*)\nFROM dbo.Customers\nGROUP BY \"Cou|",
+    "expect": {
+      "mustContain": ["Country"],
+      "mustNotContain": ["City", "Phone"],
+      "minCount": 1
+    },
+    "note": "multi-line GROUP BY with quoted column prefix; Phone is not a Customers column"
+  },
+  {
+    "id": "BRKT-037",
+    "family": "brackets-quoted",
+    "doc": "SELECT p.Price FROM dbo.Products p;\nSELECT c.[|] FROM [dbo].[Categories] c",
+    "expect": {
+      "mustContain": ["CategoryID", "CategoryName", "Description"],
+      "mustNotContain": ["Price", "ProductName"],
+      "minCount": 3
+    },
+    "note": "alias c rebinds to Categories after prior ;-statement; Products columns must not leak"
+  },
+  {
+    "id": "BRKT-038",
+    "family": "brackets-quoted",
+    "doc": "SELECT ShipperName FROM [dbo].[Shippers] ORDER BY [|",
+    "expect": {
+      "mustContain": ["ShipperName", "Phone", "ShipperID"],
+      "mustNotContain": ["CustomerName"],
+      "minCount": 3
+    },
+    "note": "ORDER BY bracketed empty prefix scoped to bracketed Shippers"
+  },
+  {
+    "id": "BRKT-039",
+    "family": "brackets-quoted",
+    "doc": "SELECT * FROM dbo.Orders;\nEXEC [dbo].[usp_|",
+    "expect": {
+      "mustContain": ["usp_GetCustomerOrders", "usp_UpdateProductPrice"],
+      "mustNotContain": ["usp_MarkInvoicePaid"],
+      "minCount": 2
+    },
+    "note": "prior ;-statement then bracketed proc prefix under [dbo]; Sales proc must not appear"
+  },
+  {
+    "id": "BRKT-040",
+    "family": "brackets-quoted",
+    "doc": "SELECT * FROM \"Sales\".\"In|",
+    "expect": {
+      "mustContain": ["Invoices"],
+      "mustNotContain": ["InvoiceID", "Employees"],
+      "minCount": 1
+    },
+    "note": "quoted schema + quoted 2-char table prefix scoped to Sales"
+  }
+]

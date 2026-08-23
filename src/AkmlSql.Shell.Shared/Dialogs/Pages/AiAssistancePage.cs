@@ -24,8 +24,24 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             ctx.RegisterSearch("AI Provider", "Select the AI provider for SQL assistance features", "Dropdown", rowProvider);
 
             var (rowModel, txtModel) = ctx.Rows.AddTextInput(panel,
-                "Model", "e.g. gpt-4o, claude-sonnet-4-20250514, gemini-pro");
-            ctx.RegisterSearch("Model", "e.g. gpt-4o, claude-sonnet-4-20250514, gemini-pro", "Text", rowModel);
+                "Model", "e.g. gpt-4o, claude-sonnet-4-6, gemini-flash-latest");
+            ctx.RegisterSearch("Model", "e.g. gpt-4o, claude-sonnet-4-6, gemini-flash-latest", "Text", rowModel);
+
+            // Provider switch: auto-correct an obviously foreign model. "claude-sonnet-5" left
+            // behind on an Anthropic → Gemini switch reached Google's API verbatim and died with
+            // a raw 404 in the chat panel. Empty or foreign-family text gets the new provider's
+            // default; custom/unrecognised names are the user's business and stay untouched.
+            // (Safe during Load: the provider combo is set BEFORE the stored model overwrites
+            // whatever this writes.)
+            cboProvider.SelectionChanged += (_, _) =>
+            {
+                var suggested = AiModelFamily.DefaultModelFor(cboProvider.SelectedItem as string);
+                if (suggested == null) return;
+                var current = (txtModel.Text ?? string.Empty).Trim();
+                var family = AiModelFamily.Detect(current);
+                if (current.Length == 0 || (family != null && family != AiModelFamily.Detect(suggested)))
+                    txtModel.Text = suggested;
+            };
 
             var (rowApiKey, txtApiKey) = ctx.Rows.AddTextInput(panel,
                 "API Key", "Your API key for the selected provider", isPassword: true);
@@ -46,7 +62,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                         "  • Anthropic (Claude): console.anthropic.com → API Keys" +
                         "  —  example model: claude-sonnet-4-6\n" +
                         "  • Google (Gemini): aistudio.google.com → Get API Key" +
-                        "  —  example model: gemini-2.0-flash\n" +
+                        "  —  example model: gemini-flash-latest\n" +
                         "  • OpenAI: platform.openai.com → API Keys" +
                         "  —  example model: gpt-4o\n\n" +
                         "Keys are stored encrypted with Windows DPAPI and never written in plain text.",
@@ -70,6 +86,16 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 new[] { "Schema Only", "Full", "Anonymous", "Offline", "Disabled" },
                 "Controls what data is sent to the AI provider");
             ctx.RegisterSearch("Privacy mode", "Controls what data is sent to the AI provider", "Dropdown", rowPrivacy);
+
+            // Cloud-provider consent gate. The engine refuses to send prompts/schema to a NON-LOCAL
+            // provider (Anthropic, OpenAI, Gemini, …) until the user consents here — otherwise AI
+            // Chat and every AI feature fail with "CONSENT_REQUIRED: Data will be sent to your AI
+            // provider. Please confirm in settings." Local providers (Ollama, LM Studio) never need
+            // this. Unchecked = consent withheld (privacy-first default).
+            const string consentTip = "Required before a cloud provider (Anthropic, OpenAI, Gemini) receives your prompts and schema. Local providers (Ollama, LM Studio) never need this. Leave off to block cloud AI.";
+            var (rowConsent, chkConsent) = ctx.Rows.AddToggle(panel,
+                "Consent to cloud AI data sharing", consentTip);
+            ctx.RegisterSearch("Consent to cloud AI data sharing", consentTip, "Toggle", rowConsent);
 
             ctx.Rows.AddGroupSeparator(panel);
             ctx.Rows.AddGroupHeader(panel, "Parameters");
@@ -131,7 +157,8 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
 
             return new AiAssistanceControls(cboProvider, txtModel, txtApiKey, txtEndpoint, cboPrivacy,
                 sldMax, lblMax, sldTemp, lblTemp, sldTimeout, lblTimeout, sldRetries, lblRetries,
-                chkTextToSql, chkExplain, chkFix, chkOptimize, chkIndex, chkChat, chkInline, chkAutoFix);
+                chkTextToSql, chkExplain, chkFix, chkOptimize, chkIndex, chkChat, chkInline, chkAutoFix,
+                chkConsent);
         }
     }
 
@@ -142,6 +169,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         private readonly TextBox _apiKey;
         private readonly TextBox _endpoint;
         private readonly ComboBox _privacy;
+        private readonly CheckBox _cloudConsent;
         private readonly Slider _maxTokens;
         private readonly TextBlock _maxTokensLabel;
         private readonly Slider _temperature;
@@ -164,13 +192,15 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             Slider sldMax, TextBlock lblMax, Slider sldTemp, TextBlock lblTemp,
             Slider sldTimeout, TextBlock lblTimeout, Slider sldRetries, TextBlock lblRetries,
             CheckBox textToSql, CheckBox explain, CheckBox fix, CheckBox optimize,
-            CheckBox idx, CheckBox chat, CheckBox inline, CheckBox autoFix)
+            CheckBox idx, CheckBox chat, CheckBox inline, CheckBox autoFix,
+            CheckBox cloudConsent)
         {
             _provider = provider;
             _model = model;
             _apiKey = apiKey;
             _endpoint = endpoint;
             _privacy = privacy;
+            _cloudConsent = cloudConsent;
             _maxTokens = sldMax;
             _maxTokensLabel = lblMax;
             _temperature = sldTemp;
@@ -214,6 +244,8 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 "disabled"  => 4,
                 _           => 0, // schemaOnly
             };
+            // Stored as "consent required?"; the checkbox shows "consent granted?" (the inverse).
+            _cloudConsent.IsChecked = !ai.PrivacyConsentRequired;
             _maxTokens.Value = ai.MaxTokens;
             _maxTokensLabel.Text = ai.MaxTokens.ToString(CultureInfo.InvariantCulture);
             _temperature.Value = (int)(ai.Temperature * 10);
@@ -257,6 +289,8 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 4 => "disabled",
                 _ => "schemaOnly",
             };
+            // Unchecked → consent withheld → the engine keeps requiring it (privacy-first default).
+            settings.Ai.PrivacyConsentRequired = _cloudConsent.IsChecked != true;
             settings.Ai.MaxTokens = (int)_maxTokens.Value;
             settings.Ai.Temperature = (int)_temperature.Value / 10.0;
             settings.Ai.Timeout = (int)_timeout.Value;

@@ -245,7 +245,9 @@ public class LineBreakDeciderTests
             }
         };
         var d = Create(profile);
-        var result = Decide(d, TSqlTokenType.Join, "JOIN");
+        // Spec 032 J1: JOIN breaks only in a genuinely TRACKED join context — in frozen
+        // scopes (ClauseContext.None inside parens) it stays inline for idempotency.
+        var result = Decide(d, TSqlTokenType.Join, "JOIN", ClauseContext.From);
         Assert.Equal(BreakType.NewLine, result.Break);
     }
 

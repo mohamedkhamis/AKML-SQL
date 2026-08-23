@@ -431,6 +431,10 @@
     private EditorComponent? _editor;
     private string _initialText = string.Empty;
     private string _currentText = string.Empty;
+    // Query-session grouping key (T9) -- minted/persisted once per page load by EditorSessionKeys,
+    // then threaded through every debounced session save and every history record so a reload keeps
+    // landing in the SAME history session.
+    private string _sessionKey = string.Empty;
     private CodeAnalysisResponse? _findings;
     private FormattingProfile? _activeProfile;
     private string? _status;
@@ -546,6 +550,11 @@
             _currentText = restored.DocumentText;
         }
 
+        // T9: get-or-create the persisted query-session grouping key, reusing the SAME record
+        // just restored above (avoids a second IndexedDB round-trip) -- mints/persists a fresh
+        // key on first use or after a reset.
+        _sessionKey = await EditorSessionKeys.GetOrCreateAsync(SessionStore, restored);
+
         // T038: load the active profile.
         var activeId = await ProfileStore.GetActiveIdAsync();
         var active = await ProfileStore.GetAsync(activeId);
@@ -658,7 +667,7 @@
         // Record into SQL History (fire-and-forget) — NoConnection isn't recorded (nothing ran).
         if (WebHistoryLogic.ShouldRecord(result.Status))
         {
-            var rec = WebHistoryLogic.BuildRecordRequest(sql, result, SqlConn.Server, SqlConn.Database);
+            var rec = WebHistoryLogic.BuildRecordRequest(sql, result, SqlConn.Server, SqlConn.Database, _sessionKey);
             _ = History.RecordAsync(rec, CancellationToken.None);
         }
 
@@ -798,13 +807,12 @@
     private async Task OnTextChangedAsync(string newText)
     {
         _currentText = newText;
-        // T051 debounced save (the store applies its own 500 ms debounce).
-        await SessionStore.SaveAsync(new EditorSessionRecord
-        {
-            DocumentText = newText,
-            CursorOffset = 0,
-            ActiveProfileId = await ProfileStore.GetActiveIdAsync(),
-        });
+        // T051 debounced save (the store applies its own 500 ms debounce). Routed through
+        // EditorSessionKeys.BuildTextChangeRecord so _sessionKey is carried forward -- SaveAsync
+        // overwrites the whole persisted record, so omitting it here would wipe the key on the very
+        // next keystroke and defeat GetOrCreateAsync's persistence (see that helper's doc comment).
+        await SessionStore.SaveAsync(EditorSessionKeys.BuildTextChangeRecord(
+            _sessionKey, newText, await ProfileStore.GetActiveIdAsync()));
     }
 
     private async Task OnProfileChangedAsync(ProfileRecord record)

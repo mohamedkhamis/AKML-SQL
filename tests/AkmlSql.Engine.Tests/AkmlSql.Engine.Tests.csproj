@@ -49,4 +49,11 @@
     <EmbeddedResource Include="Refactoring\Corpus\corpus05_stored_proc.sql" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Spec 031 T8: local copy of the Formatting.Tests fixture (same pattern as that
+         project's own "Fixtures\**" entry) so ProfileImportHandlerTests can load the
+         real-world MohamedKhamis Redgate JSON export via AppContext.BaseDirectory. -->
+    <None Update="Fixtures\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

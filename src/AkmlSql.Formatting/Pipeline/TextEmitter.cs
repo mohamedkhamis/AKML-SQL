@@ -26,31 +26,48 @@ public class TextEmitter
         // treated as a no-op, preventing silently wrong output.
         bool commentFormattingActive = profile.Comments.MultilineFormatting == "normaliseIndent";
 
+        // A '--' line comment runs to end-of-line, so whatever follows on the same line is swallowed
+        // into the comment (and lost). Track when the previously-emitted text ended in an
+        // un-terminated line comment so the next token is forced onto a new line even if layout gave
+        // it no break (e.g. a leading comment before the first statement, where the statement's first
+        // token is break-suppressed). Comments between statements already get a break and are fine.
+        bool prevWasLineComment = false;
+
         foreach (var node in nodes)
         {
             if (node.IsInNoformatRegion)
             {
                 sb.Append(node.OriginalText);
+                prevWasLineComment = false;
                 continue;
             }
 
-            switch (node.PrecedingBreak)
+            if (prevWasLineComment && node.PrecedingBreak == BreakType.None)
             {
-                case BreakType.EmptyLine:
-                    sb.Append('\n');
-                    sb.Append('\n');
-                    AppendLineStart(sb, node, useTabs, tabSize);
-                    break;
+                // Terminate the dangling line comment so this token isn't fused into it.
+                sb.Append('\n');
+                AppendLineStart(sb, node, useTabs, tabSize);
+            }
+            else
+            {
+                switch (node.PrecedingBreak)
+                {
+                    case BreakType.EmptyLine:
+                        sb.Append('\n');
+                        sb.Append('\n');
+                        AppendLineStart(sb, node, useTabs, tabSize);
+                        break;
 
-                case BreakType.NewLine:
-                    sb.Append('\n');
-                    AppendLineStart(sb, node, useTabs, tabSize);
-                    break;
+                    case BreakType.NewLine:
+                        sb.Append('\n');
+                        AppendLineStart(sb, node, useTabs, tabSize);
+                        break;
 
-                case BreakType.None:
-                    if (node.PrecedingSpaces > 0)
-                        sb.Append(' ', node.PrecedingSpaces);
-                    break;
+                    case BreakType.None:
+                        if (node.PrecedingSpaces > 0)
+                            sb.Append(' ', node.PrecedingSpaces);
+                        break;
+                }
             }
 
             // Opt-in comment body formatting — only when MultilineFormatting == "normaliseIndent".
@@ -79,6 +96,11 @@ public class TextEmitter
                 sb.Append(' ');
                 sb.Append(node.TrailingComment.Text.TrimEnd());
             }
+
+            // Did this node's emission end in an un-terminated '--' line comment? (Block comments
+            // '/* */' are self-terminating; only '--' swallows the following token.)
+            var lastEmitted = node.TrailingComment?.Text ?? node.FormattedText;
+            prevWasLineComment = lastEmitted.TrimStart().StartsWith("--", System.StringComparison.Ordinal);
         }
 
         var result = sb.ToString();

@@ -52,7 +52,7 @@ It is created automatically on first run with all defaults. The file is written 
 
   "formatter": {
     "enabled": true,
-    "activeProfile": "Default",
+    "activeProfile": "Khamis Style",
     "formatOnPaste": false,
     "formatOnSave": false,
     "formatOnDelimiter": false,
@@ -153,7 +153,7 @@ It is created automatically on first run with all defaults. The file is written 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `enabled` | bool | true | Master switch for the formatter |
-| `activeProfile` | string | "Default" | Name of the active formatting profile |
+| `activeProfile` | string | "Khamis Style" | Name of the active formatting profile |
 | `formatOnPaste` | bool | false | Auto-format SQL when pasting into the editor |
 | `formatOnSave` | bool | false | Auto-format when saving a file |
 | `formatOnDelimiter` | bool | false | Auto-format when typing `;` or `GO` |

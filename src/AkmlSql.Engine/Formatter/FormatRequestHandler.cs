@@ -17,6 +17,10 @@ namespace AkmlSql.Engine.Formatter;
 
 public class FormatRequestHandler(ProfileManager profileManager)
 {
+    /// <summary>One profile-payload size cap shared by save and import (mirrors
+    /// SnippetRequestHandler's 1 MB server-side cap) — the two limits must never drift.</summary>
+    private const int MaxProfileJsonBytes = 1024 * 1024;
+
     private readonly FormatterPipeline _pipeline = new();
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _bulkSessions = new();
 
@@ -24,7 +28,7 @@ public class FormatRequestHandler(ProfileManager profileManager)
     {
         try
         {
-            var profile = LoadProfile(request.ProfileName);
+            var profile = LoadProfile(request.ProfileName, out var fallbackWarning);
             var result = _pipeline.Format(request.Text, profile);
 
             return new FormatResponse
@@ -34,6 +38,7 @@ public class FormatRequestHandler(ProfileManager profileManager)
                 WasModified = result.WasModified,
                 ValidationPassed = result.ValidationPassed,
                 ElapsedMs = result.ElapsedMs,
+                ProfileFallbackWarning = fallbackWarning,
                 Diagnostics = result.Diagnostics.Select(d => new FormatDiagnosticInfo
                 {
                     Severity = (int)d.Severity,
@@ -295,6 +300,10 @@ public class FormatRequestHandler(ProfileManager profileManager)
     {
         try
         {
+            // Spec 033 hardening — Save previously accepted unbounded JSON from the pipe.
+            if (request.ProfileJson != null && request.ProfileJson.Length > MaxProfileJsonBytes)
+                return new ProfileSaveResponse { Success = false, ErrorMessage = "Profile JSON exceeds the 1 MB limit." };
+
             var profile = ProfileSerializer.Deserialize(request.ProfileJson);
             profileManager.Save(profile);
             return new ProfileSaveResponse { Success = true };
@@ -306,17 +315,73 @@ public class FormatRequestHandler(ProfileManager profileManager)
         }
     }
 
+    /// <summary>
+    /// Spec 033 — Format Styles editor load-on-select. Returns the stored .akmlstyle file text
+    /// VERBATIM via <see cref="ProfileManager.TryReadRaw"/> (re-serializing would bump
+    /// <c>metadata.modified</c> and drop unknown nested fields), plus the directory-derived
+    /// read-only flag. Never creates or modifies anything.
+    /// </summary>
+    public ProfileGetResponse HandleProfileGet(ProfileGetRequest request)
+    {
+        try
+        {
+            if (!profileManager.TryReadRaw(request.Name, out var json, out var isBuiltIn))
+                return new ProfileGetResponse
+                {
+                    Success = false,
+                    ErrorMessage = $"Profile '{request.Name}' was not found."
+                };
+
+            return new ProfileGetResponse
+            {
+                Success = true,
+                Name = request.Name,
+                ProfileJson = json,
+                IsBuiltIn = isBuiltIn
+            };
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Profile get failed ({Name})", request.Name);
+            return new ProfileGetResponse { Success = false, ErrorMessage = ex.Message };
+        }
+    }
+
     public ProfileDeleteResponse HandleProfileDelete(ProfileDeleteRequest request)
     {
         try
         {
-            profileManager.Delete(request.Name);
-            return new ProfileDeleteResponse { Success = true };
+            // Spec 033 fix — Delete's bool was previously discarded, so deleting a
+            // nonexistent profile reported Success=true.
+            var deleted = profileManager.Delete(request.Name);
+            return deleted
+                ? new ProfileDeleteResponse { Success = true }
+                : new ProfileDeleteResponse { Success = false, ErrorMessage = $"Profile '{request.Name}' was not found." };
         }
         catch (Exception ex)
         {
             Log.Error(ex, "Profile delete failed");
             return new ProfileDeleteResponse { Success = false, ErrorMessage = ex.Message };
+        }
+    }
+
+    /// <summary>
+    /// Spec 033 — atomic engine-side rename of a custom profile (filename + JSON metadata.name
+    /// + .source.json sidecar in one transaction via <see cref="ProfileManager.Rename"/>).
+    /// Never touches config.json: after renaming the ACTIVE style, the shell caller updates
+    /// <c>Formatter.ActiveProfile</c> itself or formatting silently falls back to defaults.
+    /// </summary>
+    public ProfileRenameResponse HandleProfileRename(ProfileRenameRequest request)
+    {
+        try
+        {
+            var finalName = profileManager.Rename(request.OldName, request.NewName);
+            return new ProfileRenameResponse { Success = true, NewName = finalName };
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Profile rename failed ({Old} -> {New})", request.OldName, request.NewName);
+            return new ProfileRenameResponse { Success = false, ErrorMessage = ex.Message };
         }
     }
 
@@ -501,22 +566,111 @@ public class FormatRequestHandler(ProfileManager profileManager)
     {
         try
         {
+            if (request.FileContent is { Length: > MaxProfileJsonBytes })
+            {
+                return new ProfileImportResponse
+                {
+                    Success = false,
+                    ErrorMessage = "Import content exceeds maximum allowed size (1 MB).",
+                };
+            }
+
             var sourceFormat = request.SourceFormat.ToLowerInvariant();
             var content = Encoding.UTF8.GetString(request.FileContent);
 
             if (sourceFormat is "sqlprompt" or "sqlpromptstylev2")
             {
-                var importResult = SqlPromptImporter.Import(content, request.TargetProfileName);
+                // Spec 031 FR-004 — sniff content: modern Redgate styles are JSON; the XML shape
+                // is AKML's own spec-020 export. Sniffing is scoped to this branch on purpose —
+                // the akmlstyle branch below always receives AKML's own JSON serialization.
+                // U+FEFF: Encoding.UTF8.GetString keeps a BOM as a leading char and it is NOT
+                // char.IsWhiteSpace, so strip it explicitly (spec edge case: BOM'd files decode correctly).
+                // The trimmed copy is also what gets handed to the JSON/XML parsers below — both
+                // JsonDocument.Parse(string) and XDocument.Parse(string) throw on a leading U+FEFF
+                // *character* (as opposed to raw UTF-8 BOM bytes), so parsing the untrimmed content
+                // would fail every BOM'd import. The verbatim ".source.json" write further down still
+                // uses the original untrimmed `content` — that copy must stay byte-for-byte faithful.
+                var trimmedContent = content.TrimStart((char)0xFEFF, ' ', '\t', '\r', '\n');
+                var firstChar = trimmedContent.FirstOrDefault();
 
-                // Save the imported profile
+                if (firstChar == '{')
+                {
+                    var jsonResult = RedgateJsonStyleImporter.Import(trimmedContent, fallbackName: request.TargetProfileName);
+                    if (!jsonResult.Success)
+                    {
+                        // FR-005 — visible failure, nothing saved.
+                        return new ProfileImportResponse
+                        {
+                            Success = false,
+                            ErrorMessage = $"Style file is not valid SQL Prompt JSON: {jsonResult.ParseError}",
+                        };
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(request.TargetProfileName))
+                        jsonResult.Profile.Metadata.Name = request.TargetProfileName;
+
+                    // FR-008 — built-in names cannot be shadowed by import.
+                    if (profileManager.List().Any(p =>
+                            p.IsBuiltIn && string.Equals(p.Name, jsonResult.Profile.Metadata.Name, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        return new ProfileImportResponse
+                        {
+                            Success = false,
+                            ErrorMessage = $"'{jsonResult.Profile.Metadata.Name}' is a built-in style name. Re-import with a different target name.",
+                        };
+                    }
+
+                    profileManager.Save(jsonResult.Profile);
+
+                    // FR-006 — preserve the verbatim source beside the profile for lossless re-import.
+                    // GetCustomArtifactPath pairs SanitizeFileName with ValidatePathWithinBase (the
+                    // same two-layer invariant Save/Delete enforce).
+                    var sourcePath = profileManager.GetCustomArtifactPath(
+                        jsonResult.Profile.Metadata.Name, ".source.json");
+                    File.WriteAllText(sourcePath, content);
+
+                    return new ProfileImportResponse
+                    {
+                        Success = true,
+                        ProfileName = jsonResult.Profile.Metadata.Name,
+                        MappedOptionsCount = jsonResult.MappedCount,
+                        UnmappedOptionsCount = jsonResult.UnsupportedCount + jsonResult.UnknownCount,
+                        OptionReports = jsonResult.Options
+                            .Select(o => new ProfileImportOptionReport { Path = o.Path, Value = o.Value, Status = o.Status, Reason = o.Reason })
+                            .ToArray(),
+                    };
+                }
+
+                if (firstChar != '<')
+                {
+                    return new ProfileImportResponse
+                    {
+                        Success = false,
+                        ErrorMessage = "Style file is neither JSON ('{') nor XML ('<').",
+                    };
+                }
+
+                var importResult = SqlPromptImporter.Import(trimmedContent, request.TargetProfileName);
+
+                // FR-005 — the legacy importer records parse errors in UnmappedOptions without failing; surface them.
+                var parseError = importResult.UnmappedOptions.FirstOrDefault(o => o.StartsWith("Parse error:", StringComparison.Ordinal));
+                if (parseError != null || (importResult.MappedCount == 0 && importResult.UnmappedCount == 0))
+                {
+                    return new ProfileImportResponse
+                    {
+                        Success = false,
+                        ErrorMessage = parseError ?? "No options found in the XML style file.",
+                    };
+                }
+
                 profileManager.Save(importResult.Profile);
-
                 return new ProfileImportResponse
                 {
                     Success = true,
+                    ProfileName = importResult.Profile.Metadata.Name,
                     MappedOptionsCount = importResult.MappedCount,
                     UnmappedOptionsCount = importResult.UnmappedCount,
-                    UnmappedOptions = importResult.UnmappedOptions.ToArray()
+                    UnmappedOptions = importResult.UnmappedOptions.ToArray(),
                 };
             }
 
@@ -603,8 +757,19 @@ public class FormatRequestHandler(ProfileManager profileManager)
         }
     }
 
-    private FormattingProfile LoadProfile(string? profileName)
+    private FormattingProfile LoadProfile(string? profileName) => LoadProfile(profileName, out _);
+
+    /// <summary>
+    /// Resolves the requested style, falling back to built-in defaults when it cannot be loaded.
+    /// <paramref name="fallbackWarning"/> is non-null ONLY in that fallback case, so callers can
+    /// tell the user their chosen style did not apply — previously this swallow was silent apart
+    /// from a log line, which is how the shipped default style formatting with POCO defaults went
+    /// unnoticed. An explicitly-empty name still means "defaults by design" (no warning).
+    /// </summary>
+    private FormattingProfile LoadProfile(string? profileName, out string? fallbackWarning)
     {
+        fallbackWarning = null;
+
         if (string.IsNullOrEmpty(profileName))
             return new FormattingProfile(); // Default profile with all defaults
 
@@ -612,9 +777,12 @@ public class FormatRequestHandler(ProfileManager profileManager)
         {
             return profileManager.Load(profileName);
         }
-        catch
+        catch (Exception ex)
         {
-            Log.Warning("Profile {Name} not found, using default", profileName);
+            fallbackWarning =
+                $"Formatting style '{profileName}' could not be loaded, so the built-in defaults were " +
+                $"used instead. Check the style still exists in Format Styles. ({ex.GetType().Name})";
+            Log.Warning(ex, "Profile {Name} not found, using default", profileName);
             return new FormattingProfile();
         }
     }

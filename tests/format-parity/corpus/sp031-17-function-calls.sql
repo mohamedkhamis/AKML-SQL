@@ -1,0 +1,1 @@
+select getdate() as now, isnull(o.shippeddate, o.requireddate) as effectivedate, datediff(day, o.orderdate, isnull(o.shippeddate, getdate())) as daystoship, upper(substring(c.companyname, 1, charindex(' ', c.companyname + ' ') - 1)) as firstword, coalesce(o.shipregion, c.region, N'n/a') as region from dbo.orders o inner join dbo.customers c on c.customerid = o.customerid;

@@ -1,0 +1,2 @@
+select o.orderid from dbo.orders o where o.orderdate between '1997-01-01' and '1997-12-31' and o.shipcountry in ('USA', 'UK', 'Germany', 'France') and o.freight between 10.5 and 200.75;
+select od.orderid from dbo.[order details] od where od.productid in (select p.productid from dbo.products p where p.categoryid in (1, 2, 3) and p.unitprice between 5 and 50 and p.productname between 'Aniseed Syrup' and 'Wimmers gute Semmelknoedel');

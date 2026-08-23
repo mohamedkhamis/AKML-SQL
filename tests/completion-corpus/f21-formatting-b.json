@@ -1,0 +1,302 @@
+[
+  {
+    "id": "FMTB-001",
+    "family": "formatting-b",
+    "sql": "InSeRt InTo dbo.Customers(CustomerName,ContactName,Address,City,PostalCode,Country)VALUES('Alpha Traders','Mona Said','12 Nile St','Cairo','11511','Egypt')",
+    "tags": ["insert", "cramped"]
+  },
+  {
+    "id": "FMTB-002",
+    "family": "formatting-b",
+    "sql": "insert dbo.OrderDetails(OrderID,ProductID,Quantity)\tSeLeCt o.OrderID,p.ProductID,5 FrOm dbo.Orders o CROSS JOIN dbo.Products p WHERE o.OrderID=10248 AnD p.ProductID<=3",
+    "tags": ["insert", "select", "join"]
+  },
+  {
+    "id": "FMTB-003",
+    "family": "formatting-b",
+    "sql": "insert into dbo.Shippers\t(ShipperName,Phone)\nvalues('Speedy Express','(503) 555-9831'),\t('United Package',\n'(503) 555-3199'),('Federal Shipping','(503) 555-9931')",
+    "tags": ["insert", "multirow", "whitespace"]
+  },
+  {
+    "id": "FMTB-004",
+    "family": "formatting-b",
+    "sql": "update p set p.Price=p.Price*1.10 from dbo.Products p inner join dbo.Categories c on c.CategoryID=p.CategoryID where c.CategoryName='Beverages'",
+    "tags": ["update", "join", "cramped"]
+  },
+  {
+    "id": "FMTB-005",
+    "family": "formatting-b",
+    "sql": "UPDATE dbo.Products SET\nUnit=case\tWHEN Price>50 then 'crate'\nwhen Price>20\tTHEN 'box' ELSE 'bag'\tend WHERE CategoryID=2",
+    "tags": ["update", "case", "whitespace"]
+  },
+  {
+    "id": "FMTB-006",
+    "family": "formatting-b",
+    "sql": "delete od from dbo.OrderDetails od where not exists(select 1 from dbo.Products p where p.ProductID=od.ProductID)",
+    "tags": ["delete", "subquery", "cramped"]
+  },
+  {
+    "id": "FMTB-007",
+    "family": "formatting-b",
+    "sql": "DELETE o FROM dbo.Orders o JOIN dbo.Customers c ON c.CustomerID=o.CustomerID WHERE c.Country='Norway'\tAND o.ShipperID IS NULL",
+    "tags": ["delete", "join"]
+  },
+  {
+    "id": "FMTB-008",
+    "family": "formatting-b",
+    "sql": "MERGE dbo.Products AS tgt USING(SELECT SupplierID,SupplierName FROM dbo.Suppliers)AS src ON tgt.SupplierID=src.SupplierID WHEN MATCHED THEN UPDATE SET Unit='box' WHEN NOT MATCHED THEN INSERT(ProductName,SupplierID)VALUES(src.SupplierName,src.SupplierID);",
+    "tags": ["merge", "cramped"]
+  },
+  {
+    "id": "FMTB-009",
+    "family": "formatting-b",
+    "sql": "merge dbo.Categories as tgt using(values('Beverages','Soft drinks and ales'),('Seafood','Fish and shellfish'))as src(CategoryName,Description)on tgt.CategoryName=src.CategoryName when matched then update set Description=src.Description when not matched by target then insert(CategoryName,Description)values(src.CategoryName,src.Description) when not matched by source and tgt.CategoryName='Obsolete' then delete;",
+    "tags": ["merge", "values-source", "cramped"]
+  },
+  {
+    "id": "FMTB-010",
+    "family": "formatting-b",
+    "sql": "insert into dbo.Categories(CategoryName,Description)values('Temp','scratch row');update dbo.Categories set Description='updated scratch' where CategoryName='Temp';delete from dbo.Categories where CategoryName='Temp';",
+    "tags": ["batch", "insert", "update", "delete"]
+  },
+  {
+    "id": "FMTB-011",
+    "family": "formatting-b",
+    "sql": "SELECT COUNT(*)AS CustomerCount FROM dbo.Customers ;\n\n\n\tselect\tmax(Price)as MaxPrice from dbo.Products;\n   SELECT top 3 OrderID,OrderDate FROM dbo.Orders ORDER BY OrderDate DESC;",
+    "tags": ["batch", "select", "whitespace"]
+  },
+  {
+    "id": "FMTB-012",
+    "family": "formatting-b",
+    "sql": "DECLARE @cty varchar(15);SET @cty='Mexico';SELECT CustomerID,CustomerName FROM dbo.Customers WHERE Country=@cty;",
+    "tags": ["batch", "variables", "select"]
+  },
+  {
+    "id": "FMTB-013",
+    "family": "formatting-b",
+    "sql": "-- refresh shipper phone\nUPDATE dbo.Shippers SET Phone='(503) 555-0000' WHERE ShipperID=1; /* now check it */ SELECT ShipperID,Phone FROM dbo.Shippers WHERE ShipperID=1; -- done",
+    "tags": ["batch", "comments", "update", "select"]
+  },
+  {
+    "id": "FMTB-014",
+    "family": "formatting-b",
+    "sql": "update dbo.Products set Price=19.99 where ProductID=7;exec dbo.usp_UpdateProductPrice @ProductID=7,@NewPrice=21.50;select ProductID,Price from dbo.Products where ProductID=7;",
+    "tags": ["batch", "update", "exec", "select"]
+  },
+  {
+    "id": "FMTB-015",
+    "family": "formatting-b",
+    "sql": "INSERT INTO dbo.Suppliers(SupplierName,ContactName,City,Country,Phone)VALUES('Cairo Foods','Omar Aly','Cairo','Egypt','02-2735-0000');INSERT INTO dbo.Suppliers(SupplierName,City,Country)VALUES('Delta Farms','Tanta','Egypt');INSERT INTO dbo.Shippers(ShipperName,Phone)VALUES('Nile Express','02-1234-5678');",
+    "tags": ["batch", "insert"]
+  },
+  {
+    "id": "FMTB-016",
+    "family": "formatting-b",
+    "sql": "SELECT [c].[CustomerID],[c].[CustomerName] FROM [dbo].[Customers] AS [c] WHERE [c].[Country]='UK';UPDATE [dbo].[Employees] SET [Notes]='senior staff' WHERE [EmployeeID]=2;",
+    "tags": ["batch", "brackets", "select", "update"]
+  },
+  {
+    "id": "FMTB-017",
+    "family": "formatting-b",
+    "sql": "DELETE FROM dbo.OrderDetails WHERE Quantity=0;   \nINSERT INTO dbo.OrderDetails(OrderID,ProductID,Quantity)   \n\tVALUES(10250,11,4);   ",
+    "tags": ["batch", "delete", "insert", "whitespace"]
+  },
+  {
+    "id": "FMTB-018",
+    "family": "formatting-b",
+    "sql": "INSERT INTO dbo.Employees(FirstName,LastName,Notes)VALUES('Nancy','Davolio','prefers ''SELECT * FROM'' style queries');UPDATE dbo.Employees SET Notes='wrote: DELETE FROM Orders WHERE 1=1 -- never run this' WHERE LastName='Davolio';",
+    "tags": ["batch", "strings", "insert", "update"]
+  },
+  {
+    "id": "FMTB-019",
+    "family": "formatting-b",
+    "sql": "select ProductID,ProductName from dbo.Products where SupplierID=1;update dbo.Suppliers set Phone='555-0001' where SupplierID=1;merge dbo.Shippers as t using(select 1 as ShipperID,'Speedy Express' as ShipperName)as s on t.ShipperID=s.ShipperID when matched then update set ShipperName=s.ShipperName when not matched then insert(ShipperName)values(s.ShipperName);",
+    "tags": ["batch", "select", "update", "merge"]
+  },
+  {
+    "id": "FMTB-020",
+    "family": "formatting-b",
+    "sql": "DECLARE @n int=0;\tSELECT @n=COUNT(*) FROM dbo.Orders;\nIF @n>100 UPDATE dbo.Shippers SET Phone='(503) 555-3199' WHERE ShipperID=2;\n\n\nINSERT INTO dbo.Categories(CategoryName)VALUES('Bulk');\t\tDELETE FROM dbo.Categories WHERE CategoryName='Bulk';",
+    "tags": ["batch", "variables", "if", "insert", "delete"]
+  },
+  {
+    "id": "FMTB-021",
+    "family": "formatting-b",
+    "sql": "SELECT CustomerID, /* the display name */ CustomerName,\tCountry FROM dbo.Customers WHERE City='London'",
+    "tags": ["comments", "select"]
+  },
+  {
+    "id": "FMTB-022",
+    "family": "formatting-b",
+    "sql": "SELECT -- grab just the keys\n OrderID, -- pk\n\tCustomerID -- fk\nFROM dbo.Orders WHERE OrderDate>='19970101'",
+    "tags": ["comments", "select"]
+  },
+  {
+    "id": "FMTB-023",
+    "family": "formatting-b",
+    "sql": "UPDATE dbo.Products/*bump price*/SET Price=Price+1/*by one*/WHERE ProductID=3",
+    "tags": ["comments", "update", "cramped"]
+  },
+  {
+    "id": "FMTB-024",
+    "family": "formatting-b",
+    "sql": "SELECT o.OrderID,c.CustomerName FROM dbo.Orders o JOIN dbo.Customers c ON /* key match */ c.CustomerID=o.CustomerID -- inner\nWHERE c.Country='Germany'",
+    "tags": ["comments", "join", "select"]
+  },
+  {
+    "id": "FMTB-025",
+    "family": "formatting-b",
+    "sql": "/* outer start /* nested part */ still outer */ SELECT EmployeeID,LastName FROM dbo.Employees WHERE BirthDate<'19600101'",
+    "tags": ["comments", "nested-comment", "select"]
+  },
+  {
+    "id": "FMTB-026",
+    "family": "formatting-b",
+    "sql": "-- head comment\t \nSELECT ShipperID,ShipperName,Phone FROM dbo.Shippers\n/* tail\n   block */",
+    "tags": ["comments", "select"]
+  },
+  {
+    "id": "FMTB-027",
+    "family": "formatting-b",
+    "sql": "select CustomerID from dbo.Customers where CustomerName =  'SELECT * FROM Orders'   ",
+    "tags": ["strings", "select"]
+  },
+  {
+    "id": "FMTB-028",
+    "family": "formatting-b",
+    "sql": "INSERT INTO dbo.Categories(CategoryName,Description)VALUES('Scripts','DELETE FROM dbo.Products WHERE Price IS NULL')",
+    "tags": ["strings", "insert"]
+  },
+  {
+    "id": "FMTB-029",
+    "family": "formatting-b",
+    "sql": "UPDATE dbo.Employees SET Notes='ran INSERT INTO Orders VALUES(...) at 5pm, said it''s fine' WHERE EmployeeID=4",
+    "tags": ["strings", "update", "escaped-quote"]
+  },
+  {
+    "id": "FMTB-030",
+    "family": "formatting-b",
+    "sql": "SELECT SupplierID,SupplierName FROM dbo.Suppliers\tWHERE ContactName='it''s a JOIN and a UNION, not a MERGE'",
+    "tags": ["strings", "select", "escaped-quote"]
+  },
+  {
+    "id": "FMTB-031",
+    "family": "formatting-b",
+    "sql": "PRINT 'BEGIN TRAN then COMMIT or ROLLBACK';PRINT 'WHERE clause goes last';SELECT TOP 1 ProductName FROM dbo.Products ORDER BY Price DESC;",
+    "tags": ["strings", "batch", "print", "select"]
+  },
+  {
+    "id": "FMTB-032",
+    "family": "formatting-b",
+    "sql": "delete from dbo.Categories where Description='DROP TABLE dbo.Orders; -- cleanup'",
+    "tags": ["strings", "delete"]
+  },
+  {
+    "id": "FMTB-033",
+    "family": "formatting-b",
+    "sql": "SELECT\t[ProductID],[ProductName],[Price]\tFROM [dbo].[Products] WHERE [Price] between 10 and 20 order by [Price] desc",
+    "tags": ["brackets", "select"]
+  },
+  {
+    "id": "FMTB-034",
+    "family": "formatting-b",
+    "sql": "SELECT i.[InvoiceID] AS [Invoice Number],i.[TotalAmount] AS [Total Amount],o.[OrderDate] AS [Order Date] FROM [Sales].[Invoices] i JOIN [dbo].[Orders] o ON o.[OrderID]=i.[OrderID] WHERE i.[Paid]=0",
+    "tags": ["brackets", "join", "select"]
+  },
+  {
+    "id": "FMTB-035",
+    "family": "formatting-b",
+    "sql": "update [dbo].[Customers] set [City]='Leeds',[PostalCode]='LS1 1AA' where [CustomerID]=12",
+    "tags": ["brackets", "update"]
+  },
+  {
+    "id": "FMTB-036",
+    "family": "formatting-b",
+    "sql": "declare @from datetime,@to datetime,@cnt int set @from='19970101' set @to='19971231' select @cnt=count(*) from dbo.Orders where OrderDate between @from and @to select @cnt as OrdersIn1997",
+    "tags": ["variables", "select", "no-semicolons"]
+  },
+  {
+    "id": "FMTB-037",
+    "family": "formatting-b",
+    "sql": "DECLARE @minPrice numeric(18,2)=15.00;SELECT ProductID,ProductName,Price FROM dbo.Products WHERE Price>=@minPrice ORDER BY Price;",
+    "tags": ["variables", "select"]
+  },
+  {
+    "id": "FMTB-038",
+    "family": "formatting-b",
+    "sql": "DECLARE @Top5 TABLE(ProductID int,Price numeric(18,2));INSERT INTO @Top5 SELECT TOP 5 ProductID,Price FROM dbo.Products ORDER BY Price DESC;SELECT t.ProductID,p.ProductName,t.Price FROM @Top5 t JOIN dbo.Products p ON p.ProductID=t.ProductID;",
+    "tags": ["batch", "variables", "table-variable", "insert", "join"]
+  },
+  {
+    "id": "FMTB-039",
+    "family": "formatting-b",
+    "sql": "IF EXISTS(SELECT 1 FROM dbo.Products WHERE Price>100)BEGIN UPDATE dbo.Products SET Price=99.99 WHERE Price>100 END ELSE BEGIN INSERT INTO dbo.Categories(CategoryName,Description)VALUES('Premium','high end goods') END",
+    "tags": ["if", "update", "insert", "cramped"]
+  },
+  {
+    "id": "FMTB-040",
+    "family": "formatting-b",
+    "sql": "if exists(select 1 from Sales.Invoices where Paid=0) begin if exists(select 1 from Sales.Invoices where Paid=0 and TotalAmount>1000) begin update Sales.Invoices set Paid=1 where TotalAmount>1000 and Paid=0 end else print 'nothing large unpaid' end else print 'all invoices paid'",
+    "tags": ["if", "nested", "update", "print"]
+  },
+  {
+    "id": "FMTB-041",
+    "family": "formatting-b",
+    "sql": "UPDATE dbo.Orders SET ShipperID=2 WHERE ShipperID IS NULL\nIF @@ROWCOUNT=0\tPRINT 'no rows touched'\nELSE\tPRINT 'shippers assigned'",
+    "tags": ["if", "update", "rowcount"]
+  },
+  {
+    "id": "FMTB-042",
+    "family": "formatting-b",
+    "sql": "DECLARE @i int=1 WHILE @i<=3 BEGIN UPDATE dbo.Products SET Price=Price+0.01 WHERE ProductID=@i SET @i=@i+1 END",
+    "tags": ["while", "variables", "update"]
+  },
+  {
+    "id": "FMTB-043",
+    "family": "formatting-b",
+    "sql": "declare @q int=0 while 1=1 begin set @q=@q+1 if @q>5 break if @q=2 continue insert into dbo.OrderDetails(OrderID,ProductID,Quantity)values(10248,@q,@q) end",
+    "tags": ["while", "if", "insert", "break-continue"]
+  },
+  {
+    "id": "FMTB-044",
+    "family": "formatting-b",
+    "sql": "BEGIN TRY INSERT INTO Sales.Invoices(OrderID,InvoiceDate,TotalAmount,Paid)VALUES(10248,'20240115',250.00,0) END TRY BEGIN CATCH SELECT ERROR_NUMBER()AS ErrNo,ERROR_MESSAGE()AS ErrMsg END CATCH",
+    "tags": ["trycatch", "insert", "cramped"]
+  },
+  {
+    "id": "FMTB-045",
+    "family": "formatting-b",
+    "sql": "begin try begin tran update Sales.Invoices set Paid=1 where InvoiceID=10 delete from dbo.OrderDetails where OrderDetailID=999 commit tran end try begin catch if @@TRANCOUNT>0 rollback tran select ERROR_MESSAGE() as Msg end catch",
+    "tags": ["trycatch", "transaction", "update", "delete"]
+  },
+  {
+    "id": "FMTB-046",
+    "family": "formatting-b",
+    "sql": "exec dbo.usp_GetCustomerOrders 7,'19970101','19971231'",
+    "tags": ["exec", "positional"]
+  },
+  {
+    "id": "FMTB-047",
+    "family": "formatting-b",
+    "sql": "EXEC dbo.usp_GetCustomerOrders\n\t@CustomerID = 12 ,\n   @FromDate='19970301',\t@ToDate =\n'19970930'",
+    "tags": ["exec", "whitespace"]
+  },
+  {
+    "id": "FMTB-048",
+    "family": "formatting-b",
+    "sql": "DECLARE @rc int;EXEC @rc=Sales.usp_MarkInvoicePaid @InvoiceID=5;SELECT @rc AS ReturnCode;",
+    "tags": ["batch", "exec", "variables"]
+  },
+  {
+    "id": "FMTB-049",
+    "family": "formatting-b",
+    "sql": "exec sp_executesql N'SELECT CustomerID,CustomerName FROM dbo.Customers WHERE Country=@c ORDER BY CustomerName',N'@c varchar(15)',@c='Mexico'",
+    "tags": ["exec", "strings", "dynamic-sql"]
+  },
+  {
+    "id": "FMTB-050",
+    "family": "formatting-b",
+    "sql": "BEGIN TRY DECLARE @k int=1 WHILE @k<=2 BEGIN MERGE dbo.Shippers AS t USING(SELECT @k AS ShipperID)AS s ON t.ShipperID=s.ShipperID WHEN MATCHED THEN UPDATE SET Phone='(503) 555-0100' WHEN NOT MATCHED THEN INSERT(ShipperName,Phone)VALUES('Backfill','(503) 555-0101'); SET @k=@k+1 END EXEC Sales.usp_MarkInvoicePaid @InvoiceID=1 END TRY BEGIN CATCH PRINT 'MERGE failed inside WHILE' SELECT ERROR_LINE()AS ErrLine END CATCH",
+    "tags": ["trycatch", "while", "merge", "exec", "batch"]
+  }
+]

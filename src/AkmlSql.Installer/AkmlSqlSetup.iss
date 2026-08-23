@@ -187,6 +187,12 @@ var
   AutoUpdateEnabled: Boolean;
   TelemetryEnabled: Boolean;
   ImportSqlPromptEnabled: Boolean;
+  // PR-249 review follow-up: set by TerminateAkmlBackgroundProcesses when the AkmlSqlWebEngine
+  // service existed AND was running before install; read by CurStepChanged(ssPostInstall) to
+  // restart it on a desktop-only upgrade (web component unticked, so Web_PostInstall won't).
+  // Declared here (not next to its writer) because CurStepChanged appears earlier in the file
+  // and Inno Pascal has no forward references.
+  GWebServiceWasRunning: Boolean;
 
 // --- SQL Prompt Detection (T033) ---
 
@@ -622,6 +628,7 @@ var
   ConfigPath: String;
   ConfigJson: String;
   TelemetryStr: String;
+  ResultCode: Integer;
 begin
   if CurStep = ssPostInstall then
   begin
@@ -710,6 +717,17 @@ begin
     // pairing PIN + TLS thumbprint, verify the service started, and write INSTALL-SUMMARY.txt.
     // Returns early internally when the web component is unticked.
     Web_PostInstall();
+
+    // PR-249 review follow-up (desktop-only upgrade): TerminateAkmlBackgroundProcesses stopped a
+    // running AkmlSqlWebEngine service to unlock Engine\*.dll. When the web component is part of
+    // this run, Web_PostInstall (above) restarts the service itself; when it is NOT, nothing would
+    // — so restart it here. Best-effort (ignore the result): a failed restart must never fail the
+    // install, and the service was created with start= auto so a reboot recovers it regardless.
+    if GWebServiceWasRunning and (not IsWebSelected()) then
+    begin
+      Log('Restarting AkmlSqlWebEngine (was running before install; web component not selected this run).');
+      Exec('sc.exe', 'start AkmlSqlWebEngine', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    end;
   end;
 end;
 
@@ -784,10 +802,35 @@ end;
 // copying files, replacement fails with "DeleteFile failed; code 5. Access is denied." They hold no
 // user state, so terminate them silently. MUST run AFTER the IDE hosts are closed: a live shell
 // would otherwise immediately respawn the engine and re-lock the files.
+
+// PR-249 review follow-up: the AkmlSqlWebEngine Windows service (web edition, spec 026) runs the
+// SAME AkmlSql.Engine.exe binary in --web mode, so the taskkill below also takes down the web
+// service's engine. On a DESKTOP-ONLY upgrade (web component unticked this run) Web_PostInstall
+// exits early and never restarts it — a working web edition would stay silently dead until reboot.
+// Remember whether the service existed AND was running (GWebServiceWasRunning, declared with the
+// other globals at the top of [Code]) so CurStepChanged(ssPostInstall) can restart it.
+// All service handling is best-effort: it must never fail the install.
 procedure TerminateAkmlBackgroundProcesses;
 var
   ResultCode: Integer;
 begin
+  // Detect first — locale-safe: Get-Service compares the Status ENUM, not sc.exe's localized
+  // STATE text (findstr /C:"RUNNING" silently fails on non-English Windows). Same pattern as
+  // web-installer.iss's post-start service check. Missing service → SilentlyContinue → exit 1.
+  GWebServiceWasRunning := False;
+  if Exec('powershell.exe',
+          '-NoProfile -ExecutionPolicy Bypass -Command "if ((Get-Service AkmlSqlWebEngine -ErrorAction SilentlyContinue).Status -eq ''Running'') { exit 0 } else { exit 1 }"',
+          '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    GWebServiceWasRunning := (ResultCode = 0);
+
+  // Graceful SCM stop before the force-kill so the service engine can shut down cleanly.
+  // Ignore failures — the service may not exist, or may already be stopping.
+  if GWebServiceWasRunning then
+  begin
+    Exec('sc.exe', 'stop AkmlSqlWebEngine', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Sleep(2000); // sc stop is async — give the SCM a moment before the /F taskkill below
+  end;
+
   if IsProcessRunning('AkmlSql.Engine.exe') then
     Exec('taskkill.exe', '/F /T /IM AkmlSql.Engine.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   if IsProcessRunning('AkmlSql.Updater.exe') then

@@ -1,0 +1,302 @@
+[
+  {
+    "id": "FMTA-001",
+    "family": "formatting-a",
+    "sql": "SeLeCt o.OrderID , c.CustomerName ,e.LastName   FrOm dbo.Orders AS o inner JOIN dbo.Customers c oN o.CustomerID=c.CustomerID INNER join dbo.Employees AS e On o.EmployeeID=e.EmployeeID WHERE o.OrderDate>='2024-01-01' oRdEr By o.OrderID dEsC",
+    "tags": ["join", "order-by", "casing", "one-line"]
+  },
+  {
+    "id": "FMTA-002",
+    "family": "formatting-a",
+    "sql": "select\td.OrderDetailID,\tp.ProductName\t,s.SupplierName, cat.CategoryName,o.OrderDate \nfrom dbo.OrderDetails d\n\tjoin dbo.Products p on d.ProductID=p.ProductID\n\tjoin dbo.Suppliers s\ton p.SupplierID=s.SupplierID   \n\tjoin dbo.Categories cat\ton p.CategoryID=cat.CategoryID\n\tjoin dbo.Orders o on d.OrderID =o.OrderID\nwhere p.Price>10",
+    "tags": ["join", "tabs", "whitespace"]
+  },
+  {
+    "id": "FMTA-003",
+    "family": "formatting-a",
+    "sql": "SELECT c.CustomerName, o.OrderID, sh.ShipperName FROM dbo.Customers c LEFT OUTER JOIN dbo.Orders o ON c.CustomerID = o.CustomerID left join dbo.Shippers sh on o.ShipperID=sh.ShipperID where c.Country in('USA','UK','Germany')",
+    "tags": ["join", "casing", "one-line"]
+  },
+  {
+    "id": "FMTA-004",
+    "family": "formatting-a",
+    "sql": "with OrderTotals as(select od.OrderID,sum(od.Quantity) as TotalQty from dbo.OrderDetails od group by od.OrderID)select o.OrderID,o.OrderDate,t.TotalQty from dbo.Orders o join OrderTotals t on o.OrderID=t.OrderID where t.TotalQty>20",
+    "tags": ["cte", "group-by", "join", "one-line", "whitespace"]
+  },
+  {
+    "id": "FMTA-005",
+    "family": "formatting-a",
+    "sql": "WITH CustOrders AS (SELECT CustomerID, COUNT(*) AS Cnt FROM dbo.Orders GROUP\nBY CustomerID), BigCust as (select CustomerID from CustOrders where\nCnt>5) sElEcT c.CustomerName , c.Country FROM dbo.Customers c JOIN BigCust b ON c.CustomerID=b.CustomerID order by c.CustomerName",
+    "tags": ["cte", "multiple-cte", "group-by", "join", "casing"]
+  },
+  {
+    "id": "FMTA-006",
+    "family": "formatting-a",
+    "sql": "-- chained CTEs three deep\nwith L1 as (select ProductID, SupplierID, Price from dbo.Products where Price is not null), L2 as (select SupplierID, avg(Price) as AvgPrice from L1 group by SupplierID), L3 as (select s.SupplierName, l.AvgPrice from dbo.Suppliers s join L2 l on s.SupplierID=l.SupplierID)\nselect * from L3 where AvgPrice>15 order by AvgPrice desc",
+    "tags": ["cte", "multiple-cte", "nested", "comment", "group-by", "join", "order-by"]
+  },
+  {
+    "id": "FMTA-007",
+    "family": "formatting-a",
+    "sql": "select ProductName,Price from dbo.Products where CategoryID in(select CategoryID from dbo.Categories where CategoryName like '%o%')and Price between 5 and 50",
+    "tags": ["subquery", "one-line", "whitespace"]
+  },
+  {
+    "id": "FMTA-008",
+    "family": "formatting-a",
+    "sql": "SELECT c.CustomerName,(SELECT COUNT(*) FROM dbo.Orders o WHERE o.CustomerID=c.CustomerID) AS OrderCount,( select max(o2.OrderDate) from dbo.Orders o2 where o2.CustomerID=c.CustomerID ) LastOrder FROM dbo.Customers c",
+    "tags": ["subquery", "correlated", "casing", "one-line"]
+  },
+  {
+    "id": "FMTA-009",
+    "family": "formatting-a",
+    "sql": "select s.SupplierName from dbo.Suppliers s where EXISTS(select 1 from dbo.Products p where p.SupplierID=s.SupplierID and p.Price>40) and s.Country is not null",
+    "tags": ["subquery", "exists", "one-line"]
+  },
+  {
+    "id": "FMTA-010",
+    "family": "formatting-a",
+    "sql": "select x.CategoryID,x.AvgPrice from (select CategoryID,avg(Price) as AvgPrice from dbo.Products group by CategoryID) as x where x.AvgPrice>20 order by x.AvgPrice desc",
+    "tags": ["derived-table", "group-by", "order-by", "one-line"]
+  },
+  {
+    "id": "FMTA-011",
+    "family": "formatting-a",
+    "sql": "SELECT c.CategoryName,\tt.ProductCount FROM dbo.Categories c JOIN\t(SELECT CategoryID, COUNT(*) AS ProductCount FROM dbo.Products GROUP BY CategoryID) t ON c.CategoryID=t.CategoryID ORDER BY t.ProductCount DESC",
+    "tags": ["derived-table", "join", "group-by", "order-by", "tabs"]
+  },
+  {
+    "id": "FMTA-012",
+    "family": "formatting-a",
+    "sql": "select City , Country from dbo.Customers where City is not null UNION select City,Country from dbo.Suppliers where City is not null ORDER BY Country , City",
+    "tags": ["union", "order-by", "whitespace", "one-line"]
+  },
+  {
+    "id": "FMTA-013",
+    "family": "formatting-a",
+    "sql": "select 'customer' as Src, CustomerName as Name from dbo.Customers union all select 'supplier',SupplierName from dbo.Suppliers union all select 'shipper',ShipperName from dbo.Shippers",
+    "tags": ["union", "union-all", "one-line"]
+  },
+  {
+    "id": "FMTA-014",
+    "family": "formatting-a",
+    "sql": "select e.LastName , count(o.OrderID) as Orders from dbo.Employees e join dbo.Orders o on e.EmployeeID=o.EmployeeID GROUP BY e.LastName HAVING count(o.OrderID)>=10 order by Orders desc , e.LastName",
+    "tags": ["join", "group-by", "having", "order-by", "casing"]
+  },
+  {
+    "id": "FMTA-015",
+    "family": "formatting-a",
+    "sql": "select year(InvoiceDate) as yr,Paid,sum(TotalAmount) as Total from Sales.Invoices group by year(InvoiceDate),Paid having sum(TotalAmount)>1000 order by yr;select count(*) as UnpaidCnt from Sales.Invoices where Paid=0",
+    "tags": ["multi-statement", "group-by", "having", "order-by", "one-line"]
+  },
+  {
+    "id": "FMTA-016",
+    "family": "formatting-a",
+    "sql": "select   top 5   ProductName,Price   from dbo.Products   order by Price desc   ",
+    "tags": ["top", "order-by", "whitespace", "trailing-spaces"]
+  },
+  {
+    "id": "FMTA-017",
+    "family": "formatting-a",
+    "sql": "selecT Top 10 pErCeNt With Ties p.ProductName,p.Price FROM dbo.Products p ORDER BY p.Price DESC",
+    "tags": ["top", "percent", "with-ties", "order-by", "casing"]
+  },
+  {
+    "id": "FMTA-018",
+    "family": "formatting-a",
+    "sql": "select\tDISTINCT\n\tc.Country\nfrom dbo.Customers c\nwhere c.Country is not null\norder\tby c.Country",
+    "tags": ["distinct", "order-by", "tabs", "whitespace"]
+  },
+  {
+    "id": "FMTA-019",
+    "family": "formatting-a",
+    "sql": "SELECT distinct p.ProductName FROM dbo.Products p JOIN dbo.OrderDetails od ON p.ProductID=od.ProductID WHERE od.Quantity>50",
+    "tags": ["distinct", "join", "casing", "one-line"]
+  },
+  {
+    "id": "FMTA-020",
+    "family": "formatting-a",
+    "sql": "select ProductName, case CategoryID when 1 then 'Beverage' when 2 then 'Condiment' else 'Other' end as Kind from dbo.Products where CategoryID is not null",
+    "tags": ["case", "simple-case", "one-line"]
+  },
+  {
+    "id": "FMTA-021",
+    "family": "formatting-a",
+    "sql": "select InvoiceID,case when Paid=1 then 'settled' when TotalAmount>500 then 'big open' else 'open' end Status,TotalAmount from Sales.Invoices",
+    "tags": ["case", "searched-case", "one-line"]
+  },
+  {
+    "id": "FMTA-022",
+    "family": "formatting-a",
+    "sql": "select o.OrderID, case when o.ShipperID is null then 'none' else case o.ShipperID when 1 then 'Speedy' when 2 then 'United' else 'Federal' end end as ShipVia from dbo.Orders o",
+    "tags": ["case", "nested-case", "one-line"]
+  },
+  {
+    "id": "FMTA-023",
+    "family": "formatting-a",
+    "sql": "select CustomerName, Country from dbo.Customers order by case when Country='USA' then 0 when Country='UK' then 1 else 2 end , CustomerName",
+    "tags": ["case", "searched-case", "order-by"]
+  },
+  {
+    "id": "FMTA-024",
+    "family": "formatting-a",
+    "sql": "select CategoryID,sum(case when Price>20 then 1 else 0 end) as Expensive,sum(case when Price<=20 then 1 else 0 end) Cheap from dbo.Products group by CategoryID order by CategoryID",
+    "tags": ["case", "aggregate", "group-by", "order-by", "one-line"]
+  },
+  {
+    "id": "FMTA-025",
+    "family": "formatting-a",
+    "sql": "select * from dbo.vw_ProductCatalog where Price>15 ; exec dbo.usp_GetCustomerOrders @CustomerID=3,@FromDate='2024-01-01',@ToDate='2024-06-30' ;select count(*) as OrderCnt from dbo.Orders",
+    "tags": ["multi-statement", "view", "exec", "one-line"]
+  },
+  {
+    "id": "FMTA-026",
+    "family": "formatting-a",
+    "sql": "SeLeCt v.CustomerName,v.OrderDate ,v.OrderID frOm dbo.vw_CustomerOrders v whERE v.Country='UK' oRDer bY v.OrderDate dEsc",
+    "tags": ["view", "casing", "order-by", "one-line"]
+  },
+  {
+    "id": "FMTA-027",
+    "family": "formatting-a",
+    "sql": "-- top customers report\nselect top 10 c.CustomerName, /* total order count */ count(o.OrderID) as Cnt from dbo.Customers c /* keep zero-order customers */ left join dbo.Orders o on c.CustomerID=o.CustomerID group by c.CustomerName order by Cnt desc -- trailing note",
+    "tags": ["comment", "top", "join", "group-by", "order-by"]
+  },
+  {
+    "id": "FMTA-028",
+    "family": "formatting-a",
+    "sql": "select p.ProductName /* unit info follows */ , p.Unit , p.Price from dbo.Products p where p.SupplierID=1 /* first supplier only */",
+    "tags": ["comment", "block-comment", "one-line"]
+  },
+  {
+    "id": "FMTA-029",
+    "family": "formatting-a",
+    "sql": "select CustomerName from dbo.Customers where ContactName<>'SELECT * FROM secret' and City not like '%DROP TABLE%' and Country='USA'",
+    "tags": ["string-literal", "keywords-in-string", "one-line"]
+  },
+  {
+    "id": "FMTA-030",
+    "family": "formatting-a",
+    "sql": "select 'ORDER BY is a keyword' as Note,OrderID from dbo.Orders where OrderID<5;select 'UNION ALL inside a literal' as Note2,count(*) as Cnt from dbo.Products",
+    "tags": ["multi-statement", "string-literal", "keywords-in-string", "one-line"]
+  },
+  {
+    "id": "FMTA-031",
+    "family": "formatting-a",
+    "sql": "select ProductName from dbo.Products where Unit='it''s a SELECT box' or ProductName like '%and%'",
+    "tags": ["string-literal", "keywords-in-string", "escaped-quote", "one-line"]
+  },
+  {
+    "id": "FMTA-032",
+    "family": "formatting-a",
+    "sql": "select InvoiceID, case when Paid=1 then 'PAID -- do not UPDATE' else 'PENDING /* SELECT later */' end as Note from Sales.Invoices where TotalAmount>0",
+    "tags": ["string-literal", "keywords-in-string", "case", "searched-case", "comment-markers-in-string"]
+  },
+  {
+    "id": "FMTA-033",
+    "family": "formatting-a",
+    "sql": "update dbo.Products set Price=Price*1.10 where CategoryID=(select CategoryID from dbo.Categories where CategoryName='Beverages') ; select ProductName,Price from dbo.Products where CategoryID=1 order by Price",
+    "tags": ["multi-statement", "update", "subquery", "order-by"]
+  },
+  {
+    "id": "FMTA-034",
+    "family": "formatting-a",
+    "sql": "select o.OrderID,o.OrderDate from dbo.Orders o where o.CustomerID in (select top 3 CustomerID from dbo.Orders where CustomerID is not null group by CustomerID order by count(*) desc)",
+    "tags": ["subquery", "top", "group-by", "order-by", "one-line"]
+  },
+  {
+    "id": "FMTA-035",
+    "family": "formatting-a",
+    "sql": "select u.Name,u.Src from (select CustomerName as Name,'C' as Src from dbo.Customers union all select SupplierName,'S' from dbo.Suppliers) u where u.Name like 'A%' order by u.Name",
+    "tags": ["derived-table", "union", "union-all", "order-by", "one-line"]
+  },
+  {
+    "id": "FMTA-036",
+    "family": "formatting-a",
+    "sql": "with AllCities as (select City,Country from dbo.Customers union select City,Country from dbo.Suppliers) select Country,count(*) as CityCnt from AllCities where City is not null group by Country having count(*)>1 order by CityCnt desc",
+    "tags": ["cte", "union", "group-by", "having", "order-by", "one-line"]
+  },
+  {
+    "id": "FMTA-037",
+    "family": "formatting-a",
+    "sql": "select ShipperID,ShipperName,Phone from dbo.Shippers;\t\tSELECT\te.FirstName ,\te.LastName\nFROM dbo.Employees e\nWHERE e.BirthDate is not null ;\nselect   count(*)   as ProductCount   \nfrom dbo.Products   ",
+    "tags": ["multi-statement", "tabs", "trailing-spaces", "whitespace", "casing"]
+  },
+  {
+    "id": "FMTA-038",
+    "family": "formatting-a",
+    "sql": "select z.CategoryName,z.MaxPrice from (select c.CategoryName,y.MaxPrice from dbo.Categories c join (select CategoryID,max(Price) as MaxPrice from dbo.Products group by CategoryID) y on c.CategoryID=y.CategoryID) z where z.MaxPrice>30 order by z.MaxPrice desc",
+    "tags": ["derived-table", "nested", "join", "group-by", "order-by", "one-line"]
+  },
+  {
+    "id": "FMTA-039",
+    "family": "formatting-a",
+    "sql": "select c.CategoryName , s.ShipperName from dbo.Categories c CROSS JOIN dbo.Shippers s order by c.CategoryName",
+    "tags": ["join", "cross-join", "order-by", "one-line"]
+  },
+  {
+    "id": "FMTA-040",
+    "family": "formatting-a",
+    "sql": "declare @minPrice numeric(9,2)=10 ; -- price floor\nselect ProductName , Price from dbo.Products where Price>=@minPrice order by Price ; select @minPrice as UsedFloor",
+    "tags": ["multi-statement", "declare", "comment", "order-by"]
+  },
+  {
+    "id": "FMTA-041",
+    "family": "formatting-a",
+    "sql": "select o1.OrderID , o2.OrderID as LaterOrder from dbo.Orders o1 join dbo.Orders o2 on o1.CustomerID=o2.CustomerID and o1.OrderID<o2.OrderID where o1.EmployeeID=4",
+    "tags": ["join", "self-join", "one-line"]
+  },
+  {
+    "id": "FMTA-042",
+    "family": "formatting-a",
+    "sql": "select od.OrderID , od.ProductID , od.Quantity , sum(od.Quantity) over(partition by od.OrderID) as TotalPerOrder from dbo.OrderDetails od where od.Quantity is not null",
+    "tags": ["window", "one-line", "whitespace"]
+  },
+  {
+    "id": "FMTA-043",
+    "family": "formatting-a",
+    "sql": "select count(*) as CustCount from dbo.Customers ;with Recent as (select top 10 OrderID,OrderDate from dbo.Orders order by OrderDate desc) select r.OrderID,r.OrderDate,i.TotalAmount from Recent r join Sales.Invoices i on i.OrderID=r.OrderID",
+    "tags": ["multi-statement", "cte", "top", "order-by", "join", "one-line"]
+  },
+  {
+    "id": "FMTA-044",
+    "family": "formatting-a",
+    "sql": "select p.SupplierID , count(*) as Cnt , avg(p.Price) as AvgPrice from dbo.Products p where p.SupplierID is not null group by p.SupplierID having count(*)>2 and avg(p.Price)<100 order by AvgPrice",
+    "tags": ["group-by", "having", "order-by", "one-line"]
+  },
+  {
+    "id": "FMTA-045",
+    "family": "formatting-a",
+    "sql": "select e.EmployeeID , sum( case when o.ShipperID=1 then case when o.OrderDate>'2024-06-01' then 2 else 1 end else 0 end ) as Score from dbo.Employees e left join dbo.Orders o on e.EmployeeID=o.EmployeeID group by e.EmployeeID order by Score desc",
+    "tags": ["case", "nested-case", "aggregate", "join", "group-by", "order-by"]
+  },
+  {
+    "id": "FMTA-046",
+    "family": "formatting-a",
+    "sql": "exec Sales.usp_MarkInvoicePaid @InvoiceID=7 ; EXEC dbo.usp_UpdateProductPrice @ProductID=12 , @NewPrice=19.99 ; select InvoiceID , Paid from Sales.Invoices where InvoiceID=7",
+    "tags": ["multi-statement", "exec", "casing", "one-line"]
+  },
+  {
+    "id": "FMTA-047",
+    "family": "formatting-a",
+    "sql": "SELECT C.CUSTOMERNAME FROM DBO.CUSTOMERS C WHERE C.CUSTOMERID NOT IN(SELECT O.CUSTOMERID FROM DBO.ORDERS O WHERE O.CUSTOMERID IS NOT NULL)ORDER BY C.CUSTOMERNAME",
+    "tags": ["subquery", "not-in", "casing", "one-line", "whitespace"]
+  },
+  {
+    "id": "FMTA-048",
+    "family": "formatting-a",
+    "sql": "select\n\n\n     p.ProductName   ,\n\n  p.Price\t\nfrom\n     dbo.Products    p\nwhere\n   p.Price   >   25\n  order    by\n p.Price   ",
+    "tags": ["whitespace", "tabs", "trailing-spaces", "order-by"]
+  },
+  {
+    "id": "FMTA-049",
+    "family": "formatting-a",
+    "sql": "-- batch header comment\nselect 'FROM here to WHERE there' as A ; select City from dbo.Customers where City='Berlin' union all select City from dbo.Suppliers where City='Berlin' ; /* mid-batch block */ select top 1 OrderID , OrderDate from dbo.Orders order by OrderDate desc ; select distinct Country from dbo.Suppliers where Country is not null",
+    "tags": ["multi-statement", "comment", "string-literal", "keywords-in-string", "union", "union-all", "top", "distinct", "order-by"]
+  },
+  {
+    "id": "FMTA-050",
+    "family": "formatting-a",
+    "sql": "with T as(select o.CustomerID,count(*) Cnt,max(o.OrderDate) LastDate from dbo.Orders o group by o.CustomerID)select c.CustomerName,t.Cnt,case when t.Cnt>10 then 'VIP' when t.Cnt>5 then 'regular' else 'rare' end Tier from dbo.Customers c join T t on c.CustomerID=t.CustomerID where c.Country<>'INSERT INTO nowhere' order by t.Cnt desc;select ProductName from dbo.Products where ProductID in(select ProductID from dbo.OrderDetails where Quantity>90) -- end of batch",
+    "tags": ["multi-statement", "cte", "case", "searched-case", "join", "group-by", "order-by", "subquery", "string-literal", "keywords-in-string", "comment", "one-line"]
+  }
+]

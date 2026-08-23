@@ -30,9 +30,18 @@ public partial class TsqlParserService
         return parser.GetTokenStream(reader, out _);
     }
 
+    /// <summary>
+    /// Count of full AST parses performed by this instance. Diagnostic seam only — completion
+    /// escalates through several repair attempts on the keystroke path, and a full parse is the
+    /// single most expensive thing that path does, so the attempt count is worth pinning in tests.
+    /// </summary>
+    internal int ParseCount => _parseCount;
+    private int _parseCount;
+
     /// Full tier: parse to AST (~300ms for 10K lines)
     public TSqlScript? Parse(string sql, out IList<ParseError> errors)
     {
+        System.Threading.Interlocked.Increment(ref _parseCount);
         var parser = GetParser();
         using var reader = new StringReader(sql);
         var fragment = parser.Parse(reader, out errors);
@@ -52,6 +61,66 @@ public partial class TsqlParserService
         // Try with suffix completion helper
         var suffixed = SuffixCompletionHelper.AppendDummyTokens(sql);
         return Parse(suffixed, out errors);
+    }
+
+    /// <summary>
+    /// Spec 032 (A1/E6) — cursor-aware variant of <see cref="ParseWithSuffix(string, out IList{ParseError})"/>.
+    /// When both the plain parse and the tail-repaired parse fail, tries repairing AT the
+    /// caret (<see cref="SuffixCompletionHelper.RepairAtCursor"/>): documents that are broken
+    /// exactly at the caret — a subquery or CTE body being typed inside <c>(...)</c> — become
+    /// parseable, so AST-based scope/CTE/temp resolution keeps working there. The caret-repaired
+    /// script is only used when it parses CLEAN; otherwise the tail-repaired result is returned
+    /// unchanged (old behavior). Note: text is inserted at the caret, so fragment offsets at or
+    /// before the caret remain valid — which is all the cursor-scope consumers rely on.
+    /// </summary>
+    public TSqlScript? ParseWithSuffix(string sql, int cursorOffset, out IList<ParseError> errors)
+    {
+        var result = Parse(sql, out errors);
+        if (result != null && result.Batches.Count > 0 && errors.Count == 0)
+        {
+            return result;
+        }
+
+        var suffixed = SuffixCompletionHelper.AppendDummyTokens(sql);
+        var tailResult = Parse(suffixed, out var tailErrors);
+        if (tailResult != null && tailResult.Batches.Count > 0 && tailErrors.Count == 0)
+        {
+            errors = tailErrors;
+            return tailResult;
+        }
+
+        var repaired = SuffixCompletionHelper.RepairAtCursor(sql, cursorOffset);
+        if (!string.Equals(repaired, sql, StringComparison.Ordinal))
+        {
+            // With the caret at end-of-document — the dominant typing position — RepairAtCursor
+            // reattaches an empty suffix and so returns exactly `suffixed`, which just failed
+            // above. Re-parsing it is a guaranteed-identical failure, not a second chance.
+            if (!string.Equals(repaired, suffixed, StringComparison.Ordinal))
+            {
+                var repairedResult = Parse(repaired, out var repairedErrors);
+                if (repairedResult != null && repairedResult.Batches.Count > 0 && repairedErrors.Count == 0)
+                {
+                    errors = repairedErrors;
+                    return repairedResult;
+                }
+            }
+
+            // Caret repair + tail repair combined (e.g. broken at the caret AND incomplete tail).
+            var both = SuffixCompletionHelper.AppendDummyTokens(repaired);
+            if (!string.Equals(both, suffixed, StringComparison.Ordinal) &&
+                !string.Equals(both, repaired, StringComparison.Ordinal))
+            {
+                var bothResult = Parse(both, out var bothErrors);
+                if (bothResult != null && bothResult.Batches.Count > 0 && bothErrors.Count == 0)
+                {
+                    errors = bothErrors;
+                    return bothResult;
+                }
+            }
+        }
+
+        errors = tailErrors;
+        return tailResult;
     }
 
     private TSqlParser GetParser()

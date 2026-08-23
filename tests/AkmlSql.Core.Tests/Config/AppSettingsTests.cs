@@ -192,7 +192,7 @@ namespace AkmlSql.Core.Tests.Config
         {
             var s = new FormatterSettings();
             Assert.True(s.Enabled);
-            Assert.Equal("Default", s.ActiveProfile);
+            Assert.Equal("Khamis Style", s.ActiveProfile);
             Assert.False(s.FormatOnPaste);
             Assert.False(s.FormatOnSave);
             Assert.False(s.FormatOnDelimiter);

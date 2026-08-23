@@ -1,0 +1,1102 @@
+[
+  {
+    "id": "FROMTB-001",
+    "family": "from-tables",
+    "doc": "SELECT * FROM |",
+    "expect": {
+      "mustContain": ["Customers", "Orders", "Products"],
+      "mustNotContain": ["NoSuchTable", "usp_GetCustomerOrders"],
+      "minCount": 3
+    },
+    "note": "Bare FROM with empty prefix lists tables; procs must not appear as FROM targets"
+  },
+  {
+    "id": "FROMTB-002",
+    "family": "from-tables",
+    "doc": "select * from |",
+    "expect": {
+      "mustContain": ["Suppliers", "Shippers"],
+      "mustNotContain": ["Quantity"],
+      "minCount": 2
+    },
+    "note": "Lowercase keywords still trigger table completion; column names must not appear after FROM"
+  },
+  {
+    "id": "FROMTB-003",
+    "family": "from-tables",
+    "doc": "SELECT CustomerID, CustomerName FROM |",
+    "expect": {
+      "mustContain": ["Customers", "vw_CustomerOrders"],
+      "mustNotContain": ["ContactName"],
+      "minCount": 2
+    },
+    "note": "FROM after explicit select list offers tables and views, not columns"
+  },
+  {
+    "id": "FROMTB-004",
+    "family": "from-tables",
+    "doc": "SELECT\n    OrderID,\n    OrderDate\nFROM |",
+    "expect": {
+      "mustContain": ["Orders", "OrderDetails"],
+      "mustNotContain": ["OrderDate"],
+      "minCount": 2
+    },
+    "note": "Multi-line doc: FROM on its own line still completes tables, not select-list columns"
+  },
+  {
+    "id": "FROMTB-005",
+    "family": "from-tables",
+    "doc": "From |",
+    "expect": {
+      "mustContain": ["Customers", "Employees"],
+      "mustNotContain": ["NoSuchTable"],
+      "minCount": 2
+    },
+    "note": "Title-case From keyword in a minimal fragment completes tables"
+  },
+  {
+    "id": "FROMTB-006",
+    "family": "from-tables",
+    "doc": "SELECT TOP (10) * FROM |",
+    "expect": {
+      "mustContain": ["Orders", "Categories"],
+      "mustNotContain": ["Price"],
+      "minCount": 2
+    },
+    "note": "TOP (n) clause before FROM does not break table completion"
+  },
+  {
+    "id": "FROMTB-007",
+    "family": "from-tables",
+    "doc": "SELECT * FROM    |",
+    "expect": {
+      "mustContain": ["Products", "Suppliers"],
+      "mustNotContain": ["Unit"],
+      "minCount": 2
+    },
+    "note": "Multiple spaces between FROM and caret still yield table completions"
+  },
+  {
+    "id": "FROMTB-008",
+    "family": "from-tables",
+    "doc": "SELECT *\tFROM\t|",
+    "expect": {
+      "mustContain": ["Customers", "Orders"],
+      "mustNotContain": ["BirthDate"],
+      "minCount": 2
+    },
+    "note": "Tab whitespace around FROM still yields table completions"
+  },
+  {
+    "id": "FROMTB-009",
+    "family": "from-tables",
+    "doc": "SELECT * FROM Customers;\nSELECT * FROM |",
+    "expect": {
+      "mustContain": ["Orders", "Products"],
+      "mustNotContain": ["NoSuchTable"],
+      "minCount": 2
+    },
+    "note": "FROM in a new statement after a semicolon-terminated statement sees the full schema"
+  },
+  {
+    "id": "FROMTB-010",
+    "family": "from-tables",
+    "doc": "SELECT * FROM | -- choose a table",
+    "expect": {
+      "mustContain": ["Employees", "Shippers"],
+      "mustNotContain": ["LastName"],
+      "minCount": 2
+    },
+    "note": "Trailing line comment after the caret does not suppress table completion"
+  },
+  {
+    "id": "FROMTB-011",
+    "family": "from-tables",
+    "doc": "SELECT * FROM C|",
+    "expect": {
+      "mustContain": ["Categories", "Customers"],
+      "mustNotContain": ["Orders", "Products"],
+      "minCount": 2
+    },
+    "note": "1-char prefix C filters to Categories and Customers only"
+  },
+  {
+    "id": "FROMTB-012",
+    "family": "from-tables",
+    "doc": "SELECT * FROM O|",
+    "expect": {
+      "mustContain": ["Orders", "OrderDetails"],
+      "mustNotContain": ["Customers"],
+      "minCount": 2
+    },
+    "note": "1-char prefix O filters to Orders and OrderDetails"
+  },
+  {
+    "id": "FROMTB-013",
+    "family": "from-tables",
+    "doc": "SELECT * FROM P|",
+    "expect": {
+      "mustContain": ["Products"],
+      "mustNotContain": ["Customers", "Suppliers"],
+      "minCount": 1
+    },
+    "note": "1-char prefix P matches Products; non-matching tables excluded"
+  },
+  {
+    "id": "FROMTB-014",
+    "family": "from-tables",
+    "doc": "SELECT * FROM S|",
+    "expect": {
+      "mustContain": ["Shippers", "Suppliers"],
+      "mustNotContain": ["Orders"],
+      "minCount": 2
+    },
+    "note": "1-char prefix S matches Shippers and Suppliers"
+  },
+  {
+    "id": "FROMTB-015",
+    "family": "from-tables",
+    "doc": "SELECT * FROM E|",
+    "expect": {
+      "mustContain": ["Employees"],
+      "mustNotContain": ["Customers"],
+      "minCount": 1
+    },
+    "note": "1-char prefix E matches Employees only among dbo tables"
+  },
+  {
+    "id": "FROMTB-016",
+    "family": "from-tables",
+    "doc": "select * from c|",
+    "expect": {
+      "mustContain": ["Customers", "Categories"],
+      "mustNotContain": ["Products"],
+      "minCount": 2
+    },
+    "note": "Lowercase 1-char prefix must match case-insensitively"
+  },
+  {
+    "id": "FROMTB-017",
+    "family": "from-tables",
+    "doc": "SELECT * FROM v|",
+    "expect": {
+      "mustContain": ["vw_CustomerOrders", "vw_ProductCatalog"],
+      "mustNotContain": ["Customers"],
+      "minCount": 2
+    },
+    "note": "Prefix v surfaces views in FROM position"
+  },
+  {
+    "id": "FROMTB-018",
+    "family": "from-tables",
+    "doc": "SELECT * FROM o|",
+    "expect": {
+      "mustContain": ["Orders", "OrderDetails"],
+      "mustNotContain": ["Products"],
+      "minCount": 2
+    },
+    "note": "Lowercase o prefix matches Orders and OrderDetails case-insensitively"
+  },
+  {
+    "id": "FROMTB-019",
+    "family": "from-tables",
+    "doc": "SELECT * FROM s|",
+    "expect": {
+      "mustContain": ["Shippers", "Suppliers", "sysdiagrams"],
+      "mustNotContain": ["Orders"],
+      "minCount": 3
+    },
+    "note": "Lowercase s prefix matches Shippers, Suppliers, and sysdiagrams"
+  },
+  {
+    "id": "FROMTB-020",
+    "family": "from-tables",
+    "doc": "SELECT Photo FROM E|",
+    "expect": {
+      "mustContain": ["Employees"],
+      "mustNotContain": ["Photo"],
+      "minCount": 1
+    },
+    "note": "FROM prefix completion offers tables, never the columns already in the select list"
+  },
+  {
+    "id": "FROMTB-021",
+    "family": "from-tables",
+    "doc": "SELECT * FROM Cus|",
+    "expect": {
+      "mustContain": ["Customers"],
+      "mustNotContain": ["Categories"],
+      "minCount": 1
+    },
+    "note": "3-char prefix Cus narrows past Categories to Customers"
+  },
+  {
+    "id": "FROMTB-022",
+    "family": "from-tables",
+    "doc": "SELECT * FROM Cat|",
+    "expect": {
+      "mustContain": ["Categories"],
+      "mustNotContain": ["Customers"],
+      "minCount": 1
+    },
+    "note": "3-char prefix Cat narrows to Categories"
+  },
+  {
+    "id": "FROMTB-023",
+    "family": "from-tables",
+    "doc": "SELECT * FROM Ord|",
+    "expect": {
+      "mustContain": ["Orders", "OrderDetails"],
+      "mustNotContain": ["Products", "Customers"],
+      "minCount": 2
+    },
+    "note": "3-char prefix Ord keeps both Orders and OrderDetails"
+  },
+  {
+    "id": "FROMTB-024",
+    "family": "from-tables",
+    "doc": "SELECT * FROM Pro|",
+    "expect": {
+      "mustContain": ["Products"],
+      "mustNotContain": ["Shippers"],
+      "minCount": 1
+    },
+    "note": "3-char prefix Pro narrows to Products"
+  },
+  {
+    "id": "FROMTB-025",
+    "family": "from-tables",
+    "doc": "SELECT * FROM Shi|",
+    "expect": {
+      "mustContain": ["Shippers"],
+      "mustNotContain": ["Suppliers"],
+      "minCount": 1
+    },
+    "note": "3-char prefix Shi separates Shippers from Suppliers"
+  },
+  {
+    "id": "FROMTB-026",
+    "family": "from-tables",
+    "doc": "SELECT * FROM Sup|",
+    "expect": {
+      "mustContain": ["Suppliers"],
+      "mustNotContain": ["Shippers"],
+      "minCount": 1
+    },
+    "note": "3-char prefix Sup separates Suppliers from Shippers"
+  },
+  {
+    "id": "FROMTB-027",
+    "family": "from-tables",
+    "doc": "SELECT * FROM Emp|",
+    "expect": {
+      "mustContain": ["Employees"],
+      "mustNotContain": ["Customers", "Orders"],
+      "minCount": 1
+    },
+    "note": "3-char prefix Emp narrows to Employees"
+  },
+  {
+    "id": "FROMTB-028",
+    "family": "from-tables",
+    "doc": "SELECT * FROM vw_|",
+    "expect": {
+      "mustContain": ["vw_CustomerOrders", "vw_ProductCatalog"],
+      "mustNotContain": ["Customers", "Products"],
+      "minCount": 2
+    },
+    "note": "vw_ prefix filters to views only"
+  },
+  {
+    "id": "FROMTB-029",
+    "family": "from-tables",
+    "doc": "select * from ord|",
+    "expect": {
+      "mustContain": ["Orders", "OrderDetails"],
+      "mustNotContain": ["Suppliers"],
+      "minCount": 2
+    },
+    "note": "Lowercase 3-char prefix matches case-insensitively"
+  },
+  {
+    "id": "FROMTB-030",
+    "family": "from-tables",
+    "doc": "SELECT * FROM cUS|",
+    "expect": {
+      "mustContain": ["Customers"],
+      "mustNotContain": ["Categories"],
+      "minCount": 1
+    },
+    "note": "Mixed-case prefix cUS must still match Customers case-insensitively"
+  },
+  {
+    "id": "FROMTB-031",
+    "family": "from-tables",
+    "doc": "SELECT * FROM sysd|",
+    "expect": {
+      "mustContain": ["sysdiagrams"],
+      "mustNotContain": ["Suppliers"],
+      "minCount": 1
+    },
+    "note": "sysd prefix matches the sysdiagrams table"
+  },
+  {
+    "id": "FROMTB-032",
+    "family": "from-tables",
+    "doc": "SELECT * FROM Orders o JOIN |",
+    "expect": {
+      "mustContain": ["Customers", "Employees", "Shippers"],
+      "mustNotContain": ["NoSuchTable"],
+      "minCount": 3
+    },
+    "note": "Bare JOIN offers all tables as join targets"
+  },
+  {
+    "id": "FROMTB-033",
+    "family": "from-tables",
+    "doc": "SELECT * FROM Orders o INNER JOIN |",
+    "expect": {
+      "mustContain": ["Customers", "OrderDetails"],
+      "mustNotContain": ["usp_UpdateProductPrice"],
+      "minCount": 2
+    },
+    "note": "INNER JOIN target position offers tables, not procedures"
+  },
+  {
+    "id": "FROMTB-034",
+    "family": "from-tables",
+    "doc": "SELECT * FROM Orders o LEFT JOIN |",
+    "expect": {
+      "mustContain": ["Employees", "Shippers"],
+      "mustNotContain": ["OrderDate"],
+      "minCount": 2
+    },
+    "note": "LEFT JOIN target offers tables, never columns"
+  },
+  {
+    "id": "FROMTB-035",
+    "family": "from-tables",
+    "doc": "SELECT * FROM Orders o LEFT OUTER JOIN |",
+    "expect": {
+      "mustContain": ["Customers", "Shippers"],
+      "mustNotContain": ["NoSuchTable"],
+      "minCount": 2
+    },
+    "note": "LEFT OUTER JOIN variant also completes tables"
+  },
+  {
+    "id": "FROMTB-036",
+    "family": "from-tables",
+    "doc": "SELECT * FROM Orders o RIGHT JOIN |",
+    "expect": {
+      "mustContain": ["Customers", "Employees"],
+      "mustNotContain": ["Quantity"],
+      "minCount": 2
+    },
+    "note": "RIGHT JOIN target offers tables, never columns"
+  },
+  {
+    "id": "FROMTB-037",
+    "family": "from-tables",
+    "doc": "SELECT * FROM Orders o FULL OUTER JOIN |",
+    "expect": {
+      "mustContain": ["Customers", "Products"],
+      "mustNotContain": ["NoSuchTable"],
+      "minCount": 2
+    },
+    "note": "FULL OUTER JOIN variant also completes tables"
+  },
+  {
+    "id": "FROMTB-038",
+    "family": "from-tables",
+    "doc": "SELECT * FROM Products p CROSS JOIN |",
+    "expect": {
+      "mustContain": ["Categories", "Suppliers"],
+      "mustNotContain": ["Price"],
+      "minCount": 2
+    },
+    "note": "CROSS JOIN target offers tables, never columns of the left table"
+  },
+  {
+    "id": "FROMTB-039",
+    "family": "from-tables",
+    "doc": "SELECT * FROM Customers c JOIN Or|",
+    "expect": {
+      "mustContain": ["Orders", "OrderDetails"],
+      "mustNotContain": ["Customers", "Products"],
+      "minCount": 2
+    },
+    "note": "Prefix filter after JOIN keeps only Or-prefixed objects"
+  },
+  {
+    "id": "FROMTB-040",
+    "family": "from-tables",
+    "doc": "SELECT * FROM Products p join s|",
+    "expect": {
+      "mustContain": ["Suppliers", "Shippers"],
+      "mustNotContain": ["Orders"],
+      "minCount": 2
+    },
+    "note": "Lowercase join keyword plus lowercase prefix still filters correctly"
+  },
+  {
+    "id": "FROMTB-041",
+    "family": "from-tables",
+    "doc": "SELECT * FROM OrderDetails od JOIN Prod|",
+    "expect": {
+      "mustContain": ["Products"],
+      "mustNotContain": ["Orders", "Shippers"],
+      "minCount": 1
+    },
+    "note": "4-char prefix after JOIN narrows to Products"
+  },
+  {
+    "id": "FROMTB-042",
+    "family": "from-tables",
+    "doc": "SELECT o.OrderID\nFROM Orders o\nJOIN |",
+    "expect": {
+      "mustContain": ["Customers", "Employees"],
+      "mustNotContain": ["NoSuchTable"],
+      "minCount": 2
+    },
+    "note": "Multi-line doc with JOIN on its own line completes tables"
+  },
+  {
+    "id": "FROMTB-043",
+    "family": "from-tables",
+    "doc": "SELECT o.OrderID, c.CustomerName\nFROM Orders o\n  INNER JOIN Cust|",
+    "expect": {
+      "mustContain": ["Customers"],
+      "mustNotContain": ["Categories", "Orders"],
+      "minCount": 1
+    },
+    "note": "Multi-line indented INNER JOIN with Cust prefix narrows to Customers"
+  },
+  {
+    "id": "FROMTB-044",
+    "family": "from-tables",
+    "doc": "SELECT * FROM Orders o JOIN dbo.|",
+    "expect": {
+      "mustContain": ["Customers", "Employees"],
+      "mustNotContain": ["Invoices"],
+      "minCount": 2
+    },
+    "note": "Schema-qualified JOIN target scopes to dbo objects; Sales.Invoices excluded"
+  },
+  {
+    "id": "FROMTB-045",
+    "family": "from-tables",
+    "doc": "SELECT * FROM Orders o JOIN Sales.|",
+    "expect": {
+      "mustContain": ["Invoices"],
+      "mustNotContain": ["Customers", "Orders"],
+      "minCount": 1
+    },
+    "note": "Sales. after JOIN scopes to the Sales schema only"
+  },
+  {
+    "id": "FROMTB-046",
+    "family": "from-tables",
+    "doc": "SELECT * FROM Orders o JOIN Customers c ON o.CustomerID = c.CustomerID JOIN |",
+    "expect": {
+      "mustContain": ["Employees", "Shippers"],
+      "mustNotContain": ["NoSuchTable"],
+      "minCount": 2
+    },
+    "note": "Second JOIN after a completed ON clause still offers tables"
+  },
+  {
+    "id": "FROMTB-047",
+    "family": "from-tables",
+    "doc": "SELECT * FROM Orders o INNER JOIN Sales.Inv|",
+    "expect": {
+      "mustContain": ["Invoices"],
+      "mustNotContain": ["Customers"],
+      "minCount": 1
+    },
+    "note": "Prefix filter under the Sales schema after INNER JOIN"
+  },
+  {
+    "id": "FROMTB-048",
+    "family": "from-tables",
+    "doc": "SELECT * FROM dbo.|",
+    "expect": {
+      "mustContain": ["Customers", "Orders", "vw_CustomerOrders"],
+      "mustNotContain": ["Invoices"],
+      "minCount": 3
+    },
+    "note": "dbo. lists dbo tables and views; Sales objects must not leak in"
+  },
+  {
+    "id": "FROMTB-049",
+    "family": "from-tables",
+    "doc": "SELECT * FROM dbo.C|",
+    "expect": {
+      "mustContain": ["Categories", "Customers"],
+      "mustNotContain": ["Invoices", "Orders"],
+      "minCount": 2
+    },
+    "note": "Prefix under dbo. filters within the schema scope"
+  },
+  {
+    "id": "FROMTB-050",
+    "family": "from-tables",
+    "doc": "SELECT * FROM dbo.vw_|",
+    "expect": {
+      "mustContain": ["vw_CustomerOrders", "vw_ProductCatalog"],
+      "mustNotContain": ["Invoices"],
+      "minCount": 2
+    },
+    "note": "dbo.vw_ prefix surfaces both dbo views"
+  },
+  {
+    "id": "FROMTB-051",
+    "family": "from-tables",
+    "doc": "SELECT * FROM dbo.Ord|",
+    "expect": {
+      "mustContain": ["Orders", "OrderDetails"],
+      "mustNotContain": ["Invoices", "Products"],
+      "minCount": 2
+    },
+    "note": "dbo.Ord keeps Orders and OrderDetails inside schema scope"
+  },
+  {
+    "id": "FROMTB-052",
+    "family": "from-tables",
+    "doc": "SELECT * FROM Sales.|",
+    "expect": {
+      "mustContain": ["Invoices"],
+      "mustNotContain": ["Customers", "Orders"],
+      "minCount": 1
+    },
+    "note": "Sales. scopes to the Sales schema; dbo tables excluded"
+  },
+  {
+    "id": "FROMTB-053",
+    "family": "from-tables",
+    "doc": "SELECT * FROM Sales.In|",
+    "expect": {
+      "mustContain": ["Invoices"],
+      "mustNotContain": ["Customers"],
+      "minCount": 1
+    },
+    "note": "Prefix In under Sales schema matches Invoices"
+  },
+  {
+    "id": "FROMTB-054",
+    "family": "from-tables",
+    "doc": "select * from sales.|",
+    "expect": {
+      "mustContain": ["Invoices"],
+      "mustNotContain": ["Products"],
+      "minCount": 1
+    },
+    "note": "Lowercase schema name sales. must resolve case-insensitively"
+  },
+  {
+    "id": "FROMTB-055",
+    "family": "from-tables",
+    "doc": "SELECT * FROM DBO.|",
+    "expect": {
+      "mustContain": ["Customers", "Products"],
+      "mustNotContain": ["Invoices"],
+      "minCount": 2
+    },
+    "note": "Uppercase DBO. must resolve to the dbo schema case-insensitively"
+  },
+  {
+    "id": "FROMTB-056",
+    "family": "from-tables",
+    "doc": "SELECT * FROM Orders o JOIN dbo.Su|",
+    "expect": {
+      "mustContain": ["Suppliers"],
+      "mustNotContain": ["Shippers", "Invoices"],
+      "minCount": 1
+    },
+    "note": "dbo.Su after JOIN narrows to Suppliers within schema scope"
+  },
+  {
+    "id": "FROMTB-057",
+    "family": "from-tables",
+    "doc": "SELECT * FROM dbo.fn_|",
+    "expect": {
+      "mustContain": ["fn_OrdersByCustomer"],
+      "mustNotContain": ["Invoices"],
+      "minCount": 1
+    },
+    "note": "TVF fn_OrdersByCustomer is a valid FROM target under dbo"
+  },
+  {
+    "id": "FROMTB-058",
+    "family": "from-tables",
+    "doc": "SELECT InvoiceID FROM Sales.Invoices;\nSELECT * FROM Sales.|",
+    "expect": {
+      "mustContain": ["Invoices"],
+      "mustNotContain": ["Customers"],
+      "minCount": 1
+    },
+    "note": "Schema-scoped completion works in a second statement after a semicolon"
+  },
+  {
+    "id": "FROMTB-059",
+    "family": "from-tables",
+    "doc": "SELECT p.ProductName\nFROM dbo.|",
+    "expect": {
+      "mustContain": ["Products", "Categories"],
+      "mustNotContain": ["Invoices"],
+      "minCount": 2
+    },
+    "note": "Multi-line doc with dbo. on the FROM line scopes to dbo objects"
+  },
+  {
+    "id": "FROMTB-060",
+    "family": "from-tables",
+    "doc": "SELECT * FROM Northwind_AutoTest.dbo.|",
+    "expect": {
+      "mustContain": ["Customers", "Orders"],
+      "mustNotContain": ["Invoices"],
+      "minCount": 2
+    },
+    "note": "Three-part database.schema. prefix scopes to dbo objects"
+  },
+  {
+    "id": "FROMTB-061",
+    "family": "from-tables",
+    "doc": "SELECT * FROM Northwind_AutoTest.dbo.Cu|",
+    "expect": {
+      "mustContain": ["Customers"],
+      "mustNotContain": ["Categories", "Invoices"],
+      "minCount": 1
+    },
+    "note": "Three-part reference with Cu prefix narrows to Customers"
+  },
+  {
+    "id": "FROMTB-062",
+    "family": "from-tables",
+    "doc": "SELECT * FROM Northwind_AutoTest.Sales.|",
+    "expect": {
+      "mustContain": ["Invoices"],
+      "mustNotContain": ["Customers", "Orders"],
+      "minCount": 1
+    },
+    "note": "Three-part reference to the Sales schema excludes dbo tables"
+  },
+  {
+    "id": "FROMTB-063",
+    "family": "from-tables",
+    "doc": "SELECT * FROM Northwind_AutoTest.|",
+    "expect": {
+      "mustContain": ["dbo", "Sales"],
+      "mustNotContain": ["NoSuchSchema"],
+      "minCount": 2
+    },
+    "note": "After database name and dot the schemas dbo and Sales are offered"
+  },
+  {
+    "id": "FROMTB-064",
+    "family": "from-tables",
+    "doc": "select * from northwind_autotest.dbo.|",
+    "expect": {
+      "mustContain": ["Products", "Suppliers"],
+      "mustNotContain": ["Invoices"],
+      "minCount": 2
+    },
+    "note": "Lowercase database name must resolve case-insensitively in three-part reference"
+  },
+  {
+    "id": "FROMTB-065",
+    "family": "from-tables",
+    "doc": "SELECT * FROM Orders o JOIN Northwind_AutoTest.dbo.Or|",
+    "expect": {
+      "mustContain": ["Orders", "OrderDetails"],
+      "mustNotContain": ["Invoices"],
+      "minCount": 2
+    },
+    "note": "Three-part prefix in JOIN target position filters within dbo"
+  },
+  {
+    "id": "FROMTB-066",
+    "family": "from-tables",
+    "doc": "SELECT *\nFROM Northwind_AutoTest.dbo.vw_Cust|",
+    "expect": {
+      "mustContain": ["vw_CustomerOrders"],
+      "mustNotContain": ["vw_ProductCatalog"],
+      "minCount": 1
+    },
+    "note": "Multi-line three-part reference with long view prefix narrows to one view"
+  },
+  {
+    "id": "FROMTB-067",
+    "family": "from-tables",
+    "doc": "SELECT * FROM Northwind_AutoTest.dbo.Emp|",
+    "expect": {
+      "mustContain": ["Employees"],
+      "mustNotContain": ["Invoices", "Customers"],
+      "minCount": 1
+    },
+    "note": "Three-part Emp prefix narrows to Employees"
+  },
+  {
+    "id": "FROMTB-068",
+    "family": "from-tables",
+    "doc": "SELECT * FROM vw_C|",
+    "expect": {
+      "mustContain": ["vw_CustomerOrders"],
+      "mustNotContain": ["vw_ProductCatalog"],
+      "minCount": 1
+    },
+    "note": "vw_C prefix separates the two views"
+  },
+  {
+    "id": "FROMTB-069",
+    "family": "from-tables",
+    "doc": "SELECT * FROM vw_P|",
+    "expect": {
+      "mustContain": ["vw_ProductCatalog"],
+      "mustNotContain": ["vw_CustomerOrders"],
+      "minCount": 1
+    },
+    "note": "vw_P prefix separates the two views the other way"
+  },
+  {
+    "id": "FROMTB-070",
+    "family": "from-tables",
+    "doc": "SELECT * FROM fn_Orders|",
+    "expect": {
+      "mustContain": ["fn_OrdersByCustomer"],
+      "mustNotContain": ["Orders"],
+      "minCount": 1
+    },
+    "note": "TVF matches fn_Orders prefix in FROM position; non-matching table excluded"
+  },
+  {
+    "id": "FROMTB-071",
+    "family": "from-tables",
+    "doc": "SELECT * FROM Customers c CROSS APPLY dbo.|",
+    "expect": {
+      "mustContain": ["fn_OrdersByCustomer"],
+      "mustNotContain": ["Invoices"],
+      "minCount": 1
+    },
+    "note": "CROSS APPLY dbo. offers the table-valued function"
+  },
+  {
+    "id": "FROMTB-072",
+    "family": "from-tables",
+    "doc": "SELECT * FROM Customers c CROSS APPLY fn_|",
+    "expect": {
+      "mustContain": ["fn_OrdersByCustomer"],
+      "mustNotContain": ["Customers"],
+      "minCount": 1
+    },
+    "note": "fn_ prefix after CROSS APPLY matches the TVF"
+  },
+  {
+    "id": "FROMTB-073",
+    "family": "from-tables",
+    "doc": "SELECT * FROM Customers c OUTER APPLY dbo.fn_|",
+    "expect": {
+      "mustContain": ["fn_OrdersByCustomer"],
+      "mustNotContain": ["Invoices"],
+      "minCount": 1
+    },
+    "note": "OUTER APPLY with schema-qualified fn_ prefix matches the TVF"
+  },
+  {
+    "id": "FROMTB-074",
+    "family": "from-tables",
+    "doc": "SELECT * FROM vw_ProductCatalog;\nSELECT * FROM vw_|",
+    "expect": {
+      "mustContain": ["vw_CustomerOrders", "vw_ProductCatalog"],
+      "mustNotContain": ["Products"],
+      "minCount": 2
+    },
+    "note": "View prefix completion in second statement after semicolon"
+  },
+  {
+    "id": "FROMTB-075",
+    "family": "from-tables",
+    "doc": "SELECT * FROM Products p;\nSELECT * FROM |",
+    "expect": {
+      "mustContain": ["Customers", "Orders"],
+      "mustNotContain": ["ProductName"],
+      "minCount": 2
+    },
+    "note": "New FROM after semicolon sees schema tables, not columns from the earlier statement"
+  },
+  {
+    "id": "FROMTB-076",
+    "family": "from-tables",
+    "doc": "UPDATE Products SET Price = 10 WHERE ProductID = 1;\nSELECT * FROM Cus|",
+    "expect": {
+      "mustContain": ["Customers"],
+      "mustNotContain": ["Products"],
+      "minCount": 1
+    },
+    "note": "FROM prefix completion after an earlier UPDATE statement"
+  },
+  {
+    "id": "FROMTB-077",
+    "family": "from-tables",
+    "doc": "INSERT INTO Shippers (ShipperName, Phone) VALUES ('Speedy', '555-0100');\nSELECT * FROM Ship|",
+    "expect": {
+      "mustContain": ["Shippers"],
+      "mustNotContain": ["Suppliers"],
+      "minCount": 1
+    },
+    "note": "FROM prefix completion after an earlier INSERT statement"
+  },
+  {
+    "id": "FROMTB-078",
+    "family": "from-tables",
+    "doc": "SELECT * FROM Customers c; SELECT * FROM O|",
+    "expect": {
+      "mustContain": ["Orders", "OrderDetails"],
+      "mustNotContain": ["Customers"],
+      "minCount": 2
+    },
+    "note": "Single-line doc with two statements; prefix in the second filters normally"
+  },
+  {
+    "id": "FROMTB-079",
+    "family": "from-tables",
+    "doc": "DELETE FROM OrderDetails WHERE Quantity = 0; SELECT * FROM Order|",
+    "expect": {
+      "mustContain": ["Orders", "OrderDetails"],
+      "mustNotContain": ["Products"],
+      "minCount": 2
+    },
+    "note": "FROM completion in a SELECT following a DELETE statement"
+  },
+  {
+    "id": "FROMTB-080",
+    "family": "from-tables",
+    "doc": "EXEC dbo.usp_GetCustomerOrders @CustomerID = 1;\nSELECT * FROM |",
+    "expect": {
+      "mustContain": ["Customers", "Orders"],
+      "mustNotContain": ["usp_GetCustomerOrders"],
+      "minCount": 2
+    },
+    "note": "FROM after an EXEC statement lists tables; the proc name is not a FROM target"
+  },
+  {
+    "id": "FROMTB-081",
+    "family": "from-tables",
+    "doc": "SELECT * FROM Customers WHERE CustomerID IN (SELECT CustomerID FROM |)",
+    "expect": {
+      "mustContain": ["Orders", "vw_CustomerOrders"],
+      "mustNotContain": ["NoSuchTable"],
+      "minCount": 2
+    },
+    "note": "FROM inside an IN subquery offers tables and views"
+  },
+  {
+    "id": "FROMTB-082",
+    "family": "from-tables",
+    "doc": "SELECT * FROM (SELECT OrderID FROM |) d",
+    "expect": {
+      "mustContain": ["Orders", "OrderDetails"],
+      "mustNotContain": ["NoSuchTable"],
+      "minCount": 2
+    },
+    "note": "FROM inside a derived table offers schema tables"
+  },
+  {
+    "id": "FROMTB-083",
+    "family": "from-tables",
+    "doc": "SELECT * FROM Customers, |",
+    "expect": {
+      "mustContain": ["Orders", "Products"],
+      "mustNotContain": ["ContactName"],
+      "minCount": 2
+    },
+    "note": "Comma-separated FROM list offers tables for the next source, not columns"
+  },
+  {
+    "id": "FROMTB-084",
+    "family": "from-tables",
+    "doc": "SELECT * FROM Customers c, Ord|",
+    "expect": {
+      "mustContain": ["Orders", "OrderDetails"],
+      "mustNotContain": ["Customers"],
+      "minCount": 2
+    },
+    "note": "Prefix filter on the second comma-joined FROM source"
+  },
+  {
+    "id": "FROMTB-085",
+    "family": "from-tables",
+    "doc": "SELECT (SELECT COUNT(*) FROM |) AS OrderCount",
+    "expect": {
+      "mustContain": ["Orders", "OrderDetails"],
+      "mustNotContain": ["NoSuchTable"],
+      "minCount": 2
+    },
+    "note": "FROM inside a scalar subquery in the select list offers tables"
+  },
+  {
+    "id": "FROMTB-086",
+    "family": "from-tables",
+    "doc": "SELECT * FROM Orders o WHERE EXISTS (SELECT 1 FROM Order|",
+    "expect": {
+      "mustContain": ["Orders", "OrderDetails"],
+      "mustNotContain": ["Customers"],
+      "minCount": 2
+    },
+    "note": "FROM prefix inside an unclosed EXISTS subquery still filters tables"
+  },
+  {
+    "id": "FROMTB-087",
+    "family": "from-tables",
+    "doc": "UPDATE p SET p.Price = p.Price * 1.1 FROM |",
+    "expect": {
+      "mustContain": ["Products", "Suppliers"],
+      "mustNotContain": ["NoSuchTable"],
+      "minCount": 2
+    },
+    "note": "FROM clause of an aliased UPDATE offers tables"
+  },
+  {
+    "id": "FROMTB-088",
+    "family": "from-tables",
+    "doc": "SELECT * INTO #CustomerSnapshot FROM |",
+    "expect": {
+      "mustContain": ["Customers", "Orders"],
+      "mustNotContain": ["NoSuchTable"],
+      "minCount": 2
+    },
+    "note": "SELECT INTO source FROM position offers schema tables"
+  },
+  {
+    "id": "FROMTB-089",
+    "family": "from-tables",
+    "doc": "INSERT INTO OrderDetails (OrderID, ProductID, Quantity)\nSELECT OrderID, 1, 1 FROM |",
+    "expect": {
+      "mustContain": ["Orders"],
+      "mustNotContain": ["Quantity"],
+      "minCount": 1
+    },
+    "note": "Multi-line INSERT ... SELECT: source FROM offers tables, not the insert column list"
+  },
+  {
+    "id": "FROMTB-090",
+    "family": "from-tables",
+    "doc": "SELECT CustomerID FROM Customers\nUNION\nSELECT CustomerID FROM |",
+    "expect": {
+      "mustContain": ["Orders", "vw_CustomerOrders"],
+      "mustNotContain": ["NoSuchTable"],
+      "minCount": 2
+    },
+    "note": "Multi-line UNION second branch FROM sees the full schema"
+  },
+  {
+    "id": "FROMTB-091",
+    "family": "from-tables",
+    "doc": "SELECT c.CustomerName FROM Customers c WHERE c.Country IN (SELECT Country FROM Sup|)",
+    "expect": {
+      "mustContain": ["Suppliers"],
+      "mustNotContain": ["Shippers", "Customers"],
+      "minCount": 1
+    },
+    "note": "Prefix filter inside a correlated IN subquery FROM position"
+  },
+  {
+    "id": "FROMTB-092",
+    "family": "from-tables",
+    "doc": "SELECT * FROM Orders o\nWHERE o.EmployeeID IN (\n    SELECT EmployeeID FROM Emp|\n)",
+    "expect": {
+      "mustContain": ["Employees"],
+      "mustNotContain": ["Orders"],
+      "minCount": 1
+    },
+    "note": "Multi-line subquery FROM with Emp prefix narrows to Employees"
+  },
+  {
+    "id": "FROMTB-093",
+    "family": "from-tables",
+    "doc": "SELECT * FROM NoSuch|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["NoSuchTable"],
+      "minCount": 0
+    },
+    "note": "Negative: fake prefix matches no schema object"
+  },
+  {
+    "id": "FROMTB-094",
+    "family": "from-tables",
+    "doc": "SELECT * FROM Zq|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["Customers"],
+      "minCount": 0
+    },
+    "note": "Negative: Zq prefix matches nothing; unfiltered items would indicate a broken prefix filter"
+  },
+  {
+    "id": "FROMTB-095",
+    "family": "from-tables",
+    "doc": "SELECT * FROM usp_|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["usp_GetCustomerOrders", "usp_UpdateProductPrice"],
+      "minCount": 0
+    },
+    "note": "Negative: stored procedures are not valid FROM targets even when the prefix matches them"
+  },
+  {
+    "id": "FROMTB-096",
+    "family": "from-tables",
+    "doc": "SELECT * FROM Sales.C|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["Customers", "Categories"],
+      "minCount": 0
+    },
+    "note": "Negative: dbo tables must not leak into a Sales-schema-scoped prefix"
+  },
+  {
+    "id": "FROMTB-097",
+    "family": "from-tables",
+    "doc": "SELECT * FROM dbo.Inv|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["Invoices"],
+      "minCount": 0
+    },
+    "note": "Negative: Sales.Invoices must not leak into a dbo-scoped prefix"
+  },
+  {
+    "id": "FROMTB-098",
+    "family": "from-tables",
+    "doc": "select top 5 * from |",
+    "expect": {
+      "mustContain": ["Orders", "Customers"],
+      "mustNotContain": ["NoSuchTable"],
+      "minCount": 2
+    },
+    "note": "Lowercase TOP without parentheses still completes tables after from"
+  },
+  {
+    "id": "FROMTB-099",
+    "family": "from-tables",
+    "doc": "SELECT DISTINCT Country FROM |",
+    "expect": {
+      "mustContain": ["Customers", "Suppliers"],
+      "mustNotContain": ["Country"],
+      "minCount": 2
+    },
+    "note": "DISTINCT select list does not change FROM completion; the selected column is not offered"
+  },
+  {
+    "id": "FROMTB-100",
+    "family": "from-tables",
+    "doc": "SELECT *\nFROM\n|",
+    "expect": {
+      "mustContain": ["Customers", "Products"],
+      "mustNotContain": ["Notes"],
+      "minCount": 2
+    },
+    "note": "Caret on the line after a bare FROM keyword still completes tables"
+  }
+]

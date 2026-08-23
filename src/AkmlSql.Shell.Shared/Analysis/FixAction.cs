@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Shell.Shared.Ipc;
 using Microsoft.VisualStudio.Imaging;
@@ -143,46 +144,28 @@ namespace AkmlSql.Shell.Shared.Analysis
 
         public void Invoke(CancellationToken cancellationToken)
         {
-            // Write a user-level .casettings file that disables this rule
-            // (T064/T066 will wire this into the full ConfigManager/SettingsDialog flow)
+            // Persist through config.json ruleOverrides — the mechanism the engine actually
+            // reads and ManageRulesCommand already uses. The previous implementation wrote a
+            // user-level %AppData%\AKML SQL\.casettings, which CaSettingsLoader never loads
+            // (it only searches upward from the DOCUMENT directory), so "Disable rule"
+            // silently did nothing across restarts.
             try
             {
-                var userDir  = System.IO.Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "AKML SQL");
-                System.IO.Directory.CreateDirectory(userDir);
-                var settingsPath = System.IO.Path.Combine(userDir, ".casettings");
+                var settings = ConfigManager.Load();
+                var overrides = settings.CodeAnalysis.RuleOverrides;
 
-                // Load existing file or start fresh
-                var json = System.IO.File.Exists(settingsPath)
-                    ? System.IO.File.ReadAllText(settingsPath)
-                    : "{}";
-                var jobj = System.Text.Json.JsonDocument.Parse(json).RootElement;
-                // Minimal write: merge disabled rule into rules section
-                var merged = new Dictionary<string, object>();
-                if (jobj.TryGetProperty("rules", out var rulesEl))
+                // Preserve any existing severity override; only flip the enable flag.
+                if (overrides.TryGetValue(ruleId, out var existing))
                 {
-                    foreach (var prop in rulesEl.EnumerateObject())
-                        merged[prop.Name] = prop.Value;
+                    existing.Enabled = false;
+                }
+                else
+                {
+                    overrides[ruleId] = new Core.Config.RuleOverride { Enabled = false };
                 }
 
-                // Preserve any existing severity override; only flip enabled to false
-                string existingSeverity = null;
-                if (rulesEl.ValueKind == System.Text.Json.JsonValueKind.Object &&
-                    rulesEl.TryGetProperty(ruleId, out var existing) &&
-                    existing.TryGetProperty("severity", out var sev))
-                {
-                    existingSeverity = sev.GetString();
-                }
-
-                merged[ruleId] = existingSeverity != null
-                    ? (object)new { enabled = false, severity = existingSeverity }
-                    : new { enabled = false };
-
-                var updated = System.Text.Json.JsonSerializer.Serialize(
-                    new { rules = merged },
-                    new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
-                System.IO.File.WriteAllText(settingsPath, updated);
+                ConfigManager.Save(settings);
+                Serilog.Log.Information("DisableRuleGloballyFixAction: disabled {Rule} via config.json ruleOverrides", ruleId);
             }
             catch (Exception ex)
             {

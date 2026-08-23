@@ -66,7 +66,11 @@ Source: "web-config-bridge.ps1"; DestDir: "{tmp}"; Flags: deleteafterinstall; Co
 [Run]
 ; FR-004 -- web-iis-setup.ps1 receives the IIS port (the static-bundle site).
 ; Skipped when "Don't host" was selected (only runs for the web\iis component).
-Filename: "powershell.exe"; \
+; {sysnative}: this setup is a 32-bit process, so a bare "powershell.exe" resolves to the SysWOW64
+; host, where WebAdministration's IIS config COM classes are unregistered -- provisioning then dies
+; with 0x80040154 REGDB_E_CLASSNOTREG on EVERY install, even with IIS fully present. The script now
+; also self-relaunches 64-bit, but launching the native host directly keeps the log single-run.
+Filename: "{sysnative}\WindowsPowerShell\v1.0\powershell.exe"; \
     Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\Support\web-iis-setup.ps1"" -Port {code:GetIisPort} -PhysicalPath ""{app}\Web"" -Mode {code:GetBridgeMode}"; \
     StatusMsg: "Provisioning IIS site for AKML SQL Web..."; \
     Components: web\iis; \
@@ -161,6 +165,9 @@ var
     WebSilentDontHost: Boolean;   { US4: /WEB_HOST=NONE }
 
 procedure Web_Init();
+var
+    prevPort: Cardinal;
+    prevMode: String;
 begin
     { Hosting choice }
     WebHostPage := CreateInputOptionPage(
@@ -210,11 +217,25 @@ begin
         'The pairing PIN + TLS thumbprint + browser URL are below. They are also written to "%CommonAppData%\AKML SQL Web\INSTALL-SUMMARY.txt".');
 
     { Seed the port globals with the page defaults UNLESS the silent flags already set them
-      (Web_ValidateSilentFlags runs in InitializeSetup, before this). }
+      (Web_ValidateSilentFlags runs in InitializeSetup, before this). On a REINSTALL, prefer the
+      values persisted by the previous install (Web_PostInstall writes them to HKLM): otherwise a
+      Next-Next upgrade would default back to port 80 and web-iis-setup.ps1 -- which removes and
+      recreates the site -- would silently rebind a working site (e.g. :8083) to :80. }
     if not WebSilentActive then
     begin
         WebIisPort := 80;
         WebBridgePort := 47291;
+        if RegQueryDWordValue(HKLM, 'Software\AKML SQL\Web', 'IisPort', prevPort)
+           and (prevPort > 0) then
+            WebIisPort := prevPort;
+        if RegQueryDWordValue(HKLM, 'Software\AKML SQL\Web', 'BridgePort', prevPort)
+           and (prevPort > 0) then
+            WebBridgePort := prevPort;
+        WebIisPortPage.Values[0] := IntToStr(WebIisPort);
+        WebBridgePortPage.Values[0] := IntToStr(WebBridgePort);
+        if RegQueryStringValue(HKLM, 'Software\AKML SQL\Web', 'IisMode', prevMode)
+           and (prevMode = 'Lan') then
+            WebNetworkPage.SelectedValueIndex := 1;
     end;
 end;
 
@@ -685,8 +706,10 @@ begin
         Exec('netsh.exe', 'http delete sslcert ipport=0.0.0.0:' + IntToStr(bridgePort),
              '', SW_HIDE, ewWaitUntilTerminated, resultCode);
 
-    { Remove the IIS site if installed. }
-    Exec('powershell.exe',
+    { Remove the IIS site if installed. sysnative: the 32-bit uninstaller must use the native
+      64-bit PowerShell -- WebAdministration's COM classes are unregistered in SysWOW64, so a bare
+      'powershell.exe' here silently failed (0x80040154) and leaked the site on uninstall. }
+    Exec(ExpandConstant('{sysnative}\WindowsPowerShell\v1.0\powershell.exe'),
          '-NoProfile -ExecutionPolicy Bypass -Command "Import-Module WebAdministration; Remove-WebSite -Name AkmlSqlWeb -ErrorAction SilentlyContinue"',
          '', SW_HIDE, ewWaitUntilTerminated, resultCode);
 

@@ -11,7 +11,7 @@ namespace AkmlSql.Core.Text
     /// <see cref="KindDefault"/>. Intentionally simple: it colours for readability, it is not a parser.
     /// Pure C# only (netstandard2.0 + net10.0) so both editions can share it.
     /// <para>
-    /// The desktop ProfileEditor format-preview renderer (<c>AkmlSql.Shell.Shared/Ui/SqlPreviewRenderer.cs</c>)
+    /// The desktop format-preview surfaces (historically the retired ProfileEditor renderer)
     /// was deliberately NOT migrated onto this tokenizer: it keeps its own richer tokenizer by design,
     /// because the format preview needs finer number/function colouring than the history previews require.
     /// </para>

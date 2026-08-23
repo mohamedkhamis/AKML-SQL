@@ -1,0 +1,662 @@
+[
+  {
+    "id": "FUNC-001",
+    "family": "functions",
+    "doc": "SELECT dbo.fn_| FROM dbo.Orders",
+    "expect": {
+      "mustContain": ["fn_OrderItemCount"],
+      "mustNotContain": ["fn_NoSuchFunction"],
+      "minCount": 1
+    },
+    "note": "scalar function completion in select list after dbo. with fn_ prefix"
+  },
+  {
+    "id": "FUNC-002",
+    "family": "functions",
+    "doc": "SELECT dbo.fn_OrderItem|",
+    "expect": {
+      "mustContain": ["fn_OrderItemCount"],
+      "mustNotContain": ["fn_OrdersByCustomer", "GETDATE"],
+      "minCount": 1
+    },
+    "note": "long prefix fn_OrderItem must filter out the sibling TVF and built-ins"
+  },
+  {
+    "id": "FUNC-003",
+    "family": "functions",
+    "doc": "select dbo.|",
+    "expect": {
+      "mustContain": ["fn_OrderItemCount"],
+      "mustNotContain": ["NoSuchTable"],
+      "minCount": 1
+    },
+    "note": "lowercase keywords, empty prefix after dbo. offers scalar function"
+  },
+  {
+    "id": "FUNC-004",
+    "family": "functions",
+    "doc": "SELECT o.OrderID, dbo.fn_|(o.OrderID) FROM dbo.Orders o",
+    "expect": {
+      "mustContain": ["fn_OrderItemCount"],
+      "mustNotContain": ["fn_NoSuchFunction"],
+      "minCount": 1
+    },
+    "note": "scalar fn completion mid-expression with existing call parens after caret"
+  },
+  {
+    "id": "FUNC-005",
+    "family": "functions",
+    "doc": "SELECT\n    o.OrderID,\n    dbo.fn_Ord|\nFROM dbo.Orders o",
+    "expect": {
+      "mustContain": ["fn_OrderItemCount"],
+      "mustNotContain": ["GETDATE", "usp_GetCustomerOrders"],
+      "minCount": 1
+    },
+    "note": "multi-line select list; fn_Ord prefix excludes non-matching builtins and procs"
+  },
+  {
+    "id": "FUNC-006",
+    "family": "functions",
+    "doc": "SELECT DBO.FN_| FROM dbo.Products",
+    "expect": {
+      "mustContain": ["fn_OrderItemCount"],
+      "mustNotContain": ["fn_NoSuchFunction"],
+      "minCount": 1
+    },
+    "note": "uppercase schema qualifier and prefix match case-insensitively"
+  },
+  {
+    "id": "FUNC-007",
+    "family": "functions",
+    "doc": "SELECT CustomerID FROM dbo.Customers;\nSELECT dbo.fn_Order| FROM dbo.Orders",
+    "expect": {
+      "mustContain": ["fn_OrderItemCount"],
+      "mustNotContain": ["usp_GetCustomerOrders"],
+      "minCount": 1
+    },
+    "note": "scalar fn completion in second statement after a semicolon-terminated statement"
+  },
+  {
+    "id": "FUNC-008",
+    "family": "functions",
+    "doc": "SELECT dbo.f|",
+    "expect": {
+      "mustContain": ["fn_OrderItemCount"],
+      "mustNotContain": ["GETDATE"],
+      "minCount": 1
+    },
+    "note": "1-char prefix f after dbo. matches user functions, not built-ins"
+  },
+  {
+    "id": "FUNC-009",
+    "family": "functions",
+    "doc": "SELECT OrderID FROM dbo.Orders WHERE dbo.fn_|(OrderID) > 5",
+    "expect": {
+      "mustContain": ["fn_OrderItemCount"],
+      "mustNotContain": ["fn_NoSuchFunction"],
+      "minCount": 1
+    },
+    "note": "scalar function completion inside WHERE predicate"
+  },
+  {
+    "id": "FUNC-010",
+    "family": "functions",
+    "doc": "SELECT o.OrderID FROM dbo.Orders o WHERE dbo.fn_OrderItemC|(o.OrderID) > 3",
+    "expect": {
+      "mustContain": ["fn_OrderItemCount"],
+      "mustNotContain": ["fn_OrdersByCustomer"],
+      "minCount": 1
+    },
+    "note": "long prefix in WHERE filters out the TVF"
+  },
+  {
+    "id": "FUNC-011",
+    "family": "functions",
+    "doc": "SELECT OrderID\nFROM dbo.Orders\nWHERE dbo.|",
+    "expect": {
+      "mustContain": ["fn_OrderItemCount"],
+      "mustNotContain": ["fn_NoSuchFunction"],
+      "minCount": 1
+    },
+    "note": "multi-line doc, empty prefix after dbo. in WHERE offers scalar function"
+  },
+  {
+    "id": "FUNC-012",
+    "family": "functions",
+    "doc": "select OrderID from dbo.Orders where OrderDate < GET|",
+    "expect": {
+      "mustContain": ["GETDATE"],
+      "mustNotContain": ["fn_OrderItemCount", "CustomerID"],
+      "minCount": 1
+    },
+    "note": "lowercase doc; GET prefix matches GETDATE and filters everything else"
+  },
+  {
+    "id": "FUNC-013",
+    "family": "functions",
+    "doc": "SELECT * FROM dbo.fn_|",
+    "expect": {
+      "mustContain": ["fn_OrdersByCustomer"],
+      "mustNotContain": ["fn_NoSuchFunction"],
+      "minCount": 1
+    },
+    "note": "TVF offered after FROM dbo. with fn_ prefix"
+  },
+  {
+    "id": "FUNC-014",
+    "family": "functions",
+    "doc": "SELECT * FROM dbo.fn_OrdersBy|(42) AS oc",
+    "expect": {
+      "mustContain": ["fn_OrdersByCustomer"],
+      "mustNotContain": ["fn_OrderItemCount"],
+      "minCount": 1
+    },
+    "note": "TVF prefix fn_OrdersBy excludes scalar fn by prefix; call args already present"
+  },
+  {
+    "id": "FUNC-015",
+    "family": "functions",
+    "doc": "SELECT c.CustomerName FROM dbo.Customers c CROSS APPLY dbo.fn_|",
+    "expect": {
+      "mustContain": ["fn_OrdersByCustomer"],
+      "mustNotContain": ["fn_NoSuchFunction"],
+      "minCount": 1
+    },
+    "note": "TVF completion after CROSS APPLY"
+  },
+  {
+    "id": "FUNC-016",
+    "family": "functions",
+    "doc": "SELECT c.CustomerID\nFROM dbo.Customers c\nOUTER APPLY dbo.fn_Orders|",
+    "expect": {
+      "mustContain": ["fn_OrdersByCustomer"],
+      "mustNotContain": ["fn_OrderItemCount"],
+      "minCount": 1
+    },
+    "note": "multi-line OUTER APPLY; prefix fn_Orders does not match fn_OrderItemCount"
+  },
+  {
+    "id": "FUNC-017",
+    "family": "functions",
+    "doc": "select * from DBO.FN_ORDERSBY|",
+    "expect": {
+      "mustContain": ["fn_OrdersByCustomer"],
+      "mustNotContain": ["fn_NoSuchFunction"],
+      "minCount": 1
+    },
+    "note": "all-caps prefix after FROM matches TVF case-insensitively"
+  },
+  {
+    "id": "FUNC-018",
+    "family": "functions",
+    "doc": "EXEC dbo.usp_UpdateProductPrice @ProductID = 1, @NewPrice = 9.99;\nSELECT * FROM dbo.fn_|",
+    "expect": {
+      "mustContain": ["fn_OrdersByCustomer"],
+      "mustNotContain": ["usp_UpdateProductPrice"],
+      "minCount": 1
+    },
+    "note": "prior EXEC statement terminated by ; must not leak proc into FROM fn_ completion"
+  },
+  {
+    "id": "FUNC-019",
+    "family": "functions",
+    "doc": "SELECT * FROM dbo.|",
+    "expect": {
+      "mustContain": ["fn_OrdersByCustomer", "Customers", "Orders"],
+      "mustNotContain": ["fn_OrderItemCount"],
+      "minCount": 3
+    },
+    "note": "FROM position offers tables and TVFs; scalar function is not valid in FROM"
+  },
+  {
+    "id": "FUNC-020",
+    "family": "functions",
+    "doc": "SELECT | FROM dbo.Orders",
+    "expect": {
+      "mustContain": ["COUNT", "SUM", "GETDATE"],
+      "mustNotContain": ["fn_NoSuchFunction"],
+      "minCount": 5
+    },
+    "note": "empty prefix in select list includes built-in functions"
+  },
+  {
+    "id": "FUNC-021",
+    "family": "functions",
+    "doc": "SELECT COUNT(|) FROM dbo.Orders",
+    "expect": {
+      "mustContain": ["OrderID", "CustomerID"],
+      "mustNotContain": ["ProductName", "Quantity"],
+      "minCount": 2
+    },
+    "note": "inside COUNT args only in-scope Orders columns should appear"
+  },
+  {
+    "id": "FUNC-022",
+    "family": "functions",
+    "doc": "SELECT SUM(od.|) FROM dbo.OrderDetails od",
+    "expect": {
+      "mustContain": ["Quantity", "OrderID"],
+      "mustNotContain": ["Price", "CustomerName"],
+      "minCount": 2
+    },
+    "note": "alias-qualified column completion inside SUM scoped to OrderDetails"
+  },
+  {
+    "id": "FUNC-023",
+    "family": "functions",
+    "doc": "SELECT AVG(p.Pr|) FROM dbo.Products p",
+    "expect": {
+      "mustContain": ["Price", "ProductName"],
+      "mustNotContain": ["Quantity", "SupplierName"],
+      "minCount": 2
+    },
+    "note": "2-char prefix inside AVG filters Products columns; other tables excluded"
+  },
+  {
+    "id": "FUNC-024",
+    "family": "functions",
+    "doc": "SELECT GET|",
+    "expect": {
+      "mustContain": ["GETDATE"],
+      "mustNotContain": ["SUM", "fn_OrderItemCount"],
+      "minCount": 1
+    },
+    "note": "GET prefix at select start matches GETDATE only among asserted items"
+  },
+  {
+    "id": "FUNC-025",
+    "family": "functions",
+    "doc": "select getd|",
+    "expect": {
+      "mustContain": ["GETDATE"],
+      "mustNotContain": ["COUNT"],
+      "minCount": 1
+    },
+    "note": "lowercase 4-char prefix matches GETDATE case-insensitively"
+  },
+  {
+    "id": "FUNC-026",
+    "family": "functions",
+    "doc": "SELECT SU| FROM dbo.OrderDetails",
+    "expect": {
+      "mustContain": ["SUM"],
+      "mustNotContain": ["COUNT", "GETDATE"],
+      "minCount": 1
+    },
+    "note": "SU prefix offers SUM; non-matching built-ins filtered"
+  },
+  {
+    "id": "FUNC-027",
+    "family": "functions",
+    "doc": "SELECT\n    o.CustomerID,\n    COU|\nFROM dbo.Orders o\nGROUP BY o.CustomerID",
+    "expect": {
+      "mustContain": ["COUNT"],
+      "mustNotContain": ["SUM", "fn_OrderItemCount"],
+      "minCount": 1
+    },
+    "note": "multi-line grouped query; COU prefix matches COUNT"
+  },
+  {
+    "id": "FUNC-028",
+    "family": "functions",
+    "doc": "SELECT ProductName, ROU|(Price, 0) FROM dbo.Products",
+    "expect": {
+      "mustContain": ["ROUND"],
+      "mustNotContain": ["GETDATE"],
+      "minCount": 1
+    },
+    "note": "ROU prefix matches ROUND built-in in select list"
+  },
+  {
+    "id": "FUNC-029",
+    "family": "functions",
+    "doc": "SELECT ISN|(ContactName, 'none') FROM dbo.Suppliers",
+    "expect": {
+      "mustContain": ["ISNULL"],
+      "mustNotContain": ["COALESCE"],
+      "minCount": 1
+    },
+    "note": "ISN prefix matches ISNULL; COALESCE filtered by prefix"
+  },
+  {
+    "id": "FUNC-030",
+    "family": "functions",
+    "doc": "SELECT UPPER(c.|) FROM dbo.Customers c",
+    "expect": {
+      "mustContain": ["CustomerName", "City"],
+      "mustNotContain": ["ProductName"],
+      "minCount": 2
+    },
+    "note": "alias-qualified columns offered inside UPPER string function"
+  },
+  {
+    "id": "FUNC-031",
+    "family": "functions",
+    "doc": "SELECT OrderID FROM dbo.Orders WHERE OrderDate >= DATEA|",
+    "expect": {
+      "mustContain": ["DATEADD"],
+      "mustNotContain": ["DATEDIFF", "GETDATE"],
+      "minCount": 1
+    },
+    "note": "DATEA prefix in WHERE matches DATEADD but not DATEDIFF"
+  },
+  {
+    "id": "FUNC-032",
+    "family": "functions",
+    "doc": "SELECT OrderID FROM dbo.Orders WHERE YEAR(|) = 2024",
+    "expect": {
+      "mustContain": ["OrderDate", "OrderID"],
+      "mustNotContain": ["InvoiceDate"],
+      "minCount": 2
+    },
+    "note": "columns of in-scope Orders offered inside YEAR(); Sales.Invoices column excluded"
+  },
+  {
+    "id": "FUNC-033",
+    "family": "functions",
+    "doc": "SELECT ProductID FROM dbo.OrderDetails GROUP BY ProductID HAVING SUM(|) > 100",
+    "expect": {
+      "mustContain": ["Quantity", "OrderID"],
+      "mustNotContain": ["Price"],
+      "minCount": 2
+    },
+    "note": "HAVING aggregate args scoped to OrderDetails columns"
+  },
+  {
+    "id": "FUNC-034",
+    "family": "functions",
+    "doc": "SELECT ProductID, SUM(Quantity) AS Total FROM dbo.OrderDetails GROUP BY ProductID HAVING SU|",
+    "expect": {
+      "mustContain": ["SUM"],
+      "mustNotContain": ["COUNT"],
+      "minCount": 1
+    },
+    "note": "built-in aggregate name completion at HAVING position with SU prefix"
+  },
+  {
+    "id": "FUNC-035",
+    "family": "functions",
+    "doc": "SELECT ProductName FROM dbo.Products ORDER BY LE|",
+    "expect": {
+      "mustContain": ["LEN"],
+      "mustNotContain": ["fn_OrdersByCustomer", "GETDATE"],
+      "minCount": 1
+    },
+    "note": "LE prefix in ORDER BY matches LEN built-in"
+  },
+  {
+    "id": "FUNC-036",
+    "family": "functions",
+    "doc": "SELECT InvoiceID FROM Sales.Invoices WHERE InvoiceDate < GETD|",
+    "expect": {
+      "mustContain": ["GETDATE"],
+      "mustNotContain": ["TotalAmount", "fn_OrderItemCount"],
+      "minCount": 1
+    },
+    "note": "built-in completion inside WHERE against Sales schema table"
+  },
+  {
+    "id": "FUNC-037",
+    "family": "functions",
+    "doc": "DECLARE @n int = dbo.fn_|",
+    "expect": {
+      "mustContain": ["fn_OrderItemCount"],
+      "mustNotContain": ["fn_NoSuchFunction"],
+      "minCount": 1
+    },
+    "note": "scalar function completion in DECLARE inline default expression"
+  },
+  {
+    "id": "FUNC-038",
+    "family": "functions",
+    "doc": "DECLARE @cnt int;\nSET @cnt = dbo.fn_OrderItem|(10)",
+    "expect": {
+      "mustContain": ["fn_OrderItemCount"],
+      "mustNotContain": ["fn_OrdersByCustomer"],
+      "minCount": 1
+    },
+    "note": "SET assignment after semicolon-terminated DECLARE; long prefix filters TVF"
+  },
+  {
+    "id": "FUNC-039",
+    "family": "functions",
+    "doc": "IF dbo.fn_|(1) > 0 SELECT 1",
+    "expect": {
+      "mustContain": ["fn_OrderItemCount"],
+      "mustNotContain": ["fn_NoSuchFunction"],
+      "minCount": 1
+    },
+    "note": "scalar function completion inside IF condition"
+  },
+  {
+    "id": "FUNC-040",
+    "family": "functions",
+    "doc": "SELECT o.OrderID FROM dbo.Orders o INNER JOIN dbo.OrderDetails od ON od.OrderID = o.OrderID AND dbo.fn_|(o.OrderID) > 1",
+    "expect": {
+      "mustContain": ["fn_OrderItemCount"],
+      "mustNotContain": ["fn_NoSuchFunction"],
+      "minCount": 1
+    },
+    "note": "scalar function completion inside JOIN ON extra predicate"
+  },
+  {
+    "id": "FUNC-041",
+    "family": "functions",
+    "doc": "UPDATE dbo.Products SET Price = 10 WHERE ProductID = 1;\nSELECT dbo.fn_|(OrderID) FROM dbo.Orders",
+    "expect": {
+      "mustContain": ["fn_OrderItemCount"],
+      "mustNotContain": ["usp_UpdateProductPrice", "fn_NoSuchFunction"],
+      "minCount": 1
+    },
+    "note": "fn_ prefix after prior semicolon-terminated UPDATE; proc name must not match"
+  },
+  {
+    "id": "FUNC-042",
+    "family": "functions",
+    "doc": "SELECT GETDATE();\nSELECT COUN| FROM dbo.Orders",
+    "expect": {
+      "mustContain": ["COUNT"],
+      "mustNotContain": ["GETDATE", "SUM"],
+      "minCount": 1
+    },
+    "note": "second statement after ;: COUN prefix filters other built-ins"
+  },
+  {
+    "id": "FUNC-043",
+    "family": "functions",
+    "doc": "SELECT p.ProductName FROM dbo.Products p;\nSELECT SUM(|) FROM dbo.OrderDetails",
+    "expect": {
+      "mustContain": ["Quantity", "OrderID"],
+      "mustNotContain": ["ProductName", "Price"],
+      "minCount": 2
+    },
+    "note": "aggregate args in second statement must not see prior statement's Products columns"
+  },
+  {
+    "id": "FUNC-044",
+    "family": "functions",
+    "doc": "DELETE FROM dbo.OrderDetails WHERE Quantity = 0;\nSELECT * FROM dbo.fn_Or|",
+    "expect": {
+      "mustContain": ["fn_OrdersByCustomer"],
+      "mustNotContain": ["Quantity"],
+      "minCount": 1
+    },
+    "note": "TVF after FROM in a new statement following semicolon-terminated DELETE"
+  },
+  {
+    "id": "FUNC-045",
+    "family": "functions",
+    "doc": "SELECT SUM(|) FROM dbo.Orders o JOIN dbo.OrderDetails od ON od.OrderID = o.OrderID",
+    "expect": {
+      "mustContain": ["Quantity", "OrderDate"],
+      "mustNotContain": ["Price", "InvoiceID"],
+      "minCount": 2
+    },
+    "note": "aggregate args see columns from both joined tables, not unrelated tables"
+  },
+  {
+    "id": "FUNC-046",
+    "family": "functions",
+    "doc": "SELECT COUNT(o.|) FROM dbo.Orders o",
+    "expect": {
+      "mustContain": ["OrderID", "CustomerID", "EmployeeID"],
+      "mustNotContain": ["Quantity"],
+      "minCount": 3
+    },
+    "note": "alias-qualified completion inside COUNT scoped to Orders"
+  },
+  {
+    "id": "FUNC-047",
+    "family": "functions",
+    "doc": "SELECT COUNT(v.|) FROM dbo.vw_CustomerOrders v",
+    "expect": {
+      "mustContain": ["CustomerName", "OrderDate"],
+      "mustNotContain": ["ProductName"],
+      "minCount": 2
+    },
+    "note": "view columns offered inside built-in aggregate via view alias"
+  },
+  {
+    "id": "FUNC-048",
+    "family": "functions",
+    "doc": "SELECT MIN(|), MAX(Price) FROM dbo.Products",
+    "expect": {
+      "mustContain": ["Price", "ProductID"],
+      "mustNotContain": ["TotalAmount"],
+      "minCount": 2
+    },
+    "note": "first aggregate arg position with a second complete aggregate after it"
+  },
+  {
+    "id": "FUNC-049",
+    "family": "functions",
+    "doc": "SELECT COALESCE(c.|, 'n/a') FROM dbo.Customers c",
+    "expect": {
+      "mustContain": ["ContactName", "City"],
+      "mustNotContain": ["SupplierName"],
+      "minCount": 2
+    },
+    "note": "alias columns inside COALESCE; Suppliers column with same-named siblings excluded"
+  },
+  {
+    "id": "FUNC-050",
+    "family": "functions",
+    "doc": "SELECT UPPER(LEFT(CustomerName, 3)) AS Prefix, LOW| FROM dbo.Customers",
+    "expect": {
+      "mustContain": ["LOWER"],
+      "mustNotContain": ["UPPER"],
+      "minCount": 1
+    },
+    "note": "LOW prefix after a nested function expression matches LOWER only"
+  },
+  {
+    "id": "FUNC-051",
+    "family": "functions",
+    "doc": "SELECT OrderID FROM dbo.Orders WHERE dbo.fn_OrderItemCount(|) > 2",
+    "expect": {
+      "mustContain": ["OrderID", "CustomerID"],
+      "mustNotContain": ["Quantity"],
+      "minCount": 2
+    },
+    "note": "column completion inside user scalar function call arguments in WHERE"
+  },
+  {
+    "id": "FUNC-052",
+    "family": "functions",
+    "doc": "SELECT * FROM dbo.fn_ordersbycustomer(7) AS t;\nSELECT dbo.fn_orderitem|",
+    "expect": {
+      "mustContain": ["fn_OrderItemCount"],
+      "mustNotContain": ["fn_OrdersByCustomer"],
+      "minCount": 1
+    },
+    "note": "lowercase prefix in a new statement after semicolon-terminated TVF query"
+  },
+  {
+    "id": "FUNC-053",
+    "family": "functions",
+    "doc": "SELECT    dbo.fn_|   FROM dbo.Orders",
+    "expect": {
+      "mustContain": ["fn_OrderItemCount"],
+      "mustNotContain": ["fn_NoSuchFunction"],
+      "minCount": 1
+    },
+    "note": "irregular whitespace around caret does not break function completion"
+  },
+  {
+    "id": "FUNC-054",
+    "family": "functions",
+    "doc": "SELECT\n\tCOUNT(DISTINCT |)\nFROM dbo.Orders",
+    "expect": {
+      "mustContain": ["CustomerID", "EmployeeID"],
+      "mustNotContain": ["ProductID"],
+      "minCount": 2
+    },
+    "note": "multi-line tab-indented COUNT(DISTINCT ...) arg position scoped to Orders"
+  },
+  {
+    "id": "FUNC-055",
+    "family": "functions",
+    "doc": "SELECT C| FROM dbo.Customers",
+    "expect": {
+      "mustContain": ["COUNT", "CustomerID"],
+      "mustNotContain": ["SUM"],
+      "minCount": 2
+    },
+    "note": "1-char prefix mixes built-in functions and in-scope columns"
+  },
+  {
+    "id": "FUNC-056",
+    "family": "functions",
+    "doc": "SELECT * FROM dbo.Orders o WHERE o.OrderDate > DATEADD(day, -30, |)",
+    "expect": {
+      "mustContain": ["GETDATE", "OrderDate"],
+      "mustNotContain": ["InvoiceDate"],
+      "minCount": 2
+    },
+    "note": "third DATEADD arg offers both built-ins and in-scope columns"
+  },
+  {
+    "id": "FUNC-057",
+    "family": "functions",
+    "doc": "SELECT dbo.fn_Xyz|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["fn_OrderItemCount", "fn_OrdersByCustomer"],
+      "minCount": 0
+    },
+    "note": "negative: fake fn_Xyz prefix matches no real function"
+  },
+  {
+    "id": "FUNC-058",
+    "family": "functions",
+    "doc": "SELECT * FROM dbo.fn_Nope|",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["fn_OrdersByCustomer", "fn_OrderItemCount"],
+      "minCount": 0
+    },
+    "note": "negative: fake TVF prefix after FROM yields no function matches"
+  },
+  {
+    "id": "FUNC-059",
+    "family": "functions",
+    "doc": "SELECT i.InvoiceID FROM Sales.Invoices i WHERE i.TotalAmount > 100 AND YEA|",
+    "expect": {
+      "mustContain": ["YEAR"],
+      "mustNotContain": ["MONTH", "GETDATE"],
+      "minCount": 1
+    },
+    "note": "YEA prefix in compound WHERE against Sales.Invoices matches YEAR only"
+  },
+  {
+    "id": "FUNC-060",
+    "family": "functions",
+    "doc": "SELECT o.OrderID, DaTeD|(day, o.OrderDate, GETDATE()) FROM dbo.Orders o",
+    "expect": {
+      "mustContain": ["DATEDIFF"],
+      "mustNotContain": ["DATEADD"],
+      "minCount": 1
+    },
+    "note": "mixed-case DaTeD prefix matches DATEDIFF case-insensitively, not DATEADD"
+  }
+]

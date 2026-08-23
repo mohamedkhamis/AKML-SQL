@@ -31,16 +31,38 @@ namespace AkmlSql.Shell.Shared.Formatting
     /// </para>
     ///
     /// <para>
-    /// Edit / Save / Export / Live-preview wiring is intentionally not implemented in this
-    /// Tier-2 slice — the panels render data but don't yet mutate it. Adding those panels
-    /// is a follow-up commit; the view-model exposes the hooks
-    /// (<see cref="SelectedSettingId"/>, <see cref="SelectedProfileName"/>) ready for them.
+    /// Spec 033 promoted this from a browser to a full editor: <see cref="SelectProfileAsync"/>
+    /// loads a style's stored values (raw ProfileGet text as the merge base),
+    /// <see cref="SaveAsync"/> persists via <see cref="ProfileJsonMerger"/> + ProfileSave, and
+    /// the lifecycle operations (rename/delete/create) keep the shell-owned
+    /// <c>Formatter.ActiveProfile</c> pointer consistent.
     /// </para>
     /// </summary>
     internal sealed class FormatStylesEditorViewModel : INotifyPropertyChanged
     {
         private static int? _cachedSchemaVersion;
         private static string? _cachedSchemaJson;
+
+        /// <summary>
+        /// Spec 033 (T002) — all engine IPC goes through this seam so tests can inject a fake.
+        /// The default resolves <c>EngineLifecycle.Manager?.Client</c> at call time, preserving
+        /// the pre-seam late-binding semantics.
+        /// </summary>
+        private readonly IRpcClientAccessor _rpc;
+
+        public FormatStylesEditorViewModel() : this(EngineRpcClientAccessor.Instance) { }
+
+        internal FormatStylesEditorViewModel(IRpcClientAccessor rpc)
+        {
+            _rpc = rpc ?? throw new ArgumentNullException(nameof(rpc));
+        }
+
+        /// <summary>
+        /// Test seam beside <see cref="IRpcClientAccessor"/>: replaces the ThreadHelper
+        /// main-thread switch, which requires a live VS JoinableTaskContext. Null (production)
+        /// uses ThreadHelper directly — and fails fast if the switch genuinely breaks.
+        /// </summary>
+        internal Func<Task>? MainThreadSwitchOverride { get; set; }
 
         public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -76,12 +98,43 @@ namespace AkmlSql.Shell.Shared.Formatting
             set { _selectedProfileName = value; OnPropertyChanged(); }
         }
 
-        private string? _selectedSettingId;
-        public string? SelectedSettingId
+        // -----------------------------------------------------------------
+        // Spec 033 (T014/T015): load-on-select + dirty tracking + merge-save
+        // -----------------------------------------------------------------
+
+        /// <summary>Raw ProfileGet text for the loaded style — the merge base for Save.</summary>
+        private string? _loadedProfileJson;
+
+        /// <summary>Which style the working values belong to (null until a load succeeds).</summary>
+        private string? _loadedProfileName;
+
+        /// <summary>Test seam: the current merge base.</summary>
+        internal string? LoadedProfileJson => _loadedProfileJson;
+
+        /// <summary>Test seam: the loaded style's name.</summary>
+        internal string? LoadedProfileName => _loadedProfileName;
+
+        private bool _isDirty;
+        /// <summary>True when a loaded style has unsaved edits; gates the Save button and switch/close prompts.</summary>
+        public bool IsDirty
         {
-            get => _selectedSettingId;
-            set { _selectedSettingId = value; OnPropertyChanged(); }
+            get => _isDirty;
+            private set { if (_isDirty != value) { _isDirty = value; OnPropertyChanged(); } }
         }
+
+        private bool _isSelectedReadOnly;
+        /// <summary>True when the loaded style is a built-in (controls disabled, Save refused).</summary>
+        public bool IsSelectedReadOnly
+        {
+            get => _isSelectedReadOnly;
+            private set { if (_isSelectedReadOnly != value) { _isSelectedReadOnly = value; OnPropertyChanged(); } }
+        }
+
+        /// <summary>
+        /// Window-provided prompt shown when switching away from (or closing over) unsaved
+        /// edits. Null (headless/tests without a handler) behaves as Discard.
+        /// </summary>
+        public Func<Task<StyleSwitchDecision>>? DirtyDecisionHandler { get; set; }
 
         private string _previewText = string.Empty;
         public string PreviewText
@@ -119,6 +172,12 @@ namespace AkmlSql.Shell.Shared.Formatting
         /// </para>
         /// </summary>
         private readonly ConcurrentDictionary<string, object?> _workingValues = new(StringComparer.Ordinal);
+
+        /// <summary>
+        /// Spec 033 — schema default per setting id, captured at seed time. The merge-save uses
+        /// it to keep paths absent from the stored file implicit when an edit matches the default.
+        /// </summary>
+        private readonly ConcurrentDictionary<string, object?> _schemaDefaults = new(StringComparer.Ordinal);
 
         /// <summary>
         /// The sample SQL the preview pane formats. Spec 020 US5 (T069): persisted at
@@ -243,11 +302,13 @@ namespace AkmlSql.Shell.Shared.Formatting
             _workingValues.TryGetValue(settingId, out var v) ? v : null;
 
         /// <summary>
-        /// Records a user edit and triggers a debounced preview refresh.
+        /// Records a user edit and triggers a debounced preview refresh. Marks the loaded
+        /// style dirty (browsing edits with no style loaded stay preview-only, never dirty).
         /// </summary>
         public void SetWorkingValue(string settingId, object? value)
         {
             _workingValues[settingId] = value;
+            if (_loadedProfileName != null) IsDirty = true;
             QueuePreviewAsync();
         }
 
@@ -269,13 +330,9 @@ namespace AkmlSql.Shell.Shared.Formatting
 
                     if (s.TryGetProperty("default", out var defEl))
                     {
-                        _workingValues[id!] = defEl.ValueKind switch
-                        {
-                            JsonValueKind.True or JsonValueKind.False => defEl.GetBoolean(),
-                            JsonValueKind.Number => defEl.TryGetInt32(out var i) ? (object)i : defEl.GetDouble(),
-                            JsonValueKind.String => defEl.GetString()!,
-                            _ => null,
-                        };
+                        var value = ProfileJsonMerger.ReadScalar(defEl);
+                        _workingValues[id!] = value;
+                        _schemaDefaults[id!] = value; // spec 033 — merge-save's implicit-default oracle
                     }
                 }
             }
@@ -287,39 +344,23 @@ namespace AkmlSql.Shell.Shared.Formatting
 
         /// <summary>
         /// Builds a <c>FormattingProfile</c>-shaped JSON document from <see cref="_workingValues"/>.
-        /// Flat <c>"groupId.settingName"</c> keys become nested JSON paths.
+        /// Flat dotted keys become nested JSON paths — nesting by EVERY segment (spec 033 T024:
+        /// v2's flattened multi-segment ids like <c>insertStatements.columns.parenthesisStyle</c>
+        /// must produce <c>{"insertStatements":{"columns":{...}}}</c>, not a literal
+        /// "columns.parenthesisStyle" property).
         /// </summary>
         internal string BuildProfileJson()
         {
             var root = new JsonObject();
             foreach (var kvp in _workingValues)
             {
-                var key = kvp.Key;
-                var dotIdx = key.IndexOf('.');
-                if (dotIdx <= 0) continue;
-                var groupId = key.Substring(0, dotIdx);
-                var settingName = key.Substring(dotIdx + 1);
-
-                if (root[groupId] is not JsonObject groupNode)
-                {
-                    groupNode = new JsonObject();
-                    root[groupId] = groupNode;
-                }
-                groupNode[settingName] = ToJsonValue(kvp.Value);
+                var segments = kvp.Key.Split('.');
+                if (segments.Length < 2 || segments[0].Length == 0) continue;
+                // Shared with the save path — preview and persisted JSON must nest identically.
+                ProfileJsonMerger.SetValueAt(root, segments, ProfileJsonMerger.ToJsonValue(kvp.Value));
             }
             return root.ToJsonString();
         }
-
-        private static JsonNode? ToJsonValue(object? value) => value switch
-        {
-            null => null,
-            bool b => JsonValue.Create(b),
-            int i => JsonValue.Create(i),
-            long l => JsonValue.Create(l),
-            double d => JsonValue.Create(d),
-            string s => JsonValue.Create(s),
-            _ => JsonValue.Create(value.ToString()),
-        };
 
         /// <summary>
         /// Fire-and-forget request to refresh the preview. 100 ms debounce + supersession via
@@ -354,8 +395,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                     if (token.IsCancellationRequested) return;
                     if (sequence < _previewSequence) return; // superseded
 
-                    var client = EngineLifecycle.Manager?.Client;
-                    if (client == null || !client.IsConnected) return;
+                    if (!_rpc.IsConnected) return;
 
                     var request = new FormatPreviewRequest
                     {
@@ -364,7 +404,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                         ProfileJson = BuildProfileJson(),
                     };
 
-                    var response = await client.SendRequestAsync<FormatPreviewResponse, FormatPreviewRequest>(
+                    var response = await _rpc.SendRequestAsync<FormatPreviewResponse, FormatPreviewRequest>(
                         MessageTypes.FormatPreview,
                         request,
                         timeoutMs: 2000,
@@ -385,6 +425,201 @@ namespace AkmlSql.Shell.Shared.Formatting
                     Log.Debug(ex, "FormatStylesEditor: preview request failed");
                 }
             }, token);
+        }
+
+        // -----------------------------------------------------------------
+        // Spec 033 (T014): load-on-select
+        // -----------------------------------------------------------------
+
+        /// <summary>
+        /// Guarded selection transition: prompts on unsaved edits (Save / Discard / Cancel),
+        /// fetches the style's RAW stored JSON via ProfileGet, and seeds the working values
+        /// with schema defaults overlaid by the style's actual values.
+        /// Returns false when the transition was cancelled or the load failed — the caller
+        /// must then restore the previous visual selection.
+        /// </summary>
+        public async Task<bool> SelectProfileAsync(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return false;
+
+            if (string.Equals(name, _loadedProfileName, StringComparison.OrdinalIgnoreCase))
+            {
+                SelectedProfileName = name; // reselect of the loaded style — nothing to do
+                return true;
+            }
+
+            if (IsDirty)
+            {
+                var decision = DirtyDecisionHandler != null
+                    ? await DirtyDecisionHandler().ConfigureAwait(true)
+                    : StyleSwitchDecision.Discard;
+                if (decision == StyleSwitchDecision.Cancel) return false;
+                if (decision == StyleSwitchDecision.Save && !await SaveAsync().ConfigureAwait(true))
+                    return false; // save failed — stay on the dirty style, error already surfaced
+            }
+
+            if (!_rpc.IsConnected)
+            {
+                LastError = "Engine not connected.";
+                return false;
+            }
+
+            try
+            {
+                var response = await _rpc.SendRequestAsync<ProfileGetResponse, ProfileGetRequest>(
+                    MessageTypes.ProfileGet,
+                    new ProfileGetRequest { Name = name },
+                    timeoutMs: 5000).ConfigureAwait(true);
+
+                if (response == null || !response.Success || string.IsNullOrEmpty(response.ProfileJson))
+                {
+                    // Never show schema defaults masquerading as the style (spec US1 scenario).
+                    LastError = response?.ErrorMessage ?? $"Could not load style '{name}'.";
+                    ClearLoadedProfile();
+                    return false;
+                }
+
+                _workingValues.Clear();
+                if (!_schemaDefaults.IsEmpty)
+                {
+                    // Cheaper than re-parsing the ~180-setting schema JSON on every selection:
+                    // the defaults captured at seed time ARE the reseed source.
+                    foreach (var kvp in _schemaDefaults) _workingValues[kvp.Key] = kvp.Value;
+                }
+                else
+                {
+                    var schema = SchemaJson ?? _cachedSchemaJson;
+                    if (!string.IsNullOrEmpty(schema)) SeedWorkingValuesFromSchema(schema!);
+                }
+                OverlayProfileValuesFromJson(response.ProfileJson!);
+
+                _loadedProfileJson = response.ProfileJson;
+                _loadedProfileName = name;
+                SelectedProfileName = name;
+                IsSelectedReadOnly = response.IsBuiltIn;
+                IsDirty = false;
+                LastError = null;
+                QueuePreviewAsync();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                LastError = ex.Message;
+                Log.Warning(ex, "FormatStylesEditor: load profile {Name} failed", name);
+                ClearLoadedProfile();
+                return false;
+            }
+        }
+
+        private void ClearLoadedProfile()
+        {
+            _loadedProfileJson = null;
+            _loadedProfileName = null;
+            SelectedProfileName = null;
+            IsSelectedReadOnly = false;
+            IsDirty = false;
+        }
+
+        /// <summary>
+        /// Flattens the style's nested option values over the seeded defaults so the tree,
+        /// controls, and preview reflect the style itself. Objects recurse (multi-segment ids
+        /// like <c>insertStatements.columns.parenthesisStyle</c>); metadata and non-primitive
+        /// leaves are skipped — the merge base keeps whatever the editor doesn't model.
+        /// </summary>
+        private void OverlayProfileValuesFromJson(string profileJson)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(profileJson);
+                if (doc.RootElement.ValueKind != JsonValueKind.Object) return;
+
+                foreach (var group in doc.RootElement.EnumerateObject())
+                {
+                    if (group.Value.ValueKind != JsonValueKind.Object) continue;
+                    if (string.Equals(group.Name, "metadata", StringComparison.OrdinalIgnoreCase)) continue;
+                    OverlayObject(group.Name, group.Value);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "FormatStylesEditor: overlay of loaded profile values failed");
+            }
+        }
+
+        private void OverlayObject(string prefix, JsonElement obj)
+        {
+            foreach (var prop in obj.EnumerateObject())
+            {
+                var path = prefix + "." + prop.Name;
+                switch (prop.Value.ValueKind)
+                {
+                    case JsonValueKind.True:
+                    case JsonValueKind.False:
+                    case JsonValueKind.Number:
+                    case JsonValueKind.String:
+                        _workingValues[path] = ProfileJsonMerger.ReadScalar(prop.Value);
+                        break;
+                    case JsonValueKind.Object:
+                        OverlayObject(path, prop.Value);
+                        break;
+                    // Arrays/null: not editor-modeled — the merge base preserves them untouched.
+                }
+            }
+        }
+
+        // -----------------------------------------------------------------
+        // Spec 033 (T015): merge-save
+        // -----------------------------------------------------------------
+
+        /// <summary>
+        /// Persists the loaded style by merging edited working values into its raw stored JSON
+        /// (metadata + untouched keys intact) via the existing ProfileSave IPC. On success the
+        /// merged text becomes the new merge base and the dirty flag clears.
+        /// </summary>
+        public async Task<bool> SaveAsync()
+        {
+            if (IsSelectedReadOnly)
+            {
+                LastError = "Built-in styles are read-only — copy this style to edit it.";
+                return false;
+            }
+            if (_loadedProfileJson == null || string.IsNullOrEmpty(_loadedProfileName))
+            {
+                LastError = "No style loaded.";
+                return false;
+            }
+            if (!_rpc.IsConnected)
+            {
+                LastError = "Engine not connected.";
+                return false;
+            }
+
+            try
+            {
+                var merged = ProfileJsonMerger.Merge(_loadedProfileJson, _workingValues, _schemaDefaults);
+
+                var response = await _rpc.SendRequestAsync<ProfileSaveResponse, ProfileSaveRequest>(
+                    MessageTypes.ProfileSave,
+                    new ProfileSaveRequest { Name = _loadedProfileName!, ProfileJson = merged },
+                    timeoutMs: 5000).ConfigureAwait(true);
+
+                if (response == null || !response.Success)
+                {
+                    LastError = response?.ErrorMessage ?? "Save failed.";
+                    return false;
+                }
+
+                _loadedProfileJson = merged;
+                IsDirty = false;
+                LastError = null;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                LastError = ex.Message;
+                Log.Warning(ex, "FormatStylesEditor: save {Name} failed", _loadedProfileName);
+                return false;
+            }
         }
 
         // -----------------------------------------------------------------
@@ -425,6 +660,138 @@ namespace AkmlSql.Shell.Shared.Formatting
         public Task<string?> NewProfileAsync()
             => DuplicateAsync("Default", UniqueName("Custom Style"));
 
+        /// <summary>
+        /// Spec 033 (T034) — New Style… with a chosen name and based-on style. The engine's
+        /// DuplicateProfile clones the base's persisted values under the new name directly.
+        /// </summary>
+        public Task<string?> CreateStyleAsync(string name, string basedOn)
+        {
+            if (string.IsNullOrWhiteSpace(name)) { LastError = "Enter a style name."; return Task.FromResult<string?>(null); }
+            if (string.IsNullOrWhiteSpace(basedOn)) { LastError = "Choose a style to base the new one on."; return Task.FromResult<string?>(null); }
+            if (Profiles.Any(p => string.Equals(p.Name, name.Trim(), StringComparison.OrdinalIgnoreCase)))
+            {
+                LastError = $"A style named '{name.Trim()}' already exists.";
+                return Task.FromResult<string?>(null);
+            }
+            return DuplicateAsync(basedOn, name.Trim());
+        }
+
+        /// <summary>
+        /// Spec 033 (T034) — renames the loaded/selected custom style via the atomic engine
+        /// ProfileRename. When the renamed style is the ACTIVE one, the shell-owned
+        /// <c>Formatter.ActiveProfile</c> pointer is updated in the same flow (the engine
+        /// cannot touch config.json — without this, formatting silently falls back to defaults).
+        /// Returns the final persisted name, or null on failure/refusal.
+        /// </summary>
+        public async Task<string?> RenameSelectedAsync(string newName)
+        {
+            var target = _loadedProfileName ?? SelectedProfileName;
+            if (string.IsNullOrWhiteSpace(target)) { LastError = "Select a style to rename."; return null; }
+            if (IsSelectedReadOnly) { LastError = "Built-in styles cannot be renamed."; return null; }
+            if (string.IsNullOrWhiteSpace(newName)) { LastError = "Enter a new name."; return null; }
+            if (!_rpc.IsConnected) { LastError = "Engine not connected."; return null; }
+
+            try
+            {
+                var response = await _rpc.SendRequestAsync<ProfileRenameResponse, ProfileRenameRequest>(
+                    MessageTypes.ProfileRename,
+                    new ProfileRenameRequest { OldName = target!, NewName = newName },
+                    timeoutMs: 5000).ConfigureAwait(true);
+
+                if (response == null || !response.Success)
+                {
+                    LastError = response?.ErrorMessage ?? "Rename failed.";
+                    return null;
+                }
+
+                var finalName = response.NewName ?? newName.Trim();
+
+                // Active-pointer follow-up (shell-owned config).
+                try
+                {
+                    var settings = ConfigManager.Load();
+                    if (string.Equals(settings.Formatter.ActiveProfile, target, StringComparison.OrdinalIgnoreCase))
+                    {
+                        settings.Formatter.ActiveProfile = finalName;
+                        ConfigManager.Save(settings);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning(ex, "FormatStylesEditor: active-profile update after rename failed");
+                }
+
+                if (string.Equals(_loadedProfileName, target, StringComparison.OrdinalIgnoreCase))
+                    _loadedProfileName = finalName;
+                SelectedProfileName = finalName;
+                LastError = null;
+                await RefreshProfilesAsync().ConfigureAwait(true);
+                return finalName;
+            }
+            catch (Exception ex)
+            {
+                LastError = ex.Message;
+                Log.Warning(ex, "FormatStylesEditor: rename {Old} -> {New} failed", target, newName);
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Spec 033 (T034) — deletes the selected custom style. Refused shell-side (before any
+        /// IPC) for built-ins and for the ACTIVE style: deleting the active style would leave a
+        /// dangling config pointer and the engine silently formats with defaults.
+        /// </summary>
+        public async Task<bool> DeleteSelectedAsync()
+        {
+            var target = SelectedProfileName ?? _loadedProfileName;
+            if (string.IsNullOrWhiteSpace(target)) { LastError = "Select a style to delete."; return false; }
+
+            var item = Profiles.FirstOrDefault(p => string.Equals(p.Name, target, StringComparison.OrdinalIgnoreCase));
+            if (item?.IsReadOnly == true) { LastError = "Built-in styles cannot be deleted."; return false; }
+
+            try
+            {
+                var active = ConfigManager.Load().Formatter.ActiveProfile;
+                if (string.Equals(active, target, StringComparison.OrdinalIgnoreCase))
+                {
+                    LastError = $"'{target}' is the active style — make another style active first.";
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "FormatStylesEditor: active-style check before delete failed");
+            }
+
+            if (!_rpc.IsConnected) { LastError = "Engine not connected."; return false; }
+
+            try
+            {
+                var response = await _rpc.SendRequestAsync<ProfileDeleteResponse, ProfileDeleteRequest>(
+                    MessageTypes.ProfileDelete,
+                    new ProfileDeleteRequest { Name = target! },
+                    timeoutMs: 5000).ConfigureAwait(true);
+
+                if (response == null || !response.Success)
+                {
+                    LastError = response?.ErrorMessage ?? "Delete failed.";
+                    return false;
+                }
+
+                if (string.Equals(_loadedProfileName, target, StringComparison.OrdinalIgnoreCase))
+                    ClearLoadedProfile();
+                LastError = null;
+                await RefreshProfilesAsync().ConfigureAwait(true);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                LastError = ex.Message;
+                Log.Warning(ex, "FormatStylesEditor: delete {Name} failed", target);
+                return false;
+            }
+        }
+
         /// <summary>Copy: duplicate the given stored profile under a unique "{name} copy" name.</summary>
         public Task<string?> CopyProfileAsync(string sourceName)
             => string.IsNullOrWhiteSpace(sourceName)
@@ -433,15 +800,14 @@ namespace AkmlSql.Shell.Shared.Formatting
 
         private async Task<string?> DuplicateAsync(string source, string newName)
         {
-            var client = EngineLifecycle.Manager?.Client;
-            if (client == null || !client.IsConnected)
+            if (!_rpc.IsConnected)
             {
                 LastError = "Engine not connected.";
                 return null;
             }
             try
             {
-                var response = await client.SendRequestAsync<DuplicateProfileResponse, DuplicateProfileRequest>(
+                var response = await _rpc.SendRequestAsync<DuplicateProfileResponse, DuplicateProfileRequest>(
                     MessageTypes.DuplicateProfile,
                     new DuplicateProfileRequest { SourceName = source, NewName = newName },
                     timeoutMs: 5000).ConfigureAwait(false);
@@ -487,15 +853,14 @@ namespace AkmlSql.Shell.Shared.Formatting
         /// <summary>Exports the given stored profile to a .sqlpromptstylev2 file at the given path.</summary>
         public async Task<bool> ExportProfileAsync(string profileName, string destinationPath)
         {
-            var client = EngineLifecycle.Manager?.Client;
-            if (client == null || !client.IsConnected)
+            if (!_rpc.IsConnected)
             {
                 LastError = "Engine not connected.";
                 return false;
             }
             try
             {
-                var response = await client.SendRequestAsync<ProfileExportSqlPromptResponse, ProfileExportSqlPromptRequest>(
+                var response = await _rpc.SendRequestAsync<ProfileExportSqlPromptResponse, ProfileExportSqlPromptRequest>(
                     MessageTypes.ProfileExportSqlPrompt,
                     new ProfileExportSqlPromptRequest { Name = profileName, DestinationPath = destinationPath },
                     timeoutMs: 5000).ConfigureAwait(false);
@@ -512,6 +877,48 @@ namespace AkmlSql.Shell.Shared.Formatting
                 LastError = ex.Message;
                 Log.Warning(ex, "FormatStylesEditor: export {Name} failed", profileName);
                 return false;
+            }
+        }
+
+        /// <summary>
+        /// Spec 031 FR-010/FR-011 — imports a SQL Prompt style file (JSON or legacy XML) via the
+        /// ProfileImport IPC. Returns the full response (option reports included) or null on
+        /// transport failure; LastError is set on any failure path.
+        /// </summary>
+        public async Task<ProfileImportResponse?> ImportProfileAsync(string filePath, string? targetName = null)
+        {
+            const long MaxImportBytes = 1024 * 1024; // FR-010 — 1 MB cap, mirrors snippet import
+
+            if (!_rpc.IsConnected)
+            {
+                LastError = "Engine not connected.";
+                return null;
+            }
+            try
+            {
+                var info = new FileInfo(filePath);
+                if (!info.Exists) { LastError = "File not found."; return null; }
+                if (info.Length > MaxImportBytes) { LastError = "Style file exceeds the 1 MB import limit."; return null; }
+
+                var bytes = File.ReadAllBytes(filePath); // UTF-8 (BOM tolerated engine-side by Encoding.UTF8.GetString)
+                var response = await _rpc.SendRequestAsync<ProfileImportResponse, ProfileImportRequest>(
+                    MessageTypes.ProfileImport,
+                    new ProfileImportRequest { SourceFormat = "sqlprompt", FileContent = bytes, TargetProfileName = targetName },
+                    timeoutMs: 5000).ConfigureAwait(false);
+
+                if (response == null || !response.Success)
+                {
+                    LastError = response?.ErrorMessage ?? "Import failed.";
+                    return response;
+                }
+                await RefreshProfilesAsync().ConfigureAwait(false);
+                return response;
+            }
+            catch (Exception ex)
+            {
+                LastError = ex.Message;
+                Log.Warning(ex, "FormatStylesEditor: import {Path} failed", filePath);
+                return null;
             }
         }
 
@@ -533,8 +940,7 @@ namespace AkmlSql.Shell.Shared.Formatting
 
         private async Task LoadProfilesAsync(CancellationToken ct)
         {
-            var client = EngineLifecycle.Manager?.Client;
-            if (client == null || !client.IsConnected)
+            if (!_rpc.IsConnected)
             {
                 Log.Debug("FormatStylesEditor: engine not connected, profile list skipped");
                 return;
@@ -542,17 +948,29 @@ namespace AkmlSql.Shell.Shared.Formatting
 
             try
             {
-                var response = await client.SendRequestAsync<ProfileListResponse, ProfileListRequest>(
+                var response = await _rpc.SendRequestAsync<ProfileListResponse, ProfileListRequest>(
                     MessageTypes.ProfileList,
                     new ProfileListRequest(),
                     timeoutMs: 3000,
                     ct).ConfigureAwait(false);
 
+                // Spec 033 (T034) — ✔ marker source. The active style is shell-owned config
+                // (ProfileInfo.IsActive is never populated on the wire).
+                string? activeProfile = null;
+                try { activeProfile = ConfigManager.Load().Formatter.ActiveProfile; }
+                catch (Exception ex) { Log.Debug(ex, "FormatStylesEditor: active-profile read failed"); }
+
                 // Profiles is bound to the style ListBox (ItemsSource) — mutate it on the UI thread.
                 // The IPC await above resumed on a thread-pool thread (ConfigureAwait(false)); without
                 // this switch, Clear()/Add() throw off-dispatcher, which surfaced as New/Copy wrongly
                 // reporting failure after a successful server-side duplicate (spec 030 T020 review).
-                await Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                // Spec 033 simplify pass: the seam replaces the old catch-all guard — swallowing a
+                // REAL switch failure would proceed to mutate the collection off-dispatcher, the
+                // exact bug the switch exists to prevent. Headless tests inject a no-op instead.
+                if (MainThreadSwitchOverride != null)
+                    await MainThreadSwitchOverride().ConfigureAwait(false);
+                else
+                    await Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
 
                 Profiles.Clear();
                 if (response?.Profiles == null) return;
@@ -566,6 +984,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                         Kind = p.IsBuiltIn ? "Built-in" : "Native",
                         IsReadOnly = p.IsBuiltIn,
                         BasedOn = p.BasedOn,
+                        IsActive = activeProfile != null && string.Equals(p.Name, activeProfile, StringComparison.OrdinalIgnoreCase),
                     });
                 }
             }
@@ -578,8 +997,7 @@ namespace AkmlSql.Shell.Shared.Formatting
 
         private async Task LoadSchemaAsync(CancellationToken ct)
         {
-            var client = EngineLifecycle.Manager?.Client;
-            if (client == null || !client.IsConnected)
+            if (!_rpc.IsConnected)
             {
                 Log.Debug("FormatStylesEditor: engine not connected, schema fetch skipped");
                 return;
@@ -587,7 +1005,7 @@ namespace AkmlSql.Shell.Shared.Formatting
 
             try
             {
-                var response = await client.SendRequestAsync<StyleEditorSchemaResponse, StyleEditorSchemaRequest>(
+                var response = await _rpc.SendRequestAsync<StyleEditorSchemaResponse, StyleEditorSchemaRequest>(
                     MessageTypes.RequestStyleEditorSchema,
                     new StyleEditorSchemaRequest
                     {
@@ -671,8 +1089,25 @@ VALUES ('SampleQuery', GETDATE());";
         /// <summary>If this profile was forked from another, that source name.</summary>
         public string? BasedOn { get; set; }
 
+        /// <summary>Spec 033 — ✔ marker: this style is <c>Formatter.ActiveProfile</c> (shell config).</summary>
+        public bool IsActive { get; set; }
+
+        /// <summary>Spec 033 — list section header ("Your styles" / "Built-in styles").</summary>
+        public string Section => IsReadOnly ? "Built-in styles" : "Your styles";
+
         public override string ToString() =>
             string.IsNullOrEmpty(Description) ? Name : $"{Name} — {Description}";
+    }
+
+    /// <summary>Spec 033 — outcome of the unsaved-edits prompt when switching styles or closing.</summary>
+    internal enum StyleSwitchDecision
+    {
+        /// <summary>Persist the edits, then continue the transition.</summary>
+        Save,
+        /// <summary>Drop the edits and continue the transition.</summary>
+        Discard,
+        /// <summary>Abort the transition; the dirty style stays loaded and selected.</summary>
+        Cancel,
     }
 
     /// <summary>Spec 030 T019 / FR-008 — which SQL the Format Styles preview formats.</summary>

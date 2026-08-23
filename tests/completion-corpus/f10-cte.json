@@ -1,0 +1,772 @@
+[
+  {
+    "id": "CTE-001",
+    "family": "cte",
+    "doc": "WITH RecentOrders AS (SELECT OrderID, OrderDate FROM dbo.Orders) SELECT * FROM |",
+    "expect": {
+      "mustContain": ["RecentOrders", "Customers", "Orders"],
+      "mustNotContain": ["OrderDate"],
+      "minCount": 3
+    },
+    "note": "CTE name plus base tables appear after outer FROM; columns do not"
+  },
+  {
+    "id": "CTE-002",
+    "family": "cte",
+    "doc": "WITH RecentOrders AS (SELECT OrderID FROM dbo.Orders) SELECT * FROM Rec|",
+    "expect": {
+      "mustContain": ["RecentOrders"],
+      "mustNotContain": ["Customers", "Products"],
+      "minCount": 1
+    },
+    "note": "3-char prefix filters outer FROM list down to the CTE name"
+  },
+  {
+    "id": "CTE-003",
+    "family": "cte",
+    "doc": "with RecentOrders as (select OrderID from dbo.Orders) select * from rec|",
+    "expect": {
+      "mustContain": ["RecentOrders"],
+      "mustNotContain": ["Orders", "Shippers"],
+      "minCount": 1
+    },
+    "note": "lowercase keywords and lowercase prefix must match CTE name case-insensitively"
+  },
+  {
+    "id": "CTE-004",
+    "family": "cte",
+    "doc": "WITH CustOrders AS (\n    SELECT CustomerID, OrderID FROM dbo.Orders\n)\nSELECT c.CustomerName\nFROM dbo.Customers c\nINNER JOIN |",
+    "expect": {
+      "mustContain": ["CustOrders", "Orders"],
+      "mustNotContain": ["CustomerName"],
+      "minCount": 2
+    },
+    "note": "CTE name is joinable after INNER JOIN in the outer query"
+  },
+  {
+    "id": "CTE-005",
+    "family": "cte",
+    "doc": "WITH OrderCte AS (SELECT OrderID FROM dbo.Orders), ProductCte AS (SELECT ProductID FROM dbo.Products) SELECT * FROM |",
+    "expect": {
+      "mustContain": ["OrderCte", "ProductCte", "Suppliers"],
+      "mustNotContain": ["ProductID"],
+      "minCount": 3
+    },
+    "note": "both CTE names visible after outer FROM alongside base tables"
+  },
+  {
+    "id": "CTE-006",
+    "family": "cte",
+    "doc": "SELECT * FROM dbo.Shippers;\nWITH InvoiceCte AS (SELECT InvoiceID, TotalAmount FROM Sales.Invoices)\nSELECT * FROM |",
+    "expect": {
+      "mustContain": ["InvoiceCte", "Orders"],
+      "mustNotContain": ["TotalAmount"],
+      "minCount": 2
+    },
+    "note": "CTE defined after a prior ;-terminated statement is visible after FROM"
+  },
+  {
+    "id": "CTE-007",
+    "family": "cte",
+    "doc": "WITH OldCte AS (SELECT OrderID FROM dbo.Orders) SELECT * FROM OldCte;\nSELECT * FROM |",
+    "expect": {
+      "mustContain": ["Orders", "Customers"],
+      "mustNotContain": ["OldCte"],
+      "minCount": 2
+    },
+    "note": "CTE from a previous ;-terminated statement must not leak into the next statement"
+  },
+  {
+    "id": "CTE-008",
+    "family": "cte",
+    "doc": "WITH TopProducts AS (SELECT ProductID, Price FROM dbo.Products) SELECT * FROM T|",
+    "expect": {
+      "mustContain": ["TopProducts"],
+      "mustNotContain": ["Products", "Orders"],
+      "minCount": 1
+    },
+    "note": "1-char prefix T matches only the CTE name (no schema table starts with T)"
+  },
+  {
+    "id": "CTE-009",
+    "family": "cte",
+    "doc": "WITH   Agg   AS   (   SELECT   CategoryID   FROM   dbo.Products   )   SELECT * FROM   |",
+    "expect": {
+      "mustContain": ["Agg", "Categories"],
+      "mustNotContain": ["CategoryID"],
+      "minCount": 2
+    },
+    "note": "excess whitespace around CTE definition must not break name registration"
+  },
+  {
+    "id": "CTE-010",
+    "family": "cte",
+    "doc": "WITH Base AS (\n    SELECT OrderID, CustomerID FROM dbo.Orders\n),\nEnriched AS (\n    SELECT b.OrderID FROM |\n)\nSELECT * FROM Enriched",
+    "expect": {
+      "mustContain": ["Base", "Orders"],
+      "mustNotContain": ["ProductName"],
+      "minCount": 2
+    },
+    "note": "second CTE body FROM sees the earlier CTE plus base tables"
+  },
+  {
+    "id": "CTE-011",
+    "family": "cte",
+    "doc": "WITH First AS (\n    SELECT OrderID FROM |\n),\nSecond AS (\n    SELECT 1 AS X\n)\nSELECT * FROM First",
+    "expect": {
+      "mustContain": ["Orders", "Customers"],
+      "mustNotContain": ["Second"],
+      "minCount": 2
+    },
+    "note": "forward reference: a later CTE must not be suggested inside an earlier CTE body"
+  },
+  {
+    "id": "CTE-012",
+    "family": "cte",
+    "doc": "WITH A1 AS (SELECT OrderID FROM dbo.Orders), B1 AS (SELECT OrderID FROM A1), C1 AS (SELECT OrderID FROM B1) SELECT * FROM |",
+    "expect": {
+      "mustContain": ["A1", "B1", "C1"],
+      "mustNotContain": ["OrderID"],
+      "minCount": 3
+    },
+    "note": "chained three-CTE definition: all names visible in the outer FROM"
+  },
+  {
+    "id": "CTE-013",
+    "family": "cte",
+    "doc": "wItH SupplierCte aS (SeLeCt SupplierID, SupplierName FrOm dbo.Suppliers) sElEcT * fRoM Sup|",
+    "expect": {
+      "mustContain": ["SupplierCte", "Suppliers"],
+      "mustNotContain": ["Shippers"],
+      "minCount": 2
+    },
+    "note": "mixed-case keywords; Sup prefix matches CTE and Suppliers but not Shippers"
+  },
+  {
+    "id": "CTE-014",
+    "family": "cte",
+    "doc": "WITH Ship AS (SELECT ShipperID, ShipperName FROM dbo.Shippers)\nSELECT o.OrderID\nFROM dbo.Orders o\nLEFT JOIN Ship s ON s.ShipperID = o.ShipperID\nLEFT JOIN |",
+    "expect": {
+      "mustContain": ["Ship", "Employees"],
+      "mustNotContain": ["ShipperName"],
+      "minCount": 2
+    },
+    "note": "CTE name remains suggested for a second JOIN later in the same statement"
+  },
+  {
+    "id": "CTE-015",
+    "family": "cte",
+    "doc": "WITH co AS (SELECT OrderID, OrderDate FROM dbo.Orders) SELECT co.| FROM co",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["CustomerID", "ShipperID"],
+      "minCount": 2
+    },
+    "note": "CTE-name qualifier exposes only projected columns, not all Orders columns"
+  },
+  {
+    "id": "CTE-016",
+    "family": "cte",
+    "doc": "WITH co AS (SELECT OrderID, OrderDate FROM dbo.Orders) SELECT x.| FROM co x",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["EmployeeID"],
+      "minCount": 2
+    },
+    "note": "alias over a CTE resolves to the CTE projection"
+  },
+  {
+    "id": "CTE-017",
+    "family": "cte",
+    "doc": "WITH t (Id, Name) AS (SELECT CustomerID, CustomerName FROM dbo.Customers) SELECT t.| FROM t",
+    "expect": {
+      "mustContain": ["Id", "Name"],
+      "mustNotContain": ["CustomerID", "CustomerName"],
+      "minCount": 2
+    },
+    "note": "explicit CTE column list renames win over the underlying column names"
+  },
+  {
+    "id": "CTE-018",
+    "family": "cte",
+    "doc": "WITH pc AS (SELECT ProductID, Price AS UnitPrice FROM dbo.Products) SELECT pc.| FROM pc",
+    "expect": {
+      "mustContain": ["ProductID", "UnitPrice"],
+      "mustNotContain": ["Price", "ProductName"],
+      "minCount": 2
+    },
+    "note": "AS alias in CTE body replaces the base column name in the projection"
+  },
+  {
+    "id": "CTE-019",
+    "family": "cte",
+    "doc": "WITH allc AS (SELECT * FROM dbo.Customers) SELECT allc.| FROM allc",
+    "expect": {
+      "mustContain": ["CustomerID", "CustomerName", "City", "Country"],
+      "mustNotContain": ["ProductID", "OrderID"],
+      "minCount": 5
+    },
+    "note": "SELECT * body exposes all Customers columns through the CTE, no foreign columns"
+  },
+  {
+    "id": "CTE-020",
+    "family": "cte",
+    "doc": "WITH oc AS (SELECT OrderID, OrderDate, EmployeeID FROM dbo.Orders) SELECT oc.Ord| FROM oc",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["EmployeeID"],
+      "minCount": 2
+    },
+    "note": "3-char prefix on CTE-qualified columns filters to Ord-prefixed projections"
+  },
+  {
+    "id": "CTE-021",
+    "family": "cte",
+    "doc": "WITH inv AS (SELECT InvoiceID, TotalAmount, Paid FROM Sales.Invoices) SELECT * FROM inv WHERE inv.P|",
+    "expect": {
+      "mustContain": ["Paid"],
+      "mustNotContain": ["InvoiceID", "TotalAmount"],
+      "minCount": 1
+    },
+    "note": "1-char prefix in WHERE over Sales-schema CTE projection"
+  },
+  {
+    "id": "CTE-022",
+    "family": "cte",
+    "doc": "WITH sales AS (\n    SELECT InvoiceID, InvoiceDate, TotalAmount\n    FROM Sales.Invoices\n)\nSELECT *\nFROM sales s\nORDER BY s.|",
+    "expect": {
+      "mustContain": ["TotalAmount", "InvoiceDate"],
+      "mustNotContain": ["Paid", "OrderID"],
+      "minCount": 2
+    },
+    "note": "ORDER BY via CTE alias sees only projected columns; Paid was not projected"
+  },
+  {
+    "id": "CTE-023",
+    "family": "cte",
+    "doc": "WITH EmpCte AS (SELECT EmployeeID, LastName, FirstName FROM dbo.Employees) SELECT EmpCte.| FROM EmpCte",
+    "expect": {
+      "mustContain": ["EmployeeID", "LastName", "FirstName"],
+      "mustNotContain": ["BirthDate", "Notes"],
+      "minCount": 3
+    },
+    "note": "full CTE name as qualifier; unprojected Employees columns absent"
+  },
+  {
+    "id": "CTE-024",
+    "family": "cte",
+    "doc": "WITH agg AS (SELECT CustomerID, COUNT(*) AS OrderCount FROM dbo.Orders GROUP BY CustomerID) SELECT a.| FROM agg a",
+    "expect": {
+      "mustContain": ["CustomerID", "OrderCount"],
+      "mustNotContain": ["OrderID", "OrderDate"],
+      "minCount": 2
+    },
+    "note": "aggregate alias OrderCount becomes a CTE column"
+  },
+  {
+    "id": "CTE-025",
+    "family": "cte",
+    "doc": "UPDATE dbo.Products SET Price = Price * 1.1 WHERE CategoryID = 2;\nWITH cheap AS (SELECT ProductID, ProductName, Price FROM dbo.Products WHERE Price < 20)\nSELECT * FROM cheap c WHERE c.|",
+    "expect": {
+      "mustContain": ["ProductID", "ProductName", "Price"],
+      "mustNotContain": ["SupplierID", "Unit"],
+      "minCount": 3
+    },
+    "note": "prior UPDATE statement; CTE alias in WHERE limited to projection"
+  },
+  {
+    "id": "CTE-026",
+    "family": "cte",
+    "doc": "WITH co AS (SELECT OrderID, CustomerID FROM dbo.Orders)\nSELECT c.CustomerName, co.|\nFROM co\nJOIN dbo.Customers c ON c.CustomerID = co.CustomerID",
+    "expect": {
+      "mustContain": ["OrderID", "CustomerID"],
+      "mustNotContain": ["OrderDate", "CustomerName"],
+      "minCount": 2
+    },
+    "note": "CTE joined to base table: co qualifier must not include Customers columns"
+  },
+  {
+    "id": "CTE-027",
+    "family": "cte",
+    "doc": "WITH co AS (SELECT OrderID, ShipperID FROM dbo.Orders)\nSELECT s.|\nFROM co\nJOIN dbo.Shippers s ON s.ShipperID = co.ShipperID",
+    "expect": {
+      "mustContain": ["ShipperID", "ShipperName", "Phone"],
+      "mustNotContain": ["OrderID"],
+      "minCount": 3
+    },
+    "note": "base-table alias joined to a CTE still resolves to full Shippers columns"
+  },
+  {
+    "id": "CTE-028",
+    "family": "cte",
+    "doc": "with prod as (select ProductID, ProductName, Unit from dbo.Products) select PROD.PRODUCT| from prod",
+    "expect": {
+      "mustContain": ["ProductID", "ProductName"],
+      "mustNotContain": ["Unit"],
+      "minCount": 2
+    },
+    "note": "UPPER-case qualifier and prefix must match lower-case CTE alias case-insensitively"
+  },
+  {
+    "id": "CTE-029",
+    "family": "cte",
+    "doc": "WITH vco AS (SELECT CustomerID, CustomerName, OrderDate FROM dbo.vw_CustomerOrders) SELECT vco.| FROM vco",
+    "expect": {
+      "mustContain": ["CustomerID", "CustomerName", "OrderDate"],
+      "mustNotContain": ["ShipperID", "Country"],
+      "minCount": 3
+    },
+    "note": "CTE over a view: unprojected view columns (ShipperID, Country) absent"
+  },
+  {
+    "id": "CTE-030",
+    "family": "cte",
+    "doc": "WITH oi AS (\n    SELECT o.OrderID, i.TotalAmount\n    FROM dbo.Orders o\n    JOIN Sales.Invoices i ON i.OrderID = o.OrderID\n)\nSELECT oi.| FROM oi",
+    "expect": {
+      "mustContain": ["OrderID", "TotalAmount"],
+      "mustNotContain": ["InvoiceDate", "CustomerID"],
+      "minCount": 2
+    },
+    "note": "two-table join in body: CTE exposes only the two projected columns"
+  },
+  {
+    "id": "CTE-031",
+    "family": "cte",
+    "doc": "WITH co AS (SELECT OrderID FROM dbo.Orders) SELECT z.| FROM co",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["OrderID", "CustomerID"],
+      "minCount": 0
+    },
+    "note": "undefined alias z must not resolve to CTE or table columns"
+  },
+  {
+    "id": "CTE-032",
+    "family": "cte",
+    "doc": "WITH old AS (SELECT OrderID, OrderDate FROM dbo.Orders) SELECT old.OrderID FROM old;\nSELECT old.| FROM dbo.Customers",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["OrderID", "OrderDate", "CustomerName"],
+      "minCount": 0
+    },
+    "note": "CTE qualifier from prior ;-terminated statement must not resolve in next statement"
+  },
+  {
+    "id": "CTE-033",
+    "family": "cte",
+    "doc": "WITH base AS (SELECT OrderID, CustomerID, OrderDate FROM dbo.Orders), filt AS (SELECT b.| FROM base b) SELECT * FROM filt",
+    "expect": {
+      "mustContain": ["OrderID", "CustomerID", "OrderDate"],
+      "mustNotContain": ["EmployeeID", "ShipperID"],
+      "minCount": 3
+    },
+    "note": "second CTE body aliases the first CTE; only its projection is visible"
+  },
+  {
+    "id": "CTE-034",
+    "family": "cte",
+    "doc": "WITH CustBase AS (SELECT CustomerID, Country FROM dbo.Customers), UK AS (SELECT CustomerID FROM |) SELECT * FROM UK",
+    "expect": {
+      "mustContain": ["CustBase", "Customers"],
+      "mustNotContain": ["Country"],
+      "minCount": 2
+    },
+    "note": "FROM inside second CTE body offers the first CTE and base tables, not columns"
+  },
+  {
+    "id": "CTE-035",
+    "family": "cte",
+    "doc": "WITH a AS (SELECT ProductID, Price FROM dbo.Products), b AS (SELECT a.ProductID, a.Price FROM a WHERE a.Price > 50) SELECT b.| FROM b",
+    "expect": {
+      "mustContain": ["ProductID", "Price"],
+      "mustNotContain": ["ProductName", "CategoryID"],
+      "minCount": 2
+    },
+    "note": "outer query over second CTE sees projection propagated through both CTEs"
+  },
+  {
+    "id": "CTE-036",
+    "family": "cte",
+    "doc": "WITH lvl1 AS (\n    SELECT CategoryID, CategoryName FROM dbo.Categories\n),\nlvl2 AS (\n    SELECT l1.CategoryID FROM lvl1 l1\n),\nlvl3 AS (\n    SELECT l2.CategoryID FROM |\n)\nSELECT * FROM lvl3",
+    "expect": {
+      "mustContain": ["lvl1", "lvl2"],
+      "mustNotContain": ["CategoryName"],
+      "minCount": 2
+    },
+    "note": "third CTE body FROM sees both earlier CTEs"
+  },
+  {
+    "id": "CTE-037",
+    "family": "cte",
+    "doc": "WITH ords AS (SELECT OrderID, CustomerID FROM dbo.Orders),\ncusts AS (SELECT CustomerID, CustomerName, Country FROM dbo.Customers)\nSELECT o.OrderID, cu.|\nFROM ords o\nJOIN custs cu ON cu.CustomerID = o.CustomerID",
+    "expect": {
+      "mustContain": ["CustomerName", "Country", "CustomerID"],
+      "mustNotContain": ["OrderDate", "Address"],
+      "minCount": 3
+    },
+    "note": "two CTEs joined in outer query; Address unprojected so absent from cu"
+  },
+  {
+    "id": "CTE-038",
+    "family": "cte",
+    "doc": "WITH x AS (SELECT OrderID FROM dbo.Orders), y AS (SELECT ProductID, ProductName FROM dbo.Products) SELECT x.| FROM x JOIN y ON y.ProductID = x.OrderID",
+    "expect": {
+      "mustContain": ["OrderID"],
+      "mustNotContain": ["ProductID", "ProductName"],
+      "minCount": 1
+    },
+    "note": "sibling CTE columns must not bleed across aliases"
+  },
+  {
+    "id": "CTE-039",
+    "family": "cte",
+    "doc": "WITH OrderSummary AS (SELECT OrderID FROM dbo.Orders), OrderDetail AS (SELECT OrderDetailID FROM dbo.OrderDetails) SELECT * FROM Order|",
+    "expect": {
+      "mustContain": ["OrderSummary", "OrderDetail", "Orders", "OrderDetails"],
+      "mustNotContain": ["Products"],
+      "minCount": 4
+    },
+    "note": "prefix Order matches both CTE names and both base tables"
+  },
+  {
+    "id": "CTE-040",
+    "family": "cte",
+    "doc": "DELETE FROM dbo.OrderDetails WHERE Quantity = 0;\nWITH p AS (SELECT ProductID, ProductName, SupplierID FROM dbo.Products),\ns AS (SELECT SupplierID, SupplierName FROM dbo.Suppliers)\nSELECT p.ProductName, s.|\nFROM p JOIN s ON s.SupplierID = p.SupplierID",
+    "expect": {
+      "mustContain": ["SupplierID", "SupplierName"],
+      "mustNotContain": ["ContactName", "City"],
+      "minCount": 2
+    },
+    "note": "prior DELETE statement; second CTE alias limited to its projection"
+  },
+  {
+    "id": "CTE-041",
+    "family": "cte",
+    "doc": "WITH src (OID, CID) AS (SELECT OrderID, CustomerID FROM dbo.Orders), agg AS (SELECT s.| FROM src s) SELECT * FROM agg",
+    "expect": {
+      "mustContain": ["OID", "CID"],
+      "mustNotContain": ["OrderID", "CustomerID"],
+      "minCount": 2
+    },
+    "note": "column-list renames propagate when a later CTE references the renamed CTE"
+  },
+  {
+    "id": "CTE-042",
+    "family": "cte",
+    "doc": "WITH inv AS (SELECT InvoiceID, OrderID, Paid FROM Sales.Invoices),\nunpaid AS (SELECT i.InvoiceID FROM inv i WHERE i.|)\nSELECT * FROM unpaid",
+    "expect": {
+      "mustContain": ["Paid", "OrderID", "InvoiceID"],
+      "mustNotContain": ["TotalAmount", "InvoiceDate"],
+      "minCount": 3
+    },
+    "note": "WHERE inside second CTE via first-CTE alias; unprojected Invoices columns absent"
+  },
+  {
+    "id": "CTE-043",
+    "family": "cte",
+    "doc": "WITH c1 AS (SELECT CategoryID FROM dbo.Categories), c2 AS (SELECT CustomerID FROM dbo.Customers) SELECT * FROM c|",
+    "expect": {
+      "mustContain": ["c1", "c2", "Categories", "Customers"],
+      "mustNotContain": ["Orders"],
+      "minCount": 4
+    },
+    "note": "1-char prefix c matches both CTE names and c-prefixed tables"
+  },
+  {
+    "id": "CTE-044",
+    "family": "cte",
+    "doc": "WITH e AS (SELECT EmployeeID, LastName FROM dbo.Employees),\no AS (SELECT OrderID, EmployeeID FROM dbo.Orders)\nSELECT o.|\nFROM o\nJOIN e ON e.EmployeeID = o.EmployeeID",
+    "expect": {
+      "mustContain": ["OrderID", "EmployeeID"],
+      "mustNotContain": ["LastName", "OrderDate"],
+      "minCount": 2
+    },
+    "note": "alias o maps to the CTE projection, not full Orders nor sibling CTE columns"
+  },
+  {
+    "id": "CTE-045",
+    "family": "cte",
+    "doc": "WITH cte1 AS (SELECT * FROM |) SELECT * FROM cte1",
+    "expect": {
+      "mustContain": ["Orders", "Customers", "vw_ProductCatalog"],
+      "mustNotContain": ["OrderDate"],
+      "minCount": 3
+    },
+    "note": "FROM inside CTE body offers tables and views like any FROM"
+  },
+  {
+    "id": "CTE-046",
+    "family": "cte",
+    "doc": "WITH cte1 AS (SELECT o.| FROM dbo.Orders o) SELECT * FROM cte1",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate", "CustomerID"],
+      "mustNotContain": ["ProductName"],
+      "minCount": 3
+    },
+    "note": "table alias inside CTE body resolves to full base-table columns"
+  },
+  {
+    "id": "CTE-047",
+    "family": "cte",
+    "doc": "WITH recent AS (\n    SELECT OrderID, OrderDate\n    FROM dbo.Orders o\n    WHERE o.Order|\n)\nSELECT * FROM recent",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["OrderDetailID"],
+      "minCount": 2
+    },
+    "note": "WHERE inside body: Order prefix must not pull OrderDetails columns"
+  },
+  {
+    "id": "CTE-048",
+    "family": "cte",
+    "doc": "WITH catprod AS (\n    SELECT p.ProductID, c.CategoryName\n    FROM dbo.Products p\n    INNER JOIN dbo.Categories c ON c.|\n)\nSELECT * FROM catprod",
+    "expect": {
+      "mustContain": ["CategoryID", "CategoryName", "Description"],
+      "mustNotContain": ["ProductID", "SupplierID"],
+      "minCount": 3
+    },
+    "note": "ON clause inside CTE body scopes qualifier c to Categories only"
+  },
+  {
+    "id": "CTE-049",
+    "family": "cte",
+    "doc": "WITH bycat AS (SELECT CategoryID, COUNT(*) AS Cnt FROM dbo.Products GROUP BY |) SELECT * FROM bycat",
+    "expect": {
+      "mustContain": ["CategoryID", "SupplierID"],
+      "mustNotContain": ["CategoryName"],
+      "minCount": 2
+    },
+    "note": "GROUP BY inside CTE body offers Products columns, not Categories columns"
+  },
+  {
+    "id": "CTE-050",
+    "family": "cte",
+    "doc": "WITH t AS (SELECT * FROM Northwind_AutoTest.dbo.|) SELECT * FROM t",
+    "expect": {
+      "mustContain": ["Orders", "Products", "vw_CustomerOrders"],
+      "mustNotContain": ["Invoices"],
+      "minCount": 3
+    },
+    "note": "three-part dbo. inside CTE body must exclude Sales-schema objects"
+  },
+  {
+    "id": "CTE-051",
+    "family": "cte",
+    "doc": "WITH inv AS (SELECT * FROM Sales.|) SELECT * FROM inv",
+    "expect": {
+      "mustContain": ["Invoices"],
+      "mustNotContain": ["Orders", "Customers"],
+      "minCount": 1
+    },
+    "note": "Sales. qualifier inside CTE body lists only Sales-schema objects"
+  },
+  {
+    "id": "CTE-052",
+    "family": "cte",
+    "doc": "with q as (select | from dbo.Suppliers) select * from q",
+    "expect": {
+      "mustContain": ["SupplierID", "SupplierName", "City"],
+      "mustNotContain": ["CustomerID", "ProductName"],
+      "minCount": 3
+    },
+    "note": "unqualified select list inside body scoped to the body's FROM table"
+  },
+  {
+    "id": "CTE-053",
+    "family": "cte",
+    "doc": "WITH w AS (SELECT c.| FROM dbo.Categories c) SELECT * FROM w JOIN dbo.Customers cu ON cu.CustomerID = w.CategoryID",
+    "expect": {
+      "mustContain": ["CategoryID", "CategoryName", "Description"],
+      "mustNotContain": ["CustomerName", "CustomerID"],
+      "minCount": 3
+    },
+    "note": "alias c inside body is Categories; outer-query Customers alias must not leak in"
+  },
+  {
+    "id": "CTE-054",
+    "family": "cte",
+    "doc": "WITH topcust AS (\n    SELECT CustomerID, COUNT(*) AS N\n    FROM dbo.Orders\n    GROUP BY CustomerID\n    HAVING COUNT(*) > 5\n)\nSELECT t.| FROM topcust t",
+    "expect": {
+      "mustContain": ["CustomerID", "N"],
+      "mustNotContain": ["OrderID", "OrderDate"],
+      "minCount": 2
+    },
+    "note": "aggregated CTE with HAVING exposes group key plus aggregate alias only"
+  },
+  {
+    "id": "CTE-055",
+    "family": "cte",
+    "doc": "WITH EmpTree AS (\n    SELECT EmployeeID, LastName FROM dbo.Employees WHERE EmployeeID = 1\n    UNION ALL\n    SELECT e.EmployeeID, e.LastName\n    FROM dbo.Employees e\n    INNER JOIN EmpTree t ON t.|\n)\nSELECT * FROM EmpTree",
+    "expect": {
+      "mustContain": ["EmployeeID", "LastName"],
+      "mustNotContain": ["FirstName", "BirthDate"],
+      "minCount": 2
+    },
+    "note": "recursive member: self-reference alias exposes anchor projection only"
+  },
+  {
+    "id": "CTE-056",
+    "family": "cte",
+    "doc": "WITH Chain AS (\n    SELECT OrderID FROM dbo.Orders WHERE OrderID = 1\n    UNION ALL\n    SELECT c.OrderID + 1 FROM |\n)\nSELECT * FROM Chain",
+    "expect": {
+      "mustContain": ["Chain", "Orders"],
+      "mustNotContain": ["OrderID"],
+      "minCount": 2
+    },
+    "note": "recursive member FROM must offer the CTE's own name for self-reference"
+  },
+  {
+    "id": "CTE-057",
+    "family": "cte",
+    "doc": "WITH l1 AS (SELECT ProductID, Price FROM dbo.Products),\nl2 AS (SELECT l1.ProductID, l1.Price FROM l1),\nl3 AS (SELECT l2.ProductID FROM l2)\nSELECT z.| FROM l3 z",
+    "expect": {
+      "mustContain": ["ProductID"],
+      "mustNotContain": ["Price", "ProductName"],
+      "minCount": 1
+    },
+    "note": "projection narrows through nested CTEs; Price dropped at l3"
+  },
+  {
+    "id": "CTE-058",
+    "family": "cte",
+    "doc": "WITH Nums (N) AS (\n    SELECT 1\n    UNION ALL\n    SELECT n.| FROM Nums n WHERE n.N < 10\n)\nSELECT * FROM Nums",
+    "expect": {
+      "mustContain": ["N"],
+      "mustNotContain": ["OrderID"],
+      "minCount": 1
+    },
+    "note": "recursive CTE with explicit column list: self alias exposes the declared column"
+  },
+  {
+    "id": "CTE-059",
+    "family": "cte",
+    "doc": "WITH Tree AS (\n    SELECT EmployeeID, FirstName FROM dbo.Employees\n    UNION ALL\n    SELECT t.EmployeeID, t.FirstName FROM Tree t JOIN dbo.Employees e ON e.EmployeeID = t.EmployeeID\n)\nSELECT * FROM Tre|",
+    "expect": {
+      "mustContain": ["Tree"],
+      "mustNotContain": ["Employees", "Orders"],
+      "minCount": 1
+    },
+    "note": "outer FROM after a recursive CTE: Tre prefix matches only the CTE name"
+  },
+  {
+    "id": "CTE-060",
+    "family": "cte",
+    "doc": "WITH v1 AS (SELECT ProductID, ProductName, CategoryName FROM dbo.vw_ProductCatalog),\nv2 AS (SELECT v.Cat| FROM v1 v)\nSELECT * FROM v2",
+    "expect": {
+      "mustContain": ["CategoryName"],
+      "mustNotContain": ["CategoryID"],
+      "minCount": 1
+    },
+    "note": "nested CTE over a view: Cat prefix matches projected CategoryName, not base CategoryID"
+  },
+  {
+    "id": "CTE-061",
+    "family": "cte",
+    "doc": "WITH combo AS (\n    SELECT City FROM dbo.Customers\n    UNION\n    SELECT | FROM dbo.Suppliers\n)\nSELECT * FROM combo",
+    "expect": {
+      "mustContain": ["City", "SupplierName", "Country"],
+      "mustNotContain": ["CustomerName"],
+      "minCount": 3
+    },
+    "note": "second UNION branch inside body scoped to Suppliers, not the first branch's table"
+  },
+  {
+    "id": "CTE-062",
+    "family": "cte",
+    "doc": "WITH bigorders AS (SELECT OrderID, CustomerID FROM dbo.Orders)\nSELECT c.CustomerName\nFROM dbo.Customers c\nWHERE c.CustomerID IN (SELECT b.| FROM bigorders b)",
+    "expect": {
+      "mustContain": ["OrderID", "CustomerID"],
+      "mustNotContain": ["OrderDate", "CustomerName"],
+      "minCount": 2
+    },
+    "note": "CTE referenced inside an IN-subquery resolves through the subquery alias"
+  },
+  {
+    "id": "CTE-063",
+    "family": "cte",
+    "doc": "SELECT GETDATE();\nSELECT COUNT(*) FROM dbo.Orders;\nWITH latest AS (SELECT OrderID, OrderDate FROM dbo.Orders)\nSELECT l.| FROM latest l",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["CustomerID"],
+      "minCount": 2
+    },
+    "note": "two prior ;-terminated statements before the CTE statement"
+  },
+  {
+    "id": "CTE-064",
+    "family": "cte",
+    "doc": "SELECT p.ProductID FROM dbo.Products p;\nWITH s AS (SELECT p.| FROM dbo.Shippers p)\nSELECT * FROM s",
+    "expect": {
+      "mustContain": ["ShipperID", "ShipperName", "Phone"],
+      "mustNotContain": ["ProductID", "ProductName"],
+      "minCount": 3
+    },
+    "note": "alias p rebound to Shippers in the new statement; prior statement's binding must not leak"
+  },
+  {
+    "id": "CTE-065",
+    "family": "cte",
+    "doc": "WITH cte AS (|",
+    "expect": {
+      "mustContain": ["SELECT"],
+      "mustNotContain": ["OrderID"],
+      "minCount": 1
+    },
+    "note": "immediately after AS ( a SELECT keyword is expected, not columns"
+  },
+  {
+    "id": "CTE-066",
+    "family": "cte",
+    "doc": "WITH Top5 AS (SELECT TOP (5) OrderID, OrderDate FROM dbo.Orders ORDER BY OrderDate DESC)\nSELECT t.O| FROM Top5 t",
+    "expect": {
+      "mustContain": ["OrderID", "OrderDate"],
+      "mustNotContain": ["OrderDetailID"],
+      "minCount": 2
+    },
+    "note": "TOP (5) body; 1-char O prefix on CTE alias must not pull OrderDetails columns"
+  },
+  {
+    "id": "CTE-067",
+    "family": "cte",
+    "doc": "WITH tgt AS (SELECT ProductID, Price FROM dbo.Products WHERE Price > 100)\nUPDATE p SET p.Price = t.Price\nFROM dbo.Products p\nJOIN tgt t ON t.ProductID = p.ProductID\nWHERE t.|",
+    "expect": {
+      "mustContain": ["ProductID", "Price"],
+      "mustNotContain": ["ProductName", "Unit"],
+      "minCount": 2
+    },
+    "note": "CTE joined into an UPDATE ... FROM; alias t limited to the CTE projection"
+  },
+  {
+    "id": "CTE-068",
+    "family": "cte",
+    "doc": "WITH src AS (SELECT OrderID, InvoiceDate, TotalAmount FROM Sales.Invoices)\nINSERT INTO dbo.OrderDetails (OrderID, Quantity)\nSELECT s.OrderID, 1 FROM src s WHERE s.|",
+    "expect": {
+      "mustContain": ["TotalAmount", "InvoiceDate", "OrderID"],
+      "mustNotContain": ["Paid", "InvoiceID"],
+      "minCount": 3
+    },
+    "note": "WITH feeding INSERT ... SELECT; alias s sees projected Invoices columns only"
+  },
+  {
+    "id": "CTE-069",
+    "family": "cte",
+    "doc": "WITH\tw1 AS (SELECT CategoryID, CategoryName FROM dbo.Categories)\nSELECT w1.|\nFROM w1",
+    "expect": {
+      "mustContain": ["CategoryID", "CategoryName"],
+      "mustNotContain": ["Description"],
+      "minCount": 2
+    },
+    "note": "tab after WITH; Description unprojected so absent through w1"
+  },
+  {
+    "id": "CTE-070",
+    "family": "cte",
+    "doc": "WITH gone AS (SELECT OrderID FROM dbo.Orders) SELECT * FROM gone;\nSELECT g.Ord| FROM dbo.Categories g",
+    "expect": {
+      "mustContain": [],
+      "mustNotContain": ["OrderID"],
+      "minCount": 0
+    },
+    "note": "prior statement's CTE columns must not surface via a new alias with Ord prefix"
+  }
+]

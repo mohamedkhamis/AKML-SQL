@@ -45,7 +45,8 @@ public class HistoryRequestHandler(HistoryDatabase database)
                 recordRequest.Status,
                 recordRequest.ErrorMessage,
                 recordRequest.Source,
-                recordRequest.TabTitle);
+                recordRequest.TabTitle,
+                sessionKey: recordRequest.SessionKey);
 
             Log.Debug("History record saved: EntryId={EntryId}, Server={Server}, Database={Database}",
                 entryId, recordRequest.Server, recordRequest.Database);
@@ -403,11 +404,11 @@ public class HistoryRequestHandler(HistoryDatabase database)
                         return CreateActionResponse(request.RequestId, new HistoryActionResponse
                         {
                             Success = false,
-                            Error = "NewName (tabTitle) and SqlText required for SaveVersion"
+                            Error = "NewName (source path) and SqlText required for SaveVersion"
                         });
                     }
 
-                    var saved = await _database.SaveVersionByTabTitleAsync(actionRequest.NewName, actionRequest.SqlText);
+                    var saved = await _database.SaveVersionBySourceAsync(actionRequest.NewName, actionRequest.SqlText);
                     return CreateActionResponse(request.RequestId, new HistoryActionResponse
                     {
                         Success = saved

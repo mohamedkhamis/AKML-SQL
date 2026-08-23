@@ -33,4 +33,12 @@
     <ProjectReference Include="..\AkmlSql.Core\AkmlSql.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Expose the TsqlParserService.ParseCount diagnostic seam to the engine tests, which pin
+         how many full parses the completion repair ladder is allowed to perform per keystroke. -->
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>AkmlSql.Engine.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
 </Project>
