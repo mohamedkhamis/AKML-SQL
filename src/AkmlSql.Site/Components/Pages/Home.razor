@@ -1,0 +1,92 @@
+@page "/"
+
+@* Spec 034 T014 (US1): landing page per contracts/site-routes.md (FR-001). Site redesign:
+   full-bleed hero (gradient mesh + grid backdrop, display headline with gradient accent,
+   dual CTA, product screenshot in a browser-chrome frame), icon feature cards, CTA banner.
+   SC-001: /download is one click from here. Static SSR only. *@
+
+<PageTitle>AKML SQL — AI-powered SQL development assistance</PageTitle>
+<HeadContent>
+    <meta name="description" content="AKML SQL brings AI-powered IntelliSense, formatting, static analysis, refactoring, snippets, SQL history, and AI assistance to SSMS 22 and Visual Studio 2026 — replicating and extending the Redgate SQL Prompt feature set." />
+    <meta property="og:title" content="AKML SQL — AI-powered SQL development assistance" />
+    <meta property="og:description" content="AI-powered IntelliSense, formatting, static analysis, refactoring, snippets, SQL history, and AI assistance for SSMS 22 and Visual Studio 2026." />
+</HeadContent>
+
+<section class="hero" aria-labelledby="hero-heading">
+    <div class="hero-backdrop" aria-hidden="true"></div>
+    <div class="container">
+        <p class="eyebrow hero-eyebrow">For SSMS 22 + Visual Studio 2026</p>
+        <h1 id="hero-heading">SQL development, <span class="text-gradient">supercharged.</span></h1>
+        <p class="hero-tagline">
+            AKML SQL brings AI-powered IntelliSense, formatting, static analysis, refactoring,
+            snippets, SQL history, and chat-style assistance to the tools you already use —
+            replicating and extending the Redgate SQL Prompt feature set.
+        </p>
+        <p class="cta-row hero-cta">
+            <a class="btn btn-primary" href="/download">Download AKML SQL</a>
+            <a class="btn btn-secondary" href="/docs">Browse documentation</a>
+        </p>
+        <div class="hero-visual">
+            <figure class="screenshot-frame hero-screenshot">
+                <figcaption class="screenshot-chrome" aria-hidden="true">
+                    <span class="chrome-dot chrome-dot-close"></span>
+                    <span class="chrome-dot chrome-dot-minimize"></span>
+                    <span class="chrome-dot chrome-dot-maximize"></span>
+                    <span class="chrome-title">AKML SQL — web edition</span>
+                </figcaption>
+                <img src="img/screenshots/query-results.png" width="1920" height="889" fetchpriority="high"
+                     alt="The AKML SQL editor with a syntax-highlighted query, schema tree, problems panel, and a live result grid." />
+            </figure>
+        </div>
+    </div>
+</section>
+
+<div class="page-body container">
+    <section aria-labelledby="highlights-heading">
+        <p class="eyebrow">Capabilities</p>
+        <h2 id="highlights-heading">A complete SQL productivity toolkit</h2>
+        <ul class="card-grid">
+            <li class="card feature-card">
+                <span class="feature-card-icon" aria-hidden="true"><FeatureIcon Name="intellisense" /></span>
+                <h3>IntelliSense</h3>
+                <p>Schema-aware completions with fuzzy matching and SQL Prompt-style popups that understand your database.</p>
+            </li>
+            <li class="card feature-card">
+                <span class="feature-card-icon" aria-hidden="true"><FeatureIcon Name="formatting" /></span>
+                <h3>Code formatting</h3>
+                <p>A 7-stage formatting pipeline with shareable <code>.akmlstyle</code> profiles and SQL Prompt style round-trip.</p>
+            </li>
+            <li class="card feature-card">
+                <span class="feature-card-icon" aria-hidden="true"><FeatureIcon Name="analysis" /></span>
+                <h3>Static analysis</h3>
+                <p>130+ rules across 8 categories catch performance, security, and style issues before they ship.</p>
+            </li>
+            <li class="card feature-card">
+                <span class="feature-card-icon" aria-hidden="true"><FeatureIcon Name="refactoring" /></span>
+                <h3>Refactoring</h3>
+                <p>Smart Rename, Parameterize Values, and lightweight ops that reshape SQL safely in one action.</p>
+            </li>
+            <li class="card feature-card">
+                <span class="feature-card-icon" aria-hidden="true"><FeatureIcon Name="snippets" /></span>
+                <h3>Snippets</h3>
+                <p>Personal, team, and built-in snippet libraries with context-aware filtering and surround-with.</p>
+            </li>
+            <li class="card feature-card">
+                <span class="feature-card-icon" aria-hidden="true"><FeatureIcon Name="history" /></span>
+                <h3>SQL History</h3>
+                <p>Crash-safe history of every query you run, with full-text search and a three-panel browser.</p>
+            </li>
+            <li class="card feature-card">
+                <span class="feature-card-icon" aria-hidden="true"><FeatureIcon Name="ai" /></span>
+                <h3>AI assistance</h3>
+                <p>Text-to-SQL, Explain, Fix, Optimize, Chat, and Ghost Text inline autocomplete, grounded in your schema.</p>
+            </li>
+        </ul>
+    </section>
+
+    <section class="cta-banner" aria-labelledby="get-started-heading">
+        <h2 id="get-started-heading">Ready to try it?</h2>
+        <p>Free and open source under the MIT license. One installer covers both hosts.</p>
+        <p class="cta-row"><a class="btn btn-primary" href="/download">Download the latest release</a></p>
+    </section>
+</div>

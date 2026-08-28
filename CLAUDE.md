@@ -21,14 +21,16 @@ src/
   AkmlSql.VS2026/                      # VS 2026 extension (net472, x64, VS SDK 17.14.x)
   AkmlSql.Web/                         # Blazor WASM web edition (net10.0)
   AkmlSql.Web.Shared/                  # Web contracts (netstandard2.0)
+  AkmlSql.Site/                        # Blazor static-SSR product site (net10.0) — landing/features/download + docs auto-ingested from doc/ (spec 034)
   AkmlSql.Updater/                     # Self-contained updater (net10.0, win-x64, trimmed)
   AkmlSql.Installer/                   # Inno Setup 7 installer scripts
 tests/
-  AkmlSql.Core.Tests/                  # xunit tests (net10.0) — one project per src library (11 total) + E2E/Web.E2E/Installer
+  AkmlSql.Core.Tests/                  # xunit tests (net10.0) — one project per src library (12 total) + E2E/Web.E2E/Installer
+  AkmlSql.Site.Tests/                  # xunit + bunit (net10.0) — site components, docs pipeline, releases manifest (spec 034)
   format-parity/                       # SQL Prompt parity corpus + golden outputs
   completion-corpus/                   # 1,342-case autocomplete corpus + CorpusGateTests ratchet (~97.5% gate)
 doc/                                   # All project documentation (architecture, ipc-api, progress, WEB/ milestone docs)
-specs/                                 # Specify framework feature specs (001–033)
+specs/                                 # Specify framework feature specs (001–034)
 ```
 
 ## Technologies

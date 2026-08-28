@@ -1,0 +1,213 @@
+@page "/admin"
+@using AkmlSql.Site.Analytics
+@using Microsoft.Extensions.Options
+@inject AnalyticsStore Store
+@inject IOptions<DownloadsOptions> DownloadsConfig
+
+@* Admin metrics dashboard. Static SSR; the daily-visits chart is PURE CSS — bar heights come
+   from the precomputed .bar-h-* bucket classes in site.css (strict CSP: no inline styles). *@
+
+<PageTitle>Dashboard — AKML SQL Admin</PageTitle>
+<HeadContent>
+    <meta name="robots" content="noindex, nofollow" />
+</HeadContent>
+
+<div class="page-body container">
+<header class="page-header admin-header-row">
+    <div>
+        <p class="eyebrow">Admin</p>
+        <h1>Site metrics</h1>
+        <p class="page-intro">
+            Page visits and installer downloads. Privacy: client IPs are stored only as per-day
+            salted hashes; no cookies are set for visitors.
+        </p>
+    </div>
+    <form method="post" action="/admin/logout" class="admin-signout">
+        <button type="submit" class="btn btn-secondary">Sign out</button>
+    </form>
+</header>
+
+<section class="admin-stats" aria-label="Key metrics">
+    <div class="admin-stat">
+        <p class="admin-stat-value">@_summary.VisitsToday</p>
+        <p class="admin-stat-label">Visits today</p>
+    </div>
+    <div class="admin-stat">
+        <p class="admin-stat-value">@_summary.VisitsLast7Days</p>
+        <p class="admin-stat-label">Visits · 7 days</p>
+    </div>
+    <div class="admin-stat">
+        <p class="admin-stat-value">@_summary.VisitsWindow</p>
+        <p class="admin-stat-label">Visits · @_summary.Days days</p>
+    </div>
+    <div class="admin-stat">
+        <p class="admin-stat-value">@_summary.DownloadsTotal</p>
+        <p class="admin-stat-label">Downloads · total</p>
+    </div>
+    <div class="admin-stat">
+        <p class="admin-stat-value">@_summary.DownloadsLast7Days</p>
+        <p class="admin-stat-label">Downloads · 7 days</p>
+    </div>
+</section>
+
+<section class="admin-panel" aria-labelledby="chart-heading">
+    <h2 id="chart-heading">Visits — last @_summary.Days days</h2>
+    <div class="admin-chart">
+        <div class="admin-chart-bars">
+            @foreach (var day in _summary.DailyVisits)
+            {
+                <div class="admin-chart-bar bar-h-@HeightBucket(day.Count)"
+                     title="@day.Day.ToString("yyyy-MM-dd"): @day.Count visits"></div>
+            }
+        </div>
+        <div class="admin-chart-labels" aria-hidden="true">
+            @for (var i = 0; i < _summary.DailyVisits.Count; i++)
+            {
+                <span class="admin-chart-label">@(i % 5 == 0 ? _summary.DailyVisits[i].Day.ToString("M/d") : "")</span>
+            }
+        </div>
+    </div>
+</section>
+
+<div class="admin-tables">
+    <section class="admin-panel" aria-labelledby="top-pages-heading">
+        <h2 id="top-pages-heading">Top pages · @_summary.Days days</h2>
+        @if (_summary.TopPages.Count == 0)
+        {
+            <p class="admin-empty">No visits recorded yet.</p>
+        }
+        else
+        {
+            <div class="table-scroll">
+                <table class="admin-table">
+                    <thead>
+                        <tr><th>Path</th><th class="admin-num">Visits</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _summary.TopPages)
+                        {
+                            <tr><td>@row.Key</td><td class="admin-num">@row.Count</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+    <section class="admin-panel" aria-labelledby="downloads-heading">
+        <h2 id="downloads-heading">Downloads by file</h2>
+        @if (_summary.DownloadsByFile.Count == 0)
+        {
+            <p class="admin-empty">No downloads recorded yet.</p>
+        }
+        else
+        {
+            <div class="table-scroll">
+                <table class="admin-table">
+                    <thead>
+                        <tr><th>File</th><th class="admin-num">Downloads</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _summary.DownloadsByFile)
+                        {
+                            <tr><td>@row.Key</td><td class="admin-num">@row.Count</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+    <section class="admin-panel" aria-labelledby="referrers-heading">
+        <h2 id="referrers-heading">Top referrers · @_summary.Days days</h2>
+        @if (_summary.TopReferrers.Count == 0)
+        {
+            <p class="admin-empty">No external referrers recorded yet.</p>
+        }
+        else
+        {
+            <div class="table-scroll">
+                <table class="admin-table">
+                    <thead>
+                        <tr><th>Host</th><th class="admin-num">Visits</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _summary.TopReferrers)
+                        {
+                            <tr><td>@row.Key</td><td class="admin-num">@row.Count</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+    <section class="admin-panel" aria-labelledby="files-heading">
+        <h2 id="files-heading">Files in the downloads folder</h2>
+        <p class="admin-path"><code>@DownloadsConfig.Value.Folder</code></p>
+        @if (_files.Count == 0)
+        {
+            <p class="admin-empty">No installer files present.</p>
+        }
+        else
+        {
+            <div class="table-scroll">
+                <table class="admin-table">
+                    <thead>
+                        <tr><th>Name</th><th class="admin-num">Size</th><th>Last write (UTC)</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var file in _files)
+                        {
+                            <tr>
+                                <td><a href="/dl/@file.Name">@file.Name</a></td>
+                                <td class="admin-num">@FormatSize(file.SizeBytes)</td>
+                                <td>@file.LastWriteUtc.ToString("yyyy-MM-dd HH:mm")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+</div>
+
+</div>
+
+@code {
+    private AnalyticsSummary _summary = null!;
+    private IReadOnlyList<DownloadFileInfo> _files = [];
+    private long _maxDaily;
+
+    protected override void OnInitialized()
+    {
+        _summary = Store.GetSummary(30);
+        _files = DownloadsInfo.List(DownloadsConfig.Value.Folder);
+        _maxDaily = _summary.DailyVisits.Count == 0 ? 0 : _summary.DailyVisits.Max(d => d.Count);
+    }
+
+    /// <summary>
+    /// Maps a daily count to one of the precomputed .bar-h-* height classes (0..100, step 5) —
+    /// strict CSP forbids inline styles, so heights must come from a fixed class set.
+    /// Non-zero counts always get a visible bar (minimum bucket 5).
+    /// </summary>
+    private int HeightBucket(long count)
+    {
+        if (count <= 0 || _maxDaily <= 0)
+        {
+            return 0;
+        }
+
+        var percent = (int)Math.Round(count * 100.0 / _maxDaily, MidpointRounding.AwayFromZero);
+        var bucket = (int)Math.Round(percent / 5.0, MidpointRounding.AwayFromZero) * 5;
+        return Math.Clamp(bucket, 5, 100);
+    }
+
+    private static string FormatSize(long bytes) => bytes switch
+    {
+        < 1024L => $"{bytes} B",
+        < 1024L * 1024 => $"{bytes / 1024.0:0.#} KB",
+        < 1024L * 1024 * 1024 => $"{bytes / (1024.0 * 1024):0.#} MB",
+        _ => $"{bytes / (1024.0 * 1024 * 1024):0.##} GB",
+    };
+}

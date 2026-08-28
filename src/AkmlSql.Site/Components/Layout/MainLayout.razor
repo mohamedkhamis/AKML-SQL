@@ -1,0 +1,117 @@
+@inherits LayoutComponentBase
+
+@* Spec 034 T006 / contracts/site-routes.md: semantic landmarks, keyboard-navigable nav,
+   FR-011 repository + license links. Styles live in wwwroot/css/site.css on --akml-* tokens.
+   Site redesign: sticky blurred header, CSS-only mobile menu (no JS required), and a
+   multi-column footer. <main> no longer carries .container — pages opt into .page-body so
+   the Home hero can run full-bleed. *@
+
+<a class="skip-link" href="#main-content">Skip to content</a>
+
+<header class="site-header">
+    <nav class="site-nav container" aria-label="Main navigation">
+        <a class="site-brand" href="/">
+            <svg class="site-brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">
+                <rect x="1.75" y="1.75" width="20.5" height="20.5" rx="5.5" fill="none" stroke="currentColor" stroke-width="1.5" />
+                <path d="m8 16.5 4-9 4 9.5M9.7 13.6h4.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            <span>AKML SQL</span>
+        </a>
+        @* CSS-only mobile menu (<=768px): the checkbox fills its label invisibly, so clicks
+           and keyboard focus land on a real input — Space/Enter toggles natively, no JS.
+           :has(:checked) in site.css opens the panel and swaps the icon. Full-page SSR
+           navigation resets the box; for Blazor enhanced nav js/nav-menu.js (deferred,
+           CSP-clean) unchecks it on link click / Escape. Desktop CSS hides both elements. *@
+        <label class="nav-toggle-btn">
+            <input type="checkbox" class="nav-toggle" aria-label="Toggle navigation menu" autocomplete="off" />
+            <svg class="nav-icon-open" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" focusable="false">
+                <path d="M4 7h16M4 12h16M4 17h16" />
+            </svg>
+            <svg class="nav-icon-close" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" focusable="false">
+                <path d="m6 6 12 12M18 6 6 18" />
+            </svg>
+        </label>
+        <ul class="site-nav-links">
+            <li><NavLink href="/" Match="NavLinkMatch.All">Home</NavLink></li>
+            <li><NavLink href="/features">Features</NavLink></li>
+            <li><NavLink href="/docs">Docs</NavLink></li>
+            <li><NavLink href="/download">Download</NavLink></li>
+            <!-- FR-010: reserved insertion point for the future "Support" nav entry.
+                 No /support route and no payment/donation UI until that feature lands. -->
+            <li>
+                <a href="https://github.com/mohamedkhamis/AKML-SQL" target="_blank" rel="noopener noreferrer">
+                    GitHub
+                    <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                        <path d="M7 17 17 7" />
+                        <path d="M9 7h8v8" />
+                    </svg>
+                </a>
+            </li>
+        </ul>
+        @* T028 (US3): dark/light toggle. Wired by js/theme-toggle.js (deferred); without JS the
+           button is inert and the boot script's theme still applies, so CSS hides it until the
+           JS reveals it (U24). The icon pair is swapped by CSS from the data-akml-theme
+           attribute and shows the theme you will switch TO (U25) — sun while dark, moon while
+           light — matching the aria-label the JS keeps current ("Switch to light theme"…). *@
+        <button type="button" id="theme-toggle" class="theme-toggle" aria-label="Toggle color theme" title="Toggle color theme">
+            <svg class="theme-toggle-icon theme-toggle-moon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+                <path d="M6 .3a7 7 0 0 0 9.7 9.7A8 8 0 1 1 6 .3z" fill="currentColor" />
+            </svg>
+            <svg class="theme-toggle-icon theme-toggle-sun" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+                <circle cx="8" cy="8" r="3.2" fill="currentColor" />
+                <g stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
+                    <path d="M8 .8v1.6M8 13.6v1.6M.8 8h1.6M13.6 8h1.6M2.9 2.9l1.1 1.1M12 12l1.1 1.1M13.1 2.9 12 4M4 12l-1.1 1.1" />
+                </g>
+            </svg>
+        </button>
+    </nav>
+</header>
+
+<main id="main-content" class="site-main">
+    @Body
+</main>
+
+<footer class="site-footer">
+    <div class="site-footer-inner container">
+        <div class="site-footer-brand">
+            <a class="site-brand" href="/">
+                <svg class="site-brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">
+                    <rect x="1.75" y="1.75" width="20.5" height="20.5" rx="5.5" fill="none" stroke="currentColor" stroke-width="1.5" />
+                    <path d="m8 16.5 4-9 4 9.5M9.7 13.6h4.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+                <span>AKML SQL</span>
+            </a>
+            <p class="site-footer-tagline">
+                AI-powered SQL development assistance for SSMS 22 and Visual Studio 2026.
+            </p>
+        </div>
+        <nav class="site-footer-col" aria-label="Product">
+            <h2 class="site-footer-heading">Product</h2>
+            <ul class="site-footer-list">
+                <li><a href="/features">Features</a></li>
+                <li><a href="/download">Download</a></li>
+            </ul>
+        </nav>
+        <nav class="site-footer-col" aria-label="Documentation">
+            <h2 class="site-footer-heading">Docs</h2>
+            <ul class="site-footer-list">
+                <li><a href="/docs">Documentation</a></li>
+                <li><a href="/docs/architecture">Architecture</a></li>
+                <li><a href="/docs/formatting">Formatting</a></li>
+                <li><a href="/docs/configuration">Configuration</a></li>
+            </ul>
+        </nav>
+        <nav class="site-footer-col" aria-label="Legal and source code">
+            <h2 class="site-footer-heading">Legal &amp; source</h2>
+            <ul class="site-footer-list">
+                <li><a href="https://github.com/mohamedkhamis/AKML-SQL/blob/master/LICENSE.txt" target="_blank" rel="noopener noreferrer">MIT License</a></li>
+                <li><a href="https://github.com/mohamedkhamis/AKML-SQL" target="_blank" rel="noopener noreferrer">Source on GitHub</a></li>
+                <!-- FR-010: reserved slot for the future "Support" footer link. -->
+            </ul>
+        </nav>
+    </div>
+    <div class="site-footer-base container">
+        <p>Free and open source under the MIT license.</p>
+        <!-- Site metrics live at /admin — a direct URL for the owner, intentionally not linked anywhere public. -->
+    </div>
+</footer>

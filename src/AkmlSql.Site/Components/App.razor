@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en" data-akml-theme="dark">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+    <ResourcePreloader />
+    <!-- T031 (SEO): site-wide Open Graph defaults; pages override og:title/og:description
+         via HeadContent. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="AKML SQL" />
+    <!-- Theme CSS (generated from docs/theme-tokens.json -- never hand-edit). Dark is the
+         site default (FR-009); the external boot script below swaps this link to the stored
+         override before first paint so there is no flash of the wrong theme. Pattern:
+         src/AkmlSql.Web/wwwroot/js/akml-theme-boot.js + akml-theme.js (which boot light).
+         Plain hrefs (no fingerprint) so the swap can construct the alternate theme URL. -->
+    <link id="akml-theme-css" rel="stylesheet" href="css/themes/dark.css" />
+    <!-- Structural shell styles; loaded after the theme so they consume --akml-* tokens.
+         Fingerprinted via MapStaticAssets (T033) — only the theme link above needs a
+         stable string-swappable URL. -->
+    <link rel="stylesheet" href="@Assets["css/site.css"]" />
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <!-- T028: no-flash theme boot (FR-009). External classic script, NOT deferred, so the
+         strict CSP (script-src 'self', no inline scripts) holds while it still runs before
+         first paint. Precedence: stored localStorage choice > prefers-color-scheme > dark. -->
+    <script src="js/theme-boot.js"></script>
+    <!-- T028: header theme toggle, deferred (progressive enhancement; inert without JS). -->
+    <script src="@Assets["js/theme-toggle.js"]" defer></script>
+    <!-- Mobile nav enhancement: closes the CSS-only menu after enhanced-nav link clicks and
+         on Escape. The menu works fully without it (SSR page loads reset the checkbox). -->
+    <script src="@Assets["js/nav-menu.js"]" defer></script>
+    <HeadOutlet />
+</head>
+
+<body>
+    <Routes />
+    <script src="_framework/blazor.web.js"></script>
+</body>
+
+</html>

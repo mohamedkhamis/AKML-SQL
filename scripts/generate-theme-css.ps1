@@ -22,20 +22,42 @@
 .PARAMETER RepoRoot
     Override repo root. Defaults to the script's grandparent ($PSScriptRoot/..).
 
+.PARAMETER OutputFolder
+    Override the output folder for the generated CSS files. Empty (default) writes to
+    src/AkmlSql.Web/wwwroot/css/themes (the web edition). Relative paths resolve
+    against RepoRoot. Spec 034 uses this to emit the product site's themes into
+    src/AkmlSql.Site/wwwroot/css/themes/ without touching the web-edition default.
+
 .EXAMPLE
-    pwsh scripts/generate-theme-css.ps1
-    pwsh scripts/generate-theme-css.ps1 -CheckOnly
+    # From the repo root. Pass -RepoRoot explicitly: under Windows PowerShell 5.1
+    # (powershell.exe -File) the $PSScriptRoot-based default resolves empty.
+    powershell -NoProfile -File scripts/generate-theme-css.ps1 -RepoRoot .
+.EXAMPLE
+    # Drift gate for the web edition themes (used by build.ps1 / CI).
+    powershell -NoProfile -File scripts/generate-theme-css.ps1 -CheckOnly -RepoRoot .
+.EXAMPLE
+    # Drift gate for the product site's own theme copies.
+    powershell -NoProfile -File scripts/generate-theme-css.ps1 -CheckOnly -RepoRoot . -OutputFolder src/AkmlSql.Site/wwwroot/css/themes
 #>
 [CmdletBinding()]
 param(
     [switch]$CheckOnly,
-    [string]$RepoRoot = (Split-Path -Parent $PSScriptRoot)
+    [string]$RepoRoot = (Split-Path -Parent $PSScriptRoot),
+    [string]$OutputFolder = ''
 )
 
 $ErrorActionPreference = 'Stop'
 
 $tokensPath = Join-Path $RepoRoot 'docs/theme-tokens.json'
-$outDir     = Join-Path $RepoRoot 'src/AkmlSql.Web/wwwroot/css/themes'
+if ([string]::IsNullOrWhiteSpace($OutputFolder)) {
+    $outDir = Join-Path $RepoRoot 'src/AkmlSql.Web/wwwroot/css/themes'
+}
+elseif ([System.IO.Path]::IsPathRooted($OutputFolder)) {
+    $outDir = $OutputFolder
+}
+else {
+    $outDir = Join-Path $RepoRoot $OutputFolder
+}
 
 if (-not (Test-Path $tokensPath)) {
     throw "theme-tokens.json not found at $tokensPath"

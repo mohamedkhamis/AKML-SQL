@@ -1,0 +1,164 @@
+@page "/features"
+
+@* Spec 034 T015 (US1): FR-002 capability areas with real descriptions drawn from README.md.
+   Site redesign: alternating media sections built from the real product screenshots in
+   wwwroot/img/screenshots (lazy-loaded, explicit width/height to avoid CLS per
+   contracts/site-routes.md), followed by the full capability card grid. *@
+
+<PageTitle>Features — AKML SQL</PageTitle>
+<HeadContent>
+    <meta name="description" content="The AKML SQL capability set for SSMS 22 and Visual Studio 2026: schema-aware IntelliSense, a 7-stage formatting pipeline, 130+ static analysis rules, refactoring, snippets, crash-safe SQL history, and schema-grounded AI assistance." />
+    <meta property="og:title" content="Features" />
+    <meta property="og:description" content="Schema-aware IntelliSense, a 7-stage formatting pipeline, 130+ static analysis rules, refactoring, snippets, crash-safe SQL history, and schema-grounded AI assistance." />
+</HeadContent>
+
+<div class="page-body container">
+    <header class="page-header">
+        <p class="eyebrow">Features</p>
+        <h1>Everything SQL Prompt did — and then some</h1>
+        <p class="page-intro">
+            AKML SQL replicates and extends the Redgate SQL Prompt feature set inside SQL Server
+            Management Studio 22 and Visual Studio 2026, powered by a self-contained .NET 10 engine.
+        </p>
+    </header>
+
+    <section class="media-row" aria-labelledby="media-connect-heading">
+        <div class="media-text">
+            <p class="eyebrow">Connections</p>
+            <h2 id="media-connect-heading">Connect once, get to work fast</h2>
+            <p>
+                Saved connections with friendly display names, Windows or SQL Server
+                authentication, and one-click Test, Save, and Connect. No connection strings
+                to juggle — pick a saved profile and start writing SQL.
+            </p>
+        </div>
+        <figure class="screenshot-frame media-frame">
+            <figcaption class="screenshot-chrome" aria-hidden="true">
+                <span class="chrome-dot chrome-dot-close"></span>
+                <span class="chrome-dot chrome-dot-minimize"></span>
+                <span class="chrome-dot chrome-dot-maximize"></span>
+            </figcaption>
+            <img src="img/screenshots/connect-dialog.png" width="720" height="501" loading="lazy"
+                 alt="The AKML SQL connection dialog with a saved-connections list and a populated server form." />
+        </figure>
+    </section>
+
+    <section class="media-row media-row-flip" aria-labelledby="media-editor-heading">
+        <div class="media-text">
+            <p class="eyebrow">Editor</p>
+            <h2 id="media-editor-heading">An editor that knows your database</h2>
+            <p>
+                Live IntelliSense ranked by your schema, a problems panel fed by 130+ analysis
+                rules, and an execute grid with inline edit, add, and delete — with elapsed
+                time on every run. Format, analyse, refactor, and ask AI without leaving the
+                editor.
+            </p>
+        </div>
+        <figure class="screenshot-frame media-frame">
+            <figcaption class="screenshot-chrome" aria-hidden="true">
+                <span class="chrome-dot chrome-dot-close"></span>
+                <span class="chrome-dot chrome-dot-minimize"></span>
+                <span class="chrome-dot chrome-dot-maximize"></span>
+            </figcaption>
+            <img src="img/screenshots/query-results.png" width="1920" height="889" loading="lazy"
+                 alt="The AKML SQL editor showing an executed query with its result grid, schema panel, and a clean problems report." />
+        </figure>
+    </section>
+
+    <section class="media-row" aria-labelledby="media-server-heading">
+        <div class="media-text">
+            <p class="eyebrow">Discovery</p>
+            <h2 id="media-server-heading">Pick the right database, every time</h2>
+            <p>
+                Pair an engine once and AKML SQL lists its databases inline — no typing server
+                names from memory, and no running a script against the wrong environment.
+            </p>
+        </div>
+        <figure class="screenshot-frame media-frame">
+            <figcaption class="screenshot-chrome" aria-hidden="true">
+                <span class="chrome-dot chrome-dot-close"></span>
+                <span class="chrome-dot chrome-dot-minimize"></span>
+                <span class="chrome-dot chrome-dot-maximize"></span>
+            </figcaption>
+            <img src="img/screenshots/connect-dialog-server.png" width="720" height="501" loading="lazy"
+                 alt="The connection dialog's database picker, listing databases from the paired engine." />
+        </figure>
+    </section>
+
+    <section aria-labelledby="capability-heading">
+        <p class="eyebrow">Deep dive</p>
+        <h2 id="capability-heading">The full capability set</h2>
+        <ul class="card-grid feature-list">
+            <li class="card feature-card">
+                <span class="feature-card-icon" aria-hidden="true"><FeatureIcon Name="intellisense" /></span>
+                <h3>IntelliSense</h3>
+                <p>
+                    Nine completion providers — Column, Alias, Object, Keyword, Snippet, Variable, JOIN,
+                    QuickInfo, and Signature — with fuzzy matching, dot-trigger, and schema-aware ranking.
+                    The SQL Prompt-style popup shows type-coded icon badges and turns semi-transparent
+                    while you hold Ctrl to peek at the code behind it.
+                </p>
+            </li>
+            <li class="card feature-card">
+                <span class="feature-card-icon" aria-hidden="true"><FeatureIcon Name="formatting" /></span>
+                <h3>Code formatting</h3>
+                <p>
+                    A 7-stage pipeline (parse → annotate → layout → cast → emit → validate → idempotency)
+                    behind 21 format commands. Share styles as <code>.akmlstyle</code> profiles, and
+                    round-trip SQL Prompt <code>.sqlpromptstylev2</code> XML — import and export — so
+                    existing team styles carry over unchanged.
+                </p>
+            </li>
+            <li class="card feature-card">
+                <span class="feature-card-icon" aria-hidden="true"><FeatureIcon Name="analysis" /></span>
+                <h3>Static analysis</h3>
+                <p>
+                    More than 130 rules across 8 categories — Performance, Best Practices, Security,
+                    Style, Design, Deprecated, Execution, and Naming — with inline suppressions,
+                    per-project <code>.casettings</code>, and native Visual Studio Error List integration.
+                </p>
+            </li>
+            <li class="card feature-card">
+                <span class="feature-card-icon" aria-hidden="true"><FeatureIcon Name="refactoring" /></span>
+                <h3>Refactoring</h3>
+                <p>
+                    Heavyweight operations like Smart Rename, Parameterize Values, and Convert Temp Table,
+                    plus 9 lightweight ops — Expand INSERT Columns, Convert Old-Style Joins, Encapsulate
+                    BEGIN/END, and more — that reshape SQL in a single action.
+                </p>
+            </li>
+            <li class="card feature-card">
+                <span class="feature-card-icon" aria-hidden="true"><FeatureIcon Name="snippets" /></span>
+                <h3>Snippets</h3>
+                <p>
+                    Personal, team, and built-in snippet folders with context-aware filtering, so the
+                    right snippet surfaces where it applies. A surround-with chord wraps a selection in
+                    blocks like transactions or try/catch.
+                </p>
+            </li>
+            <li class="card feature-card">
+                <span class="feature-card-icon" aria-hidden="true"><FeatureIcon Name="history" /></span>
+                <h3>SQL History</h3>
+                <p>
+                    A full, crash-safe history of every executed query in a three-panel UI — queries,
+                    versions, and a syntax-highlighted preview — with full-text search and star,
+                    open, and closed filters.
+                </p>
+            </li>
+            <li class="card feature-card">
+                <span class="feature-card-icon" aria-hidden="true"><FeatureIcon Name="ai" /></span>
+                <h3>AI assistance</h3>
+                <p>
+                    Text-to-SQL, Explain, Fix, Optimize, Index Analysis, Chat, and Ghost Text inline
+                    autocomplete — all schema-aware, so suggestions are grounded in the database you
+                    are actually working against.
+                </p>
+            </li>
+        </ul>
+    </section>
+
+    <p class="cta-row">
+        <a class="btn btn-primary" href="/download">Download AKML SQL</a>
+        <a class="btn btn-secondary" href="/docs">Read the docs</a>
+    </p>
+</div>

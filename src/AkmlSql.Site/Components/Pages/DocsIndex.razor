@@ -1,0 +1,78 @@
+@page "/docs"
+@layout DocsLayout
+@using AkmlSql.Site.Docs
+@inject DocsContentService Docs
+
+@* Spec 034 T025 (US2) / contracts/site-routes.md FR-004 + FR-007: docs index — section tree
+   of every discovered document. Empty content source renders an empty-state message, never
+   an error (spec edge case). Honors the ?filter= title filter shared with the sidebar. *@
+
+<PageTitle>Documentation — AKML SQL</PageTitle>
+<HeadContent>
+    <meta name="description" content="AKML SQL documentation: architecture, configuration, formatting, analysis, security, and usage guides." />
+    <meta property="og:title" content="Documentation" />
+    <meta property="og:description" content="AKML SQL documentation: architecture, configuration, formatting, analysis, security, and usage guides." />
+</HeadContent>
+
+<h1>Documentation</h1>
+
+@if (Docs.IsEmpty)
+{
+    <div class="notice" role="status">
+        <h2>No documentation available yet</h2>
+        <p>
+            The documentation content source is currently empty. Once documentation files are
+            published with the site, they appear here automatically — no manual registration needed.
+        </p>
+    </div>
+}
+else
+{
+    var sections = Docs.FilterSections(Filter);
+    @if (!string.IsNullOrWhiteSpace(Filter))
+    {
+        <p class="docs-filter-status">Showing documents matching &ldquo;@Filter&rdquo;. <a href="/docs">Show all</a></p>
+    }
+    @if (sections.Count == 0)
+    {
+        <p class="docs-no-matches">No documents match &ldquo;@Filter&rdquo;.</p>
+    }
+    else
+    {
+        @foreach (var section in sections)
+        {
+            <section class="docs-index-section" aria-labelledby="docs-section-@section.Key">
+                <h2 id="docs-section-@section.Key">@section.Name</h2>
+                <ul class="docs-index-list">
+                    @foreach (var doc in section.Documents)
+                    {
+                        <li>
+                            <a href="@doc.Route">@NavTitle(doc.Title)</a>
+                            <DocBadgePill Value="doc.Badge" />
+                            @if (!string.IsNullOrWhiteSpace(doc.Summary))
+                            {
+                                <p class="docs-index-summary">@doc.Summary</p>
+                            }
+                        </li>
+                    }
+                </ul>
+            </section>
+        }
+        <p class="docs-legend">New = added in the last @Docs.BadgeWindowDays days &middot; Updated = changed in the last @Docs.BadgeWindowDays days</p>
+    }
+}
+
+@code {
+    /// <summary>Corpus title prefix stripped from index link labels (U18) — the full
+    /// title still appears in the document H1 and browser tab.</summary>
+    private const string TitlePrefix = "AKML SQL — ";
+
+    /// <summary>Title filter from the <c>?filter=</c> query string (server-side, no JS).</summary>
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "filter")]
+    public string? Filter { get; set; }
+
+    /// <summary>Nav display title: drops the redundant "AKML SQL — " corpus prefix (U18).</summary>
+    private static string NavTitle(string title) =>
+        title.StartsWith(TitlePrefix, StringComparison.Ordinal) ? title[TitlePrefix.Length..] : title;
+}

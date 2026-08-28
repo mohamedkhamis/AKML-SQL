@@ -1,0 +1,107 @@
+namespace AkmlSql.Site.Analytics;
+
+/// <summary>Configuration binding for the <c>Downloads</c> section of appsettings.json.</summary>
+public sealed class DownloadsOptions
+{
+    public const string SectionName = "Downloads";
+
+    /// <summary>
+    /// Folder holding the installer files served via <c>/dl/{file}</c>. Lives OUTSIDE the app
+    /// root so deploying the site never touches release binaries.
+    /// </summary>
+    public string Folder { get; set; } = @"C:\inetpub\akml.khamis.work-downloads";
+}
+
+/// <summary>
+/// Tracked installer download endpoint: <c>GET /dl/{**file}</c> streams a file from the
+/// configured downloads folder after logging the download. Path handling is canonical —
+/// the requested path is combined with the folder, normalized with <see cref="Path.GetFullPath(string)"/>,
+/// and rejected unless the result stays strictly under the folder (traversal, backslashes,
+/// absolute paths, and URL-encoded tricks all collapse to 404).
+/// </summary>
+public static class DownloadEndpoint
+{
+    /// <summary>Registers the <c>/dl/{**file}</c> route.</summary>
+    public static void Map(IEndpointRouteBuilder endpoints) =>
+        endpoints.MapGet("/dl/{**file}", (HttpContext http, string? file, Microsoft.Extensions.Options.IOptions<DownloadsOptions> options, IAnalyticsSink sink) =>
+            Handle(file, http, options.Value, sink));
+
+    /// <summary>
+    /// Canonical path resolution: returns the full file path to serve, or null (→ 404) when the
+    /// request escapes the downloads folder, points at a directory, or names a missing file.
+    /// </summary>
+    public static string? ResolveFilePath(string rootFolder, string? requestPath)
+    {
+        if (string.IsNullOrWhiteSpace(requestPath))
+        {
+            return null;
+        }
+
+        string candidate;
+        try
+        {
+            var root = Path.GetFullPath(rootFolder);
+            candidate = Path.GetFullPath(Path.Combine(root, requestPath));
+            var rootWithSeparator = root.EndsWith(Path.DirectorySeparatorChar)
+                ? root
+                : root + Path.DirectorySeparatorChar;
+            if (!candidate.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException)
+        {
+            return null;
+        }
+
+        if (Directory.Exists(candidate) || !File.Exists(candidate))
+        {
+            return null;
+        }
+
+        return candidate;
+    }
+
+    /// <summary>
+    /// Handler body, factored out for tests: 404 for anything that fails canonical resolution,
+    /// otherwise logs the download (best-effort) and streams the file as an attachment.
+    /// </summary>
+    public static IResult Handle(string? file, HttpContext http, DownloadsOptions options, IAnalyticsSink sink)
+    {
+        var fullPath = ResolveFilePath(options.Folder, file);
+        if (fullPath is null)
+        {
+            return Results.NotFound();
+        }
+
+        FileStream stream;
+        try
+        {
+            stream = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Deleted/locked between the existence check and the open — indistinguishable from absent.
+            return Results.NotFound();
+        }
+
+        var fileName = Path.GetFileName(fullPath);
+        try
+        {
+            sink.EnqueueDownload(new DownloadInfo(
+                DateTimeOffset.UtcNow,
+                fileName,
+                HttpRequestFacts.ReferrerHost(http.Request),
+                UserAgentBuckets.FromUserAgent(http.Request.Headers.UserAgent),
+                HttpRequestFacts.ClientIp(http)));
+        }
+        catch
+        {
+            // Metrics must never break the download.
+        }
+
+        http.Response.Headers.CacheControl = "no-cache";
+        return Results.File(stream, "application/octet-stream", fileDownloadName: fileName);
+    }
+}

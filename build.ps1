@@ -137,6 +137,35 @@ Invoke-Build "Gate: theme CSS drift check" {
         -File "$Root\scripts\generate-theme-css.ps1" -CheckOnly -RepoRoot "$Root"
 }
 
+# Spec 034 (product site): the site serves its OWN copies of the three theme files under
+# src\AkmlSql.Site\wwwroot\css\themes — run the same drift gate against that output folder
+# so the site's themes cannot drift from docs/theme-tokens.json either (C2).
+Invoke-Build "Gate: site theme CSS drift check" {
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass `
+        -File "$Root\scripts\generate-theme-css.ps1" -CheckOnly -RepoRoot "$Root" `
+        -OutputFolder "src\AkmlSql.Site\wwwroot\css\themes"
+}
+
+# Spec 034 (product site): regenerate wwwroot/docs-metadata.json (per-doc git
+# added/updated dates behind the New/Updated badges) before publishing the site.
+# Non-fatal: without git the committed copy of docs-metadata.json is used as-is.
+Write-Step "Docs metadata (git dates)"
+try {
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass `
+        -File "$Root\scripts\generate-docs-metadata.ps1" -RepoRoot "$Root"
+    if ($LASTEXITCODE -ne 0) { throw "generator exit code $LASTEXITCODE" }
+    Write-Host "  Done" -ForegroundColor Green
+}
+catch {
+    Write-Host "  WARNING: docs metadata not regenerated ($_) -- using committed copy" -ForegroundColor Yellow
+}
+
+# Spec 034 (product site) — Blazor static SSR, framework-dependent (no -r). Published
+# right after the theme gate: the gate covers the exact theme files this site serves.
+Invoke-Build "Product site (publish)" {
+    dotnet publish "$Root\src\AkmlSql.Site\AkmlSql.Site.csproj" -c $Configuration -p:Version=$Version -v quiet --nologo
+}
+
 # --- .NET projects ---
 Invoke-Build "Core library" {
     dotnet build "$Root\src\AkmlSql.Core\AkmlSql.Core.csproj" -c $Configuration -p:Version=$Version -v quiet --nologo
@@ -190,6 +219,10 @@ if (-not $SkipTests) {
     # Spec 021 (web edition) — bUnit component tests
     Invoke-Build "Tests: Web (bUnit)" {
         dotnet test "$Root\tests\AkmlSql.Web.Tests\AkmlSql.Web.Tests.csproj" -c $Configuration -p:Version=$Version -v quiet --nologo
+    }
+    # Spec 034 (product site) — bUnit component tests
+    Invoke-Build "Tests: Site (bUnit)" {
+        dotnet test "$Root\tests\AkmlSql.Site.Tests\AkmlSql.Site.Tests.csproj" -c $Configuration -p:Version=$Version -v quiet --nologo
     }
 }
 

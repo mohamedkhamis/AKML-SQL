@@ -1,0 +1,107 @@
+@layout MainLayout
+@inherits LayoutComponentBase
+@using AkmlSql.Site.Docs
+@inject DocsContentService Docs
+@inject NavigationManager Nav
+
+@* Spec 034 T024 (US2) / contracts/site-routes.md FR-007: docs section layout nested inside
+   MainLayout. Sidebar: scrollable, collapsible section tree (native <details> — deep trees
+   stay usable per spec edge case) + an always-on title filter that works with JS disabled
+   (plain GET form, filtered server-side via ?filter=). The full-text search box is
+   progressive enhancement: hidden by CSS unless js/docs-search.js adds the 'js' class.
+   Static SSR only — no render modes. *@
+
+<div class="docs-layout">
+    <aside class="docs-sidebar">
+        <form class="docs-filter" method="get" action="/docs" role="search">
+            <input type="search" name="filter" value="@Filter" placeholder="Filter by title…"
+                   aria-label="Filter documents by title" />
+            <button type="submit">Filter</button>
+            @if (!string.IsNullOrWhiteSpace(Filter))
+            {
+                <a class="docs-filter-clear" href="/docs">Clear</a>
+            }
+        </form>
+
+        <div class="docs-search" id="docs-search">
+            <input id="docs-search-input" type="search" placeholder="Search full text…"
+                   autocomplete="off" aria-label="Search documentation" />
+            @* U21: result count/list changes are announced to screen readers. *@
+            <ul id="docs-search-results" class="docs-search-results" role="status" aria-live="polite" hidden></ul>
+        </div>
+
+        <nav class="docs-tree" aria-label="Documentation sections">
+            @foreach (var section in FilteredSections)
+            {
+                <details class="docs-section" open>
+                    <summary>@section.Name</summary>
+                    <ul>
+                        @foreach (var doc in section.Documents)
+                        {
+                            <li>
+                                @if (IsCurrent(doc))
+                                {
+                                    <a class="docs-current" aria-current="page" href="@doc.Route">@NavTitle(doc.Title)<DocBadgePill Value="doc.Badge" /></a>
+                                }
+                                else
+                                {
+                                    <a href="@doc.Route">@NavTitle(doc.Title)<DocBadgePill Value="doc.Badge" /></a>
+                                }
+                            </li>
+                        }
+                    </ul>
+                </details>
+            }
+            @* U20: a filter with no matches is reported once, in the /docs content area —
+               the sidebar simply renders an empty tree. *@
+        </nav>
+    </aside>
+
+    <div class="docs-content">
+        @Body
+    </div>
+</div>
+
+@* T027: deferred progressive enhancement. Without JS the GET-form title filter above still
+   works; docs-search.js unhides the full-text box only after the index is ready. Scripts are
+   fingerprinted via MapStaticAssets (T033). *@
+<script src="@Assets["js/minisearch.min.js"]" defer></script>
+<script src="@Assets["js/docs-search.js"]" defer></script>
+
+@code {
+    /// <summary>Corpus title prefix stripped from sidebar nav labels (U18) — the full
+    /// title still appears in the document H1 and browser tab.</summary>
+    private const string TitlePrefix = "AKML SQL — ";
+
+    /// <summary>Title filter from the <c>?filter=</c> query string (server-side, no JS).</summary>
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "filter")]
+    public string? Filter { get; set; }
+
+    private IReadOnlyList<DocSection> FilteredSections => Docs.FilterSections(Filter);
+
+    /// <summary>Nav display title: drops the redundant "AKML SQL — " corpus prefix (U18).</summary>
+    private static string NavTitle(string title) =>
+        title.StartsWith(TitlePrefix, StringComparison.Ordinal) ? title[TitlePrefix.Length..] : title;
+
+    /// <summary>Slug of the document currently being read, from the request path ("" on /docs).</summary>
+    private string CurrentSlug
+    {
+        get
+        {
+            var relative = Nav.ToBaseRelativePath(Nav.Uri);
+            var end = relative.IndexOfAny('?', '#');
+            if (end >= 0)
+            {
+                relative = relative[..end];
+            }
+
+            return relative.StartsWith("docs/", StringComparison.OrdinalIgnoreCase)
+                ? relative["docs/".Length..].TrimEnd('/')
+                : "";
+        }
+    }
+
+    private bool IsCurrent(Document document) =>
+        CurrentSlug.Length > 0 && string.Equals(CurrentSlug, document.Slug, StringComparison.OrdinalIgnoreCase);
+}

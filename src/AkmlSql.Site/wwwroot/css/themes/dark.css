@@ -1,0 +1,110 @@
+﻿/*
+  AKML SQL -- web edition theme variant: Dark
+  AUTO-GENERATED from docs/theme-tokens.json by scripts/generate-theme-css.ps1.
+  Do not edit by hand. Run the script to regenerate after editing the JSON.
+*/
+:root {
+    /* Surface */
+    --akml-surface-canvas: #0f172a;
+    --akml-surface-panel: #1e293b;
+    --akml-surface-elevated: #334155;
+    --akml-surface-sidebar: #1e293b;
+    --akml-surface-input: #1e293b;
+    --akml-surface-inputreadonly: #334155;
+    --akml-surface-hover: #334155;
+    --akml-surface-selection: rgba(37, 99, 235, 0.149);
+    --akml-surface-selectionstrong: #2563eb;
+    /* Text */
+    --akml-text-primary: #e2e8f0;
+    --akml-text-secondary: #94a3b8;
+    --akml-text-disabled: #64748b;
+    --akml-text-placeholder: #64748b;
+    --akml-text-link: #60a5fa;
+    --akml-text-onaccent: #ffffff;
+    --akml-text-ondanger: #ffffff;
+    /* Border */
+    --akml-border-default: rgba(255, 255, 255, 0.078);
+    --akml-border-strong: rgba(255, 255, 255, 0.157);
+    --akml-border-subtle: rgba(255, 255, 255, 0.051);
+    --akml-border-focus: #60a5fa;
+    --akml-border-splitter: rgba(255, 255, 255, 0.078);
+    /* Accent */
+    --akml-accent-primary: #2563eb;
+    --akml-accent-primaryhover: #3b82f6;
+    --akml-accent-primarypressed: #1e40af;
+    /* Status */
+    --akml-status-success: #4ade80;
+    --akml-status-warning: #fb923c;
+    --akml-status-danger: #f87171;
+    --akml-status-info: #60a5fa;
+    /* Editor */
+    --akml-editor-marginbackground: #1e293b;
+    --akml-editor-spinnerstroke: #60a5fa;
+    --akml-editor-popupbackground: #1e293b;
+    --akml-editor-popupborder: rgba(255, 255, 255, 0.078);
+    /* Chat */
+    --akml-chat-userbubble: #1e3a5f;
+    --akml-chat-assistantbubble: #334155;
+    --akml-chat-systembubble: #3a3000;
+    /* Syntax */
+    --akml-syntax-keyword: #60a5fa;
+    --akml-syntax-string: #4ade80;
+    --akml-syntax-number: #fb923c;
+    --akml-syntax-comment: #64748b;
+    --akml-syntax-function: #c084fc;
+    --akml-syntax-tablecolumn: #22d3ee;
+    /* IconBadge */
+    --akml-iconbadge-table: #e5c04b;
+    --akml-iconbadge-view: #56b6c2;
+    --akml-iconbadge-column: #61afef;
+    --akml-iconbadge-storedproc: #c678dd;
+    --akml-iconbadge-function: #d19a66;
+    --akml-iconbadge-snippet: #3dd68c;
+    --akml-iconbadge-keyword: #abb2bf;
+    --akml-iconbadge-database: #e06c75;
+    --akml-iconbadge-schema: #98c379;
+    --akml-iconbadge-trigger: #be5046;
+    --akml-iconbadge-index: #7f848e;
+    --akml-iconbadge-synonym: #56b6c2;
+    /* TabColor */
+    --akml-tabcolor-red: #ff4444;
+    --akml-tabcolor-amber: #ffb800;
+    --akml-tabcolor-green: #44bb44;
+    --akml-tabcolor-blue: #4488ff;
+    --akml-tabcolor-teal: #00bcd4;
+    --akml-tabcolor-purple: #9b59b6;
+    --akml-tabcolor-pink: #e91e63;
+    --akml-tabcolor-gray: #808a99;
+    /* History */
+    --akml-history-openicon: #4ade80;
+    --akml-history-closedicon: #f87171;
+    --akml-history-star-active: #fb923c;
+    --akml-history-star-inactive: rgba(255, 255, 255, 0.078);
+    --akml-history-matchhighlight: rgba(218, 165, 32, 0.302);
+    /* Spacing (theme-invariant scalars in DIU) */
+    --akml-scalar-spacing-xs: 4px;
+    --akml-scalar-spacing-s: 8px;
+    --akml-scalar-spacing-m: 12px;
+    --akml-scalar-spacing-l: 16px;
+    /* Radius (theme-invariant scalars in DIU) */
+    --akml-scalar-radius-xs: 6px;
+    --akml-scalar-radius-s: 8px;
+    --akml-scalar-radius-m: 12px;
+    --akml-scalar-radius-pill: 999px;
+    /* Typography (theme-invariant; split into family/size/weight) */
+    --akml-type-chrome-family: "Segoe UI";
+    --akml-type-chrome-size: 14px;
+    --akml-type-chrome-weight: 400;
+    --akml-type-chrometitle-family: "Segoe UI";
+    --akml-type-chrometitle-size: 14px;
+    --akml-type-chrometitle-weight: 600;
+    --akml-type-editor-family: Consolas;
+    --akml-type-editor-size: 13px;
+    --akml-type-editor-weight: 400;
+    --akml-type-editorgrid-family: Consolas;
+    --akml-type-editorgrid-size: 12px;
+    --akml-type-editorgrid-weight: 400;
+    --akml-type-iconbadge-family: "Segoe UI";
+    --akml-type-iconbadge-size: 9px;
+    --akml-type-iconbadge-weight: 600;
+}

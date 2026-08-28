@@ -1,0 +1,73 @@
+@page "/admin/login"
+@using AkmlSql.Site.Admin
+@using Microsoft.AspNetCore.Antiforgery
+@using Microsoft.Extensions.Options
+@inject IOptions<AdminOptions> AdminConfig
+@inject IAntiforgery Antiforgery
+
+@* Admin portal sign-in. Static SSR: a plain HTML form posting to the minimal-API login endpoint.
+   The antiforgery token is rendered server-side (external-CSP-clean: no inline script/style).
+   With an empty Admin:PasswordHash the portal shows a "not configured" notice instead of the
+   form — an unconfigured server must not look like a login bypass. *@
+
+<PageTitle>Sign in — AKML SQL Admin</PageTitle>
+<HeadContent>
+    <meta name="robots" content="noindex, nofollow" />
+</HeadContent>
+
+<div class="page-body container">
+<section class="admin-login" aria-labelledby="admin-login-heading">
+    <div class="admin-login-card">
+        <h1 id="admin-login-heading">Admin sign in</h1>
+        @if (!AdminConfig.Value.IsConfigured)
+        {
+            <div class="notice" role="status">
+                <h2>Admin portal not configured</h2>
+                <p>
+                    Sign-in is disabled until <code>Admin:PasswordHash</code> is set in
+                    <code>appsettings.Production.json</code> on the server.
+                </p>
+            </div>
+        }
+        else
+        {
+            @if (Error is not null)
+            {
+                <p class="admin-error" role="alert">Invalid password. Please try again.</p>
+            }
+            <form method="post" action="/admin/login">
+                @if (RequestToken is not null)
+                {
+                    <input type="hidden" name="__RequestVerificationToken" value="@RequestToken" />
+                }
+                <div class="admin-field">
+                    <label for="admin-password">Password</label>
+                    <input class="admin-input" type="password" id="admin-password" name="password"
+                           autocomplete="current-password" required />
+                </div>
+                <button type="submit" class="btn btn-primary admin-login-submit">Sign in</button>
+            </form>
+        }
+    </div>
+</section>
+</div>
+
+@code {
+    [CascadingParameter]
+    public HttpContext? HttpContext { get; set; }
+
+    [Parameter, SupplyParameterFromQuery(Name = "error")]
+    public string? Error { get; set; }
+
+    private string? RequestToken { get; set; }
+
+    protected override void OnInitialized()
+    {
+        // HttpContext is present in static SSR (null under bUnit — the form then renders without
+        // a token, which is fine for render tests).
+        if (HttpContext is not null)
+        {
+            RequestToken = Antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
+        }
+    }
+}

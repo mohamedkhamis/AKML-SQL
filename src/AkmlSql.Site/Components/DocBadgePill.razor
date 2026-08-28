@@ -1,0 +1,20 @@
+@using AkmlSql.Site.Docs
+
+@* Freshness pill from docs-metadata.json (Docs:BadgeWindowDays): green "New" for recently
+   added docs, red "Updated" for recently changed ones. Renders nothing for DocBadge.None.
+   Colors come from the --akml-status-* theme tokens (site.css), so both themes stay legible. *@
+
+@if (Value == DocBadge.New)
+{
+    <span class="doc-badge doc-badge-new">New</span>
+}
+else if (Value == DocBadge.Updated)
+{
+    <span class="doc-badge doc-badge-updated">Updated</span>
+}
+
+@code {
+    /// <summary>The badge to render; <see cref="DocBadge.None"/> (the default) renders nothing.</summary>
+    [Parameter]
+    public DocBadge Value { get; set; }
+}

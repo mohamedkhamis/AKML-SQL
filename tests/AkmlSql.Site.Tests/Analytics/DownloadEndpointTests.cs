@@ -1,0 +1,145 @@
+using AkmlSql.Site.Analytics;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.Extensions.DependencyInjection;
+using Xunit;
+
+namespace AkmlSql.Site.Tests.Analytics;
+
+/// <summary>
+/// /dl endpoint: canonical path validation (traversal, backslashes, rooted paths, URL-encoded
+/// segments all rejected), 404 for missing files/directories, and the happy path — streamed
+/// bytes, attachment headers, no-cache, and exactly one logged download.
+/// </summary>
+public sealed class DownloadEndpointTests
+{
+    [Theory]
+    [InlineData("../web.config")]
+    [InlineData("..\\web.config")]
+    [InlineData("sub/../../web.config")]
+    [InlineData("../../etc/passwd")]
+    [InlineData("%2e%2e%2fweb.config")]   // decoded by routing before binding; raw form resolves to a non-existent literal name
+    [InlineData("%2e%2e%5cweb.config")]
+    [InlineData("")]
+    [InlineData(null)]
+    public void ResolveFilePath_RejectsTraversalAndEmptyInput(string? requestPath)
+    {
+        using var dir = new TempDirectory();
+
+        Assert.Null(DownloadEndpoint.ResolveFilePath(dir.Path, requestPath));
+    }
+
+    [Fact]
+    public void ResolveFilePath_RejectsRootedAbsolutePaths()
+    {
+        using var dir = new TempDirectory();
+        var outside = Path.Combine(dir.Path, "..", "outside-" + Guid.NewGuid().ToString("N") + ".txt");
+        File.WriteAllText(outside, "secret");
+        try
+        {
+            Assert.Null(DownloadEndpoint.ResolveFilePath(dir.Path, Path.GetFullPath(outside)));
+        }
+        finally
+        {
+            File.Delete(outside);
+        }
+    }
+
+    [Fact]
+    public void ResolveFilePath_ReturnsNull_ForMissingFileAndDirectories()
+    {
+        using var dir = new TempDirectory();
+        Directory.CreateDirectory(Path.Combine(dir.Path, "sub"));
+
+        Assert.Null(DownloadEndpoint.ResolveFilePath(dir.Path, "missing.exe"));
+        Assert.Null(DownloadEndpoint.ResolveFilePath(dir.Path, "sub"));
+    }
+
+    [Fact]
+    public void ResolveFilePath_ResolvesFileInsideRoot()
+    {
+        using var dir = new TempDirectory();
+        var file = Path.Combine(dir.Path, "setup.exe");
+        File.WriteAllText(file, "payload");
+
+        Assert.Equal(Path.GetFullPath(file), DownloadEndpoint.ResolveFilePath(dir.Path, "setup.exe"));
+    }
+
+    [Fact]
+    public async Task Handle_StreamsFile_LogsDownload_AndSetsAttachmentHeaders()
+    {
+        using var dir = new TempDirectory();
+        var bytes = new byte[] { 1, 2, 3, 4, 5 };
+        await File.WriteAllBytesAsync(Path.Combine(dir.Path, "setup.exe"), bytes);
+
+        var sink = new RecordingSink();
+        var http = new DefaultHttpContext();
+        http.Response.Body = new MemoryStream();
+        // FileStreamHttpResult resolves an ILogger from RequestServices when executing.
+        http.RequestServices = new ServiceCollection().AddLogging().BuildServiceProvider();
+
+        var result = DownloadEndpoint.Handle("setup.exe", http, new DownloadsOptions { Folder = dir.Path }, sink);
+
+        var fileResult = Assert.IsType<FileStreamHttpResult>(result);
+        Assert.Equal("application/octet-stream", fileResult.ContentType);
+        Assert.Equal("setup.exe", fileResult.FileDownloadName);
+        Assert.Equal("no-cache", http.Response.Headers.CacheControl.ToString());
+
+        await fileResult.ExecuteAsync(http);
+        http.Response.Body.Position = 0;
+        var streamed = ((MemoryStream)http.Response.Body).ToArray();
+        Assert.Equal(bytes, streamed);
+        Assert.StartsWith("attachment", http.Response.Headers.ContentDisposition.ToString());
+
+        var download = Assert.Single(sink.Downloads);
+        Assert.Equal("setup.exe", download.File);
+    }
+
+    [Fact]
+    public void Handle_MissingFile_Returns404AndLogsNothing()
+    {
+        using var dir = new TempDirectory();
+        var sink = new RecordingSink();
+        var http = new DefaultHttpContext();
+
+        var result = DownloadEndpoint.Handle("../setup.exe", http, new DownloadsOptions { Folder = dir.Path }, sink);
+
+        var notFound = Assert.IsAssignableFrom<IStatusCodeHttpResult>(result);
+        Assert.Equal(StatusCodes.Status404NotFound, notFound.StatusCode);
+        Assert.Empty(sink.Downloads);
+    }
+
+    [Fact]
+    public void DownloadsInfo_ListsFilesNewestFirst_AndToleratesMissingFolder()
+    {
+        using var dir = new TempDirectory();
+        var older = Path.Combine(dir.Path, "a.exe");
+        var newer = Path.Combine(dir.Path, "b.exe");
+        File.WriteAllText(older, "1234");
+        File.WriteAllText(newer, "12");
+        File.SetLastWriteTimeUtc(older, new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc));
+        File.SetLastWriteTimeUtc(newer, new DateTime(2026, 8, 20, 0, 0, 0, DateTimeKind.Utc));
+
+        var files = DownloadsInfo.List(dir.Path);
+
+        Assert.Equal(2, files.Count);
+        Assert.Equal("b.exe", files[0].Name);
+        Assert.Equal(2, files[0].SizeBytes);
+        Assert.Equal("a.exe", files[1].Name);
+        Assert.Equal(4, files[1].SizeBytes);
+        Assert.Equal(new DateTimeOffset(2026, 8, 20, 0, 0, 0, TimeSpan.Zero), files[0].LastWriteUtc);
+
+        Assert.Empty(DownloadsInfo.List(Path.Combine(dir.Path, "does-not-exist")));
+    }
+
+    /// <summary>In-memory <see cref="IAnalyticsSink"/> that records what would have been queued.</summary>
+    private sealed class RecordingSink : IAnalyticsSink
+    {
+        public List<VisitInfo> Visits { get; } = [];
+        public List<DownloadInfo> Downloads { get; } = [];
+
+        public void EnqueueVisit(VisitInfo visit) => Visits.Add(visit);
+
+        public void EnqueueDownload(DownloadInfo download) => Downloads.Add(download);
+    }
+}

@@ -1,0 +1,82 @@
+@page "/docs/{*Slug}"
+@layout DocsLayout
+@using AkmlSql.Site.Docs
+@inject DocsContentService Docs
+@inject NavigationManager Nav
+
+@* Spec 034 T026 (US2) / contracts/site-routes.md FR-005/FR-006: renders one document from the
+   startup-built cache (no per-request parsing). Catch-all route — slugs contain slashes for
+   nested docs (web/m4-iis-installer). Unknown slug → .NET 10 NavigationManager.NotFound(),
+   served by UseStatusCodePagesWithReExecute("/not-found") (T005). *@
+
+@if (_document is not null)
+{
+    @* U27: corpus H1 titles carry a redundant "AKML SQL — " prefix; strip it for the tab
+       title only so it doesn't read "AKML SQL — X — AKML SQL Docs". *@
+    <PageTitle>@PageTitleText — AKML SQL Docs</PageTitle>
+    <HeadContent>
+        @* T031 (SEO): description from the document's first paragraph (MarkdownRenderer Summary),
+           falling back to a title-derived one when the document opens with no paragraph. *@
+        <meta name="description" content="@Description" />
+        <meta property="og:title" content="@_document.Title" />
+        <meta property="og:description" content="@Description" />
+    </HeadContent>
+
+    <article class="doc-article">
+        <header class="doc-header">
+            <h1>@_document.Title <DocBadgePill Value="_document.Badge" /></h1>
+        </header>
+        @* U15: on-page TOC over the document's H2 anchors (ids emitted by Markdig
+           AutoIdentifiers). Full route + fragment — a bare "#id" would resolve against
+           <base href="/"> and navigate home. *@
+        @if (_document.Toc.Count >= 2)
+        {
+            <nav class="on-this-page" aria-label="On this page">
+                <p class="on-this-page-heading">On this page</p>
+                <ul>
+                    @foreach (var heading in _document.Toc)
+                    {
+                        <li><a href="@_document.Route#@heading.Id">@heading.Text</a></li>
+                    }
+                </ul>
+            </nav>
+        }
+        <div class="doc-body">
+            @((MarkupString)_document.HtmlContent)
+        </div>
+    </article>
+}
+
+@code {
+    /// <summary>Corpus title prefix stripped from the browser tab title (U27).</summary>
+    private const string TitlePrefix = "AKML SQL — ";
+
+    /// <summary>Catch-all slug (may contain slashes for nested documents).</summary>
+    [Parameter]
+    public string? Slug { get; set; }
+
+    private Document? _document;
+
+    /// <summary>Meta description: the document's first paragraph, else a title-derived fallback.</summary>
+    private string Description =>
+        _document is null
+            ? ""
+            : _document.Summary.Length > 0
+                ? _document.Summary
+                : $"{_document.Title} — AKML SQL documentation.";
+
+    /// <summary>Tab title: document title minus the redundant site-name prefix (U27).</summary>
+    private string PageTitleText =>
+        _document is not null && _document.Title.StartsWith(TitlePrefix, StringComparison.Ordinal)
+            ? _document.Title[TitlePrefix.Length..]
+            : _document?.Title ?? "";
+
+    protected override void OnParametersSet()
+    {
+        _document = Slug is null ? null : Docs.FindBySlug(Slug);
+        if (_document is null)
+        {
+            Nav.NotFound();
+        }
+    }
+}

@@ -1,0 +1,131 @@
+@page "/download"
+@using System.Globalization
+@using AkmlSql.Site.Releases
+@inject ReleasesManifest Manifest
+
+@* Spec 034 T016 (US1): FR-003 download page driven by wwwroot/releases.json via the
+   singleton ReleasesManifest (T012). Failure behavior per contracts/releases-json.md:
+   missing/invalid/empty manifest renders a friendly fallback plus the repo
+   /releases/latest link — never an error page. Static SSR only. *@
+
+<PageTitle>Download — AKML SQL</PageTitle>
+<HeadContent>
+    <meta name="description" content="Download the latest AKML SQL installer for SSMS 22 and Visual Studio 2026, with SHA-256 verification hashes and previous releases." />
+    <meta property="og:title" content="Download" />
+    <meta property="og:description" content="Download the latest AKML SQL installer for SSMS 22 and Visual Studio 2026, with SHA-256 verification hashes and previous releases." />
+</HeadContent>
+
+<div class="page-body container">
+<header class="page-header">
+    <p class="eyebrow">Get AKML SQL</p>
+    <h1>Download AKML SQL</h1>
+    <p class="page-intro">
+        One installer covers SSMS 22 and Visual Studio 2026. Free and open source under the
+        MIT license.
+    </p>
+</header>
+
+@if (Manifest.IsAvailable && Manifest.Latest is { } latest)
+{
+    <section class="release-card release-card-latest" aria-labelledby="latest-release-heading">
+        <h2 id="latest-release-heading">Latest release: @latest.Version</h2>
+        <dl class="release-facts">
+            <dt>Released</dt>
+            <dd><time datetime="@latest.ReleasedAt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)">@latest.ReleasedAt.ToString("MMMM d, yyyy", CultureInfo.InvariantCulture)</time></dd>
+            <dt>Supported hosts</dt>
+            <dd>
+                <ul class="host-badges">
+                    @foreach (var host in latest.SupportedHosts)
+                    {
+                        <li>@host</li>
+                    }
+                </ul>
+            </dd>
+            @if (latest.MinimumOsVersion is not null)
+            {
+                <dt>Requires</dt>
+                @* U23: "Windows 10.0 or later" reads like an API version — trim a trailing ".0". *@
+                <dd>Windows @DisplayOsVersion(latest.MinimumOsVersion) or later</dd>
+            }
+        </dl>
+        @if (latest.NotesSummary is not null)
+        {
+            <p>@latest.NotesSummary</p>
+        }
+        <p class="cta-row">
+            <a class="btn btn-primary" href="@TrackedDownloadUrl(latest.DownloadUrl)">Download AKML SQL @latest.Version</a>
+            @if (latest.ReleaseNotesUrl is not null)
+            {
+                <a class="btn btn-secondary" href="@latest.ReleaseNotesUrl" target="_blank" rel="noopener noreferrer">Release notes</a>
+            }
+        </p>
+        <div class="hash-block">
+            <h3>SHA-256</h3>
+            <p class="hash-hint">
+                Verify the downloaded installer against this digest.
+                @* U22: copy affordance — hidden by default, revealed by js/copy-hash.js
+                   (CSP-clean external script, so no-JS users never see a dead button). *@
+                <button type="button" class="copy-hash-btn" data-copy-target="latest-sha256">Copy</button>
+            </p>
+            <code id="latest-sha256">@latest.Sha256Hash</code>
+        </div>
+        <p>New here? See the <a href="/docs">documentation</a> for installation and getting-started guidance.</p>
+    </section>
+
+    @* U22: static SSR renders this into the page body; script-src 'self' allows it. *@
+    <script src="@Assets["js/copy-hash.js"]" defer></script>
+
+    @if (Manifest.Releases.Count > 1)
+    {
+        <section class="release-history" aria-labelledby="previous-releases-heading">
+            <h2 id="previous-releases-heading">Previous releases</h2>
+            <ul class="release-list">
+                @foreach (var release in Manifest.Releases.Skip(1))
+                {
+                    <li class="release-card">
+                        <h3>@release.Version</h3>
+                        <p>
+                            Released <time datetime="@release.ReleasedAt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)">@release.ReleasedAt.ToString("MMMM d, yyyy", CultureInfo.InvariantCulture)</time>
+                            · Hosts: @string.Join(", ", release.SupportedHosts)
+                        </p>
+                        <p><a href="@TrackedDownloadUrl(release.DownloadUrl)">Download installer</a></p>
+                        <details class="hash-block">
+                            <summary>SHA-256</summary>
+                            <code>@release.Sha256Hash</code>
+                        </details>
+                    </li>
+                }
+            </ul>
+        </section>
+    }
+}
+else
+{
+    @* contracts/releases-json.md: missing/unreadable file, invalid JSON, or an empty
+       releases array all land here. *@
+    <div class="notice" role="status">
+        <h2>No public release available yet</h2>
+        <p>
+            The first installer release will be published right here. In the meantime you can
+            get the latest build from the
+            <a href="https://github.com/mohamedkhamis/AKML-SQL/releases/latest" target="_blank" rel="noopener noreferrer">latest release on GitHub</a>.
+        </p>
+    </div>
+}
+
+</div>
+
+@code {
+    /// <summary>U23: display form of the minimum OS version — trims a trailing ".0"
+    /// so "10.0" renders as the consumer-facing "Windows 10 or later".</summary>
+    private static string DisplayOsVersion(string version) =>
+        version.EndsWith(".0", StringComparison.Ordinal) ? version[..^2] : version;
+
+    /// <summary>
+    /// Routes site-relative <c>downloads/...</c> manifest URLs through the tracked
+    /// <c>/dl/{file}</c> endpoint so downloads are counted; absolute http(s) URLs
+    /// (e.g. GitHub-hosted assets) are left untouched.
+    /// </summary>
+    private static string TrackedDownloadUrl(string url) =>
+        url.StartsWith("downloads/", StringComparison.Ordinal) ? "/dl/" + url["downloads/".Length..] : url;
+}

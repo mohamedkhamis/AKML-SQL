@@ -13,6 +13,7 @@
     <Project Path="src/AkmlSql.IntelliSense/AkmlSql.IntelliSense.csproj" />
     <Project Path="src/AkmlSql.Web/AkmlSql.Web.csproj" />
     <Project Path="src/AkmlSql.Web.Shared/AkmlSql.Web.Shared.csproj" />
+    <Project Path="src/AkmlSql.Site/AkmlSql.Site.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/AkmlSql.Core.Tests/AkmlSql.Core.Tests.csproj" />
@@ -24,6 +25,7 @@
     <Project Path="tests/AkmlSql.IntelliSense.Tests/AkmlSql.IntelliSense.Tests.csproj" />
     <Project Path="tests/AkmlSql.Shell.Shared.Tests/AkmlSql.Shell.Shared.Tests.csproj" />
     <Project Path="tests/AkmlSql.Web.Tests/AkmlSql.Web.Tests.csproj" />
+    <Project Path="tests/AkmlSql.Site.Tests/AkmlSql.Site.Tests.csproj" />
     <Project Path="tests/AkmlSql.Web.E2E.Tests/AkmlSql.Web.E2E.Tests.csproj" />
     <Project Path="tests/AkmlSql.Installer.Tests/AkmlSql.Installer.Tests.csproj" />
   </Folder>

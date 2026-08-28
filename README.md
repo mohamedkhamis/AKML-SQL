@@ -34,11 +34,13 @@ src/
   AkmlSql.Ssms22/                      # SSMS 22 extension (net472, x64, VS SDK 17.14.x)
   AkmlSql.VS2026/                      # VS 2026 extension (net472, x64, VS SDK 17.14.x)
   AkmlSql.Updater/                     # Self-contained updater (.NET 10, win-x64, trimmed)
+  AkmlSql.Site/                        # Blazor static-SSR product site (.NET 10) — landing/features/download + docs auto-ingested from doc/
   AkmlSql.Installer/                   # Inno Setup 7 installer scripts
 tests/
   AkmlSql.Core.Tests/                  # xunit (net10.0) — Core + IPC + Tabs + Theme + Format
   AkmlSql.Engine.Tests/                # xunit (net10.0) — engine handlers + parser + analysis rules + refactoring
   AkmlSql.Formatting.Tests/            # xunit (net10.0) — pipeline + profile + SqlPrompt import/export
+  AkmlSql.Site.Tests/                  # xunit + bunit (net10.0) — site components, docs pipeline, releases manifest
   format-parity/                       # SQL Prompt parity corpus + golden outputs (scaffold; population deferred to corpus PR)
 doc/                                   # All project documentation — architecture, ipc-api, configuration, formatting, analysis-rules, progress, deployment
 docs/                                  # WPF theming contributor guide
@@ -115,6 +117,23 @@ Explain / Fix / Optimize.
 | AI | Direct fetch from the browser to OpenAI / Anthropic / Gemini / Azure / Ollama / LM Studio. Per-provider origin allow-list refuses non-listed fetches at the factory layer. API keys wrapped with non-extractable AES-GCM 256. |
 
 See [doc/WEB/00-INDEX.md](doc/WEB/00-INDEX.md) for the full spec 021 documentation set, including per-milestone quickstart guides at [quickstart-m2.md](doc/WEB/quickstart-m2.md), [quickstart-m4.md](doc/WEB/quickstart-m4.md), [quickstart-m5.md](doc/WEB/quickstart-m5.md), and [quickstart-m6.md](doc/WEB/quickstart-m6.md).
+
+## Product site (spec 034)
+
+The public product website in `src/AkmlSql.Site/` — a Blazor Web App (.NET 10, static
+SSR only, no interactive render modes) serving the landing, features, download, and
+documentation pages. Documentation is auto-ingested from `doc/` at build/publish time
+(no per-document registration): sidebar section tree, no-JS title filter, deferred
+MiniSearch full-text search, and server-rendered Markdown with syntax highlighting.
+Developer Dark theme by default with an optional persisted light/dark toggle.
+
+```bash
+dotnet run --project src/AkmlSql.Site   # http://localhost:5180
+```
+
+Releases shown on `/download` come from `src/AkmlSql.Site/wwwroot/releases.json`;
+SEO surface includes per-page titles/descriptions, Open Graph tags, `/sitemap.xml`,
+and `robots.txt` (canonical base URL via `Site:BaseUrl` in `appsettings.json`).
 
 ## Status
 
