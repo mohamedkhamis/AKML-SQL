@@ -72,9 +72,25 @@
     [Parameter]
     public string Empty { get; set; } = "Nothing recorded yet.";
 
-    /// <summary>Denominator for the share column; 0 (the default) hides that column.</summary>
+    /// <summary>
+    /// Denominator for the share column; 0 (the default) hides that column.
+    /// <para>
+    /// For a dimension that is only recorded on some rows — anything added after the database
+    /// already had history, or that depends on an optional geo database — pass
+    /// <see cref="RowTotal"/> rather than the window's visit count. Dividing 13 desktop visits by
+    /// 207 total visits produced "6.3% desktop" on the live dashboard when the honest reading was
+    /// 72% of the visits whose device is known.
+    /// </para>
+    /// </summary>
     [Parameter]
     public long Total { get; set; }
+
+    /// <summary>
+    /// Sum of the displayed rows — the correct denominator for a sparsely populated dimension.
+    /// Exact whenever the dimension has no more distinct values than the table's row limit, which
+    /// holds for device, OS, language and country.
+    /// </summary>
+    public long RowTotal => Rows.Sum(r => r.Count);
 
     private string Share(long count) =>
         Total <= 0 ? "—" : (count * 100.0 / Total).ToString("0.#", CultureInfo.InvariantCulture) + "%";

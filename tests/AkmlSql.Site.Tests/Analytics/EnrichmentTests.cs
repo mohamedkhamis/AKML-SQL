@@ -427,4 +427,38 @@ public sealed class EnrichmentTests
         Assert.Contains(summary.TopPages, r => r.Key == "/legacy");
         Assert.Contains(summary.Countries, r => r.Key == "Egypt" && r.Count == 1);
     }
+    [Fact]
+    public void SameOriginReferrers_AreDroppedFromTheHostToo_NotJustTheUrl()
+    {
+        // Found on the live dashboard: the site's own host was the top "referrer" with 160 hits
+        // against 2 for the only real external source. Every internal click sets a Referer, so a
+        // referrer table that counts them answers the wrong question.
+        var context = new DefaultHttpContext();
+        context.Request.Host = new HostString("akml.khamis.work");
+        context.Request.Headers.Referer = "https://akml.khamis.work/docs";
+
+        Assert.Null(HttpRequestFacts.ReferrerHost(context.Request));
+        Assert.Null(HttpRequestFacts.ReferrerUrl(context.Request));
+    }
+
+    [Fact]
+    public void ExternalReferrerHosts_AreStillRecorded()
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Host = new HostString("akml.khamis.work");
+        context.Request.Headers.Referer = "https://news.example.com/posts/x";
+
+        Assert.Equal("news.example.com", HttpRequestFacts.ReferrerHost(context.Request));
+    }
+
+    [Fact]
+    public void ReferrerHostComparison_IsCaseInsensitive()
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Host = new HostString("AKML.Khamis.Work");
+        context.Request.Headers.Referer = "https://akml.khamis.work/docs";
+
+        Assert.Null(HttpRequestFacts.ReferrerHost(context.Request));
+    }
+
 }

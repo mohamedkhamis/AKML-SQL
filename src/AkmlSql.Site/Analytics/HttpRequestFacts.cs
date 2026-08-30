@@ -11,8 +11,21 @@ public static class HttpRequestFacts
     /// <summary>Longest campaign value stored.</summary>
     private const int MaxCampaignLength = 128;
 
-    /// <summary>Host part of the Referer header only (no path/query); null when absent or not an absolute URI.</summary>
-    public static string? ReferrerHost(HttpRequest request) => ReferrerHost(request.Headers.Referer.ToString());
+    /// <summary>
+    /// Host part of the Referer header only (no path/query); null when absent, not an absolute
+    /// URI, or SAME-ORIGIN.
+    /// <para>
+    /// Same-origin is excluded because a referrer table answers "who sends me traffic", and every
+    /// internal click also sets a Referer. On the live site this made the site's own host the top
+    /// referrer by two orders of magnitude (160 hits against 2 for the only real external source),
+    /// which is worse than useless — it hid the answer.
+    /// </para>
+    /// </summary>
+    public static string? ReferrerHost(HttpRequest request)
+    {
+        var host = ReferrerHost(request.Headers.Referer.ToString());
+        return string.Equals(host, request.Host.Host, StringComparison.OrdinalIgnoreCase) ? null : host;
+    }
 
     /// <summary>Host part of a Referer value only; null when empty, relative, or unparseable.</summary>
     public static string? ReferrerHost(string? referer) =>

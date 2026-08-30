@@ -230,29 +230,29 @@
     </section>
 
     <MetricTable Id="countries" Heading="@($"Countries · {_summary.Days} days")" KeyHeader="Country"
-                 Rows="_summary.Countries" Total="_summary.VisitsWindow"
+                 Rows="_summary.Countries" Total="_summary.Countries.Sum(r => r.Count)"
                  Empty="@(_geoAvailable ? "No located visits yet." : "No geo database installed — see Analytics:GeoDatabasePath.")" />
 
     <MetricTable Id="cities" Heading="@($"Cities · {_summary.Days} days")" KeyHeader="City"
-                 Rows="_summary.Cities" Total="_summary.VisitsWindow"
+                 Rows="_summary.Cities" Total="_summary.Cities.Sum(r => r.Count)"
                  Empty="@(_geoAvailable ? "No city-level data (a Country-only database is installed)." : "No geo database installed.")" />
 
     <MetricTable Id="devices" Heading="@($"Devices · {_summary.Days} days")" KeyHeader="Device"
-                 Rows="_summary.Devices" Total="_summary.VisitsWindow" Empty="No visits recorded yet." />
+                 Rows="_summary.Devices" Total="_summary.Devices.Sum(r => r.Count)" Empty="No visits recorded yet." />
 
     <MetricTable Id="os" Heading="@($"Operating systems · {_summary.Days} days")" KeyHeader="OS"
-                 Rows="_summary.OperatingSystems" Total="_summary.VisitsWindow" Empty="No visits recorded yet." />
+                 Rows="_summary.OperatingSystems" Total="_summary.OperatingSystems.Sum(r => r.Count)" Empty="No visits recorded yet." />
 
     <MetricTable Id="languages" Heading="@($"Languages · {_summary.Days} days")" KeyHeader="Language"
-                 Rows="_summary.Languages" Total="_summary.VisitsWindow" Empty="No language data recorded yet." />
+                 Rows="_summary.Languages" Total="_summary.Languages.Sum(r => r.Count)" Empty="No language data recorded yet." />
 
     @* Campaign attribution: what actually connects a download back to the link that produced it. *@
     <MetricTable Id="campaigns" Heading="@($"Campaigns · {_summary.Days} days")" KeyHeader="Campaign / medium"
-                 Rows="_summary.Campaigns" Total="_summary.VisitsWindow"
+                 Rows="_summary.Campaigns" Total="_summary.Campaigns.Sum(r => r.Count)"
                  Empty="No UTM-tagged links seen yet — add ?utm_source=… to a shared link." />
 
     <MetricTable Id="referrer-urls" Heading="@($"Referring pages · {_summary.Days} days")" KeyHeader="URL"
-                 Rows="_summary.ReferrerUrls" Total="_summary.VisitsWindow"
+                 Rows="_summary.ReferrerUrls" Total="_summary.ReferrerUrls.Sum(r => r.Count)"
                  Empty="No external referring pages recorded yet." />
 
     <MetricTable Id="entry-pages" Heading="@($"Entry pages · {_summary.Days} days")" KeyHeader="Path"
