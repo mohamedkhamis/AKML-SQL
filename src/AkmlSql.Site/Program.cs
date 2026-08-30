@@ -66,6 +66,14 @@ builder.Services.Configure<DownloadsOptions>(builder.Configuration.GetSection(Do
 builder.Services.Configure<AdminOptions>(builder.Configuration.GetSection(AdminOptions.SectionName));
 builder.Services.AddSingleton(sp => new AnalyticsStore(sp.GetRequiredService<IOptions<AnalyticsOptions>>().Value));
 
+// Offline IP-to-location lookup. The .mmdb is supplied by the deploy (scripts/update-geoip.ps1),
+// not source control -- GeoLite2 needs a MaxMind licence key. Without the file every lookup
+// returns "unknown" and the site behaves exactly as before, so geo is an enrichment, never a
+// dependency. Singleton: the database is memory-mapped once and queried per request.
+builder.Services.AddSingleton(sp => new GeoLookup(
+    sp.GetRequiredService<IOptions<AnalyticsOptions>>().Value.GeoDatabasePath,
+    sp.GetRequiredService<ILogger<GeoLookup>>()));
+
 // ADM-006: client IP comes from Connection.RemoteIpAddress, which is correct on IIS in-process
 // but becomes the PROXY's address the moment anything fronts the site (Cloudflare, ARR, a load
 // balancer) -- at which point every visitor hashes to one value and unique-visitor counting

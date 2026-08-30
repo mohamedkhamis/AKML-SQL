@@ -194,14 +194,30 @@
         if (input) { input.setAttribute('aria-activedescendant', active.id); }
     }
 
-    function activeHref() {
+    /*
+     * Target for Enter. Reads the DOM first (so an arrow-key selection is honoured), then falls
+     * back to querying the index directly.
+     *
+     * The fallback matters: rendering is driven by an async promise, so a late re-render can
+     * empty the list for an instant. Enter pressed in that window used to find no rows and do
+     * nothing at all — the search box simply ignored you, roughly two times in five under test.
+     * Asking MiniSearch for the top hit cannot hit that window.
+     */
+    function targetHref() {
         var results = currentResults();
-        if (!results || results.hidden) { return null; }
+        if (results && !results.hidden) {
+            var items = results.querySelectorAll('li[role="option"] a');
+            if (items.length > 0) {
+                return (activeIndex >= 0 && items[activeIndex] ? items[activeIndex] : items[0]).href;
+            }
+        }
 
-        var items = results.querySelectorAll('li[role="option"] a');
-        if (items.length === 0) { return null; }
+        var input = document.getElementById(INPUT_ID);
+        var term = input ? input.value.trim() : '';
+        if (!mini || term.length < MIN_TERM) { return null; }
 
-        return (activeIndex >= 0 ? items[activeIndex] : items[0]).href;
+        var matches = mini.search(term);
+        return matches.length > 0 ? matches[0].url : null;
     }
 
     document.addEventListener('input', function (event) {
@@ -249,7 +265,7 @@
             event.preventDefault();
             moveActive(-1);
         } else if (event.key === 'Enter') {
-            var href = activeHref();
+            var href = targetHref();
             if (href) {
                 event.preventDefault();
                 window.location.href = href;

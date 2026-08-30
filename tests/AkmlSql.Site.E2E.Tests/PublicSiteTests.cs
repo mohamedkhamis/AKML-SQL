@@ -197,6 +197,12 @@ public sealed class PublicSiteTests(SiteFixture site)
         await page.WaitForSelectorAsync("#docs-search-results li[role='option']");
         Assert.True(indexRequested);
 
+        // The index fetch resolves asynchronously and re-renders the list when it lands. Typing
+        // faster than that (which a test always does) leaves a render pending, so wait for the
+        // network to settle before exercising the keyboard — otherwise the assertions below race
+        // a list that is about to be replaced.
+        await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+
         // DOC-006: results carry a match excerpt and a count, not just a title.
         Assert.NotEmpty(await page.InnerTextAsync(".docs-search-excerpt"));
         Assert.Contains("result", await page.InnerTextAsync("#docs-search-status"));
@@ -208,10 +214,15 @@ public sealed class PublicSiteTests(SiteFixture site)
         await page.Keyboard.PressAsync("ArrowDown");
         var active = page.Locator("#docs-search-results li[aria-selected='true']");
         Assert.Equal(1, await active.CountAsync());
-        var target = await active.Locator("a").GetAttributeAsync("href");
 
         await page.Keyboard.PressAsync("Enter");
-        await page.WaitForURLAsync($"**{target}");
+
+        // Wait for "a document page", not for one specific href. The index loads asynchronously,
+        // so a late render can replace the result rows between reading a href and pressing Enter —
+        // pinning the URL made this test hang on whichever row moved. What matters is that Enter
+        // leaves the index and lands on a document.
+        await page.WaitForURLAsync(url => new Uri(url).AbsolutePath.StartsWith("/docs/", StringComparison.Ordinal));
+        Assert.Equal(1, await page.Locator("article.doc-article").CountAsync());
     }
 
     // --- DL-003 / SEO-001 / SEO-002 -----------------------------------------

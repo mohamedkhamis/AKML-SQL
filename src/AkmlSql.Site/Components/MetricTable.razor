@@ -1,0 +1,81 @@
+@using System.Globalization
+@using AkmlSql.Site.Analytics
+
+@* One "key + count" panel on the admin dashboard. The dashboard grew from four such tables to
+   thirteen when the enrichment dimensions landed; they were identical apart from their heading
+   and empty-state text, so they share one component rather than thirteen copies of the same
+   markup drifting apart.
+
+   Total is optional: when supplied the table adds a share column, which is what makes a
+   distribution readable at a glance ("62% Windows" says more than "93"). *@
+
+<section class="admin-panel" aria-labelledby="@($"{Id}-heading")">
+    <h2 id="@($"{Id}-heading")">@Heading</h2>
+    @if (Rows.Count == 0)
+    {
+        <p class="admin-empty">@Empty</p>
+    }
+    else
+    {
+        <div class="table-scroll">
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th scope="col">@KeyHeader</th>
+                        <th scope="col" class="admin-num">@CountHeader</th>
+                        @if (Total > 0)
+                        {
+                            <th scope="col" class="admin-num">Share</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in Rows)
+                    {
+                        <tr>
+                            <td class="admin-key">@row.Key</td>
+                            <td class="admin-num">@row.Count.ToString("N0", CultureInfo.InvariantCulture)</td>
+                            @if (Total > 0)
+                            {
+                                <td class="admin-num">@Share(row.Count)</td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+@code {
+    /// <summary>Element-id prefix; must be unique on the page.</summary>
+    [Parameter, EditorRequired]
+    public string Id { get; set; } = "";
+
+    /// <summary>Panel heading.</summary>
+    [Parameter, EditorRequired]
+    public string Heading { get; set; } = "";
+
+    /// <summary>Rows to render, already ordered by the store.</summary>
+    [Parameter, EditorRequired]
+    public IReadOnlyList<CountRow> Rows { get; set; } = [];
+
+    /// <summary>Column header for the key.</summary>
+    [Parameter]
+    public string KeyHeader { get; set; } = "Key";
+
+    /// <summary>Column header for the count.</summary>
+    [Parameter]
+    public string CountHeader { get; set; } = "Visits";
+
+    /// <summary>Message shown instead of the table when there are no rows.</summary>
+    [Parameter]
+    public string Empty { get; set; } = "Nothing recorded yet.";
+
+    /// <summary>Denominator for the share column; 0 (the default) hides that column.</summary>
+    [Parameter]
+    public long Total { get; set; }
+
+    private string Share(long count) =>
+        Total <= 0 ? "—" : (count * 100.0 / Total).ToString("0.#", CultureInfo.InvariantCulture) + "%";
+}

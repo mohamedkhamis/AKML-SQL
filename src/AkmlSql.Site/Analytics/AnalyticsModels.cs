@@ -4,11 +4,65 @@ namespace AkmlSql.Site.Analytics;
 // /dl download endpoint) through IAnalyticsSink into AnalyticsStore; AnalyticsSummary is the
 // read shape consumed by the /admin dashboard.
 
-/// <summary>One page-view event. <see cref="IpAddress"/> is hashed per-day by the store and never persisted raw.</summary>
-public sealed record VisitInfo(DateTimeOffset Utc, string Path, string? ReferrerHost, string? UaFamily, string? IpAddress);
+/// <summary>
+/// One page-view event.
+/// <para>
+/// <see cref="IpAddress"/> is the full client address. It is used in-process for the per-day
+/// salted hash and the geo lookup, and is NEVER persisted: the store writes only the hash and
+/// the truncated <see cref="IpAnonymizer.ToPrefix">network prefix</see>.
+/// </para>
+/// <para>
+/// The optional members carry the enrichment added for analysis (device/OS/browser detail,
+/// location, language, campaign, full referrer, response timing). All are nullable so a caller
+/// that has none of them — a test, or a future non-HTTP source — still produces a valid record.
+/// </para>
+/// </summary>
+public sealed record VisitInfo(DateTimeOffset Utc, string Path, string? ReferrerHost, string? UaFamily, string? IpAddress)
+{
+    /// <summary>Full referrer URL including path; null for same-origin or absent referrers.</summary>
+    public string? ReferrerUrl { get; init; }
 
-/// <summary>One installer download event. <see cref="IpAddress"/> is hashed per-day by the store and never persisted raw.</summary>
-public sealed record DownloadInfo(DateTimeOffset Utc, string File, string? ReferrerHost, string? UaFamily, string? IpAddress);
+    /// <summary>Parsed user-agent detail; defaults to the unknown shape.</summary>
+    public UserAgentDetails UserAgent { get; init; } = UserAgentDetailsParser.Unknown;
+
+    /// <summary>Location derived from the full IP at write time.</summary>
+    public GeoLocation Location { get; init; } = GeoLocation.Unknown;
+
+    /// <summary>Primary Accept-Language tag, lower-cased ("en", "ar-eg").</summary>
+    public string? Language { get; init; }
+
+    /// <summary>UTM parameters carried on the inbound link.</summary>
+    public CampaignInfo Campaign { get; init; } = CampaignInfo.None;
+
+    /// <summary>Server-side handling time in milliseconds, for spotting slow pages.</summary>
+    public int? DurationMs { get; init; }
+}
+
+/// <summary>
+/// One installer download event. <see cref="IpAddress"/> is hashed per-day by the store and never
+/// persisted raw; only the truncated prefix and derived location are stored.
+/// <para>
+/// Carries the same acquisition context as a visit so "which campaign produced installs?" is
+/// answerable directly, without joining back through sessions.
+/// </para>
+/// </summary>
+public sealed record DownloadInfo(DateTimeOffset Utc, string File, string? ReferrerHost, string? UaFamily, string? IpAddress)
+{
+    /// <summary>Full referrer URL including path; null for same-origin or absent referrers.</summary>
+    public string? ReferrerUrl { get; init; }
+
+    /// <summary>Parsed user-agent detail.</summary>
+    public UserAgentDetails UserAgent { get; init; } = UserAgentDetailsParser.Unknown;
+
+    /// <summary>Location derived from the full IP at write time.</summary>
+    public GeoLocation Location { get; init; } = GeoLocation.Unknown;
+
+    /// <summary>Primary Accept-Language tag.</summary>
+    public string? Language { get; init; }
+
+    /// <summary>UTM parameters carried on the inbound link.</summary>
+    public CampaignInfo Campaign { get; init; } = CampaignInfo.None;
+}
 
 /// <summary>
 /// ADM-008: one request that produced a 404. Visit tracking records only 2xx responses, so broken
@@ -104,4 +158,48 @@ public sealed class AnalyticsSummary
     /// bookmarks, which visit tracking (2xx only) could never surface.
     /// </summary>
     public required IReadOnlyList<CountRow> TopNotFound { get; init; }
+
+    // --- Enrichment dimensions ---------------------------------------------
+
+    /// <summary>Visits by country ("Egypt", "United Kingdom"); empty without a geo database.</summary>
+    public required IReadOnlyList<CountRow> Countries { get; init; }
+
+    /// <summary>Visits by region/city, most specific available; empty without a City database.</summary>
+    public required IReadOnlyList<CountRow> Cities { get; init; }
+
+    /// <summary>Visits by form factor: desktop / mobile / tablet.</summary>
+    public required IReadOnlyList<CountRow> Devices { get; init; }
+
+    /// <summary>Visits by operating system, with version ("Windows 10/11", "iOS 17.2").</summary>
+    public required IReadOnlyList<CountRow> OperatingSystems { get; init; }
+
+    /// <summary>Visits by primary Accept-Language tag.</summary>
+    public required IReadOnlyList<CountRow> Languages { get; init; }
+
+    /// <summary>Visits by UTM campaign source/medium/campaign, most specific available.</summary>
+    public required IReadOnlyList<CountRow> Campaigns { get; init; }
+
+    /// <summary>Visits by full referrer URL — which page linked here, not just which host.</summary>
+    public required IReadOnlyList<CountRow> ReferrerUrls { get; init; }
+
+    /// <summary>Slowest pages by mean server handling time, in milliseconds.</summary>
+    public required IReadOnlyList<CountRow> SlowestPages { get; init; }
+
+    /// <summary>Pages that most often begin a session — where people actually arrive.</summary>
+    public required IReadOnlyList<CountRow> EntryPages { get; init; }
+
+    /// <summary>Pages that most often end a session — where people leave.</summary>
+    public required IReadOnlyList<CountRow> ExitPages { get; init; }
+
+    /// <summary>Distinct sessions in the window.</summary>
+    public required long Sessions { get; init; }
+
+    /// <summary>Percentage of sessions with exactly one page view (0-100).</summary>
+    public required double BounceRatePercent { get; init; }
+
+    /// <summary>Mean pages per session.</summary>
+    public required double PagesPerSession { get; init; }
+
+    /// <summary>Mean session length in seconds (single-page sessions count as 0).</summary>
+    public required double AverageSessionSeconds { get; init; }
 }

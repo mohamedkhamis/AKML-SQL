@@ -106,12 +106,15 @@ public sealed class AdminPagesTests
         using var ctx = new BunitContext();
         ctx.Services.AddSingleton(store);
         ctx.Services.Configure<DownloadsOptions>(o => o.Folder = downloadsDir);
+        ctx.Services.Configure<AnalyticsOptions>(o => o.RetentionDays = 400);
+        ctx.Services.AddSingleton(new GeoLookup(Path.Combine(dir.Path, "no-such-geo.mmdb")));
 
         var cut = ctx.Render<AdminDashboard>();
 
         // Stat tiles: visits today, unique today, 7d, window, downloads window, downloads total,
         // bot hits. Two distinct IPs visited "/" plus one more for "/features" => 3 unique.
-        var values = cut.FindAll(".admin-stat-value").Select(e => e.TextContent.Trim()).ToList();
+        var values = cut.FindAll("section[aria-label='Key metrics'] .admin-stat-value")
+            .Select(e => e.TextContent.Trim()).ToList();
         Assert.Equal(["3", "3", "3", "3", "1", "1", "0"], values);
 
         // Two charts now (ADM-005): visits and downloads, one column per day of the window.
@@ -152,9 +155,12 @@ public sealed class AdminPagesTests
         using var ctx = NewDashboardCtx(store, dir);
         var cut = ctx.Render<AdminDashboard>();
 
-        var values = cut.FindAll(".admin-stat-value").Select(e => e.TextContent.Trim()).ToList();
+        var values = cut.FindAll("section[aria-label='Key metrics'] .admin-stat-value")
+            .Select(e => e.TextContent.Trim()).ToList();
         Assert.Equal("1", values[0]); // visits today: the human only
-        Assert.Equal("2", values[^1]); // bot hits: reported, not discarded
+        // Selected by class, not by position: an index from the end broke as soon as a second
+        // stats row was added below this one.
+        Assert.Equal("2", cut.Find(".admin-stat-muted .admin-stat-value").TextContent.Trim());
         Assert.DoesNotContain("/crawled", cut.Markup);
     }
 
@@ -225,13 +231,15 @@ public sealed class AdminPagesTests
         using var dir = new TempDirectory();
         using var store = new AnalyticsStore(Path.Combine(dir.Path, "analytics.db"));
 
-        using var ctx = new BunitContext();
-        ctx.Services.AddSingleton(store);
-        ctx.Services.Configure<DownloadsOptions>(o => o.Folder = Path.Combine(dir.Path, "downloads"));
+        using var ctx = NewDashboardCtx(store, dir);
 
         var cut = ctx.Render<AdminDashboard>();
 
-        Assert.All(cut.FindAll(".admin-stat-value"), v => Assert.Equal("0", v.TextContent.Trim()));
+        // Only the headline counters are all-zero; the engagement row carries rates and a
+        // duration, which render as "0.00", "0%" and an em dash rather than "0".
+        Assert.All(
+            cut.FindAll("section[aria-label='Key metrics'] .admin-stat-value"),
+            v => Assert.Equal("0", v.TextContent.Trim()));
         // 30 days x (visits + unique) + 30 days x downloads = 90 zero-height bars.
         Assert.Equal(90, cut.FindAll(".admin-chart-bar.bar-h-0").Count);
         Assert.Contains("No visits recorded yet.", cut.Markup);
@@ -245,6 +253,10 @@ public sealed class AdminPagesTests
         var ctx = new BunitContext();
         ctx.Services.AddSingleton(store);
         ctx.Services.Configure<DownloadsOptions>(o => o.Folder = Path.Combine(dir.Path, "downloads"));
+        ctx.Services.Configure<AnalyticsOptions>(o => o.RetentionDays = 400);
+        // No .mmdb path: GeoLookup resolves to "unavailable", which is the state the dashboard
+        // must render correctly on any machine without a MaxMind licence key.
+        ctx.Services.AddSingleton(new GeoLookup(Path.Combine(dir.Path, "no-such-geo.mmdb")));
         return ctx;
     }
 }

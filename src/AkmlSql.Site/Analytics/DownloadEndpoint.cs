@@ -23,8 +23,12 @@ public static class DownloadEndpoint
 {
     /// <summary>Registers the <c>/dl/{**file}</c> route.</summary>
     public static void Map(IEndpointRouteBuilder endpoints) =>
-        endpoints.MapGet("/dl/{**file}", (HttpContext http, string? file, Microsoft.Extensions.Options.IOptions<DownloadsOptions> options, IAnalyticsSink sink) =>
-            Handle(file, http, options.Value, sink));
+        endpoints.MapGet("/dl/{**file}", (
+            HttpContext http,
+            string? file,
+            Microsoft.Extensions.Options.IOptions<DownloadsOptions> options,
+            IAnalyticsSink sink,
+            GeoLookup geo) => Handle(file, http, options.Value, sink, geo));
 
     /// <summary>
     /// Canonical path resolution: returns the full file path to serve, or null (→ 404) when the
@@ -67,7 +71,12 @@ public static class DownloadEndpoint
     /// Handler body, factored out for tests: 404 for anything that fails canonical resolution,
     /// otherwise logs the download (best-effort) and streams the file as an attachment.
     /// </summary>
-    public static IResult Handle(string? file, HttpContext http, DownloadsOptions options, IAnalyticsSink sink)
+    public static IResult Handle(
+        string? file,
+        HttpContext http,
+        DownloadsOptions options,
+        IAnalyticsSink sink,
+        GeoLookup? geo = null)
     {
         var fullPath = ResolveFilePath(options.Folder, file);
         if (fullPath is null)
@@ -95,12 +104,22 @@ public static class DownloadEndpoint
         {
             try
             {
+                var ip = HttpRequestFacts.ClientIp(http);
+                var userAgent = UserAgentDetailsParser.Parse(http.Request.Headers.UserAgent);
+
                 sink.EnqueueDownload(new DownloadInfo(
                     DateTimeOffset.UtcNow,
                     fileName,
                     HttpRequestFacts.ReferrerHost(http.Request),
-                    UserAgentBuckets.FromUserAgent(http.Request.Headers.UserAgent),
-                    HttpRequestFacts.ClientIp(http)));
+                    userAgent.Browser,
+                    ip)
+                {
+                    ReferrerUrl = HttpRequestFacts.ReferrerUrl(http.Request),
+                    UserAgent = userAgent,
+                    Location = geo?.Locate(ip) ?? GeoLocation.Unknown,
+                    Language = HttpRequestFacts.Language(http.Request),
+                    Campaign = HttpRequestFacts.Campaign(http.Request),
+                });
             }
             catch
             {

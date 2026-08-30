@@ -6,6 +6,8 @@
 @using Microsoft.Extensions.Options
 @inject AnalyticsStore Store
 @inject IOptions<DownloadsOptions> DownloadsConfig
+@inject GeoLookup Geo
+@inject IOptions<AnalyticsOptions> AnalyticsConfig
 
 @* Admin metrics dashboard. Static SSR; the charts are PURE CSS — bar heights come from the
    precomputed .bar-h-* bucket classes in site.css (strict CSP: no inline styles).
@@ -26,7 +28,16 @@
         <p class="page-intro">
             Page visits and installer downloads over the last @AdminDashboardOptions.Label(_days).
             Crawler traffic is excluded from every figure below and reported separately.
-            Privacy: client IPs are stored only as per-day salted hashes; no cookies are set for visitors.
+        </p>
+        @* Kept accurate deliberately: the store now also keeps a truncated network prefix and a
+           derived location, so the old "hashes only" wording would be a false claim. *@
+        <p class="admin-privacy">
+            <strong>Privacy:</strong> full IP addresses are never stored. Each visit keeps a per-day
+            salted hash (for unique counting) and the network prefix only —
+            <code>@($"/{IpAnonymizer.IPv4PrefixBits}")</code> for IPv4,
+            <code>@($"/{IpAnonymizer.IPv6PrefixBits}")</code> for IPv6 — plus a country/region
+            derived from the address at write time. No cookies are set for visitors.
+            Data older than @_retentionDays days is deleted automatically.
         </p>
     </div>
     <form method="post" action="/admin/logout" class="admin-signout">
@@ -95,6 +106,26 @@
 @* ADM-005: downloads previously had only two scalars — the conversion metric that matters most
    had no trend at all. *@
 <Chart Title="Downloads" Series="_summary.DailyDownloads" Days="_summary.Days" IdPrefix="downloads" />
+
+@* Session shape: what page-view counts alone cannot say. *@
+<section class="admin-stats admin-stats-secondary" aria-label="Engagement">
+    <div class="admin-stat">
+        <p class="admin-stat-value">@_summary.Sessions</p>
+        <p class="admin-stat-label">Sessions · @_summary.Days days</p>
+    </div>
+    <div class="admin-stat">
+        <p class="admin-stat-value">@_summary.PagesPerSession.ToString("0.00", CultureInfo.InvariantCulture)</p>
+        <p class="admin-stat-label">Pages / session</p>
+    </div>
+    <div class="admin-stat">
+        <p class="admin-stat-value">@_summary.BounceRatePercent.ToString("0.#", CultureInfo.InvariantCulture)%</p>
+        <p class="admin-stat-label">Bounce rate</p>
+    </div>
+    <div class="admin-stat">
+        <p class="admin-stat-value">@FormatDuration(_summary.AverageSessionSeconds)</p>
+        <p class="admin-stat-label">Avg. session</p>
+    </div>
+</section>
 
 <div class="admin-tables">
     <section class="admin-panel" aria-labelledby="top-pages-heading">
@@ -198,6 +229,42 @@
         }
     </section>
 
+    <MetricTable Id="countries" Heading="@($"Countries · {_summary.Days} days")" KeyHeader="Country"
+                 Rows="_summary.Countries" Total="_summary.VisitsWindow"
+                 Empty="@(_geoAvailable ? "No located visits yet." : "No geo database installed — see Analytics:GeoDatabasePath.")" />
+
+    <MetricTable Id="cities" Heading="@($"Cities · {_summary.Days} days")" KeyHeader="City"
+                 Rows="_summary.Cities" Total="_summary.VisitsWindow"
+                 Empty="@(_geoAvailable ? "No city-level data (a Country-only database is installed)." : "No geo database installed.")" />
+
+    <MetricTable Id="devices" Heading="@($"Devices · {_summary.Days} days")" KeyHeader="Device"
+                 Rows="_summary.Devices" Total="_summary.VisitsWindow" Empty="No visits recorded yet." />
+
+    <MetricTable Id="os" Heading="@($"Operating systems · {_summary.Days} days")" KeyHeader="OS"
+                 Rows="_summary.OperatingSystems" Total="_summary.VisitsWindow" Empty="No visits recorded yet." />
+
+    <MetricTable Id="languages" Heading="@($"Languages · {_summary.Days} days")" KeyHeader="Language"
+                 Rows="_summary.Languages" Total="_summary.VisitsWindow" Empty="No language data recorded yet." />
+
+    @* Campaign attribution: what actually connects a download back to the link that produced it. *@
+    <MetricTable Id="campaigns" Heading="@($"Campaigns · {_summary.Days} days")" KeyHeader="Campaign / medium"
+                 Rows="_summary.Campaigns" Total="_summary.VisitsWindow"
+                 Empty="No UTM-tagged links seen yet — add ?utm_source=… to a shared link." />
+
+    <MetricTable Id="referrer-urls" Heading="@($"Referring pages · {_summary.Days} days")" KeyHeader="URL"
+                 Rows="_summary.ReferrerUrls" Total="_summary.VisitsWindow"
+                 Empty="No external referring pages recorded yet." />
+
+    <MetricTable Id="entry-pages" Heading="@($"Entry pages · {_summary.Days} days")" KeyHeader="Path"
+                 Rows="_summary.EntryPages" CountHeader="Sessions" Empty="No sessions recorded yet." />
+
+    <MetricTable Id="exit-pages" Heading="@($"Exit pages · {_summary.Days} days")" KeyHeader="Path"
+                 Rows="_summary.ExitPages" CountHeader="Sessions" Empty="No sessions recorded yet." />
+
+    <MetricTable Id="slow-pages" Heading="@($"Slowest pages · {_summary.Days} days")" KeyHeader="Path"
+                 Rows="_summary.SlowestPages" CountHeader="Mean ms"
+                 Empty="Not enough samples yet (a page needs at least 3 views)." />
+
     @* ADM-008: broken inbound links. Only 2xx responses were tracked before, so these were
        invisible — and they are the one failure the owner can actually fix. *@
     <section class="admin-panel" aria-labelledby="notfound-heading">
@@ -260,6 +327,8 @@
     private AnalyticsSummary _summary = null!;
     private IReadOnlyList<DownloadFileInfo> _files = [];
     private int _days = AdminDashboardOptions.DefaultDays;
+    private bool _geoAvailable;
+    private int _retentionDays;
 
     /// <summary>
     /// ADM-003: reporting window from <c>?days=</c>; clamped, never trusted raw.
@@ -280,9 +349,19 @@
             int.TryParse(Days, NumberStyles.Integer, CultureInfo.InvariantCulture, out var requested)
                 ? requested
                 : null);
+        _geoAvailable = Geo.IsAvailable;
+        _retentionDays = AnalyticsConfig.Value.RetentionDays;
         _summary = Store.GetSummary(_days);
         _files = DownloadsInfo.List(DownloadsConfig.Value.Folder);
     }
+
+    /// <summary>Session length as "1m 42s" / "38s"; 0 renders as a dash.</summary>
+    private static string FormatDuration(double seconds) => seconds switch
+    {
+        <= 0 => "—",
+        < 60 => $"{seconds:0}s",
+        _ => $"{(int)(seconds / 60)}m {(int)(seconds % 60):00}s",
+    };
 
     /// <summary>Share of window visits, for the browser table.</summary>
     private string Share(long count) =>

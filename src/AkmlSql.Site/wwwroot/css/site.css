@@ -2217,3 +2217,36 @@ html[data-akml-theme="light"] .card:hover {
     max-height: 22rem;
     overflow-y: auto;
 }
+
+/* Engagement tile row sits under the charts — slightly quieter than the headline metrics. */
+.admin-stats-secondary {
+    margin-top: calc(-1 * var(--s-4));
+}
+
+.admin-stats-secondary .admin-stat-value {
+    font-size: 1.4rem;
+}
+
+/* Privacy note under the dashboard intro: it states what is actually stored, so it should be
+   readable rather than fine print. */
+.admin-privacy {
+    max-width: 70ch;
+    margin: var(--s-3) 0 0;
+    padding: var(--s-3);
+    color: var(--akml-text-secondary);
+    font-size: var(--t-sm);
+    line-height: 1.55;
+    background-color: var(--akml-surface-panel);
+    border: 1px solid var(--akml-border-subtle);
+    border-radius: var(--akml-scalar-radius-s);
+}
+
+.admin-privacy strong {
+    color: var(--akml-text-primary);
+}
+
+/* Long keys (referrer URLs, campaign names) must wrap rather than stretch the table. */
+.admin-key {
+    max-width: 32ch;
+    overflow-wrap: anywhere;
+}

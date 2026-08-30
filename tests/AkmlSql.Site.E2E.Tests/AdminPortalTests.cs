@@ -89,7 +89,7 @@ public sealed class AdminPortalTests(SiteFixture site)
         // Playwright APIs disagree about it. InnerTextAsync is render-aware and returns
         // "VISITS · 7 DAYS"; Expect(...).ToContainTextAsync compares textContent and sees the
         // source casing. Match the source.
-        await Assertions.Expect(page.Locator(".admin-stats")).ToContainTextAsync("Visits · 7 days");
+        await Assertions.Expect(page.Locator("section[aria-label='Key metrics']")).ToContainTextAsync("Visits · 7 days");
         await Assertions.Expect(page.Locator(".admin-ranges a[href='/admin?days=7']"))
             .ToHaveAttributeAsync("aria-current", "true");
         // The export follows the selected window.
@@ -108,7 +108,7 @@ public sealed class AdminPortalTests(SiteFixture site)
         var response = await page.GotoAsync(SiteFixture.BaseUrl + "/admin?days=banana");
 
         Assert.Equal(200, response!.Status);
-        await Assertions.Expect(page.Locator(".admin-stats")).ToContainTextAsync("Visits · 30 days");
+        await Assertions.Expect(page.Locator("section[aria-label='Key metrics']")).ToContainTextAsync("Visits · 30 days");
     }
 
     [SkippableFact]
@@ -204,6 +204,69 @@ public sealed class AdminPortalTests(SiteFixture site)
             .Select(text => int.TryParse(text.Trim(), out var value) ? value : 0)
             .DefaultIfEmpty(0)
             .Max();
+    }
+
+    [SkippableFact]
+    public async Task Dashboard_ShowsTheEnrichmentDimensions()
+    {
+        SkipIfUnavailable();
+        await using var context = await site.NewContextAsync();
+        var page = await context.NewPageAsync();
+
+        // Arrive on a campaign-tagged link from an external referrer, then browse — so the
+        // request carries everything the enrichment is supposed to capture.
+        await page.SetExtraHTTPHeadersAsync(new Dictionary<string, string>
+        {
+            ["Accept-Language"] = "ar-EG,ar;q=0.9,en;q=0.8",
+        });
+        await page.GotoAsync($"{SiteFixture.BaseUrl}/?utm_source=e2e&utm_medium=test&utm_campaign=enrichment-probe");
+        await page.GotoAsync(SiteFixture.BaseUrl + "/features");
+
+        var admin = await SignInAsync(context);
+
+        // Every dimension panel is present, whether or not it has rows yet.
+        foreach (var id in (string[])
+                 ["countries", "cities", "devices", "os", "languages",
+                  "campaigns", "referrer-urls", "entry-pages", "exit-pages", "slow-pages"])
+        {
+            Assert.Equal(1, await admin.Locator($"#{id}-heading").CountAsync());
+        }
+
+        // Engagement tiles are computed from sessions, not page views.
+        var engagement = await admin.Locator("section[aria-label='Engagement']").InnerTextAsync();
+        Assert.Contains("Sessions", engagement, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Bounce rate", engagement, StringComparison.OrdinalIgnoreCase);
+
+        // Assert on dimensions with few distinct values, which are therefore always inside the
+        // LIMIT 10. A specific campaign name is NOT asserted: every panel is
+        // ORDER BY COUNT(*) DESC over a database that persists across runs, so a one-off value
+        // competes with all history and its presence would be a matter of luck, not correctness
+        // (the same trap the 404 test fell into).
+        var tables = await admin.Locator(".admin-tables").InnerTextAsync();
+        Assert.Contains("ar-eg", tables, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("desktop", tables, StringComparison.OrdinalIgnoreCase);
+
+        // Campaign capture is proven by the panel having rows at all — it is empty until some
+        // visit arrives with UTM parameters, and this test just made one.
+        await Assertions.Expect(
+            admin.Locator("section[aria-labelledby='campaigns-heading'] tbody tr").First).ToBeVisibleAsync();
+    }
+
+    [SkippableFact]
+    public async Task Dashboard_StatesWhatIsActuallyStored()
+    {
+        SkipIfUnavailable();
+        // The privacy note is a claim made to visitors; it must match the schema. Storing a
+        // truncated prefix and a location means the old "hashes only" wording would be false.
+        await using var context = await site.NewContextAsync();
+        var page = await SignInAsync(context);
+
+        var privacy = await page.Locator(".admin-privacy").InnerTextAsync();
+
+        Assert.Contains("never stored", privacy, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("/24", privacy, StringComparison.Ordinal);
+        Assert.Contains("/48", privacy, StringComparison.Ordinal);
+        Assert.Contains("No cookies", privacy, StringComparison.OrdinalIgnoreCase);
     }
 
     [SkippableFact]

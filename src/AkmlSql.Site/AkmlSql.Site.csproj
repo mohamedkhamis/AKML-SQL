@@ -21,6 +21,9 @@
     <PackageReference Include="Markdown.ColorCode" Version="3.0.*" />
     <!-- Analytics storage (spec: site metrics): plain ADO.NET SQLite, no EF Core. -->
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.*" />
+    <!-- Offline IP-to-location lookup (GeoLite2 .mmdb). No network calls at request time; the
+         database file is supplied by the deploy, and the site degrades to "unknown" without it. -->
+    <PackageReference Include="MaxMind.GeoIP2" Version="6.*" />
   </ItemGroup>
 
   <!--

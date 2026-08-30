@@ -18,30 +18,54 @@ public sealed class VisitTrackingMiddleware
 
     private readonly RequestDelegate _next;
     private readonly IAnalyticsSink _sink;
+    private readonly GeoLookup _geo;
     private readonly ILogger<VisitTrackingMiddleware> _logger;
 
-    public VisitTrackingMiddleware(RequestDelegate next, IAnalyticsSink sink, ILogger<VisitTrackingMiddleware> logger)
+    public VisitTrackingMiddleware(
+        RequestDelegate next,
+        IAnalyticsSink sink,
+        GeoLookup geo,
+        ILogger<VisitTrackingMiddleware> logger)
     {
         _next = next;
         _sink = sink;
+        _geo = geo;
         _logger = logger;
     }
 
     public async Task InvokeAsync(HttpContext context)
     {
+        // Server-side handling time, so a slow page shows up in the metrics rather than only in
+        // someone's complaint. Started before _next so it covers the whole downstream pipeline.
+        var started = System.Diagnostics.Stopwatch.GetTimestamp();
         await _next(context);
+        var elapsedMs = (int)System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds;
 
         try
         {
             var request = context.Request;
             if (ShouldTrack(request.Path.Value, request.Method, context.Response.StatusCode, context.Response.ContentType))
             {
+                var ip = HttpRequestFacts.ClientIp(context);
+                var userAgent = UserAgentDetailsParser.Parse(request.Headers.UserAgent);
+
                 _sink.EnqueueVisit(new VisitInfo(
                     DateTimeOffset.UtcNow,
                     request.Path.Value ?? "/",
                     HttpRequestFacts.ReferrerHost(request),
-                    UserAgentBuckets.FromUserAgent(request.Headers.UserAgent),
-                    HttpRequestFacts.ClientIp(context)));
+                    // Keep the coarse family in its original column so existing history and the
+                    // bot filter stay comparable; the parsed detail goes alongside it.
+                    userAgent.Browser,
+                    ip)
+                {
+                    ReferrerUrl = HttpRequestFacts.ReferrerUrl(request),
+                    UserAgent = userAgent,
+                    // Resolved from the FULL address here; the store persists only the prefix.
+                    Location = _geo.Locate(ip),
+                    Language = HttpRequestFacts.Language(request),
+                    Campaign = HttpRequestFacts.Campaign(request),
+                    DurationMs = elapsedMs,
+                });
             }
             else if (ShouldTrackNotFound(request.Path.Value, request.Method, context.Response.StatusCode))
             {
