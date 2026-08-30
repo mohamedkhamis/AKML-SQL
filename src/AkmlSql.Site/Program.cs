@@ -134,6 +134,23 @@ if (prunedRows > 0)
         prunedRows, analyticsOptions.RetentionDays);
 }
 
+// Repair history written before same-origin referrers were filtered at write time: internal
+// navigation had made the site its own top referrer. Only the referrer columns are cleared, never
+// a row, and the operation is idempotent — after the first run it corrects nothing.
+var siteHost = Uri.TryCreate(
+    app.Services.GetRequiredService<IOptions<SiteOptions>>().Value.CanonicalRoot,
+    UriKind.Absolute,
+    out var canonicalUri)
+        ? canonicalUri.Host
+        : null;
+var correctedReferrers = analyticsStore.ClearSameOriginReferrers(siteHost);
+if (correctedReferrers > 0)
+{
+    app.Logger.LogInformation(
+        "Analytics: cleared self-referrer on {Rows} historical row(s) for host {Host}.",
+        correctedReferrers, siteHost);
+}
+
 // PERF-001: compress the responses the app GENERATES -- SSR pages, search-index.json,
 // sitemap.xml, robots.txt -- which were previously served raw (a docs page was 35 KB).
 //

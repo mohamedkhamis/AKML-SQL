@@ -38,7 +38,7 @@ public sealed class AnalyticsInsightsTests
         Assert.Equal(1, summary.VisitsToday);
         Assert.Equal(1, summary.VisitsLast7Days);
         Assert.Equal(1, summary.VisitsWindow);
-        Assert.Equal(3, summary.BotVisitsWindow);
+        Assert.Equal(3, summary.AutomatedVisitsWindow);
 
         // The crawled path must not appear in top pages, the daily series, or the browser mix.
         Assert.DoesNotContain(summary.TopPages, r => r.Key == "/crawled");
@@ -302,6 +302,98 @@ public sealed class AnalyticsInsightsTests
 
         Assert.Empty(store.GetSummary(7, Now).TopNotFound);
         Assert.Single(store.GetSummary(30, Now).TopNotFound);
+    }
+
+    [Fact]
+    public void ScriptedClients_AreExcludedFromVisitsLikeCrawlers()
+    {
+        // A curl or PowerShell page fetch is automation, not a reader. On the live site these
+        // were 38% of the browser table, inflating visits, uniques and session shape.
+        using var dir = new TempDirectory();
+        using var store = NewStore(dir);
+
+        store.LogVisit(Visit(0, "/", ua: "Chrome", ip: "203.0.113.1"));
+        store.LogVisit(Visit(0, "/", ua: "curl", ip: "198.51.100.1"));
+        store.LogVisit(Visit(0, "/", ua: "wget", ip: "198.51.100.2"));
+        store.LogVisit(Visit(0, "/", ua: "powershell", ip: "198.51.100.3"));
+        store.LogVisit(Visit(0, "/", ua: "bot", ip: "198.51.100.4"));
+
+        var summary = store.GetSummary(30, Now);
+
+        Assert.Equal(1, summary.VisitsToday);
+        Assert.Equal(1, summary.UniqueVisitorsToday);
+        Assert.Equal(4, summary.AutomatedVisitsWindow);
+        Assert.DoesNotContain(summary.BrowserMix, r => r.Key is "curl" or "wget" or "powershell" or "bot");
+    }
+
+    [Fact]
+    public void ScriptedDownloads_StillCount_BecauseTheyAreRealAcquisitions()
+    {
+        // Deliberately different from visits: someone fetching the installer with curl or
+        // PowerShell has genuinely acquired it. Only crawlers are dropped.
+        using var dir = new TempDirectory();
+        using var store = NewStore(dir);
+
+        store.LogDownload(new DownloadInfo(Now, "setup.exe", null, "Chrome", "203.0.113.1"));
+        store.LogDownload(new DownloadInfo(Now, "setup.exe", null, "curl", "203.0.113.2"));
+        store.LogDownload(new DownloadInfo(Now, "setup.exe", null, "powershell", "203.0.113.3"));
+        store.LogDownload(new DownloadInfo(Now, "setup.exe", null, "bot", "198.51.100.9"));
+
+        var summary = store.GetSummary(30, Now);
+
+        Assert.Equal(3, summary.DownloadsTotal);
+        Assert.Equal(3, summary.DownloadsWindow);
+        Assert.Equal(3, summary.DailyDownloads.Sum(d => d.Count));
+    }
+
+    [Fact]
+    public void ClearSameOriginReferrers_RepairsHistory_AndIsIdempotent()
+    {
+        // History written before same-origin was filtered at write time: the site was its own
+        // top referrer, which answered the wrong question entirely.
+        using var dir = new TempDirectory();
+        using var store = NewStore(dir);
+
+        store.LogVisit(Visit(0, "/docs", referrer: "akml.khamis.work"));
+        store.LogVisit(Visit(0, "/", referrer: "akml.khamis.work"));
+        store.LogVisit(Visit(0, "/", referrer: "news.example.com"));
+
+        var corrected = store.ClearSameOriginReferrers("akml.khamis.work");
+
+        Assert.Equal(2, corrected);
+        var referrers = store.GetSummary(30, Now).TopReferrers;
+        Assert.Equal("news.example.com", referrers.Single().Key);
+
+        // Safe to run on every startup.
+        Assert.Equal(0, store.ClearSameOriginReferrers("akml.khamis.work"));
+    }
+
+    [Fact]
+    public void ClearSameOriginReferrers_KeepsTheVisitsThemselves()
+    {
+        // Only the referrer columns are cleared — the visit really happened and still counts.
+        using var dir = new TempDirectory();
+        using var store = NewStore(dir);
+
+        store.LogVisit(Visit(0, "/docs", referrer: "akml.khamis.work"));
+        store.ClearSameOriginReferrers("akml.khamis.work");
+
+        var summary = store.GetSummary(30, Now);
+        Assert.Equal(1, summary.VisitsToday);
+        Assert.Contains(summary.TopPages, r => r.Key == "/docs");
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public void ClearSameOriginReferrers_WithNoHost_DoesNothing(string? host)
+    {
+        using var dir = new TempDirectory();
+        using var store = NewStore(dir);
+        store.LogVisit(Visit(0, "/", referrer: "akml.khamis.work"));
+
+        Assert.Equal(0, store.ClearSameOriginReferrers(host));
+        Assert.Single(store.GetSummary(30, Now).TopReferrers);
     }
 
 }

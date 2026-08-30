@@ -95,11 +95,36 @@ public sealed class VisitTrackingMiddlewareTests
     [InlineData("Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)", "bot")]
     [InlineData("Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; bingbot/2.0) Chrome/125.0 Safari/537.36", "bot")]
     [InlineData("HeadlessChrome/126.0.0.0", "bot")]
-    [InlineData("Wget/1.21", "other")]
+    // Scripted clients now get their own families instead of falling into "other", so they can
+    // be excluded from visitor figures the way crawlers are.
+    [InlineData("Wget/1.21", "wget")]
+    [InlineData("python-requests/2.31.0", "python")]
+    [InlineData("Mozilla/5.0 (Windows NT; Windows NT 10.0; en-US) WindowsPowerShell/5.1.20348.1", "powershell")]
+    [InlineData("Go-http-client/2.0", "go")]
+    [InlineData("PostmanRuntime/7.37.0", "postman")]
     [InlineData(null, "other")]
     [InlineData("", "other")]
     public void UserAgentBuckets_MapToCoarseFamilies(string? ua, string expected) =>
         Assert.Equal(expected, UserAgentBuckets.FromUserAgent(ua));
+
+    [Theory]
+    [InlineData("bot")]
+    [InlineData("curl")]
+    [InlineData("wget")]
+    [InlineData("python")]
+    [InlineData("powershell")]
+    public void AutomationFamilies_AreRecognisedAsSuch(string family) =>
+        Assert.True(UserAgentBuckets.IsAutomation(family));
+
+    [Theory]
+    [InlineData("Chrome")]
+    [InlineData("Firefox")]
+    [InlineData("Safari")]
+    [InlineData("Edge")]
+    [InlineData("other")]
+    [InlineData(null)]
+    public void BrowsersAndUnknownAgents_AreNotAutomation(string? family) =>
+        Assert.False(UserAgentBuckets.IsAutomation(family));
 
     [Theory]
     [InlineData("https://example.com/some/page?q=1", "example.com")]

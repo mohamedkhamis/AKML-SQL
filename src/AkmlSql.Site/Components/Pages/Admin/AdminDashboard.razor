@@ -27,7 +27,7 @@
         <h1>Site metrics</h1>
         <p class="page-intro">
             Page visits and installer downloads over the last @AdminDashboardOptions.Label(_days).
-            Crawler traffic is excluded from every figure below and reported separately.
+            Automated traffic — crawlers and scripted clients — is excluded from the visitor figures and reported separately. Installer downloads still count a scripted fetch, which is a real acquisition.
         </p>
         @* Kept accurate deliberately: the store now also keeps a truncated network prefix and a
            derived location, so the old "hashes only" wording would be a false claim. *@
@@ -93,10 +93,11 @@
         <p class="admin-stat-value">@_summary.DownloadsTotal</p>
         <p class="admin-stat-label">Downloads · total</p>
     </div>
-    @* ADM-001: shown rather than silently discarded — a spike here explains a quiet week. *@
+    @* Crawlers and scripted clients, shown rather than silently discarded — a spike here
+       explains an otherwise quiet week. Excluded from every visitor figure above. *@
     <div class="admin-stat admin-stat-muted">
-        <p class="admin-stat-value">@_summary.BotVisitsWindow</p>
-        <p class="admin-stat-label">Bot hits · @_summary.Days days</p>
+        <p class="admin-stat-value">@_summary.AutomatedVisitsWindow</p>
+        <p class="admin-stat-label">Automated · @_summary.Days days</p>
     </div>
 </section>
 

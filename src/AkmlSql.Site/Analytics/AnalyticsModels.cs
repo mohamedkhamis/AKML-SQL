@@ -138,11 +138,16 @@ public sealed class AnalyticsSummary
     public required IReadOnlyList<DailyCount> DailyUniqueVisitors { get; init; }
 
     /// <summary>
-    /// ADM-001: crawler page views within the window. Bots are excluded from every other figure
-    /// here — counting them as visitors inflated every headline number — but shown separately
-    /// rather than silently discarded.
+    /// Automated page views within the window: crawlers AND scripted clients (curl, wget,
+    /// PowerShell, and friends). Excluded from every visitor figure — counting them inflated
+    /// every headline number, the session shape and the top-pages ranking — but reported here
+    /// rather than silently discarded, because a spike explains an otherwise quiet week.
+    /// <para>
+    /// Downloads deliberately do NOT apply this exclusion: fetching an installer with curl is a
+    /// real acquisition. Only crawlers are dropped there.
+    /// </para>
     /// </summary>
-    public required long BotVisitsWindow { get; init; }
+    public required long AutomatedVisitsWindow { get; init; }
 
     /// <summary>Browser mix within the window (user-agent family, views), descending; bots excluded.</summary>
     public required IReadOnlyList<CountRow> BrowserMix { get; init; }

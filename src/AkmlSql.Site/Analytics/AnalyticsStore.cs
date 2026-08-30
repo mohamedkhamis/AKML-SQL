@@ -309,17 +309,17 @@ public sealed class AnalyticsStore : IDisposable
                 VisitsToday = CountRows("visits", $"day = $day AND {HumanOnly}", ("$day", FormatDay(today))),
                 VisitsLast7Days = CountRows("visits", $"day >= $day AND {HumanOnly}", ("$day", FormatDay(since7))),
                 VisitsWindow = CountRows("visits", $"day >= $day AND {HumanOnly}", ("$day", FormatDay(sinceWindow))),
-                BotVisitsWindow = CountRows("visits", $"day >= $day AND NOT ({HumanOnly})", ("$day", FormatDay(sinceWindow))),
-                DownloadsTotal = CountRows("downloads", $"{HumanOnly}", null),
-                DownloadsLast7Days = CountRows("downloads", $"day >= $day AND {HumanOnly}", ("$day", FormatDay(since7))),
-                DownloadsWindow = CountRows("downloads", $"day >= $day AND {HumanOnly}", ("$day", FormatDay(sinceWindow))),
+                AutomatedVisitsWindow = CountRows("visits", $"day >= $day AND NOT ({HumanOnly})", ("$day", FormatDay(sinceWindow))),
+                DownloadsTotal = CountRows("downloads", $"{RealDownloadOnly}", null),
+                DownloadsLast7Days = CountRows("downloads", $"day >= $day AND {RealDownloadOnly}", ("$day", FormatDay(since7))),
+                DownloadsWindow = CountRows("downloads", $"day >= $day AND {RealDownloadOnly}", ("$day", FormatDay(sinceWindow))),
                 UniqueVisitorsToday = CountRows("visits", $"day = $day AND {HumanOnly}", ("$day", FormatDay(today)), distinctColumn: "ip_hash"),
                 TopPages = QueryCountRows(
                     $"SELECT path, COUNT(*) FROM visits WHERE day >= $day AND {HumanOnly} " +
                     "GROUP BY path ORDER BY COUNT(*) DESC, path LIMIT $limit;",
                     ("$day", FormatDay(sinceWindow))),
                 DownloadsByFile = QueryCountRows(
-                    $"SELECT file, COUNT(*) FROM downloads WHERE {HumanOnly} " +
+                    $"SELECT file, COUNT(*) FROM downloads WHERE {RealDownloadOnly} " +
                     "GROUP BY file ORDER BY COUNT(*) DESC, file LIMIT $limit;",
                     null),
                 // ADM-002: the browser mix was recorded on every row and never displayed.
@@ -548,6 +548,53 @@ public sealed class AnalyticsStore : IDisposable
     }
 
     /// <summary>
+    /// Clears <c>referrer_host</c>/<c>referrer_url</c> on rows that recorded the site's OWN host.
+    /// Returns the number of rows corrected.
+    /// <para>
+    /// Every internal click sets a Referer, and until this was filtered at write time the site was
+    /// its own top referrer by two orders of magnitude — the table answered "did someone navigate"
+    /// instead of "who sends me traffic". New rows no longer record it; this repairs the history
+    /// that already did.
+    /// </para>
+    /// <para>
+    /// Only those two columns are cleared, never a row: the visit itself really happened and still
+    /// counts. Idempotent, so it is safe to run on every startup.
+    /// </para>
+    /// </summary>
+    public int ClearSameOriginReferrers(string? siteHost)
+    {
+        if (string.IsNullOrWhiteSpace(siteHost))
+        {
+            return 0;
+        }
+
+        lock (_gate)
+        {
+            var corrected = 0;
+
+            using (var visits = _connection.CreateCommand())
+            {
+                visits.CommandText =
+                    "UPDATE visits SET referrer_host = NULL, referrer_url = NULL " +
+                    "WHERE referrer_host IS NOT NULL AND LOWER(referrer_host) = LOWER($host);";
+                visits.Parameters.AddWithValue("$host", siteHost);
+                corrected += visits.ExecuteNonQuery();
+            }
+
+            using (var downloads = _connection.CreateCommand())
+            {
+                downloads.CommandText =
+                    "UPDATE downloads SET referrer_host = NULL, referrer_url = NULL " +
+                    "WHERE referrer_host IS NOT NULL AND LOWER(referrer_host) = LOWER($host);";
+                downloads.Parameters.AddWithValue("$host", siteHost);
+                corrected += downloads.ExecuteNonQuery();
+            }
+
+            return corrected;
+        }
+    }
+
+    /// <summary>
     /// ADM-004: deletes rows older than <paramref name="retentionDays"/>. Returns the number of
     /// rows removed. A non-positive retention keeps everything.
     /// </summary>
@@ -582,7 +629,28 @@ public sealed class AnalyticsStore : IDisposable
     /// ADM-001: the predicate that keeps crawler traffic out of visitor figures.
     /// <see cref="UserAgentBuckets"/> already classifies bots on every row; nothing consumed it.
     /// </summary>
-    private const string HumanOnly = "(ua_family IS NULL OR ua_family <> 'bot')";
+    /// <summary>
+    /// SQL list literal of the automation families, e.g. <c>'bot','curl','wget'</c>. Built from
+    /// <see cref="UserAgentBuckets.AutomationFamilies"/> so the classifier and the queries cannot
+    /// drift; the values are internal constants, never user input.
+    /// </summary>
+    private static readonly string AutomationList =
+        string.Join(",", UserAgentBuckets.AutomationFamilies.Order(StringComparer.Ordinal).Select(f => $"'{f}'"));
+
+    /// <summary>
+    /// Predicate for VISIT figures: a person read a page. Excludes crawlers and every scripted
+    /// client — on the live site those were 38% of the browser table, inflating visits, unique
+    /// visitors, session shape and the top-pages ranking.
+    /// </summary>
+    private static readonly string HumanOnly = $"(ua_family IS NULL OR ua_family NOT IN ({AutomationList}))";
+
+    /// <summary>
+    /// Predicate for DOWNLOAD figures. Deliberately weaker than <see cref="HumanOnly"/>: fetching
+    /// an installer with curl, wget or PowerShell is a real acquisition — often the most
+    /// deliberate kind — so only crawlers are excluded here. Counting those as installs would be
+    /// as wrong as counting a crawler's page hit as a reader.
+    /// </summary>
+    private const string RealDownloadOnly = "(ua_family IS NULL OR ua_family <> 'bot')";
 
     private long CountRows(
         string table,
@@ -722,8 +790,10 @@ public sealed class AnalyticsStore : IDisposable
         {
             // Table name and distinct column are fixed internal fragments; the date is parameterized.
             var selector = distinctColumn is null ? "COUNT(*)" : $"COUNT(DISTINCT {distinctColumn})";
+            // Downloads keep scripted clients (a curl fetch is a real install); visits do not.
+            var exclusion = table == "downloads" ? RealDownloadOnly : HumanOnly;
             command.CommandText =
-                $"SELECT day, {selector} FROM {table} WHERE day >= $day AND {HumanOnly} GROUP BY day;";
+                $"SELECT day, {selector} FROM {table} WHERE day >= $day AND {exclusion} GROUP BY day;";
             command.Parameters.AddWithValue("$day", FormatDay(since));
             using var reader = command.ExecuteReader();
             while (reader.Read())

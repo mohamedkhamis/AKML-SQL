@@ -31,7 +31,7 @@ public static class MetricsExport
         Row("totals", "unique_visitors_today", summary.UniqueVisitorsToday);
         Row("totals", "visits_7d", summary.VisitsLast7Days);
         Row("totals", "visits_window", summary.VisitsWindow);
-        Row("totals", "bot_visits_window", summary.BotVisitsWindow);
+        Row("totals", "automated_visits_window", summary.AutomatedVisitsWindow);
         Row("totals", "downloads_total", summary.DownloadsTotal);
         Row("totals", "downloads_7d", summary.DownloadsLast7Days);
         Row("totals", "downloads_window", summary.DownloadsWindow);
