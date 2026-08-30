@@ -95,8 +95,12 @@
         <nav class="site-footer-col" aria-label="Documentation">
             <h2 class="site-footer-heading">Docs</h2>
             <ul class="site-footer-list">
+                @* DOC-001: these are hand-written links into the docs corpus, so they break
+                   silently when a document is excluded — "/docs/architecture" pointed at a 404
+                   the moment the contributor docs were unpublished. FooterDocLinksTests asserts
+                   every slug here still resolves. *@
                 <li><a href="/docs">Documentation</a></li>
-                <li><a href="/docs/architecture">Architecture</a></li>
+                <li><a href="/docs/topics/getting-started">Getting started</a></li>
                 <li><a href="/docs/formatting">Formatting</a></li>
                 <li><a href="/docs/configuration">Configuration</a></li>
             </ul>

@@ -15,7 +15,9 @@ namespace AkmlSql.Site.Tests.Components;
 /// </summary>
 public sealed class AdminPagesTests
 {
-    private const string ConfiguredHash = "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8";
+    // A real PBKDF2 hash (SEC-001) rather than a literal: the salt is random, so the value cannot
+    // be inlined without pinning one salt forever.
+    private static readonly string ConfiguredHash = AdminAuth.HashPassword("correct horse battery staple");
 
     private static BunitContext NewLoginCtx(string passwordHash)
     {
@@ -53,6 +55,26 @@ public sealed class AdminPagesTests
 
         Assert.NotNull(cut.Find(".admin-error"));
         Assert.Contains("Invalid password", cut.Markup);
+    }
+
+    [Fact]
+    public void Login_Throttled_ExplainsTheWaitInsteadOfBlamingThePassword()
+    {
+        using var ctx = NewLoginCtx(ConfiguredHash);
+
+        var nav = ctx.Services.GetRequiredService<NavigationManager>();
+        nav.NavigateTo(nav.GetUriWithQueryParameters(new Dictionary<string, object?>
+        {
+            ["error"] = "throttled",
+            ["retry"] = "45",
+        }));
+
+        var cut = ctx.Render<AdminLogin>();
+
+        Assert.Contains("Too many failed attempts", cut.Markup);
+        Assert.Contains("45 seconds", cut.Markup);
+        // SEC-002: the attempt was never evaluated, so claiming the password was wrong would lie.
+        Assert.DoesNotContain("Invalid password", cut.Markup);
     }
 
     [Fact]

@@ -1,5 +1,6 @@
 @page "/docs/{*Slug}"
 @layout DocsLayout
+@using System.Globalization
 @using AkmlSql.Site.Docs
 @inject DocsContentService Docs
 @inject NavigationManager Nav
@@ -25,6 +26,16 @@
     <article class="doc-article">
         <header class="doc-header">
             <h1>@_document.Title <DocBadgePill Value="_document.Badge" /></h1>
+            @* DOC-003: freshness is one of the strongest trust signals a docs page has, and the
+               git date was already loaded to pick the badge above. Omitted entirely when the
+               document has no metadata entry rather than showing a guessed date. *@
+            @if (_document.Dates is { } dates)
+            {
+                <p class="doc-meta">
+                    Last updated
+                    <time datetime="@dates.Updated.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)">@dates.Updated.ToString("d MMMM yyyy", CultureInfo.InvariantCulture)</time>
+                </p>
+            }
         </header>
         @* U15: on-page TOC over the document's H2 anchors (ids emitted by Markdig
            AutoIdentifiers). Full route + fragment — a bare "#id" would resolve against

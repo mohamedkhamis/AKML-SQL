@@ -10,7 +10,7 @@ public sealed class VisitTrackingMiddleware
 {
     // Exact-match exclusions (machine endpoints + icon files that happen to live at the root).
     private static readonly string[] ExcludedPaths =
-        ["/search-index.json", "/sitemap.xml", "/robots.txt", "/favicon.svg", "/favicon.ico"];
+        ["/search-index.json", "/sitemap.xml", "/robots.txt", "/favicon.svg", "/favicon.ico", "/health"];
 
     // Segment-boundary prefix exclusions: "/dl" excludes "/dl" and "/dl/x.exe" but NOT "/dlx".
     private static readonly string[] ExcludedPrefixes =

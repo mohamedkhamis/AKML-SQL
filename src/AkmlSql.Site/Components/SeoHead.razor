@@ -1,0 +1,60 @@
+@using AkmlSql.Site.Seo
+@using Microsoft.Extensions.Options
+@inject IOptions<SiteOptions> Site
+@inject NavigationManager Nav
+
+@* SEO-001: the head tags every page needs and none of them set individually — a canonical URL,
+   an absolute og:url, a share image, and the Twitter card type.
+
+   Rendered directly into App.razor's <head>, NOT through <HeadContent>. HeadContent is a
+   SectionContent, and a section renders only its most recently registered content — so a layout's
+   HeadContent is silently REPLACED by the page's, and every page here has one. Emitting the tags
+   as plain markup from the document head sidesteps the section mechanism entirely, so a new page
+   cannot forget them and cannot clobber them.
+
+   The canonical host comes from Site:BaseUrl, never from the request: serving the same page on
+   two hostnames (an IP, the machine name) must not produce two different canonical URLs. *@
+
+<link rel="canonical" href="@CanonicalUrl" />
+<meta property="og:url" content="@CanonicalUrl" />
+<meta property="og:image" content="@ImageUrl" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="AKML SQL — AI-powered SQL development assistance for SSMS 22 and Visual Studio 2026." />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:image" content="@ImageUrl" />
+<meta name="theme-color" content="#0f172a" />
+
+@code {
+    /// <summary>Share card served from wwwroot; absolute, as Open Graph requires.</summary>
+    private const string ImagePath = "/img/og-card.png";
+
+    private string Root => Site.Value.CanonicalRoot;
+
+    /// <summary>
+    /// Absolute canonical URL for the current page: the configured host plus the request path,
+    /// with the query string dropped (<c>?filter=</c> on /docs produces filtered views of one
+    /// page, not distinct pages) and a trailing slash trimmed so "/docs/" and "/docs" agree.
+    /// </summary>
+    private string CanonicalUrl
+    {
+        get
+        {
+            var path = "/" + Nav.ToBaseRelativePath(Nav.Uri);
+            var end = path.IndexOfAny(['?', '#']);
+            if (end >= 0)
+            {
+                path = path[..end];
+            }
+
+            if (path.Length > 1)
+            {
+                path = path.TrimEnd('/');
+            }
+
+            return Root + path;
+        }
+    }
+
+    private string ImageUrl => Root + ImagePath;
+}

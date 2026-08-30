@@ -1,34 +1,18 @@
 {
-    "generatedAt":  "2026-08-28T21:44:51Z",
+    "generatedAt":  "2026-08-30T02:36:25Z",
     "docs":  {
                  "analysis-rules.md":  {
                                            "added":  "2026-03-24",
                                            "updated":  "2026-06-25"
                                        },
-                 "architecture.md":  {
-                                         "added":  "2026-03-24",
-                                         "updated":  "2026-07-22"
-                                     },
                  "configuration.md":  {
                                           "added":  "2026-03-24",
                                           "updated":  "2026-07-16"
                                       },
-                 "deployment.md":  {
-                                       "added":  "2026-03-24",
-                                       "updated":  "2026-05-29"
-                                   },
                  "formatting.md":  {
                                        "added":  "2026-03-24",
                                        "updated":  "2026-05-22"
                                    },
-                 "ipc-api.md":  {
-                                    "added":  "2026-03-24",
-                                    "updated":  "2026-07-22"
-                                },
-                 "m3-security.md":  {
-                                        "added":  "2026-05-27",
-                                        "updated":  "2026-05-30"
-                                    },
                  "topics/ai-assistance.md":  {
                                                  "added":  "2026-08-29",
                                                  "updated":  "2026-08-29"
@@ -68,10 +52,6 @@
                  "topics/troubleshooting.md":  {
                                                    "added":  "2026-08-29",
                                                    "updated":  "2026-08-29"
-                                               },
-                 "use-cases.md":  {
-                                      "added":  "2026-03-24",
-                                      "updated":  "2026-04-01"
-                                  }
+                                               }
              }
 }

@@ -83,7 +83,12 @@ try {
     Set-Content -Path $offline -Value '<!doctype html><title>Deploying</title><p>Deploying -- back in a few seconds.</p>' -Encoding UTF8
     Start-Sleep -Seconds 3
     Log "robocopy mirror -> $DeployPath"
-    & robocopy $staging $DeployPath /MIR /R:2 /W:2 /NFL /NDL /NJH /NJS /NP | Out-Null
+    # /MIR deletes destination files absent from the source, so anything placed on the server by
+    # hand is erased on every deploy (OPS-002 -- this is what kept wiping the admin configuration).
+    # Secrets now live in the app pool's environment, but keep these excluded so a hand-written
+    # override survives, and never mirror the Development settings onto a production box (OPS-003).
+    $mirrorExclusions = @('appsettings.Production.json', 'appsettings.Development.json', 'app_offline.htm')
+    & robocopy $staging $DeployPath /MIR /XF $mirrorExclusions /R:2 /W:2 /NFL /NDL /NJH /NJS /NP | Out-Null
     if ($LASTEXITCODE -gt 7) { throw "robocopy failed ($LASTEXITCODE)" }
     Remove-Item $offline -Force -ErrorAction SilentlyContinue
     Remove-Item $staging -Recurse -Force
@@ -96,6 +101,35 @@ try {
     }
     Set-ItemProperty "IIS:\AppPools\$AppPoolName" -Name managedRuntimeVersion -Value ''
     Set-ItemProperty "IIS:\AppPools\$AppPoolName" -Name startMode -Value 'AlwaysRunning'
+
+    # App pool environment (OPS-001): the admin password hash lives here, not in a file under the
+    # deploy path, so the robocopy mirror above can never erase it. This deploy never sets the
+    # hash -- it only pins the environment name and reports whether the hash is present.
+    $envFilter = "system.applicationHost/applicationPools/add[@name='$AppPoolName']/environmentVariables"
+    function Set-PoolEnv {
+        param([string] $Name, [string] $Value)
+        $existing = Get-WebConfiguration -pspath 'MACHINE/WEBROOT/APPHOST' -filter "$envFilter/add[@name='$Name']"
+        if ($existing) {
+            Set-WebConfigurationProperty -pspath 'MACHINE/WEBROOT/APPHOST' `
+                -filter "$envFilter/add[@name='$Name']" -name 'value' -value $Value
+        }
+        else {
+            Add-WebConfigurationProperty -pspath 'MACHINE/WEBROOT/APPHOST' -filter $envFilter `
+                -name '.' -value @{ name = $Name; value = $Value }
+        }
+    }
+    Set-PoolEnv -Name 'ASPNETCORE_ENVIRONMENT' -Value 'Production'
+
+    $hashVar = Get-WebConfiguration -pspath 'MACHINE/WEBROOT/APPHOST' -filter "$envFilter/add[@name='Admin__PasswordHash']"
+    if ($hashVar -and $hashVar.value) {
+        Log 'Admin__PasswordHash present on the app pool -- admin portal configured'
+    }
+    else {
+        Log 'WARNING: Admin__PasswordHash is NOT set -- the admin portal will show "not configured".'
+        Log '         Generate one:  .\AkmlSql.Site.exe --hash-password'
+        Log "         Then set it:   Add-WebConfigurationProperty -pspath 'MACHINE/WEBROOT/APPHOST' -filter `"$envFilter`" -name '.' -value @{name='Admin__PasswordHash';value='<hash>'}"
+    }
+
     $poolIdentity = "IIS AppPool\$AppPoolName"
     Log "Granting $poolIdentity read access to $DeployPath"
     & icacls $DeployPath /grant "${poolIdentity}:(OI)(CI)RX" /T /Q | Out-Null
@@ -171,10 +205,21 @@ try {
     }
 
     # --- 5. Smoke test --------------------------------------------------------
+    # /health reports which startup singleton is unhealthy, so a failed deploy says why (OPS-004).
     Start-Sleep -Seconds 3
-    $code = & curl.exe -sL -o NUL -w '%{http_code}' -H "Host: $HostName" 'http://localhost/'
-    Log "smoke http://localhost (Host: $HostName, redirects followed) -> $code"
-    if ($code -ne '200') { throw "smoke test failed: HTTP $code" }
+    $health = & curl.exe -sL -w '\n%{http_code}' -H "Host: $HostName" 'http://localhost/health'
+    $healthLines = $health -split "`n"
+    $code = $healthLines[-1].Trim()
+    $healthBody = ($healthLines[0..($healthLines.Count - 2)] -join '').Trim()
+    Log "smoke http://localhost/health (Host: $HostName) -> $code $healthBody"
+    if ($code -ne '200') { throw "smoke test failed: /health returned HTTP $code" }
+    if ($healthBody -match '"status"\s*:\s*"degraded"') {
+        Log 'WARNING: /health reports degraded -- check the docs corpus and releases.json'
+    }
+
+    $homeCode = & curl.exe -sL -o NUL -w '%{http_code}' -H "Host: $HostName" 'http://localhost/'
+    Log "smoke http://localhost (Host: $HostName, redirects followed) -> $homeCode"
+    if ($homeCode -ne '200') { throw "smoke test failed: home page returned HTTP $homeCode" }
     $httpsBound = [bool] (Get-WebBinding -Name $SiteName -Protocol https -HostHeader $HostName -Port 443 -ErrorAction SilentlyContinue)
     if ($httpsBound) {
         $scode = & curl.exe -sk -o NUL -w '%{http_code}' --resolve "${HostName}:443:127.0.0.1" "https://$HostName/"

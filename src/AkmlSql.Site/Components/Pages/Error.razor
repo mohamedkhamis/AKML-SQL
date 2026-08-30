@@ -1,35 +1,51 @@
 @page "/Error"
 @using System.Diagnostics
 
-<PageTitle>Error</PageTitle>
+@* MISC-001: this page used to carry the scaffolded template copy — "Swapping to Development
+   environment will display more detailed information", "The Development environment shouldn't be
+   enabled for deployed applications". Those are instructions for a developer, shown to a visitor
+   who just hit a 500. It now matches the tone and layout of /not-found: apologise, offer the way
+   out, and surface the request id so a report can be tied to a log entry. *@
 
-@* C11: the template's "text-danger" class doesn't exist in this site's CSS — plain text. *@
-<h1>Error.</h1>
-<h2>An error occurred while processing your request.</h2>
+<PageTitle>Something went wrong — AKML SQL</PageTitle>
+<HeadContent>
+    <meta name="robots" content="noindex, nofollow" />
+</HeadContent>
 
-@if (ShowRequestId)
-{
-    <p>
-        <strong>Request ID:</strong> <code>@RequestId</code>
+<div class="page-body container">
+    <header class="page-header">
+        <p class="eyebrow">Error</p>
+        <h1>Something went wrong</h1>
+        <p class="page-intro">
+            The page could not be loaded. The problem has been logged — trying again often works.
+        </p>
+    </header>
+
+    <p class="cta-row">
+        <a class="btn btn-primary" href="/">Back to home</a>
+        <a class="btn btn-secondary" href="/docs">Browse documentation</a>
     </p>
-}
 
-<h3>Development Mode</h3>
-<p>
-    Swapping to <strong>Development</strong> environment will display more detailed information about the error that occurred.
-</p>
-<p>
-    <strong>The Development environment shouldn't be enabled for deployed applications.</strong>
-    It can result in displaying sensitive information from exceptions to end users.
-    For local debugging, enable the <strong>Development</strong> environment by setting the <strong>ASPNETCORE_ENVIRONMENT</strong> environment variable to <strong>Development</strong>
-    and restarting the app.
-</p>
+    @if (ShowRequestId)
+    {
+        <div class="hash-block error-request-id">
+            <h2>Request ID</h2>
+            <p class="hash-hint">
+                Quote this when
+                <a href="https://github.com/mohamedkhamis/AKML-SQL/issues" target="_blank" rel="noopener noreferrer">reporting the problem</a>
+                — it identifies this exact request in the server log.
+            </p>
+            <code>@RequestId</code>
+        </div>
+    }
+</div>
 
-@code{
+@code {
     [CascadingParameter]
     private HttpContext? HttpContext { get; set; }
 
     private string? RequestId { get; set; }
+
     private bool ShowRequestId => !string.IsNullOrEmpty(RequestId);
 
     protected override void OnInitialized() =>

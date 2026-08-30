@@ -24,27 +24,50 @@
 
     var mini = null;
     var lastTerm = null;
+    var loading = null;
 
-    fetch('/search-index.json')
-        .then(function (response) {
-            return response.ok ? response.json() : Promise.reject(new Error('search-index.json: ' + response.status));
-        })
-        .then(function (data) {
-            mini = new MiniSearch({
-                idField: 'url',
-                fields: ['title', 'headings', 'body'],
-                storeFields: ['title', 'url'],
-                searchOptions: { prefix: true, fuzzy: 0.2 }
+    // PERF-002: the index used to be fetched on every docs page load, before the visitor had shown
+    // any intent to search. It is now loaded on first contact with the search box (focus, or a
+    // keystroke if focus was somehow missed), so a reader who never searches never pays for it.
+    // The box is revealed immediately — it is a real control the moment it is focusable, and the
+    // first query resolves against the in-flight fetch rather than being dropped.
+    document.documentElement.classList.add('js');
+
+    function ensureIndex() {
+        if (loading) {
+            return loading;
+        }
+
+        loading = fetch('/search-index.json')
+            .then(function (response) {
+                return response.ok ? response.json() : Promise.reject(new Error('search-index.json: ' + response.status));
+            })
+            .then(function (data) {
+                mini = new MiniSearch({
+                    idField: 'url',
+                    fields: ['title', 'headings', 'body'],
+                    storeFields: ['title', 'url'],
+                    searchOptions: { prefix: true, fuzzy: 0.2 }
+                });
+                mini.addAll(data.documents || []);
+            })
+            .catch(function () {
+                // Search unavailable (offline, index missing) — fall back to the no-JS title
+                // filter by undoing the reveal above.
+                document.documentElement.classList.remove('js');
+                var box = document.getElementById(BOX_ID);
+                if (box) { box.hidden = true; }
             });
-            mini.addAll(data.documents || []);
-            // Reveal the search box now that an index is ready to serve it.
-            document.documentElement.classList.add('js');
-        })
-        .catch(function () {
-            // Search unavailable (offline, index missing) — no-JS title filter still works.
-            var box = document.getElementById(BOX_ID);
-            if (box) { box.hidden = true; }
-        });
+
+        return loading;
+    }
+
+    // Warm the index as soon as the visitor reaches for the box, so the first keystroke is instant.
+    document.addEventListener('focusin', function (event) {
+        if (event.target && event.target.id === INPUT_ID) {
+            ensureIndex();
+        }
+    });
 
     function currentResults() {
         return document.getElementById(RESULTS_ID);
@@ -85,7 +108,7 @@
     }
 
     document.addEventListener('input', function (event) {
-        if (!mini || !event.target || event.target.id !== INPUT_ID) {
+        if (!event.target || event.target.id !== INPUT_ID) {
             return;
         }
 
@@ -100,7 +123,23 @@
             return;
         }
 
-        showResults(mini.search(term).slice(0, MAX_RESULTS));
+        // The index may still be in flight (a fast typist, or focus never fired). Resolve against
+        // it, then re-read the field: results must reflect what is in the box now, not the term
+        // that started the fetch.
+        ensureIndex().then(function () {
+            if (!mini) {
+                return;
+            }
+
+            var input = document.getElementById(INPUT_ID);
+            var current = input ? input.value.trim() : term;
+            if (current.length < MIN_TERM) {
+                clearResults();
+                return;
+            }
+
+            showResults(mini.search(current).slice(0, MAX_RESULTS));
+        });
     });
 
     document.addEventListener('keydown', function (event) {

@@ -4,13 +4,35 @@ using AkmlSql.Site.Components;
 using AkmlSql.Site.Docs;
 using AkmlSql.Site.Releases;
 using AkmlSql.Site.Seo;
+using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Options;
+
+// OPS-001/SEC-001: `AkmlSql.Site --hash-password` generates the value for the server's
+// Admin__PasswordHash environment variable. Deliberately part of this executable rather than a
+// side script, so the hash is always produced by the exact code path that verifies it.
+if (args.Contains("--hash-password", StringComparer.OrdinalIgnoreCase))
+{
+    return AdminPasswordTool.Run();
+}
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddRazorComponents();
+
+// PERF-001: MapStaticAssets pre-compresses css/js at build time, but everything the app generates
+// itself -- every SSR page, search-index.json, sitemap.xml -- was going out raw (a docs page was
+// 35 KB uncompressed). Compression is enabled for HTTPS too: the site serves no attacker-injected
+// content reflected into responses, so the BREACH precondition does not apply here.
+builder.Services.AddResponseCompression(options =>
+{
+    options.EnableForHttps = true;
+    options.Providers.Add<BrotliCompressionProvider>();
+    options.Providers.Add<GzipCompressionProvider>();
+    options.MimeTypes = ResponseCompressionDefaults.MimeTypes.Concat(
+        ["application/json", "application/xml", "image/svg+xml"]);
+});
 
 // --- Composition root (spec 034) ---------------------------------------------
 // Story services register here; nothing else belongs in Program.cs.
@@ -19,6 +41,12 @@ builder.Services.AddRazorComponents();
 // T012 (US1): download page feed, loaded once from wwwroot/releases.json.
 // Missing/invalid manifest resolves to the friendly-fallback state per contracts/releases-json.md.
 builder.Services.AddSingleton(sp => ReleasesManifest.Load(sp.GetRequiredService<IWebHostEnvironment>()));
+
+// DL-001: the download page checks the advertised installer is actually on disk before offering
+// it. Not a singleton snapshot -- files are dropped into the folder between deploys, so presence
+// is resolved per render.
+builder.Services.AddScoped(sp => new ReleaseAvailability(
+    sp.GetRequiredService<IOptions<DownloadsOptions>>().Value.Folder));
 
 // T023 (US2): docs catalog + render + search index, built ONCE at startup and cached
 // (contracts/docs-content.md: no per-request parsing). Config binding: "Docs" section.
@@ -63,6 +91,11 @@ var app = builder.Build();
 _ = app.Services.GetRequiredService<ReleasesManifest>();
 _ = app.Services.GetRequiredService<DocsContentService>();
 _ = app.Services.GetRequiredService<AnalyticsStore>();
+
+// PERF-001: compression wraps everything downstream, so it must be registered before the
+// terminal middleware that produces the bodies. It runs after the header middleware below only
+// in registration order -- headers are still written on every response either way.
+app.UseResponseCompression();
 
 // S2: security response headers on EVERY response (incl. error pages, so register first).
 // Static SSR with no inline scripts/styles (the theme boot lives in js/theme-boot.js), so a
@@ -123,10 +156,45 @@ app.MapGet("/search-index.json", (HttpContext http, DocsContentService docs) =>
     return Results.Text(docs.SearchIndexJson, "application/json");
 });
 
+// OPS-004: liveness + startup-state probe for the deploy smoke test and IIS monitoring. Reports
+// which startup singleton is unhealthy instead of just proving a page renders; never cached.
+app.MapGet("/health", (
+    HttpContext http,
+    DocsContentService docs,
+    ReleasesManifest releases,
+    AnalyticsStore analytics,
+    IOptions<AdminOptions> admin) =>
+{
+    http.Response.Headers.CacheControl = "no-store";
+
+    var report = new
+    {
+        status = docs.IsEmpty || !releases.IsAvailable ? "degraded" : "ok",
+        docs = docs.Documents.Count,
+        releases = releases.Releases.Count,
+        latestVersion = releases.Latest?.Version,
+        analyticsDatabase = File.Exists(analytics.DatabasePath),
+        adminConfigured = admin.Value.IsConfigured,
+    };
+
+    // Degraded is still a 200: the site serves fine without a release manifest, and a probe that
+    // fails the deploy for a missing installer would block publishing the fix for it.
+    return Results.Json(report);
+});
+
 app.MapGet("/sitemap.xml", (HttpContext http, DocsContentService docs, IOptions<SiteOptions> site) =>
 {
     http.Response.Headers.CacheControl = "public, max-age=3600";
     return Results.Text(Sitemap.Build(site.Value.BaseUrl, docs.Documents), "application/xml");
+});
+
+// SEO-002: generated, not a static file — the checked-in copy advertised a sitemap on a host the
+// site does not serve, and nothing could catch the drift. Registered before MapStaticAssets so it
+// wins over any stale wwwroot/robots.txt left behind by an older deploy.
+app.MapGet("/robots.txt", (HttpContext http, IOptions<SiteOptions> site) =>
+{
+    http.Response.Headers.CacheControl = "public, max-age=3600";
+    return Results.Text(RobotsTxt.Build(site.Value.BaseUrl), "text/plain");
 });
 
 app.MapStaticAssets();
@@ -138,3 +206,6 @@ AdminEndpoints.Map(app);
 app.MapRazorComponents<App>();
 
 app.Run();
+
+// Explicit exit code: the --hash-password branch above makes this entry point int-returning.
+return 0;

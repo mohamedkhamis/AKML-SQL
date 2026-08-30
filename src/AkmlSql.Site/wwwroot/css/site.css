@@ -1644,3 +1644,22 @@ html[data-akml-theme="light"] .card:hover {
 .bar-h-90 { height: 90%; }
 .bar-h-95 { height: 95%; }
 .bar-h-100 { height: 100%; }
+
+/* DOC-003: "Last updated" line under a document title — quiet, sits between the H1 and the
+   article body without competing with either. */
+.doc-meta {
+    margin: calc(-1 * var(--akml-scalar-spacing-xs)) 0 var(--akml-scalar-spacing-m);
+    color: var(--akml-text-secondary);
+    font-size: 0.85rem;
+}
+
+/* MISC-001: request-id block on the error page reuses the .hash-block monospace treatment. */
+.error-request-id {
+    max-width: 65ch;
+    margin-top: clamp(2rem, 5vw, 3rem);
+}
+
+.error-request-id h2 {
+    margin-top: 0;
+    font-size: 1.05rem;
+}

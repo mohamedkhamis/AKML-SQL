@@ -10,6 +10,9 @@
          via HeadContent. -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="AKML SQL" />
+    @* SEO-001: canonical URL, og:url, share card, Twitter card, theme colour. Here rather than in
+       a layout because HeadContent from a layout is replaced by the page's own (see SeoHead). *@
+    <SeoHead />
     <!-- Theme CSS (generated from docs/theme-tokens.json -- never hand-edit). Dark is the
          site default (FR-009); the external boot script below swaps this link to the stored
          override before first paint so there is no flash of the wrong theme. Pattern:

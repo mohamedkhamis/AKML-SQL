@@ -12,9 +12,18 @@ namespace AkmlSql.Site.Tests.Components;
 /// and the friendly fallback with the repo /releases/latest link when the manifest is
 /// broken (contracts/releases-json.md failure behavior).
 /// </summary>
-public sealed class DownloadPageTests
+public sealed class DownloadPageTests : IDisposable
 {
     private const string RepoLatestReleasesUrl = "https://github.com/mohamedkhamis/AKML-SQL/releases/latest";
+
+    /// <summary>
+    /// DL-001: the page now only offers a release whose installer is actually in the downloads
+    /// folder, so these tests need a real folder. Files are created on demand by
+    /// <see cref="NewCtx"/> from the manifest under test.
+    /// </summary>
+    private readonly TempDirectory _downloads = new();
+
+    public void Dispose() => _downloads.Dispose();
 
     private static Release MakeRelease(
         string version,
@@ -50,10 +59,25 @@ public sealed class DownloadPageTests
             ],
             product: "AKML SQL");
 
-    private static BunitContext NewCtx(ReleasesManifest manifest)
+    /// <summary>
+    /// Renders the page against a downloads folder containing every locally hosted installer the
+    /// manifest names, unless <paramref name="createFiles"/> is false — which is how the DL-001
+    /// "advertised but missing" case is exercised.
+    /// </summary>
+    private BunitContext NewCtx(ReleasesManifest manifest, bool createFiles = true)
     {
+        if (createFiles)
+        {
+            foreach (var release in manifest.Releases.Where(ReleaseAvailability.IsLocal))
+            {
+                var name = release.DownloadUrl[ReleaseAvailability.LocalPrefix.Length..];
+                File.WriteAllText(Path.Combine(_downloads.Path, name), "installer payload");
+            }
+        }
+
         var ctx = new BunitContext();
         ctx.Services.AddSingleton(manifest);
+        ctx.Services.AddSingleton(new ReleaseAvailability(_downloads.Path));
         return ctx;
     }
 
@@ -143,13 +167,71 @@ public sealed class DownloadPageTests
     }
 
     [Fact]
+    public void AdvertisedButMissingInstaller_FallsBackInsteadOfOfferingADeadLink()
+    {
+        // DL-001: a manifest entry is not proof the file exists. Offering a download that 404s is
+        // the worst failure this page has, so an absent installer must degrade to the fallback.
+        using var ctx = NewCtx(TwoReleaseManifest(), createFiles: false);
+
+        var cut = ctx.Render<Download>();
+
+        Assert.Contains("No public release available yet", cut.Markup, StringComparison.OrdinalIgnoreCase);
+        Assert.NotNull(cut.Find($"a[href='{RepoLatestReleasesUrl}']"));
+        Assert.Empty(cut.FindAll("a[href^='/dl/']"));
+    }
+
+    [Fact]
+    public void PreviousRelease_WithAMissingInstaller_IsOmittedFromTheHistory()
+    {
+        // The latest release is present, an older one has been cleaned up: the page still works
+        // and simply does not list the release it can no longer serve.
+        var manifest = TwoReleaseManifest();
+        using var ctx = NewCtx(manifest);
+        File.Delete(Path.Combine(_downloads.Path, "AKMLSQLSetup-1.0.0.exe"));
+
+        var cut = ctx.Render<Download>();
+
+        Assert.NotNull(cut.Find("a[href='/dl/AKMLSQLSetup-1.1.0.exe']"));
+        Assert.Empty(cut.FindAll("a[href='/dl/AKMLSQLSetup-1.0.0.exe']"));
+        Assert.DoesNotContain("Previous releases", cut.Markup);
+    }
+
+    [Fact]
+    public void LatestReleaseCard_ShowsTheDownloadSizeReadFromTheFile()
+    {
+        // DL-003: size is read from disk, not declared in the manifest, so it cannot go stale.
+        using var ctx = NewCtx(TwoReleaseManifest());
+
+        var cut = ctx.Render<Download>();
+
+        Assert.Contains("Download size", cut.Markup);
+        Assert.Contains("17 B", cut.Markup); // "installer payload"
+    }
+
+    [Fact]
+    public void RemoteRelease_IsOfferedWithoutALocalFile()
+    {
+        // A release hosted elsewhere cannot be checked and must not be suppressed by DL-001.
+        var release = MakeRelease("1.3.0", "2026-08-29", new string('d', 64))
+            with { DownloadUrl = "https://example.com/assets/setup.exe" };
+        using var ctx = NewCtx(ReleasesManifest.Create([release]), createFiles: false);
+
+        var cut = ctx.Render<Download>();
+
+        Assert.NotNull(cut.Find("a[href='https://example.com/assets/setup.exe']"));
+        Assert.DoesNotContain("No public release available yet", cut.Markup);
+        // Size is unknown for a remote asset — better absent than guessed.
+        Assert.DoesNotContain("Download size", cut.Markup);
+    }
+
+    [Fact]
     public void DownloadLink_AbsoluteUrl_IsNotRewritten()
     {
         // Only site-relative downloads/... URLs go through the /dl tracker; absolute
         // http(s) URLs (e.g. GitHub-hosted assets) are rendered as-is.
         var release = MakeRelease("1.2.0", "2026-08-28", "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc")
             with { DownloadUrl = "https://example.com/assets/setup.exe" };
-        using var ctx = NewCtx(ReleasesManifest.Create([release]));
+        using var ctx = NewCtx(ReleasesManifest.Create([release]), createFiles: false);
 
         var cut = ctx.Render<Download>();
 

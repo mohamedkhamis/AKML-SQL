@@ -93,6 +93,14 @@ public sealed class Document
     /// </summary>
     public DocBadge Badge { get; set; } = DocBadge.None;
 
+    /// <summary>
+    /// Git added/updated dates from docs-metadata.json, or null when the document has no entry.
+    /// DOC-003/SEO-003: these were previously computed, used to pick <see cref="Badge"/>, and then
+    /// discarded — they now also drive the "Last updated" line on the page and the sitemap's
+    /// <c>lastmod</c>.
+    /// </summary>
+    public DocDates? Dates { get; set; }
+
     /// <summary>Markdig-rendered, ColorCode-highlighted, sanitized HTML; cached at startup.</summary>
     public string HtmlContent { get; set; } = "";
 

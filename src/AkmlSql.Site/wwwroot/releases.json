@@ -9,7 +9,7 @@
       "downloadUrl": "downloads/AKMLSQLSetup-1.26.0828.1939.exe",
       "sha256Hash": "8e90df20d065c282464d227fced53396c236575fc3ece6a8be7023a742fc8adc",
       "releaseNotesUrl": "https://github.com/mohamedkhamis/AKML-SQL/releases",
-      "notesSummary": "IntelliSense, formatting, static analysis, refactoring, snippets, SQL history, and AI assistance for SSMS 22 and Visual Studio 2026. 66 MB installer.",
+      "notesSummary": "IntelliSense, formatting, static analysis, refactoring, snippets, SQL history, and AI assistance for SSMS 22 and Visual Studio 2026.",
       "minimumOsVersion": "10.0"
     }
   ]

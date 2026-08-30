@@ -84,7 +84,9 @@ public sealed class MainLayoutTests
         Assert.Contains(cut.FindAll(".site-footer-heading"), h => h.TextContent.Trim() == "Docs");
         Assert.Contains(cut.FindAll(".site-footer-heading"), h => h.TextContent.Trim() == "Legal & source");
         // Docs column links real documents; Legal column keeps the FR-011 repo/license links.
-        Assert.NotNull(cut.Find(".site-footer a[href='/docs/architecture']"));
+        // DOC-001: architecture.md is no longer published, so the column leads with the guide a
+        // first-time visitor actually wants. FooterDocLinksTests checks every slug here resolves.
+        Assert.NotNull(cut.Find(".site-footer a[href='/docs/topics/getting-started']"));
         Assert.NotNull(cut.Find(".site-footer a[href='https://github.com/mohamedkhamis/AKML-SQL/blob/master/LICENSE.txt']"));
     }
 }

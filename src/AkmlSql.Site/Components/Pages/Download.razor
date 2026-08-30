@@ -2,6 +2,7 @@
 @using System.Globalization
 @using AkmlSql.Site.Releases
 @inject ReleasesManifest Manifest
+@inject ReleaseAvailability Availability
 
 @* Spec 034 T016 (US1): FR-003 download page driven by wwwroot/releases.json via the
    singleton ReleasesManifest (T012). Failure behavior per contracts/releases-json.md:
@@ -25,7 +26,10 @@
     </p>
 </header>
 
-@if (Manifest.IsAvailable && Manifest.Latest is { } latest)
+@* DL-001: an entry in releases.json is not proof the installer exists. If the advertised file is
+   missing from the downloads folder, fall through to the same friendly fallback used when there is
+   no manifest at all — a broken primary CTA is worse than an honest "not available yet". *@
+@if (Manifest.IsAvailable && Manifest.Latest is { } latest && Availability.IsDownloadable(latest))
 {
     <section class="release-card release-card-latest" aria-labelledby="latest-release-heading">
         <h2 id="latest-release-heading">Latest release: @latest.Version</h2>
@@ -47,13 +51,20 @@
                 @* U23: "Windows 10.0 or later" reads like an API version — trim a trailing ".0". *@
                 <dd>Windows @DisplayOsVersion(latest.MinimumOsVersion) or later</dd>
             }
+            @* DL-003: download size is something people check before clicking, so it belongs here
+               rather than buried in the notes prose. Read from the file, so it cannot be stale. *@
+            @if (Availability.DisplaySize(latest) is { } size)
+            {
+                <dt>Download size</dt>
+                <dd>@size</dd>
+            }
         </dl>
         @if (latest.NotesSummary is not null)
         {
             <p>@latest.NotesSummary</p>
         }
         <p class="cta-row">
-            <a class="btn btn-primary" href="@TrackedDownloadUrl(latest.DownloadUrl)">Download AKML SQL @latest.Version</a>
+            <a class="btn btn-primary" href="@ReleaseAvailability.TrackedUrl(latest)">Download AKML SQL @latest.Version</a>
             @if (latest.ReleaseNotesUrl is not null)
             {
                 <a class="btn btn-secondary" href="@latest.ReleaseNotesUrl" target="_blank" rel="noopener noreferrer">Release notes</a>
@@ -75,12 +86,13 @@
     @* U22: static SSR renders this into the page body; script-src 'self' allows it. *@
     <script src="@Assets["js/copy-hash.js"]" defer></script>
 
-    @if (Manifest.Releases.Count > 1)
+    @* DL-001: only list previous releases whose installer is still present. *@
+    @if (PreviousReleases.Count > 0)
     {
         <section class="release-history" aria-labelledby="previous-releases-heading">
             <h2 id="previous-releases-heading">Previous releases</h2>
             <ul class="release-list">
-                @foreach (var release in Manifest.Releases.Skip(1))
+                @foreach (var release in PreviousReleases)
                 {
                     <li class="release-card">
                         <h3>@release.Version</h3>
@@ -88,7 +100,7 @@
                             Released <time datetime="@release.ReleasedAt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)">@release.ReleasedAt.ToString("MMMM d, yyyy", CultureInfo.InvariantCulture)</time>
                             · Hosts: @string.Join(", ", release.SupportedHosts)
                         </p>
-                        <p><a href="@TrackedDownloadUrl(release.DownloadUrl)">Download installer</a></p>
+                        <p><a href="@ReleaseAvailability.TrackedUrl(release)">Download installer</a></p>
                         <details class="hash-block">
                             <summary>SHA-256</summary>
                             <code>@release.Sha256Hash</code>
@@ -122,10 +134,11 @@ else
         version.EndsWith(".0", StringComparison.Ordinal) ? version[..^2] : version;
 
     /// <summary>
-    /// Routes site-relative <c>downloads/...</c> manifest URLs through the tracked
-    /// <c>/dl/{file}</c> endpoint so downloads are counted; absolute http(s) URLs
-    /// (e.g. GitHub-hosted assets) are left untouched.
+    /// DL-001: older releases whose installer is still present in the downloads folder. An entry
+    /// whose file has been cleaned up is dropped rather than offered as a dead link.
+    /// URL construction lives in ReleaseAvailability.TrackedUrl so the page and the availability
+    /// check agree on what "served locally" means.
     /// </summary>
-    private static string TrackedDownloadUrl(string url) =>
-        url.StartsWith("downloads/", StringComparison.Ordinal) ? "/dl/" + url["downloads/".Length..] : url;
+    private List<Release> PreviousReleases =>
+        Manifest.Releases.Skip(1).Where(Availability.IsDownloadable).ToList();
 }

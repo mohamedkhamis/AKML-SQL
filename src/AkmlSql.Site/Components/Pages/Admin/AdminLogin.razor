@@ -31,7 +31,15 @@
         }
         else
         {
-            @if (Error is not null)
+            @if (IsThrottled)
+            {
+                @* SEC-002: the attempt was refused without being evaluated. Say how long the wait is
+                   rather than repeating "invalid password", which would be untrue and confusing. *@
+                <p class="admin-error" role="alert">
+                    Too many failed attempts. Try again in @RetryDescription.
+                </p>
+            }
+            else if (Error is not null)
             {
                 <p class="admin-error" role="alert">Invalid password. Please try again.</p>
             }
@@ -59,7 +67,23 @@
     [Parameter, SupplyParameterFromQuery(Name = "error")]
     public string? Error { get; set; }
 
+    /// <summary>Seconds until the next attempt is allowed, set by the throttled login redirect.</summary>
+    [Parameter, SupplyParameterFromQuery(Name = "retry")]
+    public int? Retry { get; set; }
+
     private string? RequestToken { get; set; }
+
+    /// <summary>True when this render follows a throttled (not merely failed) sign-in attempt.</summary>
+    private bool IsThrottled => string.Equals(Error, "throttled", StringComparison.Ordinal);
+
+    /// <summary>Human wait text — "45 seconds" / "2 minutes"; falls back when no value was supplied.</summary>
+    private string RetryDescription => Retry switch
+    {
+        null or <= 0 => "a moment",
+        < 60 => $"{Retry} seconds",
+        < 120 => "a minute",
+        _ => $"{Retry / 60} minutes",
+    };
 
     protected override void OnInitialized()
     {

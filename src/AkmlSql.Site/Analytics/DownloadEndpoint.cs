@@ -87,21 +87,47 @@ public static class DownloadEndpoint
         }
 
         var fileName = Path.GetFileName(fullPath);
-        try
+
+        // DL-002: a range request is a resumed transfer, not a new download — counting it would
+        // inflate the metric every time a 66 MB installer drops its connection.
+        var isRangeRequest = http.Request.Headers.ContainsKey("Range");
+        if (!isRangeRequest)
         {
-            sink.EnqueueDownload(new DownloadInfo(
-                DateTimeOffset.UtcNow,
-                fileName,
-                HttpRequestFacts.ReferrerHost(http.Request),
-                UserAgentBuckets.FromUserAgent(http.Request.Headers.UserAgent),
-                HttpRequestFacts.ClientIp(http)));
-        }
-        catch
-        {
-            // Metrics must never break the download.
+            try
+            {
+                sink.EnqueueDownload(new DownloadInfo(
+                    DateTimeOffset.UtcNow,
+                    fileName,
+                    HttpRequestFacts.ReferrerHost(http.Request),
+                    UserAgentBuckets.FromUserAgent(http.Request.Headers.UserAgent),
+                    HttpRequestFacts.ClientIp(http)));
+            }
+            catch
+            {
+                // Metrics must never break the download.
+            }
         }
 
         http.Response.Headers.CacheControl = "no-cache";
-        return Results.File(stream, "application/octet-stream", fileDownloadName: fileName);
+
+        // DL-002: enableRangeProcessing + a last-modified stamp, so a dropped connection resumes
+        // instead of restarting from zero. Without them the whole installer is re-fetched.
+        DateTimeOffset? lastModified = null;
+        try
+        {
+            lastModified = new DateTimeOffset(File.GetLastWriteTimeUtc(fullPath), TimeSpan.Zero);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Serve without the validator rather than failing the download.
+        }
+
+        return Results.File(
+            stream,
+            "application/octet-stream",
+            fileDownloadName: fileName,
+            lastModified: lastModified,
+            entityTag: null,
+            enableRangeProcessing: true);
     }
 }

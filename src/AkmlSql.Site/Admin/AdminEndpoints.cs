@@ -1,4 +1,6 @@
+using System.Globalization;
 using System.Security.Claims;
+using AkmlSql.Site.Analytics;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Options;
 
@@ -11,6 +13,9 @@ namespace AkmlSql.Site.Admin;
 /// </summary>
 public static class AdminEndpoints
 {
+    /// <summary>Logger category for the sign-in audit trail (SEC-003).</summary>
+    public const string AuditLoggerName = "AkmlSql.Site.Admin.Login";
+
     /// <summary>Registers <c>POST /admin/login</c> and <c>POST /admin/logout</c>.</summary>
     public static void Map(IEndpointRouteBuilder endpoints)
     {
@@ -24,33 +29,56 @@ public static class AdminEndpoints
         HttpContext http,
         IFormCollection form,
         IOptions<AdminOptions> options,
-        AdminLoginThrottle throttle)
+        AdminLoginThrottle throttle,
+        ILoggerFactory loggerFactory)
     {
-        var ip = AkmlSql.Site.Analytics.HttpRequestFacts.ClientIp(http) ?? "";
+        var logger = loggerFactory.CreateLogger(AuditLoggerName);
+        var ip = HttpRequestFacts.ClientIp(http) ?? "";
 
-        // Throttled IPs wait before their attempt is even evaluated.
-        var delay = throttle.GetDelay(ip);
-        if (delay > TimeSpan.Zero)
+        // SEC-002: a locked-out IP is rejected immediately. The previous version awaited the
+        // back-off inside the request, which let attackers park connections for free.
+        //
+        // The rejection is a redirect carrying Retry-After rather than a bare 429: this endpoint
+        // backs a browser form, and the login page can explain the wait in the site's own chrome.
+        // A bare 429 has no body, so UseStatusCodePagesWithReExecute would render the "page not
+        // found" page at it — actively misleading. The security property is unchanged either way;
+        // the attempt is refused without doing any work.
+        var retryAfter = throttle.GetRetryAfter(ip);
+        if (retryAfter > TimeSpan.Zero)
         {
-            await Task.Delay(delay, http.RequestAborted);
+            var seconds = (int)Math.Ceiling(retryAfter.TotalSeconds);
+            logger.LogWarning(
+                "Admin sign-in throttled for {ClientIp}; {Failures} prior failures, retry after {RetryAfterSeconds}s.",
+                ip, throttle.GetFailureCount(ip), seconds);
+
+            http.Response.Headers.RetryAfter = seconds.ToString(CultureInfo.InvariantCulture);
+            return Results.Redirect("/admin/login?error=throttled&retry=" + seconds.ToString(CultureInfo.InvariantCulture));
         }
 
         var password = form["password"].ToString();
         if (options.Value.IsConfigured && AdminAuth.Verify(password, options.Value.PasswordHash))
         {
             throttle.Reset(ip);
+            logger.LogInformation("Admin sign-in succeeded for {ClientIp}.", ip);
+
             var identity = new ClaimsIdentity([new Claim(ClaimTypes.Name, "admin")], AdminAuth.Scheme);
             await http.SignInAsync(AdminAuth.Scheme, new ClaimsPrincipal(identity));
             return Results.Redirect("/admin");
         }
 
-        throttle.RecordFailure(ip);
+        var failures = throttle.RecordFailure(ip);
+        logger.LogWarning(
+            "Admin sign-in failed for {ClientIp}; {Failures} failure(s) in the current window. Portal configured: {Configured}.",
+            ip, failures, options.Value.IsConfigured);
+
         return Results.Redirect("/admin/login?error=1");
     }
 
-    private static async Task<IResult> HandleLogout(HttpContext http)
+    private static async Task<IResult> HandleLogout(HttpContext http, ILoggerFactory loggerFactory)
     {
         await http.SignOutAsync(AdminAuth.Scheme);
+        loggerFactory.CreateLogger(AuditLoggerName)
+            .LogInformation("Admin signed out from {ClientIp}.", HttpRequestFacts.ClientIp(http) ?? "");
         return Results.Redirect("/admin/login");
     }
 }

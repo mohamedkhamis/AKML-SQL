@@ -6,8 +6,11 @@ namespace AkmlSql.Site.Tests.Seo;
 
 /// <summary>
 /// Spec 034 T031 (SEO): sitemap.xml generation — static routes plus every docs route,
-/// absolute URLs from the configured base. No lastmod: the only available timestamp was the
-/// source file mtime (= checkout date after a fresh clone), which is misleading (C10).
+/// absolute URLs from the configured base.
+/// SEO-003: lastmod now comes from the git dates in docs-metadata.json. The original C10 note
+/// omitted it because the only timestamp available was the source file mtime (= checkout date
+/// after a fresh clone); that premise no longer holds. A document with no dates still gets no
+/// lastmod — an absent element is honest, a fabricated date is not.
 /// </summary>
 public sealed class SitemapTests
 {
@@ -44,11 +47,39 @@ public sealed class SitemapTests
     }
 
     [Fact]
-    public void Build_OmitsLastMod_Entirely()
+    public void Build_OmitsLastMod_ForDocumentsWithNoDates()
     {
         var xml = Sitemap.Build("https://akmlsql.com", [MakeDoc("architecture")]);
 
-        // C10: file mtime equals checkout date after a fresh clone — misleading, so dropped.
+        // No metadata entry -> no date to state. Never fabricate one.
         Assert.DoesNotContain("lastmod", xml);
+    }
+
+    [Fact]
+    public void Build_EmitsLastMod_FromTheDocumentGitDates()
+    {
+        var doc = MakeDoc("formatting");
+        doc.Dates = new DocDates(new DateOnly(2026, 3, 24), new DateOnly(2026, 7, 16));
+
+        var xml = Sitemap.Build("https://akmlsql.com", [doc]);
+
+        // The UPDATED date, not the added date — lastmod means "last changed".
+        Assert.Contains("<loc>https://akmlsql.com/docs/formatting</loc>", xml);
+        Assert.Contains("<lastmod>2026-07-16</lastmod>", xml);
+        Assert.DoesNotContain("2026-03-24", xml);
+    }
+
+    [Fact]
+    public void Build_DatesTheHomeAndDocsIndex_FromTheNewestDocument()
+    {
+        var older = MakeDoc("configuration");
+        older.Dates = new DocDates(new DateOnly(2026, 1, 1), new DateOnly(2026, 5, 29));
+        var newer = MakeDoc("formatting");
+        newer.Dates = new DocDates(new DateOnly(2026, 1, 1), new DateOnly(2026, 7, 16));
+
+        var xml = Sitemap.Build("https://akmlsql.com", [older, newer]);
+
+        // The index pages are as fresh as the freshest thing they list.
+        Assert.Equal(3, System.Text.RegularExpressions.Regex.Matches(xml, "<lastmod>2026-07-16</lastmod>").Count);
     }
 }

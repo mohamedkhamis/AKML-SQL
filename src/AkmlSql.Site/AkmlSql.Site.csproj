@@ -10,6 +10,12 @@
     <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
   </PropertyGroup>
 
+  <!-- OPS-003: development settings are for `dotnet run`, never for a deployed server. Kept in the
+       build output so local runs still pick it up; excluded from publish so it cannot reach IIS. -->
+  <ItemGroup>
+    <Content Update="appsettings.Development.json" CopyToPublishDirectory="Never" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Markdig" Version="1.3.*" />
     <PackageReference Include="Markdown.ColorCode" Version="3.0.*" />
@@ -41,6 +47,15 @@
     <DocsSource Remove="../../doc/**/test-coverage-plan.md" />
     <DocsSource Remove="../../doc/**/*-campaign-*.md" />
     <DocsSource Remove="../../doc/**/MinMax-Installation-and-Testing-Guide.md" />
+    <!-- DOC-001: contributor/engineering docs are not public product documentation. They stay in
+         the repo for contributors; the site publishes the user guides plus end-user reference
+         (analysis rules, configuration, formatting). Kept in lockstep with appsettings.json
+         Docs:Exclusions — DocsExclusionSyncTests fails the build if the two lists drift. -->
+    <DocsSource Remove="../../doc/**/architecture.md" />
+    <DocsSource Remove="../../doc/**/ipc-api.md" />
+    <DocsSource Remove="../../doc/**/deployment.md" />
+    <DocsSource Remove="../../doc/**/m3-security.md" />
+    <DocsSource Remove="../../doc/**/use-cases.md" />
     <Content Include="@(DocsSource)"
              Link="Content/docs/%(RecursiveDir)%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest"

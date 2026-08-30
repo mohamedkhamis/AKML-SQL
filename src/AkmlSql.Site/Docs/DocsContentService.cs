@@ -15,8 +15,15 @@ public sealed class DocsContentService
     /// <summary>Request path under which docs content assets (images) are served.</summary>
     public const string AssetsRequestPath = "/docs-assets";
 
-    /// <summary>Plain-text body truncation for search index entries (data-model.md).</summary>
-    private const int SearchBodyMaxLength = 20_000;
+    /// <summary>
+    /// Plain-text body truncation for search index entries (data-model.md).
+    /// <para>
+    /// PERF-002: was 20,000, which produced a 168 KB index that every docs page downloaded. Titles
+    /// and headings — the fields that actually decide a match — are indexed in full and are
+    /// unaffected; this only bounds how deep into a long document a body-text match can be found.
+    /// </para>
+    /// </summary>
+    private const int SearchBodyMaxLength = 4_000;
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -152,9 +159,16 @@ public sealed class DocsContentService
             document.Headings = rendered.Headings;
             document.Summary = rendered.Summary;
             document.Toc = rendered.Toc;
-            document.Badge = metadata.TryGet(document.SourcePath, out var dates)
-                ? DocsMetadata.ComputeBadge(dates, today, options.BadgeWindowDays)
-                : DocBadge.None;
+            if (metadata.TryGet(document.SourcePath, out var dates))
+            {
+                document.Dates = dates;
+                document.Badge = DocsMetadata.ComputeBadge(dates, today, options.BadgeWindowDays);
+            }
+            else
+            {
+                document.Dates = null;
+                document.Badge = DocBadge.None;
+            }
         }
 
         return Create(documents, sectionOrder: options.SectionOrder, badgeWindowDays: options.BadgeWindowDays);
