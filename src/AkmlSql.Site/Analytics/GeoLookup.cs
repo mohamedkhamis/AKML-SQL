@@ -52,18 +52,19 @@ public sealed class GeoLookup : IDisposable
     /// <summary>Opens the database at <paramref name="databasePath"/>, or stays inert if absent.</summary>
     public GeoLookup(string? databasePath, ILogger<GeoLookup>? logger = null)
     {
-        DatabasePath = string.IsNullOrWhiteSpace(databasePath)
+        var resolved = string.IsNullOrWhiteSpace(databasePath)
             ? Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
                 "AKML SQL Site",
                 DefaultFileName)
             : Path.GetFullPath(Environment.ExpandEnvironmentVariables(databasePath));
+        DatabasePath = resolved;
 
-        if (!File.Exists(DatabasePath))
+        if (!File.Exists(resolved))
         {
             logger?.LogInformation(
                 "Geo database not configured or not found ({Path}) — visits will be recorded without location.",
-                DatabasePath ?? "(unset)");
+                resolved);
             return;
         }
 
