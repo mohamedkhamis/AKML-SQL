@@ -22,6 +22,11 @@ bld/
 [Tt]est[Rr]esult*/
 [Dd]ebugPublic/
 [Rr]eleases/
+# ...but AkmlSql.Site has SOURCE folders named Releases/ (the release-manifest feature and its
+# tests). The rule above silently ignored every new file added to them -- the existing files only
+# survived because they were already tracked. Re-include the source folders explicitly.
+!src/AkmlSql.Site/Releases/
+!tests/AkmlSql.Site.Tests/Releases/
 *.userprefs
 
 # NuGet
