@@ -283,7 +283,7 @@ public sealed class EnrichmentTests
         store.LogVisit(new VisitInfo(Now, "/", null, "Chrome", "203.0.113.1")
         {
             UserAgent = new UserAgentDetails("Chrome", "120", "Windows", "10/11", "desktop"),
-            Location = new GeoLocation("EG", "Egypt", "Cairo Governorate", "Cairo", "Africa/Cairo"),
+            Location = new GeoLocation("EG", "Egypt"),
             Language = "ar-eg",
             Campaign = new CampaignInfo("newsletter", "email", "v1-launch", null, null),
             ReferrerUrl = "https://news.example.com/post",
@@ -292,7 +292,7 @@ public sealed class EnrichmentTests
         store.LogVisit(new VisitInfo(Now.AddMinutes(1), "/features", null, "Safari", "198.51.100.1")
         {
             UserAgent = new UserAgentDetails("Safari", "17", "iOS", "17.2", "mobile"),
-            Location = new GeoLocation("GB", "United Kingdom", "England", "London", "Europe/London"),
+            Location = new GeoLocation("GB", "United Kingdom"),
             Language = "en-gb",
             DurationMs = 10,
         });
@@ -301,7 +301,6 @@ public sealed class EnrichmentTests
 
         Assert.Contains(summary.Countries, r => r.Key == "Egypt" && r.Count == 1);
         Assert.Contains(summary.Countries, r => r.Key == "United Kingdom" && r.Count == 1);
-        Assert.Contains(summary.Cities, r => r.Key == "Cairo, Cairo Governorate");
         Assert.Contains(summary.Devices, r => r.Key == "desktop" && r.Count == 1);
         Assert.Contains(summary.Devices, r => r.Key == "mobile" && r.Count == 1);
         Assert.Contains(summary.OperatingSystems, r => r.Key == "Windows 10/11");
@@ -417,7 +416,7 @@ public sealed class EnrichmentTests
         using var store = new AnalyticsStore(path);
         store.LogVisit(new VisitInfo(Now, "/new", null, "Chrome", "203.0.113.1")
         {
-            Location = new GeoLocation("EG", "Egypt", null, null, null),
+            Location = new GeoLocation("EG", "Egypt"),
         });
 
         var summary = store.GetSummary(30, Now);
@@ -459,6 +458,82 @@ public sealed class EnrichmentTests
         context.Request.Headers.Referer = "https://akml.khamis.work/docs";
 
         Assert.Null(HttpRequestFacts.ReferrerHost(context.Request));
+    }
+
+    [Fact]
+    public void OnlyTheCountryIsStored_NoCityRegionOrTimezone()
+    {
+        // Data minimisation: country answers the questions a product site has; anything finer
+        // narrows a visitor further than the analysis needs. The columns are dropped, not merely
+        // left unwritten, so nothing can quietly repopulate them.
+        using var dir = new TempDirectory();
+        var path = Path.Combine(dir.Path, "analytics.db");
+        using var store = new AnalyticsStore(path);
+        store.LogVisit(new VisitInfo(Now, "/", null, "Chrome", "203.0.113.1")
+        {
+            Location = new GeoLocation("EG", "Egypt"),
+        });
+
+        using var connection = new SqliteConnection(
+            new SqliteConnectionStringBuilder { DataSource = path }.ConnectionString);
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT name FROM pragma_table_info('visits');";
+        var columns = new List<string>();
+        using (var reader = command.ExecuteReader())
+        {
+            while (reader.Read())
+            {
+                columns.Add(reader.GetString(0));
+            }
+        }
+
+        Assert.Contains("country", columns);
+        Assert.Contains("country_code", columns);
+        Assert.DoesNotContain("city", columns);
+        Assert.DoesNotContain("region", columns);
+        Assert.DoesNotContain("time_zone", columns);
+    }
+
+    [Fact]
+    public void ADatabaseThatAlreadyHasTheFinerColumns_HasThemRemoved()
+    {
+        // An installed database from the previous version carries city/region/time_zone. Opening
+        // it must drop them rather than leave data the owner asked not to keep.
+        using var dir = new TempDirectory();
+        var path = Path.Combine(dir.Path, "analytics.db");
+
+        using (var connection = new SqliteConnection(
+            new SqliteConnectionStringBuilder { DataSource = path, Mode = SqliteOpenMode.ReadWriteCreate }.ConnectionString))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                CREATE TABLE visits (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT, utc TEXT NOT NULL, day TEXT NULL,
+                    path TEXT NOT NULL, referrer_host TEXT NULL, ua_family TEXT NULL,
+                    ip_hash TEXT NOT NULL, region TEXT NULL, city TEXT NULL, time_zone TEXT NULL);
+                CREATE TABLE downloads (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT, utc TEXT NOT NULL, day TEXT NULL,
+                    file TEXT NOT NULL, referrer_host TEXT NULL, ua_family TEXT NULL,
+                    ip_hash TEXT NOT NULL);
+                INSERT INTO visits (utc, day, path, ua_family, ip_hash, city, region, time_zone)
+                VALUES ('2026-08-28T09:00:00.0000000Z', '2026-08-28', '/legacy', 'Chrome',
+                        'deadbeef', 'Cairo', 'Cairo Governorate', 'Africa/Cairo');
+                """;
+            command.ExecuteNonQuery();
+        }
+
+        using (var store = new AnalyticsStore(path))
+        {
+            // The visit itself survives — only the unwanted columns go.
+            Assert.Equal(1, store.GetSummary(30, Now).VisitsToday);
+        }
+
+        SqliteConnection.ClearAllPools();
+        var text = System.Text.Encoding.UTF8.GetString(File.ReadAllBytes(path));
+        Assert.DoesNotContain("Cairo Governorate", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Africa/Cairo", text, StringComparison.Ordinal);
     }
 
 }

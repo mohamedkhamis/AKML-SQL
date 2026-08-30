@@ -166,11 +166,11 @@ public sealed class AnalyticsSummary
 
     // --- Enrichment dimensions ---------------------------------------------
 
-    /// <summary>Visits by country ("Egypt", "United Kingdom"); empty without a geo database.</summary>
+    /// <summary>
+    /// Visits by country ("Egypt", "United Kingdom"); empty without a geo database. Country is
+    /// the only location recorded — see <see cref="GeoLocation"/> for why nothing finer is.
+    /// </summary>
     public required IReadOnlyList<CountRow> Countries { get; init; }
-
-    /// <summary>Visits by region/city, most specific available; empty without a City database.</summary>
-    public required IReadOnlyList<CountRow> Cities { get; init; }
 
     /// <summary>Visits by form factor: desktop / mobile / tablet.</summary>
     public required IReadOnlyList<CountRow> Devices { get; init; }

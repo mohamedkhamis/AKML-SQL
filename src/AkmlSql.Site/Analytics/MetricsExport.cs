@@ -86,7 +86,6 @@ public static class MetricsExport
         var sections = new (string Section, IReadOnlyList<CountRow> Rows)[]
         {
             ("countries", summary.Countries),
-            ("cities", summary.Cities),
             ("devices", summary.Devices),
             ("operating_systems", summary.OperatingSystems),
             ("languages", summary.Languages),

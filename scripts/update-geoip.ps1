@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Downloads / refreshes the MaxMind GeoLite2 database the site uses for country and region
+    Downloads / refreshes the MaxMind GeoLite2 database the site uses for country
     reporting.
 
 .DESCRIPTION
@@ -29,8 +29,9 @@
     MaxMind account id. Falls back to $env:MAXMIND_ACCOUNT_ID. Required by the download endpoint.
 
 .PARAMETER Edition
-    GeoLite2-City (country + region + city + timezone) or GeoLite2-Country (country only).
-    City is the default: the extra detail is what makes the region and timezone columns useful.
+    GeoLite2-Country (country only) or GeoLite2-City. Country is the default and is what the
+    site uses: it is about a tenth the size, and it cannot yield city-level data, so the
+    "country only" decision is enforced by the file rather than by remembering not to read it.
 
 .PARAMETER DestinationPath
     Where to write the .mmdb. Defaults to the location the site reads when
@@ -43,9 +44,9 @@
 param(
     [string] $LicenseKey = $env:MAXMIND_LICENSE_KEY,
     [string] $AccountId = $env:MAXMIND_ACCOUNT_ID,
-    [ValidateSet('GeoLite2-City', 'GeoLite2-Country')]
-    [string] $Edition = 'GeoLite2-City',
-    [string] $DestinationPath = (Join-Path $env:ProgramData 'AKML SQL Site\GeoLite2-City.mmdb')
+    [ValidateSet('GeoLite2-Country', 'GeoLite2-City')]
+    [string] $Edition = 'GeoLite2-Country',
+    [string] $DestinationPath = (Join-Path $env:ProgramData 'AKML SQL Site\GeoLite2-Country.mmdb')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -55,7 +56,7 @@ if ([string]::IsNullOrWhiteSpace($LicenseKey) -or [string]::IsNullOrWhiteSpace($
     Write-Host '  The site runs fine without a geo database -- visits are recorded without a location'
     Write-Host '  and the admin dashboard shows "No geo database installed".'
     Write-Host ''
-    Write-Host '  To enable country/region reporting:'
+    Write-Host '  To enable country reporting:'
     Write-Host '    1. Free account: https://www.maxmind.com/en/geolite2/signup'
     Write-Host '    2. Manage License Keys -> Generate new licence key'
     Write-Host '    3. Re-run:  update-geoip.ps1 -AccountId <id> -LicenseKey <key>'

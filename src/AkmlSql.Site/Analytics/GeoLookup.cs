@@ -5,22 +5,23 @@ using MaxMind.GeoIP2.Exceptions;
 
 namespace AkmlSql.Site.Analytics;
 
-/// <summary>Location facts resolved from a client IP. Every field is optional.</summary>
+/// <summary>
+/// Location resolved from a client IP — country only, by choice.
+/// <para>
+/// City, region and timezone are deliberately not collected. Country answers the questions a
+/// product site actually has (where is the audience, is translation worth it, which timezone to
+/// release in) while city-level data narrows a visitor far more than that needs, and the least
+/// risky way to hold data you do not need is not to hold it. The Country edition of the database
+/// does not even contain the finer fields, so this is enforced at the source rather than by
+/// remembering not to read them.
+/// </para>
+/// </summary>
 /// <param name="CountryCode">ISO 3166-1 alpha-2 ("EG", "GB"), or null.</param>
 /// <param name="CountryName">English country name, or null.</param>
-/// <param name="Region">Most specific subdivision (state/governorate), or null.</param>
-/// <param name="City">City name, or null.</param>
-/// <param name="TimeZone">IANA zone ("Africa/Cairo"), or null. Comes from the location, so no
-/// client-side clock reading is needed.</param>
-public sealed record GeoLocation(
-    string? CountryCode,
-    string? CountryName,
-    string? Region,
-    string? City,
-    string? TimeZone)
+public sealed record GeoLocation(string? CountryCode, string? CountryName)
 {
     /// <summary>The all-null result used when no database is loaded or the IP is not found.</summary>
-    public static readonly GeoLocation Unknown = new(null, null, null, null, null);
+    public static readonly GeoLocation Unknown = new(null, null);
 }
 
 /// <summary>
@@ -44,10 +45,9 @@ public sealed record GeoLocation(
 public sealed class GeoLookup : IDisposable
 {
     private readonly DatabaseReader? _reader;
-    private readonly bool _hasCityData;
 
     /// <summary>Default file name and location when <c>Analytics:GeoDatabasePath</c> is empty.</summary>
-    public const string DefaultFileName = "GeoLite2-City.mmdb";
+    public const string DefaultFileName = "GeoLite2-Country.mmdb";
 
     /// <summary>Opens the database at <paramref name="databasePath"/>, or stays inert if absent.</summary>
     public GeoLookup(string? databasePath, ILogger<GeoLookup>? logger = null)
@@ -71,8 +71,6 @@ public sealed class GeoLookup : IDisposable
         try
         {
             _reader = new DatabaseReader(DatabasePath);
-            // GeoLite2-City carries subdivisions and a time zone; GeoLite2-Country does not.
-            _hasCityData = _reader.Metadata.DatabaseType.Contains("City", StringComparison.OrdinalIgnoreCase);
             logger?.LogInformation(
                 "Geo database loaded: {Type}, built {Built:yyyy-MM-dd}.",
                 _reader.Metadata.DatabaseType, _reader.Metadata.BuildDate);
@@ -90,9 +88,6 @@ public sealed class GeoLookup : IDisposable
 
     /// <summary>True when a database is loaded and lookups can return a location.</summary>
     public bool IsAvailable => _reader is not null;
-
-    /// <summary>True when the loaded database carries city/subdivision/timezone detail.</summary>
-    public bool HasCityData => _hasCityData;
 
     /// <summary>
     /// Locates <paramref name="ipAddress"/>. Returns <see cref="GeoLocation.Unknown"/> for a
@@ -115,19 +110,11 @@ public sealed class GeoLookup : IDisposable
 
         try
         {
-            if (_hasCityData && _reader.TryCity(parsed, out var city) && city is not null)
-            {
-                return new GeoLocation(
-                    city.Country.IsoCode,
-                    city.Country.Name,
-                    city.MostSpecificSubdivision.Name,
-                    city.City.Name,
-                    city.Location.TimeZone);
-            }
-
+            // TryCountry only. A City-edition database would also answer this call, so pointing
+            // GeoDatabasePath at one still yields country and nothing finer.
             if (_reader.TryCountry(parsed, out var country) && country is not null)
             {
-                return new GeoLocation(country.Country.IsoCode, country.Country.Name, null, null, null);
+                return new GeoLocation(country.Country.IsoCode, country.Country.Name);
             }
         }
         catch (Exception ex) when (ex is GeoIP2Exception or InvalidDatabaseException)

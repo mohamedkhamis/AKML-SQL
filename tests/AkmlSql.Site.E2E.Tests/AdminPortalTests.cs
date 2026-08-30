@@ -226,11 +226,14 @@ public sealed class AdminPortalTests(SiteFixture site)
 
         // Every dimension panel is present, whether or not it has rows yet.
         foreach (var id in (string[])
-                 ["countries", "cities", "devices", "os", "languages",
+                 ["countries", "devices", "os", "languages",
                   "campaigns", "referrer-urls", "entry-pages", "exit-pages", "slow-pages"])
         {
             Assert.Equal(1, await admin.Locator($"#{id}-heading").CountAsync());
         }
+
+        // Country is the only location collected — no city or region panel should exist.
+        Assert.Equal(0, await admin.Locator("#cities-heading").CountAsync());
 
         // Engagement tiles are computed from sessions, not page views.
         var engagement = await admin.Locator("section[aria-label='Engagement']").InnerTextAsync();
@@ -267,6 +270,8 @@ public sealed class AdminPortalTests(SiteFixture site)
         Assert.Contains("/24", privacy, StringComparison.Ordinal);
         Assert.Contains("/48", privacy, StringComparison.Ordinal);
         Assert.Contains("No cookies", privacy, StringComparison.OrdinalIgnoreCase);
+        // The note must say what is NOT collected too, now that only country is.
+        Assert.Contains("no city, region or finer location", privacy, StringComparison.OrdinalIgnoreCase);
     }
 
     [SkippableFact]

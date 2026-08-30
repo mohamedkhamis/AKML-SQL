@@ -24,8 +24,9 @@ public sealed class AnalyticsOptions
     public int RetentionDays { get; set; } = 400;
 
     /// <summary>
-    /// Path to a MaxMind GeoLite2 <c>.mmdb</c> file for country/region lookup. Empty →
-    /// <c>%ProgramData%\AKML SQL Site\GeoLite2-City.mmdb</c>. The file is not in source control
+    /// Path to a MaxMind GeoLite2 <c>.mmdb</c> file for COUNTRY lookup. Empty →
+    /// <c>%ProgramData%\AKML SQL Site\GeoLite2-Country.mmdb</c>. The Country edition is the
+    /// right one: it is a tenth the size of City and cannot yield finer data than is wanted. The file is not in source control
     /// (it needs a MaxMind licence key — see scripts/update-geoip.ps1); when it is absent,
     /// visits are recorded without location and nothing else changes.
     /// </summary>
@@ -140,11 +141,11 @@ public sealed class AnalyticsStore : IDisposable
             using var command = _connection.CreateCommand();
             command.CommandText =
                 "INSERT INTO visits (utc, day, path, referrer_host, ua_family, ip_hash, " +
-                "ip_prefix, country_code, country, region, city, time_zone, " +
+                "ip_prefix, country_code, country, " +
                 "device, os_family, os_version, browser_version, language, referrer_url, " +
                 "utm_source, utm_medium, utm_campaign, utm_term, utm_content, session_id, duration_ms) " +
                 "VALUES ($utc, $day, $path, $referrer, $ua, $hash, " +
-                "$prefix, $countryCode, $country, $region, $city, $timeZone, " +
+                "$prefix, $countryCode, $country, " +
                 "$device, $osFamily, $osVersion, $browserVersion, $language, $referrerUrl, " +
                 "$utmSource, $utmMedium, $utmCampaign, $utmTerm, $utmContent, $session, $duration);";
 
@@ -159,9 +160,6 @@ public sealed class AnalyticsStore : IDisposable
             command.Parameters.AddWithValue("$prefix", (object?)IpAnonymizer.ToPrefix(visit.IpAddress) ?? DBNull.Value);
             command.Parameters.AddWithValue("$countryCode", (object?)visit.Location.CountryCode ?? DBNull.Value);
             command.Parameters.AddWithValue("$country", (object?)visit.Location.CountryName ?? DBNull.Value);
-            command.Parameters.AddWithValue("$region", (object?)visit.Location.Region ?? DBNull.Value);
-            command.Parameters.AddWithValue("$city", (object?)visit.Location.City ?? DBNull.Value);
-            command.Parameters.AddWithValue("$timeZone", (object?)visit.Location.TimeZone ?? DBNull.Value);
             command.Parameters.AddWithValue("$device", (object?)visit.UserAgent.Device ?? DBNull.Value);
             command.Parameters.AddWithValue("$osFamily", (object?)visit.UserAgent.Os ?? DBNull.Value);
             command.Parameters.AddWithValue("$osVersion", (object?)visit.UserAgent.OsVersion ?? DBNull.Value);
@@ -347,11 +345,6 @@ public sealed class AnalyticsStore : IDisposable
                 // written before a column existed (or while the geo database was absent) simply
                 // does not appear rather than showing up as a bogus "unknown" bucket.
                 Countries = TopBy("country", sinceWindow),
-                Cities = QueryCountRows(
-                    "SELECT COALESCE(city || ', ' || region, city, region), COUNT(*) FROM visits " +
-                    $"WHERE day >= $day AND {HumanOnly} AND (city IS NOT NULL OR region IS NOT NULL) " +
-                    "GROUP BY 1 ORDER BY COUNT(*) DESC, 1 LIMIT $limit;",
-                    ("$day", FormatDay(sinceWindow))),
                 Devices = TopBy("device", sinceWindow),
                 OperatingSystems = QueryCountRows(
                     "SELECT os_family || COALESCE(' ' || os_version, ''), COUNT(*) FROM visits " +
@@ -467,6 +460,14 @@ public sealed class AnalyticsStore : IDisposable
             AddColumnIfMissing("downloads", column);
         }
 
+        // Data minimisation: only the country is wanted, so the finer location columns are
+        // removed rather than left in place holding values nobody asked for. Dropping the column
+        // (not just ceasing to write it) means a future change cannot quietly repopulate it.
+        foreach (var column in (string[])["region", "city", "time_zone"])
+        {
+            DropColumnIfPresent("visits", column);
+        }
+
         using (var command = _connection.CreateCommand())
         {
             command.CommandText = """
@@ -493,9 +494,6 @@ public sealed class AnalyticsStore : IDisposable
         ("ip_prefix", "TEXT"),        // truncated /24 or /48 — never the full address
         ("country_code", "TEXT"),
         ("country", "TEXT"),
-        ("region", "TEXT"),
-        ("city", "TEXT"),
-        ("time_zone", "TEXT"),
         ("device", "TEXT"),           // desktop | mobile | tablet | bot
         ("os_family", "TEXT"),
         ("os_version", "TEXT"),
@@ -527,6 +525,22 @@ public sealed class AnalyticsStore : IDisposable
         ("utm_campaign", "TEXT"),
         ("session_id", "TEXT"),
     ];
+
+    /// <summary>Removes a column that is no longer collected, if an older database still has it.</summary>
+    private void DropColumnIfPresent(string table, string column)
+    {
+        using var check = _connection.CreateCommand();
+        // Table and column names are fixed internal literals, never user input.
+        check.CommandText = $"SELECT COUNT(*) FROM pragma_table_info('{table}') WHERE name = '{column}';";
+        if ((long)(check.ExecuteScalar() ?? 0L) == 0)
+        {
+            return;
+        }
+
+        using var drop = _connection.CreateCommand();
+        drop.CommandText = $"ALTER TABLE {table} DROP COLUMN {column};";
+        drop.ExecuteNonQuery();
+    }
 
     /// <summary>Adds the <c>day</c> column when an older database predates it.</summary>
     private void AddDayColumnIfMissing(string table) => AddColumnIfMissing(table, ("day", "TEXT"));
