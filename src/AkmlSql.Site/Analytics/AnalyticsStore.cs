@@ -16,6 +16,12 @@ public sealed class AnalyticsOptions
     /// deploy step must grant the app pool identity write access to it.
     /// </summary>
     public string DatabasePath { get; set; } = "";
+
+    /// <summary>
+    /// ADM-004: days of history to keep. Rows older than this are pruned at startup — the tables
+    /// previously grew without bound. 0 disables pruning (keep everything).
+    /// </summary>
+    public int RetentionDays { get; set; } = 400;
 }
 
 /// <summary>
@@ -119,9 +125,10 @@ public sealed class AnalyticsStore : IDisposable
         {
             using var command = _connection.CreateCommand();
             command.CommandText =
-                "INSERT INTO visits (utc, path, referrer_host, ua_family, ip_hash) " +
-                "VALUES ($utc, $path, $referrer, $ua, $hash);";
+                "INSERT INTO visits (utc, day, path, referrer_host, ua_family, ip_hash) " +
+                "VALUES ($utc, $day, $path, $referrer, $ua, $hash);";
             command.Parameters.AddWithValue("$utc", FormatUtc(visit.Utc));
+            command.Parameters.AddWithValue("$day", FormatDay(DateOnly.FromDateTime(visit.Utc.UtcDateTime)));
             command.Parameters.AddWithValue("$path", visit.Path);
             command.Parameters.AddWithValue("$referrer", (object?)visit.ReferrerHost ?? DBNull.Value);
             command.Parameters.AddWithValue("$ua", (object?)visit.UaFamily ?? DBNull.Value);
@@ -140,13 +147,36 @@ public sealed class AnalyticsStore : IDisposable
         {
             using var command = _connection.CreateCommand();
             command.CommandText =
-                "INSERT INTO downloads (utc, file, referrer_host, ua_family, ip_hash) " +
-                "VALUES ($utc, $file, $referrer, $ua, $hash);";
+                "INSERT INTO downloads (utc, day, file, referrer_host, ua_family, ip_hash) " +
+                "VALUES ($utc, $day, $file, $referrer, $ua, $hash);";
             command.Parameters.AddWithValue("$utc", FormatUtc(download.Utc));
+            command.Parameters.AddWithValue("$day", FormatDay(DateOnly.FromDateTime(download.Utc.UtcDateTime)));
             command.Parameters.AddWithValue("$file", download.File);
             command.Parameters.AddWithValue("$referrer", (object?)download.ReferrerHost ?? DBNull.Value);
             command.Parameters.AddWithValue("$ua", (object?)download.UaFamily ?? DBNull.Value);
             command.Parameters.AddWithValue("$hash", ComputeIpHash(download.IpAddress, DateOnly.FromDateTime(download.Utc.UtcDateTime)));
+            command.ExecuteNonQuery();
+        }
+    }
+
+    /// <summary>
+    /// ADM-008: records one 404. Nothing IP-derived is stored — a missing page is a content
+    /// problem, so the useful facts are the path and where the link came from.
+    /// </summary>
+    public void LogNotFound(NotFoundInfo notFound)
+    {
+        ArgumentNullException.ThrowIfNull(notFound);
+        ArgumentException.ThrowIfNullOrWhiteSpace(notFound.Path);
+
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText =
+                "INSERT INTO not_found (utc, day, path, referrer_host) VALUES ($utc, $day, $path, $referrer);";
+            command.Parameters.AddWithValue("$utc", FormatUtc(notFound.Utc));
+            command.Parameters.AddWithValue("$day", FormatDay(DateOnly.FromDateTime(notFound.Utc.UtcDateTime)));
+            command.Parameters.AddWithValue("$path", notFound.Path);
+            command.Parameters.AddWithValue("$referrer", (object?)notFound.ReferrerHost ?? DBNull.Value);
             command.ExecuteNonQuery();
         }
     }
@@ -168,24 +198,43 @@ public sealed class AnalyticsStore : IDisposable
             return new AnalyticsSummary
             {
                 Days = days,
-                VisitsToday = CountRows("visits", "substr(utc, 1, 10) = $day", ("$day", FormatDay(today))),
-                VisitsLast7Days = CountRows("visits", "substr(utc, 1, 10) >= $day", ("$day", FormatDay(since7))),
-                VisitsWindow = CountRows("visits", "substr(utc, 1, 10) >= $day", ("$day", FormatDay(sinceWindow))),
-                DownloadsTotal = CountRows("downloads", "1 = 1", null),
-                DownloadsLast7Days = CountRows("downloads", "substr(utc, 1, 10) >= $day", ("$day", FormatDay(since7))),
+                // ADM-001: every visitor-facing figure excludes crawlers. Counting them made the
+                // headline numbers, the daily chart and the top-pages table meaningless.
+                VisitsToday = CountRows("visits", $"day = $day AND {HumanOnly}", ("$day", FormatDay(today))),
+                VisitsLast7Days = CountRows("visits", $"day >= $day AND {HumanOnly}", ("$day", FormatDay(since7))),
+                VisitsWindow = CountRows("visits", $"day >= $day AND {HumanOnly}", ("$day", FormatDay(sinceWindow))),
+                BotVisitsWindow = CountRows("visits", $"day >= $day AND NOT ({HumanOnly})", ("$day", FormatDay(sinceWindow))),
+                DownloadsTotal = CountRows("downloads", $"{HumanOnly}", null),
+                DownloadsLast7Days = CountRows("downloads", $"day >= $day AND {HumanOnly}", ("$day", FormatDay(since7))),
+                DownloadsWindow = CountRows("downloads", $"day >= $day AND {HumanOnly}", ("$day", FormatDay(sinceWindow))),
+                UniqueVisitorsToday = CountRows("visits", $"day = $day AND {HumanOnly}", ("$day", FormatDay(today)), distinctColumn: "ip_hash"),
                 TopPages = QueryCountRows(
-                    "SELECT path, COUNT(*) FROM visits WHERE substr(utc, 1, 10) >= $day " +
+                    $"SELECT path, COUNT(*) FROM visits WHERE day >= $day AND {HumanOnly} " +
                     "GROUP BY path ORDER BY COUNT(*) DESC, path LIMIT $limit;",
                     ("$day", FormatDay(sinceWindow))),
                 DownloadsByFile = QueryCountRows(
-                    "SELECT file, COUNT(*) FROM downloads " +
+                    $"SELECT file, COUNT(*) FROM downloads WHERE {HumanOnly} " +
                     "GROUP BY file ORDER BY COUNT(*) DESC, file LIMIT $limit;",
                     null),
-                DailyVisits = QueryDailySeries(sinceWindow, today),
+                // ADM-002: the browser mix was recorded on every row and never displayed.
+                BrowserMix = QueryCountRows(
+                    $"SELECT COALESCE(ua_family, 'other'), COUNT(*) FROM visits WHERE day >= $day AND {HumanOnly} " +
+                    "GROUP BY COALESCE(ua_family, 'other') ORDER BY COUNT(*) DESC, 1 LIMIT $limit;",
+                    ("$day", FormatDay(sinceWindow))),
+                DailyVisits = QueryDailySeries("visits", sinceWindow, today, distinctColumn: null),
+                DailyUniqueVisitors = QueryDailySeries("visits", sinceWindow, today, distinctColumn: "ip_hash"),
+                // ADM-005: downloads had only two scalars; conversion over time is the metric a
+                // product owner actually watches.
+                DailyDownloads = QueryDailySeries("downloads", sinceWindow, today, distinctColumn: null),
                 TopReferrers = QueryCountRows(
                     "SELECT referrer_host, COUNT(*) FROM visits " +
-                    "WHERE referrer_host IS NOT NULL AND referrer_host <> '' AND substr(utc, 1, 10) >= $day " +
+                    $"WHERE referrer_host IS NOT NULL AND referrer_host <> '' AND day >= $day AND {HumanOnly} " +
                     "GROUP BY referrer_host ORDER BY COUNT(*) DESC, referrer_host LIMIT $limit;",
+                    ("$day", FormatDay(sinceWindow))),
+                // ADM-008: broken inbound links, invisible while only 2xx responses were tracked.
+                TopNotFound = QueryCountRows(
+                    "SELECT path, COUNT(*) FROM not_found WHERE day >= $day " +
+                    "GROUP BY path ORDER BY COUNT(*) DESC, path LIMIT $limit;",
                     ("$day", FormatDay(sinceWindow))),
             };
         }
@@ -210,38 +259,135 @@ public sealed class AnalyticsStore : IDisposable
         return salt;
     }
 
+    /// <summary>
+    /// Creates the schema and brings an existing database up to date.
+    /// <para>
+    /// ADM-004: every query filters on <c>substr(utc, 1, 10) &gt;= $day</c> — an expression over
+    /// the column, which SQLite cannot serve from an index on <c>utc</c>, so <c>ix_visits_utc</c>
+    /// was dead weight and every dashboard load full-scanned both tables. A stored <c>day</c>
+    /// column carries the same value as a plain column and IS indexable. It is backfilled for
+    /// existing rows, so upgrading an installed database needs no migration step.
+    /// </para>
+    /// </summary>
     private void InitializeSchema()
     {
-        using var command = _connection.CreateCommand();
-        command.CommandText = """
-            PRAGMA journal_mode = WAL;
-            CREATE TABLE IF NOT EXISTS visits (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                utc TEXT NOT NULL,
-                path TEXT NOT NULL,
-                referrer_host TEXT NULL,
-                ua_family TEXT NULL,
-                ip_hash TEXT NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS downloads (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                utc TEXT NOT NULL,
-                file TEXT NOT NULL,
-                referrer_host TEXT NULL,
-                ua_family TEXT NULL,
-                ip_hash TEXT NOT NULL
-            );
-            CREATE INDEX IF NOT EXISTS ix_visits_utc ON visits (utc);
-            CREATE INDEX IF NOT EXISTS ix_downloads_utc ON downloads (utc);
-            """;
-        command.ExecuteNonQuery();
+        using (var command = _connection.CreateCommand())
+        {
+            command.CommandText = """
+                PRAGMA journal_mode = WAL;
+                CREATE TABLE IF NOT EXISTS visits (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    utc TEXT NOT NULL,
+                    path TEXT NOT NULL,
+                    referrer_host TEXT NULL,
+                    ua_family TEXT NULL,
+                    ip_hash TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS downloads (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    utc TEXT NOT NULL,
+                    file TEXT NOT NULL,
+                    referrer_host TEXT NULL,
+                    ua_family TEXT NULL,
+                    ip_hash TEXT NOT NULL
+                );
+                -- ADM-008: 404s. No ip_hash column: a missing page is a content problem, not a
+                -- visitor measurement, so nothing here needs to identify who asked for it.
+                CREATE TABLE IF NOT EXISTS not_found (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    utc TEXT NOT NULL,
+                    day TEXT NULL,
+                    path TEXT NOT NULL,
+                    referrer_host TEXT NULL
+                );
+                """;
+            command.ExecuteNonQuery();
+        }
+
+        AddDayColumnIfMissing("visits");
+        AddDayColumnIfMissing("downloads");
+
+        using (var command = _connection.CreateCommand())
+        {
+            command.CommandText = """
+                UPDATE visits SET day = substr(utc, 1, 10) WHERE day IS NULL;
+                UPDATE downloads SET day = substr(utc, 1, 10) WHERE day IS NULL;
+                UPDATE not_found SET day = substr(utc, 1, 10) WHERE day IS NULL;
+                CREATE INDEX IF NOT EXISTS ix_not_found_day ON not_found (day);
+                CREATE INDEX IF NOT EXISTS ix_visits_day ON visits (day);
+                CREATE INDEX IF NOT EXISTS ix_downloads_day ON downloads (day);
+                CREATE INDEX IF NOT EXISTS ix_visits_day_ua ON visits (day, ua_family);
+                DROP INDEX IF EXISTS ix_visits_utc;
+                DROP INDEX IF EXISTS ix_downloads_utc;
+                """;
+            command.ExecuteNonQuery();
+        }
     }
 
-    private long CountRows(string table, string whereClause, (string Name, object Value)? parameter)
+    /// <summary>Adds the <c>day</c> column when an older database predates it.</summary>
+    private void AddDayColumnIfMissing(string table)
+    {
+        using var check = _connection.CreateCommand();
+        // Table name is a fixed internal literal, never user input.
+        check.CommandText = $"SELECT COUNT(*) FROM pragma_table_info('{table}') WHERE name = 'day';";
+        if ((long)(check.ExecuteScalar() ?? 0L) > 0)
+        {
+            return;
+        }
+
+        using var alter = _connection.CreateCommand();
+        alter.CommandText = $"ALTER TABLE {table} ADD COLUMN day TEXT NULL;";
+        alter.ExecuteNonQuery();
+    }
+
+    /// <summary>
+    /// ADM-004: deletes rows older than <paramref name="retentionDays"/>. Returns the number of
+    /// rows removed. A non-positive retention keeps everything.
+    /// </summary>
+    public int Prune(int retentionDays) => Prune(retentionDays, DateTimeOffset.UtcNow);
+
+    /// <summary>Retention prune anchored at <paramref name="now"/> (injectable for tests).</summary>
+    public int Prune(int retentionDays, DateTimeOffset now)
+    {
+        if (retentionDays <= 0)
+        {
+            return 0;
+        }
+
+        var cutoff = FormatDay(DateOnly.FromDateTime(now.UtcDateTime).AddDays(-retentionDays));
+
+        lock (_gate)
+        {
+            var removed = 0;
+            foreach (var table in (string[])["visits", "downloads", "not_found"])
+            {
+                using var command = _connection.CreateCommand();
+                command.CommandText = $"DELETE FROM {table} WHERE day < $cutoff;";
+                command.Parameters.AddWithValue("$cutoff", cutoff);
+                removed += command.ExecuteNonQuery();
+            }
+
+            return removed;
+        }
+    }
+
+    /// <summary>
+    /// ADM-001: the predicate that keeps crawler traffic out of visitor figures.
+    /// <see cref="UserAgentBuckets"/> already classifies bots on every row; nothing consumed it.
+    /// </summary>
+    private const string HumanOnly = "(ua_family IS NULL OR ua_family <> 'bot')";
+
+    private long CountRows(
+        string table,
+        string whereClause,
+        (string Name, object Value)? parameter,
+        string? distinctColumn = null)
     {
         using var command = _connection.CreateCommand();
-        // Table name and WHERE clause are fixed internal fragments (never user input); values are parameterized.
-        command.CommandText = $"SELECT COUNT(*) FROM {table} WHERE {whereClause};";
+        // Table name, WHERE clause and distinct column are fixed internal fragments (never user
+        // input); values are parameterized.
+        var selector = distinctColumn is null ? "COUNT(*)" : $"COUNT(DISTINCT {distinctColumn})";
+        command.CommandText = $"SELECT {selector} FROM {table} WHERE {whereClause};";
         if (parameter is { } p)
         {
             command.Parameters.AddWithValue(p.Name, p.Value);
@@ -271,14 +417,23 @@ public sealed class AnalyticsStore : IDisposable
         return rows;
     }
 
-    private IReadOnlyList<DailyCount> QueryDailySeries(DateOnly since, DateOnly today)
+    /// <summary>
+    /// Zero-filled daily series for a table over the window. <paramref name="distinctColumn"/>
+    /// switches between total events and distinct values (unique visitors per day).
+    /// </summary>
+    private IReadOnlyList<DailyCount> QueryDailySeries(
+        string table,
+        DateOnly since,
+        DateOnly today,
+        string? distinctColumn)
     {
         var countsByDay = new Dictionary<DateOnly, long>();
         using (var command = _connection.CreateCommand())
         {
+            // Table name and distinct column are fixed internal fragments; the date is parameterized.
+            var selector = distinctColumn is null ? "COUNT(*)" : $"COUNT(DISTINCT {distinctColumn})";
             command.CommandText =
-                "SELECT substr(utc, 1, 10), COUNT(*) FROM visits WHERE substr(utc, 1, 10) >= $day " +
-                "GROUP BY substr(utc, 1, 10);";
+                $"SELECT day, {selector} FROM {table} WHERE day >= $day AND {HumanOnly} GROUP BY day;";
             command.Parameters.AddWithValue("$day", FormatDay(since));
             using var reader = command.ExecuteReader();
             while (reader.Read())

@@ -10,6 +10,32 @@ namespace AkmlSql.Site.Tests.Analytics;
 /// </summary>
 public sealed class VisitTrackingMiddlewareTests
 {
+    // --- ADM-008: 404 recording -------------------------------------------
+
+    [Fact]
+    public void NotFoundGate_RecordsA404ForAContentPath()
+    {
+        Assert.True(VisitTrackingMiddleware.ShouldTrackNotFound("/docs/old-guide", "GET", 404));
+        Assert.True(VisitTrackingMiddleware.ShouldTrackNotFound("/moved", "HEAD", 404));
+    }
+
+    [Theory]
+    [InlineData("/docs/exists", "GET", 200)]   // not a 404
+    [InlineData("/docs/gone", "POST", 404)]    // not a navigation
+    [InlineData("/css/missing.css", "GET", 404)]   // asset root, excluded
+    [InlineData("/favicon.ico", "GET", 404)]       // machine path, excluded
+    [InlineData("/admin/nope", "GET", 404)]        // admin branch, excluded
+    public void NotFoundGate_IgnoresEverythingElse(string path, string method, int status) =>
+        Assert.False(VisitTrackingMiddleware.ShouldTrackNotFound(path, method, status));
+
+    [Fact]
+    public void NotFoundGate_IsNotContentTypeSensitive()
+    {
+        // A 404 for a non-HTML path is still a broken link worth knowing about, so unlike the
+        // visit gate this one does not require text/html.
+        Assert.True(VisitTrackingMiddleware.ShouldTrackNotFound("/downloads/setup.zip", "GET", 404));
+    }
+
     [Theory]
     // Public content pages — tracked.
     [InlineData("/", true)]

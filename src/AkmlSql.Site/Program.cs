@@ -4,6 +4,7 @@ using AkmlSql.Site.Components;
 using AkmlSql.Site.Docs;
 using AkmlSql.Site.Releases;
 using AkmlSql.Site.Seo;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Options;
@@ -64,6 +65,27 @@ builder.Services.Configure<AnalyticsOptions>(builder.Configuration.GetSection(An
 builder.Services.Configure<DownloadsOptions>(builder.Configuration.GetSection(DownloadsOptions.SectionName));
 builder.Services.Configure<AdminOptions>(builder.Configuration.GetSection(AdminOptions.SectionName));
 builder.Services.AddSingleton(sp => new AnalyticsStore(sp.GetRequiredService<IOptions<AnalyticsOptions>>().Value));
+
+// ADM-006: client IP comes from Connection.RemoteIpAddress, which is correct on IIS in-process
+// but becomes the PROXY's address the moment anything fronts the site (Cloudflare, ARR, a load
+// balancer) -- at which point every visitor hashes to one value and unique-visitor counting
+// silently becomes meaningless. Configured here so that day needs a config change, not a code
+// change. KnownProxies/KnownNetworks are cleared and repopulated from config: with none listed
+// the middleware trusts nothing and behaviour is exactly as before.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownProxies.Clear();
+    options.KnownIPNetworks.Clear();
+
+    foreach (var entry in builder.Configuration.GetSection("Analytics:KnownProxies").Get<string[]>() ?? [])
+    {
+        if (System.Net.IPAddress.TryParse(entry, out var address))
+        {
+            options.KnownProxies.Add(address);
+        }
+    }
+});
 builder.Services.AddSingleton<ChannelAnalyticsSink>();
 builder.Services.AddSingleton<IAnalyticsSink>(sp => sp.GetRequiredService<ChannelAnalyticsSink>());
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ChannelAnalyticsSink>());
@@ -90,7 +112,19 @@ var app = builder.Build();
 // missing/unwritable database folder must fail the deploy, not the first page view.
 _ = app.Services.GetRequiredService<ReleasesManifest>();
 _ = app.Services.GetRequiredService<DocsContentService>();
-_ = app.Services.GetRequiredService<AnalyticsStore>();
+var analyticsStore = app.Services.GetRequiredService<AnalyticsStore>();
+
+// ADM-004: retention prune at startup. The visits/downloads tables previously grew without bound.
+// Once per boot rather than on a timer: the tables gain a few thousand rows a day at most, so a
+// prune per deploy or app-pool recycle is ample, and it cannot interfere with a live request.
+var analyticsOptions = app.Services.GetRequiredService<IOptions<AnalyticsOptions>>().Value;
+var prunedRows = analyticsStore.Prune(analyticsOptions.RetentionDays);
+if (prunedRows > 0)
+{
+    app.Logger.LogInformation(
+        "Analytics retention: pruned {Rows} row(s) older than {Days} days.",
+        prunedRows, analyticsOptions.RetentionDays);
+}
 
 // PERF-001: compress the responses the app GENERATES -- SSR pages, search-index.json,
 // sitemap.xml, robots.txt -- which were previously served raw (a docs page was 35 KB).
@@ -137,6 +171,10 @@ if (!app.Environment.IsDevelopment())
 }
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
+
+// ADM-006: resolve the real client IP before anything reads it (visit tracking, the login
+// throttle). No-op until Analytics:KnownProxies names a trusted proxy.
+app.UseForwardedHeaders();
 
 // Auth before antiforgery and the /admin branch guard (the guard reads HttpContext.User).
 app.UseAuthentication();

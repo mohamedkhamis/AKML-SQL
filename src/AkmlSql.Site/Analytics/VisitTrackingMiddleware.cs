@@ -43,6 +43,15 @@ public sealed class VisitTrackingMiddleware
                     UserAgentBuckets.FromUserAgent(request.Headers.UserAgent),
                     HttpRequestFacts.ClientIp(context)));
             }
+            else if (ShouldTrackNotFound(request.Path.Value, request.Method, context.Response.StatusCode))
+            {
+                // ADM-008: a 404 is the one failure the owner can act on — it names a link
+                // someone followed that no longer resolves.
+                _sink.EnqueueNotFound(new NotFoundInfo(
+                    DateTimeOffset.UtcNow,
+                    request.Path.Value ?? "/",
+                    HttpRequestFacts.ReferrerHost(request)));
+            }
         }
         catch (Exception ex)
         {
@@ -66,6 +75,28 @@ public sealed class VisitTrackingMiddleware
         }
 
         if (contentType is null || !contentType.StartsWith("text/html", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return IsTrackablePath(path);
+    }
+
+    /// <summary>
+    /// ADM-008: gate for 404 recording — a GET/HEAD for a trackable path that returned 404.
+    /// Asset and machine paths are excluded by the same classifier as visits, so a missing
+    /// favicon or a probe for /wp-login.php under an excluded root does not fill the table.
+    /// Content type is deliberately NOT checked: a 404 for a non-HTML path is still a broken
+    /// link worth knowing about.
+    /// </summary>
+    public static bool ShouldTrackNotFound(string? path, string method, int statusCode)
+    {
+        if (statusCode != StatusCodes.Status404NotFound)
+        {
+            return false;
+        }
+
+        if (!HttpMethods.IsGet(method) && !HttpMethods.IsHead(method))
         {
             return false;
         }

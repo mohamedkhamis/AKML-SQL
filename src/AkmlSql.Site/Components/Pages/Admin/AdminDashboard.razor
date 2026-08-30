@@ -1,11 +1,17 @@
 @page "/admin"
+@using System.Globalization
+@using AkmlSql.Site.Admin
 @using AkmlSql.Site.Analytics
+@using AkmlSql.Site.Releases
 @using Microsoft.Extensions.Options
 @inject AnalyticsStore Store
 @inject IOptions<DownloadsOptions> DownloadsConfig
 
-@* Admin metrics dashboard. Static SSR; the daily-visits chart is PURE CSS — bar heights come
-   from the precomputed .bar-h-* bucket classes in site.css (strict CSP: no inline styles). *@
+@* Admin metrics dashboard. Static SSR; the charts are PURE CSS — bar heights come from the
+   precomputed .bar-h-* bucket classes in site.css (strict CSP: no inline styles).
+
+   ADM-003: the window is a query-string value, which keeps the page static-SSR while making a
+   chosen range bookmarkable and shareable. *@
 
 <PageTitle>Dashboard — AKML SQL Admin</PageTitle>
 <HeadContent>
@@ -18,8 +24,9 @@
         <p class="eyebrow">Admin</p>
         <h1>Site metrics</h1>
         <p class="page-intro">
-            Page visits and installer downloads. Privacy: client IPs are stored only as per-day
-            salted hashes; no cookies are set for visitors.
+            Page visits and installer downloads over the last @AdminDashboardOptions.Label(_days).
+            Crawler traffic is excluded from every figure below and reported separately.
+            Privacy: client IPs are stored only as per-day salted hashes; no cookies are set for visitors.
         </p>
     </div>
     <form method="post" action="/admin/logout" class="admin-signout">
@@ -27,10 +34,37 @@
     </form>
 </header>
 
+@* ADM-003/007: range selector and export. Plain links, so both work without JavaScript. *@
+<nav class="admin-toolbar" aria-label="Reporting window">
+    <span class="admin-toolbar-label" id="range-label">Window</span>
+    <ul class="admin-ranges" aria-labelledby="range-label">
+        @foreach (var range in AdminDashboardOptions.Ranges)
+        {
+            <li>
+                @if (range == _days)
+                {
+                    <a href="/admin?days=@range" aria-current="true" class="is-current">@AdminDashboardOptions.Label(range)</a>
+                }
+                else
+                {
+                    <a href="/admin?days=@range">@AdminDashboardOptions.Label(range)</a>
+                }
+            </li>
+        }
+    </ul>
+    <a class="admin-export" href="/admin/metrics.csv?days=@_days" download>Export CSV</a>
+</nav>
+
 <section class="admin-stats" aria-label="Key metrics">
     <div class="admin-stat">
         <p class="admin-stat-value">@_summary.VisitsToday</p>
         <p class="admin-stat-label">Visits today</p>
+    </div>
+    @* ADM-002: the per-day salted IP hash existed so this was countable without storing an IP;
+       nothing had ever used it. *@
+    <div class="admin-stat">
+        <p class="admin-stat-value">@_summary.UniqueVisitorsToday</p>
+        <p class="admin-stat-label">Unique today</p>
     </div>
     <div class="admin-stat">
         <p class="admin-stat-value">@_summary.VisitsLast7Days</p>
@@ -41,33 +75,26 @@
         <p class="admin-stat-label">Visits · @_summary.Days days</p>
     </div>
     <div class="admin-stat">
+        <p class="admin-stat-value">@_summary.DownloadsWindow</p>
+        <p class="admin-stat-label">Downloads · @_summary.Days days</p>
+    </div>
+    <div class="admin-stat">
         <p class="admin-stat-value">@_summary.DownloadsTotal</p>
         <p class="admin-stat-label">Downloads · total</p>
     </div>
-    <div class="admin-stat">
-        <p class="admin-stat-value">@_summary.DownloadsLast7Days</p>
-        <p class="admin-stat-label">Downloads · 7 days</p>
+    @* ADM-001: shown rather than silently discarded — a spike here explains a quiet week. *@
+    <div class="admin-stat admin-stat-muted">
+        <p class="admin-stat-value">@_summary.BotVisitsWindow</p>
+        <p class="admin-stat-label">Bot hits · @_summary.Days days</p>
     </div>
 </section>
 
-<section class="admin-panel" aria-labelledby="chart-heading">
-    <h2 id="chart-heading">Visits — last @_summary.Days days</h2>
-    <div class="admin-chart">
-        <div class="admin-chart-bars">
-            @foreach (var day in _summary.DailyVisits)
-            {
-                <div class="admin-chart-bar bar-h-@HeightBucket(day.Count)"
-                     title="@day.Day.ToString("yyyy-MM-dd"): @day.Count visits"></div>
-            }
-        </div>
-        <div class="admin-chart-labels" aria-hidden="true">
-            @for (var i = 0; i < _summary.DailyVisits.Count; i++)
-            {
-                <span class="admin-chart-label">@(i % 5 == 0 ? _summary.DailyVisits[i].Day.ToString("M/d") : "")</span>
-            }
-        </div>
-    </div>
-</section>
+<Chart Title="Visits" Series="_summary.DailyVisits" Secondary="_summary.DailyUniqueVisitors"
+       SecondaryLabel="unique visitors" Days="_summary.Days" IdPrefix="visits" />
+
+@* ADM-005: downloads previously had only two scalars — the conversion metric that matters most
+   had no trend at all. *@
+<Chart Title="Downloads" Series="_summary.DailyDownloads" Days="_summary.Days" IdPrefix="downloads" />
 
 <div class="admin-tables">
     <section class="admin-panel" aria-labelledby="top-pages-heading">
@@ -87,6 +114,35 @@
                         @foreach (var row in _summary.TopPages)
                         {
                             <tr><td>@row.Key</td><td class="admin-num">@row.Count</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+    @* ADM-002: ua_family was recorded on every row and never displayed. *@
+    <section class="admin-panel" aria-labelledby="browsers-heading">
+        <h2 id="browsers-heading">Browsers · @_summary.Days days</h2>
+        @if (_summary.BrowserMix.Count == 0)
+        {
+            <p class="admin-empty">No visits recorded yet.</p>
+        }
+        else
+        {
+            <div class="table-scroll">
+                <table class="admin-table">
+                    <thead>
+                        <tr><th>Browser</th><th class="admin-num">Visits</th><th class="admin-num">Share</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _summary.BrowserMix)
+                        {
+                            <tr>
+                                <td>@row.Key</td>
+                                <td class="admin-num">@row.Count</td>
+                                <td class="admin-num">@Share(row.Count)</td>
+                            </tr>
                         }
                     </tbody>
                 </table>
@@ -142,6 +198,32 @@
         }
     </section>
 
+    @* ADM-008: broken inbound links. Only 2xx responses were tracked before, so these were
+       invisible — and they are the one failure the owner can actually fix. *@
+    <section class="admin-panel" aria-labelledby="notfound-heading">
+        <h2 id="notfound-heading">Broken links · @_summary.Days days</h2>
+        @if (_summary.TopNotFound.Count == 0)
+        {
+            <p class="admin-empty">No missing pages requested — nothing to fix.</p>
+        }
+        else
+        {
+            <div class="table-scroll">
+                <table class="admin-table">
+                    <thead>
+                        <tr><th>Requested path</th><th class="admin-num">404s</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _summary.TopNotFound)
+                        {
+                            <tr><td>@row.Key</td><td class="admin-num">@row.Count</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
     <section class="admin-panel" aria-labelledby="files-heading">
         <h2 id="files-heading">Files in the downloads folder</h2>
         <p class="admin-path"><code>@DownloadsConfig.Value.Folder</code></p>
@@ -161,8 +243,8 @@
                         {
                             <tr>
                                 <td><a href="/dl/@file.Name">@file.Name</a></td>
-                                <td class="admin-num">@FormatSize(file.SizeBytes)</td>
-                                <td>@file.LastWriteUtc.ToString("yyyy-MM-dd HH:mm")</td>
+                                <td class="admin-num">@ReleaseAvailability.FormatSize(file.SizeBytes)</td>
+                                <td>@file.LastWriteUtc.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)</td>
                             </tr>
                         }
                     </tbody>
@@ -177,37 +259,34 @@
 @code {
     private AnalyticsSummary _summary = null!;
     private IReadOnlyList<DownloadFileInfo> _files = [];
-    private long _maxDaily;
-
-    protected override void OnInitialized()
-    {
-        _summary = Store.GetSummary(30);
-        _files = DownloadsInfo.List(DownloadsConfig.Value.Folder);
-        _maxDaily = _summary.DailyVisits.Count == 0 ? 0 : _summary.DailyVisits.Max(d => d.Count);
-    }
+    private int _days = AdminDashboardOptions.DefaultDays;
 
     /// <summary>
-    /// Maps a daily count to one of the precomputed .bar-h-* height classes (0..100, step 5) —
-    /// strict CSP forbids inline styles, so heights must come from a fixed class set.
-    /// Non-zero counts always get a visible bar (minimum bucket 5).
+    /// ADM-003: reporting window from <c>?days=</c>; clamped, never trusted raw.
+    /// <para>
+    /// Bound as a STRING, not an <c>int?</c>: Blazor's query-string binder throws on a value it
+    /// cannot parse, so <c>?days=banana</c> returned a 500 before any clamping could run — a
+    /// mangled link or a crawler could break the owner's dashboard. Parsing here means every
+    /// malformed value lands on the default instead.
+    /// </para>
     /// </summary>
-    private int HeightBucket(long count)
-    {
-        if (count <= 0 || _maxDaily <= 0)
-        {
-            return 0;
-        }
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "days")]
+    public string? Days { get; set; }
 
-        var percent = (int)Math.Round(count * 100.0 / _maxDaily, MidpointRounding.AwayFromZero);
-        var bucket = (int)Math.Round(percent / 5.0, MidpointRounding.AwayFromZero) * 5;
-        return Math.Clamp(bucket, 5, 100);
+    protected override void OnParametersSet()
+    {
+        _days = AdminDashboardOptions.NormalizeDays(
+            int.TryParse(Days, NumberStyles.Integer, CultureInfo.InvariantCulture, out var requested)
+                ? requested
+                : null);
+        _summary = Store.GetSummary(_days);
+        _files = DownloadsInfo.List(DownloadsConfig.Value.Folder);
     }
 
-    private static string FormatSize(long bytes) => bytes switch
-    {
-        < 1024L => $"{bytes} B",
-        < 1024L * 1024 => $"{bytes / 1024.0:0.#} KB",
-        < 1024L * 1024 * 1024 => $"{bytes / (1024.0 * 1024):0.#} MB",
-        _ => $"{bytes / (1024.0 * 1024 * 1024):0.##} GB",
-    };
+    /// <summary>Share of window visits, for the browser table.</summary>
+    private string Share(long count) =>
+        _summary.VisitsWindow <= 0
+            ? "—"
+            : (count * 100.0 / _summary.VisitsWindow).ToString("0.#", CultureInfo.InvariantCulture) + "%";
 }

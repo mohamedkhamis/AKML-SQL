@@ -10,6 +10,12 @@ public sealed record VisitInfo(DateTimeOffset Utc, string Path, string? Referrer
 /// <summary>One installer download event. <see cref="IpAddress"/> is hashed per-day by the store and never persisted raw.</summary>
 public sealed record DownloadInfo(DateTimeOffset Utc, string File, string? ReferrerHost, string? UaFamily, string? IpAddress);
 
+/// <summary>
+/// ADM-008: one request that produced a 404. Visit tracking records only 2xx responses, so broken
+/// inbound links and stale bookmarks were invisible — exactly the thing the owner can fix.
+/// </summary>
+public sealed record NotFoundInfo(DateTimeOffset Utc, string Path, string? ReferrerHost);
+
 /// <summary>Fire-and-forget metrics queue. Implementations must never throw and never block the caller.</summary>
 public interface IAnalyticsSink
 {
@@ -18,6 +24,9 @@ public interface IAnalyticsSink
 
     /// <summary>Queues an installer download for background persistence (dropped silently when the queue is full).</summary>
     void EnqueueDownload(DownloadInfo download);
+
+    /// <summary>Queues a 404 for background persistence (dropped silently when the queue is full).</summary>
+    void EnqueueNotFound(NotFoundInfo notFound);
 }
 
 /// <summary>Aggregate count for one key (page path, file name, referrer host).</summary>
@@ -61,4 +70,38 @@ public sealed class AnalyticsSummary
 
     /// <summary>Top referrer hosts within the window (host, views), descending; empty/null referrers excluded.</summary>
     public required IReadOnlyList<CountRow> TopReferrers { get; init; }
+
+    // --- ADM-001/002/005: values the pipeline already recorded but the dashboard never showed ---
+
+    /// <summary>
+    /// ADM-002: distinct visitors today, counted from the per-day salted IP hash. That hash exists
+    /// precisely so unique counting is possible without storing an IP; nothing used it before.
+    /// Only meaningful within a single day — the salt is re-mixed per day by design.
+    /// </summary>
+    public required long UniqueVisitorsToday { get; init; }
+
+    /// <summary>Distinct visitors on each day of the window, oldest first (same caveat as above).</summary>
+    public required IReadOnlyList<DailyCount> DailyUniqueVisitors { get; init; }
+
+    /// <summary>
+    /// ADM-001: crawler page views within the window. Bots are excluded from every other figure
+    /// here — counting them as visitors inflated every headline number — but shown separately
+    /// rather than silently discarded.
+    /// </summary>
+    public required long BotVisitsWindow { get; init; }
+
+    /// <summary>Browser mix within the window (user-agent family, views), descending; bots excluded.</summary>
+    public required IReadOnlyList<CountRow> BrowserMix { get; init; }
+
+    /// <summary>ADM-005: daily installer downloads for the window, oldest first, zero-filled.</summary>
+    public required IReadOnlyList<DailyCount> DailyDownloads { get; init; }
+
+    /// <summary>Installer downloads over the last <see cref="Days"/> days (today inclusive).</summary>
+    public required long DownloadsWindow { get; init; }
+
+    /// <summary>
+    /// ADM-008: most-requested missing paths within the window — broken inbound links and stale
+    /// bookmarks, which visit tracking (2xx only) could never surface.
+    /// </summary>
+    public required IReadOnlyList<CountRow> TopNotFound { get; init; }
 }

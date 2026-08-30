@@ -1,0 +1,160 @@
+@using System.Globalization
+@using AkmlSql.Site.Analytics
+
+@* Daily bar chart for the admin dashboard.
+
+   Pure CSS: bar heights come from the precomputed .bar-h-* bucket classes in site.css, because
+   the strict CSP forbids inline styles. Bucketing is 5% steps, chosen server-side.
+
+   A11Y-005: the chart used to convey its values ONLY through a title tooltip — unreachable by
+   keyboard and by screen readers, with no axis and no alternative. It now carries a
+   visually-hidden data table (the accessible representation) plus a visible axis maximum, and the
+   graphic itself is aria-hidden so the numbers are not read twice. *@
+
+<section class="admin-panel" aria-labelledby="@($"{IdPrefix}-chart-heading")">
+    <div class="admin-chart-head">
+        <h2 id="@($"{IdPrefix}-chart-heading")">@Title — last @Days days</h2>
+        <p class="admin-chart-total">@Total.ToString("N0", CultureInfo.InvariantCulture) total</p>
+    </div>
+
+    <div class="admin-chart" aria-hidden="true">
+        <div class="admin-chart-scale">
+            <span>@Max.ToString("N0", CultureInfo.InvariantCulture)</span>
+            <span>0</span>
+        </div>
+        <div class="admin-chart-plot">
+            <div class="admin-chart-bars">
+                @for (var i = 0; i < Series.Count; i++)
+                {
+                    var day = Series[i];
+                    <div class="admin-chart-col" title="@Tooltip(i)">
+                        <div class="admin-chart-bar bar-h-@HeightBucket(day.Count)"></div>
+                        @if (Secondary is not null)
+                        {
+                            <div class="admin-chart-bar admin-chart-bar-secondary bar-h-@HeightBucket(Secondary[i].Count)"></div>
+                        }
+                    </div>
+                }
+            </div>
+            <div class="admin-chart-labels">
+                @for (var i = 0; i < Series.Count; i++)
+                {
+                    <span class="admin-chart-label">@(ShowLabel(i) ? Series[i].Day.ToString("M/d", CultureInfo.InvariantCulture) : "")</span>
+                }
+            </div>
+        </div>
+    </div>
+
+    @if (Secondary is not null)
+    {
+        <p class="admin-chart-legend" aria-hidden="true">
+            <span class="admin-legend-key admin-legend-primary"></span> @Title.ToLowerInvariant()
+            <span class="admin-legend-key admin-legend-secondary"></span> @SecondaryLabel
+        </p>
+    }
+
+    @* The accessible equivalent of the graphic above. Collapsed for sighted users so the panel
+       stays a chart, but a real table for assistive tech and for anyone who wants the numbers. *@
+    <details class="admin-chart-data">
+        <summary>View @Title.ToLowerInvariant() as a table</summary>
+        <div class="table-scroll">
+            <table class="admin-table">
+                <caption class="visually-hidden">@Title per day for the last @Days days</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Day</th>
+                        <th scope="col" class="admin-num">@Title</th>
+                        @if (Secondary is not null)
+                        {
+                            <th scope="col" class="admin-num">@SecondaryLabel</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @for (var i = 0; i < Series.Count; i++)
+                    {
+                        <tr>
+                            <th scope="row">@Series[i].Day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)</th>
+                            <td class="admin-num">@Series[i].Count</td>
+                            @if (Secondary is not null)
+                            {
+                                <td class="admin-num">@Secondary[i].Count</td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </details>
+</section>
+
+@code {
+    /// <summary>Chart heading, e.g. "Visits".</summary>
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = "";
+
+    /// <summary>Primary daily series, oldest first.</summary>
+    [Parameter, EditorRequired]
+    public IReadOnlyList<DailyCount> Series { get; set; } = [];
+
+    /// <summary>Optional second series drawn alongside (e.g. unique visitors); same length.</summary>
+    [Parameter]
+    public IReadOnlyList<DailyCount>? Secondary { get; set; }
+
+    /// <summary>Legend label for <see cref="Secondary"/>.</summary>
+    [Parameter]
+    public string SecondaryLabel { get; set; } = "";
+
+    /// <summary>Window length, for the heading.</summary>
+    [Parameter, EditorRequired]
+    public int Days { get; set; }
+
+    /// <summary>Prefix for element ids, so two charts on one page stay unique.</summary>
+    [Parameter, EditorRequired]
+    public string IdPrefix { get; set; } = "";
+
+    private long Total => Series.Sum(d => d.Count);
+
+    /// <summary>Axis maximum — the tallest bar across both series.</summary>
+    private long Max
+    {
+        get
+        {
+            var primary = Series.Count == 0 ? 0 : Series.Max(d => d.Count);
+            var secondary = Secondary is null || Secondary.Count == 0 ? 0 : Secondary.Max(d => d.Count);
+            return Math.Max(primary, secondary);
+        }
+    }
+
+    /// <summary>Date label every fifth column, so the axis stays readable at 365 days.</summary>
+    private bool ShowLabel(int index)
+    {
+        var step = Math.Max(1, Series.Count / 6);
+        return index % step == 0;
+    }
+
+    private string Tooltip(int index)
+    {
+        var day = Series[index].Day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        var primary = $"{day}: {Series[index].Count} {Title.ToLowerInvariant()}";
+        return Secondary is null ? primary : $"{primary}, {Secondary[index].Count} {SecondaryLabel}";
+    }
+
+    /// <summary>
+    /// Maps a count to one of the precomputed .bar-h-* height classes (0..100, step 5) — strict
+    /// CSP forbids inline styles, so heights must come from a fixed class set. Non-zero counts
+    /// always get a visible bar (minimum bucket 5).
+    /// </summary>
+    private int HeightBucket(long count)
+    {
+        var max = Max;
+        if (count <= 0 || max <= 0)
+        {
+            return 0;
+        }
+
+        var percent = (int)Math.Round(count * 100.0 / max, MidpointRounding.AwayFromZero);
+        var bucket = (int)Math.Round(percent / 5.0, MidpointRounding.AwayFromZero) * 5;
+        return Math.Clamp(bucket, 5, 100);
+    }
+}

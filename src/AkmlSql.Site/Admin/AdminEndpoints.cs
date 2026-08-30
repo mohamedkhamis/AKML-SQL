@@ -16,13 +16,30 @@ public static class AdminEndpoints
     /// <summary>Logger category for the sign-in audit trail (SEC-003).</summary>
     public const string AuditLoggerName = "AkmlSql.Site.Admin.Login";
 
-    /// <summary>Registers <c>POST /admin/login</c> and <c>POST /admin/logout</c>.</summary>
+    /// <summary>Registers the admin POST endpoints and the CSV export.</summary>
     public static void Map(IEndpointRouteBuilder endpoints)
     {
         endpoints.MapPost("/admin/login", HandleLogin);
         // Cast to Delegate: HandleLogout matches the RequestDelegate shape, which would discard
         // the IResult (analyzer ASP0016) instead of writing the redirect to the response.
         endpoints.MapPost("/admin/logout", (Delegate)HandleLogout);
+
+        // ADM-007: CSV export. Sits under /admin so AdminBranchMiddleware guards it with the same
+        // cookie as the dashboard -- no separate authorization path to get wrong.
+        // `days` is a string for the same reason as on the dashboard: an unparseable int binds to
+        // an error response instead of falling back to the default window.
+        endpoints.MapGet("/admin/metrics.csv", (HttpContext http, AnalyticsStore store, string? days) =>
+        {
+            var requested = int.TryParse(days, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+                ? parsed
+                : (int?)null;
+            var summary = store.GetSummary(AdminDashboardOptions.NormalizeDays(requested));
+            http.Response.Headers.CacheControl = "no-store";
+            return Results.File(
+                System.Text.Encoding.UTF8.GetBytes(MetricsExport.ToCsv(summary)),
+                "text/csv",
+                MetricsExport.FileName(summary, DateTimeOffset.UtcNow));
+        });
     }
 
     private static async Task<IResult> HandleLogin(

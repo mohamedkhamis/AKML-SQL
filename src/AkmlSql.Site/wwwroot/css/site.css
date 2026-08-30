@@ -2036,3 +2036,184 @@ html[data-akml-theme="light"] .card:hover {
         margin: 0;
     }
 }
+
+/* --- Admin portal, Phase 4 additions --------------------------------------------- */
+
+/* Screen-reader-only helper (chart captions). */
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* ADM-003/007: window selector + export, above the metrics. */
+.admin-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--s-3);
+    margin-bottom: var(--s-5);
+}
+
+.admin-toolbar-label {
+    color: var(--akml-text-secondary);
+    font-size: var(--t-xs);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.admin-ranges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    margin: 0;
+    padding: var(--s-1);
+    list-style: none;
+    background-color: var(--akml-surface-panel);
+    border: 1px solid var(--akml-border-subtle);
+    border-radius: var(--akml-scalar-radius-s);
+}
+
+.admin-ranges a {
+    display: block;
+    padding: var(--s-1) var(--s-3);
+    color: var(--akml-text-secondary);
+    font-size: var(--t-sm);
+    text-decoration: none;
+    border-radius: var(--akml-scalar-radius-xs);
+    transition: color 0.16s ease, background-color 0.16s ease;
+}
+
+.admin-ranges a:hover {
+    color: var(--akml-text-primary);
+    background-color: var(--akml-surface-hover);
+}
+
+.admin-ranges a.is-current {
+    color: var(--akml-text-onaccent);
+    background-color: var(--akml-accent-primary);
+}
+
+.admin-export {
+    margin-inline-start: auto;
+    font-size: var(--t-sm);
+}
+
+/* The bot-hits tile is context, not a headline number — keep it visually secondary. */
+.admin-stat-muted .admin-stat-value {
+    color: var(--akml-text-secondary);
+    font-weight: 600;
+}
+
+/* --- Charts ---------------------------------------------------------------------- */
+
+.admin-chart-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--s-3);
+}
+
+.admin-chart-head h2 {
+    margin: 0;
+}
+
+.admin-chart-total {
+    margin: 0;
+    color: var(--akml-text-secondary);
+    font-size: var(--t-sm);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Axis column + plot area. */
+.admin-chart {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: var(--s-2);
+    margin-top: var(--s-4);
+}
+
+.admin-chart-scale {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    height: 160px;
+    padding-top: var(--s-2);
+    color: var(--akml-text-secondary);
+    font-size: var(--t-xs);
+    font-variant-numeric: tabular-nums;
+    text-align: end;
+}
+
+.admin-chart-plot {
+    min-width: 0;
+}
+
+/* One column per day; two bars inside when a secondary series is present. */
+.admin-chart-col {
+    display: flex;
+    align-items: flex-end;
+    gap: 1px;
+    flex: 1 1 0;
+    min-width: 2px;
+    height: 100%;
+}
+
+.admin-chart-bar-secondary {
+    background-color: color-mix(in srgb, var(--akml-accent-primary) 45%, var(--akml-surface-panel));
+}
+
+.admin-chart-legend {
+    display: flex;
+    align-items: center;
+    gap: var(--s-2);
+    margin: var(--s-3) 0 0;
+    color: var(--akml-text-secondary);
+    font-size: var(--t-xs);
+}
+
+.admin-legend-key {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+}
+
+.admin-legend-primary {
+    background-color: var(--akml-accent-primary);
+}
+
+.admin-legend-secondary {
+    background-color: color-mix(in srgb, var(--akml-accent-primary) 45%, var(--akml-surface-panel));
+}
+
+/* A11Y-005: the table behind each chart. Collapsed by default so the panel still reads as a
+   chart, but present in the DOM for assistive tech and for anyone wanting exact numbers. */
+.admin-chart-data {
+    margin-top: var(--s-4);
+    border-top: 1px solid var(--akml-border-subtle);
+    padding-top: var(--s-3);
+}
+
+.admin-chart-data summary {
+    cursor: pointer;
+    color: var(--akml-text-secondary);
+    font-size: var(--t-sm);
+}
+
+.admin-chart-data summary:hover {
+    color: var(--akml-text-primary);
+}
+
+.admin-chart-data .table-scroll {
+    max-height: 22rem;
+    overflow-y: auto;
+}

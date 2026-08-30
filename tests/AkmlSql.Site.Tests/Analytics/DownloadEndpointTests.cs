@@ -137,9 +137,12 @@ public sealed class DownloadEndpointTests
     {
         public List<VisitInfo> Visits { get; } = [];
         public List<DownloadInfo> Downloads { get; } = [];
+        public List<NotFoundInfo> NotFound { get; } = [];
 
         public void EnqueueVisit(VisitInfo visit) => Visits.Add(visit);
 
         public void EnqueueDownload(DownloadInfo download) => Downloads.Add(download);
+
+        public void EnqueueNotFound(NotFoundInfo notFound) => NotFound.Add(notFound);
     }
 }

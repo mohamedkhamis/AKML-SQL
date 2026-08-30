@@ -32,6 +32,8 @@ public sealed class ChannelAnalyticsSink : BackgroundService, IAnalyticsSink
 
     public void EnqueueDownload(DownloadInfo download) => _queue.Writer.TryWrite(download);
 
+    public void EnqueueNotFound(NotFoundInfo notFound) => _queue.Writer.TryWrite(notFound);
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         try
@@ -47,6 +49,9 @@ public sealed class ChannelAnalyticsSink : BackgroundService, IAnalyticsSink
                             break;
                         case DownloadInfo download:
                             _store.LogDownload(download);
+                            break;
+                        case NotFoundInfo notFound:
+                            _store.LogNotFound(notFound);
                             break;
                     }
                 }
