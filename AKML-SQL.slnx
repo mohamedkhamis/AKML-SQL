@@ -27,6 +27,7 @@
     <Project Path="tests/AkmlSql.Web.Tests/AkmlSql.Web.Tests.csproj" />
     <Project Path="tests/AkmlSql.Site.Tests/AkmlSql.Site.Tests.csproj" />
     <Project Path="tests/AkmlSql.Web.E2E.Tests/AkmlSql.Web.E2E.Tests.csproj" />
+    <Project Path="tests/AkmlSql.Site.E2E.Tests/AkmlSql.Site.E2E.Tests.csproj" />
     <Project Path="tests/AkmlSql.Installer.Tests/AkmlSql.Installer.Tests.csproj" />
   </Folder>
 </Solution>

@@ -85,9 +85,14 @@ try {
     Log "robocopy mirror -> $DeployPath"
     # /MIR deletes destination files absent from the source, so anything placed on the server by
     # hand is erased on every deploy (OPS-002 -- this is what kept wiping the admin configuration).
-    # Secrets now live in the app pool's environment, but keep these excluded so a hand-written
-    # override survives, and never mirror the Development settings onto a production box (OPS-003).
-    $mirrorExclusions = @('appsettings.Production.json', 'appsettings.Development.json', 'app_offline.htm')
+    # Secrets now live in the app pool's environment, but keep appsettings.Production.json excluded
+    # so a hand-written override survives, and app_offline.htm excluded so the mirror does not
+    # delete the marker written just above (which would bring the app back up mid-copy).
+    #
+    # appsettings.Development.json is deliberately NOT in this list. /XF protects a file from
+    # deletion as well as from copying, so excluding it would preserve a stale copy from an older
+    # deploy forever -- the opposite of OPS-003. It is no longer published, so /MIR removes it.
+    $mirrorExclusions = @('appsettings.Production.json', 'app_offline.htm')
     & robocopy $staging $DeployPath /MIR /XF $mirrorExclusions /R:2 /W:2 /NFL /NDL /NJH /NJS /NP | Out-Null
     if ($LASTEXITCODE -gt 7) { throw "robocopy failed ($LASTEXITCODE)" }
     Remove-Item $offline -Force -ErrorAction SilentlyContinue
