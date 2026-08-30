@@ -25,9 +25,16 @@
 
         <div class="docs-search" id="docs-search">
             <input id="docs-search-input" type="search" placeholder="Search full text…"
-                   autocomplete="off" aria-label="Search documentation" />
-            @* U21: result count/list changes are announced to screen readers. *@
-            <ul id="docs-search-results" class="docs-search-results" role="status" aria-live="polite" hidden></ul>
+                   autocomplete="off" aria-label="Search documentation"
+                   role="combobox" aria-expanded="false" aria-controls="docs-search-results"
+                   aria-autocomplete="list" />
+            @* A11Y-003: role="status" used to sit on the <ul> itself, which overrode the list
+               role — results were announced as one blob instead of "list, N items". The live
+               region is now a separate element that announces the COUNT, and the list keeps its
+               own semantics. U21: changes are still announced. *@
+            <p id="docs-search-status" class="docs-search-status" role="status" aria-live="polite"></p>
+            <ul id="docs-search-results" class="docs-search-results" role="listbox"
+                aria-label="Search results" hidden></ul>
         </div>
 
         <nav class="docs-tree" aria-label="Documentation sections">
@@ -67,6 +74,9 @@
    fingerprinted via MapStaticAssets (T033). *@
 <script src="@Assets["js/minisearch.min.js"]" defer></script>
 <script src="@Assets["js/docs-search.js"]" defer></script>
+@* DOC-005: copy buttons on documentation code blocks (same script that serves the /download
+   digest button — it already had the clipboard fallback and the hidden-until-JS pattern). *@
+<script src="@Assets["js/copy-hash.js"]" defer></script>
 
 @code {
     /// <summary>Corpus title prefix stripped from sidebar nav labels (U18) — the full

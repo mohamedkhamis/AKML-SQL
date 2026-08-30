@@ -227,13 +227,25 @@ public sealed class DocsPagesTests
     public void DocsLayout_SearchResults_HaveLiveRegionWiring()
     {
         // U21: dynamic search results must be announced to screen readers.
+        // A11Y-003: role="status" used to sit on the <ul> itself, which overrode the list role —
+        // results were announced as one blob instead of "list, N items". The live region is now a
+        // separate node announcing the count, and the list keeps listbox semantics.
         using var ctx = NewCtx(TwoSectionCatalog());
 
         var cut = ctx.Render<DocsLayout>(ps => ps.Add(p => p.Body, "<p>body</p>"));
 
+        var status = cut.Find("#docs-search-status");
+        Assert.Equal("status", status.GetAttribute("role"));
+        Assert.Equal("polite", status.GetAttribute("aria-live"));
+
         var results = cut.Find("ul#docs-search-results");
-        Assert.Equal("status", results.GetAttribute("role"));
-        Assert.Equal("polite", results.GetAttribute("aria-live"));
+        Assert.Equal("listbox", results.GetAttribute("role"));
+        Assert.NotNull(results.GetAttribute("aria-label"));
+
+        // The input drives the listbox, so it must advertise the relationship.
+        var input = cut.Find("#docs-search-input");
+        Assert.Equal("combobox", input.GetAttribute("role"));
+        Assert.Equal("docs-search-results", input.GetAttribute("aria-controls"));
     }
 
     [Fact]

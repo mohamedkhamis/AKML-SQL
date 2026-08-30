@@ -94,6 +94,7 @@ public sealed class MarkdownRenderer
         SanitizeAndRewriteLinks(document, sourceRelativePath);
 
         var html = Markdig.Markdown.ToHtml(document, _pipeline);
+        html = AddHeadingPermalinks(html);
         // Mobile tables: wrap in a scroll container — a display:block table with
         // border-collapse does not scroll reliably in Chromium at narrow widths, so the
         // wrapper owns the scrolling and the table stays a real table.
@@ -105,6 +106,35 @@ public sealed class MarkdownRenderer
 
         return new RenderedDocument(html, plainText, headings, summary, toc);
     }
+
+    /// <summary>
+    /// Matches an H2-H4 opening tag that AutoIdentifiers gave an id, capturing the level and id.
+    /// </summary>
+    private static readonly Regex HeadingWithId = new(
+        @"<h(?<level>[2-4]) id=""(?<id>[^""]+)"">",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// DOC-004: appends a permalink anchor to every id-bearing H2-H4 so a reader can link
+    /// directly to a section. Markdig's AutoIdentifier extension already emits the ids; only
+    /// the affordance was missing.
+    /// <para>
+    /// The href is a bare fragment, which is safe here because the docs pages do not rely on
+    /// <c>&lt;base href&gt;</c> resolution for it — the anchor is activated in-page and the
+    /// browser scrolls without navigating. (The "On this page" nav in DocPage.razor uses the
+    /// full route because it is rendered before the document is known to be current.)
+    /// </para>
+    /// The link is aria-hidden with a title, so screen readers are not read a "#" after every
+    /// heading; CSS reveals it on hover/focus of the heading.
+    /// </summary>
+    internal static string AddHeadingPermalinks(string html) =>
+        HeadingWithId.Replace(html, match =>
+        {
+            var level = match.Groups["level"].Value;
+            var id = match.Groups["id"].Value;
+            return $"<h{level} id=\"{id}\" class=\"doc-heading\">"
+                 + $"<a class=\"doc-anchor\" href=\"#{id}\" title=\"Link to this section\" aria-hidden=\"true\" tabindex=\"-1\">#</a>";
+        });
 
     /// <summary>
     /// U3: the doc page renders its own <c>&lt;h1&gt;@Title&lt;/h1&gt;</c>, so a leading source

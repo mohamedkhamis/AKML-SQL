@@ -6,7 +6,7 @@
     "Surface": {
       "Akml.Brush.Surface.Canvas":          { "light": "#F1F5F9",   "dark": "#0F172A",   "highContrast": "Canvas" },
       "Akml.Brush.Surface.Panel":           { "light": "#FFFFFF",   "dark": "#1E293B",   "highContrast": "Canvas" },
-      "Akml.Brush.Surface.Elevated":        { "light": "#FFFFFF",   "dark": "#334155",   "highContrast": "Canvas" },
+      "Akml.Brush.Surface.Elevated":        { "light": "#E2E8F0",   "dark": "#334155",   "highContrast": "Canvas" },
       "Akml.Brush.Surface.Sidebar":         { "light": "#F8FAFC",   "dark": "#1E293B",   "highContrast": "ButtonFace" },
       "Akml.Brush.Surface.Input":           { "light": "#FFFFFF",   "dark": "#1E293B",   "highContrast": "Field" },
       "Akml.Brush.Surface.InputReadOnly":   { "light": "#F8FAFC",   "dark": "#334155",   "highContrast": "ButtonFace" },

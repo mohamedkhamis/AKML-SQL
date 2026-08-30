@@ -77,7 +77,7 @@ namespace AkmlSql.Shell.Shared.Ui.Theme
                 // Surface (v2 AKML-Blue / slate)
                 [ThemeTokens.SurfaceCanvas]          = Solid(0xF1, 0xF5, 0xF9),
                 [ThemeTokens.SurfacePanel]           = Solid(0xFF, 0xFF, 0xFF),
-                [ThemeTokens.SurfaceElevated]        = Solid(0xFF, 0xFF, 0xFF),
+                [ThemeTokens.SurfaceElevated]        = Solid(0xE2, 0xE8, 0xF0),
                 [ThemeTokens.SurfaceSidebar]         = Solid(0xF8, 0xFA, 0xFC),
                 [ThemeTokens.SurfaceInput]           = Solid(0xFF, 0xFF, 0xFF),
                 [ThemeTokens.SurfaceInputReadOnly]   = Solid(0xF8, 0xFA, 0xFC),

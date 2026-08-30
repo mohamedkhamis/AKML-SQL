@@ -22,7 +22,9 @@
            :has(:checked) in site.css opens the panel and swaps the icon. Full-page SSR
            navigation resets the box; for Blazor enhanced nav js/nav-menu.js (deferred,
            CSP-clean) unchecks it on link click / Escape. Desktop CSS hides both elements. *@
-        <label class="nav-toggle-btn">
+        @* A11Y-004: aria-expanded is kept current by js/nav-menu.js — the checkbox alone
+           announces as "checkbox" with no open/closed state. The menu still works without JS. *@
+        <label class="nav-toggle-btn" role="button" aria-expanded="false" aria-controls="site-nav-links">
             <input type="checkbox" class="nav-toggle" aria-label="Toggle navigation menu" autocomplete="off" />
             <svg class="nav-icon-open" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" focusable="false">
                 <path d="M4 7h16M4 12h16M4 17h16" />
@@ -31,7 +33,7 @@
                 <path d="m6 6 12 12M18 6 6 18" />
             </svg>
         </label>
-        <ul class="site-nav-links">
+        <ul class="site-nav-links" id="site-nav-links">
             <li><NavLink href="/" Match="NavLinkMatch.All">Home</NavLink></li>
             <li><NavLink href="/features">Features</NavLink></li>
             <li><NavLink href="/docs">Docs</NavLink></li>
@@ -48,22 +50,37 @@
                 </a>
             </li>
         </ul>
-        @* T028 (US3): dark/light toggle. Wired by js/theme-toggle.js (deferred); without JS the
-           button is inert and the boot script's theme still applies, so CSS hides it until the
-           JS reveals it (U24). The icon pair is swapped by CSS from the data-akml-theme
-           attribute and shows the theme you will switch TO (U25) — sun while dark, moon while
-           light — matching the aria-label the JS keeps current ("Switch to light theme"…). *@
-        <button type="button" id="theme-toggle" class="theme-toggle" aria-label="Toggle color theme" title="Toggle color theme">
-            <svg class="theme-toggle-icon theme-toggle-moon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
-                <path d="M6 .3a7 7 0 0 0 9.7 9.7A8 8 0 1 1 6 .3z" fill="currentColor" />
-            </svg>
-            <svg class="theme-toggle-icon theme-toggle-sun" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
-                <circle cx="8" cy="8" r="3.2" fill="currentColor" />
-                <g stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
-                    <path d="M8 .8v1.6M8 13.6v1.6M.8 8h1.6M13.6 8h1.6M2.9 2.9l1.1 1.1M12 12l1.1 1.1M13.1 2.9 12 4M4 12l-1.1 1.1" />
-                </g>
-            </svg>
-        </button>
+@* T028 (US3) + UI-004: colour-theme control. Wired by js/theme-toggle.js (deferred); without
+           JS it is inert, so CSS hides it until the script reveals it (U24) — the boot script.s
+           theme still applies either way. The icon shows the ACTIVE theme (moon/sun/half-circle),
+           because a three-option menu has no single "theme you will switch to". *@
+        <div class="theme-picker">
+            <button type="button" id="theme-toggle" class="theme-toggle" aria-label="Colour theme"
+                    title="Colour theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-menu">
+                <svg class="theme-toggle-icon theme-toggle-moon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+                    <path d="M6 .3a7 7 0 0 0 9.7 9.7A8 8 0 1 1 6 .3z" fill="currentColor" />
+                </svg>
+                <svg class="theme-toggle-icon theme-toggle-sun" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+                    <circle cx="8" cy="8" r="3.2" fill="currentColor" />
+                    <g stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
+                        <path d="M8 .8v1.6M8 13.6v1.6M.8 8h1.6M13.6 8h1.6M2.9 2.9l1.1 1.1M12 12l1.1 1.1M13.1 2.9 12 4M4 12l-1.1 1.1" />
+                    </g>
+                </svg>
+                <svg class="theme-toggle-icon theme-toggle-contrast" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+                    <circle cx="8" cy="8" r="6.4" fill="none" stroke="currentColor" stroke-width="1.4" />
+                    <path d="M8 1.6a6.4 6.4 0 0 1 0 12.8z" fill="currentColor" />
+                </svg>
+            </button>
+            @* UI-004: high-contrast.css shipped from day one but nothing could select it — the
+               old control only flipped dark/light. A11Y-006: radio semantics with aria-checked
+               report the active theme, which a changing aria-label never did.
+               Hidden until theme-toggle.js wires it; the boot script's theme still applies. *@
+            <div id="theme-menu" class="theme-menu" role="radiogroup" aria-label="Colour theme" hidden>
+                <button type="button" role="radio" aria-checked="false" data-theme-value="dark">Dark</button>
+                <button type="button" role="radio" aria-checked="false" data-theme-value="light">Light</button>
+                <button type="button" role="radio" aria-checked="false" data-theme-value="high-contrast">High contrast</button>
+            </div>
+        </div>
     </nav>
 </header>
 

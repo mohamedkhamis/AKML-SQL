@@ -393,8 +393,48 @@ public sealed class MarkdownRendererTests : IDisposable
         var result = renderer.Render(markdown, "architecture.md", documentTitle: "Doc Title");
 
         // U15: H2s only, in order; each captured id must match the emitted <h2 id="…">.
+        // DOC-004 added the permalink class and anchor to the tag, so match the id ATTRIBUTE
+        // rather than the whole opening tag — the contract is "the ids agree".
         Assert.Equal(["Getting Started", "Advanced Setup"], result.Toc.Select(h => h.Text).ToArray());
-        Assert.All(result.Toc, h => Assert.Contains($"<h2 id=\"{h.Id}\">", result.Html));
+        Assert.All(result.Toc, h => Assert.Contains($"<h2 id=\"{h.Id}\"", result.Html));
+        Assert.All(result.Toc, h => Assert.Contains($"<a class=\"doc-anchor\" href=\"#{h.Id}\"", result.Html));
         Assert.DoesNotContain(result.Toc, h => h.Text.Contains("Nested"));
+    }
+
+    [Fact]
+    public void Render_AddsPermalinkAnchors_ToH2ThroughH4()
+    {
+        // DOC-004: Markdig's AutoIdentifiers already emitted the ids; only the affordance to
+        // link to a section was missing.
+        var renderer = CreateRenderer();
+        var markdown = "# Title\n\n## Level Two\n\n### Level Three\n\n#### Level Four\n";
+
+        var html = renderer.Render(markdown, "architecture.md", documentTitle: "Title").Html;
+
+        Assert.Contains("<h2 id=\"level-two\" class=\"doc-heading\">", html);
+        Assert.Contains("<h3 id=\"level-three\" class=\"doc-heading\">", html);
+        Assert.Contains("<h4 id=\"level-four\" class=\"doc-heading\">", html);
+        Assert.Contains("<a class=\"doc-anchor\" href=\"#level-two\"", html);
+    }
+
+    [Fact]
+    public void Render_PermalinkAnchors_AreHiddenFromAssistiveTech()
+    {
+        // The heading text already names the section: a screen reader should not read "#" after
+        // every heading, and the anchor must stay out of the tab order.
+        var html = CreateRenderer().Render("# T\n\n## Section\n", "a.md", documentTitle: "T").Html;
+
+        Assert.Contains("aria-hidden=\"true\"", html);
+        Assert.Contains("tabindex=\"-1\"", html);
+    }
+
+    [Fact]
+    public void Render_DoesNotAddAPermalinkToH1()
+    {
+        // The page renders its own <h1>; a permalink there would just point at the page itself.
+        var html = CreateRenderer().Render("# Kept Title\n\ntext\n", "a.md", documentTitle: "Other").Html;
+
+        Assert.Contains("<h1", html);
+        Assert.DoesNotContain("doc-anchor", html);
     }
 }

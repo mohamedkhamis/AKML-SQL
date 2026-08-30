@@ -58,6 +58,48 @@ public sealed class DocsContentService
         slug is not null && _documentsBySlug.TryGetValue(slug, out var document) ? document : null;
 
     /// <summary>
+    /// DOC-004: documents in the order a reader moves through them — section order, then the
+    /// document order within each section. This is the sidebar's order, so "next" always means
+    /// "the next entry down the tree", never a different sequence.
+    /// </summary>
+    public IReadOnlyList<Document> ReadingOrder =>
+        _readingOrder ??= Sections.SelectMany(s => s.Documents).ToList();
+
+    private IReadOnlyList<Document>? _readingOrder;
+
+    /// <summary>
+    /// Previous/next neighbours of <paramref name="document"/> in <see cref="ReadingOrder"/>.
+    /// Either may be null at the ends of the corpus.
+    /// </summary>
+    public (Document? Previous, Document? Next) Neighbours(Document document)
+    {
+        if (document is null)
+        {
+            return (null, null);
+        }
+
+        var order = ReadingOrder;
+        var index = -1;
+        for (var i = 0; i < order.Count; i++)
+        {
+            if (ReferenceEquals(order[i], document))
+            {
+                index = i;
+                break;
+            }
+        }
+
+        if (index < 0)
+        {
+            return (null, null);
+        }
+
+        return (
+            index > 0 ? order[index - 1] : null,
+            index < order.Count - 1 ? order[index + 1] : null);
+    }
+
+    /// <summary>
     /// FR-007 title filter (works with JS disabled — plain GET form, filtered server-side).
     /// Returns sections whose documents match <paramref name="titleFilter"/> (ordinal-ignore-case
     /// substring on the title); empty sections and an empty/blank filter pass through unfiltered.

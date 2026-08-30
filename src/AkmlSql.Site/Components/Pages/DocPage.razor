@@ -55,6 +55,36 @@
         <div class="doc-body">
             @((MarkupString)_document.HtmlContent)
         </div>
+
+        <footer class="doc-footer">
+            @* DOC-004: an "Edit on GitHub" link built from the document's own source path, so it
+               cannot point at the wrong file and needs no per-document configuration. *@
+            <p class="doc-source">
+                <a href="@EditUrl" target="_blank" rel="noopener noreferrer">Edit this page on GitHub</a>
+            </p>
+
+            @* DOC-004: prev/next follow the sidebar's reading order, so "next" always means the
+               next entry down the tree. Both ends of the corpus simply omit a link. *@
+            @if (_previous is not null || _next is not null)
+            {
+                <nav class="doc-pager" aria-label="Document navigation">
+                    @if (_previous is not null)
+                    {
+                        <a class="doc-pager-link doc-pager-prev" href="@_previous.Route" rel="prev">
+                            <span class="doc-pager-dir">Previous</span>
+                            <span class="doc-pager-title">@NavTitle(_previous.Title)</span>
+                        </a>
+                    }
+                    @if (_next is not null)
+                    {
+                        <a class="doc-pager-link doc-pager-next" href="@_next.Route" rel="next">
+                            <span class="doc-pager-dir">Next</span>
+                            <span class="doc-pager-title">@NavTitle(_next.Title)</span>
+                        </a>
+                    }
+                </nav>
+            }
+        </footer>
     </article>
 }
 
@@ -66,7 +96,20 @@
     [Parameter]
     public string? Slug { get; set; }
 
+    /// <summary>Repository path the docs corpus is ingested from (csproj DocsSource glob).</summary>
+    private const string SourceRepositoryRoot =
+        "https://github.com/mohamedkhamis/AKML-SQL/blob/master/doc/";
+
     private Document? _document;
+    private Document? _previous;
+    private Document? _next;
+
+    /// <summary>DOC-004: GitHub edit link derived from the document's own source path.</summary>
+    private string EditUrl => SourceRepositoryRoot + (_document?.SourcePath ?? "");
+
+    /// <summary>Pager label: drops the redundant corpus prefix, as the sidebar does (U18).</summary>
+    private static string NavTitle(string title) =>
+        title.StartsWith(TitlePrefix, StringComparison.Ordinal) ? title[TitlePrefix.Length..] : title;
 
     /// <summary>Meta description: the document's first paragraph, else a title-derived fallback.</summary>
     private string Description =>
@@ -88,6 +131,9 @@
         if (_document is null)
         {
             Nav.NotFound();
+            return;
         }
+
+        (_previous, _next) = Docs.Neighbours(_document);
     }
 }

@@ -9,11 +9,36 @@
 (function () {
     'use strict';
 
+    /*
+     * A11Y-004: the CSS-only checkbox pattern works without JS, but a checkbox announces as
+     * "checkbox", not "menu, collapsed". Mirror its state into aria-expanded on the label so
+     * assistive tech reports open/closed. The no-JS path is unchanged — without this script the
+     * menu still opens, it just doesn't announce the state.
+     */
+    function syncExpanded(box) {
+        var label = box && box.closest ? box.closest('.nav-toggle-btn') : null;
+        if (label) {
+            label.setAttribute('aria-expanded', box.checked ? 'true' : 'false');
+        }
+    }
+
     function closeMenu() {
         var box = document.querySelector('.nav-toggle');
         if (box) {
             box.checked = false;
+            syncExpanded(box);
         }
+    }
+
+    document.addEventListener('change', function (event) {
+        if (event.target && event.target.classList.contains('nav-toggle')) {
+            syncExpanded(event.target);
+        }
+    });
+
+    var initial = document.querySelector('.nav-toggle');
+    if (initial) {
+        syncExpanded(initial);
     }
 
     document.addEventListener('click', function (event) {

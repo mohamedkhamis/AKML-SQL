@@ -92,10 +92,27 @@ _ = app.Services.GetRequiredService<ReleasesManifest>();
 _ = app.Services.GetRequiredService<DocsContentService>();
 _ = app.Services.GetRequiredService<AnalyticsStore>();
 
-// PERF-001: compression wraps everything downstream, so it must be registered before the
-// terminal middleware that produces the bodies. It runs after the header middleware below only
-// in registration order -- headers are still written on every response either way.
-app.UseResponseCompression();
+// PERF-001: compress the responses the app GENERATES -- SSR pages, search-index.json,
+// sitemap.xml, robots.txt -- which were previously served raw (a docs page was 35 KB).
+//
+// Deliberately NOT applied to the static-asset roots: MapStaticAssets already serves those from
+// variants compressed at BUILD time (better ratios than a per-request pass, and no CPU cost per
+// request), negotiated via its own Content-Encoding selectors. Running this middleware over them
+// would at best duplicate that work.
+//
+// Note for anyone verifying compression locally: under `dotnet run` the .gz/.br variants are not
+// materialised next to wwwroot, so a gzip-accepting request for a static asset returns an empty
+// body. That is a run-from-source artifact, NOT a deployment problem -- `dotnet publish` writes
+// site.css.gz/.br alongside site.css and the published app negotiates them correctly. Verify
+// static-asset compression against a published build, never against `dotnet run`.
+//
+// The excluded prefixes mirror VisitTrackingMiddleware.ExcludedPrefixes; both describe the same
+// thing (paths that are assets rather than pages).
+string[] staticAssetPrefixes = ["/css", "/js", "/img", "/lib", "/_framework", "/_content", "/docs-assets", "/favicon"];
+app.UseWhen(
+    context => !staticAssetPrefixes.Any(prefix =>
+        context.Request.Path.StartsWithSegments(prefix, StringComparison.OrdinalIgnoreCase)),
+    branch => branch.UseResponseCompression());
 
 // S2: security response headers on EVERY response (incl. error pages, so register first).
 // Static SSR with no inline scripts/styles (the theme boot lives in js/theme-boot.js), so a

@@ -64,9 +64,10 @@ public sealed class DocsContentServiceTests : IDisposable
         // S3: the image existence check ran against Content/docs-assets/, not Content/docs/.
         Assert.Contains("src=\"/docs-assets/images/diagram.png\"", document.HtmlContent);
 
-        // U15: both H2s captured with ids that match the emitted anchors.
+        // U15: both H2s captured with ids that match the emitted anchors (DOC-004 added the
+        // permalink class/anchor to the tag, so match the id attribute, not the whole tag).
         Assert.Equal(["First Section", "Second Section"], document.Toc.Select(h => h.Text).ToArray());
-        Assert.All(document.Toc, h => Assert.Contains($"<h2 id=\"{h.Id}\">", document.HtmlContent));
+        Assert.All(document.Toc, h => Assert.Contains($"<h2 id=\"{h.Id}\"", document.HtmlContent));
     }
 
     [Fact]
