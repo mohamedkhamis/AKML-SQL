@@ -46,22 +46,16 @@ namespace AkmlSql.Shell.Shared.Analysis
 
                 if (!string.IsNullOrEmpty(issue.RuleId))
                 {
-                    var suppress = new MenuItem { Header = $"Suppress {issue.RuleId} for this line" };
-                    var suppressAction = new SuppressLineFixAction(buffer, issue.Line, issue.RuleId);
-                    suppress.Click += (_, __) => suppressAction.Invoke(CancellationToken.None);
-                    menu.Items.Add(suppress);
-
-                    var disable = new MenuItem { Header = $"Disable rule {issue.RuleId}" };
-                    var disableAction = new DisableRuleGloballyFixAction(issue.RuleId);
-                    disable.Click += (_, __) =>
+                    // Line / script / session / everywhere — narrowest first, from the same
+                    // factory the lightbulb uses. Each action refreshes analysis itself, including
+                    // the two that edit no buffer text and would otherwise leave the squiggles up.
+                    foreach (var action in SuppressionActions.ForIssue(buffer, issue))
                     {
-                        disableAction.Invoke(CancellationToken.None);
-                        // Disabling edits no buffer text, so nothing re-triggers analysis —
-                        // refresh explicitly so the squiggles/glyphs clear immediately.
-                        if (buffer.Properties.TryGetProperty(typeof(AnalysisController), out AnalysisController controller))
-                            controller.TriggerReanalysis();
-                    };
-                    menu.Items.Add(disable);
+                        var captured = action;
+                        var item = new MenuItem { Header = captured.DisplayText };
+                        item.Click += (_, __) => captured.Invoke(CancellationToken.None);
+                        menu.Items.Add(item);
+                    }
                 }
             }
 

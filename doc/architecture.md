@@ -47,7 +47,8 @@
 │  ├── AnalysisEngine         Static code analysis (70+ rules)            │
 │  │   ├── RuleRegistry       Discovers all IAnalysisRule implementations  │
 │  │   ├── CaSettingsLoader   Per-project .casettings overrides           │
-│  │   └── SuppressionMap     -- akml-disable/enable comment parsing       │
+│  │   ├── SuppressionMap     -- akml-disable/enable comment parsing       │
+│  │   └── SessionSuppression Rules muted until the engine process exits   │
 │  ├── RefactoringEngine      Preview + apply refactoring operations       │
 │  │   ├── Lightweight ops    Pure-text transforms (no schema needed)      │
 │  │   └── Heavyweight ops    Schema-aware transforms                      │

@@ -65,6 +65,18 @@ internal static class SqlSamples
     public static string DeleteBlockSuppressed =>
         "-- noqa-begin\nDELETE FROM dbo.Orders\n-- noqa-end";
 
+    /// <summary>Inline PE003 suppression in the documented akml-disable-line form.</summary>
+    public static string DeleteSuppressedAkmlLine =>
+        "DELETE FROM dbo.Orders; -- akml-disable-line PE003";
+
+    /// <summary>Block suppression wrapping a DELETE (akml-disable / akml-enable).</summary>
+    public static string DeleteBlockSuppressedAkml =>
+        "-- akml-disable PE003\nDELETE FROM dbo.Orders;\n-- akml-enable PE003";
+
+    /// <summary>Whole-script PE003 suppression: an akml-disable with no matching enable.</summary>
+    public static string DeleteScriptSuppressedAkml =>
+        "-- akml-disable PE003\nDELETE FROM dbo.Orders;\nGO\nDELETE FROM dbo.Customers;";
+
     /// <summary>Deliberately unparseable SQL.</summary>
     public const string Invalid =
         "THIS IS NOT SQL @@@### ???";

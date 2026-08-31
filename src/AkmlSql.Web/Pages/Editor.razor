@@ -922,12 +922,12 @@
     }
 
     // ── Spec 027 T025/T026 (US4) — inline suppression ────────────────────────────────────
-    /// <summary>Suppress this finding on its line: insert ` -- noqa: RuleId` at the line end
+    /// <summary>Suppress this finding on its line: insert ` -- akml-disable-line RuleId` at the line end
     /// (the shared directive the engine + WPF surface honour) and re-analyse.</summary>
     private async Task OnSuppressLineAsync(ProblemsListComponent.IssueLocation loc)
     {
         if (_editor == null) return;
-        _currentText = await _editor.InsertAtLineEndAsync(loc.Line, $" -- noqa: {loc.RuleId}");
+        _currentText = await _editor.InsertAtLineEndAsync(loc.Line, $" -- akml-disable-line {loc.RuleId}");
         Diagnostics.Log(DiagnosticLevel.Info, "suppress", $"Suppressed {loc.RuleId} on line {loc.Line}.");
         await AnalyseAsync();
     }

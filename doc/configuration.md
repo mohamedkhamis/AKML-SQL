@@ -242,6 +242,18 @@ Or single-line:
 SELECT * FROM dbo.Orders  -- akml-disable-line PE001
 ```
 
+Omit the `-- akml-enable` and the suppression runs to the end of the file, which is how the
+"Disable … in this script" quick fix works. Rule ids are comma-separated (`-- akml-disable PE001,
+BP004`); omitting them entirely suppresses every rule; trailing text is treated as a note. The
+directives are case-insensitive, work inside `/* … */`, and the original `-- noqa:` /
+`-- noqa-begin` / `-- noqa-end` forms are still honoured.
+
+### Session-only suppressions
+
+The quick-fix menu also offers **Disable … for this session**, which is held in the engine process
+and written nowhere. It ends when the IDE closes, or from the **Restore** button in
+**Manage Code Analysis Rules**. Because it is not persisted there is no `config.json` key for it.
+
 ---
 
 ## Persistence Markers (Spec 020)

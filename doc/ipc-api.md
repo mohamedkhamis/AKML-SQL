@@ -88,6 +88,7 @@ class RpcMessage {
 | Shell→Engine | `RequestRefactorApply` | 31 |
 | Shell→Engine | `ProfileGet` | 34 |
 | Shell→Engine | `ProfileRename` | 35 |
+| Shell→Engine | `SessionSuppression` | 36 |
 | Engine→Shell | `CompletionResult` | 101 |
 | Engine→Shell | `SignatureHelpResult` | 102 |
 | Engine→Shell | `QuickInfoResult` | 103 |
@@ -114,6 +115,7 @@ class RpcMessage {
 | Engine→Shell | `RefactorApplyResult` | 131 |
 | Engine→Shell | `ProfileGetResult` | 134 |
 | Engine→Shell | `ProfileRenameResult` | 135 |
+| Engine→Shell | `SessionSuppressionResult` | 136 |
 | Shell→Engine | `HandshakeRequest` | 200 |
 | Engine→Shell | `HandshakeResponse` | 201 |
 | Shell→Engine | `SchemaIdentifyRequest` | 202 |
@@ -499,6 +501,27 @@ NewName       string?  Key(2)  Final (sanitized/trimmed) name actually persisted
 ```
 
 **Behavior fixes shipped with spec 033**: `ProfileDelete` (16) now returns `Success=false` when the named profile does not exist (it previously discarded the delete result and always reported success), and `ProfileSave` (15) rejects `ProfileJson` payloads over 1 MB (mirroring the import cap).
+
+### `SessionSuppression` (36) → `SessionSuppressionResult` (136)
+
+Adds, removes, clears or lists the rules suppressed for the current session — the "Disable RULE for this session" quick fix, and the Restore button on the Manage Code Analysis Rules dialog. Backed by `SessionSuppressionStore`, which lives only in engine memory; because the engine runs one process per shell instance, the scope is exactly the IDE session, and nothing is written to the script or to `config.json`.
+
+`AnalysisEngine` applies it as a post-filter over the finished diagnostics rather than by dropping the rule from the run set, so no batch-cache invalidation is needed and lifting a suppression takes effect on the very next pass.
+
+**Request** (`SessionSuppressionRequest`):
+```
+RuleId  string  Key(0)  Ignored by Clear and List.
+Action  int     Key(1)  0=Add, 1=Remove, 2=Clear, 3=List. Defaults to List.
+```
+
+**Response** (`SessionSuppressionResponse`):
+```
+Success          bool      Key(0)
+SuppressedRules  string[]  Key(1)  The full list after the change, sorted. Returned by every action.
+Error            string?   Key(2)
+```
+
+Empty payloads are allowed and are treated as List. An unrecognised `Action` returns `Success=false` and changes nothing.
 
 ### `ProfileList` → `ProfileListResult`
 

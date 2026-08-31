@@ -548,7 +548,7 @@
 
     /// <summary>Spec 027 (M5 offline closure) T025 — append <paramref name="text"/> at the end
     /// of <paramref name="lineNumber"/> (1-based). Used by the suppression "this line" action
-    /// to insert <c>-- noqa: RuleId</c> at the finding's line. Returns the updated full text.</summary>
+    /// to insert <c>-- akml-disable-line RuleId</c> at the finding's line. Returns the updated full text.</summary>
     public async Task<string> InsertAtLineEndAsync(int lineNumber, string text)
     {
         if (_module == null) return InitialText;

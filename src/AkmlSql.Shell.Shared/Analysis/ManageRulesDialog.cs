@@ -24,7 +24,17 @@ namespace AkmlSql.Shell.Shared.Analysis
         private static readonly string[] SeverityLabels = { "Hint", "Information", "Warning", "Error" };
 
         private readonly IReadOnlyList<AnalysisRuleInfoDto> _rules;
+        private readonly HashSet<string> _sessionSuppressed;
         private DataGridView _grid = null!;
+        private Label _sessionLabel = null!;
+        private Button _sessionRestore = null!;
+
+        /// <summary>
+        /// True when the user asked to lift the session-only suppressions. The owning command
+        /// applies it on Save (the same gesture that commits the grid), so Cancel backs out of
+        /// this too.
+        /// </summary>
+        public bool RestoreSessionSuppressions { get; private set; }
 
         private const string ColRuleId      = "RuleId";
         private const string ColName        = "Name";
@@ -34,9 +44,19 @@ namespace AkmlSql.Shell.Shared.Analysis
         private const string ColAutoFix     = "AutoFix";
         private const string ColDescription = "Description";
 
-        public ManageRulesDialog(IReadOnlyList<AnalysisRuleInfoDto> rules)
+        /// <param name="rules">The catalog, from the engine's ListAnalysisRules.</param>
+        /// <param name="sessionSuppressedRules">
+        /// Rules switched off for this session only (engine memory, nothing on disk). They are
+        /// listed so the scope is not a one-way door — without somewhere to see and undo it, a
+        /// session suppression would be invisible and irreversible until the IDE restarts.
+        /// </param>
+        public ManageRulesDialog(
+            IReadOnlyList<AnalysisRuleInfoDto> rules,
+            IReadOnlyList<string> sessionSuppressedRules = null)
         {
             _rules = rules ?? Array.Empty<AnalysisRuleInfoDto>();
+            _sessionSuppressed = new HashSet<string>(
+                sessionSuppressedRules ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
             Build();
         }
 
@@ -121,6 +141,18 @@ namespace AkmlSql.Shell.Shared.Analysis
                     dto.AutoFixable ? "✓" : string.Empty,
                     dto.Description);
                 _grid.Rows[idx].Tag = dto;
+
+                // A session-suppressed rule still shows Enabled here — that is accurate, the
+                // override is elsewhere — so mark the row rather than lying about the checkbox,
+                // which would also corrupt the changed/unchanged comparison in GetOverrides.
+                if (_sessionSuppressed.Contains(dto.RuleId))
+                {
+                    var row = _grid.Rows[idx];
+                    row.DefaultCellStyle.BackColor = Color.FromArgb(255, 249, 226);
+                    row.Cells[ColRuleId].ToolTipText =
+                        $"{dto.RuleId} is disabled for this session only. It is not saved anywhere " +
+                        "and comes back when the IDE restarts, or when you restore it below.";
+                }
             }
 
             // ─── Footer (Save / Cancel) ───────────────────────────────────────
@@ -166,9 +198,71 @@ namespace AkmlSql.Shell.Shared.Analysis
             AcceptButton = btnSave;
             CancelButton = btnCancel;
 
+            // ─── Session-suppression strip ────────────────────────────────────
+            // Only present when there is something to undo, so the dialog is unchanged for the
+            // (common) case of no session suppressions.
+            var sessionStrip = BuildSessionStrip();
+
+            // WinForms docks from the back of the z-order forward, so the control added LAST claims
+            // the outermost position at its edge. Adding the footer after the strip therefore keeps
+            // Save/Cancel flush with the bottom and puts the strip directly above them.
             Controls.Add(_grid);
             Controls.Add(header);
+            if (sessionStrip != null) Controls.Add(sessionStrip);
             Controls.Add(footer);
+        }
+
+        /// <summary>
+        /// The "disabled for this session only" strip: what is suppressed, and one button to put it
+        /// back. Returns <c>null</c> when nothing is session-suppressed.
+        /// </summary>
+        private Panel BuildSessionStrip()
+        {
+            if (_sessionSuppressed.Count == 0) return null;
+
+            var strip = new Panel
+            {
+                Dock      = DockStyle.Bottom,
+                Height    = 42,
+                BackColor = Color.FromArgb(255, 249, 226),
+                Padding   = new Padding(12, 0, 12, 0)
+            };
+            strip.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 1, BackColor = Color.FromArgb(232, 220, 170) });
+
+            _sessionRestore = new Button
+            {
+                Text      = "Restore",
+                Width     = 90,
+                Height    = 26,
+                Top       = 8,
+                FlatStyle = FlatStyle.System,
+                Anchor    = AnchorStyles.Top | AnchorStyles.Right
+            };
+
+            var ordered = _sessionSuppressed.OrderBy(r => r, StringComparer.OrdinalIgnoreCase);
+            _sessionLabel = new Label
+            {
+                Dock      = DockStyle.Fill,
+                Text      = "Disabled for this session only: " + string.Join(", ", ordered),
+                ForeColor = Color.FromArgb(90, 75, 30),
+                TextAlign = ContentAlignment.MiddleLeft,
+                Padding   = new Padding(0, 0, 100, 0)
+            };
+
+            _sessionRestore.Click += (_, __) =>
+            {
+                RestoreSessionSuppressions = true;
+                _sessionLabel.Text = "These rules will be restored when you click Save.";
+                _sessionRestore.Enabled = false;
+            };
+
+            void PositionRestore() => _sessionRestore.Left = strip.Width - 102;
+            strip.Layout += (_, __) => PositionRestore();
+            PositionRestore();
+
+            strip.Controls.Add(_sessionLabel);
+            strip.Controls.Add(_sessionRestore);
+            return strip;
         }
 
         /// <summary>

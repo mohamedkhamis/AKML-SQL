@@ -97,8 +97,9 @@ namespace AkmlSql.Shell.Shared.Analysis
 
                 if (!string.IsNullOrEmpty(issue.RuleId))
                 {
-                    actions.Add(new SuppressLineFixAction(_buffer, issue.Line, issue.RuleId));
-                    actions.Add(new DisableRuleGloballyFixAction(issue.RuleId));
+                    // Line / script / session / everywhere — narrowest first. Shared with the
+                    // warning-glyph menu so both surfaces offer the same scopes.
+                    actions.AddRange(SuppressionActions.ForIssue(_buffer, issue));
                 }
 
                 if (actions.Count > 0)

@@ -40,8 +40,16 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             ctx.RegisterSearch("Rules", "120+ rules across 8 categories", "Info", rulesRow);
             var perProjectRow = ctx.Rows.AddInfoRow(panel, "Per-project config", ".casettings JSON file searched upward from file");
             ctx.RegisterSearch("Per-project config", ".casettings JSON file searched upward from file", "Info", perProjectRow);
-            var suppressRow = ctx.Rows.AddInfoRow(panel, "Inline suppression", "-- akml-disable RuleId / -- akml-enable RuleId");
-            ctx.RegisterSearch("Inline suppression", "-- akml-disable RuleId / -- akml-enable RuleId", "Info", suppressRow);
+            const string suppressHint =
+                "-- akml-disable-line RuleId (one line) · -- akml-disable RuleId … -- akml-enable RuleId " +
+                "(a block; omit the enable to cover the whole script)";
+            var suppressRow = ctx.Rows.AddInfoRow(panel, "Inline suppression", suppressHint);
+            ctx.RegisterSearch("Inline suppression", suppressHint, "Info", suppressRow);
+
+            const string scopeHint =
+                "Click the warning glyph or lightbulb: this line · this script · this session · everywhere";
+            var scopeRow = ctx.Rows.AddInfoRow(panel, "Disable a rule", scopeHint);
+            ctx.RegisterSearch("Disable a rule", scopeHint, "Info", scopeRow);
 
             return new CodeAnalysisControls(chkEnabled, chkRunOnType, chkRunOnSave, chkShowInErrorList);
         }

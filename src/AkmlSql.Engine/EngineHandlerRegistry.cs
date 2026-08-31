@@ -64,7 +64,10 @@ internal static class EngineHandlerRegistry
 
         var caSettingsLoader = new CaSettingsLoader();
         var ruleRegistry = new RuleRegistry();
-        var analysisEngine = new AnalysisEngine(parser, ruleRegistry, caSettingsLoader);
+        // Process-wide and deliberately unpersisted: the engine runs one process per shell
+        // instance, so "this session" ends when the IDE closes.
+        var sessionSuppressions = new SessionSuppressionStore();
+        var analysisEngine = new AnalysisEngine(parser, ruleRegistry, caSettingsLoader, sessionSuppressions);
         var refactoringEngine = new RefactoringEngine(parser, schemaCache);
 
         var safetyHandler = new SafetyCheckHandler(parser);
@@ -171,13 +174,14 @@ internal static class EngineHandlerRegistry
         router.Register(new Handlers.Formatting.BulkFormatHandler(formatHandler));
         router.Register(new Handlers.Formatting.BulkFormatCancelHandler(formatHandler));
 
-        // === Analysis (3 typed) ===
+        // === Analysis (4 typed) ===
         router.Register(new Handlers.Analysis.AnalysisHandler(
             analysisEngine, () => ctx.EnsureSettings()));
         // Spec 030 T052: Manage Rules dialog catalog. Shares ruleRegistry + caSettingsLoader with
         // AnalysisHandler so the reported enabled/severity match what analysis actually applies.
         router.Register(new Handlers.Analysis.ListAnalysisRulesHandler(
             ruleRegistry, caSettingsLoader, () => ctx.EnsureSettings()));
+        router.Register(new Handlers.Analysis.SessionSuppressionHandler(sessionSuppressions));
         router.Register(new Handlers.Analysis.AnalysisSettingsChangedHandler(() =>
         {
             caSettingsLoader.InvalidateCache();

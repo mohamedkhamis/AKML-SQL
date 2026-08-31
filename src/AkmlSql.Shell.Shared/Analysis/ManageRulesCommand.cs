@@ -65,9 +65,43 @@ namespace AkmlSql.Shell.Shared.Analysis
                     return;
                 }
 
-                using var dialog = new ManageRulesDialog(response.Rules);
+                // The session-only suppressions live in engine memory, so they must be fetched
+                // rather than read from config. A failure here is not worth blocking the dialog
+                // over — the strip simply does not appear.
+                string[] sessionSuppressed = Array.Empty<string>();
+                try
+                {
+                    SessionSuppressionResponse session = null;
+                    ThreadHelper.JoinableTaskFactory.Run(async () =>
+                    {
+                        session = await client.SendRequestAsync<SessionSuppressionResponse, SessionSuppressionRequest>(
+                            MessageTypes.SessionSuppression,
+                            new SessionSuppressionRequest { Action = SessionSuppressionActions.List },
+                            timeoutMs: 5_000);
+                    });
+                    if (session?.Success == true) sessionSuppressed = session.SuppressedRules;
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning(ex, "ManageRulesCommand: could not read session suppressions");
+                }
+
+                using var dialog = new ManageRulesDialog(response.Rules, sessionSuppressed);
                 if (dialog.ShowDialog() != DialogResult.OK)
                     return;
+
+                if (dialog.RestoreSessionSuppressions && client.IsConnected)
+                {
+                    ThreadHelper.JoinableTaskFactory.Run(async () =>
+                    {
+                        await client.SendRequestAsync<SessionSuppressionResponse, SessionSuppressionRequest>(
+                            MessageTypes.SessionSuppression,
+                            new SessionSuppressionRequest { Action = SessionSuppressionActions.Clear },
+                            timeoutMs: 5_000);
+                    });
+                    Log.Information("ManageRulesCommand: cleared {Count} session suppression(s)",
+                        sessionSuppressed.Length);
+                }
 
                 var overrides = dialog.GetOverrides();
 

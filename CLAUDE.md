@@ -171,7 +171,8 @@ NoformatScanner → SqlcmdPreprocessor → TSql170Parser → AstAnnotator
 - `RuleRegistry` auto-discovers all `IAnalysisRule` implementations via reflection
 - Rules are organized in 8 categories: Performance (PE), BestPractices (BP), Security (SE), Style (ST), Design (DE), Deprecated (DEP), Execution (EX), Naming (NM)
 - Per-project overrides via `.casettings` JSON (searched upward from current file's directory)
-- Inline suppressions: `-- akml-disable RuleId` / `-- akml-enable RuleId` / `-- akml-disable-line RuleId`
+- Inline suppressions: `-- akml-disable RuleId` / `-- akml-enable RuleId` / `-- akml-disable-line RuleId` (an `akml-disable` with no matching `akml-enable` runs to end of file — that is the whole-script scope). The original `-- noqa:` / `-- noqa-begin` / `-- noqa-end` forms still parse.
+- Four disable scopes, offered narrowest-first by both the lightbulb and the warning-glyph menu (`SuppressionActions.ForIssue`): **line** and **script** write a directive into the buffer; **session** is engine-memory only (`SessionSuppressionStore`, IPC 36/136, cleared from the Manage Rules dialog); **everywhere** writes `config.json codeAnalysis.ruleOverrides`
 
 See [docs/analysis-rules.md](docs/analysis-rules.md) for all rules.
 

@@ -159,6 +159,15 @@ namespace AkmlSql.Core.Ipc
         // Engine → Shell (Spec 033: ProfileRename result — pairs with request 35)
         public const int ProfileRenameResult = 135;
 
+        // Shell → Engine (Session rule suppression — the "Disable RULE for this session" quick fix
+        //   and the Manage Rules dialog's session strip. Adds/removes/clears/lists the rules held
+        //   in the engine's in-memory SessionSuppressionStore, which nothing persists: the scope
+        //   ends when the engine process does. Pairs with response 136.)
+        public const int SessionSuppression = 36;
+
+        // Engine → Shell (SessionSuppression result — pairs with request 36)
+        public const int SessionSuppressionResult = 136;
+
         // Shell → Engine (Refactoring — heavyweight preview/apply)
         public const int RequestRefactorPreview = 30;
         public const int RequestRefactorApply = 31;

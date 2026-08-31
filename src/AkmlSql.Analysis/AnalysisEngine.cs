@@ -20,7 +20,16 @@ namespace AkmlSql.Engine.Analysis;
 ///   Token-scan rules (ST001, ST006, ST008, DEP004, DEP007) are scoped to their batch offset range
 ///   to avoid O(batches × total_tokens) behaviour.
 /// </summary>
-public class AnalysisEngine(TsqlParserService parser, RuleRegistry registry, CaSettingsLoader settingsLoader)
+/// <param name="sessionSuppressions">
+/// Rules switched off for the current session (see <see cref="SessionSuppressionStore"/>).
+/// Optional so existing callers — the CLI analyzer and the web edition, which have no session
+/// concept — keep compiling and behave exactly as before.
+/// </param>
+public class AnalysisEngine(
+    TsqlParserService parser,
+    RuleRegistry registry,
+    CaSettingsLoader settingsLoader,
+    SessionSuppressionStore? sessionSuppressions = null)
 {
     // Batch-level result cache: (sessionId + batchHash) → diagnostics
     private readonly Dictionary<string, List<AnalysisDiagnostic>> _batchCache = new();
@@ -116,7 +125,12 @@ public class AnalysisEngine(TsqlParserService parser, RuleRegistry registry, CaS
             var batchText = ExtractBatchText(request.DocumentText, batch);
             var batchHash = ComputeHash(request.SessionId + batchText);
 
-            if (_batchCache.TryGetValue(batchHash, out var cached))
+            // Guarded: ClearBatchCache can fire on the notification thread at any moment, and an
+            // unsynchronised Dictionary read racing a Clear can throw or return a torn bucket.
+            List<AnalysisDiagnostic>? cached;
+            lock (_batchCache) { _batchCache.TryGetValue(batchHash, out cached); }
+
+            if (cached != null)
             {
                 allDiagnostics.AddRange(cached);
                 continue;
@@ -136,14 +150,18 @@ public class AnalysisEngine(TsqlParserService parser, RuleRegistry registry, CaS
             };
 
             var batchDiagnostics = await RunRulesAsync(ctx, enabledRules, ct);
-            _batchCache[batchHash] = batchDiagnostics;
+            lock (_batchCache) { _batchCache[batchHash] = batchDiagnostics; }
             allDiagnostics.AddRange(batchDiagnostics);
         }
 
-        // Apply suppression filter (inline noqa + global suppressions)
+        // Apply the suppression filter: inline directives, .casettings globalSuppressions, and the
+        // rules switched off for this session. Session suppressions are filtered here rather than
+        // by dropping the rule from enabledRules so that cached batches stay valid and lifting a
+        // suppression shows the findings again on the very next pass.
         var filtered = allDiagnostics
             .Where(d => !suppressions.IsSuppressed(d.Line, d.RuleId)
-                     && !settings.GloballySuppressedRules.Contains(d.RuleId))
+                     && !settings.GloballySuppressedRules.Contains(d.RuleId)
+                     && sessionSuppressions?.IsSuppressed(d.RuleId) != true)
             .ToList();
 
         return new CodeAnalysisResponse

@@ -259,6 +259,15 @@ Suppress for a single line:
 SELECT * FROM dbo.Orders  -- akml-disable-line PE001
 ```
 
+Suppress for the rest of the file — a disable with no matching enable:
+
+```sql
+-- akml-disable PE001
+```
+
+See [Static code analysis](topics/static-analysis.md#turn-a-rule-off) for the full set of scopes,
+including the session-only one offered by the lightbulb and warning-glyph menus.
+
 ### Global Settings
 
 See [configuration.md](configuration.md) for the `codeAnalysis` section of `config.json`:

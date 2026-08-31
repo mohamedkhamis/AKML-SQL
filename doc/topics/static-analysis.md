@@ -22,9 +22,34 @@ Each rule has an ID like `PE003` (category letters plus a number). The full list
 
 Many rules offer a lightbulb auto-fix. Click the squiggle and choose the fix; the change is undoable with Ctrl+Z.
 
-## Suppress a rule inline
+## Turn a rule off
 
-Disable a rule for a block of code:
+Click the warning glyph in the margin, or the lightbulb on the squiggle, and pick how far the
+change should reach. The four scopes go from narrowest to widest:
+
+| Menu item | Reaches | Lasts | Where it is recorded |
+|---|---|---|---|
+| **Suppress PE001 on this line** | that one line | until you delete the comment | a comment in your script |
+| **Disable PE001 in this script** | the whole file | until you delete the comment | a comment in your script |
+| **Disable PE001 for this session** | every file | until you close SSMS / Visual Studio | nowhere — it is held in memory |
+| **Disable PE001 everywhere** | every file | permanently | `config.json` |
+
+The first two write a comment, so they travel with the file — commit them and your team sees the
+same result. The session scope writes nothing at all, which makes it the right choice for "not
+right now" rather than "not ever". The last one is reversible from
+**Tools → AKML SQL → Manage Code Analysis Rules**.
+
+### Writing the comments by hand
+
+The first two scopes are just comments, so you can type them yourself.
+
+Suppress on one line:
+
+```sql
+SELECT * FROM dbo.Orders  -- akml-disable-line PE001
+```
+
+Suppress over a block:
 
 ```sql
 -- akml-disable PE001
@@ -32,11 +57,28 @@ SELECT * FROM dbo.Orders
 -- akml-enable PE001
 ```
 
-Or for a single line:
+Leave out the `-- akml-enable` and the suppression runs to the end of the file — that is how
+"disable in this script" works. Put it on the first line to cover everything:
 
 ```sql
-SELECT * FROM dbo.Orders  -- akml-disable-line PE001
+-- akml-disable PE001
 ```
+
+A few details worth knowing:
+
+- Name several rules at once with commas: `-- akml-disable PE001, BP004`.
+- Name no rule at all and every rule is suppressed: `-- akml-disable-line` silences the whole line.
+- A bare `-- akml-enable` closes everything currently open.
+- Anything after the rule ids is treated as a note, so you can say why:
+  `-- akml-disable PE001 reporting query, columns are intentional`.
+- The directives are case-insensitive and work in `/* … */` comments too.
+- The older `-- noqa: PE001`, `-- noqa`, and `-- noqa-begin` / `-- noqa-end` forms still work.
+
+### Undoing a session suppression
+
+Open **Tools → AKML SQL → Manage Code Analysis Rules**. Rules disabled for the session are
+highlighted and listed along the bottom of the dialog, with a **Restore** button that puts them all
+back when you Save. They also come back on their own the next time you start the IDE.
 
 ## Per-project settings
 
