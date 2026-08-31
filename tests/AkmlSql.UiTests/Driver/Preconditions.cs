@@ -73,6 +73,32 @@ public static class Preconditions
     }
 
     /// <summary>
+    /// Blocks until the session has a usable desktop, then returns. Throws if it never does.
+    ///
+    /// <para>
+    /// A remote session comes and goes with the person at the other end of it: disconnecting the
+    /// RDP client leaves every process running but tears down the rendering surface, and
+    /// reconnecting restores it. For an unattended capture run that is worth waiting through rather
+    /// than failing on, so the run completes by itself the moment the session is back.
+    /// </para>
+    /// </summary>
+    public static void WaitForInteractiveDesktop(int timeoutSeconds = 600)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(timeoutSeconds);
+        Exception? last = null;
+
+        while (DateTime.UtcNow < deadline)
+        {
+            try { RequireInteractiveDesktop(); return; }
+            catch (InvalidOperationException ex) { last = ex; }
+            Thread.Sleep(2000);
+        }
+
+        throw new InvalidOperationException(
+            $"No usable desktop appeared within {timeoutSeconds}s. {last?.Message}");
+    }
+
+    /// <summary>
     /// True when nobody has touched the keyboard or mouse for <paramref name="idleSeconds"/>.
     /// Synthetic input and a human sharing the desktop fight each other, so a long unattended run
     /// should check this rather than silently stealing focus mid-keystroke.

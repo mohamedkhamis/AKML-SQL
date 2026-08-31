@@ -73,11 +73,13 @@ public sealed class SsmsApp : IDisposable
     /// Pass <c>-C</c>. On by default because the usual automation target is a local development
     /// instance with a self-signed certificate. Set false against a properly certificated server.
     /// </param>
+    /// <param name="database">Optional initial database (<c>-d</c>).</param>
     public static SsmsApp Launch(
         string sqlFile,
         string server = "(local)",
         string? ssmsPath = null,
-        bool trustServerCertificate = true)
+        bool trustServerCertificate = true,
+        string? database = null)
     {
         Preconditions.RequireInteractiveDesktop();
 
@@ -92,6 +94,11 @@ public sealed class SsmsApp : IDisposable
         psi.ArgumentList.Add(sqlFile);
         psi.ArgumentList.Add("-S");
         psi.ArgumentList.Add(server);
+        if (!string.IsNullOrWhiteSpace(database))
+        {
+            psi.ArgumentList.Add("-d");
+            psi.ArgumentList.Add(database);
+        }
         if (trustServerCertificate) psi.ArgumentList.Add("-C");
         psi.ArgumentList.Add("-nosplash");
 

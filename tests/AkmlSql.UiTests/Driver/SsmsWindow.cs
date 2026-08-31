@@ -188,6 +188,110 @@ public sealed class SsmsWindow
     public bool IsConnected() =>
         !_window.FindAllDescendants(cf => cf.ByName("Disconnected.")).Any();
 
+    // ---- tool windows -------------------------------------------------------
+
+    /// <summary>
+    /// Closes a docked tool window by its title, e.g. "GitHub Copilot Chat". Returns true if one
+    /// was found and closed.
+    ///
+    /// <para>
+    /// Worth doing before any screenshot that will be published: SSMS restores whatever panels were
+    /// last open, so a product shot can easily end up advertising somebody else's panel down one
+    /// side of the frame.
+    /// </para>
+    /// </summary>
+    public bool CloseToolWindow(string title)
+    {
+        // A docked panel appears as TWO panes with the same name: the outer one carrying the
+        // ST:0:0:{guid} id and the caption bar, and an inner content pane starting below it. Only
+        // the outer one contains the close button, so every match is tried rather than just the
+        // first — picking the wrong one finds nothing and the panel silently stays open.
+        var panes = _window.FindAllDescendants(cf => cf.ByControlType(ControlType.Pane))
+            .Where(p => (p.Properties.Name.ValueOrDefault ?? string.Empty)
+                .Contains(title, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (panes.Count == 0) return false;
+
+        // Only a Close button whose rectangle sits INSIDE the pane counts. An earlier version fell
+        // back to "a Close button near the pane's top-left", which in a docked IDE is just as likely
+        // to be the document tab's close button — and duly closed the query window instead, so the
+        // editor vanished and the next step failed somewhere else entirely. The search is
+        // window-wide because a panel's caption buttons are children of the frame, not of the pane;
+        // the containment test is what makes that safe.
+        //
+        // Names are matched by prefix because these carry their shortcut: a tool window's is
+        // "Close (Shift+Esc)" and a document tab's is "Close (Ctrl+W)". Matching "Close" exactly
+        // finds neither.
+        var closeButtons = _window.FindAllDescendants(cf => cf.ByControlType(ControlType.Button))
+            .Where(b => (b.Properties.Name.ValueOrDefault ?? string.Empty)
+                .StartsWith("Close", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        var close = panes
+            .Select(p => p.BoundingRectangle)
+            .SelectMany(bounds => closeButtons.Where(b => bounds.Contains(b.BoundingRectangle)))
+            .FirstOrDefault();
+
+        if (close is null) return false;
+        close.AsButton().Invoke();
+        Thread.Sleep(700);
+
+        // Closing a panel must never cost us the document. If it did, say so here rather than
+        // letting it surface as an unrelated timeout later.
+        if (_window.FindFirstDescendant(cf => cf.ByAutomationId("WpfTextView")) is null)
+            throw new InvalidOperationException(
+                $"Closing '{title}' also closed the editor — the Close button that was clicked did " +
+                "not belong to that panel.");
+
+        return true;
+    }
+
+    /// <summary>
+    /// Diagnostic: the named panes and every "Close" button with its rectangle. Docked-panel
+    /// close buttons are easy to guess wrong, and this shows what is actually there.
+    /// </summary>
+    public IReadOnlyList<string> DescribeToolWindows()
+    {
+        var lines = new List<string>();
+
+        foreach (var p in _window.FindAllDescendants(cf => cf.ByControlType(ControlType.Pane)))
+        {
+            var name = p.Properties.Name.ValueOrDefault ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(name)) continue;
+            var r = p.BoundingRectangle;
+            lines.Add($"PANE  '{name}'  id='{p.Properties.AutomationId.ValueOrDefault}'  [{r.Left},{r.Top} {r.Width}x{r.Height}]");
+        }
+
+        foreach (var b in _window.FindAllDescendants(cf => cf.ByControlType(ControlType.Button)))
+        {
+            var name = b.Properties.Name.ValueOrDefault ?? string.Empty;
+            if (!name.Contains("Close", StringComparison.OrdinalIgnoreCase)) continue;
+            var r = b.BoundingRectangle;
+            lines.Add($"CLOSE '{name}'  id='{b.Properties.AutomationId.ValueOrDefault}'  [{r.Left},{r.Top} {r.Width}x{r.Height}]");
+        }
+
+        return lines;
+    }
+
+    /// <summary>Runs the current query (F5) and waits for SSMS to report it finished.</summary>
+    public void Execute(int timeoutSeconds = 60)
+    {
+        Editor().Click();
+        Thread.Sleep(200);
+        Keyboard.Type(VirtualKeyShort.F5);
+
+        // "Query executed successfully" / a row count lands in the status bar when it is done.
+        var deadline = DateTime.UtcNow.AddSeconds(timeoutSeconds);
+        while (DateTime.UtcNow < deadline)
+        {
+            var done = _window.FindAllDescendants()
+                .Any(e => (e.Name ?? string.Empty).Contains("row", StringComparison.OrdinalIgnoreCase)
+                       && (e.Name ?? string.Empty).Contains("Query executed", StringComparison.OrdinalIgnoreCase));
+            if (done) return;
+            Thread.Sleep(500);
+        }
+    }
+
     // ---- content ------------------------------------------------------------
 
     /// <summary>

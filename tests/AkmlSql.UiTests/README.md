@@ -135,6 +135,61 @@ Until then, assert analysis behaviour through channels that *are* automatable:
 2. **The Error List** (`Tracking List View`) — Code and Line columns carry the rule id and location.
 3. **The engine's own logs** at `%AppData%/AKML SQL/logs/`.
 
+## Regenerating the product-site screenshots
+
+The images on the site are produced by two tours rather than captured by hand, so they can be
+refreshed whenever the UI moves instead of quietly going stale.
+
+| Tour | Produces | Command |
+|---|---|---|
+| `SsmsScreenshotTour` (here) | SSMS 22 with the extension loaded | `dotnet test tests/AkmlSql.UiTests --filter SsmsScreenshotTour` |
+| `SiteScreenshotTour` (in `AkmlSql.Web.E2E.Tests`) | web edition: editor, connection dialog | `dotnet test tests/AkmlSql.Web.E2E.Tests --filter SiteScreenshotTour` |
+
+**Everything is shot against Northwind, and that is not a stylistic preference.** The images these
+replaced were captured against a live working database and published to a public site, showing real
+personal data — names, dates, and links — in the result grid. Both tours assert that the captured
+content contains "Northwind" and contains none of the real database names, so a screenshot taken
+against the wrong connection fails the run instead of reaching the site.
+
+Install Northwind with the Microsoft sample script, and note the two traps:
+
+```bash
+curl -sLo instnwnd.sql \
+  https://raw.githubusercontent.com/microsoft/sql-server-samples/master/samples/databases/northwind-pubs/instnwnd.sql
+
+sqlcmd -S "(local)" -E -C -d master -Q "IF DB_ID('Northwind') IS NULL CREATE DATABASE Northwind;"
+sqlcmd -S "(local)" -E -C -d Northwind -f 65001 -i instnwnd.sql
+```
+
+- The script says so in its own header, but it is easy to miss: **it does not create a database.**
+  Run it without `-d Northwind` and all 36 objects land in `master`.
+- The file is UTF-8 and `sqlcmd` defaults to the ANSI codepage, so **without `-f 65001`** the
+  accented customer names store double-encoded and appear in screenshots as `MÃ¨re Paillarde`.
+
+### What the web tour needs
+
+The web edition reaches SQL Server through a paired engine, not directly, so the tour pairs one
+first. Three things about that deployment are worth knowing:
+
+- `IEngineBridge` builds `ws://` when a connection is marked *Localhost* and `wss://` otherwise. The
+  installer here provisioned the bridge in **LAN mode with TLS**, so the localhost path — the one
+  that waives the PIN — is reset by the TLS listener. The tour therefore pairs as a LAN connection.
+- The certificate's SAN list is the machine name and public IP, **not `127.0.0.1`**, so the host
+  must be the machine name, and Chromium needs `--ignore-certificate-errors` for a self-signed cert.
+- A pairing PIN is single-use and expires. The engine publishes the current one to
+  `%ProgramData%\AKML SQL Web\pairing-pin.txt`; the tour reads it from there. If pairing fails with
+  `Failed`, restart `AkmlSqlWebEngine` to mint a fresh PIN.
+
+The engine service runs as `LocalSystem`, so it authenticates to SQL Server as
+`NT AUTHORITY\SYSTEM`. That login needs read access to Northwind or the connection dialog can only
+offer `master`, `msdb` and `tempdb`:
+
+```sql
+USE Northwind;
+CREATE USER [NT AUTHORITY\SYSTEM] FOR LOGIN [NT AUTHORITY\SYSTEM];
+ALTER ROLE db_datareader ADD MEMBER [NT AUTHORITY\SYSTEM];
+```
+
 ## Suggested next steps
 
 - Add automation ids to the extension's WPF controls (above), then drive the glyph menu directly.
