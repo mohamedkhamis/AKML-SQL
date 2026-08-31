@@ -59,6 +59,11 @@ builder.Services.AddSingleton<IConnectionStore, ConnectionStore>();
 builder.Services.AddTransient<IBridgeWebSocket, JsBridgeWebSocket>();
 builder.Services.AddSingleton<Func<IBridgeWebSocket>>(sp => () => sp.GetRequiredService<IBridgeWebSocket>());
 builder.Services.AddSingleton<IEngineBridge, EngineBridge>();
+
+// Keeps the bridge up without the user asking: startup connect, bounded-backoff retry, and a
+// wake-up when the tab regains focus or the browser comes back online. Singleton because there is
+// exactly one bridge and every page that loads calls StartAsync on it (idempotent by design).
+builder.Services.AddSingleton<IEngineAutoConnect, EngineAutoConnect>();
 // Spec 030: browser-side "Connect to SQL Server" — sends ConnectionChanged/DocumentChanged over the
 // bridge using one canonical SessionId, enabling live-schema IntelliSense (Windows or SQL auth).
 builder.Services.AddSingleton<ISqlConnectionService, SqlConnectionService>();

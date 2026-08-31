@@ -4,6 +4,7 @@
     Real page slots for Editor / Settings / About land in M2 (T031 onwards).
 *@
 @using System.Threading
+@using Microsoft.JSInterop
 @using AkmlSql.Web.Services
 @inherits LayoutComponentBase
 @implements IDisposable
@@ -13,6 +14,8 @@
 @inject IPairingTokenVault Vault
 @inject ISqlConnectionService SqlConn
 @inject ISchemaSync SchemaSync
+@inject IEngineAutoConnect AutoConnect
+@inject IJSRuntime JS
 
 <div class="akml-app">
     <NavMenu />
@@ -82,37 +85,44 @@
         // also await it (Editor, Settings) share this Task instead of racing.
         await Theme.InitializeAsync();
 
-        // Spec 025 (M3) — auto-reconnect the active engine connection on app startup, so re-opening
-        // the web edition restores the live bridge without a manual Connect (the connection picker
-        // lives only on /settings, so this has to be a layout-level hook to cover the editor landing
-        // page too). No PIN is needed: localhost auto-accepts; LAN replays the wrapped bearer from
-        // IndexedDB. Fire-and-forget so a slow / unreachable engine never blocks first paint — on any
-        // failure the bridge simply stays Offline and the user can click Connect.
-        _ = TryAutoConnectActiveAsync();
+        // Spec 025 (M3) — restore the live bridge on app startup so re-opening the web edition does
+        // not need a manual Connect (the connection picker lives only on /settings, so this has to
+        // be a layout-level hook to cover the editor landing page too).
+        //
+        // This used to be a single fire-and-forget attempt, which handled the happy path and nothing
+        // else: opening the browser a moment before the engine service finished starting left the
+        // page Offline for good, however healthy the engine became afterwards. EngineAutoConnect
+        // owns the retry schedule and the wake-up signals now; StartAsync is idempotent and does not
+        // block first paint.
+        _ = AutoConnect.StartAsync();
     }
 
-    private async Task TryAutoConnectActiveAsync()
+    /// <summary>
+    /// Bridge the two browser signals that mean "the user is back, and the world may have changed"
+    /// to an immediate retry: a tab becoming visible, and the browser reporting it is online again.
+    /// Between them they cover almost every real recovery, so someone who starts the engine and
+    /// switches back to the tab finds it already connected.
+    /// </summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (!firstRender) return;
         try
         {
-            if (Bridge.State != BridgeState.Disconnected) return;   // already connecting / open
-            var activeId = await Connections.GetActiveIdAsync();
-            if (string.IsNullOrEmpty(activeId)) return;
-            var conn = await Connections.GetAsync(activeId);
-            if (conn == null) return;
-
-            // Localhost auto-accepts (no PIN, no bearer); LAN replays the stored bearer so reconnect
-            // needs no PIN. A null bearer for LAN just means the engine will demand a fresh PIN —
-            // handled gracefully (the handshake returns PinRequired and we leave the bridge Offline).
-            string? bearer = conn.IsLocalhost ? null : await Vault.RetrieveAsync(conn.Id);
-            await Bridge.ConnectAsync(conn, bearer, pairingPin: null, CancellationToken.None);
-            // StatusBar subscribes to Bridge state changes, so it reflects Open/Live on its own.
+            _wakeRef = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("akmlEngineWake.register", _wakeRef);
         }
-        catch
+        catch (Exception)
         {
-            // Engine unreachable / no stored bearer / transient error — stay Offline by design.
+            // The wake hooks are an accelerant, not the mechanism — the backoff loop still recovers
+            // on its own if the JS module is unavailable.
         }
     }
+
+    private DotNetObjectReference<MainLayout>? _wakeRef;
+
+    /// <summary>Called from JS when the tab regains focus or the browser comes back online.</summary>
+    [JSInvokable]
+    public Task OnBrowserWake() => AutoConnect.RetryNowAsync();
 
     /// <summary>
     /// Phase 4 — the SINGLE SchemaSync owner. StateChanged fires on BOTH connect and disconnect, and
@@ -141,5 +151,6 @@
     public void Dispose()
     {
         SqlConn.StateChanged -= OnSqlConnStateChanged;
+        _wakeRef?.Dispose();
     }
 }

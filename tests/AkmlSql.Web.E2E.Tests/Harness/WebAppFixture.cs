@@ -21,7 +21,13 @@ public sealed class WebAppFixture : IAsyncDisposable
         var repoRoot = FindRepoRoot();
         var csproj = Path.Combine(repoRoot, "src", "AkmlSql.Web", "AkmlSql.Web.csproj");
 
-        var psi = new ProcessStartInfo("dotnet", $"run --project \"{csproj}\" --no-build -c Debug")
+        // --no-launch-profile + explicit --urls: the app acquired a launchSettings.json after this
+        // fixture was written, and its profile binds two random ports (52118/52119 on this machine).
+        // Without overriding it, the fixture polls localhost:5000 for 90s while the app serves
+        // happily somewhere else entirely, and reports "did not start".
+        var psi = new ProcessStartInfo(
+            "dotnet",
+            $"run --project \"{csproj}\" --no-build -c Debug --no-launch-profile --urls {fixture.Url.TrimEnd('/')}")
         {
             WorkingDirectory = repoRoot,
             UseShellExecute = false,

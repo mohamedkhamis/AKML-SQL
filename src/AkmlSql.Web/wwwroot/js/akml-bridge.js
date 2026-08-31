@@ -27,14 +27,27 @@ export function connect(url) {
         };
         _sockets.set(id, state);
 
-        ws.onopen = () => resolve(id);
-        ws.onerror = (e) => {
-            // Reject the connect promise if the socket never opened. Otherwise the
-            // receive-side will surface the error via state.closed.
-            if (ws.readyState === WebSocket.CONNECTING) {
-                _sockets.delete(id);
-                reject(new Error('WebSocket connect failed.'));
-            }
+        // The connect promise MUST settle exactly once, and it must settle on every path.
+        //
+        // This used to reject only from onerror, and only while readyState was still CONNECTING.
+        // That condition is almost never true when it matters: for a refused connection the browser
+        // has already advanced readyState to CLOSED by the time onerror fires, so the promise was
+        // simply abandoned. The C# side then awaited it forever — the bridge sat on "Connecting…"
+        // with no error, no state change and no retry, and the only way out was for the user to
+        // reload or click Connect by hand. That is the whole of "it needs a manual connect every
+        // time": open the page while the engine is not listening and the app never recovers.
+        let settled = false;
+        const settle = (fn, arg) => {
+            if (settled) return;
+            settled = true;
+            fn(arg);
+        };
+
+        ws.onopen = () => settle(resolve, id);
+
+        ws.onerror = () => {
+            _sockets.delete(id);
+            settle(reject, new Error(`WebSocket connect failed (${url}).`));
         };
         ws.onmessage = (event) => {
             const frame = new Uint8Array(event.data);
@@ -45,7 +58,17 @@ export function connect(url) {
                 state.queue.push(frame);
             }
         };
-        ws.onclose = () => {
+        ws.onclose = (e) => {
+            // A close BEFORE open is a failed connect. Browsers do not guarantee onerror fires
+            // first (or at all) for every failure mode, so this is the backstop that makes the
+            // promise settle on every path rather than most of them.
+            if (!settled) {
+                _sockets.delete(id);
+                settle(reject, new Error(
+                    `WebSocket closed before opening (${url}, code ${e.code}${e.reason ? ': ' + e.reason : ''}).`));
+                return;
+            }
+
             state.closed = true;
             // Drain any pending waiters with null (signals "closed").
             while (state.waiters.length > 0) {

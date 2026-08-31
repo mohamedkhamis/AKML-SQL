@@ -15,10 +15,37 @@
 @inject ISqlConnectionService SqlConn
 @inject ISavedSqlConnectionStore SavedSqlConnections
 @inject IConnectionManagerController ConnManager
+@inject IEngineAutoConnect AutoConnect
+@inject NavigationManager Nav
 
 <div class="akml-status">
     <span class="akml-status-pill @PillClass" data-testid="status-pill">@PillLabel</span>
     <span class="akml-status-text">@StatusText</span>
+
+    @* A stalled bridge used to be a dead end: the pill said "Offline" and nothing said why or what
+       to do, so the only way forward was knowing to open Settings. The reason and the way out now
+       sit next to the pill, and only appear when there is actually something wrong. *@
+    @if (AutoConnect.LastFailure is { } failure)
+    {
+        <span class="akml-status-issue" data-testid="engine-issue">
+            <span class="akml-status-issue-text">@failure.Message</span>
+            @if (failure.Kind == EngineConnectFailureKind.NotPaired
+                 || failure.Kind == EngineConnectFailureKind.PairingRequired)
+            {
+                <button type="button" class="akml-status-action"
+                        @onclick="@(() => Nav.NavigateTo("/settings"))"
+                        data-testid="engine-setup">Set up engine</button>
+            }
+            else
+            {
+                <button type="button" class="akml-status-action"
+                        @onclick="RetryEngineAsync" data-testid="engine-retry">
+                    @RetryLabel
+                </button>
+            }
+        </span>
+    }
+
     <span class="akml-status-spacer"></span>
     <button type="button" class="akml-status-conn" @onclick="@(() => ConnManager.Open())"
             aria-label="Manage SQL connection" title="@ConnTooltip" data-testid="status-connection">
@@ -44,6 +71,39 @@
         font-family: var(--akml-type-chrome-family);
         font-size: var(--akml-type-chrome-size);
     }
+    /* The problem strip. Deliberately quiet: it is information, not an alarm, and it sits inline
+       rather than as a banner so a transient engine restart does not shove the editor down the
+       page and back again. */
+    .akml-status-issue {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--akml-scalar-spacing-xs);
+        min-width: 0;
+    }
+    .akml-status-issue-text {
+        color: var(--akml-text-secondary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 42ch;
+    }
+    .akml-status-action {
+        background: none;
+        border: 1px solid var(--akml-border-default);
+        border-radius: 3px;
+        color: var(--akml-text-link);
+        cursor: pointer;
+        font: inherit;
+        padding: 0 var(--akml-scalar-spacing-xs);
+        white-space: nowrap;
+    }
+    .akml-status-action:hover { background-color: var(--akml-surface-hover); }
+    .akml-status-action:focus-visible {
+        outline: 2px solid var(--akml-accent-primary);
+        outline-offset: 1px;
+    }
+    .akml-status-action[disabled] { color: var(--akml-text-secondary); cursor: default; }
+
     .akml-status-pill {
         padding: 1px var(--akml-scalar-spacing-xs);
         border-radius: var(--akml-scalar-radius-xs);
@@ -97,6 +157,43 @@
     private BridgeState _bridgeState = BridgeState.Disconnected;
     private bool _cachePresent;
     private Availability _state = Availability.Disconnected;
+    private bool _retrying;
+
+    private void OnFailureChanged() => _ = InvokeAsync(StateHasChanged);
+
+    /// <summary>
+    /// The label doubles as the countdown, so one control answers both "when will it try again?"
+    /// and "can I make it try now?" — a separate timer readout would be noise in a status bar.
+    /// </summary>
+    private string RetryLabel
+    {
+        get
+        {
+            if (_retrying) return "Retrying…";
+            var next = AutoConnect.LastFailure?.NextAttemptAt;
+            if (next is null) return "Retry";
+            var secs = (int)Math.Ceiling((next.Value - DateTimeOffset.UtcNow).TotalSeconds);
+            return secs > 1 ? $"Retry ({secs}s)" : "Retry";
+        }
+    }
+
+    private async Task RetryEngineAsync()
+    {
+        if (_retrying) return;
+        _retrying = true;
+        try
+        {
+            await AutoConnect.RetryNowAsync();
+            // Give the attempt a beat to land so the button does not flicker back to "Retry"
+            // before the pill has had a chance to turn green.
+            await Task.Delay(600);
+        }
+        finally
+        {
+            _retrying = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
 
     // Spec 025 US3: reconnect countdown plumbing (preserved).
     private DateTimeOffset? _nextRetryAt;
@@ -107,6 +204,7 @@
         _bridgeState = Bridge.State;
         Bridge.StateChanged += OnStateChanged;
         Bridge.RetryScheduled += OnRetryScheduled;
+        AutoConnect.FailureChanged += OnFailureChanged;
         SchemaSync.ChecksumDrifted += OnChecksumDrifted;
         SqlConn.StateChanged += OnSqlConnChanged;
         _countdownTimer = new System.Threading.Timer(_ => TickCountdown(), null,
@@ -281,6 +379,7 @@
     {
         Bridge.StateChanged -= OnStateChanged;
         Bridge.RetryScheduled -= OnRetryScheduled;
+        AutoConnect.FailureChanged -= OnFailureChanged;
         SchemaSync.ChecksumDrifted -= OnChecksumDrifted;
         SqlConn.StateChanged -= OnSqlConnChanged;
         _countdownTimer?.Dispose();

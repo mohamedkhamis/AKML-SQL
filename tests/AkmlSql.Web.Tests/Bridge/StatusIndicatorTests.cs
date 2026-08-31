@@ -45,6 +45,10 @@ public sealed class StatusIndicatorTests : BunitContext
         // auto-restore; an empty store means "nothing to restore" in these tests.
         Services.AddSingleton<ISavedSqlConnectionStore>(new SavedSqlConnectionStore(adapter));
         Services.AddSingleton<IConnectionManagerController>(new ConnectionManagerController());
+        // The status bar now also reports WHY the bridge is down and offers a retry. These tests
+        // are about the availability pill, so a stub that never reports a failure keeps them
+        // focused — the auto-connect behaviour has its own tests.
+        Services.AddSingleton<IEngineAutoConnect>(new NoFailureAutoConnect());
     }
 
     private sealed class NoopDiagnostics : IDiagnosticsRingBuffer
@@ -171,4 +175,17 @@ public sealed class StatusIndicatorTests : BunitContext
         cut.WaitForAssertion(() =>
             Assert.Equal("Cached", cut.Find("[data-testid='status-pill']").TextContent));
     }
+}
+
+/// <summary>
+/// A status bar that never has an engine problem to report, so the availability-pill tests above
+/// stay about the pill. The auto-connect loop's own behaviour is covered by
+/// <c>EngineAutoConnectTests</c>.
+/// </summary>
+internal sealed class NoFailureAutoConnect : IEngineAutoConnect
+{
+    public EngineConnectFailure? LastFailure => null;
+    public event Action? FailureChanged { add { } remove { } }
+    public Task StartAsync() => Task.CompletedTask;
+    public Task RetryNowAsync() => Task.CompletedTask;
 }

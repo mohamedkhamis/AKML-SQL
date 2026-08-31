@@ -48,6 +48,13 @@ public sealed class EngineConnection
     /// <summary>Hex SHA-256 of the engine's TLS cert. Pinned after first connect for LAN.</summary>
     public string? TlsFingerprint { get; set; }
 
+    /// <summary>
+    /// The URL scheme (<c>ws</c> or <c>wss</c>) that last connected successfully, remembered so a
+    /// returning visitor reconnects in one attempt instead of re-probing. Null until something has
+    /// worked; <see cref="EngineEndpoint"/> then falls back to probing.
+    /// </summary>
+    public string? ResolvedScheme { get; set; }
+
     public DateTimeOffset? LastConnectedAt { get; set; }
     public string? LastKnownEngineVersion { get; set; }
     public string[] LastKnownCapabilities { get; set; } = Array.Empty<string>();

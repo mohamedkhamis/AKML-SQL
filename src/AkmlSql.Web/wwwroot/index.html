@@ -28,6 +28,9 @@
         <a href="" class="reload">Reload</a>
     </div>
 
+    <!-- Wake signals for the engine auto-connect loop. Loaded before Blazor so the global exists
+         by the time MainLayout's first render calls akmlEngineWake.register. -->
+    <script src="js/akml-engine-wake.js"></script>
     <script src="_framework/blazor.webassembly.js"></script>
 </body>
 </html>

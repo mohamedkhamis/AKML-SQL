@@ -19,6 +19,19 @@ public interface IEngineBridge : IAsyncDisposable
     /// <summary>Latest known state of the underlying WebSocket + handshake.</summary>
     BridgeState State { get; }
 
+    /// <summary>
+    /// The URL that actually answered, once a connect has succeeded; null before then. Exposed
+    /// because the scheme is now probed rather than assumed, so "which endpoint are we actually on"
+    /// is no longer derivable from the saved connection.
+    ///
+    /// <para>
+    /// Defaulted rather than abstract: it is diagnostic detail, and the several test doubles that
+    /// implement this interface have no meaningful answer for it. Forcing each of them to write
+    /// <c>=> null</c> would be churn that tells the reader nothing.
+    /// </para>
+    /// </summary>
+    string? ConnectedUrl => null;
+
     /// <summary>Raised whenever <see cref="State"/> changes.</summary>
     event Action<BridgeState>? StateChanged;
 
@@ -177,6 +190,14 @@ internal sealed class EngineBridge : IEngineBridge
     public event Action<DateTimeOffset?>? RetryScheduled;
     public event Action<TlsFingerprintMismatch>? FingerprintMismatchDetected;
 
+    /// <summary>
+    /// The URL that actually answered, once a connect has succeeded. Surfaced for diagnostics: when
+    /// somebody reports "it will not connect", the first useful question is which scheme and port
+    /// were reached, and guessing that from the saved connection is exactly the mistake this class
+    /// used to make.
+    /// </summary>
+    public string? ConnectedUrl { get; private set; }
+
     public string[] EngineCapabilities { get; private set; } = Array.Empty<string>();
     public string? EngineVersion { get; private set; }
 
@@ -199,18 +220,41 @@ internal sealed class EngineBridge : IEngineBridge
         State = BridgeState.Connecting;
         await CloseSocketOnlyAsync().ConfigureAwait(false);    // close any prior socket, keep reconnect context
 
-        _socket = _socketFactory();
-        var url = (connection.IsLocalhost ? "ws://" : "wss://") + connection.Host + ":" + connection.Port + "/akmlsql";
+        // The scheme is probed rather than inferred from the IsLocalhost checkbox. See
+        // EngineEndpoint for why: that checkbox conflated "no PIN needed" with "no TLS", so ticking
+        // it against a TLS bridge produced a connection reset and a pill stuck on "Connecting…".
+        var candidates = EngineEndpoint.CandidateUrls(connection.Host, connection.Port, connection.ResolvedScheme);
+        Exception? lastFailure = null;
+        var connected = false;
 
-        try
+        foreach (var url in candidates)
         {
-            await _socket.ConnectAsync(url, ct).ConfigureAwait(false);
+            _socket = _socketFactory();
+            try
+            {
+                await _socket.ConnectAsync(url, ct).ConfigureAwait(false);
+                ConnectedUrl = url;
+                connection.ResolvedScheme = EngineEndpoint.SchemeOf(url);
+                connected = true;
+                break;
+            }
+            catch (Exception ex)
+            {
+                lastFailure = ex;
+                _diagnostics.Log(DiagnosticLevel.Trace, "bridge", $"{url} did not answer: {ex.Message}");
+                await CloseSocketOnlyAsync().ConfigureAwait(false);
+                ct.ThrowIfCancellationRequested();
+            }
         }
-        catch (Exception ex)
+
+        if (!connected)
         {
             State = BridgeState.Failed;
-            _diagnostics.Log(DiagnosticLevel.Error, "bridge", $"Connect failed: {ex.Message}");
-            throw;
+            _diagnostics.Log(DiagnosticLevel.Error, "bridge",
+                $"Could not reach the engine at {connection.Host}:{connection.Port}. " +
+                $"Tried {string.Join(", ", candidates)}. Last error: {lastFailure?.Message}");
+            throw lastFailure ?? new InvalidOperationException(
+                $"No reachable engine endpoint at {connection.Host}:{connection.Port}.");
         }
 
         _receiveLoop = Task.Run(() => ReceiveLoopAsync(_socket));
