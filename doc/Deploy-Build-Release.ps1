@@ -388,8 +388,21 @@ if (-not $SkipInstaller) {
         # Pass MyAppVersion via /D so it overrides the #ifndef fallback in the
         # .iss. This is what makes "Programs and Features" show the real build
         # version instead of the 1.0.0 placeholder.
+        # ISCC writes warnings to stderr, and `2>&1` on a NATIVE command makes PowerShell wrap each
+        # stderr line in an ErrorRecord. With $ErrorActionPreference = 'Stop' that is a TERMINATING
+        # error, so the script aborted on a warning even though ISCC exited 0 and wrote a perfectly
+        # good installer. The .iss raises a permanent "[UninstallRun] entries without a RunOnceId"
+        # warning, so this made every release build report failure.
+        #
+        # Relaxing the preference for just this call keeps the output captured while letting
+        # $LASTEXITCODE -- the only trustworthy signal from a native tool -- decide the outcome.
+        $prevEap = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
         $output = & $iscc "/DMyAppVersion=$buildVersion" $issFile 2>&1
-        if ($LASTEXITCODE -ne 0) {
+        $isccExit = $LASTEXITCODE
+        $ErrorActionPreference = $prevEap
+
+        if ($isccExit -ne 0) {
             Write-Fail " FAILED"
             $output | Select-String 'Error' | ForEach-Object { Write-Host "    $_" -ForegroundColor Red }
             $script:errors += "Inno Setup compilation failed"
