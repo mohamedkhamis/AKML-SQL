@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    UI automation harness for SSMS 22 / Visual Studio 2026 — the desktop equivalent of the
+    Playwright suite that covers the web edition.
+
+    DELIBERATELY NOT IN AKML-SQL.slnx. These tests drive a real IDE on a real desktop: they need an
+    interactive, connected session (see Driver/README notes), they are slow, and they cannot run on
+    a headless build agent. Keeping them out of the solution means `msbuild AKML-SQL.slnx` and the
+    normal `dotnet test` sweep are unaffected. Run them explicitly:
+
+        dotnet test tests/AkmlSql.UiTests/AkmlSql.UiTests.csproj
+
+    net10.0-windows (not plain net10.0) so FlaUI resolves its net8.0-windows7.0 assets rather than
+    falling back to net48 with an NU1701 warning.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <!-- x64: SSMS 22 is a 64-bit process and cross-bitness UIA adds avoidable failure modes. -->
+    <PlatformTarget>x64</PlatformTarget>
+    <!-- These tests own a single desktop; xunit must never run two of them at once. -->
+    <ParallelizeTestCollections>false</ParallelizeTestCollections>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FlaUI.UIA3" Version="5.0.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+</Project>
