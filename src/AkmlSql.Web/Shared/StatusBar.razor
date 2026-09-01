@@ -159,7 +159,29 @@
     private Availability _state = Availability.Disconnected;
     private bool _retrying;
 
-    private void OnFailureChanged() => _ = InvokeAsync(StateHasChanged);
+    private void OnFailureChanged() => _ = InvokeAsync(() =>
+    {
+        SyncCountdownTimer();
+        StateHasChanged();
+    });
+
+    /// <summary>
+    /// Runs the one-second tick while EITHER countdown is pending.
+    ///
+    /// <para>
+    /// The timer was originally owned solely by <c>Bridge.RetryScheduled</c>, which fires for a
+    /// connection that dropped. An auto-connect failure never raises that event, so its "Retry
+    /// (40s)" label rendered once and then sat frozen until the next attempt — reading as a stuck
+    /// UI rather than a countdown. Both sources drive the same timer now.
+    /// </para>
+    /// </summary>
+    private void SyncCountdownTimer()
+    {
+        var pending = _nextRetryAt is not null || AutoConnect.LastFailure?.NextAttemptAt is not null;
+        _countdownTimer?.Change(
+            pending ? TimeSpan.FromSeconds(1) : System.Threading.Timeout.InfiniteTimeSpan,
+            TimeSpan.FromSeconds(1));
+    }
 
     /// <summary>
     /// The label doubles as the countdown, so one control answers both "when will it try again?"
@@ -316,9 +338,7 @@
         InvokeAsync(() =>
         {
             _nextRetryAt = nextRetryAt;
-            _countdownTimer?.Change(
-                nextRetryAt != null ? TimeSpan.FromSeconds(1) : System.Threading.Timeout.InfiniteTimeSpan,
-                TimeSpan.FromSeconds(1));
+            SyncCountdownTimer();
             StateHasChanged();
         });
     }

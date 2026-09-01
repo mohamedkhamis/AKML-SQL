@@ -46,6 +46,12 @@ export function connect(url) {
         ws.onopen = () => settle(resolve, id);
 
         ws.onerror = () => {
+            // Only a PRE-OPEN error is a failed connect. onerror also fires on an already-open
+            // socket when the connection drops mid-session, and dropping the map entry there would
+            // make send() throw "Unknown WebSocket id" instead of reporting through the normal
+            // closed path that the reconnect logic already understands. Teardown for that case
+            // belongs to onclose.
+            if (settled) return;
             _sockets.delete(id);
             settle(reject, new Error(`WebSocket connect failed (${url}).`));
         };

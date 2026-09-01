@@ -104,6 +104,7 @@ internal sealed class EngineAutoConnect : IEngineAutoConnect, IAsyncDisposable
     // Guards loop ownership only; never held across a wait.
     private readonly object _lifecycle = new();
     private bool _loopRunning;
+    private bool _disposed;
     private CancellationTokenSource? _shutdown;
 
     public EngineAutoConnect(
@@ -134,9 +135,13 @@ internal sealed class EngineAutoConnect : IEngineAutoConnect, IAsyncDisposable
         // bridge went live, or because the pairing needs a human — start a fresh one.
         lock (_lifecycle)
         {
+            if (_disposed) return Task.CompletedTask;
             if (_loopRunning)
             {
                 // Release at most one permit; extra wakes while already awake are meaningless.
+                // A permit can still be left behind if the loop exits between this check and the
+                // next wait -- harmless, because the next loop's first backoff simply returns
+                // immediately, which is the same thing a wake would have done anyway.
                 if (_wake.CurrentCount == 0) _wake.Release();
                 return Task.CompletedTask;
             }
@@ -147,19 +152,30 @@ internal sealed class EngineAutoConnect : IEngineAutoConnect, IAsyncDisposable
 
     private void EnsureLoop()
     {
+        CancellationToken ct;
         lock (_lifecycle)
         {
+            if (_disposed) return;
             if (_loopRunning) return;
             _loopRunning = true;
             _shutdown ??= new CancellationTokenSource();
+
+            // Read the token HERE, under the lock, and hand it to the loop.
+            //
+            // Reading it inside RunLoopAsync was a latent trap: that read sat before the try, so if
+            // DisposeAsync had raced in between and disposed the source, .Token threw
+            // ObjectDisposedException, the finally that clears _loopRunning never ran, and the flag
+            // stayed true forever -- after which EnsureLoop and RetryNowAsync both early-return and
+            // auto-connect is silently dead for the rest of the page's life. The exception went
+            // unobserved too, so nothing said why. That is exactly the failure this class exists to
+            // prevent, so it is worth the extra parameter.
+            ct = _shutdown.Token;
         }
-        _ = RunLoopAsync();
+        _ = RunLoopAsync(ct);
     }
 
-    private async Task RunLoopAsync()
+    private async Task RunLoopAsync(CancellationToken ct)
     {
-        var ct = _shutdown?.Token ?? CancellationToken.None;
-
         try
         {
             var attempt = 0;
@@ -291,7 +307,7 @@ internal sealed class EngineAutoConnect : IEngineAutoConnect, IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         CancellationTokenSource? shutdown;
-        lock (_lifecycle) { shutdown = _shutdown; _shutdown = null; }
+        lock (_lifecycle) { _disposed = true; shutdown = _shutdown; _shutdown = null; }
 
         if (shutdown is not null)
         {
