@@ -169,6 +169,24 @@ try {
                 $manifest.generatedAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
                 $manifest.releases = @($entry) + @($manifest.releases)
                 ($manifest | ConvertTo-Json -Depth 6) | Set-Content $manifestPath -Encoding UTF8
+
+                # Spec 036 US5 / FR-036: the updater manifest is emitted from the SAME $entry
+                # object — one write, two files, no second computation of version or hash, so the
+                # download page and the update channel cannot drift. It MUST stay in this staging
+                # block: MapStaticAssets resolves its asset list at build time, so a manifest
+                # dropped into wwwroot after the publish below would 404 silently.
+                # downloadUrl is always absolute (the updater cannot resolve the site-relative
+                # 'downloads/...' path): prefer the CDN asset, fall back to the site's /dl route.
+                $updateManifest = [PSCustomObject]@{
+                    version          = $entry.version
+                    downloadUrl      = $(if ($null -ne $entry.cdnUrl) { $entry.cdnUrl } else { "https://$HostName/dl/$fileName" })
+                    releaseNotesUrl  = $entry.releaseNotesUrl
+                    minimumOsVersion = $entry.minimumOsVersion
+                    sha256Hash       = $entry.sha256Hash
+                }
+                ($updateManifest | ConvertTo-Json -Depth 4) | Set-Content (Join-Path $RepoRoot 'src\AkmlSql.Site\wwwroot\update-manifest.json') -Encoding UTF8
+                Log "Update manifest written for $version (downloadUrl $($updateManifest.downloadUrl))"
+
                 Log "Staged release $version -> $fileName (sha256 $($sha.Substring(0,12))..., $sizeMb MB)"
             }
         }

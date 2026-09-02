@@ -42,7 +42,17 @@ namespace AkmlSql.Core.Tests
 
         [Fact] public void UpdateManifestUrl()
         {
-            Assert.Equal("https://updates.akmlsql.com/manifest.json", Constants.UpdateManifestUrl);
+            // Spec 036 US5 / FR-033: the check must target the live product-site host.
+            // updates.akmlsql.com never resolved and no build ever checked successfully.
+            Assert.Equal("https://akml.khamis.work/update-manifest.json", Constants.UpdateManifestUrl);
+        }
+
+        [Fact] public void UpdateManifestUrl_IsHttpsOnTheLiveSiteHost()
+        {
+            var uri = new System.Uri(Constants.UpdateManifestUrl, System.UriKind.Absolute);
+            Assert.Equal("https", uri.Scheme);
+            Assert.Equal("akml.khamis.work", uri.Host);
+            Assert.DoesNotContain("updates.akmlsql.com", Constants.UpdateManifestUrl);
         }
 
         [Fact] public void AppDataFolderName()

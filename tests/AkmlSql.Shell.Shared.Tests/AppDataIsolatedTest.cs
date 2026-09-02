@@ -25,7 +25,7 @@ namespace AkmlSql.Shell.Shared.Tests
             Environment.SetEnvironmentVariable(AppDataRootEnvVar, TempRoot);
         }
 
-        public void Dispose()
+        public virtual void Dispose()
         {
             Environment.SetEnvironmentVariable(AppDataRootEnvVar, _priorRoot);
             try { if (Directory.Exists(TempRoot)) Directory.Delete(TempRoot, recursive: true); }

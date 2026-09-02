@@ -1,3 +1,4 @@
+#nullable enable
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -9,6 +10,16 @@ namespace AkmlSql.Shell.Shared.Update
 {
     internal static class UpdateLauncher
     {
+        // Test hooks (Shell.Shared.Tests). Production defaults are restored by ResetTestHooks.
+        internal static Func<string?> UpdaterPathProvider { get; set; } = FindUpdaterPath;
+        internal static Func<ProcessStartInfo, Process?> ProcessStarter { get; set; } = StartProcessDefault;
+
+        internal static void ResetTestHooks()
+        {
+            UpdaterPathProvider = FindUpdaterPath;
+            ProcessStarter = StartProcessDefault;
+        }
+
         public static void LaunchIfDue()
         {
             try
@@ -39,18 +50,20 @@ namespace AkmlSql.Shell.Shared.Update
         }
 
         /// <summary>
-        /// Launches the updater process fire-and-forget (used for background auto-check).
+        /// Launches the updater process fire-and-forget (used for background auto-check and —
+        /// spec 036 US5 / FR-042 — the manual "Check for updates" path, which bypasses the
+        /// 24-hour throttle in <see cref="LaunchIfDue"/>).
         /// </summary>
         public static void LaunchUpdater()
         {
-            var updaterPath = FindUpdaterPath();
+            var updaterPath = UpdaterPathProvider();
             if (updaterPath == null)
             {
                 return;
             }
 
             Log.Information("Launching update checker: {Path}", updaterPath);
-            using (Process.Start(new ProcessStartInfo
+            using (ProcessStarter(new ProcessStartInfo
             {
                 FileName = updaterPath,
                 Arguments = "--check",
@@ -63,16 +76,16 @@ namespace AkmlSql.Shell.Shared.Update
         /// <summary>
         /// Launches the updater and waits for it to exit. Returns the process, or null if not found.
         /// </summary>
-        public static Process LaunchUpdaterAndWait(TimeSpan timeout)
+        public static Process? LaunchUpdaterAndWait(TimeSpan timeout)
         {
-            var updaterPath = FindUpdaterPath();
+            var updaterPath = UpdaterPathProvider();
             if (updaterPath == null)
             {
                 return null;
             }
 
             Log.Information("Launching update checker (synchronous): {Path}", updaterPath);
-            var process = Process.Start(new ProcessStartInfo
+            var process = ProcessStarter(new ProcessStartInfo
             {
                 FileName = updaterPath,
                 Arguments = "--check",
@@ -85,7 +98,40 @@ namespace AkmlSql.Shell.Shared.Update
             return process;
         }
 
-        private static string FindUpdaterPath()
+        /// <summary>
+        /// Launches the updater in <c>--download</c> mode (spec 036 US5 / FR-039): downloads and
+        /// verifies the offered installer out of process. Returns the live process with
+        /// <see cref="Process.EnableRaisingEvents"/> set so the progress window can watch
+        /// <c>Exited</c> — and kill it on cancel (the shell then deletes the <c>.partial</c>
+        /// itself, because a killed process never runs its finally blocks).
+        /// </summary>
+        public static Process? LaunchUpdaterDownload()
+        {
+            var updaterPath = UpdaterPathProvider();
+            if (updaterPath == null)
+            {
+                return null;
+            }
+
+            Log.Information("Launching update downloader: {Path}", updaterPath);
+            var process = ProcessStarter(new ProcessStartInfo
+            {
+                FileName = updaterPath,
+                Arguments = "--download",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden
+            });
+            if (process != null)
+            {
+                process.EnableRaisingEvents = true;
+            }
+            return process;
+        }
+
+        private static Process? StartProcessDefault(ProcessStartInfo info) => Process.Start(info);
+
+        private static string? FindUpdaterPath()
         {
             // Try both ProgramFiles locations to handle x86 and x64 host processes.
             // On x86 processes, Environment.SpecialFolder.ProgramFiles resolves to
