@@ -31,6 +31,13 @@ public sealed record Release
     /// <summary>Optional minimum Windows version (carried from the updater schema).</summary>
     public string? MinimumOsVersion { get; init; }
 
+    /// <summary>
+    /// Optional CDN mirror for the installer (absolute http/https, e.g. a GitHub Releases
+    /// asset). When set, the tracked <c>/dl/</c> endpoint redirects here instead of streaming
+    /// the file from this server — the download is still counted first.
+    /// </summary>
+    public string? CdnUrl { get; init; }
+
     /// <summary>Derived by <see cref="ReleasesManifest"/>: true only for the newest entry. Never stored.</summary>
     public bool IsLatest { get; init; }
 }

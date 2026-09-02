@@ -64,7 +64,11 @@
             <p>@latest.NotesSummary</p>
         }
         <p class="cta-row">
-            <a class="btn btn-primary" href="@ReleaseAvailability.TrackedUrl(latest)">Download AKML SQL @latest.Version</a>
+            @* DL-004: download-track.js upgrades this link to the CDN URL and beacons the click
+               to /dl-count — the visitor goes straight to the CDN, the metric still lands. *@
+            <a class="btn btn-primary download-tracked" href="@ReleaseAvailability.TrackedUrl(latest)"
+               data-file="@System.IO.Path.GetFileName(latest.DownloadUrl)"
+               data-cdn-url="@latest.CdnUrl">Download AKML SQL @latest.Version</a>
             @if (latest.ReleaseNotesUrl is not null)
             {
                 <a class="btn btn-secondary" href="@latest.ReleaseNotesUrl" target="_blank" rel="noopener noreferrer">Release notes</a>
@@ -85,6 +89,7 @@
 
     @* U22: static SSR renders this into the page body; script-src 'self' allows it. *@
     <script src="@Assets["js/copy-hash.js"]" defer></script>
+    <script src="@Assets["js/download-track.js"]" defer></script>
 
     @* DL-001: only list previous releases whose installer is still present. *@
     @if (PreviousReleases.Count > 0)
@@ -100,7 +105,9 @@
                             Released <time datetime="@release.ReleasedAt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)">@release.ReleasedAt.ToString("MMMM d, yyyy", CultureInfo.InvariantCulture)</time>
                             · Hosts: @string.Join(", ", release.SupportedHosts)
                         </p>
-                        <p><a href="@ReleaseAvailability.TrackedUrl(release)">Download installer</a></p>
+                        <p><a class="download-tracked" href="@ReleaseAvailability.TrackedUrl(release)"
+                              data-file="@System.IO.Path.GetFileName(release.DownloadUrl)"
+                              data-cdn-url="@release.CdnUrl">Download installer</a></p>
                         <details class="hash-block">
                             <summary>SHA-256</summary>
                             <code>@release.Sha256Hash</code>

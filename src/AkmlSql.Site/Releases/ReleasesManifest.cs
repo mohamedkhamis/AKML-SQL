@@ -163,6 +163,9 @@ public sealed class ReleasesManifest
             Sha256Hash = dto.Sha256Hash!,
             // Optional: an invalid notes URL degrades to null instead of dropping the entry.
             ReleaseNotesUrl = IsAllowedUrl(dto.ReleaseNotesUrl) ? dto.ReleaseNotesUrl : null,
+            // Optional: CDN mirror must be an absolute http/https URL (never site-relative);
+            // anything else degrades to null instead of dropping the entry.
+            CdnUrl = IsAbsoluteHttpUrl(dto.CdnUrl) ? dto.CdnUrl : null,
             NotesSummary = string.IsNullOrWhiteSpace(dto.NotesSummary) ? null : dto.NotesSummary,
             MinimumOsVersion = string.IsNullOrWhiteSpace(dto.MinimumOsVersion) ? null : dto.MinimumOsVersion,
         };
@@ -195,6 +198,12 @@ public sealed class ReleasesManifest
 
     private static bool IsSha256Hex(string? hash) =>
         hash is { Length: 64 } && hash.All(Uri.IsHexDigit);
+
+    /// <summary>Stricter than <see cref="IsAllowedUrl"/>: absolute http/https only (CDN mirrors).</summary>
+    internal static bool IsAbsoluteHttpUrl(string? url) =>
+        !string.IsNullOrWhiteSpace(url)
+        && Uri.TryCreate(url, UriKind.Absolute, out var uri)
+        && uri.Scheme is "http" or "https";
 
     private static IReadOnlyList<Release> OrderNewestFirst(IEnumerable<Release> releases) =>
         releases
@@ -232,5 +241,6 @@ public sealed class ReleasesManifest
         public string? ReleaseNotesUrl { get; set; }
         public string? NotesSummary { get; set; }
         public string? MinimumOsVersion { get; set; }
+        public string? CdnUrl { get; set; }
     }
 }

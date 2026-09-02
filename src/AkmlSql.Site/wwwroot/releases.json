@@ -1,26 +1,48 @@
 {
-  "product": "AKML SQL",
-  "generatedAt": "2026-09-01T09:16:21Z",
-  "releases": [
-    {
-      "version": "1.26.0901.1016",
-      "releasedAt": "2026-09-01",
-      "supportedHosts": [ "SSMS 22", "VS 2026" ],
-      "downloadUrl": "downloads/AKMLSQLSetup-1.26.0901.1016.exe",
-      "sha256Hash": "accfebaa00d8c6a24c579855b6d78563e18722b7c7f8f69e7f487a4aef15267b",
-      "releaseNotesUrl": "https://github.com/mohamedkhamis/AKML-SQL/releases",
-      "notesSummary": "Working disable-rule scopes (line / script / session / everywhere), automatic engine connect and recovery in the web edition, and refreshed documentation.",
-      "minimumOsVersion": "10.0"
-    },
-    {
-      "version": "1.26.0828.1939",
-      "releasedAt": "2026-08-28",
-      "supportedHosts": [ "SSMS 22", "VS 2026" ],
-      "downloadUrl": "downloads/AKMLSQLSetup-1.26.0828.1939.exe",
-      "sha256Hash": "8e90df20d065c282464d227fced53396c236575fc3ece6a8be7023a742fc8adc",
-      "releaseNotesUrl": "https://github.com/mohamedkhamis/AKML-SQL/releases",
-      "notesSummary": "IntelliSense, formatting, static analysis, refactoring, snippets, SQL history, and AI assistance for SSMS 22 and Visual Studio 2026.",
-      "minimumOsVersion": "10.0"
-    }
-  ]
+    "product":  "AKML SQL",
+    "generatedAt":  "2026-09-01T15:14:04Z",
+    "releases":  [
+                     {
+                         "version":  "1.26.0901.1502",
+                         "releasedAt":  "2026-09-01",
+                         "supportedHosts":  [
+                                                "SSMS 22",
+                                                "VS 2026"
+                                            ],
+                         "downloadUrl":  "downloads/AKMLSQLSetup-1.26.0901.1502.exe",
+                         "sha256Hash":  "9ad4cd1774679948ec0a34936bc2b6f7b922bcbd6e613903e77ed411e5a6eae7",
+                         "releaseNotesUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases",
+                         "notesSummary":  "AKML SQL 1.26.0901.1502 installer for SSMS 22 and Visual Studio 2026 (71.97 MB).",
+                         "minimumOsVersion":  "10.0",
+                         "cdnUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases/download/v1.26.0901.1502/AKMLSQLSetup-1.26.0901.1502.exe"
+                     },
+                     {
+                         "version":  "1.26.0901.1016",
+                         "releasedAt":  "2026-09-01",
+                         "supportedHosts":  [
+                                                "SSMS 22",
+                                                "VS 2026"
+                                            ],
+                         "downloadUrl":  "downloads/AKMLSQLSetup-1.26.0901.1016.exe",
+                         "sha256Hash":  "accfebaa00d8c6a24c579855b6d78563e18722b7c7f8f69e7f487a4aef15267b",
+                         "releaseNotesUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases",
+                         "notesSummary":  "Working disable-rule scopes (line / script / session / everywhere), automatic engine connect and recovery in the web edition, and refreshed documentation.",
+                         "minimumOsVersion":  "10.0",
+                         "cdnUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases/download/v1.26.0901.1016/AKMLSQLSetup-1.26.0901.1016.exe"
+                     },
+                     {
+                         "version":  "1.26.0828.1939",
+                         "releasedAt":  "2026-08-28",
+                         "supportedHosts":  [
+                                                "SSMS 22",
+                                                "VS 2026"
+                                            ],
+                         "downloadUrl":  "downloads/AKMLSQLSetup-1.26.0828.1939.exe",
+                         "sha256Hash":  "8e90df20d065c282464d227fced53396c236575fc3ece6a8be7023a742fc8adc",
+                         "releaseNotesUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases",
+                         "notesSummary":  "IntelliSense, formatting, static analysis, refactoring, snippets, SQL history, and AI assistance for SSMS 22 and Visual Studio 2026.",
+                         "minimumOsVersion":  "10.0",
+                         "cdnUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases/download/v1.26.0828.1939/AKMLSQLSetup-1.26.0828.1939.exe"
+                     }
+                 ]
 }

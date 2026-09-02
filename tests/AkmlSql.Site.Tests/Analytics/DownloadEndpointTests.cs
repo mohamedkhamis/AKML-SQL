@@ -145,4 +145,121 @@ public sealed class DownloadEndpointTests
 
         public void EnqueueNotFound(NotFoundInfo notFound) => NotFound.Add(notFound);
     }
+
+    // --- CDN redirect (/dl -> GitHub Releases etc.) ---
+
+    private static AkmlSql.Site.Releases.ReleasesManifest ManifestWithCdn(string fileName, string? cdnUrl) =>
+        AkmlSql.Site.Releases.ReleasesManifest.Create(
+        [
+            new AkmlSql.Site.Releases.Release
+            {
+                Version = "1.0.0",
+                ReleasedAt = new DateOnly(2026, 9, 1),
+                SupportedHosts = ["SSMS 22"],
+                DownloadUrl = $"downloads/{fileName}",
+                Sha256Hash = new string('0', 64),
+                CdnUrl = cdnUrl,
+            },
+        ]);
+
+    [Fact]
+    public void Handle_ManifestHasCdnUrl_RedirectsAndLogsDownload()
+    {
+        using var dir = new TempDirectory();
+        var sink = new RecordingSink();
+        var http = new DefaultHttpContext();
+        var manifest = ManifestWithCdn("setup.exe", "https://cdn.example.com/releases/v1/setup.exe");
+
+        var result = DownloadEndpoint.Handle("setup.exe", http, new DownloadsOptions { Folder = dir.Path }, sink, manifest: manifest);
+
+        var redirect = Assert.IsType<RedirectHttpResult>(result);
+        Assert.Equal("https://cdn.example.com/releases/v1/setup.exe", redirect.Url);
+        Assert.False(redirect.Permanent);
+        var download = Assert.Single(sink.Downloads);
+        Assert.Equal("setup.exe", download.File);
+    }
+
+    [Fact]
+    public void Handle_ManifestWithoutCdnUrl_StreamsLocalFile()
+    {
+        using var dir = new TempDirectory();
+        File.WriteAllText(Path.Combine(dir.Path, "setup.exe"), "payload");
+        var sink = new RecordingSink();
+        var http = new DefaultHttpContext();
+        http.Response.Body = new MemoryStream();
+        http.RequestServices = new ServiceCollection().AddLogging().BuildServiceProvider();
+        var manifest = ManifestWithCdn("setup.exe", null);
+
+        var result = DownloadEndpoint.Handle("setup.exe", http, new DownloadsOptions { Folder = dir.Path }, sink, manifest: manifest);
+
+        Assert.IsType<FileStreamHttpResult>(result);
+    }
+
+    [Theory]
+    [InlineData("../setup.exe")]
+    [InlineData("sub/setup.exe")]
+    [InlineData("..\\setup.exe")]
+    public void Handle_CdnLookupIgnoresTraversalAndSubpaths(string? requestPath)
+    {
+        var manifest = ManifestWithCdn("setup.exe", "https://cdn.example.com/setup.exe");
+
+        Assert.Null(DownloadEndpoint.ResolveCdnUrl(manifest, requestPath));
+    }
+
+    [Fact]
+    public void ResolveCdnUrl_MatchesFilenameCaseInsensitively_AndRejectsUnknownFiles()
+    {
+        var manifest = ManifestWithCdn("AKMLSQLSetup-1.0.0.exe", "https://cdn.example.com/x.exe");
+
+        Assert.Equal("https://cdn.example.com/x.exe", DownloadEndpoint.ResolveCdnUrl(manifest, "akmlsqlsetup-1.0.0.EXE"));
+        Assert.Null(DownloadEndpoint.ResolveCdnUrl(manifest, "other.exe"));
+    }
+
+    // --- /dl-count beacon (DL-004) ---
+
+    [Fact]
+    public void HandleCount_CdnMirroredFile_Returns204AndLogsDownload()
+    {
+        using var dir = new TempDirectory();
+        var sink = new RecordingSink();
+        var http = new DefaultHttpContext();
+        var manifest = ManifestWithCdn("setup.exe", "https://cdn.example.com/setup.exe");
+
+        var result = DownloadEndpoint.HandleCount("setup.exe", http, new DownloadsOptions { Folder = dir.Path }, sink, manifest: manifest);
+
+        Assert.Equal(StatusCodes.Status204NoContent, Assert.IsAssignableFrom<IStatusCodeHttpResult>(result).StatusCode);
+        var download = Assert.Single(sink.Downloads);
+        Assert.Equal("setup.exe", download.File);
+    }
+
+    [Fact]
+    public void HandleCount_LocallyPresentFileWithoutCdn_Returns204AndLogsDownload()
+    {
+        using var dir = new TempDirectory();
+        File.WriteAllText(Path.Combine(dir.Path, "setup.exe"), "payload");
+        var sink = new RecordingSink();
+        var http = new DefaultHttpContext();
+
+        var result = DownloadEndpoint.HandleCount("setup.exe", http, new DownloadsOptions { Folder = dir.Path }, sink);
+
+        Assert.Equal(StatusCodes.Status204NoContent, Assert.IsAssignableFrom<IStatusCodeHttpResult>(result).StatusCode);
+        Assert.Single(sink.Downloads);
+    }
+
+    [Theory]
+    [InlineData("invented.exe")]
+    [InlineData("../setup.exe")]
+    [InlineData(null)]
+    public void HandleCount_UnknownOrInvalidFile_Returns404AndLogsNothing(string? requestPath)
+    {
+        using var dir = new TempDirectory();
+        var sink = new RecordingSink();
+        var http = new DefaultHttpContext();
+        var manifest = ManifestWithCdn("setup.exe", "https://cdn.example.com/setup.exe");
+
+        var result = DownloadEndpoint.HandleCount(requestPath, http, new DownloadsOptions { Folder = dir.Path }, sink, manifest: manifest);
+
+        Assert.Equal(StatusCodes.Status404NotFound, Assert.IsAssignableFrom<IStatusCodeHttpResult>(result).StatusCode);
+        Assert.Empty(sink.Downloads);
+    }
 }

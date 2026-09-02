@@ -252,6 +252,56 @@ public sealed class ReleasesManifestTests
         Assert.Null(release.ReleaseNotesUrl);
     }
 
+    [Fact]
+    public void CdnUrl_AbsoluteHttps_Parsed()
+    {
+        const string json = """
+            {
+              "product": "AKML SQL",
+              "releases": [
+                {
+                  "version": "1.0.0",
+                  "releasedAt": "2026-08-27",
+                  "supportedHosts": ["SSMS 22"],
+                  "downloadUrl": "downloads/AKMLSQLSetup-1.0.0.exe",
+                  "sha256Hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "cdnUrl": "https://github.com/mohamedkhamis/AKML-SQL/releases/download/v1.0.0/AKMLSQLSetup-1.0.0.exe"
+                }
+              ]
+            }
+            """;
+
+        var release = Assert.Single(ReleasesManifest.Parse(json).Releases);
+        Assert.Equal("https://github.com/mohamedkhamis/AKML-SQL/releases/download/v1.0.0/AKMLSQLSetup-1.0.0.exe", release.CdnUrl);
+    }
+
+    [Theory]
+    [InlineData("javascript:alert(1)")]
+    [InlineData("downloads/AKMLSQLSetup-1.0.0.exe")] // site-relative is not a CDN mirror
+    [InlineData("//evil.example.com/x.exe")]
+    [InlineData("file:///C:/x.exe")]
+    public void CdnUrl_NotAbsoluteHttp_TreatedAsNull_EntrySurvives(string cdnUrl)
+    {
+        var json = $$"""
+            {
+              "product": "AKML SQL",
+              "releases": [
+                {
+                  "version": "1.0.0",
+                  "releasedAt": "2026-08-27",
+                  "supportedHosts": ["SSMS 22"],
+                  "downloadUrl": "downloads/AKMLSQLSetup-1.0.0.exe",
+                  "sha256Hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "cdnUrl": "{{cdnUrl}}"
+                }
+              ]
+            }
+            """;
+
+        var release = Assert.Single(ReleasesManifest.Parse(json).Releases);
+        Assert.Null(release.CdnUrl);
+    }
+
     private static string Entry(string downloadUrl) => $$"""
         {
           "version": "1.0.0",

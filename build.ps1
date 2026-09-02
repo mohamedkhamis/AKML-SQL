@@ -11,17 +11,23 @@
     Skip building shell extension projects (MSBuild).
 .PARAMETER InstallerOnly
     Only build the Inno Setup installer (assumes all projects already built).
+.PARAMETER DeploySite
+    After the installer is built, deploy the product site to IIS via
+    scripts\deploy-site-iis.ps1, staging the new exe as a release on the site
+    (versioned download + releases.json entry). Requires an elevated shell.
 .PARAMETER Configuration
     Build configuration. Default: Release.
 .EXAMPLE
     .\build.ps1
     .\build.ps1 -SkipTests
     .\build.ps1 -InstallerOnly
+    .\build.ps1 -DeploySite
 #>
 param(
     [switch]$SkipTests,
     [switch]$SkipShell,
     [switch]$InstallerOnly,
+    [switch]$DeploySite,
     [ValidateSet("Debug", "Release")]
     [string]$Configuration = "Release"
 )
@@ -230,6 +236,14 @@ if (-not $SkipTests) {
 Update-VsixManifests $Version
 Invoke-Build "Installer (Inno Setup)" {
     & $ISCC "$Root\src\AkmlSql.Installer\AkmlSqlSetup.iss" "/DMyAppVersion=$Version"
+}
+
+# --- Optional: deploy product site with the freshly built release ---
+if ($DeploySite) {
+    Invoke-Build "Deploy product site (IIS)" {
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$Root\scripts\deploy-site-iis.ps1" -RepoRoot $Root
+        if ($LASTEXITCODE -ne 0) { throw "deploy-site-iis.ps1 failed (exit $LASTEXITCODE)" }
+    }
 }
 
 $TotalSw.Stop()

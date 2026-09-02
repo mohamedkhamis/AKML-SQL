@@ -6,6 +6,11 @@
 
 .DESCRIPTION
     Idempotent deploy pipeline:
+      0. Release staging: if the installer build at -ReleaseExe (default
+         src\AkmlSql.Installer\Output\AKMLSQLSetup.exe) has a version that is not
+         yet in wwwroot\releases.json, copy it to the downloads folder as a
+         versioned file and prepend a release entry (real SHA-256, size, date).
+         Re-runs are no-ops. -SkipRelease disables this.
       1. dotnet publish (framework-dependent) + mirror into the deploy path
       2. App pool (No Managed Code, AlwaysRunning) + read ACL for the pool identity
       3. IIS site with http:80 host-header binding
@@ -21,6 +26,17 @@
 .PARAMETER HostName
     Public host name. Default akml.khamis.work.
 
+.PARAMETER ReleaseExe
+    Path to the installer exe to stage as a release. Default: the build output
+    src\AkmlSql.Installer\Output\AKMLSQLSetup.exe. Older versioned files are kept
+    in the downloads folder so previous releases stay downloadable.
+
+.PARAMETER NotesSummary
+    Release-notes summary for the new entry. Default: generic line with version + size.
+
+.PARAMETER SkipRelease
+    Deploy the site without staging a new release.
+
 .PARAMETER SelfSigned
     Force a self-signed cert even if win-acme is available (local testing).
 
@@ -35,9 +51,15 @@ param(
     [string] $SiteName = 'AkmlSqlSite',
     [string] $AppPoolName = 'AkmlSqlSite',
     [string] $DeployPath = 'C:\inetpub\akml.khamis.work',
+    [string] $DownloadsPath = 'C:\inetpub\akml.khamis.work-downloads',
     [string] $Configuration = 'Release',
     [string] $WacsPath = 'C:\win-acme\wacs.exe',
+    [string] $ReleaseExe = '',
+    [string] $NotesSummary = '',
+    [string] $GitHubRepo = 'mohamedkhamis/AKML-SQL',
     [string] $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path,
+    [switch] $SkipRelease,
+    [switch] $SkipCdn,
     [switch] $SelfSigned,
     [switch] $SkipCert
 )
@@ -67,6 +89,89 @@ try {
     }
     catch {
         Log "WARNING: docs metadata not regenerated ($_) -- using committed copy"
+    }
+
+    # --- 0. Release staging -------------------------------------------------
+    # A new installer build becomes a site release automatically: versioned copy
+    # into the downloads folder + prepended entry in wwwroot\releases.json (the
+    # publish below then carries the updated manifest). Idempotent per version.
+    if ($SkipRelease) {
+        Log 'SkipRelease set -- releases.json untouched'
+    }
+    else {
+        if ([string]::IsNullOrWhiteSpace($ReleaseExe)) {
+            $ReleaseExe = Join-Path $RepoRoot 'src\AkmlSql.Installer\Output\AKMLSQLSetup.exe'
+        }
+        if (-not (Test-Path $ReleaseExe)) {
+            Log "No installer at $ReleaseExe -- skipping release staging"
+        }
+        else {
+            $version = (Get-Item $ReleaseExe).VersionInfo.FileVersion.Trim()
+            $manifestPath = Join-Path $RepoRoot 'src\AkmlSql.Site\wwwroot\releases.json'
+            $manifest = Get-Content $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+            $already = @($manifest.releases | Where-Object { $_.version -eq $version })
+            if ($already.Count -gt 0) {
+                Log "Release $version already staged -- skipping"
+            }
+            else {
+                New-Item -ItemType Directory -Force -Path $DownloadsPath | Out-Null
+                $fileName = "AKMLSQLSetup-$version.exe"
+                Copy-Item $ReleaseExe (Join-Path $DownloadsPath $fileName) -Force
+                $sha = (Get-FileHash $ReleaseExe -Algorithm SHA256).Hash.ToLower()
+                $sizeMb = [math]::Round((Get-Item $ReleaseExe).Length / 1MB, 2)
+                $notes = if (-not [string]::IsNullOrWhiteSpace($NotesSummary)) { $NotesSummary } else { "AKML SQL $version installer for SSMS 22 and Visual Studio 2026 ($sizeMb MB)." }
+
+                # CDN upload (GitHub Releases = free binary CDN). Non-fatal: on any failure the
+                # site keeps serving the file from /dl locally. -SkipCdn disables.
+                $cdnUrl = $null
+                if ($SkipCdn) {
+                    Log 'SkipCdn set -- no GitHub upload'
+                }
+                else {
+                    $gh = (Get-Command gh -ErrorAction SilentlyContinue).Source
+                    if (-not $gh -and (Test-Path 'C:\Program Files\GitHub CLI\gh.exe')) { $gh = 'C:\Program Files\GitHub CLI\gh.exe' }
+                    if (-not $gh) {
+                        Log 'WARNING: gh CLI not found -- skipping CDN upload (local /dl still serves the file)'
+                    }
+                    else {
+                        $tag = "v$version"
+                        $stagedFile = Join-Path $DownloadsPath $fileName
+                        & $gh release view $tag --repo $GitHubRepo 2>&1 | Out-Null
+                        if ($LASTEXITCODE -eq 0) {
+                            Log "GitHub release $tag exists -- uploading asset (clobber)"
+                            & $gh release upload $tag $stagedFile --repo $GitHubRepo --clobber 2>&1 | ForEach-Object { Log "gh: $_" }
+                        }
+                        else {
+                            Log "Creating GitHub release $tag + uploading asset"
+                            & $gh release create $tag $stagedFile --repo $GitHubRepo --title "AKML SQL $version" --notes $notes 2>&1 | ForEach-Object { Log "gh: $_" }
+                        }
+                        if ($LASTEXITCODE -eq 0) {
+                            $cdnUrl = "https://github.com/$GitHubRepo/releases/download/$tag/$fileName"
+                            Log "CDN asset live: $cdnUrl"
+                        }
+                        else {
+                            Log "WARNING: GitHub upload failed (auth? run 'gh auth login' once) -- local /dl still serves the file"
+                        }
+                    }
+                }
+
+                $entry = [PSCustomObject]@{
+                    version          = $version
+                    releasedAt       = (Get-Date).ToString('yyyy-MM-dd')
+                    supportedHosts   = @('SSMS 22', 'VS 2026')
+                    downloadUrl      = "downloads/$fileName"
+                    sha256Hash       = $sha
+                    releaseNotesUrl  = 'https://github.com/mohamedkhamis/AKML-SQL/releases'
+                    notesSummary     = $notes
+                    minimumOsVersion = '10.0'
+                    cdnUrl           = $cdnUrl
+                }
+                $manifest.generatedAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+                $manifest.releases = @($entry) + @($manifest.releases)
+                ($manifest | ConvertTo-Json -Depth 6) | Set-Content $manifestPath -Encoding UTF8
+                Log "Staged release $version -> $fileName (sha256 $($sha.Substring(0,12))..., $sizeMb MB)"
+            }
+        }
     }
 
     # --- 1. Publish ---------------------------------------------------------
@@ -139,7 +244,7 @@ try {
     Log "Granting $poolIdentity read access to $DeployPath"
     & icacls $DeployPath /grant "${poolIdentity}:(OI)(CI)RX" /T /Q | Out-Null
     # Data folders outside the app root: tracked-download files + analytics SQLite db.
-    $downloadsDir = 'C:\inetpub\akml.khamis.work-downloads'
+    $downloadsDir = $DownloadsPath
     $analyticsDir = Join-Path $env:ProgramData 'AKML SQL Site'
     foreach ($dir in @($downloadsDir, $analyticsDir)) {
         New-Item -ItemType Directory -Force -Path $dir | Out-Null

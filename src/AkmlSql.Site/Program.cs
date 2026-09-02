@@ -281,6 +281,7 @@ app.MapStaticAssets();
 
 // Tracked installer downloads + admin portal POST endpoints (login/logout).
 DownloadEndpoint.Map(app);
+DownloadEndpoint.MapCount(app);
 AdminEndpoints.Map(app);
 
 app.MapRazorComponents<App>();
