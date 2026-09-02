@@ -79,6 +79,97 @@ namespace AkmlSql.Shell.Shared.Tests
             Assert.Equal("claude-sonnet-5", dialog.GetSettings().Ai.Model);
         }
 
+        // Spec 036 (US2, FR-010/FR-013, T028) — every list entry must round-trip select → save →
+        // load and Save must write the canonical id the factory accepts. Azure OpenAI and
+        // LM Studio fail this today: Save writes "AzureOpenAI"/"LMStudio", which the factory
+        // rejects as unknown (research R8). One loop, eight entries — the positional coupling is
+        // how the mismatch survived, so the whole list is pinned, not just the new Kimi entry.
+        [StaFact]
+        public void Every_provider_round_trips_through_save_and_load()
+        {
+            // (combo index, canonical id) in page-list order; index 0 is (None).
+            var cases = new (int Index, string Id)[]
+            {
+                (1, "anthropic"),
+                (2, "openai"),
+                (3, "azure"),
+                (4, "gemini"),
+                (5, "kimi"),
+                (6, "ollama"),
+                (7, "lmstudio"),
+                (8, "custom"),
+            };
+
+            foreach (var (index, id) in cases)
+            {
+                var dialog = new SettingsWindow(new AppSettings());
+                _ = dialog.TestBuildWindowForRenderTest();
+                FindProviderCombo(dialog).SelectedIndex = index;
+
+                var saved = dialog.GetSettings();
+                Assert.True(saved.Ai.Provider == id,
+                    $"Save for list index {index} wrote '{saved.Ai.Provider}', expected canonical id '{id}'.");
+                Assert.True(saved.Ai.Enabled, $"Selecting index {index} must enable AI.");
+
+                var reopened = new SettingsWindow(saved);
+                _ = reopened.TestBuildWindowForRenderTest();
+
+                Assert.True(FindProviderCombo(reopened).SelectedIndex == index,
+                    $"Reload of provider '{id}' selected index {FindProviderCombo(reopened).SelectedIndex}, expected {index}.");
+                Assert.Equal(id, reopened.GetSettings().Ai.Provider);
+            }
+        }
+
+        [StaTheory]
+        [InlineData("AzureOpenAI", 3)]   // written by builds before FR-013
+        [InlineData("azure", 3)]
+        [InlineData("LMStudio", 7)]      // written by builds before FR-013
+        [InlineData("lmstudio", 7)]
+        [InlineData("Kimi (Moonshot)", 5)]
+        [InlineData("moonshot", 5)]
+        [InlineData("", 0)]
+        [InlineData(null, 0)]
+        public void Load_normalises_legacy_and_display_spellings(string? stored, int expectedIndex)
+        {
+            var settings = new AppSettings();
+            settings.Ai.Provider = stored ?? string.Empty;
+
+            var dialog = new SettingsWindow(settings);
+            _ = dialog.TestBuildWindowForRenderTest();
+
+            Assert.Equal(expectedIndex, FindProviderCombo(dialog).SelectedIndex);
+        }
+
+        [StaFact]
+        public void Switching_to_kimi_preserves_an_unrecognised_custom_model()
+        {
+            var settings = new AppSettings();
+            settings.Ai.Provider = "OpenAI";
+            settings.Ai.Model = "my-fine-tuned-model";
+
+            var dialog = new SettingsWindow(settings);
+            _ = dialog.TestBuildWindowForRenderTest();
+
+            FindProviderCombo(dialog).SelectedIndex = 5; // Kimi (Moonshot)
+
+            Assert.Equal("my-fine-tuned-model", dialog.GetSettings().Ai.Model);
+        }
+
+        [StaFact]
+        public void Switching_to_kimi_fills_the_default_model()
+        {
+            var settings = new AppSettings();
+            settings.Ai.Provider = "";
+            settings.Ai.Model = "";
+
+            var dialog = new SettingsWindow(settings);
+            _ = dialog.TestBuildWindowForRenderTest();
+
+            FindProviderCombo(dialog).SelectedIndex = 5; // Kimi (Moonshot)
+
+            Assert.Equal("kimi-latest", dialog.GetSettings().Ai.Model);
+        }
+
         /// <summary>The AI provider ComboBox: the only combo whose items include "(None)" and "Gemini".
         /// Pages live in the window's private <c>_pages</c> dictionary (only the active page is in
         /// the window's own tree), so search the AI page's element directly.</summary>

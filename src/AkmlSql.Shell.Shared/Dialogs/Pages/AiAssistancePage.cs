@@ -1,8 +1,14 @@
 #nullable enable
+using System;
 using System.Globalization;
+using System.Security.Cryptography;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using AkmlSql.Core.Config;
+using AkmlSql.Shell.Shared.Ai;
+using AkmlSql.Shell.Shared.Ipc;
+using Serilog;
 
 namespace AkmlSql.Shell.Shared.Dialogs.Pages
 {
@@ -11,15 +17,37 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         public string Key     => "AI Assistance";
         public string Display => "AI Assistance";
         public string Title   => "AI Assistance";
-        public string Help    => "Connect an AI provider (Anthropic, OpenAI, Gemini, Ollama, and more) and tune the model, privacy mode, and request parameters that power AI features. Enable assistance such as natural-language-to-SQL, query explanation, error fixes, optimization, index suggestions, the chat panel, and inline ghost-text completions.";
+        public string Help    => "Connect an AI provider (Anthropic, OpenAI, Gemini, Kimi, Ollama, and more) and tune the model, privacy mode, and request parameters that power AI features. Enable assistance such as natural-language-to-SQL, query explanation, error fixes, optimization, index suggestions, the chat panel, and inline ghost-text completions.";
+
+        /// <summary>
+        /// Spec 036 (US2, FR-013): the provider list keyed by canonical id, in display order.
+        /// <c>Save</c> writes the id (never the display name) and <c>Load</c> finds the entry by
+        /// id after <see cref="AiProviderIds.Normalize"/> — the old positional index→string
+        /// switches are how the Azure/LM Studio mismatch survived (research R8).
+        /// </summary>
+        internal static readonly (string Display, string Id)[] Providers =
+        {
+            ("(None)", ""),
+            ("Anthropic", AiProviderIds.Anthropic),
+            ("OpenAI", AiProviderIds.OpenAI),
+            ("Azure OpenAI", AiProviderIds.Azure),
+            ("Gemini", AiProviderIds.Gemini),
+            ("Kimi (Moonshot)", AiProviderIds.Kimi),
+            ("Ollama", AiProviderIds.Ollama),
+            ("LM Studio", AiProviderIds.LmStudio),
+            ("Custom", AiProviderIds.Custom),
+        };
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {
             ctx.Rows.AddGroupHeader(panel, "Provider Configuration");
 
+            var providerNames = new string[Providers.Length];
+            for (var i = 0; i < Providers.Length; i++) providerNames[i] = Providers[i].Display;
+
             var (rowProvider, cboProvider) = ctx.Rows.AddDropdown(panel,
                 "AI Provider",
-                new[] { "(None)", "Anthropic", "OpenAI", "Azure OpenAI", "Gemini", "Ollama", "LM Studio", "Custom" },
+                providerNames,
                 "Select the AI provider for SQL assistance features");
             ctx.RegisterSearch("AI Provider", "Select the AI provider for SQL assistance features", "Dropdown", rowProvider);
 
@@ -46,6 +74,23 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             var (rowApiKey, txtApiKey) = ctx.Rows.AddTextInput(panel,
                 "API Key", "Your API key for the selected provider", isPassword: true);
             ctx.RegisterSearch("API Key", "Your API key for the selected provider", "Text", rowApiKey);
+
+            // Spec 036 (US2, FR-009): in-dialog connection test. Sends the CURRENT field values
+            // over the existing AiProviderTest (77/177) IPC pair — nothing is saved until OK.
+            var (rowTest, btnTest) = ctx.Rows.AddButton(panel,
+                "Test connection",
+                "Test connection",
+                "Verify the provider, model, endpoint and key above with a one-line test prompt. Uses the current field values; nothing is saved.");
+            ctx.RegisterSearch("Test connection", "Verify the configured AI provider, model, endpoint and key", "Button", rowTest);
+            btnTest.SetValue(System.Windows.Automation.AutomationProperties.NameProperty, "Test AI provider connection");
+
+            var testResult = new TextBlock
+            {
+                Foreground = ctx.Theme.FgSecondary,
+                FontSize = 11,
+                TextWrapping = TextWrapping.Wrap
+            };
+            panel.Children.Add(ctx.Rows.WrapZebraRow(testResult));
 
             // Inline help block (theme-aware) — preserved from the legacy build
             var helpBorder = new Border
@@ -158,7 +203,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             return new AiAssistanceControls(cboProvider, txtModel, txtApiKey, txtEndpoint, cboPrivacy,
                 sldMax, lblMax, sldTemp, lblTemp, sldTimeout, lblTimeout, sldRetries, lblRetries,
                 chkTextToSql, chkExplain, chkFix, chkOptimize, chkIndex, chkChat, chkInline, chkAutoFix,
-                chkConsent);
+                chkConsent, btnTest, testResult);
         }
     }
 
@@ -186,6 +231,15 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         private readonly CheckBox _chatPanel;
         private readonly CheckBox _inlineCompletion;
         private readonly CheckBox _autoFixOnError;
+        private readonly Button _testButton;
+        private readonly TextBlock _testResult;
+        private readonly Brush _testIdleBrush;
+
+        // Semantic colours are the only acceptable hardcoded hex (CLAUDE.md WPF conventions).
+        private static readonly SolidColorBrush SuccessBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x2E, 0x7D, 0x32)));
+        private static readonly SolidColorBrush FailureBrush = Freeze(new SolidColorBrush(Color.FromRgb(0xC6, 0x28, 0x28)));
+
+        private static SolidColorBrush Freeze(SolidColorBrush b) { b.Freeze(); return b; }
 
         public AiAssistanceControls(
             ComboBox provider, TextBox model, TextBox apiKey, TextBox endpoint, ComboBox privacy,
@@ -193,7 +247,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             Slider sldTimeout, TextBlock lblTimeout, Slider sldRetries, TextBlock lblRetries,
             CheckBox textToSql, CheckBox explain, CheckBox fix, CheckBox optimize,
             CheckBox idx, CheckBox chat, CheckBox inline, CheckBox autoFix,
-            CheckBox cloudConsent)
+            CheckBox cloudConsent, Button testButton, TextBlock testResult)
         {
             _provider = provider;
             _model = model;
@@ -217,24 +271,22 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             _chatPanel = chat;
             _inlineCompletion = inline;
             _autoFixOnError = autoFix;
+            _testButton = testButton;
+            _testResult = testResult;
+            _testIdleBrush = testResult.Foreground;
+            _testButton.Click += async (_, _) => await RunProviderTestAsync();
         }
 
         public void Load(AppSettings settings)
         {
             var ai = settings.Ai;
-            _provider.SelectedIndex = (ai.Provider?.ToLowerInvariant()) switch
-            {
-                "anthropic"   => 1,
-                "openai"      => 2,
-                "azureopenai" => 3,
-                "gemini"      => 4,
-                "ollama"      => 5,
-                "lmstudio"    => 6,
-                "custom"      => 7,
-                _             => 0,
-            };
+            // Normalise BEFORE matching (FR-013): configs written by earlier builds ("AzureOpenAI",
+            // "LMStudio") resolve to their canonical ids and select correctly with no migration.
+            var providerId = AiProviderIds.Normalize(ai.Provider);
+            var providerIndex = Array.FindIndex(AiAssistancePage.Providers, p => p.Id == providerId);
+            _provider.SelectedIndex = providerIndex >= 0 ? providerIndex : 0;
             _model.Text = ai.Model ?? string.Empty;
-            _apiKey.Text = ai.ApiKey ?? string.Empty;
+            _apiKey.Text = UnwrapKeyForDisplay(ai.ApiKey);
             _endpoint.Text = ai.Endpoint ?? string.Empty;
             _privacy.SelectedIndex = (ai.PrivacyMode?.ToLowerInvariant()) switch
             {
@@ -267,19 +319,13 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
 
         public void Save(AppSettings settings)
         {
-            settings.Ai.Provider = _provider.SelectedIndex switch
-            {
-                1 => "Anthropic",
-                2 => "OpenAI",
-                3 => "AzureOpenAI",
-                4 => "Gemini",
-                5 => "Ollama",
-                6 => "LMStudio",
-                7 => "Custom",
-                _ => "",
-            };
+            // Key off the canonical id, never the index (FR-013) — the factory rejects anything else.
+            var index = _provider.SelectedIndex;
+            settings.Ai.Provider = index > 0 ? AiAssistancePage.Providers[index].Id : string.Empty;
             settings.Ai.Model = _model.Text ?? string.Empty;
-            settings.Ai.ApiKey = _apiKey.Text ?? string.Empty;
+            // FR-008: keys are DPAPI-wrapped at rest. An already-wrapped value is never re-wrapped.
+            var keyText = _apiKey.Text ?? string.Empty;
+            settings.Ai.ApiKey = ApiKeyProtector.IsProtected(keyText) ? keyText : ApiKeyProtector.Protect(keyText);
             settings.Ai.Endpoint = _endpoint.Text ?? string.Empty;
             settings.Ai.PrivacyMode = _privacy.SelectedIndex switch
             {
@@ -304,6 +350,58 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             settings.Ai.ChatPanel = _chatPanel.IsChecked == true;
             settings.Ai.InlineCompletion = _inlineCompletion.IsChecked == true;
             settings.Ai.AutoFixOnError = _autoFixOnError.IsChecked == true;
+        }
+
+        /// <summary>
+        /// Reads accept legacy plaintext for free (<see cref="ApiKeyProtector.Unprotect"/> passes
+        /// unprefixed values through); a corrupt wrapped blob (e.g. a roamed profile) is dropped
+        /// to empty rather than blocking the dialog — the same drop-and-continue rule as
+        /// <c>SqlCredentialStore</c>.
+        /// </summary>
+        private static string UnwrapKeyForDisplay(string? stored)
+        {
+            if (string.IsNullOrEmpty(stored)) return string.Empty;
+            try
+            {
+                return ApiKeyProtector.Unprotect(stored);
+            }
+            catch (Exception ex) when (ex is CryptographicException || ex is FormatException)
+            {
+                Log.Warning(ex, "AiAssistancePage: stored API key could not be decrypted; clearing the field");
+                return string.Empty;
+            }
+        }
+
+        /// <summary>
+        /// FR-009: sends the CURRENT dialog values to the engine's AiProviderTest handler — the
+        /// user can verify a key before committing it. Busy state, never blocks the UI thread,
+        /// re-enables in a finally; the key is never logged.
+        /// </summary>
+        private async System.Threading.Tasks.Task RunProviderTestAsync()
+        {
+            var request = AiProviderTestRunner.BuildRequest(
+                _provider.SelectedItem as string, _model.Text, _apiKey.Text, _endpoint.Text);
+
+            // The wait budget follows the dialog's CURRENT timeout slider, not the saved config.
+            var waitSettings = new AppSettings();
+            waitSettings.Ai.Timeout = (int)_timeout.Value;
+
+            _testButton.IsEnabled = false;
+            _testButton.Content = "Testing…";
+            _testResult.Foreground = _testIdleBrush;
+            _testResult.Text = "Testing the connection…";
+            try
+            {
+                var (success, message) = await AiProviderTestRunner.RunAsync(
+                    EngineRpcClientAccessor.Instance, request, waitSettings);
+                _testResult.Text = message;
+                _testResult.Foreground = success ? SuccessBrush : FailureBrush;
+            }
+            finally
+            {
+                _testButton.IsEnabled = true;
+                _testButton.Content = "Test connection";
+            }
         }
 
         public void Reset(AppSettings defaults) => Load(defaults);

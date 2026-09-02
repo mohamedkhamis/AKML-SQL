@@ -12,9 +12,9 @@ namespace AkmlSql.Core.Config
     public static class AiModelFamily
     {
         /// <summary>
-        /// "anthropic", "openai", or "gemini" when the name clearly belongs to that first-party
-        /// family; null for anything else (local models, Azure deployment names, custom ids) —
-        /// those are the user's business and must never be second-guessed.
+        /// "anthropic", "openai", "gemini", or "kimi" when the name clearly belongs to that
+        /// first-party family; null for anything else (local models, Azure deployment names,
+        /// custom ids) — those are the user's business and must never be second-guessed.
         /// </summary>
         public static string? Detect(string? model)
         {
@@ -33,6 +33,12 @@ namespace AkmlSql.Core.Config
                 m.StartsWith("gemma", StringComparison.Ordinal))
             {
                 return "gemini";
+            }
+            // Kimi (Moonshot) — spec 036 FR-012: the guard must work in both directions.
+            if (m.StartsWith("kimi", StringComparison.Ordinal) ||
+                m.StartsWith("moonshot", StringComparison.Ordinal))
+            {
+                return "kimi";
             }
             return null;
         }
@@ -60,6 +66,10 @@ namespace AkmlSql.Core.Config
                 case "anthropic": return "claude-sonnet-4-6";
                 case "openai": return "gpt-4o";
                 case "gemini": return "gemini-flash-latest";
+                // Rolling alias like "gemini-flash-latest": pinned Moonshot names rot too.
+                // The Options-page display name is accepted alongside the canonical id.
+                case "kimi":
+                case "kimi (moonshot)": return "kimi-latest";
                 default: return null;
             }
         }

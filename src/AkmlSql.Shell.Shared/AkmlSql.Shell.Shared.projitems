@@ -292,6 +292,8 @@
     <Compile Include="$(MSBuildThisFileDirectory)Ai\AiChatToolWindow.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ai\AiChatPanel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ai\AiIpcTimeouts.cs" />
+    <!-- Spec 036 US2 (FR-009): shell caller for the AiProviderTest 77/177 IPC pair -->
+    <Compile Include="$(MSBuildThisFileDirectory)Ai\AiProviderTestRunner.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\AiChatPanelCommand.cs" />
     <!-- Phase 9 US7: Inline Ghost Text -->
     <Compile Include="$(MSBuildThisFileDirectory)Ai\GhostTextAdornment.cs" />

@@ -9,7 +9,7 @@ namespace AkmlSql.Core.Ipc.Messages
     [MessagePackObject]
     public class AiProviderTestRequest
     {
-        /// <summary>Provider name (e.g. "OpenAI", "AzureOpenAI", "Anthropic", "Ollama").</summary>
+        /// <summary>Canonical provider id (see <c>AiProviderIds</c>: "openai", "azure", "anthropic", "kimi", …). Callers normalise before sending.</summary>
         [Key(0)]
         public string Provider { get; set; } = string.Empty;
 
