@@ -88,7 +88,9 @@ public sealed class IdentifierHasher : IDisposable
         {
             DatabaseName = Hash(context.DatabaseName, "database"),
             CompressionLevel = context.CompressionLevel,
-            EstimatedTokens = context.EstimatedTokens
+            EstimatedTokens = context.EstimatedTokens,
+            Truncated = context.Truncated,
+            TotalObjectCount = context.TotalObjectCount
         };
 
         foreach (var obj in context.Objects)
@@ -101,6 +103,14 @@ public sealed class IdentifierHasher : IDisposable
                 ApproxRowCount = obj.ApproxRowCount,
                 Description = null // descriptions may contain sensitive data, strip in anonymous mode
             };
+
+            // Carry the detail promotion across hashing (spec 036 FR-023/FR-025): build the hashed
+            // "schema.name" from the hashed parts so the formatter's DetailedObjectNames lookup
+            // still matches. Building from hashedObj avoids any qualified-name format drift.
+            if (context.DetailedObjectNames.Contains($"{obj.Schema}.{obj.Name}"))
+            {
+                hashedContext.DetailedObjectNames.Add($"{hashedObj.Schema}.{hashedObj.Name}");
+            }
 
             if (obj.Columns != null)
             {

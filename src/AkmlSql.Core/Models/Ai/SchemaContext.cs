@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace AkmlSql.Core.Models.Ai
@@ -8,13 +9,19 @@ namespace AkmlSql.Core.Models.Ai
     /// </summary>
     public class SchemaContext
     {
-        /// <summary>Name of the database this context was built from.</summary>
+        /// <summary>
+        /// Name of the database this context was built from. Empty when the request had no
+        /// bound connection — the "no database connection" signal (FR-028); the formatter
+        /// renders that state distinctly from a connected-but-empty database.
+        /// </summary>
         public string DatabaseName { get; set; } = string.Empty;
 
         /// <summary>
-        /// Compression level used when building this context:
-        /// 0 = full (all columns, descriptions), 1 = standard (columns, no descriptions),
-        /// 2 = compact (table/column names only), 3 = minimal (table names only).
+        /// Requested detail level (1–4): 1 = names/row counts only (ghost text),
+        /// 2 = add columns, 3 = add PK/indexes/FK detail, 4 = add descriptions.
+        /// Inventory objects are always rendered at level 1; prompt-relevant objects and their
+        /// FK 1-hop neighbours are promoted to the requested level (see
+        /// <see cref="DetailedObjectNames"/>).
         /// </summary>
         public int CompressionLevel { get; set; } = 2;
 
@@ -24,6 +31,23 @@ namespace AkmlSql.Core.Models.Ai
         /// <summary>Foreign key relationships between tables.</summary>
         // ReSharper disable once UnusedMember.Global
         public List<FkSummary> ForeignKeys { get; set; } = new();
+
+        /// <summary>
+        /// True when the database inventory exceeded the object budget and was truncated
+        /// (FR-026). The formatter emits an explicit "showing N of M" notice; silent
+        /// truncation is a defect.
+        /// </summary>
+        public bool Truncated { get; set; }
+
+        /// <summary>Total number of objects in the database cache before budget truncation.</summary>
+        public int TotalObjectCount { get; set; }
+
+        /// <summary>
+        /// Full names ("schema.name", case-insensitive) of the objects promoted to full detail
+        /// because the prompt named them (or they are FK 1-hop neighbours of a named object).
+        /// Empty on the level-1 latency path (ghost text).
+        /// </summary>
+        public HashSet<string> DetailedObjectNames { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>Estimated token count of this context when serialized for an AI prompt.</summary>
         // ReSharper disable once UnusedMember.Global

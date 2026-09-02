@@ -170,18 +170,29 @@ namespace AkmlSql.Shell.Shared.Ui.Theme
         private void EnsureInitialized()
         {
             if (_initialized) return;
-            // Lazy fallback — populate Light palette so AttachTo works during early calls
-            // (e.g., during a unit test, or if a surface is constructed before Initialize ran).
-            var palette = ThemePalette.Light;
-            foreach (var kvp in palette.Brushes)
+            // Spec 036: serialize + complete the lazy fallback. Before this, EnsureInitialized
+            // never set _initialized, so every pre-Initialize AttachTo (e.g. each unit test
+            // constructing a ThemeAwareUserControl on its own STA thread) re-wrote the shared
+            // dictionary — a cross-thread InvalidOperationException once another thread's
+            // control owned it. Production calls all arrive on the VS UI thread; the lock only
+            // matters for parallel test threads.
+            lock (SLock)
             {
-                if (!Resources.Contains(kvp.Key))
+                if (_initialized) return;
+                // Lazy fallback — populate Light palette so AttachTo works during early calls
+                // (e.g., during a unit test, or if a surface is constructed before Initialize ran).
+                var palette = ThemePalette.Light;
+                foreach (var kvp in palette.Brushes)
                 {
-                    Resources[kvp.Key] = kvp.Value;
+                    if (!Resources.Contains(kvp.Key))
+                    {
+                        Resources[kvp.Key] = kvp.Value;
+                    }
                 }
+                SeedInvariantTokens();
+                Current = ThemeVariant.Light;
+                _initialized = true;
             }
-            SeedInvariantTokens();
-            Current = ThemeVariant.Light;
         }
 
         /// <summary>

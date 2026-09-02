@@ -1161,6 +1161,14 @@ namespace AkmlSql.Core.Config
         [JsonPropertyName("retries")]
         public int Retries { get; set; } = 2;
 
+        /// <summary>
+        /// Maximum number of schema objects included in the AI schema context (FR-026).
+        /// The full inventory is always included up to this budget; when a database exceeds
+        /// it, the context is marked truncated and the model is told so.
+        /// </summary>
+        [JsonPropertyName("schemaContextMaxObjects")]
+        public int SchemaContextMaxObjects { get; set; } = 500;
+
         /// <summary>Privacy mode: "schemaOnly" sends only metadata, "full" sends query text.</summary>
         [JsonPropertyName("privacyMode")]
         public string PrivacyMode { get; set; } = "schemaOnly";

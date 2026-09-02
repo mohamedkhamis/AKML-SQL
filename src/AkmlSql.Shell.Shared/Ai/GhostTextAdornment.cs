@@ -129,9 +129,19 @@ namespace AkmlSql.Shell.Shared.Ai
             var cts = new CancellationTokenSource();
             _currentCts = cts;
 
+            // Spec 036 (US1, T012): bind to the session id this view's buffer actually carries
+            // (set by TextViewCreationListener) — never a fabricated Guid, which the engine
+            // cannot resolve to a connection (R1). Empty when the buffer is not wired yet;
+            // the engine then builds the explicit unbound context.
+            var sessionId =
+                _view.TextBuffer.Properties.TryGetProperty<string>("AkmlSqlSessionId", out var sid)
+                && !string.IsNullOrEmpty(sid)
+                    ? sid
+                    : string.Empty;
+
             var request = new AiGhostTextRequest
             {
-                SessionId = Guid.NewGuid().ToString("N"),
+                SessionId = sessionId,
                 DocumentText = snapshot.GetText(),
                 CursorOffset = caretOffset,
                 PrecedingText = precedingText

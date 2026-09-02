@@ -40,7 +40,8 @@ public sealed class AiIndexAnalysisHandler : AiHandlerBase<AiIndexAnalysisReques
         }
 
         var schemaContext = await Services.SchemaContext.BuildAsync(
-            request.SessionId, sessionLookup, request.SelectedSql, compressionLevel: 3);
+            request.SessionId, sessionLookup, request.SelectedSql, compressionLevel: 3,
+            maxObjects: settings.SchemaContextMaxObjects);
         var schemaText = SchemaContextFormatter.Format(schemaContext);
         var (transformedSql, transformedContext, transformation) =
             Services.Privacy.Transform(request.SelectedSql, schemaContext, settings.PrivacyMode);

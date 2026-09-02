@@ -7,19 +7,25 @@ namespace AkmlSql.Engine.Ai.Context;
 
 /// <summary>
 /// Builds a <see cref="SchemaContext"/> from a <see cref="DatabaseCache"/> for inclusion in AI prompts.
-/// Filters objects by prompt relevance and includes FK-connected tables (1-hop).
-/// Compression levels control the detail included per object:
+/// Spec 036 (US1) inventory-first assembly (contracts/schema-context.md Part 2): the FULL object
+/// inventory is always included at level 1; prompt-named objects and their FK 1-hop neighbours are
+/// promoted to the requested detail level; the object budget is applied LAST and truncation is
+/// signalled explicitly. Relevance may only promote detail — it can never remove inventory.
+/// Compression levels control the detail a PROMOTED object carries:
 /// <list type="bullet">
-///   <item>Level 1: Schema, Name, Type, ApproxRowCount only</item>
+///   <item>Level 1: Schema, Name, Type, ApproxRowCount only (ghost-text latency path; no promotion)</item>
 ///   <item>Level 2: Add column details (name, type, nullable, PK)</item>
 ///   <item>Level 3: Add PK columns list, indexes, FK relationships</item>
 ///   <item>Level 4: Add Description from extended properties</item>
 /// </list>
 /// <para>
 /// Spec 021 T121: refactored to take a <c>cacheLookup</c> delegate rather than the engine-only
-/// <c>SchemaCacheManager</c>. The engine wires <c>(cs, db) => schemaCacheManager.GetCache(cs, db)</c>;
-/// the web edition (M6) wires its IndexedDB cache lookup. Decouples this assembly from
-/// AkmlSql.Engine and lets it run in WASM.
+/// <c>SchemaCacheManager</c>. The engine wires <c>(sid, db) => schemaCacheManager.GetCache(sid, db)</c>
+/// — engine caches are keyed by SESSION ID (<c>ConnectionChangedHandler</c> creates them via
+/// <c>GetOrCreateCache(request.SessionId, ...)</c>), so the lookup key is the session id, never the
+/// connection string (passing the raw connection string always misses — see ScriptAsHandler).
+/// The web edition (M6) wires its IndexedDB cache lookup and ignores the key. Decouples this
+/// assembly from AkmlSql.Engine and lets it run in WASM.
 /// </para>
 /// </summary>
 public class SchemaContextBuilder
@@ -32,19 +38,29 @@ public class SchemaContextBuilder
     }
 
     /// <summary>
-    /// Builds a <see cref="SchemaContext"/> for the given session, optionally filtering objects by prompt relevance.
+    /// Builds a <see cref="SchemaContext"/> for the given session.
     /// </summary>
-    /// <param name="sessionId">The session identifier used to look up connection info.</param>
+    /// <param name="sessionId">
+    /// The session identifier used to look up connection info AND the schema cache (engine
+    /// caches are keyed by session id).
+    /// </param>
     /// <param name="sessionLookup">
-    /// Delegate that returns (ConnectionString, DatabaseName) for a given session ID.
+    /// Delegate that returns (ConnectionString, DatabaseName) for a given session ID. The
+    /// connection string is only used as the "bound" signal (null/empty → unbound context).
     /// </param>
     /// <param name="prompt">
-    /// Optional user prompt. When provided, objects are filtered by name/column relevance to the prompt tokens.
-    /// When null, all objects are included (up to <paramref name="maxObjects"/>).
+    /// Optional user prompt. Objects whose name/column a prompt token matches are PROMOTED to
+    /// the requested detail level (with their FK 1-hop neighbours). The rest of the inventory is
+    /// always included at level 1 — matching never removes objects (FR-024/FR-025).
     /// </param>
-    /// <param name="compressionLevel">Detail level (1-4). See class summary.</param>
-    /// <param name="maxObjects">Maximum number of objects to include in the context.</param>
-    /// <returns>A populated <see cref="SchemaContext"/>, or an empty one if no cache is available.</returns>
+    /// <param name="compressionLevel">Detail level for promoted objects (1-4). See class summary.</param>
+    /// <param name="maxObjects">
+    /// Maximum number of objects to include in the context (the explicit FR-026 budget;
+    /// <c>settings.Ai.SchemaContextMaxObjects</c>, default 500). Applied LAST: promoted objects
+    /// are always kept, the remaining budget is filled from the inventory in stable order, and
+    /// overflow sets <see cref="SchemaContext.Truncated"/>.
+    /// </param>
+    /// <returns>A populated <see cref="SchemaContext"/>, or an unbound/empty one.</returns>
     public Task<SchemaContext> BuildAsync(
         string sessionId,
         Func<string, (string? ConnectionString, string? DatabaseName)> sessionLookup,
@@ -66,77 +82,85 @@ public class SchemaContextBuilder
             return Task.FromResult(context);
         }
 
-        var dbCache = _cacheLookup(connectionString, databaseName);
+        var dbCache = _cacheLookup(sessionId, databaseName);
         if (dbCache == null)
         {
-            Log.Debug("SchemaContextBuilder: no cache found for {Database}", databaseName);
+            Log.Debug("SchemaContextBuilder: no cache found for session {SessionId} database {Database}",
+                sessionId, databaseName);
             return Task.FromResult(context);
         }
 
-        var allObjects = dbCache.GetAllObjects().ToList();
-        if (allObjects.Count == 0)
+        var inventory = dbCache.GetAllObjects().ToList();
+        context.TotalObjectCount = inventory.Count;
+        if (inventory.Count == 0)
         {
             return Task.FromResult(context);
         }
 
-        // Filter objects by prompt relevance or take all
-        var matchedObjects = FilterByRelevance(allObjects, prompt);
-
-        // Include 1-hop FK-connected tables for matched objects
-        var expandedSet = ExpandFkConnections(matchedObjects, dbCache, allObjects);
-
-        // Cap at maxObjects
-        var finalObjects = expandedSet.Count > maxObjects
-            ? expandedSet.Take(maxObjects).ToList()
-            : expandedSet;
-
-        Log.Debug("SchemaContextBuilder: {Matched} matched, {Expanded} after FK expansion, {Final} final (max {Max})",
-            matchedObjects.Count, expandedSet.Count, finalObjects.Count, maxObjects);
-
-        // Build summaries
-        var fkLookup = BuildFkLookupForObjects(finalObjects, dbCache);
-
-        foreach (var obj in finalObjects)
+        // Promotion: objects the prompt names, plus their FK 1-hop neighbours. Level 1 is the
+        // latency path (ghost text) — names suffice, so nothing is promoted at all.
+        List<DatabaseObject> promote;
+        if (compressionLevel <= 1)
         {
-            var summary = BuildObjectSummary(obj, compressionLevel, fkLookup);
-            context.Objects.Add(summary);
+            promote = [];
+        }
+        else
+        {
+            var tokens = string.IsNullOrWhiteSpace(prompt) ? [] : TokenizePrompt(prompt!);
+            var named = tokens.Count == 0
+                ? []
+                : inventory.Where(obj => IsObjectRelevant(obj, tokens)).ToList();
+            promote = ExpandFkConnections(named, dbCache, inventory);
         }
 
-        // Build FK summaries for relationships between included objects
-        context.ForeignKeys = BuildFkSummaries(finalObjects, dbCache);
+        var promoteNames = new HashSet<string>(
+            promote.Select(o => o.FullName), StringComparer.OrdinalIgnoreCase);
 
-        return Task.FromResult(context);
-    }
-
-    /// <summary>
-    /// Filters database objects by relevance to the user prompt.
-    /// Tokenizes the prompt into words and matches against object names and column names (case-insensitive).
-    /// Returns all objects if no prompt is provided.
-    /// </summary>
-    private static List<DatabaseObject> FilterByRelevance(List<DatabaseObject> allObjects, string? prompt)
-    {
-        if (string.IsNullOrWhiteSpace(prompt))
+        // Budget LAST: keep every promoted object, fill the rest from the inventory in stable
+        // order. Overflow is explicit (Truncated + TotalObjectCount), never silent.
+        List<DatabaseObject> kept;
+        if (inventory.Count > maxObjects)
         {
-            return allObjects;
-        }
-
-        var tokens = TokenizePrompt(prompt);
-        if (tokens.Count == 0)
-        {
-            return allObjects;
-        }
-
-        var matched = new List<DatabaseObject>();
-        foreach (var obj in allObjects)
-        {
-            if (IsObjectRelevant(obj, tokens))
+            context.Truncated = true;
+            kept = new List<DatabaseObject>(promote);
+            foreach (var obj in inventory)
             {
-                matched.Add(obj);
+                if (kept.Count >= maxObjects) break;
+                if (promoteNames.Contains(obj.FullName)) continue; // already kept
+                kept.Add(obj);
+            }
+        }
+        else
+        {
+            kept = inventory;
+        }
+
+        Log.Debug("SchemaContextBuilder: {Inventory} inventory, {Promoted} promoted, {Kept} kept (max {Max}, truncated={Truncated})",
+            inventory.Count, promote.Count, kept.Count, maxObjects, context.Truncated);
+
+        // Build summaries: promoted objects at the requested level (at least 3 — keys and
+        // relationships are the point of promotion), the rest of the inventory at level 1.
+        var detailLevel = Math.Max(compressionLevel, 3);
+        var fkLookup = BuildFkLookupForObjects(kept, dbCache);
+
+        foreach (var obj in kept)
+        {
+            var level = promoteNames.Contains(obj.FullName) ? detailLevel : 1;
+            context.Objects.Add(BuildObjectSummary(obj, level, fkLookup));
+        }
+
+        if (compressionLevel > 1)
+        {
+            foreach (var name in promoteNames)
+            {
+                context.DetailedObjectNames.Add(name);
             }
         }
 
-        // If no matches found, return all objects (fallback to unfiltered)
-        return matched.Count > 0 ? matched : allObjects;
+        // Build FK summaries for relationships between included objects
+        context.ForeignKeys = BuildFkSummaries(kept, dbCache);
+
+        return Task.FromResult(context);
     }
 
     /// <summary>

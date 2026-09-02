@@ -40,7 +40,8 @@ public sealed class AiExplainHandler : AiHandlerBase<AiExplainRequest, AiExplain
         }
 
         var schemaContext = await Services.SchemaContext.BuildAsync(
-            request.SessionId, sessionLookup, request.SelectedSql, compressionLevel: 2);
+            request.SessionId, sessionLookup, request.SelectedSql, compressionLevel: 3,
+            maxObjects: settings.SchemaContextMaxObjects);
         var schemaText = SchemaContextFormatter.Format(schemaContext);
         var (transformedSql, transformedContext, transformation) =
             Services.Privacy.Transform(request.SelectedSql, schemaContext, settings.PrivacyMode);

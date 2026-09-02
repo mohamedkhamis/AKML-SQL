@@ -5,13 +5,11 @@ namespace AkmlSql.Engine.Ai.Context;
 
 /// <summary>
 /// Formats a <see cref="SchemaContext"/> into compact DDL-like text suitable for AI prompt injection.
-/// Output detail is controlled by <see cref="SchemaContext.CompressionLevel"/>:
-/// <list type="bullet">
-///   <item>Level 1: Names only — grouped by type with row counts</item>
-///   <item>Level 2: Inline column definitions with FK annotations</item>
-///   <item>Level 3: PK, index, and FK detail lines</item>
-///   <item>Level 4: Same as Level 3 plus Description lines from extended properties</item>
-/// </list>
+/// Spec 036 (US1) rendering: a level-1 line for every object in the kept inventory, a full
+/// detail block (columns, PK, indexes, FK lines; descriptions at level 4) for every object in
+/// <see cref="SchemaContext.DetailedObjectNames"/>, an explicit truncation notice when
+/// <see cref="SchemaContext.Truncated"/> (FR-026), and two distinguishable empty states
+/// (FR-028): no database connection vs connected-but-no-visible-objects.
 /// Uses abbreviations (PK, FK, IX, NVARCHAR) to keep output compact.
 /// </summary>
 public static class SchemaContextFormatter
@@ -23,35 +21,73 @@ public static class SchemaContextFormatter
     /// <returns>A formatted string representation of the schema context.</returns>
     public static string Format(SchemaContext context)
     {
-        if (context.Objects.Count == 0)
+        // FR-028: unbound (no connection) must be distinguishable from connected-but-empty.
+        if (string.IsNullOrEmpty(context.DatabaseName))
         {
-            return $"Database: {context.DatabaseName}\n(No schema objects available)";
+            return "No database connection. The user has not connected a SQL editor to a database. " +
+                   "Do not answer schema questions from assumption; tell the user to connect a query " +
+                   "window to a database first.";
         }
 
-        return context.CompressionLevel switch
+        if (context.Objects.Count == 0)
         {
-            <= 1 => FormatLevel1(context),
-            2 => FormatLevel2(context),
-            3 => FormatLevel3(context),
-            _ => FormatLevel4(context)
-        };
+            // The login may simply be unable to see the objects — never claim "empty database".
+            return $"Database: {context.DatabaseName}\n" +
+                   "(No schema objects are visible for this database — it may be empty, its schema " +
+                   "may still be loading, or the connected login may not have permission to see them. " +
+                   "Do not claim the database is empty.)";
+        }
+
+        var detailedNames = context.DetailedObjectNames;
+        var detailed = new List<SchemaObjectSummary>();
+        var inventoryOnly = new List<SchemaObjectSummary>();
+        foreach (var obj in context.Objects)
+        {
+            if (detailedNames.Contains($"{obj.Schema}.{obj.Name}"))
+                detailed.Add(obj);
+            else
+                inventoryOnly.Add(obj);
+        }
+
+        var sb = new StringBuilder();
+        sb.AppendLine($"Database: {context.DatabaseName}");
+
+        // FR-026: explicit truncation notice the model can quote.
+        if (context.Truncated)
+        {
+            sb.AppendLine($"NOTE: showing {context.Objects.Count:N0} of {context.TotalObjectCount:N0} " +
+                          "objects in this database. The inventory below is incomplete.");
+        }
+
+        // Level-1 inventory lines (names grouped by type with row counts) for non-promoted objects.
+        AppendInventorySection(sb, inventoryOnly);
+
+        // Full detail blocks for promoted objects.
+        if (detailed.Count > 0)
+        {
+            sb.AppendLine();
+            foreach (var obj in detailed)
+            {
+                FormatObjectLevel2(sb, obj);
+                FormatObjectDetailLines(sb, obj, includeDescription: context.CompressionLevel >= 4);
+            }
+        }
+
+        AppendFkSummarySection(sb, context);
+        return sb.ToString().TrimEnd();
     }
 
     /// <summary>
-    /// Level 1: Names only, grouped by type with approximate row counts.
+    /// Inventory section: names only, grouped by type with approximate row counts.
     /// Example:
     /// <code>
-    /// Database: Northwind
     /// Tables: dbo.Orders (~50K rows), dbo.Customers (~500 rows)
     /// Views: dbo.OrderSummary
     /// </code>
     /// </summary>
-    private static string FormatLevel1(SchemaContext context)
+    private static void AppendInventorySection(StringBuilder sb, List<SchemaObjectSummary> objects)
     {
-        var sb = new StringBuilder();
-        sb.AppendLine($"Database: {context.DatabaseName}");
-
-        var groups = context.Objects
+        var groups = objects
             .GroupBy(o => o.Type)
             .OrderBy(g => TypeSortOrder(g.Key));
 
@@ -61,69 +97,6 @@ public static class SchemaContextFormatter
             var items = group.Select(o => FormatObjectNameWithRows(o)).ToList();
             sb.AppendLine($"{typePlural}: {string.Join(", ", items)}");
         }
-
-        AppendFkSummarySection(sb, context);
-        return sb.ToString().TrimEnd();
-    }
-
-    /// <summary>
-    /// Level 2: Inline column definitions with FK annotations.
-    /// Example:
-    /// <code>
-    /// dbo.Orders(OrderId INT PK, CustomerId INT FK->dbo.Customers, OrderDate DATE, Total DECIMAL(18,2))
-    /// </code>
-    /// </summary>
-    private static string FormatLevel2(SchemaContext context)
-    {
-        var sb = new StringBuilder();
-        sb.AppendLine($"Database: {context.DatabaseName}");
-        sb.AppendLine();
-
-        foreach (var obj in context.Objects)
-        {
-            FormatObjectLevel2(sb, obj);
-        }
-
-        AppendFkSummarySection(sb, context);
-        return sb.ToString().TrimEnd();
-    }
-
-    /// <summary>
-    /// Level 3: Column definitions plus PK, index, and FK detail lines.
-    /// </summary>
-    private static string FormatLevel3(SchemaContext context)
-    {
-        var sb = new StringBuilder();
-        sb.AppendLine($"Database: {context.DatabaseName}");
-        sb.AppendLine();
-
-        foreach (var obj in context.Objects)
-        {
-            FormatObjectLevel2(sb, obj);
-            FormatObjectDetailLines(sb, obj, includeDescription: false);
-        }
-
-        AppendFkSummarySection(sb, context);
-        return sb.ToString().TrimEnd();
-    }
-
-    /// <summary>
-    /// Level 4: Same as Level 3 plus Description lines from extended properties.
-    /// </summary>
-    private static string FormatLevel4(SchemaContext context)
-    {
-        var sb = new StringBuilder();
-        sb.AppendLine($"Database: {context.DatabaseName}");
-        sb.AppendLine();
-
-        foreach (var obj in context.Objects)
-        {
-            FormatObjectLevel2(sb, obj);
-            FormatObjectDetailLines(sb, obj, includeDescription: true);
-        }
-
-        AppendFkSummarySection(sb, context);
-        return sb.ToString().TrimEnd();
     }
 
     /// <summary>
