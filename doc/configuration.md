@@ -209,6 +209,30 @@ It is created automatically on first run with all defaults. The file is written 
 
 ---
 
+## `ai` Section
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `enabled` | bool | false | Master switch for AI assistance features |
+| `provider` | string | "" | Canonical provider id: `anthropic`, `openai`, `azure`, `gemini`, `kimi`, `ollama`, `lmstudio`, `custom`. Legacy spellings (`AzureOpenAI`, `LMStudio`) are normalised on load (spec 036) |
+| `model` | string | "" | Model identifier (e.g. `gpt-4o`, `claude-sonnet-4-6`, `kimi-latest`) |
+| `apiKey` | string | "" | **DPAPI-wrapped at rest** (`dpapi:<base64>`, spec 036 FR-008) — the Options page wraps on save via `ApiKeyProtector` (entropy `AkmlSql-ApiKey-v1`). Legacy plaintext values still read correctly and are upgraded on the next save. The key is never written to logs |
+| `endpoint` | string | "" | Service endpoint; required for `azure`, defaulted for `kimi` (`https://api.moonshot.ai/v1`; use `https://api.moonshot.cn/v1` for the mainland-China service) and `ollama` |
+| `maxTokens` | int | 4096 | Maximum response tokens |
+| `temperature` | double | 0.2 | Sampling temperature |
+| `timeout` | int | 30 | Request timeout in seconds; also bounds the Options "Test connection" check |
+| `retries` | int | 2 | Provider retry count |
+| `schemaContextMaxObjects` | int | 500 | **Spec 036 FR-026** — the explicit schema-context budget. Every schema-aware AI request receives the full object inventory at name level up to this count; prompt-named objects are promoted to full detail additionally. When a database exceeds the budget the context is marked truncated and both the model and the user are told so |
+| `privacyMode` | string | "schemaOnly" | `schemaOnly` (metadata only) / `full` (includes query text) / `anonymous` (identifiers hashed — the assistant cannot see real object names; the chat panel says so and names this setting) / `offline` / `disabled` |
+| `offlineProvider` / `offlineModel` / `offlineEndpoint` | string | "" | Optional offline fallback profile |
+| `privacyConsentRequired` | bool | true | When true, cloud providers require the in-product consent before use |
+
+Schema information sent to a provider never includes table data rows — metadata only
+(FR-032). The chat panel and all AI commands bind to the active editor's connection; when no
+editor is connected the assistant says so instead of answering from an empty schema (FR-028).
+
+---
+
 ## Per-Project Settings (`.casettings`)
 
 Individual rule overrides can be placed in a `.casettings` JSON file anywhere in the project directory hierarchy. The engine searches from the current file's directory upward.
