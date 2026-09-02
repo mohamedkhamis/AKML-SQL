@@ -1,4 +1,4 @@
-﻿#nullable enable
+#nullable enable
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -417,9 +417,23 @@ namespace AkmlSql.Shell.Shared.Dialogs
             selectedTrigger.Setters.Add(new Setter(Control.ForegroundProperty, _theme.SelectedText));
             itemStyle.Triggers.Add(selectedTrigger);
 
+            // Spec 036 (US4, FR-001/FR-002, research R7): every hover background must carry its own
+            // paired foreground — the trigger used to set only Background, so a selected+hovered item
+            // painted TreeHover (near-white in Light) with SelectedText (white): the reported
+            // white-on-white bug. FgPrimary is the token paired with SurfaceHover in every palette.
             var mouseOverTrigger = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
             mouseOverTrigger.Setters.Add(new Setter(Control.BackgroundProperty, _theme.TreeHover));
+            mouseOverTrigger.Setters.Add(new Setter(Control.ForegroundProperty, _theme.FgPrimary));
             itemStyle.Triggers.Add(mouseOverTrigger);
+
+            // Selected ∧ hovered keeps the selected pair intact (readable by design). Placed last so
+            // it wins over the single triggers above for the properties they share.
+            var selectedMouseOverTrigger = new MultiTrigger();
+            selectedMouseOverTrigger.Conditions.Add(new Condition(TreeViewItem.IsSelectedProperty, true));
+            selectedMouseOverTrigger.Conditions.Add(new Condition(UIElement.IsMouseOverProperty, true));
+            selectedMouseOverTrigger.Setters.Add(new Setter(Control.BackgroundProperty, _theme.Selected));
+            selectedMouseOverTrigger.Setters.Add(new Setter(Control.ForegroundProperty, _theme.SelectedText));
+            itemStyle.Triggers.Add(selectedMouseOverTrigger);
 
             // SQL Prompt's nav has no expander chevrons — a flat, permanently-expanded list with
             // bold groups and indented leaves. Replace the default TreeViewItem template with
@@ -732,8 +746,12 @@ namespace AkmlSql.Shell.Shared.Dialogs
             itemStyle.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0)));
             itemStyle.Setters.Add(new Setter(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Stretch));
             itemStyle.Setters.Add(new Setter(Control.HorizontalContentAlignmentProperty, HorizontalAlignment.Stretch));
+            // Spec 036 (US4, FR-003, research R7): pair a foreground with the hover background here
+            // too — this list escapes the bug today only through trigger ordering, and one palette
+            // change would break it. FgPrimary is the token paired with SurfaceHover.
             var hoverTrigger = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
             hoverTrigger.Setters.Add(new Setter(Control.BackgroundProperty, _theme.TreeHover));
+            hoverTrigger.Setters.Add(new Setter(Control.ForegroundProperty, _theme.FgPrimary));
             itemStyle.Triggers.Add(hoverTrigger);
             var selTrigger = new Trigger { Property = ListBoxItem.IsSelectedProperty, Value = true };
             selTrigger.Setters.Add(new Setter(Control.BackgroundProperty, _theme.Selected));
