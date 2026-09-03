@@ -1,3 +1,4 @@
+using System;
 using System.Windows;
 using System.Windows.Controls;
 using AkmlSql.Core.Config;
@@ -168,6 +169,83 @@ namespace AkmlSql.Shell.Shared.Tests
             FindProviderCombo(dialog).SelectedIndex = 5; // Kimi (Moonshot)
 
             Assert.Equal("kimi-latest", dialog.GetSettings().Ai.Model);
+        }
+
+        // ── PR #251 review finding 2: an undecryptable stored key (roamed profile, restored
+        // backup, different machine) must be VISIBLE and must never be silently blanked by a
+        // Save the user did not touch the key in. ──
+
+        /// <summary>A syntactically valid dpapi: blob this user cannot decrypt (bad HMAC).</summary>
+        private static string UndecryptableKey() =>
+            "dpapi:" + Convert.ToBase64String(new byte[64]);
+
+        [StaFact]
+        public void Undecryptable_stored_key_shows_notice_and_survives_save()
+        {
+            var settings = new AppSettings();
+            settings.Ai.Provider = "openai";
+            settings.Ai.Model = "gpt-4o";
+            settings.Ai.ApiKey = UndecryptableKey();
+
+            var dialog = new SettingsWindow(settings);
+            _ = dialog.TestBuildWindowForRenderTest();
+
+            var controls = GetAiControls(dialog);
+            var keyBox = GetField<TextBox>(controls, "_apiKey");
+            var notice = GetField<Border>(controls, "_keyNotice");
+
+            // The failure is visible: empty field + the inline notice telling the user to re-enter.
+            Assert.Equal(string.Empty, keyBox.Text);
+            Assert.Equal(Visibility.Visible, notice.Visibility);
+            Assert.Contains("could not be decrypted", ((TextBlock)notice.Child).Text);
+
+            // A Save the user never touched the key in must NOT overwrite the stored value.
+            var saved = dialog.GetSettings();
+            Assert.Equal(settings.Ai.ApiKey, saved.Ai.ApiKey);
+        }
+
+        [StaFact]
+        public void After_decrypt_failure_typing_a_new_key_saves_normally()
+        {
+            var settings = new AppSettings();
+            settings.Ai.Provider = "openai";
+            settings.Ai.ApiKey = UndecryptableKey();
+
+            var dialog = new SettingsWindow(settings);
+            _ = dialog.TestBuildWindowForRenderTest();
+
+            var controls = GetAiControls(dialog);
+            var keyBox = GetField<TextBox>(controls, "_apiKey");
+            var notice = GetField<Border>(controls, "_keyNotice");
+            keyBox.Text = "sk-user-retyped"; // user took control of the field
+
+            // The notice must go with the flag: "the stored value was left untouched" is false
+            // the moment the user types, because Save now overwrites it (PR #251 review).
+            Assert.Equal(Visibility.Collapsed, notice.Visibility);
+
+            var saved = dialog.GetSettings();
+            Assert.True(ApiKeyProtector.IsProtected(saved.Ai.ApiKey),
+                "the re-entered key must be wrapped, not stored plaintext");
+            Assert.Equal("sk-user-retyped", ApiKeyProtector.Unprotect(saved.Ai.ApiKey));
+        }
+
+        /// <summary>The AI Assistance page's controls object from the window's page map.</summary>
+        private static object GetAiControls(SettingsWindow dialog)
+        {
+            var f = typeof(SettingsWindow).GetField("_pageControlsByKey",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            Assert.NotNull(f);
+            var pages = (System.Collections.Generic.Dictionary<string, AkmlSql.Shell.Shared.Dialogs.Pages.IPageControls>)f!.GetValue(dialog)!;
+            Assert.True(pages.TryGetValue("AI Assistance", out var controls), "AI Assistance controls not found.");
+            return controls!;
+        }
+
+        private static T GetField<T>(object instance, string name) where T : class
+        {
+            var f = instance.GetType().GetField(name,
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            Assert.NotNull(f);
+            return (f!.GetValue(instance) as T)!;
         }
 
         /// <summary>The AI provider ComboBox: the only combo whose items include "(None)" and "Gemini".

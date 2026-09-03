@@ -51,7 +51,10 @@ public sealed class AiPipelineServices : IDisposable
         return new AiPipelineServices
         {
             SchemaContext = new SchemaContextBuilder(
-                (cs, db) => schemaCache.GetCache(cs, db)),
+                // Engine caches are keyed by SESSION ID (ConnectionChangedHandler creates them
+                // via GetOrCreateCache(request.SessionId, ...)) — the first argument is the
+                // session id, not a connection string.
+                (sessionId, db) => schemaCache.GetCache(sessionId, db)),
             Privacy = new PrivacyTransformer(parser),
             Parser = parser,
             SettingsProvider = settingsProvider,

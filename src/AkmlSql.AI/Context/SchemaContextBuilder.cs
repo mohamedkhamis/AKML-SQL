@@ -56,8 +56,9 @@ public class SchemaContextBuilder
     /// <param name="compressionLevel">Detail level for promoted objects (1-4). See class summary.</param>
     /// <param name="maxObjects">
     /// Maximum number of objects to include in the context (the explicit FR-026 budget;
-    /// <c>settings.Ai.SchemaContextMaxObjects</c>, default 500). Applied LAST: promoted objects
-    /// are always kept, the remaining budget is filled from the inventory in stable order, and
+    /// <c>settings.Ai.SchemaContextMaxObjects</c>, default 500). A hard cap on BOTH the promoted
+    /// set and the inventory fill: promoted objects are kept first (directly-named before FK
+    /// neighbours), the remaining budget is filled from the inventory in stable order, and any
     /// overflow sets <see cref="SchemaContext.Truncated"/>.
     /// </param>
     /// <returns>A populated <see cref="SchemaContext"/>, or an unbound/empty one.</returns>
@@ -111,6 +112,16 @@ public class SchemaContextBuilder
                 ? []
                 : inventory.Where(obj => IsObjectRelevant(obj, tokens)).ToList();
             promote = ExpandFkConnections(named, dbCache, inventory);
+        }
+
+        // Hard cap on promotion too (PR #251 review finding 3): a prompt naming more objects
+        // than the budget (e.g. a pasted script against a large database) must not blow the
+        // token ceiling. ExpandFkConnections yields directly-named objects first, so Take
+        // prefers them over FK 1-hop neighbours. Trimming promotion is truncation — say so.
+        if (promote.Count > maxObjects)
+        {
+            context.Truncated = true;
+            promote = promote.Take(maxObjects).ToList();
         }
 
         var promoteNames = new HashSet<string>(

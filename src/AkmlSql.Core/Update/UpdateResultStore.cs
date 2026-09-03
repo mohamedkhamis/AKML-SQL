@@ -66,5 +66,25 @@ namespace AkmlSql.Core.Update
             File.Move(tempPath, path, overwrite: true);
 #endif
         }
+
+        /// <summary>
+        /// Carries the download lifecycle (<see cref="UpdateResult.DownloadState"/>,
+        /// <see cref="UpdateResult.VerifiedInstallerPath"/>, <see cref="UpdateResult.FailureReason"/>)
+        /// from an existing result onto a fresh one when both offer the SAME version. A user who
+        /// downloaded and verified an update and then declined the install must not be made to
+        /// re-download ~70 MB because the next scheduled check rewrote the file (spec 036 edge
+        /// case: "update already downloaded and verified on a previous attempt"). A version
+        /// change starts clean: a stale verified path must never survive it.
+        /// </summary>
+        public static void CarryForwardDownloadState(UpdateResult fresh, UpdateResult? existing)
+        {
+            if (existing is { Available: true }
+                && string.Equals(existing.Version, fresh.Version, StringComparison.Ordinal))
+            {
+                fresh.DownloadState = existing.DownloadState;
+                fresh.VerifiedInstallerPath = existing.VerifiedInstallerPath;
+                fresh.FailureReason = existing.FailureReason;
+            }
+        }
     }
 }

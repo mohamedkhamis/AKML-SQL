@@ -75,6 +75,29 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 "API Key", "Your API key for the selected provider", isPassword: true);
             ctx.RegisterSearch("API Key", "Your API key for the selected provider", "Text", rowApiKey);
 
+            // PR #251 review finding 2: a stored key this Windows user cannot decrypt (roamed
+            // profile, restored backup, different machine) must be VISIBLE, not silently dropped.
+            // Shown by Load on decrypt failure; follows the inline-help idiom (helpBorder below).
+            var keyNotice = new Border
+            {
+                BorderBrush = ctx.Theme.FgAccent,
+                BorderThickness = new Thickness(2, 0, 0, 0),
+                Padding = new Thickness(10, 8, 10, 8),
+                Margin = new Thickness(0, 0, 0, 10),
+                Background = ctx.Theme.Panel,
+                Visibility = Visibility.Collapsed,
+                Child = new TextBlock
+                {
+                    Text = "The stored API key could not be decrypted on this machine (it may come " +
+                           "from a roamed profile or a restored backup). The stored value was left " +
+                           "untouched — re-enter the key to keep using the selected provider.",
+                    Foreground = ctx.Theme.FgSecondary,
+                    FontSize = 11,
+                    TextWrapping = TextWrapping.Wrap
+                }
+            };
+            panel.Children.Add(keyNotice);
+
             // Spec 036 (US2, FR-009): in-dialog connection test. Sends the CURRENT field values
             // over the existing AiProviderTest (77/177) IPC pair — nothing is saved until OK.
             var (rowTest, btnTest) = ctx.Rows.AddButton(panel,
@@ -203,7 +226,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             return new AiAssistanceControls(cboProvider, txtModel, txtApiKey, txtEndpoint, cboPrivacy,
                 sldMax, lblMax, sldTemp, lblTemp, sldTimeout, lblTimeout, sldRetries, lblRetries,
                 chkTextToSql, chkExplain, chkFix, chkOptimize, chkIndex, chkChat, chkInline, chkAutoFix,
-                chkConsent, btnTest, testResult);
+                chkConsent, btnTest, testResult, keyNotice);
         }
     }
 
@@ -234,6 +257,12 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         private readonly Button _testButton;
         private readonly TextBlock _testResult;
         private readonly Brush _testIdleBrush;
+        private readonly Border _keyNotice;
+
+        // PR #251 review finding 2: true when the key field is empty because the stored value
+        // failed to decrypt — NOT because the user cleared it. Set on Load, cleared the moment
+        // the user edits the field.
+        private bool _keyDecryptFailed;
 
         // Semantic colours are the only acceptable hardcoded hex (CLAUDE.md WPF conventions).
         private static readonly SolidColorBrush SuccessBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x2E, 0x7D, 0x32)));
@@ -247,7 +276,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             Slider sldTimeout, TextBlock lblTimeout, Slider sldRetries, TextBlock lblRetries,
             CheckBox textToSql, CheckBox explain, CheckBox fix, CheckBox optimize,
             CheckBox idx, CheckBox chat, CheckBox inline, CheckBox autoFix,
-            CheckBox cloudConsent, Button testButton, TextBlock testResult)
+            CheckBox cloudConsent, Button testButton, TextBlock testResult, Border keyNotice)
         {
             _provider = provider;
             _model = model;
@@ -274,6 +303,16 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             _testButton = testButton;
             _testResult = testResult;
             _testIdleBrush = testResult.Foreground;
+            _keyNotice = keyNotice;
+            // Any edit means the user has taken control of the field — the decrypt-failure
+            // guard no longer applies (a deliberate clear must stay possible). The notice goes
+            // with it: once the user types, "the stored value was left untouched" is no longer
+            // true, because Save will now overwrite it.
+            _apiKey.TextChanged += (_, _) =>
+            {
+                _keyDecryptFailed = false;
+                _keyNotice.Visibility = Visibility.Collapsed;
+            };
             _testButton.Click += async (_, _) => await RunProviderTestAsync();
         }
 
@@ -286,7 +325,12 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             var providerIndex = Array.FindIndex(AiAssistancePage.Providers, p => p.Id == providerId);
             _provider.SelectedIndex = providerIndex >= 0 ? providerIndex : 0;
             _model.Text = ai.Model ?? string.Empty;
-            _apiKey.Text = UnwrapKeyForDisplay(ai.ApiKey);
+            var (keyDisplay, keyDecrypted) = UnwrapKeyForDisplay(ai.ApiKey);
+            _apiKey.Text = keyDisplay;
+            // AFTER the text assignment (which fires TextChanged and clears the flag): an empty
+            // field here means the stored value failed to decrypt, not that the user cleared it.
+            _keyDecryptFailed = !keyDecrypted;
+            _keyNotice.Visibility = _keyDecryptFailed ? Visibility.Visible : Visibility.Collapsed;
             _endpoint.Text = ai.Endpoint ?? string.Empty;
             _privacy.SelectedIndex = (ai.PrivacyMode?.ToLowerInvariant()) switch
             {
@@ -325,7 +369,12 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             settings.Ai.Model = _model.Text ?? string.Empty;
             // FR-008: keys are DPAPI-wrapped at rest. An already-wrapped value is never re-wrapped.
             var keyText = _apiKey.Text ?? string.Empty;
-            settings.Ai.ApiKey = ApiKeyProtector.IsProtected(keyText) ? keyText : ApiKeyProtector.Protect(keyText);
+            if (!(_keyDecryptFailed && string.IsNullOrEmpty(keyText)))
+            {
+                settings.Ai.ApiKey = ApiKeyProtector.IsProtected(keyText) ? keyText : ApiKeyProtector.Protect(keyText);
+            }
+            // else (review finding 2): the field is empty because decryption failed — never let a
+            // Save the user never touched the key in overwrite a non-empty stored key with "".
             settings.Ai.Endpoint = _endpoint.Text ?? string.Empty;
             settings.Ai.PrivacyMode = _privacy.SelectedIndex switch
             {
@@ -354,21 +403,23 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
 
         /// <summary>
         /// Reads accept legacy plaintext for free (<see cref="ApiKeyProtector.Unprotect"/> passes
-        /// unprefixed values through); a corrupt wrapped blob (e.g. a roamed profile) is dropped
-        /// to empty rather than blocking the dialog — the same drop-and-continue rule as
-        /// <c>SqlCredentialStore</c>.
+        /// unprefixed values through). A wrapped blob this Windows user cannot decrypt (a roamed
+        /// profile, a restored backup, a different machine) returns <c>Decrypted = false</c> with
+        /// an empty display value — the caller surfaces a notice and never lets a Save blank the
+        /// stored key (review finding 2). Nothing to decrypt (null/empty) is not a failure.
         /// </summary>
-        private static string UnwrapKeyForDisplay(string? stored)
+        private static (string Display, bool Decrypted) UnwrapKeyForDisplay(string? stored)
         {
-            if (string.IsNullOrEmpty(stored)) return string.Empty;
+            if (string.IsNullOrEmpty(stored)) return (string.Empty, true);
+            if (!ApiKeyProtector.IsProtected(stored)) return (stored!, true); // legacy plaintext
             try
             {
-                return ApiKeyProtector.Unprotect(stored);
+                return (ApiKeyProtector.Unprotect(stored), true);
             }
             catch (Exception ex) when (ex is CryptographicException || ex is FormatException)
             {
-                Log.Warning(ex, "AiAssistancePage: stored API key could not be decrypted; clearing the field");
-                return string.Empty;
+                Log.Warning(ex, "AiAssistancePage: stored API key could not be decrypted; user must re-enter it");
+                return (string.Empty, false);
             }
         }
 

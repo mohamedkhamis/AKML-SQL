@@ -58,9 +58,12 @@ named    := objects whose name matches a prompt token   // existing IsObjectRele
 expanded := named ∪ FK-1-hop(named)                     // existing ExpandFkConnections
 promote  := expanded                                    // level 3: columns, PK, indexes, FKs
 
-budget := settings.Ai.SchemaContextMaxObjects           // default 500
+budget := settings.Ai.SchemaContextMaxObjects           // default 500 — a HARD cap on the whole context
+if |promote| > budget:                                  // (PR #251 review: promotion is capped too —
+    keep the first budget objects of promote            //  directly-named before FK neighbours, so a
+    Truncated := true                                   //  pasted script cannot blow the token ceiling)
 if |inventory| > budget:
-    keep all of promote
+    keep the (already capped) promote
     fill remaining budget from inventory (stable order)
     Truncated        := true
     TotalObjectCount := |inventory|

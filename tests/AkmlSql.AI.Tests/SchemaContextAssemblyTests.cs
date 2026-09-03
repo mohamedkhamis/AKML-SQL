@@ -217,6 +217,52 @@ public sealed class SchemaContextAssemblyTests
         Assert.Contains("dbo.Customers", ctx.DetailedObjectNames);
     }
 
+    // ── PR #251 review finding 3: the budget is a HARD cap on promotion too ──
+
+    [Fact]
+    public async Task Prompt_naming_more_objects_than_the_budget_is_hard_capped()
+    {
+        var cache = CreateCache(
+            Table("dbo", "Alpha", Col("AlphaId", "int", pk: true, nullable: false)),
+            Table("dbo", "Bravo", Col("BravoId", "int", pk: true, nullable: false)),
+            Table("dbo", "Charlie", Col("CharlieId", "int", pk: true, nullable: false)),
+            Table("dbo", "Delta", Col("DeltaId", "int", pk: true, nullable: false)),
+            Table("dbo", "Echo", Col("EchoId", "int", pk: true, nullable: false)),
+            Table("dbo", "Foxtrot", Col("FoxtrotId", "int", pk: true, nullable: false)));
+
+        // All six tables are named by the prompt; the budget admits only three.
+        var ctx = await BuildAsync(cache, "join alpha bravo charlie delta echo foxtrot", maxObjects: 3);
+
+        Assert.True(ctx.Truncated); // trimming promotion is truncation — the model is told
+        Assert.Equal(6, ctx.TotalObjectCount);
+        Assert.True(ctx.Objects.Count <= 3, $"kept {ctx.Objects.Count} exceeds the budget of 3");
+        Assert.Equal(3, ctx.DetailedObjectNames.Count);
+        // Named-first order from ExpandFkConnections: the first three named win the detail blocks.
+        Assert.Equal(new[] { "dbo.Alpha", "dbo.Bravo", "dbo.Charlie" },
+            ctx.Objects.Where(o => ctx.DetailedObjectNames.Contains($"{o.Schema}.{o.Name}"))
+                .Select(o => $"{o.Schema}.{o.Name}").ToArray());
+
+        var text = SchemaContextFormatter.Format(ctx);
+        Assert.Contains("NOTE: showing 3 of 6 objects", text);
+    }
+
+    [Fact]
+    public async Task Promotion_cap_prefers_directly_named_over_fk_neighbours()
+    {
+        var cache = CreateOrdersCache(); // Orders -FK-> Customers; Products unconnected
+
+        // Two named objects + one FK neighbour = 3 promoted; the budget admits 2.
+        var ctx = await BuildAsync(cache, "compare Orders and Products", maxObjects: 2);
+
+        Assert.True(ctx.Truncated);
+        Assert.Equal(3, ctx.TotalObjectCount);
+        Assert.Equal(2, ctx.Objects.Count);
+        // The FK neighbour (Customers) is trimmed before any directly-named object.
+        Assert.Equal(new[] { "dbo.Orders", "dbo.Products" },
+            ctx.Objects.Select(o => $"{o.Schema}.{o.Name}").ToArray());
+        Assert.DoesNotContain("dbo.Customers", ctx.DetailedObjectNames);
+    }
+
     // ── FR-028: unbound vs connected-but-empty render distinctly ────────────
 
     [Fact]

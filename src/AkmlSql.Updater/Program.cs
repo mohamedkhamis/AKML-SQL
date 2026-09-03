@@ -96,6 +96,12 @@ namespace AkmlSql.Updater
                     CheckedAt = DateTimeOffset.UtcNow
                 };
 
+                // A repeated offer of the SAME version must not discard a completed download:
+                // carry the lifecycle forward so the download short-circuit in
+                // UpdateDownloader stays reachable and a declined install never re-downloads.
+                var existing = UpdateResultStore.Load(Constants.UpdateResultFilePath);
+                UpdateResultStore.CarryForwardDownloadState(result, existing);
+
                 // Atomic write: temp file + rename, via the shared store (data-model V21).
                 UpdateResultStore.SaveAtomic(result, Constants.UpdateResultFilePath);
                 Log.Information("Update result written to {Path}", Constants.UpdateResultFilePath);

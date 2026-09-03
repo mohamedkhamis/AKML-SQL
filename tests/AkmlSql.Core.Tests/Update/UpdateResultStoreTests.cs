@@ -119,5 +119,94 @@ namespace AkmlSql.Core.Tests.Update
             Assert.Equal("checksum mismatch", loaded.FailureReason);
             Assert.Null(loaded.VerifiedInstallerPath);
         }
+
+        // ── PR #251 review finding 1: a re-check offering the SAME version must not discard a
+        // verified download (declined install → next 24 h check must not force a re-download). ──
+
+        /// <summary>Simulates RunCheck's write path: fresh manifest result + carry-forward + save.</summary>
+        private UpdateResult SimulateCheckSave(UpdateResult fresh)
+        {
+            var existing = UpdateResultStore.Load(_path);
+            UpdateResultStore.CarryForwardDownloadState(fresh, existing);
+            UpdateResultStore.SaveAtomic(fresh, _path);
+            return UpdateResultStore.Load(_path)!;
+        }
+
+        [Fact]
+        public void Recheck_SameVersion_KeepsVerifiedDownloadState()
+        {
+            UpdateResultStore.SaveAtomic(new UpdateResult
+            {
+                Available = true,
+                Version = "1.26.0903.0900",
+                DownloadUrl = "https://cdn.example.com/old.exe",
+                ReleaseNotesUrl = "https://example.com/notes-old",
+                Sha256Hash = "oldhash",
+                CheckedAt = new DateTimeOffset(2026, 9, 2, 12, 0, 0, TimeSpan.Zero),
+                VerifiedInstallerPath = @"C:\cache\AKMLSQLSetup-1.26.0903.0900.exe",
+                DownloadState = "verified",
+                FailureReason = null
+            }, _path);
+
+            var reloaded = SimulateCheckSave(new UpdateResult
+            {
+                Available = true,
+                Version = "1.26.0903.0900",
+                DownloadUrl = "https://cdn.example.com/new.exe",
+                ReleaseNotesUrl = "https://example.com/notes-new",
+                Sha256Hash = "newhash",
+                CheckedAt = new DateTimeOffset(2026, 9, 3, 12, 0, 0, TimeSpan.Zero)
+            });
+
+            // Lifecycle carried forward; manifest fields always refreshed.
+            Assert.Equal("verified", reloaded.DownloadState);
+            Assert.Equal(@"C:\cache\AKMLSQLSetup-1.26.0903.0900.exe", reloaded.VerifiedInstallerPath);
+            Assert.Null(reloaded.FailureReason);
+            Assert.Equal("https://cdn.example.com/new.exe", reloaded.DownloadUrl);
+            Assert.Equal("newhash", reloaded.Sha256Hash);
+            Assert.Equal(new DateTimeOffset(2026, 9, 3, 12, 0, 0, TimeSpan.Zero), reloaded.CheckedAt);
+        }
+
+        [Fact]
+        public void Recheck_NewerVersion_StartsClean()
+        {
+            UpdateResultStore.SaveAtomic(new UpdateResult
+            {
+                Available = true,
+                Version = "1.26.0903.0900",
+                VerifiedInstallerPath = @"C:\cache\AKMLSQLSetup-1.26.0903.0900.exe",
+                DownloadState = "verified",
+                FailureReason = "checksum mismatch"
+            }, _path);
+
+            var reloaded = SimulateCheckSave(new UpdateResult
+            {
+                Available = true,
+                Version = "1.26.0904.1010",
+                CheckedAt = new DateTimeOffset(2026, 9, 4, 12, 0, 0, TimeSpan.Zero)
+            });
+
+            // A stale verified path must never survive a version change.
+            Assert.Equal("none", reloaded.DownloadState);
+            Assert.Null(reloaded.VerifiedInstallerPath);
+            Assert.Null(reloaded.FailureReason);
+        }
+
+        [Fact]
+        public void Recheck_NoExistingResult_BehavesAsBefore()
+        {
+            var reloaded = SimulateCheckSave(new UpdateResult
+            {
+                Available = true,
+                Version = "1.26.0903.0900",
+                DownloadUrl = "https://cdn.example.com/setup.exe",
+                CheckedAt = new DateTimeOffset(2026, 9, 2, 12, 0, 0, TimeSpan.Zero)
+            });
+
+            Assert.True(reloaded.Available);
+            Assert.Equal("1.26.0903.0900", reloaded.Version);
+            Assert.Equal("none", reloaded.DownloadState);
+            Assert.Null(reloaded.VerifiedInstallerPath);
+        }
     }
 }
