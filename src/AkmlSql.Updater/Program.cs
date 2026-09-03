@@ -2,10 +2,10 @@ using System;
 using System.IO;
 using System.Net.Http;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using AkmlSql.Core;
-using AkmlSql.Core.Config;
 using AkmlSql.Core.Logging;
 using AkmlSql.Core.Update;
 using Serilog;
@@ -14,84 +14,25 @@ namespace AkmlSql.Updater
 {
     internal static class Program
     {
-        private static readonly JsonSerializerOptions JsonOptions = new()
-        {
-            WriteIndented = true,
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-        };
-
         private static async Task<int> Main(string[] args)
         {
+            var downloadMode = args.Length > 0 && args[0] == "--download";
             try
             {
                 LoggerFactory.Initialize();
 
-                if (args.Length == 0 || args[0] != "--check")
+                if (args.Length == 0 || (args[0] != "--check" && args[0] != "--download"))
                 {
-                    Log.Information("Usage: AkmlSql.Updater.exe --check");
+                    Log.Information("Usage: AkmlSql.Updater.exe --check|--download");
                     return 1;
                 }
 
-                Log.Information("Update check started for v{Version}", Constants.RuntimeVersion);
-
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-                using var client = new HttpClient();
-                client.DefaultRequestHeaders.UserAgent.ParseAdd(
-                    $"AkmlSql.Updater/{Constants.RuntimeVersion}");
-
-                var json = await client.GetStringAsync(Constants.UpdateManifestUrl, cts.Token);
-                var manifest = JsonSerializer.Deserialize<UpdateManifest>(json, JsonOptions);
-
-                if (manifest == null)
+                if (downloadMode)
                 {
-                    Log.Warning("Update manifest deserialized to null");
-                    UpdateLastCheckTimestamp();
-                    return 0;
+                    return await RunDownload();
                 }
 
-                if (IsNewerVersion(manifest.Version, Constants.RuntimeVersion))
-                {
-                    Log.Information("Update available: v{Current} -> v{Latest}",
-                        Constants.RuntimeVersion, manifest.Version);
-
-                    var result = new UpdateResult
-                    {
-                        Available = true,
-                        Version = manifest.Version,
-                        DownloadUrl = manifest.DownloadUrl,
-                        ReleaseNotesUrl = manifest.ReleaseNotesUrl,
-                        Sha256Hash = manifest.Sha256Hash ?? string.Empty,
-                        CheckedAt = DateTimeOffset.UtcNow
-                    };
-
-                    var resultJson = JsonSerializer.Serialize(result, JsonOptions);
-
-                    var resultDir = Path.GetDirectoryName(Constants.UpdateResultFilePath);
-                    if (resultDir != null)
-                    {
-                        Directory.CreateDirectory(resultDir);
-                    }
-
-                    // Atomic write: write to temp file then rename
-                    var tempPath = Constants.UpdateResultFilePath + ".tmp";
-                    await File.WriteAllTextAsync(tempPath, resultJson, cts.Token);
-                    File.Move(tempPath, Constants.UpdateResultFilePath, overwrite: true);
-                    Log.Information("Update result written to {Path}", Constants.UpdateResultFilePath);
-                }
-                else
-                {
-                    Log.Information("No update available (current: v{Current}, latest: v{Latest})",
-                        Constants.RuntimeVersion, manifest.Version);
-
-                    // Remove stale update result if present
-                    if (File.Exists(Constants.UpdateResultFilePath))
-                    {
-                        File.Delete(Constants.UpdateResultFilePath);
-                    }
-                }
-
-                UpdateLastCheckTimestamp();
-                return 0;
+                return await RunCheck();
             }
             catch (OperationCanceledException)
             {
@@ -100,13 +41,15 @@ namespace AkmlSql.Updater
             }
             catch (HttpRequestException ex)
             {
+                // --check: a failed check is not a user-facing error (FR-041). --download: the
+                // run produced no verified installer, and the downloader already persisted why.
                 Log.Warning(ex, "Update check failed (network error)");
-                return 0;
+                return downloadMode ? 2 : 0;
             }
             catch (Exception ex)
             {
                 Log.Error(ex, "Update check failed unexpectedly");
-                return 0;
+                return downloadMode ? 2 : 0;
             }
             finally
             {
@@ -115,37 +58,119 @@ namespace AkmlSql.Updater
         }
 
         /// <summary>
-        /// Compares version strings safely, handling SemVer pre-release suffixes
-        /// by stripping the pre-release tag before comparison.
+        /// Fetches the manifest, compares versions and writes the result file. Always exits 0 —
+        /// a failed check is never a user-facing error (FR-041).
         /// </summary>
-        private static bool IsNewerVersion(string latest, string current)
+        private static async Task<int> RunCheck()
         {
-            try
+            Log.Information("Update check started for v{Version}", Constants.RuntimeVersion);
+
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            using var client = new HttpClient();
+            client.DefaultRequestHeaders.UserAgent.ParseAdd(
+                $"AkmlSql.Updater/{Constants.RuntimeVersion}");
+
+            var json = await client.GetStringAsync(Constants.UpdateManifestUrl, cts.Token);
+            // Source-generated metadata: reflection-based STJ is disabled in this trimmed exe.
+            var manifest = JsonSerializer.Deserialize(json, UpdateJsonContext.Default.UpdateManifest);
+
+            if (manifest == null)
             {
-                var latestVersion = new Version(StripPreRelease(latest));
-                var currentVersion = new Version(StripPreRelease(current));
-                return latestVersion > currentVersion;
+                Log.Warning("Update manifest deserialized to null");
+                UpdateLastCheckTimestamp();
+                return 0;
             }
-            catch (Exception ex)
+
+            if (VersionComparer.IsNewer(manifest.Version, Constants.RuntimeVersion))
             {
-                Log.Warning(ex, "Failed to compare versions: {Latest} vs {Current}", latest, current);
-                return false;
+                Log.Information("Update available: v{Current} -> v{Latest}",
+                    Constants.RuntimeVersion, manifest.Version);
+
+                var result = new UpdateResult
+                {
+                    Available = true,
+                    Version = manifest.Version,
+                    DownloadUrl = manifest.DownloadUrl,
+                    ReleaseNotesUrl = manifest.ReleaseNotesUrl,
+                    Sha256Hash = manifest.Sha256Hash ?? string.Empty,
+                    CheckedAt = DateTimeOffset.UtcNow
+                };
+
+                // A repeated offer of the SAME version must not discard a completed download:
+                // carry the lifecycle forward so the download short-circuit in
+                // UpdateDownloader stays reachable and a declined install never re-downloads.
+                var existing = UpdateResultStore.Load(Constants.UpdateResultFilePath);
+                UpdateResultStore.CarryForwardDownloadState(result, existing);
+
+                // Atomic write: temp file + rename, via the shared store (data-model V21).
+                UpdateResultStore.SaveAtomic(result, Constants.UpdateResultFilePath);
+                Log.Information("Update result written to {Path}", Constants.UpdateResultFilePath);
             }
+            else
+            {
+                Log.Information("No update available (current: v{Current}, latest: v{Latest})",
+                    Constants.RuntimeVersion, manifest.Version);
+
+                // Remove stale update result if present
+                if (File.Exists(Constants.UpdateResultFilePath))
+                {
+                    File.Delete(Constants.UpdateResultFilePath);
+                }
+            }
+
+            UpdateLastCheckTimestamp();
+            return 0;
         }
 
-        private static string StripPreRelease(string version)
+        /// <summary>
+        /// Downloads + verifies the offered installer (contracts/update-manifest.md §3).
+        /// Ctrl+C maps to a graceful cancellation so the .partial cleanup in
+        /// <see cref="UpdateDownloader"/> always runs (FR-039a).
+        /// </summary>
+        private static async Task<int> RunDownload()
         {
-            var dashIndex = version.IndexOf('-');
-            return dashIndex >= 0 ? version.Substring(0, dashIndex) : version;
+            Log.Information("Update download started for v{Version}", Constants.RuntimeVersion);
+
+            using var cts = new CancellationTokenSource();
+            Console.CancelKeyPress += (_, e) =>
+            {
+                e.Cancel = true; // graceful: let the downloader's finally delete the .partial
+                cts.Cancel();
+            };
+
+            var downloader = new UpdateDownloader(
+                new HttpClientHandler(),
+                Constants.UpdateResultFilePath,
+                Constants.CachePath);
+            return await downloader.RunAsync(cts.Token);
         }
 
+        /// <summary>
+        /// Stamps <c>lastUpdateCheck</c> in config.json. Done as a targeted JSON edit
+        /// (JsonNode, no reflection) rather than a ConfigManager round-trip: this exe is
+        /// trimmed, so the reflection-based AppSettings serialization path is unavailable.
+        /// All other settings pass through untouched.
+        /// </summary>
         private static void UpdateLastCheckTimestamp()
         {
             try
             {
-                var settings = ConfigManager.Load();
-                settings.LastUpdateCheck = DateTimeOffset.UtcNow;
-                ConfigManager.Save(settings);
+                var path = Constants.ConfigFilePath;
+                var config = File.Exists(path)
+                    ? JsonNode.Parse(File.ReadAllText(path)) as JsonObject ?? new JsonObject()
+                    : new JsonObject();
+                config["lastUpdateCheck"] = DateTimeOffset.UtcNow.ToString("O");
+
+                var directory = Path.GetDirectoryName(path);
+                if (directory != null)
+                {
+                    Directory.CreateDirectory(directory);
+                }
+
+                // Atomic write: temp file + rename (same pattern as every other JSON write)
+                var tempPath = path + ".tmp";
+                File.WriteAllText(tempPath, config.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+                File.Move(tempPath, path, overwrite: true);
             }
             catch (Exception ex)
             {

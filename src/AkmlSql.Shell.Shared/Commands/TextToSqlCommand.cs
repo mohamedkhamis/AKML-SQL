@@ -1,4 +1,4 @@
-﻿#nullable enable
+#nullable enable
 using System;
 using System.ComponentModel.Design;
 using System.Windows.Forms;
@@ -7,6 +7,7 @@ using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Shell.Shared.Ai;
 using AkmlSql.Shell.Shared.Ipc;
+using AkmlSql.Shell.Shared.Refactoring;
 using EnvDTE;
 using EnvDTE80;
 using Microsoft.VisualStudio.Shell;
@@ -134,7 +135,9 @@ namespace AkmlSql.Shell.Shared.Commands
             {
                 Log.Error(ex, "TextToSqlCommand: failed to extract prompt from editor");
                 prompt = string.Empty;
-                sessionId = Guid.NewGuid().ToString("N");
+                // Spec 036 (US1, T013): never fabricate a session id — empty means the engine
+                // builds the explicit unbound context instead of answering from nothing (R1).
+                sessionId = RefactorCommandHelper.TryGetActiveRealSessionId() ?? string.Empty;
             }
 
             // If no --ai: prefix found, show input dialog
@@ -214,26 +217,27 @@ namespace AkmlSql.Shell.Shared.Commands
 
         /// <summary>
         /// Extracts a prompt from the current editor line if it starts with <c>--ai:</c>.
-        /// Returns the prompt text, session ID, whether inline prefix was found,
+        /// Returns the prompt text, the editor's real session id (empty when no bound session —
+        /// spec 036: never a fabricated id), whether inline prefix was found,
         /// the line number, and the full line text.
         /// </summary>
         private static (string Prompt, string SessionId, bool IsInline, int LineNumber, string? FullLine) ExtractPromptFromEditor()
         {
             ThreadHelper.ThrowIfNotOnUIThread();
 
+            var sessionId = RefactorCommandHelper.TryGetActiveRealSessionId() ?? string.Empty;
+
             var dte = (DTE2)Package.GetGlobalService(typeof(DTE));
             if (dte?.ActiveDocument == null)
-                return (string.Empty, Guid.NewGuid().ToString("N"), false, -1, null);
+                return (string.Empty, sessionId, false, -1, null);
 
             var textDocument = dte.ActiveDocument.Object("TextDocument") as TextDocument;
             if (textDocument == null)
-                return (string.Empty, Guid.NewGuid().ToString("N"), false, -1, null);
+                return (string.Empty, sessionId, false, -1, null);
 
             var editPoint = textDocument.Selection.ActivePoint.CreateEditPoint();
             var lineText = editPoint.GetLines(editPoint.Line, editPoint.Line + 1);
             var lineNumber = editPoint.Line;
-
-            var sessionId = Guid.NewGuid().ToString("N");
 
             if (string.IsNullOrWhiteSpace(lineText))
                 return (string.Empty, sessionId, false, lineNumber, lineText);

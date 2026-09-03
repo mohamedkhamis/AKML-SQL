@@ -13,12 +13,18 @@ namespace AkmlSql.Engine.Ai.Providers;
 /// <para>
 /// Provider selection is driven by <see cref="AiSettings.Provider"/>. API keys are decrypted
 /// via the pluggable <see cref="KeyDecryptor"/> hook before being passed to the underlying SDK.
-/// Supports: Anthropic, OpenAI, Azure OpenAI, Google Gemini, Ollama, LM Studio, and custom
-/// OpenAI-compatible endpoints.
+/// Supports: Anthropic, OpenAI, Azure OpenAI, Google Gemini, Kimi (Moonshot), Ollama, LM Studio,
+/// and custom OpenAI-compatible endpoints.
 /// </para>
 /// </summary>
 public static class AiProviderFactory
 {
+    /// <summary>
+    /// Spec 036 (US2, FR-007): the international Moonshot endpoint, applied when the Kimi
+    /// provider is configured without an endpoint. The mainland-China service is reached by
+    /// overriding the endpoint to <c>https://api.moonshot.cn/v1</c> (contracts/kimi-provider.md).
+    /// </summary>
+    public const string DefaultKimiEndpoint = "https://api.moonshot.ai/v1";
     /// <summary>
     /// Spec 021 T121: pluggable hook for decrypting/unwrapping the API key BEFORE it is
     /// passed to a provider SDK. The default is identity (assumes the caller has already
@@ -47,24 +53,27 @@ public static class AiProviderFactory
     {
         ArgumentNullException.ThrowIfNull(settings);
 
-        var provider = settings.Provider?.Trim() ?? string.Empty;
+        // Normalise BEFORE the switch (FR-013): legacy/display spellings saved by earlier builds
+        // ("AzureOpenAI", "LMStudio", "Kimi (Moonshot)") resolve to the canonical ids here.
+        var provider = AiProviderIds.Normalize(settings.Provider);
         var apiKey = DecryptApiKey(settings.ApiKey);
 
         Log.Debug("AiProviderFactory: creating client for provider={Provider}, model={Model}",
             provider, settings.Model);
 
-        return provider.ToLowerInvariant() switch
+        return provider switch
         {
             "anthropic" => CreateAnthropicClient(apiKey, settings.Model),
             "openai" => CreateOpenAiClient(apiKey, settings.Model, null),
             "azure" => CreateAzureClient(apiKey, settings.Model, settings.Endpoint),
             "gemini" => CreateGeminiClient(apiKey, settings.Model, settings.Timeout),
+            "kimi" => CreateKimiClient(apiKey, settings.Model, settings.Endpoint),
             "ollama" => CreateOllamaClient(settings.Model, settings.Endpoint),
             "lmstudio" => CreateOpenAiClient(apiKey, settings.Model, settings.Endpoint),
             "custom" => CreateOpenAiClient(apiKey, settings.Model, settings.Endpoint),
             _ => throw new InvalidOperationException(
                 $"Unknown AI provider: '{settings.Provider}'. " +
-                "Supported providers: anthropic, openai, azure, gemini, ollama, lmstudio, custom.")
+                $"Supported providers: {string.Join(", ", AiProviderIds.CanonicalIds)}.")
         };
     }
 
@@ -206,6 +215,22 @@ public static class AiProviderFactory
     }
 
     /// <summary>
+    /// Creates a Kimi (Moonshot) client. Kimi speaks the OpenAI wire format, so this delegates to
+    /// <see cref="CreateOpenAiClient"/> with the default endpoint — but it is its OWN case, not a
+    /// fall-through to <c>custom</c>: Kimi is a named first-party provider, so FR-012 requires
+    /// the family guard that the custom branch deliberately skips.
+    /// </summary>
+    private static IChatClient CreateKimiClient(string apiKey, string model, string? endpoint)
+    {
+        RequireApiKey(apiKey, "Kimi");
+        RequireModel(model, "Kimi");
+        RequireModelFamily(model, "kimi", "Kimi");
+
+        return CreateOpenAiClient(apiKey, model,
+            string.IsNullOrWhiteSpace(endpoint) ? DefaultKimiEndpoint : endpoint);
+    }
+
+    /// <summary>
     /// Creates an Ollama client.
     /// <para>
     /// <see cref="OllamaApiClient"/> implements <see cref="IChatClient"/> directly.
@@ -271,6 +296,7 @@ public static class AiProviderFactory
         "anthropic" => "Anthropic (Claude)",
         "openai" => "OpenAI (GPT)",
         "gemini" => "Google (Gemini)",
+        "kimi" => "Moonshot (Kimi)",
         _ => family,
     };
 

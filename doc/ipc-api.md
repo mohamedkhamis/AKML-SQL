@@ -89,6 +89,8 @@ class RpcMessage {
 | Shell→Engine | `ProfileGet` | 34 |
 | Shell→Engine | `ProfileRename` | 35 |
 | Shell→Engine | `SessionSuppression` | 36 |
+| Shell→Engine | `AiProviderTest` | 77 |
+| Engine→Shell | `AiProviderTestResult` | 177 |
 | Engine→Shell | `CompletionResult` | 101 |
 | Engine→Shell | `SignatureHelpResult` | 102 |
 | Engine→Shell | `QuickInfoResult` | 103 |
@@ -780,6 +782,44 @@ Changes    RefactorChangeInfo[]   Same changes returned from preview
 Success       bool
 ErrorMessage  string?
 ```
+
+---
+
+## AI Messages
+
+### `AiProviderTest` (77) → `AiProviderTestResult` (177) — spec 036
+
+Verifies an AI provider configuration (provider, model, endpoint, key) with a one-line test
+prompt, so the Options dialog can validate a configuration before the user saves it. The pair
+existed engine-side since the AI feature landed but had no caller; spec 036 (US2, FR-009)
+wired it to the "Test connection" button on the AI Assistance page. The full caller contract is
+`specs/036-kimi-chat-updater-fixes/contracts/ai-provider-test.md`.
+
+**Request** (`AiProviderTestRequest`):
+```
+Provider   string   Canonical provider id (anthropic | openai | azure | gemini | kimi |
+                    ollama | lmstudio | custom) — normalise through AiProviderIds first
+ApiKey     string   The key as the field holds it (dpapi:-wrapped or plaintext — the engine
+                    runs it through the KeyDecryptor hook, which passes plaintext through)
+Endpoint   string?  Optional; required for azure, defaulted for kimi/ollama
+Model      string   Required
+```
+
+**Response** (`AiProviderTestResponse`):
+```
+Success          bool
+ModelName        string?   Echo of the tested model
+ProviderVersion  string?   Echo of the provider
+ErrorMessage     string?   Set when Success is false — one of the five FR-014 causes
+                           (missing/invalid key, unknown model, unreachable endpoint,
+                           quota/rate-limit, timeout); never a raw provider payload
+LatencyMs        int
+```
+
+Caller obligations: test the dialog's CURRENT field values (not saved settings); use
+`AiIpcTimeouts.ForAiRequestMs` for the wait budget; never log the key; "engine not connected"
+is a distinct pre-IPC outcome. The other AI messages (70–76, 78 / 170–176, 178–179) are
+implemented but not yet documented in this reference.
 
 ---
 

@@ -29,5 +29,16 @@ namespace AkmlSql.Shell.Shared.Ai
             _panel = new AiChatPanel();
             Content = _panel;
         }
+
+        /// <summary>
+        /// Spec 036 (US1, FR-027): refresh the editor-session binding as soon as the window is
+        /// sited so the header reflects the current connection immediately instead of waiting for
+        /// the panel's first poll tick.
+        /// </summary>
+        public override void OnToolWindowCreated()
+        {
+            base.OnToolWindowCreated();
+            _panel.RefreshBinding();
+        }
     }
 }

@@ -31,6 +31,14 @@ namespace AkmlSql.Shell.Shared.Refactoring
         {
             public IWpfTextView View { get; set; } = null!;
             public string SessionId { get; set; } = string.Empty;
+
+            /// <summary>
+            /// True when <see cref="SessionId"/> came from the buffer's <c>AkmlSqlSessionId</c>
+            /// property; false when it is the <see cref="Guid.NewGuid"/> fallback below. The
+            /// fallback stays for refactoring (pure-text ops work without a live session), but AI
+            /// callers must never send a fabricated id (spec 036, R1/R2) — check this flag.
+            /// </summary>
+            public bool HasRealSession { get; set; }
             public string DocumentText { get; set; } = string.Empty;
             public int CaretOffset { get; set; }
             public int SelectionStart { get; set; }
@@ -67,9 +75,11 @@ namespace AkmlSql.Shell.Shared.Refactoring
                     selLen   = view.Selection.End.Position.Position - selStart;
                 }
 
-                string sessionId =
+                bool hasRealSession =
                     view.TextBuffer.Properties.TryGetProperty<string>("AkmlSqlSessionId", out var sid)
-                    && !string.IsNullOrEmpty(sid)
+                    && !string.IsNullOrEmpty(sid);
+
+                string sessionId = hasRealSession
                         ? sid
                         : Guid.NewGuid().ToString("N"); // pure-text ops still work without a real session
 
@@ -77,6 +87,7 @@ namespace AkmlSql.Shell.Shared.Refactoring
                 {
                     View            = view,
                     SessionId       = sessionId,
+                    HasRealSession  = hasRealSession,
                     DocumentText    = snapshot.GetText(),
                     CaretOffset     = caret,
                     SelectionStart  = selStart,
@@ -86,6 +97,27 @@ namespace AkmlSql.Shell.Shared.Refactoring
             catch (Exception ex)
             {
                 Log.Debug(ex, "RefactorCommandHelper: failed to resolve active editor");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Spec 036 (US1) — resolves the active editor's REAL <c>AkmlSqlSessionId</c> for
+        /// schema-aware AI requests. Returns <c>null</c> when there is no active managed view or
+        /// the buffer property is absent — the <see cref="Guid.NewGuid"/> fallback in
+        /// <see cref="TryGetActiveEditor"/> is deliberately NOT reachable from here, because a
+        /// fabricated id is exactly the R1 defect (the engine holds no session behind it).
+        /// </summary>
+        public static string? TryGetActiveRealSessionId()
+        {
+            try
+            {
+                var ctx = TryGetActiveEditor();
+                return ctx is { HasRealSession: true } ? ctx.SessionId : null;
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "RefactorCommandHelper: real-session resolution failed");
                 return null;
             }
         }

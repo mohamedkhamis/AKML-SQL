@@ -73,6 +73,11 @@
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\JoinCompletionPage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\LabsPage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)StatusBar\StatusBarManager.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Update\UpdateAvailableDialog.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Update\UpdateCheckFlow.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Update\UpdateDownloadCleanup.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Update\UpdateDownloadProgressWindow.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Update\UpdateInstallConfirmDialog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Update\UpdateLauncher.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Update\UpdateNotifier.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Validation\LoadValidator.cs" />
@@ -292,6 +297,8 @@
     <Compile Include="$(MSBuildThisFileDirectory)Ai\AiChatToolWindow.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ai\AiChatPanel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ai\AiIpcTimeouts.cs" />
+    <!-- Spec 036 US2 (FR-009): shell caller for the AiProviderTest 77/177 IPC pair -->
+    <Compile Include="$(MSBuildThisFileDirectory)Ai\AiProviderTestRunner.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\AiChatPanelCommand.cs" />
     <!-- Phase 9 US7: Inline Ghost Text -->
     <Compile Include="$(MSBuildThisFileDirectory)Ai\GhostTextAdornment.cs" />

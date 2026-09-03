@@ -75,7 +75,9 @@ internal static class EngineHandlerRegistry
         var navigationHandler = new NavigationRequestHandler(schemaCache);
         var crudHandler = new CrudGenerationHandler(schemaCache);
         var scriptAsHandler = new ScriptAsHandler(schemaCache);
-        var aiProviderTestHandler = new AiProviderTestHandler();
+        // Spec 036 (US2, FR-014): the timeout row of the failure taxonomy names the CONFIGURED
+        // AI timeout, read lazily so AnalysisSettingsChanged invalidation propagates.
+        var aiProviderTestHandler = new AiProviderTestHandler(() => ctx.EnsureSettings().Ai.Timeout);
 
         // Spec 022 (M0 closure) -- P3 / US3 (complete). AiPipelineServices is the sole shared
         // collaborator surface for the seven AiHandlerBase-derived subclasses. It reads settings

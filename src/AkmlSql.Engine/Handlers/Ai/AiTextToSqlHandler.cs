@@ -42,7 +42,8 @@ public sealed class AiTextToSqlHandler : AiHandlerBase<AiTextToSqlRequest, AiTex
         }
 
         var schemaContext = await Services.SchemaContext.BuildAsync(
-            request.SessionId, sessionLookup, request.Prompt, compressionLevel: 2);
+            request.SessionId, sessionLookup, request.Prompt, compressionLevel: 3,
+            maxObjects: settings.SchemaContextMaxObjects);
         var schemaText = SchemaContextFormatter.Format(schemaContext);
         var (transformedPrompt, transformedContext, transformation) =
             Services.Privacy.Transform(request.Prompt, schemaContext, settings.PrivacyMode);

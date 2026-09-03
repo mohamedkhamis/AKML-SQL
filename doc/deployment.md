@@ -47,6 +47,24 @@ dotnet publish src/AkmlSql.Updater/AkmlSql.Updater.csproj \
   -c Release -r win-x64 --self-contained -p:PublishSingleFile=true
 ```
 
+The updater CLI has two modes (spec 036 US5):
+
+- `AkmlSql.Updater.exe --check` — fetches the update manifest from `Constants.UpdateManifestUrl`
+  (`https://akml.khamis.work/update-manifest.json`), compares versions (strictly-newer only,
+  SemVer pre-release tags stripped), and atomically writes `%AppData%\AKML SQL\update-available.json`
+  when a newer version exists. Always exits 0 — a failed check is logged, never user-visible.
+- `AkmlSql.Updater.exe --download` — reads the result file, downloads the installer to
+  `%LocalAppData%\AKML SQL\cache\AKMLSQLSetup-<version>.exe.partial`, verifies its SHA-256
+  against the manifest, and on success renames it and records `verifiedInstallerPath` with
+  `downloadState: "verified"`. Exit codes: `0` success/nothing to do/cancelled, `1` usage error,
+  `2` verification or download failure (`failureReason` set, partial file deleted). HTTPS-only,
+  anonymous.
+
+The shell's guided update flow (spec 036 FR-039) drives `--download` with visible progress and
+a working cancel, asks for one confirmation naming the applications that must close, then
+launches the verified installer with its normal UI. `/VERYSILENT` is never used by the
+in-product flow — it remains the unattended-deployment path documented below only.
+
 ### Tests
 
 ```bash
@@ -62,6 +80,22 @@ Requires that Engine and all shell targets are already built/published:
 ```
 
 Output: `src/AkmlSql.Installer/Output/AKMLSQLSetup.exe`
+
+### Release publishing & the update manifest (spec 036)
+
+`scripts/deploy-site-iis.ps1` stages a release and publishes the product site. As part of the
+staging block (before the site publish step) it now writes **two** files from the same in-memory
+release entry — one computation of version and SHA-256, two consumers (FR-036):
+
+- `src/AkmlSql.Site/wwwroot/releases.json` — the download page's list (unchanged behaviour);
+- `src/AkmlSql.Site/wwwroot/update-manifest.json` — the updater's manifest, served at
+  `https://akml.khamis.work/update-manifest.json` (this is `Constants.UpdateManifestUrl`).
+
+The manifest's `downloadUrl` is always absolute HTTPS: the GitHub CDN asset when the release
+upload succeeded, otherwise the site's own `/dl/<file>` URL. Never hand-edit either file — the
+consistency invariant is enforced by `tests/AkmlSql.Site.Tests`. The manifest must be written
+before the site publish because `MapStaticAssets` resolves its asset list at build time; a file
+dropped into `wwwroot` afterwards would 404 silently.
 
 ---
 

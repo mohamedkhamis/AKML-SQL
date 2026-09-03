@@ -1,7 +1,7 @@
 namespace AkmlSql.Core.Update
 {
     /// <summary>
-    /// JSON manifest fetched from <c>https://updates.akmlsql.com/manifest.json</c> by the Updater process.
+    /// JSON manifest fetched from <c>https://akml.khamis.work/update-manifest.json</c> by the Updater process.
     /// The Updater compares <see cref="Version"/> against the running extension version and writes
     /// an <see cref="UpdateResult"/> file if a newer version is available.
     /// </summary>

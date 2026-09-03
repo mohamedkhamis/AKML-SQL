@@ -1,10 +1,11 @@
-﻿#nullable enable
+#nullable enable
 using System;
 using System.ComponentModel.Design;
 using System.Text;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Shell.Shared.Ipc;
+using AkmlSql.Shell.Shared.Refactoring;
 using EnvDTE;
 using EnvDTE80;
 using Microsoft.VisualStudio.Shell;
@@ -106,7 +107,8 @@ namespace AkmlSql.Shell.Shared.Commands
                 }
 
                 selectedSql = textDocument.Selection.Text;
-                sessionId = Guid.NewGuid().ToString("N");
+                // Spec 036 (US1, T014): the editor's real session id, never a fabricated one (R1).
+                sessionId = RefactorCommandHelper.TryGetActiveRealSessionId() ?? string.Empty;
             }
             catch (Exception ex)
             {

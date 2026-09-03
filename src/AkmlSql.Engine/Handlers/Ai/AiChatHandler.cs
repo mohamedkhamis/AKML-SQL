@@ -40,7 +40,8 @@ public sealed class AiChatHandler : AiHandlerBase<AiChatRequest, AiChatResponse>
         }
 
         var schemaContext = await Services.SchemaContext.BuildAsync(
-            request.SessionId, sessionLookup, request.Message, compressionLevel: 2);
+            request.SessionId, sessionLookup, request.Message, compressionLevel: 3,
+            maxObjects: settings.SchemaContextMaxObjects);
         var schemaText = SchemaContextFormatter.Format(schemaContext);
         var (transformedMessage, transformedContext, transformation) =
             Services.Privacy.Transform(request.Message, schemaContext, settings.PrivacyMode);

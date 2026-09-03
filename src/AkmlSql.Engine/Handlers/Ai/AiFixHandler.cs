@@ -40,7 +40,8 @@ public sealed class AiFixHandler : AiHandlerBase<AiFixRequest, AiFixResponse>
         }
 
         var schemaContext = await Services.SchemaContext.BuildAsync(
-            request.SessionId, sessionLookup, request.FailingSql, compressionLevel: 3);
+            request.SessionId, sessionLookup, request.FailingSql, compressionLevel: 3,
+            maxObjects: settings.SchemaContextMaxObjects);
         var schemaText = SchemaContextFormatter.Format(schemaContext);
         var (transformedSql, transformedContext, transformation) =
             Services.Privacy.Transform(request.FailingSql, schemaContext, settings.PrivacyMode);
