@@ -134,6 +134,13 @@ try {
                         Log 'WARNING: gh CLI not found -- skipping CDN upload (local /dl still serves the file)'
                     }
                     else {
+                        # gh writes "release not found" to stderr for a missing tag; with
+                        # EAP=Stop the 2>&1 wrapper turns that into a TERMINATING error before
+                        # the LASTEXITCODE check can branch to create. Relax the preference for
+                        # these native calls — $LASTEXITCODE decides the outcome (same pattern
+                        # as ISCC in Deploy-Build-Release.ps1).
+                        $prevEap = $ErrorActionPreference
+                        $ErrorActionPreference = 'Continue'
                         $tag = "v$version"
                         $stagedFile = Join-Path $DownloadsPath $fileName
                         & $gh release view $tag --repo $GitHubRepo 2>&1 | Out-Null
@@ -145,7 +152,9 @@ try {
                             Log "Creating GitHub release $tag + uploading asset"
                             & $gh release create $tag $stagedFile --repo $GitHubRepo --title "AKML SQL $version" --notes $notes 2>&1 | ForEach-Object { Log "gh: $_" }
                         }
-                        if ($LASTEXITCODE -eq 0) {
+                        $ghExit = $LASTEXITCODE
+                        $ErrorActionPreference = $prevEap
+                        if ($ghExit -eq 0) {
                             $cdnUrl = "https://github.com/$GitHubRepo/releases/download/$tag/$fileName"
                             Log "CDN asset live: $cdnUrl"
                         }
