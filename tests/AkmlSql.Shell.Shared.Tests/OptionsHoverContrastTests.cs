@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
@@ -49,6 +50,24 @@ namespace AkmlSql.Shell.Shared.Tests
 
         [StaFact]
         public void SearchResults_Dark_AllStates_MeetContrast() => AssertSearchResultsAllStates("Dark");
+
+        // ── Agent list sweeps (spec 037 US2, FR-036) ─────────────────────────
+
+        [StaFact]
+        public void AgentList_Light_AllStates_MeetContrast() => AssertAgentListAllStates("Light");
+
+        [StaFact]
+        public void AgentList_Dark_AllStates_MeetContrast() => AssertAgentListAllStates("Dark");
+
+        [StaFact]
+        public void AgentList_HighContrast_TokenPairs_MeetContrast()
+        {
+            var pairs = ResolveAgentTokenPairs("Light");
+            foreach (var (state, bgToken, fgToken) in pairs)
+            {
+                AssertHcPair("agent-list", state, bgToken, fgToken);
+            }
+        }
 
         /// <summary>
         /// High Contrast: the dialog snapshots Light/Dark brushes, but the tokens the style pairs
@@ -134,6 +153,20 @@ namespace AkmlSql.Shell.Shared.Tests
             }
         }
 
+        private static void AssertAgentListAllStates(string theme)
+        {
+            var list = GetAgentList(theme, out _);
+            var style = list.ItemContainerStyle;
+            Assert.NotNull(style);
+            // The rows float transparent over the list's own surface (Input), so the normal
+            // state's effective background is the list Background, exactly like the search list
+            // over Panel.
+            foreach (var (state, bg, fg) in ResolveAgentPairs(style, (SolidColorBrush)list.Background))
+            {
+                AssertContrast(state, theme, bg, fg);
+            }
+        }
+
         /// <summary>The four states as (background, foreground) brushes resolved from the style.</summary>
         private static IEnumerable<(string State, SolidColorBrush Bg, SolidColorBrush Fg)> ResolveNavPairs(Style style, string theme)
         {
@@ -149,6 +182,25 @@ namespace AkmlSql.Shell.Shared.Tests
             yield return ("selected", sBg, sFg);
             var (shBg, shFg) = SelectedHoverPair(style);
             yield return ("selected+hovered", shBg, shFg);
+        }
+
+        /// <summary>
+        /// The agent list's states, resolved against the list's own surface for the normal state.
+        /// Like the search list, hover is declared before selected, so selected ∧ hovered resolves
+        /// to the selected pair (the later trigger wins both properties).
+        /// </summary>
+        private static IEnumerable<(string State, SolidColorBrush Bg, SolidColorBrush Fg)> ResolveAgentPairs(Style style, SolidColorBrush listSurface)
+        {
+            var normalBg = RequiredSetterBrush(style.Setters, Control.BackgroundProperty, "normal/Background");
+            yield return ("normal",
+                normalBg.Color != Colors.Transparent ? normalBg : listSurface,
+                RequiredSetterBrush(style.Setters, Control.ForegroundProperty, "normal/Foreground"));
+
+            var (hBg, hFg) = HoverPair(style);
+            yield return ("hovered", hBg, hFg);
+            var (sBg, sFg) = SelectedPair(style);
+            yield return ("selected", sBg, sFg);
+            yield return ("selected+hovered", sBg, sFg);
         }
 
         private static IEnumerable<(string State, SolidColorBrush Bg, SolidColorBrush Fg)> ResolveSearchPairs(Style style, string theme)
@@ -233,11 +285,23 @@ namespace AkmlSql.Shell.Shared.Tests
             return result;
         }
 
+        private static List<(string State, string BgToken, string FgToken)> ResolveAgentTokenPairs(string theme)
+        {
+            var list = GetAgentList(theme, out _);
+            var result = new List<(string, string, string)>();
+            foreach (var (state, bg, fg) in ResolveAgentPairs(list.ItemContainerStyle, (SolidColorBrush)list.Background))
+            {
+                result.Add((state, TokenForBrush(bg, navSurface: false), TokenForBrush(fg, navSurface: false)));
+            }
+            return result;
+        }
+
         /// <summary>PageTheme property name → the token <see cref="PageTheme"/> sources it from.</summary>
         private static readonly Dictionary<string, string> PropertyToToken = new(StringComparer.Ordinal)
         {
             [nameof(PageTheme.Sidebar)] = ThemeTokens.SurfaceSidebar,
             [nameof(PageTheme.Panel)] = ThemeTokens.SurfacePanel,
+            [nameof(PageTheme.Input)] = ThemeTokens.SurfaceInput,
             [nameof(PageTheme.TreeHover)] = ThemeTokens.SurfaceHover,
             [nameof(PageTheme.Selected)] = ThemeTokens.AccentPrimary,
             [nameof(PageTheme.FgPrimary)] = ThemeTokens.TextPrimary,
@@ -288,6 +352,24 @@ namespace AkmlSql.Shell.Shared.Tests
             var list = GetPrivateField<ListBox>(dialog, "_searchResultsList");
             Assert.NotNull(list.ItemContainerStyle);
             return list.ItemContainerStyle;
+        }
+
+        /// <summary>
+        /// The AI Assistance page's agent ListBox (spec 037 US2) — found by its "AI agents"
+        /// automation name, which distinguishes it from the page's fallback-order ListBox
+        /// (spec 037 US4). Pages live in the host's <c>_pages</c> map, not in the window's
+        /// active tree.
+        /// </summary>
+        private static ListBox GetAgentList(string theme, out SettingsWindow dialog)
+        {
+            dialog = BuildDialog(theme, out _);
+            var f = typeof(SettingsWindow).GetField("_pages",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(f);
+            var pages = (Dictionary<string, UIElement>)f!.GetValue(dialog)!;
+            Assert.True(pages.TryGetValue("AI Assistance", out var aiPage), "AI Assistance page not built.");
+            return Assert.Single(LogicalTree.Descendants<ListBox>(aiPage!),
+                lb => System.Windows.Automation.AutomationProperties.GetName(lb) == "AI agents");
         }
 
         private static SettingsWindow BuildDialog(string theme, out Window window)
