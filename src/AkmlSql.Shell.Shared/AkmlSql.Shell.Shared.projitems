@@ -59,6 +59,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\SchemaCachePage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\HistoryPage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\AiAssistancePage.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\AiAgentListView.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\FormattingPage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\TabsPage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\IntelliSensePage.cs" />
@@ -300,6 +301,11 @@
     <!-- Spec 036 US2 (FR-009): shell caller for the AiProviderTest 77/177 IPC pair -->
     <Compile Include="$(MSBuildThisFileDirectory)Ai\AiProviderTestRunner.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\AiChatPanelCommand.cs" />
+    <!-- Spec 037 US1: onboarding card (FR-015/FR-021) + the no-agent gate for the other AI surfaces (FR-022) -->
+    <Compile Include="$(MSBuildThisFileDirectory)Ai\AiChatEmptyState.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\AiNoAgentGate.cs" />
+    <!-- Spec 037 US3: chat-header agent picker (FR-037..FR-041, FR-044) -->
+    <Compile Include="$(MSBuildThisFileDirectory)Ai\AiAgentPicker.cs" />
     <!-- Phase 9 US7: Inline Ghost Text -->
     <Compile Include="$(MSBuildThisFileDirectory)Ai\GhostTextAdornment.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ai\GhostTextAdornmentProvider.cs" />
