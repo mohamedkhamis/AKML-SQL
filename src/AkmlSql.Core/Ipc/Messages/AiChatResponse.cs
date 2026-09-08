@@ -33,5 +33,16 @@ namespace AkmlSql.Core.Ipc.Messages
         /// <summary>Round-trip latency in milliseconds.</summary>
         [Key(5)]
         public int LatencyMs { get; set; }
+
+        /// <summary>
+        /// Name of the agent that produced this answer — a fallback-chain agent or the offline
+        /// provider's display name when a fallback answered (spec 037 US3/US4, FR-042/FR-052,
+        /// research R6). <c>null</c> from an older engine.
+        /// MessagePack explicit keys make the addition safe in both directions: a peer that does
+        /// not know key 6 ignores it, and a peer expecting it deserializes it as <c>null</c>,
+        /// so the shell shows no attribution rather than a guessed one.
+        /// </summary>
+        [Key(6)]
+        public string? AgentName { get; set; }
     }
 }

@@ -114,6 +114,61 @@ namespace AkmlSql.Shell.Shared.Tests
             Assert.Contains("Copied", button.Content?.ToString());
         }
 
+        /// <summary>Spec 037 (US3) T053 — FR-043: the copied conversation attributes each answer
+        /// to the agent that produced it, preserving turn order, the one-blank-line spacing, the
+        /// trailing trim, and the ✓ Copied flash.</summary>
+        [StaFact]
+        public void Copy_conversation_attributes_each_answer_to_its_own_agent()
+        {
+            var panel = new AiChatPanel();
+            SeedHistoryWithAgents(panel,
+                ("user", "what tables do I have?", null),
+                ("assistant", "You have Customers and Orders.", "Claude (work)"),
+                ("user", "same question, different model", null),
+                ("assistant", "The database contains 12 tables.", "Kimi"));
+
+            var button = Assert.Single(FindCopyButtons(panel, "Copy conversation"));
+            button.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+
+            var text = WithClipboardRetry(Clipboard.GetText).Replace("\r\n", "\n");
+            Assert.Contains("You:\nwhat tables do I have?", text);
+            Assert.Contains("Claude (work):\nYou have Customers and Orders.", text);
+            Assert.Contains("Kimi:\nThe database contains 12 tables.", text);
+            Assert.DoesNotContain("Assistant:", text);
+
+            // Order preserved, one blank line between turns, trailing whitespace trimmed.
+            Assert.True(text.IndexOf("Claude (work):", StringComparison.Ordinal)
+                        < text.IndexOf("same question", StringComparison.Ordinal),
+                "turn order must be preserved");
+            Assert.True(text.IndexOf("same question", StringComparison.Ordinal)
+                        < text.IndexOf("Kimi:", StringComparison.Ordinal),
+                "turn order must be preserved");
+            Assert.Contains("Orders.\n\nYou:", text);
+            Assert.False(text.EndsWith("\n", StringComparison.Ordinal), "the copy is trimmed");
+            Assert.Contains("Copied", button.Content?.ToString());
+        }
+
+        /// <summary>Spec 037 (US3) T053: an answer with no recorded agent name (an older engine)
+        /// keeps the pre-attribution "Assistant" speaker label rather than a guessed name.</summary>
+        [StaFact]
+        public void Copy_conversation_falls_back_to_Assistant_when_an_answer_has_no_agent_name()
+        {
+            var panel = new AiChatPanel();
+            SeedHistoryWithAgents(panel,
+                ("user", "first question", null),
+                ("assistant", "older-engine answer.", null),
+                ("user", "second question", null),
+                ("assistant", "attributed answer.", "Kimi"));
+
+            var button = Assert.Single(FindCopyButtons(panel, "Copy conversation"));
+            button.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+
+            var text = WithClipboardRetry(Clipboard.GetText).Replace("\r\n", "\n");
+            Assert.Contains("Assistant:\nolder-engine answer.", text);
+            Assert.Contains("Kimi:\nattributed answer.", text);
+            Assert.Contains("Copied", button.Content?.ToString());
+        }
+
         /// <summary>FR-019: a clipboard failure is surfaced on the button and the message stays
         /// re-copyable — the bubble is never removed. Uses a real clipboard lock (OpenClipboard)
         /// so the failure path is genuinely exercised.</summary>
@@ -198,7 +253,9 @@ namespace AkmlSql.Shell.Shared.Tests
             var method = typeof(AiChatPanel).GetMethod("AddAssistantMessage",
                 BindingFlags.NonPublic | BindingFlags.Instance);
             Assert.NotNull(method);
-            method!.Invoke(panel, new object[] { text, actions });
+            // Spec 037 (US3): the method gained optional agentName/selectedAgentName parameters
+            // for per-answer attribution; reflection must pass every parameter explicitly.
+            method!.Invoke(panel, new object?[] { text, actions, null, null });
         }
 
         private static void SeedHistory(AiChatPanel panel, params (string Role, string Content)[] turns)
@@ -209,6 +266,25 @@ namespace AkmlSql.Shell.Shared.Tests
             foreach (var (role, content) in turns)
             {
                 history.Add(new ChatTurnDto { Role = role, Content = content });
+            }
+        }
+
+        /// <summary>Spec 037 (US3, FR-043): seeds <c>_history</c> AND the parallel per-turn agent
+        /// name list the panel keeps for attribution. A null name is an unanswered/older-engine
+        /// turn — the copy falls back to "Assistant" for it.</summary>
+        private static void SeedHistoryWithAgents(AiChatPanel panel,
+            params (string Role, string Content, string? Agent)[] turns)
+        {
+            var historyField = typeof(AiChatPanel).GetField("_history", BindingFlags.NonPublic | BindingFlags.Instance);
+            var namesField = typeof(AiChatPanel).GetField("_historyAgentNames", BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.NotNull(historyField);
+            Assert.NotNull(namesField);
+            var history = (List<ChatTurnDto>)historyField!.GetValue(panel)!;
+            var names = (List<string?>)namesField!.GetValue(panel)!;
+            foreach (var (role, content, agent) in turns)
+            {
+                history.Add(new ChatTurnDto { Role = role, Content = content });
+                names.Add(agent);
             }
         }
 
