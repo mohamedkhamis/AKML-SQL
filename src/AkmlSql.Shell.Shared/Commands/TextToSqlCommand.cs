@@ -82,27 +82,10 @@ namespace AkmlSql.Shell.Shared.Commands
 
         private async Task ExecuteAsync()
         {
-            // Step 1: Check AI configuration
-            AiSettings aiSettings;
-            try
-            {
-                var settings = ConfigManager.Load();
-                aiSettings = settings.Ai;
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "TextToSqlCommand: failed to load settings");
-                await ShowMessageBoxAsync("AKML SQL", "Failed to load settings. Please check the configuration file.");
+            // Step 1: the no-agent gate (spec 037, US1, FR-022) — reports the chat card's reason
+            // and offers the same route into Options instead of a bare "not configured" message.
+            if (await AiNoAgentGate.ShouldStopAsync("Text to SQL"))
                 return;
-            }
-
-            if (!aiSettings.Enabled || string.IsNullOrWhiteSpace(aiSettings.Provider))
-            {
-                await ShowMessageBoxAsync("AI Not Configured",
-                    "AI assistance is not configured.\n\n" +
-                    "Please go to AKML SQL > Options to configure your AI provider (API key, model, etc.).");
-                return;
-            }
 
             // Step 2: Check engine connectivity
             var manager = EngineLifecycle.Manager;

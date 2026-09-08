@@ -109,6 +109,14 @@ namespace AkmlSql.Shell.Shared.Dialogs
         /// </summary>
         public bool ThemeChangeRequested { get; private set; }
 
+        /// <summary>
+        /// Spec 037 (US1, FR-017): deep-link target for the AI Assistance page. Set before
+        /// <see cref="ShowDialog(string?)"/>: an agent id selects that agent; <c>""</c> performs
+        /// the page's implicit Add when its agent list is empty; <c>null</c> (the default) is
+        /// the ordinary open with no agent pre-selection.
+        /// </summary>
+        public string? InitialAgentId { get; set; }
+
         // ─── Control references (for Load / Save) ───────────────────────────
 
         // General
@@ -180,6 +188,19 @@ namespace AkmlSql.Shell.Shared.Dialogs
         }
 
         /// <summary>
+        /// Spec 037 (US1, FR-017): as <see cref="ShowDialog()"/>, but pre-selects the page whose
+        /// key is <paramref name="initialPageKey"/> (routing through the same
+        /// <see cref="SelectTreeLeafByPageKey"/> the settings search box drives) instead of the
+        /// first nav item. A null or unknown key degrades to the ordinary first-item selection.
+        /// </summary>
+        public bool ShowDialog(string? initialPageKey)
+        {
+            BuildWindowInner(initialPageKey);
+            _window!.ShowDialog();
+            return _dialogResult;
+        }
+
+        /// <summary>
         /// Test-only: build the dialog's visual tree without showing it. Used by
         /// AkmlSql.Shell.Shared.Tests for chrome regression checks. Must NOT be
         /// called from production code paths — this method exists solely to expose
@@ -199,14 +220,35 @@ namespace AkmlSql.Shell.Shared.Dialogs
         }
 
         /// <summary>
-        /// Shared initialization: creates the window, populates controls, and selects the first
-        /// navigation item. Called by both <see cref="ShowDialog"/> and
-        /// <see cref="TestBuildWindowForRenderTest"/>.
+        /// Test-only deep-link seam (spec 037 T019): as <see cref="TestBuildWindowForRenderTest()"/>,
+        /// but performs the same pre-selection <see cref="ShowDialog(string?)"/> performs, so the
+        /// deep-link routing is assertable without showing a modal dialog.
         /// </summary>
-        private void BuildWindowInner()
+        public Window TestBuildWindowForRenderTest(string? initialPageKey)
         {
             _window = CreateWindow();
             LoadSettingsToControls();
+            if (!string.IsNullOrEmpty(initialPageKey))
+                SelectTreeLeafByPageKey(initialPageKey!);
+            _window.Measure(new System.Windows.Size(double.PositiveInfinity, double.PositiveInfinity));
+            _window.Arrange(new Rect(0, 0, _window.DesiredSize.Width, _window.DesiredSize.Height));
+            _window.UpdateLayout();
+            return _window!;
+        }
+
+        /// <summary>
+        /// Shared initialization: creates the window, populates controls, and selects the first
+        /// navigation item — or the page named by <paramref name="initialPageKey"/> when one is
+        /// given. Called by both <see cref="ShowDialog"/> and
+        /// <see cref="TestBuildWindowForRenderTest()"/>.
+        /// </summary>
+        private void BuildWindowInner(string? initialPageKey = null)
+        {
+            _window = CreateWindow();
+            LoadSettingsToControls();
+
+            if (!string.IsNullOrEmpty(initialPageKey) && SelectTreeLeafByPageKey(initialPageKey!))
+                return;
 
             // Select the first category
             if (_navTree?.Items.Count > 0)
@@ -1020,10 +1062,11 @@ namespace AkmlSql.Shell.Shared.Dialogs
         /// <summary>
         /// Walks the tree (including parent groups) to find the leaf with the given
         /// page key Tag, expands its parent if needed, and selects it.
+        /// Returns false when no leaf carries that key.
         /// </summary>
-        private void SelectTreeLeafByPageKey(string pageKey)
+        private bool SelectTreeLeafByPageKey(string pageKey)
         {
-            if (_navTree == null) return;
+            if (_navTree == null) return false;
 
             foreach (var obj in _navTree.Items)
             {
@@ -1032,7 +1075,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 if (item.Tag is string topKey && topKey == pageKey)
                 {
                     item.IsSelected = true;
-                    return;
+                    return true;
                 }
 
                 foreach (var childObj in item.Items)
@@ -1042,10 +1085,11 @@ namespace AkmlSql.Shell.Shared.Dialogs
                     {
                         item.IsExpanded = true;
                         child.IsSelected = true;
-                        return;
+                        return true;
                     }
                 }
             }
+            return false;
         }
 
         /// <summary>
@@ -1501,6 +1545,26 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
         private void OnOkClick(object sender, RoutedEventArgs e)
         {
+            // Spec 037 (US2, FR-032): OK is refused while any agent fails V1–V12. The page
+            // validates its whole working copy (a user can leave an invalid agent, select
+            // another, and press OK) and selects the offending agent before the message is
+            // shown, so the user lands where the problem is.
+            if (_pageControlsByKey.TryGetValue("AI Assistance", out var aiPageControls) &&
+                aiPageControls is AiAssistanceControls aiControls)
+            {
+                var validationError = aiControls.ValidateWorkingCopy();
+                if (validationError != null)
+                {
+                    SelectTreeLeafByPageKey("AI Assistance");
+                    MessageBox.Show(
+                        validationError,
+                        Constants.ProductName,
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                    return;
+                }
+            }
+
             SaveControlsToSettings();
             _dialogResult = true;
             _window?.Close();
@@ -1726,7 +1790,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
                     Constants.ProductName, MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
                     return;
 
-                ResetPageToDefaultsCore(pageName);
+                ResetPageToDefaultsCore(pageName!);
                 LoadSettingsToControls();
             }
             catch (Exception ex)
@@ -1816,7 +1880,12 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 case "Editor": _settings.EditorProductivity = defaults.EditorProductivity; break;
                 case "Execution": _settings.ExecutionProductivity = defaults.ExecutionProductivity; break;
                 case "Navigation": _settings.Navigation = defaults.Navigation; break;
-                case "AI Assistance": _settings.Ai = defaults.Ai; break;
+                case "AI Assistance":
+                    // Whole-object reset: the default AiSettings carries an empty agent list, a
+                    // blank active id, cleared feature assignments and an empty fallback order
+                    // (spec 037 US2, T048) as well as the flat fields.
+                    _settings.Ai = defaults.Ai;
+                    break;
                 default:
                     throw new InvalidOperationException(
                         $"Page '{pageName}' has no Reset case in SettingsWindow.ResetPageToDefaultsCore. " +
@@ -1847,6 +1916,15 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
         private void LoadSettingsToControls()
         {
+            // Spec 037 (US1, FR-017): hand the deep-link agent id to the AI Assistance page
+            // before it loads — it selects that agent, or performs its implicit Add when the
+            // id is "" and the agent list is empty.
+            if (_pageControlsByKey.TryGetValue("AI Assistance", out var aiPageControls) &&
+                aiPageControls is AiAssistanceControls aiControls)
+            {
+                aiControls.InitialAgentId = InitialAgentId;
+            }
+
             // Single dispatch loop covers every registered IPageBuilder. Adding
             // a new page to _pageBuilders automatically picks up Load coverage —
             // there is no second list to keep in sync, which was the root cause
