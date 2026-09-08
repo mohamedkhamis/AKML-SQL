@@ -30,8 +30,9 @@ public class AiHandlerBaseTests
         public EchoHandler(AiPipelineServices svcs) : base(svcs) { }
         public override int RequestMessageType => 9999;
         public override int ResponseMessageType => 10099;
+        public override AiFeature Feature => AiFeature.Chat;
         protected override Task<TestResponse> InvokeAsync(
-            TestRequest req, RpcContext ctx, AiSettings settings, Stopwatch sw, CancellationToken ct)
+            TestRequest req, RpcContext ctx, AiSettings settings, AiAgent? resolvedAgent, Stopwatch sw, CancellationToken ct)
             => Task.FromResult(new TestResponse { Echo = req.Text });
         protected override TestResponse BuildErrorResponse(string message, long elapsedMs)
             => new() { Echo = $"err:{message}" };

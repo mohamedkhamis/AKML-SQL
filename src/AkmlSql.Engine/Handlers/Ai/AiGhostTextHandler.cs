@@ -20,12 +20,13 @@ public sealed class AiGhostTextHandler : AiHandlerBase<AiGhostTextRequest, AiGho
     public AiGhostTextHandler(AiPipelineServices svcs) : base(svcs) { }
     public override int RequestMessageType => MessageTypes.AiGhostText;
     public override int ResponseMessageType => MessageTypes.AiGhostTextResult;
+    public override AiFeature Feature => AiFeature.GhostText;
 
     protected override AiGhostTextResponse BuildErrorResponse(string errorMessage, long elapsedMs) =>
         new() { Success = false, CursorOffset = 0, ErrorMessage = errorMessage, LatencyMs = (int)elapsedMs };
 
     protected override async Task<AiGhostTextResponse> InvokeAsync(
-        AiGhostTextRequest request, RpcContext ctx, AiSettings settings, Stopwatch sw, CancellationToken ct)
+        AiGhostTextRequest request, RpcContext ctx, AiSettings settings, AiAgent? resolvedAgent, Stopwatch sw, CancellationToken ct)
     {
         if (!settings.Enabled || !settings.InlineCompletion)
             throw new InvalidOperationException("Inline completion is disabled");
@@ -64,7 +65,8 @@ public sealed class AiGhostTextHandler : AiHandlerBase<AiGhostTextRequest, AiGho
             new(ChatRole.User, userPrompt),
         };
         var options = new ChatOptions { MaxOutputTokens = 150, Temperature = 0.2f };
-        var (aiResponse, _) = await Services.ExecuteWithFallbackAsync(settings, chatMessages, options, ct);
+        var (aiResponse, _, _) = await Services.ExecuteWithFallbackAsync(
+            settings, resolvedAgent, chatMessages, options, ct);
         var predictedText = aiResponse.Text ?? string.Empty;
         if (transformation.IdentifierMap.Count > 0 || transformation.LiteralMap.Count > 0)
             predictedText = PrivacyTransformer.DeTransform(predictedText, transformation);

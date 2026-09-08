@@ -20,12 +20,13 @@ public sealed class AiExplainHandler : AiHandlerBase<AiExplainRequest, AiExplain
     public AiExplainHandler(AiPipelineServices svcs) : base(svcs) { }
     public override int RequestMessageType => MessageTypes.AiExplain;
     public override int ResponseMessageType => MessageTypes.AiExplainResult;
+    public override AiFeature Feature => AiFeature.Explain;
 
     protected override AiExplainResponse BuildErrorResponse(string errorMessage, long elapsedMs) =>
         new() { Success = false, ErrorMessage = errorMessage, LatencyMs = (int)elapsedMs };
 
     protected override async Task<AiExplainResponse> InvokeAsync(
-        AiExplainRequest request, RpcContext ctx, AiSettings settings, Stopwatch sw, CancellationToken ct)
+        AiExplainRequest request, RpcContext ctx, AiSettings settings, AiAgent? resolvedAgent, Stopwatch sw, CancellationToken ct)
     {
         if (!settings.Enabled) throw new InvalidOperationException("AI assistance is disabled");
         if (string.IsNullOrWhiteSpace(request.SelectedSql)) throw new ArgumentException("No SQL text provided");
@@ -59,14 +60,15 @@ public sealed class AiExplainHandler : AiHandlerBase<AiExplainRequest, AiExplain
             MaxOutputTokens = settings.MaxTokens,
             Temperature = (float)settings.Temperature,
         };
-        var (aiResponse, usedFallback) = await Services.ExecuteWithFallbackAsync(settings, chatMessages, options, ct);
+        var (aiResponse, usedFallback, agentName) = await Services.ExecuteWithFallbackAsync(
+            settings, resolvedAgent, chatMessages, options, ct);
         var responseText = aiResponse.Text ?? string.Empty;
         if (transformation.IdentifierMap.Count > 0 || transformation.LiteralMap.Count > 0)
             responseText = PrivacyTransformer.DeTransform(responseText, transformation);
 
         var (purpose, stepByStep, keyDetails, suggestions) = AiPipelineServices.ParseExplainSections(responseText);
         if (usedFallback)
-            purpose = $"[Fallback model: {settings.OfflineProvider}/{settings.OfflineModel}] {purpose}";
+            purpose = $"[Fallback agent: {agentName}] {purpose}";
 
         var tokensUsed = aiResponse.Usage != null
             ? (int)((aiResponse.Usage.InputTokenCount ?? 0) + (aiResponse.Usage.OutputTokenCount ?? 0)) : 0;

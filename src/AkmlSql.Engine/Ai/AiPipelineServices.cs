@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Text.RegularExpressions;
@@ -37,6 +39,34 @@ public sealed class AiPipelineServices : IDisposable
 
     /// <summary>Fresh-AI-settings provider. Wired to <c>ctx.EnsureSettings().Ai</c> by the registry.</summary>
     public required Func<AiSettings> SettingsProvider { get; init; }
+
+    /// <summary>
+    /// Spec 037 (US4, T072): construction seam between the pipeline and
+    /// <see cref="AiProviderFactory.Create"/>, so the fallback chain can be exercised without a
+    /// network. Receives the PROJECTED settings of the agent being attempted.
+    /// </summary>
+    public Func<AiSettings, IChatClient> ClientFactory { get; set; } = AiProviderFactory.Create;
+
+    /// <summary>
+    /// Spec 037 (US4, T072): the offline-provider construction seam — same role as
+    /// <see cref="ClientFactory"/> for <see cref="AiProviderFactory.CreateFromFallback"/>.
+    /// </summary>
+    public Func<AiSettings, IChatClient> FallbackClientFactory { get; set; } = AiProviderFactory.CreateFromFallback;
+
+    // Spec 037 (US4, T071, V22): features whose "assigned agent unusable — active answers"
+    // notice has already been logged. This services instance is process-wide (the registry
+    // builds it once), which is exactly the contract's once-per-feature-per-engine-process
+    // scope — and it keeps the flag out of the singleton handler instances.
+    private readonly ConcurrentDictionary<AiFeature, byte> _assignmentFallbackNoticed = new();
+
+    /// <summary>
+    /// V22 — returns <c>true</c> the FIRST time a feature marks its assigned-agent fallback
+    /// notice, <c>false</c> on every later call, so the engine logs it once per feature per
+    /// engine process rather than once per request (a ghost-text user must not get a
+    /// notification storm at every keystroke).
+    /// </summary>
+    internal bool MarkAssignmentFallbackNoticed(AiFeature feature)
+        => _assignmentFallbackNoticed.TryAdd(feature, 0);
 
     /// <summary>Builds the shared services. Used by <see cref="EngineHandlerRegistry"/>.</summary>
     public static AiPipelineServices Build(
@@ -103,53 +133,121 @@ public sealed class AiPipelineServices : IDisposable
         }
     }
 
-    // ───────── Primary-then-offline-fallback (lifted from AiRequestHandler.ExecuteWithFallbackAsync) ─────────
+    // ───────── Primary → fallback chain → offline last resort (spec 037 US4, T072/T073) ─────────
+
+    /// <summary>The per-attempt retry budget (contract invariant 2): retries must never make one
+    /// logical request outlive the deadline the rest of the pipeline (and the shell's IPC wait,
+    /// provider timeout + margin) is built around — <c>max(30s, agent.Timeout)</c>, computed from
+    /// the ATTEMPTING agent's own projected settings.</summary>
+    internal static TimeSpan RetryBudgetFor(AiSettings settings)
+        => TimeSpan.FromSeconds(Math.Max(30, settings.Timeout));
 
     /// <summary>
-    /// Calls the primary AI provider with retry-on-rate-limit. On transient failure (anything
-    /// other than cancellation / consent) falls back to the configured offline provider if any.
-    /// Lifted from <c>AiRequestHandler.ExecuteWithFallbackAsync</c>.
+    /// Calls the selected agent's provider with retry-on-rate-limit. On transient failure
+    /// (anything other than cancellation / consent) walks <see cref="AiSettings.FallbackOrder"/>
+    /// in order — usable agents only, the selected agent never in its own chain — and falls
+    /// through to the configured offline provider last (FR-050/FR-051). The chain stops at the
+    /// first success and returns the answering agent's name (FR-052) plus whether a fallback
+    /// fired. Lifted from <c>AiRequestHandler.ExecuteWithFallbackAsync</c>; the chain is "a list
+    /// in front of the existing single fallback" (research R5), so a configuration that sets
+    /// only <see cref="AiSettings.OfflineProvider"/> behaves exactly as it always has.
     /// </summary>
-    public async Task<(ChatResponse Response, bool UsedFallback)> ExecuteWithFallbackAsync(
+    /// <param name="settings">The selected agent's PROJECTED settings (the base handler has
+    /// already resolved and projected). Its <c>Agents</c>/<c>FallbackOrder</c> copies drive the
+    /// chain; projection preserves every global concern, so re-projecting a chain candidate from
+    /// it is equivalent to projecting from the globals.</param>
+    /// <param name="selectedAgent">The agent <paramref name="settings"/> was projected from, or
+    /// <c>null</c> for a pre-resolution caller (legacy flat settings).</param>
+    public async Task<(ChatResponse Response, bool UsedFallback, string? AgentName)> ExecuteWithFallbackAsync(
         AiSettings settings,
+        AiAgent? selectedAgent,
         List<ChatMessage> messages,
         ChatOptions options,
         CancellationToken ct)
     {
+        // The user's chain (FR-050): usable agents named by FallbackOrder, in order, skipping
+        // the selected agent — an agent is never its own fallback (contract invariant 5).
+        var chain = new List<AiAgent>();
+        if (settings.FallbackOrder != null)
+        {
+            foreach (var id in settings.FallbackOrder)
+            {
+                if (string.IsNullOrEmpty(id)) continue;
+                if (selectedAgent != null && string.Equals(id, selectedAgent.Id, StringComparison.Ordinal)) continue;
+                var candidate = settings.Agents?.FirstOrDefault(
+                    a => a != null && string.Equals(a.Id, id, StringComparison.Ordinal));
+                if (candidate == null || !AiAgentResolver.IsUsable(candidate)) continue;
+                chain.Add(candidate);
+            }
+        }
+
+        // When nothing can serve as a fallback the primary's exception must propagate UNTOUCHED
+        // (the pre-chain behaviour, encoded by the original filter's OfflineProvider clause);
+        // the two exception-type clauses are preserved verbatim at every attempt: cancellation
+        // and consent never trigger a fallback.
+        var hasFallback = chain.Count > 0 || !string.IsNullOrWhiteSpace(settings.OfflineProvider);
+        var attemptFailures = new List<string>();
+        var attemptExceptions = new List<Exception>();
+
         try
         {
-            using var primaryClient = AiProviderFactory.Create(settings);
-            // Retry budget = the configured provider timeout: retries must never make one
-            // logical request outlive the deadline the rest of the pipeline (and the shell's
-            // IPC wait, provider timeout + margin) is built around.
+            using var primaryClient = ClientFactory(settings);
             var response = await ExecuteWithBackoffAsync(
                 () => primaryClient.GetResponseAsync(messages, options, ct),
-                settings.Retries, ct,
-                retryBudget: TimeSpan.FromSeconds(Math.Max(30, settings.Timeout)));
-            return (response, false);
+                settings.Retries, ct, retryBudget: RetryBudgetFor(settings));
+            return (response, false, selectedAgent?.Name);
         }
         catch (Exception ex) when (
             ex is not OperationCanceledException &&
             ex is not PrivacyConsentRequiredException &&
-            !string.IsNullOrWhiteSpace(settings.OfflineProvider))
+            hasFallback)
         {
-            Log.Warning(ex, "Primary AI provider failed, switching to offline fallback provider={FallbackProvider}",
-                settings.OfflineProvider);
+            Log.Warning(ex, "Primary AI provider failed, walking the fallback chain");
+            attemptFailures.Add($"Primary provider failed: {ex.Message}");
+            attemptExceptions.Add(ex);
+        }
 
+        foreach (var candidate in chain)
+        {
             try
             {
-                using var fallbackClient = AiProviderFactory.CreateFromFallback(settings);
+                var projected = AiAgentResolver.Project(settings, candidate);
+                using var client = ClientFactory(projected);
+                var response = await ExecuteWithBackoffAsync(
+                    () => client.GetResponseAsync(messages, options, ct),
+                    projected.Retries, ct, retryBudget: RetryBudgetFor(projected));
+                Log.Warning("AI fallback chain: agent {AgentName} answered after the primary failed", candidate.Name);
+                return (response, true, candidate.Name);
+            }
+            catch (Exception ex) when (
+                ex is not OperationCanceledException &&
+                ex is not PrivacyConsentRequiredException)
+            {
+                Log.Warning(ex, "AI fallback chain: agent {AgentName} failed, trying the next candidate", candidate.Name);
+                attemptFailures.Add($"Fallback agent {candidate.Name} failed: {ex.Message}");
+                attemptExceptions.Add(ex);
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(settings.OfflineProvider))
+        {
+            Log.Warning("Primary AI provider failed, switching to offline fallback provider={FallbackProvider}",
+                settings.OfflineProvider);
+            try
+            {
+                using var fallbackClient = FallbackClientFactory(settings);
                 var response = await fallbackClient.GetResponseAsync(messages, options, ct);
-                return (response, true);
+                return (response, true, AiProviderIds.DisplayName(settings.OfflineProvider));
             }
             catch (Exception fallbackEx)
             {
                 Log.Error(fallbackEx, "Offline fallback provider also failed");
-                throw new AggregateException(
-                    $"Primary provider failed: {ex.Message}. Fallback also failed: {fallbackEx.Message}",
-                    ex, fallbackEx);
+                attemptFailures.Add($"Fallback also failed: {fallbackEx.Message}");
+                attemptExceptions.Add(fallbackEx);
             }
         }
+
+        throw new AggregateException(string.Join(". ", attemptFailures), attemptExceptions);
     }
 
     // ───────── Generated-SQL validation (lifted from AiRequestHandler.ValidateGeneratedSql) ─────────

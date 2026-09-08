@@ -16,11 +16,14 @@ namespace AkmlSql.Engine.Handlers.Ai;
 ///
 /// <para>Concrete subclasses override only <see cref="InvokeAsync"/> with the happy-path
 /// per-message logic plus <see cref="BuildErrorResponse"/> with the typed error envelope, plus
-/// the two integer-code properties. They do NOT catch their own exceptions -- the base does it.</para>
+/// the two integer-code properties and the <see cref="Feature"/> declaration. They do NOT catch
+/// their own exceptions -- the base does it.</para>
 ///
 /// <para>Per FR-013: settings are read fresh on every call via <see cref="AiPipelineServices.SettingsProvider"/>;
 /// the consent gate uses the local-provider allowlist (<c>ollama</c>, <c>lmstudio</c>) plus the
-/// <see cref="AiSettings.PrivacyConsentRequired"/> flag.</para>
+/// <see cref="AiSettings.PrivacyConsentRequired"/> flag. Spec 037 (US4): the base resolves the
+/// feature's agent and projects it BEFORE the consent gate, so consent is evaluated against the
+/// provider that will actually be called.</para>
 /// </summary>
 public abstract class AiHandlerBase<TRequest, TResponse> : IRpcRequestHandler<TRequest, TResponse>
     where TResponse : new()
@@ -37,11 +40,18 @@ public abstract class AiHandlerBase<TRequest, TResponse> : IRpcRequestHandler<TR
     public virtual bool SwallowCancellation => false;
     public virtual bool AllowsEmptyPayload => false;
 
+    /// <summary>Spec 037 (US4, T070): the feature this handler serves — the key for per-feature
+    /// agent resolution in <see cref="HandleAsync"/>. One line per concrete handler.</summary>
+    public abstract AiFeature Feature { get; }
+
     /// <summary>Per-message logic. Throw on errors -- the base catches and routes to
-    /// <see cref="BuildErrorResponse"/>. Receives the live <see cref="AiSettings"/> + the
-    /// per-call <see cref="Stopwatch"/> so the success-path response can read LatencyMs.</summary>
+    /// <see cref="BuildErrorResponse"/>. Receives the live <see cref="AiSettings"/> — PROJECTED
+    /// from <paramref name="resolvedAgent"/> when one resolved (spec 037 US4: connection fields
+    /// and request parameters are the agent's; every global concern is preserved) — plus the
+    /// resolved agent itself for attribution and the fallback chain, plus the per-call
+    /// <see cref="Stopwatch"/> so the success-path response can read LatencyMs.</summary>
     protected abstract Task<TResponse> InvokeAsync(
-        TRequest request, RpcContext ctx, AiSettings settings, Stopwatch sw, CancellationToken ct);
+        TRequest request, RpcContext ctx, AiSettings settings, AiAgent? resolvedAgent, Stopwatch sw, CancellationToken ct);
 
     /// <summary>Shape the typed error response from a message + elapsed milliseconds. Subclasses
     /// typically return <c>new() { Success = false, ErrorMessage = message, LatencyMs = (int)elapsedMs }</c>.</summary>
@@ -51,9 +61,20 @@ public abstract class AiHandlerBase<TRequest, TResponse> : IRpcRequestHandler<TR
     {
         var sw = Stopwatch.StartNew();
         AiSettings settings;
+        AiAgent? resolvedAgent;
         try
         {
-            settings = Services.SettingsProvider();
+            var globalSettings = Services.SettingsProvider();
+            // Spec 037 (US4, contracts/agent-resolution.md Part 1): resolve the feature's agent
+            // and project BEFORE the consent gate — consent must be evaluated against the
+            // provider that will actually be called. A null resolution runs against the
+            // unprojected globals, whose Enabled is false (V19), so the handlers' existing
+            // "AI assistance is disabled" guard fires with no new error path.
+            resolvedAgent = AiAgentResolver.ResolveFor(globalSettings, Feature);
+            NoteAssignedAgentFallback(globalSettings, resolvedAgent);
+            settings = resolvedAgent == null
+                ? globalSettings
+                : AiAgentResolver.Project(globalSettings, resolvedAgent);
             CheckPrivacyConsent(settings);
         }
         catch (PrivacyConsentRequiredException consentEx)
@@ -65,7 +86,7 @@ public abstract class AiHandlerBase<TRequest, TResponse> : IRpcRequestHandler<TR
 
         try
         {
-            return await InvokeAsync(request, ctx, settings, sw, ct).ConfigureAwait(false);
+            return await InvokeAsync(request, ctx, settings, resolvedAgent, sw, ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (SwallowCancellation)
         {
@@ -83,6 +104,23 @@ public abstract class AiHandlerBase<TRequest, TResponse> : IRpcRequestHandler<TR
             Log.Error(ex, "{Handler} failed after {LatencyMs}ms", GetType().Name, sw.ElapsedMilliseconds);
             return BuildErrorResponse(ex.Message, sw.ElapsedMilliseconds);
         }
+    }
+
+    /// <summary>
+    /// FR-049 / V22: an assigned agent that is missing or unusable falls back to the active
+    /// agent — logged at Information ONCE per feature per engine process (the dedupe lives in
+    /// <see cref="AiPipelineServices"/>, which the registry builds once per process), never per
+    /// request. The shell repairs the dangling assignment on the next load (V16).
+    /// </summary>
+    private void NoteAssignedAgentFallback(AiSettings settings, AiAgent? resolvedAgent)
+    {
+        var assignedId = AiAgentResolver.AssignedIdFor(settings, Feature);
+        if (string.IsNullOrEmpty(assignedId)) return;
+        if (resolvedAgent != null && string.Equals(resolvedAgent.Id, assignedId, StringComparison.Ordinal)) return;
+        if (!Services.MarkAssignmentFallbackNoticed(Feature)) return;
+        Log.Information(
+            "{Handler}: the agent assigned to {Feature} ({AgentId}) is missing or unusable; falling back to the active agent",
+            GetType().Name, Feature, assignedId);
     }
 
     // ───────── Privacy-consent gate (lifted from AiRequestHandler.CheckPrivacyConsent) ─────────
