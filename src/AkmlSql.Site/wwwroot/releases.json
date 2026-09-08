@@ -1,7 +1,21 @@
 ﻿{
     "product":  "AKML SQL",
-    "generatedAt":  "2026-09-03T13:34:46Z",
+    "generatedAt":  "2026-09-08T20:19:24Z",
     "releases":  [
+                     {
+                         "version":  "1.26.0908.2157",
+                         "releasedAt":  "2026-09-08",
+                         "supportedHosts":  [
+                                                "SSMS 22",
+                                                "VS 2026"
+                                            ],
+                         "downloadUrl":  "downloads/AKMLSQLSetup-1.26.0908.2157.exe",
+                         "sha256Hash":  "0747ad1f75349b843b212cb939486497ae5da1589c5f8e3848255587f8e083c1",
+                         "releaseNotesUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases",
+                         "notesSummary":  "Multiple AI agents: up to 20 named agents with guided setup, a chat agent picker, per-feature assignment with an ordered fallback chain, and per-agent health.",
+                         "minimumOsVersion":  "10.0",
+                         "cdnUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases/download/v1.26.0908.2157/AKMLSQLSetup-1.26.0908.2157.exe"
+                     },
                      {
                          "version":  "1.26.0903.1456",
                          "releasedAt":  "2026-09-03",
