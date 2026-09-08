@@ -1261,6 +1261,33 @@ namespace AkmlSql.Core.Config
         /// <summary>US18 — debounce delay before AI ghost-text auto-suggest fires (milliseconds).</summary>
         [JsonPropertyName("ghostTextDelayMs")]
         public int GhostTextDelayMs { get; set; } = 500;
+
+        // ── Spec 037: multiple named AI agents ──
+        // ai.agents is the truth; the flat provider/model/apiKey/endpoint fields above are a
+        // derived mirror of the active agent, rewritten by AiAgentResolver on every load and save.
+
+        /// <summary>
+        /// Spec 037 (data-model E5) — the saved AI agents, 0 … 20 (V12). List order is display
+        /// order. When empty, the flat fields above are the whole configuration (pre-migration
+        /// shape, rescued by V14 on load).
+        /// </summary>
+        [JsonPropertyName("agents")]
+        public List<AiAgent> Agents { get; set; } = new();
+
+        /// <summary>
+        /// Spec 037 (data-model E5) — id of the active agent. Resolved by V13 when it names no
+        /// agent in <see cref="Agents"/>.
+        /// </summary>
+        [JsonPropertyName("activeAgentId")]
+        public string ActiveAgentId { get; set; } = "";
+
+        /// <summary>Spec 037 (data-model E5) — per-feature agent assignments; "" = follow the active agent.</summary>
+        [JsonPropertyName("featureAgents")]
+        public FeatureAgentAssignments FeatureAgents { get; set; } = new();
+
+        /// <summary>Spec 037 (data-model E5) — agent ids tried in order when the selected agent fails.</summary>
+        [JsonPropertyName("fallbackOrder")]
+        public List<string> FallbackOrder { get; set; } = new();
     }
 
     /// <summary>

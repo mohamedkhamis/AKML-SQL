@@ -28,4 +28,11 @@
     <ProjectReference Include="..\..\src\AkmlSql.Formatting\AkmlSql.Formatting.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Spec 037 T013: the legacy pre-agents config fixture rides to the output directory so
+         AiAgentMigrationTests loads it from AppContext.BaseDirectory (same idiom as
+         AkmlSql.Engine.Tests / AkmlSql.Formatting.Tests Fixtures). -->
+    <None Update="Config\Fixtures\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

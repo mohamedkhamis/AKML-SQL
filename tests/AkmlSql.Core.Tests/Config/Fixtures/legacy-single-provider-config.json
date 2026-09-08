@@ -1,0 +1,15 @@
+{
+  "ai": {
+    "enabled": true,
+    "provider": "anthropic",
+    "model": "claude-sonnet-4-20250514",
+    "apiKey": "dpapi:AQAAANCMnd8BFdERjHoAwE/Cl+sBAAAA7Zx1m0bZQkG2n0h0placeholderbase64blob==",
+    "endpoint": "",
+    "maxTokens": 4096,
+    "temperature": 0.2,
+    "timeout": 30,
+    "retries": 2,
+    "privacyMode": "schemaOnly",
+    "privacyConsentRequired": false
+  }
+}
