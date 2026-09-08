@@ -24,11 +24,13 @@ namespace AkmlSql.Core.Config
 
         /// <summary>
         /// Load-time normalisation, in rule order: drop malformed entries (V15) and any beyond
-        /// the 20-agent ceiling (V21), repair unknown health statuses (V20), migrate the
+        /// the 20-agent ceiling (V21), repair unknown health statuses (V20), canonicalise provider
+        /// spellings (FR-014 — before any usability-dependent step runs), migrate the
         /// pre-agents flat-field shape (V14 — after the drops, so a list that lost every entry
         /// is rescued from its flat fields), repair a dangling <see cref="AiSettings.ActiveAgentId"/>
-        /// (V13), clear feature assignments naming no usable agent (V16), prune the fallback
-        /// order (V17), mirror the active agent into the flat fields (V18) and derive
+        /// (V13), clear feature assignments naming no usable agent (V16 — recording each clear in
+        /// <see cref="AiSettings.ClearedFeatureAssignments"/> for the engine's V22 notice), prune
+        /// the fallback order (V17), mirror the active agent into the flat fields (V18) and derive
         /// <see cref="AiSettings.Enabled"/> (V19). Idempotent — every repair establishes a state
         /// it then leaves alone — and never throws: a failure is logged and the settings pass
         /// through as read, because <c>ConfigManager.Load</c> returning defaults on any failure
@@ -47,6 +49,7 @@ namespace AkmlSql.Core.Config
                 DropMalformedAgents(settings);        // V15
                 DropExcessAgents(settings);           // V21
                 RepairHealthStatuses(settings);       // V20
+                NormalizeProviderSpellings(settings); // FR-014 — before usability is judged
                 MigrateFlatProvider(settings);        // V14
                 RepairActiveAgentId(settings);        // V13
                 RepairFeatureAssignments(settings);   // V16
@@ -129,6 +132,22 @@ namespace AkmlSql.Core.Config
         }
 
         /// <summary>
+        /// FR-014 — an agent persisted with a legacy or display provider spelling
+        /// (<c>"AzureOpenAI"</c>, <c>"moonshot"</c>, <c>"LMStudio"</c>) is canonicalised on read.
+        /// Runs before the usability-dependent repairs: <see cref="IsUsable"/> rejects any
+        /// non-canonical id, so an uncanonicalised agent would be judged unusable and lose its
+        /// feature assignments (V16) and fallback entries (V17).
+        /// </summary>
+        private static void NormalizeProviderSpellings(AiSettings settings)
+        {
+            foreach (var agent in settings.Agents)
+            {
+                if (agent?.Provider != null)
+                    agent.Provider = AiProviderIds.Normalize(agent.Provider);
+            }
+        }
+
+        /// <summary>
         /// V13 — an <see cref="AiSettings.ActiveAgentId"/> naming no agent in the list becomes the
         /// id of the first usable agent, or <c>""</c> when there is none. An id naming a present
         /// but disabled agent is the user's own state and is kept; an empty id is the product's
@@ -150,25 +169,31 @@ namespace AkmlSql.Core.Config
 
         /// <summary>
         /// V16 — a feature assignment naming no usable agent (missing or disabled) reverts to
-        /// <c>""</c>, "follow the active agent" (FR-049).
+        /// <c>""</c>, "follow the active agent" (FR-049). Each cleared feature is recorded in
+        /// <see cref="AiSettings.ClearedFeatureAssignments"/> as the post-load signal for the
+        /// engine's once-per-feature fallback notice (V22): by the time a handler runs, the
+        /// dangling assignment it would have keyed on is already gone.
         /// </summary>
         private static void RepairFeatureAssignments(AiSettings settings)
         {
             var assignments = settings.FeatureAgents;
-            assignments.Chat = RepairedAssignment(settings, assignments.Chat);
-            assignments.TextToSql = RepairedAssignment(settings, assignments.TextToSql);
-            assignments.Explain = RepairedAssignment(settings, assignments.Explain);
-            assignments.Fix = RepairedAssignment(settings, assignments.Fix);
-            assignments.Optimize = RepairedAssignment(settings, assignments.Optimize);
-            assignments.IndexSuggestions = RepairedAssignment(settings, assignments.IndexSuggestions);
-            assignments.GhostText = RepairedAssignment(settings, assignments.GhostText);
+            assignments.Chat = RepairedAssignment(settings, assignments.Chat, nameof(AiFeature.Chat));
+            assignments.TextToSql = RepairedAssignment(settings, assignments.TextToSql, nameof(AiFeature.TextToSql));
+            assignments.Explain = RepairedAssignment(settings, assignments.Explain, nameof(AiFeature.Explain));
+            assignments.Fix = RepairedAssignment(settings, assignments.Fix, nameof(AiFeature.Fix));
+            assignments.Optimize = RepairedAssignment(settings, assignments.Optimize, nameof(AiFeature.Optimize));
+            assignments.IndexSuggestions = RepairedAssignment(settings, assignments.IndexSuggestions, nameof(AiFeature.IndexSuggestions));
+            assignments.GhostText = RepairedAssignment(settings, assignments.GhostText, nameof(AiFeature.GhostText));
         }
 
-        private static string RepairedAssignment(AiSettings settings, string? id)
+        private static string RepairedAssignment(AiSettings settings, string? id, string featureName)
         {
             if (string.IsNullOrEmpty(id)) return "";
             var agent = Find(settings, id!);
-            return agent != null && IsUsable(agent) ? id! : "";
+            if (agent != null && IsUsable(agent)) return id!;
+            if (!settings.ClearedFeatureAssignments.Contains(featureName))
+                settings.ClearedFeatureAssignments.Add(featureName);
+            return "";
         }
 
         /// <summary>
@@ -212,11 +237,13 @@ namespace AkmlSql.Core.Config
         /// V14 — a pre-agents config (flat fields populated, no agent list) becomes exactly one
         /// agent named for its provider's display name, enabled, never health-tested, and active.
         /// The API key is carried across <b>verbatim</b>: unwrapping it here would fail on a
-        /// roamed profile and destroy a working key, and re-wrapping would corrupt it.
+        /// roamed profile and destroy a working key, and re-wrapping would corrupt it. A
+        /// whitespace-only <see cref="AiSettings.Provider"/> is no provider at all — migrating it
+        /// would produce a permanently unusable blank agent.
         /// </summary>
         private static void MigrateFlatProvider(AiSettings settings)
         {
-            if (settings.Agents.Count != 0 || string.IsNullOrEmpty(settings.Provider)) return;
+            if (settings.Agents.Count != 0 || string.IsNullOrWhiteSpace(settings.Provider)) return;
 
             var provider = AiProviderIds.Normalize(settings.Provider);
             var agent = new AiAgent
@@ -290,8 +317,9 @@ namespace AkmlSql.Core.Config
         /// <c>AiProviderFactory.Create</c> unchanged — the same manoeuvre
         /// <c>CreateFromFallback</c> performs with the offline fields. The mutable members
         /// (<see cref="AiSettings.Agents"/>, <see cref="AiSettings.FeatureAgents"/>,
-        /// <see cref="AiSettings.FallbackOrder"/>) are copied, not aliased: a handler mutating
-        /// the projection must never reach the cached global settings.
+        /// <see cref="AiSettings.FallbackOrder"/>) are copied, not aliased — the agent list
+        /// deep-copied element by element: a handler mutating an agent reached through the
+        /// projection must never reach the cached global settings.
         /// </summary>
         public static AiSettings Project(AiSettings global, AiAgent agent)
         {
@@ -337,7 +365,7 @@ namespace AkmlSql.Core.Config
 
                 // Agent bookkeeping stays the global's, copied so nothing is aliased.
                 ActiveAgentId = global.ActiveAgentId,
-                Agents = global.Agents != null ? new List<AiAgent>(global.Agents) : new List<AiAgent>(),
+                Agents = CopyAgents(global.Agents),
                 FallbackOrder = global.FallbackOrder != null ? new List<string>(global.FallbackOrder) : new List<string>(),
                 FeatureAgents = global.FeatureAgents != null
                     ? new FeatureAgentAssignments
@@ -351,6 +379,50 @@ namespace AkmlSql.Core.Config
                         GhostText = global.FeatureAgents.GhostText,
                     }
                     : new FeatureAgentAssignments(),
+            };
+        }
+
+        /// <summary>
+        /// A deep copy of the agent list for <see cref="Project"/>: a fresh list alone would still
+        /// alias the <see cref="AiAgent"/> elements, and a handler mutating one of them would
+        /// rewrite the cached global settings. Agents are small (and ≤ <see cref="MaxAgents"/>),
+        /// so a field-by-field copy is cheap.
+        /// </summary>
+        private static List<AiAgent> CopyAgents(List<AiAgent>? agents)
+        {
+            var copy = new List<AiAgent>(agents?.Count ?? 0);
+            if (agents == null) return copy;
+            foreach (var agent in agents)
+                copy.Add(agent == null ? null! : CopyAgent(agent));
+            return copy;
+        }
+
+        private static AiAgent CopyAgent(AiAgent agent)
+        {
+            return new AiAgent
+            {
+                Id = agent.Id,
+                Name = agent.Name,
+                Provider = agent.Provider,
+                Model = agent.Model,
+                ApiKey = agent.ApiKey,
+                Endpoint = agent.Endpoint,
+                MaxTokens = agent.MaxTokens,
+                Temperature = agent.Temperature,
+                Timeout = agent.Timeout,
+                Retries = agent.Retries,
+                Enabled = agent.Enabled,
+                CreatedUtc = agent.CreatedUtc,
+                Health = agent.Health == null
+                    ? null
+                    : new AgentHealth
+                    {
+                        Status = agent.Health.Status,
+                        CheckedUtc = agent.Health.CheckedUtc,
+                        LatencyMs = agent.Health.LatencyMs,
+                        Message = agent.Health.Message,
+                    },
+                KeyDecryptFailed = agent.KeyDecryptFailed,
             };
         }
 

@@ -190,6 +190,72 @@ namespace AkmlSql.Shell.Shared.Tests
             Assert.Equal(a.Id, controls.ActiveAgentId); // unchanged
         }
 
+        // ── The per-agent Enabled toggle (review finding) ────────────────────
+
+        [StaFact]
+        public void A_disabled_agent_can_be_re_enabled_and_saved()
+        {
+            var on = MakeAgent("On", provider: "kimi", model: "kimi-latest");
+            var off = MakeAgent("Off", provider: "kimi", model: "kimi-latest");
+            off.Enabled = false;
+            var (dialog, controls) = BuildPage(SettingsWith(on, off));
+
+            var toggle = EnabledToggle(controls);
+            Assert.True(toggle.IsChecked == true);    // bound from the active (enabled) agent
+
+            SelectAgentInList(controls, 1);
+            Assert.True(toggle.IsChecked == false);   // bound from the disabled agent
+
+            toggle.IsChecked = true;
+            var saved = dialog.GetSettings();
+
+            Assert.True(saved.Ai.Agents[1].Enabled);
+            Assert.True(saved.Ai.Enabled);   // V19 on the write path — the agent is usable again
+        }
+
+        [StaFact]
+        public void Disabling_an_agent_commits_through_save()
+        {
+            var agent = MakeAgent("On", provider: "kimi", model: "kimi-latest");
+            var (dialog, controls) = BuildPage(SettingsWith(agent));
+
+            EnabledToggle(controls).IsChecked = false;
+            var saved = dialog.GetSettings();
+
+            Assert.False(saved.Ai.Agents[0].Enabled);
+            Assert.False(saved.Ai.Enabled);   // nothing usable left
+        }
+
+        [StaFact]
+        public void Toggling_enabled_does_not_reset_health()
+        {
+            var agent = MakeAgent("Ready");
+            agent.Health = new AgentHealth { Status = AgentHealthStatus.Ready, LatencyMs = 812 };
+            var (_, controls) = BuildPage(SettingsWith(agent));
+
+            EnabledToggle(controls).IsChecked = false;
+
+            // Only provider/model/key/endpoint edits invalidate a recorded check (T086).
+            Assert.Equal(AgentHealthStatus.Ready, controls.WorkingAgents[0].Health?.Status);
+        }
+
+        [StaFact]
+        public void Set_active_is_refused_while_the_agent_is_disabled()
+        {
+            var a = MakeAgent("A");
+            var off = MakeAgent("Off", provider: "kimi", model: "kimi-latest");
+            off.Enabled = false;
+            var (_, controls) = BuildPage(SettingsWith(a, off));
+
+            SelectAgentInList(controls, 1);
+            var refusal = controls.TrySetActiveSelectedAgent();
+
+            Assert.NotNull(refusal);
+            Assert.Contains("Off", refusal);
+            Assert.Contains("disabled", refusal);
+            Assert.Equal(a.Id, controls.ActiveAgentId); // unchanged
+        }
+
         [StaFact]
         public void List_rows_show_name_provider_model_health_and_the_active_marker()
         {
@@ -462,6 +528,7 @@ namespace AkmlSql.Shell.Shared.Tests
         private static TextBox ModelBox(AiAssistanceControls controls) => GetField<TextBox>(controls, "_model");
         private static TextBox EndpointBox(AiAssistanceControls controls) => GetField<TextBox>(controls, "_endpoint");
         private static ComboBox ProviderCombo(AiAssistanceControls controls) => GetField<ComboBox>(controls, "_provider");
+        private static CheckBox EnabledToggle(AiAssistanceControls controls) => GetField<CheckBox>(controls, "_agentEnabled");
 
         private static T GetField<T>(object instance, string name) where T : class
         {

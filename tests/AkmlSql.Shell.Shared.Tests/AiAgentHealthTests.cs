@@ -186,6 +186,23 @@ namespace AkmlSql.Shell.Shared.Tests
         }
 
         [StaFact]
+        public void An_unselected_agents_undecryptable_key_reports_needsKey_from_the_first_render()
+        {
+            var good = MakeAgent("Good");
+            var bad = MakeAgent("Bad");
+            bad.ApiKey = "dpapi:" + Convert.ToBase64String(new byte[64]); // valid shape, bad HMAC
+            var (_, controls) = BuildPage(SettingsWith(good, bad));
+
+            // Bad is NEVER selected (the initial selection is the active agent) — yet its badge
+            // is already right: the flag is derived for every agent at Load (FR-053), not first
+            // derived on bind. Before the fix the badge stayed stale until the user clicked Bad.
+            Assert.Equal(good.Id, controls.SelectedAgentId);
+            Assert.True(controls.WorkingAgents[1].KeyDecryptFailed);
+            Assert.Equal(AgentHealthStatus.NeedsKey, controls.WorkingAgents[1].Health?.Status);
+            Assert.Contains(RowTexts(controls.ListView.List, 1), t => t == "⚠ Needs API key");
+        }
+
+        [StaFact]
         public void Supplying_a_key_clears_needsKey_back_to_unknown()
         {
             var keyless = MakeAgent("Kimi", provider: "kimi", model: "kimi-latest", apiKey: "");
@@ -427,6 +444,30 @@ namespace AkmlSql.Shell.Shared.Tests
                 Assert.Equal(500, health.Message.Length);
                 Assert.Contains(RowTexts(controls.ListView.List, 0),
                     t => t.StartsWith("✖ Failed", StringComparison.Ordinal));
+            });
+        }
+
+        [StaFact]
+        public async Task A_failed_test_zeroes_the_latency_of_the_previous_success()
+        {
+            // E2: latencyMs is 0 when the last check did not succeed — an earlier success's
+            // number must not stand next to a fresh failure.
+            var agent = MakeAgent("Kimi", provider: "kimi", model: "kimi-latest");
+            agent.Health = new AgentHealth { Status = AgentHealthStatus.Ready, LatencyMs = 812 };
+            var fake = new FakeRpcClientAccessor();
+            fake.Respond(MessageTypes.AiProviderTest,
+                new AiProviderTestResponse { Success = false, ErrorMessage = "boom" });
+
+            await WithRpcAsync(fake, async () =>
+            {
+                var (_, controls) = BuildPage(SettingsWith(agent));
+
+                await controls.RunProviderTestAsync();
+
+                var health = controls.WorkingAgents[0].Health;
+                Assert.NotNull(health);
+                Assert.Equal(AgentHealthStatus.Failed, health!.Status);
+                Assert.Equal(0, health.LatencyMs);
             });
         }
 

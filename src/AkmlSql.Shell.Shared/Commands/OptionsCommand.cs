@@ -92,6 +92,14 @@ namespace AkmlSql.Shell.Shared.Commands
         }
 
         /// <summary>
+        /// Test seam (spec 037 review): when set, <see cref="SaveAndNotify"/>'s
+        /// <see cref="MessageTypes.AnalysisSettingsChanged"/> notification goes through this
+        /// accessor instead of <see cref="EngineLifecycle.Manager"/>, so the notification is
+        /// assertable without a pipe or an engine. Production code never sets it.
+        /// </summary>
+        internal static IRpcClientAccessor? TestRpcAccessor { get; set; }
+
+        /// <summary>
         /// Spec 037 (US3, FR-040): the save-and-notify half of the shared path, for callers that
         /// change settings WITHOUT opening the dialog — the chat panel's agent picker persisting
         /// <c>FeatureAgents.Chat</c>. Keeping the body here means there is still exactly one
@@ -108,6 +116,14 @@ namespace AkmlSql.Shell.Shared.Commands
             try { Tabs.TabColoringManager.RepaintAllTabs(); } catch { }
 
             // T066: Notify the engine to reload its settings cache (fire-and-forget)
+            var accessor = TestRpcAccessor;
+            if (accessor != null)
+            {
+                if (accessor.IsConnected)
+                    _ = accessor.SendNotificationAsync(MessageTypes.AnalysisSettingsChanged, new { });
+                return;
+            }
+
             var client = EngineLifecycle.Manager?.Client;
             if (client != null && client.IsConnected)
             {

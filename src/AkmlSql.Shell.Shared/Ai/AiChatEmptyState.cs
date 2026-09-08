@@ -144,9 +144,11 @@ namespace AkmlSql.Shell.Shared.Ai
                 return $"{name} has no model selected.";
             if (AiAgentResolver.RequiresEndpoint(provider) && string.IsNullOrEmpty(agent.Endpoint))
                 return $"{name} needs an endpoint URL.";
-            // Provider blank/unrecognised — no dedicated FR-021 wording; the deep link still
-            // opens this agent so the user can pick a provider.
-            return NoAgentsText;
+            // Provider blank/unrecognised: FR-021's closed set has no provider wording, and an
+            // agent with no provider cannot have a usable model — the needs-model wording is
+            // this case's bucket. What it must NOT say is NoAgentsText: the deep link opens
+            // THIS agent, so "No AI agent is set up." would contradict the dialog it lands on.
+            return $"{name} has no model selected.";
         }
 
         /// <summary>

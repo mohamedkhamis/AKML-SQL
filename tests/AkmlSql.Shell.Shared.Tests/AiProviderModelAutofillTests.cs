@@ -107,10 +107,20 @@ namespace AkmlSql.Shell.Shared.Tests
                 _ = dialog.TestBuildWindowForRenderTest();
                 FindProviderCombo(dialog).SelectedIndex = index;
 
+                // Spec 037 (V19): on the write path "enabled" is derived from agent usability,
+                // not from the provider selection alone — so give the agent what its provider
+                // requires: a model (the first-party autofill already set one; local/custom
+                // providers need one typed), plus a key and an endpoint.
+                var controls = GetAiControls(dialog);
+                var modelBox = GetField<TextBox>(controls, "_model");
+                if (modelBox.Text.Length == 0) modelBox.Text = "test-model";
+                GetField<TextBox>(controls, "_apiKey").Text = "sk-test";
+                GetField<TextBox>(controls, "_endpoint").Text = "https://ai.example.com";
+
                 var saved = dialog.GetSettings();
                 Assert.True(saved.Ai.Provider == id,
                     $"Save for list index {index} wrote '{saved.Ai.Provider}', expected canonical id '{id}'.");
-                Assert.True(saved.Ai.Enabled, $"Selecting index {index} must enable AI.");
+                Assert.True(saved.Ai.Enabled, $"Selecting index {index} with a usable agent must enable AI.");
 
                 var reopened = new SettingsWindow(saved);
                 _ = reopened.TestBuildWindowForRenderTest();

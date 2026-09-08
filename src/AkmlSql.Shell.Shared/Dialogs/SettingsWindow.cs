@@ -117,6 +117,14 @@ namespace AkmlSql.Shell.Shared.Dialogs
         /// </summary>
         public string? InitialAgentId { get; set; }
 
+        /// <summary>
+        /// Test seam (spec 037 review): when set, the OK/Apply agent-validation refusal is
+        /// reported through this action instead of a modal <see cref="MessageBox"/>, so the
+        /// refusal path is exercisable without a pump-blocking dialog. Production code never
+        /// sets it.
+        /// </summary>
+        internal Action<string>? ValidationRefusalReporter { get; set; }
+
         // ─── Control references (for Load / Save) ───────────────────────────
 
         // General
@@ -1545,10 +1553,21 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
         private void OnOkClick(object sender, RoutedEventArgs e)
         {
-            // Spec 037 (US2, FR-032): OK is refused while any agent fails V1–V12. The page
-            // validates its whole working copy (a user can leave an invalid agent, select
-            // another, and press OK) and selects the offending agent before the message is
-            // shown, so the user lands where the problem is.
+            if (!ValidateAiWorkingCopyBeforeSave()) return;
+
+            SaveControlsToSettings();
+            _dialogResult = true;
+            _window?.Close();
+        }
+
+        /// <summary>
+        /// Spec 037 (US2, FR-032): the validate-first half of OK and Apply — refused while any
+        /// agent fails V1–V12. The page validates its whole working copy (a user can leave an
+        /// invalid agent, select another, and press OK) and selects the offending agent before
+        /// the message is shown, so the user lands where the problem is; the dialog stays open.
+        /// </summary>
+        private bool ValidateAiWorkingCopyBeforeSave()
+        {
             if (_pageControlsByKey.TryGetValue("AI Assistance", out var aiPageControls) &&
                 aiPageControls is AiAssistanceControls aiControls)
             {
@@ -1556,18 +1575,22 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 if (validationError != null)
                 {
                     SelectTreeLeafByPageKey("AI Assistance");
-                    MessageBox.Show(
-                        validationError,
-                        Constants.ProductName,
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Warning);
-                    return;
+                    if (ValidationRefusalReporter != null)
+                    {
+                        ValidationRefusalReporter(validationError);
+                    }
+                    else
+                    {
+                        MessageBox.Show(
+                            validationError,
+                            Constants.ProductName,
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Warning);
+                    }
+                    return false;
                 }
             }
-
-            SaveControlsToSettings();
-            _dialogResult = true;
-            _window?.Close();
+            return true;
         }
 
         private void OnCancelClick(object sender, RoutedEventArgs e)
@@ -1578,15 +1601,17 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
         private void OnApplyClick(object sender, RoutedEventArgs e)
         {
+            // Apply is OK without the close: the same validate-first gate (FR-032), then the
+            // same save-and-notify path (the AnalysisSettingsChanged notification is what keeps
+            // the engine from serving stale settings after an Apply).
+            if (!ValidateAiWorkingCopyBeforeSave()) return;
+
             SaveControlsToSettings();
             try
             {
-                ConfigManager.Save(_settings);
+                Commands.OptionsCommand.SaveAndNotify(_settings);
                 _dialogResult = true;
                 Log.Information("Settings applied via SettingsWindow");
-
-                // FR-042: Live re-render tab colors after settings change
-                try { Tabs.TabColoringManager.RepaintAllTabs(); } catch { }
             }
             catch (Exception ex)
             {

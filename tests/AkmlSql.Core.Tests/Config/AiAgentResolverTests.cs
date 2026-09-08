@@ -201,6 +201,25 @@ namespace AkmlSql.Core.Tests.Config
             Assert.Equal(global.ActiveAgentId, projected.ActiveAgentId);
         }
 
+        [Fact]
+        public void Project_DeepCopiesAgents_MutatingAProjectedAgentLeavesTheGlobalUntouched()
+        {
+            // A fresh list alone would still alias the AiAgent elements: a handler mutating an
+            // agent reached through the projection would rewrite the cached global settings.
+            var global = new AiSettings();
+            global.Agents.Add(UsableAgent("One"));
+            var agent = UsableAgent("Cloud");
+
+            var projected = AiAgentResolver.Project(global, agent);
+
+            Assert.NotSame(global.Agents[0], projected.Agents[0]);
+            projected.Agents[0].Model = "mutated";
+            projected.Agents[0].Health = new AgentHealth { Status = AgentHealthStatus.Failed };
+
+            Assert.NotEqual("mutated", global.Agents[0].Model);
+            Assert.Null(global.Agents[0].Health);
+        }
+
         // ── Active / ResolveFor (S3) ─────────────────────────────────────────
 
         [Fact]
@@ -554,6 +573,54 @@ namespace AkmlSql.Core.Tests.Config
             Assert.Equal(enabled, ai.Enabled);
         }
 
+        // ── FR-014: provider spellings canonicalised on read ────────────────
+
+        [Fact]
+        public void Normalize_LegacyAzureSpelling_Canonicalised_StaysUsable_KeepsDependents()
+        {
+            // A hand-edited agent persisted as "AzureOpenAI" would fail IsUsable's canonical-id
+            // check uncanonicalised — and lose its feature assignment (V16) and fallback entry
+            // (V17) to the repairs that key on usability.
+            var ai = new AiSettings();
+            var active = UsableAgent("Active", "ollama", "llama3.1");
+            var azure = UsableAgent("Cloud", "AzureOpenAI", "gpt-4o");
+            azure.ApiKey = "sk-azure";                              // the helper keys on the canonical id
+            azure.Endpoint = "https://my-resource.openai.azure.com/";
+            ai.Agents.Add(active);
+            ai.Agents.Add(azure);
+            ai.ActiveAgentId = active.Id;
+            ai.FeatureAgents.Chat = azure.Id;
+            ai.FallbackOrder.Add(azure.Id);
+
+            AiAgentResolver.Normalize(ai);
+
+            Assert.Equal("azure", azure.Provider);
+            Assert.True(AiAgentResolver.IsUsable(azure));
+            Assert.Equal(azure.Id, ai.FeatureAgents.Chat);          // V16 keeps it
+            Assert.Equal(new[] { azure.Id }, ai.FallbackOrder);     // V17 keeps it
+        }
+
+        [Fact]
+        public void Normalize_DisplayLmStudioSpelling_Canonicalised_StaysUsable_KeepsDependents()
+        {
+            // Same for an Options-page display spelling the alias table covers ("LMStudio").
+            var ai = new AiSettings();
+            var active = UsableAgent("Active", "ollama", "llama3.1");
+            var local = UsableAgent("Local", "LMStudio", "qwen2.5-coder");   // needs no key or endpoint
+            ai.Agents.Add(active);
+            ai.Agents.Add(local);
+            ai.ActiveAgentId = active.Id;
+            ai.FeatureAgents.Explain = local.Id;
+            ai.FallbackOrder.Add(local.Id);
+
+            AiAgentResolver.Normalize(ai);
+
+            Assert.Equal("lmstudio", local.Provider);
+            Assert.True(AiAgentResolver.IsUsable(local));
+            Assert.Equal(local.Id, ai.FeatureAgents.Explain);
+            Assert.Equal(new[] { local.Id }, ai.FallbackOrder);
+        }
+
         // ── T015: consumers of the flat fields are unaffected by migration ───
 
         [Fact]
@@ -707,6 +774,7 @@ namespace AkmlSql.Core.Tests.Config
             AiAgentResolver.Normalize(ai);
 
             Assert.Equal("", ai.FeatureAgents.GhostText);
+            Assert.Equal(new[] { "GhostText" }, ai.ClearedFeatureAssignments);
         }
 
         [Fact]
@@ -720,6 +788,25 @@ namespace AkmlSql.Core.Tests.Config
             AiAgentResolver.Normalize(ai);
 
             Assert.Equal(agent.Id, ai.FeatureAgents.Chat);
+            Assert.Empty(ai.ClearedFeatureAssignments);
+        }
+
+        [Fact]
+        public void Normalize_DanglingFeatureAssignment_RecordsTheClearedFeature_WithoutDuplicates()
+        {
+            // FR-049/V22 — the engine's once-per-feature fallback notice keys on this post-load
+            // signal: V16 clears the dangling assignment before any handler could see it.
+            var ai = new AiSettings();
+            ai.Agents.Add(UsableAgent("One"));
+            ai.FeatureAgents.Chat = "does-not-exist";
+
+            AiAgentResolver.Normalize(ai);
+
+            Assert.Equal("", ai.FeatureAgents.Chat);
+            Assert.Equal(new[] { "Chat" }, ai.ClearedFeatureAssignments);
+
+            AiAgentResolver.Normalize(ai);                          // V16 is idempotent — the signal must not grow
+            Assert.Equal(new[] { "Chat" }, ai.ClearedFeatureAssignments);
         }
 
         // ── T090: V17 — fallback order pruned ───────────────────────────────
@@ -889,6 +976,124 @@ namespace AkmlSql.Core.Tests.Config
             Assert.True(settings.Ai.Enabled);
             Assert.Contains(warnings, w => w.Contains("ai.agents[1]"));
             Assert.Contains(warnings, w => w.Contains("ai.agents[2]"));
+        }
+
+        // ── T091: V15/FR-012 — type-mismatched entries dropped by the converter ──
+
+        [Fact]
+        public void Load_TypeMismatchedAgentEntry_IsDropped_TheRestLoad_AndOtherSectionsSurvive()
+        {
+            // Before AiAgentListConverter, `42` here threw inside Deserialize<AppSettings> and
+            // Load's catch-all returned defaults — the next Save then overwrote the whole file.
+            Directory.CreateDirectory(_tempRoot);
+            var path = Path.Combine(_tempRoot, "type-mismatched-agent.json");
+            File.WriteAllText(path, """
+                {
+                  "theme": "dark",
+                  "formatter": { "enabled": false },
+                  "ai": {
+                    "agents": [
+                      { "id": "0123456789abcdef0123456789abcdef", "name": "One",
+                        "provider": "anthropic", "model": "claude-sonnet-4-6", "apiKey": "dpapi:k" },
+                      42,
+                      { "id": "fedcba9876543210fedcba9876543210", "name": "Two",
+                        "provider": "ollama", "model": "llama3.1" }
+                    ]
+                  }
+                }
+                """);
+
+            AppSettings settings = null!;
+            var warnings = CaptureWarnings(() => settings = ConfigManager.Load(path));
+
+            Assert.Equal(2, settings.Ai.Agents.Count);
+            Assert.Equal("One", settings.Ai.Agents[0].Name);
+            Assert.Equal("Two", settings.Ai.Agents[1].Name);
+            Assert.Equal("dark", settings.Theme);                   // every other section survives too
+            Assert.False(settings.Formatter.Enabled);
+            Assert.Contains(warnings, w => w.Contains("ai.agents[1]"));
+        }
+
+        [Fact]
+        public void Load_AgentEntryWithATypeMismatchedField_DropsOnlyThatEntry()
+        {
+            // "health": "x" — a scalar where the health object belongs — poisons its own entry only.
+            Directory.CreateDirectory(_tempRoot);
+            var path = Path.Combine(_tempRoot, "mismatched-health.json");
+            File.WriteAllText(path, """
+                {
+                  "ai": {
+                    "agents": [
+                      { "id": "0123456789abcdef0123456789abcdef", "name": "One",
+                        "provider": "anthropic", "model": "claude-sonnet-4-6", "apiKey": "dpapi:k" },
+                      { "id": "fedcba9876543210fedcba9876543210", "name": "Broken",
+                        "provider": "ollama", "model": "llama3.1", "health": "x" },
+                      { "id": "aaaa1111aaaa1111aaaa1111aaaa1111", "name": "Three",
+                        "provider": "ollama", "model": "llama3.1" }
+                    ]
+                  }
+                }
+                """);
+
+            AppSettings settings = null!;
+            var warnings = CaptureWarnings(() => settings = ConfigManager.Load(path));
+
+            Assert.Equal(2, settings.Ai.Agents.Count);
+            Assert.Equal("One", settings.Ai.Agents[0].Name);
+            Assert.Equal("Three", settings.Ai.Agents[1].Name);
+            Assert.Contains(warnings, w => w.Contains("ai.agents[1]"));
+        }
+
+        [Fact]
+        public void Load_NonArrayAgents_YieldsAnEmptyList_WithoutThrowing()
+        {
+            Directory.CreateDirectory(_tempRoot);
+            var path = Path.Combine(_tempRoot, "agents-not-an-array.json");
+            File.WriteAllText(path, """
+                {
+                  "ai": {
+                    "agents": 42
+                  }
+                }
+                """);
+
+            AppSettings settings = null!;
+            var ex = Record.Exception(() => settings = ConfigManager.Load(path));
+
+            Assert.Null(ex);
+            Assert.Empty(settings.Ai.Agents);                       // no flat provider either — nothing migrates
+            Assert.False(settings.Ai.Enabled);
+        }
+
+        [Fact]
+        public void AgentsConverter_RoundTrips_WhatTheTolerantReadKept()
+        {
+            // The converter composes with [JsonPropertyName("agents")] in both directions:
+            // default serialisation on write, tolerant per-entry parsing on read.
+            var ai = new AiSettings();
+            var one = UsableAgent("One");
+            one.Health = new AgentHealth
+            {
+                Status = AgentHealthStatus.Ready,
+                CheckedUtc = "2026-01-02T03:04:05Z",
+                LatencyMs = 42,
+                Message = "ok",
+            };
+            var two = UsableAgent("Two", "azure", "gpt-4o");
+            ai.Agents.Add(one);
+            ai.Agents.Add(two);
+            ai.ActiveAgentId = two.Id;
+
+            var read = JsonSerializer.Deserialize<AiSettings>(JsonSerializer.Serialize(ai))!;
+
+            Assert.Equal(2, read.Agents.Count);
+            Assert.Equal(one.Id, read.Agents[0].Id);
+            Assert.Equal("anthropic", read.Agents[0].Provider);
+            Assert.Equal(AgentHealthStatus.Ready, read.Agents[0].Health!.Status);
+            Assert.Equal(42, read.Agents[0].Health.LatencyMs);
+            Assert.Equal(two.Id, read.Agents[1].Id);
+            Assert.Equal("azure", read.Agents[1].Provider);
+            Assert.Equal(two.Id, read.ActiveAgentId);
         }
 
         // ── T091: V20 — unknown health status ───────────────────────────────

@@ -129,6 +129,22 @@ namespace AkmlSql.Core.Tests.Config
             Assert.Equal("azure", settings.Ai.Provider);           // mirrored canonical id
         }
 
+        [Fact]
+        public void WhitespaceOnlyProvider_DoesNotMigrate()
+        {
+            // A hand-edited "provider": " " is no provider at all — migrating it would produce a
+            // permanently unusable blank agent.
+            var json = File.ReadAllText(FixturePath)
+                .Replace("\"provider\": \"anthropic\"", "\"provider\": \"   \"");
+            var path = WriteTempConfig(json);
+
+            var settings = ConfigManager.Load(path);
+
+            Assert.Empty(settings.Ai.Agents);
+            Assert.Equal("", settings.Ai.ActiveAgentId);
+            Assert.False(settings.Ai.Enabled);                     // V19 — the empty state applies
+        }
+
         // ── Empty config ─────────────────────────────────────────────────────
 
         [Theory]

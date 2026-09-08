@@ -432,8 +432,10 @@ namespace AkmlSql.Shell.Shared.Ai
 
         /// <summary>
         /// The change-detection signature: agent count, active id, chat assignment, and each
-        /// agent's id + can-answer bit. Anything not in it (a rename, a slider value) changes
-        /// nothing the panel renders, so it rightly costs no re-render.
+        /// agent's id + name + can-answer bit. The name rides along because the greeting and the
+        /// picker both render it (FR-037) — a rename must re-render without a panel rebuild.
+        /// Anything not in it (a slider value, a reassigned key) changes nothing the panel
+        /// renders, so it rightly costs no re-render.
         /// </summary>
         private static string ComputeSignature(AiSettings ai)
         {
@@ -447,6 +449,8 @@ namespace AkmlSql.Shell.Shared.Ai
                 foreach (var agent in agents)
                 {
                     sb.Append(agent?.Id ?? string.Empty)
+                      .Append('|')
+                      .Append(agent?.Name ?? string.Empty)
                       .Append(AiChatEmptyState.CanAnswer(agent) ? '1' : '0')
                       .Append(';');
                 }
@@ -622,9 +626,11 @@ namespace AkmlSql.Shell.Shared.Ai
         /// <summary>
         /// Spec 037 (US3, FR-041): the picker's trailing "Add agent…" entry opens Options on the
         /// AI Assistance page (no agent preselected) via the same shared route as the onboarding
-        /// card; when the dialog saved a new agent, that agent becomes the picker's selection —
-        /// persisted like any other selection (FR-040). A cancel simply re-syncs the picker to
-        /// the resolved agent.
+        /// card; when the dialog saved a new agent AND that agent can answer, it becomes the
+        /// picker's selection — persisted like any other selection (FR-040). A still-blank new
+        /// agent is never auto-selected: pinning <c>FeatureAgents.Chat</c> to an unusable id
+        /// would fire the "can no longer answer" notice on the next normalised load, seconds
+        /// after adding. A cancel simply re-syncs the picker to the resolved agent.
         /// </summary>
         private void OnChatAgentAddRequested()
         {
@@ -642,7 +648,7 @@ namespace AkmlSql.Shell.Shared.Ai
 
                 ShowOptionsRoute("AI Assistance", null);
 
-                string? newAgentId = null;
+                AiAgent? added = null;
                 var after = LoadSettings().Ai.Agents;
                 if (after != null)
                 {
@@ -650,15 +656,22 @@ namespace AkmlSql.Shell.Shared.Ai
                     {
                         if (agent?.Id != null && !before.Contains(agent.Id))
                         {
-                            newAgentId = agent.Id;
+                            added = agent;
                             break;
                         }
                     }
                 }
 
-                if (newAgentId != null)
+                if (added != null && AiChatEmptyState.CanAnswer(added))
                 {
-                    OnChatAgentSelected(newAgentId);   // persists + refreshes
+                    OnChatAgentSelected(added.Id);   // persists + refreshes
+                }
+                else if (added != null)
+                {
+                    // Added but cannot answer yet (no provider/model/key): leave the picker on
+                    // the resolved agent. The agent count changed the signature, so go through
+                    // the refresh — it re-renders and keeps _configSignature honest.
+                    RefreshConfiguration(forceRefresh: true);
                 }
                 else
                 {
@@ -846,7 +859,7 @@ namespace AkmlSql.Shell.Shared.Ai
 
                 var response = await manager.Client.SendRequestAsync<AiChatResponse, AiChatRequest>(
                     MessageTypes.AiChat, request,
-                    timeoutMs: AiIpcTimeouts.ForAiRequestMs(ConfigManager.Load()));
+                    timeoutMs: AiIpcTimeouts.ForAiRequestMs(ConfigManager.Load(), AiFeature.Chat));
 
                 if (response.Success && !string.IsNullOrEmpty(response.Response))
                 {
@@ -878,7 +891,7 @@ namespace AkmlSql.Shell.Shared.Ai
             catch (Exception ex)
             {
                 Log.Error(ex, "AiChatPanel: failed to send message");
-                AddLiveFailureMessage(AiIpcTimeouts.DescribeFailure(ex, ConfigManager.Load()),
+                AddLiveFailureMessage(AiIpcTimeouts.DescribeFailure(ex, ConfigManager.Load(), AiFeature.Chat),
                     expectedAgentName, expectedAgentId);
             }
             finally

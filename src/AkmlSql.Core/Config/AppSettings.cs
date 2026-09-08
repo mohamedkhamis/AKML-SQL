@@ -1269,9 +1269,11 @@ namespace AkmlSql.Core.Config
         /// <summary>
         /// Spec 037 (data-model E5) — the saved AI agents, 0 … 20 (V12). List order is display
         /// order. When empty, the flat fields above are the whole configuration (pre-migration
-        /// shape, rescued by V14 on load).
+        /// shape, rescued by V14 on load). Read through <see cref="AiAgentListConverter"/> so one
+        /// malformed entry is dropped with a warning instead of failing the whole load (V15/FR-012).
         /// </summary>
         [JsonPropertyName("agents")]
+        [JsonConverter(typeof(AiAgentListConverter))]
         public List<AiAgent> Agents { get; set; } = new();
 
         /// <summary>
@@ -1288,6 +1290,17 @@ namespace AkmlSql.Core.Config
         /// <summary>Spec 037 (data-model E5) — agent ids tried in order when the selected agent fails.</summary>
         [JsonPropertyName("fallbackOrder")]
         public List<string> FallbackOrder { get; set; } = new();
+
+        /// <summary>
+        /// Spec 037 (FR-049/V22) — the features whose agent assignment V16 cleared on the last
+        /// load because it named no usable agent, as <see cref="AiFeature"/> names ("Chat", …).
+        /// Never serialised; populated by <c>AiAgentResolver.Normalize</c> and never consumed by
+        /// Core. This is the post-load signal for the engine's once-per-feature fallback notice:
+        /// V16 clears the dangling assignment before any handler can see it, so the notice keys
+        /// on this list instead.
+        /// </summary>
+        [JsonIgnore]
+        public List<string> ClearedFeatureAssignments { get; } = new();
     }
 
     /// <summary>

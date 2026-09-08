@@ -23,6 +23,22 @@ namespace AkmlSql.Shell.Shared.Ai
         }
 
         /// <summary>
+        /// Spec 037 (FR-048): as <see cref="ForAiRequestMs(AppSettings)"/>, but keyed to the agent
+        /// that will actually ANSWER <paramref name="feature"/> — the engine serves each feature
+        /// from its resolved agent with that agent's timeout, so a shell budget read from the
+        /// flat <see cref="AiSettings.Timeout"/> (the ACTIVE agent's mirror) can cancel a slower
+        /// assigned agent mid-generation. Falls back to the flat value when no agent resolves.
+        /// </summary>
+        public static int ForAiRequestMs(AppSettings? settings, AiFeature feature)
+        {
+            var ai = settings?.Ai;
+            var resolved = ai != null ? AiAgentResolver.ResolveFor(ai, feature) : null;
+            var providerSec = resolved?.Timeout ?? ai?.Timeout ?? 0;
+            if (providerSec <= 0) providerSec = DefaultProviderTimeoutSec;
+            return (providerSec + MarginSec) * 1000;
+        }
+
+        /// <summary>
         /// User-facing text for a failed AI request. A timed-out IPC wait surfaces as the bare
         /// "A task was canceled" — useless to the user; say it timed out, for how long, and
         /// where to look. Provider errors (quota, key, model) keep their original message.
@@ -32,6 +48,22 @@ namespace AkmlSql.Shell.Shared.Ai
             if (ex is System.OperationCanceledException)
             {
                 var waitedSec = ForAiRequestMs(settings) / 1000;
+                return $"The AI request timed out after {waitedSec}s — the provider may be slow or rate-limited. " +
+                       "See AKML SQL → View Logs for the provider's last error.";
+            }
+            return ex.Message;
+        }
+
+        /// <summary>
+        /// Spec 037 (FR-048): as <see cref="DescribeFailure(System.Exception, AppSettings)"/>, but
+        /// the quoted wait is the per-feature budget (<see cref="ForAiRequestMs(AppSettings, AiFeature)"/>),
+        /// so the message names the duration the shell actually waited.
+        /// </summary>
+        public static string DescribeFailure(System.Exception ex, AppSettings? settings, AiFeature feature)
+        {
+            if (ex is System.OperationCanceledException)
+            {
+                var waitedSec = ForAiRequestMs(settings, feature) / 1000;
                 return $"The AI request timed out after {waitedSec}s — the provider may be slow or rate-limited. " +
                        "See AKML SQL → View Logs for the provider's last error.";
             }

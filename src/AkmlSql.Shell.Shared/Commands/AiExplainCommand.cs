@@ -126,7 +126,7 @@ namespace AkmlSql.Shell.Shared.Commands
 
                 var response = await manager.Client.SendRequestAsync<AiExplainResponse, AiExplainRequest>(
                     MessageTypes.AiExplain, request,
-                    timeoutMs: Ai.AiIpcTimeouts.ForAiRequestMs(ConfigManager.Load()));
+                    timeoutMs: Ai.AiIpcTimeouts.ForAiRequestMs(ConfigManager.Load(), AiFeature.Explain));
 
                 if (!response.Success)
                 {

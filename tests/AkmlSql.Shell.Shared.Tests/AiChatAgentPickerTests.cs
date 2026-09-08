@@ -339,6 +339,43 @@ namespace AkmlSql.Shell.Shared.Tests
             });
         }
 
+        [StaFact]
+        public void A_still_blank_agent_added_via_the_picker_does_not_become_the_selection()
+        {
+            var settings = new AppSettings();
+            var active = UsableAgent("Claude (work)");
+            settings.Ai.Agents.Add(active);
+            settings.Ai.ActiveAgentId = active.Id;
+            var blank = new AiAgent   // added in Options but saved unconfigured
+            {
+                Id = Guid.NewGuid().ToString("N"),
+                Name = "Agent 1",
+                Enabled = true,
+            };
+
+            WithSeams(settings, (page, agentId) =>
+            {
+                settings.Ai.Agents.Add(blank);
+                return true;
+            }, () =>
+            {
+                var panel = new AiChatPanel();
+                var combo = FindPickerCombo(panel);
+
+                combo.SelectedIndex = combo.Items.Count - 1;   // "Add agent…"
+
+                // The new agent cannot answer — chat must NOT be pinned to it: the next
+                // normalised load would clear the assignment and fire the "can no longer
+                // answer" notice seconds after the add.
+                Assert.Equal(string.Empty, settings.Ai.FeatureAgents.Chat);
+                Assert.Equal(active.Id, settings.Ai.ActiveAgentId);
+                // The picker re-syncs to the resolved agent and never lists the unusable one.
+                Assert.Equal("Claude (work)", combo.SelectedItem);
+                Assert.Equal(new[] { "Claude (work)", AiAgentPicker.AddAgentDisplayText }, ComboItems(panel));
+                Assert.Empty(FindNotices(panel));
+            });
+        }
+
         // ── T095: FR-049 — a cleared assignment is stated once, in the panel ─
 
         [StaFact]

@@ -139,7 +139,7 @@ namespace AkmlSql.Shell.Shared.Commands
 
                 var response = await manager.Client.SendRequestAsync<AiOptimizeResponse, AiOptimizeRequest>(
                     MessageTypes.AiOptimize, request,
-                    timeoutMs: Ai.AiIpcTimeouts.ForAiRequestMs(AkmlSql.Core.Config.ConfigManager.Load()));
+                    timeoutMs: Ai.AiIpcTimeouts.ForAiRequestMs(AkmlSql.Core.Config.ConfigManager.Load(), AkmlSql.Core.Config.AiFeature.Optimize));
 
                 if (!response.Success)
                 {

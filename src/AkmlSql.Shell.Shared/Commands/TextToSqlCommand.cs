@@ -147,7 +147,7 @@ namespace AkmlSql.Shell.Shared.Commands
 
                 var response = await manager.Client.SendRequestAsync<AiTextToSqlResponse, AiTextToSqlRequest>(
                     MessageTypes.AiTextToSql, request,
-                    timeoutMs: Ai.AiIpcTimeouts.ForAiRequestMs(ConfigManager.Load()));
+                    timeoutMs: Ai.AiIpcTimeouts.ForAiRequestMs(ConfigManager.Load(), AiFeature.TextToSql));
 
                 if (!response.Success || string.IsNullOrEmpty(response.GeneratedSql))
                 {

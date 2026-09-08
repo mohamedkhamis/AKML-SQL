@@ -133,6 +133,28 @@ public sealed class AiPipelineServices : IDisposable
         }
     }
 
+    // ───────── Privacy-consent predicate (shared with AiHandlerBase's gate) ─────────
+
+    /// <summary>The local providers the consent gate allow-lists — consent is about data
+    /// leaving the machine. Shared by <c>AiHandlerBase.CheckPrivacyConsent</c> and the
+    /// fallback chain below.</summary>
+    private static readonly HashSet<string> LocalProviders =
+        new(StringComparer.OrdinalIgnoreCase) { AiProviderIds.Ollama, AiProviderIds.LmStudio };
+
+    /// <summary>
+    /// The predicate behind the privacy-consent gate: <c>true</c> when calling the provider
+    /// named by <paramref name="settings"/> would send data somewhere the user has not
+    /// consented to. Evaluated against the ATTEMPTING agent's projected settings, so consent is
+    /// always judged against the provider that will actually be called
+    /// (contracts/agent-resolution.md Part 1) — including fallback-chain candidates.
+    /// </summary>
+    internal static bool PrivacyConsentBlocks(AiSettings settings)
+    {
+        if (!settings.PrivacyConsentRequired) return false;
+        var provider = settings.Provider?.Trim() ?? string.Empty;
+        return !LocalProviders.Contains(provider);
+    }
+
     // ───────── Primary → fallback chain → offline last resort (spec 037 US4, T072/T073) ─────────
 
     /// <summary>The per-attempt retry budget (contract invariant 2): retries must never make one
@@ -145,12 +167,14 @@ public sealed class AiPipelineServices : IDisposable
     /// <summary>
     /// Calls the selected agent's provider with retry-on-rate-limit. On transient failure
     /// (anything other than cancellation / consent) walks <see cref="AiSettings.FallbackOrder"/>
-    /// in order — usable agents only, the selected agent never in its own chain — and falls
-    /// through to the configured offline provider last (FR-050/FR-051). The chain stops at the
-    /// first success and returns the answering agent's name (FR-052) plus whether a fallback
-    /// fired. Lifted from <c>AiRequestHandler.ExecuteWithFallbackAsync</c>; the chain is "a list
-    /// in front of the existing single fallback" (research R5), so a configuration that sets
-    /// only <see cref="AiSettings.OfflineProvider"/> behaves exactly as it always has.
+    /// in order — usable agents only, the selected agent never in its own chain, and any
+    /// candidate whose provider the user has not consented to skipped without being called —
+    /// and falls through to the configured offline provider last (FR-050/FR-051). The chain
+    /// stops at the first success and returns the answering agent's name (FR-052) plus whether
+    /// a fallback fired. Lifted from <c>AiRequestHandler.ExecuteWithFallbackAsync</c>; the
+    /// chain is "a list in front of the existing single fallback" (research R5), so a
+    /// configuration that sets only <see cref="AiSettings.OfflineProvider"/> behaves exactly as
+    /// it always has.
     /// </summary>
     /// <param name="settings">The selected agent's PROJECTED settings (the base handler has
     /// already resolved and projected). Its <c>Agents</c>/<c>FallbackOrder</c> copies drive the
@@ -186,8 +210,13 @@ public sealed class AiPipelineServices : IDisposable
         // the two exception-type clauses are preserved verbatim at every attempt: cancellation
         // and consent never trigger a fallback.
         var hasFallback = chain.Count > 0 || !string.IsNullOrWhiteSpace(settings.OfflineProvider);
-        var attemptFailures = new List<string>();
+        // FR-057: the all-fail aggregate names every attempt in order (the primary by its agent
+        // name when it has one). FR-058: the per-attempt text surfaced to the user is the
+        // FR-014 taxonomy message, never the raw provider payload — the raw exception rides
+        // along inside the inner exception and is attached to the log event.
+        var attemptNames = new List<string>();
         var attemptExceptions = new List<Exception>();
+        var primaryName = !string.IsNullOrEmpty(selectedAgent?.Name) ? selectedAgent!.Name : null;
 
         try
         {
@@ -202,16 +231,28 @@ public sealed class AiPipelineServices : IDisposable
             ex is not PrivacyConsentRequiredException &&
             hasFallback)
         {
-            Log.Warning(ex, "Primary AI provider failed, walking the fallback chain");
-            attemptFailures.Add($"Primary provider failed: {ex.Message}");
-            attemptExceptions.Add(ex);
+            attemptNames.Add(primaryName ?? "primary provider");
+            RecordAttemptFailure(ex, settings,
+                primaryName != null ? $"Agent '{primaryName}'" : "Primary provider",
+                "walking the fallback chain", attemptExceptions);
         }
 
         foreach (var candidate in chain)
         {
+            var projected = AiAgentResolver.Project(settings, candidate);
+            // Consent is evaluated against the provider that will actually be called — a chain
+            // candidate the user has not consented to is SKIPPED (never called), and the chain
+            // walks on. The user already made the request against a consented primary; the
+            // chain must not leak their data to a non-consented cloud.
+            if (PrivacyConsentBlocks(projected))
+            {
+                Log.Warning(
+                    "AI fallback chain: skipping agent {AgentName} — privacy consent has not been granted for provider {Provider}",
+                    candidate.Name, candidate.Provider);
+                continue;
+            }
             try
             {
-                var projected = AiAgentResolver.Project(settings, candidate);
                 using var client = ClientFactory(projected);
                 var response = await ExecuteWithBackoffAsync(
                     () => client.GetResponseAsync(messages, options, ct),
@@ -223,9 +264,9 @@ public sealed class AiPipelineServices : IDisposable
                 ex is not OperationCanceledException &&
                 ex is not PrivacyConsentRequiredException)
             {
-                Log.Warning(ex, "AI fallback chain: agent {AgentName} failed, trying the next candidate", candidate.Name);
-                attemptFailures.Add($"Fallback agent {candidate.Name} failed: {ex.Message}");
-                attemptExceptions.Add(ex);
+                attemptNames.Add(candidate.Name);
+                RecordAttemptFailure(ex, projected, $"Fallback agent '{candidate.Name}'",
+                    "trying the next candidate", attemptExceptions);
             }
         }
 
@@ -239,15 +280,46 @@ public sealed class AiPipelineServices : IDisposable
                 var response = await fallbackClient.GetResponseAsync(messages, options, ct);
                 return (response, true, AiProviderIds.DisplayName(settings.OfflineProvider));
             }
-            catch (Exception fallbackEx)
+            catch (Exception fallbackEx) when (
+                fallbackEx is not OperationCanceledException &&
+                fallbackEx is not PrivacyConsentRequiredException)
             {
-                Log.Error(fallbackEx, "Offline fallback provider also failed");
-                attemptFailures.Add($"Fallback also failed: {fallbackEx.Message}");
-                attemptExceptions.Add(fallbackEx);
+                var offlineName = AiProviderIds.DisplayName(settings.OfflineProvider);
+                attemptNames.Add(offlineName);
+                var sanitized = AiFailureTaxonomy.Map(fallbackEx,
+                    settings.OfflineProvider ?? "", settings.OfflineModel ?? "",
+                    settings.OfflineEndpoint, settings.Timeout, "The AI request");
+                Log.Error(fallbackEx, "Offline fallback provider also failed: {SanitizedFailure}", sanitized);
+                attemptExceptions.Add(new Exception($"Offline fallback '{offlineName}' failed: {sanitized}", fallbackEx));
             }
         }
 
-        throw new AggregateException(string.Join(". ", attemptFailures), attemptExceptions);
+        // AggregateException.Message re-appends each inner exception's message, so the summary
+        // stays concise (how many were tried, who, in what order) and the per-attempt detail
+        // lives on the inner exceptions — otherwise the chat panel's ErrorMessage shows every
+        // attempt's text twice.
+        var summary = attemptNames.Count == 1
+            ? $"The AI request failed — {attemptNames[0]} was the only provider available."
+            : $"All {attemptNames.Count} AI providers failed (tried in order: {string.Join(" → ", attemptNames)}).";
+        throw new AggregateException(summary, attemptExceptions);
+    }
+
+    /// <summary>
+    /// FR-058: maps one failed attempt to the FR-014 taxonomy (<see cref="AiFailureTaxonomy"/>)
+    /// for the user-facing aggregate and the "failed" log line. The recorded inner exception
+    /// carries the SANITIZED text as its message with the raw exception preserved inside (and
+    /// on the log event) for diagnosis — key material in a provider's raw payload never reaches
+    /// a user-facing string.
+    /// </summary>
+    private static void RecordAttemptFailure(
+        Exception ex, AiSettings attempted, string agentLabel, string nextStep, List<Exception> attemptExceptions)
+    {
+        var sanitized = AiFailureTaxonomy.Map(ex,
+            attempted.Provider ?? "", attempted.Model ?? "", attempted.Endpoint,
+            attempted.Timeout, "The AI request");
+        Log.Warning(ex, "AI fallback chain: {AgentLabel} failed: {SanitizedFailure} — {NextStep}",
+            agentLabel, sanitized, nextStep);
+        attemptExceptions.Add(new Exception($"{agentLabel} failed: {sanitized}", ex));
     }
 
     // ───────── Generated-SQL validation (lifted from AiRequestHandler.ValidateGeneratedSql) ─────────

@@ -190,6 +190,21 @@ namespace AkmlSql.Shell.Shared.Tests
             Assert.Equal(first.Id, agentId);
         }
 
+        [Fact]
+        public void Reason_when_the_agent_has_no_provider_uses_the_needs_model_wording_and_names_it()
+        {
+            // FR-021's closed set has no provider wording; an agent with no provider cannot
+            // have a usable model, so the needs-model bucket applies. What it must NOT say is
+            // "No AI agent is set up." — the card's button deep-links THIS existing agent.
+            var agent = UnusableAgent("Claude (work)", provider: "",
+                model: "claude-sonnet-4-6", apiKey: "", endpoint: "");
+
+            var (text, agentId) = AiChatEmptyState.DetectReason(AiWith(agent));
+
+            Assert.Equal("Claude (work) has no model selected.", text);
+            Assert.Equal(agent.Id, agentId);
+        }
+
         // ── T020: the refresh is a no-op when the signature is unchanged ──────
 
         [StaFact]
@@ -232,6 +247,39 @@ namespace AkmlSql.Shell.Shared.Tests
 
                 Assert.Same(greeting, Assert.Single(FindAll<TextBox>(panel),
                     tb => AutomationProperties.GetName(tb) == "Message text"));
+            });
+        }
+
+        [StaFact]
+        public void Renaming_the_chat_agent_re_renders_the_greeting_and_picker_without_a_rebuild()
+        {
+            var settings = new AppSettings();
+            var agent = UsableAgent("Claude (work)");
+            settings.Ai.Agents.Add(agent);
+            settings.Ai.ActiveAgentId = agent.Id;
+
+            WithSettings(settings, () =>
+            {
+                var panel = new AiChatPanel();
+                var greeting = Assert.Single(FindAll<TextBox>(panel),
+                    tb => AutomationProperties.GetName(tb) == "Message text");
+                Assert.Contains("Claude (work)", greeting.Text);
+
+                // The user renames the agent in Options and saves; the next refresh must pick
+                // the new name up (FR-037) — the name is part of the signature now, so this is
+                // a re-render of the SAME panel, not a rebuild.
+                agent.Name = "Claude K2";
+                panel.RefreshConfiguration(forceRefresh: true);
+
+                var renamed = Assert.Single(FindAll<TextBox>(panel),
+                    tb => AutomationProperties.GetName(tb) == "Message text");
+                Assert.NotSame(greeting, renamed);
+                Assert.Contains("Claude K2", renamed.Text);
+                Assert.DoesNotContain("Claude (work)", renamed.Text);
+
+                var picker = Assert.Single(FindAll<ComboBox>(panel),
+                    c => AutomationProperties.GetName(c) == AiAgentPicker.ComboAutomationName);
+                Assert.Equal("Claude K2", picker.SelectedItem);
             });
         }
 

@@ -18,6 +18,9 @@ namespace AkmlSql.Shell.Shared.Tests
         /// <summary>Every request sent, in order (message type + payload), for assertions.</summary>
         public List<(int MessageType, object? Payload)> Requests { get; } = new List<(int, object?)>();
 
+        /// <summary>Every notification sent, in order (message type + payload), for assertions.</summary>
+        public List<(int MessageType, object? Payload)> Notifications { get; } = new List<(int, object?)>();
+
         private readonly Dictionary<int, Func<object?, object?>> _handlers =
             new Dictionary<int, Func<object?, object?>>();
 
@@ -44,6 +47,12 @@ namespace AkmlSql.Shell.Shared.Tests
             var result = handler(payload);
             if (result is Exception ex) throw ex;
             return Task.FromResult((T)result!);
+        }
+
+        public Task SendNotificationAsync<TPayload>(int messageType, TPayload payload, CancellationToken ct = default)
+        {
+            Notifications.Add((messageType, payload));
+            return Task.CompletedTask;
         }
     }
 }

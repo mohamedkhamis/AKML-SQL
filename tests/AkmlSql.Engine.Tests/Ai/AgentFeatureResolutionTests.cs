@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
@@ -347,13 +348,20 @@ public class AgentFeatureResolutionTests
     }
 
     [Fact]
-    public async Task A_deleted_assigned_agent_falls_back_to_the_active_agent_and_notices_once_per_feature()
+    public async Task A_cleared_assignment_falls_back_to_the_active_agent_and_notices_once_per_feature()
     {
         var agents = new FeatureAgents();
         var settings = SettingsWith(agents, assignEveryFeature: false);
         var dangling = new string('d', 32);
         settings.FeatureAgents.Chat = dangling;   // no agent with this id exists
         settings.FeatureAgents.Fix = dangling;
+        // Production shape: settings arrive NORMALIZED — V16 has already cleared the dangling
+        // assignments and recorded the features as the post-load signal for the V22 notice.
+        AiAgentResolver.Normalize(settings);
+        Assert.Equal("", settings.FeatureAgents.Chat);
+        Assert.Equal("", settings.FeatureAgents.Fix);
+        Assert.Contains(nameof(AiFeature.Chat), settings.ClearedFeatureAssignments);
+        Assert.Contains(nameof(AiFeature.Fix), settings.ClearedFeatureAssignments);
         var factory = new RecordingFactory();
         var svcs = ServicesFor(settings, factory);
 
@@ -365,7 +373,7 @@ public class AgentFeatureResolutionTests
             // FR-049: two requests for the SAME feature — the active agent serves both…
             var first = await RunAsync(AiFeature.Chat, svcs);
             var second = await RunAsync(AiFeature.Chat, svcs);
-            // …and a DIFFERENT feature with the same dangling assignment gets its own notice.
+            // …and a DIFFERENT feature with a cleared assignment gets its own notice.
             var fix = await RunAsync(AiFeature.Fix, svcs);
 
             Assert.True(first.Success, first.Error);
@@ -396,6 +404,10 @@ public class AgentFeatureResolutionTests
         var settings = SettingsWith(agents, assignEveryFeature: false);
         agents.Chat.Enabled = false;              // present but disabled ≡ absent (S1)
         settings.FeatureAgents.Chat = agents.Chat.Id;
+        // Production shape: Normalize clears the disabled agent's assignment (V16) and records it.
+        AiAgentResolver.Normalize(settings);
+        Assert.Equal("", settings.FeatureAgents.Chat);
+        Assert.Contains(nameof(AiFeature.Chat), settings.ClearedFeatureAssignments);
         var factory = new RecordingFactory();
         var svcs = ServicesFor(settings, factory);
 
@@ -416,5 +428,122 @@ public class AgentFeatureResolutionTests
 
         Assert.All(factory.Constructed, c => Assert.Equal((agents.Active.Provider, agents.Active.Model), c));
         Assert.Single(FallbackNotices(sink));   // one notice across both requests (V22)
+    }
+
+    [Fact]
+    public async Task A_dangling_assignment_in_unnormalized_settings_still_notices_once_per_feature()
+    {
+        // Legacy signal: a host may hand the handler settings that never went through
+        // Normalize (tests, a caller that assembled them by hand) — the dangling assigned id
+        // is still present, and the notice keys on it directly.
+        var agents = new FeatureAgents();
+        var settings = SettingsWith(agents, assignEveryFeature: false);
+        settings.FeatureAgents.Chat = new string('d', 32);   // no agent with this id exists
+        var factory = new RecordingFactory();
+        var svcs = ServicesFor(settings, factory);
+
+        var sink = new ListSink();
+        var previous = Log.Logger;
+        Log.Logger = new LoggerConfiguration().MinimumLevel.Verbose().WriteTo.Sink(sink).CreateLogger();
+        try
+        {
+            var first = await RunAsync(AiFeature.Chat, svcs);
+            var second = await RunAsync(AiFeature.Chat, svcs);
+            Assert.True(first.Success, first.Error);
+            Assert.True(second.Success, second.Error);
+        }
+        finally
+        {
+            Log.Logger = previous;
+        }
+
+        Assert.All(factory.Constructed, c => Assert.Equal((agents.Active.Provider, agents.Active.Model), c));
+        Assert.Single(FallbackNotices(sink));
+    }
+
+    [Fact]
+    public async Task A_consent_killed_request_does_not_burn_the_once_per_feature_notice()
+    {
+        var agents = new FeatureAgents();
+        var settings = SettingsWith(agents, assignEveryFeature: false);
+        settings.FeatureAgents.Chat = new string('d', 32);
+        settings.ActiveAgentId = agents.Chat.Id;   // the fallback target is CLOUD (anthropic)
+        settings.PrivacyConsentRequired = true;     // consent withheld
+        AiAgentResolver.Normalize(settings);
+        var factory = new RecordingFactory();
+        var svcs = ServicesFor(settings, factory);
+
+        var sink = new ListSink();
+        var previous = Log.Logger;
+        Log.Logger = new LoggerConfiguration().MinimumLevel.Verbose().WriteTo.Sink(sink).CreateLogger();
+        try
+        {
+            // The consent gate kills the request BEFORE the notice…
+            var blocked = await RunAsync(AiFeature.Chat, svcs);
+            Assert.False(blocked.Success);
+            Assert.StartsWith("CONSENT_REQUIRED:", blocked.Error);
+            Assert.Empty(factory.Constructed);
+            Assert.Empty(FallbackNotices(sink));
+
+            // …so the flag is not burned: once consent is granted the notice still fires, once.
+            settings.PrivacyConsentRequired = false;
+            var allowed1 = await RunAsync(AiFeature.Chat, svcs);
+            var allowed2 = await RunAsync(AiFeature.Chat, svcs);
+            Assert.True(allowed1.Success, allowed1.Error);
+            Assert.True(allowed2.Success, allowed2.Error);
+        }
+        finally
+        {
+            Log.Logger = previous;
+        }
+
+        Assert.Single(FallbackNotices(sink));
+    }
+
+    [Fact]
+    public async Task When_no_active_agent_is_usable_the_notice_says_no_fallback_is_available()
+    {
+        var settings = new AiSettings
+        {
+            PrivacyConsentRequired = false,
+            FeatureAgents = { Chat = new string('d', 32) },
+        };
+        AiAgentResolver.Normalize(settings);   // V16 clears + records; V19: Enabled = false
+        var factory = new RecordingFactory();
+        var svcs = ServicesFor(settings, factory);
+
+        var sink = new ListSink();
+        var previous = Log.Logger;
+        Log.Logger = new LoggerConfiguration().MinimumLevel.Verbose().WriteTo.Sink(sink).CreateLogger();
+        try
+        {
+            var (success, error, _) = await RunAsync(AiFeature.Chat, svcs);
+            Assert.False(success);
+            Assert.Equal("AI assistance is disabled", error);
+        }
+        finally
+        {
+            Log.Logger = previous;
+        }
+
+        // The assigned agent is unusable AND there is no active agent to fall back to — the
+        // log must say so instead of naming a fallback that does not exist.
+        List<LogEvent> events;
+        lock (sink.Events) events = sink.Events.ToList();
+        Assert.Single(events, e => e.RenderMessage().Contains("no fallback is available"));
+        Assert.DoesNotContain(events, e => e.RenderMessage().Contains("falling back to the active agent"));
+    }
+
+    [Fact]
+    public void MarkAssignmentFallbackNoticed_admits_exactly_one_notice_per_feature_under_parallel_calls()
+    {
+        var svcs = ServicesFor(new AiSettings(), new RecordingFactory());
+        var admitted = new ConcurrentBag<bool>();
+        Parallel.For(0, 64, _ => admitted.Add(svcs.MarkAssignmentFallbackNoticed(AiFeature.Chat)));
+
+        Assert.Equal(1, admitted.Count(first => first));
+        // A different feature gets its own single admission.
+        Assert.True(svcs.MarkAssignmentFallbackNoticed(AiFeature.Fix));
+        Assert.False(svcs.MarkAssignmentFallbackNoticed(AiFeature.Fix));
     }
 }

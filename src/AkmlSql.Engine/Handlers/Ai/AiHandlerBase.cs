@@ -71,11 +71,13 @@ public abstract class AiHandlerBase<TRequest, TResponse> : IRpcRequestHandler<TR
             // unprojected globals, whose Enabled is false (V19), so the handlers' existing
             // "AI assistance is disabled" guard fires with no new error path.
             resolvedAgent = AiAgentResolver.ResolveFor(globalSettings, Feature);
-            NoteAssignedAgentFallback(globalSettings, resolvedAgent);
             settings = resolvedAgent == null
                 ? globalSettings
                 : AiAgentResolver.Project(globalSettings, resolvedAgent);
             CheckPrivacyConsent(settings);
+            // AFTER the consent gate: a request killed by consent must not burn the
+            // once-per-feature notice flag.
+            NoteAssignedAgentFallback(globalSettings, resolvedAgent);
         }
         catch (PrivacyConsentRequiredException consentEx)
         {
@@ -110,29 +112,45 @@ public abstract class AiHandlerBase<TRequest, TResponse> : IRpcRequestHandler<TR
     /// FR-049 / V22: an assigned agent that is missing or unusable falls back to the active
     /// agent — logged at Information ONCE per feature per engine process (the dedupe lives in
     /// <see cref="AiPipelineServices"/>, which the registry builds once per process), never per
-    /// request. The shell repairs the dangling assignment on the next load (V16).
+    /// request. Two signals say the assignment is broken: the production one (V16 cleared the
+    /// dangling assignment on load and recorded the feature in
+    /// <see cref="AiSettings.ClearedFeatureAssignments"/>) and the legacy one (a dangling
+    /// assigned id still present — settings that never went through <c>Normalize</c>, e.g. a
+    /// test host). When no active agent is usable either, the log says so instead of naming a
+    /// fallback that does not exist.
     /// </summary>
     private void NoteAssignedAgentFallback(AiSettings settings, AiAgent? resolvedAgent)
     {
         var assignedId = AiAgentResolver.AssignedIdFor(settings, Feature);
-        if (string.IsNullOrEmpty(assignedId)) return;
-        if (resolvedAgent != null && string.Equals(resolvedAgent.Id, assignedId, StringComparison.Ordinal)) return;
+        if (!string.IsNullOrEmpty(assignedId) && resolvedAgent != null
+            && string.Equals(resolvedAgent.Id, assignedId, StringComparison.Ordinal))
+            return;   // the assigned agent itself is serving — nothing to notice
+        var clearedOnLoad = settings.ClearedFeatureAssignments.Contains(Feature.ToString());
+        if (string.IsNullOrEmpty(assignedId) && !clearedOnLoad) return;
         if (!Services.MarkAssignmentFallbackNoticed(Feature)) return;
-        Log.Information(
-            "{Handler}: the agent assigned to {Feature} ({AgentId}) is missing or unusable; falling back to the active agent",
-            GetType().Name, Feature, assignedId);
+
+        if (resolvedAgent != null)
+        {
+            Log.Information(
+                "{Handler}: the agent assigned to {Feature} ({AgentId}) is missing or unusable; falling back to the active agent",
+                GetType().Name, Feature, assignedId);
+        }
+        else
+        {
+            Log.Information(
+                "{Handler}: the agent assigned to {Feature} ({AgentId}) is missing or unusable and no active agent is usable; no fallback is available",
+                GetType().Name, Feature, assignedId);
+        }
     }
 
     // ───────── Privacy-consent gate (lifted from AiRequestHandler.CheckPrivacyConsent) ─────────
 
-    private static readonly HashSet<string> LocalProviders =
-        new(StringComparer.OrdinalIgnoreCase) { "ollama", "lmstudio" };
-
     private static void CheckPrivacyConsent(AiSettings settings)
     {
-        if (!settings.PrivacyConsentRequired) return;
+        // The predicate (local-provider allowlist + consent flag) is shared with the fallback
+        // chain — see AiPipelineServices.PrivacyConsentBlocks. The gate's behaviour is unchanged.
+        if (!AiPipelineServices.PrivacyConsentBlocks(settings)) return;
         var provider = settings.Provider?.Trim() ?? string.Empty;
-        if (LocalProviders.Contains(provider)) return;
         var providerDisplay = string.IsNullOrEmpty(provider) ? "your AI provider" : provider;
         throw new PrivacyConsentRequiredException(
             $"CONSENT_REQUIRED:Data will be sent to {providerDisplay}. Please confirm in settings.");

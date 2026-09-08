@@ -214,7 +214,7 @@ namespace AkmlSql.Shell.Shared.Commands
 
                 var response = await manager.Client.SendRequestAsync<AiFixResponse, AiFixRequest>(
                     MessageTypes.AiFix, request,
-                    timeoutMs: Ai.AiIpcTimeouts.ForAiRequestMs(ConfigManager.Load()));
+                    timeoutMs: Ai.AiIpcTimeouts.ForAiRequestMs(ConfigManager.Load(), AiFeature.Fix));
 
                 if (!response.Success)
                 {

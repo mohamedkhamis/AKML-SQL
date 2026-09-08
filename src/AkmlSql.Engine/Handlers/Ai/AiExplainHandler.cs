@@ -60,15 +60,16 @@ public sealed class AiExplainHandler : AiHandlerBase<AiExplainRequest, AiExplain
             MaxOutputTokens = settings.MaxTokens,
             Temperature = (float)settings.Temperature,
         };
-        var (aiResponse, usedFallback, agentName) = await Services.ExecuteWithFallbackAsync(
+        var (aiResponse, usedFallback, _) = await Services.ExecuteWithFallbackAsync(
             settings, resolvedAgent, chatMessages, options, ct);
         var responseText = aiResponse.Text ?? string.Empty;
         if (transformation.IdentifierMap.Count > 0 || transformation.LiteralMap.Count > 0)
             responseText = PrivacyTransformer.DeTransform(responseText, transformation);
 
         var (purpose, stepByStep, keyDetails, suggestions) = AiPipelineServices.ParseExplainSections(responseText);
+        // FR-052: non-chat fallback is recorded for diagnosis, not surfaced by name.
         if (usedFallback)
-            purpose = $"[Fallback agent: {agentName}] {purpose}";
+            purpose = $"[Fallback provider] {purpose}";
 
         var tokensUsed = aiResponse.Usage != null
             ? (int)((aiResponse.Usage.InputTokenCount ?? 0) + (aiResponse.Usage.OutputTokenCount ?? 0)) : 0;

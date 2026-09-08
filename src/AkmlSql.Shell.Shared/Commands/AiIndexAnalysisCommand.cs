@@ -140,7 +140,7 @@ namespace AkmlSql.Shell.Shared.Commands
 
                 var response = await manager.Client.SendRequestAsync<AiIndexAnalysisResponse, AiIndexAnalysisRequest>(
                     MessageTypes.AiIndexAnalysis, request,
-                    timeoutMs: Ai.AiIpcTimeouts.ForAiRequestMs(AkmlSql.Core.Config.ConfigManager.Load()));
+                    timeoutMs: Ai.AiIpcTimeouts.ForAiRequestMs(AkmlSql.Core.Config.ConfigManager.Load(), AkmlSql.Core.Config.AiFeature.IndexSuggestions));
 
                 if (!response.Success)
                 {

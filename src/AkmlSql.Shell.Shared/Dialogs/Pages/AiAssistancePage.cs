@@ -86,6 +86,16 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             };
             panel.Children.Add(nameError);
 
+            // Spec 037 (review finding): the per-agent on/off switch — the route back from the
+            // "Every AI agent is turned off." empty state without deleting the agent. Committed
+            // through CommitEditorToSelectedAgent like every other editor field, and NOT one of
+            // the T086 health-reset fields (only provider/model/key/endpoint edits invalidate a
+            // recorded check), so it carries no change handler at all.
+            const string enabledTip = "Turn this agent on or off — a turned-off agent is hidden from the chat picker and skipped by feature assignments and the fallback order";
+            var (rowEnabled, chkAgentEnabled) = ctx.Rows.AddToggle(panel, "Enabled", enabledTip);
+            ctx.RegisterSearch("Enabled", enabledTip, "Toggle", rowEnabled);
+            chkAgentEnabled.SetValue(System.Windows.Automation.AutomationProperties.NameProperty, "Agent enabled");
+
             var providerNames = new string[Providers.Length];
             for (var i = 0; i < Providers.Length; i++) providerNames[i] = Providers[i].Display;
 
@@ -331,7 +341,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             return new AiAssistanceControls(cboProvider, txtModel, txtApiKey, txtEndpoint, cboPrivacy,
                 sldMax, lblMax, sldTemp, lblTemp, sldTimeout, lblTimeout, sldRetries, lblRetries,
                 chkTextToSql, chkExplain, chkFix, chkOptimize, chkIndex, chkChat, chkInline, chkAutoFix,
-                chkConsent, btnTest, testResult, keyNotice, txtName, nameError, agentListView, featureRows);
+                chkConsent, btnTest, testResult, keyNotice, txtName, nameError, chkAgentEnabled, agentListView, featureRows);
         }
     }
 
@@ -386,6 +396,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         private readonly Border _keyNotice;
         private readonly TextBox _name;
         private readonly TextBlock _nameError;
+        private readonly CheckBox _agentEnabled;
         private readonly AiAgentListView _listView;
         private readonly FeatureAssignmentRows _featureRows;
         private readonly List<string> _assignmentIds = new();   // index-aligned with every assignment combo
@@ -500,17 +511,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             CommitEditorToSelectedAgent();
             var index = _agents.IndexOf(agent);
             _agents.RemoveAt(index);
-
-            if (string.Equals(_activeId, agent.Id, StringComparison.Ordinal))
-                _activeId = FirstUsableAgentId() ?? string.Empty;
-            if (string.Equals(_assignments.Chat, agent.Id, StringComparison.Ordinal)) _assignments.Chat = string.Empty;
-            if (string.Equals(_assignments.TextToSql, agent.Id, StringComparison.Ordinal)) _assignments.TextToSql = string.Empty;
-            if (string.Equals(_assignments.Explain, agent.Id, StringComparison.Ordinal)) _assignments.Explain = string.Empty;
-            if (string.Equals(_assignments.Fix, agent.Id, StringComparison.Ordinal)) _assignments.Fix = string.Empty;
-            if (string.Equals(_assignments.Optimize, agent.Id, StringComparison.Ordinal)) _assignments.Optimize = string.Empty;
-            if (string.Equals(_assignments.IndexSuggestions, agent.Id, StringComparison.Ordinal)) _assignments.IndexSuggestions = string.Empty;
-            if (string.Equals(_assignments.GhostText, agent.Id, StringComparison.Ordinal)) _assignments.GhostText = string.Empty;
-            _fallback.RemoveAll(id => string.Equals(id, agent.Id, StringComparison.Ordinal));
+            RepairReferencesToRemovedAgent(agent);
 
             if (_agents.Count > 0)
             {
@@ -523,6 +524,68 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 RenderList();
             }
             return null;
+        }
+
+        /// <summary>
+        /// The reference repair every removal path shares (FR-028's Remove and the Save-time
+        /// blank-agent drop): an active id pointing at the removed agent moves to the first
+        /// usable survivor (V13-shaped), assignments naming it revert to "" (V16), and fallback
+        /// entries naming it drop out (V17).
+        /// </summary>
+        private void RepairReferencesToRemovedAgent(AiAgent agent)
+        {
+            if (string.Equals(_activeId, agent.Id, StringComparison.Ordinal))
+                _activeId = FirstUsableAgentId() ?? string.Empty;
+            if (string.Equals(_assignments.Chat, agent.Id, StringComparison.Ordinal)) _assignments.Chat = string.Empty;
+            if (string.Equals(_assignments.TextToSql, agent.Id, StringComparison.Ordinal)) _assignments.TextToSql = string.Empty;
+            if (string.Equals(_assignments.Explain, agent.Id, StringComparison.Ordinal)) _assignments.Explain = string.Empty;
+            if (string.Equals(_assignments.Fix, agent.Id, StringComparison.Ordinal)) _assignments.Fix = string.Empty;
+            if (string.Equals(_assignments.Optimize, agent.Id, StringComparison.Ordinal)) _assignments.Optimize = string.Empty;
+            if (string.Equals(_assignments.IndexSuggestions, agent.Id, StringComparison.Ordinal)) _assignments.IndexSuggestions = string.Empty;
+            if (string.Equals(_assignments.GhostText, agent.Id, StringComparison.Ordinal)) _assignments.GhostText = string.Empty;
+            _fallback.RemoveAll(id => string.Equals(id, agent.Id, StringComparison.Ordinal));
+        }
+
+        /// <summary>
+        /// The Load-time seed (and any agent the user added but left untouched) is a placeholder
+        /// for the editor, not a configuration: pages load eagerly, so an OK from ANY page would
+        /// otherwise persist the phantom. Drop every agent that is STILL completely blank,
+        /// repairing references exactly as Remove does. The validation exemption
+        /// (<see cref="IsBlankAgent"/>) stays: a blank agent never BLOCKS OK — it just never
+        /// persists.
+        /// </summary>
+        private void DropStillBlankAgents()
+        {
+            var droppedAny = false;
+            var selectedDropped = false;
+            // Materialise first: the working copy is mutated inside the loop.
+            foreach (var agent in _agents.Where(IsStillBlankAgent).ToList())
+            {
+                _agents.Remove(agent);
+                RepairReferencesToRemovedAgent(agent);
+                selectedDropped |= string.Equals(_selectedId, agent.Id, StringComparison.Ordinal);
+                droppedAny = true;
+            }
+            if (!droppedAny) return;
+
+            // Mirror Remove's selection repair so the editor never stays bound to a phantom.
+            if (selectedDropped)
+            {
+                if (_agents.Count > 0)
+                {
+                    SelectAgent(_agents[0]);
+                }
+                else
+                {
+                    _selectedId = string.Empty;
+                    ClearEditor();
+                    RenderList();
+                }
+            }
+            else
+            {
+                RenderList();   // rows, assignment combos and fallback candidates lost an entry
+            }
         }
 
         /// <summary>FR-028: the confirmation wording, naming the selected agent.</summary>
@@ -599,6 +662,23 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                && string.IsNullOrEmpty(agent.ApiKey)
                && string.IsNullOrEmpty(agent.Endpoint);
 
+        /// <summary>
+        /// The Save-time counterpart of <see cref="IsBlankAgent"/>, one notch stricter: the
+        /// request parameters must also sit at the <see cref="AiAgent"/> defaults. That is the
+        /// shape of the Load-seeded placeholder and of an Add the user never edited — an agent
+        /// the user only retuned the sliders on is a real (if incomplete) configuration and is
+        /// kept. The name is irrelevant to both predicates.
+        /// </summary>
+        private static bool IsStillBlankAgent(AiAgent agent)
+        {
+            var defaults = new AiAgent();
+            return IsBlankAgent(agent)
+                && agent.MaxTokens == defaults.MaxTokens
+                && agent.Temperature == defaults.Temperature
+                && agent.Timeout == defaults.Timeout
+                && agent.Retries == defaults.Retries;
+        }
+
         /// <summary>V1–V3 for a blank agent — the resolver's name rules and wordings, no connection rules.</summary>
         private string? ValidateBlankAgentName(AiAgent agent)
         {
@@ -659,7 +739,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             CheckBox textToSql, CheckBox explain, CheckBox fix, CheckBox optimize,
             CheckBox idx, CheckBox chat, CheckBox inline, CheckBox autoFix,
             CheckBox cloudConsent, Button testButton, TextBlock testResult, Border keyNotice,
-            TextBox name, TextBlock nameError, AiAgentListView listView, FeatureAssignmentRows featureRows)
+            TextBox name, TextBlock nameError, CheckBox agentEnabled, AiAgentListView listView, FeatureAssignmentRows featureRows)
         {
             _provider = provider;
             _model = model;
@@ -690,6 +770,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             _name = name;
             _nameError = nameError;
             _nameError.Foreground = FailureBrush;
+            _agentEnabled = agentEnabled;
             _listView = listView;
             _featureRows = featureRows;
             // Any edit means the user has taken control of the field — the decrypt-failure
@@ -1011,6 +1092,18 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 _activeId = seed.Id;
             }
 
+            // FR-053 (V23, review): derive the decrypt-failure flag for EVERY agent now, not
+            // only for the one BindEditorTo happens to select — ApplyLocalHealthState reads the
+            // flag for the needsKey badge, and an agent the user never selects must not show a
+            // stale badge. A local DPAPI attempt per agent (≤ 20, no RPC), in the same try/catch
+            // idiom the bind path uses. Runs before any bind: the TextChanged ordering contract
+            // (flag set AFTER the key text assignment) belongs to BindEditorTo alone.
+            foreach (var agent in _agents)
+            {
+                var (_, decrypted) = UnwrapKeyForDisplay(agent.ApiKey);
+                agent.KeyDecryptFailed = !decrypted;
+            }
+
             // Selection: the deep-linked agent when one was named, else the active agent, else
             // the first. A dangling active id follows the selection (full V13 repair is US6).
             AiAgent? selected = null;
@@ -1080,6 +1173,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             {
                 _name.Text = agent.Name ?? string.Empty;
                 _nameError.Visibility = Visibility.Collapsed;
+                _agentEnabled.IsChecked = agent.Enabled;
                 // Normalise BEFORE matching (FR-013): configs written by earlier builds ("AzureOpenAI",
                 // "LMStudio") resolve to their canonical ids and select correctly with no migration.
                 var providerId = AiProviderIds.Normalize(agent.Provider);
@@ -1113,6 +1207,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             {
                 _name.Text = string.Empty;
                 _nameError.Visibility = Visibility.Collapsed;
+                _agentEnabled.IsChecked = true;   // a fresh agent starts enabled (AiAgent default)
                 _provider.SelectedIndex = 0;
                 _model.Text = string.Empty;
                 _apiKey.Text = string.Empty;
@@ -1143,6 +1238,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             if (agent == null) return;
 
             agent.Name = _name.Text ?? string.Empty;
+            agent.Enabled = _agentEnabled.IsChecked == true;
             // Key off the canonical id, never the index (FR-013) — the factory rejects anything else.
             var index = _provider.SelectedIndex;
             agent.Provider = index > 0 ? AiAssistancePage.Providers[index].Id : string.Empty;
@@ -1231,14 +1327,16 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         public void Save(AppSettings settings)
         {
             CommitEditorToSelectedAgent(); // the third of the three commit moments (R13)
+            DropStillBlankAgents();
 
-            // The working copy is written back wholesale; the flat mirror itself is refreshed by
-            // AiAgentResolver.MirrorActiveAgent inside ConfigManager.Save (V18), so the invariant
-            // holds on disk the moment the write completes.
-            settings.Ai.Agents = _agents;
+            // The working copy is written back wholesale — as fresh lists and fresh agent
+            // objects, never the page's own: the dialog can stay open after an Apply, and an
+            // edit made past that point must not mutate the settings object the host already
+            // saved through the aliased reference.
+            settings.Ai.Agents = DeepCopyAgents(_agents);
             settings.Ai.ActiveAgentId = _activeId;
-            settings.Ai.FeatureAgents = _assignments;
-            settings.Ai.FallbackOrder = _fallback;
+            settings.Ai.FeatureAgents = CopyAssignments(_assignments);
+            settings.Ai.FallbackOrder = new List<string>(_fallback);
 
             // The flat fields mirror the ACTIVE working-copy agent — the editor may be showing a
             // different (selected) agent — so every pre-agents consumer, and an older build
@@ -1274,7 +1372,9 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             };
             // Unchecked → consent withheld → the engine keeps requiring it (privacy-first default).
             settings.Ai.PrivacyConsentRequired = _cloudConsent.IsChecked != true;
-            settings.Ai.Enabled = _provider.SelectedIndex > 0;
+            // V19 on the write path: "AI enabled" is a property of the whole list — at least one
+            // usable agent — never of whichever agent happens to be selected in the editor.
+            settings.Ai.Enabled = _agents.Any(AiAgentResolver.IsUsable);
             settings.Ai.TextToSql = _textToSql.IsChecked == true;
             settings.Ai.Explain = _explain.IsChecked == true;
             settings.Ai.Fix = _fix.IsChecked == true;
@@ -1398,8 +1498,9 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         /// FR-053 (US5, T085): the test outcome lands on the TESTED working-copy agent — the
         /// status, the check time, and the user-facing message capped at 500 chars (data-model
         /// E2; never built from the key — V24). <see cref="AgentHealth.LatencyMs"/> records the
-        /// round trip of the last SUCCESSFUL check only: a failure leaves the previous value
-        /// standing.
+        /// round trip of the last SUCCESSFUL check: a failed check writes 0 (E2 — "0 when the
+        /// last check did not succeed"), never leaves an earlier success's number standing next
+        /// to a failure.
         /// </summary>
         private static void RecordHealth(AiAgent? agent, bool success, string message, int latencyMs)
         {
@@ -1407,7 +1508,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             agent.Health ??= new AgentHealth();
             agent.Health.Status = success ? AgentHealthStatus.Ready : AgentHealthStatus.Failed;
             agent.Health.CheckedUtc = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture);
-            if (success) agent.Health.LatencyMs = latencyMs;
+            agent.Health.LatencyMs = success ? latencyMs : 0;
             agent.Health.Message = message.Length <= 500 ? message : message.Substring(0, 500);
         }
 

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -9,6 +10,9 @@ using AkmlSql.Engine.Ai;
 using AkmlSql.Engine.Parser;
 using AkmlSql.Engine.Schema;
 using Microsoft.Extensions.AI;
+using Serilog;
+using Serilog.Core;
+using Serilog.Events;
 using Xunit;
 
 namespace AkmlSql.Engine.Tests.Ai;
@@ -317,13 +321,22 @@ public class AgentFallbackChainTests
 
         var ex = await Assert.ThrowsAsync<AggregateException>(() => RunAsync(svcs, settings, chain.Selected));
 
-        // The user sees the outcome of the chain, named per attempt — intermediate failures
-        // were logged, not surfaced alone.
-        Assert.Contains("Primary provider failed: selected down", ex.Message);
-        Assert.Contains("First", ex.Message);
-        Assert.Contains("Second", ex.Message);
-        Assert.Contains("Third", ex.Message);
-        Assert.Contains("Fallback also failed: offline down", ex.Message);
+        // The user sees the outcome of the chain — a concise summary naming every attempt in
+        // order (the primary by its agent name, FR-057)…
+        Assert.Contains("All 5 AI providers failed", ex.Message);
+        Assert.Contains("Selected → First → Second → Third → Ollama", ex.Message);
+        // …with the per-attempt detail carried ONCE, on the inner exceptions (the aggregate
+        // message re-appends them) — no duplicated wall of text.
+        Assert.Contains("Agent 'Selected' failed", ex.Message);
+        Assert.Contains("Fallback agent 'First' failed", ex.Message);
+        Assert.Contains("Fallback agent 'Second' failed", ex.Message);
+        Assert.Contains("Fallback agent 'Third' failed", ex.Message);
+        Assert.Contains("Offline fallback 'Ollama' failed", ex.Message);
+        // FR-058: raw provider bodies are sanitized to the taxonomy before they reach the
+        // user-facing message; the raw exceptions ride inside the inners for diagnosis.
+        Assert.DoesNotContain("selected down", ex.Message);
+        Assert.All(ex.InnerExceptions,
+            inner => Assert.IsType<HttpRequestException>(inner.InnerException));
     }
 
     [Fact]
@@ -365,5 +378,219 @@ public class AgentFallbackChainTests
         Assert.Equal(
             new[] { ("ollama", "selected-model", 300), ("ollama", "first-model", 5) },
             factory.Constructed.Take(2).ToArray());
+    }
+
+    // ── Consent is evaluated against every chain candidate (HIGH review finding) ──
+
+    private sealed class ListSink : ILogEventSink
+    {
+        public readonly List<LogEvent> Events = new();
+        public void Emit(LogEvent logEvent) { lock (Events) Events.Add(logEvent); }
+    }
+
+    [Fact]
+    public async Task A_cloud_candidate_without_consent_is_never_called_and_the_chain_walks_on()
+    {
+        var chain = new Chain();
+        var settings = chain.Settings();
+        settings.PrivacyConsentRequired = true;              // consent WITHHELD
+        chain.First.Provider = "anthropic";                  // a cloud candidate…
+        chain.First.ApiKey = "sk-test-key";                  // …kept usable, so ONLY consent can skip it
+        var factory = new ScriptedFactory()
+            .On("selected-model", () => new ThrowingChatClient(Boom()))
+            .On("second-model", () => new ThrowingChatClient(Boom()))
+            .On("third-model", () => new FakeChatClient("from-third"));
+        var svcs = ServicesFor(settings, factory);
+
+        var sink = new ListSink();
+        var previous = Log.Logger;
+        Log.Logger = new LoggerConfiguration().MinimumLevel.Verbose().WriteTo.Sink(sink).CreateLogger();
+        (ChatResponse Response, bool UsedFallback, string? AgentName) result;
+        try
+        {
+            result = await RunAsync(svcs, settings, chain.Selected);
+        }
+        finally
+        {
+            Log.Logger = previous;
+        }
+
+        Assert.True(result.UsedFallback);
+        Assert.Equal("Third", result.AgentName);
+        Assert.Equal("from-third", result.Response.Text);
+        // The non-consented cloud candidate was never even constructed — no data left for it…
+        Assert.DoesNotContain(factory.Constructed, c => c.Provider == "anthropic");
+        // …but the local candidates were still tried, in order.
+        Assert.Equal(
+            new[] { ("ollama", "selected-model", 30), ("ollama", "second-model", 30), ("ollama", "third-model", 30) },
+            factory.Constructed);
+        // The skip is logged with the agent's name — and never any key material (FR-058).
+        List<LogEvent> events;
+        lock (sink.Events) events = sink.Events.ToList();
+        Assert.Contains(events, e =>
+            e.RenderMessage().Contains("skipping agent") && e.RenderMessage().Contains("First"));
+        Assert.DoesNotContain(events, e => e.RenderMessage().Contains("sk-test-key"));
+    }
+
+    [Fact]
+    public async Task A_local_candidate_is_still_tried_when_consent_is_withheld()
+    {
+        var chain = new Chain();
+        var settings = chain.Settings();
+        settings.PrivacyConsentRequired = true;
+        chain.First.Provider = "lmstudio";                   // local — allow-listed like ollama
+        var factory = new ScriptedFactory()
+            .On("selected-model", () => new ThrowingChatClient(Boom()))
+            .On("first-model", () => new FakeChatClient("from-first"));
+        var svcs = ServicesFor(settings, factory);
+
+        var (_, usedFallback, agentName) = await RunAsync(svcs, settings, chain.Selected);
+
+        Assert.True(usedFallback);
+        Assert.Equal("First", agentName);
+        Assert.Equal(("lmstudio", "first-model", 30), factory.Constructed[1]);
+    }
+
+    [Fact]
+    public async Task With_consent_granted_a_cloud_candidate_is_tried()
+    {
+        var chain = new Chain();
+        var settings = chain.Settings();
+        settings.PrivacyConsentRequired = false;             // consent GIVEN
+        chain.First.Provider = "anthropic";
+        chain.First.ApiKey = "sk-test-key";
+        var factory = new ScriptedFactory()
+            .On("selected-model", () => new ThrowingChatClient(Boom()))
+            .On("first-model", () => new FakeChatClient("from-cloud"));
+        var svcs = ServicesFor(settings, factory);
+
+        var (response, usedFallback, agentName) = await RunAsync(svcs, settings, chain.Selected);
+
+        Assert.True(usedFallback);
+        Assert.Equal("First", agentName);
+        Assert.Equal("from-cloud", response.Text);
+        Assert.Equal(("anthropic", "first-model", 30), factory.Constructed[1]);
+    }
+
+    // ── Cancellation and consent propagate out of every attempt ──
+
+    [Fact]
+    public async Task A_candidate_cancellation_propagates_and_stops_the_chain()
+    {
+        var chain = new Chain();
+        var settings = chain.Settings();
+        var factory = new ScriptedFactory()
+            .On("selected-model", () => new ThrowingChatClient(Boom()))
+            .On("first-model", () => new ThrowingChatClient(new OperationCanceledException()));
+        var offlineCalled = 0;
+        var svcs = ServicesFor(settings, factory, _ => { offlineCalled++; return new FakeChatClient("offline"); });
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => RunAsync(svcs, settings, chain.Selected));
+
+        // Selected + First were tried; the chain stopped — Second/Third and the offline
+        // provider were never touched.
+        Assert.Equal(2, factory.Constructed.Count);
+        Assert.Equal(0, offlineCalled);
+    }
+
+    [Fact]
+    public async Task A_candidate_consent_exception_propagates_and_stops_the_chain()
+    {
+        var chain = new Chain();
+        var settings = chain.Settings();
+        var factory = new ScriptedFactory()
+            .On("selected-model", () => new ThrowingChatClient(Boom()))
+            .On("first-model", () => new ThrowingChatClient(new PrivacyConsentRequiredException("CONSENT_REQUIRED:x")));
+        var offlineCalled = 0;
+        var svcs = ServicesFor(settings, factory, _ => { offlineCalled++; return new FakeChatClient("offline"); });
+
+        await Assert.ThrowsAsync<PrivacyConsentRequiredException>(() => RunAsync(svcs, settings, chain.Selected));
+
+        Assert.Equal(2, factory.Constructed.Count);
+        Assert.Equal(0, offlineCalled);
+    }
+
+    [Fact]
+    public async Task The_offline_attempt_never_swallows_cancellation()
+    {
+        var chain = new Chain();
+        var settings = chain.Settings();
+        var factory = new ScriptedFactory()
+            .On("selected-model", () => new ThrowingChatClient(Boom()))
+            .On("first-model", () => new ThrowingChatClient(Boom()))
+            .On("second-model", () => new ThrowingChatClient(Boom()))
+            .On("third-model", () => new ThrowingChatClient(Boom()));
+        var svcs = ServicesFor(settings, factory,
+            _ => new ThrowingChatClient(new OperationCanceledException()));
+
+        // Not wrapped into the all-fail aggregate — cancellation propagates untouched.
+        await Assert.ThrowsAsync<OperationCanceledException>(() => RunAsync(svcs, settings, chain.Selected));
+    }
+
+    [Fact]
+    public async Task The_offline_attempt_never_swallows_a_consent_exception()
+    {
+        var chain = new Chain();
+        var settings = chain.Settings();
+        var factory = new ScriptedFactory()
+            .On("selected-model", () => new ThrowingChatClient(Boom()))
+            .On("first-model", () => new ThrowingChatClient(Boom()))
+            .On("second-model", () => new ThrowingChatClient(Boom()))
+            .On("third-model", () => new ThrowingChatClient(Boom()));
+        var svcs = ServicesFor(settings, factory,
+            _ => new ThrowingChatClient(new PrivacyConsentRequiredException("CONSENT_REQUIRED:x")));
+
+        await Assert.ThrowsAsync<PrivacyConsentRequiredException>(() => RunAsync(svcs, settings, chain.Selected));
+    }
+
+    // ── FR-058: the user-facing aggregate is sanitized; FR-057: the primary is named ──
+
+    [Fact]
+    public async Task A_provider_auth_error_surfaces_the_taxonomy_message_not_the_raw_body()
+    {
+        var chain = new Chain();
+        var settings = chain.Settings();
+        IChatClient AuthError() => new ThrowingChatClient(
+            new HttpRequestException("401 Unauthorized — bad key sk-live-secret", null, HttpStatusCode.Unauthorized));
+        var factory = new ScriptedFactory()
+            .On("selected-model", AuthError)
+            .On("first-model", AuthError)
+            .On("second-model", AuthError)
+            .On("third-model", AuthError);
+        var svcs = ServicesFor(settings, factory, _ => AuthError());
+
+        var ex = await Assert.ThrowsAsync<AggregateException>(() => RunAsync(svcs, settings, chain.Selected));
+
+        // The user gets the FR-014 taxonomy row…
+        Assert.Contains("The API key was rejected", ex.Message);
+        // …never the raw provider body, which may echo credentials (FR-058).
+        Assert.DoesNotContain("sk-live-secret", ex.Message);
+        Assert.DoesNotContain("401 Unauthorized — bad key", ex.Message);
+        // The raw exceptions still ride inside the inners (and the log) for diagnosis.
+        Assert.All(ex.InnerExceptions,
+            inner => Assert.IsType<HttpRequestException>(inner.InnerException));
+    }
+
+    [Fact]
+    public async Task The_aggregate_uses_generic_wording_when_the_primary_has_no_name()
+    {
+        // Legacy shape: flat settings, no selected agent — the FR-057 naming falls back to the
+        // pre-chain generic label.
+        var settings = new AiSettings
+        {
+            Enabled = true,
+            Provider = "ollama",
+            Model = "legacy-model",
+            OfflineProvider = "ollama",
+            OfflineModel = "offline-model",
+            OfflineEndpoint = "http://127.0.0.1:1/",
+        };
+        var factory = new ScriptedFactory()
+            .On("legacy-model", () => new ThrowingChatClient(Boom()));
+        var svcs = ServicesFor(settings, factory, _ => new ThrowingChatClient(Boom()));
+
+        var ex = await Assert.ThrowsAsync<AggregateException>(() => RunAsync(svcs, settings, selected: null));
+
+        Assert.Contains("Primary provider failed", ex.Message);
     }
 }
