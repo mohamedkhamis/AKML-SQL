@@ -426,6 +426,23 @@ Contract details (IndexedDB layout, change-detection polling, eviction policy, o
 
 ---
 
+## 9f. Spec 037 — Multiple AI agents
+
+AI configuration supports up to 20 named agents (`ai.agents` in `config.json`) with one active agent, per-feature assignments (`ai.featureAgents`), and an ordered fallback chain (`ai.fallbackOrder`).
+
+**Mirroring invariant.** `ai.agents` is the truth; the flat `ai.provider`/`model`/`apiKey`/`endpoint`/`maxTokens`/`temperature`/`timeout`/`retries` are a derived mirror of the active agent, rewritten by `AiAgentResolver.MirrorActiveAgent` on every `ConfigManager.Load` (inside `Normalize`) and every `ConfigManager.Save`. An empty agent list leaves the flat fields untouched — that is the pre-migration shape V14 rescues on the next load — and an older build downgraded onto a new config reads the flat fields and ignores `ai.agents`, which is what makes the feature downgrade-safe. The same `Normalize` pass applies the load-time repairs (V13–V21) and derives `ai.enabled` (= at least one usable agent).
+
+**Resolution seam.** Every AI handler derives from `AiHandlerBase<TRequest, TResponse>` and declares an abstract `AiFeature Feature`. `HandleAsync` resolves the feature's agent (`AiAgentResolver.ResolveFor` — the assigned agent when usable, else the active agent) and then *projects* it (`AiAgentResolver.Project`: the agent's connection fields and request parameters substituted over a copy of the global settings; privacy mode, consent and feature switches stay global) **before** `CheckPrivacyConsent` — the ordering is load-bearing, because consent must be evaluated against the provider that will actually be called. An assigned agent that is missing or disabled falls back to the active agent, logged once per feature per engine process (V22). `AiPipelineServices.ExecuteWithFallbackAsync` walks `fallbackOrder` after the selected agent — each attempt bounded by its own agent's timeout, stop at first success, cancellation and `PrivacyConsentRequiredException` never fall back — with the offline provider (`AiProviderFactory.CreateFromFallback`) last; the answering agent's name travels back to the shell as the additive `AiChatResponse.AgentName` (MessagePack key 6).
+
+| Component | Path | Role |
+|-----------|------|------|
+| `AiAgent` / `AgentHealth` / `FeatureAgentAssignments` | `src/AkmlSql.Core/Config/AiAgent.cs` | Persisted agent model, health record, per-feature assignments |
+| `AiAgentResolver` | `src/AkmlSql.Core/Config/AiAgentResolver.cs` | Stateless normalisation + repairs (V13–V21), V14 migration, mirroring, projection, per-feature resolution, edit-time validation (V1–V12) |
+| `AiHandlerBase.Feature` | `src/AkmlSql.Engine/Handlers/Ai/AiHandlerBase.cs` | Per-handler feature declaration; resolve + project before the consent gate |
+| `AiPipelineServices.ExecuteWithFallbackAsync` | `src/AkmlSql.Engine/Ai/AiPipelineServices.cs` | Fallback-chain walk after the selected agent, offline provider last, answering-agent attribution |
+
+---
+
 ## 10. Key Design Decisions
 
 | Decision | Rationale |
@@ -442,3 +459,4 @@ Contract details (IndexedDB layout, change-detection polling, eviction policy, o
 | EnableIdempotencyCheck flag | Allows bulk operations to skip the expensive second parse pass |
 | Spec 021 M0 `IRpcTransport` abstraction | Same engine handlers serve named-pipe (IDE plugins) + in-process (Blazor WASM) + future WebSocket transports without per-transport duplication. Wire format unchanged for backward compat. |
 | Two opt-in DIM properties on `IRpcRequestHandler<,>` (`AllowsEmptyPayload`, `SwallowCancellation`) | Lets specific handlers (ProfileList, AnalysisSettingsChanged; AnalysisHandler, RefactorPreview/Apply) opt out of default error-on-null-payload and OCE-propagation behaviour without polluting the contract for the common case. |
+| Spec 037 `ai.agents` as truth + flat-field mirroring | Multi-agent AI stays downgrade-safe: `AiAgentResolver.MirrorActiveAgent` rewrites the flat `ai.*` fields from the active agent on every load and save, so an older build — or a second host that has not reloaded — reads the same provider the new build uses. |

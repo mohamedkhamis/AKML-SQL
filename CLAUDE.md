@@ -298,15 +298,15 @@ The `StrokeDashArray` sum (`10 + 30 = 40`) must be ≥ the ellipse perimeter (`2
 | [doc/deployment.md](doc/deployment.md) | Build commands, install paths, MEF cache clearing, troubleshooting |
 | [doc/analysis-rules.md](doc/analysis-rules.md) | All 130+ analysis rules with descriptions and severities |
 | [doc/formatting.md](doc/formatting.md) | Formatting pipeline stages, profile schema, all options, SQL Prompt round-trip |
-| [doc/progress.md](doc/progress.md) | Development log through spec 033 — per-phase task tables, clarifications, deferred follow-ups |
+| [doc/progress.md](doc/progress.md) | Development log through spec 037 — per-phase task tables, clarifications, deferred follow-ups |
 | [doc/WEB/](doc/WEB/) | Web edition milestone docs (M0 dispatcher/transport … M6 AI browser) + quickstarts |
 | [docs/wpf-theming.md](docs/wpf-theming.md) | WPF theme token system contributor guide (introduced in spec 016) |
 
 ## Progress and Troubleshooting
 
-See [doc/progress.md](doc/progress.md) for the full development progress log — issues, root causes, fixes, cache clearing procedures, and the per-spec progress tables (most recently spec 033 Format Styles window promotion).
+See [doc/progress.md](doc/progress.md) for the full development progress log — issues, root causes, fixes, cache clearing procedures, and the per-spec progress tables (most recently spec 037 Multiple AI agents with guided setup).
 
-**Latest merged work**: specs 021 → 033 merged to master through PR #249 (2026-08). Highlights:
+**Latest merged work**: specs 021 → 033 merged to master through PR #249 (2026-08); specs 036 and 037 (multi-agent AI) landed after. Highlights:
 
 - **Specs 021–028 — Web edition (Blazor WASM)**: dispatcher/transport (M0), WASM spike (M1), formatter/analyser MVP (M2), WebSocket LAN transport (M3), IIS installer (M4), IndexedDB schema cache (M5), AI in browser (M6). Shared libraries extracted for engine + web reuse: `AkmlSql.IntelliSense`, `AkmlSql.Analysis`, `AkmlSql.AI` (types keep their original `AkmlSql.Engine.*` namespaces).
 - **Spec 029 — SQL-auth credentials**: DPAPI `SqlCredentialStore` (`%AppData%\AKML SQL\sql-credentials.json`), `AuthMode.SqlPassword` detection, `TestSqlConnection` IPC (93/193), `SqlCredentialDialog`, multi-window auto-resolve.
@@ -314,11 +314,13 @@ See [doc/progress.md](doc/progress.md) for the full development progress log —
 - **Spec 031 — Redgate style import**: `.sqlpromptstylev2` → `.akmlstyle`; built-in "Khamis Style" + "Collapsed" styles ship in the web edition.
 - **Spec 032 — Autocomplete remediation**: completion corpus gate (`tests/completion-corpus`, 1,342 cases, `CorpusGateTests` ratchet) **72.1% → 97.5%**; new `ParameterProvider`; `VariableTracker` wired; `CompletionItem.FilterText` (Key 7); FMTA-006 oscillation root-fixed (977/977 goldens green).
 - **Spec 033 — Format Styles window promotion**: full style editor (load-on-select, dirty tracking, merge-save via `ProfileJsonMerger`, read-only built-ins), profile schema v2 (`parentId` hierarchy + `[SettingMeta]` on all 179 properties), new `ProfileGet` (34/134) + `ProfileRename` (35/135) IPC, Options → Format → Styles launcher page, legacy editor stack deleted.
+- **Spec 037 — Multiple AI agents**: up to 20 named agents under `ai.agents` (flat `ai.provider`/`model`/`apiKey`/`endpoint` are now a derived mirror of the active agent, rewritten on every load and save — downgrade-safe); per-feature assignments (`ai.featureAgents`) + ordered fallback chain (`ai.fallbackOrder`); engine resolution seam in `AiHandlerBase` — resolve + project the feature's agent BEFORE the privacy-consent gate; additive `AiChatResponse.AgentName` (key 6) answer attribution; chat empty state deep-links into a guided add-agent flow; agent list + health badges on Options → AI Assistance.
 
 **Open follow-ups** (see `doc/progress.md` and the spec tasks files for full lists):
 
 - Spec 032 pending live items: web deploy + keystroke E2E (T013), campaign re-run (T057/T058), desktop smoke (T059), final perf gate (T060), sandbox cleanup (T062). Known pre-existing red, NOT spec-032: `FormatterServiceTests`/`AnalyserServiceTests` sp031-* pending golden baselines; `PerformanceBaselineTests` environmental drift.
 - Spec 033: T044/T045 (final gate + deploy/manual verification) pending user availability.
+- Spec 037: Phase-9 polish items T103–T108 open (perf budgets, golden/corpus ratchets, key-leak grep, full quickstart, one-pass build); GUI-only quickstart scenarios 62/69a/70 stay manual.
 
 ## Git Rules (MANDATORY)
 

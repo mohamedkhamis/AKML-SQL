@@ -787,6 +787,41 @@ ErrorMessage  string?
 
 ## AI Messages
 
+### `AiChat` (75) → `AiChatResult` (175)
+
+Sends one chat-panel message (with the conversation history for multi-turn context) and returns
+the assistant's reply plus optional code actions. The pair predates this reference; it is
+documented at spec 037 because the response gained a key.
+
+**Request** (`AiChatRequest`):
+```
+SessionId  string         Key(0)  Active editor session — binds the schema context
+Message    string         Key(1)  The user's chat message
+History    ChatTurnDto[]  Key(2)  Previous turns, oldest first
+    Role     string  Key(0)  "user" | "assistant"
+    Content  string  Key(1)
+```
+
+**Response** (`AiChatResponse`):
+```
+Success      bool              Key(0)
+Response     string?           Key(1)  The assistant's reply text
+CodeActions  CodeActionDto[]?  Key(2)  Optional actionable suggestions the user can apply
+    Label      string  Key(0)  e.g. "Apply to Editor"
+    ActionType string  Key(1)  "applyToEditor" | "copyToClipboard" | "runQuery"
+    Code       string  Key(2)
+ErrorMessage string?           Key(3)  Set when Success is false
+TokensUsed   int               Key(4)
+LatencyMs    int               Key(5)
+AgentName    string?           Key(6)  Spec 037 (US3/US4, FR-042/FR-052): name of the agent that
+                                     produced the answer — a fallback-chain agent's name, or the
+                                     offline provider's display name when the fallback answered.
+                                     Additive field: a peer that does not know key 6 ignores it,
+                                     and a peer expecting it from an older engine deserializes
+                                     null, so the shell renders no attribution rather than a
+                                     guessed one.
+```
+
 ### `AiProviderTest` (77) → `AiProviderTestResult` (177) — spec 036
 
 Verifies an AI provider configuration (provider, model, endpoint, key) with a one-line test
@@ -818,7 +853,7 @@ LatencyMs        int
 
 Caller obligations: test the dialog's CURRENT field values (not saved settings); use
 `AiIpcTimeouts.ForAiRequestMs` for the wait budget; never log the key; "engine not connected"
-is a distinct pre-IPC outcome. The other AI messages (70–76, 78 / 170–176, 178–179) are
+is a distinct pre-IPC outcome. The other AI messages (70–74, 76, 78 / 170–174, 176, 178–179) are
 implemented but not yet documented in this reference.
 
 ---

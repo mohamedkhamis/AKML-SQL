@@ -69,8 +69,9 @@ Save(settings):
     // ConfigManager.Save (and again on the next Load), so the invariant holds on disk
 ```
 
-`CommitEditorToSelectedAgent` runs at exactly three moments: on selection change, before any CRUD
-action, and in `Save`. One private method, three call sites.
+`CommitEditorToSelectedAgent` runs at exactly four moments: on selection change, before any CRUD
+action, in `Save`, and before a Test connection (FR-054 — the working copy must hold the values
+being tested). One private method, four call sites.
 
 Cancel is correct for free: `SettingsWindow.GetSettings()` is only called on OK
 (`SettingsWindow.cs:221`), so an abandoned working copy is an abandoned edit.

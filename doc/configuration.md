@@ -213,8 +213,8 @@ It is created automatically on first run with all defaults. The file is written 
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `enabled` | bool | false | Master switch for AI assistance features |
-| `provider` | string | "" | Canonical provider id: `anthropic`, `openai`, `azure`, `gemini`, `kimi`, `ollama`, `lmstudio`, `custom`. Legacy spellings (`AzureOpenAI`, `LMStudio`) are normalised on load (spec 036) |
+| `enabled` | bool | false | Master switch for AI assistance features. **Spec 037**: derived on every load — true exactly when at least one agent in `agents` is usable; the value on disk is rewritten by normalisation |
+| `provider` | string | "" | Canonical provider id: `anthropic`, `openai`, `azure`, `gemini`, `kimi`, `ollama`, `lmstudio`, `custom`. Legacy spellings (`AzureOpenAI`, `LMStudio`) are normalised on load (spec 036). **Spec 037**: this and the other flat connection fields below are a derived mirror of the active agent — see *Multiple agents* |
 | `model` | string | "" | Model identifier (e.g. `gpt-4o`, `claude-sonnet-4-6`, `kimi-latest`) |
 | `apiKey` | string | "" | **DPAPI-wrapped at rest** (`dpapi:<base64>`, spec 036 FR-008) — the Options page wraps on save via `ApiKeyProtector` (entropy `AkmlSql-ApiKey-v1`). Legacy plaintext values still read correctly and are upgraded on the next save. The key is never written to logs |
 | `endpoint` | string | "" | Service endpoint; required for `azure`, defaulted for `kimi` (`https://api.moonshot.ai/v1`; use `https://api.moonshot.cn/v1` for the mainland-China service) and `ollama` |
@@ -230,6 +230,54 @@ It is created automatically on first run with all defaults. The file is written 
 Schema information sent to a provider never includes table data rows — metadata only
 (FR-032). The chat panel and all AI commands bind to the active editor's connection; when no
 editor is connected the assistant says so instead of answering from an empty schema (FR-028).
+
+### Multiple agents (spec 037)
+
+`ai.agents` is the truth for which provider serves AI requests. The flat
+`provider`/`model`/`apiKey`/`endpoint`/`maxTokens`/`temperature`/`timeout`/`retries` above are a
+**derived mirror of the active agent**, rewritten by `AiAgentResolver.MirrorActiveAgent` on every
+`ConfigManager.Load` (inside `Normalize`) and every `ConfigManager.Save`. The mirror keeps the
+file downgrade-safe: an older build reads the flat fields and ignores `ai.agents`, so it uses the
+same provider the new build would. When `agents` is empty the flat fields are the whole
+configuration and are left untouched — that is the pre-migration shape the V14 migration rescues
+on the next load.
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `agents` | array | `[]` | 0–20 agent objects (V12); list order is display order |
+| `activeAgentId` | string | "" | `id` of the active agent. A dangling id is repaired on load to the first usable agent, or "" when there is none (V13) |
+| `featureAgents` | object | `{}` | Which agent serves each feature: `chat`, `textToSql`, `explain`, `fix`, `optimize`, `indexSuggestions`, `ghostText` — each an agent `id`, or `""` = follow the active agent. An assignment naming a missing or disabled agent is cleared on load (V16) |
+| `fallbackOrder` | array | `[]` | Agent `id`s tried in order when the selected agent fails; the offline provider (`offlineProvider` above) is still tried last. Dangling, duplicate and self references are pruned on load (V17) |
+
+Each `agents[]` entry:
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `id` | string | (generated) | 32 lowercase hex (`Guid.NewGuid().ToString("N")`), assigned at creation and immutable. Every reference — `activeAgentId`, `featureAgents.*`, `fallbackOrder[]` — is by id, never by name |
+| `name` | string | — | 1–40 chars after trim, unique case/trim-insensitively across the list |
+| `provider` | string | — | Canonical provider id, same vocabulary as the flat `provider` above |
+| `model` | string | — | Model identifier (free text) |
+| `apiKey` | string | "" | Same `dpapi:` wrapping as the flat key. Migration copies the flat value **verbatim** — never unwrapped, never re-wrapped |
+| `endpoint` | string | "" | Absolute URL; required for `azure` and `custom` |
+| `maxTokens` | int | 4096 | 256–32768 |
+| `temperature` | double | 0.2 | 0.0–2.0 |
+| `timeout` | int | 30 | 5–300 seconds |
+| `retries` | int | 2 | 0–5 |
+| `enabled` | bool | true | Disabled agents are hidden from the chat picker and treated as absent by assignments and the fallback order |
+| `createdUtc` | string | — | ISO 8601 UTC creation time; informational only |
+| `health` | object? | null | Last recorded health check; `null` = never tested. Advisory only — it never gates a request |
+
+`health` carries `status` (`unknown` / `ready` / `needsKey` / `failed` — an unrecognised value
+loads as `unknown`, V20), `checkedUtc`, `latencyMs` (round trip of the last **successful** check)
+and `message` (≤ 500 chars, never contains a key).
+
+Load-time migration and repairs all live in `AiAgentResolver.Normalize`, are idempotent, and never
+throw: **V14** turns an empty `agents` list with a non-empty flat `provider` into exactly one agent
+named for the provider's display name, enabled, never health-tested, and active, copying the key
+verbatim; **V15** drops malformed entries (empty or duplicate id) with a log warning naming the
+index; **V21** drops entries beyond the 20th. An agent counts as *usable* when it is enabled,
+names a canonical provider, has a model, and carries every field its provider requires (key for
+the cloud providers, endpoint for `azure`/`custom`).
 
 ---
 
