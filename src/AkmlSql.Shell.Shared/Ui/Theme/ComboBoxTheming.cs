@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Media;
+using System.Windows.Media.Effects;
 
 namespace AkmlSql.Shell.Shared.Ui.Theme
 {
@@ -25,6 +26,11 @@ namespace AkmlSql.Shell.Shared.Ui.Theme
         // Template and item style are both immutable once sealed and built purely from frozen
         // singleton brushes, so one shared pair per theme serves every combo.
         private static readonly Dictionary<PageTheme, (ControlTemplate Template, Style ItemStyle)> ThemeCache = new();
+
+        // The menu look (ApplyMenuStyle — the chat agent picker) caches APART: its template and
+        // item style deliberately differ from the Options-dialog pair pinned by
+        // OptionsHoverContrastTests, and neither may leak into the other.
+        private static readonly Dictionary<PageTheme, (ControlTemplate Template, Style ItemStyle)> MenuThemeCache = new();
 
         /// <summary>
         /// Themes <paramref name="combo"/> for the CURRENT theme variant. No-op under High
@@ -60,6 +66,148 @@ namespace AkmlSql.Shell.Shared.Ui.Theme
                 }
                 return artifacts;
             }
+        }
+
+        /// <summary>
+        /// Themes <paramref name="combo"/> as a dropdown MENU (the chat header's agent picker):
+        /// the same toggle face as <see cref="Apply"/>, but the popup is a padded, rounded,
+        /// softly shadowed card and its items use the subtle hover / accent-TINT selection
+        /// brushes — the saturated accent surface with white text read wrong in light mode.
+        /// No-op under High Contrast, same as <see cref="Apply"/>.
+        /// </summary>
+        public static void ApplyMenuStyle(ComboBox combo)
+        {
+            if (ThemeRegistry.Instance.Current == ThemeVariant.HighContrast) return;
+            ApplyMenuStyle(combo, ThemeRegistry.Instance.Current == ThemeVariant.Dark ? PageTheme.Dark : PageTheme.Light);
+        }
+
+        public static void ApplyMenuStyle(ComboBox combo, PageTheme theme)
+        {
+            var (template, itemStyle) = GetMenuThemeArtifacts(theme);
+
+            // Same contract as Apply: only Foreground is a live property — the template paints
+            // every other visual itself.
+            combo.Foreground = theme.FgPrimary;
+            combo.Template = template;
+            combo.ItemContainerStyle = itemStyle;
+        }
+
+        private static (ControlTemplate Template, Style ItemStyle) GetMenuThemeArtifacts(PageTheme theme)
+        {
+            lock (MenuThemeCache)
+            {
+                if (!MenuThemeCache.TryGetValue(theme, out var artifacts))
+                {
+                    artifacts = (BuildMenuComboBoxTemplate(theme), BuildMenuItemStyle(theme));
+                    MenuThemeCache[theme] = artifacts;
+                }
+                return artifacts;
+            }
+        }
+
+        /// <summary>
+        /// Menu item rows: transparent on the popup card, subtle gray hover (<see cref="PageTheme.TreeHover"/>)
+        /// in both themes, and an accent-TINT selection (<see cref="PageTheme.SelectionTint"/>)
+        /// under the primary text color. The accent SURFACE pair (Selected/SelectedText) stays
+        /// out: FgAccent is a TEXT color — white on it is only ~2.2:1 and unreadable (see the
+        /// note on <see cref="BuildItemStyle"/>'s selected trigger), and the full-saturation
+        /// surface is exactly what looked wrong on a light menu.
+        /// </summary>
+        private static Style BuildMenuItemStyle(PageTheme theme)
+        {
+            var itemStyle = new Style(typeof(ComboBoxItem));
+            itemStyle.Setters.Add(new Setter(Control.BackgroundProperty, theme.Transparent));
+            itemStyle.Setters.Add(new Setter(Control.ForegroundProperty, theme.FgPrimary));
+            itemStyle.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0)));
+            itemStyle.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(10, 5, 10, 5)));
+
+            var hoverTrigger = new Trigger { Property = ComboBoxItem.IsHighlightedProperty, Value = true };
+            hoverTrigger.Setters.Add(new Setter(Control.BackgroundProperty, theme.TreeHover));
+            hoverTrigger.Setters.Add(new Setter(Control.ForegroundProperty, theme.FgPrimary));
+            itemStyle.Triggers.Add(hoverTrigger);
+
+            var selectedTrigger = new Trigger { Property = ComboBoxItem.IsSelectedProperty, Value = true };
+            selectedTrigger.Setters.Add(new Setter(Control.BackgroundProperty, theme.SelectionTint));
+            selectedTrigger.Setters.Add(new Setter(Control.ForegroundProperty, theme.FgPrimary));
+            itemStyle.Triggers.Add(selectedTrigger);
+
+            itemStyle.Seal();
+            return itemStyle;
+        }
+
+        /// <summary>
+        /// The menu twin of <see cref="BuildComboBoxTemplate"/>: identical toggle face and
+        /// selection box, but the dropdown Border is a rounded, padded card on a subtle drop
+        /// shadow with the theme's subtle separator as its edge.
+        /// </summary>
+        private static ControlTemplate BuildMenuComboBoxTemplate(PageTheme theme)
+        {
+            var root = new FrameworkElementFactory(typeof(Grid));
+
+            var toggle = new FrameworkElementFactory(typeof(ToggleButton), "toggleButton");
+            toggle.SetValue(UIElement.FocusableProperty, false);
+            toggle.SetValue(ToggleButton.ClickModeProperty, ClickMode.Press);
+            toggle.SetBinding(ToggleButton.IsCheckedProperty, new Binding("IsDropDownOpen")
+            {
+                RelativeSource = RelativeSource.TemplatedParent,
+                Mode = BindingMode.TwoWay
+            });
+            toggle.SetValue(Control.TemplateProperty, BuildToggleTemplate(theme));
+            root.AppendChild(toggle);
+
+            var content = new FrameworkElementFactory(typeof(ContentPresenter), "contentPresenter");
+            content.SetValue(ContentPresenter.ContentProperty, new TemplateBindingExtension(ComboBox.SelectionBoxItemProperty));
+            content.SetValue(ContentPresenter.ContentTemplateProperty, new TemplateBindingExtension(ComboBox.SelectionBoxItemTemplateProperty));
+            content.SetValue(FrameworkElement.MarginProperty, new Thickness(8, 0, 24, 0));
+            content.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            content.SetValue(UIElement.IsHitTestVisibleProperty, false);
+            root.AppendChild(content);
+
+            var itemsPresenter = new FrameworkElementFactory(typeof(ItemsPresenter));
+
+            var scroll = new FrameworkElementFactory(typeof(ScrollViewer));
+            scroll.SetValue(ScrollViewer.HorizontalScrollBarVisibilityProperty, ScrollBarVisibility.Disabled);
+            scroll.AppendChild(itemsPresenter);
+
+            var shadow = new DropShadowEffect
+            {
+                Color = Colors.Black,   // neutral — the one sanctioned non-token color
+                Direction = 270,
+                BlurRadius = 8,
+                ShadowDepth = 2,
+                Opacity = 0.18,
+                RenderingBias = RenderingBias.Quality
+            };
+            shadow.Freeze();
+
+            var dropDownBorder = new FrameworkElementFactory(typeof(Border), "dropDownBorder");
+            dropDownBorder.SetValue(Border.BackgroundProperty, theme.Input);
+            dropDownBorder.SetValue(Border.BorderBrushProperty, theme.Sep);
+            dropDownBorder.SetValue(Border.BorderThicknessProperty, new Thickness(1));
+            dropDownBorder.SetValue(Border.CornerRadiusProperty, new CornerRadius(4));
+            dropDownBorder.SetValue(Border.PaddingProperty, new Thickness(2));
+            dropDownBorder.SetValue(UIElement.EffectProperty, shadow);
+            dropDownBorder.SetBinding(FrameworkElement.MinWidthProperty, new Binding("ActualWidth")
+            {
+                RelativeSource = RelativeSource.TemplatedParent
+            });
+            dropDownBorder.SetValue(FrameworkElement.MaxHeightProperty, new TemplateBindingExtension(ComboBox.MaxDropDownHeightProperty));
+            dropDownBorder.AppendChild(scroll);
+
+            var popup = new FrameworkElementFactory(typeof(Popup), "PART_Popup");
+            popup.SetValue(Popup.AllowsTransparencyProperty, true);
+            popup.SetValue(Popup.PlacementProperty, PlacementMode.Bottom);
+            popup.SetValue(UIElement.FocusableProperty, false);
+            popup.SetBinding(Popup.IsOpenProperty, new Binding("IsDropDownOpen")
+            {
+                RelativeSource = RelativeSource.TemplatedParent
+            });
+            popup.AppendChild(dropDownBorder);
+            root.AppendChild(popup);
+
+            var template = new ControlTemplate(typeof(ComboBox)) { VisualTree = root };
+            template.Seal();
+            return template;
         }
 
         private static Style BuildItemStyle(PageTheme theme)

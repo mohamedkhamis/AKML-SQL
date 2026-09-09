@@ -306,6 +306,8 @@
     <Compile Include="$(MSBuildThisFileDirectory)Commands\AiNoAgentGate.cs" />
     <!-- Spec 037 US3: chat-header agent picker (FR-037..FR-041, FR-044) -->
     <Compile Include="$(MSBuildThisFileDirectory)Ai\AiAgentPicker.cs" />
+    <!-- Spec 037: per-SQL-block "insert into active query" for chat code actions -->
+    <Compile Include="$(MSBuildThisFileDirectory)Ai\AiEditorSqlInserter.cs" />
     <!-- Phase 9 US7: Inline Ghost Text -->
     <Compile Include="$(MSBuildThisFileDirectory)Ai\GhostTextAdornment.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ai\GhostTextAdornmentProvider.cs" />

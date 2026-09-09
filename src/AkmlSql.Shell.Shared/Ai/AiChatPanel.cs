@@ -978,6 +978,8 @@ namespace AkmlSql.Shell.Shared.Ai
             {
                 // Spec 036 (US3, FR-015): with several SQL blocks in one message each copy action
                 // must say which block it belongs to. Single-block messages keep the engine label.
+                // Each block's copy and insert buttons share one horizontal row (the row owns the
+                // outer margin; the copy button keeps only a trailing gap against the insert one).
                 var blockNumber = 0;
                 foreach (var action in codeActions)
                 {
@@ -990,7 +992,7 @@ namespace AkmlSql.Shell.Shared.Ai
                     {
                         Content = label,
                         Tag = action.Code,
-                        Margin = new Thickness(Spacing.Md, 2, Spacing.Md, 2),
+                        Margin = new Thickness(0, 0, Spacing.Sm, 0),
                         Padding = new Thickness(Spacing.Sm, Spacing.Xs, Spacing.Sm, Spacing.Xs),
                         FontSize = 11,
                         BorderThickness = new Thickness(1),
@@ -1005,7 +1007,37 @@ namespace AkmlSql.Shell.Shared.Ai
                     actionButton.SetResourceReference(Button.ForegroundProperty, ThemeTokens.TextLink);
                     actionButton.SetResourceReference(Button.BorderBrushProperty, ThemeTokens.TextLink);
                     actionButton.Click += OnCodeActionClick;
-                    _conversationPanel.Children.Add(actionButton);
+
+                    // Spec 037: the insert companion drops this block's SQL into the active query
+                    // editor at the caret — same visual idiom as the copy button.
+                    var insertLabel = codeActions.Count > 1
+                        ? $"⇩ Insert SQL block {blockNumber} of {codeActions.Count}"
+                        : "⇩ Insert into query";
+                    var insertButton = new Button
+                    {
+                        Content = insertLabel,
+                        Tag = action.Code,
+                        Padding = new Thickness(Spacing.Sm, Spacing.Xs, Spacing.Sm, Spacing.Xs),
+                        FontSize = 11,
+                        BorderThickness = new Thickness(1),
+                        Cursor = Cursors.Hand,
+                        HorizontalAlignment = HorizontalAlignment.Left,
+                        FocusVisualStyle = FocusVisualStyles.HighStakes
+                    };
+                    System.Windows.Automation.AutomationProperties.SetName(insertButton, insertLabel);
+                    insertButton.SetResourceReference(Button.BackgroundProperty, ThemeTokens.SurfaceElevated);
+                    insertButton.SetResourceReference(Button.ForegroundProperty, ThemeTokens.TextLink);
+                    insertButton.SetResourceReference(Button.BorderBrushProperty, ThemeTokens.TextLink);
+                    insertButton.Click += OnInsertSqlClick;
+
+                    var row = new StackPanel
+                    {
+                        Orientation = Orientation.Horizontal,
+                        Margin = new Thickness(Spacing.Md, 2, Spacing.Md, 2)
+                    };
+                    row.Children.Add(actionButton);
+                    row.Children.Add(insertButton);
+                    _conversationPanel.Children.Add(row);
                 }
             }
 
@@ -1247,6 +1279,25 @@ namespace AkmlSql.Shell.Shared.Ai
                     return;
                 }
                 button.Content = "Copied!";
+            }
+        }
+
+        /// <summary>
+        /// Spec 037: the insert companion to <see cref="OnCodeActionClick"/> — drops the block's
+        /// SQL into the active query editor at the caret. When no query editor is active the
+        /// inserter reports false and the button says so transiently (the flash reverts after
+        /// 1.5 s, so the action stays retryable).
+        /// </summary>
+        private static void OnInsertSqlClick(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button button && button.Tag is string code)
+            {
+                if (AiEditorSqlInserter.TryInsertAtCaret(code))
+                {
+                    FlashButtonContent(button, "✓ Inserted");
+                    return;
+                }
+                FlashButtonContent(button, "⚠ No active query");
             }
         }
 

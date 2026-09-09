@@ -98,6 +98,21 @@ namespace AkmlSql.Shell.Shared.Tests
         }
 
         [StaFact]
+        public void Picker_combo_is_sized_to_fit_and_carries_the_themed_menu_item_style()
+        {
+            // Built in the constructor — no load needed for size or the themed item style.
+            var picker = new AiAgentPicker();
+            var combo = FindPickerCombo(picker);
+
+            // "chat menu header of select model is small" — the picker must be a comfortable size.
+            Assert.True(combo.MinWidth >= 150, $"MinWidth {combo.MinWidth} is too small to fit");
+            Assert.True(combo.MinHeight >= 24, $"MinHeight {combo.MinHeight} is too small to fit");
+            // The light-mode menu redesign themes the item container (null under High Contrast
+            // only, where the stock system-color rendering is the accessible one).
+            Assert.NotNull(combo.ItemContainerStyle);
+        }
+
+        [StaFact]
         public void Add_agent_entry_routes_through_ShowOptions()
         {
             var settings = new AppSettings();

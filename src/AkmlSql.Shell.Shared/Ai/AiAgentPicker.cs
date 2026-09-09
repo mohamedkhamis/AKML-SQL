@@ -18,9 +18,12 @@ namespace AkmlSql.Shell.Shared.Ai
     /// the owning panel decides what to persist (research R7). Shown even with exactly one
     /// agent — the user must always know who is answering.
     ///
-    /// <para>The ComboBox is themed via <see cref="ComboBoxTheming"/> (the stock template paints
-    /// a hardcoded light face). Unlike the Options dialogs, which rebuild on a theme switch, the
-    /// chat panel lives across one — so the template is re-applied on
+    /// <para>The ComboBox is themed via <see cref="ComboBoxTheming.ApplyMenuStyle(ComboBox)"/>
+    /// (the stock template paints a hardcoded light face): the menu variant keeps the themed
+    /// toggle face but renders the dropdown as a modern light menu — rounded, padded, subtly
+    /// shadowed card with gray hover and an accent-tint selection instead of the saturated
+    /// accent surface that read wrong in light mode. Unlike the Options dialogs, which rebuild
+    /// on a theme switch, the chat panel lives across one — so the template is re-applied on
     /// <see cref="ThemeRegistry.VariantChanged"/>, subscribed only while loaded. Items are plain
     /// strings per the <see cref="ComboBoxTheming"/> contract.</para>
     /// </summary>
@@ -49,20 +52,21 @@ namespace AkmlSql.Shell.Shared.Ai
             _combo = new ComboBox
             {
                 FontSize = Typography.Small,
-                MinWidth = 110,
+                MinWidth = 170,
+                MinHeight = 28,
                 VerticalAlignment = VerticalAlignment.Center,
                 ToolTip = "Choose which agent answers your chat messages",
                 FocusVisualStyle = FocusVisualStyles.HighStakes
             };
             System.Windows.Automation.AutomationProperties.SetName(_combo, ComboAutomationName);
-            ComboBoxTheming.Apply(_combo);
+            ComboBoxTheming.ApplyMenuStyle(_combo);
             _combo.SelectionChanged += OnSelectionChanged;
 
             Content = _combo;
 
             Loaded += (_, _) =>
             {
-                ComboBoxTheming.Apply(_combo);
+                ComboBoxTheming.ApplyMenuStyle(_combo);
                 ThemeRegistry.Instance.VariantChanged += OnThemeVariantChanged;
             };
             Unloaded += (_, _) => ThemeRegistry.Instance.VariantChanged -= OnThemeVariantChanged;
@@ -117,6 +121,6 @@ namespace AkmlSql.Shell.Shared.Ai
             AgentSelected?.Invoke(this, _agentIds[index]);
         }
 
-        private void OnThemeVariantChanged(object? sender, EventArgs e) => ComboBoxTheming.Apply(_combo);
+        private void OnThemeVariantChanged(object? sender, EventArgs e) => ComboBoxTheming.ApplyMenuStyle(_combo);
     }
 }

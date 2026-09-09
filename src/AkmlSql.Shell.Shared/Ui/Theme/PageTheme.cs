@@ -1,4 +1,4 @@
-﻿#nullable enable
+#nullable enable
 using System.Windows.Media;
 
 namespace AkmlSql.Shell.Shared.Ui.Theme
@@ -34,12 +34,18 @@ namespace AkmlSql.Shell.Shared.Ui.Theme
         public SolidColorBrush TreeHover { get; }
         public SolidColorBrush Caret { get; }
 
+        /// <summary>Accent TINT for selected rows on light menus (the chat agent picker's
+        /// dropdown) — <see cref="ThemeTokens.SurfaceSelection"/>. Unlike <see cref="Selected"/>
+        /// (the saturated accent surface built to carry <see cref="SelectedText"/>), this reads
+        /// correctly under <see cref="FgPrimary"/> text in both themes.</summary>
+        public SolidColorBrush SelectionTint { get; }
+
         private PageTheme(
             Color main, Color sidebar, Color panel, Color input, Color inputReadOnly,
             Color button, Color buttonHover, Color selected,
             Color border, Color comboBorder,
             Color fgPrimary, Color fgSecondary, Color fgAccent, Color fgWhite,
-            Color selectedText, Color sep, Color treeHover, Color caret)
+            Color selectedText, Color sep, Color treeHover, Color caret, Color selectionTint)
         {
             Main = Freeze(new SolidColorBrush(main));
             Sidebar = Freeze(new SolidColorBrush(sidebar));
@@ -60,6 +66,7 @@ namespace AkmlSql.Shell.Shared.Ui.Theme
             Transparent = Freeze(new SolidColorBrush(Colors.Transparent));
             TreeHover = Freeze(new SolidColorBrush(treeHover));
             Caret = Freeze(new SolidColorBrush(caret));
+            SelectionTint = Freeze(new SolidColorBrush(selectionTint));
         }
 
         public static readonly PageTheme Dark = FromPalette(ThemePalette.Dark);
@@ -86,7 +93,8 @@ namespace AkmlSql.Shell.Shared.Ui.Theme
                 selectedText:  C(ThemeTokens.TextOnAccent),
                 sep:           C(ThemeTokens.BorderSubtle),
                 treeHover:     C(ThemeTokens.SurfaceHover),
-                caret:         C(ThemeTokens.TextPrimary)
+                caret:         C(ThemeTokens.TextPrimary),
+                selectionTint: C(ThemeTokens.SurfaceSelection)
             );
         }
 
