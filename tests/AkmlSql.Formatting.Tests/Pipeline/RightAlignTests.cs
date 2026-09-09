@@ -79,6 +79,26 @@ public class RightAlignTests
         Assert.True(result.ValidationPassed, result.FormattedText);
     }
 
+    [Fact]
+    public void Operators_RightAligned_TabsWhenPossible_AlignsWithSpaces()
+    {
+        // tabsWhenPossible = tabs for indentation, spaces for alignment: unlike pure "tabs",
+        // the right-align pass must still run (its columns ride the space grid).
+        var profile = LoadDefaultStyle();
+        profile.Whitespace.TabStyle = "tabsWhenPossible";
+        profile.Operators.Alignment = "rightAligned";
+        const string sql = "select orderid, total from orders where orderdate between '2025-01-01' and '2025-12-31' and total between 100 and 10000 or status = 'Open';";
+        var result = new FormatterPipeline().Format(sql, profile);
+        Assert.True(result.ValidationPassed, result.FormattedText);
+
+        var lines = result.FormattedText.Replace("\r\n", "\n").Split('\n');
+        int andEnd = RightEdgeOf(lines, "AND");
+        int orEnd = RightEdgeOf(lines, "OR");
+        Assert.True(andEnd > 0 && orEnd > 0, "AND/OR must each be on their own line:\n" + result.FormattedText);
+        Assert.True(andEnd == orEnd,
+            $"AND right-edge col {andEnd} != OR right-edge col {orEnd}:\n{result.FormattedText}");
+    }
+
     // The right edge (1-based end column) of a keyword that begins its line, or -1.
     private static int RightEdgeOf(string[] lines, string keyword)
     {
