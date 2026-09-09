@@ -110,10 +110,16 @@ SolidCompression=yes
 PrivilegesRequired=admin
 PrivilegesRequiredOverridesAllowed=commandline
 UsePreviousAppDir=yes
-; Assets to be replaced with branded versions from design team (US14 — deferred)
+; Branded assets, generated from the design canvas artboards (TURN 5/6).
+; icon.ico carries 10 entries (16-256), all using the 5a glyph-only mark — the
+; design keeps the wordmark off the icon because it smudges below ~48px.
+; The wizard images list 100/125/150/200% variants; Inno picks the one matching
+; the current DPI. WizardSmallImageFile renders into a 55x55 box so those must
+; stay square — the design's 497x58 header strip is an NSIS size and has no
+; equivalent control in Inno's modern wizard.
 SetupIconFile=assets\icon.ico
-WizardImageFile=assets\sidebar.bmp
-WizardSmallImageFile=assets\banner.bmp
+WizardImageFile=assets\sidebar.bmp,assets\sidebar-125.bmp,assets\sidebar-150.bmp,assets\sidebar-200.bmp
+WizardSmallImageFile=assets\banner.bmp,assets\banner-125.bmp,assets\banner-150.bmp,assets\banner-200.bmp
 WizardStyle=modern
 WizardSizePercent=120
 DisableWelcomePage=no
