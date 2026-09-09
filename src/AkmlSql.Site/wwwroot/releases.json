@@ -1,7 +1,35 @@
 ﻿{
     "product":  "AKML SQL",
-    "generatedAt":  "2026-09-08T20:19:24Z",
+    "generatedAt":  "2026-09-09T10:37:42Z",
     "releases":  [
+                     {
+                         "version":  "1.26.0909.1215",
+                         "releasedAt":  "2026-09-09",
+                         "supportedHosts":  [
+                                                "SSMS 22",
+                                                "VS 2026"
+                                            ],
+                         "downloadUrl":  "downloads/AKMLSQLSetup-1.26.0909.1215.exe",
+                         "sha256Hash":  "6daa0bf88ef1b073fd959872ed68b9e05369ecba0e80532633564edb1f4f4f0a",
+                         "releaseNotesUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases",
+                         "notesSummary":  "Chat agent picker redesign + insert-into-query button, format-styles live preview fixes, and Khamis style formatting fixes (real tabs, no more one-line squashing).",
+                         "minimumOsVersion":  "10.0",
+                         "cdnUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases/download/v1.26.0909.1215/AKMLSQLSetup-1.26.0909.1215.exe"
+                     },
+                     {
+                         "version":  "1.26.0909.1225",
+                         "releasedAt":  "2026-09-09",
+                         "supportedHosts":  [
+                                                "SSMS 22",
+                                                "VS 2026"
+                                            ],
+                         "downloadUrl":  "downloads/AKMLSQLSetup-1.26.0909.1225.exe",
+                         "sha256Hash":  "4eb505fc5369ff4f190f2e4db70158b6d28aa2f726a6643ae1e542c959064504",
+                         "releaseNotesUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases",
+                         "notesSummary":  "AKML SQL 1.26.0909.1225 installer for SSMS 22 and Visual Studio 2026 (81.47 MB).",
+                         "minimumOsVersion":  "10.0",
+                         "cdnUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases/download/v1.26.0909.1225/AKMLSQLSetup-1.26.0909.1225.exe"
+                     },
                      {
                          "version":  "1.26.0908.2157",
                          "releasedAt":  "2026-09-08",
