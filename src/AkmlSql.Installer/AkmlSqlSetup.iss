@@ -135,9 +135,22 @@ UninstallDisplayIcon={app}\AkmlSql.Core.dll
 CloseApplications=yes
 CloseApplicationsFilter=Ssms.exe,devenv.exe
 
-; Code signing (configure via iscc.exe /S flag)
-; SignTool=mysigntool
-; SignedUninstaller=yes
+; --- Code signing (off unless a thumbprint is supplied) ------------------------------
+; SmartScreen builds reputation from the SIGNATURE, not the download domain: an unsigned
+; installer from a young domain gets held/flagged by the browser (the "download doesn't
+; start until I click twice" report). Sign by passing the cert's SHA-1 thumbprint:
+;   ISCC /DCodeSignThumbprint=<thumbprint> AkmlSqlSetup.iss
+; build.ps1 wires this automatically when AKML_CODESIGN_THUMBPRINT is set AND signtool.exe
+; is available (Windows Kits or PATH), passing the matching /Sakmlsign command. The cert
+; (with private key) must be in the CurrentUser or LocalMachine "My" store. Timestamping
+; keeps the signature valid after the cert itself expires.
+#ifndef CodeSignThumbprint
+  #define CodeSignThumbprint ""
+#endif
+#if CodeSignThumbprint != ""
+SignTool=akmlsign
+SignedUninstaller=yes
+#endif
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

@@ -74,6 +74,16 @@
                 <a class="btn btn-secondary" href="@latest.ReleaseNotesUrl" target="_blank" rel="noopener noreferrer">Release notes</a>
             }
         </p>
+        @* SmartScreen guidance: the installer is currently UNSIGNED, and a brand-new domain has
+           no browser reputation — Edge/Chrome may hold the first download for evaluation or flag
+           it in the download shelf. Telling the user what the warning looks like and what to do
+           beats leaving them thinking the click did nothing. *@
+        <p class="download-note">
+            First time downloading? Your browser may briefly hold the file for a security review
+            or mark it <em>"not commonly downloaded"</em> — the installer is not yet code-signed.
+            Choose <strong>Keep</strong> (in Edge: <strong>… → Keep → Show more → Keep anyway</strong>),
+            then verify it against the SHA-256 below.
+        </p>
         <div class="hash-block">
             <h3>SHA-256</h3>
             <p class="hash-hint">
