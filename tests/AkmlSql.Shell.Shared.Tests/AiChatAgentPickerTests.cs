@@ -619,12 +619,27 @@ namespace AkmlSql.Shell.Shared.Tests
 
             internal AppDataRedirect()
             {
+                // Same process-wide lock as AppDataIsolatedTest: the env var is process-global
+                // and this class lives in a different collection, so without the shared lock a
+                // racing Dispose could restore the real path mid-write (fixture agents once
+                // landed in the developer's REAL config.json).
+                AppDataIsolatedTest.EnvVarLock.Wait();
                 _prior = Environment.GetEnvironmentVariable("AKML_APP_DATA_ROOT");
                 Environment.SetEnvironmentVariable("AKML_APP_DATA_ROOT",
                     Path.Combine(Path.GetTempPath(), "akml-picker-tests-" + Guid.NewGuid().ToString("N")));
             }
 
-            public void Dispose() => Environment.SetEnvironmentVariable("AKML_APP_DATA_ROOT", _prior);
+            public void Dispose()
+            {
+                try
+                {
+                    Environment.SetEnvironmentVariable("AKML_APP_DATA_ROOT", _prior);
+                }
+                finally
+                {
+                    AppDataIsolatedTest.EnvVarLock.Release();
+                }
+            }
         }
     }
 }

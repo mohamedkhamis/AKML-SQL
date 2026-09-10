@@ -275,10 +275,19 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         /// every background comes with a foreground. Hover is declared before selected, so a
         /// selected-and-hovered row keeps the selected pairing. Shared with the fallback-order
         /// list on the AI page (spec 037 US4).
+        /// <para>
+        /// The style MUST own the item template: the stock Aero2 <see cref="ListBoxItem"/>
+        /// template paints its own ~24%-alpha highlight wash on selection and ignores the item's
+        /// <see cref="Control.BackgroundProperty"/> — our SelectedText white then sat on a
+        /// near-white wash (invisible selected row, the user-reported bug). The Border template
+        /// below paints the trigger-set Background directly, so the selected row is the solid
+        /// accent surface the foreground was chosen for.
+        /// </para>
         /// </summary>
         internal static Style BuildItemStyle(PageTheme theme)
         {
             var style = new Style(typeof(ListBoxItem));
+            style.Setters.Add(new Setter(Control.TemplateProperty, BuildItemTemplate()));
             style.Setters.Add(new Setter(Control.BackgroundProperty, theme.Transparent));
             style.Setters.Add(new Setter(Control.ForegroundProperty, theme.FgPrimary));
             style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(8, 5, 8, 5)));
@@ -297,6 +306,28 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             style.Triggers.Add(selectedTrigger);
 
             return style;
+        }
+
+        /// <summary>
+        /// Minimal Border+ContentPresenter item template: paints the item's (trigger-set)
+        /// Background instead of the stock Aero2 selection wash. See <see cref="BuildItemStyle"/>.
+        /// Internal so other options lists (e.g. the settings search results) share it.
+        /// </summary>
+        internal static ControlTemplate BuildItemTemplate()
+        {
+            var border = new FrameworkElementFactory(typeof(Border));
+            border.Name = "Bd";
+            border.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Control.BackgroundProperty));
+            border.SetValue(Border.PaddingProperty, new TemplateBindingExtension(Control.PaddingProperty));
+
+            var content = new FrameworkElementFactory(typeof(ContentPresenter));
+            content.SetValue(FrameworkElement.HorizontalAlignmentProperty,
+                new TemplateBindingExtension(ItemsControl.HorizontalContentAlignmentProperty));
+            content.SetValue(FrameworkElement.VerticalAlignmentProperty,
+                new TemplateBindingExtension(ItemsControl.VerticalContentAlignmentProperty));
+            border.AppendChild(content);
+
+            return new ControlTemplate(typeof(ListBoxItem)) { VisualTree = border };
         }
 
         internal static Button MakeButton(string content, string automationName)

@@ -790,6 +790,10 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
             // Themed item container — flat rows with hover/selected highlight
             var itemStyle = new Style(typeof(ListBoxItem));
+            // Own the template: the stock Aero2 template paints a ~24% wash on selection and
+            // ignores the Background set below — white SelectedText on a near-white wash is
+            // invisible (same bug class as the agent list; shared template).
+            itemStyle.Setters.Add(new Setter(Control.TemplateProperty, Pages.AiAgentListView.BuildItemTemplate()));
             itemStyle.Setters.Add(new Setter(Control.BackgroundProperty, _theme.Transparent));
             itemStyle.Setters.Add(new Setter(Control.ForegroundProperty, _theme.FgPrimary));
             itemStyle.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(10, 7, 10, 7)));

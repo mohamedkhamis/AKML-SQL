@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Shell.Shared.Ai;
 using Xunit;
@@ -28,8 +29,41 @@ namespace AkmlSql.Shell.Shared.Tests
     /// "AkmlSql ThemeRegistry" collection serialises them against the other panel classes).</para>
     /// </summary>
     [Collection("AkmlSql ThemeRegistry")]
-    public class AiChatPanelCopyButtonTests
+    public class AiChatPanelCopyButtonTests : IDisposable
     {
+        /// <summary>
+        /// Deterministic usable agent for the whole class. These tests build live panels whose
+        /// greeting/gating comes from config; reading the machine's REAL config.json made them
+        /// depend on the developer's agents AND flake whenever another test class redirected
+        /// the config path mid-run (empty config → no greeting bubble → copy buttons missing).
+        /// </summary>
+        private static readonly AppSettings SeededSettings = Seed();
+        private readonly Func<AppSettings>? _priorProvider;
+
+        public AiChatPanelCopyButtonTests()
+        {
+            _priorProvider = AiChatPanel.TestSettingsProvider;
+            AiChatPanel.TestSettingsProvider = () => SeededSettings;
+        }
+
+        public void Dispose() => AiChatPanel.TestSettingsProvider = _priorProvider;
+
+        private static AppSettings Seed()
+        {
+            var settings = new AppSettings();
+            settings.Ai.Agents.Add(new AiAgent
+            {
+                Id = "test-agent-1",
+                Name = "TestClaude",
+                Provider = "anthropic",
+                Model = "claude-sonnet-4-6",
+                ApiKey = "sk-test",
+                Enabled = true,
+            });
+            settings.Ai.ActiveAgentId = "test-agent-1";
+            return settings;
+        }
+
         [StaFact]
         public void Every_bubble_gets_a_copy_button_that_copies_the_whole_message()
         {
