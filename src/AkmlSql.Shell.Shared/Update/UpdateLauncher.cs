@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using Constants = AkmlSql.Core.Constants;
@@ -131,13 +132,19 @@ namespace AkmlSql.Shell.Shared.Update
 
         private static Process? StartProcessDefault(ProcessStartInfo info) => Process.Start(info);
 
-        private static string? FindUpdaterPath()
+        /// <summary>The candidate updater paths, x86 Program Files first. Exposed for tests.</summary>
+        internal static IReadOnlyList<string> UpdaterPathCandidates()
         {
-            // Try both ProgramFiles locations to handle x86 and x64 host processes.
-            // On x86 processes, Environment.SpecialFolder.ProgramFiles resolves to
-            // "Program Files (x86)", but the installer puts files in "Program Files".
-            var candidates = new[]
+            // The Inno installer is 32-bit, so {app} always lands under "Program Files (x86)"
+            // — check it FIRST (mirrors EngineProcessManager's engine lookup). From a 64-bit
+            // host process (SSMS 22, VS 2026) SpecialFolder.ProgramFiles AND ProgramW6432 both
+            // resolve to the 64-bit "Program Files", where the updater is never installed;
+            // looking there first made every update check fail with "updater not found".
+            return new[]
             {
+                Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+                    "AKML SQL", "AkmlSql.Updater.exe"),
                 Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
                     "AKML SQL", "AkmlSql.Updater.exe"),
@@ -145,6 +152,11 @@ namespace AkmlSql.Shell.Shared.Update
                     Environment.GetEnvironmentVariable("ProgramW6432") ?? string.Empty,
                     "AKML SQL", "AkmlSql.Updater.exe")
             };
+        }
+
+        private static string? FindUpdaterPath()
+        {
+            var candidates = UpdaterPathCandidates();
 
             foreach (var path in candidates)
             {
