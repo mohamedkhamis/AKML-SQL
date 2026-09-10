@@ -140,27 +140,39 @@ namespace AkmlSql.Shell.Shared.Ai
             };
             headerBar.SetResourceReference(Border.BackgroundProperty, ThemeTokens.SurfaceElevated);
 
-            var headerStack = new StackPanel { Orientation = Orientation.Horizontal };
+            var headerGrid = new Grid();
+            // [title | * db name (ellipsis) | agent picker | copy] — the star column takes the
+            // squeeze so a long server.database never pushes the agent dropdown off the edge
+            // (user feedback: "Gemini" ended up clipped at the panel's right edge).
+            headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
             var titleLabel = new TextBlock
             {
                 Text = "AI Chat",
                 FontWeight = FontWeights.SemiBold,
                 FontSize = 13,
-                VerticalAlignment = VerticalAlignment.Center
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, Spacing.Sm, 0)
             };
             titleLabel.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPrimary);
-            headerStack.Children.Add(titleLabel);
+            Grid.SetColumn(titleLabel, 0);
+            headerGrid.Children.Add(titleLabel);
 
             _headerLabel = new TextBlock
             {
                 Text = string.Empty,
                 FontSize = 11,
                 VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(Spacing.Md, 0, 0, 0)
+                Margin = new Thickness(0, 0, Spacing.Sm, 0),
+                // Ellipsize; SetDatabaseContext puts the full name on the tooltip.
+                TextTrimming = TextTrimming.CharacterEllipsis
             };
             _headerLabel.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
-            headerStack.Children.Add(_headerLabel);
+            Grid.SetColumn(_headerLabel, 1);
+            headerGrid.Children.Add(_headerLabel);
 
             // Spec 037 (US3, FR-037/FR-038/FR-044): the agent picker lives in the header — the
             // panel's "who and what" strip — beside the database label and the ⧉ button, so the
@@ -169,11 +181,12 @@ namespace AkmlSql.Shell.Shared.Ai
             _agentPicker = new AiAgentPicker
             {
                 VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(Spacing.Md, 0, 0, 0)
+                Margin = new Thickness(0)
             };
             _agentPicker.AgentSelected += (_, agentId) => OnChatAgentSelected(agentId);
             _agentPicker.AddAgentRequested += (_, _) => OnChatAgentAddRequested();
-            headerStack.Children.Add(_agentPicker);
+            Grid.SetColumn(_agentPicker, 2);
+            headerGrid.Children.Add(_agentPicker);
 
             // Spec 036 (US3, FR-018): copy the entire conversation, each turn attributed to its
             // speaker, built from _history at click time. Lives in the header so it is reachable
@@ -184,7 +197,7 @@ namespace AkmlSql.Shell.Shared.Ai
                 ToolTip = "Copy the whole conversation to the clipboard",
                 FontSize = 11,
                 Padding = new Thickness(Spacing.Sm, 0, Spacing.Sm, 2),
-                Margin = new Thickness(Spacing.Md, 0, 0, 0),
+                Margin = new Thickness(Spacing.Sm, 0, 0, 0),
                 BorderThickness = new Thickness(0),
                 Background = Brushes.Transparent,
                 Cursor = Cursors.Hand,
@@ -197,9 +210,10 @@ namespace AkmlSql.Shell.Shared.Ai
             copyConversationButton.MouseEnter += (s, _) => ((Button)s).Opacity = 1.0;
             copyConversationButton.MouseLeave += (s, _) => ((Button)s).Opacity = 0.9;
             copyConversationButton.Click += OnCopyConversationClick;
-            headerStack.Children.Add(copyConversationButton);
+            Grid.SetColumn(copyConversationButton, 3);
+            headerGrid.Children.Add(copyConversationButton);
 
-            headerBar.Child = headerStack;
+            headerBar.Child = headerGrid;
             DockPanel.SetDock(headerBar, Dock.Top);
             rootPanel.Children.Add(headerBar);
 
@@ -245,10 +259,12 @@ namespace AkmlSql.Shell.Shared.Ai
                 Content = "Send",
                 MinWidth = 64,
                 Padding = new Thickness(Spacing.Md, 6, Spacing.Md, 6),
-                Margin = new Thickness(Spacing.Xs, 0, Spacing.Sm, Spacing.Sm),
+                Margin = new Thickness(Spacing.Xs, Spacing.Sm, Spacing.Sm, Spacing.Sm),
                 Cursor = Cursors.Hand,
                 FontSize = 12,
-                VerticalAlignment = VerticalAlignment.Bottom,
+                // Stretch to the composer's full height so button and growing input read as one
+                // bar (the old bottom-aligned chip floated oddly beside a 2-line box).
+                VerticalAlignment = VerticalAlignment.Stretch,
                 FocusVisualStyle = FocusVisualStyles.HighStakes
             };
             ThemedButton.ApplyPrimary(_sendButton);
@@ -287,7 +303,8 @@ namespace AkmlSql.Shell.Shared.Ai
                 TextWrapping = TextWrapping.Wrap,
                 IsHitTestVisible = false,
                 VerticalAlignment = VerticalAlignment.Top,
-                Margin = new Thickness(Spacing.Sm + 4, Spacing.Sm + 7, Spacing.Sm, 0)
+                // Match the TextBox's inner text origin exactly: margin Sm + border 1 + padding Sm.
+                Margin = new Thickness(Spacing.Sm + Spacing.Sm + 1, Spacing.Sm + 7, Spacing.Sm, 0)
             };
             _inputPlaceholder.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPlaceholder);
             _inputBox.TextChanged += (_, _) =>
@@ -821,6 +838,8 @@ namespace AkmlSql.Shell.Shared.Ai
             _headerLabel.Text = !string.IsNullOrEmpty(databaseName)
                 ? databaseName
                 : NotConnectedHeaderText;
+            // The header ellipsizes long server.database names — the tooltip keeps the full one.
+            _headerLabel.ToolTip = !string.IsNullOrEmpty(databaseName) ? databaseName : null;
         }
 
         private void OnInputKeyDown(object sender, KeyEventArgs e)

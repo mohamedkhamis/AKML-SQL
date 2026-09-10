@@ -183,7 +183,8 @@
         border-radius: var(--akml-scalar-radius-xs);
         padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-m);
         cursor: pointer;
-        align-self: flex-end;
+        /* Stretch to the composer's height so button and textarea read as one bar. */
+        align-self: stretch;
     }
     .akml-chat-send:hover:not(:disabled) { background-color: var(--akml-accent-primaryhover); }
     .akml-chat-send:disabled { opacity: 0.6; cursor: not-allowed; }
