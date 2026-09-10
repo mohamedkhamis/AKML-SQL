@@ -188,6 +188,57 @@ public sealed class ClientErrorEndpointTests
         Assert.Equal(error.ReceivedUtc, error.EventUtc);
     }
 
+    [Fact]
+    public async Task Handle_NoIngestKeyConfigured_AcceptsWithoutHeader()
+    {
+        var sink = new RecordingSink();
+
+        var result = await ClientErrorEndpoint.Handle(NewContext(ValidJson), new ClientErrorOptions(), sink);
+
+        Assert.Equal(StatusCodes.Status204NoContent, StatusOf(result));
+        Assert.Single(sink.Batches);
+    }
+
+    [Fact]
+    public async Task Handle_IngestKeyConfigured_MissingHeader_Returns404()
+    {
+        var sink = new RecordingSink();
+        var options = new ClientErrorOptions { IngestKey = "s3cret" };
+
+        var result = await ClientErrorEndpoint.Handle(NewContext(ValidJson), options, sink);
+
+        Assert.Equal(StatusCodes.Status404NotFound, StatusOf(result));
+        Assert.Empty(sink.Batches);
+    }
+
+    [Fact]
+    public async Task Handle_IngestKeyConfigured_WrongHeader_Returns404()
+    {
+        var sink = new RecordingSink();
+        var options = new ClientErrorOptions { IngestKey = "s3cret" };
+        var http = NewContext(ValidJson);
+        http.Request.Headers[ClientErrorEndpoint.IngestKeyHeader] = "s3creT"; // case must match too
+
+        var result = await ClientErrorEndpoint.Handle(http, options, sink);
+
+        Assert.Equal(StatusCodes.Status404NotFound, StatusOf(result));
+        Assert.Empty(sink.Batches);
+    }
+
+    [Fact]
+    public async Task Handle_IngestKeyConfigured_MatchingHeader_Returns204AndEnqueues()
+    {
+        var sink = new RecordingSink();
+        var options = new ClientErrorOptions { IngestKey = "s3cret" };
+        var http = NewContext(ValidJson);
+        http.Request.Headers[ClientErrorEndpoint.IngestKeyHeader] = "s3cret";
+
+        var result = await ClientErrorEndpoint.Handle(http, options, sink);
+
+        Assert.Equal(StatusCodes.Status204NoContent, StatusOf(result));
+        Assert.Single(sink.Batches);
+    }
+
     [Theory]
     [InlineData("verbose", "Verbose")]
     [InlineData("Debug", "Debug")]

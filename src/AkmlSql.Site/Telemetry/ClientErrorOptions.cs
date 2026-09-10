@@ -20,6 +20,17 @@ public sealed class ClientErrorOptions
     public bool Enabled { get; set; } = true;
 
     /// <summary>
+    /// Shared ingestion key. When set, a batch is accepted only if its
+    /// <c>X-AKML-Ingest-Key</c> header matches (constant-time compare); anything else gets the
+    /// same 404 as a disabled endpoint, so an unauthenticated caller cannot even tell the
+    /// route exists. EMPTY in the repo — the live value is the <c>ClientErrors__IngestKey</c>
+    /// environment variable on the app pool (same OPS pattern as <c>Admin__PasswordHash</c>),
+    /// and the client posts the compile-time key embedded in the product. Leave empty only
+    /// while old installs that predate the key must still report: empty means open intake.
+    /// </summary>
+    public string IngestKey { get; set; } = "";
+
+    /// <summary>
     /// Maximum events accepted from one batch. Extra events are truncated (dropped), not
     /// rejected: a crashing client should never be told to retry with a smaller batch.
     /// </summary>

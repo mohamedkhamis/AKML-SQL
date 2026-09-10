@@ -199,6 +199,14 @@ namespace AkmlSql.Core.Logging
                 var json = System.Text.Json.JsonSerializer.Serialize(
                     batch, TelemetryJsonContext.Default.TelemetryBatch);
                 using var content = new StringContent(json, Encoding.UTF8, "application/json");
+                // Shared ingestion key: the site 404s unauthenticated batches once the matching
+                // server variable is set (Constants docs cover the embedded-key threat model).
+                if (!string.IsNullOrEmpty(Constants.TelemetryIngestKey))
+                {
+                    content.Headers.TryAddWithoutValidation(
+                        Constants.TelemetryIngestKeyHeader, Constants.TelemetryIngestKey);
+                }
+
                 using var timeoutCts = new CancellationTokenSource(timeout);
                 using var response = await _http.PostAsync(Constants.TelemetryUrl, content, timeoutCts.Token)
                     .ConfigureAwait(false);
