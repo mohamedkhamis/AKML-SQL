@@ -1,0 +1,58 @@
+{
+  "akmlParityBaseline": {
+    "revision": "1.26.0526.0000",
+    "corpusItem": "sp031-11-insert-values",
+    "profile": "default"
+  },
+  "findings": [
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'insert' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'into' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 8
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'values' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 47
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'insert' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 2,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'into' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 2,
+      "column": 8
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'values' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 2,
+      "column": 47
+    },
+    {
+      "ruleId": "ST010",
+      "severity": "Hint",
+      "message": "Line exceeds 120 characters — consider breaking into multiple lines for readability",
+      "line": 2,
+      "column": 121
+    }
+  ]
+}

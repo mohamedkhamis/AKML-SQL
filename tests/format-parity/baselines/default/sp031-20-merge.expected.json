@@ -1,0 +1,219 @@
+{
+  "akmlParityBaseline": {
+    "revision": "1.26.0526.0000",
+    "corpusItem": "sp031-20-merge",
+    "profile": "default"
+  },
+  "findings": [
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'merge' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'as' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 20
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'using' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 30
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'select' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 37
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'as' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 69
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'from' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 77
+    },
+    {
+      "ruleId": "NM005",
+      "severity": "Warning",
+      "message": "Identifier 'order details' contains special characters — use standard alphanumeric names without spaces or special characters",
+      "line": 1,
+      "column": 86
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'group' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 102
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'by' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 108
+    },
+    {
+      "ruleId": "ST010",
+      "severity": "Hint",
+      "message": "Line exceeds 120 characters — consider breaking into multiple lines for readability",
+      "line": 1,
+      "column": 121
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'as' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 122
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'on' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 132
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'when' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 171
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'matched' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 176
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'and' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 184
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'then' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 223
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'update' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 228
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'set' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 235
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'when' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 295
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'matched' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 300
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'then' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 308
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'update' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 313
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'set' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 320
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'when' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 348
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'not' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 353
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'matched' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 357
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'by' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 365
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'then' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 375
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'insert' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 380
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'values' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 415
+    }
+  ]
+}

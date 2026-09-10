@@ -1,0 +1,24 @@
+-- akml-parity-baseline revision=1.26.0526.0000 corpus-item=sp031-08-case-long profile=ansi
+select
+    o.orderid,
+    case
+        when o.freight > 500
+    and o.shipcountry not in(
+    'USA',
+    'Canada'
+) then 'international heavy'
+        when o.freight > 100
+    then 'heavy shipment overweight'
+        when o.freight > 50
+    and o.shipvia = 3
+    then 'medium express shipment'
+        else 'standard ground delivery'
+        end as freightband,
+    case o.shipvia
+        when 1
+    then 'speedy'
+        when 2
+    then 'united'
+        else 'federal'
+        end as shippername
+from   dbo.orders o;
