@@ -1,5 +1,7 @@
 namespace AkmlSql.Site.Analytics;
 
+using AkmlSql.Site.Telemetry;
+
 // Site metrics models: events flow from the request pipeline (visit tracking middleware,
 // /dl download endpoint) through IAnalyticsSink into AnalyticsStore; AnalyticsSummary is the
 // read shape consumed by the /admin dashboard.
@@ -81,6 +83,9 @@ public interface IAnalyticsSink
 
     /// <summary>Queues a 404 for background persistence (dropped silently when the queue is full).</summary>
     void EnqueueNotFound(NotFoundInfo notFound);
+
+    /// <summary>Queues a batch of anonymous client error reports for background persistence (dropped silently when the queue is full).</summary>
+    void EnqueueClientErrors(ClientErrorBatch batch);
 }
 
 /// <summary>Aggregate count for one key (page path, file name, referrer host).</summary>

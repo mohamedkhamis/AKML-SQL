@@ -30,6 +30,15 @@ namespace AkmlSql.Core
         /// </summary>
         public const string UpdateManifestUrl = "https://akml.khamis.work/update-manifest.json";
 
+        /// <summary>
+        /// Anonymous error-telemetry endpoint on the product site. Receives batches of client
+        /// log events (severity <see cref="Constants"/>-configured minimum, default Error) so
+        /// failures in the field are visible in the site's admin portal. Anonymous by design:
+        /// the payload carries a random install id, product version, process name and OS version
+        /// — never a user name, machine name or IP-derived value.
+        /// </summary>
+        public const string TelemetryUrl = "https://akml.khamis.work/api/client-errors";
+
         public const string AppDataFolderName = "AKML SQL";
         public const string ConfigFileName = "config.json";
         public const string UpdateResultFileName = "update-available.json";

@@ -1,0 +1,194 @@
+@page "/admin/errors"
+@using System.Globalization
+@using AkmlSql.Site.Admin
+@using AkmlSql.Site.Analytics
+@using AkmlSql.Site.Telemetry
+@inject AnalyticsStore Store
+
+@* Client error telemetry. Static SSR like the dashboard: both filters (window, level) travel as
+   query-string values bound as STRINGS and normalized in OnParametersSet — see Days below for why
+   a mangled value must never reach Blazor's query binder. *@
+
+<PageTitle>Client error logs — AKML SQL Admin</PageTitle>
+<HeadContent>
+    <meta name="robots" content="noindex, nofollow" />
+</HeadContent>
+
+<div class="page-body container">
+<header class="page-header">
+    <p class="eyebrow">Admin</p>
+    <h1>Client error logs</h1>
+    <p class="page-intro">
+        Errors reported by the desktop product over the last @AdminDashboardOptions.Label(_days).
+    </p>
+    <p class="admin-privacy">
+        <strong>Privacy:</strong> reports are anonymous — a random client-generated install id, the
+        product version and the host process. No IP addresses, no machine names, no user identity.
+    </p>
+    <p><a href="/admin">← Site metrics dashboard</a></p>
+</header>
+
+<nav class="admin-toolbar" aria-label="Reporting window">
+    <span class="admin-toolbar-label" id="range-label">Window</span>
+    <ul class="admin-ranges" aria-labelledby="range-label">
+        @foreach (var range in AdminDashboardOptions.Ranges)
+        {
+            <li>
+                @if (range == _days)
+                {
+                    <a href="@DaysUrl(range)" aria-current="true" class="is-current">@AdminDashboardOptions.Label(range)</a>
+                }
+                else
+                {
+                    <a href="@DaysUrl(range)">@AdminDashboardOptions.Label(range)</a>
+                }
+            </li>
+        }
+    </ul>
+</nav>
+
+<nav class="admin-toolbar" aria-label="Severity level">
+    <span class="admin-toolbar-label" id="level-label">Level</span>
+    <ul class="admin-ranges" aria-labelledby="level-label">
+        <li>
+            @if (_level is null)
+            {
+                <a href="@LevelUrl(null)" aria-current="true" class="is-current">All</a>
+            }
+            else
+            {
+                <a href="@LevelUrl(null)">All</a>
+            }
+        </li>
+        @foreach (var level in ClientErrorLevelNormalization.Levels)
+        {
+            <li>
+                @if (level == _level)
+                {
+                    <a href="@LevelUrl(level)" aria-current="true" class="is-current">@level</a>
+                }
+                else
+                {
+                    <a href="@LevelUrl(level)">@level</a>
+                }
+            </li>
+        }
+    </ul>
+</nav>
+
+<section class="admin-stats" aria-label="Key metrics">
+    <div class="admin-stat">
+        <p class="admin-stat-value">@_summary.TotalWindow</p>
+        <p class="admin-stat-label">Errors · @_summary.Days days</p>
+    </div>
+    <div class="admin-stat">
+        <p class="admin-stat-value">@_summary.DistinctInstallsWindow</p>
+        <p class="admin-stat-label">Installs · @_summary.Days days</p>
+    </div>
+    <div class="admin-stat">
+        <p class="admin-stat-value">@(_summary.ByLevel.FirstOrDefault()?.Key ?? "—")</p>
+        <p class="admin-stat-label">Top level</p>
+    </div>
+</section>
+
+<div class="admin-tables">
+    <MetricTable Id="levels" Heading="By severity level" KeyHeader="Level" CountHeader="Errors"
+                 Rows="_summary.ByLevel" Total="_summary.ByLevel.Sum(r => r.Count)"
+                 Empty="No client errors recorded in this window." />
+
+    <section class="admin-panel" aria-labelledby="recent-heading">
+        <h2 id="recent-heading">Recent errors</h2>
+        @if (_summary.Recent.Count == 0)
+        {
+            <p class="admin-empty">No client errors recorded in this window.</p>
+        }
+        else
+        {
+            <div class="table-scroll">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">When (UTC)</th>
+                            <th scope="col">Level</th>
+                            <th scope="col">Version</th>
+                            <th scope="col">Host</th>
+                            <th scope="col">Install</th>
+                            <th scope="col">Message</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _summary.Recent)
+                        {
+                            <tr>
+                                <td>@row.Utc.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)</td>
+                                <td>@row.Level</td>
+                                <td>@(row.ProductVersion ?? "—")</td>
+                                <td>@(row.Host ?? "—")</td>
+                                <td><code>@ShortInstall(row.InstallId)</code></td>
+                                <td>
+                                    @row.Message
+                                    @if (!string.IsNullOrEmpty(row.Exception))
+                                    {
+                                        <details><summary>stack</summary><pre>@row.Exception</pre></details>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+</div>
+
+</div>
+
+@code {
+    /// <summary>Cap on the recent-events table — the newest rows are what a triage session reads.</summary>
+    private const int RecentLimit = 200;
+
+    private ClientErrorsSummary _summary = null!;
+    private int _days = AdminDashboardOptions.DefaultDays;
+    private string? _level;
+
+    /// <summary>
+    /// Reporting window from <c>?days=</c>; bound as a STRING (a value Blazor's query binder
+    /// cannot parse would otherwise 500 the page) and clamped by
+    /// <see cref="AdminDashboardOptions.NormalizeDays"/>.
+    /// </summary>
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "days")]
+    public string? Days { get; set; }
+
+    /// <summary>
+    /// Severity filter from <c>?level=</c>; bound as a string and normalized to the canonical
+    /// Serilog casing — an unrecognized value is treated as no filter, never an error.
+    /// </summary>
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "level")]
+    public string? Level { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        _days = AdminDashboardOptions.NormalizeDays(
+            int.TryParse(Days, NumberStyles.Integer, CultureInfo.InvariantCulture, out var requested)
+                ? requested
+                : null);
+        _level = ClientErrorLevelNormalization.Normalize(Level);
+        _summary = Store.GetClientErrorsSummary(_days, _level, RecentLimit);
+    }
+
+    /// <summary>Window-switch link preserving the selected level.</summary>
+    private string DaysUrl(int days) => _level is null
+        ? $"/admin/errors?days={days}"
+        : $"/admin/errors?days={days}&level={_level}";
+
+    /// <summary>Level-switch link preserving the selected window; null clears the filter.</summary>
+    private string LevelUrl(string? level) => level is null
+        ? $"/admin/errors?days={_days}"
+        : $"/admin/errors?days={_days}&level={level}";
+
+    /// <summary>First 8 characters of the install id — enough to correlate rows, short enough to read.</summary>
+    private static string ShortInstall(string? installId) =>
+        string.IsNullOrEmpty(installId) ? "—" : installId.Length <= 8 ? installId : installId[..8];
+}

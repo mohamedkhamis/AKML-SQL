@@ -15,7 +15,9 @@ namespace AkmlSql.Core.Tests.Config
             var s = new AppSettings();
             Assert.Equal(1, s.ConfigVersion);
             Assert.True(s.AutoUpdateEnabled);
-            Assert.False(s.TelemetryEnabled);
+            // Anonymous error reporting ships on by default; Settings → General turns it off.
+            Assert.True(s.TelemetryEnabled);
+            Assert.Equal("Error", s.TelemetryMinimumLevel);
             Assert.Null(s.LastUpdateCheck);
             Assert.NotNull(s.InstallId);
             Assert.NotEmpty(s.InstallId);

@@ -20,8 +20,15 @@ namespace AkmlSql.Core.Config
         /// <summary>When <c>true</c>, the shell checks for updates on startup.</summary>
         public bool AutoUpdateEnabled { get; set; } = true;
 
-        /// <summary>Reserved for future telemetry opt-in. Defaults to <c>false</c>.</summary>
-        public bool TelemetryEnabled { get; set; }
+        /// <summary>
+        /// Anonymous error telemetry: when true (the default), log events at or above
+        /// <see cref="TelemetryMinimumLevel"/> are batched and POSTed to the product site so
+        /// failures in the field show up in the admin portal. The payload identifies the install
+        /// only by the anonymous <see cref="InstallId"/> — no user name, machine name or
+        /// IP-derived value is ever sent. The Settings → General toggle flips this off.
+        /// </summary>
+        [JsonPropertyName("telemetryEnabled")]
+        public bool TelemetryEnabled { get; set; } = true;
 
         /// <summary>
         /// UI theme for AKML SQL dialogs. Valid values: "dark", "light", "system".
@@ -133,6 +140,14 @@ namespace AkmlSql.Core.Config
         /// </summary>
         [JsonPropertyName("logMinimumLevel")]
         public string LogMinimumLevel { get; set; } = "Debug";
+
+        /// <summary>
+        /// Minimum level for telemetry upload, independent of <see cref="LogMinimumLevel"/> (the
+        /// local file can stay verbose while only real errors leave the machine).
+        /// Valid values: Verbose, Debug, Information, Warning, Error, Fatal. Defaults to Error.
+        /// </summary>
+        [JsonPropertyName("telemetryMinimumLevel")]
+        public string TelemetryMinimumLevel { get; set; } = "Error";
     }
 
     /// <summary>

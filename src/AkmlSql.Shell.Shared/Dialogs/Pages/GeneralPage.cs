@@ -10,7 +10,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         public string Key     => "General";
         public string Display => "General";
         public string Title   => "General Settings";
-        public string Help    => "Configure the AKML SQL dialog theme, automatic update checks, and anonymous usage telemetry. This page also shows the configuration file, log directory, and installed version.";
+        public string Help    => "Configure the AKML SQL dialog theme, automatic update checks, and anonymous error reporting. This page also shows the configuration file, log directory, and installed version.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {
@@ -29,9 +29,9 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             ctx.RegisterSearch("Check for updates automatically", "Checks for new versions every 24 hours on startup", "Toggle", rowAutoUpdate);
 
             var (rowTelemetry, chkTelemetry) = ctx.Rows.AddToggle(panel,
-                "Send anonymous usage telemetry",
-                "No personally identifiable information is collected");
-            ctx.RegisterSearch("Send anonymous usage telemetry", "No personally identifiable information is collected", "Toggle", rowTelemetry);
+                "Send anonymous error reports",
+                "Error-level log entries only — no personal data, machine name or IP is collected");
+            ctx.RegisterSearch("Send anonymous error reports", "Error-level log entries only — no personal data, machine name or IP is collected", "Toggle", rowTelemetry);
 
             ctx.Rows.AddGroupSeparator(panel);
             ctx.Rows.AddGroupHeader(panel, "Paths");

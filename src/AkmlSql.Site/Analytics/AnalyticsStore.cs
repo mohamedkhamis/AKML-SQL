@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using AkmlSql.Site.Telemetry;
 using Microsoft.Data.Sqlite;
 
 namespace AkmlSql.Site.Analytics;
@@ -283,6 +284,41 @@ public sealed class AnalyticsStore : IDisposable
         }
     }
 
+    /// <summary>
+    /// Records one batch of anonymous client error reports. Nothing IP-derived is stored —
+    /// <see cref="ClientErrorInfo.InstallId"/> is a random client-generated GUID. The day bucket
+    /// comes from the client-claimed event time, so a delayed upload lands on the day the error
+    /// happened, not the day it arrived.
+    /// </summary>
+    public void LogClientErrors(ClientErrorBatch batch)
+    {
+        ArgumentNullException.ThrowIfNull(batch);
+
+        lock (_gate)
+        {
+            foreach (var error in batch.Errors)
+            {
+                using var command = _connection.CreateCommand();
+                command.CommandText =
+                    "INSERT INTO client_errors (received_utc, day, event_utc, level, message, exception, " +
+                    "source, product_version, host, install_id) " +
+                    "VALUES ($received, $day, $event, $level, $message, $exception, " +
+                    "$source, $version, $host, $install);";
+                command.Parameters.AddWithValue("$received", FormatUtc(error.ReceivedUtc));
+                command.Parameters.AddWithValue("$day", FormatDay(DateOnly.FromDateTime(error.EventUtc.UtcDateTime)));
+                command.Parameters.AddWithValue("$event", FormatUtc(error.EventUtc));
+                command.Parameters.AddWithValue("$level", error.Level);
+                command.Parameters.AddWithValue("$message", error.Message);
+                command.Parameters.AddWithValue("$exception", (object?)error.Exception ?? DBNull.Value);
+                command.Parameters.AddWithValue("$source", (object?)error.Source ?? DBNull.Value);
+                command.Parameters.AddWithValue("$version", (object?)error.ProductVersion ?? DBNull.Value);
+                command.Parameters.AddWithValue("$host", (object?)error.Host ?? DBNull.Value);
+                command.Parameters.AddWithValue("$install", (object?)error.InstallId ?? DBNull.Value);
+                command.ExecuteNonQuery();
+            }
+        }
+    }
+
     /// <summary>Dashboard summary anchored at the current UTC instant.</summary>
     public AnalyticsSummary GetSummary(int days) => GetSummary(days, DateTimeOffset.UtcNow);
 
@@ -377,6 +413,41 @@ public sealed class AnalyticsStore : IDisposable
         }
     }
 
+    /// <summary>Client-error summary for /admin/errors, anchored at the current UTC instant.</summary>
+    public ClientErrorsSummary GetClientErrorsSummary(int days, string? level, int recentLimit) =>
+        GetClientErrorsSummary(days, level, recentLimit, DateTimeOffset.UtcNow);
+
+    /// <summary>
+    /// Client-error summary anchored at <paramref name="now"/> (injectable for tests). The window
+    /// is today-(<paramref name="days"/>-1)..today on the day column, today inclusive — the same
+    /// convention as <see cref="GetSummary(int)"/>. <paramref name="level"/> filters only the
+    /// recent-rows list; the caller (page) has already normalized it, so it is a plain equality.
+    /// </summary>
+    public ClientErrorsSummary GetClientErrorsSummary(int days, string? level, int recentLimit, DateTimeOffset now)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(days, 1);
+
+        var today = DateOnly.FromDateTime(now.UtcDateTime);
+        var sinceWindow = today.AddDays(-(days - 1));
+        var clampedRecentLimit = Math.Clamp(recentLimit, 1, 500);
+
+        lock (_gate)
+        {
+            return new ClientErrorsSummary
+            {
+                Days = days,
+                TotalWindow = CountRows("client_errors", "day >= $day", ("$day", FormatDay(sinceWindow))),
+                ByLevel = QueryClientErrorLevels(sinceWindow),
+                DistinctInstallsWindow = CountRows(
+                    "client_errors",
+                    "day >= $day AND install_id IS NOT NULL AND install_id <> ''",
+                    ("$day", FormatDay(sinceWindow)),
+                    distinctColumn: "install_id"),
+                Recent = QueryRecentClientErrors(sinceWindow, level, clampedRecentLimit),
+            };
+        }
+    }
+
     public void Dispose() => _connection.Dispose();
 
     /// <summary>Loads the persisted salt, or generates and persists a fresh 32-byte one on first run.</summary>
@@ -437,6 +508,22 @@ public sealed class AnalyticsStore : IDisposable
                     path TEXT NOT NULL,
                     referrer_host TEXT NULL
                 );
+                -- Anonymous client error reports (POST /api/client-errors). No IP-derived column
+                -- at all: install_id is a random client-generated GUID, and "day" buckets the
+                -- CLIENT-claimed event time (event_utc), with received_utc kept for auditing.
+                CREATE TABLE IF NOT EXISTS client_errors (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    received_utc TEXT NOT NULL,
+                    day TEXT NOT NULL,
+                    event_utc TEXT NOT NULL,
+                    level TEXT NOT NULL,
+                    message TEXT NOT NULL,
+                    exception TEXT NULL,
+                    source TEXT NULL,
+                    product_version TEXT NULL,
+                    host TEXT NULL,
+                    install_id TEXT NULL
+                );
                 """;
             command.ExecuteNonQuery();
         }
@@ -478,6 +565,8 @@ public sealed class AnalyticsStore : IDisposable
                 CREATE INDEX IF NOT EXISTS ix_visits_day ON visits (day);
                 CREATE INDEX IF NOT EXISTS ix_downloads_day ON downloads (day);
                 CREATE INDEX IF NOT EXISTS ix_visits_day_ua ON visits (day, ua_family);
+                CREATE INDEX IF NOT EXISTS ix_client_errors_day ON client_errors (day);
+                CREATE INDEX IF NOT EXISTS ix_client_errors_day_level ON client_errors (day, level);
                 DROP INDEX IF EXISTS ix_visits_utc;
                 DROP INDEX IF EXISTS ix_downloads_utc;
                 """;
@@ -627,7 +716,7 @@ public sealed class AnalyticsStore : IDisposable
         lock (_gate)
         {
             var removed = 0;
-            foreach (var table in (string[])["visits", "downloads", "not_found"])
+            foreach (var table in (string[])["visits", "downloads", "not_found", "client_errors"])
             {
                 using var command = _connection.CreateCommand();
                 command.CommandText = $"DELETE FROM {table} WHERE day < $cutoff;";
@@ -784,6 +873,67 @@ public sealed class AnalyticsStore : IDisposable
         while (reader.Read())
         {
             rows.Add(new CountRow(reader.GetString(0), reader.GetInt64(1)));
+        }
+
+        return rows;
+    }
+
+    /// <summary>
+    /// Errors per level within the window, descending by count. No row cap: the endpoint only
+    /// stores the six canonical Serilog levels, so the group count is bounded by design.
+    /// Caller must hold <c>_gate</c>.
+    /// </summary>
+    private IReadOnlyList<CountRow> QueryClientErrorLevels(DateOnly since)
+    {
+        using var command = _connection.CreateCommand();
+        command.CommandText =
+            "SELECT level, COUNT(*) FROM client_errors WHERE day >= $day " +
+            "GROUP BY level ORDER BY COUNT(*) DESC, level;";
+        command.Parameters.AddWithValue("$day", FormatDay(since));
+
+        var rows = new List<CountRow>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            rows.Add(new CountRow(reader.GetString(0), reader.GetInt64(1)));
+        }
+
+        return rows;
+    }
+
+    /// <summary>
+    /// Latest stored errors in the window, newest first, capped at <paramref name="limit"/> and
+    /// optionally restricted to one (already-normalized) level. Caller must hold <c>_gate</c>.
+    /// </summary>
+    private IReadOnlyList<ClientErrorRow> QueryRecentClientErrors(DateOnly since, string? level, int limit)
+    {
+        using var command = _connection.CreateCommand();
+        command.CommandText =
+            "SELECT id, event_utc, level, product_version, host, install_id, message, exception " +
+            "FROM client_errors " +
+            "WHERE day >= $day AND ($level IS NULL OR level = $level) " +
+            "ORDER BY id DESC LIMIT $limit;";
+        command.Parameters.AddWithValue("$day", FormatDay(since));
+        command.Parameters.AddWithValue("$level", (object?)level ?? DBNull.Value);
+        command.Parameters.AddWithValue("$limit", limit);
+
+        var rows = new List<ClientErrorRow>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            var utc = DateTimeOffset.TryParse(
+                reader.GetString(1), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsed)
+                ? parsed
+                : DateTimeOffset.MinValue;
+            rows.Add(new ClientErrorRow(
+                reader.GetInt64(0),
+                utc,
+                reader.GetString(2),
+                reader.IsDBNull(3) ? null : reader.GetString(3),
+                reader.IsDBNull(4) ? null : reader.GetString(4),
+                reader.IsDBNull(5) ? null : reader.GetString(5),
+                reader.GetString(6),
+                reader.IsDBNull(7) ? null : reader.GetString(7)));
         }
 
         return rows;
