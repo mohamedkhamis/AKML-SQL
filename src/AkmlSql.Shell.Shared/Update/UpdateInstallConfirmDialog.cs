@@ -23,14 +23,12 @@ namespace AkmlSql.Shell.Shared.Update
     internal sealed class UpdateInstallConfirmDialog : Window
     {
         private static readonly Color AmberBorder = Color.FromRgb(0xFF, 0xC1, 0x07);
-        private static readonly Color BtnPrimary = Color.FromRgb(0x00, 0x78, 0xD4);
         private static readonly FontFamily SegoeUiFont = new("Segoe UI");
 
         private SolidColorBrush _mutedBrush = null!;
         private SolidColorBrush _dividerBrush = null!;
         private SolidColorBrush _cardBgBrush = null!;
         private SolidColorBrush _chromeFgBrush = null!;
-        private SolidColorBrush _onAccentBrush = null!;
         private SolidColorBrush _accentBrush = null!;
 
         private UpdateInstallConfirmDialog() { }
@@ -78,7 +76,6 @@ namespace AkmlSql.Shell.Shared.Update
             _mutedBrush = (SolidColorBrush)registry[ThemeTokens.TextPlaceholder];
             _dividerBrush = (SolidColorBrush)registry[ThemeTokens.BorderDefault];
             _cardBgBrush = (SolidColorBrush)registry[ThemeTokens.SurfaceElevated];
-            _onAccentBrush = (SolidColorBrush)registry[ThemeTokens.TextOnAccent];
             _accentBrush = Freeze(new SolidColorBrush(AmberBorder));
 
             Title = "Install update";
@@ -186,17 +183,16 @@ namespace AkmlSql.Shell.Shared.Update
             DockPanel.SetDock(btnPanel, Dock.Right);
 
             // FR-005 — deliberately not the default button; installing must be a deliberate click.
+            // ThemedButton: the stock Aero hover chrome hid the white accent text (user report).
             var installBtn = new Button
             {
                 Content = "Install now",
                 MinWidth = 110,
                 Height = 32,
                 FontSize = 13,
-                Foreground = _onAccentBrush,
-                Background = Freeze(new SolidColorBrush(BtnPrimary)),
-                BorderThickness = new Thickness(0),
                 Padding = new Thickness(16, 0, 16, 0)
             };
+            ThemedButton.ApplyPrimary(installBtn);
             installBtn.Click += (_, _) => Complete(true);
 
             cancelBtn = new Button
@@ -208,6 +204,7 @@ namespace AkmlSql.Shell.Shared.Update
                 IsCancel = true,
                 FontSize = 13
             };
+            ThemedButton.ApplySecondary(cancelBtn);
             cancelBtn.Click += (_, _) => Complete(false);
 
             btnPanel.Children.Add(installBtn);

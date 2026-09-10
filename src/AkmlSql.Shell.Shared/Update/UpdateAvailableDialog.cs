@@ -21,7 +21,6 @@ namespace AkmlSql.Shell.Shared.Update
     /// </summary>
     internal sealed class UpdateAvailableDialog : Window
     {
-        private static readonly Color BtnPrimary = Color.FromRgb(0x00, 0x78, 0xD4);
         private static readonly FontFamily SegoeUiFont = new("Segoe UI");
 
         private UpdateAvailableDialog() { }
@@ -65,7 +64,6 @@ namespace AkmlSql.Shell.Shared.Update
             var chromeFg = (SolidColorBrush)registry[ThemeTokens.TextPrimary];
             var muted = (SolidColorBrush)registry[ThemeTokens.TextPlaceholder];
             var linkBrush = (SolidColorBrush)registry[ThemeTokens.TextLink];
-            var onAccent = (SolidColorBrush)registry[ThemeTokens.TextOnAccent];
 
             Title = "Update available";
             Width = 440;
@@ -118,18 +116,17 @@ namespace AkmlSql.Shell.Shared.Update
                 HorizontalAlignment = HorizontalAlignment.Right
             };
 
-            // FR-005 — deliberately not the default button.
+            // FR-005 — deliberately not the default button. ThemedButton: the stock Aero
+            // chrome repaints the face near-white on hover, hiding the white accent text.
             var installBtn = new Button
             {
                 Content = "Download and install",
                 MinWidth = 130,
                 Height = 32,
                 FontSize = 13,
-                Foreground = onAccent,
-                Background = Freeze(new SolidColorBrush(BtnPrimary)),
-                BorderThickness = new Thickness(0),
                 Padding = new Thickness(16, 0, 16, 0)
             };
+            ThemedButton.ApplyPrimary(installBtn);
             installBtn.Click += (_, _) => Complete(true);
 
             var laterBtn = new Button
@@ -141,6 +138,7 @@ namespace AkmlSql.Shell.Shared.Update
                 IsCancel = true,
                 FontSize = 13
             };
+            ThemedButton.ApplySecondary(laterBtn);
             laterBtn.Click += (_, _) => Complete(false);
 
             btnPanel.Children.Add(installBtn);
@@ -185,12 +183,6 @@ namespace AkmlSql.Shell.Shared.Update
             return !string.IsNullOrEmpty(url)
                 && Uri.TryCreate(url, UriKind.Absolute, out var uri)
                 && uri.Scheme == Uri.UriSchemeHttps;
-        }
-
-        private static SolidColorBrush Freeze(SolidColorBrush brush)
-        {
-            if (brush.CanFreeze) brush.Freeze();
-            return brush;
         }
     }
 }

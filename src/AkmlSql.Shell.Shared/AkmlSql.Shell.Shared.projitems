@@ -106,6 +106,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\ThemeMigrationManager.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\HostThemeWatcher.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\FocusVisualStyles.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\ThemedButton.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\ThemeAwareWindow.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\ThemeAwareUserControl.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\DpiHelper.cs" />

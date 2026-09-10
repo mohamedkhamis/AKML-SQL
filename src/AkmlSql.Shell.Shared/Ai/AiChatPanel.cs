@@ -246,15 +246,12 @@ namespace AkmlSql.Shell.Shared.Ai
                 MinWidth = 64,
                 Padding = new Thickness(Spacing.Md, 6, Spacing.Md, 6),
                 Margin = new Thickness(Spacing.Xs, 0, Spacing.Sm, Spacing.Sm),
-                BorderThickness = new Thickness(1),
                 Cursor = Cursors.Hand,
                 FontSize = 12,
                 VerticalAlignment = VerticalAlignment.Bottom,
                 FocusVisualStyle = FocusVisualStyles.HighStakes
             };
-            _sendButton.SetResourceReference(Button.BackgroundProperty, ThemeTokens.AccentPrimary);
-            _sendButton.SetResourceReference(Button.ForegroundProperty, ThemeTokens.TextOnAccent);
-            _sendButton.SetResourceReference(Button.BorderBrushProperty, ThemeTokens.AccentPrimaryPressed);
+            ThemedButton.ApplyPrimary(_sendButton);
             _sendButton.Click += OnSendClick;
             DockPanel.SetDock(_sendButton, Dock.Right);
 
