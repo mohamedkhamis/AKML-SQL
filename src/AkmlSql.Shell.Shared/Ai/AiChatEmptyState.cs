@@ -60,7 +60,7 @@ namespace AkmlSql.Shell.Shared.Ai
                 MinWidth = 120,
                 Padding = new Thickness(Spacing.Md, 6, Spacing.Md, 6),
                 Margin = new Thickness(0, Spacing.Md, 0, 0),
-                BorderThickness = new Thickness(0),
+                BorderThickness = new Thickness(1),
                 HorizontalAlignment = HorizontalAlignment.Center,
                 Cursor = System.Windows.Input.Cursors.Hand,
                 FontSize = 12,
@@ -68,6 +68,7 @@ namespace AkmlSql.Shell.Shared.Ai
             };
             addButton.SetResourceReference(Button.BackgroundProperty, ThemeTokens.AccentPrimary);
             addButton.SetResourceReference(Button.ForegroundProperty, ThemeTokens.TextOnAccent);
+            addButton.SetResourceReference(Button.BorderBrushProperty, ThemeTokens.AccentPrimaryPressed);
             System.Windows.Automation.AutomationProperties.SetName(addButton, AddAgentAutomationName);
             addButton.Click += (_, _) => AddAgentRequested?.Invoke(this, EventArgs.Empty);
 

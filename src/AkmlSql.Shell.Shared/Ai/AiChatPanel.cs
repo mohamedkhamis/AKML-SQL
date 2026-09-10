@@ -49,6 +49,7 @@ namespace AkmlSql.Shell.Shared.Ai
         private readonly StackPanel _conversationPanel;
         private readonly ScrollViewer _scrollViewer;
         private readonly TextBox _inputBox;
+        private readonly TextBlock _inputPlaceholder;
         private readonly Button _sendButton;
         private readonly TextBlock _headerLabel;
         private readonly AiAgentPicker _agentPicker;
@@ -188,13 +189,13 @@ namespace AkmlSql.Shell.Shared.Ai
                 Background = Brushes.Transparent,
                 Cursor = Cursors.Hand,
                 VerticalAlignment = VerticalAlignment.Center,
-                Opacity = 0.75,
+                Opacity = 0.9,
                 FocusVisualStyle = FocusVisualStyles.HighStakes
             };
             copyConversationButton.SetResourceReference(Button.ForegroundProperty, ThemeTokens.TextSecondary);
             System.Windows.Automation.AutomationProperties.SetName(copyConversationButton, "Copy conversation");
             copyConversationButton.MouseEnter += (s, _) => ((Button)s).Opacity = 1.0;
-            copyConversationButton.MouseLeave += (s, _) => ((Button)s).Opacity = 0.75;
+            copyConversationButton.MouseLeave += (s, _) => ((Button)s).Opacity = 0.9;
             copyConversationButton.Click += OnCopyConversationClick;
             headerStack.Children.Add(copyConversationButton);
 
@@ -235,38 +236,39 @@ namespace AkmlSql.Shell.Shared.Ai
             DockPanel.SetDock(_statusStrip, Dock.Top);
             rootPanel.Children.Add(_statusStrip);
 
-            // ──── Bottom: Input bar with TextBox + Send button ────
-            var inputBar = new DockPanel
-            {
-                Margin = new Thickness(0)
-            };
-            inputBar.SetResourceReference(DockPanel.BackgroundProperty, ThemeTokens.SurfacePanel);
-
+            // ──── Bottom: the composer — multi-line input + Send, visually separated from the
+            // conversation by a divider. The old flat single-line bar blended into the panel:
+            // no visible input border, no placeholder, no hint how to add a line. Enter sends,
+            // Shift+Enter inserts a newline; the box grows 2..6 lines before scrolling.
             _sendButton = new Button
             {
                 Content = "Send",
-                MinWidth = 60,
+                MinWidth = 64,
                 Padding = new Thickness(Spacing.Md, 6, Spacing.Md, 6),
-                Margin = new Thickness(Spacing.Xs, Spacing.Xs, Spacing.Xs, Spacing.Xs),
-                BorderThickness = new Thickness(0),
+                Margin = new Thickness(Spacing.Xs, 0, Spacing.Sm, Spacing.Sm),
+                BorderThickness = new Thickness(1),
                 Cursor = Cursors.Hand,
                 FontSize = 12,
+                VerticalAlignment = VerticalAlignment.Bottom,
                 FocusVisualStyle = FocusVisualStyles.HighStakes
             };
             _sendButton.SetResourceReference(Button.BackgroundProperty, ThemeTokens.AccentPrimary);
             _sendButton.SetResourceReference(Button.ForegroundProperty, ThemeTokens.TextOnAccent);
+            _sendButton.SetResourceReference(Button.BorderBrushProperty, ThemeTokens.AccentPrimaryPressed);
             _sendButton.Click += OnSendClick;
             DockPanel.SetDock(_sendButton, Dock.Right);
-            inputBar.Children.Add(_sendButton);
 
             _inputBox = new TextBox
             {
-                AcceptsReturn = false,
+                AcceptsReturn = true,
                 AcceptsTab = false,
                 TextWrapping = TextWrapping.Wrap,
-                VerticalContentAlignment = VerticalAlignment.Center,
+                MinLines = 2,
+                MaxLines = 6,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                VerticalContentAlignment = VerticalAlignment.Top,
                 Padding = new Thickness(Spacing.Sm, 6, Spacing.Sm, 6),
-                Margin = new Thickness(Spacing.Xs, Spacing.Xs, 0, Spacing.Xs),
+                Margin = new Thickness(Spacing.Sm, Spacing.Sm, 0, Spacing.Sm),
                 FontSize = 12,
                 BorderThickness = new Thickness(1),
                 FocusVisualStyle = FocusVisualStyles.HighStakes
@@ -275,12 +277,48 @@ namespace AkmlSql.Shell.Shared.Ai
             _inputBox.SetResourceReference(TextBox.BackgroundProperty, ThemeTokens.SurfaceInput);
             _inputBox.SetResourceReference(TextBox.ForegroundProperty, ThemeTokens.TextPrimary);
             _inputBox.SetResourceReference(System.Windows.Controls.Primitives.TextBoxBase.CaretBrushProperty, ThemeTokens.TextPrimary);
-            _inputBox.SetResourceReference(TextBox.BorderBrushProperty, ThemeTokens.BorderDefault);
+            _inputBox.SetResourceReference(TextBox.BorderBrushProperty, ThemeTokens.BorderStrong);
             _inputBox.KeyDown += OnInputKeyDown;
-            inputBar.Children.Add(_inputBox);
 
-            DockPanel.SetDock(inputBar, Dock.Bottom);
-            rootPanel.Children.Add(inputBar);
+            // Placeholder overlay (the SnippetManagerDialog idiom): visible only while the box
+            // is empty; IsHitTestVisible=false so clicks fall through to the TextBox.
+            _inputPlaceholder = new TextBlock
+            {
+                Text = "Ask a question about this database…   (Enter sends · Shift+Enter for a new line)",
+                FontSize = 12,
+                FontStyle = FontStyles.Italic,
+                TextWrapping = TextWrapping.Wrap,
+                IsHitTestVisible = false,
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(Spacing.Sm + 4, Spacing.Sm + 7, Spacing.Sm, 0)
+            };
+            _inputPlaceholder.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPlaceholder);
+            _inputBox.TextChanged += (_, _) =>
+                _inputPlaceholder.Visibility = string.IsNullOrEmpty(_inputBox.Text)
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+
+            var inputGrid = new Grid();
+            inputGrid.Children.Add(_inputBox);
+            inputGrid.Children.Add(_inputPlaceholder);
+
+            var inputBar = new DockPanel
+            {
+                Margin = new Thickness(0)
+            };
+            inputBar.SetResourceReference(DockPanel.BackgroundProperty, ThemeTokens.SurfacePanel);
+            inputBar.Children.Add(_sendButton);
+            inputBar.Children.Add(inputGrid);
+
+            var composerFrame = new Border
+            {
+                Child = inputBar,
+                BorderThickness = new Thickness(0, 1, 0, 0)
+            };
+            composerFrame.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.BorderSplitter);
+
+            DockPanel.SetDock(composerFrame, Dock.Bottom);
+            rootPanel.Children.Add(composerFrame);
 
             // ──── Center: Scrollable conversation area ────
             _conversationPanel = new StackPanel
@@ -790,7 +828,10 @@ namespace AkmlSql.Shell.Shared.Ai
 
         private void OnInputKeyDown(object sender, KeyEventArgs e)
         {
-            if (e.Key == Key.Enter && !_isSending && _agentUsable)
+            // Enter sends; Shift+Enter falls through and inserts a newline (multi-line composer).
+            if (e.Key == Key.Enter
+                && (Keyboard.Modifiers & ModifierKeys.Shift) == 0
+                && !_isSending && _agentUsable)
             {
                 e.Handled = true;
                 _ = SendMessageAsync();
@@ -1111,13 +1152,13 @@ namespace AkmlSql.Shell.Shared.Ai
                 Background = Brushes.Transparent,
                 Cursor = Cursors.Hand,
                 VerticalAlignment = VerticalAlignment.Top,
-                Opacity = 0.55,
+                Opacity = 0.8,
                 FocusVisualStyle = FocusVisualStyles.HighStakes
             };
             copyButton.SetResourceReference(Button.ForegroundProperty, ThemeTokens.TextSecondary);
             System.Windows.Automation.AutomationProperties.SetName(copyButton, "Copy message");
             copyButton.MouseEnter += (s, _) => ((Button)s).Opacity = 1.0;
-            copyButton.MouseLeave += (s, _) => ((Button)s).Opacity = 0.55;
+            copyButton.MouseLeave += (s, _) => ((Button)s).Opacity = 0.8;
             copyButton.Click += OnCopyMessageClick;
 
             var layout = new Grid();
@@ -1158,6 +1199,9 @@ namespace AkmlSql.Shell.Shared.Ai
                     isUser ? Spacing.Sm : 60,  // Right margin
                     Spacing.Xs),
                 CornerRadius = new CornerRadius(Spacing.Sm),
+                // Visible edge: on the white light-theme panel a borderless slate bubble is
+                // indistinguishable from the background (user feedback).
+                BorderThickness = new Thickness(1),
                 HorizontalAlignment = isUser
                     ? HorizontalAlignment.Right
                     : HorizontalAlignment.Left,
@@ -1165,6 +1209,7 @@ namespace AkmlSql.Shell.Shared.Ai
             };
             bubble.SetResourceReference(Border.BackgroundProperty,
                 isUser ? ThemeTokens.ChatUserBubble : ThemeTokens.ChatAssistantBubble);
+            bubble.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.BorderStrong);
 
             return bubble;
         }

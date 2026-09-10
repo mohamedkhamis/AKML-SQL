@@ -1,7 +1,7 @@
 {
   "$schema": "./theme-tokens.schema.json",
   "version": 2,
-  "description": "Single source of truth for AKML SQL theme tokens. Consumed by the WPF ThemeRegistry (spec 016) and by scripts/generate-theme-css.ps1 which emits CSS custom-property files for the web edition (spec 021). Hex values mirror src/AkmlSql.Shell.Shared/Ui/Theme/ThemePalette.cs (edit BOTH in lockstep). High-contrast values map to CSS system colors (forced-colors keywords) since the WPF surface delegates HC to Windows SystemColors at runtime. v2 (2026-06): rebranded to AKML Blue #2563EB + slate surfaces; added radius scalars and a Syntax group; UI 14px / editor 13px.",
+  "description": "Single source of truth for AKML SQL theme tokens. Consumed by the WPF ThemeRegistry (spec 016) and by scripts/generate-theme-css.ps1 which emits CSS custom-property files for the web edition (spec 021). Hex values mirror src/AkmlSql.Shell.Shared/Ui/Theme/ThemePalette.cs (edit BOTH in lockstep). High-contrast values map to CSS system colors (forced-colors keywords) since the WPF surface delegates HC to Windows SystemColors at runtime. v2 (2026-06): rebranded to AKML Blue #2563EB + slate surfaces; added radius scalars and a Syntax group; UI 14px / editor 13px. v2.1 (2026-09): light-theme legibility pass — placeholder/disabled text, control/popup borders, splitters and the assistant chat bubble all strengthened (user feedback: elements were invisible on white surfaces); dark theme unchanged.",
   "groups": {
     "Surface": {
       "Akml.Brush.Surface.Canvas":          { "light": "#F1F5F9",   "dark": "#0F172A",   "highContrast": "Canvas" },
@@ -17,18 +17,18 @@
     "Text": {
       "Akml.Brush.Text.Primary":     { "light": "#0F172A", "dark": "#E2E8F0", "highContrast": "CanvasText" },
       "Akml.Brush.Text.Secondary":   { "light": "#475569", "dark": "#94A3B8", "highContrast": "GrayText" },
-      "Akml.Brush.Text.Disabled":    { "light": "#94A3B8", "dark": "#64748B", "highContrast": "GrayText" },
-      "Akml.Brush.Text.Placeholder": { "light": "#94A3B8", "dark": "#64748B", "highContrast": "GrayText" },
+      "Akml.Brush.Text.Disabled":    { "light": "#64748B", "dark": "#64748B", "highContrast": "GrayText" },
+      "Akml.Brush.Text.Placeholder": { "light": "#64748B", "dark": "#64748B", "highContrast": "GrayText" },
       "Akml.Brush.Text.Link":        { "light": "#2563EB", "dark": "#60A5FA", "highContrast": "LinkText" },
       "Akml.Brush.Text.OnAccent":    { "light": "#FFFFFF", "dark": "#FFFFFF", "highContrast": "HighlightText" },
       "Akml.Brush.Text.OnDanger":    { "light": "#FFFFFF", "dark": "#FFFFFF", "highContrast": "HighlightText" }
     },
     "Border": {
-      "Akml.Brush.Border.Default":  { "light": "#E2E8F0", "dark": "#14FFFFFF", "highContrast": "ButtonText" },
-      "Akml.Brush.Border.Strong":   { "light": "#CBD5E1", "dark": "#28FFFFFF", "highContrast": "ButtonText" },
-      "Akml.Brush.Border.Subtle":   { "light": "#E2E8F0", "dark": "#0DFFFFFF", "highContrast": "GrayText" },
+      "Akml.Brush.Border.Default":  { "light": "#94A3B8", "dark": "#14FFFFFF", "highContrast": "ButtonText" },
+      "Akml.Brush.Border.Strong":   { "light": "#64748B", "dark": "#28FFFFFF", "highContrast": "ButtonText" },
+      "Akml.Brush.Border.Subtle":   { "light": "#CBD5E1", "dark": "#0DFFFFFF", "highContrast": "GrayText" },
       "Akml.Brush.Border.Focus":    { "light": "#2563EB", "dark": "#60A5FA", "highContrast": "LinkText" },
-      "Akml.Brush.Border.Splitter": { "light": "#E2E8F0", "dark": "#14FFFFFF", "highContrast": "GrayText" }
+      "Akml.Brush.Border.Splitter": { "light": "#CBD5E1", "dark": "#14FFFFFF", "highContrast": "GrayText" }
     },
     "Accent": {
       "Akml.Brush.Accent.Primary":        { "light": "#2563EB", "dark": "#2563EB", "highContrast": "Highlight" },
@@ -45,11 +45,11 @@
       "Akml.Brush.Editor.MarginBackground": { "light": "#F8FAFC", "dark": "#1E293B", "highContrast": "ButtonFace" },
       "Akml.Brush.Editor.SpinnerStroke":    { "light": "#2563EB", "dark": "#60A5FA", "highContrast": "LinkText" },
       "Akml.Brush.Editor.PopupBackground":  { "light": "#FFFFFF", "dark": "#1E293B", "highContrast": "Canvas" },
-      "Akml.Brush.Editor.PopupBorder":      { "light": "#E2E8F0", "dark": "#14FFFFFF", "highContrast": "ButtonText" }
+      "Akml.Brush.Editor.PopupBorder":      { "light": "#94A3B8", "dark": "#14FFFFFF", "highContrast": "ButtonText" }
     },
     "Chat": {
       "Akml.Brush.Chat.UserBubble":      { "light": "#DBEAFE", "dark": "#1E3A5F", "highContrast": "Canvas" },
-      "Akml.Brush.Chat.AssistantBubble": { "light": "#F1F5F9", "dark": "#334155", "highContrast": "ButtonFace" },
+      "Akml.Brush.Chat.AssistantBubble": { "light": "#E2E8F0", "dark": "#334155", "highContrast": "ButtonFace" },
       "Akml.Brush.Chat.SystemBubble":    { "light": "#FEF3C7", "dark": "#3A3000", "highContrast": "Canvas" }
     },
     "Syntax": {
@@ -88,7 +88,7 @@
       "Akml.Brush.History.OpenIcon":       { "light": "#16A34A",   "dark": "#4ADE80",   "highContrast": "LinkText" },
       "Akml.Brush.History.ClosedIcon":     { "light": "#DC2626",   "dark": "#F87171",   "highContrast": "LinkText" },
       "Akml.Brush.History.Star.Active":    { "light": "#EA580C",   "dark": "#FB923C",   "highContrast": "LinkText" },
-      "Akml.Brush.History.Star.Inactive":  { "light": "#E2E8F0",   "dark": "#14FFFFFF", "highContrast": "GrayText" },
+      "Akml.Brush.History.Star.Inactive":  { "light": "#CBD5E1",   "dark": "#14FFFFFF", "highContrast": "GrayText" },
       "Akml.Brush.History.MatchHighlight": { "light": "#4DFEF08A", "dark": "#4DDAA520", "highContrast": "Highlight" }
     }
   },

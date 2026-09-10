@@ -88,18 +88,21 @@ namespace AkmlSql.Shell.Shared.Ui.Theme
                 // Text
                 [ThemeTokens.TextPrimary]     = Solid(0x0F, 0x17, 0x2A),
                 [ThemeTokens.TextSecondary]   = Solid(0x47, 0x55, 0x69),
-                [ThemeTokens.TextDisabled]    = Solid(0x94, 0xA3, 0xB8),
-                [ThemeTokens.TextPlaceholder] = Solid(0x94, 0xA3, 0xB8),
+                // v2.1 light-legibility: disabled/placeholder moved slate-400 → slate-500 —
+                // #94A3B8 on white was unreadable in practice (user feedback).
+                [ThemeTokens.TextDisabled]    = Solid(0x64, 0x74, 0x8B),
+                [ThemeTokens.TextPlaceholder] = Solid(0x64, 0x74, 0x8B),
                 [ThemeTokens.TextLink]        = Solid(0x25, 0x63, 0xEB),
                 [ThemeTokens.TextOnAccent]    = Solid(0xFF, 0xFF, 0xFF),
                 [ThemeTokens.TextOnDanger]    = Solid(0xFF, 0xFF, 0xFF),
 
-                // Border
-                [ThemeTokens.BorderDefault]  = Solid(0xE2, 0xE8, 0xF0),
-                [ThemeTokens.BorderStrong]   = Solid(0xCB, 0xD5, 0xE1),
-                [ThemeTokens.BorderSubtle]   = Solid(0xE2, 0xE8, 0xF0),
+                // Border (v2.1 light-legibility: clearly VISIBLE control borders on white —
+                // #E2E8F0 hairlines vanished against Surface.Panel)
+                [ThemeTokens.BorderDefault]  = Solid(0x94, 0xA3, 0xB8),
+                [ThemeTokens.BorderStrong]   = Solid(0x64, 0x74, 0x8B),
+                [ThemeTokens.BorderSubtle]   = Solid(0xCB, 0xD5, 0xE1),
                 [ThemeTokens.BorderFocus]    = Solid(0x25, 0x63, 0xEB),
-                [ThemeTokens.BorderSplitter] = Solid(0xE2, 0xE8, 0xF0),
+                [ThemeTokens.BorderSplitter] = Solid(0xCB, 0xD5, 0xE1),
 
                 // Accent (AKML Blue)
                 [ThemeTokens.AccentPrimary]        = Solid(0x25, 0x63, 0xEB),  // blue-600
@@ -116,11 +119,12 @@ namespace AkmlSql.Shell.Shared.Ui.Theme
                 [ThemeTokens.EditorMarginBackground] = Solid(0xF8, 0xFA, 0xFC),
                 [ThemeTokens.EditorSpinnerStroke]    = Solid(0x25, 0x63, 0xEB),
                 [ThemeTokens.EditorPopupBackground]  = Solid(0xFF, 0xFF, 0xFF),
-                [ThemeTokens.EditorPopupBorder]      = Solid(0xE2, 0xE8, 0xF0),
+                [ThemeTokens.EditorPopupBorder]      = Solid(0x94, 0xA3, 0xB8),
 
-                // Chat
+                // Chat (v2.1: assistant bubble deepened slate-100 → slate-200 — with the new
+                // Border.Strong bubble edge it now reads on the white panel)
                 [ThemeTokens.ChatUserBubble]      = Solid(0xDB, 0xEA, 0xFE),
-                [ThemeTokens.ChatAssistantBubble] = Solid(0xF1, 0xF5, 0xF9),
+                [ThemeTokens.ChatAssistantBubble] = Solid(0xE2, 0xE8, 0xF0),
                 [ThemeTokens.ChatSystemBubble]    = Solid(0xFE, 0xF3, 0xC7),
 
                 // Spec 020 — IconBadge (solid foreground colour per object type).
@@ -154,7 +158,7 @@ namespace AkmlSql.Shell.Shared.Ui.Theme
                 [ThemeTokens.HistoryOpenIcon]       = Solid(0x16, 0xA3, 0x4A),
                 [ThemeTokens.HistoryClosedIcon]     = Solid(0xDC, 0x26, 0x26),
                 [ThemeTokens.HistoryStarActive]     = Solid(0xEA, 0x58, 0x0C),
-                [ThemeTokens.HistoryStarInactive]   = Solid(0xE2, 0xE8, 0xF0),
+                [ThemeTokens.HistoryStarInactive]   = Solid(0xCB, 0xD5, 0xE1),
                 // Spec 020 PR-235 review fix: legacy ThemeManager.HistorySearchHighlight
                 // returned Color.FromArgb(0x4D, ...) — 30 % alpha so editor text behind the
                 // match remains readable. Preserving that alpha here against the
