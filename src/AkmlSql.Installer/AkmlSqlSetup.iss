@@ -23,7 +23,10 @@
 ;     Install with auto-update and telemetry disabled.
 ;
 ;   AKMLSQLSetup.exe /VERYSILENT /ACCEPTEULA /FORCECLOSEAPPS
-;     Force-close running SSMS/VS instances before installing.
+;     Force-close running SSMS/VS instances before installing. (Redundant in
+;     silent mode: silent installs ALWAYS force-close selected running hosts —
+;     there is no one to answer the prompt, and a still-open IDE respawns the
+;     engine mid-install, failing the file copy with DeleteFile code 5.)
 ;
 ;   AKMLSQLSetup.exe /VERYSILENT /ACCEPTEULA /IMPORTSQLPROMPT
 ;     Import SQL Prompt formatting styles during installation.
@@ -36,7 +39,7 @@
 ;   /NOUPDATE         Disable built-in auto-update check
 ;   /TELEMETRY        Enable anonymous usage telemetry (off by default)
 ;   /NOTELEMETRY      Explicitly disable telemetry
-;   /FORCECLOSEAPPS   Force-close running SSMS/VS without prompting
+;   /FORCECLOSEAPPS   Force-close running SSMS/VS without prompting (default in silent mode)
 ;   /IMPORTSQLPROMPT  Import SQL Prompt styles (only if SQL Prompt config detected)
 ;
 ; TODO T096: On uninstall, restore native SSMS IntelliSense if AKML SQL disabled it.
@@ -802,6 +805,24 @@ begin
   end;
 end;
 
+// Waits until the named process is really gone (bounded). taskkill only ISSUES the kill — the
+// process unwinds (and unmaps its DLLs) asynchronously, and file copy must not start while
+// those DLLs are still locked (DeleteFile failed; code 5). Returns instantly when the process
+// is not running at all.
+procedure WaitForProcessExit(ExeName: String; TimeoutSeconds: Integer);
+var
+  tries: Integer;
+begin
+  tries := 0;
+  while (tries < TimeoutSeconds) and IsProcessRunning(ExeName) do
+  begin
+    Sleep(1000);
+    tries := tries + 1;
+  end;
+  if IsProcessRunning(ExeName) then
+    Log('WARNING: ' + ExeName + ' still running after ' + IntToStr(TimeoutSeconds) + 's wait.');
+end;
+
 // The AKML engine/updater/analyzer are HEADLESS out-of-process helpers deployed under {app}.
 // The engine in particular is spawned by the shell but OUTLIVES it — it can linger as an orphan
 // after SSMS/VS close — keeping Engine\*.dll memory-mapped. If any is still alive when Inno starts
@@ -838,11 +859,20 @@ begin
   end;
 
   if IsProcessRunning('AkmlSql.Engine.exe') then
+  begin
     Exec('taskkill.exe', '/F /T /IM AkmlSql.Engine.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    WaitForProcessExit('AkmlSql.Engine.exe', 10);
+  end;
   if IsProcessRunning('AkmlSql.Updater.exe') then
+  begin
     Exec('taskkill.exe', '/F /IM AkmlSql.Updater.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    WaitForProcessExit('AkmlSql.Updater.exe', 5);
+  end;
   if IsProcessRunning('AkmlSql.Analyzer.exe') then
+  begin
     Exec('taskkill.exe', '/F /IM AkmlSql.Analyzer.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    WaitForProcessExit('AkmlSql.Analyzer.exe', 5);
+  end;
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
@@ -854,7 +884,13 @@ var
 begin
   Result := '';
   RunningList := '';
-  ForceClose := ExpandConstant('{param:FORCECLOSEAPPS|}') <> '';
+  // Silent installs (the SSMS/VS "Check for updates" flow runs the installer with its normal UI,
+  // but unattended /VERYSILENT deploys have no one to answer either) cannot show the close-apps
+  // prompt below — and skipping the close is fatal: a still-running SSMS/VS shell RESPAWNS the
+  // engine the moment TerminateAkmlBackgroundProcesses kills it, re-locking Engine\*.dll so the
+  // file copy dies with "DeleteFile failed; code 5". Force-close the selected running hosts in
+  // silent mode, exactly as /FORCECLOSEAPPS does interactively-by-request.
+  ForceClose := (ExpandConstant('{param:FORCECLOSEAPPS|}') <> '') or WizardSilent;
 
   for I := 0 to TargetCount - 1 do
   begin
@@ -863,9 +899,15 @@ begin
       if ForceClose then
       begin
         if Pos('SSMS', Targets[I].Name) > 0 then
-          Exec('taskkill.exe', '/F /IM Ssms.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode)
+        begin
+          Exec('taskkill.exe', '/F /IM Ssms.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+          WaitForProcessExit('Ssms.exe', 15);
+        end
         else
+        begin
           Exec('taskkill.exe', '/F /IM devenv.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+          WaitForProcessExit('devenv.exe', 15);
+        end;
       end
       else
       begin
@@ -884,9 +926,15 @@ begin
       mbConfirmation, MB_OKCANCEL) = IDOK then
     begin
       if IsProcessRunning('Ssms.exe') then
+      begin
         Exec('taskkill.exe', '/F /IM Ssms.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+        WaitForProcessExit('Ssms.exe', 15);
+      end;
       if IsProcessRunning('devenv.exe') then
+      begin
         Exec('taskkill.exe', '/F /IM devenv.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+        WaitForProcessExit('devenv.exe', 15);
+      end;
     end
     else
     begin
