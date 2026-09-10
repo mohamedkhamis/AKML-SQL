@@ -881,9 +881,13 @@ var
   RunningList: String;
   ForceClose: Boolean;
   ResultCode: Integer;
+  KillSsms: Boolean;
+  KillDevenv: Boolean;
 begin
   Result := '';
   RunningList := '';
+  KillSsms := False;
+  KillDevenv := False;
   // Silent installs (the SSMS/VS "Check for updates" flow runs the installer with its normal UI,
   // but unattended /VERYSILENT deploys have no one to answer either) cannot show the close-apps
   // prompt below — and skipping the close is fatal: a still-running SSMS/VS shell RESPAWNS the
@@ -892,24 +896,17 @@ begin
   // silent mode, exactly as /FORCECLOSEAPPS does interactively-by-request.
   ForceClose := (ExpandConstant('{param:FORCECLOSEAPPS|}') <> '') or WizardSilent;
 
+  // First pass: flag WHICH IDE families need closing (selected + running only).
   for I := 0 to TargetCount - 1 do
   begin
     if Targets[I].IsSelected and Targets[I].IsRunning then
     begin
-      if ForceClose then
-      begin
-        if Pos('SSMS', Targets[I].Name) > 0 then
-        begin
-          Exec('taskkill.exe', '/F /IM Ssms.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-          WaitForProcessExit('Ssms.exe', 15);
-        end
-        else
-        begin
-          Exec('taskkill.exe', '/F /IM devenv.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-          WaitForProcessExit('devenv.exe', 15);
-        end;
-      end
+      if Pos('SSMS', Targets[I].Name) > 0 then
+        KillSsms := True
       else
+        KillDevenv := True;
+
+      if not ForceClose then
       begin
         if RunningList <> '' then
           RunningList := RunningList + ', ';
@@ -918,27 +915,67 @@ begin
     end;
   end;
 
-  if (RunningList <> '') and not WizardSilent then
+  if ForceClose then
   begin
-    if MsgBox('The following applications are running and should be closed:'#13#10#13#10
-      + RunningList + #13#10#13#10
-      + 'Click OK to close them automatically, or Cancel to close them manually.',
-      mbConfirmation, MB_OKCANCEL) = IDOK then
+    // Silent/forced: kill + wait, then VERIFY — a survivor would keep Engine\*.dll locked, so
+    // at minimum the install log must say so honestly.
+    if KillSsms then
     begin
+      Exec('taskkill.exe', '/F /IM Ssms.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+      WaitForProcessExit('Ssms.exe', 15);
       if IsProcessRunning('Ssms.exe') then
+        Log('WARNING: Ssms.exe survived the silent force-close — Engine\*.dll may still be locked.');
+    end;
+    if KillDevenv then
+    begin
+      Exec('taskkill.exe', '/F /IM devenv.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+      WaitForProcessExit('devenv.exe', 15);
+      if IsProcessRunning('devenv.exe') then
+        Log('WARNING: devenv.exe survived the silent force-close — Engine\*.dll may still be locked.');
+    end;
+  end
+  else if RunningList <> '' then
+  begin
+    // Interactive: one confirm, then a VERIFIED close — the loop re-kills until the hosts are
+    // really gone, so setup never reaches a file copy that is guaranteed to fail with
+    // "DeleteFile failed; code 5". Cancel aborts BEFORE any file is touched.
+    if MsgBox('The following applications are running and must be closed to install:'#13#10#13#10
+      + RunningList + #13#10#13#10
+      + 'Click OK to close them automatically (unsaved query windows will be lost),'#13#10
+      + 'or Cancel to close them yourself and run setup again.',
+      mbConfirmation, MB_OKCANCEL) = IDCANCEL then
+    begin
+      Result := 'Please close the running applications and try again.';
+      Exit;
+    end;
+
+    while (KillSsms and IsProcessRunning('Ssms.exe'))
+       or (KillDevenv and IsProcessRunning('devenv.exe')) do
+    begin
+      if KillSsms and IsProcessRunning('Ssms.exe') then
       begin
         Exec('taskkill.exe', '/F /IM Ssms.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
         WaitForProcessExit('Ssms.exe', 15);
       end;
-      if IsProcessRunning('devenv.exe') then
+      if KillDevenv and IsProcessRunning('devenv.exe') then
       begin
         Exec('taskkill.exe', '/F /IM devenv.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
         WaitForProcessExit('devenv.exe', 15);
       end;
-    end
-    else
-    begin
-      Result := 'Please close the running applications and try again.';
+
+      if (KillSsms and IsProcessRunning('Ssms.exe'))
+         or (KillDevenv and IsProcessRunning('devenv.exe')) then
+      begin
+        Log('WARNING: a running IDE host survived taskkill /F — asking the user to close it.');
+        if MsgBox('Setup could not close the application automatically.'#13#10#13#10
+          + 'Close ' + RunningList + ' yourself, then click OK to check again,'#13#10
+          + 'or click Cancel to abort setup (nothing has been installed yet).',
+          mbError, MB_OKCANCEL) = IDCANCEL then
+        begin
+          Result := 'Please close the running applications and try again.';
+          Exit;
+        end;
+      end;
     end;
   end;
 
