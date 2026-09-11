@@ -43,7 +43,10 @@ namespace AkmlSql.Shell.Shared.Ai
 
         /// <summary>Spec 037 (research R9): the AI-config read behind RefreshConfiguration is
         /// cached this long — the same idiom AiCommandVisibility uses (CacheDurationMs = 5000),
-        /// so the 2-second binding tick never becomes per-tick disk I/O in the host.</summary>
+        /// so the 2-second binding tick never becomes per-tick disk I/O in the host. The
+        /// per-agent can-answer verdicts computed from that read are cached with it (see
+        /// <see cref="_canAnswerCache"/>): the disk read was never the only per-tick cost, the
+        /// DPAPI unwrap behind <see cref="AiChatEmptyState.CanAnswer"/> was the other one.</summary>
         private const int ConfigCacheSeconds = 5;
 
         private readonly StackPanel _conversationPanel;
@@ -82,6 +85,18 @@ namespace AkmlSql.Shell.Shared.Ai
         private string _configSignature = string.Empty;
         private AppSettings? _cachedSettings;
         private DateTime _configReadAtUtc = DateTime.MinValue;
+
+        /// <summary>
+        /// Spec 037 (US1, research R9): the can-answer verdict per agent of
+        /// <see cref="_cachedSettings"/>, keyed by agent instance (reference equality —
+        /// <c>AiAgent</c> is a plain class). <see cref="AiChatEmptyState.CanAnswer"/> ends in a
+        /// synchronous DPAPI unwrap, and the signature is recomputed on every 2-second tick, so
+        /// with the 20-agent maximum an uncached probe means 20 crypto round-trips on the UI
+        /// thread, 30 times a minute. Cleared in exactly the one place <see cref="_cachedSettings"/>
+        /// is re-read, so an edited key, an added agent or a removed one is still picked up on
+        /// the next read — immediately on the forceRefresh path.
+        /// </summary>
+        private readonly Dictionary<AiAgent, bool> _canAnswerCache = new();
 
         /// <summary>Spec 037 (US3): the resolved chat agent's name (S3), kept by
         /// <see cref="RenderAgentState"/> so the send path can attribute each answer — and so a
@@ -307,10 +322,11 @@ namespace AkmlSql.Shell.Shared.Ai
                 Margin = new Thickness(Spacing.Sm + Spacing.Sm + 1, Spacing.Sm + 7, Spacing.Sm, 0)
             };
             _inputPlaceholder.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPlaceholder);
-            _inputBox.TextChanged += (_, _) =>
-                _inputPlaceholder.Visibility = string.IsNullOrEmpty(_inputBox.Text)
-                    ? Visibility.Visible
-                    : Visibility.Collapsed;
+            // FR-015: the placeholder is a SIBLING of the TextBox, so the composer's IsEnabled
+            // does not reach it — both signals must run through one method, or a gated composer
+            // keeps inviting a question it cannot answer.
+            _inputBox.TextChanged += (_, _) => UpdatePlaceholderVisibility();
+            _inputBox.IsEnabledChanged += (_, _) => UpdatePlaceholderVisibility();
 
             var inputGrid = new Grid();
             inputGrid.Children.Add(_inputBox);
@@ -388,7 +404,19 @@ namespace AkmlSql.Shell.Shared.Ai
             Unloaded += (_, _) => _bindingTimer.Stop();
 
             RefreshBinding();
+            UpdatePlaceholderVisibility();   // FR-015: the initial state comes from neither event
         }
+
+        /// <summary>
+        /// FR-015: the placeholder invites a question, so it may show only while the composer can
+        /// take one — empty AND enabled. Both signals (text, enabled) route here so they cannot
+        /// diverge and leave an inviting placeholder over a composer that refuses input.
+        /// </summary>
+        private void UpdatePlaceholderVisibility()
+            => _inputPlaceholder.Visibility =
+                _inputBox.IsEnabled && string.IsNullOrEmpty(_inputBox.Text)
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
 
         /// <summary>
         /// Spec 036 (US1, FR-027/FR-029/FR-030): re-resolves the chat's binding to the active
@@ -465,6 +493,9 @@ namespace AkmlSql.Shell.Shared.Ai
                 {
                     _cachedSettings = LoadSettings();
                     _configReadAtUtc = DateTime.UtcNow;
+                    // The verdicts belong to the settings they were computed from — drop them
+                    // with the read that replaces those settings, never later (R9).
+                    _canAnswerCache.Clear();
                 }
                 settings = _cachedSettings;
 
@@ -488,8 +519,14 @@ namespace AkmlSql.Shell.Shared.Ai
         /// picker both render it (FR-037) — a rename must re-render without a panel rebuild.
         /// Anything not in it (a slider value, a reassigned key) changes nothing the panel
         /// renders, so it rightly costs no re-render.
+        /// <para>
+        /// The can-answer bit comes from <see cref="CanAnswerCached"/>, not straight from
+        /// <see cref="AiChatEmptyState.CanAnswer"/>: this runs on every 2-second tick and that
+        /// predicate ends in a synchronous DPAPI unwrap (R9). Instance, not static, for that
+        /// memo alone.
+        /// </para>
         /// </summary>
-        private static string ComputeSignature(AiSettings ai)
+        private string ComputeSignature(AiSettings ai)
         {
             var sb = new System.Text.StringBuilder();
             var agents = ai.Agents;
@@ -503,11 +540,25 @@ namespace AkmlSql.Shell.Shared.Ai
                     sb.Append(agent?.Id ?? string.Empty)
                       .Append('|')
                       .Append(agent?.Name ?? string.Empty)
-                      .Append(AiChatEmptyState.CanAnswer(agent) ? '1' : '0')
+                      .Append(CanAnswerCached(agent) ? '1' : '0')
                       .Append(';');
                 }
             }
             return sb.ToString();
+        }
+
+        /// <summary>
+        /// <see cref="AiChatEmptyState.CanAnswer"/>, memoised for the lifetime of the current
+        /// <see cref="_cachedSettings"/> — see <see cref="_canAnswerCache"/> for why the raw
+        /// predicate must not run per tick.
+        /// </summary>
+        private bool CanAnswerCached(AiAgent? agent)
+        {
+            if (agent == null) return false;
+            if (_canAnswerCache.TryGetValue(agent, out var cached)) return cached;
+            var canAnswer = AiChatEmptyState.CanAnswer(agent);
+            _canAnswerCache[agent] = canAnswer;
+            return canAnswer;
         }
 
         /// <summary>
@@ -519,7 +570,7 @@ namespace AkmlSql.Shell.Shared.Ai
         private void RenderAgentState(AiSettings ai)
         {
             var chatAgent = AiAgentResolver.ResolveFor(ai, AiFeature.Chat);
-            var canAnswer = chatAgent != null && AiChatEmptyState.CanAnswer(chatAgent);
+            var canAnswer = CanAnswerCached(chatAgent);   // memoised — no per-render DPAPI unwrap (R9)
             _agentUsable = canAnswer;
             _resolvedChatAgentName = chatAgent?.Name;
             _resolvedChatAgentId = chatAgent?.Id;
@@ -551,7 +602,13 @@ namespace AkmlSql.Shell.Shared.Ai
                     _conversationPanel.Children.Remove(_emptyStateCard);
                 _emptyStateCard = new AiChatEmptyState(reasonText);
                 _emptyStateCard.AddAgentRequested += (_, _) => OnAddAgentRequested();
-                _conversationPanel.Children.Insert(0, _emptyStateCard);
+                // FR-021: an agent can break MID-conversation (key rotated, disabled from another
+                // host), and the scrollback is then pinned at the bottom — inserted at the top the
+                // reason and its Add button land off-screen beside a silently dead composer. Append
+                // and scroll, the same as the FR-049 notice; on a first run the panel is empty, so
+                // this is the position Insert(0) had.
+                _conversationPanel.Children.Add(_emptyStateCard);
+                ScrollToBottom();
             }
 
             _inputBox.IsEnabled = canAnswer;
@@ -662,7 +719,20 @@ namespace AkmlSql.Shell.Shared.Ai
                     : agentId;
                 ai.FeatureAgents ??= new FeatureAgentAssignments();
                 if (string.Equals(ai.FeatureAgents.Chat ?? string.Empty, assignment, StringComparison.Ordinal))
-                    return;   // no change — nothing to persist
+                {
+                    // No change — nothing to persist, but the picker may still be sitting on the
+                    // trailing "Add agent…" row: adding the FIRST agent makes it active, so the
+                    // assignment stays "" and the header would keep advertising "Add agent…" as
+                    // the answering agent (FR-037/FR-041). Re-sync without writing config — and
+                    // when the signature genuinely did not change the refresh early-outs, so
+                    // re-render explicitly (the cancel branch of OnChatAgentAddRequested's
+                    // precedent).
+                    var signatureBefore = _configSignature;
+                    RefreshConfiguration(forceRefresh: true);
+                    if (string.Equals(signatureBefore, _configSignature, StringComparison.Ordinal))
+                        RenderAgentState(ai);
+                    return;
+                }
 
                 ai.FeatureAgents.Chat = assignment;
                 Commands.OptionsCommand.SaveAndNotify(settings);
@@ -979,7 +1049,12 @@ namespace AkmlSql.Shell.Shared.Ai
             if (string.IsNullOrEmpty(agentId) || !AiIpcTimeouts.IsConfigurationCaused(error))
                 return;
 
-            var label = $"Open {agentName} settings";
+            // An agent may carry an id and a blank name (the editor writes the name unguarded),
+            // and "Open  settings" is what a screen reader would then read out — fall back to the
+            // name-free wording, the same guard DescribeLiveFailure applies to the message itself.
+            var label = string.IsNullOrWhiteSpace(agentName)
+                ? "Open AI agent settings"
+                : $"Open {agentName} settings";
             var routeButton = new Button
             {
                 Content = label,
@@ -1309,21 +1384,47 @@ namespace AkmlSql.Shell.Shared.Ai
             }
         }
 
+        /// <summary>
+        /// The true pre-flash content of one flashing button and its single live countdown.
+        /// Kept off the button's <c>Tag</c>, which already carries the code/message payload.
+        /// </summary>
+        private sealed class FlashState
+        {
+            internal object? Original;
+            internal DispatcherTimer? Timer;
+        }
+
+        /// <summary>Per-button flash state; weak on the button so a discarded bubble still collects.</summary>
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Button, FlashState> FlashStates
+            = new System.Runtime.CompilerServices.ConditionalWeakTable<Button, FlashState>();
+
         /// <summary>Shows a transient confirmation/failure on a copy button, reverting after 1.5 s.</summary>
         private static void FlashButtonContent(Button button, string feedback)
         {
-            var original = button.Content;
+            // A feedback string must never be captured as the "original": a second click inside
+            // the window used to stack a second timer whose original was the first flash's text,
+            // latching e.g. "✓ Inserted" on the button forever. Stash the true original on the
+            // FIRST flash only, and restart the one timer instead of stacking another.
+            var state = FlashStates.GetValue(button, _ => new FlashState());
+            if (state.Timer == null)
+            {
+                state.Original = button.Content;
+                var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1500) };
+                timer.Tick += (_, __) =>
+                {
+                    timer.Stop();
+                    state.Timer = null;
+                    button.Content = state.Original;
+                };
+                state.Timer = timer;
+                button.Content = feedback;
+                timer.Start();
+                return;
+            }
+
+            state.Timer.Stop();   // still flashing — this click restarts the one countdown
             button.Content = feedback;
-            var timer = new System.Windows.Threading.DispatcherTimer
-            {
-                Interval = TimeSpan.FromMilliseconds(1500)
-            };
-            timer.Tick += (_, __) =>
-            {
-                timer.Stop();
-                button.Content = original;
-            };
-            timer.Start();
+            state.Timer.Start();
         }
 
         /// <summary>

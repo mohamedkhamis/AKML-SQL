@@ -32,6 +32,15 @@ namespace AkmlSql.Shell.Shared.Ui.Theme
         // OptionsHoverContrastTests, and neither may leak into the other.
         private static readonly Dictionary<PageTheme, (ControlTemplate Template, Style ItemStyle)> MenuThemeCache = new();
 
+        // Row template for BOTH item styles. It bakes in no palette brush — every visual is a
+        // TemplateBinding to the item's own (trigger-set) Background/Padding — so a single sealed
+        // instance serves every theme and is never rebuilt per item.
+        private static readonly ControlTemplate ItemTemplate = BuildItemTemplate();
+
+        // Room reserved INSIDE the menu popup for the card's drop shadow (blur 8, depth 2 pointing
+        // down, so the bottom needs the most). Cancelled again by the popup's negative offsets.
+        private static readonly Thickness ShadowPadding = new Thickness(10, 8, 10, 10);
+
         /// <summary>
         /// Themes <paramref name="combo"/> for the CURRENT theme variant. No-op under High
         /// Contrast — there the stock template's system colors are the accessible rendering and
@@ -116,6 +125,9 @@ namespace AkmlSql.Shell.Shared.Ui.Theme
         private static Style BuildMenuItemStyle(PageTheme theme)
         {
             var itemStyle = new Style(typeof(ComboBoxItem));
+            // Same stock-template hazard as the Options pair: the menu pairing only survived the
+            // Aero2 wash by accident (FgPrimary stays legible on it) — see BuildItemTemplate.
+            itemStyle.Setters.Add(new Setter(Control.TemplateProperty, ItemTemplate));
             itemStyle.Setters.Add(new Setter(Control.BackgroundProperty, theme.Transparent));
             itemStyle.Setters.Add(new Setter(Control.ForegroundProperty, theme.FgPrimary));
             itemStyle.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0)));
@@ -194,15 +206,29 @@ namespace AkmlSql.Shell.Shared.Ui.Theme
             dropDownBorder.SetValue(FrameworkElement.MaxHeightProperty, new TemplateBindingExtension(ComboBox.MaxDropDownHeightProperty));
             dropDownBorder.AppendChild(scroll);
 
+            // A Popup sizes its window to its child and a drop shadow paints OUTSIDE that child's
+            // layout bounds, so as the popup's direct child the card lost every shadow pixel to
+            // clipping (and still paid for the effect pass on every open). This host reserves the
+            // blur's room INSIDE the popup window. Its Background stays null — invisible AND
+            // non-hit-testable, where a transparent brush would swallow the click that should
+            // dismiss the menu. Sizing stays on the inner card (MinWidth / MaxHeight untouched).
+            var shadowHost = new FrameworkElementFactory(typeof(Border), "dropDownShadowHost");
+            shadowHost.SetValue(Border.PaddingProperty, ShadowPadding);
+            shadowHost.AppendChild(dropDownBorder);
+
             var popup = new FrameworkElementFactory(typeof(Popup), "PART_Popup");
             popup.SetValue(Popup.AllowsTransparencyProperty, true);
             popup.SetValue(Popup.PlacementProperty, PlacementMode.Bottom);
             popup.SetValue(UIElement.FocusableProperty, false);
+            // Cancel the host's padding so the card lands exactly where it did before the fix —
+            // flush under the toggle face, left edges aligned.
+            popup.SetValue(Popup.HorizontalOffsetProperty, -ShadowPadding.Left);
+            popup.SetValue(Popup.VerticalOffsetProperty, -ShadowPadding.Top);
             popup.SetBinding(Popup.IsOpenProperty, new Binding("IsDropDownOpen")
             {
                 RelativeSource = RelativeSource.TemplatedParent
             });
-            popup.AppendChild(dropDownBorder);
+            popup.AppendChild(shadowHost);
             root.AppendChild(popup);
 
             var template = new ControlTemplate(typeof(ComboBox)) { VisualTree = root };
@@ -210,9 +236,37 @@ namespace AkmlSql.Shell.Shared.Ui.Theme
             return template;
         }
 
+        /// <summary>
+        /// Minimal Border+ContentPresenter row template, the ComboBoxItem twin of
+        /// <see cref="Dialogs.Pages.AiAgentListView.BuildItemTemplate"/>. Both item styles MUST own
+        /// it: the stock Aero2 ComboBoxItem template paints its own ~12%-alpha highlight wash on
+        /// IsHighlighted from a TEMPLATE trigger, which outranks the TemplateBinding to the item's
+        /// Background — so the accent surface set by our triggers never landed and SelectedText
+        /// white sat on a near-white wash in Light theme (the unreadable dropdown row).
+        /// </summary>
+        private static ControlTemplate BuildItemTemplate()
+        {
+            var border = new FrameworkElementFactory(typeof(Border), "Bd");
+            border.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Control.BackgroundProperty));
+            border.SetValue(Border.PaddingProperty, new TemplateBindingExtension(Control.PaddingProperty));
+
+            var content = new FrameworkElementFactory(typeof(ContentPresenter));
+            content.SetValue(FrameworkElement.HorizontalAlignmentProperty,
+                new TemplateBindingExtension(Control.HorizontalContentAlignmentProperty));
+            content.SetValue(FrameworkElement.VerticalAlignmentProperty,
+                new TemplateBindingExtension(Control.VerticalContentAlignmentProperty));
+            border.AppendChild(content);
+
+            var template = new ControlTemplate(typeof(ComboBoxItem)) { VisualTree = border };
+            template.Seal();
+            return template;
+        }
+
         private static Style BuildItemStyle(PageTheme theme)
         {
             var itemStyle = new Style(typeof(ComboBoxItem));
+            // Without this the triggers below are dead paint — see BuildItemTemplate.
+            itemStyle.Setters.Add(new Setter(Control.TemplateProperty, ItemTemplate));
             itemStyle.Setters.Add(new Setter(Control.BackgroundProperty, theme.Input));
             itemStyle.Setters.Add(new Setter(Control.ForegroundProperty, theme.FgPrimary));
             itemStyle.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0)));

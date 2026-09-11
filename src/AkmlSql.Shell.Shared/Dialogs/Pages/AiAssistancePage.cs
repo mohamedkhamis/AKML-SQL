@@ -400,6 +400,12 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         private readonly AiAgentListView _listView;
         private readonly FeatureAssignmentRows _featureRows;
         private readonly List<string> _assignmentIds = new();   // index-aligned with every assignment combo
+        // Defect 11 fix: index-aligned with the fallback CANDIDATE combo, which skips agents
+        // already in _fallback — the ids must skip them in lockstep or the alignment is wrong.
+        // Resolving the picked candidate by name went to the first agent carrying that name,
+        // which is the wrong agent as soon as two agents share one (and did nothing at all for
+        // an unnamed one).
+        private readonly List<string> _fallbackCandidateIds = new();
         private bool _suppressFeatureEvents;
 
         // Spec 037 (US2, research R13): the page edits a WORKING COPY of the agent list (plus the
@@ -414,6 +420,14 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         private List<string> _fallback = new();
         private bool _suppressListEvents;
         private bool _suppressHealthReset;
+
+        // Defect 9 fix (FR-032 scope): the ids of the agents this dialog session actually
+        // TOUCHED — an editor commit that differs from the bound agent, or an agent the user
+        // added/duplicated here. Pages load eagerly, so the working copy always holds every
+        // stored agent; gating OK on all of them let one long-stale half-configured agent block
+        // a save the user came here to make on an entirely different page, with no way out but
+        // repairing an agent they never opened. FR-032 still refuses the agents being edited.
+        private readonly HashSet<string> _touchedAgentIds = new HashSet<string>(StringComparer.Ordinal);
 
         /// <summary>
         /// Spec 037 (FR-017): deep-link target handed over by SettingsWindow before Load. An
@@ -472,6 +486,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 CreatedUtc = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture),
             };
             _agents.Add(agent);
+            _touchedAgentIds.Add(agent.Id);   // defect 9 fix: an agent the user added here is touched
             SelectAgent(agent);
             return null;
         }
@@ -494,6 +509,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             copy.Health = null;
             copy.CreatedUtc = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture);
             _agents.Insert(_agents.IndexOf(source) + 1, copy);
+            _touchedAgentIds.Add(copy.Id);   // defect 9 fix: a copy made here is touched
             SelectAgent(copy);
             return null;
         }
@@ -621,7 +637,18 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         /// arriving early: OK is validate-then-Save, and validation must see the same working
         /// copy Save would write — including edits still sitting in the boxes.
         /// </summary>
-        internal string? ValidateWorkingCopy()
+        internal string? ValidateWorkingCopy() => ValidateAgents(touchedOnly: false);
+
+        /// <summary>
+        /// Defect 9 fix — the gate the settings dialog's OK and Apply use. Same FR-032 rules and
+        /// wordings as <see cref="ValidateWorkingCopy"/>, but only over the agents this dialog
+        /// session touched (see <see cref="_touchedAgentIds"/>): a stale half-configured agent
+        /// the user never opened must not be able to refuse a save made from another page.
+        /// V12 (the list ceiling) stays list-level — it is about the list, not one agent.
+        /// </summary>
+        internal string? ValidateTouchedAgents() => ValidateAgents(touchedOnly: true);
+
+        private string? ValidateAgents(bool touchedOnly)
         {
             CommitEditorToSelectedAgent();
 
@@ -633,6 +660,11 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
 
             foreach (var agent in _agents)
             {
+                // Untouched agents are skipped by the dialog's gate only — the name-uniqueness
+                // rules still compare against the WHOLE list, so a rename onto an untouched
+                // agent's name is still caught.
+                if (touchedOnly && !_touchedAgentIds.Contains(agent.Id)) continue;
+
                 // A completely unconfigured agent is a placeholder, not a validation failure:
                 // the page seeds exactly one on every load when the list is empty, so strict V4
                 // would trap every unconfigured user out of the dialog's OK — from any page,
@@ -941,10 +973,16 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
 
                 var candidate = _featureRows.FallbackCandidate;
                 candidate.Items.Clear();
+                // Defect 11 fix: the candidate ids are filled in lockstep with the items —
+                // including the skip of agents already in _fallback — so the combo's
+                // SelectedIndex identifies the agent exactly (names are neither unique nor
+                // necessarily non-empty), the way _assignmentIds backs the assignment combos.
+                _fallbackCandidateIds.Clear();
                 foreach (var agent in _agents)
                 {
                     if (_fallback.Contains(agent.Id)) continue;
                     candidate.Items.Add(agent.Name ?? string.Empty);
+                    _fallbackCandidateIds.Add(agent.Id);
                 }
                 if (candidate.Items.Count > 0) candidate.SelectedIndex = 0;
             }
@@ -961,9 +999,14 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
 
         private void OnFallbackAdd()
         {
-            var name = _featureRows.FallbackCandidate.SelectedItem as string;
-            if (string.IsNullOrEmpty(name)) return;
-            var agent = _agents.Find(a => string.Equals(a.Name ?? string.Empty, name, StringComparison.Ordinal));
+            // Defect 11 fix: resolve the pick by INDEX against _fallbackCandidateIds, never by
+            // name — two agents may carry one name within a session (the name box only renders
+            // an inline error, it does not revert or block), which sent the FIRST match into the
+            // order while the UI showed the second; and an agent that has no name yet was not
+            // addable at all because the name guard swallowed the click silently.
+            var index = _featureRows.FallbackCandidate.SelectedIndex;
+            if (index < 0 || index >= _fallbackCandidateIds.Count) return;
+            var agent = FindAgent(_fallbackCandidateIds[index]);
             if (agent == null || _fallback.Contains(agent.Id)) return;
             _fallback.Add(agent.Id);
             RebuildFeatureRows();
@@ -1060,6 +1103,9 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             // R13: deep-copy the agent list into the working copy. Cancel is correct for free —
             // the host only calls Save on OK, so an abandoned copy is an abandoned edit.
             _agents = DeepCopyAgents(ai.Agents);
+            // Defect 9 fix: a fresh working copy is a fresh session — nothing is touched yet
+            // (Reset-all reloads through here too).
+            _touchedAgentIds.Clear();
             _activeId = ai.ActiveAgentId ?? string.Empty;
             _assignments = CopyAssignments(ai.FeatureAgents);
             _fallback = new List<string>(ai.FallbackOrder ?? new List<string>());
@@ -1237,6 +1283,12 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             var agent = SelectedAgent();
             if (agent == null) return;
 
+            // Defect 9 fix: a commit that writes something other than what BindEditorTo put in
+            // the boxes is the user having edited THIS agent — the signal the dialog's gate
+            // (ValidateTouchedAgents) scopes itself to. Computed before the write, while the
+            // agent still holds its pre-edit values.
+            if (!EditorMatchesBoundAgent(agent)) _touchedAgentIds.Add(agent.Id);
+
             agent.Name = _name.Text ?? string.Empty;
             agent.Enabled = _agentEnabled.IsChecked == true;
             // Key off the canonical id, never the index (FR-013) — the factory rejects anything else.
@@ -1256,6 +1308,33 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             agent.Temperature = (int)_temperature.Value / 10.0;
             agent.Timeout = (int)_timeout.Value;
             agent.Retries = (int)_retries.Value;
+        }
+
+        /// <summary>
+        /// Defect 9 fix: true when every editor row still holds exactly what
+        /// <see cref="BindEditorTo"/> projected from this agent — i.e. nothing has been edited
+        /// since the bind. Deliberately compares the BOUND projection rather than the raw stored
+        /// values: the provider falls back to "(None)" when a stored id does not match, and the
+        /// key is shown unwrapped (DPAPI ciphertext never round-trips byte for byte), so a raw
+        /// comparison would report a phantom edit on an agent the user never opened.
+        /// </summary>
+        private bool EditorMatchesBoundAgent(AiAgent agent)
+        {
+            var providerId = AiProviderIds.Normalize(agent.Provider);
+            var providerIndex = Array.FindIndex(AiAssistancePage.Providers, p => p.Id == providerId);
+            if (providerIndex < 0) providerIndex = 0;
+            var (keyDisplay, _) = UnwrapKeyForDisplay(agent.ApiKey);
+
+            return string.Equals(_name.Text ?? string.Empty, agent.Name ?? string.Empty, StringComparison.Ordinal)
+                && (_agentEnabled.IsChecked == true) == agent.Enabled
+                && _provider.SelectedIndex == providerIndex
+                && string.Equals(_model.Text ?? string.Empty, agent.Model ?? string.Empty, StringComparison.Ordinal)
+                && string.Equals(_apiKey.Text ?? string.Empty, keyDisplay, StringComparison.Ordinal)
+                && string.Equals(_endpoint.Text ?? string.Empty, agent.Endpoint ?? string.Empty, StringComparison.Ordinal)
+                && (int)_maxTokens.Value == agent.MaxTokens
+                && (int)_temperature.Value == (int)(agent.Temperature * 10)
+                && (int)_timeout.Value == agent.Timeout
+                && (int)_retries.Value == agent.Retries;
         }
 
         private AiAgent? SelectedAgent() => FindAgent(_selectedId);

@@ -1566,16 +1566,23 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
         /// <summary>
         /// Spec 037 (US2, FR-032): the validate-first half of OK and Apply — refused while any
-        /// agent fails V1–V12. The page validates its whole working copy (a user can leave an
-        /// invalid agent, select another, and press OK) and selects the offending agent before
-        /// the message is shown, so the user lands where the problem is; the dialog stays open.
+        /// agent the user EDITED here fails V1–V12 (a user can leave an invalid agent, select
+        /// another, and press OK), with the offending agent selected before the message is
+        /// shown, so the user lands where the problem is; the dialog stays open.
+        ///
+        /// <para>Defect 9 fix: the scope is the agents this dialog session touched, not the
+        /// whole working copy. Every page loads eagerly, so the AI page always holds every
+        /// stored agent — gating the WHOLE dialog on all of them let one stale half-configured
+        /// agent (a key typed weeks ago, no model) refuse a save the user came here to make on
+        /// an unrelated page, yank the nav to a page they never opened, and leave no way out but
+        /// repairing that agent. See <c>AiAssistanceControls.ValidateTouchedAgents</c>.</para>
         /// </summary>
         private bool ValidateAiWorkingCopyBeforeSave()
         {
             if (_pageControlsByKey.TryGetValue("AI Assistance", out var aiPageControls) &&
                 aiPageControls is AiAssistanceControls aiControls)
             {
-                var validationError = aiControls.ValidateWorkingCopy();
+                var validationError = aiControls.ValidateTouchedAgents();
                 if (validationError != null)
                 {
                     SelectTreeLeafByPageKey("AI Assistance");

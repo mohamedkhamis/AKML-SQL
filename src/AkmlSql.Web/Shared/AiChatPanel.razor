@@ -73,11 +73,16 @@
 
         <div class="akml-chat-composer">
             @* oninput (not the default onchange): the browser only fires change on blur, so a
-               default bind would keep Send disabled while typing and make Ctrl+Enter read an
+               default bind would keep Send disabled while typing and make an Enter send read an
                empty prompt (silent no-op). *@
+            @* Enter sends / Shift+Enter inserts a newline, matching the desktop panel. The newline
+               is the DEFAULT ACTION of Enter's keypress, so it is suppressed there and armed one
+               event earlier — see OnKeyDown / _suppressEnterNewline for why it cannot ride on
+               keydown. *@
             <textarea class="akml-chat-input" @bind="_pending" @bind:event="oninput"
-                      placeholder="Ask anything about your SQL…  (Ctrl+Enter sends · Enter adds a new line)" rows="3"
-                      @onkeydown="OnKeyDown" disabled="@_busy"></textarea>
+                      placeholder="Ask anything about your SQL…  (Enter sends · Shift+Enter for a new line)" rows="3"
+                      @onkeydown="OnKeyDown" @onkeypress="OnKeyPress"
+                      @onkeypress:preventDefault="_suppressEnterNewline" disabled="@_busy"></textarea>
             <button class="akml-chat-send" @onclick="SendAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_pending))">
                 Send
             </button>
@@ -229,13 +234,41 @@
         _conversation = await History.GetAsync() ?? NewConversation();
     }
 
+    /// <summary>Armed by <see cref="OnKeyDown"/> when the key just pressed is an Enter that sends;
+    /// read by the textarea's <c>@onkeypress:preventDefault</c> on the very next event.</summary>
+    /// <remarks>The newline Enter would add is the default action of the KEYPRESS that follows the
+    /// keydown, so suppressing it has to happen on keypress. It cannot ride on keydown: Blazor reads
+    /// a dynamic <c>:preventDefault</c> off the DOM at dispatch time, so a keydown flag is always one
+    /// keystroke stale (it would eat the character typed AFTER Enter), and a static one suppresses
+    /// keydown→beforeinput and kills all typing — the same trap documented in
+    /// wwwroot/js/akml-command-palette.js (trapKeys), which solves it with a targeted native listener
+    /// this panel has no module of its own to host. Re-evaluated on every keydown, so ordinary typing
+    /// is never suppressed.</remarks>
+    private bool _suppressEnterNewline;
+
     private async Task OnKeyDown(KeyboardEventArgs e)
     {
-        // Ctrl+Enter sends. Plain Enter inserts a newline (default textarea behaviour).
-        if (e.CtrlKey && e.Key == "Enter")
+        // Key contract now matches the desktop panel (AkmlSql.Shell.Shared/Ai/AiChatPanel.cs,
+        // OnInputKeyDown): Enter with no Shift sends, Shift+Enter falls through to the textarea
+        // default and inserts a newline. Ctrl+Enter keeps working because it is simply an Enter
+        // without Shift, so the web edition's original chord is not broken.
+        var sends = e.Key == "Enter" && !e.ShiftKey;
+
+        // Arm BEFORE awaiting: ComponentBase re-renders as soon as the handler reaches its first
+        // await, so the flag is in the DOM before the matching keypress is dispatched.
+        _suppressEnterNewline = sends;
+
+        if (sends)
         {
+            // SendAsync owns the _busy / empty-prompt guards — this path must not bypass them.
             await SendAsync();
         }
+    }
+
+    /// <summary>No behaviour of its own: registered so Blazor installs the global keypress listener
+    /// that the paired <c>@onkeypress:preventDefault="_suppressEnterNewline"</c> rides on.</summary>
+    private void OnKeyPress(KeyboardEventArgs e)
+    {
     }
 
     private async Task SendAsync()

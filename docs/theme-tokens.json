@@ -1,7 +1,7 @@
 {
   "$schema": "./theme-tokens.schema.json",
   "version": 2,
-  "description": "Single source of truth for AKML SQL theme tokens. Consumed by the WPF ThemeRegistry (spec 016) and by scripts/generate-theme-css.ps1 which emits CSS custom-property files for the web edition (spec 021). Hex values mirror src/AkmlSql.Shell.Shared/Ui/Theme/ThemePalette.cs (edit BOTH in lockstep). High-contrast values map to CSS system colors (forced-colors keywords) since the WPF surface delegates HC to Windows SystemColors at runtime. v2 (2026-06): rebranded to AKML Blue #2563EB + slate surfaces; added radius scalars and a Syntax group; UI 14px / editor 13px. v2.1 (2026-09): light-theme legibility pass — placeholder/disabled text, control/popup borders, splitters and the assistant chat bubble all strengthened (user feedback: elements were invisible on white surfaces); dark theme unchanged.",
+  "description": "Single source of truth for AKML SQL theme tokens. Consumed by the WPF ThemeRegistry (spec 016) and by scripts/generate-theme-css.ps1 which emits CSS custom-property files for the web edition (spec 021). Hex values mirror src/AkmlSql.Shell.Shared/Ui/Theme/ThemePalette.cs (edit BOTH in lockstep). High-contrast values map to CSS system colors (forced-colors keywords) since the WPF surface delegates HC to Windows SystemColors at runtime. v2 (2026-06): rebranded to AKML Blue #2563EB + slate surfaces; added radius scalars and a Syntax group; UI 14px / editor 13px. v2.1 (2026-09): light-theme legibility pass — placeholder/disabled text, control/popup borders, splitters and the assistant chat bubble all strengthened (user feedback: elements were invisible on white surfaces); dark theme unchanged. v2.1.1 (2026-09): light Accent.PrimaryHover corrected blue-800 #1E40AF -> blue-700 #1D4ED8 to match ThemePalette.cs — it had collapsed onto the PrimaryPressed value, so hover and pressed rendered identically on the web once the hover token gained consumers.",
   "groups": {
     "Surface": {
       "Akml.Brush.Surface.Canvas":          { "light": "#F1F5F9",   "dark": "#0F172A",   "highContrast": "Canvas" },
@@ -32,7 +32,7 @@
     },
     "Accent": {
       "Akml.Brush.Accent.Primary":        { "light": "#2563EB", "dark": "#2563EB", "highContrast": "Highlight" },
-      "Akml.Brush.Accent.PrimaryHover":   { "light": "#1E40AF", "dark": "#3B82F6", "highContrast": "Highlight" },
+      "Akml.Brush.Accent.PrimaryHover":   { "light": "#1D4ED8", "dark": "#3B82F6", "highContrast": "Highlight" },
       "Akml.Brush.Accent.PrimaryPressed": { "light": "#1E40AF", "dark": "#1E40AF", "highContrast": "Highlight" }
     },
     "Status": {
