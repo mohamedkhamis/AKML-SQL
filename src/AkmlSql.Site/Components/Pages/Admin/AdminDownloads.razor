@@ -36,7 +36,10 @@
         <p class="admin-stat-label">All time</p>
     </div>
     <div class="admin-stat">
-        <p class="admin-stat-value">@_countries.Count.ToString("N0", CultureInfo.InvariantCulture)</p>
+        @* Resolved countries only. Counting the explicit "Unknown" bucket as a country read as
+           "1 country" on a deployment where the geo database is absent and nothing has a country
+           at all — a number that is worse than useless because it looks like data. *@
+        <p class="admin-stat-value">@_resolvedCountryCount.ToString("N0", CultureInfo.InvariantCulture)</p>
         <p class="admin-stat-label">Countries</p>
     </div>
 </section>
@@ -148,6 +151,7 @@
     private IReadOnlyList<DownloadCountryRow> _countries = [];
     private IReadOnlyList<DownloadVersionRow> _versions = [];
     private bool _hasAnyCountry;
+    private int _resolvedCountryCount;
 
     protected override void OnInitialized()
     {
@@ -156,5 +160,6 @@
         _countries = Store.GetDownloadsByCountry(Days, now);
         _versions = Store.GetDownloadsByVersion(Days, now);
         _hasAnyCountry = _countries.Any(c => c.CountryCode is not null);
+        _resolvedCountryCount = _countries.Count(c => c.CountryCode is not null);
     }
 }

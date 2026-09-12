@@ -59,6 +59,23 @@ public sealed class ScreenshotCapture(SiteFixture site)
                 Path = Path.Combine(outputDir!, "admin.png"),
                 FullPage = true,
             });
+
+            // Spec 038: the portal is no longer one page. Capture every section, so a review of a
+            // deploy can see the whole surface rather than just the overview.
+            foreach (var (name, path) in ((string Name, string Path)[])
+                     [("admin-downloads", "/admin/downloads"),
+                      ("admin-people", "/admin/people"),
+                      ("admin-pages", "/admin/pages"),
+                      ("admin-releases", "/admin/releases"),
+                      ("admin-settings", "/admin/settings")])
+            {
+                await page.GotoAsync(SiteFixture.BaseUrl + path, new PageGotoOptions { WaitUntil = WaitUntilState.NetworkIdle });
+                await page.ScreenshotAsync(new PageScreenshotOptions
+                {
+                    Path = Path.Combine(outputDir!, $"{name}.png"),
+                    FullPage = true,
+                });
+            }
         }
     }
 }

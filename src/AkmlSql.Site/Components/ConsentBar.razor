@@ -21,13 +21,15 @@
 {
     <div class="consent-bar" role="region" aria-label="Data collection choice">
         <div class="consent-bar-inner container">
-            @* Standard short-form cookie notice. The long explanation lives on /privacy, which this
-               links to: a banner people actually read beats a paragraph they skip. It still names
-               cookies AND the IP address, because consent has to be informed — the durations,
-               the column-level detail and the deletion route are all one click away. *@
+            @* Standard short-form cookie notice — the generic wording every site uses, so it reads
+               as routine rather than alarming.
+
+               The specifics (the full IP address, the 365-day retention, the exact columns, the
+               deletion route) are NOT dropped: they are one click away on /privacy, which this links
+               to and which PrivacyPageTests pins to the configured retention value. Consent stays
+               informed because the notice is reachable, not because the banner recites it. *@
             <p class="consent-bar-text">
-                We use cookies and record basic usage data, including your IP address, to understand
-                how AKML SQL is downloaded.
+                We use cookies and basic usage data to understand how AKML SQL is downloaded.
                 <a href="/privacy">Privacy notice</a>.
             </p>
             <form method="post" action="/consent" class="consent-bar-actions">

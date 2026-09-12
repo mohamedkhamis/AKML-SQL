@@ -132,17 +132,32 @@ public sealed class ConsentBarTests : IDisposable
     }
 
     [Fact]
-    public void ItNamesCookiesAndTheAddress_AndLinksToTheFullNotice()
+    public void ItUsesGenericWording_AndLinksToTheFullNotice()
     {
         using var ctx = NewCtx(ConsentState.Unknown);
 
         var cut = Render(ctx);
 
-        // Short-form banner: enough for the choice to be informed — cookies AND the IP address are
-        // named — with the durations, the stored columns and the deletion route one click away.
+        // Generic, conventional wording -- it should read as routine, not alarming.
         Assert.Contains("cookies", cut.Markup, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("IP address", cut.Markup, StringComparison.OrdinalIgnoreCase);
+
+        // The specifics moved to /privacy, so the link is now load-bearing for informed consent:
+        // without it the banner would be a notice that discloses nothing.
         Assert.NotNull(cut.Find("a[href='/privacy']"));
+    }
+
+    [Fact]
+    public void ItDoesNotReciteTheSpecificsInTheBanner()
+    {
+        using var ctx = NewCtx(ConsentState.Unknown, retentionDays: 365);
+
+        var text = Render(ctx).Find(".consent-bar-text").TextContent;
+
+        // Deliberate: the banner stays generic. /privacy carries the address, the retention period
+        // and the deletion route -- and PrivacyPageTests fails the build if it stops matching the
+        // configured behaviour.
+        Assert.DoesNotContain("IP address", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("365", text, StringComparison.Ordinal);
     }
 
     [Fact]

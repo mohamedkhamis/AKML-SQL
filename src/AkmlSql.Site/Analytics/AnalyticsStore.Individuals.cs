@@ -97,8 +97,14 @@ public sealed partial class AnalyticsStore
                 }
             }
 
+            // Rows written before spec 038 have no release_version, but the installer file name
+            // carries it ("AKMLSQLSetup-1.26.0901.1502.exe"). Showing "Unattributed" next to a file
+            // name that literally contains the version is useless to the owner, so derive it for
+            // display. The STORED value still wins wherever it exists: this is a fallback for
+            // history, not a replacement for write-time attribution.
             return rows
-                .Select(r => new DownloadVersionRow(r.Version, r.File, r.Count, Share(r.Count, total)))
+                .Select(r => new DownloadVersionRow(
+                    r.Version ?? VersionFromFileName(r.File), r.File, r.Count, Share(r.Count, total)))
                 .ToList();
         }
     }
@@ -139,15 +145,20 @@ public sealed partial class AnalyticsStore
             {
                 // "Returning" means first seen BEFORE the window opened — the only honest reading,
                 // and the one cross-day cookie identity made possible (FR-022a).
+                // The bot filter MUST match GetIndividuals exactly. Without it the headline
+                // "N individuals" contradicted the table below it: automated clients that accept a
+                // cookie (a headless browser in an E2E run, for instance) were counted here and
+                // excluded there. A stat that disagrees with the list under it is worse than no
+                // stat (FR-027, SC-008).
                 command.CommandText =
                     "SELECT COUNT(*), SUM(CASE WHEN first_ever < $since THEN 1 ELSE 0 END) FROM (" +
                     "  SELECT visitor_id, MIN(day) AS first_ever FROM (" +
-                    "    SELECT visitor_id, day FROM visits WHERE visitor_id IS NOT NULL" +
+                    $"    SELECT visitor_id, day FROM visits WHERE visitor_id IS NOT NULL AND {PeopleHumanOnly}" +
                     "    UNION ALL" +
                     "    SELECT visitor_id, day FROM downloads WHERE visitor_id IS NOT NULL" +
                     "  ) GROUP BY visitor_id" +
                     ") WHERE visitor_id IN (" +
-                    "  SELECT visitor_id FROM visits WHERE day >= $since AND visitor_id IS NOT NULL" +
+                    $"  SELECT visitor_id FROM visits WHERE day >= $since AND visitor_id IS NOT NULL AND {PeopleHumanOnly}" +
                     "  UNION SELECT visitor_id FROM downloads WHERE day >= $since AND visitor_id IS NOT NULL" +
                     ");";
                 command.Parameters.AddWithValue("$since", since);
@@ -281,6 +292,22 @@ public sealed partial class AnalyticsStore
 
     private static DateOnly WindowStart(int days, DateTimeOffset now) =>
         DateOnly.FromDateTime(now.UtcDateTime).AddDays(-(Math.Max(days, 1) - 1));
+
+    /// <summary>
+    /// Version embedded in an installer file name, or null when the name does not carry one.
+    /// Matches the 1.YY.MMDD.HHmm shape the build stamps.
+    /// </summary>
+    internal static string? VersionFromFileName(string? file)
+    {
+        if (string.IsNullOrWhiteSpace(file))
+        {
+            return null;
+        }
+
+        var match = System.Text.RegularExpressions.Regex.Match(
+            file, @"(\d+\.\d+\.\d+\.\d+)", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+        return match.Success ? match.Groups[1].Value : null;
+    }
 
     private static double Share(long count, long total) =>
         total <= 0 ? 0 : Math.Round(count * 100.0 / total, 1);

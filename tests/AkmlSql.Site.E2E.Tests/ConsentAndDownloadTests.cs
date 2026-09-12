@@ -38,7 +38,7 @@ public sealed class ConsentAndDownloadTests(SiteFixture site)
     }
 
     [SkippableFact]
-    public async Task ConsentBar_IsShort_AndNamesCookiesAndTheAddress()
+    public async Task ConsentBar_IsShort_AndGenericallyWorded()
     {
         SkipIfUnavailable();
         await using var context = await site.NewContextAsync();
@@ -50,7 +50,11 @@ public sealed class ConsentAndDownloadTests(SiteFixture site)
 
         Assert.True(words <= 30, $"Consent banner is {words} words: \"{text}\"");
         Assert.Contains("cookie", text, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("IP address", text, StringComparison.OrdinalIgnoreCase);
+
+        // The banner stays generic; the specifics live on /privacy, so that link is what makes the
+        // consent informed and must always be present.
+        Assert.DoesNotContain("IP address", text, StringComparison.OrdinalIgnoreCase);
+        await Assertions.Expect(page.Locator(".consent-bar a[href='/privacy']")).ToBeVisibleAsync();
     }
 
     [SkippableFact]
