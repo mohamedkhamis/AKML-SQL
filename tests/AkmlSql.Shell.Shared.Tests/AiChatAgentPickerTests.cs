@@ -506,6 +506,56 @@ namespace AkmlSql.Shell.Shared.Tests
             });
         }
 
+        // ── FR-041: the onboarding add must leave the picker on the new agent ─
+
+        /// <summary>
+        /// The zero-agent onboarding path, which is the one most users meet first. Adding the
+        /// FIRST agent makes it active, so the assignment the handler computes is "" — which
+        /// already equals <c>FeatureAgents.Chat</c>. The "nothing to persist" early return then
+        /// skipped the re-render, leaving the combo parked on the trailing "Add agent…" row, so
+        /// the header advertised "Add agent…" as the agent about to answer. Nothing corrected it
+        /// until a later tick observed a changed signature — and because this path never refreshed
+        /// the 5-second settings cache, that could take seconds.
+        /// </summary>
+        [StaFact]
+        public void Adding_the_first_agent_moves_the_picker_off_the_add_entry()
+        {
+            var settings = new AppSettings();          // zero agents — nothing configured yet
+            var added = UsableAgent("Claude (work)");
+
+            WithSeams(settings, (page, agentId) =>
+            {
+                // Options adds the first agent; adding the first one also activates it.
+                settings.Ai.Agents.Add(added);
+                settings.Ai.ActiveAgentId = added.Id;
+                return true;
+            }, () =>
+            {
+                var panel = new AiChatPanel();
+                var combo = FindPickerCombo(panel);
+
+                // With no agents the picker holds only the Add entry.
+                Assert.Equal(new[] { AiAgentPicker.AddAgentDisplayText }, ComboItems(panel));
+
+                combo.SelectedIndex = combo.Items.Count - 1;   // "Add agent…"
+
+                // The picker must now name the agent that will answer — not the action row.
+                Assert.Equal("Claude (work)", combo.SelectedItem);
+                Assert.NotEqual(AiAgentPicker.AddAgentDisplayText, combo.SelectedItem as string);
+                Assert.Equal(
+                    new[] { "Claude (work)", AiAgentPicker.AddAgentDisplayText },
+                    ComboItems(panel));
+
+                // Re-syncing must not invent a write: with the new agent active, chat keeps
+                // FOLLOWING the active agent (S3) rather than being pinned to it.
+                Assert.Equal(string.Empty, settings.Ai.FeatureAgents.Chat);
+                Assert.Equal(added.Id, settings.Ai.ActiveAgentId);
+
+                // Nothing changed hands, so there is no "can no longer answer" story to tell.
+                Assert.Empty(FindNotices(panel));
+            });
+        }
+
         // ── helpers ──────────────────────────────────────────────────────────
 
         private static void WithSettings(AppSettings settings, Action body)

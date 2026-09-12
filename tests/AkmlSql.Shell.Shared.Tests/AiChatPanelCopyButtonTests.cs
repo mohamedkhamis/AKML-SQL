@@ -266,6 +266,80 @@ namespace AkmlSql.Shell.Shared.Tests
             }
         }
 
+        // ── FR-019: a second click must not latch the feedback string ──────────
+
+        /// <summary>
+        /// <c>FlashButtonContent</c> used to capture whatever the button was showing as the
+        /// "original". A second click inside the 1.5 s window therefore captured the FEEDBACK
+        /// string and stacked a second timer: the first timer restored the true label, then the
+        /// second overwrote it with "✓ Copied" — permanently. The button then no longer said what
+        /// it did. Two new call sites in the insert path made this routinely reachable.
+        /// </summary>
+        [StaFact]
+        public void A_second_click_inside_the_flash_window_still_restores_the_true_label()
+        {
+            var panel = new AiChatPanel();
+            var button = Assert.Single(FindCopyButtons(panel, "Copy message"));
+            var trueLabel = button.Content?.ToString();
+            Assert.False(string.IsNullOrEmpty(trueLabel));
+
+            WithClipboardRetry(() => { Clipboard.SetText("sentinel"); return string.Empty; });
+
+            // Click twice, the second one well inside the first's 1.5 s countdown.
+            button.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+            var afterFirst = button.Content?.ToString();
+            button.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+
+            Assert.NotEqual(trueLabel, afterFirst);   // it really did flash
+
+            // Structural half: the stashed original must still be the TRUE label. Capturing the
+            // feedback string here is the defect, and it is observable before any timer fires.
+            Assert.Equal(trueLabel, StashedOriginal(button)?.ToString());
+
+            // Behavioural half: pump the dispatcher past the restart and the label comes back.
+            PumpFor(TimeSpan.FromMilliseconds(2200));
+            Assert.Equal(trueLabel, button.Content?.ToString());
+        }
+
+        /// <summary>
+        /// The true pre-flash content the panel stashed for <paramref name="button"/>, read out of
+        /// the per-button <c>ConditionalWeakTable</c>. Null when the button has never flashed.
+        /// </summary>
+        private static object? StashedOriginal(Button button)
+        {
+            var tableField = typeof(AiChatPanel).GetField("FlashStates",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            Assert.True(tableField != null, "AiChatPanel.FlashStates not found — renamed?");
+            var table = tableField!.GetValue(null)!;
+
+            var tryGet = table.GetType().GetMethod("TryGetValue");
+            var args = new object?[] { button, null };
+            Assert.True((bool)tryGet!.Invoke(table, args)!, "no flash state recorded for the button");
+
+            var state = args[1]!;
+            var originalField = state.GetType().GetField("Original",
+                BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
+            Assert.True(originalField != null, "FlashState.Original not found — renamed?");
+            return originalField!.GetValue(state);
+        }
+
+        /// <summary>
+        /// Runs the dispatcher for <paramref name="duration"/> so DispatcherTimer ticks actually
+        /// fire — a plain Thread.Sleep would block the very thread the timer posts to.
+        /// </summary>
+        private static void PumpFor(TimeSpan duration)
+        {
+            var frame = new System.Windows.Threading.DispatcherFrame();
+            var timer = new System.Windows.Threading.DispatcherTimer(
+                duration,
+                System.Windows.Threading.DispatcherPriority.Normal,
+                (_, __) => frame.Continue = false,
+                System.Windows.Threading.Dispatcher.CurrentDispatcher);
+            timer.Start();
+            try { System.Windows.Threading.Dispatcher.PushFrame(frame); }
+            finally { timer.Stop(); }
+        }
+
         // ── helpers ────────────────────────────────────────────────────────────
 
         /// <summary>The Windows clipboard is shared machine state; transient

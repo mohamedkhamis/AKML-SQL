@@ -1,4 +1,4 @@
-#nullable enable
+﻿#nullable enable
 using System;
 using System.Collections.Generic;
 using System.Reflection;
@@ -160,6 +160,79 @@ namespace AkmlSql.Shell.Shared.Tests
             AddFallback(controls, "Kimi");
 
             Assert.Equal(new[] { "Claude (work)" }, Items(controls.FallbackCandidate));
+        }
+
+        // ── The candidate must resolve by id, never by display name ────────
+
+        /// <summary>
+        /// The candidate combo holds bare name strings, and <c>OnFallbackAdd</c> used to resolve
+        /// the pick with <c>_agents.Find(a =&gt; a.Name == name)</c>. Duplicate names are reachable
+        /// inside a session — name validation only renders an inline error on LostFocus; it never
+        /// reverts the value and never blocks — so picking the SECOND "Claude" appended the FIRST
+        /// one's id while the UI showed the user had picked the second.
+        /// </summary>
+        [StaFact]
+        public void Duplicate_names_add_the_agent_the_user_actually_picked()
+        {
+            var first = MakeAgent("Claude");
+            var second = MakeAgent("Claude");          // same display name, different id
+            var (dialog, controls) = BuildPage(SettingsWith(first, second));
+
+            Assert.Equal(new[] { "Claude", "Claude" }, Items(controls.FallbackCandidate));
+
+            // Pick the SECOND row by index — SelectedItem would match the first by value and
+            // could not express this scenario at all.
+            controls.FallbackCandidate.SelectedIndex = 1;
+            Click(controls.FallbackAddButton);
+
+            var saved = dialog.GetSettings();
+            Assert.Equal(new[] { second.Id }, saved.Ai.FallbackOrder);
+        }
+
+        /// <summary>
+        /// An agent can have a blank name (Add creates one before the user types, and
+        /// CommitEditorToSelectedAgent writes the box through unguarded). The old
+        /// <c>IsNullOrEmpty(name)</c> guard turned that into a dead Add button — a click that did
+        /// nothing at all, with no feedback.
+        /// </summary>
+        [StaFact]
+        public void An_agent_with_a_blank_name_can_still_be_added()
+        {
+            var unnamed = MakeAgent(string.Empty);
+            var (dialog, controls) = BuildPage(SettingsWith(unnamed));
+
+            controls.FallbackCandidate.SelectedIndex = 0;
+            Click(controls.FallbackAddButton);
+
+            var saved = dialog.GetSettings();
+            Assert.Equal(new[] { unnamed.Id }, saved.Ai.FallbackOrder);
+        }
+
+        /// <summary>
+        /// The alignment hazard: <c>RebuildFeatureRows</c> SKIPS agents already in the chain when
+        /// it repopulates the candidate combo, so a parallel id list that does not skip in exact
+        /// lockstep drifts by one and every later pick resolves to the wrong agent.
+        /// </summary>
+        [StaFact]
+        public void Candidate_ids_stay_aligned_after_an_agent_is_removed_from_the_list()
+        {
+            var a = MakeAgent("Alpha");
+            var b = MakeAgent("Bravo");
+            var c = MakeAgent("Charlie");
+            var (dialog, controls) = BuildPage(SettingsWith(a, b, c));
+
+            // Add the FIRST agent, so the rebuilt candidate list is offset from _agents.
+            controls.FallbackCandidate.SelectedIndex = 0;
+            Click(controls.FallbackAddButton);
+            Assert.Equal(new[] { "Bravo", "Charlie" }, Items(controls.FallbackCandidate));
+
+            // Index 1 of the REBUILT list is Charlie — not _agents[1], which is Bravo.
+            controls.FallbackCandidate.SelectedIndex = 1;
+            Click(controls.FallbackAddButton);
+
+            var saved = dialog.GetSettings();
+            Assert.Equal(new[] { a.Id, c.Id }, saved.Ai.FallbackOrder);
+            Assert.Equal(new[] { "Alpha", "Charlie" }, FallbackNames(controls));
         }
 
         // ── Helpers ────────────────────────────────────────────────────────
