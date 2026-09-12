@@ -236,8 +236,15 @@ public sealed class PublicSiteTests(SiteFixture site)
         var page = await context.NewPageAsync();
         await page.GotoAsync(SiteFixture.BaseUrl + "/download");
 
-        // DL-003: read from the file on disk, so it cannot be stale.
-        Assert.Contains("Download size", await page.InnerTextAsync(".release-facts"));
+        // DL-003: read from the file on disk, so it cannot be stale. Spec 038 moved the facts from
+        // a definition list into a scannable spec table.
+        Assert.Contains("Download size", await page.InnerTextAsync(".spec-table"));
+
+        // Spec 038: verification is available rather than prominent — most visitors never check a
+        // checksum, so it sits behind a disclosure the way a vendor download page treats it. It
+        // must still be reachable and the copy affordance must still work once opened.
+        var verify = page.Locator("details.hash-block").First;
+        await verify.Locator("summary").ClickAsync();
 
         var digest = await page.InnerTextAsync("#latest-sha256");
         Assert.Equal(64, digest.Trim().Length);

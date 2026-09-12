@@ -2416,3 +2416,155 @@ html[data-akml-theme="light"] .card:hover {
         flex: 1 1 auto;
     }
 }
+
+/* ---------------------------------------------------------------------------
+   Spec 038: download page, rebuilt in the shape a product download page usually
+   takes. One decisive call to action carrying the size, specs as a scannable
+   table, verification folded away until wanted, older versions in a table
+   rather than a stack of cards. Design tokens only.
+   --------------------------------------------------------------------------- */
+.download-hero {
+    padding: var(--s-6) var(--s-5);
+    margin-bottom: var(--s-5);
+}
+
+.download-hero h1 {
+    margin: var(--s-2) 0 var(--s-3);
+}
+
+.download-hero-lead {
+    max-width: 58ch;
+    margin: 0 0 var(--s-5);
+    color: var(--akml-text-secondary);
+    font-size: var(--t-lg);
+}
+
+.download-hero-meta {
+    margin: var(--s-4) 0 0;
+    color: var(--akml-text-secondary);
+    font-size: var(--t-sm);
+}
+
+.download-meta-sep {
+    margin-inline: var(--s-2);
+    opacity: 0.6;
+}
+
+/* The primary action carries the platform and size on a second line, so the
+   visitor knows what they are about to get without hunting for it. */
+.btn-lg {
+    padding: var(--s-3) var(--s-5);
+    font-size: var(--t-md);
+    line-height: 1.25;
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+
+.btn-lg .btn-sub {
+    font-size: var(--t-xs);
+    font-weight: 400;
+    opacity: 0.85;
+}
+
+.download-panel {
+    padding: var(--s-5);
+    margin-bottom: var(--s-4);
+    background-color: var(--akml-surface-panel);
+    border: 1px solid var(--akml-border-subtle);
+    border-radius: var(--akml-scalar-radius-m);
+}
+
+.download-panel > h2,
+.download-panel-summary {
+    margin: 0 0 var(--s-3);
+    font-size: var(--t-lg);
+}
+
+/* A <summary> containing a heading keeps the document outline correct while
+   staying one clickable control. */
+.download-panel > summary {
+    cursor: pointer;
+    list-style-position: outside;
+}
+
+.download-panel > summary .download-panel-summary {
+    display: inline;
+    margin: 0;
+}
+
+.spec-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.spec-table th,
+.spec-table td {
+    padding: var(--s-2) 0;
+    text-align: left;
+    vertical-align: top;
+    border-bottom: 1px solid var(--akml-border-subtle);
+}
+
+.spec-table tbody tr:last-child th,
+.spec-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.spec-table th[scope="row"] {
+    width: 34%;
+    padding-inline-end: var(--s-4);
+    color: var(--akml-text-secondary);
+    font-weight: 500;
+}
+
+.release-table th[scope="col"] {
+    color: var(--akml-text-secondary);
+    font-size: var(--t-xs);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.release-table td {
+    padding-block: var(--s-3);
+}
+
+.release-table-action {
+    white-space: nowrap;
+}
+
+.hash-block-inline {
+    display: inline-block;
+    margin-inline-start: var(--s-3);
+    font-size: var(--t-xs);
+}
+
+.hash-block-inline code {
+    display: block;
+    margin-top: var(--s-1);
+    overflow-wrap: anywhere;
+}
+
+.hash-cmd {
+    display: block;
+    margin-top: var(--s-1);
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+    .download-hero {
+        padding: var(--s-5) var(--s-4);
+    }
+
+    .spec-table th[scope="row"] {
+        width: 42%;
+    }
+
+    /* The version table is the one place the page may scroll sideways, inside
+       its own container -- the page body never does. */
+    .release-table {
+        min-width: 30rem;
+    }
+}

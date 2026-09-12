@@ -9,124 +9,180 @@
 @* Spec 034 T016 (US1): FR-003 download page driven by wwwroot/releases.json via the
    singleton ReleasesManifest (T012). Failure behavior per contracts/releases-json.md:
    missing/invalid/empty manifest renders a friendly fallback plus the repo
-   /releases/latest link — never an error page. Static SSR only. *@
+   /releases/latest link — never an error page. Static SSR only.
+
+   Spec 038: rebuilt in the shape a product download page usually takes — one decisive call to
+   action with the size on it, the specs as a scannable table rather than prose, verification
+   folded away until wanted, and older versions in a table instead of a stack of cards. The
+   previous layout buried the button under a definition list and a paragraph of SmartScreen
+   guidance. *@
 
 <PageTitle>Download — AKML SQL</PageTitle>
 <HeadContent>
-    <meta name="description" content="Download the latest AKML SQL installer for SSMS 22 and Visual Studio 2026, with SHA-256 verification hashes and previous releases." />
+    <meta name="description" content="Download AKML SQL for SQL Server Management Studio 22 and Visual Studio 2026. Free, open source, with SHA-256 verification and previous releases." />
     <meta property="og:title" content="Download" />
-    <meta property="og:description" content="Download the latest AKML SQL installer for SSMS 22 and Visual Studio 2026, with SHA-256 verification hashes and previous releases." />
+    <meta property="og:description" content="Download AKML SQL for SQL Server Management Studio 22 and Visual Studio 2026. Free, open source, with SHA-256 verification and previous releases." />
 </HeadContent>
 
 <div class="page-body container">
-<header class="page-header">
-    <p class="eyebrow">Get AKML SQL</p>
-    <h1>Download AKML SQL</h1>
-    <p class="page-intro">
-        One installer covers SSMS 22 and Visual Studio 2026. Free and open source under the
-        MIT license.
-    </p>
-</header>
 
 @* DL-001: an entry in releases.json is not proof the installer exists. If the advertised file is
    missing from the downloads folder, fall through to the same friendly fallback used when there is
    no manifest at all — a broken primary CTA is worse than an honest "not available yet". *@
 @if (_latest is { } latest)
 {
-    <section class="release-card release-card-latest" aria-labelledby="latest-release-heading">
-        <h2 id="latest-release-heading">Latest release: @latest.Version</h2>
-        <dl class="release-facts">
-            <dt>Released</dt>
-            <dd><time datetime="@latest.ReleasedAt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)">@latest.ReleasedAt.ToString("MMMM d, yyyy", CultureInfo.InvariantCulture)</time></dd>
-            <dt>Supported hosts</dt>
-            <dd>
-                <ul class="host-badges">
-                    @foreach (var host in latest.SupportedHosts)
-                    {
-                        <li>@host</li>
-                    }
-                </ul>
-            </dd>
-            @if (latest.MinimumOsVersion is not null)
-            {
-                <dt>Requires</dt>
-                @* U23: "Windows 10.0 or later" reads like an API version — trim a trailing ".0". *@
-                <dd>Windows @DisplayOsVersion(latest.MinimumOsVersion) or later</dd>
-            }
-            @* DL-003: download size is something people check before clicking, so it belongs here
-               rather than buried in the notes prose. Read from the file, so it cannot be stale. *@
-            @if (_latestSize is { } size)
-            {
-                <dt>Download size</dt>
-                <dd>@size</dd>
-            }
-        </dl>
-        @if (latest.NotesSummary is not null)
-        {
-            <p>@latest.NotesSummary</p>
-        }
-        <p class="cta-row">
-            @* DL-004: download-track.js upgrades this link to the CDN URL and beacons the click
-               to /dl-count — the visitor goes straight to the CDN, the metric still lands. *@
-            <a class="btn btn-primary download-tracked" href="@ReleaseAvailability.TrackedUrl(latest)"
-               data-file="@System.IO.Path.GetFileName(latest.DownloadUrl)"
-               data-cdn-url="@latest.CdnUrl">Download AKML SQL @latest.Version</a>
-            @if (latest.ReleaseNotesUrl is not null)
-            {
-                <a class="btn btn-secondary" href="@latest.ReleaseNotesUrl" target="_blank" rel="noopener noreferrer">Release notes</a>
-            }
-        </p>
-        @* SmartScreen guidance: the installer is currently UNSIGNED, and a brand-new domain has
-           no browser reputation — Edge/Chrome may hold the first download for evaluation or flag
-           it in the download shelf. Telling the user what the warning looks like and what to do
-           beats leaving them thinking the click did nothing. *@
-        <p class="download-note">
-            First time downloading? Your browser may briefly hold the file for a security review
-            or mark it <em>"not commonly downloaded"</em> — the installer is not yet code-signed.
-            Choose <strong>Keep</strong> (in Edge: <strong>… → Keep → Show more → Keep anyway</strong>),
-            then verify it against the SHA-256 below.
-        </p>
-        <div class="hash-block">
-            <h3>SHA-256</h3>
-            <p class="hash-hint">
-                Verify the downloaded installer against this digest.
-                @* U22: copy affordance — hidden by default, revealed by js/copy-hash.js
-                   (CSP-clean external script, so no-JS users never see a dead button). *@
-                <button type="button" class="copy-hash-btn" data-copy-target="latest-sha256">Copy</button>
+    <section class="download-hero release-card release-card-latest" aria-labelledby="latest-release-heading">
+        <div class="download-hero-main">
+            <p class="eyebrow">Download</p>
+            <h1 id="latest-release-heading">AKML SQL for SSMS and Visual Studio</h1>
+            <p class="download-hero-lead">
+                One installer covers SQL Server Management Studio 22 and Visual Studio 2026.
+                Free and open source under the MIT license.
             </p>
-            <code id="latest-sha256">@latest.Sha256Hash</code>
+
+            <p class="cta-row">
+                @* DL-004: download-track.js upgrades this link to the CDN URL and beacons the click
+                   to /dl-count — the visitor goes straight to the CDN, the metric still lands. *@
+                <a class="btn btn-primary btn-lg download-tracked" href="@ReleaseAvailability.TrackedUrl(latest)"
+                   data-file="@System.IO.Path.GetFileName(latest.DownloadUrl)"
+                   data-cdn-url="@latest.CdnUrl">
+                    Download AKML SQL
+                    @if (_latestSize is { } heroSize)
+                    {
+                        <span class="btn-sub">Windows · @heroSize</span>
+                    }
+                </a>
+                @if (latest.ReleaseNotesUrl is not null)
+                {
+                    <a class="btn btn-secondary" href="@latest.ReleaseNotesUrl" target="_blank" rel="noopener noreferrer">Release notes</a>
+                }
+            </p>
+
+            <p class="download-hero-meta">
+                Version <strong>@latest.Version</strong>
+                <span class="download-meta-sep">·</span>
+                Released <time datetime="@latest.ReleasedAt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)">@latest.ReleasedAt.ToString("MMMM d, yyyy", CultureInfo.InvariantCulture)</time>
+            </p>
         </div>
-        <p>New here? See the <a href="/docs">documentation</a> for installation and getting-started guidance.</p>
+    </section>
+
+    @if (latest.NotesSummary is not null)
+    {
+        <section class="download-panel" aria-labelledby="whats-new-heading">
+            <h2 id="whats-new-heading">What's in this release</h2>
+            <p>@latest.NotesSummary</p>
+        </section>
+    }
+
+    <section class="download-panel" aria-labelledby="requirements-heading">
+        <h2 id="requirements-heading">Requirements</h2>
+        <table class="spec-table">
+            <tbody>
+                <tr>
+                    <th scope="row">Supported hosts</th>
+                    <td>
+                        <ul class="host-badges">
+                            @foreach (var host in latest.SupportedHosts)
+                            {
+                                <li>@host</li>
+                            }
+                        </ul>
+                    </td>
+                </tr>
+                @if (latest.MinimumOsVersion is not null)
+                {
+                    @* U23: "Windows 10.0 or later" reads like an API version — trim a trailing ".0". *@
+                    <tr>
+                        <th scope="row">Operating system</th>
+                        <td>Windows @DisplayOsVersion(latest.MinimumOsVersion) or later</td>
+                    </tr>
+                }
+                @* DL-003: download size is something people check before clicking. Read from the
+                   file, so it cannot be stale. *@
+                @if (_latestSize is { } size)
+                {
+                    <tr>
+                        <th scope="row">Download size</th>
+                        <td>@size</td>
+                    </tr>
+                }
+                <tr>
+                    <th scope="row">File</th>
+                    <td><code>@System.IO.Path.GetFileName(latest.DownloadUrl)</code></td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    @* Verification is standard practice but not something most visitors act on, so it is available
+       rather than prominent — the same treatment a vendor download page gives a checksum. *@
+    <details class="download-panel hash-block">
+        <summary><h2 class="download-panel-summary">Verify this download</h2></summary>
+        <p class="hash-hint">
+            Compare the SHA-256 of the file you downloaded against this digest.
+            @* U22: copy affordance — hidden by default, revealed by js/copy-hash.js
+               (CSP-clean external script, so no-JS users never see a dead button). *@
+            <button type="button" class="copy-hash-btn" data-copy-target="latest-sha256">Copy</button>
+        </p>
+        <code id="latest-sha256">@latest.Sha256Hash</code>
+        <p class="hash-hint">
+            In PowerShell:
+            <code class="hash-cmd">Get-FileHash .\@System.IO.Path.GetFileName(latest.DownloadUrl) -Algorithm SHA256</code>
+        </p>
+    </details>
+
+    <section class="download-panel" aria-labelledby="getting-started-heading">
+        <h2 id="getting-started-heading">Getting started</h2>
+        <p>
+            New here? The <a href="/docs">documentation</a> covers installation and first steps, and
+            the <a href="/features">feature overview</a> shows what the extension adds to SSMS and
+            Visual Studio.
+        </p>
     </section>
 
     @* U22: static SSR renders this into the page body; script-src 'self' allows it. *@
     <script src="@Assets["js/copy-hash.js"]" defer></script>
     <script src="@Assets["js/download-track.js"]" defer></script>
 
-    @* DL-001: only list previous releases whose installer is still present. *@
+    @* DL-001: only list previous releases that can actually be downloaded. A table rather than a
+       stack of cards: older versions are a reference list people scan, not content they read. *@
     @if (_previousReleases.Count > 0)
     {
         <section class="release-history" aria-labelledby="previous-releases-heading">
-            <h2 id="previous-releases-heading">Previous releases</h2>
-            <ul class="release-list">
-                @foreach (var release in _previousReleases)
-                {
-                    <li class="release-card">
-                        <h3>@release.Version</h3>
-                        <p>
-                            Released <time datetime="@release.ReleasedAt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)">@release.ReleasedAt.ToString("MMMM d, yyyy", CultureInfo.InvariantCulture)</time>
-                            · Hosts: @string.Join(", ", release.SupportedHosts)
-                        </p>
-                        <p><a class="download-tracked" href="@ReleaseAvailability.TrackedUrl(release)"
-                              data-file="@System.IO.Path.GetFileName(release.DownloadUrl)"
-                              data-cdn-url="@release.CdnUrl">Download installer</a></p>
-                        <details class="hash-block">
-                            <summary>SHA-256</summary>
-                            <code>@release.Sha256Hash</code>
-                        </details>
-                    </li>
-                }
-            </ul>
+            <h2 id="previous-releases-heading">Previous versions</h2>
+            <div class="table-scroll">
+                <table class="spec-table release-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">Version</th>
+                            <th scope="col">Released</th>
+                            <th scope="col">Hosts</th>
+                            <th scope="col"><span class="visually-hidden">Download</span></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var release in _previousReleases)
+                        {
+                            <tr class="release-card">
+                                <td><strong>@release.Version</strong></td>
+                                <td>
+                                    <time datetime="@release.ReleasedAt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)">@release.ReleasedAt.ToString("MMMM d, yyyy", CultureInfo.InvariantCulture)</time>
+                                </td>
+                                <td>@string.Join(", ", release.SupportedHosts)</td>
+                                <td class="release-table-action">
+                                    <a class="download-tracked" href="@ReleaseAvailability.TrackedUrl(release)"
+                                       data-file="@System.IO.Path.GetFileName(release.DownloadUrl)"
+                                       data-cdn-url="@release.CdnUrl">Download</a>
+                                    <details class="hash-block hash-block-inline">
+                                        <summary>SHA-256</summary>
+                                        <code>@release.Sha256Hash</code>
+                                    </details>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
         </section>
     }
 }
@@ -134,6 +190,10 @@ else
 {
     @* contracts/releases-json.md: missing/unreadable file, invalid JSON, or an empty
        releases array all land here. *@
+    <header class="page-header">
+        <p class="eyebrow">Download</p>
+        <h1>Download AKML SQL</h1>
+    </header>
     <div class="notice" role="status">
         <h2>No public release available yet</h2>
         <p>
