@@ -110,6 +110,14 @@ public sealed class AdminPagesTests
         ctx.Services.Configure<AnalyticsOptions>(o => o.RetentionDays = 400);
         ctx.Services.AddSingleton(new GeoLookup(Path.Combine(dir.Path, "no-such-geo.mmdb")));
 
+        // Spec 038 T096: the dashboard's privacy paragraph reads the configured identifiable
+        // retention, so the page needs the settings store. (This test builds its own context rather
+        // than using NewDashboardCtx because it needs a populated downloads folder.)
+        var dashboardSettings = new AkmlSql.Site.Settings.SiteSettingsStore(Path.Combine(dir.Path, "settings.db"));
+        dashboardSettings.CreateTableIfMissing();
+        dashboardSettings.Load();
+        ctx.Services.AddSingleton(dashboardSettings);
+
         var cut = ctx.Render<AdminDashboard>();
 
         // Stat tiles: visits today, unique today, 7d, window, downloads window, downloads total,
@@ -137,8 +145,8 @@ public sealed class AdminPagesTests
         // Downloads folder listing.
         Assert.Contains(downloadsDir, cut.Markup);
 
-        // Sign-out posts to the logout endpoint.
-        Assert.NotNull(cut.Find("form[action='/admin/logout'][method='post']"));
+        // Spec 038 T017: sign-out moved to AdminLayout, which every portal page now shares.
+        // AdminLayoutTests.Layout_RendersSignOutPostingToTheLogoutEndpoint covers it there.
     }
 
     [Fact]
@@ -184,7 +192,8 @@ public sealed class AdminPagesTests
         Assert.Equal(days * 2, cut.FindAll(".admin-chart-col").Count); // both charts follow it
         Assert.Contains(label, cut.Markup);
         Assert.NotNull(cut.Find($"a[href='/admin/metrics.csv?days={days}']")); // export follows too
-        Assert.NotNull(cut.Find($"a[href='/admin?days={days}'].is-current"));
+        // Spec 038 T017: the range selector itself moved to AdminLayout, shared by every section
+        // (FR-032). AdminLayoutTests asserts the selected range is marked current there.
     }
 
     [Theory]
@@ -280,9 +289,8 @@ public sealed class AdminPagesTests
         Assert.NotNull(cut.Find("details summary"));
         Assert.Contains("By severity level", cut.Markup);
 
-        // Navigation: back to the dashboard, and the window filter is rendered.
-        Assert.NotNull(cut.Find("a[href='/admin']"));
-        Assert.NotNull(cut.Find("a[href='/admin/errors?days=30'].is-current"));
+        // Spec 038 T017: the hand-rolled "back to dashboard" link and the window selector both
+        // moved to AdminLayout's persistent navigation (FR-031/FR-032).
     }
 
     [Fact]
@@ -338,6 +346,14 @@ public sealed class AdminPagesTests
         // No .mmdb path: GeoLookup resolves to "unavailable", which is the state the dashboard
         // must render correctly on any machine without a MaxMind licence key.
         ctx.Services.AddSingleton(new GeoLookup(Path.Combine(dir.Path, "no-such-geo.mmdb")));
+
+        // Spec 038 T096: the dashboard's privacy paragraph now quotes the CONFIGURED identifiable
+        // retention rather than a literal, so it cannot drift from what the store enforces.
+        var settings = new AkmlSql.Site.Settings.SiteSettingsStore(Path.Combine(dir.Path, "settings.db"));
+        settings.CreateTableIfMissing();
+        settings.Load();
+        ctx.Services.AddSingleton(settings);
+
         return ctx;
     }
 }

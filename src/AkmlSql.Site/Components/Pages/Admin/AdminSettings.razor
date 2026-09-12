@@ -1,0 +1,226 @@
+@page "/admin/settings"
+@layout AdminLayout
+@using System.Globalization
+@using AkmlSql.Site.Admin
+@using AkmlSql.Site.Releases
+@using AkmlSql.Site.Settings
+@using Microsoft.AspNetCore.Antiforgery
+@inject SiteSettingsStore Settings
+@inject ReleasesManifest Manifest
+@inject ReleaseAvailability Availability
+@inject IAntiforgery Antiforgery
+
+@* Spec 038 T034 (US2): the owner's controls over public behaviour.
+
+   Static SSR, plain form POST, antiforgery token rendered server-side — the same shape as
+   AdminLogin, and it works with JavaScript disabled (contract A5.6). No inline script or style:
+   the site CSP forbids both. *@
+
+<PageTitle>Settings — AKML SQL Admin</PageTitle>
+
+<header class="page-header">
+    <p class="eyebrow">Admin</p>
+    <h1>Settings</h1>
+    <p class="page-intro">
+        What the public download page publishes, and how long identifiable visitor data is kept.
+        Changes take effect on the next public request — no deploy, no restart.
+    </p>
+</header>
+
+@if (Settings.LoadFailed)
+{
+    @* FR-016a: a settings failure is never fatal to the public page, so it has to be loud
+       somewhere. This is that somewhere. *@
+    <div class="notice" role="alert">
+        <h2>Settings could not be read</h2>
+        <p>
+            The site is serving the documented defaults
+            (<strong>@ReleaseVisibility.Label(Current.Visibility, Current.VisibilityCount)</strong>).
+            Saving below will attempt to write them again.
+        </p>
+        @if (Settings.LoadError is not null)
+        {
+            <p><code>@Settings.LoadError</code></p>
+        }
+    </div>
+}
+
+@if (Saved)
+{
+    <div class="notice" role="status">
+        <h2>Settings saved</h2>
+        <p>
+            The download page now publishes
+            <strong>@ReleaseVisibility.Label(Current.Visibility, Current.VisibilityCount)</strong>.
+            This is live on the next public request.
+        </p>
+    </div>
+}
+
+@if (Errors.Count > 0)
+{
+    <div class="notice" role="alert">
+        <h2>Nothing was saved</h2>
+        <ul>
+            @foreach (var error in Errors)
+            {
+                <li>@error</li>
+            }
+        </ul>
+    </div>
+}
+
+<form method="post" action="/admin/settings">
+    @if (RequestToken is not null)
+    {
+        <input type="hidden" name="__RequestVerificationToken" value="@RequestToken" />
+    }
+
+    <section class="admin-panel" aria-labelledby="visibility-heading">
+        <h2 id="visibility-heading">Release visibility</h2>
+        <p>
+            The manifest currently holds <strong>@Manifest.Releases.Count</strong> releases. This
+            setting decides how many of them the download page offers.
+        </p>
+
+        @foreach (var mode in new[] { ReleaseVisibilityMode.LatestOnly, ReleaseVisibilityMode.LatestN, ReleaseVisibilityMode.All })
+        {
+            <div class="admin-field admin-choice">
+                <label>
+                    <input type="radio" name="visibility" value="@mode"
+                           checked="@(Current.Visibility == mode)" />
+                    <strong>@ReleaseVisibility.Label(mode, Current.VisibilityCount)</strong>
+                </label>
+                <p class="admin-choice-hint">@ReleaseVisibility.Description(mode)</p>
+            </div>
+        }
+
+        <div class="admin-field">
+            <label for="visibility-count">Number of releases for “latest N”</label>
+            <input class="admin-input" type="number" id="visibility-count" name="visibilityCount"
+                   min="@ReleaseVisibilityBounds.MinCount" max="@ReleaseVisibilityBounds.MaxCount"
+                   value="@Current.VisibilityCount" />
+            <p class="admin-choice-hint">
+                Between @ReleaseVisibilityBounds.MinCount and @ReleaseVisibilityBounds.MaxCount.
+            </p>
+        </div>
+    </section>
+
+    @* FR-017 / contract A5.2: show the effect before and after, computed with the SAME helper the
+       public page uses, so this preview cannot disagree with what visitors actually see. *@
+    <section class="admin-panel" aria-labelledby="preview-heading">
+        <h2 id="preview-heading">What the public sees right now</h2>
+        @if (VisibleReleases.Count == 0)
+        {
+            <p class="admin-empty">No release is currently downloadable, so the page shows its fallback message.</p>
+        }
+        else
+        {
+            <ul class="release-preview">
+                @foreach (var release in VisibleReleases)
+                {
+                    <li>
+                        <strong>@release.Version</strong>
+                        <span> — released @release.ReleasedAt.ToString("d MMMM yyyy", CultureInfo.InvariantCulture)</span>
+                        @if (!Availability.IsDownloadable(release))
+                        {
+                            <span class="admin-flag"> (advertised but not downloadable)</span>
+                        }
+                    </li>
+                }
+            </ul>
+            @if (HiddenCount > 0)
+            {
+                <p class="admin-choice-hint">@HiddenNote</p>
+            }
+        }
+    </section>
+
+    <section class="admin-panel" aria-labelledby="retention-heading">
+        <h2 id="retention-heading">Data retention</h2>
+        <p>
+            How long identifiable visitor data — the full address and the persistent visitor id — is
+            kept. Past this point those two values are erased while the visit itself is retained, so
+            country and version totals for older periods still add up.
+        </p>
+        <div class="admin-field">
+            <label for="retention-days">Identifiable data retention (days)</label>
+            <input class="admin-input" type="number" id="retention-days" name="retentionDays"
+                   min="@SiteSettings.MinRetentionDays" max="@SiteSettings.MaxRetentionDays"
+                   value="@Current.IdentifiableRetentionDays" />
+            <p class="admin-choice-hint">
+                Between @SiteSettings.MinRetentionDays and @SiteSettings.MaxRetentionDays days.
+                This number is also what the public privacy notice states.
+            </p>
+        </div>
+    </section>
+
+    <p class="cta-row">
+        <button type="submit" class="btn btn-primary">Save settings</button>
+    </p>
+</form>
+
+@if (LastChangedUtc is { } changedAt)
+{
+    <p class="admin-choice-hint">
+        Last changed @changedAt.ToString("u", CultureInfo.InvariantCulture)
+        @if (LastChangedBy is not null)
+        {
+            <span> by @LastChangedBy</span>
+        }
+    </p>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "saved")]
+    private string? SavedFlag { get; set; }
+
+    [SupplyParameterFromQuery(Name = "error")]
+    private string? ErrorFlag { get; set; }
+
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
+    private SiteSettings Current => Settings.Current;
+
+    private bool Saved => !string.IsNullOrEmpty(SavedFlag);
+
+    private IReadOnlyList<string> Errors { get; set; } = [];
+
+    private string? RequestToken { get; set; }
+
+    private IReadOnlyList<Release> VisibleReleases { get; set; } = [];
+
+    private int HiddenCount { get; set; }
+
+    /// <summary>
+    /// Built in C# rather than interleaved into the markup: Razor inserts whitespace around each
+    /// expression, which turns a pluralised sentence into ragged output.
+    /// </summary>
+    private string HiddenNote => HiddenCount == 1
+        ? "1 older release is hidden from the page. Direct links to them keep working and keep being counted."
+        : $"{HiddenCount} older releases are hidden from the page. Direct links to them keep working and keep being counted.";
+
+    private DateTimeOffset? LastChangedUtc { get; set; }
+
+    private string? LastChangedBy { get; set; }
+
+    protected override void OnInitialized()
+    {
+        if (HttpContext is not null)
+        {
+            RequestToken = Antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
+        }
+
+        // Errors travel back from the POST as a separated list, so the page can name the bound that
+        // was violated rather than silently clamping (contract A5.3).
+        Errors = string.IsNullOrEmpty(ErrorFlag)
+            ? []
+            : ErrorFlag.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        VisibleReleases = ReleaseVisibility.Apply(Current.Visibility, Current.VisibilityCount, Manifest.Releases);
+        HiddenCount = Math.Max(0, Manifest.Releases.Count - VisibleReleases.Count);
+
+        (LastChangedUtc, LastChangedBy) = Settings.LastChange();
+    }
+}

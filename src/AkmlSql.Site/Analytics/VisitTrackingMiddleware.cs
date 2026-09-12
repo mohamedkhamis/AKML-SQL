@@ -1,5 +1,7 @@
 namespace AkmlSql.Site.Analytics;
 
+using AkmlSql.Site.Consent;
+
 /// <summary>
 /// Logs page visits after routing: only successful (2xx) GET/HEAD responses that rendered HTML
 /// for a public content path are recorded. Everything is funneled through the fire-and-forget
@@ -65,6 +67,10 @@ public sealed class VisitTrackingMiddleware
                     Language = HttpRequestFacts.Language(request),
                     Campaign = HttpRequestFacts.Campaign(request),
                     DurationMs = elapsedMs,
+                    // Spec 038 T049 (US5): resolved once per request by ConsentMiddleware, which
+                    // runs ahead of this one. The store re-checks the gate before writing.
+                    Consent = ConsentMiddleware.StateOf(context),
+                    VisitorId = ConsentMiddleware.VisitorIdOf(context),
                 });
             }
             else if (ShouldTrackNotFound(request.Path.Value, request.Method, context.Response.StatusCode))

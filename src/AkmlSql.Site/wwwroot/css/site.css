@@ -2259,3 +2259,160 @@ html[data-akml-theme="light"] .card:hover {
     max-width: 32ch;
     overflow-wrap: anywhere;
 }
+
+/* ---------------------------------------------------------------------------
+   Spec 038 (US4): admin portal shell -- persistent section navigation plus the
+   shared reporting window, rendered by Components/Layout/AdminLayout.razor on
+   every portal page. Design tokens only; nothing here belongs in the generated
+   themes/*.css files, which are produced from docs/theme-tokens.json.
+   --------------------------------------------------------------------------- */
+.admin-shell-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-3);
+    align-items: center;
+    justify-content: space-between;
+    padding-block: var(--s-3) var(--s-2);
+    margin-bottom: var(--s-4);
+    border-bottom: 1px solid var(--akml-border-subtle);
+}
+
+.admin-nav-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.admin-nav-list a {
+    display: block;
+    padding: var(--s-1) var(--s-3);
+    color: var(--akml-text-secondary);
+    font-size: var(--t-sm);
+    font-weight: 500;
+    text-decoration: none;
+    border-radius: var(--akml-scalar-radius-xs);
+    transition: color 0.16s ease, background-color 0.16s ease;
+}
+
+.admin-nav-list a:hover {
+    color: var(--akml-text-primary);
+    background-color: var(--akml-surface-hover);
+}
+
+.admin-nav-list a.is-current {
+    color: var(--akml-text-onaccent);
+    background-color: var(--akml-accent-primary);
+    font-weight: 600;
+}
+
+/* FR-032, second clause: the active window is stated in words on every section,
+   so a screenshot is never ambiguous about the range it describes. */
+.admin-range-active {
+    margin-inline-start: auto;
+    color: var(--akml-text-secondary);
+    font-size: var(--t-sm);
+}
+
+@media (max-width: 640px) {
+    .admin-shell-bar {
+        align-items: flex-start;
+    }
+
+    .admin-range-active {
+        margin-inline-start: 0;
+        width: 100%;
+    }
+}
+
+/* Spec 038 (US2): settings-page controls — radio choices with an explanatory hint,
+   and the "what the public sees" preview list. Tokens only. */
+.admin-choice {
+    padding-block: var(--s-2);
+}
+
+.admin-choice label {
+    display: flex;
+    gap: var(--s-2);
+    align-items: baseline;
+    cursor: pointer;
+}
+
+.admin-choice-hint {
+    margin: var(--s-1) 0 0;
+    color: var(--akml-text-secondary);
+    font-size: var(--t-sm);
+}
+
+.release-preview {
+    margin: 0;
+    padding-inline-start: var(--s-4);
+}
+
+.release-preview li {
+    padding-block: var(--s-1);
+}
+
+/* Reserved for the admin Releases section (T088): advertised-but-missing and
+   present-but-unadvertised both need to read as a warning, not as body text. */
+.admin-flag {
+    color: var(--akml-status-warning, #b45309);
+    font-weight: 600;
+}
+
+/* ---------------------------------------------------------------------------
+   Spec 038 (US5): consent bar. NON-BLOCKING by contract (FR-043b) — a bar, not
+   a modal. No overlay, no backdrop, no scroll lock. It sits at the bottom of the
+   viewport and must never cover the download button; on narrow screens it stacks
+   and scrolls with the page rather than pinning.
+   --------------------------------------------------------------------------- */
+.consent-bar {
+    position: sticky;
+    bottom: 0;
+    z-index: 20;
+    background-color: var(--akml-surface-panel);
+    border-top: 1px solid var(--akml-border-subtle);
+}
+
+.consent-bar-inner {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-3);
+    align-items: center;
+    justify-content: space-between;
+    padding-block: var(--s-3);
+}
+
+.consent-bar-text {
+    margin: 0;
+    flex: 1 1 28rem;
+    color: var(--akml-text-secondary);
+    font-size: var(--t-sm);
+}
+
+.consent-bar-actions {
+    display: flex;
+    gap: var(--s-2);
+    flex-wrap: wrap;
+}
+
+/* Accept and Decline must read as equally available choices (FR-043b). */
+.consent-btn {
+    min-width: 7rem;
+}
+
+@media (max-width: 640px) {
+    .consent-bar {
+        position: static;
+    }
+
+    .consent-bar-actions {
+        width: 100%;
+    }
+
+    .consent-btn {
+        flex: 1 1 auto;
+    }
+}

@@ -1,0 +1,74 @@
+@using AkmlSql.Site.Consent
+@using AkmlSql.Site.Settings
+@using Microsoft.AspNetCore.Antiforgery
+@inject IAntiforgery Antiforgery
+@inject SiteSettingsStore Settings
+
+@* Spec 038 T047 (US5): the consent request.
+
+   NON-BLOCKING BY CONTRACT (FR-043b, contract C2.5). This is a bar, not a modal. No overlay, no
+   backdrop, no focus trap, no scroll lock, and it must never cover the download button. A visitor
+   can ignore it entirely and complete the whole download path — which is precisely what the owner
+   chose on 2026-09-12, accepting that it yields a smaller individuals list.
+
+   Shown to EVERY visitor with no recorded choice, regardless of country (FR-043a). This component
+   must not consult GeoLookup, and neither must ConsentMiddleware.
+
+   Accept and Decline carry equal weight. The dismiss control posts "denied", because an explicit
+   dismissal is a refusal — silence is the only thing that leaves the choice unresolved. *@
+
+@if (State == ConsentState.Unknown)
+{
+    <div class="consent-bar" role="region" aria-label="Data collection choice">
+        <div class="consent-bar-inner container">
+            @* Standard short-form cookie notice. The long explanation lives on /privacy, which this
+               links to: a banner people actually read beats a paragraph they skip. It still names
+               cookies AND the IP address, because consent has to be informed — the durations,
+               the column-level detail and the deletion route are all one click away. *@
+            <p class="consent-bar-text">
+                We use cookies and record basic usage data, including your IP address, to understand
+                how AKML SQL is downloaded.
+                <a href="/privacy">Privacy notice</a>.
+            </p>
+            <form method="post" action="/consent" class="consent-bar-actions">
+                @if (RequestToken is not null)
+                {
+                    <input type="hidden" name="__RequestVerificationToken" value="@RequestToken" />
+                }
+                <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+                <button type="submit" name="choice" value="granted" class="btn btn-primary consent-btn">Accept</button>
+                <button type="submit" name="choice" value="denied" class="btn btn-secondary consent-btn">Decline</button>
+            </form>
+        </div>
+    </div>
+}
+
+@code {
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
+    private ConsentState State { get; set; } = ConsentState.Unknown;
+
+    private string? RequestToken { get; set; }
+
+    private string ReturnUrl { get; set; } = "/";
+
+    private int RetentionDays => Settings.Current.IdentifiableRetentionDays;
+
+    protected override void OnInitialized()
+    {
+        if (HttpContext is null)
+        {
+            return;
+        }
+
+        State = ConsentMiddleware.StateOf(HttpContext);
+        RequestToken = Antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
+
+        // Returning the visitor to where they were keeps the bar from being a navigation event.
+        // ConsentEndpoints re-validates this as a local path regardless — an open redirect on a
+        // form rendered on every page would be a real vulnerability.
+        var path = HttpContext.Request.Path.Value;
+        ReturnUrl = string.IsNullOrEmpty(path) ? "/" : path + HttpContext.Request.QueryString.Value;
+    }
+}

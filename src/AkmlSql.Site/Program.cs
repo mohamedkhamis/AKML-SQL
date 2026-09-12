@@ -1,9 +1,11 @@
 using AkmlSql.Site.Admin;
 using AkmlSql.Site.Analytics;
 using AkmlSql.Site.Components;
+using AkmlSql.Site.Consent;
 using AkmlSql.Site.Docs;
 using AkmlSql.Site.Releases;
 using AkmlSql.Site.Seo;
+using AkmlSql.Site.Settings;
 using AkmlSql.Site.Telemetry;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.ResponseCompression;
@@ -68,6 +70,15 @@ builder.Services.Configure<AdminOptions>(builder.Configuration.GetSection(AdminO
 builder.Services.Configure<ClientErrorOptions>(builder.Configuration.GetSection(ClientErrorOptions.SectionName));
 builder.Services.AddSingleton(sp => new AnalyticsStore(sp.GetRequiredService<IOptions<AnalyticsOptions>>().Value));
 
+// Spec 038 (US2): owner-editable settings, stored in a site_settings table inside the SAME
+// analytics.db -- already created, already ACL'd for the app pool by the deploy script, and backed
+// up alongside the metrics it governs. Deliberately NOT appsettings.json: writing to the deployed
+// config file restarts the application on every settings change, which would turn a one-second
+// toggle into a cold start.
+builder.Services.AddSingleton(sp => new SiteSettingsStore(
+    sp.GetRequiredService<IOptions<AnalyticsOptions>>().Value,
+    sp.GetRequiredService<ILogger<SiteSettingsStore>>()));
+
 // Offline IP-to-location lookup. The .mmdb is supplied by the deploy (scripts/update-geoip.ps1),
 // not source control -- GeoLite2 needs a MaxMind licence key. Without the file every lookup
 // returns "unknown" and the site behaves exactly as before, so geo is an enrichment, never a
@@ -101,6 +112,15 @@ builder.Services.AddSingleton<IAnalyticsSink>(sp => sp.GetRequiredService<Channe
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ChannelAnalyticsSink>());
 builder.Services.AddSingleton<AdminLoginThrottle>();
 
+// Spec 038 T104: soft per-IP limit on the two new public POST endpoints. The abuse surface is small
+// (a visitor can only set their own cookies and delete their own rows), but unauthenticated POSTs
+// that each do a database write should not be unbounded.
+builder.Services.AddSingleton<ConsentRateLimit>();
+
+// Spec 038 T026 (US1): retention prune + historical referrer repair, run on a background task after
+// start instead of inline before the first request can be served.
+builder.Services.AddHostedService<MaintenanceHostedService>();
+
 // Admin cookie: HTTPS-only, HttpOnly, SameSite=Lax, sliding 8-hour session. Visitors get no cookie.
 builder.Services.AddAuthentication(AdminAuth.Scheme)
     .AddCookie(AdminAuth.Scheme, options =>
@@ -122,36 +142,27 @@ var app = builder.Build();
 // missing/unwritable database folder must fail the deploy, not the first page view.
 _ = app.Services.GetRequiredService<ReleasesManifest>();
 _ = app.Services.GetRequiredService<DocsContentService>();
-var analyticsStore = app.Services.GetRequiredService<AnalyticsStore>();
+_ = app.Services.GetRequiredService<AnalyticsStore>();
 
-// ADM-004: retention prune at startup. The visits/downloads tables previously grew without bound.
-// Once per boot rather than on a timer: the tables gain a few thousand rows a day at most, so a
-// prune per deploy or app-pool recycle is ample, and it cannot interfere with a live request.
-var analyticsOptions = app.Services.GetRequiredService<IOptions<AnalyticsOptions>>().Value;
-var prunedRows = analyticsStore.Prune(analyticsOptions.RetentionDays);
-if (prunedRows > 0)
+// Spec 038 (US2/FR-016a): warm the settings cache once, here, so the download page render path
+// never touches SQLite. Unlike the singletons above this must NOT fail the deploy -- Load() swallows
+// and falls back to the documented defaults, because taking the site down over a settings read would
+// be strictly worse than advertising three releases.
+var siteSettings = app.Services.GetRequiredService<SiteSettingsStore>();
+siteSettings.CreateTableIfMissing();
+siteSettings.Load();
+if (siteSettings.LoadFailed)
 {
-    app.Logger.LogInformation(
-        "Analytics retention: pruned {Rows} row(s) older than {Days} days.",
-        prunedRows, analyticsOptions.RetentionDays);
+    app.Logger.LogWarning(
+        "Site settings could not be loaded; serving documented defaults ({Visibility}). {Error}",
+        ReleaseVisibility.Label(siteSettings.Current.Visibility, siteSettings.Current.VisibilityCount),
+        siteSettings.LoadError);
 }
 
-// Repair history written before same-origin referrers were filtered at write time: internal
-// navigation had made the site its own top referrer. Only the referrer columns are cleared, never
-// a row, and the operation is idempotent — after the first run it corrects nothing.
-var siteHost = Uri.TryCreate(
-    app.Services.GetRequiredService<IOptions<SiteOptions>>().Value.CanonicalRoot,
-    UriKind.Absolute,
-    out var canonicalUri)
-        ? canonicalUri.Host
-        : null;
-var correctedReferrers = analyticsStore.ClearSameOriginReferrers(siteHost);
-if (correctedReferrers > 0)
-{
-    app.Logger.LogInformation(
-        "Analytics: cleared self-referrer on {Rows} historical row(s) for host {Host}.",
-        correctedReferrers, siteHost);
-}
+// Spec 038 T026 (US1): retention prune and the historical self-referrer repair moved OUT of the
+// startup path into MaintenanceHostedService. They ran inline here, so the first request after every
+// deploy or app-pool recycle waited behind them. Neither is deploy validation -- the eager singleton
+// resolution above IS, and it deliberately stays inline so a broken deploy still fails fast.
 
 // PERF-001: compress the responses the app GENERATES -- SSR pages, search-index.json,
 // sitemap.xml, robots.txt -- which were previously served raw (a docs page was 35 KB).
@@ -207,6 +218,11 @@ app.UseForwardedHeaders();
 app.UseAuthentication();
 app.UseMiddleware<AdminBranchMiddleware>();
 
+// Spec 038 (US5): resolve the visitor's consent state and identity BEFORE visit tracking reads
+// them, so there is exactly one place that decides what state a request is in. Deliberately does
+// not consult GeoLookup -- consent is asked of every visitor regardless of country (FR-043a).
+app.UseMiddleware<ConsentMiddleware>();
+
 // Visit metrics: runs after routing decisions by wrapping the rest of the pipeline; it only
 // observes the final response (2xx + text/html + public path) and enqueues fire-and-forget.
 app.UseMiddleware<VisitTrackingMiddleware>();
@@ -245,6 +261,7 @@ app.MapGet("/health", (
     DocsContentService docs,
     ReleasesManifest releases,
     AnalyticsStore analytics,
+    SiteSettingsStore settings,
     IOptions<AdminOptions> admin) =>
 {
     http.Response.Headers.CacheControl = "no-store";
@@ -257,6 +274,10 @@ app.MapGet("/health", (
         latestVersion = releases.Latest?.Version,
         analyticsDatabase = File.Exists(analytics.DatabasePath),
         adminConfigured = admin.Value.IsConfigured,
+        // Spec 038 FR-016a: a settings failure is never fatal, so it must be visible somewhere.
+        // No personal data is exposed here -- only whether the load succeeded and what is in force.
+        settingsLoaded = !settings.LoadFailed,
+        releaseVisibility = ReleaseVisibility.Label(settings.Current.Visibility, settings.Current.VisibilityCount),
     };
 
     // Degraded is still a 200: the site serves fine without a release manifest, and a probe that
@@ -285,6 +306,7 @@ app.MapStaticAssets();
 DownloadEndpoint.Map(app);
 DownloadEndpoint.MapCount(app);
 ClientErrorEndpoint.Map(app);
+ConsentEndpoints.Map(app);
 AdminEndpoints.Map(app);
 
 app.MapRazorComponents<App>();

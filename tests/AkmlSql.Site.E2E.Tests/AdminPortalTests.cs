@@ -259,19 +259,30 @@ public sealed class AdminPortalTests(SiteFixture site)
     public async Task Dashboard_StatesWhatIsActuallyStored()
     {
         SkipIfUnavailable();
-        // The privacy note is a claim made to visitors; it must match the schema. Storing a
-        // truncated prefix and a location means the old "hashes only" wording would be false.
+        // The privacy note is a claim made to the owner about what the site does; it must match the
+        // schema. Spec 038 changed that behaviour, so this test changed with it: the site now stores
+        // the FULL address and a persistent cookie for consenting visitors, which makes the previous
+        // "full IP addresses are never stored ... No cookies are set for visitors" wording false.
         await using var context = await site.NewContextAsync();
         var page = await SignInAsync(context);
 
         var privacy = await page.Locator(".admin-privacy").InnerTextAsync();
 
-        Assert.Contains("never stored", privacy, StringComparison.OrdinalIgnoreCase);
+        // What IS now stored, and under what condition.
+        Assert.Contains("full IP address", privacy, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("accept", privacy, StringComparison.OrdinalIgnoreCase);
+
+        // What is still true for everyone who did not accept.
         Assert.Contains("/24", privacy, StringComparison.Ordinal);
         Assert.Contains("/48", privacy, StringComparison.Ordinal);
-        Assert.Contains("No cookies", privacy, StringComparison.OrdinalIgnoreCase);
-        // The note must say what is NOT collected too, now that only country is.
+        Assert.Contains("salted hash", privacy, StringComparison.OrdinalIgnoreCase);
+
+        // The note must say what is NOT collected too, since only country is.
         Assert.Contains("no city, region or finer location", privacy, StringComparison.OrdinalIgnoreCase);
+
+        // The claims the reversal invalidated must be gone, not merely contradicted elsewhere.
+        Assert.DoesNotContain("No cookies are set", privacy, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("full IP addresses are never stored", privacy, StringComparison.OrdinalIgnoreCase);
     }
 
     [SkippableFact]

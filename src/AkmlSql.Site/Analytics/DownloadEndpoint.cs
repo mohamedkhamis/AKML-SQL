@@ -1,5 +1,6 @@
 namespace AkmlSql.Site.Analytics;
 
+using AkmlSql.Site.Consent;
 using AkmlSql.Site.Releases;
 
 /// <summary>Configuration binding for the <c>Downloads</c> section of appsettings.json.</summary>
@@ -132,7 +133,7 @@ public static class DownloadEndpoint
             return Results.NotFound();
         }
 
-        LogDownload(http, file!, sink, geo);
+        LogDownload(http, file!, sink, geo, manifest);
         return Results.NoContent();
     }
 
@@ -153,7 +154,7 @@ public static class DownloadEndpoint
         var cdnUrl = ResolveCdnUrl(manifest, file);
         if (cdnUrl is not null)
         {
-            LogDownload(http, file!, sink, geo);
+            LogDownload(http, file!, sink, geo, manifest);
             return Results.Redirect(cdnUrl, permanent: false);
         }
 
@@ -177,7 +178,7 @@ public static class DownloadEndpoint
         var fileName = Path.GetFileName(fullPath);
 
         // DL-002 (range requests don't count) lives inside LogDownload.
-        LogDownload(http, fileName, sink, geo);
+        LogDownload(http, fileName, sink, geo, manifest);
 
         http.Response.Headers.CacheControl = "no-cache";
 
@@ -203,11 +204,40 @@ public static class DownloadEndpoint
     }
 
     /// <summary>
+    /// Spec 038 T060 (US3): the release a downloaded file belongs to, matched by file name against
+    /// the manifest. Null when the file is not advertised (an old installer still on disk), which
+    /// the portal reports as an explicit "Unattributed" bucket rather than dropping.
+    /// </summary>
+    public static string? ResolveReleaseVersion(ReleasesManifest? manifest, string? fileName)
+    {
+        if (manifest is null || string.IsNullOrWhiteSpace(fileName))
+        {
+            return null;
+        }
+
+        var name = Path.GetFileName(fileName);
+        foreach (var release in manifest.Releases)
+        {
+            if (string.Equals(Path.GetFileName(release.DownloadUrl), name, StringComparison.OrdinalIgnoreCase))
+            {
+                return release.Version;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Best-effort download logging, shared by the CDN-redirect and local-stream branches.
     /// DL-002: a range request is a resumed transfer, not a new download — counting it would
     /// inflate the metric every time a 66 MB installer drops its connection.
     /// </summary>
-    private static void LogDownload(HttpContext http, string fileName, IAnalyticsSink sink, GeoLookup? geo)
+    private static void LogDownload(
+        HttpContext http,
+        string fileName,
+        IAnalyticsSink sink,
+        GeoLookup? geo,
+        ReleasesManifest? manifest = null)
     {
         if (http.Request.Headers.ContainsKey("Range"))
         {
@@ -231,6 +261,13 @@ public static class DownloadEndpoint
                 Location = geo?.Locate(ip) ?? GeoLocation.Unknown,
                 Language = HttpRequestFacts.Language(http.Request),
                 Campaign = HttpRequestFacts.Campaign(http.Request),
+                // Spec 038 T049/T060: consent state decides whether ip/visitor_id are persisted;
+                // the store enforces it again before writing.
+                Consent = ConsentMiddleware.StateOf(http),
+                VisitorId = ConsentMiddleware.VisitorIdOf(http),
+                // Resolved AT WRITE TIME: the manifest is mutable, and a release later removed from
+                // it would otherwise retroactively orphan its historical downloads.
+                ReleaseVersion = ResolveReleaseVersion(manifest, fileName),
             });
         }
         catch

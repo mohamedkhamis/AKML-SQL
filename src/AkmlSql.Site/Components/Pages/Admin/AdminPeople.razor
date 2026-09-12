@@ -1,0 +1,211 @@
+@page "/admin/people"
+@layout AdminLayout
+@using System.Globalization
+@using AkmlSql.Site.Admin
+@using AkmlSql.Site.Analytics
+@inject AnalyticsStore Store
+
+@* Spec 038 T070 (US3): the individuals list.
+
+   The coverage panel is not decoration. The owner chose to ask every visitor and block none, which
+   means most traffic is unattributed BY DESIGN. A list of individuals presented without that number
+   reads as the whole audience, and every conclusion drawn from it would be wrong (FR-047, M3.1).
+
+   Filters travel in the query string so a filtered view is bookmarkable and the page stays static
+   SSR — the same reasoning as the reporting window. *@
+
+<PageTitle>People — AKML SQL Admin</PageTitle>
+
+<header class="page-header">
+    <p class="eyebrow">Admin</p>
+    <h1>People</h1>
+    <p class="page-intro">
+        Individuals who agreed to be recognised, over the last @AdminDashboardOptions.Label(Days).
+        One row is one <strong>browser</strong>, not one person: two devices are two rows, and
+        clearing cookies creates a new one.
+    </p>
+</header>
+
+<section class="admin-stats" aria-label="Coverage">
+    <div class="admin-stat">
+        <p class="admin-stat-value">@_coverage.DistinctIndividuals.ToString("N0", CultureInfo.InvariantCulture)</p>
+        <p class="admin-stat-label">Individuals</p>
+    </div>
+    <div class="admin-stat">
+        <p class="admin-stat-value">@_coverage.ReturningIndividuals.ToString("N0", CultureInfo.InvariantCulture)</p>
+        <p class="admin-stat-label">Returning</p>
+    </div>
+    <div class="admin-stat">
+        <p class="admin-stat-value">@_coverage.UnattributedSharePercent.ToString("0.#", CultureInfo.InvariantCulture)%</p>
+        <p class="admin-stat-label">Unattributed</p>
+    </div>
+    <div class="admin-stat">
+        <p class="admin-stat-value">@_coverage.AutomatedVisits.ToString("N0", CultureInfo.InvariantCulture)</p>
+        <p class="admin-stat-label">Automated visits</p>
+    </div>
+</section>
+
+<div class="notice" role="status">
+    <h2>What this list can and cannot see</h2>
+    <p>
+        @_coverage.UnattributedVisits.ToString("N0", CultureInfo.InvariantCulture) of
+        @_coverage.TotalVisits.ToString("N0", CultureInfo.InvariantCulture) visits
+        (@_coverage.UnattributedSharePercent.ToString("0.#", CultureInfo.InvariantCulture)%)
+        cannot be tied to anyone, because those visitors declined tracking or have not answered yet.
+        They are counted in every total on this site, but they are not in the table below.
+    </p>
+</div>
+
+@* Plain GET form: filters become query-string values, so the view is bookmarkable and works with
+   JavaScript disabled. *@
+<form method="get" action="/admin/people" class="admin-toolbar">
+    <input type="hidden" name="days" value="@Days" />
+    <label class="admin-toolbar-label" for="filter-country">Country</label>
+    <select class="admin-input" id="filter-country" name="country">
+        <option value="">All</option>
+        @foreach (var option in _countryOptions)
+        {
+            <option value="@option.Code" selected="@(option.Code == CountryQuery)">@option.Name</option>
+        }
+    </select>
+
+    <label class="admin-toolbar-label" for="filter-downloaded">Downloaded</label>
+    <select class="admin-input" id="filter-downloaded" name="downloaded">
+        <option value="" selected="@(DownloadedQuery is null)">Any</option>
+        <option value="yes" selected="@(DownloadedQuery == "yes")">Yes</option>
+        <option value="no" selected="@(DownloadedQuery == "no")">No</option>
+    </select>
+
+    <button type="submit" class="btn btn-secondary">Apply</button>
+    <a class="admin-export" href="@ExportUrl" download>Export CSV</a>
+</form>
+
+<section class="admin-panel" aria-labelledby="people-heading">
+    <h2 id="people-heading">
+        @_total.ToString("N0", CultureInfo.InvariantCulture) individual@(_total == 1 ? "" : "s")
+    </h2>
+    @if (_rows.Count == 0)
+    {
+        <p class="admin-empty">
+            No individuals match. Either nobody has accepted tracking in this window, or the filters
+            exclude everyone.
+        </p>
+    }
+    else
+    {
+        <div class="table-scroll">
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th scope="col">Individual</th>
+                        <th scope="col">Country</th>
+                        <th scope="col">Device</th>
+                        <th scope="col">First seen</th>
+                        <th scope="col">Last seen</th>
+                        <th scope="col" class="admin-num">Visits</th>
+                        <th scope="col" class="admin-num">Downloads</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in _rows)
+                    {
+                        <tr>
+                            <td class="admin-key">
+                                <a href="@AdminNav.WithRange($"/admin/people/{row.VisitorId}", Days)">@row.ShortId</a>
+                                @if (row.IsReturning)
+                                {
+                                    <span class="admin-choice-hint"> returning</span>
+                                }
+                            </td>
+                            <td class="admin-key">@(row.Country ?? "Unknown")</td>
+                            <td class="admin-key">@(row.Device ?? "—") · @(row.Browser ?? "—")</td>
+                            <td>@row.FirstSeen.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)</td>
+                            <td>@row.LastSeen.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)</td>
+                            <td class="admin-num">@row.VisitCount.ToString("N0", CultureInfo.InvariantCulture)</td>
+                            <td class="admin-num">@row.DownloadCount.ToString("N0", CultureInfo.InvariantCulture)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (_total > _rows.Count)
+        {
+            <nav class="admin-toolbar" aria-label="Pages">
+                @if (Page > 0)
+                {
+                    <a href="@PageUrl(Page - 1)">← Previous</a>
+                }
+                <span class="admin-toolbar-label">
+                    Page @(Page + 1) of @((_total + Individuals.DefaultPageSize - 1) / Individuals.DefaultPageSize)
+                </span>
+                @if ((Page + 1) * Individuals.DefaultPageSize < _total)
+                {
+                    <a href="@PageUrl(Page + 1)">Next →</a>
+                }
+            </nav>
+        }
+    }
+</section>
+
+@code {
+    [SupplyParameterFromQuery(Name = "days")]
+    private string? DaysQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "country")]
+    private string? CountryQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "downloaded")]
+    private string? DownloadedQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "page")]
+    private string? PageQuery { get; set; }
+
+    private int Days => AdminDashboardOptions.NormalizeDays(
+        int.TryParse(DaysQuery, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) ? parsed : null);
+
+    private int Page =>
+        int.TryParse(PageQuery, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) && parsed > 0
+            ? parsed
+            : 0;
+
+    private bool? Downloaded => DownloadedQuery switch
+    {
+        "yes" => true,
+        "no" => false,
+        _ => null,
+    };
+
+    private IReadOnlyList<IndividualRow> _rows = [];
+    private CoverageSummary _coverage = new(0, 0, 0, 0, 0, 0);
+    private long _total;
+    private IReadOnlyList<(string Code, string Name)> _countryOptions = [];
+
+    private string Filters =>
+        (string.IsNullOrEmpty(CountryQuery) ? "" : $"&country={Uri.EscapeDataString(CountryQuery)}") +
+        (string.IsNullOrEmpty(DownloadedQuery) ? "" : $"&downloaded={Uri.EscapeDataString(DownloadedQuery)}");
+
+    private string ExportUrl => $"/admin/people.csv?days={Days}{Filters}";
+
+    private string PageUrl(int page) => $"/admin/people?days={Days}{Filters}&page={page}";
+
+    protected override void OnInitialized()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var filter = new IndividualFilter(
+            Days,
+            string.IsNullOrWhiteSpace(CountryQuery) ? null : CountryQuery,
+            Downloaded,
+            Page,
+            Individuals.DefaultPageSize);
+
+        _rows = Store.GetIndividuals(filter, now);
+        _total = Store.CountIndividuals(filter, now);
+        _coverage = Store.GetCoverage(Days, now);
+
+        _countryOptions = Store.GetDownloadsByCountry(Days, now)
+            .Where(c => c.CountryCode is not null)
+            .Select(c => (c.CountryCode!, c.Label))
+            .ToList();
+    }
+}

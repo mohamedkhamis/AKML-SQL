@@ -1,0 +1,163 @@
+@page "/privacy"
+@using AkmlSql.Site.Consent
+@using AkmlSql.Site.Settings
+@using Microsoft.AspNetCore.Antiforgery
+@inject SiteSettingsStore Settings
+@inject IAntiforgery Antiforgery
+
+@* Spec 038 T048 (US5): the published privacy notice, plus withdrawal and deletion (FR-039/FR-045).
+
+   The retention number below is read from the SAME configuration the store enforces
+   (SiteSettingsStore.Current.IdentifiableRetentionDays), never hard-coded. That is what makes
+   PrivacyPageTests able to fail the build when the notice and the behaviour drift apart — a privacy
+   notice that quietly stops matching what the site does is worse than no notice (SC-013). *@
+
+<PageTitle>Privacy — AKML SQL</PageTitle>
+<HeadContent>
+    <meta name="description" content="What the AKML SQL site collects, why, how long it is kept, and how to have it removed." />
+</HeadContent>
+
+<div class="page-body container">
+<header class="page-header">
+    <p class="eyebrow">Privacy</p>
+    <h1>What this site collects</h1>
+    <p class="page-intro">
+        AKML SQL is free and open source. The site records enough to know whether anyone is using it
+        and where they are — nothing is sold, shared, or sent to an advertising network.
+    </p>
+</header>
+
+@if (Forgotten is not null)
+{
+    <div class="notice" role="status">
+        <h2>Done</h2>
+        <p>
+            @if (Forgotten > 0)
+            {
+                <span>@Forgotten record@(Forgotten == 1 ? "" : "s") deleted, and this browser will no longer be recognised.</span>
+            }
+            else
+            {
+                <span>Nothing was stored about this browser. It will not be recognised on future visits.</span>
+            }
+        </p>
+    </div>
+}
+
+<section class="doc-section" aria-labelledby="everyone-heading">
+    <h2 id="everyone-heading">Recorded for every visitor</h2>
+    <p>This is what the site records whether or not you agree to anything:</p>
+    <ul>
+        <li>The page you visited, when, and which site linked you here.</li>
+        <li>Your country, worked out from your IP address on this server — never a city or an address.</li>
+        <li>Your browser, operating system and device type.</li>
+        <li>Which installer you downloaded, if you downloaded one.</li>
+        <li>
+            A shortened form of your IP address (the network, not the machine), and a one-way hash
+            of the full address that is re-scrambled every day so it cannot be used to follow you
+            between days.
+        </li>
+    </ul>
+    <p>None of this identifies you personally, and it is never linked into a profile.</p>
+</section>
+
+<section class="doc-section" aria-labelledby="consent-heading">
+    <h2 id="consent-heading">Recorded only if you agree</h2>
+    <p>If you accept the request shown on your first visit, two further things are stored:</p>
+    <ul>
+        <li><strong>Your full IP address.</strong></li>
+        <li>
+            <strong>A cookie holding a random id</strong> (<code>akml.vid</code>), which lets the
+            site recognise this browser on later visits and join your visits and downloads into one
+            history.
+        </li>
+    </ul>
+    <p>
+        Both are kept for <strong>@RetentionDays days</strong>, then erased automatically. The visit
+        itself is kept longer as an anonymous statistic, with those two values removed.
+    </p>
+    <p>
+        If you decline, neither is ever stored, no id cookie is issued, and the site works exactly
+        the same — including downloads. Your refusal is remembered in a second cookie
+        (<code>akml.consent</code>) purely so you are not asked again.
+    </p>
+</section>
+
+<section class="doc-section" aria-labelledby="why-heading">
+    <h2 id="why-heading">Why</h2>
+    <p>
+        To know which countries the software is used in, whether a new release is being picked up,
+        and whether the site is worth translating. It is read by one person — the author — and by
+        nobody else.
+    </p>
+</section>
+
+<section class="doc-section" aria-labelledby="remove-heading">
+    <h2 id="remove-heading">Change your mind</h2>
+    <p>
+        This removes the id cookie from this browser and deletes every record held against it. It
+        takes effect immediately and cannot be undone.
+    </p>
+    <form method="post" action="/privacy/forget">
+        @if (RequestToken is not null)
+        {
+            <input type="hidden" name="__RequestVerificationToken" value="@RequestToken" />
+        }
+        <button type="submit" class="btn btn-secondary">Withdraw consent and delete my data</button>
+    </form>
+    <p class="admin-choice-hint">
+        For anything else — a copy of what is held, or a question — email the address on the
+        <a href="https://github.com/mohamedkhamis/AKML-SQL" target="_blank" rel="noopener noreferrer">project page</a>.
+    </p>
+</section>
+
+<section class="doc-section" aria-labelledby="cookies-heading">
+    <h2 id="cookies-heading">Cookies in full</h2>
+    <table class="admin-table">
+        <thead>
+            <tr><th scope="col">Name</th><th scope="col">Purpose</th><th scope="col">Lifetime</th></tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><code>akml.consent</code></td>
+                <td>Remembers your choice so you are not asked again. Set whichever way you answer.</td>
+                <td>@ConsentCookies.LifetimeDays days</td>
+            </tr>
+            <tr>
+                <td><code>akml.vid</code></td>
+                <td>Recognises this browser on return visits. Only set if you accept.</td>
+                <td>@ConsentCookies.LifetimeDays days</td>
+            </tr>
+            <tr>
+                <td><code>akml.admin</code></td>
+                <td>Sign-in session for the site owner's admin area. Never set for visitors.</td>
+                <td>8 hours</td>
+            </tr>
+        </tbody>
+    </table>
+</section>
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "forgotten")]
+    private int? Forgotten { get; set; }
+
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
+    private string? RequestToken { get; set; }
+
+    /// <summary>
+    /// Read from the live setting, never a literal — this is what keeps the notice honest when the
+    /// owner changes retention (SC-013, contract C7.3).
+    /// </summary>
+    private int RetentionDays => Settings.Current.IdentifiableRetentionDays;
+
+    protected override void OnInitialized()
+    {
+        if (HttpContext is not null)
+        {
+            RequestToken = Antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
+        }
+    }
+}

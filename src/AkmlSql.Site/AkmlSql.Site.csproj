@@ -16,6 +16,14 @@
     <Content Update="appsettings.Development.json" CopyToPublishDirectory="Never" />
   </ItemGroup>
 
+  <!-- Spec 038 T022: the availability probe is exposed to tests as an internal seam so SC-003
+       ("render cost does not vary with manifest size") can be gated by COUNTING probes rather than
+       by wall-clock timing, which would be flaky in CI and end up muted. Kept internal so the seam
+       is not part of the site's public surface. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="AkmlSql.Site.Tests" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Markdig" Version="1.3.*" />
     <PackageReference Include="Markdown.ColorCode" Version="3.0.*" />

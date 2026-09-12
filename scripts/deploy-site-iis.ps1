@@ -209,11 +209,38 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed ($LASTEXITCODE)" }
 
     New-Item -ItemType Directory -Force -Path $DeployPath | Out-Null
-    # Take the app offline first: ANCM unloads the worker and releases DLL locks,
-    # otherwise robocopy retries locked files (near-)forever on a live site.
+
+    # Take the app offline first so ANCM unloads the worker and releases its DLL locks; otherwise
+    # robocopy retries locked files (near-)forever on a live site.
+    #
+    # Spec 038: app_offline.htm ALONE is no longer sufficient. Once the pool is AlwaysRunning with
+    # preloadEnabled and idleTimeout=0 (the T027 cold-start settings), IIS restarts the application
+    # the moment it is unloaded -- it re-acquires the DLL locks inside the 3-second window and the
+    # mirror fails with robocopy 11, leaving app_offline.htm behind and the SITE DOWN. Observed
+    # exactly that on 2026-09-12.
+    #
+    # So the pool is stopped for the duration of the copy and started again afterwards. Stopping is
+    # what actually guarantees the locks are gone; app_offline.htm is kept as well so anyone who
+    # hits the site mid-deploy gets a friendly page rather than a raw 503.
+    Import-Module WebAdministration
     $offline = Join-Path $DeployPath 'app_offline.htm'
     Set-Content -Path $offline -Value '<!doctype html><title>Deploying</title><p>Deploying -- back in a few seconds.</p>' -Encoding UTF8
-    Start-Sleep -Seconds 3
+
+    $poolWasRunning = $false
+    if (Test-Path "IIS:\AppPools\$AppPoolName") {
+        $poolWasRunning = (Get-WebAppPoolState -Name $AppPoolName).Value -eq 'Started'
+        if ($poolWasRunning) {
+            Log "Stopping app pool $AppPoolName for the file mirror"
+            Stop-WebAppPool -Name $AppPoolName -ErrorAction SilentlyContinue
+            # Wait for the worker to actually exit rather than guessing at a sleep.
+            $deadline = (Get-Date).AddSeconds(30)
+            while ((Get-Date) -lt $deadline -and (Get-WebAppPoolState -Name $AppPoolName).Value -ne 'Stopped') {
+                Start-Sleep -Milliseconds 500
+            }
+            Log "App pool state: $((Get-WebAppPoolState -Name $AppPoolName).Value)"
+        }
+    }
+
     Log "robocopy mirror -> $DeployPath"
     # /MIR deletes destination files absent from the source, so anything placed on the server by
     # hand is erased on every deploy (OPS-002 -- this is what kept wiping the admin configuration).
@@ -226,8 +253,18 @@ try {
     # deploy forever -- the opposite of OPS-003. It is no longer published, so /MIR removes it.
     $mirrorExclusions = @('appsettings.Production.json', 'app_offline.htm')
     & robocopy $staging $DeployPath /MIR /XF $mirrorExclusions /R:2 /W:2 /NFL /NDL /NJH /NJS /NP | Out-Null
-    if ($LASTEXITCODE -gt 7) { throw "robocopy failed ($LASTEXITCODE)" }
+    $robocopyExit = $LASTEXITCODE
+
+    # Bring the pool back BEFORE deciding whether the mirror succeeded. A failed copy that also
+    # leaves the site stopped turns a bad deploy into an outage -- which is exactly what happened
+    # before the pool stop/start was added. The old binaries still run if the copy failed partway.
+    if ($poolWasRunning) {
+        Log "Restarting app pool $AppPoolName"
+        Start-WebAppPool -Name $AppPoolName -ErrorAction SilentlyContinue
+    }
     Remove-Item $offline -Force -ErrorAction SilentlyContinue
+
+    if ($robocopyExit -gt 7) { throw "robocopy failed ($robocopyExit)" }
     Remove-Item $staging -Recurse -Force
 
     # --- 2. App pool + ACL --------------------------------------------------
@@ -237,7 +274,26 @@ try {
         New-WebAppPool -Name $AppPoolName | Out-Null
     }
     Set-ItemProperty "IIS:\AppPools\$AppPoolName" -Name managedRuntimeVersion -Value ''
+
+    # Spec 038 T027 (US1): cold start. These three settings only work together, which is why all of
+    # them are pinned here rather than just the first:
+    #
+    #   startMode=AlwaysRunning   starts the WORKER PROCESS when IIS starts...
+    #   idleTimeout=0             ...but the default 20-minute idle timeout still tears that worker
+    #                             down on a low-traffic site, so the next visitor pays for a full
+    #                             restart. Zero disables the idle shutdown entirely.
+    #   preloadEnabled=true       starts the ASP.NET Core APPLICATION with the worker. Without it the
+    #     + applicationInitialization   app is not initialised until a real request arrives -- and on
+    #                             a product site that request is usually a visitor arriving from a
+    #                             search result, who then waits through the docs-corpus parse.
+    #
+    # Verified on the live server: idleTimeout was 00:20:00 and preloadEnabled False -- both genuinely
+    # wrong. startMode was ALREADY AlwaysRunning (a Get-ItemProperty read renders the enum blank,
+    # which is misleading; read applicationHost.config directly to confirm it). Measured cold start
+    # was ~1.0s, so this buys about a second on an infrequent request -- and removes the 20-minute
+    # cliff that made it happen at all.
     Set-ItemProperty "IIS:\AppPools\$AppPoolName" -Name startMode -Value 'AlwaysRunning'
+    Set-ItemProperty "IIS:\AppPools\$AppPoolName" -Name processModel.idleTimeout -Value ([TimeSpan]::Zero)
 
     # App pool environment (OPS-001): the admin password hash lives here, not in a file under the
     # deploy path, so the robocopy mirror above can never erase it. This deploy never sets the
@@ -303,6 +359,25 @@ try {
         Log "Creating site $SiteName"
         New-Website -Name $SiteName -ApplicationPool $AppPoolName -PhysicalPath $DeployPath -Port 80 -HostHeader $HostName -Force | Out-Null
     }
+    # Spec 038 T027 (US1): the application half of the cold-start fix (the pool half is in step 2).
+    # preloadEnabled starts the app with the worker; applicationInitialization then issues a real
+    # warm-up request so the docs corpus is parsed and the SQLite schema opened before any visitor
+    # arrives. /health is the right target: it touches every startup singleton and is never cached.
+    # Idempotent -- re-running the deploy re-applies the same values.
+    Set-ItemProperty "IIS:\Sites\$SiteName" -Name applicationDefaults.preloadEnabled -Value $true
+    Set-WebConfigurationProperty -pspath 'MACHINE/WEBROOT/APPHOST' `
+        -filter "system.webServer/applicationInitialization" `
+        -name 'doAppInitAfterRestart' -value $true -location $SiteName -ErrorAction SilentlyContinue
+    $warmup = Get-WebConfiguration -pspath 'MACHINE/WEBROOT/APPHOST' `
+        -filter "system.webServer/applicationInitialization/add[@initializationPage='/health']" `
+        -location $SiteName -ErrorAction SilentlyContinue
+    if (-not $warmup) {
+        Add-WebConfiguration -pspath 'MACHINE/WEBROOT/APPHOST' `
+            -filter "system.webServer/applicationInitialization" `
+            -value @{ initializationPage = '/health' } -location $SiteName -ErrorAction SilentlyContinue
+        Log "Added applicationInitialization warm-up for /health"
+    }
+
     $hasHttp = Get-WebBinding -Name $SiteName -Protocol http -HostHeader $HostName -Port 80 -ErrorAction SilentlyContinue
     if (-not $hasHttp) {
         Log "Adding http:80:$HostName binding"

@@ -1,0 +1,160 @@
+@page "/admin/downloads"
+@layout AdminLayout
+@using System.Globalization
+@using AkmlSql.Site.Admin
+@using AkmlSql.Site.Analytics
+@inject AnalyticsStore Store
+
+@* Spec 038 T069 (US3): downloads lead the portal, because downloads are what the owner asked to
+   see. Country, version and trend — the three questions actually being asked.
+
+   Charts are the existing pure-CSS component: bar heights come from precomputed .bar-h-* bucket
+   classes, because the site CSP forbids inline styles. No chart library. *@
+
+<PageTitle>Downloads — AKML SQL Admin</PageTitle>
+
+<header class="page-header">
+    <p class="eyebrow">Admin</p>
+    <h1>Downloads</h1>
+    <p class="page-intro">
+        Installer downloads over the last @AdminDashboardOptions.Label(Days).
+        A scripted fetch (curl, PowerShell) counts — it is a real acquisition. A crawler does not.
+    </p>
+</header>
+
+<section class="admin-stats" aria-label="Download totals">
+    <div class="admin-stat">
+        <p class="admin-stat-value">@_summary.DownloadsWindow.ToString("N0", CultureInfo.InvariantCulture)</p>
+        <p class="admin-stat-label">In window</p>
+    </div>
+    <div class="admin-stat">
+        <p class="admin-stat-value">@_summary.DownloadsLast7Days.ToString("N0", CultureInfo.InvariantCulture)</p>
+        <p class="admin-stat-label">Last 7 days</p>
+    </div>
+    <div class="admin-stat">
+        <p class="admin-stat-value">@_summary.DownloadsTotal.ToString("N0", CultureInfo.InvariantCulture)</p>
+        <p class="admin-stat-label">All time</p>
+    </div>
+    <div class="admin-stat">
+        <p class="admin-stat-value">@_countries.Count.ToString("N0", CultureInfo.InvariantCulture)</p>
+        <p class="admin-stat-label">Countries</p>
+    </div>
+</section>
+
+<nav class="admin-toolbar" aria-label="Export">
+    <a class="admin-export" href="@AdminNav.WithRange("/admin/downloads.csv", Days)" download>Export CSV</a>
+</nav>
+
+<Chart IdPrefix="downloads" Title="Downloads per day" Days="Days" Series="_summary.DailyDownloads" />
+
+@if (!_hasAnyCountry && _summary.DownloadsWindow > 0)
+{
+    @* The single most useful thing this page can say on this deployment: the geo database has never
+       been installed, so every country reads "Unknown" and no amount of looking will change that. *@
+    <div class="notice" role="status">
+        <h2>No country data</h2>
+        <p>
+            Every download below is grouped under <strong>Unknown</strong> because the offline
+            country database is not installed on this server. Country is resolved when a download is
+            recorded, so installing it will not backfill existing rows — only downloads recorded
+            afterwards will have a country.
+        </p>
+        <p>Run <code>scripts/update-geoip.ps1</code> with a MaxMind licence key to enable it.</p>
+    </div>
+}
+
+<div class="admin-tables">
+    <section class="admin-panel" aria-labelledby="country-heading">
+        <h2 id="country-heading">By country</h2>
+        @if (_countries.Count == 0)
+        {
+            <p class="admin-empty">No downloads in this window.</p>
+        }
+        else
+        {
+            <div class="table-scroll">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">Country</th>
+                            <th scope="col" class="admin-num">Downloads</th>
+                            <th scope="col" class="admin-num">Share</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _countries)
+                        {
+                            <tr>
+                                <td class="admin-key">
+                                    @row.Label
+                                    @if (row.CountryCode is not null)
+                                    {
+                                        <span class="admin-choice-hint"> (@row.CountryCode)</span>
+                                    }
+                                </td>
+                                <td class="admin-num">@row.Count.ToString("N0", CultureInfo.InvariantCulture)</td>
+                                <td class="admin-num">@row.SharePercent.ToString("0.#", CultureInfo.InvariantCulture)%</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+    <section class="admin-panel" aria-labelledby="version-heading">
+        <h2 id="version-heading">By release</h2>
+        @if (_versions.Count == 0)
+        {
+            <p class="admin-empty">No downloads in this window.</p>
+        }
+        else
+        {
+            <div class="table-scroll">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">Version</th>
+                            <th scope="col">File</th>
+                            <th scope="col" class="admin-num">Downloads</th>
+                            <th scope="col" class="admin-num">Share</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _versions)
+                        {
+                            <tr>
+                                <td class="admin-key">@row.Label</td>
+                                <td class="admin-key">@(row.File ?? "—")</td>
+                                <td class="admin-num">@row.Count.ToString("N0", CultureInfo.InvariantCulture)</td>
+                                <td class="admin-num">@row.SharePercent.ToString("0.#", CultureInfo.InvariantCulture)%</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "days")]
+    private string? DaysQuery { get; set; }
+
+    private int Days => AdminDashboardOptions.NormalizeDays(
+        int.TryParse(DaysQuery, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) ? parsed : null);
+
+    private AnalyticsSummary _summary = default!;
+    private IReadOnlyList<DownloadCountryRow> _countries = [];
+    private IReadOnlyList<DownloadVersionRow> _versions = [];
+    private bool _hasAnyCountry;
+
+    protected override void OnInitialized()
+    {
+        var now = DateTimeOffset.UtcNow;
+        _summary = Store.GetSummary(Days, now);
+        _countries = Store.GetDownloadsByCountry(Days, now);
+        _versions = Store.GetDownloadsByVersion(Days, now);
+        _hasAnyCountry = _countries.Any(c => c.CountryCode is not null);
+    }
+}

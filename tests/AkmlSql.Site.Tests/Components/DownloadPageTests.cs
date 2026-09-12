@@ -1,5 +1,6 @@
 using AkmlSql.Site.Components.Pages;
 using AkmlSql.Site.Releases;
+using AkmlSql.Site.Settings;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -78,7 +79,21 @@ public sealed class DownloadPageTests : IDisposable
         var ctx = new BunitContext();
         ctx.Services.AddSingleton(manifest);
         ctx.Services.AddSingleton(new ReleaseAvailability(_downloads.Path));
+        // Spec 038 T033: the page reads the owner's release-visibility choice. A real temp-file
+        // store keeps these tests exercising the production path; "All" preserves the pre-038
+        // behaviour these assertions were written against.
+        ctx.Services.AddSingleton(NewSettings(ReleaseVisibilityMode.All));
         return ctx;
+    }
+
+    /// <summary>A temp-file settings store pinned to one visibility choice.</summary>
+    private SiteSettingsStore NewSettings(ReleaseVisibilityMode mode, int count = 3)
+    {
+        var store = new SiteSettingsStore(Path.Combine(_downloads.Path, "settings.db"));
+        store.CreateTableIfMissing();
+        store.Load();
+        store.Save(store.Current with { Visibility = mode, VisibilityCount = count }, "test");
+        return store;
     }
 
     [Fact]

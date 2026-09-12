@@ -1,8 +1,10 @@
 @page "/download"
 @using System.Globalization
 @using AkmlSql.Site.Releases
+@using AkmlSql.Site.Settings
 @inject ReleasesManifest Manifest
 @inject ReleaseAvailability Availability
+@inject SiteSettingsStore Settings
 
 @* Spec 034 T016 (US1): FR-003 download page driven by wwwroot/releases.json via the
    singleton ReleasesManifest (T012). Failure behavior per contracts/releases-json.md:
@@ -29,7 +31,7 @@
 @* DL-001: an entry in releases.json is not proof the installer exists. If the advertised file is
    missing from the downloads folder, fall through to the same friendly fallback used when there is
    no manifest at all — a broken primary CTA is worse than an honest "not available yet". *@
-@if (Manifest.IsAvailable && Manifest.Latest is { } latest && Availability.IsDownloadable(latest))
+@if (_latest is { } latest)
 {
     <section class="release-card release-card-latest" aria-labelledby="latest-release-heading">
         <h2 id="latest-release-heading">Latest release: @latest.Version</h2>
@@ -53,7 +55,7 @@
             }
             @* DL-003: download size is something people check before clicking, so it belongs here
                rather than buried in the notes prose. Read from the file, so it cannot be stale. *@
-            @if (Availability.DisplaySize(latest) is { } size)
+            @if (_latestSize is { } size)
             {
                 <dt>Download size</dt>
                 <dd>@size</dd>
@@ -102,12 +104,12 @@
     <script src="@Assets["js/download-track.js"]" defer></script>
 
     @* DL-001: only list previous releases whose installer is still present. *@
-    @if (PreviousReleases.Count > 0)
+    @if (_previousReleases.Count > 0)
     {
         <section class="release-history" aria-labelledby="previous-releases-heading">
             <h2 id="previous-releases-heading">Previous releases</h2>
             <ul class="release-list">
-                @foreach (var release in PreviousReleases)
+                @foreach (var release in _previousReleases)
                 {
                     <li class="release-card">
                         <h3>@release.Version</h3>
@@ -150,12 +152,75 @@ else
     private static string DisplayOsVersion(string version) =>
         version.EndsWith(".0", StringComparison.Ordinal) ? version[..^2] : version;
 
+    /// <summary>The release shown in the primary card, or null when nothing is downloadable.</summary>
+    private Release? _latest;
+
+    /// <summary>Display size of the primary release, resolved once (null for a CDN-only release).</summary>
+    private string? _latestSize;
+
     /// <summary>
-    /// DL-001: older releases whose installer is still present in the downloads folder. An entry
-    /// whose file has been cleaned up is dropped rather than offered as a dead link.
-    /// URL construction lives in ReleaseAvailability.TrackedUrl so the page and the availability
-    /// check agree on what "served locally" means.
+    /// DL-001: older releases that can still actually be downloaded. An entry whose file has been
+    /// cleaned up AND has no CDN mirror is dropped rather than offered as a dead link. URL
+    /// construction lives in ReleaseAvailability.TrackedUrl so the page and the availability check
+    /// agree on what "served locally" means.
     /// </summary>
-    private List<Release> PreviousReleases =>
-        Manifest.Releases.Skip(1).Where(Availability.IsDownloadable).ToList();
+    private IReadOnlyList<Release> _previousReleases = [];
+
+    /// <summary>
+    /// Spec 038 T021 (US1): resolve the whole release list ONCE per render.
+    /// <para>
+    /// This was an expression-bodied property (<c>private List&lt;Release&gt; PreviousReleases =&gt; …</c>)
+    /// evaluated twice — once by <c>@@if (PreviousReleases.Count > 0)</c> and again by the
+    /// <c>@@foreach</c> — so every release was probed on the filesystem twice. With 16 releases that
+    /// was ~32 existence probes to render one download button. Fields resolved here cost one pass.
+    /// </para>
+    /// <para>
+    /// Availability is still resolved per render, not cached across requests: installers are dropped
+    /// into the folder between deploys, so presence must stay live (the DL-001 contract).
+    /// </para>
+    /// </summary>
+    protected override void OnInitialized()
+    {
+        if (!Manifest.IsAvailable)
+        {
+            return;
+        }
+
+        // Spec 038 T033 (US2): the owner's visibility choice is applied BEFORE any availability
+        // probe, so per-render work follows what is SHOWN rather than what is published (contract
+        // R2.1). With "latest only" a hundred-release manifest costs a single probe.
+        //
+        // Settings.Current is an in-memory snapshot — the render path never touches SQLite, so a
+        // settings failure can neither break nor slow the site's primary call to action (FR-016a).
+        var settings = Settings.Current;
+        var releases = ReleaseVisibility.Apply(settings.Visibility, settings.VisibilityCount, Manifest.Releases);
+
+        var latest = releases.Count > 0 ? releases[0] : null;
+
+        if (latest is null || !Availability.IsDownloadable(latest))
+        {
+            // contracts/releases-json.md: fall through to the friendly fallback, never an error page.
+            return;
+        }
+
+        _latest = latest;
+        _latestSize = Availability.DisplaySize(latest);
+
+        // "Latest only" renders NO history section at all -- not an empty one (contract R2.2).
+        if (settings.Visibility == ReleaseVisibilityMode.LatestOnly)
+        {
+            return;
+        }
+
+        var previous = new List<Release>();
+        for (var i = 1; i < releases.Count; i++)
+        {
+            if (Availability.IsDownloadable(releases[i]))
+            {
+                previous.Add(releases[i]);
+            }
+        }
+
+        _previousReleases = previous;
+    }
 }
