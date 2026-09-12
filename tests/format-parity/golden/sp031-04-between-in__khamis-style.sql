@@ -7,9 +7,9 @@ AND o.freight BETWEEN 10.5 AND 200.75;
 SELECT od.orderid
 FROM   dbo.[order details] od
 WHERE  od.productid IN (
-  SELECT p.productid
-  FROM   dbo.products p
-  WHERE  p.categoryid IN ( 1, 2, 3 )
-  AND p.unitprice BETWEEN 5 AND 50
-  AND p.productname BETWEEN 'Aniseed Syrup' AND 'Wimmers gute Semmelknoedel'
+	SELECT p.productid
+	FROM   dbo.products p
+	WHERE  p.categoryid IN ( 1, 2, 3 )
+	AND p.unitprice BETWEEN 5 AND 50
+	AND p.productname BETWEEN 'Aniseed Syrup' AND 'Wimmers gute Semmelknoedel'
 );

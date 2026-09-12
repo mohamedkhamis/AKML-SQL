@@ -26,4 +26,10 @@
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.*" />
   </ItemGroup>
 
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>AkmlSql.Core.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
 </Project>

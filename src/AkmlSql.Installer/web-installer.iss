@@ -209,12 +209,20 @@ begin
     WebBridgePortPage.Add('Bridge port:', False);
     WebBridgePortPage.Values[0] := '47291';
 
-    { Install-summary page (shown on the post-install success path). }
+    { Install-summary page (shown on the post-install success path). Web_PostInstall always
+      replaces this placeholder with the real summary text -- including on a partial-failure
+      path -- so the page can never appear with a heading and an empty body. }
     InstallSummaryPage := CreateOutputMsgPage(
         wpInstalling,
         'Install summary',
         'AKML SQL Web is ready.',
-        'The pairing PIN + TLS thumbprint + browser URL are below. They are also written to "%CommonAppData%\AKML SQL Web\INSTALL-SUMMARY.txt".');
+        'Writing the install summary... (also saved to "%CommonAppData%\AKML SQL Web\INSTALL-SUMMARY.txt")');
+    { The summary is long multi-line text: give the label the full page surface with word wrap
+      so long lines (URLs, warnings) render instead of overflowing off the page. }
+    InstallSummaryPage.MsgLabel.AutoSize := False;
+    InstallSummaryPage.MsgLabel.WordWrap := True;
+    InstallSummaryPage.MsgLabel.Width := InstallSummaryPage.SurfaceWidth;
+    InstallSummaryPage.MsgLabel.Height := InstallSummaryPage.SurfaceHeight - InstallSummaryPage.MsgLabel.Top;
 
     { Seed the port globals with the page defaults UNLESS the silent flags already set them
       (Web_ValidateSilentFlags runs in InitializeSetup, before this). On a REINSTALL, prefer the
@@ -343,6 +351,32 @@ begin
         Result := 'Localhost';
 end;
 
+{ True when the AkmlSqlWebEngine Windows service exists (any state). Locale-safe: sc.exe query
+  exits 0 when the service is present and 1060 when it is not -- no localized output parsing. }
+function AkmlWebServiceExists(): Boolean;
+var
+    resultCode: Integer;
+begin
+    Result := Exec('sc.exe', 'query AkmlSqlWebEngine', '', SW_HIDE, ewWaitUntilTerminated, resultCode)
+              and (resultCode = 0);
+end;
+
+{ True when portInt is the bridge port persisted by a PREVIOUS install and that install's
+  AkmlSqlWebEngine service still exists. On a re-install the old engine service is still running
+  while the wizard is up, so it holds the previous bridge port -- that is not a conflict
+  (PrepareToInstall stops the service before files copy, and the new engine rebinds the same
+  port), so the in-use warning must not fire. Every install over an existing web edition hit
+  this false positive. }
+function IsOwnPreviousBridgePort(portInt: Integer): Boolean;
+var
+    prevPort: Cardinal;
+begin
+    Result := RegQueryDWordValue(HKLM, 'Software\AKML SQL\Web', 'BridgePort', prevPort)
+              and (prevPort > 0)
+              and (Integer(prevPort) = portInt)
+              and AkmlWebServiceExists();
+end;
+
 { FR-003 + FR-003a: validate the IIS and bridge ports as the user leaves their pages. Returns
   False to block Next (range / equal-port errors); a bridge-port-in-use hit only WARNS. }
 function Web_NextButton(CurPageID: Integer): Boolean;
@@ -353,6 +387,14 @@ var
     dismResult: Integer;
 begin
     Result := True;
+
+    { Inno (7.x) fires NextButtonClick for custom pages even in /VERYSILENT installs -- the
+      never-shown page Values are still their creation defaults, so the copy-back below
+      (WebIisPort := page value) silently clobbered /WEB_PORT and /BRIDGE_PORT on EVERY silent
+      web install, rebinding the site/bridge to 80/47291 no matter what was passed. Silent
+      validation is Web_ValidateSilentFlags' job (InitializeSetup, FR-019..FR-026); with no
+      pages shown there is nothing to validate or copy here. }
+    if WizardSilent then Exit;
 
     { US3 / FR-015..FR-018: when leaving the Hosting page with "Host on IIS" selected and IIS is
       absent, offer the three-path dialog. Yes = enable IIS now (dism); No = switch to Don't host;
@@ -429,16 +471,21 @@ begin
         WebBridgePort := portInt;
 
         { FR-003a: non-blocking warning if the bridge port is already in use. Degrades to
-          no-warning when PowerShell / Test-NetConnection is unavailable. }
-        if Exec('powershell.exe',
-            '-NoProfile -ExecutionPolicy Bypass -Command "if ((Test-NetConnection -ComputerName 127.0.0.1 -Port ' +
-            IntToStr(portInt) + ' -InformationLevel Quiet -WarningAction SilentlyContinue)) { exit 9 } else { exit 0 }"',
-            '', SW_HIDE, ewWaitUntilTerminated, resultCode) then
+          no-warning when PowerShell / Test-NetConnection is unavailable. Skipped entirely when
+          the port is held by our OWN previous install (IsOwnPreviousBridgePort) -- that case is
+          a normal upgrade, not a conflict. }
+        if not IsOwnPreviousBridgePort(portInt) then
         begin
-            if resultCode = 9 then
-                MsgBox('Port ' + IntToStr(portInt) + ' appears to be in use already.' + #13#10 +
-                       'You can continue (the engine will report a bind error if it really is taken) ' +
-                       'or go back and pick another port.', mbInformation, MB_OK);
+            if Exec('powershell.exe',
+                '-NoProfile -ExecutionPolicy Bypass -Command "if ((Test-NetConnection -ComputerName 127.0.0.1 -Port ' +
+                IntToStr(portInt) + ' -InformationLevel Quiet -WarningAction SilentlyContinue)) { exit 9 } else { exit 0 }"',
+                '', SW_HIDE, ewWaitUntilTerminated, resultCode) then
+            begin
+                if resultCode = 9 then
+                    MsgBox('Port ' + IntToStr(portInt) + ' appears to be in use already.' + #13#10 +
+                           'You can continue (the engine will report a bind error if it really is taken) ' +
+                           'or go back and pick another port.', mbInformation, MB_OK);
+            end;
         end;
     end;
 end;
@@ -481,9 +528,21 @@ var
     aclOk: Boolean;
     resultCode: Integer;
     serviceRunning: Boolean;
+    configError: String;
     rawText: AnsiString;   { LoadStringFromFile requires a var AnsiString in Unicode Inno Setup }
 begin
     if not IsWebSelected() then Exit;
+
+    { Resolve the shared-state dir FIRST: the summary-file write on the exception path below
+      needs it, so appdata must be set before any statement that can fail. }
+    appdata := ExpandConstant('{commonappdata}\AKML SQL Web');
+    configError := '';
+    { Honest defaults for the summary on the exception path: no "service failed" / "ACL failed"
+      warnings for steps the guarded block never reached. }
+    serviceRunning := True;
+    aclOk := True;
+
+    try
 
     { Spec 026 (M4 closure) M3: persist the bridge port machine-wide so Web_Uninstall (a separate
       process that never runs the setup wizard) can delete the netsh sslcert binding on the REAL
@@ -522,8 +581,8 @@ begin
     Exec('powershell.exe', bridgeArgs, '', SW_HIDE, ewWaitUntilTerminated, bridgeResult);
 
     { Capture the engine-generated pairing PIN. The engine writes it to
-      %CommonAppData%\AKML SQL Web\pairing-pin.txt on first start (spec 026 FR-008). }
-    appdata := ExpandConstant('{commonappdata}\AKML SQL Web');
+      %CommonAppData%\AKML SQL Web\pairing-pin.txt on first start (spec 026 FR-008).
+      (appdata was resolved at the top of this procedure.) }
 
     { T021 / FR-010: lock the shared-state dir to Administrators + SYSTEM only (no standard-user
       read -- a leaked PIN allows local operator impersonation). SIDs (not names) keep this
@@ -596,6 +655,14 @@ begin
     else
         iisPortSuffix := ':' + IntToStr(WebIisPort);
 
+    except
+        { A post-install failure must never leave the wizard summary page empty: record it and
+          fall through -- the summary file write + wizard page population below run in EVERY
+          outcome, so the page can no longer show its placeholder as an "empty" summary. }
+        configError := GetExceptionMessage;
+        Log('Web post-install error: ' + configError);
+    end;
+
     summary := TStringList.Create;
     try
         summary.Add('AKML SQL Web -- install summary');
@@ -658,12 +725,27 @@ begin
             summary.Add('  Quick local server:  cd "' + ExpandConstant('{app}\Web') + '" && python -m http.server 8080');
             summary.Add('  Then browse to:      http://localhost:8080/');
         end;
-        summaryPath := appdata + '\INSTALL-SUMMARY.txt';
-        summary.SaveToFile(summaryPath);
+        { Exception path: say what failed, in the same file/page the operator will read. }
+        if configError <> '' then
+        begin
+            summary.Add('');
+            summary.Add('WARNING: web post-install configuration failed:');
+            summary.Add('  ' + configError);
+            summary.Add('  The product files are installed; re-run setup to repair the web configuration.');
+        end;
 
-        { Spec 026 (M4 closure) M4 / FR-005: mirror the summary onto the wizard success page. The
-          page was created promising "the pairing PIN + TLS thumbprint + browser URL are below" but
-          its body was never populated -- now it shows the same content written to the file. }
+        summaryPath := appdata + '\INSTALL-SUMMARY.txt';
+        { A file-write failure (locked/readonly INSTALL-SUMMARY.txt, missing dir) is logged,
+          never raised -- the wizard page below carries the same text either way. }
+        try
+            summary.SaveToFile(summaryPath);
+        except
+            Log('INSTALL-SUMMARY.txt write failed: ' + GetExceptionMessage);
+        end;
+
+        { Spec 026 (M4 closure) M4 / FR-005: mirror the summary onto the wizard success page.
+          This assignment now runs on EVERY web-selected install (success or partial failure),
+          so the page always shows real content. }
         InstallSummaryPage.MsgLabel.Caption := summary.Text;
     finally
         summary.Free;

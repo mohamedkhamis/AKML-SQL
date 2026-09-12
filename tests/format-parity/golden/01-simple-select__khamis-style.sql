@@ -1,1 +1,4 @@
-SELECT customerid, customername, country FROM customers WHERE country = 'USA' ORDER BY customername;
+SELECT customerid, customername, country
+FROM   customers
+WHERE  country = 'USA'
+ORDER BY customername;

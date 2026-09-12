@@ -1,0 +1,191 @@
+{
+  "akmlParityBaseline": {
+    "revision": "1.26.0526.0000",
+    "corpusItem": "sp031-08-case-long",
+    "profile": "default"
+  },
+  "findings": [
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'select' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'case' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 19
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'when' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 24
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'and' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 45
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'not' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 63
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'in' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 67
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'then' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 88
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'when' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 115
+    },
+    {
+      "ruleId": "ST010",
+      "severity": "Hint",
+      "message": "Line exceeds 120 characters — consider breaking into multiple lines for readability",
+      "line": 1,
+      "column": 121
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'then' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 136
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'when' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 169
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'and' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 189
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'then' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 207
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'else' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 238
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'end' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 270
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'as' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 274
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'case' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 290
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'when' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 305
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'then' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 312
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'when' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 326
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'then' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 333
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'else' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 347
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'end' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 362
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'as' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 366
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'from' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 381
+    },
+    {
+      "ruleId": "NM006",
+      "severity": "Info",
+      "message": "Single-letter alias 'o' is not descriptive — use a meaningful alias",
+      "line": 1,
+      "column": 386
+    }
+  ]
+}

@@ -39,8 +39,9 @@ namespace AkmlSql.Core.Config
                 }
 
                 var json = File.ReadAllText(path);
-                var settings = JsonSerializer.Deserialize<AppSettings>(json, SerializerOptions);
-                return settings ?? new AppSettings();
+                var settings = JsonSerializer.Deserialize<AppSettings>(json, SerializerOptions) ?? new AppSettings();
+                AiAgentResolver.Normalize(settings.Ai);
+                return settings;
             }
             catch (Exception ex)
             {
@@ -69,8 +70,9 @@ namespace AkmlSql.Core.Config
                 }
 
                 var json = File.ReadAllText(path);
-                var settings = JsonSerializer.Deserialize<AppSettings>(json, SerializerOptions);
-                return settings ?? new AppSettings();
+                var settings = JsonSerializer.Deserialize<AppSettings>(json, SerializerOptions) ?? new AppSettings();
+                AiAgentResolver.Normalize(settings.Ai);
+                return settings;
             }
             catch (Exception ex)
             {
@@ -88,6 +90,12 @@ namespace AkmlSql.Core.Config
         {
             try
             {
+                // Spec 037 (V18): mirror the active agent into the flat fields so the invariant
+                // holds on disk the moment the write completes, not only after the next load.
+                // MirrorActiveAgent only — never Normalize: migration and repair are load-time
+                // concerns and must not rewrite a caller's settings on the write path.
+                AiAgentResolver.MirrorActiveAgent(settings.Ai);
+
                 var path = Constants.ConfigFilePath;
                 var directory = Path.GetDirectoryName(path);
                 if (directory != null)

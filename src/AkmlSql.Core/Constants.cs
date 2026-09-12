@@ -30,6 +30,31 @@ namespace AkmlSql.Core
         /// </summary>
         public const string UpdateManifestUrl = "https://akml.khamis.work/update-manifest.json";
 
+        /// <summary>
+        /// Anonymous error-telemetry endpoint on the product site. Receives batches of client
+        /// log events (severity <see cref="Constants"/>-configured minimum, default Error) so
+        /// failures in the field are visible in the site's admin portal. Anonymous by design:
+        /// the payload carries a random install id, product version, process name and OS version
+        /// — never a user name, machine name or IP-derived value.
+        /// </summary>
+        public const string TelemetryUrl = "https://akml.khamis.work/api/client-errors";
+
+        /// <summary>
+        /// Header name carrying the shared ingestion key to <see cref="TelemetryUrl"/>
+        /// (matched server-side against the <c>ClientErrors__IngestKey</c> app-pool variable).
+        /// </summary>
+        public const string TelemetryIngestKeyHeader = "X-AKML-Ingest-Key";
+
+        /// <summary>
+        /// Shared ingestion key posted as <see cref="TelemetryIngestKeyHeader"/>. The site
+        /// answers 404 for batches without it once the server variable is set, so the intake
+        /// cannot be spammed or the error dashboard poisoned by strangers. The key is embedded
+        /// in the shipped binaries by necessity — it repels internet-wide abuse, not a reverse
+        /// engineer; payloads stay anonymous regardless, and transport is HTTPS. The matching
+        /// server-side value is never committed to this repo.
+        /// </summary>
+        public const string TelemetryIngestKey = "3d2b7828ac3b13bb79715a38837acc6a76e6e93d4d6b8af880244d20c851d574";
+
         public const string AppDataFolderName = "AKML SQL";
         public const string ConfigFileName = "config.json";
         public const string UpdateResultFileName = "update-available.json";

@@ -805,6 +805,15 @@ html[data-akml-theme="high-contrast"] .theme-toggle-moon {
     color: var(--akml-text-secondary);
 }
 
+/* SmartScreen guidance under the download CTA: why the first download may be held. */
+.download-note {
+    max-width: 56ch;
+    margin-block: var(--akml-scalar-spacing-s) 0;
+    color: var(--akml-text-secondary);
+    font-size: 0.95em;
+    line-height: 1.5;
+}
+
 /* U22: copy-to-clipboard affordance for the SHA-256 digest. Hidden by default so no-JS
    users never see a dead button; copy-hash.js reveals it via .js-copy-hash on <html>. */
 .copy-hash-btn {

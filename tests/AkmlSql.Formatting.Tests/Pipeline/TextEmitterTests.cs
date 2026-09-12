@@ -152,6 +152,55 @@ public class TextEmitterTests
         Assert.Equal("SELECT\n\tcol", result);
     }
 
+    // ── tabsWhenPossible: tabs for indentation, spaces for alignment ──────
+
+    [Fact]
+    public void Emit_IndentLevel1_TabsWhenPossible_Tab()
+    {
+        var nodes = new List<LayoutNode>
+        {
+            Node("SELECT"),
+            Node("col", breakType: BreakType.NewLine, spaces: 0, indent: 1)
+        };
+
+        // tabSize 2 = the khamis profile's; a spaces rendering would be "  " here.
+        string result = _emitter.Emit(nodes, FlatProfile("tabsWhenPossible", 2));
+
+        Assert.Equal("SELECT\n\tcol", result);
+    }
+
+    [Fact]
+    public void Emit_IndentLevel2_TabsWhenPossible_TwoTabs()
+    {
+        var nodes = new List<LayoutNode>
+        {
+            Node("BEGIN"),
+            Node("SELECT", breakType: BreakType.NewLine, spaces: 0, indent: 2)
+        };
+
+        string result = _emitter.Emit(nodes, FlatProfile("tabsWhenPossible", 2));
+
+        Assert.Equal("BEGIN\n\t\tSELECT", result);
+    }
+
+    [Fact]
+    public void Emit_TabsWhenPossible_AbsoluteLeadingSpaces_StaysSpaces()
+    {
+        // The right-align pass's absolute space count can't ride the tab grid — it must still
+        // be honored as spaces ("when possible" = tabs for indentation, spaces for alignment).
+        var aligned = Node("OR", TSqlTokenType.Or, BreakType.NewLine, spaces: 0, indent: 1);
+        aligned.AbsoluteLeadingSpaces = 5;
+        var nodes = new List<LayoutNode>
+        {
+            Node("SELECT"),
+            aligned
+        };
+
+        string result = _emitter.Emit(nodes, FlatProfile("tabsWhenPossible", 2));
+
+        Assert.Equal("SELECT\n     OR", result);
+    }
+
     [Fact]
     public void Emit_IndentLevel2_EightSpaces()
     {

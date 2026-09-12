@@ -1,0 +1,219 @@
+{
+  "akmlParityBaseline": {
+    "revision": "1.26.0526.0000",
+    "corpusItem": "sp031-06-subqueries",
+    "profile": "default"
+  },
+  "findings": [
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'select' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'from' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 22
+    },
+    {
+      "ruleId": "NM006",
+      "severity": "Info",
+      "message": "Single-letter alias 'c' is not descriptive — use a meaningful alias",
+      "line": 1,
+      "column": 27
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'where' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 43
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'in' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 62
+    },
+    {
+      "ruleId": "PE016",
+      "severity": "Info",
+      "message": "Correlated subquery in WHERE clause executes once per row — consider rewriting as a JOIN",
+      "line": 1,
+      "column": 65
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'select' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 66
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'from' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 86
+    },
+    {
+      "ruleId": "NM006",
+      "severity": "Info",
+      "message": "Single-letter alias 'o' is not descriptive — use a meaningful alias",
+      "line": 1,
+      "column": 91
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'select' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 2,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'select' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 2,
+      "column": 24
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'from' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 2,
+      "column": 40
+    },
+    {
+      "ruleId": "NM006",
+      "severity": "Info",
+      "message": "Single-letter alias 'o' is not descriptive — use a meaningful alias",
+      "line": 2,
+      "column": 45
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'where' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 2,
+      "column": 58
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'and' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 2,
+      "column": 92
+    },
+    {
+      "ruleId": "BP012",
+      "severity": "Info",
+      "message": "Hard-coded date literal '1997-01-01' — consider using a parameter or variable for maintainability",
+      "line": 2,
+      "column": 111
+    },
+    {
+      "ruleId": "ST010",
+      "severity": "Hint",
+      "message": "Line exceeds 120 characters — consider breaking into multiple lines for readability",
+      "line": 2,
+      "column": 121
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'and' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 2,
+      "column": 124
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'not' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 2,
+      "column": 142
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'in' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 2,
+      "column": 146
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'and' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 2,
+      "column": 167
+    },
+    {
+      "ruleId": "PE016",
+      "severity": "Info",
+      "message": "Correlated subquery in WHERE clause executes once per row — consider rewriting as a JOIN",
+      "line": 2,
+      "column": 183
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'select' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 2,
+      "column": 184
+    },
+    {
+      "ruleId": "PE013",
+      "severity": "Warning",
+      "message": "Function call on column in WHERE clause prevents index seek",
+      "line": 2,
+      "column": 191
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'from' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 2,
+      "column": 206
+    },
+    {
+      "ruleId": "NM006",
+      "severity": "Info",
+      "message": "Single-letter alias 'f' is not descriptive — use a meaningful alias",
+      "line": 2,
+      "column": 211
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'where' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 2,
+      "column": 224
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'as' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 2,
+      "column": 258
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'from' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 2,
+      "column": 272
+    },
+    {
+      "ruleId": "NM006",
+      "severity": "Info",
+      "message": "Single-letter alias 'c' is not descriptive — use a meaningful alias",
+      "line": 2,
+      "column": 277
+    }
+  ]
+}

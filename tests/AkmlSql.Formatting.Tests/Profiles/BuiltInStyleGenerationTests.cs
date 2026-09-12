@@ -40,21 +40,21 @@ public class BuiltInStyleGenerationTests
     /// <summary>
     /// (fixture file under tests/AkmlSql.Formatting.Tests/Fixtures, display name, output .akmlstyle
     /// file under src/AkmlSql.Formatting/Profiles/BuiltIn, pinned metadata.id or null to keep the
-    /// fixture's own metadata.id).
+    /// fixture's own metadata.id, ship the built-in with the four collapse gates forced off).
     /// </summary>
     public static IEnumerable<object?[]> Cases()
     {
-        yield return new object?[] { "MohamedKhamis-style.json", "Khamis Style", "khamis-style.akmlstyle", null };
+        yield return new object?[] { "MohamedKhamis-style.json", "Khamis Style", "khamis-style.akmlstyle", null, true };
         yield return new object?[]
         {
-            "Collapsed-style.json", "Collapsed", "collapsed.akmlstyle", "3f8a2b1c-9d4e-4f6a-8b2c-031c011a95ed",
+            "Collapsed-style.json", "Collapsed", "collapsed.akmlstyle", "3f8a2b1c-9d4e-4f6a-8b2c-031c011a95ed", false,
         };
     }
 
     [Theory]
     [MemberData(nameof(Cases))]
     public void Generated_builtin_matches_committed_file(
-        string fixtureFile, string displayName, string outputFile, string? pinnedId)
+        string fixtureFile, string displayName, string outputFile, string? pinnedId, bool shipCollapseGatesOff)
     {
         var repoRoot = FindRepoRoot();
         var fixturePath = Path.Combine(repoRoot, "tests", "AkmlSql.Formatting.Tests", "Fixtures", fixtureFile);
@@ -79,6 +79,9 @@ public class BuiltInStyleGenerationTests
         profile.Metadata.Created = Sentinel;
         profile.Metadata.Modified = Sentinel;
 
+        if (shipCollapseGatesOff)
+            ShipBuiltInWithCollapseGatesOff(profile);
+
         // Deterministic serialize -- see class doc: same shape as ProfileSerializer.Serialize
         // without its Metadata.Modified = DateTime.UtcNow side effect.
         var generated = JsonSerializer.Serialize(profile, ProfileJsonContext.Default.FormattingProfile);
@@ -99,6 +102,44 @@ public class BuiltInStyleGenerationTests
 
         var committed = File.ReadAllText(outputPath);
         Assert.Equal(committed, generated);
+    }
+
+    /// <summary>
+    /// Built-in ships with collapse gates off — the reference file carries thresholds only, and
+    /// SQL Prompt's gate default is off. The importer's FR-003 "threshold-implies-enabled" rule
+    /// (correct for user imports, pinned by <c>RedgateJsonStyleImporterTests</c>) turns all four
+    /// gates on — with <c>dml.collapseThreshold: 160</c> nearly every ordinary statement then
+    /// collapsed to one line. Forced off here, in this built-in generation path only; thresholds
+    /// are kept so users can opt in.
+    /// </summary>
+    private static void ShipBuiltInWithCollapseGatesOff(FormattingProfile profile)
+    {
+        profile.Dml.CollapseShortStatements = false;
+        profile.Dml.CollapseShortSubqueries = false;
+        profile.Ddl.CollapseShortDdl = false;
+        profile.ControlFlow.CollapseShortIfElse = false;
+    }
+
+    /// <summary>
+    /// Pins the shipped khamis built-in's collapse gates off (see
+    /// <see cref="ShipBuiltInWithCollapseGatesOff"/>) while keeping the reference thresholds.
+    /// </summary>
+    [Fact]
+    public void Khamis_builtin_ships_with_collapse_gates_off()
+    {
+        var repoRoot = FindRepoRoot();
+        var path = Path.Combine(repoRoot, "src", "AkmlSql.Formatting", "Profiles", "BuiltIn", "khamis-style.akmlstyle");
+        var profile = ProfileSerializer.Deserialize(File.ReadAllText(path));
+
+        Assert.False(profile.Dml.CollapseShortStatements);
+        Assert.False(profile.Dml.CollapseShortSubqueries);
+        Assert.False(profile.Ddl.CollapseShortDdl);
+        Assert.False(profile.ControlFlow.CollapseShortIfElse);
+
+        Assert.Equal(160, profile.Dml.CollapseThreshold);
+        Assert.Equal(78, profile.Dml.SubqueryCollapseThreshold);
+        Assert.Equal(75, profile.Ddl.CollapseThreshold);
+        Assert.Equal(35, profile.ControlFlow.CollapseThreshold);
     }
 
     /// <summary>

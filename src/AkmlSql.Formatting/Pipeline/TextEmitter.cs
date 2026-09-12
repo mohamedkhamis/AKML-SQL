@@ -16,7 +16,10 @@ public class TextEmitter
     {
         var sb = new StringBuilder();
         var ws = profile.Whitespace;
-        bool useTabs = ws.TabStyle == "tabs";
+        // "tabsWhenPossible" (SQL Prompt: tabs for indentation, spaces for alignment) indents
+        // with tabs like "tabs"; only the right-align pass's absolute space columns stay spaces.
+        bool useTabs = ws.TabStyle == "tabs" || ws.TabStyle == "tabsWhenPossible";
+        bool allowAbsoluteSpaces = ws.TabStyle != "tabs";
         int tabSize = ws.TabSize;
 
         // Pre-compute whether comment formatting is active. Only the explicitly-known opt-in value
@@ -46,7 +49,7 @@ public class TextEmitter
             {
                 // Terminate the dangling line comment so this token isn't fused into it.
                 sb.Append('\n');
-                AppendLineStart(sb, node, useTabs, tabSize);
+                AppendLineStart(sb, node, useTabs, allowAbsoluteSpaces, tabSize);
             }
             else
             {
@@ -55,12 +58,12 @@ public class TextEmitter
                     case BreakType.EmptyLine:
                         sb.Append('\n');
                         sb.Append('\n');
-                        AppendLineStart(sb, node, useTabs, tabSize);
+                        AppendLineStart(sb, node, useTabs, allowAbsoluteSpaces, tabSize);
                         break;
 
                     case BreakType.NewLine:
                         sb.Append('\n');
-                        AppendLineStart(sb, node, useTabs, tabSize);
+                        AppendLineStart(sb, node, useTabs, allowAbsoluteSpaces, tabSize);
                         break;
 
                     case BreakType.None:
@@ -127,11 +130,13 @@ public class TextEmitter
 
     /// <summary>
     /// Leading whitespace for a line-start token: the opt-in absolute space count from the
-    /// right-align pass (spaces mode only), else the normal IndentLevel×tabSize indent.
+    /// right-align pass (honored in every mode except pure "tabs" — right-alignment needs the
+    /// space grid, so tabsWhenPossible keeps these spaces), else the normal IndentLevel×tabSize
+    /// indent.
     /// </summary>
-    private static void AppendLineStart(StringBuilder sb, LayoutNode node, bool useTabs, int tabSize)
+    private static void AppendLineStart(StringBuilder sb, LayoutNode node, bool useTabs, bool allowAbsoluteSpaces, int tabSize)
     {
-        if (!useTabs && node.AbsoluteLeadingSpaces >= 0)
+        if (allowAbsoluteSpaces && node.AbsoluteLeadingSpaces >= 0)
             sb.Append(' ', node.AbsoluteLeadingSpaces);
         else
             AppendIndent(sb, node.IndentLevel, useTabs, tabSize);

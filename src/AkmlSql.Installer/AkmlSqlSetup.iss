@@ -23,7 +23,10 @@
 ;     Install with auto-update and telemetry disabled.
 ;
 ;   AKMLSQLSetup.exe /VERYSILENT /ACCEPTEULA /FORCECLOSEAPPS
-;     Force-close running SSMS/VS instances before installing.
+;     Force-close running SSMS/VS instances before installing. (Redundant in
+;     silent mode: silent installs ALWAYS force-close selected running hosts —
+;     there is no one to answer the prompt, and a still-open IDE respawns the
+;     engine mid-install, failing the file copy with DeleteFile code 5.)
 ;
 ;   AKMLSQLSetup.exe /VERYSILENT /ACCEPTEULA /IMPORTSQLPROMPT
 ;     Import SQL Prompt formatting styles during installation.
@@ -36,7 +39,7 @@
 ;   /NOUPDATE         Disable built-in auto-update check
 ;   /TELEMETRY        Enable anonymous usage telemetry (off by default)
 ;   /NOTELEMETRY      Explicitly disable telemetry
-;   /FORCECLOSEAPPS   Force-close running SSMS/VS without prompting
+;   /FORCECLOSEAPPS   Force-close running SSMS/VS without prompting (default in silent mode)
 ;   /IMPORTSQLPROMPT  Import SQL Prompt styles (only if SQL Prompt config detected)
 ;
 ; TODO T096: On uninstall, restore native SSMS IntelliSense if AKML SQL disabled it.
@@ -110,10 +113,16 @@ SolidCompression=yes
 PrivilegesRequired=admin
 PrivilegesRequiredOverridesAllowed=commandline
 UsePreviousAppDir=yes
-; Assets to be replaced with branded versions from design team (US14 — deferred)
+; Branded assets, generated from the design canvas artboards (TURN 5/6).
+; icon.ico carries 10 entries (16-256), all using the 5a glyph-only mark — the
+; design keeps the wordmark off the icon because it smudges below ~48px.
+; The wizard images list 100/125/150/200% variants; Inno picks the one matching
+; the current DPI. WizardSmallImageFile renders into a 55x55 box so those must
+; stay square — the design's 497x58 header strip is an NSIS size and has no
+; equivalent control in Inno's modern wizard.
 SetupIconFile=assets\icon.ico
-WizardImageFile=assets\sidebar.bmp
-WizardSmallImageFile=assets\banner.bmp
+WizardImageFile=assets\sidebar.bmp,assets\sidebar-125.bmp,assets\sidebar-150.bmp,assets\sidebar-200.bmp
+WizardSmallImageFile=assets\banner.bmp,assets\banner-125.bmp,assets\banner-150.bmp,assets\banner-200.bmp
 WizardStyle=modern
 WizardSizePercent=120
 DisableWelcomePage=no
@@ -126,9 +135,22 @@ UninstallDisplayIcon={app}\AkmlSql.Core.dll
 CloseApplications=yes
 CloseApplicationsFilter=Ssms.exe,devenv.exe
 
-; Code signing (configure via iscc.exe /S flag)
-; SignTool=mysigntool
-; SignedUninstaller=yes
+; --- Code signing (off unless a thumbprint is supplied) ------------------------------
+; SmartScreen builds reputation from the SIGNATURE, not the download domain: an unsigned
+; installer from a young domain gets held/flagged by the browser (the "download doesn't
+; start until I click twice" report). Sign by passing the cert's SHA-1 thumbprint:
+;   ISCC /DCodeSignThumbprint=<thumbprint> AkmlSqlSetup.iss
+; build.ps1 wires this automatically when AKML_CODESIGN_THUMBPRINT is set AND signtool.exe
+; is available (Windows Kits or PATH), passing the matching /Sakmlsign command. The cert
+; (with private key) must be in the CurrentUser or LocalMachine "My" store. Timestamping
+; keeps the signature valid after the cert itself expires.
+#ifndef CodeSignThumbprint
+  #define CodeSignThumbprint ""
+#endif
+#if CodeSignThumbprint != ""
+SignTool=akmlsign
+SignedUninstaller=yes
+#endif
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -796,6 +818,24 @@ begin
   end;
 end;
 
+// Waits until the named process is really gone (bounded). taskkill only ISSUES the kill — the
+// process unwinds (and unmaps its DLLs) asynchronously, and file copy must not start while
+// those DLLs are still locked (DeleteFile failed; code 5). Returns instantly when the process
+// is not running at all.
+procedure WaitForProcessExit(ExeName: String; TimeoutSeconds: Integer);
+var
+  tries: Integer;
+begin
+  tries := 0;
+  while (tries < TimeoutSeconds) and IsProcessRunning(ExeName) do
+  begin
+    Sleep(1000);
+    tries := tries + 1;
+  end;
+  if IsProcessRunning(ExeName) then
+    Log('WARNING: ' + ExeName + ' still running after ' + IntToStr(TimeoutSeconds) + 's wait.');
+end;
+
 // The AKML engine/updater/analyzer are HEADLESS out-of-process helpers deployed under {app}.
 // The engine in particular is spawned by the shell but OUTLIVES it — it can linger as an orphan
 // after SSMS/VS close — keeping Engine\*.dll memory-mapped. If any is still alive when Inno starts
@@ -832,11 +872,20 @@ begin
   end;
 
   if IsProcessRunning('AkmlSql.Engine.exe') then
+  begin
     Exec('taskkill.exe', '/F /T /IM AkmlSql.Engine.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    WaitForProcessExit('AkmlSql.Engine.exe', 10);
+  end;
   if IsProcessRunning('AkmlSql.Updater.exe') then
+  begin
     Exec('taskkill.exe', '/F /IM AkmlSql.Updater.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    WaitForProcessExit('AkmlSql.Updater.exe', 5);
+  end;
   if IsProcessRunning('AkmlSql.Analyzer.exe') then
+  begin
     Exec('taskkill.exe', '/F /IM AkmlSql.Analyzer.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    WaitForProcessExit('AkmlSql.Analyzer.exe', 5);
+  end;
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
@@ -845,23 +894,32 @@ var
   RunningList: String;
   ForceClose: Boolean;
   ResultCode: Integer;
+  KillSsms: Boolean;
+  KillDevenv: Boolean;
 begin
   Result := '';
   RunningList := '';
-  ForceClose := ExpandConstant('{param:FORCECLOSEAPPS|}') <> '';
+  KillSsms := False;
+  KillDevenv := False;
+  // Silent installs (the SSMS/VS "Check for updates" flow runs the installer with its normal UI,
+  // but unattended /VERYSILENT deploys have no one to answer either) cannot show the close-apps
+  // prompt below — and skipping the close is fatal: a still-running SSMS/VS shell RESPAWNS the
+  // engine the moment TerminateAkmlBackgroundProcesses kills it, re-locking Engine\*.dll so the
+  // file copy dies with "DeleteFile failed; code 5". Force-close the selected running hosts in
+  // silent mode, exactly as /FORCECLOSEAPPS does interactively-by-request.
+  ForceClose := (ExpandConstant('{param:FORCECLOSEAPPS|}') <> '') or WizardSilent;
 
+  // First pass: flag WHICH IDE families need closing (selected + running only).
   for I := 0 to TargetCount - 1 do
   begin
     if Targets[I].IsSelected and Targets[I].IsRunning then
     begin
-      if ForceClose then
-      begin
-        if Pos('SSMS', Targets[I].Name) > 0 then
-          Exec('taskkill.exe', '/F /IM Ssms.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode)
-        else
-          Exec('taskkill.exe', '/F /IM devenv.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-      end
+      if Pos('SSMS', Targets[I].Name) > 0 then
+        KillSsms := True
       else
+        KillDevenv := True;
+
+      if not ForceClose then
       begin
         if RunningList <> '' then
           RunningList := RunningList + ', ';
@@ -870,21 +928,67 @@ begin
     end;
   end;
 
-  if (RunningList <> '') and not WizardSilent then
+  if ForceClose then
   begin
-    if MsgBox('The following applications are running and should be closed:'#13#10#13#10
-      + RunningList + #13#10#13#10
-      + 'Click OK to close them automatically, or Cancel to close them manually.',
-      mbConfirmation, MB_OKCANCEL) = IDOK then
+    // Silent/forced: kill + wait, then VERIFY — a survivor would keep Engine\*.dll locked, so
+    // at minimum the install log must say so honestly.
+    if KillSsms then
     begin
+      Exec('taskkill.exe', '/F /IM Ssms.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+      WaitForProcessExit('Ssms.exe', 15);
       if IsProcessRunning('Ssms.exe') then
-        Exec('taskkill.exe', '/F /IM Ssms.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+        Log('WARNING: Ssms.exe survived the silent force-close — Engine\*.dll may still be locked.');
+    end;
+    if KillDevenv then
+    begin
+      Exec('taskkill.exe', '/F /IM devenv.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+      WaitForProcessExit('devenv.exe', 15);
       if IsProcessRunning('devenv.exe') then
-        Exec('taskkill.exe', '/F /IM devenv.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-    end
-    else
+        Log('WARNING: devenv.exe survived the silent force-close — Engine\*.dll may still be locked.');
+    end;
+  end
+  else if RunningList <> '' then
+  begin
+    // Interactive: one confirm, then a VERIFIED close — the loop re-kills until the hosts are
+    // really gone, so setup never reaches a file copy that is guaranteed to fail with
+    // "DeleteFile failed; code 5". Cancel aborts BEFORE any file is touched.
+    if MsgBox('The following applications are running and must be closed to install:'#13#10#13#10
+      + RunningList + #13#10#13#10
+      + 'Click OK to close them automatically (unsaved query windows will be lost),'#13#10
+      + 'or Cancel to close them yourself and run setup again.',
+      mbConfirmation, MB_OKCANCEL) = IDCANCEL then
     begin
       Result := 'Please close the running applications and try again.';
+      Exit;
+    end;
+
+    while (KillSsms and IsProcessRunning('Ssms.exe'))
+       or (KillDevenv and IsProcessRunning('devenv.exe')) do
+    begin
+      if KillSsms and IsProcessRunning('Ssms.exe') then
+      begin
+        Exec('taskkill.exe', '/F /IM Ssms.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+        WaitForProcessExit('Ssms.exe', 15);
+      end;
+      if KillDevenv and IsProcessRunning('devenv.exe') then
+      begin
+        Exec('taskkill.exe', '/F /IM devenv.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+        WaitForProcessExit('devenv.exe', 15);
+      end;
+
+      if (KillSsms and IsProcessRunning('Ssms.exe'))
+         or (KillDevenv and IsProcessRunning('devenv.exe')) then
+      begin
+        Log('WARNING: a running IDE host survived taskkill /F — asking the user to close it.');
+        if MsgBox('Setup could not close the application automatically.'#13#10#13#10
+          + 'Close ' + RunningList + ' yourself, then click OK to check again,'#13#10
+          + 'or click Cancel to abort setup (nothing has been installed yet).',
+          mbError, MB_OKCANCEL) = IDCANCEL then
+        begin
+          Result := 'Please close the running applications and try again.';
+          Exit;
+        end;
+      end;
     end;
   end;
 

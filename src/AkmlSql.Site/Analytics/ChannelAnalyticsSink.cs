@@ -1,4 +1,5 @@
 using System.Threading.Channels;
+using AkmlSql.Site.Telemetry;
 
 namespace AkmlSql.Site.Analytics;
 
@@ -34,6 +35,8 @@ public sealed class ChannelAnalyticsSink : BackgroundService, IAnalyticsSink
 
     public void EnqueueNotFound(NotFoundInfo notFound) => _queue.Writer.TryWrite(notFound);
 
+    public void EnqueueClientErrors(ClientErrorBatch batch) => _queue.Writer.TryWrite(batch);
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         try
@@ -52,6 +55,9 @@ public sealed class ChannelAnalyticsSink : BackgroundService, IAnalyticsSink
                             break;
                         case NotFoundInfo notFound:
                             _store.LogNotFound(notFound);
+                            break;
+                        case ClientErrorBatch clientErrors:
+                            _store.LogClientErrors(clientErrors);
                             break;
                     }
                 }

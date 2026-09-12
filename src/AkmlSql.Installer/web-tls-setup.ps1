@@ -18,8 +18,13 @@
     Destination path for the .pfx file.
 
 .NOTES
-    Idempotent: a re-run replaces an existing cert+binding. The PFX is marked
-    NonExportable so the private key can't be lifted from the cert store.
+    Upgrade-safe: a still-valid existing bridge cert (same subject, private key present,
+    more than 30 days left) is REUSED so the thumbprint browsers have pinned and trusted
+    does not change on every re-install -- previously each upgrade minted a new cert and
+    every paired browser lost the bridge (fingerprint mismatch / untrusted wss). A new
+    cert is generated only when none exists or the survivor is near expiry. Stale AKML
+    bridge certs are removed so the store does not accumulate one per install. The PFX is
+    marked NonExportable so the private key can't be lifted from the cert store.
 #>
 param(
     [Parameter(Mandatory = $true)] [int] $Port,
@@ -39,31 +44,53 @@ function Log {
 }
 
 try {
-    Log "Generating self-signed cert for port $Port"
+    $subject = 'CN=AKML SQL Web Engine'
 
-    # Build the SAN list: hostname + FQDN + every local IPv4 that isn't loopback.
-    $hostname = [System.Net.Dns]::GetHostName()
-    $fqdn = ([System.Net.Dns]::GetHostEntry($hostname)).HostName
-    $ips = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
-           Where-Object { $_.IPAddress -notmatch '^127\.' -and $_.IPAddress -notmatch '^169\.254\.' } |
-           Select-Object -ExpandProperty IPAddress
+    # Reuse the existing bridge cert when it is still healthy (private key + >30 days left).
+    $renewAfter = (Get-Date).AddDays(30)
+    $cert = Get-ChildItem 'Cert:\LocalMachine\My' |
+            Where-Object { $_.Subject -eq $subject -and $_.HasPrivateKey -and $_.NotAfter -gt $renewAfter } |
+            Sort-Object NotAfter -Descending |
+            Select-Object -First 1
 
-    $sanList = @($hostname, $fqdn) + $ips | Sort-Object -Unique
-    Log "SAN list: $($sanList -join ', ')"
+    if ($null -ne $cert) {
+        Log "Reusing existing bridge cert. Thumbprint=$($cert.Thumbprint); expires $($cert.NotAfter.ToString('yyyy-MM-dd'))"
+    }
+    else {
+        Log "Generating self-signed cert for port $Port"
 
-    # Generate the cert. NotAfter = 2 years; KeyExportPolicy = NonExportable.
-    $cert = New-SelfSignedCertificate `
-        -Subject 'CN=AKML SQL Web Engine' `
-        -DnsName $sanList `
-        -CertStoreLocation 'Cert:\LocalMachine\My' `
-        -KeyAlgorithm RSA `
-        -KeyLength 2048 `
-        -HashAlgorithm SHA256 `
-        -KeyExportPolicy NonExportable `
-        -NotAfter (Get-Date).AddYears(2)
+        # Build the SAN list: hostname + FQDN + every local IPv4 that isn't loopback.
+        $hostname = [System.Net.Dns]::GetHostName()
+        $fqdn = ([System.Net.Dns]::GetHostEntry($hostname)).HostName
+        $ips = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+               Where-Object { $_.IPAddress -notmatch '^127\.' -and $_.IPAddress -notmatch '^169\.254\.' } |
+               Select-Object -ExpandProperty IPAddress
+
+        $sanList = @($hostname, $fqdn) + $ips | Sort-Object -Unique
+        Log "SAN list: $($sanList -join ', ')"
+
+        # Generate the cert. NotAfter = 2 years; KeyExportPolicy = NonExportable.
+        $cert = New-SelfSignedCertificate `
+            -Subject $subject `
+            -DnsName $sanList `
+            -CertStoreLocation 'Cert:\LocalMachine\My' `
+            -KeyAlgorithm RSA `
+            -KeyLength 2048 `
+            -HashAlgorithm SHA256 `
+            -KeyExportPolicy NonExportable `
+            -NotAfter (Get-Date).AddYears(2)
+        Log "Generated cert. Thumbprint=$($cert.Thumbprint)"
+    }
+
+    # Remove stale AKML bridge certs -- older installs each left one behind.
+    Get-ChildItem 'Cert:\LocalMachine\My' |
+        Where-Object { $_.Subject -eq $subject -and $_.Thumbprint -ne $cert.Thumbprint } |
+        ForEach-Object {
+            Log "Removing stale bridge cert $($_.Thumbprint)"
+            Remove-Item -Path $_.PSPath -Force
+        }
 
     $thumbprint = $cert.Thumbprint
-    Log "Generated cert. Thumbprint=$thumbprint"
 
     # Export PFX (private key) + CER (public part for trust rollout).
     # NOTE: NonExportable means we can't actually Export-PfxCertificate the

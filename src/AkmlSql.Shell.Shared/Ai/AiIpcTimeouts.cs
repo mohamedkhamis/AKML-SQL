@@ -23,6 +23,22 @@ namespace AkmlSql.Shell.Shared.Ai
         }
 
         /// <summary>
+        /// Spec 037 (FR-048): as <see cref="ForAiRequestMs(AppSettings)"/>, but keyed to the agent
+        /// that will actually ANSWER <paramref name="feature"/> — the engine serves each feature
+        /// from its resolved agent with that agent's timeout, so a shell budget read from the
+        /// flat <see cref="AiSettings.Timeout"/> (the ACTIVE agent's mirror) can cancel a slower
+        /// assigned agent mid-generation. Falls back to the flat value when no agent resolves.
+        /// </summary>
+        public static int ForAiRequestMs(AppSettings? settings, AiFeature feature)
+        {
+            var ai = settings?.Ai;
+            var resolved = ai != null ? AiAgentResolver.ResolveFor(ai, feature) : null;
+            var providerSec = resolved?.Timeout ?? ai?.Timeout ?? 0;
+            if (providerSec <= 0) providerSec = DefaultProviderTimeoutSec;
+            return (providerSec + MarginSec) * 1000;
+        }
+
+        /// <summary>
         /// User-facing text for a failed AI request. A timed-out IPC wait surfaces as the bare
         /// "A task was canceled" — useless to the user; say it timed out, for how long, and
         /// where to look. Provider errors (quota, key, model) keep their original message.
@@ -36,6 +52,81 @@ namespace AkmlSql.Shell.Shared.Ai
                        "See AKML SQL → View Logs for the provider's last error.";
             }
             return ex.Message;
+        }
+
+        /// <summary>
+        /// Spec 037 (FR-048): as <see cref="DescribeFailure(System.Exception, AppSettings)"/>, but
+        /// the quoted wait is the per-feature budget (<see cref="ForAiRequestMs(AppSettings, AiFeature)"/>),
+        /// so the message names the duration the shell actually waited.
+        /// </summary>
+        public static string DescribeFailure(System.Exception ex, AppSettings? settings, AiFeature feature)
+        {
+            if (ex is System.OperationCanceledException)
+            {
+                var waitedSec = ForAiRequestMs(settings, feature) / 1000;
+                return $"The AI request timed out after {waitedSec}s — the provider may be slow or rate-limited. " +
+                       "See AKML SQL → View Logs for the provider's last error.";
+            }
+            return ex.Message;
+        }
+
+        /// <summary>
+        /// Spec 037 (US5, FR-057): whether a failed LIVE request reads as caused by the agent's
+        /// own configuration — a missing or rejected key, a missing or unreachable endpoint, an
+        /// unknown or cross-family model, an unrecognised provider. Momentary states the agent's
+        /// settings cannot fix are NOT configuration-caused: the privacy-consent gate, a slow
+        /// provider (timeout/cancellation), quota or rate-limiting, the engine being down, AI
+        /// being disabled. Only configuration-caused failures name the agent and route to its
+        /// settings — naming one on a quota error would send the user to a dialog that cannot
+        /// fix it.
+        /// </summary>
+        public static bool IsConfigurationCaused(string? errorMessage)
+        {
+            if (string.IsNullOrWhiteSpace(errorMessage)) return false;
+            var msg = errorMessage!;
+
+            // The momentary states first — several of their texts also mention keys or
+            // endpoints, and they must win the classification.
+            if (msg.StartsWith("CONSENT_REQUIRED:", System.StringComparison.Ordinal)) return false;
+            if (Has(msg, "timed out") || Has(msg, "timeout") ||
+                Has(msg, "cancelled") || Has(msg, "canceled")) return false;
+            if (Has(msg, "quota") || Has(msg, "rate-limited") || Has(msg, "rate limit")) return false;
+            if (Has(msg, "engine is not connected") || Has(msg, "engine is running")) return false;
+            if (Has(msg, "assistance is disabled")) return false;
+
+            return
+                Has(msg, "api key") ||
+                Has(msg, "apikey") ||
+                Has(msg, "x-api-key") ||
+                Has(msg, "authentication") ||
+                Has(msg, "http 401") ||
+                Has(msg, "http 403") ||
+                Has(msg, "endpoint") ||
+                Has(msg, "could not reach") ||
+                Has(msg, "no such host") ||
+                Has(msg, "http 404") ||
+                (Has(msg, "model") && (Has(msg, "not found") || Has(msg, "does not exist"))) ||
+                Has(msg, " model, not a ") ||
+                Has(msg, " model, but the ai provider") ||
+                Has(msg, "unknown ai provider") ||
+                Has(msg, "unknown model");
+        }
+
+        /// <summary>net472 has no <c>string.Contains(string, StringComparison)</c>.</summary>
+        private static bool Has(string haystack, string needle)
+            => haystack.IndexOf(needle, System.StringComparison.OrdinalIgnoreCase) >= 0;
+
+        /// <summary>
+        /// Spec 037 (US5, FR-057): the user-facing text for a failed LIVE request. A
+        /// configuration-caused failure names the agent whose settings produced it and states
+        /// the route that fixes it (the chat panel renders the deep-link button beside this
+        /// text); anything else keeps its bare message.
+        /// </summary>
+        public static string DescribeLiveFailure(string errorMessage, string? agentName)
+        {
+            if (string.IsNullOrWhiteSpace(agentName) || !IsConfigurationCaused(errorMessage))
+                return errorMessage;
+            return $"\"{agentName}\" failed — {errorMessage} Fix it under Options → AI Assistance.";
         }
     }
 }

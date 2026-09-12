@@ -1,7 +1,175 @@
 ﻿{
     "product":  "AKML SQL",
-    "generatedAt":  "2026-09-03T13:34:46Z",
+    "generatedAt":  "2026-09-10T20:51:23Z",
     "releases":  [
+                     {
+                         "version":  "1.26.0910.2248",
+                         "releasedAt":  "2026-09-10",
+                         "supportedHosts":  [
+                                                "SSMS 22",
+                                                "VS 2026"
+                                            ],
+                         "downloadUrl":  "downloads/AKMLSQLSetup-1.26.0910.2248.exe",
+                         "sha256Hash":  "d2ce824d61a1c3d4e8ae747ae65df7b6d38c1d26ca4423d3a5d50312ebf46277",
+                         "releaseNotesUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases",
+                         "notesSummary":  "AKML SQL 1.26.0910.2248 installer for SSMS 22 and Visual Studio 2026 (94.13 MB).",
+                         "minimumOsVersion":  "10.0",
+                         "cdnUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases/download/v1.26.0910.2248/AKMLSQLSetup-1.26.0910.2248.exe"
+                     },
+                     {
+                         "version":  "1.26.0910.1929",
+                         "releasedAt":  "2026-09-10",
+                         "supportedHosts":  [
+                                                "SSMS 22",
+                                                "VS 2026"
+                                            ],
+                         "downloadUrl":  "downloads/AKMLSQLSetup-1.26.0910.1929.exe",
+                         "sha256Hash":  "41901d0546b11da31cceab36e5439026b291aa08ff6a46ca871c6189948764a3",
+                         "releaseNotesUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases",
+                         "notesSummary":  "AKML SQL 1.26.0910.1929 installer for SSMS 22 and Visual Studio 2026 (92.47 MB).",
+                         "minimumOsVersion":  "10.0",
+                         "cdnUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases/download/v1.26.0910.1929/AKMLSQLSetup-1.26.0910.1929.exe"
+                     },
+                     {
+                         "version":  "1.26.0910.1900",
+                         "releasedAt":  "2026-09-10",
+                         "supportedHosts":  [
+                                                "SSMS 22",
+                                                "VS 2026"
+                                            ],
+                         "downloadUrl":  "downloads/AKMLSQLSetup-1.26.0910.1900.exe",
+                         "sha256Hash":  "e1130f6672b11a257594cc90145cd4605d9343c2f9b67d5fbb571bd3c050e56f",
+                         "releaseNotesUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases",
+                         "notesSummary":  "AKML SQL 1.26.0910.1900 installer for SSMS 22 and Visual Studio 2026 (91.62 MB).",
+                         "minimumOsVersion":  "10.0",
+                         "cdnUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases/download/v1.26.0910.1900/AKMLSQLSetup-1.26.0910.1900.exe"
+                     },
+                     {
+                         "version":  "1.26.0910.1820",
+                         "releasedAt":  "2026-09-10",
+                         "supportedHosts":  [
+                                                "SSMS 22",
+                                                "VS 2026"
+                                            ],
+                         "downloadUrl":  "downloads/AKMLSQLSetup-1.26.0910.1820.exe",
+                         "sha256Hash":  "432a28a27809b90bd65ddac7009122c935cb81b4ab5b2c4b9b01b1b016acaec5",
+                         "releaseNotesUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases",
+                         "notesSummary":  "AKML SQL 1.26.0910.1820 installer for SSMS 22 and Visual Studio 2026 (90.76 MB).",
+                         "minimumOsVersion":  "10.0",
+                         "cdnUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases/download/v1.26.0910.1820/AKMLSQLSetup-1.26.0910.1820.exe"
+                     },
+                     {
+                         "version":  "1.26.0910.1745",
+                         "releasedAt":  "2026-09-10",
+                         "supportedHosts":  [
+                                                "SSMS 22",
+                                                "VS 2026"
+                                            ],
+                         "downloadUrl":  "downloads/AKMLSQLSetup-1.26.0910.1745.exe",
+                         "sha256Hash":  "4cfe067843b38a0f2bebb8eda8d0c361e32fd3ef81ecbc9b7e28d7786d5c5e44",
+                         "releaseNotesUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases",
+                         "notesSummary":  "AKML SQL 1.26.0910.1745 installer for SSMS 22 and Visual Studio 2026 (90.05 MB).",
+                         "minimumOsVersion":  "10.0",
+                         "cdnUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases/download/v1.26.0910.1745/AKMLSQLSetup-1.26.0910.1745.exe"
+                     },
+                     {
+                         "version":  "1.26.0910.1748",
+                         "releasedAt":  "2026-09-10",
+                         "supportedHosts":  [
+                                                "SSMS 22",
+                                                "VS 2026"
+                                            ],
+                         "downloadUrl":  "downloads/AKMLSQLSetup-1.26.0910.1748.exe",
+                         "sha256Hash":  "c8b01972d2a6425413edf5029fecd3719eb60b90bea0f6d107acf10164182fdd",
+                         "releaseNotesUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases",
+                         "notesSummary":  "AKML SQL 1.26.0910.1748 installer for SSMS 22 and Visual Studio 2026 (90.05 MB).",
+                         "minimumOsVersion":  "10.0",
+                         "cdnUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases/download/v1.26.0910.1748/AKMLSQLSetup-1.26.0910.1748.exe"
+                     },
+                     {
+                         "version":  "1.26.0910.1656",
+                         "releasedAt":  "2026-09-10",
+                         "supportedHosts":  [
+                                                "SSMS 22",
+                                                "VS 2026"
+                                            ],
+                         "downloadUrl":  "downloads/AKMLSQLSetup-1.26.0910.1656.exe",
+                         "sha256Hash":  "e39011385dcde57e4383f8b6f45af676910fc6d003b4636c50242ba6baabc098",
+                         "releaseNotesUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases",
+                         "notesSummary":  "AKML SQL 1.26.0910.1656 installer for SSMS 22 and Visual Studio 2026 (88.36 MB).",
+                         "minimumOsVersion":  "10.0",
+                         "cdnUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases/download/v1.26.0910.1656/AKMLSQLSetup-1.26.0910.1656.exe"
+                     },
+                     {
+                         "version":  "1.26.0910.1317",
+                         "releasedAt":  "2026-09-10",
+                         "supportedHosts":  [
+                                                "SSMS 22",
+                                                "VS 2026"
+                                            ],
+                         "downloadUrl":  "downloads/AKMLSQLSetup-1.26.0910.1317.exe",
+                         "sha256Hash":  "05c02baabfb0e73b938949658c69789062ea0784a54a61cc7c72225d21efdd88",
+                         "releaseNotesUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases",
+                         "notesSummary":  "AKML SQL 1.26.0910.1317 installer for SSMS 22 and Visual Studio 2026 (86.98 MB).",
+                         "minimumOsVersion":  "10.0",
+                         "cdnUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases/download/v1.26.0910.1317/AKMLSQLSetup-1.26.0910.1317.exe"
+                     },
+                     {
+                         "version":  "1.26.0910.1239",
+                         "releasedAt":  "2026-09-10",
+                         "supportedHosts":  [
+                                                "SSMS 22",
+                                                "VS 2026"
+                                            ],
+                         "downloadUrl":  "downloads/AKMLSQLSetup-1.26.0910.1239.exe",
+                         "sha256Hash":  "09b7607bd76795f56cf4365ceced4879757cfeb93b14ccea3438ffbed7a5aaf3",
+                         "releaseNotesUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases",
+                         "notesSummary":  "AKML SQL 1.26.0910.1239 installer for SSMS 22 and Visual Studio 2026 (86.24 MB).",
+                         "minimumOsVersion":  "10.0",
+                         "cdnUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases/download/v1.26.0910.1239/AKMLSQLSetup-1.26.0910.1239.exe"
+                     },
+                     {
+                         "version":  "1.26.0910.0817",
+                         "releasedAt":  "2026-09-10",
+                         "supportedHosts":  [
+                                                "SSMS 22",
+                                                "VS 2026"
+                                            ],
+                         "downloadUrl":  "downloads/AKMLSQLSetup-1.26.0910.0817.exe",
+                         "sha256Hash":  "6b801be2b292c387d87fa6cf63c29660be877a07fbaa9985945e448c9b31c55d",
+                         "releaseNotesUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases",
+                         "notesSummary":  "Fix \u0027check for updates\u0027 on 64-bit hosts; anonymous error reporting to the admin portal",
+                         "minimumOsVersion":  "10.0",
+                         "cdnUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases/download/v1.26.0910.0817/AKMLSQLSetup-1.26.0910.0817.exe"
+                     },
+                     {
+                         "version":  "1.26.0909.1215",
+                         "releasedAt":  "2026-09-09",
+                         "supportedHosts":  [
+                                                "SSMS 22",
+                                                "VS 2026"
+                                            ],
+                         "downloadUrl":  "downloads/AKMLSQLSetup-1.26.0909.1215.exe",
+                         "sha256Hash":  "6daa0bf88ef1b073fd959872ed68b9e05369ecba0e80532633564edb1f4f4f0a",
+                         "releaseNotesUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases",
+                         "notesSummary":  "Chat agent picker redesign + insert-into-query button, format-styles live preview fixes, and Khamis style formatting fixes (real tabs, no more one-line squashing).",
+                         "minimumOsVersion":  "10.0",
+                         "cdnUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases/download/v1.26.0909.1215/AKMLSQLSetup-1.26.0909.1215.exe"
+                     },
+                     {
+                         "version":  "1.26.0908.2157",
+                         "releasedAt":  "2026-09-08",
+                         "supportedHosts":  [
+                                                "SSMS 22",
+                                                "VS 2026"
+                                            ],
+                         "downloadUrl":  "downloads/AKMLSQLSetup-1.26.0908.2157.exe",
+                         "sha256Hash":  "0747ad1f75349b843b212cb939486497ae5da1589c5f8e3848255587f8e083c1",
+                         "releaseNotesUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases",
+                         "notesSummary":  "Multiple AI agents: up to 20 named agents with guided setup, a chat agent picker, per-feature assignment with an ordered fallback chain, and per-agent health.",
+                         "minimumOsVersion":  "10.0",
+                         "cdnUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases/download/v1.26.0908.2157/AKMLSQLSetup-1.26.0908.2157.exe"
+                     },
                      {
                          "version":  "1.26.0903.1456",
                          "releasedAt":  "2026-09-03",

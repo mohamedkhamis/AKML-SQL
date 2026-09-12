@@ -148,6 +148,11 @@ namespace AkmlSql.Shell.Shared.Commands
 
         private async Task ExecuteAsync()
         {
+            // Spec 037 (US1, FR-022): report the no-agent state with the same route the chat
+            // card offers, instead of surfacing a provider error.
+            if (await AiNoAgentGate.ShouldStopAsync("AI Fix"))
+                return;
+
             var manager = EngineLifecycle.Manager;
             if (manager?.Client == null || !manager.Client.IsConnected)
             {
@@ -209,7 +214,7 @@ namespace AkmlSql.Shell.Shared.Commands
 
                 var response = await manager.Client.SendRequestAsync<AiFixResponse, AiFixRequest>(
                     MessageTypes.AiFix, request,
-                    timeoutMs: Ai.AiIpcTimeouts.ForAiRequestMs(ConfigManager.Load()));
+                    timeoutMs: Ai.AiIpcTimeouts.ForAiRequestMs(ConfigManager.Load(), AiFeature.Fix));
 
                 if (!response.Success)
                 {

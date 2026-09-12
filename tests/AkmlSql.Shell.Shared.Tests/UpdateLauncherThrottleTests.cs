@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using AkmlSql.Core.Config;
 using AkmlSql.Shell.Shared.Update;
 using Xunit;
@@ -72,6 +73,23 @@ namespace AkmlSql.Shell.Shared.Tests
 
             var start = Assert.Single(_starts);
             Assert.Equal("--download", start.Arguments);
+        }
+
+        [Fact]
+        public void Updater_path_candidates_check_x86_program_files_first()
+        {
+            // The Inno installer is 32-bit, so {app} is always "Program Files (x86)". From a
+            // 64-bit host, SpecialFolder.ProgramFiles and ProgramW6432 both resolve to the
+            // 64-bit "Program Files" — an x86-first candidate list is what makes the manual
+            // check find the updater at all (previously every check failed "not found").
+            var candidates = UpdateLauncher.UpdaterPathCandidates();
+
+            Assert.NotEmpty(candidates);
+            var x86Root = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+            Assert.Equal(
+                Path.Combine(x86Root, "AKML SQL", "AkmlSql.Updater.exe"),
+                candidates[0]);
+            Assert.All(candidates, c => Assert.EndsWith("AkmlSql.Updater.exe", c));
         }
 
         private static void SaveLastCheck(DateTimeOffset when)

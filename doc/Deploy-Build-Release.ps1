@@ -148,6 +148,27 @@ function Write-Ok([string]$msg)   { Write-Host "  [OK] $msg" -ForegroundColor Gr
 function Write-Warn([string]$msg) { Write-Host "  [WARN] $msg" -ForegroundColor Yellow }
 function Write-Fail([string]$msg) { Write-Host "  [FAIL] $msg" -ForegroundColor Red }
 
+function Invoke-Native {
+    <#
+    .SYNOPSIS
+        Runs a native tool with $ErrorActionPreference relaxed, returning its output.
+    .DESCRIPTION
+        MSBuild, dotnet and ISCC all write warnings to stderr. `2>&1` on a NATIVE
+        command makes PowerShell wrap each stderr line in an ErrorRecord, and under
+        this script's global 'Stop' preference that is a TERMINATING error -- so a
+        mere warning aborted the build even though the tool exited 0. See the longer
+        note above the ISCC call in Step 6 for the original diagnosis.
+
+        Only $LASTEXITCODE is a trustworthy signal from a native tool. It propagates
+        out of this function, so callers keep testing it exactly as before.
+    #>
+    param([Parameter(Mandatory)][scriptblock]$Command)
+
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try { & $Command } finally { $ErrorActionPreference = $prev }
+}
+
 $script:errors = @()
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -181,7 +202,7 @@ Write-Step "Step 2/7: Restoring NuGet packages"
 foreach ($target in $buildTargets) {
     $csproj = Join-Path $srcDir "AkmlSql.$target\AkmlSql.$target.csproj"
     Write-Host "  Restoring AkmlSql.$target..." -NoNewline
-    & $msbuild $csproj -t:Restore -p:Configuration=$Configuration -v:quiet 2>&1 | Out-Null
+    Invoke-Native { & $msbuild $csproj -t:Restore -p:Configuration=$Configuration -v:quiet 2>&1 } | Out-Null
     if ($LASTEXITCODE -ne 0) {
         Write-Fail " FAILED"
         $script:errors += "NuGet restore failed for AkmlSql.$target"
@@ -195,7 +216,7 @@ foreach ($proj in @('AkmlSql.Engine', 'AkmlSql.Updater', 'AkmlSql.Formatter', 'A
     $csproj = Join-Path $srcDir "$proj\$proj.csproj"
     if (Test-Path $csproj) {
         Write-Host "  Restoring $proj..." -NoNewline
-        dotnet restore $csproj --verbosity quiet 2>&1 | Out-Null
+        Invoke-Native { dotnet restore $csproj --verbosity quiet 2>&1 } | Out-Null
         if ($LASTEXITCODE -ne 0) {
             Write-Fail " FAILED"
             $script:errors += "NuGet restore failed for $proj"
@@ -215,7 +236,7 @@ foreach ($target in $buildTargets) {
     $csproj = Join-Path $srcDir "AkmlSql.$target\AkmlSql.$target.csproj"
     Write-Host "  Building AkmlSql.$target..." -NoNewline
 
-    $output = & $msbuild $csproj -t:Build -p:Configuration=$Configuration -v:quiet 2>&1
+    $output = Invoke-Native { & $msbuild $csproj -t:Build -p:Configuration=$Configuration -v:quiet 2>&1 }
     # Match real MSBuild error codes (e.g. ": error CS0579:") and skip the
     # literal word "Error" inside warning text like NU1900 vulnerability fetch.
     $buildErrors = $output | Select-String ': error [A-Z]+\d+: '
@@ -242,7 +263,7 @@ Write-Step "Step 4/7: Publishing .NET 10 projects"
 # Drain any lingering MSBuild/VBCSCompiler workers from prior runs so they don't
 # hold file handles that race with real-time AV scans on the freshly-copied
 # obj/Release/.../singlefilehost.exe.
-dotnet build-server shutdown 2>&1 | Out-Null
+Invoke-Native { dotnet build-server shutdown 2>&1 } | Out-Null
 
 $publishProjects = @(
     @{ Name = 'AkmlSql.Engine';    Rid = 'win-x64'; Desc = 'Engine (out-of-process IntelliSense)' }
@@ -268,7 +289,7 @@ foreach ($proj in $publishProjects) {
     $maxAttempts = 3
     while ($true) {
         $attempt++
-        $output = dotnet publish $csproj -c $Configuration -r $proj.Rid --verbosity quiet 2>&1
+        $output = Invoke-Native { dotnet publish $csproj -c $Configuration -r $proj.Rid --verbosity quiet 2>&1 }
         if ($LASTEXITCODE -eq 0) { break }
         if ($attempt -ge $maxAttempts) {
             Write-Fail " FAILED (after $maxAttempts attempts)"
@@ -299,7 +320,7 @@ if (Test-Path $webCsproj) {
     $maxAttempts = 3
     while ($true) {
         $attempt++
-        $output = dotnet publish $webCsproj -c $Configuration --verbosity quiet 2>&1
+        $output = Invoke-Native { dotnet publish $webCsproj -c $Configuration --verbosity quiet 2>&1 }
         if ($LASTEXITCODE -eq 0) { break }
         if ($attempt -ge $maxAttempts) {
             Write-Fail " FAILED (after $maxAttempts attempts)"

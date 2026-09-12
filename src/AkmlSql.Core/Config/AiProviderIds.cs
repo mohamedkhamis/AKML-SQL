@@ -29,6 +29,28 @@ namespace AkmlSql.Core.Config
         };
 
         /// <summary>
+        /// The Options-page display name for a canonical id ("Anthropic", "Kimi (Moonshot)", …),
+        /// matching <c>AiAssistancePage.Providers</c> in the shell. Spec 037 (V14) names the agent
+        /// a migration creates after its provider. Unrecognised ids pass through unchanged — the
+        /// name is informational only.
+        /// </summary>
+        public static string DisplayName(string? providerId)
+        {
+            switch (providerId)
+            {
+                case Anthropic: return "Anthropic";
+                case OpenAI: return "OpenAI";
+                case Azure: return "Azure OpenAI";
+                case Gemini: return "Gemini";
+                case Kimi: return "Kimi (Moonshot)";
+                case Ollama: return "Ollama";
+                case LmStudio: return "LM Studio";
+                case Custom: return "Custom";
+                default: return providerId ?? "";
+            }
+        }
+
+        /// <summary>
         /// Normalises any accepted spelling (canonical id, legacy save form, or Options display
         /// name, case-insensitive) to the canonical id. Null/whitespace and the "(None)" display
         /// entry map to "" (provider = none). Unrecognised non-empty input passes through

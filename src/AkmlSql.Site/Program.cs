@@ -4,6 +4,7 @@ using AkmlSql.Site.Components;
 using AkmlSql.Site.Docs;
 using AkmlSql.Site.Releases;
 using AkmlSql.Site.Seo;
+using AkmlSql.Site.Telemetry;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.Extensions.FileProviders;
@@ -64,6 +65,7 @@ builder.Services.Configure<SiteOptions>(builder.Configuration.GetSection(SiteOpt
 builder.Services.Configure<AnalyticsOptions>(builder.Configuration.GetSection(AnalyticsOptions.SectionName));
 builder.Services.Configure<DownloadsOptions>(builder.Configuration.GetSection(DownloadsOptions.SectionName));
 builder.Services.Configure<AdminOptions>(builder.Configuration.GetSection(AdminOptions.SectionName));
+builder.Services.Configure<ClientErrorOptions>(builder.Configuration.GetSection(ClientErrorOptions.SectionName));
 builder.Services.AddSingleton(sp => new AnalyticsStore(sp.GetRequiredService<IOptions<AnalyticsOptions>>().Value));
 
 // Offline IP-to-location lookup. The .mmdb is supplied by the deploy (scripts/update-geoip.ps1),
@@ -282,6 +284,7 @@ app.MapStaticAssets();
 // Tracked installer downloads + admin portal POST endpoints (login/logout).
 DownloadEndpoint.Map(app);
 DownloadEndpoint.MapCount(app);
+ClientErrorEndpoint.Map(app);
 AdminEndpoints.Map(app);
 
 app.MapRazorComponents<App>();

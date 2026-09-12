@@ -22,8 +22,10 @@ namespace AkmlSql.Core.Logging
 
             Directory.CreateDirectory(Constants.LogsPath);
 
-            // Read minimum log level from config JSON directly (avoids circular dependency with ConfigManager)
+            // Read minimum log level + telemetry settings from config JSON directly (avoids circular dependency with ConfigManager)
             var minLevel = LogEventLevel.Debug;
+            var telemetryEnabled = true;
+            var telemetryLevel = LogEventLevel.Error;
             try
             {
                 var configPath = Constants.ConfigFilePath;
@@ -32,11 +34,16 @@ namespace AkmlSql.Core.Logging
                     using var doc = JsonDocument.Parse(File.ReadAllText(configPath));
                     if (doc.RootElement.TryGetProperty("logMinimumLevel", out var lvlProp))
                         Enum.TryParse(lvlProp.GetString(), ignoreCase: true, out minLevel);
+                    if (doc.RootElement.TryGetProperty("telemetryEnabled", out var telProp)
+                        && telProp.ValueKind is JsonValueKind.True or JsonValueKind.False)
+                        telemetryEnabled = telProp.GetBoolean();
+                    if (doc.RootElement.TryGetProperty("telemetryMinimumLevel", out var telLvlProp))
+                        Enum.TryParse(telLvlProp.GetString(), ignoreCase: true, out telemetryLevel);
                 }
             }
-            catch { /* use default */ }
+            catch { /* use defaults */ }
 
-            Log.Logger = new LoggerConfiguration()
+            var configuration = new LoggerConfiguration()
                 .MinimumLevel.Is(minLevel)
                 .WriteTo.File(
                     path: logPath,
@@ -47,8 +54,21 @@ namespace AkmlSql.Core.Logging
                     // Flush the file sink's buffer every 250ms so a UI-thread hang
                     // cannot swallow the last breadcrumb before the process dies.
                     flushToDiskInterval: TimeSpan.FromMilliseconds(250),
-                    outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
-                .CreateLogger();
+                    outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}");
+
+            if (telemetryEnabled)
+            {
+                // Anonymous error upload to the product site's admin portal. Independent minimum
+                // level (default Error): the local file stays verbose while only real failures
+                // leave the machine. Serilog disposes the sink on Shutdown; its final flush is
+                // capped at a few seconds so a dead endpoint cannot hold the host open.
+                var installId = TelemetryIdentity.GetOrCreateInstallId();
+                configuration.WriteTo.Sink(
+                    new TelemetrySink(new TelemetryClient(installId)),
+                    restrictedToMinimumLevel: telemetryLevel);
+            }
+
+            Log.Logger = configuration.CreateLogger();
 
             Log.Information("AKML SQL {Version} logger initialized", Constants.RuntimeVersion);
         }

@@ -7,11 +7,11 @@
 
 set -e
 
-REPO="D:/Repo/01-Khamis-Projects/AKML-SQL"
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EXT_DIR="/c/Program Files/Microsoft SQL Server Management Studio 22/Release/Common7/IDE/Extensions/AkmlSql"
 ENGINE_DIR="/c/Program Files (x86)/AKML SQL/Engine"
 APP_DIR="/c/Program Files (x86)/AKML SQL"
-MEF_CACHE="/c/Users/MohamedKhamis/AppData/Local/Microsoft/SSMS/22.0_*/ComponentModelCache"
+MEF_CACHE="$LOCALAPPDATA/Microsoft/SSMS/22.0_*/ComponentModelCache"
 
 # 1. Safety check: refuse if SSMS or Engine is running
 if tasklist 2>/dev/null | grep -qi "ssms.exe\|akmlsql.engine.exe"; then

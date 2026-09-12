@@ -76,6 +76,11 @@ namespace AkmlSql.Shell.Shared.Commands
 
         private async Task ExecuteAsync()
         {
+            // Spec 037 (US1, FR-022): report the no-agent state with the same route the chat
+            // card offers, instead of surfacing a provider error.
+            if (await AiNoAgentGate.ShouldStopAsync("AI Optimize"))
+                return;
+
             var manager = EngineLifecycle.Manager;
             if (manager?.Client == null || !manager.Client.IsConnected)
             {
@@ -134,7 +139,7 @@ namespace AkmlSql.Shell.Shared.Commands
 
                 var response = await manager.Client.SendRequestAsync<AiOptimizeResponse, AiOptimizeRequest>(
                     MessageTypes.AiOptimize, request,
-                    timeoutMs: Ai.AiIpcTimeouts.ForAiRequestMs(AkmlSql.Core.Config.ConfigManager.Load()));
+                    timeoutMs: Ai.AiIpcTimeouts.ForAiRequestMs(AkmlSql.Core.Config.ConfigManager.Load(), AkmlSql.Core.Config.AiFeature.Optimize));
 
                 if (!response.Success)
                 {

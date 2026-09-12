@@ -18,6 +18,10 @@ namespace AkmlSql.Shell.Shared.Ipc
         /// <summary>Sends a request and awaits its typed response. Mirrors
         /// <see cref="PipeRpcClient.SendRequestAsync{T,TPayload}"/> exactly.</summary>
         Task<T> SendRequestAsync<T, TPayload>(int messageType, TPayload payload, int timeoutMs = 5000, CancellationToken ct = default);
+
+        /// <summary>Sends a fire-and-forget notification. Mirrors
+        /// <see cref="PipeRpcClient.SendNotificationAsync{TPayload}"/> exactly.</summary>
+        Task SendNotificationAsync<TPayload>(int messageType, TPayload payload, CancellationToken ct = default);
     }
 
     /// <summary>
@@ -39,6 +43,14 @@ namespace AkmlSql.Shell.Shared.Ipc
             if (client == null)
                 throw new InvalidOperationException("Engine not connected.");
             return client.SendRequestAsync<T, TPayload>(messageType, payload, timeoutMs, ct);
+        }
+
+        public Task SendNotificationAsync<TPayload>(int messageType, TPayload payload, CancellationToken ct = default)
+        {
+            var client = EngineLifecycle.Manager?.Client;
+            if (client == null)
+                throw new InvalidOperationException("Engine not connected.");
+            return client.SendNotificationAsync(messageType, payload, ct);
         }
     }
 }

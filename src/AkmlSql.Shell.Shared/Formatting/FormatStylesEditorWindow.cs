@@ -1988,6 +1988,15 @@ namespace AkmlSql.Shell.Shared.Formatting
                 RebuildSettingsTreeFromSchema(_viewModel.SchemaJson!);
             }
 
+            // The view-model auto-selects the ACTIVE style at open; reflect that in the list.
+            // Assigning SelectedItem fires the normal selection-changed flow (SelectProfileAsync
+            // short-circuits on the already-loaded style) so the controls render its values.
+            if (_styleList != null && _styleList.SelectedItem == null && _viewModel.LoadedProfileName != null)
+            {
+                _styleList.SelectedItem = _viewModel.Profiles.FirstOrDefault(
+                    p => string.Equals(p.Name, _viewModel.LoadedProfileName, StringComparison.OrdinalIgnoreCase));
+            }
+
             UpdateStatus(_viewModel.LastError ?? $"Loaded {_viewModel.Profiles.Count} style(s).");
         }
 

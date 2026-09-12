@@ -115,6 +115,7 @@ namespace AkmlSql.Shell.Shared.Update
                 FontSize = 12.5,
                 HorizontalAlignment = HorizontalAlignment.Right
             };
+            ThemedButton.ApplySecondary(cancelBtn);
             cancelBtn.Click += OnCancelClicked;
             root.Children.Add(cancelBtn);
 

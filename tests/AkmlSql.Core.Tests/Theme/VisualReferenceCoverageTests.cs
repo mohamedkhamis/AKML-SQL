@@ -22,6 +22,13 @@ namespace AkmlSql.Core.Tests.Theme
     ///   <item>Every documented reference file is non-empty.</item>
     /// </list>
     /// <para>
+    /// The pack is deliberately LOCAL-ONLY — <c>doc/SQL-PROMPT/</c> is gitignored (commit
+    /// c7621f8: distributed as a zip the developer extracts, not as tracked content) — so both
+    /// tests SKIP when the folder is absent instead of failing on every clean checkout / CI run.
+    /// A present-but-incomplete pack is still a real failure: the gate activates the moment the
+    /// reference material is extracted.
+    /// </para>
+    /// <para>
     /// When <c>Surface</c> records are introduced (US1 / US3), extend this test to assert
     /// each <c>Surface</c> in the catalog resolves its <c>VisualReferencePath</c> to an
     /// existing anchor inside one of these files.
@@ -35,6 +42,14 @@ namespace AkmlSql.Core.Tests.Theme
         {
             _output = output;
         }
+
+        /// <summary>True when the gitignored local reference pack is extracted at <c>doc/SQL-PROMPT/</c>.</summary>
+        private static bool ReferencePackPresent(string repoRoot) =>
+            Directory.Exists(Path.Combine(repoRoot, "doc", "SQL-PROMPT"));
+
+        private const string PackAbsentSkipReason =
+            "doc/SQL-PROMPT/ reference pack not extracted on this machine (gitignored local-only " +
+            "material — see class doc); visual-contract gate inactive.";
 
         // The doc/SQL-PROMPT/ files that every in-scope surface ultimately references. This is the
         // canonical visual contract listed in spec.md.
@@ -69,10 +84,12 @@ namespace AkmlSql.Core.Tests.Theme
             "doc/SQL-PROMPT/SQL-Prompt-Option/14_format_styles_editor.svg",
         };
 
-        [Fact]
+        [SkippableFact]
         public void AllReferenceMarkdownFilesExistAndAreNonEmpty()
         {
             var repoRoot = FindRepoRoot();
+            Skip.IfNot(ReferencePackPresent(repoRoot), PackAbsentSkipReason);
+
             var missing = new List<string>();
             var empty = new List<string>();
 
@@ -101,10 +118,12 @@ namespace AkmlSql.Core.Tests.Theme
                 $"{empty.Count} expected SQL Prompt reference file(s) are empty.");
         }
 
-        [Fact]
+        [SkippableFact]
         public void AllSvgMockupsExist()
         {
             var repoRoot = FindRepoRoot();
+            Skip.IfNot(ReferencePackPresent(repoRoot), PackAbsentSkipReason);
+
             var missing = new List<string>();
 
             foreach (var rel in ExpectedSvgMockups)

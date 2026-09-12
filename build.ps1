@@ -69,6 +69,42 @@ function Assert-Tool([string]$Path, [string]$Name) {
 Assert-Tool $MSBuild "MSBuild"
 Assert-Tool $ISCC    "Inno Setup 7"
 
+# --- Optional code signing ---
+# AKML_CODESIGN_THUMBPRINT = SHA-1 thumbprint of a code-signing cert (with private key) in
+# the CurrentUser or LocalMachine "My" store. When set, the installer EXE and uninstaller
+# are signed (SmartScreen reputation — see AkmlSqlSetup.iss). signtool.exe comes from
+# Windows Kits or PATH; missing signtool with a thumbprint set is a hard error (never
+# silently ship unsigned when signing was requested).
+$SignThumb = [Environment]::GetEnvironmentVariable('AKML_CODESIGN_THUMBPRINT')
+$SignToolExe = $null
+if ($SignThumb) {
+    $candidates = @()
+    $kitsBin = "C:\Program Files (x86)\Windows Kits\10\bin"
+    if (Test-Path $kitsBin) {
+        $candidates += Get-ChildItem $kitsBin -Recurse -Filter signtool.exe -ErrorAction SilentlyContinue |
+                       Where-Object { $_.FullName -match '\\x64\\' } |
+                       Sort-Object FullName -Descending |
+                       Select-Object -First 1 -ExpandProperty FullName
+    }
+    $onPath = Get-Command signtool.exe -ErrorAction SilentlyContinue
+    if ($onPath) { $candidates += $onPath.Source }
+    $SignToolExe = $candidates | Select-Object -First 1
+    if (-not $SignToolExe) {
+        Write-Host "ERROR: AKML_CODESIGN_THUMBPRINT is set but signtool.exe was not found. Install the Windows SDK signing tools." -ForegroundColor Red
+        exit 1
+    }
+    Write-Host "Code signing  : thumbprint $SignThumb via $SignToolExe" -ForegroundColor Magenta
+}
+
+function Get-IsccArgs([string]$VersionText) {
+    $args = @("$Root\src\AkmlSql.Installer\AkmlSqlSetup.iss", "/DMyAppVersion=$VersionText")
+    if ($SignToolExe) {
+        $args += "/DCodeSignThumbprint=$SignThumb"
+        $args += "/Sakmlsign=`"$SignToolExe`" sign /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com /sha1 $SignThumb `$f"
+    }
+    return ,$args
+}
+
 Write-Host "Build version : $Version" -ForegroundColor Magenta
 
 # --- Helpers ---
@@ -123,7 +159,7 @@ function Update-VsixManifests([string]$VersionText) {
 if ($InstallerOnly) {
     Update-VsixManifests $Version
     Invoke-Build "Installer (Inno Setup)" {
-        & $ISCC "$Root\src\AkmlSql.Installer\AkmlSqlSetup.iss" "/DMyAppVersion=$Version"
+        & $ISCC (Get-IsccArgs $Version)
     }
     $Exe = "$Root\src\AkmlSql.Installer\Output\AKMLSQLSetup.exe"
     Write-Host "`nInstaller ready: $Exe" -ForegroundColor Yellow
@@ -235,7 +271,7 @@ if (-not $SkipTests) {
 # --- Installer ---
 Update-VsixManifests $Version
 Invoke-Build "Installer (Inno Setup)" {
-    & $ISCC "$Root\src\AkmlSql.Installer\AkmlSqlSetup.iss" "/DMyAppVersion=$Version"
+    & $ISCC (Get-IsccArgs $Version)
 }
 
 # --- Optional: deploy product site with the freshly built release ---

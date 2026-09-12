@@ -1,0 +1,135 @@
+{
+  "akmlParityBaseline": {
+    "revision": "1.26.0526.0000",
+    "corpusItem": "sp031-09-cte-single",
+    "profile": "default"
+  },
+  "findings": [
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'with' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'as' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 19
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'select' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 23
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'from' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 67
+    },
+    {
+      "ruleId": "NM006",
+      "severity": "Info",
+      "message": "Single-letter alias 'o' is not descriptive — use a meaningful alias",
+      "line": 1,
+      "column": 72
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'where' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 85
+    },
+    {
+      "ruleId": "BP012",
+      "severity": "Info",
+      "message": "Hard-coded date literal '1998-01-01' — consider using a parameter or variable for maintainability",
+      "line": 1,
+      "column": 106
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'select' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 120
+    },
+    {
+      "ruleId": "ST010",
+      "severity": "Hint",
+      "message": "Line exceeds 120 characters — consider breaking into multiple lines for readability",
+      "line": 1,
+      "column": 121
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'as' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 150
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'from' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 157
+    },
+    {
+      "ruleId": "NM006",
+      "severity": "Info",
+      "message": "Single-letter alias 'r' is not descriptive — use a meaningful alias",
+      "line": 1,
+      "column": 162
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'group' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 177
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'by' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 183
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'having' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 199
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'order' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 219
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'by' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 225
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'desc' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 232
+    }
+  ]
+}

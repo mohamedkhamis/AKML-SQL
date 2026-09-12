@@ -20,8 +20,15 @@ namespace AkmlSql.Core.Config
         /// <summary>When <c>true</c>, the shell checks for updates on startup.</summary>
         public bool AutoUpdateEnabled { get; set; } = true;
 
-        /// <summary>Reserved for future telemetry opt-in. Defaults to <c>false</c>.</summary>
-        public bool TelemetryEnabled { get; set; }
+        /// <summary>
+        /// Anonymous error telemetry: when true (the default), log events at or above
+        /// <see cref="TelemetryMinimumLevel"/> are batched and POSTed to the product site so
+        /// failures in the field show up in the admin portal. The payload identifies the install
+        /// only by the anonymous <see cref="InstallId"/> — no user name, machine name or
+        /// IP-derived value is ever sent. The Settings → General toggle flips this off.
+        /// </summary>
+        [JsonPropertyName("telemetryEnabled")]
+        public bool TelemetryEnabled { get; set; } = true;
 
         /// <summary>
         /// UI theme for AKML SQL dialogs. Valid values: "dark", "light", "system".
@@ -133,6 +140,14 @@ namespace AkmlSql.Core.Config
         /// </summary>
         [JsonPropertyName("logMinimumLevel")]
         public string LogMinimumLevel { get; set; } = "Debug";
+
+        /// <summary>
+        /// Minimum level for telemetry upload, independent of <see cref="LogMinimumLevel"/> (the
+        /// local file can stay verbose while only real errors leave the machine).
+        /// Valid values: Verbose, Debug, Information, Warning, Error, Fatal. Defaults to Error.
+        /// </summary>
+        [JsonPropertyName("telemetryMinimumLevel")]
+        public string TelemetryMinimumLevel { get; set; } = "Error";
     }
 
     /// <summary>
@@ -1261,6 +1276,46 @@ namespace AkmlSql.Core.Config
         /// <summary>US18 — debounce delay before AI ghost-text auto-suggest fires (milliseconds).</summary>
         [JsonPropertyName("ghostTextDelayMs")]
         public int GhostTextDelayMs { get; set; } = 500;
+
+        // ── Spec 037: multiple named AI agents ──
+        // ai.agents is the truth; the flat provider/model/apiKey/endpoint fields above are a
+        // derived mirror of the active agent, rewritten by AiAgentResolver on every load and save.
+
+        /// <summary>
+        /// Spec 037 (data-model E5) — the saved AI agents, 0 … 20 (V12). List order is display
+        /// order. When empty, the flat fields above are the whole configuration (pre-migration
+        /// shape, rescued by V14 on load). Read through <see cref="AiAgentListConverter"/> so one
+        /// malformed entry is dropped with a warning instead of failing the whole load (V15/FR-012).
+        /// </summary>
+        [JsonPropertyName("agents")]
+        [JsonConverter(typeof(AiAgentListConverter))]
+        public List<AiAgent> Agents { get; set; } = new();
+
+        /// <summary>
+        /// Spec 037 (data-model E5) — id of the active agent. Resolved by V13 when it names no
+        /// agent in <see cref="Agents"/>.
+        /// </summary>
+        [JsonPropertyName("activeAgentId")]
+        public string ActiveAgentId { get; set; } = "";
+
+        /// <summary>Spec 037 (data-model E5) — per-feature agent assignments; "" = follow the active agent.</summary>
+        [JsonPropertyName("featureAgents")]
+        public FeatureAgentAssignments FeatureAgents { get; set; } = new();
+
+        /// <summary>Spec 037 (data-model E5) — agent ids tried in order when the selected agent fails.</summary>
+        [JsonPropertyName("fallbackOrder")]
+        public List<string> FallbackOrder { get; set; } = new();
+
+        /// <summary>
+        /// Spec 037 (FR-049/V22) — the features whose agent assignment V16 cleared on the last
+        /// load because it named no usable agent, as <see cref="AiFeature"/> names ("Chat", …).
+        /// Never serialised; populated by <c>AiAgentResolver.Normalize</c> and never consumed by
+        /// Core. This is the post-load signal for the engine's once-per-feature fallback notice:
+        /// V16 clears the dangling assignment before any handler can see it, so the notice keys
+        /// on this list instead.
+        /// </summary>
+        [JsonIgnore]
+        public List<string> ClearedFeatureAssignments { get; } = new();
     }
 
     /// <summary>

@@ -1,4 +1,5 @@
 using AkmlSql.Site.Analytics;
+using AkmlSql.Site.Telemetry;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.Extensions.DependencyInjection;
@@ -138,12 +139,15 @@ public sealed class DownloadEndpointTests
         public List<VisitInfo> Visits { get; } = [];
         public List<DownloadInfo> Downloads { get; } = [];
         public List<NotFoundInfo> NotFound { get; } = [];
+        public List<ClientErrorBatch> ClientErrors { get; } = [];
 
         public void EnqueueVisit(VisitInfo visit) => Visits.Add(visit);
 
         public void EnqueueDownload(DownloadInfo download) => Downloads.Add(download);
 
         public void EnqueueNotFound(NotFoundInfo notFound) => NotFound.Add(notFound);
+
+        public void EnqueueClientErrors(ClientErrorBatch batch) => ClientErrors.Add(batch);
     }
 
     // --- CDN redirect (/dl -> GitHub Releases etc.) ---

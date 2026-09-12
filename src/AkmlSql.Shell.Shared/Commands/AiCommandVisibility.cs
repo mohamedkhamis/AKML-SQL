@@ -55,8 +55,7 @@ namespace AkmlSql.Shell.Shared.Commands
             try
             {
                 var settings = ConfigManager.Load();
-                visible = settings.Ai.Enabled &&
-                          !string.Equals(settings.Ai.PrivacyMode, "disabled", StringComparison.OrdinalIgnoreCase);
+                visible = IsAiEnabled(settings) && IsPrivacyPermitting(settings);
             }
             catch (Exception ex)
             {
@@ -67,6 +66,25 @@ namespace AkmlSql.Shell.Shared.Commands
             Volatile.Write(ref _cachedVisible, visible);
             Interlocked.Exchange(ref _cacheTimestamp, now);
             return visible;
+        }
+
+        /// <summary>
+        /// The master AI toggle, in one place: <see cref="AiNoAgentGate"/> asks the same question
+        /// for shortcut-invoked commands, which no hidden menu item can cover.
+        /// </summary>
+        internal static bool IsAiEnabled(AppSettings? settings)
+        {
+            return settings?.Ai != null && settings.Ai.Enabled;
+        }
+
+        /// <summary>
+        /// The privacy half of the same predicate: "disabled" privacy mode blocks every AI
+        /// feature regardless of how many usable agents exist.
+        /// </summary>
+        internal static bool IsPrivacyPermitting(AppSettings? settings)
+        {
+            return settings?.Ai != null &&
+                   !string.Equals(settings.Ai.PrivacyMode, "disabled", StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>

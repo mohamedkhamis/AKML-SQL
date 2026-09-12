@@ -267,6 +267,20 @@ try {
         Log "         Then set it:   Add-WebConfigurationProperty -pspath 'MACHINE/WEBROOT/APPHOST' -filter `"$envFilter`" -name '.' -value @{name='Admin__PasswordHash';value='<hash>'}"
     }
 
+    # Client error telemetry intake key (same env-var pattern as the admin hash): once set, the
+    # site rejects error batches that lack the matching X-AKML-Ingest-Key header. The value must
+    # equal Constants.TelemetryIngestKey in src/AkmlSql.Core/Constants.cs. While unset the intake
+    # stays OPEN so installs that predate the key keep reporting.
+    $ingestVar = Get-WebConfiguration -pspath 'MACHINE/WEBROOT/APPHOST' -filter "$envFilter/add[@name='ClientErrors__IngestKey']"
+    if ($ingestVar -and $ingestVar.value) {
+        Log 'ClientErrors__IngestKey present on the app pool -- error telemetry intake is key-gated'
+    }
+    else {
+        Log 'WARNING: ClientErrors__IngestKey is NOT set -- /api/client-errors accepts unauthenticated batches.'
+        Log '         The value is Constants.TelemetryIngestKey in src/AkmlSql.Core/Constants.cs.'
+        Log "         Set it:        Add-WebConfigurationProperty -pspath 'MACHINE/WEBROOT/APPHOST' -filter `"$envFilter`" -name '.' -value @{name='ClientErrors__IngestKey';value='<key>'}"
+    }
+
     $poolIdentity = "IIS AppPool\$AppPoolName"
     Log "Granting $poolIdentity read access to $DeployPath"
     & icacls $DeployPath /grant "${poolIdentity}:(OI)(CI)RX" /T /Q | Out-Null

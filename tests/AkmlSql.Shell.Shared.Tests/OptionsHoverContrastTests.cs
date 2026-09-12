@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Media;
 using AkmlSql.Core.Config;
 using AkmlSql.Shell.Shared.Dialogs;
@@ -49,6 +51,24 @@ namespace AkmlSql.Shell.Shared.Tests
 
         [StaFact]
         public void SearchResults_Dark_AllStates_MeetContrast() => AssertSearchResultsAllStates("Dark");
+
+        // ── Agent list sweeps (spec 037 US2, FR-036) ─────────────────────────
+
+        [StaFact]
+        public void AgentList_Light_AllStates_MeetContrast() => AssertAgentListAllStates("Light");
+
+        [StaFact]
+        public void AgentList_Dark_AllStates_MeetContrast() => AssertAgentListAllStates("Dark");
+
+        [StaFact]
+        public void AgentList_HighContrast_TokenPairs_MeetContrast()
+        {
+            var pairs = ResolveAgentTokenPairs("Light");
+            foreach (var (state, bgToken, fgToken) in pairs)
+            {
+                AssertHcPair("agent-list", state, bgToken, fgToken);
+            }
+        }
 
         /// <summary>
         /// High Contrast: the dialog snapshots Light/Dark brushes, but the tokens the style pairs
@@ -134,6 +154,20 @@ namespace AkmlSql.Shell.Shared.Tests
             }
         }
 
+        private static void AssertAgentListAllStates(string theme)
+        {
+            var list = GetAgentList(theme, out _);
+            var style = list.ItemContainerStyle;
+            Assert.NotNull(style);
+            // The rows float transparent over the list's own surface (Input), so the normal
+            // state's effective background is the list Background, exactly like the search list
+            // over Panel.
+            foreach (var (state, bg, fg) in ResolveAgentPairs(style, (SolidColorBrush)list.Background))
+            {
+                AssertContrast(state, theme, bg, fg);
+            }
+        }
+
         /// <summary>The four states as (background, foreground) brushes resolved from the style.</summary>
         private static IEnumerable<(string State, SolidColorBrush Bg, SolidColorBrush Fg)> ResolveNavPairs(Style style, string theme)
         {
@@ -149,6 +183,25 @@ namespace AkmlSql.Shell.Shared.Tests
             yield return ("selected", sBg, sFg);
             var (shBg, shFg) = SelectedHoverPair(style);
             yield return ("selected+hovered", shBg, shFg);
+        }
+
+        /// <summary>
+        /// The agent list's states, resolved against the list's own surface for the normal state.
+        /// Like the search list, hover is declared before selected, so selected ∧ hovered resolves
+        /// to the selected pair (the later trigger wins both properties).
+        /// </summary>
+        private static IEnumerable<(string State, SolidColorBrush Bg, SolidColorBrush Fg)> ResolveAgentPairs(Style style, SolidColorBrush listSurface)
+        {
+            var normalBg = RequiredSetterBrush(style.Setters, Control.BackgroundProperty, "normal/Background");
+            yield return ("normal",
+                normalBg.Color != Colors.Transparent ? normalBg : listSurface,
+                RequiredSetterBrush(style.Setters, Control.ForegroundProperty, "normal/Foreground"));
+
+            var (hBg, hFg) = HoverPair(style);
+            yield return ("hovered", hBg, hFg);
+            var (sBg, sFg) = SelectedPair(style);
+            yield return ("selected", sBg, sFg);
+            yield return ("selected+hovered", sBg, sFg);
         }
 
         private static IEnumerable<(string State, SolidColorBrush Bg, SolidColorBrush Fg)> ResolveSearchPairs(Style style, string theme)
@@ -233,11 +286,23 @@ namespace AkmlSql.Shell.Shared.Tests
             return result;
         }
 
+        private static List<(string State, string BgToken, string FgToken)> ResolveAgentTokenPairs(string theme)
+        {
+            var list = GetAgentList(theme, out _);
+            var result = new List<(string, string, string)>();
+            foreach (var (state, bg, fg) in ResolveAgentPairs(list.ItemContainerStyle, (SolidColorBrush)list.Background))
+            {
+                result.Add((state, TokenForBrush(bg, navSurface: false), TokenForBrush(fg, navSurface: false)));
+            }
+            return result;
+        }
+
         /// <summary>PageTheme property name → the token <see cref="PageTheme"/> sources it from.</summary>
         private static readonly Dictionary<string, string> PropertyToToken = new(StringComparer.Ordinal)
         {
             [nameof(PageTheme.Sidebar)] = ThemeTokens.SurfaceSidebar,
             [nameof(PageTheme.Panel)] = ThemeTokens.SurfacePanel,
+            [nameof(PageTheme.Input)] = ThemeTokens.SurfaceInput,
             [nameof(PageTheme.TreeHover)] = ThemeTokens.SurfaceHover,
             [nameof(PageTheme.Selected)] = ThemeTokens.AccentPrimary,
             [nameof(PageTheme.FgPrimary)] = ThemeTokens.TextPrimary,
@@ -288,6 +353,24 @@ namespace AkmlSql.Shell.Shared.Tests
             var list = GetPrivateField<ListBox>(dialog, "_searchResultsList");
             Assert.NotNull(list.ItemContainerStyle);
             return list.ItemContainerStyle;
+        }
+
+        /// <summary>
+        /// The AI Assistance page's agent ListBox (spec 037 US2) — found by its "AI agents"
+        /// automation name, which distinguishes it from the page's fallback-order ListBox
+        /// (spec 037 US4). Pages live in the host's <c>_pages</c> map, not in the window's
+        /// active tree.
+        /// </summary>
+        private static ListBox GetAgentList(string theme, out SettingsWindow dialog)
+        {
+            dialog = BuildDialog(theme, out _);
+            var f = typeof(SettingsWindow).GetField("_pages",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(f);
+            var pages = (Dictionary<string, UIElement>)f!.GetValue(dialog)!;
+            Assert.True(pages.TryGetValue("AI Assistance", out var aiPage), "AI Assistance page not built.");
+            return Assert.Single(LogicalTree.Descendants<ListBox>(aiPage!),
+                lb => System.Windows.Automation.AutomationProperties.GetName(lb) == "AI agents");
         }
 
         private static SettingsWindow BuildDialog(string theme, out Window window)
@@ -357,6 +440,233 @@ namespace AkmlSql.Shell.Shared.Tests
             throw new Xunit.Sdk.XunitException(
                 $"{what}: the style does not set {property.Name} with a brush in this state — " +
                 "an unpaired background/foreground is the spec-036 hover defect");
+        }
+
+        // ── ComboBox dropdown sweeps (the Aero2 wash bug, ComboBoxItem twin) ───
+
+        /// <summary>
+        /// The regression gate for the unreadable dropdown row. <see cref="ComboBoxTheming"/>'s item
+        /// styles set Background/Foreground through triggers, but the STOCK Aero2 ComboBoxItem
+        /// template paints its own ~12%-alpha highlight wash from a TEMPLATE trigger, which outranks
+        /// a TemplateBinding to the item's Background — so unless the style owns an item template the
+        /// accent fill never lands and SelectedText white sits on a near-white wash in Light theme.
+        /// Asserting colours alone would pass while the control still rendered the wash, so this
+        /// asserts template OWNERSHIP too. Twin of <see cref="AiAgentItemStyleTests"/> for ListBoxItem.
+        /// </summary>
+        [StaFact]
+        public void ComboBoxItemStyles_own_their_item_template()
+        {
+            foreach (var menu in new[] { false, true })
+            {
+                foreach (var theme in new[] { "Light", "Dark" })
+                {
+                    var style = ComboItemStyle(theme, menu);
+                    var what = (menu ? "menu" : "options") + "/" + theme;
+
+                    var item = new ComboBoxItem();
+                    item.ApplyTemplate();
+                    item.Style = style;
+
+                    Assert.True(item.Template != null,
+                        what + ": the ComboBoxItem style sets no ControlTemplate, so the stock Aero2 " +
+                        "highlight wash paints over every trigger-set Background (the invisible-row bug)");
+                    Assert.Equal(typeof(ComboBoxItem), item.Template!.TargetType);
+                    Assert.Equal(typeof(Border), item.Template.VisualTree.Type);
+
+                    // Behavioural half: the trigger-set selection brush must actually reach the item.
+                    item.IsSelected = true;
+                    var expected = menu ? PageThemeFor(theme).SelectionTint : PageThemeFor(theme).Selected;
+                    Assert.True(ReferenceEquals(expected, item.Background),
+                        what + ": selecting the row did not apply the style's selection brush");
+                }
+            }
+        }
+
+        [StaFact]
+        public void ComboBoxItems_Light_AllStates_MeetContrast() => AssertComboItemsAllStates("Light", menu: false);
+
+        [StaFact]
+        public void ComboBoxItems_Dark_AllStates_MeetContrast() => AssertComboItemsAllStates("Dark", menu: false);
+
+        [StaFact]
+        public void ComboBoxMenuItems_Light_AllStates_MeetContrast() => AssertComboItemsAllStates("Light", menu: true);
+
+        [StaFact]
+        public void ComboBoxMenuItems_Dark_AllStates_MeetContrast() => AssertComboItemsAllStates("Dark", menu: true);
+
+        /// <summary>
+        /// High Contrast for the Options dropdown, resolved at token level like the nav/search/agent
+        /// sweeps. The menu style is excluded on purpose: its normal row is Transparent and its
+        /// selection is an alpha TINT, neither of which is a traceable opaque token pairing — and
+        /// <see cref="ComboBoxTheming.ApplyMenuStyle(ComboBox)"/> is a documented no-op under High Contrast anyway.
+        /// </summary>
+        [StaFact]
+        public void ComboBoxItems_HighContrast_TokenPairs_MeetContrast()
+        {
+            var style = ComboItemStyle("Light", menu: false);
+            foreach (var (state, bg, fg) in ResolveComboPairs(style, "Light"))
+            {
+                AssertHcPair("combo", state, TokenForBrush(bg, navSurface: false), TokenForBrush(fg, navSurface: false));
+            }
+        }
+
+        private static void AssertComboItemsAllStates(string theme, bool menu)
+        {
+            var style = ComboItemStyle(theme, menu);
+            foreach (var (state, bg, fg) in ResolveComboPairs(style, theme))
+            {
+                AssertContrast((menu ? "menu-combo " : "combo ") + state, theme, bg, fg);
+            }
+        }
+
+        /// <summary>
+        /// Both item styles declare IsHighlighted before IsSelected, so a row that is selected AND
+        /// highlighted resolves to the selected pair (the later trigger wins both properties) — the
+        /// same ordering convention the search list documents.
+        /// </summary>
+        private static IEnumerable<(string State, SolidColorBrush Bg, SolidColorBrush Fg)> ResolveComboPairs(
+            Style style, string theme)
+        {
+            // The popup card paints SurfaceInput, so a Transparent row shows that through.
+            var surface = PageThemeFor(theme).Input;
+
+            var normalBg = RequiredSetterBrush(style.Setters, Control.BackgroundProperty, "normal/Background");
+            yield return ("normal",
+                Flatten(normalBg, surface),
+                RequiredSetterBrush(style.Setters, Control.ForegroundProperty, "normal/Foreground"));
+
+            var highlight = FindTrigger(style, ComboBoxItem.IsHighlightedProperty)
+                ?? throw new Xunit.Sdk.XunitException("highlighted state: no IsHighlighted trigger on the ComboBoxItem style");
+            yield return ("highlighted",
+                Flatten(RequiredSetterBrush(highlight.Setters, Control.BackgroundProperty, "highlighted/Background"), surface),
+                RequiredSetterBrush(highlight.Setters, Control.ForegroundProperty, "highlighted/Foreground"));
+
+            var selected = FindTrigger(style, ComboBoxItem.IsSelectedProperty)
+                ?? throw new Xunit.Sdk.XunitException("selected state: no IsSelected trigger on the ComboBoxItem style");
+            var sBg = Flatten(RequiredSetterBrush(selected.Setters, Control.BackgroundProperty, "selected/Background"), surface);
+            var sFg = RequiredSetterBrush(selected.Setters, Control.ForegroundProperty, "selected/Foreground");
+            yield return ("selected", sBg, sFg);
+            yield return ("selected+highlighted", sBg, sFg);
+        }
+
+        /// <summary>
+        /// Item styles come from the real public entry points, so the sweep covers the path the
+        /// dialog actually uses rather than a private builder that could drift away from it.
+        /// </summary>
+        private static Style ComboItemStyle(string theme, bool menu)
+        {
+            var combo = new ComboBox();
+            var pageTheme = PageThemeFor(theme);
+            if (menu) ComboBoxTheming.ApplyMenuStyle(combo, pageTheme);
+            else ComboBoxTheming.Apply(combo, pageTheme);
+            Assert.True(combo.ItemContainerStyle != null, "ComboBoxTheming set no ItemContainerStyle");
+            return combo.ItemContainerStyle!;
+        }
+
+        private static PageTheme PageThemeFor(string theme)
+            => string.Equals(theme, "Dark", StringComparison.OrdinalIgnoreCase) ? PageTheme.Dark : PageTheme.Light;
+
+        /// <summary>
+        /// Composites a translucent row brush (Transparent rows, the menu's alpha selection TINT)
+        /// over the surface behind it — contrast math on the raw colour would otherwise score a
+        /// colour no pixel ever shows.
+        /// </summary>
+        private static SolidColorBrush Flatten(SolidColorBrush overlay, SolidColorBrush under)
+        {
+            if (overlay.Color.A == 255) return overlay;
+            double a = overlay.Color.A / 255.0;
+            byte Mix(byte o, byte u) => (byte)Math.Round((o * a) + (u * (1 - a)));
+            var flat = new SolidColorBrush(Color.FromRgb(
+                Mix(overlay.Color.R, under.Color.R),
+                Mix(overlay.Color.G, under.Color.G),
+                Mix(overlay.Color.B, under.Color.B)));
+            flat.Freeze();
+            return flat;
+        }
+
+        // ── ThemedButton disabled-state sweep ──────────────────────────────────
+
+        /// <summary>
+        /// The regression gate for the vanishing disabled button caption. <see cref="ThemedButton"/>'s
+        /// disabled trigger repainted only the FACE, so a disabled PRIMARY button kept ApplyPrimary's
+        /// white Text.OnAccent over the muted surface — about 1.2:1 in Light, faded further by a
+        /// blanket Opacity — for the whole of every AI request, on the chat Send button, the
+        /// empty-state "Add AI agent" button and the update dialogs' install buttons.
+        /// <para>
+        /// Resolution is token-level: ThemedButton serves every window, so it paints through
+        /// DynamicResource token NAMES rather than PageTheme brushes; the setters therefore carry
+        /// <see cref="DynamicResourceExtension"/> values, resolved here through <see cref="ThemePalette"/>.
+        /// </para>
+        /// </summary>
+        [StaFact]
+        public void ThemedButton_Disabled_Light_PairsForegroundAndMeetsContrast() => AssertThemedButtonDisabled("Light");
+
+        [StaFact]
+        public void ThemedButton_Disabled_Dark_PairsForegroundAndMeetsContrast() => AssertThemedButtonDisabled("Dark");
+
+        private static void AssertThemedButtonDisabled(string theme)
+        {
+            var palette = string.Equals(theme, "Dark", StringComparison.OrdinalIgnoreCase)
+                ? ThemePalette.Dark
+                : ThemePalette.Light;
+
+            foreach (var kind in new[] { "primary", "secondary" })
+            {
+                var button = new Button();
+                if (kind == "primary") ThemedButton.ApplyPrimary(button);
+                else ThemedButton.ApplySecondary(button);
+
+                Assert.True(button.Template != null, kind + ": ThemedButton applied no template");
+
+                var disabled = Assert.Single(
+                    button.Template!.Triggers.OfType<Trigger>(),
+                    t => ReferenceEquals(t.Property, UIElement.IsEnabledProperty) && Equals(t.Value, false));
+
+                var bgToken = RequiredSetterToken(disabled.Setters, Control.BackgroundProperty,
+                    kind + " disabled/Background");
+                // The unpaired foreground IS the defect: without this setter the label keeps the
+                // enabled colour (white, for primary) over the disabled face.
+                var fgToken = RequiredSetterToken(disabled.Setters, Control.ForegroundProperty,
+                    kind + " disabled/Foreground");
+
+                AssertContrast(kind + " disabled", theme,
+                    PaletteBrush(palette, bgToken), PaletteBrush(palette, fgToken));
+
+                // A dimming Opacity composites the TEXT toward the face too, giving back exactly the
+                // contrast the token pairing just bought — so the pairing must stand on its own.
+                Assert.DoesNotContain(disabled.Setters.OfType<Setter>(), s =>
+                    ReferenceEquals(s.Property, UIElement.OpacityProperty)
+                    && s.Value is double d && d < 1.0);
+            }
+        }
+
+        /// <summary>
+        /// A token-name setter (<see cref="DynamicResourceExtension"/>), the form ThemedButton uses.
+        /// <see cref="RequiredSetterBrush"/>'s sibling for styles that cannot hold theme brushes.
+        /// Foreground is matched on <see cref="TextElement.ForegroundProperty"/> as well, because the
+        /// label is repainted through the inheritable property on the template's Border.
+        /// </summary>
+        private static string RequiredSetterToken(SetterBaseCollection setters, DependencyProperty property, string what)
+        {
+            foreach (var setterBase in setters)
+            {
+                if (!(setterBase is Setter s)) continue;
+                var matches = ReferenceEquals(s.Property, property)
+                    || (ReferenceEquals(property, Control.ForegroundProperty)
+                        && ReferenceEquals(s.Property, TextElement.ForegroundProperty));
+                if (matches && s.Value is DynamicResourceExtension dyn && dyn.ResourceKey is string token)
+                    return token;
+            }
+            throw new Xunit.Sdk.XunitException(
+                $"{what}: the trigger sets no {property.Name} token in this state — " +
+                "an unpaired background/foreground is the vanishing-caption defect");
+        }
+
+        private static SolidColorBrush PaletteBrush(ThemePalette palette, string token)
+        {
+            Assert.True(palette.Brushes.TryGetValue(token, out var brush),
+                $"palette has no entry for token {token}");
+            return (SolidColorBrush)brush!;
         }
 
         // ── Contrast math (WCAG 2.x relative luminance) ────────────────────────

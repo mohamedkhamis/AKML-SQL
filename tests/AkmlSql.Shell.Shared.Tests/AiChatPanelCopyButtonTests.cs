@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Shell.Shared.Ai;
 using Xunit;
@@ -28,8 +29,41 @@ namespace AkmlSql.Shell.Shared.Tests
     /// "AkmlSql ThemeRegistry" collection serialises them against the other panel classes).</para>
     /// </summary>
     [Collection("AkmlSql ThemeRegistry")]
-    public class AiChatPanelCopyButtonTests
+    public class AiChatPanelCopyButtonTests : IDisposable
     {
+        /// <summary>
+        /// Deterministic usable agent for the whole class. These tests build live panels whose
+        /// greeting/gating comes from config; reading the machine's REAL config.json made them
+        /// depend on the developer's agents AND flake whenever another test class redirected
+        /// the config path mid-run (empty config → no greeting bubble → copy buttons missing).
+        /// </summary>
+        private static readonly AppSettings SeededSettings = Seed();
+        private readonly Func<AppSettings>? _priorProvider;
+
+        public AiChatPanelCopyButtonTests()
+        {
+            _priorProvider = AiChatPanel.TestSettingsProvider;
+            AiChatPanel.TestSettingsProvider = () => SeededSettings;
+        }
+
+        public void Dispose() => AiChatPanel.TestSettingsProvider = _priorProvider;
+
+        private static AppSettings Seed()
+        {
+            var settings = new AppSettings();
+            settings.Ai.Agents.Add(new AiAgent
+            {
+                Id = "test-agent-1",
+                Name = "TestClaude",
+                Provider = "anthropic",
+                Model = "claude-sonnet-4-6",
+                ApiKey = "sk-test",
+                Enabled = true,
+            });
+            settings.Ai.ActiveAgentId = "test-agent-1";
+            return settings;
+        }
+
         [StaFact]
         public void Every_bubble_gets_a_copy_button_that_copies_the_whole_message()
         {
@@ -114,6 +148,61 @@ namespace AkmlSql.Shell.Shared.Tests
             Assert.Contains("Copied", button.Content?.ToString());
         }
 
+        /// <summary>Spec 037 (US3) T053 — FR-043: the copied conversation attributes each answer
+        /// to the agent that produced it, preserving turn order, the one-blank-line spacing, the
+        /// trailing trim, and the ✓ Copied flash.</summary>
+        [StaFact]
+        public void Copy_conversation_attributes_each_answer_to_its_own_agent()
+        {
+            var panel = new AiChatPanel();
+            SeedHistoryWithAgents(panel,
+                ("user", "what tables do I have?", null),
+                ("assistant", "You have Customers and Orders.", "Claude (work)"),
+                ("user", "same question, different model", null),
+                ("assistant", "The database contains 12 tables.", "Kimi"));
+
+            var button = Assert.Single(FindCopyButtons(panel, "Copy conversation"));
+            button.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+
+            var text = WithClipboardRetry(Clipboard.GetText).Replace("\r\n", "\n");
+            Assert.Contains("You:\nwhat tables do I have?", text);
+            Assert.Contains("Claude (work):\nYou have Customers and Orders.", text);
+            Assert.Contains("Kimi:\nThe database contains 12 tables.", text);
+            Assert.DoesNotContain("Assistant:", text);
+
+            // Order preserved, one blank line between turns, trailing whitespace trimmed.
+            Assert.True(text.IndexOf("Claude (work):", StringComparison.Ordinal)
+                        < text.IndexOf("same question", StringComparison.Ordinal),
+                "turn order must be preserved");
+            Assert.True(text.IndexOf("same question", StringComparison.Ordinal)
+                        < text.IndexOf("Kimi:", StringComparison.Ordinal),
+                "turn order must be preserved");
+            Assert.Contains("Orders.\n\nYou:", text);
+            Assert.False(text.EndsWith("\n", StringComparison.Ordinal), "the copy is trimmed");
+            Assert.Contains("Copied", button.Content?.ToString());
+        }
+
+        /// <summary>Spec 037 (US3) T053: an answer with no recorded agent name (an older engine)
+        /// keeps the pre-attribution "Assistant" speaker label rather than a guessed name.</summary>
+        [StaFact]
+        public void Copy_conversation_falls_back_to_Assistant_when_an_answer_has_no_agent_name()
+        {
+            var panel = new AiChatPanel();
+            SeedHistoryWithAgents(panel,
+                ("user", "first question", null),
+                ("assistant", "older-engine answer.", null),
+                ("user", "second question", null),
+                ("assistant", "attributed answer.", "Kimi"));
+
+            var button = Assert.Single(FindCopyButtons(panel, "Copy conversation"));
+            button.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+
+            var text = WithClipboardRetry(Clipboard.GetText).Replace("\r\n", "\n");
+            Assert.Contains("Assistant:\nolder-engine answer.", text);
+            Assert.Contains("Kimi:\nattributed answer.", text);
+            Assert.Contains("Copied", button.Content?.ToString());
+        }
+
         /// <summary>FR-019: a clipboard failure is surfaced on the button and the message stays
         /// re-copyable — the bubble is never removed. Uses a real clipboard lock (OpenClipboard)
         /// so the failure path is genuinely exercised.</summary>
@@ -177,6 +266,80 @@ namespace AkmlSql.Shell.Shared.Tests
             }
         }
 
+        // ── FR-019: a second click must not latch the feedback string ──────────
+
+        /// <summary>
+        /// <c>FlashButtonContent</c> used to capture whatever the button was showing as the
+        /// "original". A second click inside the 1.5 s window therefore captured the FEEDBACK
+        /// string and stacked a second timer: the first timer restored the true label, then the
+        /// second overwrote it with "✓ Copied" — permanently. The button then no longer said what
+        /// it did. Two new call sites in the insert path made this routinely reachable.
+        /// </summary>
+        [StaFact]
+        public void A_second_click_inside_the_flash_window_still_restores_the_true_label()
+        {
+            var panel = new AiChatPanel();
+            var button = Assert.Single(FindCopyButtons(panel, "Copy message"));
+            var trueLabel = button.Content?.ToString();
+            Assert.False(string.IsNullOrEmpty(trueLabel));
+
+            WithClipboardRetry(() => { Clipboard.SetText("sentinel"); return string.Empty; });
+
+            // Click twice, the second one well inside the first's 1.5 s countdown.
+            button.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+            var afterFirst = button.Content?.ToString();
+            button.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+
+            Assert.NotEqual(trueLabel, afterFirst);   // it really did flash
+
+            // Structural half: the stashed original must still be the TRUE label. Capturing the
+            // feedback string here is the defect, and it is observable before any timer fires.
+            Assert.Equal(trueLabel, StashedOriginal(button)?.ToString());
+
+            // Behavioural half: pump the dispatcher past the restart and the label comes back.
+            PumpFor(TimeSpan.FromMilliseconds(2200));
+            Assert.Equal(trueLabel, button.Content?.ToString());
+        }
+
+        /// <summary>
+        /// The true pre-flash content the panel stashed for <paramref name="button"/>, read out of
+        /// the per-button <c>ConditionalWeakTable</c>. Null when the button has never flashed.
+        /// </summary>
+        private static object? StashedOriginal(Button button)
+        {
+            var tableField = typeof(AiChatPanel).GetField("FlashStates",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            Assert.True(tableField != null, "AiChatPanel.FlashStates not found — renamed?");
+            var table = tableField!.GetValue(null)!;
+
+            var tryGet = table.GetType().GetMethod("TryGetValue");
+            var args = new object?[] { button, null };
+            Assert.True((bool)tryGet!.Invoke(table, args)!, "no flash state recorded for the button");
+
+            var state = args[1]!;
+            var originalField = state.GetType().GetField("Original",
+                BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
+            Assert.True(originalField != null, "FlashState.Original not found — renamed?");
+            return originalField!.GetValue(state);
+        }
+
+        /// <summary>
+        /// Runs the dispatcher for <paramref name="duration"/> so DispatcherTimer ticks actually
+        /// fire — a plain Thread.Sleep would block the very thread the timer posts to.
+        /// </summary>
+        private static void PumpFor(TimeSpan duration)
+        {
+            var frame = new System.Windows.Threading.DispatcherFrame();
+            var timer = new System.Windows.Threading.DispatcherTimer(
+                duration,
+                System.Windows.Threading.DispatcherPriority.Normal,
+                (_, __) => frame.Continue = false,
+                System.Windows.Threading.Dispatcher.CurrentDispatcher);
+            timer.Start();
+            try { System.Windows.Threading.Dispatcher.PushFrame(frame); }
+            finally { timer.Stop(); }
+        }
+
         // ── helpers ────────────────────────────────────────────────────────────
 
         /// <summary>The Windows clipboard is shared machine state; transient
@@ -198,7 +361,9 @@ namespace AkmlSql.Shell.Shared.Tests
             var method = typeof(AiChatPanel).GetMethod("AddAssistantMessage",
                 BindingFlags.NonPublic | BindingFlags.Instance);
             Assert.NotNull(method);
-            method!.Invoke(panel, new object[] { text, actions });
+            // Spec 037 (US3): the method gained optional agentName/selectedAgentName parameters
+            // for per-answer attribution; reflection must pass every parameter explicitly.
+            method!.Invoke(panel, new object?[] { text, actions, null, null });
         }
 
         private static void SeedHistory(AiChatPanel panel, params (string Role, string Content)[] turns)
@@ -209,6 +374,25 @@ namespace AkmlSql.Shell.Shared.Tests
             foreach (var (role, content) in turns)
             {
                 history.Add(new ChatTurnDto { Role = role, Content = content });
+            }
+        }
+
+        /// <summary>Spec 037 (US3, FR-043): seeds <c>_history</c> AND the parallel per-turn agent
+        /// name list the panel keeps for attribution. A null name is an unanswered/older-engine
+        /// turn — the copy falls back to "Assistant" for it.</summary>
+        private static void SeedHistoryWithAgents(AiChatPanel panel,
+            params (string Role, string Content, string? Agent)[] turns)
+        {
+            var historyField = typeof(AiChatPanel).GetField("_history", BindingFlags.NonPublic | BindingFlags.Instance);
+            var namesField = typeof(AiChatPanel).GetField("_historyAgentNames", BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.NotNull(historyField);
+            Assert.NotNull(namesField);
+            var history = (List<ChatTurnDto>)historyField!.GetValue(panel)!;
+            var names = (List<string?>)namesField!.GetValue(panel)!;
+            foreach (var (role, content, agent) in turns)
+            {
+                history.Add(new ChatTurnDto { Role = role, Content = content });
+                names.Add(agent);
             }
         }
 

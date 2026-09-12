@@ -1,7 +1,9 @@
+using System;
 using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using AkmlSql.Core.Config;
 using AkmlSql.Shell.Shared.Ai;
 using AkmlSql.Shell.Shared.Refactoring;
 using Xunit;
@@ -19,8 +21,37 @@ namespace AkmlSql.Shell.Shared.Tests
     /// the "AkmlSql ThemeRegistry" collection so the two panel classes never run in parallel.</para>
     /// </summary>
     [Collection("AkmlSql ThemeRegistry")]
-    public class AiChatSessionBindingTests
+    public class AiChatSessionBindingTests : IDisposable
     {
+        // Deterministic usable agent (same rationale as AiChatPanelCopyButtonTests: never the
+        // machine's real config.json — send must not be gated by an empty/raced config).
+        private static readonly AppSettings SeededSettings = Seed();
+        private readonly Func<AppSettings>? _priorProvider;
+
+        public AiChatSessionBindingTests()
+        {
+            _priorProvider = AiChatPanel.TestSettingsProvider;
+            AiChatPanel.TestSettingsProvider = () => SeededSettings;
+        }
+
+        public void Dispose() => AiChatPanel.TestSettingsProvider = _priorProvider;
+
+        private static AppSettings Seed()
+        {
+            var settings = new AppSettings();
+            settings.Ai.Agents.Add(new AiAgent
+            {
+                Id = "test-agent-1",
+                Name = "TestClaude",
+                Provider = "anthropic",
+                Model = "claude-sonnet-4-6",
+                ApiKey = "sk-test",
+                Enabled = true,
+            });
+            settings.Ai.ActiveAgentId = "test-agent-1";
+            return settings;
+        }
+
         [Fact]
         public void Real_session_resolution_returns_null_outside_a_shell_host()
         {

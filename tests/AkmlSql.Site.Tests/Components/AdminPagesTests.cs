@@ -1,6 +1,7 @@
 using AkmlSql.Site.Admin;
 using AkmlSql.Site.Analytics;
 using AkmlSql.Site.Components.Pages.Admin;
+using AkmlSql.Site.Telemetry;
 using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
@@ -245,6 +246,86 @@ public sealed class AdminPagesTests
         Assert.Contains("No visits recorded yet.", cut.Markup);
         Assert.Contains("No downloads recorded yet.", cut.Markup);
         Assert.Contains("No installer files present.", cut.Markup);
+    }
+
+    [Fact]
+    public void Errors_RendersStoredErrorsStatsAndLevelBreakdown()
+    {
+        using var dir = new TempDirectory();
+        using var store = new AnalyticsStore(Path.Combine(dir.Path, "analytics.db"));
+        var now = DateTimeOffset.UtcNow;
+        store.LogClientErrors(new ClientErrorBatch(
+        [
+            new ClientErrorInfo(now, now, "Error", "Parser blew up", "System.Exception: boom", "parser", "1.4.0", "ssms", "abcdef1234567890"),
+            new ClientErrorInfo(now, now, "Error", "Formatter crashed", null, "formatter", "1.4.0", "ssms", "abcdef1234567890"),
+            new ClientErrorInfo(now, now, "Warning", "Slow completion", null, "intellisense", "1.4.0", "ssms", "abcdef1234567890"),
+        ]));
+
+        using var ctx = new BunitContext();
+        ctx.Services.AddSingleton(store);
+
+        var cut = ctx.Render<AdminErrors>();
+
+        // Stat tiles: errors in window, distinct installs, top level.
+        var values = cut.FindAll(".admin-stat-value").Select(e => e.TextContent.Trim()).ToList();
+        Assert.Equal(["3", "1", "Error"], values);
+
+        // The recent table shows the stored rows; the install id is truncated to 8 characters.
+        Assert.Contains("Parser blew up", cut.Markup);
+        Assert.Contains("Slow completion", cut.Markup);
+        Assert.Contains("abcdef12", cut.Markup);
+        Assert.DoesNotContain("abcdef1234567890", cut.Markup);
+
+        // The stack is tucked behind <details>, and the severity breakdown table rendered.
+        Assert.NotNull(cut.Find("details summary"));
+        Assert.Contains("By severity level", cut.Markup);
+
+        // Navigation: back to the dashboard, and the window filter is rendered.
+        Assert.NotNull(cut.Find("a[href='/admin']"));
+        Assert.NotNull(cut.Find("a[href='/admin/errors?days=30'].is-current"));
+    }
+
+    [Fact]
+    public void Errors_LevelQuery_FiltersRecentRowsAndPreservesItselfInLinks()
+    {
+        using var dir = new TempDirectory();
+        using var store = new AnalyticsStore(Path.Combine(dir.Path, "analytics.db"));
+        var now = DateTimeOffset.UtcNow;
+        store.LogClientErrors(new ClientErrorBatch(
+        [
+            new ClientErrorInfo(now, now, "Error", "Parser blew up", null, "parser", "1.4.0", "ssms", "install-a"),
+            new ClientErrorInfo(now, now, "Warning", "Slow completion", null, "intellisense", "1.4.0", "ssms", "install-a"),
+        ]));
+
+        using var ctx = new BunitContext();
+        ctx.Services.AddSingleton(store);
+        var nav = ctx.Services.GetRequiredService<NavigationManager>();
+        // Lowercase on purpose: the page normalizes the query value to the canonical casing.
+        nav.NavigateTo(nav.GetUriWithQueryParameter("level", "warning"));
+
+        var cut = ctx.Render<AdminErrors>();
+
+        Assert.Contains("Slow completion", cut.Markup);
+        Assert.DoesNotContain("Parser blew up", cut.Markup);
+        // The selected level survives in the filter links (canonical casing).
+        Assert.Contains("level=Warning", cut.Markup);
+    }
+
+    [Fact]
+    public void Errors_EmptyStore_RendersEmptyStates()
+    {
+        using var dir = new TempDirectory();
+        using var store = new AnalyticsStore(Path.Combine(dir.Path, "analytics.db"));
+
+        using var ctx = new BunitContext();
+        ctx.Services.AddSingleton(store);
+
+        var cut = ctx.Render<AdminErrors>();
+
+        Assert.Contains("No client errors recorded in this window.", cut.Markup);
+        Assert.All(
+            cut.FindAll(".admin-stat-value").Take(2),
+            v => Assert.Equal("0", v.TextContent.Trim()));
     }
 
     /// <summary>Dashboard context: a real store plus a downloads folder inside <paramref name="dir"/>.</summary>

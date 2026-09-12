@@ -1,5 +1,6 @@
 using Xunit;
 using AkmlSql.Formatting.Layout;
+using AkmlSql.Formatting.Pipeline;
 using AkmlSql.Formatting.Profiles;
 using AkmlSql.Formatting.Rules;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
@@ -171,5 +172,67 @@ public class DmlRulesTests
 
         // FROM should be kept on same line
         Assert.Equal(BreakType.None, nodes[1].PrecedingBreak);
+    }
+
+    // ── Built-in khamis style: collapse gates ship off (SQL Prompt default) ──
+
+    [Fact]
+    public void KhamisProfile_ShortSelect_KeepsMultiLineLayout()
+    {
+        var profile = LoadKhamisStyle();
+        // Well under dml.collapseThreshold (160): collapsed to one line back when
+        // the built-in shipped with collapseShortStatements on.
+        const string sql = "select orderid, total from orders where total > 100;";
+
+        var result = new FormatterPipeline().Format(sql, profile);
+
+        Assert.True(result.ValidationPassed, result.FormattedText);
+        var lines = result.FormattedText.Replace("\r\n", "\n")
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        Assert.True(lines.Length >= 3,
+            $"Expected multi-line SELECT/FROM/WHERE layout, got:\n{result.FormattedText}");
+        Assert.Contains(lines, l => l.TrimStart().StartsWith("FROM", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(lines, l => l.TrimStart().StartsWith("WHERE", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void KhamisProfile_SubqueryBody_IndentsWithTabs()
+    {
+        var profile = LoadKhamisStyle();   // whitespace.tabStyle: tabsWhenPossible, tabSize 2
+        // Still comfortably under dml.collapseThreshold (160).
+        const string sql = "select customerid from customers c where exists (select 1 from orders o where o.customerid = c.customerid);";
+
+        var result = new FormatterPipeline().Format(sql, profile);
+
+        Assert.True(result.ValidationPassed, result.FormattedText);
+        // tabsWhenPossible: the expanded subquery body indents on the tab grid, not spaces.
+        Assert.Contains('\n', result.FormattedText);
+        Assert.Contains('\t', result.FormattedText);
+        Assert.DoesNotContain("\n  ", result.FormattedText);
+    }
+
+    [Fact]
+    public void KhamisProfile_ShortSelect_CollapsesOnlyWhenGateForcedOn()
+    {
+        // Guards against a vacuous multi-line assertion above: the same statement IS
+        // collapse-eligible (≤160 chars, no subquery) — flipping the gate on collapses it.
+        var profile = LoadKhamisStyle();
+        profile.Dml.CollapseShortStatements = true;
+        const string sql = "select orderid, total from orders where total > 100;";
+
+        var result = new FormatterPipeline().Format(sql, profile);
+
+        Assert.True(result.ValidationPassed, result.FormattedText);
+        Assert.DoesNotContain('\n', result.FormattedText.TrimEnd('\r', '\n'));
+    }
+
+    private static FormattingProfile LoadKhamisStyle()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !File.Exists(Path.Combine(dir.FullName, "AKML-SQL.slnx")))
+            dir = dir.Parent;
+        if (dir == null) throw new DirectoryNotFoundException("AKML-SQL.slnx not found");
+        var stylePath = Path.Combine(dir.FullName, "src", "AkmlSql.Formatting", "Profiles", "BuiltIn", "khamis-style.akmlstyle");
+        return ProfileSerializer.Deserialize(File.ReadAllText(stylePath));
     }
 }

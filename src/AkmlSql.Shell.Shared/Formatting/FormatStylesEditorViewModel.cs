@@ -44,6 +44,17 @@ namespace AkmlSql.Shell.Shared.Formatting
         private static string? _cachedSchemaJson;
 
         /// <summary>
+        /// Test seam: primes or clears the static schema cache. The cache deliberately outlives
+        /// the view-model (second-and-later editor opens short-circuit the schema IPC), so tests
+        /// need deterministic control over it.
+        /// </summary>
+        internal static void SetCachedSchemaForTests(int? version, string? json)
+        {
+            _cachedSchemaVersion = version;
+            _cachedSchemaJson = json;
+        }
+
+        /// <summary>
         /// Spec 033 (T002) — all engine IPC goes through this seam so tests can inject a fake.
         /// The default resolves <c>EngineLifecycle.Manager?.Client</c> at call time, preserving
         /// the pre-seam late-binding semantics.
@@ -146,12 +157,16 @@ namespace AkmlSql.Shell.Shared.Formatting
         /// <summary>
         /// Spec 020 T070 — non-null when the engine's stage-6 SemanticValidator rejected the
         /// formatted output. The view renders an inline warning bar above the preview pane.
+        /// Also the surface for preview PIPELINE failures (engine not connected, request
+        /// timeout, request error) — the pane must never sit silent on its placeholder.
+        /// The equality guard rate-limits a failure that repeats on every keystroke:
+        /// deterministic messages re-raise no PropertyChanged.
         /// </summary>
         private string? _previewValidationError;
         public string? PreviewValidationError
         {
             get => _previewValidationError;
-            private set { _previewValidationError = value; OnPropertyChanged(); }
+            private set { if (_previewValidationError != value) { _previewValidationError = value; OnPropertyChanged(); } }
         }
 
         // -----------------------------------------------------------------
@@ -362,6 +377,26 @@ namespace AkmlSql.Shell.Shared.Formatting
             return root.ToJsonString();
         }
 
+        /// <summary>Shown in the pane when the engine answered but returned no text to display.</summary>
+        private const string PreviewEmptyResponseText = "-- preview unavailable (the engine returned no text).";
+
+        private const string PreviewNotConnectedMessage = "Preview unavailable — the engine is not connected.";
+        private const string PreviewTimeoutMessage = "Preview unavailable — the request timed out.";
+
+        /// <summary>
+        /// Makes a preview failure visible: logs at Warning and puts a one-line reason in the
+        /// pane's warning bar, so the pane never sits silent on the placeholder. A failure from
+        /// a superseded request (a newer preview was queued while this one was in flight) is
+        /// dropped — the newer request owns the pane.
+        /// </summary>
+        private void ReportPreviewFailure(int sequence, string reason, string userMessage, Exception? ex = null)
+        {
+            if (sequence < _previewSequence) return; // superseded
+            if (ex != null) Log.Warning(ex, "FormatStylesEditor: preview {Reason}", reason);
+            else Log.Warning("FormatStylesEditor: preview {Reason}", reason);
+            PreviewValidationError = userMessage;
+        }
+
         /// <summary>
         /// Fire-and-forget request to refresh the preview. 100 ms debounce + supersession via
         /// monotonic sequence ID per <c>contracts/ipc-format-preview-debounce.md</c>.
@@ -395,7 +430,11 @@ namespace AkmlSql.Shell.Shared.Formatting
                     if (token.IsCancellationRequested) return;
                     if (sequence < _previewSequence) return; // superseded
 
-                    if (!_rpc.IsConnected) return;
+                    if (!_rpc.IsConnected)
+                    {
+                        ReportPreviewFailure(sequence, "engine not connected", PreviewNotConnectedMessage);
+                        return;
+                    }
 
                     var request = new FormatPreviewRequest
                     {
@@ -413,16 +452,29 @@ namespace AkmlSql.Shell.Shared.Formatting
                     // Discard if a newer request has been queued while we waited
                     if (sequence < _previewSequence) return;
 
-                    if (response != null && !string.IsNullOrEmpty(response.FormattedText))
+                    if (response != null)
                     {
-                        PreviewText = response.FormattedText;
+                        // Always apply: a response can carry ONLY a validation error (empty
+                        // FormattedText) — dropping it left the pane stuck on the placeholder.
+                        PreviewText = string.IsNullOrEmpty(response.FormattedText)
+                            ? PreviewEmptyResponseText
+                            : response.FormattedText!;
                         PreviewValidationError = response.ValidationError;
                     }
                 }
-                catch (OperationCanceledException) { /* superseded — fine */ }
+                catch (OperationCanceledException) when (token.IsCancellationRequested)
+                {
+                    // Our debounce token fired — genuinely superseded, stay silent.
+                }
+                catch (OperationCanceledException)
+                {
+                    // NOT our token: PipeRpcClient cancels its response TCS when the 2000 ms
+                    // request timeout fires — surface it instead of dying silently.
+                    ReportPreviewFailure(sequence, "request timed out", PreviewTimeoutMessage);
+                }
                 catch (Exception ex)
                 {
-                    Log.Debug(ex, "FormatStylesEditor: preview request failed");
+                    ReportPreviewFailure(sequence, "request failed", $"Preview unavailable — the request failed: {ex.Message}", ex);
                 }
             }, token);
         }
@@ -636,6 +688,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             {
                 await LoadProfilesAsync(cancellationToken).ConfigureAwait(false);
                 await LoadSchemaAsync(cancellationToken).ConfigureAwait(false);
+                await AutoSelectActiveProfileAsync().ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -646,6 +699,23 @@ namespace AkmlSql.Shell.Shared.Formatting
             {
                 IsLoading = false;
             }
+        }
+
+        /// <summary>
+        /// Spec 033 review — open the editor with the ACTIVE style already loaded: nothing else
+        /// selects a style at open, so without this the preview sits on its placeholder until
+        /// the user clicks. Goes through the normal <see cref="SelectProfileAsync"/> path (at
+        /// open nothing is dirty, so the dirty prompt cannot fire) — working values seed and
+        /// the initial preview queues. When no active style resolves (engine down, or a
+        /// config pointer naming a style the engine no longer lists), nothing is selected,
+        /// same as before.
+        /// </summary>
+        private async Task AutoSelectActiveProfileAsync()
+        {
+            if (_loadedProfileName != null || !_rpc.IsConnected) return;
+            var active = Profiles.FirstOrDefault(p => p.IsActive)?.Name;
+            if (active == null) return;
+            await SelectProfileAsync(active).ConfigureAwait(false);
         }
 
         // -----------------------------------------------------------------
@@ -1020,6 +1090,11 @@ namespace AkmlSql.Shell.Shared.Formatting
                 if (response.Cached && _cachedSchemaJson != null)
                 {
                     SchemaJson = _cachedSchemaJson;
+                    // The cache is static but the VM is recreated per window open — seed + queue
+                    // exactly like the cold path below, or every second-and-later open starts
+                    // with empty working values and never renders an initial preview.
+                    SeedWorkingValuesFromSchema(_cachedSchemaJson);
+                    QueuePreviewAsync();
                     return;
                 }
 
