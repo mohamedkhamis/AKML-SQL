@@ -128,6 +128,37 @@ public sealed class PrivacyPageTests : IDisposable
     }
 
     [Fact]
+    public void ItAttributesTheGeoDatabase()
+    {
+        using var ctx = NewCtx();
+
+        var cut = ctx.Render<Privacy>();
+
+        // DB-IP's IP-to-Country Lite is CC BY 4.0 and attribution is a LICENCE CONDITION, not a
+        // courtesy. Asserting it here means removing the credit breaks the build rather than
+        // quietly putting the site out of compliance.
+        Assert.Contains("DB-IP", cut.Markup, StringComparison.OrdinalIgnoreCase);
+        Assert.NotNull(cut.Find("a[href='https://db-ip.com']"));
+        Assert.NotNull(cut.Find("a[href='https://creativecommons.org/licenses/by/4.0/']"));
+    }
+
+    [Fact]
+    public void ItSaysTheLookupHappensOnTheServer()
+    {
+        using var ctx = NewCtx();
+
+        var cut = ctx.Render<Privacy>();
+
+        // The visitor's address never reaches a third-party geolocation API -- that is a real
+        // privacy property of the design and worth stating plainly.
+        //
+        // Asserted on fragments that do not span a source line break: Razor preserves the newline
+        // from the .razor file, so a longer contiguous phrase would fail on formatting alone.
+        Assert.Contains("offline database", cut.Markup, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("third-party geolocation service", cut.Markup, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void ItIsPubliclyReachable_AndNotNoIndexed()
     {
         using var ctx = NewCtx();
