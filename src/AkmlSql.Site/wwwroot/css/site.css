@@ -201,11 +201,24 @@ a:hover {
     line-height: 1.6;
 }
 
-/* Section headings inside a page body share the display treatment. */
+/* Section headings inside a page body share the display treatment.
+
+   NOTE the specificity: this is (0,1,2) -- one class, two elements -- so a panel rule written as
+   `.some-panel h2` at (0,1,1) LOSES to it. That is exactly how every panel heading on this site
+   ended up flush against its own content. Panel rules that need their own spacing must name the
+   panel class in the chain (see .admin-panel / .download-panel headings below), not assume they
+   win by being later in the file. */
 .page-body > section > h2 {
     margin: 0;
     font-size: var(--t-xl);
     letter-spacing: -0.01em;
+}
+
+/* (0,2,1) beats the (0,1,2) above on class count, so panelled headings get their spacing back
+   while keeping the shared type treatment. */
+.page-body > .admin-panel > h2,
+.page-body > .download-panel > h2 {
+    margin-bottom: var(--s-4);
 }
 
 /* --- Buttons --------------------------------------------------------------- */
@@ -1709,7 +1722,9 @@ html[data-akml-theme="light"] .card:hover {
 
 .admin-panel h2 {
     margin-top: 0;
+    margin-bottom: var(--s-4);
     font-size: 1.05rem;
+    line-height: 1.3;
 }
 
 .admin-tables {
@@ -2440,7 +2455,9 @@ html[data-akml-theme="light"] .card:hover {
 }
 
 .download-hero-meta {
-    margin: var(--s-4) 0 0;
+    margin: 0;
+    padding-top: var(--s-4);
+    border-top: 1px solid var(--akml-border-subtle);
     color: var(--akml-text-secondary);
     font-size: var(--t-sm);
 }
@@ -2451,35 +2468,70 @@ html[data-akml-theme="light"] .card:hover {
 }
 
 /* The primary action carries the platform and size on a second line, so the
-   visitor knows what they are about to get without hunting for it. */
+   visitor knows what they are about to get without hunting for it.
+
+   Generous padding is deliberate: this is the one control the whole page exists
+   for, and at 12px it read as cramped against its own two lines of text. */
 .btn-lg {
-    padding: var(--s-3) var(--s-5);
+    padding: var(--s-4) var(--s-6);
     font-size: var(--t-md);
-    line-height: 1.25;
+    line-height: 1.3;
     display: inline-flex;
     flex-direction: column;
     align-items: center;
-    gap: 2px;
+    gap: var(--s-1);
+    min-width: 15rem;
 }
 
 .btn-lg .btn-sub {
     font-size: var(--t-xs);
     font-weight: 400;
+    line-height: 1.2;
     opacity: 0.85;
 }
 
+/* The secondary action sits beside a two-line button, so it stretches to match
+   rather than floating against its top edge. */
+.cta-row .btn-lg + .btn {
+    align-self: stretch;
+}
+
+/* Breathing room around the primary action specifically. The generic .cta-row
+   rhythm is fine in a paragraph flow; the hero's CTA is the focal point and
+   earns more space above and below it. */
+.download-hero .cta-row {
+    margin-block: var(--s-6) var(--s-5);
+}
+
 .download-panel {
-    padding: var(--s-5);
-    margin-bottom: var(--s-4);
+    padding: var(--s-6) var(--s-5);
+    margin-bottom: var(--s-5);
     background-color: var(--akml-surface-panel);
     border: 1px solid var(--akml-border-subtle);
     border-radius: var(--akml-scalar-radius-m);
 }
 
+/* Specificity note, and the cause of the "no margin" bug this fixes:
+   `.page-body > section > h2 { margin: 0 }` above is (0,1,2) -- one class, two elements -- so a
+   plain `.download-panel > h2` at (0,1,1) LOST to it and every panel heading rendered flush
+   against its content. Naming the panel class in the descendant chain takes this to (0,2,1),
+   which wins on class count. */
 .download-panel > h2,
 .download-panel-summary {
-    margin: 0 0 var(--s-3);
+    margin: 0 0 var(--s-4);
     font-size: var(--t-lg);
+    line-height: 1.3;
+}
+
+/* Body content inside a panel needs its own rhythm -- the panel padding spaces the box, not the
+   paragraphs within it. */
+.download-panel > p {
+    margin: 0 0 var(--s-3);
+    max-width: 70ch;
+}
+
+.download-panel > p:last-child {
+    margin-bottom: 0;
 }
 
 /* A <summary> containing a heading keeps the document outline correct while
@@ -2496,7 +2548,15 @@ html[data-akml-theme="light"] .card:hover {
 
 .spec-table {
     width: 100%;
+    margin: 0;
     border-collapse: collapse;
+}
+
+/* .table-scroll sets its own margin-block; inside a panel the heading already
+   provides the space above, so collapse the duplicate. */
+.download-panel .table-scroll,
+.release-history .table-scroll {
+    margin-block: 0;
 }
 
 .spec-table th,
@@ -2517,6 +2577,10 @@ html[data-akml-theme="light"] .card:hover {
     padding-inline-end: var(--s-4);
     color: var(--akml-text-secondary);
     font-weight: 500;
+}
+
+.release-history {
+    margin-top: var(--s-7);
 }
 
 .release-table th[scope="col"] {

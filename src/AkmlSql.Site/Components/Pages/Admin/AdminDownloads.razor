@@ -4,6 +4,7 @@
 @using AkmlSql.Site.Admin
 @using AkmlSql.Site.Analytics
 @inject AnalyticsStore Store
+@inject GeoLookup Geo
 
 @* Spec 038 T069 (US3): downloads lead the portal, because downloads are what the owner asked to
    see. Country, version and trend — the three questions actually being asked.
@@ -52,17 +53,32 @@
 
 @if (!_hasAnyCountry && _summary.DownloadsWindow > 0)
 {
-    @* The single most useful thing this page can say on this deployment: the geo database has never
-       been installed, so every country reads "Unknown" and no amount of looking will change that. *@
+    @* Two very different situations produce the same all-Unknown table, and saying the wrong one is
+       worse than saying nothing: either no database is installed, or one is installed but no
+       download has been recorded since. The banner has to tell them apart -- it claimed the former
+       for hours after the database went live. *@
     <div class="notice" role="status">
-        <h2>No country data</h2>
-        <p>
-            Every download below is grouped under <strong>Unknown</strong> because the offline
-            country database is not installed on this server. Country is resolved when a download is
-            recorded, so installing it will not backfill existing rows — only downloads recorded
-            afterwards will have a country.
-        </p>
-        <p>Run <code>scripts/update-geoip.ps1</code> with a MaxMind licence key to enable it.</p>
+        @if (!_geoAvailable)
+        {
+            <h2>No country database installed</h2>
+            <p>
+                Every download below is grouped under <strong>Unknown</strong> because the offline
+                country database is not installed on this server.
+            </p>
+            <p>
+                Run <code>scripts/update-geoip.ps1</code> to install it — the default source needs
+                no account or licence key.
+            </p>
+        }
+        else
+        {
+            <h2>No country data yet</h2>
+            <p>
+                The country database <strong>is</strong> installed, but no download in this window
+                was recorded after it went live. Country is resolved when a download is recorded, so
+                earlier rows can never be given one — only downloads from now on will have a country.
+            </p>
+        }
     </div>
 }
 
@@ -152,6 +168,7 @@
     private IReadOnlyList<DownloadVersionRow> _versions = [];
     private bool _hasAnyCountry;
     private int _resolvedCountryCount;
+    private bool _geoAvailable;
 
     protected override void OnInitialized()
     {
@@ -161,5 +178,6 @@
         _versions = Store.GetDownloadsByVersion(Days, now);
         _hasAnyCountry = _countries.Any(c => c.CountryCode is not null);
         _resolvedCountryCount = _countries.Count(c => c.CountryCode is not null);
+        _geoAvailable = Geo.IsAvailable;
     }
 }
