@@ -650,7 +650,7 @@ country and by "downloaded" narrows every figure on screen.
 
 - [x] T083 [P] [US3] Write `tests/AkmlSql.Site.Tests/Admin/MetricsExportTests.cs`: each export contains only the filtered rows, the window and filters appear in the file name and a header row, exports with personal data carry the label, and `Cache-Control: no-store` is set (FR-026, FR-049, M6.1–M6.4, quickstart **S3.9**).
 
-- [ ] T084 **BLOCKED — needs `AKML_SITE_ADMIN_PASSWORD`.** Playwright is wired; `AkmlSql.Site.E2E.Tests.AdminPortalTests` covers this and skips without the password. [US3] Manually verify quickstart **S3.1** (country grouping answerable in under 15 s — SC-006) and **S3.3** (one individual's full history reachable in under 30 s — SC-007). Record in `specs/038-site-downloads-admin-portal/baseline.md`.
+- [x] T084 **Done — automated, not manual.** `AkmlSql.Site.E2E.Tests.AdminQuickstartTests` runs both scenarios against the deployed site with `AKML_SITE_ADMIN_PASSWORD` set, measuring SC-006 and SC-007 rather than eyeballing them; results in `baseline.md`. [US3] Verify quickstart **S3.1** (country grouping answerable in under 15 s — SC-006) and **S3.3** (one individual's full history reachable in under 30 s — SC-007). Record in `specs/038-site-downloads-admin-portal/baseline.md`.
 
 - [x] T085 [US3] Run the full site test suite and confirm green.
 
@@ -692,7 +692,7 @@ range chosen in one section still applies in another; confirm signing out blocks
 
 - [x] T093 [P] [US4] Add a test asserting `/admin/login` does **not** render the portal shell — a sign-in page must not display navigation to sections the visitor cannot reach (contract A3.5).
 
-- [ ] T094 **BLOCKED — needs `AKML_SITE_ADMIN_PASSWORD`.** Playwright is wired; `AkmlSql.Site.E2E.Tests.AdminPortalTests` covers this and skips without the password. [US4] Manually verify quickstart **S4.1** (every section from nav), **S4.4** (releases flags), **S4.5** (settings confirmation) and **S4.6** (overview and downloads at 400 px, no horizontal page scroll). Record in `specs/038-site-downloads-admin-portal/baseline.md`.
+- [x] T094 **Done — automated, not manual.** `AkmlSql.Site.E2E.Tests.AdminQuickstartTests` covers all four against the deployed site; S4.6 measures document overflow at 400 px rather than reading a screenshot. Results in `baseline.md`. [US4] Verify quickstart **S4.1** (every section from nav), **S4.4** (releases flags), **S4.5** (settings confirmation) and **S4.6** (overview and downloads at 400 px, no horizontal page scroll). Record in `specs/038-site-downloads-admin-portal/baseline.md`.
 
 - [x] T095 [US4] Run the full site test suite and confirm green.
 

@@ -205,7 +205,7 @@ read from the same options the store enforces.
 
 ## US3 — Downloads and people
 
-### S3.1 Country grouping **[MANUAL]**
+### S3.1 Country grouping **[AUTO]**
 
 Generate downloads from several countries (a VPN, or seed the store directly). Open
 `/admin/downloads`.
@@ -218,7 +218,7 @@ Downloads of two different installers group by `release_version`.
 
 **Pass**: FR-020.
 
-### S3.3 Individual detail **[MANUAL]**
+### S3.3 Individual detail **[AUTO]**
 
 Open one individual from `/admin/people`.
 
@@ -275,7 +275,7 @@ for that window are unchanged, and `ip`/`visitor_id` are null.
 
 ## US4 — Portal
 
-### S4.1 Every section from nav **[MANUAL]**
+### S4.1 Every section from nav **[AUTO]**
 
 Sign in; reach all seven sections without typing a URL.
 
@@ -295,19 +295,19 @@ Enumerate every route and export from §1 of the portal contract through
 
 **Pass**: FR-033, SC-011.
 
-### S4.4 Releases section **[MANUAL]**
+### S4.4 Releases section **[AUTO]**
 
 Open `/admin/releases`.
 
 **Pass**: advertised-but-missing and present-but-unadvertised both flagged (FR-034, A6.2, A6.3).
 
-### S4.5 Settings confirmation **[MANUAL]**
+### S4.5 Settings confirmation **[AUTO]**
 
 Change a setting.
 
 **Pass**: on-screen confirmation of what changed and when it takes effect (FR-035).
 
-### S4.6 Phone width **[MANUAL]**
+### S4.6 Phone width **[AUTO]**
 
 Overview and Downloads at 400 px.
 
@@ -376,8 +376,8 @@ Executed against the site deployed to `https://akml.khamis.work` by
 
 | Suite | Result |
 |---|---|
-| `AkmlSql.Site.Tests` (all `[AUTO]` scenarios) | **679 passed / 0 failed** |
-| `AkmlSql.Site.E2E.Tests` (Playwright, real browser) | **30 passed / 0 failed / 12 skipped** |
+| `AkmlSql.Site.Tests` (all `[AUTO]` scenarios) | **710 passed / 0 failed** |
+| `AkmlSql.Site.E2E.Tests` (Playwright, real browser) | **48 passed / 0 failed / 1 skipped** |
 | Theme drift gate (`generate-theme-css.ps1 -CheckOnly`) | green |
 | Full solution MSBuild Release | 0 errors |
 
@@ -397,6 +397,18 @@ Playwright tests in `tests/AkmlSql.Site.E2E.Tests/ConsentAndDownloadTests.cs` an
 | S5.5 withdraw and forget | `WithdrawingConsent_ClearsTheIdentityCookie` |
 | S2.1/S2.2 release visibility | `DownloadPage_AdvertisesOnlyTheConfiguredNumberOfReleases` |
 
+And the portal scenarios, in `tests/AkmlSql.Site.E2E.Tests/AdminQuickstartTests.cs` (these need
+`AKML_SITE_ADMIN_PASSWORD`; the class skips without it):
+
+| Scenario | Test |
+|---|---|
+| S4.1 every section from nav | `S4_1_EverySectionIsReachableFromTheNav_WithoutTypingAUrl` |
+| S3.1 country grouping in < 15 s | `S3_1_DownloadsByCountryIsRankedWithCountsAndShares_Within15Seconds` |
+| S3.3 individual detail in < 30 s | `S3_3_OneIndividualsFullHistoryIsReachable_Within30Seconds` |
+| S4.4 releases flags | `S4_4_ReleasesFlagsBothAdvertisedButMissing_AndPresentButUnadvertised` |
+| S4.5 settings confirmation | `S4_5_SavingASettingConfirmsWhatChangedAndWhenItTakesEffect` |
+| S4.6 phone width, portal | `S4_6_AtPhoneWidth_ThePageDoesNotScrollSideways_ButWideTablesDo` |
+
 `ConsentBar_DoesNotCoverTheDownloadButton` is the one no unit test could ever make: it reads the
 bounding boxes of the bar and the primary button and asserts they do not intersect. FR-043b says the
 bar blocks nothing; this is the only honest way to check it.
@@ -405,14 +417,22 @@ bar blocks nothing; this is the only honest way to check it.
 
 | Scenario | Why |
 |---|---|
-| S3.1, S3.3, S4.1, S4.4, S4.5 (portal views) | Need the real admin password. The 12 skipped E2E tests are exactly these; set `AKML_SITE_ADMIN_PASSWORD` and they run. |
 | S1.1, S1.2 (cold/warm timing) | Deliberately not CI gates — see the note below. |
+
+S3.1, S3.3, S4.1, S4.4, S4.5 and S4.6 used to be listed here. They were manual only because they
+needed the real admin password, which is a missing credential rather than a limit on what a browser
+can check. They are now `AkmlSql.Site.E2E.Tests.AdminQuickstartTests`: set
+`AKML_SITE_ADMIN_PASSWORD` and they run against the deployed site, with SC-006 and SC-007 measured
+rather than judged by eye. Without the password the class skips, so a machine with no credential
+still gets a green suite. Results in `baseline.md`.
 
 ## Known environmental caveats, confirmed on this run
 
-- **The geo database is absent.** Every country scenario reports "Unknown", which is correct degraded
-  behaviour and not a failure. `/admin/downloads` renders an explicit banner saying so. Country is
-  resolved at write time, so installing it later cannot backfill the 3,140 existing visits.
+- **The geo database is installed, and cannot backfill.** DB-IP IP-to-Country Lite is live on the
+  server (`scripts/update-geoip.ps1`, no account needed). Country is resolved WHEN A VISIT IS
+  RECORDED, so the 3,700+ visits that predate the install carry no country and never will —
+  `/admin/downloads` distinguishes that case from a missing database. Scenarios that need several
+  countries are therefore still thin on data: this deployment currently has one.
 - **Timing scenarios are not CI gates.** Measured cold start is ~1.0 s against a 3 s budget and warm
   render ~11 ms against 1 s. The cold-start fix removes the *trigger* (the 20-minute idle shutdown)
   rather than the cost, so a forced-kill measurement cannot show it moving. Recorded in

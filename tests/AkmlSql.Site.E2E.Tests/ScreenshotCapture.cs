@@ -34,7 +34,9 @@ public sealed class ScreenshotCapture(SiteFixture site)
             await page.ScreenshotAsync(new PageScreenshotOptions
             {
                 Path = Path.Combine(outputDir!, $"{name}.png"),
-                FullPage = false,
+                // Full page, not the fold: the thing most often under review is the vertical
+                // rhythm BETWEEN sections, and a fold-height crop hides all but the first gap.
+                FullPage = true,
             });
         }
 

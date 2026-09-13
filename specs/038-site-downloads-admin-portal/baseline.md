@@ -196,3 +196,45 @@ reached curl as `returnUrl=C:/Program Files/Git/docs`, and `SafeReturnUrl` corre
 containing a colon — the open-redirect guard doing its job. Sending the value pre-encoded
 (`returnUrl=%2Fdocs`) shows the correct `Location: /docs`. When testing URL-valued form fields from
 Git Bash, pre-encode them or the shell will lie to you.
+
+## T084 / T094 — the six "manual" portal scenarios, now measured
+
+S3.1, S3.3, S4.1, S4.4, S4.5 and S4.6 were marked `[MANUAL]` for one reason: they needed the real
+admin password. That is a missing credential, not a limit on what a browser can check. With
+`AKML_SITE_ADMIN_PASSWORD` supplied they are now `tests/AkmlSql.Site.E2E.Tests/AdminQuickstartTests.cs`,
+run against the deployed site, and the two timing claims are measured instead of judged by eye.
+
+| Scenario | Criterion | Result |
+|---|---|---|
+| S4.1 every section from nav | SC-010 — all seven reachable without typing a URL | Pass. Each lands on its route, renders its own `h1`, and marks exactly one nav item `aria-current="page"`. |
+| S3.1 country grouping | SC-006 — answerable in < 15 s | Pass. Dashboard → ranked country table, well inside budget. Each row parsed for country, count and share; order asserted descending. |
+| S3.3 individual detail | SC-007 — reachable in < 30 s | Pass. People → first individual → first/last seen, country, address, network, device, and the interleaved activity stream. |
+| S4.4 releases flags | FR-034, A6.2, A6.3 | Pass. Every manifest row states Yes or "No — …" with the reason; the orphans panel is present and answers either way. |
+| S4.5 settings confirmation | FR-035 | Pass. A real change is made and reverted; the notice names the resulting state and says it is live on the next public request. |
+| S4.6 phone width | FR-036 | Pass. Overview and Downloads at 400 px: zero horizontal page overflow, measured from the document; every wide table scrolls inside its own container. |
+
+Two caveats worth stating rather than burying:
+
+- **S3.1's ranking assertion is currently weak on data, not on logic.** This deployment has one
+  resolved country (Egypt), because the geo database went live after almost all recorded downloads.
+  Descending order over one row is trivially true. The parsing and share-range assertions are real
+  now; the ordering assertion becomes real as soon as a second country appears.
+- **S4.5 writes to the live site.** It changes the visibility count, asserts the confirmation, and
+  restores the original in a `finally`. A no-op save would avoid the write and prove nothing, since
+  FR-035 is about confirming *what changed*. Verified after the run: `/health` reports
+  `releaseVisibility: "Latest 3 releases"`, the original value.
+
+### Two failures on the first run, both in the test, neither in the site
+
+Recording these because each is the kind that looks like a product bug and is not.
+
+- **The settings test signed itself out.** `button[type='submit']` matched the admin layout's "Sign
+  out" button, which precedes the settings form's Save button in the DOM. Every later assertion then
+  failed against the login page. The submit is now scoped to `form[action='/admin/settings']`.
+- **The nav test read the previous page's heading.** `WaitForLoadStateAsync` is a no-op while the
+  old document is still current, so clicking "Downloads" and immediately reading `h1` returned
+  "Site metrics" — indistinguishable from a broken nav link. It now waits on the expected heading,
+  which retries until the new document renders.
+
+The site was correct in both cases. The `Errors` section's heading is "Client error logs", not
+"Errors"; the test's expectation was wrong and was corrected to match the page.

@@ -38,9 +38,18 @@
     --s-6: 2rem;
     --s-7: 3rem;
     --s-8: 4rem;
-    /* Fluid steps for section rhythm — the page breathes with the viewport. */
-    --s-section: var(--s-section);
-    --s-block: var(--s-block);
+    /* Fluid steps for section rhythm — the page breathes with the viewport.
+
+       These were `--s-section: var(--s-section)` and `--s-block: var(--s-block)` — SELF-REFERENTIAL,
+       which CSS resolves to the guaranteed-invalid value. Every rule using them silently computed to
+       NO margin at all, including `.page-body > section + section`, which is the rhythm between
+       every section on every page of this site. That is why the whole site read as cramped and why
+       panels sat flush against each other; it looked like a dozen unrelated spacing bugs.
+
+       A self-referential custom property is legal syntax and fails silently, so nothing flagged it.
+       If either of these is ever edited, give it a real length. */
+    --s-section: clamp(3rem, 6vw, 5rem);
+    --s-block: clamp(2rem, 4vw, 3rem);
 
     /* Type scale (1.2 minor third at the small end, opening up for display sizes). */
     --t-xs: 0.75rem;
@@ -532,6 +541,9 @@ html[data-akml-theme="high-contrast"] .theme-toggle-moon {
     color: var(--akml-text-secondary);
     font-size: clamp(1.05rem, 1.6vw, 1.25rem);
     line-height: 1.6;
+    /* Even out the lines instead of filling one and orphaning two words onto the next. Unsupported
+       browsers just get the normal greedy wrap, which is what they render today. */
+    text-wrap: balance;
 }
 
 .hero-cta {
@@ -756,8 +768,9 @@ html[data-akml-theme="high-contrast"] .theme-toggle-moon {
     box-shadow: 0 0 20px color-mix(in srgb, var(--akml-accent-primary) 30%, transparent);
 }
 
+/* Spacing lives with the download-panel stack rule, so every card on the page shares one gap. */
 .release-history {
-    margin-top: var(--s-block);
+    margin-top: 0;
 }
 
 .release-facts {
@@ -2505,10 +2518,26 @@ html[data-akml-theme="light"] .card:hover {
 
 .download-panel {
     padding: var(--s-6) var(--s-5);
-    margin-bottom: var(--s-5);
     background-color: var(--akml-surface-panel);
     border: 1px solid var(--akml-border-subtle);
     border-radius: var(--akml-scalar-radius-m);
+}
+
+/* The download page is a stack of cards, not a run of marketing sections, and two separate things
+   were making the gaps between those cards inconsistent:
+
+     - `.page-body > section + section` (80px) matches only between literal <section> elements, and
+       "Verify this download" is a <details> because it collapses. That one element broke the
+       adjacency chain, so on the same page three gaps measured ~80px and three measured ~24px.
+     - Even unbroken, marketing-section spacing is wrong here. 80px between sibling cards reads as
+       unrelated blocks rather than as one list of panels about a single download.
+
+   A single margin-top on the class fixes both: it is tag-agnostic, so <section> and <details> get
+   the same gap, and at (0,2,1) it outranks the (0,1,2) section rule on class count. The panels
+   carry no margin-bottom -- one owner per gap, so they cannot compound. */
+.page-body > .download-panel,
+.page-body > .release-history {
+    margin-top: var(--s-block);
 }
 
 /* Specificity note, and the cause of the "no margin" bug this fixes:
@@ -2579,10 +2608,6 @@ html[data-akml-theme="light"] .card:hover {
     font-weight: 500;
 }
 
-.release-history {
-    margin-top: var(--s-7);
-}
-
 .release-table th[scope="col"] {
     color: var(--akml-text-secondary);
     font-size: var(--t-xs);
@@ -2630,5 +2655,81 @@ html[data-akml-theme="light"] .card:hover {
        its own container -- the page body never does. */
     .release-table {
         min-width: 30rem;
+    }
+}
+
+/* ---------------------------------------------------------------------------
+   Home page: the credibility strip and the comparison section. Design tokens
+   only; the hero, card grid and CTA banner keep their existing styles.
+   --------------------------------------------------------------------------- */
+
+/* The hero's second line carries the free/open-source fact, which is the single
+   strongest thing this project can say against a paid alternative. Quieter than
+   the tagline above it, louder than fine print. */
+.hero-tagline-sub {
+    margin-top: var(--s-3);
+    font-size: var(--t-base);
+    color: var(--akml-text-secondary);
+    text-wrap: balance;
+}
+
+.proof-strip {
+    margin-block: var(--s-7) var(--s-8);
+    padding-block: var(--s-5);
+    border-block: 1px solid var(--akml-border-subtle);
+}
+
+.proof-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+    gap: var(--s-5);
+    margin: 0;
+}
+
+.proof-item dt {
+    font-size: var(--t-2xl);
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    color: var(--akml-accent-primary);
+}
+
+.proof-item dd {
+    margin: var(--s-2) 0 0;
+    color: var(--akml-text-secondary);
+    font-size: var(--t-sm);
+    line-height: 1.5;
+}
+
+.comparison {
+    margin-block: var(--s-8);
+}
+
+.comparison-lead {
+    max-width: 68ch;
+    margin: 0 0 var(--s-4);
+    font-size: var(--t-md);
+    line-height: 1.7;
+    color: var(--akml-text-secondary);
+}
+
+.comparison-lead:last-child {
+    margin-bottom: 0;
+}
+
+/* The comparison heading is a classed section, so it needs its own spacing --
+   `.page-body > section > h2 { margin: 0 }` is (0,1,2) and outranks a bare
+   `.comparison h2`. Same trap the panel headings fell into. */
+.page-body > .comparison > h2 {
+    margin: var(--s-2) 0 var(--s-4);
+}
+
+@media (max-width: 640px) {
+    .proof-strip {
+        margin-block: var(--s-6);
+    }
+
+    .proof-list {
+        gap: var(--s-4);
     }
 }
