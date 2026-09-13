@@ -1,7 +1,21 @@
 ﻿{
     "product":  "AKML SQL",
-    "generatedAt":  "2026-09-12T18:44:03Z",
+    "generatedAt":  "2026-09-13T09:39:42Z",
     "releases":  [
+                     {
+                         "version":  "1.26.0912.2043",
+                         "releasedAt":  "2026-09-13",
+                         "supportedHosts":  [
+                                                "SSMS 22",
+                                                "VS 2026"
+                                            ],
+                         "downloadUrl":  "downloads/AKMLSQLSetup-1.26.0912.2043.exe",
+                         "sha256Hash":  "3b2bec39c8324202a7f3c983ccfba7fe757cef35e61e7edc31c50ebaffbc3fcd",
+                         "releaseNotesUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases",
+                         "notesSummary":  "AKML SQL 1.26.0912.2043 installer for SSMS 22 and Visual Studio 2026 (95.86 MB).",
+                         "minimumOsVersion":  "10.0",
+                         "cdnUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases/download/v1.26.0912.2043/AKMLSQLSetup-1.26.0912.2043.exe"
+                     },
                      {
                          "version":  "1.26.0911.2219",
                          "releasedAt":  "2026-09-12",
