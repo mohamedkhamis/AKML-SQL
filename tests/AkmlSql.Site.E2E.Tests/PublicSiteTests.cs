@@ -236,15 +236,20 @@ public sealed class PublicSiteTests(SiteFixture site)
         var page = await context.NewPageAsync();
         await page.GotoAsync(SiteFixture.BaseUrl + "/download");
 
-        // DL-003: read from the file on disk, so it cannot be stale. Spec 038 moved the facts from
-        // a definition list into a scannable spec table.
-        Assert.Contains("Download size", await page.InnerTextAsync(".spec-table"));
+        // DL-003: read from the file on disk, so it cannot be stale. The facts now sit in a panel
+        // beside the download button rather than in a section below it — these are the questions
+        // asked BEFORE clicking, so they belong next to the control they inform.
+        var facts = await page.InnerTextAsync(".release-facts-panel");
+        Assert.Contains("Download size", facts, StringComparison.Ordinal);
+        Assert.Contains("Version", facts, StringComparison.Ordinal);
 
-        // Spec 038: verification is available rather than prominent — most visitors never check a
-        // checksum, so it sits behind a disclosure the way a vendor download page treats it. It
-        // must still be reachable and the copy affordance must still work once opened.
-        var verify = page.Locator("details.hash-block").First;
-        await verify.Locator("summary").ClickAsync();
+        // The digest is now shown outright rather than folded into a disclosure. A checksum nobody
+        // can see is a checksum nobody checks, and collapsing it also left the page looking empty.
+        // It must be visible without any interaction, and the copy affordance must still work.
+        await page.WaitForSelectorAsync("#latest-sha256", new PageWaitForSelectorOptions
+        {
+            State = WaitForSelectorState.Visible,
+        });
 
         var digest = await page.InnerTextAsync("#latest-sha256");
         Assert.Equal(64, digest.Trim().Length);

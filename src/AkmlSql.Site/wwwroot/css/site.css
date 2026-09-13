@@ -215,8 +215,8 @@ a:hover {
    NOTE the specificity: this is (0,1,2) -- one class, two elements -- so a panel rule written as
    `.some-panel h2` at (0,1,1) LOSES to it. That is exactly how every panel heading on this site
    ended up flush against its own content. Panel rules that need their own spacing must name the
-   panel class in the chain (see .admin-panel / .download-panel headings below), not assume they
-   win by being later in the file. */
+   panel class in the chain (see the .admin-panel heading rule below), not assume they win by being
+   later in the file. */
 .page-body > section > h2 {
     margin: 0;
     font-size: var(--t-xl);
@@ -224,9 +224,10 @@ a:hover {
 }
 
 /* (0,2,1) beats the (0,1,2) above on class count, so panelled headings get their spacing back
-   while keeping the shared type treatment. */
-.page-body > .admin-panel > h2,
-.page-body > .download-panel > h2 {
+   while keeping the shared type treatment. The download page's headings sit inside a wrapper
+   rather than directly under .page-body, so the rule above never reaches them and they set their
+   own type in the download section. */
+.page-body > .admin-panel > h2 {
     margin-bottom: var(--s-4);
 }
 
@@ -768,7 +769,8 @@ html[data-akml-theme="high-contrast"] .theme-toggle-moon {
     box-shadow: 0 0 20px color-mix(in srgb, var(--akml-accent-primary) 30%, transparent);
 }
 
-/* Spacing lives with the download-panel stack rule, so every card on the page shares one gap. */
+/* Spacing is owned by the download page's own rhythm rule, so every top-level block there shares
+   one gap. Left at 0 here rather than deleted: the class carries its own borders and type below. */
 .release-history {
     margin-top: 0;
 }
@@ -2446,14 +2448,29 @@ html[data-akml-theme="light"] .card:hover {
 }
 
 /* ---------------------------------------------------------------------------
-   Spec 038: download page, rebuilt in the shape a product download page usually
-   takes. One decisive call to action carrying the size, specs as a scannable
-   table, verification folded away until wanted, older versions in a table
-   rather than a stack of cards. Design tokens only.
+   Spec 038: download page.
+
+   The first rebuild stacked five full-width panels, each holding a sentence or
+   two. It turned about six facts into a 2,000px page and repeated the filename
+   and size three times over, which read as unfinished rather than spare.
+
+   This is the layout vendor download pages converge on, and for a reason: the
+   facts sit BESIDE the button (they are the questions asked before clicking,
+   not after), and everything below splits into a main column and a narrow one.
+   Two columns is what makes the page dense without being cramped -- a single
+   column of short sections can only ever be sparse or long.
+
+   Design tokens only.
    --------------------------------------------------------------------------- */
 .download-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.55fr) minmax(17rem, 1fr);
+    gap: var(--s-7);
+    align-items: start;
     padding: var(--s-6) var(--s-5);
-    margin-bottom: var(--s-5);
+    /* .release-card sets a bottom margin for the old stacked-card layout. The gap below the hero
+       is owned by .download-columns' margin-top; two owners for one gap is how gaps compound. */
+    margin-bottom: 0;
 }
 
 .download-hero h1 {
@@ -2461,23 +2478,10 @@ html[data-akml-theme="light"] .card:hover {
 }
 
 .download-hero-lead {
-    max-width: 58ch;
+    max-width: 52ch;
     margin: 0 0 var(--s-5);
     color: var(--akml-text-secondary);
     font-size: var(--t-lg);
-}
-
-.download-hero-meta {
-    margin: 0;
-    padding-top: var(--s-4);
-    border-top: 1px solid var(--akml-border-subtle);
-    color: var(--akml-text-secondary);
-    font-size: var(--t-sm);
-}
-
-.download-meta-sep {
-    margin-inline: var(--s-2);
-    opacity: 0.6;
 }
 
 /* The primary action carries the platform and size on a second line, so the
@@ -2511,68 +2515,202 @@ html[data-akml-theme="light"] .card:hover {
 
 /* Breathing room around the primary action specifically. The generic .cta-row
    rhythm is fine in a paragraph flow; the hero's CTA is the focal point and
-   earns more space above and below it. */
+   earns more space above it. */
 .download-hero .cta-row {
-    margin-block: var(--s-6) var(--s-5);
+    margin-block: var(--s-6) 0;
 }
 
-.download-panel {
-    padding: var(--s-6) var(--s-5);
+.download-hero-note {
+    max-width: 46ch;
+    margin: var(--s-5) 0 0;
+    color: var(--akml-text-secondary);
+    font-size: var(--t-sm);
+    line-height: 1.6;
+}
+
+/* ---- The facts panel beside the hero ---- */
+
+/* Elevated, not the plain panel ground: this sits INSIDE the hero card, which is already
+   --akml-surface-panel, and a panel on a panel is an invisible panel. */
+.release-facts-panel {
+    padding: var(--s-5);
+    background-color: var(--akml-surface-elevated);
+    border: 1px solid var(--akml-border-subtle);
+    border-radius: var(--akml-scalar-radius-m);
+}
+
+.release-facts-title {
+    margin: 0 0 var(--s-4);
+    /* `.release-card h2` sets the mono face, for the release cards that used a version number as
+       their heading. This is a label, not a version, so it takes the body face back. */
+    font-family: var(--f-sans);
+    color: var(--akml-text-secondary);
+    font-size: var(--t-xs);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+/* Each fact is one row with the label opposite the value, so the panel scans as
+   a table rather than as a list of sentences. Label-above-value would double
+   its height for no gain. */
+.release-facts-list {
+    margin: 0;
+    display: grid;
+    gap: var(--s-3);
+    font-size: var(--t-sm);
+}
+
+.release-facts-list > div {
+    display: grid;
+    grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+    gap: var(--s-3);
+    align-items: baseline;
+    padding-bottom: var(--s-3);
+    border-bottom: 1px solid var(--akml-border-subtle);
+}
+
+.release-facts-list > div:last-child {
+    padding-bottom: 0;
+    border-bottom: none;
+}
+
+.release-facts-list dt {
+    color: var(--akml-text-secondary);
+}
+
+.release-facts-list dd {
+    margin: 0;
+    justify-self: end;
+    text-align: right;
+    overflow-wrap: anywhere;
+}
+
+/* The filename is the one value long enough to fight the panel for width. */
+.release-facts-file {
+    font-size: var(--t-xs);
+}
+
+.release-facts-list .host-badges {
+    justify-content: flex-end;
+}
+
+/* ---- The two columns below the hero ---- */
+
+.download-columns {
+    display: grid;
+    grid-template-columns: minmax(0, 1.55fr) minmax(17rem, 1fr);
+    gap: var(--s-7);
+    align-items: start;
+}
+
+/* Rhythm between the page's top-level blocks. `.page-body > section + section` (80px) matches only
+   between literal <section> elements and carries marketing-section spacing, both wrong here: the
+   hero, the two-column body and the version history are one continuous document about a single
+   download, not three separate pitches. At (0,2,1) this outranks that (0,1,2) rule on class count,
+   and it is tag-agnostic, so the <div> wrapper cannot silently break the chain the way a <details>
+   element did in the previous layout. */
+.page-body > .download-columns,
+.page-body > .release-history {
+    margin-top: var(--s-block);
+}
+
+.download-main > .download-block + .download-block {
+    margin-top: var(--s-6);
+}
+
+.download-aside > .download-card + .download-card {
+    margin-top: var(--s-5);
+}
+
+/* The main column is plain sections on the page ground; only the aside is
+   carded. Boxing everything was what made the previous version monotonous --
+   with no contrast between a card and its surroundings, a card means nothing. */
+.download-block > p {
+    margin: 0 0 var(--s-3);
+    max-width: 70ch;
+}
+
+.download-block > p:last-child {
+    margin-bottom: 0;
+}
+
+.download-card {
+    padding: var(--s-5);
     background-color: var(--akml-surface-panel);
     border: 1px solid var(--akml-border-subtle);
     border-radius: var(--akml-scalar-radius-m);
 }
 
-/* The download page is a stack of cards, not a run of marketing sections, and two separate things
-   were making the gaps between those cards inconsistent:
-
-     - `.page-body > section + section` (80px) matches only between literal <section> elements, and
-       "Verify this download" is a <details> because it collapses. That one element broke the
-       adjacency chain, so on the same page three gaps measured ~80px and three measured ~24px.
-     - Even unbroken, marketing-section spacing is wrong here. 80px between sibling cards reads as
-       unrelated blocks rather than as one list of panels about a single download.
-
-   A single margin-top on the class fixes both: it is tag-agnostic, so <section> and <details> get
-   the same gap, and at (0,2,1) it outranks the (0,1,2) section rule on class count. The panels
-   carry no margin-bottom -- one owner per gap, so they cannot compound. */
-.page-body > .download-panel,
-.page-body > .release-history {
-    margin-top: var(--s-block);
-}
-
-/* Specificity note, and the cause of the "no margin" bug this fixes:
-   `.page-body > section > h2 { margin: 0 }` above is (0,1,2) -- one class, two elements -- so a
-   plain `.download-panel > h2` at (0,1,1) LOST to it and every panel heading rendered flush
-   against its content. Naming the panel class in the descendant chain takes this to (0,2,1),
-   which wins on class count. */
-.download-panel > h2,
-.download-panel-summary {
+/* Specificity note, and the cause of a "no margin" bug fixed earlier in this
+   spec: `.page-body > section > h2 { margin: 0 }` is (0,1,2) -- one class, two
+   elements -- so a plain `.download-card > h2` at (0,1,1) LOSES to it and every
+   heading renders flush against its own content. These chains are (0,2,1),
+   which wins on class count. Any new panel class needs the same treatment. */
+.download-columns .download-block > h2 {
     margin: 0 0 var(--s-4);
     font-size: var(--t-lg);
     line-height: 1.3;
 }
 
-/* Body content inside a panel needs its own rhythm -- the panel padding spaces the box, not the
-   paragraphs within it. */
-.download-panel > p {
-    margin: 0 0 var(--s-3);
+.download-columns .download-card > h2 {
+    margin: 0 0 var(--s-4);
+    font-size: var(--t-base);
+    line-height: 1.3;
+}
+
+/* ---- Install steps ---- */
+
+.download-steps {
+    margin: 0;
+    padding-left: var(--s-5);
+    display: grid;
+    gap: var(--s-4);
     max-width: 70ch;
 }
 
-.download-panel > p:last-child {
-    margin-bottom: 0;
+.download-steps li {
+    padding-left: var(--s-1);
+    line-height: 1.6;
 }
 
-/* A <summary> containing a heading keeps the document outline correct while
-   staying one clickable control. */
-.download-panel > summary {
-    cursor: pointer;
-    list-style-position: outside;
+.download-steps strong {
+    display: block;
 }
 
-.download-panel > summary .download-panel-summary {
-    display: inline;
+.download-note {
+    margin: var(--s-5) 0 var(--s-2);
+    color: var(--akml-text-secondary);
+    font-size: var(--t-sm);
+}
+
+/* A command line is read left to right and must never be silently clipped, so
+   it scrolls inside its own box rather than wrapping mid-switch. */
+.download-cmd {
+    display: block;
+    padding: var(--s-3) var(--s-4);
+    background-color: var(--akml-surface-panel);
+    border: 1px solid var(--akml-border-subtle);
+    border-radius: var(--akml-scalar-radius-s);
+    font-size: var(--t-sm);
+    overflow-x: auto;
+    white-space: nowrap;
+}
+
+/* ---- Link lists ---- */
+
+.download-links {
     margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: var(--s-3);
+    font-size: var(--t-sm);
+    max-width: 70ch;
+}
+
+.download-links li {
+    line-height: 1.5;
 }
 
 .spec-table {
@@ -2581,9 +2719,8 @@ html[data-akml-theme="light"] .card:hover {
     border-collapse: collapse;
 }
 
-/* .table-scroll sets its own margin-block; inside a panel the heading already
+/* .table-scroll sets its own margin-block; inside a section the heading already
    provides the space above, so collapse the duplicate. */
-.download-panel .table-scroll,
 .release-history .table-scroll {
     margin-block: 0;
 }
@@ -2620,6 +2757,20 @@ html[data-akml-theme="light"] .card:hover {
     padding-block: var(--s-3);
 }
 
+/* .spec-table sets `padding: var(--s-2) 0` -- no horizontal padding at all. On a wide viewport the
+   columns are far enough apart that it never shows, but once the table hits its 30rem min-width and
+   starts scrolling inside its container, adjacent cells touch: "1.26.0911.2219September 12, 2026".
+   Only the version/date table needs this; the spec table's two columns are explicitly sized. */
+.release-table th,
+.release-table td {
+    padding-inline-end: var(--s-5);
+}
+
+.release-table th:last-child,
+.release-table td:last-child {
+    padding-inline-end: 0;
+}
+
 .release-table-action {
     white-space: nowrap;
 }
@@ -2640,6 +2791,28 @@ html[data-akml-theme="light"] .card:hover {
     display: block;
     margin-top: var(--s-1);
     overflow-wrap: anywhere;
+}
+
+/* One breakpoint collapses both grids. Below roughly 62rem the narrow column is
+   too tight for a checksum, and its 17rem minimum would start forcing the page
+   itself to scroll sideways. */
+@media (max-width: 62rem) {
+    .download-hero,
+    .download-columns {
+        grid-template-columns: minmax(0, 1fr);
+        gap: var(--s-5);
+    }
+
+    /* Stacked, the facts panel reads better left-aligned -- right-aligned values
+       only make sense when a label sits opposite them across a narrow gutter. */
+    .release-facts-list dd {
+        justify-self: start;
+        text-align: left;
+    }
+
+    .release-facts-list .host-badges {
+        justify-content: flex-start;
+    }
 }
 
 @media (max-width: 640px) {

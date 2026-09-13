@@ -13,9 +13,19 @@
 
    Spec 038: rebuilt in the shape a product download page usually takes — one decisive call to
    action with the size on it, the specs as a scannable table rather than prose, verification
-   folded away until wanted, and older versions in a table instead of a stack of cards. The
-   previous layout buried the button under a definition list and a paragraph of SmartScreen
-   guidance. *@
+   folded away until wanted, and older versions in a table instead of a stack of cards.
+
+   Spec 038 follow-up: the stacked-cards version that replaced it had the opposite problem. Five
+   full-width panels, each holding one sentence, made a 2,000px page out of about six facts, and
+   half of them said the same thing twice — the filename and size appeared in the hero, in
+   "What's in this release", and again in Requirements. It read as unfinished rather than spare.
+
+   So: the facts move into a panel beside the hero, where they use the empty right half of the
+   page and answer "is this the right file" without scrolling. Everything below splits into a
+   main column (what changed, how to install, where to go next) and a narrow one (checksum, other
+   sources), which is the layout most vendor download pages settle on because it is dense without
+   being cramped. The checksum is now visible rather than collapsed: hiding it behind a disclosure
+   made the page look like it had nothing to say. *@
 
 <PageTitle>Download — AKML SQL</PageTitle>
 <HeadContent>
@@ -31,6 +41,11 @@
    no manifest at all — a broken primary CTA is worse than an honest "not available yet". *@
 @if (_latest is { } latest)
 {
+    var fileName = System.IO.Path.GetFileName(latest.DownloadUrl);
+
+    @* .release-card / .release-card-latest keep the accent-bordered treatment that marks the
+       current release, and they are also how the visibility tests count what the page offers:
+       one .release-card per downloadable release, here and in the history table. *@
     <section class="download-hero release-card release-card-latest" aria-labelledby="latest-release-heading">
         <div class="download-hero-main">
             <p class="eyebrow">Download</p>
@@ -44,7 +59,7 @@
                 @* DL-004: download-track.js upgrades this link to the CDN URL and beacons the click
                    to /dl-count — the visitor goes straight to the CDN, the metric still lands. *@
                 <a class="btn btn-primary btn-lg download-tracked" href="@ReleaseAvailability.TrackedUrl(latest)"
-                   data-file="@System.IO.Path.GetFileName(latest.DownloadUrl)"
+                   data-file="@fileName"
                    data-cdn-url="@latest.CdnUrl">
                     Download AKML SQL
                     @if (_latestSize is { } heroSize)
@@ -58,87 +73,170 @@
                 }
             </p>
 
-            <p class="download-hero-meta">
-                Version <strong>@latest.Version</strong>
-                <span class="download-meta-sep">·</span>
-                Released <time datetime="@latest.ReleasedAt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)">@latest.ReleasedAt.ToString("MMMM d, yyyy", CultureInfo.InvariantCulture)</time>
+            @* The facts panel beside this is taller than the column holding the button, which left
+               an empty block under the CTA. Rather than pad it, answer the two things a first-time
+               visitor wonders next: do I need an account, and do I have to pick the right build. *@
+            <p class="download-hero-note">
+                No account, no licence key. One installer detects every supported editor on the
+                machine and extends the ones you choose.
             </p>
         </div>
-    </section>
 
-    @if (latest.NotesSummary is not null)
-    {
-        <section class="download-panel" aria-labelledby="whats-new-heading">
-            <h2 id="whats-new-heading">What's in this release</h2>
-            <p>@latest.NotesSummary</p>
-        </section>
-    }
-
-    <section class="download-panel" aria-labelledby="requirements-heading">
-        <h2 id="requirements-heading">Requirements</h2>
-        <table class="spec-table">
-            <tbody>
-                <tr>
-                    <th scope="row">Supported hosts</th>
-                    <td>
+        @* The facts panel, not a "Requirements" section further down the page. These are the
+           questions asked BEFORE clicking — which version, how big, will it run here — so they
+           belong next to the button, not below three screens of prose. *@
+        <aside class="release-facts-panel" aria-labelledby="release-facts-heading">
+            <h2 id="release-facts-heading" class="release-facts-title">Release details</h2>
+            <dl class="release-facts-list">
+                <div>
+                    <dt>Version</dt>
+                    <dd><strong>@latest.Version</strong></dd>
+                </div>
+                <div>
+                    <dt>Released</dt>
+                    <dd>
+                        <time datetime="@latest.ReleasedAt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)">@latest.ReleasedAt.ToString("MMMM d, yyyy", CultureInfo.InvariantCulture)</time>
+                    </dd>
+                </div>
+                @* DL-003: download size is something people check before clicking. Read from the
+                   file, so it cannot be stale. *@
+                @if (_latestSize is { } size)
+                {
+                    <div>
+                        <dt>Download size</dt>
+                        <dd>@size</dd>
+                    </div>
+                }
+                <div>
+                    <dt>Supported hosts</dt>
+                    <dd>
                         <ul class="host-badges">
                             @foreach (var host in latest.SupportedHosts)
                             {
                                 <li>@host</li>
                             }
                         </ul>
-                    </td>
-                </tr>
+                    </dd>
+                </div>
                 @if (latest.MinimumOsVersion is not null)
                 {
                     @* U23: "Windows 10.0 or later" reads like an API version — trim a trailing ".0". *@
-                    <tr>
-                        <th scope="row">Operating system</th>
-                        <td>Windows @DisplayOsVersion(latest.MinimumOsVersion) or later</td>
-                    </tr>
+                    <div>
+                        <dt>Operating system</dt>
+                        <dd>Windows @DisplayOsVersion(latest.MinimumOsVersion) or later</dd>
+                    </div>
                 }
-                @* DL-003: download size is something people check before clicking. Read from the
-                   file, so it cannot be stale. *@
-                @if (_latestSize is { } size)
-                {
-                    <tr>
-                        <th scope="row">Download size</th>
-                        <td>@size</td>
-                    </tr>
-                }
-                <tr>
-                    <th scope="row">File</th>
-                    <td><code>@System.IO.Path.GetFileName(latest.DownloadUrl)</code></td>
-                </tr>
-            </tbody>
-        </table>
+                <div>
+                    <dt>License</dt>
+                    <dd><a href="https://github.com/mohamedkhamis/AKML-SQL/blob/master/LICENSE" target="_blank" rel="noopener noreferrer">MIT</a></dd>
+                </div>
+                <div>
+                    <dt>File</dt>
+                    <dd><code class="release-facts-file">@fileName</code></dd>
+                </div>
+            </dl>
+        </aside>
     </section>
 
-    @* Verification is standard practice but not something most visitors act on, so it is available
-       rather than prominent — the same treatment a vendor download page gives a checksum. *@
-    <details class="download-panel hash-block">
-        <summary><h2 class="download-panel-summary">Verify this download</h2></summary>
-        <p class="hash-hint">
-            Compare the SHA-256 of the file you downloaded against this digest.
-            @* U22: copy affordance — hidden by default, revealed by js/copy-hash.js
-               (CSP-clean external script, so no-JS users never see a dead button). *@
-            <button type="button" class="copy-hash-btn" data-copy-target="latest-sha256">Copy</button>
-        </p>
-        <code id="latest-sha256">@latest.Sha256Hash</code>
-        <p class="hash-hint">
-            In PowerShell:
-            <code class="hash-cmd">Get-FileHash .\@System.IO.Path.GetFileName(latest.DownloadUrl) -Algorithm SHA256</code>
-        </p>
-    </details>
+    <div class="download-columns">
+        <div class="download-main">
+            @if (latest.NotesSummary is not null)
+            {
+                <section class="download-block" aria-labelledby="whats-new-heading">
+                    <h2 id="whats-new-heading">What's new in @latest.Version</h2>
+                    <p>@latest.NotesSummary</p>
+                    @if (latest.ReleaseNotesUrl is not null)
+                    {
+                        <p>
+                            <a href="@latest.ReleaseNotesUrl" target="_blank" rel="noopener noreferrer">Read the full release notes</a>
+                        </p>
+                    }
+                </section>
+            }
 
-    <section class="download-panel" aria-labelledby="getting-started-heading">
-        <h2 id="getting-started-heading">Getting started</h2>
-        <p>
-            New here? The <a href="/docs">documentation</a> covers installation and first steps, and
-            the <a href="/features">feature overview</a> shows what the extension adds to SSMS and
-            Visual Studio.
-        </p>
-    </section>
+            @* Every step here is checked against the installer script rather than assumed.
+               CloseApplications=yes with CloseApplicationsFilter=Ssms.exe,devenv.exe means the
+               installer offers to close the editors itself, so telling people to close them first
+               would be wrong. The silent switches are the ones AkmlSqlSetup.iss actually parses:
+               ApplySilentTargets in environment-scanner.iss matches "ssms22" and "vs2026". *@
+            <section class="download-block" aria-labelledby="install-heading">
+                <h2 id="install-heading">Install</h2>
+                <ol class="download-steps">
+                    <li>
+                        <strong>Run the installer.</strong>
+                        It finds every supported editor on the machine and lets you choose which
+                        ones to extend.
+                    </li>
+                    <li>
+                        <strong>Let it close SSMS or Visual Studio if they are open.</strong>
+                        It writes into their extension folders, so it will offer to close them and
+                        reopen them afterwards.
+                    </li>
+                    <li>
+                        <strong>Open the Tools menu.</strong>
+                        AKML SQL is there. The first launch after installing rebuilds the editor's
+                        component cache, so give it a few seconds longer than usual.
+                    </li>
+                </ol>
+                <p class="download-note">
+                    Deploying to a fleet? Install without any prompts:
+                </p>
+                <code class="download-cmd">@fileName /VERYSILENT /ACCEPTEULA /TARGETS=ssms22,vs2026</code>
+            </section>
+
+            <section class="download-block" aria-labelledby="getting-started-heading">
+                <h2 id="getting-started-heading">Next steps</h2>
+                <ul class="download-links">
+                    <li>
+                        <a href="/docs">Documentation</a>
+                        — installation, configuration and every feature in detail.
+                    </li>
+                    <li>
+                        <a href="/features">Feature overview</a>
+                        — what the extension adds to SSMS and Visual Studio.
+                    </li>
+                    <li>
+                        <a href="/docs/topics/connecting">Connecting to a server</a>
+                        — the first thing to do once it is installed.
+                    </li>
+                </ul>
+            </section>
+        </div>
+
+        <aside class="download-aside">
+            @* Verification used to sit inside a collapsed <details>. Standard practice on a vendor
+               page is the opposite: show the digest. Collapsed, the panel rendered as a single bare
+               line of text and made the page look empty. *@
+            <section class="download-card hash-block" aria-labelledby="verify-heading">
+                <h2 id="verify-heading">Verify this download</h2>
+                <p class="hash-hint">
+                    SHA-256 of the installer.
+                    @* U22: copy affordance — hidden by default, revealed by js/copy-hash.js
+                       (CSP-clean external script, so no-JS users never see a dead button). *@
+                    <button type="button" class="copy-hash-btn" data-copy-target="latest-sha256">Copy</button>
+                </p>
+                <code id="latest-sha256">@latest.Sha256Hash</code>
+                <p class="hash-hint">Compare it against the file you downloaded:</p>
+                <code class="hash-cmd">Get-FileHash .\@fileName -Algorithm SHA256</code>
+            </section>
+
+            <section class="download-card" aria-labelledby="other-sources-heading">
+                <h2 id="other-sources-heading">Other sources</h2>
+                <ul class="download-links">
+                    <li>
+                        <a href="https://github.com/mohamedkhamis/AKML-SQL/releases" target="_blank" rel="noopener noreferrer">All releases on GitHub</a>
+                    </li>
+                    @if (_previousReleases.Count > 0)
+                    {
+                        <li><a href="#previous-releases-heading">Previous versions</a></li>
+                    }
+                    <li>
+                        <a href="https://github.com/mohamedkhamis/AKML-SQL" target="_blank" rel="noopener noreferrer">Source code</a>
+                    </li>
+                </ul>
+            </section>
+        </aside>
+    </div>
 
     @* U22: static SSR renders this into the page body; script-src 'self' allows it. *@
     <script src="@Assets["js/copy-hash.js"]" defer></script>
