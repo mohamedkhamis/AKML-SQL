@@ -1,4 +1,5 @@
 @page "/admin"
+@layout AdminLayout
 @using System.Globalization
 @using AkmlSql.Site.Admin
 @using AkmlSql.Site.Analytics
@@ -8,6 +9,7 @@
 @inject IOptions<DownloadsOptions> DownloadsConfig
 @inject GeoLookup Geo
 @inject IOptions<AnalyticsOptions> AnalyticsConfig
+@inject AkmlSql.Site.Settings.SiteSettingsStore SiteSettings
 
 @* Admin metrics dashboard. Static SSR; the charts are PURE CSS — bar heights come from the
    precomputed .bar-h-* bucket classes in site.css (strict CSP: no inline styles).
@@ -20,7 +22,8 @@
     <meta name="robots" content="noindex, nofollow" />
 </HeadContent>
 
-<div class="page-body container">
+@* Spec 038 (US4): AdminLayout now owns the page wrapper, the section navigation, the shared
+   reporting window and sign-out. This page keeps only what it actually reports. *@
 <header class="page-header admin-header-row">
     <div>
         <p class="eyebrow">Admin</p>
@@ -29,41 +32,27 @@
             Page visits and installer downloads over the last @AdminDashboardOptions.Label(_days).
             Automated traffic — crawlers and scripted clients — is excluded from the visitor figures and reported separately. Installer downloads still count a scripted fetch, which is a real acquisition.
         </p>
-        @* Kept accurate deliberately: the store now also keeps a truncated network prefix and a
-           derived location, so the old "hashes only" wording would be a false claim. *@
+        @* Spec 038 T096: this paragraph must state what the site ACTUALLY does. Before this feature
+           it read "full IP addresses are never stored ... No cookies are set for visitors" — both
+           halves became false the moment the consent gate shipped, and a false privacy claim shown
+           to the owner is how a false one ends up shown to visitors. Kept in step with
+           /privacy, which PrivacyPageTests pins to the same configured retention value. *@
         <p class="admin-privacy">
-            <strong>Privacy:</strong> full IP addresses are never stored. Each visit keeps a per-day
-            salted hash (for unique counting) and the network prefix only —
-            <code>@($"/{IpAnonymizer.IPv4PrefixBits}")</code> for IPv4,
-            <code>@($"/{IpAnonymizer.IPv6PrefixBits}")</code> for IPv6 — plus the country
-            derived from the address at write time — no city, region or finer location is kept. No cookies are set for visitors.
-            Data older than @_retentionDays days is deleted automatically.
+            <strong>Privacy:</strong> for visitors who <em>accept</em> tracking, the full IP address
+            and a persistent id cookie are stored for @_identifiableRetentionDays days, then erased
+            while the visit itself is kept. For everyone else — declined, or not yet answered —
+            neither is ever written: only a per-day salted hash (for unique counting), the network
+            prefix (<code>@($"/{IpAnonymizer.IPv4PrefixBits}")</code> IPv4,
+            <code>@($"/{IpAnonymizer.IPv6PrefixBits}")</code> IPv6) and the country derived at write
+            time. No city, region or finer location is ever kept.
+            Rows older than @_retentionDays days are deleted entirely.
         </p>
     </div>
-    <form method="post" action="/admin/logout" class="admin-signout">
-        <a href="/admin/errors" class="btn btn-secondary">Error logs</a>
-        <button type="submit" class="btn btn-secondary">Sign out</button>
-    </form>
 </header>
 
-@* ADM-003/007: range selector and export. Plain links, so both work without JavaScript. *@
-<nav class="admin-toolbar" aria-label="Reporting window">
-    <span class="admin-toolbar-label" id="range-label">Window</span>
-    <ul class="admin-ranges" aria-labelledby="range-label">
-        @foreach (var range in AdminDashboardOptions.Ranges)
-        {
-            <li>
-                @if (range == _days)
-                {
-                    <a href="/admin?days=@range" aria-current="true" class="is-current">@AdminDashboardOptions.Label(range)</a>
-                }
-                else
-                {
-                    <a href="/admin?days=@range">@AdminDashboardOptions.Label(range)</a>
-                }
-            </li>
-        }
-    </ul>
+@* ADM-007: export. The range selector itself moved to AdminLayout, which shares one window
+   across every portal section (FR-032). *@
+<nav class="admin-toolbar" aria-label="Export">
     <a class="admin-export" href="/admin/metrics.csv?days=@_days" download>Export CSV</a>
 </nav>
 
@@ -319,7 +308,6 @@
     </section>
 </div>
 
-</div>
 
 @code {
     private AnalyticsSummary _summary = null!;
@@ -327,6 +315,9 @@
     private int _days = AdminDashboardOptions.DefaultDays;
     private bool _geoAvailable;
     private int _retentionDays;
+
+    /// <summary>Spec 038: read from the live setting, so this paragraph cannot drift from behaviour.</summary>
+    private int _identifiableRetentionDays;
 
     /// <summary>
     /// ADM-003: reporting window from <c>?days=</c>; clamped, never trusted raw.
@@ -349,6 +340,7 @@
                 : null);
         _geoAvailable = Geo.IsAvailable;
         _retentionDays = AnalyticsConfig.Value.RetentionDays;
+        _identifiableRetentionDays = SiteSettings.Current.IdentifiableRetentionDays;
         _summary = Store.GetSummary(_days);
         _files = DownloadsInfo.List(DownloadsConfig.Value.Folder);
     }

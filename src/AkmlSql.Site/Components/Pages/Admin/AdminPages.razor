@@ -1,0 +1,106 @@
+@page "/admin/pages"
+@layout AdminLayout
+@using System.Globalization
+@using AkmlSql.Site.Admin
+@using AkmlSql.Site.Analytics
+@inject AnalyticsStore Store
+
+@* Spec 038 T074 (US3/FR-030): page-visit reporting, moved here from the dashboard.
+
+   The owner called these "fine but not important", so they are RETAINED IN FULL and simply no
+   longer lead the portal. Nothing was removed; the existing AnalyticsSummary shape is reused
+   unchanged rather than page-visit reporting being rebuilt. *@
+
+<PageTitle>Pages — AKML SQL Admin</PageTitle>
+
+<header class="page-header">
+    <p class="eyebrow">Admin</p>
+    <h1>Pages</h1>
+    <p class="page-intro">
+        Page visits over the last @AdminDashboardOptions.Label(Days).
+        Automated traffic — crawlers and scripted clients — is excluded from these figures and
+        reported separately below.
+    </p>
+</header>
+
+<section class="admin-stats" aria-label="Visit totals">
+    <div class="admin-stat">
+        <p class="admin-stat-value">@_summary.VisitsWindow.ToString("N0", CultureInfo.InvariantCulture)</p>
+        <p class="admin-stat-label">Visits</p>
+    </div>
+    <div class="admin-stat">
+        <p class="admin-stat-value">@_summary.Sessions.ToString("N0", CultureInfo.InvariantCulture)</p>
+        <p class="admin-stat-label">Sessions</p>
+    </div>
+    <div class="admin-stat">
+        <p class="admin-stat-value">@_summary.BounceRatePercent.ToString("0.#", CultureInfo.InvariantCulture)%</p>
+        <p class="admin-stat-label">Bounce rate</p>
+    </div>
+    <div class="admin-stat">
+        <p class="admin-stat-value">@_summary.PagesPerSession.ToString("0.0", CultureInfo.InvariantCulture)</p>
+        <p class="admin-stat-label">Pages / session</p>
+    </div>
+    <div class="admin-stat">
+        <p class="admin-stat-value">@_summary.AutomatedVisitsWindow.ToString("N0", CultureInfo.InvariantCulture)</p>
+        <p class="admin-stat-label">Automated</p>
+    </div>
+</section>
+
+<nav class="admin-toolbar" aria-label="Export">
+    <a class="admin-export" href="@AdminNav.WithRange("/admin/pages.csv", Days)" download>Export CSV</a>
+</nav>
+
+<Chart IdPrefix="visits" Title="Visits per day" Days="Days" Series="_summary.DailyVisits" />
+
+<div class="admin-tables">
+    <MetricTable Id="top-pages" Heading="Most visited" Rows="_summary.TopPages"
+                 KeyHeader="Page" Total="_summary.VisitsWindow"
+                 Empty="No page visits in this window." />
+
+    <MetricTable Id="entry-pages" Heading="Where people arrive" Rows="_summary.EntryPages"
+                 KeyHeader="Entry page" Empty="No sessions in this window." />
+
+    <MetricTable Id="exit-pages" Heading="Where people leave" Rows="_summary.ExitPages"
+                 KeyHeader="Exit page" Empty="No sessions in this window." />
+
+    <MetricTable Id="referrers" Heading="Top referrers" Rows="_summary.TopReferrers"
+                 KeyHeader="Host" Empty="No external referrers in this window." />
+
+    <MetricTable Id="referrer-urls" Heading="Referring pages" Rows="_summary.ReferrerUrls"
+                 KeyHeader="URL" Empty="No external referrers in this window." />
+
+    <MetricTable Id="campaigns" Heading="Campaigns" Rows="_summary.Campaigns"
+                 KeyHeader="Campaign" Empty="No campaign-tagged traffic in this window." />
+
+    <MetricTable Id="browsers" Heading="Browsers" Rows="_summary.BrowserMix"
+                 KeyHeader="Browser" Empty="No visits in this window." />
+
+    <MetricTable Id="devices" Heading="Devices" Rows="_summary.Devices"
+                 KeyHeader="Device" Empty="No visits in this window." />
+
+    <MetricTable Id="os" Heading="Operating systems" Rows="_summary.OperatingSystems"
+                 KeyHeader="OS" Empty="No visits in this window." />
+
+    <MetricTable Id="languages" Heading="Languages" Rows="_summary.Languages"
+                 KeyHeader="Language" Empty="No visits in this window." />
+
+    <MetricTable Id="slow-pages" Heading="Slowest pages (mean ms)" Rows="_summary.SlowestPages"
+                 KeyHeader="Page" CountHeader="ms" Empty="No timing data in this window." />
+
+    @* ADM-008: broken inbound links and stale bookmarks — the one failure the owner can act on. *@
+    <MetricTable Id="not-found" Heading="Missing pages (404)" Rows="_summary.TopNotFound"
+                 KeyHeader="Path" CountHeader="Requests"
+                 Empty="No 404s in this window." />
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "days")]
+    private string? DaysQuery { get; set; }
+
+    private int Days => AdminDashboardOptions.NormalizeDays(
+        int.TryParse(DaysQuery, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) ? parsed : null);
+
+    private AnalyticsSummary _summary = default!;
+
+    protected override void OnInitialized() => _summary = Store.GetSummary(Days, DateTimeOffset.UtcNow);
+}

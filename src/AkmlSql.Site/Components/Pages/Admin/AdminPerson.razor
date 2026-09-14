@@ -1,0 +1,160 @@
+@page "/admin/people/{VisitorId}"
+@layout AdminLayout
+@using System.Globalization
+@using AkmlSql.Site.Admin
+@using AkmlSql.Site.Analytics
+@using Microsoft.AspNetCore.Antiforgery
+@inject AnalyticsStore Store
+@inject IAntiforgery Antiforgery
+
+@* Spec 038 T071 (US3): one individual's history.
+
+   The activity stream is ONE interleaved list, not a visits table beside a downloads table. The
+   question being asked — "what did this person do" — is inherently chronological, and splitting it
+   makes the answer ("they read the docs twice, then downloaded") impossible to see. *@
+
+<PageTitle>Individual — AKML SQL Admin</PageTitle>
+
+@if (_detail is null)
+{
+    <header class="page-header">
+        <p class="eyebrow">Admin</p>
+        <h1>Individual not found</h1>
+        <p class="page-intro">
+            No records for this id in the last @AdminDashboardOptions.Label(Days). They may have been
+            deleted, or aged past the retention period, or the id may be wrong.
+        </p>
+    </header>
+    <p><a href="@AdminNav.WithRange("/admin/people", Days)">← Back to people</a></p>
+}
+else
+{
+    var summary = _detail.Summary;
+
+    <header class="page-header">
+        <p class="eyebrow">Admin · Individual</p>
+        <h1><code>@summary.ShortId</code></h1>
+        <p class="page-intro">
+            @summary.VisitCount.ToString("N0", CultureInfo.InvariantCulture) visit@(summary.VisitCount == 1 ? "" : "s")
+            and @summary.DownloadCount.ToString("N0", CultureInfo.InvariantCulture) download@(summary.DownloadCount == 1 ? "" : "s")
+            in the last @AdminDashboardOptions.Label(Days).
+        </p>
+    </header>
+
+    <p><a href="@AdminNav.WithRange("/admin/people", Days)">← Back to people</a></p>
+
+    <section class="admin-panel" aria-labelledby="who-heading">
+        <h2 id="who-heading">Who</h2>
+        <dl class="release-facts">
+            <dt>Identifier</dt>
+            <dd><code>@summary.VisitorId</code></dd>
+
+            <dt>First seen</dt>
+            <dd>@summary.FirstSeen.ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture)</dd>
+
+            <dt>Last seen</dt>
+            <dd>@summary.LastSeen.ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture)</dd>
+
+            <dt>Country</dt>
+            <dd>@(summary.Country ?? "Unknown")</dd>
+
+            @* FR-029: the full address, shown only here, only to an authenticated administrator. *@
+            <dt>IP address</dt>
+            <dd>@(summary.IpAddress ?? "— (erased at the retention boundary)")</dd>
+
+            <dt>Network</dt>
+            <dd>@(summary.NetworkPrefix ?? "—")</dd>
+
+            <dt>Device</dt>
+            <dd>@(summary.Device ?? "—") · @(summary.Os ?? "—") · @(summary.Browser ?? "—")</dd>
+        </dl>
+        <p class="admin-choice-hint">
+            This is one browser, not necessarily one person. The same human on a second device is a
+            separate individual, and this record cannot tell you which.
+        </p>
+    </section>
+
+    <section class="admin-panel" aria-labelledby="activity-heading">
+        <h2 id="activity-heading">Activity</h2>
+        @if (_detail.Activity.Count == 0)
+        {
+            <p class="admin-empty">No activity in this window.</p>
+        }
+        else
+        {
+            <div class="table-scroll">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">When</th>
+                            <th scope="col">What</th>
+                            <th scope="col">Page or file</th>
+                            <th scope="col">Came from</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var entry in _detail.Activity)
+                        {
+                            <tr>
+                                <td>@entry.Utc.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)</td>
+                                <td>@(entry.Kind == "download" ? "Download" : "Visit")</td>
+                                <td class="admin-key">
+                                    @entry.Target
+                                    @if (entry.ReleaseVersion is not null)
+                                    {
+                                        <span class="admin-choice-hint"> (@entry.ReleaseVersion)</span>
+                                    }
+                                </td>
+                                <td class="admin-key">@(entry.ReferrerUrl ?? entry.Campaign ?? "—")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+    @* FR-040: locate and delete everything for one individual, in one action. *@
+    <section class="admin-panel" aria-labelledby="delete-heading">
+        <h2 id="delete-heading">Delete this individual</h2>
+        <p>
+            Removes every visit and download recorded against this identifier, from both tables.
+            Immediate and irreversible. The totals on other pages will drop accordingly.
+        </p>
+        <form method="post" action="@($"/admin/people/{summary.VisitorId}/delete")">
+            @if (_requestToken is not null)
+            {
+                <input type="hidden" name="__RequestVerificationToken" value="@_requestToken" />
+            }
+            <input type="hidden" name="days" value="@Days" />
+            <button type="submit" class="btn btn-secondary">Delete all records for @summary.ShortId</button>
+        </form>
+    </section>
+}
+
+@code {
+    [Parameter]
+    public string VisitorId { get; set; } = "";
+
+    [SupplyParameterFromQuery(Name = "days")]
+    private string? DaysQuery { get; set; }
+
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
+    private int Days => AdminDashboardOptions.NormalizeDays(
+        int.TryParse(DaysQuery, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) ? parsed : null);
+
+    private IndividualDetail? _detail;
+    private string? _requestToken;
+
+    protected override void OnInitialized()
+    {
+        _detail = Store.GetIndividual(VisitorId, Days, DateTimeOffset.UtcNow);
+
+        if (HttpContext is not null)
+        {
+            _requestToken = Antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
+        }
+    }
+}

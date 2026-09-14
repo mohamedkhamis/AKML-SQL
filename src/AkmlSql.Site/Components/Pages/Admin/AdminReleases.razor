@@ -1,0 +1,192 @@
+@page "/admin/releases"
+@layout AdminLayout
+@using System.Globalization
+@using AkmlSql.Site.Admin
+@using AkmlSql.Site.Analytics
+@using AkmlSql.Site.Releases
+@using AkmlSql.Site.Settings
+@using Microsoft.Extensions.Options
+@inject ReleasesManifest Manifest
+@inject ReleaseAvailability Availability
+@inject SiteSettingsStore Settings
+@inject IOptions<DownloadsOptions> DownloadsConfig
+
+@* Spec 038 T088 (US4): what is advertised versus what is actually on disk.
+
+   This is the permanent answer to the question that needed a manual server check during
+   implementation: are the installers the manifest names actually there? Two failure modes get
+   flagged — advertised-but-missing (a dead primary CTA) and present-but-unadvertised (an old
+   installer quietly consuming disk; there is currently ~1.38 GB of them).
+
+   Read-only. Editing release metadata and uploading installers are explicitly out of scope. *@
+
+<PageTitle>Releases — AKML SQL Admin</PageTitle>
+
+<header class="page-header">
+    <p class="eyebrow">Admin</p>
+    <h1>Releases</h1>
+    <p class="page-intro">
+        @Manifest.Releases.Count release@(Manifest.Releases.Count == 1 ? "" : "s") in the manifest;
+        the public page currently advertises @_visible.Count.
+        Installer folder: <code>@_folder</code>
+    </p>
+</header>
+
+@if (_advertisedButMissing > 0)
+{
+    <div class="notice" role="alert">
+        <h2>@_advertisedButMissing release@(_advertisedButMissing == 1 ? "" : "s") cannot be downloaded</h2>
+        <p>
+            The manifest names @(_advertisedButMissing == 1 ? "a release" : "releases") with neither a
+            CDN mirror nor a local file. @(_advertisedButMissing == 1 ? "It is" : "They are")
+            hidden from the download page rather than offered as a dead link — but the manifest and
+            the folder disagree, which is worth fixing.
+        </p>
+    </div>
+}
+
+<section class="admin-panel" aria-labelledby="advertised-heading">
+    <h2 id="advertised-heading">In the manifest</h2>
+    <div class="table-scroll">
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th scope="col">Version</th>
+                    <th scope="col">Released</th>
+                    <th scope="col">CDN mirror</th>
+                    <th scope="col">Local file</th>
+                    <th scope="col" class="admin-num">Size</th>
+                    <th scope="col">Offered publicly</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var release in Manifest.Releases)
+                {
+                    var hasCdn = ReleaseAvailability.HasCdnMirror(release);
+                    var size = Availability.DisplaySize(release);
+                    var downloadable = Availability.IsDownloadable(release);
+                    var advertised = _visible.Any(r => r.Version == release.Version);
+
+                    <tr>
+                        <td class="admin-key">@release.Version</td>
+                        <td>@release.ReleasedAt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)</td>
+                        <td>@(hasCdn ? "Yes" : "No")</td>
+                        <td>@(size is not null ? "Yes" : "No")</td>
+                        <td class="admin-num">@(size ?? "—")</td>
+                        <td>
+                            @if (advertised)
+                            {
+                                <span>Yes</span>
+                            }
+                            else if (!downloadable)
+                            {
+                                <span class="admin-flag">No — not downloadable</span>
+                            }
+                            else
+                            {
+                                <span>No — hidden by the visibility setting</span>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <p class="admin-choice-hint">
+        Hidden releases stay reachable: a direct link published earlier still downloads and is still
+        counted. Change what is advertised on <a href="@AdminNav.WithRange("/admin/settings", Days)">Settings</a>.
+    </p>
+</section>
+
+<section class="admin-panel" aria-labelledby="orphans-heading">
+    <h2 id="orphans-heading">On disk but not in the manifest</h2>
+    @if (_orphans.Count == 0)
+    {
+        <p class="admin-empty">Every installer in the folder is named by a release. Nothing to clean up.</p>
+    }
+    else
+    {
+        <p>
+            @_orphans.Count file@(_orphans.Count == 1 ? "" : "s") no release references,
+            totalling @ReleaseAvailability.FormatSize(_orphanBytes). Safe to delete once no published
+            link points at them.
+        </p>
+        <div class="table-scroll">
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th scope="col">File</th>
+                        <th scope="col" class="admin-num">Size</th>
+                        <th scope="col">Modified</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var file in _orphans)
+                    {
+                        <tr>
+                            <td class="admin-key">@file.Name</td>
+                            <td class="admin-num">@ReleaseAvailability.FormatSize(file.Length)</td>
+                            <td>@file.Modified.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+@code {
+    [SupplyParameterFromQuery(Name = "days")]
+    private string? DaysQuery { get; set; }
+
+    private int Days => AdminDashboardOptions.NormalizeDays(
+        int.TryParse(DaysQuery, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) ? parsed : null);
+
+    private sealed record OrphanFile(string Name, long Length, DateTimeOffset Modified);
+
+    private string _folder = "";
+    private IReadOnlyList<Release> _visible = [];
+    private IReadOnlyList<OrphanFile> _orphans = [];
+    private long _orphanBytes;
+    private int _advertisedButMissing;
+
+    protected override void OnInitialized()
+    {
+        _folder = DownloadsConfig.Value.Folder;
+
+        var settings = Settings.Current;
+        _visible = ReleaseVisibility.Apply(settings.Visibility, settings.VisibilityCount, Manifest.Releases)
+            .Where(Availability.IsDownloadable)
+            .ToList();
+
+        _advertisedButMissing = Manifest.Releases.Count(r => !Availability.IsDownloadable(r));
+
+        var named = Manifest.Releases
+            .Select(r => Path.GetFileName(r.DownloadUrl))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        try
+        {
+            var orphans = new List<OrphanFile>();
+            foreach (var path in Directory.EnumerateFiles(_folder))
+            {
+                var name = Path.GetFileName(path);
+                if (named.Contains(name))
+                {
+                    continue;
+                }
+
+                var info = new FileInfo(path);
+                orphans.Add(new OrphanFile(name, info.Length, new DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero)));
+            }
+
+            _orphans = orphans.OrderByDescending(o => o.Length).ToList();
+            _orphanBytes = orphans.Sum(o => o.Length);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or DirectoryNotFoundException)
+        {
+            // An unreadable folder is a deployment problem, not a reason to fail the portal page.
+            _orphans = [];
+        }
+    }
+}

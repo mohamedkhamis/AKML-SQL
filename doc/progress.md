@@ -1494,3 +1494,99 @@ Multi-agent AI configuration: up to 20 named agents (provider + model + key + en
 Verification: every phase's build-and-suite checkpoint green — Core suite (T014, T097), full MSBuild + shell suite (T049, T089), full MSBuild + shell + Engine suites (T063, T077); the scripted quickstart portions ran per phase (T032, T062, T096).
 
 **Deferred / still manual**: the S2 "live request fails on configuration → `failed`" persistence transition (health is written by Test connection; a live request failure does not persist `failed`); quickstart scenarios 62/69a/70 (migrated key reuse without re-entry, previous release reading the mirrored flat fields, SSMS + VS side by side) are GUI-only and stay manual — executed once for T096, covered by no automated suite. Phase-9 polish tasks T103–T108 (SC-011/SC-012 perf budgets, format-parity + completion-corpus ratchet check, key-leak grep SC-009, the full 1–75 quickstart pass, one-pass solution build, Constitution V diff review) remain open at this entry's writing.
+
+## Spec 038 — Site Download Experience and Full Admin Portal (2026-09-12)
+
+Three deliverables against `src/AkmlSql.Site`: fix the download path, put release visibility under an
+owner setting, and grow `/admin` into a portal with per-country and per-individual download metrics.
+
+### What the investigation actually found
+
+The reported symptom was "the site takes a lot of time to start". **Measured on the live server, it
+does not.** Cold start (worker killed, exactly what `idleTimeout` does) is **1.01 s** against a 3 s
+budget; warm render is **12 ms** against 1 s; `/dl` answers in 15 ms and GitHub's CDN gives first
+byte in 257 ms at 3.9 MB/s. The 32 redundant filesystem probes per render cost approximately nothing
+once the OS file cache is warm. Numbers recorded in `specs/038-site-downloads-admin-portal/baseline.md`.
+
+The code defects found alongside are real and were fixed, but none of them is a multi-second delay:
+
+| Finding | Status |
+|---|---|
+| `ReleaseAvailability.IsDownloadable` demanded the LOCAL file even for releases with a working GitHub `cdnUrl` — all 16 current releases — so cleaning up an installer silently hides a release whose link works | Fixed; **latent**, not live (all 16 installers are present, ~1.38 GB) |
+| `Download.razor`'s `PreviousReleases` was an expression-bodied property evaluated twice per render, doubling every probe | Fixed: single pass, N+1 probes |
+| IIS: `startMode` empty, `idleTimeout` 20 min, `preloadEnabled` False — the worker dies after 20 idle minutes and the app is not initialised until a real request arrives | Fixed in `scripts/deploy-site-iis.ps1` |
+| **`GeoLite2-Country.mmdb` has never been installed** — 3,123 visits and 43 downloads, **zero with a country** | ⛔ **Blocker for the owner's primary requirement.** Needs a MaxMind key + `scripts/update-geoip.ps1`. Geo resolves at write time, so history cannot be backfilled |
+
+### The privacy reversal
+
+Clarification on 2026-09-12 took three decisions, all maximum-detail: store **full IP addresses**,
+identify visitors with a **persistent first-party cookie**, retain both for **365 days**. Two further
+answers followed: the consent request is shown to **every** visitor (no geo-gating) and is
+**non-blocking**. Those two together produce the smallest individuals list of any combination
+considered — accepted deliberately in favour of the download path, and written into contract C2.7 so
+it is not later "fixed" by making the prompt blocking or inferring consent from silence.
+
+This reversed a design the code asserted in six places. All six were corrected in the same change:
+`AnalyticsStore`, `IpAnonymizer`, `GeoLookup`, `AnalyticsModels`, the dashboard's visible privacy
+paragraph, and `appsettings.json`. The dashboard and `/privacy` both read the *configured* retention
+rather than a literal, so `PrivacyPageTests` fails the build if notice and behaviour drift.
+
+| Area | Change |
+|---|---|
+| Download path (US1) | CDN-aware availability with a countable probe seam; single-pass render; `MaintenanceHostedService` moves `Prune` + `ClearSameOriginReferrers` off the startup path (fail-fast singleton resolution deliberately stays inline); IIS `idleTimeout=0` + `preloadEnabled` + `applicationInitialization` warming `/health` |
+| Release visibility (US2) | `site_settings` table inside the existing `analytics.db`; `SiteSettingsStore` caches the value in memory so the render path never touches SQLite, and **falls back to the documented default rather than throwing** — a settings failure can neither break nor slow the primary CTA (FR-016a). Default is `LatestN`(3), never "all" |
+| Consent (US5) | Two independent cookies — `akml.consent` remembers the choice, `akml.vid` is issued only on acceptance, so refusing never requires accepting the thing being refused. `ConsentMiddleware` resolves state before visit tracking and **cannot reach `GeoLookup`** (asserted structurally). The gate is enforced **in the store**, not the call site: `LogVisit`/`LogDownload` write `ip`/`visitor_id` if and only if consent is granted, so a UI bug cannot cause collection |
+| Metrics (US3) | Downloads by country and by release version (version resolved at *write* time — the manifest is mutable); individuals list with country/downloaded filters and paging; one interleaved visit+download activity stream per individual; `CoverageSummary` reporting the unattributed share, which the People page leads with; two retention boundaries — `DeIdentify` nulls `ip`/`visitor_id` at 365 days keeping the row so country and version totals still reconcile, `Prune` deletes rows much later |
+| Portal (US4) | `AdminLayout` shell with persistent navigation driven by `AdminNav.Sections`; the reporting window travels in the query string via `AdminNav.WithRange` so it survives navigation with no session state; new Downloads, People, Person, Pages, Releases and Settings sections; page-visit metrics retained in full but demoted off the lead |
+| Security | `PortalAuthorizationTests` enumerates every portal route and export through `AdminBranchMiddleware`, driven from `AdminNav.Sections` so a section added later without a guard fails the build. `DisclosureBoundaryTests` sweeps log templates, public pages and `/health` for addresses and identifiers — **it caught a real leak introduced during implementation**: the admin delete endpoint was logging `{VisitorId}`, now the row count only. `ConsentRateLimit` bounds the two new public POSTs |
+
+Verification: site suite **679 passed / 0 failed** (baseline before this spec: 415), plus a new
+Playwright suite — `AkmlSql.Site.E2E.Tests` **30 passed / 12 skipped** against the deployed site (the
+skips are the admin-portal tests, which need `AKML_SITE_ADMIN_PASSWORD`). Debug and Release
+build clean, 0 warnings. Theme drift gate green — all new styling is in `site.css`, no generated
+theme CSS was touched. `appsettings.json` parses. `deploy-site-iis.ps1` parses.
+
+**Not done / blocked**: every wall-clock and browser scenario needs a human — T028 re-measure after
+deploy, T029/T030 phone-width and no-JS, T041/T058/T084/T094 manual quickstart passes. Also open:
+component tests for the new portal pages (T082, T091–T093), accessibility pass (T103), terminology
+normalisation (T106), full quickstart run (T108). Timing criteria SC-001/SC-002 are deliberately
+**not** CI gates — this repo already carries a known-drifting `PerformanceBaselineTests`, and adding
+more wall-clock assertions would produce another muted red rather than a signal. SC-003 is gated by
+counting probes instead.
+
+### Deployed and verified (2026-09-12, same day)
+
+Shipped to `https://akml.khamis.work` with `scripts/deploy-site-iis.ps1 -SkipRelease`.
+`Deploy-Build-Release.ps1` was deliberately **not** run: the change set contains no product code, and
+the full chain would have cut installer `1.26.0912.2038` and rewritten `update-manifest.json`,
+pushing a new version to every installed user's updater for a site-only change.
+
+**A regression this spec introduced, found by deploying it.** The T027 cold-start settings
+(`AlwaysRunning` + `preloadEnabled` + `idleTimeout=0`) broke the deploy script's file-lock strategy:
+IIS now restarts the application the instant `app_offline.htm` appears, re-acquiring the DLL locks
+inside robocopy's 3-second window. The mirror failed with robocopy 11, left `app_offline.htm` behind,
+and **took the site down for about two minutes**. `deploy-site-iis.ps1` now stops the app pool for
+the duration of the copy and restarts it *before* evaluating the robocopy result — so a failed mirror
+can never again leave the site stopped. Re-run clean: a 5-second offline window, all smoke tests green.
+
+**Consent copy.** The first version ran to two sentences and ~45 words. Replaced with the standard
+short form — "We use cookies and record basic usage data, including your IP address, to understand
+how AKML SQL is downloaded. *Privacy notice*." — with the durations and column-level detail one click
+away on `/privacy`. A test pins it at ≤ 30 words so it cannot creep back into a paragraph.
+
+**Browser coverage.** `tests/AkmlSql.Site.E2E.Tests/ConsentAndDownloadTests.cs` promotes eight
+previously manual-only quickstart scenarios to automated Playwright tests, including one no unit test
+could make: `ConsentBar_DoesNotCoverTheDownloadButton` reads both bounding boxes and asserts they do
+not intersect. FR-043b says the bar blocks nothing; that is the only honest way to check it.
+
+A latent red was also fixed: `AdminPortalTests.Dashboard_StatesWhatIsActuallyStored` still asserted
+`"never stored"` and `"No cookies"` and would have failed the moment anyone ran it with the admin
+password. Its assertions are now mirrored in `AdminPrivacyNoticeTests`, which runs without one.
+
+**Live state after deploy**: `/download` advertises 3 releases instead of 16 (page 21,173 → 12,837
+bytes); schema migrated in place with all 3,140 visits and 44 downloads intact (backup:
+`analytics.db.pre-spec038-20260912-203825.bak`); `idleTimeout` 0 and `preloadEnabled` true confirmed.
+
+**108/110 tasks complete.** The two open items are `T084`/`T094` — portal-view verification that needs
+`AKML_SITE_ADMIN_PASSWORD`; the Playwright tests for them exist and skip without it. The geo database
+remains the one blocker no code can clear: `scripts/update-geoip.ps1` with a MaxMind licence key.

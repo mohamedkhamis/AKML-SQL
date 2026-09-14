@@ -10,10 +10,14 @@ namespace AkmlSql.Site.Analytics;
 /// <para>
 /// City, region and timezone are deliberately not collected. Country answers the questions a
 /// product site actually has (where is the audience, is translation worth it, which timezone to
-/// release in) while city-level data narrows a visitor far more than that needs, and the least
-/// risky way to hold data you do not need is not to hold it. The Country edition of the database
-/// does not even contain the finer fields, so this is enforced at the source rather than by
-/// remembering not to read them.
+/// release in) while city-level data narrows a visitor far more than that needs. The Country
+/// edition of the database does not even contain the finer fields, so this is enforced at the
+/// source rather than by remembering not to read them.
+/// <para>
+/// This country-only choice still stands after spec 038, and is worth MORE now, not less: the site
+/// stores the full address for consenting visitors, so adding city-level resolution on top would
+/// compound two things that are each defensible alone.
+/// </para>
 /// </para>
 /// </summary>
 /// <param name="CountryCode">ISO 3166-1 alpha-2 ("EG", "GB"), or null.</param>

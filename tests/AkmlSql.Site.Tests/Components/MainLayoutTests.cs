@@ -1,5 +1,7 @@
 using AkmlSql.Site.Components.Layout;
+using AkmlSql.Site.Settings;
 using Bunit;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace AkmlSql.Site.Tests.Components;
@@ -9,12 +11,34 @@ namespace AkmlSql.Site.Tests.Components;
 /// toggle control in the header (progressive enhancement, inert without JS), skip link
 /// targeting the main landmark, and aria labels on the nav landmarks.
 /// </summary>
-public sealed class MainLayoutTests
+public sealed class MainLayoutTests : IDisposable
 {
+    private readonly TempDirectory _dir = new();
+
+    public void Dispose() => _dir.Dispose();
+
+    /// <summary>
+    /// Spec 038 (US5): MainLayout now renders the consent bar, which needs antiforgery and the
+    /// settings store (for the retention figure it quotes). Registered here so these layout tests
+    /// keep exercising the real composed layout rather than a stripped-down one.
+    /// </summary>
+    private BunitContext NewCtx()
+    {
+        var ctx = new BunitContext();
+        ctx.Services.AddAntiforgery();
+
+        var settings = new SiteSettingsStore(Path.Combine(_dir.Path, "settings.db"));
+        settings.CreateTableIfMissing();
+        settings.Load();
+        ctx.Services.AddSingleton(settings);
+
+        return ctx;
+    }
+
     [Fact]
     public void Header_RendersThemeToggleButton_WithAccessibleLabel()
     {
-        using var ctx = new BunitContext();
+        using var ctx = NewCtx();
 
         var cut = ctx.Render<MainLayout>(ps => ps.Add(p => p.Body, "<p>body</p>"));
 
@@ -29,7 +53,7 @@ public sealed class MainLayoutTests
     [Fact]
     public void SkipLink_TargetsMainContentLandmark()
     {
-        using var ctx = new BunitContext();
+        using var ctx = NewCtx();
 
         var cut = ctx.Render<MainLayout>(ps => ps.Add(p => p.Body, "<p>body</p>"));
 
@@ -41,7 +65,7 @@ public sealed class MainLayoutTests
     [Fact]
     public void HeaderNav_HasAriaLabel_AndAllPrimaryLinks()
     {
-        using var ctx = new BunitContext();
+        using var ctx = NewCtx();
 
         var cut = ctx.Render<MainLayout>(ps => ps.Add(p => p.Body, "<p>body</p>"));
 
@@ -59,7 +83,7 @@ public sealed class MainLayoutTests
         // Site redesign: the <=768px menu is a checkbox inside its label — no JS required.
         // The input is the real, keyboard-focusable control; CSS (:has(:checked)) opens the
         // panel and swaps the open/close icons.
-        using var ctx = new BunitContext();
+        using var ctx = NewCtx();
 
         var cut = ctx.Render<MainLayout>(ps => ps.Add(p => p.Body, "<p>body</p>"));
 
@@ -74,7 +98,7 @@ public sealed class MainLayoutTests
     {
         // Site redesign: multi-column footer (Product / Docs / Legal & source) with the
         // Support slot remaining a reserved comment (FR-010).
-        using var ctx = new BunitContext();
+        using var ctx = NewCtx();
 
         var cut = ctx.Render<MainLayout>(ps => ps.Add(p => p.Body, "<p>body</p>"));
 

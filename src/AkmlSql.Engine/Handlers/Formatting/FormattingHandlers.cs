@@ -173,4 +173,18 @@ namespace AkmlSql.Engine.Handlers.Formatting
         public Task<ProfileRenameResponse> HandleAsync(ProfileRenameRequest request, RpcContext ctx, CancellationToken ct)
             => Task.FromResult(_inner.HandleProfileRename(request));
     }
+
+    /// <summary>
+    /// Format Styles editor "Reset to built-in". Routes <see cref="MessageTypes.ProfileReset"/>
+    /// (37) to <see cref="FormatRequestHandler.HandleProfileReset"/>, responds on 137.
+    /// </summary>
+    public sealed class ProfileResetHandler : IRpcRequestHandler<ProfileResetRequest, ProfileResetResponse>
+    {
+        private readonly FormatRequestHandler _inner;
+        public ProfileResetHandler(FormatRequestHandler inner) => _inner = inner ?? throw new ArgumentNullException(nameof(inner));
+        public int RequestMessageType => MessageTypes.ProfileReset;
+        public int ResponseMessageType => MessageTypes.ProfileResetResult;
+        public Task<ProfileResetResponse> HandleAsync(ProfileResetRequest request, RpcContext ctx, CancellationToken ct)
+            => Task.FromResult(_inner.HandleProfileReset(request));
+    }
 }

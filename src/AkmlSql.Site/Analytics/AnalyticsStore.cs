@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using AkmlSql.Site.Consent;
 using AkmlSql.Site.Telemetry;
 using Microsoft.Data.Sqlite;
 
@@ -39,13 +40,15 @@ public sealed class AnalyticsOptions
 /// One shared connection guarded by a lock — writes arrive from a single background consumer and
 /// reads from the /admin dashboard, so contention is negligible. Parameterized commands only.
 /// <para>
-/// Privacy: the raw client IP is never persisted. The store writes
-/// <c>SHA256(ip | utc-date | per-install salt)</c>, where the salt is 32 random bytes generated
-/// once and kept next to the database in <c>salt.bin</c> — per-day hashes allow unique-visitor
-/// counting within a day without making IPs linkable across days or recoverable at rest.
+/// Privacy: the full client address is persisted only when the visitor has explicitly consented;
+/// for everyone else the <c>ip</c> column stays NULL. Always written are
+/// <c>SHA256(ip | utc-date | per-install salt)</c> (per-day hashes allow unique-visitor counting
+/// within a day without making IPs linkable across days or recoverable at rest; the salt is 32
+/// random bytes generated once and kept next to the database in <c>salt.bin</c>) and the
+/// truncated network prefix (/24 or /48).
 /// </para>
 /// </summary>
-public sealed class AnalyticsStore : IDisposable
+public sealed partial class AnalyticsStore : IDisposable
 {
     /// <summary>File name of the metrics database.</summary>
     public const string DatabaseFileName = "analytics.db";
@@ -128,6 +131,29 @@ public sealed class AnalyticsStore : IDisposable
     /// <summary>Idle gap that ends a session (the analytics convention).</summary>
     public const int SessionIdleMinutes = 30;
 
+    /// <summary>
+    /// Spec 038 T051 (US5): the consent gate, enforced HERE rather than only at the call site.
+    /// <para>
+    /// <c>ip</c> and <c>visitor_id</c> are written if and only if the visitor granted consent. A bug
+    /// in a page, a middleware, or a future caller must not be able to cause identifiable collection
+    /// — so the guard lives at the last point before the value reaches disk. Do not "simplify" this
+    /// by trusting the caller (contract C3.1).
+    /// </para>
+    /// </summary>
+    private static (object Ip, object VisitorId, string Consent) ConsentGated(
+        ConsentState consent, string? ipAddress, string? visitorId)
+    {
+        if (consent != ConsentState.Granted)
+        {
+            return (DBNull.Value, DBNull.Value, ConsentStates.ToStorageValue(consent));
+        }
+
+        return (
+            (object?)ipAddress ?? DBNull.Value,
+            (object?)visitorId ?? DBNull.Value,
+            ConsentStates.Granted);
+    }
+
     /// <summary>Records one page view, assigning it to a session.</summary>
     public void LogVisit(VisitInfo visit)
     {
@@ -144,11 +170,13 @@ public sealed class AnalyticsStore : IDisposable
                 "INSERT INTO visits (utc, day, path, referrer_host, ua_family, ip_hash, " +
                 "ip_prefix, country_code, country, " +
                 "device, os_family, os_version, browser_version, language, referrer_url, " +
-                "utm_source, utm_medium, utm_campaign, utm_term, utm_content, session_id, duration_ms) " +
+                "utm_source, utm_medium, utm_campaign, utm_term, utm_content, session_id, duration_ms, " +
+                "ip, visitor_id, consent) " +
                 "VALUES ($utc, $day, $path, $referrer, $ua, $hash, " +
                 "$prefix, $countryCode, $country, " +
                 "$device, $osFamily, $osVersion, $browserVersion, $language, $referrerUrl, " +
-                "$utmSource, $utmMedium, $utmCampaign, $utmTerm, $utmContent, $session, $duration);";
+                "$utmSource, $utmMedium, $utmCampaign, $utmTerm, $utmContent, $session, $duration, " +
+                "$ip, $visitorId, $consent);";
 
             command.Parameters.AddWithValue("$utc", FormatUtc(visit.Utc));
             command.Parameters.AddWithValue("$day", FormatDay(day));
@@ -174,6 +202,11 @@ public sealed class AnalyticsStore : IDisposable
             command.Parameters.AddWithValue("$utmContent", (object?)visit.Campaign.Content ?? DBNull.Value);
             command.Parameters.AddWithValue("$session", ResolveSessionId(hash, visit.Utc, visit.UaFamily));
             command.Parameters.AddWithValue("$duration", (object?)visit.DurationMs ?? DBNull.Value);
+
+            var gated = ConsentGated(visit.Consent, visit.IpAddress, visit.VisitorId);
+            command.Parameters.AddWithValue("$ip", gated.Ip);
+            command.Parameters.AddWithValue("$visitorId", gated.VisitorId);
+            command.Parameters.AddWithValue("$consent", gated.Consent);
             command.ExecuteNonQuery();
         }
     }
@@ -235,10 +268,12 @@ public sealed class AnalyticsStore : IDisposable
             command.CommandText =
                 "INSERT INTO downloads (utc, day, file, referrer_host, ua_family, ip_hash, " +
                 "ip_prefix, country_code, country, device, os_family, browser_version, " +
-                "language, referrer_url, utm_source, utm_medium, utm_campaign, session_id) " +
+                "language, referrer_url, utm_source, utm_medium, utm_campaign, session_id, " +
+                "ip, visitor_id, consent, release_version) " +
                 "VALUES ($utc, $day, $file, $referrer, $ua, $hash, " +
                 "$prefix, $countryCode, $country, $device, $osFamily, $browserVersion, " +
-                "$language, $referrerUrl, $utmSource, $utmMedium, $utmCampaign, $session);";
+                "$language, $referrerUrl, $utmSource, $utmMedium, $utmCampaign, $session, " +
+                "$ip, $visitorId, $consent, $releaseVersion);";
             command.Parameters.AddWithValue("$utc", FormatUtc(download.Utc));
             command.Parameters.AddWithValue("$day", FormatDay(day));
             command.Parameters.AddWithValue("$file", download.File);
@@ -258,6 +293,12 @@ public sealed class AnalyticsStore : IDisposable
             command.Parameters.AddWithValue("$utmCampaign", (object?)download.Campaign.Campaign ?? DBNull.Value);
             // Ties the install back to the browsing session that led to it.
             command.Parameters.AddWithValue("$session", ResolveSessionId(hash, download.Utc, download.UaFamily));
+
+            var gated = ConsentGated(download.Consent, download.IpAddress, download.VisitorId);
+            command.Parameters.AddWithValue("$ip", gated.Ip);
+            command.Parameters.AddWithValue("$visitorId", gated.VisitorId);
+            command.Parameters.AddWithValue("$consent", gated.Consent);
+            command.Parameters.AddWithValue("$releaseVersion", (object?)download.ReleaseVersion ?? DBNull.Value);
             command.ExecuteNonQuery();
         }
     }
@@ -567,6 +608,10 @@ public sealed class AnalyticsStore : IDisposable
                 CREATE INDEX IF NOT EXISTS ix_visits_day_ua ON visits (day, ua_family);
                 CREATE INDEX IF NOT EXISTS ix_client_errors_day ON client_errors (day);
                 CREATE INDEX IF NOT EXISTS ix_client_errors_day_level ON client_errors (day, level);
+                CREATE INDEX IF NOT EXISTS ix_visits_visitor ON visits (visitor_id, utc);
+                CREATE INDEX IF NOT EXISTS ix_downloads_visitor ON downloads (visitor_id, utc);
+                CREATE INDEX IF NOT EXISTS ix_downloads_day_country ON downloads (day, country);
+                CREATE INDEX IF NOT EXISTS ix_visits_day_country ON visits (day, country);
                 DROP INDEX IF EXISTS ix_visits_utc;
                 DROP INDEX IF EXISTS ix_downloads_utc;
                 """;
@@ -596,6 +641,9 @@ public sealed class AnalyticsStore : IDisposable
         ("utm_content", "TEXT"),
         ("session_id", "TEXT"),
         ("duration_ms", "INTEGER"),
+        ("ip", "TEXT"),               // full address — written only with consent, else NULL
+        ("visitor_id", "TEXT"),       // persistent akml.vid cookie id — consent only, else NULL
+        ("consent", "TEXT"),          // granted | denied | unknown — recorded on every row
     ];
 
     /// <summary>Acquisition context mirrored onto <c>downloads</c>.</summary>
@@ -613,6 +661,10 @@ public sealed class AnalyticsStore : IDisposable
         ("utm_medium", "TEXT"),
         ("utm_campaign", "TEXT"),
         ("session_id", "TEXT"),
+        ("ip", "TEXT"),               // full address — written only with consent, else NULL
+        ("visitor_id", "TEXT"),       // persistent akml.vid cookie id — consent only, else NULL
+        ("consent", "TEXT"),          // granted | denied | unknown — recorded on every row
+        ("release_version", "TEXT"),  // resolved at write time from the manifest by file name
     ];
 
     /// <summary>Removes a column that is no longer collected, if an older database still has it.</summary>
@@ -701,6 +753,82 @@ public sealed class AnalyticsStore : IDisposable
     /// ADM-004: deletes rows older than <paramref name="retentionDays"/>. Returns the number of
     /// rows removed. A non-positive retention keeps everything.
     /// </summary>
+    /// <summary>
+    /// Spec 038 T075 (US3): erases identifiable detail past the retention boundary, keeping the row.
+    /// <para>
+    /// <c>ip</c> and <c>visitor_id</c> are nulled <b>in place</b> rather than the rows deleted. That
+    /// is the whole point: country, version and daily totals for an old period must still reconcile
+    /// after the personal detail is gone (SC-008, contract M5.4). Deleting the rows would silently
+    /// change history every time the boundary moved.
+    /// </para>
+    /// <para>Idempotent: a second run affects zero rows.</para>
+    /// </summary>
+    /// <returns>Number of rows de-identified across both tables.</returns>
+    public int DeIdentify(int identifiableRetentionDays) =>
+        DeIdentify(identifiableRetentionDays, DateTimeOffset.UtcNow);
+
+    /// <summary>Testable overload of <see cref="DeIdentify(int)"/>.</summary>
+    public int DeIdentify(int identifiableRetentionDays, DateTimeOffset now)
+    {
+        if (identifiableRetentionDays <= 0)
+        {
+            return 0;
+        }
+
+        var boundary = FormatDay(DateOnly.FromDateTime(now.UtcDateTime).AddDays(-identifiableRetentionDays));
+
+        lock (_gate)
+        {
+            var affected = 0;
+            foreach (var table in (string[])["visits", "downloads"])
+            {
+                using var command = _connection.CreateCommand();
+                command.CommandText =
+                    $"UPDATE {table} SET ip = NULL, visitor_id = NULL " +
+                    "WHERE day < $boundary AND (ip IS NOT NULL OR visitor_id IS NOT NULL);";
+                command.Parameters.AddWithValue("$boundary", boundary);
+                affected += command.ExecuteNonQuery();
+            }
+
+            return affected;
+        }
+    }
+
+    /// <summary>
+    /// Spec 038 T077 (US3): removes every row belonging to one visitor, across both tables.
+    /// <para>
+    /// Used by the visitor's own withdrawal (<c>POST /privacy/forget</c>) and by the owner's delete
+    /// action. Rows are deleted outright, not de-identified: a deletion request means nothing should
+    /// remain that could re-link the person (FR-040, contract C4.3).
+    /// </para>
+    /// </summary>
+    /// <returns>Number of rows deleted across both tables.</returns>
+    public int DeleteVisitor(string visitorId)
+    {
+        if (string.IsNullOrWhiteSpace(visitorId))
+        {
+            return 0;
+        }
+
+        lock (_gate)
+        {
+            using var transaction = _connection.BeginTransaction();
+            var deleted = 0;
+
+            foreach (var table in (string[])["visits", "downloads"])
+            {
+                using var command = _connection.CreateCommand();
+                command.Transaction = transaction;
+                command.CommandText = $"DELETE FROM {table} WHERE visitor_id = $visitorId;";
+                command.Parameters.AddWithValue("$visitorId", visitorId);
+                deleted += command.ExecuteNonQuery();
+            }
+
+            transaction.Commit();
+            return deleted;
+        }
+    }
+
     public int Prune(int retentionDays) => Prune(retentionDays, DateTimeOffset.UtcNow);
 
     /// <summary>Retention prune anchored at <paramref name="now"/> (injectable for tests).</summary>
@@ -753,7 +881,7 @@ public sealed class AnalyticsStore : IDisposable
     /// deliberate kind — so only crawlers are excluded here. Counting those as installs would be
     /// as wrong as counting a crawler's page hit as a reader.
     /// </summary>
-    private const string RealDownloadOnly = "(ua_family IS NULL OR ua_family <> 'bot')";
+    internal const string RealDownloadOnly = "(ua_family IS NULL OR ua_family <> 'bot')";
 
     private long CountRows(
         string table,

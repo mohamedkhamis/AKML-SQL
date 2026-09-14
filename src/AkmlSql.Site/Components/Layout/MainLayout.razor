@@ -88,6 +88,10 @@
     @Body
 </main>
 
+@* Spec 038 (US5): non-blocking consent request. Placed AFTER <main> in document order so it never
+   precedes or obscures page content -- the download button above all (FR-043b). *@
+<ConsentBar />
+
 <footer class="site-footer">
     <div class="site-footer-inner container">
         <div class="site-footer-brand">
@@ -125,6 +129,7 @@
         <nav class="site-footer-col" aria-label="Legal and source code">
             <h2 class="site-footer-heading">Legal &amp; source</h2>
             <ul class="site-footer-list">
+                <li><a href="/privacy">Privacy</a></li>
                 <li><a href="https://github.com/mohamedkhamis/AKML-SQL/blob/master/LICENSE.txt" target="_blank" rel="noopener noreferrer">MIT License</a></li>
                 <li><a href="https://github.com/mohamedkhamis/AKML-SQL" target="_blank" rel="noopener noreferrer">Source on GitHub</a></li>
                 <!-- FR-010: reserved slot for the future "Support" footer link. -->

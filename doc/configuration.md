@@ -366,3 +366,65 @@ To change the log level without editing JSON directly, set `logMinimumLevel` in 
 ```json
 { "logMinimumLevel": "Information" }
 ```
+
+## Site settings (spec 038)
+
+The product site (`src/AkmlSql.Site`) has its own owner-editable settings, stored in a
+`site_settings` table inside the **same** `analytics.db` the metrics use — not in `appsettings.json`.
+Writing to the deployed config file would restart the application on every settings change, turning
+a one-second toggle into a cold start.
+
+Edit them at **`/admin/settings`**. Changes take effect on the next public request; no deploy, no
+restart.
+
+| Key | Values | Default | Effect |
+|---|---|---|---|
+| `release_visibility` | `LatestOnly`, `LatestN`, `All` | `LatestN` | How much release history `/download` advertises |
+| `release_visibility_count` | 1–50 | `3` | Number shown when the mode is `LatestN` |
+| `identifiable_retention_days` | 1–3650 | `365` | Days before `ip` and `visitor_id` are erased in place |
+
+Out-of-range values are **rejected with a message naming the bound, never silently clamped** — a
+clamp leaves the owner believing they saved something they did not.
+
+If the settings table cannot be read at all, the site serves the documented defaults and reports the
+failure in the logs, on `/health` (`settingsLoaded: false`) and in the portal. It is never fatal: the
+download page must not break for a reason unrelated to releases.
+
+**Visibility governs advertising, not reachability.** A release hidden from the page is still
+downloadable by a link published earlier, and still counted. `/dl/{file}` has no reference to the
+settings store at all, which is asserted structurally by a test.
+
+### Visitor data and consent
+
+After spec 038 the site stores, **only for visitors who explicitly accept**:
+
+- the **full client IP address**, and
+- a persistent first-party identifier in the `akml.vid` cookie.
+
+For everyone else — declined, or not yet answered — both columns stay NULL and only the per-day
+salted hash, the truncated network prefix (/24 or /48) and the derived country are written, exactly
+as before. The gate is enforced in `AnalyticsStore`, not at the call site, so no caller can bypass it.
+
+| Cookie | Purpose | Lifetime | Flags |
+|---|---|---|---|
+| `akml.consent` | Remembers the choice; set whichever way the visitor answers | 365 days | HttpOnly, Secure, SameSite=Lax |
+| `akml.vid` | Persistent individual id; **only** set on acceptance | 365 days | HttpOnly, Secure, SameSite=Lax |
+| `akml.admin` | Owner's portal sign-in session; never set for visitors | 8 hours | HttpOnly, Secure, SameSite=Lax |
+
+The consent request is shown to **every** visitor with no recorded choice, regardless of country, and
+is **non-blocking** — a visitor can ignore it and complete the whole download path. Silence leaves
+the choice unresolved and is never treated as consent; an explicit dismissal records a refusal.
+
+Two retention boundaries apply:
+
+- `identifiable_retention_days` (site setting, default 365) — `ip` and `visitor_id` are nulled **in
+  place**, keeping the row, so country and version totals for old periods still reconcile.
+- `Analytics:RetentionDays` (`appsettings.json`, default 400) — whole rows deleted.
+
+Both run in the post-start maintenance service, never inline at startup.
+
+### Geo database
+
+Country is resolved **at write time** from `GeoLite2-Country.mmdb`. Without that file every country
+reads "Unknown", and installing it later **cannot backfill** existing rows. Obtain a MaxMind licence
+key and run `scripts/update-geoip.ps1`.

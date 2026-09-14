@@ -1,0 +1,104 @@
+@inherits LayoutComponentBase
+@layout MainLayout
+@using AkmlSql.Site.Admin
+@using Microsoft.AspNetCore.WebUtilities
+@inject NavigationManager Nav
+
+@* Spec 038 (US4): the admin portal shell — persistent navigation, one shared reporting window, and
+   sign-out, on every portal page. Before this, /admin, /admin/errors and /admin/login were three
+   loose pages each repeating their own chrome.
+
+   Nested inside MainLayout on purpose: the portal keeps the site header and footer, exactly as the
+   dashboard did before. Only the portal-specific chrome is added here.
+
+   The window travels in the query string (?days=), never in session state — that keeps every portal
+   page static SSR and makes a chosen range bookmarkable and shareable, which is the same reasoning
+   AdminDashboardOptions already documents for the dashboard. Every link below is built with
+   AdminNav.WithRange so the range survives navigation (FR-032).
+
+   /admin/login deliberately does NOT use this layout: a sign-in page must not display navigation to
+   sections the visitor cannot reach (contract A3.5). *@
+
+<HeadContent>
+    <meta name="robots" content="noindex, nofollow" />
+</HeadContent>
+
+<div class="admin-shell page-body container">
+    <div class="admin-shell-bar">
+        <nav class="admin-nav" aria-label="Admin sections">
+            <ul class="admin-nav-list">
+                @foreach (var section in AdminNav.Sections)
+                {
+                    var active = AdminNav.IsActive(section, CurrentPath);
+                    <li>
+                        @if (active)
+                        {
+                            <a href="@AdminNav.WithRange(section.Route, Days)"
+                               aria-current="page"
+                               class="is-current"
+                               title="@section.Description">@section.Title</a>
+                        }
+                        else
+                        {
+                            <a href="@AdminNav.WithRange(section.Route, Days)"
+                               title="@section.Description">@section.Title</a>
+                        }
+                    </li>
+                }
+            </ul>
+        </nav>
+
+        <form method="post" action="/admin/logout" class="admin-signout">
+            <button type="submit" class="btn btn-secondary">Sign out</button>
+        </form>
+    </div>
+
+    @* FR-032 second clause: the active window is visible on every section, so a screenshot is never
+       ambiguous about the range it describes. *@
+    <nav class="admin-toolbar" aria-label="Reporting window">
+        <span class="admin-toolbar-label" id="admin-range-label">Window</span>
+        <ul class="admin-ranges" aria-labelledby="admin-range-label">
+            @foreach (var range in AdminDashboardOptions.Ranges)
+            {
+                <li>
+                    @if (range == Days)
+                    {
+                        <a href="@AdminNav.WithRange(CurrentPath, range)" aria-current="true" class="is-current">@AdminDashboardOptions.Label(range)</a>
+                    }
+                    else
+                    {
+                        <a href="@AdminNav.WithRange(CurrentPath, range)">@AdminDashboardOptions.Label(range)</a>
+                    }
+                </li>
+            }
+        </ul>
+        <span class="admin-range-active">Showing the last @AdminDashboardOptions.Label(Days)</span>
+    </nav>
+
+    @Body
+</div>
+
+@code {
+    /// <summary>Path of the request, used to mark the active section and rebuild range links.</summary>
+    private string CurrentPath { get; set; } = "/admin";
+
+    /// <summary>The reporting window in force, shared by every section.</summary>
+    private int Days { get; set; } = AdminDashboardOptions.DefaultDays;
+
+    protected override void OnParametersSet()
+    {
+        var uri = Nav.ToAbsoluteUri(Nav.Uri);
+        CurrentPath = uri.AbsolutePath;
+
+        // A bad query string must not break the owner's portal — NormalizeDays falls back to the
+        // default for anything missing, zero, negative or absurd (contract A4.4).
+        int? requested = null;
+        if (QueryHelpers.ParseQuery(uri.Query).TryGetValue("days", out var raw)
+            && int.TryParse(raw.ToString(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var parsed))
+        {
+            requested = parsed;
+        }
+
+        Days = AdminDashboardOptions.NormalizeDays(requested);
+    }
+}

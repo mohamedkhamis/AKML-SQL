@@ -65,9 +65,15 @@ namespace AkmlSql.Core.Tests.Ipc
         }
 
         [Fact]
-        public void Response_key_layout_is_positional_0_to_4()
+        public void Response_key_layout_is_positional_and_append_only()
         {
             // Guards the append-only [Key(n)] contract: serialize as array, assert slot order.
+            //
+            // Keys 5 and 6 were appended when built-in styles became editable — an edited built-in
+            // resolves from the custom directory, so IsBuiltIn (slot 4) is false for it even though
+            // it is still a shipped style. Slots 0-4 keep their meaning and position, which is the
+            // actual compatibility promise: a shell built before those keys existed reads the first
+            // five and ignores the rest.
             var m = new ProfileGetResponse
             {
                 Success = true,
@@ -75,14 +81,18 @@ namespace AkmlSql.Core.Tests.Ipc
                 Name = "n",
                 ProfileJson = "{}",
                 IsBuiltIn = true,
+                HasBuiltIn = true,
+                IsCustomizedBuiltIn = true,
             };
             var dynamicModel = MessagePackSerializer.Deserialize<object[]>(MessagePackSerializer.Serialize(m));
-            Assert.Equal(5, dynamicModel.Length);
+            Assert.Equal(7, dynamicModel.Length);
             Assert.Equal(true, dynamicModel[0]);
             Assert.Equal("e", dynamicModel[1]);
             Assert.Equal("n", dynamicModel[2]);
             Assert.Equal("{}", dynamicModel[3]);
             Assert.Equal(true, dynamicModel[4]);
+            Assert.Equal(true, dynamicModel[5]);
+            Assert.Equal(true, dynamicModel[6]);
         }
     }
 }

@@ -21,7 +21,7 @@ namespace AkmlSql.Shell.Shared.Formatting
     /// Three-column layout matching SQL Prompt's documented Edit Formatting Styles editor
     /// (<c>doc/SQL-PROMPT/SQL-Prompt-Option/SQL_Prompt_Options_Dialog.md §8</c>):
     /// <list type="bullet">
-    ///   <item>Left: style list with built-in vs Native badge, IsReadOnly lock icon.</item>
+    ///   <item>Left: style list with Built-in / Built-in · modified / Native badge.</item>
     ///   <item>Middle: settings tree built from the engine's <c>FormatSettingSchema</c>.</item>
     ///   <item>Right: controls + live preview placeholder (Tier 2b — controls panel and
     ///   preview wiring land in the follow-up commit).</item>
@@ -52,7 +52,8 @@ namespace AkmlSql.Shell.Shared.Formatting
 
         /// <summary>Footer escape hatch shown when the selected style is a read-only built-in:
         /// makes an editable copy in one click, so a disabled Save is never a dead end.</summary>
-        private Button? _copyToEditButton;
+        private Button? _resetButton;
+        private Button? _revertButton;
 
         /// <summary>First-class "Set as active" affordance under the style list — activation was
         /// previously reachable only from the per-row ⋮ / right-click menu.</summary>
@@ -60,12 +61,14 @@ namespace AkmlSql.Shell.Shared.Formatting
 
         // Header state line — the window narrates what it is editing and what Format SQL will use.
         private TextBlock? _headerSubject;
-        private Border? _headerReadOnlyChip;   // fixed label — visibility only
+        private Border? _headerBuiltInChip;
+        private TextBlock? _headerBuiltInChipText;   // "Built-in" / "Built-in · modified"
         private Border? _headerDirtyChip;      // fixed label — visibility only
         private Border? _headerActiveChip;
         private TextBlock? _headerActiveChipText;
         private TextBlock? _stylesHeader;
-        private Border? _readOnlyHint;
+        private Border? _builtInHint;
+        private TextBlock? _builtInHintText;
         // SQL Prompt-parity redesign: the right pane edits a whole settings *group* (SQL Prompt's
         // "page") at once, not one setting at a time. _currentGroup is the group whose form is
         // showing; _currentGroupCategory is its parent category (for the breadcrumb title).
@@ -200,11 +203,11 @@ namespace AkmlSql.Shell.Shared.Formatting
                 Orientation = Orientation.Horizontal,
                 VerticalAlignment = VerticalAlignment.Center,
             };
-            _headerReadOnlyChip = MakeHeaderChip("Built-in · read-only", accent: false, out _);
+            _headerBuiltInChip = MakeHeaderChip("Built-in", accent: false, out _headerBuiltInChipText);
             _headerDirtyChip = MakeHeaderChip("Unsaved changes", accent: true, out _);
             _headerActiveChip = MakeHeaderChip("Active: —", accent: true, out _headerActiveChipText);
             _headerActiveChip.ToolTip = "The style Format SQL uses";
-            chips.Children.Add(_headerReadOnlyChip);
+            chips.Children.Add(_headerBuiltInChip);
             chips.Children.Add(_headerDirtyChip);
             chips.Children.Add(_headerActiveChip);
             Grid.SetColumn(chips, 1);
@@ -298,28 +301,54 @@ namespace AkmlSql.Shell.Shared.Formatting
             };
             footerButtons.Children.Add(_saveBtn);
 
-            // Every shipped style is a read-only built-in, so on a fresh install the settings form
-            // is disabled for ALL of them and Save can never enable — the editor looks broken until
-            // you discover "Copy" inside the per-row ⋮ menu. This surfaces that one escape route
-            // exactly where the user is looking when Save won't light up. Shown only for read-only
-            // selections; Copy also stays on the ⋮ menu.
-            _copyToEditButton = new Button
+            // This slot used to hold "Copy to edit" — the escape hatch from read-only built-ins.
+            // Built-ins are editable now, so the escape hatch is gone and the slot carries the
+            // action that replaces it: undo those edits. Copy remains on the ⋮ menu, where it is
+            // a deliberate choice rather than a workaround.
+            _revertButton = new Button
             {
-                Content = "Copy to edit",
+                Content = "Revert",
                 Padding = new Thickness(Spacing.Lg, Spacing.Sm, Spacing.Lg, Spacing.Sm),
                 MinWidth = 84,
                 Margin = new Thickness(0, 0, Spacing.Sm, 0),
                 Visibility = Visibility.Collapsed,
                 FontFamily = Typography.UiFont,
                 FontSize = Typography.Body,
-                ToolTip = "Built-in styles can't be changed. This makes an editable copy and selects it.",
+                ToolTip = "Discard the unsaved changes and go back to the saved values.",
             };
-            _copyToEditButton.Click += async (_, _) =>
+            _revertButton.Click += (_, _) =>
             {
-                try { await OnCopyStyleAsync(); }   // AfterCreate selects the (editable) copy
-                catch (Exception ex) { Log.Warning(ex, "FormatStylesEditor: copy-to-edit failed"); SetStatus(ex.Message); }
+                try
+                {
+                    var name = _viewModel.LoadedProfileName;
+                    SetStatus(_viewModel.RevertChanges()
+                        ? $"Reverted unsaved changes to '{name}'."
+                        : _viewModel.LastError ?? "Nothing to revert.");
+                    RefreshVisibleSettingControls();
+                    UpdateHeaderState();
+                    UpdateSaveButtonState();
+                }
+                catch (Exception ex) { Log.Warning(ex, "FormatStylesEditor: revert failed"); SetStatus(ex.Message); }
             };
-            footerButtons.Children.Add(_copyToEditButton);
+            footerButtons.Children.Add(_revertButton);
+
+            _resetButton = new Button
+            {
+                Content = "Reset to built-in",
+                Padding = new Thickness(Spacing.Lg, Spacing.Sm, Spacing.Lg, Spacing.Sm),
+                MinWidth = 84,
+                Margin = new Thickness(0, 0, Spacing.Sm, 0),
+                Visibility = Visibility.Collapsed,
+                FontFamily = Typography.UiFont,
+                FontSize = Typography.Body,
+                ToolTip = "Discard your saved changes to this built-in style and restore the original.",
+            };
+            _resetButton.Click += async (_, _) =>
+            {
+                try { await OnResetStyleAsync(); }
+                catch (Exception ex) { Log.Warning(ex, "FormatStylesEditor: reset failed"); SetStatus(ex.Message); }
+            };
+            footerButtons.Children.Add(_resetButton);
 
             var closeBtn = new Button
             {
@@ -432,7 +461,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             view.GroupDescriptions!.Add(new System.Windows.Data.PropertyGroupDescription(
                 nameof(StyleListItem.Section), new UpperCaseConverter()));
             view.SortDescriptions.Add(new System.ComponentModel.SortDescription(
-                nameof(StyleListItem.IsReadOnly), System.ComponentModel.ListSortDirection.Ascending)); // editable first — robust to section-label rewording
+                nameof(StyleListItem.IsShipped), System.ComponentModel.ListSortDirection.Ascending)); // your own styles first — robust to section-label rewording
             view.SortDescriptions.Add(new System.ComponentModel.SortDescription(
                 nameof(StyleListItem.Name), System.ComponentModel.ListSortDirection.Ascending));
             _styleList.ItemsSource = view;
@@ -455,19 +484,25 @@ namespace AkmlSql.Shell.Shared.Formatting
             var miCopy = MakeMenuItem("Copy", OnCopyStyleAsync);
             var miRename = MakeMenuItem("Rename…", OnRenameStyleAsync);
             var miDelete = MakeMenuItem("Delete", OnDeleteStyleAsync);
+            var miReset = MakeMenuItem("Reset to built-in", OnResetStyleAsync);
             var miExport = MakeMenuItem("Export…", OnExportAsync);
             menu.Items.Add(miSetActive);
             menu.Items.Add(miCopy);
             menu.Items.Add(miRename);
             menu.Items.Add(miDelete);
+            menu.Items.Add(miReset);
             menu.Items.Add(new Separator());
             menu.Items.Add(miExport);
             menu.Opened += (_, _) =>
             {
                 if (_styleList?.SelectedItem is StyleListItem selected)
                 {
-                    miRename.IsEnabled = !selected.IsReadOnly;
-                    miDelete.IsEnabled = !selected.IsReadOnly && !selected.IsActive;
+                    // Shipped styles stay un-renameable and un-deletable even though they are now
+                    // editable: the name is what ties an override to the style it overrides, so
+                    // renaming would orphan the original rather than rename anything.
+                    miRename.IsEnabled = !selected.IsShipped;
+                    miDelete.IsEnabled = !selected.IsShipped && !selected.IsActive;
+                    miReset.IsEnabled = selected.IsCustomized;
                     miSetActive.IsEnabled = !selected.IsActive;
                 }
             };
@@ -567,13 +602,25 @@ namespace AkmlSql.Shell.Shared.Formatting
             var editing = _viewModel.LoadedProfileName;
             _headerSubject.Text = string.IsNullOrEmpty(editing) ? "No style selected" : editing!;
 
-            if (_headerReadOnlyChip != null)
-                _headerReadOnlyChip.Visibility = _viewModel.IsSelectedReadOnly && !string.IsNullOrEmpty(editing)
+            if (_headerBuiltInChip != null)
+            {
+                _headerBuiltInChip.Visibility = _viewModel.IsSelectedBuiltIn && !string.IsNullOrEmpty(editing)
                     ? Visibility.Visible
                     : Visibility.Collapsed;
 
+                // "modified" is the part that matters: it is the difference between looking at the
+                // style as shipped and looking at your own edited version of it, and nothing else
+                // on screen distinguishes them.
+                if (_headerBuiltInChipText != null)
+                    _headerBuiltInChipText.Text = _viewModel.IsSelectedCustomized
+                        ? "Built-in \u00b7 modified"
+                        : "Built-in";
+            }
+
+            // Built-ins are editable now, so a built-in with unsaved edits is an ordinary state and
+            // the dirty chip belongs there too.
             if (_headerDirtyChip != null)
-                _headerDirtyChip.Visibility = _viewModel.IsDirty && !_viewModel.IsSelectedReadOnly
+                _headerDirtyChip.Visibility = _viewModel.IsDirty
                     ? Visibility.Visible
                     : Visibility.Collapsed;
 
@@ -744,17 +791,20 @@ namespace AkmlSql.Shell.Shared.Formatting
                 return;
             }
 
-            // (Save-button + read-only visuals sync via the IsDirty/IsSelectedReadOnly
+            // (Save button + built-in visuals sync via the IsDirty/IsSelectedBuiltIn
             // PropertyChanged handler — no direct calls needed here.)
             RefreshVisibleSettingControls();
             UpdateHeaderState();   // the header names the style now being edited
-            // Explicitly re-synced (not left to the INPC handler): IsSelectedReadOnly only raises
+            // Explicitly re-synced (not left to the INPC handler): the flags only raise
             // PropertyChanged when the VALUE changes, so selecting one built-in after another would
             // otherwise leave the Save tooltip naming the previously-selected style.
             UpdateSaveButtonState();
-            SetStatus(_viewModel.IsSelectedReadOnly
-                ? $"'{item.Name}' is built-in (read-only) — copy this style to edit it."
-                : $"Loaded '{item.Name}'.");
+            SetStatus(
+                _viewModel.IsSelectedCustomized
+                    ? $"Loaded '{item.Name}' — your edited version of the built-in style."
+                : _viewModel.IsSelectedBuiltIn
+                    ? $"Loaded '{item.Name}' — editing it saves your own copy; the original is kept."
+                    : $"Loaded '{item.Name}'.");
         }
 
         /// <summary>Re-points the list selection at <paramref name="name"/> (or clears it) without re-triggering the load.</summary>
@@ -782,34 +832,54 @@ namespace AkmlSql.Shell.Shared.Formatting
 
         private void UpdateSaveButtonState()
         {
-            var readOnly = _viewModel.IsSelectedReadOnly;
             var nothingLoaded = string.IsNullOrEmpty(_viewModel.LoadedProfileName);
 
             if (_saveBtn != null)
             {
-                _saveBtn.IsEnabled = _viewModel.IsDirty && !readOnly;
-                // A disabled button with no explanation reads as broken. Name the actual reason —
-                // the three are genuinely different situations with different next steps.
+                _saveBtn.IsEnabled = _viewModel.IsDirty;
+                // A disabled button with no explanation reads as broken, so name the actual reason.
+                // Saving a built-in says where the change goes: it writes your own copy rather than
+                // altering the shipped file, which is why it can always be undone.
                 _saveBtn.ToolTip =
                     nothingLoaded ? "Select a style first"
-                    : readOnly ? $"'{_viewModel.LoadedProfileName}' is a built-in style and can't be changed — use Copy to edit"
-                    : _viewModel.IsDirty ? $"Save your changes to '{_viewModel.LoadedProfileName}'"
-                    : "No changes to save";
+                    : !_viewModel.IsDirty ? "No changes to save"
+                    : _viewModel.IsSelectedBuiltIn && !_viewModel.IsSelectedCustomized
+                        ? $"Save your own copy of the built-in '{_viewModel.LoadedProfileName}' (the original is kept)"
+                        : $"Save your changes to '{_viewModel.LoadedProfileName}'";
             }
 
-            // The escape hatch appears exactly when Save is unreachable because of read-only.
-            if (_copyToEditButton != null)
-                _copyToEditButton.Visibility = readOnly && !nothingLoaded
+            // Revert undoes UNSAVED edits, so it appears exactly when there are some.
+            if (_revertButton != null)
+                _revertButton.Visibility = _viewModel.IsDirty && !nothingLoaded
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+
+            // Reset undoes SAVED edits, so it appears only once an override exists.
+            if (_resetButton != null)
+                _resetButton.Visibility = _viewModel.IsSelectedCustomized && !nothingLoaded
                     ? Visibility.Visible
                     : Visibility.Collapsed;
         }
 
         private void UpdateReadOnlyState()
         {
+            // The settings form is never disabled now — that was the read-only built-in behaviour,
+            // and it is what made the editor look broken on a fresh install where every style is
+            // built-in.
             if (_settingControlsHost != null)
-                _settingControlsHost.IsEnabled = !_viewModel.IsSelectedReadOnly;
-            if (_readOnlyHint != null)
-                _readOnlyHint.Visibility = _viewModel.IsSelectedReadOnly ? Visibility.Visible : Visibility.Collapsed;
+                _settingControlsHost.IsEnabled = true;
+
+            if (_builtInHint != null)
+            {
+                _builtInHint.Visibility = _viewModel.IsSelectedBuiltIn && !string.IsNullOrEmpty(_viewModel.LoadedProfileName)
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+
+                if (_builtInHintText != null)
+                    _builtInHintText.Text = _viewModel.IsSelectedCustomized
+                        ? "This is your edited version of a built-in style. The original is still there — Reset to built-in restores it."
+                        : "Editing a built-in style saves your own copy of it. The original is kept, so you can reset to it at any time.";
+            }
         }
 
         /// <summary>The ONE Save / Discard / Cancel prompt (style switch + window close share it).</summary>
@@ -846,7 +916,7 @@ namespace AkmlSql.Shell.Shared.Formatting
         {
             if (EditingSample) CommitSampleEdit(); // sample edits survive close without per-keystroke writes
 
-            if (!_closeConfirmed && _viewModel.IsDirty && !_viewModel.IsSelectedReadOnly)
+            if (!_closeConfirmed && _viewModel.IsDirty)
             {
                 switch (PromptSaveDecision($"Save changes to '{_viewModel.LoadedProfileName ?? "this style"}' before closing?"))
                 {
@@ -911,7 +981,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             var current = SelectedStyle();
             if (string.IsNullOrEmpty(current)) { SetStatus("Select a style to rename."); return; }
             var item = _viewModel.Profiles.FirstOrDefault(p => string.Equals(p.Name, current, StringComparison.OrdinalIgnoreCase));
-            if (item?.IsReadOnly == true) { SetStatus("Built-in styles cannot be renamed."); return; }
+            if (item?.IsShipped == true) { SetStatus("Built-in styles cannot be renamed — use Copy to make one you can name."); return; }
 
             var (accepted, newName) = StyleNameDialog.ShowRename(this, current!);
             if (!accepted || string.Equals(newName, current, StringComparison.Ordinal)) return;
@@ -946,6 +1016,54 @@ namespace AkmlSql.Shell.Shared.Formatting
             SetStatus(await _viewModel.DeleteSelectedAsync()
                 ? $"Deleted '{current}'."
                 : _viewModel.LastError ?? "Delete failed.");
+        }
+
+        /// <summary>
+        /// "Reset to built-in" — discards SAVED edits to a shipped style and restores the original.
+        /// Confirmed first: unlike Revert, this cannot be undone from inside the editor.
+        /// </summary>
+        private async System.Threading.Tasks.Task OnResetStyleAsync()
+        {
+            var current = SelectedStyle() ?? _viewModel.LoadedProfileName;
+            if (string.IsNullOrEmpty(current)) { SetStatus("Select a style to reset."); return; }
+
+            var item = _viewModel.Profiles.FirstOrDefault(
+                p => string.Equals(p.Name, current, StringComparison.OrdinalIgnoreCase));
+            if (item?.IsShipped != true)
+            {
+                SetStatus($"'{current}' is your own style, so there is no built-in version to reset to.");
+                return;
+            }
+            if (item.IsCustomized != true)
+            {
+                SetStatus($"'{current}' is already the built-in style — nothing to reset.");
+                return;
+            }
+
+            var confirm = MessageBox.Show(
+                this,
+                $"Reset '{current}' to the built-in style?\n\nYour saved changes to it will be discarded. This cannot be undone.",
+                "AKML SQL — Format Styles",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning,
+                MessageBoxResult.No);
+            if (confirm != MessageBoxResult.Yes) return;
+
+            if (!await _viewModel.ResetToBuiltInAsync())
+            {
+                SetStatus(_viewModel.LastError ?? "Reset failed.");
+                return;
+            }
+
+            // The list badge goes from "Built-in · modified" back to "Built-in", so the list has to
+            // be rebuilt; RestoreListSelection suppresses SelectionChanged, so the style stays
+            // loaded and is not re-fetched.
+            await _viewModel.RefreshProfilesAsync();
+            RestoreListSelection(current);
+            RefreshVisibleSettingControls();
+            UpdateHeaderState();
+            UpdateSaveButtonState();
+            SetStatus($"Reset '{current}' to the built-in style.");
         }
 
         private async System.Threading.Tasks.Task OnCopyStyleAsync()
@@ -1047,7 +1165,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             var existing = collisionName == null
                 ? null
                 : _viewModel.Profiles.FirstOrDefault(p =>
-                    !p.IsReadOnly && string.Equals(p.Name, collisionName, StringComparison.OrdinalIgnoreCase));
+                    !p.IsShipped && string.Equals(p.Name, collisionName, StringComparison.OrdinalIgnoreCase));
             if (existing != null)
             {
                 var confirm = MessageBox.Show(
@@ -1381,8 +1499,9 @@ namespace AkmlSql.Shell.Shared.Formatting
             Grid.SetRow(_breadcrumbText, 0);
             formGrid.Children.Add(_breadcrumbText);
 
-            // Spec 033 (T016) — read-only hint shown while a built-in style is loaded.
-            _readOnlyHint = new Border
+            // Shown while a built-in style is loaded: says where an edit goes and that it is
+            // reversible. Built-ins used to be read-only and this said so.
+            _builtInHint = new Border
             {
                 Visibility = Visibility.Collapsed,
                 Padding = new Thickness(Spacing.Sm),
@@ -1390,19 +1509,19 @@ namespace AkmlSql.Shell.Shared.Formatting
                 CornerRadius = new CornerRadius(3),
                 BorderThickness = new Thickness(1),
             };
-            _readOnlyHint.SetResourceReference(Panel.BackgroundProperty, ThemeTokens.SurfaceHover);
-            _readOnlyHint.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.BorderSubtle);
-            var readOnlyHintText = new TextBlock
+            _builtInHint.SetResourceReference(Panel.BackgroundProperty, ThemeTokens.SurfaceHover);
+            _builtInHint.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.BorderSubtle);
+            _builtInHintText = new TextBlock
             {
-                Text = "This built-in style is read-only — use Copy to create an editable version.",
+                Text = "Editing a built-in style saves your own copy of it. The original is kept, so you can reset to it at any time.",
                 TextWrapping = TextWrapping.Wrap,
                 FontFamily = Typography.UiFont,
                 FontSize = Typography.Small,
             };
-            readOnlyHintText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
-            _readOnlyHint.Child = readOnlyHintText;
-            Grid.SetRow(_readOnlyHint, 1);
-            formGrid.Children.Add(_readOnlyHint);
+            _builtInHintText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+            _builtInHint.Child = _builtInHintText;
+            Grid.SetRow(_builtInHint, 1);
+            formGrid.Children.Add(_builtInHint);
 
             var formScroll = new ScrollViewer
             {
@@ -2034,7 +2153,8 @@ namespace AkmlSql.Shell.Shared.Formatting
                 UpdatePreviewWarningBar();
             }
             else if (e.PropertyName == nameof(FormatStylesEditorViewModel.IsDirty)
-                     || e.PropertyName == nameof(FormatStylesEditorViewModel.IsSelectedReadOnly))
+                     || e.PropertyName == nameof(FormatStylesEditorViewModel.IsSelectedBuiltIn)
+                     || e.PropertyName == nameof(FormatStylesEditorViewModel.IsSelectedCustomized))
             {
                 // Spec 033 — both flip on the UI thread (SetWorkingValue / SelectProfileAsync).
                 UpdateSaveButtonState();
