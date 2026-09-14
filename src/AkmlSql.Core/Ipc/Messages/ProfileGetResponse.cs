@@ -29,8 +29,21 @@ namespace AkmlSql.Core.Ipc.Messages
         [Key(3)]
         public string? ProfileJson { get; set; }
 
-        /// <summary>True when the profile is a read-only built-in (no custom shadow exists).</summary>
+        /// <summary>True when the name resolved from the built-in directory (no custom shadow).</summary>
         [Key(4)]
         public bool IsBuiltIn { get; set; }
+
+        /// <summary>
+        /// True when a shipped style of this name exists, whether or not it is currently
+        /// overridden. Built-ins are editable — an edit writes a custom file that shadows the
+        /// shipped one — so this, not <see cref="IsBuiltIn"/>, is what says whether Reset has an
+        /// original to return to.
+        /// </summary>
+        [Key(5)]
+        public bool HasBuiltIn { get; set; }
+
+        /// <summary>True when this is a shipped style the user has edited.</summary>
+        [Key(6)]
+        public bool IsCustomizedBuiltIn { get; set; }
     }
 }

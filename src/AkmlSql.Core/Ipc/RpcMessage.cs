@@ -159,6 +159,17 @@ namespace AkmlSql.Core.Ipc
         // Engine → Shell (Spec 033: ProfileRename result — pairs with request 35)
         public const int ProfileRenameResult = 135;
 
+        // Shell → Engine (Format Styles editor "Reset to built-in" — discards a user's edits to a
+        //   shipped style by deleting the custom file that shadows it, so the shipped one resolves
+        //   again. The built-in file itself is never written to by anything, so what comes back is
+        //   exactly what shipped. Refused for a style that never shipped: there is no original to
+        //   return to, and deleting it is a different action with a different consequence.
+        //   Pairs with response 137.)
+        public const int ProfileReset = 37;
+
+        // Engine → Shell (ProfileReset result — pairs with request 37)
+        public const int ProfileResetResult = 137;
+
         // Shell → Engine (Session rule suppression — the "Disable RULE for this session" quick fix
         //   and the Manage Rules dialog's session strip. Adds/removes/clears/lists the rules held
         //   in the engine's in-memory SessionSuppressionStore, which nothing persists: the scope

@@ -125,19 +125,41 @@ public class ProfileManagerTests : IDisposable
         Assert.Throws<ArgumentException>(() => _manager.Save(profile));
     }
 
+    // These two used to assert that Save THREW for a built-in. Built-ins are editable now: an edit
+    // writes a custom file that shadows the shipped one. What the old tests were really protecting
+    // -- that the shipped file is never written to -- is asserted directly below, and at length in
+    // BuiltInOverrideTests.
+
     [Fact]
-    public void Save_IsBuiltIn_Throws()
+    public void Save_IsBuiltIn_WritesACustomOverride_NotABuiltIn()
     {
         var profile = new FormattingProfile { Metadata = { Name = "Test", IsBuiltIn = true } };
-        Assert.Throws<InvalidOperationException>(() => _manager.Save(profile));
+        _manager.Save(profile);
+
+        // Written to the custom directory, and the flag it arrived with is not persisted: a file in
+        // the custom directory is not a built-in, and saying otherwise would put a false statement
+        // in the file.
+        Assert.True(File.Exists(Path.Combine(_customDir, "Test.akmlstyle")));
+        Assert.False(_manager.Load("Test").Metadata.IsBuiltIn);
     }
 
     [Fact]
-    public void Save_OverBuiltInWithoutCustomCopy_Throws()
+    public void Save_OverBuiltInWithoutCustomCopy_OverridesItAndLeavesTheShippedFileAlone()
     {
         WriteBuiltIn("Builtin");
+        var shippedPath = Path.Combine(_builtInDir, "Builtin.akmlstyle");
+        var shippedBefore = File.ReadAllBytes(shippedPath);
+
         var profile = new FormattingProfile { Metadata = { Name = "Builtin", IsBuiltIn = false } };
-        Assert.Throws<InvalidOperationException>(() => _manager.Save(profile));
+        _manager.Save(profile);
+
+        Assert.True(File.Exists(Path.Combine(_customDir, "Builtin.akmlstyle")));
+        Assert.Equal(shippedBefore, File.ReadAllBytes(shippedPath));
+        Assert.True(_manager.IsCustomizedBuiltIn("Builtin"));
+
+        // And it is reversible, which is the reason the shipped file is left alone.
+        Assert.True(_manager.ResetToBuiltIn("Builtin"));
+        Assert.False(_manager.IsCustomizedBuiltIn("Builtin"));
     }
 
     [Fact]

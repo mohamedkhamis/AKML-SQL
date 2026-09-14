@@ -284,6 +284,7 @@ public class FormatRequestHandler(ProfileManager profileManager)
                     Description = m.Description,
                     Author = m.Author,
                     IsBuiltIn = m.IsBuiltIn,
+                    IsCustomizedBuiltIn = m.IsCustomizedBuiltIn,
                     BasedOn = m.BasedOn,
                     Modified = m.Modified.ToString("o")
                 }).ToArray()
@@ -337,13 +338,53 @@ public class FormatRequestHandler(ProfileManager profileManager)
                 Success = true,
                 Name = request.Name,
                 ProfileJson = json,
-                IsBuiltIn = isBuiltIn
+                IsBuiltIn = isBuiltIn,
+                HasBuiltIn = profileManager.HasBuiltIn(request.Name),
+                IsCustomizedBuiltIn = profileManager.IsCustomizedBuiltIn(request.Name)
             };
         }
         catch (Exception ex)
         {
             Log.Error(ex, "Profile get failed ({Name})", request.Name);
             return new ProfileGetResponse { Success = false, ErrorMessage = ex.Message };
+        }
+    }
+
+    /// <summary>
+    /// Format Styles editor "Reset to built-in" — discards the user's edits to a shipped style by
+    /// deleting the custom file that shadows it. The built-in file is never written to by anything
+    /// in <see cref="ProfileManager"/>, so what resolves afterwards is exactly what shipped.
+    /// <para>
+    /// The restored text comes back with the response so the shell can rebind its editor from the
+    /// result rather than issuing a second round trip and rendering stale values in between.
+    /// </para>
+    /// </summary>
+    public ProfileResetResponse HandleProfileReset(ProfileResetRequest request)
+    {
+        try
+        {
+            var discarded = profileManager.ResetToBuiltIn(request.Name);
+
+            // Read back what now resolves, so the shell shows the restored file rather than
+            // assuming the reset produced what it expected.
+            if (!profileManager.TryReadRaw(request.Name, out var json, out _))
+                return new ProfileResetResponse
+                {
+                    Success = false,
+                    ErrorMessage = $"Profile '{request.Name}' could not be read back after reset."
+                };
+
+            return new ProfileResetResponse
+            {
+                Success = true,
+                ChangesDiscarded = discarded,
+                ProfileJson = json
+            };
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Profile reset failed ({Name})", request.Name);
+            return new ProfileResetResponse { Success = false, ErrorMessage = ex.Message };
         }
     }
 
@@ -610,8 +651,17 @@ public class FormatRequestHandler(ProfileManager profileManager)
                         jsonResult.Profile.Metadata.Name = request.TargetProfileName;
 
                     // FR-008 — built-in names cannot be shadowed by import.
+                    //
+                    // IsCustomizedBuiltIn is part of the test, not a refinement of it. Once built-ins
+                    // became editable, an ALREADY-EDITED one reports IsBuiltIn=false (the file that
+                    // resolves is the custom one), so an IsBuiltIn-only check would wave the import
+                    // through and silently overwrite the user's own edits to a shipped style — the
+                    // exact shadowing FR-008 exists to prevent, made worse by destroying work on the
+                    // way. Editing a built-in in the editor is a deliberate act on a named style;
+                    // an import landing on that name is not.
                     if (profileManager.List().Any(p =>
-                            p.IsBuiltIn && string.Equals(p.Name, jsonResult.Profile.Metadata.Name, StringComparison.OrdinalIgnoreCase)))
+                            (p.IsBuiltIn || p.IsCustomizedBuiltIn)
+                            && string.Equals(p.Name, jsonResult.Profile.Metadata.Name, StringComparison.OrdinalIgnoreCase)))
                     {
                         return new ProfileImportResponse
                         {

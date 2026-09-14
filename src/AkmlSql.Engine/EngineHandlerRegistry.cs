@@ -171,6 +171,7 @@ internal static class EngineHandlerRegistry
         router.Register(new Handlers.Formatting.DuplicateProfileHandler(formatHandler));
         router.Register(new Handlers.Formatting.ProfileGetHandler(formatHandler));
         router.Register(new Handlers.Formatting.ProfileRenameHandler(formatHandler));
+        router.Register(new Handlers.Formatting.ProfileResetHandler(formatHandler));
 
         // === Bulk Formatting (2 typed) ===
         router.Register(new Handlers.Formatting.BulkFormatHandler(formatHandler));
