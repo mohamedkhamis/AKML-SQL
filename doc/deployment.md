@@ -282,6 +282,8 @@ The web edition's uninstall stops + deletes the `AkmlSqlWebEngine` service, remo
 | Install fails / engine won't bind the port | Port collision. The wizard warns if the bridge port is in use — pick another. Check `netstat -ano \| findstr <port>`. |
 | Silent install does nothing for the web component | Missing `/COMPONENTS="web,..."`, or admin rights. The installer requires elevation. |
 | Service not running after install | Check **Event Viewer** + `%CommonAppData%\AKML SQL Web\install.log`; the install summary flags a non-running service. Start it: `sc start AkmlSqlWebEngine`. |
+| Engine service stops on its own | It should not stay stopped: every install configures Windows to restart it (after 5 s, 10 s, then every 60 s, indefinitely) and starts it with *delayed* automatic start. Confirm with `sc qfailure AkmlSqlWebEngine` (expect three `RESTART` actions) and `sc qfailureflag AkmlSqlWebEngine` (expect `TRUE`). If either is missing, re-run the installer — it re-applies both on every run, including upgrades. Before this, recovery was never set by the installer, and even a hand-set recovery could not fire: the engine reported its failures to Windows as clean stops. |
+| Engine service keeps restarting | Windows is doing its job; the engine is failing for a reason it logs. The service runs as LocalSystem, so its log is **not** under your profile: `C:\Windows\System32\config\systemprofile\AppData\Roaming\AKML SQL\logs\akmlsql-<date>.log`. Look for a `[FTL]` line — a disabled bridge section, a port already in use, or a missing TLS certificate are the usual causes. A normal stop logs "stop requested by the service control manager"; its absence before a restart means the process ended without being asked to. |
 
 ---
 

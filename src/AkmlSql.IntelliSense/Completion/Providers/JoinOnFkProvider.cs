@@ -111,7 +111,11 @@ public class JoinOnFkProvider : ICompletionProvider
                     var leftCols  = leftIsFkParent ? fk.ParentColumns     : fk.ReferencedColumns;
                     var rightCols = leftIsFkParent ? fk.ReferencedColumns : fk.ParentColumns;
 
-                    var predicate = FkHelpers.BuildFkPredicate(leftAlias, leftCols, rightAlias, rightCols);
+                    // Aliases are AvailableAliases keys: a user's alias, or an unaliased table's bare
+                    // name ("Order Details") -- a single identifier either way, so safe to bracket.
+                    var predicate = FkHelpers.BuildFkPredicate(
+                        SqlIdentifier.QuoteIfNeeded(leftAlias), leftCols,
+                        SqlIdentifier.QuoteIfNeeded(rightAlias), rightCols);
                     if (!seen.Add(predicate)) continue;
 
                     yield return new CompletionItem
@@ -189,7 +193,7 @@ public class JoinOnFkProvider : ICompletionProvider
                             {
                                 if (!leftSet.Contains(leftFkColumns[idx])) { parts.Clear(); break; }
                                 if (!rightSet.Contains(rightFkColumns[idx])) { parts.Clear(); break; }
-                                parts.Add($"{leftAlias}.{leftFkColumns[idx]} = {rightAlias}.{rightFkColumns[idx]}");
+                                parts.Add($"{FkHelpers.ColumnRef(SqlIdentifier.QuoteIfNeeded(leftAlias), leftFkColumns[idx])} = {FkHelpers.ColumnRef(SqlIdentifier.QuoteIfNeeded(rightAlias), rightFkColumns[idx])}");
                             }
                             if (parts.Count == 0) continue;
 
@@ -241,7 +245,7 @@ public class JoinOnFkProvider : ICompletionProvider
                     foreach (var col in leftCols)
                     {
                         if (!rightLookup.Contains(col)) continue;
-                        var predicate = $"{leftAlias}.{col} = {rightAlias}.{col}";
+                        var predicate = $"{FkHelpers.ColumnRef(SqlIdentifier.QuoteIfNeeded(leftAlias), col)} = {FkHelpers.ColumnRef(SqlIdentifier.QuoteIfNeeded(rightAlias), col)}";
                         if (!seen.Add(predicate)) continue;
 
                         // Id columns rank highest (most likely the intended join key),

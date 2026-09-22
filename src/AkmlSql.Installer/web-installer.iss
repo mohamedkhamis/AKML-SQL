@@ -104,6 +104,42 @@ Filename: "sc.exe"; \
     Components: web\service; \
     Flags: runhidden
 
+; Keep the engine running. These three run on EVERY install, not only when the service is first
+; created -- `sc create` above fails harmlessly on an existing service, so anything configured only at
+; creation time is lost the next time the service is deleted and recreated. That is exactly what
+; happened in practice: recovery had been set by hand on one machine, it restarted the engine after a
+; crash, and a later reinstall recreated the service without it. The machine then went back to
+; leaving the engine stopped until someone started it by hand.
+;
+; Gated on the service EXISTING rather than on web\service being ticked, so an upgrade that unticks
+; the component still fixes a service that an earlier install left running.
+;
+; 1. Delayed automatic start: the engine starts shortly after the boot-critical services instead of
+;    racing them. The web page reconnects on its own, so the short delay is invisible in practice.
+Filename: "sc.exe"; \
+    Parameters: "config AkmlSqlWebEngine start= delayed-auto"; \
+    StatusMsg: "Configuring AKML SQL Web Engine service..."; \
+    Check: AkmlWebServiceExists; \
+    Flags: runhidden
+
+; 2. Restart on failure: after 5 s, then 10 s, then every 60 s for as long as it keeps failing. The
+;    SCM repeats the LAST action for every failure after the third, so this never gives up -- which
+;    is the point: a stopped engine is never a state the web edition wants to stay in. The failure
+;    count resets after a day without one.
+Filename: "sc.exe"; \
+    Parameters: "failure AkmlSqlWebEngine reset= 86400 actions= restart/5000/restart/10000/restart/60000"; \
+    Check: AkmlWebServiceExists; \
+    Flags: runhidden
+
+; 3. Apply those actions to non-crash failures as well. Without this flag the SCM only acts when the
+;    process dies without reporting a status; an engine that shuts down and REPORTS a failure exit
+;    code is ignored. The engine now exits non-zero on failure (Program.cs, WebEngineBackgroundService)
+;    precisely so this flag has something to act on.
+Filename: "sc.exe"; \
+    Parameters: "failureflag AkmlSqlWebEngine 1"; \
+    Check: AkmlWebServiceExists; \
+    Flags: runhidden
+
 ; Spec 026 (M4 closure) C2/C3 ordering fix: the service is NOT started here. Starting it from
 ; [Run] would launch the engine BEFORE web-config-bridge.ps1 writes config.json (that runs later in
 ; Web_PostInstall / ssPostInstall) -- the engine would find no enabled bridge and exit, so the

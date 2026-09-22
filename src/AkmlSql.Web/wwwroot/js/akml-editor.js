@@ -203,9 +203,17 @@ export async function create(hostElementId, initialText, dotNetRef) {
                                 applySnippetBody(cm, view, i.insertText, from, to),
                         };
                     }
+                    // A bracketed name ("[Order Details]") must not double a bracket the user has
+                    // already typed. Plain-string apply replaces only the word CM matched, which
+                    // for `[Ord` is "Ord" — leaving the typed "[" in place and producing
+                    // "[[Order Details]". applyBracketed widens the replacement to take in an
+                    // open "[" (and an auto-closed "]") so the name goes in exactly once.
+                    const insertText = i.insertText;
                     return {
                         label: i.label,
-                        apply: i.insertText,
+                        apply: (typeof insertText === 'string' && insertText.includes('['))
+                            ? (view, _completion, from, to) => applyBracketed(view, insertText, from, to)
+                            : insertText,
                         type,
                         detail: i.detail || undefined,
                         boost,
@@ -739,6 +747,50 @@ function toLiteral(body) {
     return String(body)
         .replace(SNIPPET_NAMED, (_m, name) => name.toUpperCase() === 'CURSOR' ? '' : name)
         .replace(SNIPPET_NUMBERED, '');
+}
+
+/**
+ * Inserts a completion that carries square brackets without doubling one the user already typed.
+ *
+ * CM's word match (`/[@#\w]+/`) stops at "[" and at spaces, so for `[Order D|` the replaced range
+ * is only "D". Replacing just that range with "[Order Details]" gives "[Order [Order Details]".
+ * So when the insert BEGINS with "[", scan back from the match start for a "[" the user opened and
+ * has not closed, and widen the replacement to start there. Stops at anything that means no bracket
+ * is open at the caret: a "]", a line break, a statement terminator, or a string quote — the same
+ * boundaries the engine's NeutralizeOpenDelimiterAtCaret uses.
+ *
+ * Symmetrically, a "]" sitting immediately after the caret (auto-closed brackets) is consumed when
+ * the insert ENDS with "]", so the result is never "[Order Details]]".
+ *
+ * Exported for tests; pure except for the dispatch.
+ */
+export function bracketedRange(doc, insertText, from, to) {
+    let start = from;
+    let end = to;
+
+    if (insertText.startsWith('[')) {
+        for (let k = from - 1; k >= 0; k--) {
+            const c = doc.sliceString(k, k + 1);
+            if (c === ']' || c === '\n' || c === '\r' || c === ';' || c === "'") break;
+            if (c === '[') { start = k; break; }
+        }
+    }
+
+    if (insertText.endsWith(']') && end < doc.length && doc.sliceString(end, end + 1) === ']') {
+        end += 1;
+    }
+
+    return { from: start, to: end };
+}
+
+function applyBracketed(view, insertText, from, to) {
+    const range = bracketedRange(view.state.doc, insertText, from, to);
+    view.dispatch({
+        changes: { from: range.from, to: range.to, insert: insertText },
+        selection: { anchor: range.from + insertText.length },
+        // Keep it a single undo step and let CM treat it as a completion pick.
+        userEvent: 'input.complete',
+    });
 }
 
 function applySnippetBody(cm, view, body, from, to) {

@@ -121,13 +121,19 @@ public class JoinProvider : ICompletionProvider
 
                 // Qualify the join target per the engine's schema policy (Always → "dbo.Orders";
                 // NonDefaultOnly → bare for dbo; Never → bare everywhere).
+                //
+                // Each part bracketed on its own where needed. This was the raw string, so a table
+                // named "Order Details" produced `JOIN Order Details od ON ...` -- invalid T-SQL, from
+                // the suggestion whose whole purpose is to write the JOIN for you. Built from the
+                // separate parts rather than by splitting otherFullName, because a name can itself
+                // contain a dot.
                 var qualifiedName = SchemaQualifyMode switch
                 {
-                    AkmlSql.Core.Config.SchemaQualifyMode.Always => otherFullName,
-                    AkmlSql.Core.Config.SchemaQualifyMode.Never => otherTable,
+                    AkmlSql.Core.Config.SchemaQualifyMode.Always => SqlIdentifier.QuoteIfNeeded(otherSchema, otherTable),
+                    AkmlSql.Core.Config.SchemaQualifyMode.Never => SqlIdentifier.QuoteIfNeeded(otherTable),
                     _ => otherSchema.Equals("dbo", StringComparison.OrdinalIgnoreCase)
-                        ? otherTable
-                        : otherFullName,
+                        ? SqlIdentifier.QuoteIfNeeded(otherTable)
+                        : SqlIdentifier.QuoteIfNeeded(otherSchema, otherTable),
                 };
 
                 // When UseAliases is off, both sides of the ON clause fall back to bare
@@ -148,7 +154,11 @@ public class JoinProvider : ICompletionProvider
                     displayText = otherTable;
                 }
 
-                var onClause = FkHelpers.BuildFkPredicate(targetReference, otherColumns, alias, existingColumns);
+                // targetReference is either a generated alias or qualifiedName, both already valid.
+                // `alias` is an AvailableAliases key -- for an unaliased `FROM [Order Details]` that is
+                // the bare "Order Details" -- so it is bracketed here.
+                var onClause = FkHelpers.BuildFkPredicate(
+                    targetReference, otherColumns, SqlIdentifier.QuoteIfNeeded(alias), existingColumns);
                 var insertText = UseAliases
                     ? $"{qualifiedName} {targetReference} ON {onClause}"
                     : $"{qualifiedName} ON {onClause}";
@@ -209,7 +219,11 @@ public class JoinProvider : ICompletionProvider
 
         for (int i = 0; i < name.Length; i++)
         {
-            if (i == 0 || char.IsUpper(name[i]) || name[i] == '_')
+            // A space or hyphen also starts a word: "order details" -> "od", not "o". Names
+            // with spaces are exactly the ones that need brackets, so they are the ones most
+            // likely to reach here.
+            bool wordStart = i > 0 && (name[i - 1] == ' ' || name[i - 1] == '-');
+            if (i == 0 || wordStart || char.IsUpper(name[i]) || name[i] == '_')
             {
                 char c = name[i] == '_' && i + 1 < name.Length ? name[i + 1] : name[i];
                 if (char.IsLetter(c))

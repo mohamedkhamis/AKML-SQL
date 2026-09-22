@@ -187,7 +187,12 @@ public class ColumnProvider : ICompletionProvider
                     yield return new CompletionItem
                     {
                         DisplayText   = displayText,
-                        InsertText    = displayText,
+                        // Display and dedup stay unquoted; only what is written into the query is
+                        // bracketed. A CTE column aliased `AS [Total Sales]` needs them as much as a
+                        // table does.
+                        InsertText    = multiTable
+                            ? FkHelpers.ColumnRef(SqlIdentifier.QuoteIfNeeded(alias), colName)
+                            : SqlIdentifier.QuoteIfNeeded(colName),
                         ObjectType    = (int)CompletionObjectType.Column,
                         SecondaryText = "(CTE column) • " + alias,
                         SourceObject  = alias,
@@ -209,7 +214,12 @@ public class ColumnProvider : ICompletionProvider
                     yield return new CompletionItem
                     {
                         DisplayText   = displayText,
-                        InsertText    = displayText,
+                        // Display and dedup stay unquoted; only what is written into the query is
+                        // bracketed. A CTE column aliased `AS [Total Sales]` needs them as much as a
+                        // table does.
+                        InsertText    = multiTable
+                            ? FkHelpers.ColumnRef(SqlIdentifier.QuoteIfNeeded(alias), colName)
+                            : SqlIdentifier.QuoteIfNeeded(colName),
                         ObjectType    = (int)CompletionObjectType.Column,
                         SecondaryText = "(temp table column) • " + alias,
                         SourceObject  = fullTableName,
@@ -292,7 +302,7 @@ public class ColumnProvider : ICompletionProvider
                         yield return new CompletionItem
                         {
                             DisplayText = bareDisplay,
-                            InsertText = bareDisplay,
+                            InsertText = SqlIdentifier.QuoteIfNeeded(bareDisplay),
                             ObjectType = (int)CompletionObjectType.Column,
                             SecondaryText = FormatSecondaryText(column) + " • " + tableName,
                             SourceObject = dbObject.FullName,
@@ -317,7 +327,10 @@ public class ColumnProvider : ICompletionProvider
                     yield return new CompletionItem
                     {
                         DisplayText = qualifiedDisplay,
-                        InsertText = qualifiedDisplay,
+                        // `alias` is an AvailableAliases key; for an unaliased `FROM [Order Details]`
+                        // it is the bare "Order Details", which unquoted gives
+                        // `Order Details.OrderID` -- not a column reference at all.
+                        InsertText = FkHelpers.ColumnRef(SqlIdentifier.QuoteIfNeeded(alias), column.ColumnName),
                         ObjectType = (int)CompletionObjectType.Column,
                         SecondaryText = FormatSecondaryText(column) + " • " + tableName,
                         SourceObject = dbObject.FullName,
@@ -382,7 +395,7 @@ public class ColumnProvider : ICompletionProvider
                     yield return new CompletionItem
                     {
                         DisplayText = column.ColumnName,
-                        InsertText = column.ColumnName,
+                        InsertText = SqlIdentifier.QuoteIfNeeded(column.ColumnName),
                         ObjectType = (int)CompletionObjectType.Column,
                         SecondaryText = FormatSecondaryText(column) + " • " + obj.ObjectName,
                         SourceObject = obj.FullName,
@@ -423,7 +436,7 @@ public class ColumnProvider : ICompletionProvider
                 yield return new CompletionItem
                 {
                     DisplayText   = colName,
-                    InsertText    = colName,
+                    InsertText    = SqlIdentifier.QuoteIfNeeded(colName),
                     ObjectType    = (int)CompletionObjectType.Column,
                     SecondaryText = "(CTE column)",
                     SourceObject  = context.DotPrefix,
@@ -445,7 +458,7 @@ public class ColumnProvider : ICompletionProvider
                 yield return new CompletionItem
                 {
                     DisplayText   = colName,
-                    InsertText    = colName,
+                    InsertText    = SqlIdentifier.QuoteIfNeeded(colName),
                     ObjectType    = (int)CompletionObjectType.Column,
                     SecondaryText = "(temp table column)",
                     SourceObject  = tempKey,
@@ -500,7 +513,7 @@ public class ColumnProvider : ICompletionProvider
             yield return new CompletionItem
             {
                 DisplayText = column.ColumnName,
-                InsertText = column.ColumnName,
+                InsertText = SqlIdentifier.QuoteIfNeeded(column.ColumnName),
                 ObjectType = (int)CompletionObjectType.Column,
                 SecondaryText = FormatSecondaryText(column),
                 SourceObject = dbObject.FullName,
