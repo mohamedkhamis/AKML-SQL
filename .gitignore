@@ -89,3 +89,7 @@ desktop.ini
 /diagnostics-*.png
 /verify-*.png
 /editor-after-fix.png
+
+# .NET upgrade assistant raw assessment data (147 MB / 50 MB; over GitHub's file limit) — the .md reports beside it are kept
+/.github/upgrades/scenarios/dotnet-version-upgrade/assessment.json
+/.github/upgrades/scenarios/dotnet-version-upgrade/assessment.csv
