@@ -117,7 +117,7 @@ Each SSMS/VS host uses different UI contexts for package autoloading:
 - **Menu Commands**: About, Check for Updates, Options, Send Feedback, View Logs
 - **Atomic Config Writes**: ConfigManager uses temp file + rename pattern
 - **Thread-safe Logger Init**: LoggerFactory uses Interlocked.CompareExchange
-- **Update Flow**: Shell extension fires updater process → updater writes result JSON → shell reads on next load
+- **Update Flow**: the `AKML SQL\Update Check` scheduled task (daily + at sign-in, as the user) and the shells' 24 h startup check run `AkmlSql.Updater.exe` → it writes `update-available.json`, downloads + SHA-256-verifies the installer, and shows one Windows notification per version (needs the `AKML.AKMLSQL` AppUserModelID Start-menu shortcut); SSMS/VS offer a waiting update once at startup (`UpdateStartupPrompt`). Nothing installs without the user's click (`--install` re-verifies, then launches the installer with its UI)
 
 ### Process Boundary: Shell ↔ Engine
 
@@ -182,7 +182,8 @@ See [docs/analysis-rules.md](docs/analysis-rules.md) for all rules.
 
 - Config: `%AppData%/AKML SQL/config.json`
 - Logs: `%AppData%/AKML SQL/logs/akmlsql-*.log`
-- Update result: `%AppData%/AKML SQL/cache/update-available.json`
+- Update result: `%AppData%/AKML SQL/update-available.json`; downloaded installers: `%LocalAppData%/AKML SQL/cache/`
+- Program files: `C:\Program Files\AKML SQL\` (64-bit installer); installs from before it stay in `C:\Program Files (x86)\AKML SQL\` — the installer takes them over in place (`MigrateLegacy32BitInstall`)
 
 ### Extension Install Paths
 
@@ -203,7 +204,8 @@ See [docs/analysis-rules.md](docs/analysis-rules.md) for all rules.
 - **Output**: `src/AkmlSql.Installer/Output/AKMLSQLSetup.exe`
 - **Detection**: Registry + vswhere.exe + filesystem fallback (see `environment-scanner.iss`)
 - **Post-install**: Clears MEF caches, writes config.json (only if absent)
-- **Silent mode**: `/VERYSILENT /ACCEPTEULA /TARGETS=20,22,2022 /NOUPDATE`
+- **Silent mode**: `/VERYSILENT /ACCEPTEULA /TARGETS=ssms22,vs2026 /NOUPDATE /NOTELEMETRY` (error reports and automatic updates are ON by default; a silent upgrade keeps the user's existing choices unless a flag is given)
+- **Installer tests**: `AkmlSql.Installer.Tests` smoke classes RUN THE REAL INSTALLER on any admin machine with IIS — filter to the unit classes (`ScheduledUpdateTests`, `UpdateDownloaderTests`) unless you mean to install
 
 ## Key Design Decisions
 

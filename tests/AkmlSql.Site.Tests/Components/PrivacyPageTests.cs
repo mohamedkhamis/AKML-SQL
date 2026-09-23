@@ -171,6 +171,22 @@ public sealed class PrivacyPageTests : IDisposable
     }
 
     [Fact]
+    public void ItExplainsTheAppsErrorReports_WhereTheInstallerLinks()
+    {
+        using var ctx = NewCtx();
+
+        var cut = ctx.Render<Privacy>();
+
+        // The installer's options page links to /privacy#app, and error reports are on by default:
+        // what they carry, and how to turn them off, must be stated there.
+        // Whitespace collapsed: the markup wraps sentences across source lines.
+        var section = System.Text.RegularExpressions.Regex.Replace(cut.Find("section#app").TextContent, @"\s+", " ");
+        Assert.Contains("never contains your queries, your data", section, StringComparison.Ordinal);
+        Assert.Contains("removed from the error text", section, StringComparison.Ordinal);
+        Assert.Contains("Tools > AKML SQL > Options > General", section, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ItExplainsWhatHappensToFeedback_WhereTheFormLinks()
     {
         using var ctx = NewCtx();

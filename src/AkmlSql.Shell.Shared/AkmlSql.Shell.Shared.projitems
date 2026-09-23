@@ -81,6 +81,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Update\UpdateInstallConfirmDialog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Update\UpdateLauncher.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Update\UpdateNotifier.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Update\UpdateStartupPrompt.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Validation\LoadValidator.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)JsonOptions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ipc\PipeRpcClient.cs" />

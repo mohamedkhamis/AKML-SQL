@@ -61,14 +61,14 @@ namespace AkmlSql.Core.Logging
         {
             try
             {
-                // Wire-size caps enforced at the single choke point so every producer (the
-                // Serilog sink, tests, future callers) meets the server's limits.
+                // Personal and system names out first, then the wire-size caps -- both at the single
+                // choke point so every producer (the Serilog sink, tests, future callers) is covered.
                 telemetryEvent.Message = TelemetryEvent.Truncate(
-                    telemetryEvent.Message ?? string.Empty, TelemetryEvent.MaxMessageLength);
+                    TelemetryScrubber.Scrub(telemetryEvent.Message) ?? string.Empty, TelemetryEvent.MaxMessageLength);
                 if (telemetryEvent.Exception != null)
                 {
                     telemetryEvent.Exception = TelemetryEvent.Truncate(
-                        telemetryEvent.Exception, TelemetryEvent.MaxExceptionLength);
+                        TelemetryScrubber.Scrub(telemetryEvent.Exception)!, TelemetryEvent.MaxExceptionLength);
                 }
 
                 if (telemetryEvent.Source != null)

@@ -453,7 +453,7 @@ Write-Host "  Output Artifacts:" -ForegroundColor White
 $artifacts = @(
     @{ Path = (Join-Path $installerDir 'Output\AKMLSQLSetup.exe'); Label = 'Installer' }
     @{ Path = (Join-Path $srcDir 'AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\AkmlSql.Engine.exe'); Label = 'Engine' }
-    @{ Path = (Join-Path $srcDir 'AkmlSql.Updater\bin\Release\net10.0\win-x64\publish\AkmlSql.Updater.exe'); Label = 'Updater' }
+    @{ Path = (Join-Path $srcDir 'AkmlSql.Updater\bin\Release\net10.0-windows10.0.19041.0\win-x64\publish\AkmlSql.Updater.exe'); Label = 'Updater' }
     @{ Path = (Join-Path $srcDir 'AkmlSql.Formatter\bin\Release\net10.0\win-x64\publish\akmlsql-format.exe'); Label = 'Formatter CLI' }
     @{ Path = (Join-Path $srcDir 'AkmlSql.Analyzer\bin\Release\net10.0\win-x64\publish\AkmlSql.Analyzer.exe'); Label = 'Analyzer CLI' }
 )

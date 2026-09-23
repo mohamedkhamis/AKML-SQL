@@ -129,7 +129,10 @@ var
 begin
   if TargetAlreadyAdded('22') then Exit;
 
-  if RegQueryStringValue(HKLM, 'SOFTWARE\Microsoft\Microsoft SQL Server Management Studio 22',
+  // Either registry view: the installer is 64-bit now, and a 32-bit writer would land in WOW6432Node.
+  if RegQueryStringValue(HKLM64, 'SOFTWARE\Microsoft\Microsoft SQL Server Management Studio 22',
+      'SSMSInstallRoot', InstallPath)
+     or RegQueryStringValue(HKLM32, 'SOFTWARE\Microsoft\Microsoft SQL Server Management Studio 22',
       'SSMSInstallRoot', InstallPath) then
   begin
     if DirExists(InstallPath) then
@@ -251,11 +254,11 @@ begin
   EnvCheckListBox.Items.Clear;
   for I := 0 to TargetCount - 1 do
   begin
-    ItemText := Targets[I].Name + '  (' + Targets[I].Arch + ')  ' + Targets[I].InstallPath;
+    ItemText := Targets[I].Name + '  -  ' + Targets[I].InstallPath;
     if not Targets[I].IsCompatible then
-      ItemText := ItemText + '  [' + Targets[I].IncompatReason + ']';
+      ItemText := ItemText + '  (' + Targets[I].IncompatReason + ')';
     if Targets[I].IsRunning then
-      ItemText := ItemText + '  (RUNNING)';
+      ItemText := ItemText + '  (open now - setup will close it)';
 
     EnvCheckListBox.AddCheckBox(ItemText, '', 0, Targets[I].IsSelected, Targets[I].IsCompatible, False, True, nil);
   end;

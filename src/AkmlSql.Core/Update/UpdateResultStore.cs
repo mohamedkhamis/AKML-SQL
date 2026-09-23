@@ -84,6 +84,9 @@ namespace AkmlSql.Core.Update
                 fresh.DownloadState = existing.DownloadState;
                 fresh.VerifiedInstallerPath = existing.VerifiedInstallerPath;
                 fresh.FailureReason = existing.FailureReason;
+                // Being told once is enough: a re-check of the same version must not re-notify.
+                fresh.NotifiedAt = existing.NotifiedAt;
+                fresh.ShellPromptedAt = existing.ShellPromptedAt;
             }
         }
     }

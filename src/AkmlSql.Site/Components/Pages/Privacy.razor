@@ -145,6 +145,32 @@
     </p>
 </section>
 
+@* The installed product reports errors to this site (/api/client-errors), on by default since the
+   installer's options page defaulted to it. What that sends is stated here, and the installer's
+   options page links to this anchor -- so it must stay true to TelemetryScrubber and TelemetryBatch. *@
+<section class="doc-section" id="app" aria-labelledby="app-heading">
+    <h2 id="app-heading">The AKML SQL app: error reports and updates</h2>
+    <p>
+        When something goes wrong inside AKML SQL, it sends an <strong>anonymous error report</strong> to
+        this site so the problem can be found and fixed. A report contains the error message, where in
+        AKML SQL it happened, the AKML SQL and Windows versions, whether it was SSMS or Visual Studio,
+        and a random installation number that is not linked to you.
+    </p>
+    <p>
+        It never contains your queries, your data, or your connection details. User, computer, server and
+        database names, file paths under your user folder, email and IP addresses are removed from the
+        error text <em>before</em> it leaves your computer. Only errors are sent, never ordinary activity.
+    </p>
+    <p>
+        Error reports are on by default. Turn them off in the installer, or later in SSMS or Visual Studio
+        under <strong>Tools &gt; AKML SQL &gt; Options &gt; General</strong>.
+    </p>
+    <p>
+        To check for updates, AKML SQL downloads a small version file from this site once a day. That
+        request carries only the version you have.
+    </p>
+</section>
+
 <section class="doc-section" aria-labelledby="cookies-heading">
     <h2 id="cookies-heading">Cookies in full</h2>
     <table class="admin-table">

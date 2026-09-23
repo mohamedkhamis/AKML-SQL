@@ -69,6 +69,29 @@ namespace AkmlSql.Core
         public const int UpdateCheckIntervalHours = 24;
 
         /// <summary>
+        /// The scheduled task runs daily and at sign-in; a check this recent (by it or by an IDE)
+        /// is not repeated. Shorter than <see cref="UpdateCheckIntervalHours"/> so the daily run's
+        /// random delay can never make it skip a whole day.
+        /// </summary>
+        public const int ScheduledCheckMinimumHours = 12;
+
+        /// <summary>
+        /// Windows AppUserModelID of AKML SQL. The installer puts it on the "Check for AKML SQL
+        /// updates" Start-menu shortcut; Windows only shows a notification from an unpackaged app
+        /// whose ID is on such a shortcut. Must match the installer's <c>AppUserModelID</c>.
+        /// </summary>
+        public const string AppUserModelId = "AKML.AKMLSQL";
+
+        /// <summary>
+        /// URL scheme the update notification's buttons use (registered by the installer to run
+        /// <c>AkmlSql.Updater.exe --install</c>). The updater never takes a path from the URL.
+        /// </summary>
+        public const string UpdateProtocolScheme = "akmlsql-update";
+
+        /// <summary>The product site's download page: where an update without a verified installer leads.</summary>
+        public const string DownloadPageUrl = "https://akml.khamis.work/download";
+
+        /// <summary>
         /// Roaming AppData root for AKML SQL. In production this is
         /// <c>%AppData%\AKML SQL</c>; the environment variable
         /// <c>AKML_APP_DATA_ROOT</c> overrides the parent folder for test

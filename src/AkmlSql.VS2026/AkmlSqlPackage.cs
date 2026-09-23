@@ -184,6 +184,8 @@ namespace AkmlSql.VS2026
                 }
 
                 UpdateLauncher.LaunchIfDue();
+                // A downloaded, verified update waiting from an earlier check: offer it once.
+                UpdateStartupPrompt.ScheduleIfReady(JoinableTaskFactory, DisposalToken);
 
                 // Launch Engine process for IntelliSense, formatting, analysis
                 System.Threading.Tasks.Task.Run(() => EngineLifecycle.LaunchAsync());

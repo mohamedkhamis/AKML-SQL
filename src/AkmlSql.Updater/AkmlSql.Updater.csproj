@@ -2,7 +2,10 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
+    <!-- Windows TFM for the update notification (Windows.UI.Notifications via the SDK projection,
+         which trims cleanly). 17763 = Windows 10 1809 / Server 2019, the oldest supported OS. -->
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
     <RootNamespace>AkmlSql.Updater</RootNamespace>
     <AssemblyName>AkmlSql.Updater</AssemblyName>
     <PublishSingleFile>true</PublishSingleFile>
@@ -16,6 +19,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\AkmlSql.Core\AkmlSql.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="AkmlSql.Installer.Tests" />
   </ItemGroup>
 
 </Project>

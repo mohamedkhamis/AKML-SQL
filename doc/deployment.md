@@ -47,7 +47,19 @@ dotnet publish src/AkmlSql.Updater/AkmlSql.Updater.csproj \
   -c Release -r win-x64 --self-contained -p:PublishSingleFile=true
 ```
 
-The updater CLI has two modes (spec 036 US5):
+Output: `src/AkmlSql.Updater/bin/Release/net10.0-windows10.0.19041.0/win-x64/publish/AkmlSql.Updater.exe`
+(a Windows target framework, for the update notifications; minimum Windows 10 1809 / Server 2019).
+
+The updater CLI modes (spec 036 US5, plus the scheduled-update modes):
+
+- `--scheduled` — what the *AKML SQL\Update Check* scheduled task runs: check (at most every 12
+  hours), download + verify, then one Windows notification per version. Never installs.
+- `--check-now` — the Start-menu *Check for AKML SQL updates*: the same, but always checks and
+  always answers (ready / up to date / could not check), even with automatic updates off.
+- `--install [akmlsql-update:install|details]` — what the notification's buttons run: re-verifies the
+  downloaded installer and launches it with its normal UI, or opens the release notes.
+- `--configure auto-update=on|off error-reports=on|off` — the installer records its options page
+  through this, run as the signed-in user so the values land in their own `config.json`.
 
 - `AkmlSql.Updater.exe --check` — fetches the update manifest from `Constants.UpdateManifestUrl`
   (`https://akml.khamis.work/update-manifest.json`), compares versions (strictly-newer only,
@@ -147,7 +159,7 @@ AKMLSQLSetup.exe /VERYSILENT /ACCEPTEULA /TARGETS=ssms22,vs2022
 # Install with verbose logging (for troubleshooting)
 AKMLSQLSetup.exe /VERYSILENT /ACCEPTEULA /LOG="C:\Logs\akmlsql-install.log"
 
-# Install with auto-update and telemetry disabled
+# Install with automatic updates and anonymous error reports turned off
 AKMLSQLSetup.exe /VERYSILENT /ACCEPTEULA /NOUPDATE /NOTELEMETRY
 
 # Force-close running SSMS/VS instances before installing
@@ -164,16 +176,32 @@ AKMLSQLSetup.exe /VERYSILENT /ACCEPTEULA /IMPORTSQLPROMPT
 | `/VERYSILENT` | No UI, no progress dialog |
 | `/ACCEPTEULA` | Accept the EULA (required when `/VERYSILENT` is used) |
 | `/TARGETS=ssms22,vs2022` | Comma-separated target list: `ssms20`, `ssms21`, `ssms22`, `vs2019`, `vs2022`, `vs2026`. If omitted, all detected targets are selected. |
-| `/NOUPDATE` | Disable the built-in auto-update check |
-| `/TELEMETRY` | Enable anonymous usage telemetry (off by default) |
-| `/NOTELEMETRY` | Explicitly disable telemetry |
+| `/NOUPDATE` | Turn automatic updates off and do not create the update-check scheduled task |
+| `/NOTELEMETRY` | Turn anonymous error reports off (they are on by default) |
+| `/TELEMETRY` | Turn anonymous error reports on (the default; kept for older scripts) |
 | `/FORCECLOSEAPPS` | Force-close running SSMS/VS instances without prompting |
 | `/IMPORTSQLPROMPT` | Import SQL Prompt formatting styles if SQL Prompt config is detected |
 | `/LOG[=path]` | Write detailed install log. This is a native Inno Setup flag. If a path is given (`/LOG="C:\install.log"`), logs are written there. If no path is given (`/LOG`), Inno Setup writes to `%TEMP%\Setup Log YYYY-MM-DD #NNN.txt`. |
 
 ### Repair / Upgrade Behavior
 
-The installer uses a fixed `AppId` and `UsePreviousAppDir=yes`, so re-running the installer over an existing installation performs an in-place upgrade. No prior uninstall is needed. User configuration (`config.json`, profiles, snippets) is preserved across upgrades.
+The installer uses a fixed `AppId` and `UsePreviousAppDir=yes`, so re-running it over an existing installation performs an in-place upgrade. No prior uninstall is needed. User configuration (`config.json`, profiles, snippets, history) is preserved, and so are the user's choices for automatic updates and error reports: the options page shows their current values, and a silent upgrade leaves them alone unless `/NOUPDATE`, `/TELEMETRY` or `/NOTELEMETRY` says otherwise.
+
+**64-bit install, and installs from before it.** The installer is 64-bit (`SetupArchitecture=x64`) and new installs go to `C:\Program Files\AKML SQL`. Installs made by the earlier 32-bit installer live in `C:\Program Files (x86)\AKML SQL`, with their uninstall entry in the 32-bit registry view, where a 64-bit installer does not look — on its own it would install a *second* copy. Setup takes such an install over instead (`MigrateLegacy32BitInstall` in `AkmlSqlSetup.iss`): it keeps the folder (and skips the folder page, as any upgrade does), restores the components chosen last time, starts a fresh uninstall log, and removes the old 32-bit Apps & features entry once the install succeeds (if setup fails, the old uninstaller is put back). The web edition's settings are read from either registry view. Each step was proven with probe installers: upgrade, upgrade again, uninstall, and a fresh install.
+
+### Automatic updates
+
+The installer registers a scheduled task, **Task Scheduler Library > AKML SQL > Update Check** (`update-task.ps1`, installed to `{app}\Support`), that runs `AkmlSql.Updater.exe --scheduled`:
+
+- daily at 10:00 with a random delay of up to 4 hours, and 10 minutes after each sign-in;
+- as the signed-in user (the Users group, least privilege), so it reads that user's own settings and cache;
+- only with a network connection, hidden, at most one run at a time, 30-minute limit.
+
+Each run honours the user's *Check for updates automatically* setting, skips the check if one (by the task or by SSMS / Visual Studio) happened in the last 12 hours, downloads and verifies an offered installer against the manifest's SHA-256, and then shows a Windows notification **once per version**: *AKML SQL x.y is ready to install — Install now / Later*. **It never installs anything by itself**; *Install now* runs `AkmlSql.Updater.exe --install`, which re-verifies the downloaded file and launches the installer with its normal UI and Windows' admin prompt. SSMS and Visual Studio also offer a waiting update once at startup. The Start-menu shortcut *Check for AKML SQL updates* (`--check-now`) checks immediately and always answers — ready, up to date, or could not check.
+
+Notifications need the Start-menu shortcut: Windows only shows notifications from an unpackaged app whose AppUserModelID (`AKML.AKMLSQL`) is on a Start-menu shortcut. The buttons use the `akmlsql-update:` URL scheme registered in `HKLM\Software\Classes`; it carries no data the updater acts on.
+
+Unticking the option removes the task on the next install; `/NOUPDATE` does the same for silent installs. Old downloaded installers are removed from `%LocalAppData%\AKML SQL\cache` by the next check.
 
 ---
 
@@ -187,6 +215,8 @@ The installer uses a fixed `AppId` and `UsePreviousAppDir=yes`, so re-running th
 | Formatting profiles | `%AppData%\AKML SQL\profiles\` |
 | Personal snippets | `%AppData%\AKML SQL\snippets\personal\` |
 | Update result | `%AppData%\AKML SQL\update-available.json` |
+| Downloaded updates | `%LocalAppData%\AKML SQL\cache\AKMLSQLSetup-<version>.exe` |
+| Program files | `C:\Program Files\AKML SQL\` (installs from before the 64-bit installer: `C:\Program Files (x86)\AKML SQL\`) |
 
 ---
 
@@ -244,7 +274,7 @@ For pairing a browser on another machine:
    - **Per machine:** import `%ProgramData%\AKML SQL Web\certs\bridge.cer` into **Local Machine → Trusted Root Certification Authorities**. This needs the address you connect by to be in the certificate. The certificate lists the machine name, FQDN and the machine's own IPs; a public IP or DNS name the machine does not own (a cloud VM, NAT) must be added:
 
      ```powershell
-     & "C:\Program Files (x86)\AKML SQL\Support\web-tls-setup.ps1" -Port <bridge port> `
+     & "C:\Program Files\AKML SQL\Support\web-tls-setup.ps1" -Port <bridge port> `
          -PfxPath "C:\ProgramData\AKML SQL Web\certs\bridge.pfx" -ExtraNames 203.0.113.10 -RestartEngine
      ```
 

@@ -16,7 +16,7 @@ It is created automatically on first run with all defaults. The file is written 
 {
   "configVersion": 1,
   "autoUpdateEnabled": true,
-  "telemetryEnabled": false,
+  "telemetryEnabled": true,
   "logMinimumLevel": "Debug",
   "lastUpdateCheck": null,
   "installId": "00000000-0000-0000-0000-000000000000",
@@ -104,8 +104,8 @@ It is created automatically on first run with all defaults. The file is written 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `configVersion` | int | 1 | Schema version (for future migrations) |
-| `autoUpdateEnabled` | bool | true | Automatically check for updates on startup |
-| `telemetryEnabled` | bool | false | Reserved for future telemetry opt-in |
+| `autoUpdateEnabled` | bool | true | Check for updates automatically: at IDE startup (every 24 h) and through the *AKML SQL\Update Check* scheduled task (daily and at sign-in), which also downloads, verifies and announces them. Nothing is installed without the user's click. |
+| `telemetryEnabled` | bool | true | Send anonymous error reports: Error-level log entries only (`telemetryMinimumLevel`), with user, machine, domain, server and database names, profile paths, connection-string values, emails and IPs replaced by placeholders before sending (`TelemetryScrubber`). Set by the installer's options page; on by default. |
 | `logMinimumLevel` | string | "Debug" | Serilog minimum level: `Verbose`, `Debug`, `Information`, `Warning`, `Error`, `Fatal` |
 | `lastUpdateCheck` | string? | null | ISO 8601 timestamp of the last update check |
 | `installId` | string | (GUID) | Anonymous installation identifier |

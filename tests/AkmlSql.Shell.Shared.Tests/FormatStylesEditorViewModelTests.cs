@@ -42,7 +42,7 @@ namespace AkmlSql.Shell.Shared.Tests
             var fake = new FakeRpcClientAccessor();
             fake.Respond<ProfileGetRequest>(MessageTypes.ProfileGet, req =>
                 string.Equals(req.Name, name, StringComparison.OrdinalIgnoreCase)
-                    ? new ProfileGetResponse { Success = true, Name = req.Name, ProfileJson = json, IsBuiltIn = isBuiltIn }
+                    ? new ProfileGetResponse { Success = true, Name = req.Name, ProfileJson = json, IsBuiltIn = isBuiltIn, HasBuiltIn = isBuiltIn }
                     : new ProfileGetResponse { Success = false, ErrorMessage = $"Profile '{req.Name}' was not found." });
             return fake;
         }
@@ -62,7 +62,7 @@ namespace AkmlSql.Shell.Shared.Tests
             Assert.Equal("lowercase", vm.GetWorkingValue("casing.reservedKeywords"));
             Assert.Equal(2, vm.GetWorkingValue("whitespace.tabSize"));
             Assert.False(vm.IsDirty);
-            Assert.False(vm.IsSelectedReadOnly);
+            Assert.False(vm.IsSelectedBuiltIn);
         }
 
         [Fact]
@@ -107,19 +107,24 @@ namespace AkmlSql.Shell.Shared.Tests
         }
 
         [Fact]
-        public async Task Builtin_style_is_read_only_and_save_is_refused_without_ipc()
+        public async Task Builtin_style_is_editable_and_saving_it_writes_an_override()
         {
+            // Built-ins stopped being read-only (commit 4fe39f8): an edit is saved as an override
+            // of the shipped style, which is never written to, and Reset can then discard it.
             var fake = FakeWithProfile("Default", StoredJson, isBuiltIn: true);
+            fake.Respond(MessageTypes.ProfileSave, new ProfileSaveResponse { Success = true });
             var vm = new FormatStylesEditorViewModel(fake);
             await vm.SelectProfileAsync("Default");
 
-            Assert.True(vm.IsSelectedReadOnly);
+            Assert.True(vm.IsSelectedBuiltIn);
+            Assert.False(vm.IsSelectedCustomized);
 
+            vm.SetWorkingValue("casing.reservedKeywords", "UPPERCASE");
             var ok = await vm.SaveAsync();
 
-            Assert.False(ok);
-            Assert.Contains("read-only", vm.LastError, StringComparison.OrdinalIgnoreCase);
-            Assert.DoesNotContain(fake.Requests, r => r.MessageType == MessageTypes.ProfileSave);
+            Assert.True(ok);
+            Assert.Contains(fake.Requests, r => r.MessageType == MessageTypes.ProfileSave);
+            Assert.True(vm.IsSelectedCustomized);
         }
 
         [Fact]
