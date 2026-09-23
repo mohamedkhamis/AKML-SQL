@@ -13,10 +13,52 @@ function newId() {
  * Open a new WebSocket. Returns the socket id which the caller stores and uses for
  * subsequent send/receive/state/dispose calls.
  */
+/**
+ * The message for a connection this page's own Content-Security-Policy refused. The C# side
+ * (EngineConnectDiagnosis) recognises the phrase "Content-Security-Policy", so keep it.
+ */
+function blockedByPolicyMessage(url) {
+    return `The connection to ${url} was blocked by this page's Content-Security-Policy (connect-src), ` +
+        'so it never left this computer. This AKML SQL Web install only allows engines on this computer.';
+}
+
+/** True when a securitypolicyviolation event is about a connection to `url`. */
+function violationIsFor(event, url) {
+    if (event.effectiveDirective !== 'connect-src' && event.violatedDirective !== 'connect-src') return false;
+    const blocked = event.blockedURI || '';
+    if (!blocked) return false;
+    try {
+        return url.startsWith(blocked) || blocked.startsWith(new URL(url).origin);
+    } catch {
+        return false;
+    }
+}
+
 export function connect(url) {
     return new Promise((resolve, reject) => {
         const id = newId();
-        const ws = new WebSocket(url);
+
+        // A connect-src refusal looks exactly like a network failure from inside the WebSocket
+        // API: one bare `error` event. The only place the browser says why is the separate
+        // securitypolicyviolation event, so listen for it while this socket is connecting.
+        let blockedByPolicy = false;
+        const onViolation = (event) => {
+            if (violationIsFor(event, url)) blockedByPolicy = true;
+        };
+        document.addEventListener('securitypolicyviolation', onViolation);
+        const stopWatchingPolicy = () => document.removeEventListener('securitypolicyviolation', onViolation);
+
+        let ws;
+        try {
+            ws = new WebSocket(url);
+        } catch (e) {
+            // Some browsers refuse a CSP-blocked URL synchronously with a SecurityError.
+            stopWatchingPolicy();
+            reject(new Error(e && e.name === 'SecurityError'
+                ? blockedByPolicyMessage(url)
+                : `WebSocket connect failed (${url}): ${e && e.message ? e.message : e}`));
+            return;
+        }
         ws.binaryType = 'arraybuffer';
 
         const state = {
@@ -40,7 +82,19 @@ export function connect(url) {
         const settle = (fn, arg) => {
             if (settled) return;
             settled = true;
+            stopWatchingPolicy();
             fn(arg);
+        };
+
+        // The violation event and the socket's error event are separate tasks with no guaranteed
+        // order, so a failed connect waits one short beat for the violation before choosing its
+        // message. `failing` stops onerror and onclose from each scheduling one.
+        let failing = false;
+        const fail = (message) => {
+            if (settled || failing) return;
+            failing = true;
+            _sockets.delete(id);
+            setTimeout(() => settle(reject, new Error(blockedByPolicy ? blockedByPolicyMessage(url) : message)), 50);
         };
 
         ws.onopen = () => settle(resolve, id);
@@ -52,8 +106,7 @@ export function connect(url) {
             // closed path that the reconnect logic already understands. Teardown for that case
             // belongs to onclose.
             if (settled) return;
-            _sockets.delete(id);
-            settle(reject, new Error(`WebSocket connect failed (${url}).`));
+            fail(`WebSocket connect failed (${url}).`);
         };
         ws.onmessage = (event) => {
             const frame = new Uint8Array(event.data);
@@ -69,9 +122,7 @@ export function connect(url) {
             // first (or at all) for every failure mode, so this is the backstop that makes the
             // promise settle on every path rather than most of them.
             if (!settled) {
-                _sockets.delete(id);
-                settle(reject, new Error(
-                    `WebSocket closed before opening (${url}, code ${e.code}${e.reason ? ': ' + e.reason : ''}).`));
+                fail(`WebSocket closed before opening (${url}, code ${e.code}${e.reason ? ': ' + e.reason : ''}).`);
                 return;
             }
 

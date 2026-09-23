@@ -55,11 +55,13 @@ Source: "..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\*"; \
 ; PowerShell helpers. web-iis-setup.ps1 + web-iis-repair.ps1 are installed PERMANENTLY under
 ; {app}\Support so the "Repair AKML SQL Web hosting" Start-menu shortcut can re-provision the IIS
 ; site after a first install where IIS was not yet functional (web-iis-setup.ps1 exits 0 even on
-; failure, so such installs silently leave no site). The other helpers are bundled to {tmp} and
+; failure, so such installs silently leave no site). web-tls-setup.ps1 is kept there too, so an
+; operator can re-issue the bridge certificate with names the machine does not own (a public IP or
+; DNS name behind NAT: -ExtraNames ... -RestartEngine). The other helpers are bundled to {tmp} and
 ; removed after install.
 Source: "web-iis-setup.ps1"; DestDir: "{app}\Support"; Flags: ignoreversion; Components: web\iis
 Source: "web-iis-repair.ps1"; DestDir: "{app}\Support"; Flags: ignoreversion; Components: web\iis
-Source: "web-tls-setup.ps1"; DestDir: "{tmp}"; Flags: deleteafterinstall; Components: web
+Source: "web-tls-setup.ps1"; DestDir: "{app}\Support"; Flags: ignoreversion; Components: web
 Source: "web-firewall.ps1"; DestDir: "{tmp}"; Flags: deleteafterinstall; Components: web
 Source: "web-config-bridge.ps1"; DestDir: "{tmp}"; Flags: deleteafterinstall; Components: web
 
@@ -79,7 +81,7 @@ Filename: "{sysnative}\WindowsPowerShell\v1.0\powershell.exe"; \
 ; FR-004 -- web-tls-setup.ps1 receives the BRIDGE port (the cert is bound to the engine's
 ; WebSocket listener, not the IIS site). LAN mode only.
 Filename: "powershell.exe"; \
-    Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{tmp}\web-tls-setup.ps1"" -Port {code:GetBridgePort} -PfxPath ""{commonappdata}\AKML SQL Web\certs\bridge.pfx"""; \
+    Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\Support\web-tls-setup.ps1"" -Port {code:GetBridgePort} -PfxPath ""{commonappdata}\AKML SQL Web\certs\bridge.pfx"""; \
     StatusMsg: "Generating self-signed TLS certificate..."; \
     Check: IsLanExposed; \
     Components: web; \

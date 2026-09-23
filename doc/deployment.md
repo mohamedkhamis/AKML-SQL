@@ -238,7 +238,37 @@ For pairing a browser on another machine:
 1. The installer generates a self-signed TLS cert, binds it to the bridge port (`netsh http add sslcert`), and opens a firewall rule ("AKML SQL Web Engine").
 2. The engine **enforces** a 6-digit pairing PIN at the handshake (wrong PIN → refused; correct PIN → a bearer token is minted and reused on later reconnects).
 3. The install summary at `%CommonAppData%\AKML SQL Web\INSTALL-SUMMARY.txt` shows the browse URL, the bridge port, the **pairing PIN**, and the TLS thumbprint.
-4. On the second machine: browse to the printed URL, open **Add connection**, enter the host + bridge port + PIN. To trust the cert, import `%ProgramData%\AKML SQL Web\certs\bridge.cer` into **Local Machine → Trusted Root Certification Authorities**.
+4. On the second machine: open **Settings → Engine connections → Add**, enter the engine computer's name or IP (a pasted `host:port` or `wss://…` URL also works), the **Bridge port** from the install summary — it is often *not* the default `47291` — and the PIN. The PIN field appears by itself for any address that is not this computer.
+5. Trust the certificate, one of two ways:
+   - **Per browser:** open `https://<host>:<bridge port>/akmlsql`, accept the certificate warning, and you should see *"AKML SQL engine: reachable"*. The pairing form links to this address when a connect fails.
+   - **Per machine:** import `%ProgramData%\AKML SQL Web\certs\bridge.cer` into **Local Machine → Trusted Root Certification Authorities**. This needs the address you connect by to be in the certificate. The certificate lists the machine name, FQDN and the machine's own IPs; a public IP or DNS name the machine does not own (a cloud VM, NAT) must be added:
+
+     ```powershell
+     & "C:\Program Files (x86)\AKML SQL\Support\web-tls-setup.ps1" -Port <bridge port> `
+         -PfxPath "C:\ProgramData\AKML SQL Web\certs\bridge.pfx" -ExtraNames 203.0.113.10 -RestartEngine
+     ```
+
+     Re-issuing changes the certificate, so browsers already paired will be asked to re-pair.
+
+#### Do I need a remote engine?
+
+Usually not. **To query a SQL Server on another machine, use the engine on your own computer** and add the server in **Connect to SQL Server** with its address (`host`, `host\instance` or `host,port`) and **SQL Server authentication**. The SQL Server machine needs nothing from AKML.
+
+Windows authentication is limited to a SQL Server on the engine's own machine, as is any named-pipe/UNC address. The engine runs as a service (LocalSystem), so either would sign in as the service's account rather than as you — and would let a hostile page make the engine authenticate somewhere of its choosing. The web client explains the refusal; the engine enforces it again (`BridgeSqlTargetGuard`) for every request that arrives over the WebSocket bridge. Requests from the SSMS / Visual Studio extension (named pipe, running as the signed-in user) are not restricted.
+
+Add a **remote engine** only when AKML SQL Web is installed in LAN mode on the other computer — for example to use Windows authentication *as that machine* against its local SQL Server.
+
+#### When pairing fails
+
+The browser reports every WebSocket failure the same way, so the pairing form shows ordered checks instead of the raw error:
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| "blocked by this page's Content-Security-Policy" | The page you are pairing *from* is a localhost install older than this release, whose policy only allowed local engines | Update AKML SQL Web on that computer, or run **Repair AKML SQL Web hosting** after updating |
+| `https://<host>:<port>/akmlsql` does not load at all | Wrong port, engine service stopped, or the port is closed in Windows Firewall / a cloud firewall | Check the **Bridge port** in the install summary; `sc query AkmlSqlWebEngine`; open the port |
+| The page loads after a certificate warning | The certificate was not trusted yet | You have just trusted it for this browser — pair again |
+
+In localhost mode the engine also refuses WebSocket connections whose `Origin` is not this computer (localhost, a loopback IP, or the machine name), so an arbitrary website cannot drive the PIN-less local engine.
 
 ### Don't host (serve it yourself)
 

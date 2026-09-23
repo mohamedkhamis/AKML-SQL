@@ -23,6 +23,15 @@
         <button class="akml-tool-button" @onclick="ShowAddDialog">Add</button>
     </div>
 
+    @* The question users actually have: "does the other server need AKML on it?" Answered here,
+       where they are about to add one. *@
+    <p class="akml-connections-intro" data-testid="engine-connections-intro">
+        The engine is the AKML SQL service that does the work for this page. You normally use the one on this
+        computer. <b>To query a SQL Server on another machine you don't need an engine there</b> — use
+        <i>Connect to SQL Server</i> with that server's address and SQL Server authentication. Add a remote engine
+        only when AKML SQL Web is installed in network mode on the other computer.
+    </p>
+
     @if (_connections == null || _connections.Count == 0)
     {
         <p class="akml-connections-empty">
@@ -49,24 +58,64 @@
     {
         <div class="akml-connections-dialog">
             <h4>Add connection</h4>
-            <label>Name <input @bind="_form.Name" /></label>
-            <label>Host <input @bind="_form.Host" placeholder="127.0.0.1 or fqdn" /></label>
-            <label>Port <input type="number" min="1024" max="65535" @bind="_form.Port" /></label>
+            <label>Name <input @bind="_form.Name" placeholder="optional" data-testid="engine-add-name" /></label>
             <label>
-                <input type="checkbox" @bind="_form.IsLocalhost" /> Localhost (no PIN required)
+                Address
+                <input @bind="_form.Host" @bind:event="oninput" placeholder="localhost, a server name or IP, or host:port"
+                       data-testid="engine-add-host" />
             </label>
-            @if (!_form.IsLocalhost)
+            <label>
+                Port
+                <input type="number" min="1" max="65535" @bind="_form.Port" data-testid="engine-add-port" />
+            </label>
+            <p class="akml-connections-hint">
+                Use the <b>Bridge port</b> from <code>C:\ProgramData\AKML SQL Web\INSTALL-SUMMARY.txt</code> on the engine
+                computer. The default is @EngineEndpoint.DefaultPort, but the installer can choose another.
+            </p>
+            @if (NeedsPin)
             {
-                <label>Pairing PIN <input @bind="_form.PairingPin" placeholder="6-digit PIN from installer" /></label>
+                <label>
+                    Pairing PIN
+                    <input @bind="_form.PairingPin" inputmode="numeric" autocomplete="off" placeholder="PIN from the engine computer"
+                           data-testid="engine-add-pin" />
+                </label>
+                <p class="akml-connections-hint">
+                    An engine on another computer needs its PIN, from
+                    <code>C:\ProgramData\AKML SQL Web\pairing-pin.txt</code> on that computer.
+                </p>
             }
             <div class="akml-connections-dialog-buttons">
-                <button class="akml-tool-button" @onclick="SubmitAddAsync">Pair</button>
+                <button class="akml-tool-button" @onclick="SubmitAddAsync" data-testid="engine-add-pair">Pair</button>
                 <button class="akml-tool-button" @onclick="() => _showAdd = false">Cancel</button>
             </div>
             @if (!string.IsNullOrEmpty(_lastError))
             {
-                <p class="akml-connections-error">@_lastError</p>
+                <p class="akml-connections-error" data-testid="engine-add-error">@_lastError</p>
             }
+        </div>
+    }
+
+    @if (_diagnosis is { } d)
+    {
+        <div class="akml-connections-diagnosis" role="alert" data-testid="engine-connect-diagnosis">
+            <p class="akml-connections-diagnosis-summary">@d.Summary</p>
+            <ol>
+                @foreach (var step in d.Steps)
+                {
+                    <li>@step</li>
+                }
+            </ol>
+            @if (d.TrustUrl is not null)
+            {
+                <p>
+                    <a class="akml-tool-button" href="@d.TrustUrl" target="_blank" rel="noopener noreferrer"
+                       data-testid="engine-trust-link">Open the engine address in a new tab</a>
+                </p>
+            }
+            <details>
+                <summary>Technical detail</summary>
+                <code>@d.RawError</code>
+            </details>
         </div>
     }
 </div>
@@ -125,6 +174,27 @@
         margin-top: var(--akml-scalar-spacing-s);
     }
     .akml-connections-error { color: var(--akml-status-danger); margin-top: var(--akml-scalar-spacing-s); }
+    .akml-connections-intro,
+    .akml-connections-hint {
+        color: var(--akml-text-secondary);
+        line-height: 1.5;
+    }
+    .akml-connections-hint { margin: 0 0 var(--akml-scalar-spacing-s); font-size: 12px; }
+    .akml-connections-intro b { color: var(--akml-text-primary); }
+    .akml-connections-diagnosis {
+        margin-top: var(--akml-scalar-spacing-m);
+        padding: var(--akml-scalar-spacing-m);
+        border: 1px solid var(--akml-status-danger);
+        border-left-width: 3px;
+        border-radius: var(--akml-scalar-radius-xs);
+        background-color: var(--akml-surface-panel);
+        line-height: 1.5;
+    }
+    .akml-connections-diagnosis-summary { margin-top: 0; font-weight: bold; }
+    .akml-connections-diagnosis ol { padding-left: 1.25rem; }
+    .akml-connections-diagnosis li { margin-bottom: var(--akml-scalar-spacing-xs); }
+    .akml-connections-diagnosis a.akml-tool-button { display: inline-block; text-decoration: none; }
+    .akml-connections-diagnosis code { overflow-wrap: anywhere; }
     .akml-tool-button {
         font-family: var(--akml-type-chrome-family); font-size: var(--akml-type-chrome-size);
         background-color: var(--akml-surface-panel); color: var(--akml-text-primary);
@@ -141,6 +211,17 @@
     private AddForm _form = new();
     private string? _lastError;
 
+    /// <summary>Why the last connect failed, when it failed before any engine answered.</summary>
+    private EngineConnectDiagnosis? _diagnosis;
+
+    /// <summary>
+    /// A PIN is needed for any engine that is not on this computer. Worked out from the address as
+    /// it is typed, rather than from a "Localhost" checkbox the user had to remember to untick.
+    /// </summary>
+    private bool NeedsPin =>
+        EngineEndpoint.TryParseAddress(_form.Host, _form.Port, out var host, out _)
+        && !EngineEndpoint.IsLoopbackHost(host);
+
     protected override async Task OnInitializedAsync() => await ReloadAsync();
 
     private async Task ReloadAsync()
@@ -154,26 +235,45 @@
     {
         _form = new AddForm();
         _lastError = null;
+        _diagnosis = null;
         _showAdd = true;
     }
 
     private async Task SubmitAddAsync()
     {
         _lastError = null;
+        _diagnosis = null;
+
+        // A pasted "host:port" or whole URL fills both fields; a port in the text wins.
+        if (!EngineEndpoint.TryParseAddress(_form.Host, _form.Port, out var host, out var port))
+        {
+            _lastError = "Enter the engine computer's name or IP address, optionally with :port.";
+            return;
+        }
+
+        var isLocalhost = EngineEndpoint.IsLoopbackHost(host);
+        if (!isLocalhost && string.IsNullOrWhiteSpace(_form.PairingPin))
+        {
+            _lastError = "An engine on another computer needs its pairing PIN.";
+            return;
+        }
+
+        _form.Host = host;
+        _form.Port = port;
         try
         {
             var connection = new EngineConnection
             {
                 Id = Guid.NewGuid().ToString(),
-                Name = string.IsNullOrEmpty(_form.Name) ? _form.Host : _form.Name,
-                Host = _form.Host,
-                Port = _form.Port,
-                IsLocalhost = _form.IsLocalhost,
+                Name = string.IsNullOrWhiteSpace(_form.Name) ? host : _form.Name.Trim(),
+                Host = host,
+                Port = port,
+                IsLocalhost = isLocalhost,
             };
 
             // Attempt the handshake first. On localhost we skip the PIN; on LAN we send it.
             var response = await Bridge.ConnectAsync(
-                connection, bearerToken: null, pairingPin: _form.IsLocalhost ? null : _form.PairingPin,
+                connection, bearerToken: null, pairingPin: isLocalhost ? null : _form.PairingPin.Trim(),
                 CancellationToken.None);
 
             if (response.Status != HandshakeStatus.Ok)
@@ -205,16 +305,32 @@
             _showAdd = false;
             await ReloadAsync();
         }
+        catch (Exception ex) when (IsSocketFailure(ex))
+        {
+            // Nothing answered (or the page itself refused the address): explain, don't dump the stack.
+            _diagnosis = EngineConnectDiagnosis.For(host, port, ex);
+            Diagnostics.Log(DiagnosticLevel.Warn, "connections", _diagnosis.RawError);
+        }
         catch (Exception ex)
         {
-            _lastError = ex.Message;
+            _lastError = EngineConnectDiagnosis.FirstLine(ex.Message);
             Diagnostics.Log(DiagnosticLevel.Error, "connections", _lastError, new { Exception = ex.GetType().Name });
         }
     }
 
+    /// <summary>
+    /// True for a failure before any engine answered: the WebSocket never opened. Those get the
+    /// diagnosis; a handshake refusal (wrong PIN, expired token) already says what is wrong.
+    /// </summary>
+    private static bool IsSocketFailure(Exception ex) =>
+        ex is Microsoft.JSInterop.JSException
+        && (ex.Message.Contains("WebSocket", StringComparison.Ordinal)
+            || ex.Message.Contains(EngineConnectDiagnosis.PolicyMarker, StringComparison.Ordinal));
+
     private async Task ConnectAsync(EngineConnection c)
     {
         _lastError = null;
+        _diagnosis = null;
         try
         {
             string? bearer = null;
@@ -239,9 +355,13 @@
                 _lastError = $"Handshake declined: {response.Status} -- {response.ErrorMessage}";
             }
         }
+        catch (Exception ex) when (IsSocketFailure(ex))
+        {
+            _diagnosis = EngineConnectDiagnosis.For(c.Host, c.Port, ex);
+        }
         catch (Exception ex)
         {
-            _lastError = ex.Message;
+            _lastError = EngineConnectDiagnosis.FirstLine(ex.Message);
         }
         StateHasChanged();
     }
@@ -268,8 +388,7 @@
         // Default to the engine bridge's default port (BridgeOptions.Port / installer /WEB_PORT),
         // so accepting the pre-filled value just works against a default install. (Was 5081, which
         // matched nothing the engine listens on.)
-        public int Port { get; set; } = 47291;
-        public bool IsLocalhost { get; set; } = true;
+        public int Port { get; set; } = EngineEndpoint.DefaultPort;
         public string PairingPin { get; set; } = string.Empty;
     }
 }

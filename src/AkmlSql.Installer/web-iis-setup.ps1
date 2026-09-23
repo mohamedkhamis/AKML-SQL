@@ -125,14 +125,15 @@ try {
     # allow-list + the bridge sockets. Spec 026 (M4 closure) M6: in LAN mode the browser on a SECOND
     # machine loads the bundle from http://<machineA>/ and must open wss://<machineA>:<bridgePort> --
     # a host that is neither localhost nor 127.0.0.1, which the localhost-only list forbids (so the
-    # bridge connection was blocked and LAN pairing/US2 could never start). For LAN installs we add
-    # the `wss:` scheme-source so any TLS WebSocket host is permitted (the bridge still requires the
-    # pairing PIN/bearer + a pinned cert, so this is not a meaningful CSP relaxation). Localhost
-    # installs keep the tight host-locked list.
-    $bridgeConnectSrc = "ws://127.0.0.1:* wss://127.0.0.1:* ws://localhost:* wss://localhost:* "
-    if ($Mode -eq 'Lan') {
-        $bridgeConnectSrc += "wss: "
-    }
+    # bridge connection was blocked and LAN pairing/US2 could never start). The `wss:` scheme-source
+    # permits any TLS WebSocket host (a remote bridge still requires the pairing PIN/bearer + a
+    # pinned cert, so this is not a meaningful CSP relaxation).
+    #
+    # It is added in BOTH modes. A localhost install is exactly the one a user pairs FROM when the
+    # engine they want is on another machine; without `wss:` the browser blocked that connection
+    # before it left the machine and reported only "WebSocket connect failed", which looked like a
+    # network or certificate fault on the remote side. Plaintext `ws:` stays loopback-only.
+    $bridgeConnectSrc = "ws://127.0.0.1:* wss://127.0.0.1:* ws://localhost:* wss://localhost:* wss: "
     # CodeMirror is vendored locally (wwwroot/lib/codemirror/akml-cm.js), so script-src no longer
     # needs the esm.sh CDN -- everything loads from 'self'. 'wasm-unsafe-eval' stays for the Blazor
     # WASM runtime; style-src keeps 'unsafe-inline' for CodeMirror's injected editor styles.

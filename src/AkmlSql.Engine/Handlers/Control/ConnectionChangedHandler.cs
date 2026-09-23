@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Engine.Completion.Providers;
+using AkmlSql.Engine.Pairing;
 using AkmlSql.Engine.Schema;
 using AkmlSql.Engine.Transports;
 using Serilog;
@@ -32,6 +33,16 @@ namespace AkmlSql.Engine.Handlers.Control
                 throw new InvalidOperationException("RpcContext.ParserService is required for ConnectionChanged dispatch.");
             if (ctx.SchemaMetadata == null)
                 throw new InvalidOperationException("RpcContext.SchemaMetadata is required for ConnectionChanged dispatch.");
+
+            // A notification has no reply to carry a refusal, so a bridge request for a target the
+            // engine will not open under its own identity is logged and ignored: the session keeps
+            // its previous connection. The web client runs the same check first and shows the reason.
+            if (BridgeSqlTargetGuard.Check(request.ConnectionString) is not null)
+            {
+                Log.Warning("ConnectionChanged refused for a bridge request (session={Session}) — {ConnDesc}",
+                    request.SessionId, ConnectionDiagnostics.Describe(request.ConnectionString));
+                return Task.FromResult(request);
+            }
 
             // Spec 029: capture the previous connection string before UpdateSession overwrites it
             // so we can detect a credential change (different password / user) below.
