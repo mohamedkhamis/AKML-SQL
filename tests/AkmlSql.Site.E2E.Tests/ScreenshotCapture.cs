@@ -28,7 +28,7 @@ public sealed class ScreenshotCapture(SiteFixture site)
 
         foreach (var (name, path) in ((string Name, string Path)[])
                  [("home", "/"), ("features", "/features"), ("download", "/download"),
-                  ("docs", "/docs/topics/connecting")])
+                  ("docs", "/docs/topics/connecting"), ("feedback", "/feedback")])
         {
             await page.GotoAsync(SiteFixture.BaseUrl + path, new PageGotoOptions { WaitUntil = WaitUntilState.NetworkIdle });
             await page.ScreenshotAsync(new PageScreenshotOptions
@@ -47,7 +47,7 @@ public sealed class ScreenshotCapture(SiteFixture site)
         var mobilePage = await mobile.NewPageAsync();
 
         foreach (var (name, path) in ((string Name, string Path)[])
-                 [("home-mobile", "/"), ("download-mobile", "/download")])
+                 [("home-mobile", "/"), ("download-mobile", "/download"), ("feedback-mobile", "/feedback")])
         {
             await mobilePage.GotoAsync(SiteFixture.BaseUrl + path, new PageGotoOptions { WaitUntil = WaitUntilState.NetworkIdle });
             await mobilePage.ScreenshotAsync(new PageScreenshotOptions
@@ -73,7 +73,10 @@ public sealed class ScreenshotCapture(SiteFixture site)
             // Spec 038: the portal is no longer one page. Capture every section, so a review of a
             // deploy can see the whole surface rather than just the overview.
             foreach (var (name, path) in ((string Name, string Path)[])
-                     [("admin-downloads", "/admin/downloads"),
+                     [("admin-today", "/admin?days=today"),
+                      ("admin-insights", "/admin/insights"),
+                      ("admin-feedback", "/admin/feedback"),
+                      ("admin-downloads", "/admin/downloads"),
                       ("admin-people", "/admin/people"),
                       ("admin-pages", "/admin/pages"),
                       ("admin-releases", "/admin/releases"),
@@ -81,6 +84,24 @@ public sealed class ScreenshotCapture(SiteFixture site)
             {
                 await page.GotoAsync(SiteFixture.BaseUrl + path, new PageGotoOptions { WaitUntil = WaitUntilState.NetworkIdle });
                 await page.ScreenshotAsync(new PageScreenshotOptions
+                {
+                    Path = Path.Combine(outputDir!, $"{name}.png"),
+                    FullPage = true,
+                });
+            }
+
+            // The portal at phone width: the owner checks it from a phone as often as a desk.
+            await mobilePage.GotoAsync(SiteFixture.BaseUrl + "/admin/login");
+            await mobilePage.FillAsync("#admin-password", SiteFixture.AdminPassword);
+            await mobilePage.ClickAsync("button[type='submit']");
+            await mobilePage.WaitForURLAsync("**/admin");
+            foreach (var (name, path) in ((string Name, string Path)[])
+                     [("admin-mobile", "/admin?days=today"),
+                      ("admin-insights-mobile", "/admin/insights"),
+                      ("admin-feedback-mobile", "/admin/feedback")])
+            {
+                await mobilePage.GotoAsync(SiteFixture.BaseUrl + path, new PageGotoOptions { WaitUntil = WaitUntilState.NetworkIdle });
+                await mobilePage.ScreenshotAsync(new PageScreenshotOptions
                 {
                     Path = Path.Combine(outputDir!, $"{name}.png"),
                     FullPage = true,

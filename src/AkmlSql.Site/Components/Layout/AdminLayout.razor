@@ -1,8 +1,11 @@
 @inherits LayoutComponentBase
 @layout MainLayout
 @using AkmlSql.Site.Admin
+@using AkmlSql.Site.Analytics
 @using Microsoft.AspNetCore.WebUtilities
 @inject NavigationManager Nav
+@inject ReportClock Clock
+@inject IServiceProvider Services
 
 @* Spec 038 (US4): the admin portal shell — persistent navigation, one shared reporting window, and
    sign-out, on every portal page. Before this, /admin, /admin/errors and /admin/login were three
@@ -33,15 +36,15 @@
                     <li>
                         @if (active)
                         {
-                            <a href="@AdminNav.WithRange(section.Route, Days)"
+                            <a href="@AdminNav.WithRange(section.Route, Range)"
                                aria-current="page"
                                class="is-current"
-                               title="@section.Description">@section.Title</a>
+                               title="@section.Description">@section.Title@Badge(section)</a>
                         }
                         else
                         {
-                            <a href="@AdminNav.WithRange(section.Route, Days)"
-                               title="@section.Description">@section.Title</a>
+                            <a href="@AdminNav.WithRange(section.Route, Range)"
+                               title="@section.Description">@section.Title@Badge(section)</a>
                         }
                     </li>
                 }
@@ -58,21 +61,23 @@
     <nav class="admin-toolbar" aria-label="Reporting window">
         <span class="admin-toolbar-label" id="admin-range-label">Window</span>
         <ul class="admin-ranges" aria-labelledby="admin-range-label">
-            @foreach (var range in AdminDashboardOptions.Ranges)
+            @foreach (var range in ReportRange.All)
             {
                 <li>
-                    @if (range == Days)
+                    @if (range.Key == Range.Key)
                     {
-                        <a href="@AdminNav.WithRange(CurrentPath, range)" aria-current="true" class="is-current">@AdminDashboardOptions.Label(range)</a>
+                        <a href="@AdminNav.WithRange(CurrentPath, range)" aria-current="true" class="is-current">@range.Label</a>
                     }
                     else
                     {
-                        <a href="@AdminNav.WithRange(CurrentPath, range)">@AdminDashboardOptions.Label(range)</a>
+                        <a href="@AdminNav.WithRange(CurrentPath, range)">@range.Label</a>
                     }
                 </li>
             }
         </ul>
-        <span class="admin-range-active">Showing the last @AdminDashboardOptions.Label(Days)</span>
+        @* Names the actual days and the timezone. "Today" is only unambiguous once it says whose
+           today it is -- the reports used to use UTC, three hours behind the owner in summer. *@
+        <span class="admin-range-active">@Clock.Resolve(Range).Describe()</span>
     </nav>
 
     @Body
@@ -82,23 +87,54 @@
     /// <summary>Path of the request, used to mark the active section and rebuild range links.</summary>
     private string CurrentPath { get; set; } = "/admin";
 
-    /// <summary>The reporting window in force, shared by every section.</summary>
-    private int Days { get; set; } = AdminDashboardOptions.DefaultDays;
+    /// <summary>Open feedback messages, for the badge; null when it could not be read.</summary>
+    private long? _openFeedback;
+
+    /// <summary>
+    /// The count beside "Feedback", so new messages are visible from every section rather than
+    /// only to someone who thinks to open the inbox. Nothing is shown at zero.
+    /// </summary>
+    private RenderFragment Badge(AdminSection section) => builder =>
+    {
+        if (section.Route != "/admin/feedback" || _openFeedback is not > 0)
+        {
+            return;
+        }
+
+        builder.OpenElement(0, "span");
+        builder.AddAttribute(1, "class", "admin-badge");
+        builder.AddContent(2, _openFeedback.Value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        builder.CloseElement();
+        builder.OpenElement(3, "span");
+        builder.AddAttribute(4, "class", "visually-hidden");
+        builder.AddContent(5, _openFeedback == 1 ? " open message" : " open messages");
+        builder.CloseElement();
+    };
+
+    /// <summary>The reporting range in force, shared by every section.</summary>
+    private ReportRange Range { get; set; } = ReportRange.Default;
 
     protected override void OnParametersSet()
     {
         var uri = Nav.ToAbsoluteUri(Nav.Uri);
         CurrentPath = uri.AbsolutePath;
 
-        // A bad query string must not break the owner's portal — NormalizeDays falls back to the
-        // default for anything missing, zero, negative or absurd (contract A4.4).
-        int? requested = null;
-        if (QueryHelpers.ParseQuery(uri.Query).TryGetValue("days", out var raw)
-            && int.TryParse(raw.ToString(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var parsed))
-        {
-            requested = parsed;
-        }
+        // A bad query string must not break the owner's portal: ResolveRange falls back to the
+        // default for anything it does not recognise, and clamps an absurd number (contract A4.4).
+        QueryHelpers.ParseQuery(uri.Query).TryGetValue("days", out var raw);
+        Range = AdminDashboardOptions.ResolveRange(raw.ToString());
 
-        Days = AdminDashboardOptions.NormalizeDays(requested);
+        // Resolved optionally and guarded: the badge is a convenience on every portal page, and a
+        // locked or unreadable database must cost the badge, not the page.
+        try
+        {
+            _openFeedback = Services.GetService(typeof(AkmlSql.Site.Feedback.FeedbackStore)) is AkmlSql.Site.Feedback.FeedbackStore store
+                ? store.CountOpen()
+                : null;
+        }
+        catch (Microsoft.Data.Sqlite.SqliteException)
+        {
+            _openFeedback = null;
+        }
     }
 }

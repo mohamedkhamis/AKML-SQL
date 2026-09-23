@@ -33,6 +33,17 @@ public sealed class AnalyticsOptions
     /// visits are recorded without location and nothing else changes.
     /// </summary>
     public string GeoDatabasePath { get; set; } = "";
+
+    /// <summary>
+    /// Timezone the admin reports use for day boundaries -- "today", "yesterday", the daily charts,
+    /// the hour-of-day analysis. A Windows or IANA id ("Egypt Standard Time", "Africa/Cairo").
+    /// Empty uses the server's own timezone, which on the deployed site is Cairo.
+    /// <para>
+    /// Reports used to count days in UTC, three hours behind the owner in summer: a download at
+    /// 01:00 local time was reported on the previous day.
+    /// </para>
+    /// </summary>
+    public string ReportTimeZone { get; set; } = "";
 }
 
 /// <summary>
@@ -66,13 +77,20 @@ public sealed partial class AnalyticsStore : IDisposable
     private readonly byte[] _salt;
 
     public AnalyticsStore(AnalyticsOptions options)
-        : this(options?.DatabasePath)
+        : this(options?.DatabasePath, ResolveReportZone(options?.ReportTimeZone))
     {
     }
 
     /// <summary>Opens (creating if needed) the database at the configured/default path.</summary>
-    public AnalyticsStore(string? databasePath)
+    /// <param name="databasePath">Database path; empty uses the ProgramData default.</param>
+    /// <param name="reportZone">
+    /// Timezone for report day boundaries. Null means UTC -- which is how every report behaved
+    /// before timezones were supported, so a caller that does not ask for one gets exactly the old
+    /// semantics. The site passes the configured zone (see <see cref="AnalyticsOptions.ReportTimeZone"/>).
+    /// </param>
+    public AnalyticsStore(string? databasePath, TimeZoneInfo? reportZone = null)
     {
+        ReportZone = reportZone ?? TimeZoneInfo.Utc;
         DatabasePath = ResolveDatabasePath(databasePath);
         var directory = Path.GetDirectoryName(DatabasePath);
         if (!string.IsNullOrEmpty(directory))
@@ -97,6 +115,38 @@ public sealed partial class AnalyticsStore : IDisposable
     /// <summary>Resolved absolute database path.</summary>
     public string DatabasePath { get; }
 
+    /// <summary>The timezone report windows resolve in.</summary>
+    public TimeZoneInfo ReportZone { get; }
+
+    /// <summary>Resolves <paramref name="range"/> at the current instant in <see cref="ReportZone"/>.</summary>
+    public ReportWindow ResolveWindow(ReportRange range) => ResolveWindow(range, DateTimeOffset.UtcNow);
+
+    /// <summary>Resolves <paramref name="range"/> at <paramref name="now"/> in <see cref="ReportZone"/>.</summary>
+    public ReportWindow ResolveWindow(ReportRange range, DateTimeOffset now) =>
+        ReportWindow.Resolve(range, now, ReportZone);
+
+    /// <summary>
+    /// Resolves a configured timezone id. Empty means the server's own zone. An id that does not
+    /// resolve also falls back to the server's zone rather than failing startup: a typo in a
+    /// reporting setting must not take the site down.
+    /// </summary>
+    internal static TimeZoneInfo ResolveReportZone(string? id)
+    {
+        if (string.IsNullOrWhiteSpace(id))
+        {
+            return TimeZoneInfo.Local;
+        }
+
+        try
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById(id.Trim());
+        }
+        catch (Exception e) when (e is TimeZoneNotFoundException or InvalidTimeZoneException)
+        {
+            return TimeZoneInfo.Local;
+        }
+    }
+
     /// <summary>Resolves the configured path (env-var expanded) or the ProgramData default.</summary>
     public static string ResolveDatabasePath(string? configured)
     {
@@ -115,12 +165,19 @@ public sealed partial class AnalyticsStore : IDisposable
     /// Per-day salted IP hash — the only client-IP-derived value ever stored. Public so the
     /// privacy behavior (salt persistence across restarts) is directly testable.
     /// </summary>
-    public string ComputeIpHash(string? ipAddress, DateOnly utcDate)
+    /// <param name="ipAddress">The client address; never stored.</param>
+    /// <param name="day">
+    /// The day the hash is valid for. Callers pass the event's LOCAL day in <see cref="ReportZone"/>
+    /// so a visitor keeps one hash for the whole of the owner's day. It used to be the UTC day,
+    /// which rotated the hash at 03:00 Cairo time: anyone active across 03:00 was counted as two
+    /// unique visitors for the same local day.
+    /// </param>
+    public string ComputeIpHash(string? ipAddress, DateOnly day)
     {
         var prefix = Encoding.UTF8.GetBytes(string.Concat(
             ipAddress ?? "",
             "|",
-            utcDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             "|"));
         var buffer = new byte[prefix.Length + _salt.Length];
         prefix.CopyTo(buffer, 0);
@@ -160,8 +217,10 @@ public sealed partial class AnalyticsStore : IDisposable
         ArgumentNullException.ThrowIfNull(visit);
         ArgumentException.ThrowIfNullOrWhiteSpace(visit.Path);
 
+        // `day` stays the UTC day: that is what the column has always held and what history
+        // contains. Only the hash moves to the local day.
         var day = DateOnly.FromDateTime(visit.Utc.UtcDateTime);
-        var hash = ComputeIpHash(visit.IpAddress, day);
+        var hash = ComputeIpHash(visit.IpAddress, ReportWindow.LocalDay(visit.Utc, ReportZone));
 
         lock (_gate)
         {
@@ -263,7 +322,7 @@ public sealed partial class AnalyticsStore : IDisposable
         {
             using var command = _connection.CreateCommand();
             var day = DateOnly.FromDateTime(download.Utc.UtcDateTime);
-            var hash = ComputeIpHash(download.IpAddress, day);
+            var hash = ComputeIpHash(download.IpAddress, ReportWindow.LocalDay(download.Utc, ReportZone));
 
             command.CommandText =
                 "INSERT INTO downloads (utc, day, file, referrer_host, ua_family, ip_hash, " +
@@ -360,92 +419,113 @@ public sealed partial class AnalyticsStore : IDisposable
         }
     }
 
-    /// <summary>Dashboard summary anchored at the current UTC instant.</summary>
+    /// <summary>Dashboard summary for the last <paramref name="days"/> days, anchored now.</summary>
     public AnalyticsSummary GetSummary(int days) => GetSummary(days, DateTimeOffset.UtcNow);
 
-    /// <summary>Dashboard summary anchored at <paramref name="now"/> (injectable for tests).</summary>
+    /// <summary>
+    /// Dashboard summary for the last <paramref name="days"/> days anchored at <paramref name="now"/>.
+    /// Kept for existing callers; equivalent to <see cref="GetSummary(ReportWindow)"/> with a
+    /// "last N days" window in <see cref="ReportZone"/>.
+    /// </summary>
     public AnalyticsSummary GetSummary(int days, DateTimeOffset now)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(days, 1);
+        return GetSummary(ResolveWindow(ReportRange.LastDays(days), now));
+    }
 
-        var today = DateOnly.FromDateTime(now.UtcDateTime);
-        var sinceWindow = today.AddDays(-(days - 1));
-        var since7 = today.AddDays(-6);
+    /// <summary>Dashboard summary for <paramref name="window"/>, with the comparison period.</summary>
+    public AnalyticsSummary GetSummary(ReportWindow window)
+    {
+        ArgumentNullException.ThrowIfNull(window);
+
+        // The fixed "today" and "last 7 days" tiles are independent of the selected window, but they
+        // are resolved at the SAME instant so every figure on the page describes the same moment.
+        var today = ResolveWindow(ReportRange.Today, window.Now);
+        var last7 = ResolveWindow(ReportRange.Last7, window.Now);
+        var previous = window.Previous();
 
         lock (_gate)
         {
-            var sessionStats = QuerySessionStats(sinceWindow);
+            var sessionStats = QuerySessionStats(window);
+            var dailyVisits = QueryDailySeries("visits", window, distinctColumn: null);
+            var (hourlyVisits, hourlyDownloads, _) = QueryWhenPeopleVisit(window);
 
             return new AnalyticsSummary
             {
-                Days = days,
+                Days = window.Range.Days,
+                Window = window,
+                HourlyVisits = hourlyVisits,
+                HourlyDownloads = hourlyDownloads,
+                Headline = QueryHeadline(window),
+                PreviousHeadline = QueryHeadline(previous),
+                PreviousWindow = previous,
                 // ADM-001: every visitor-facing figure excludes crawlers. Counting them made the
                 // headline numbers, the daily chart and the top-pages table meaningless.
-                VisitsToday = CountRows("visits", $"day = $day AND {HumanOnly}", ("$day", FormatDay(today))),
-                VisitsLast7Days = CountRows("visits", $"day >= $day AND {HumanOnly}", ("$day", FormatDay(since7))),
-                VisitsWindow = CountRows("visits", $"day >= $day AND {HumanOnly}", ("$day", FormatDay(sinceWindow))),
-                AutomatedVisitsWindow = CountRows("visits", $"day >= $day AND NOT ({HumanOnly})", ("$day", FormatDay(sinceWindow))),
-                DownloadsTotal = CountRows("downloads", $"{RealDownloadOnly}", null),
-                DownloadsLast7Days = CountRows("downloads", $"day >= $day AND {RealDownloadOnly}", ("$day", FormatDay(since7))),
-                DownloadsWindow = CountRows("downloads", $"day >= $day AND {RealDownloadOnly}", ("$day", FormatDay(sinceWindow))),
-                UniqueVisitorsToday = CountRows("visits", $"day = $day AND {HumanOnly}", ("$day", FormatDay(today)), distinctColumn: "ip_hash"),
-                TopPages = QueryCountRows(
-                    $"SELECT path, COUNT(*) FROM visits WHERE day >= $day AND {HumanOnly} " +
+                VisitsToday = Count("visits", HumanOnly, today),
+                VisitsLast7Days = Count("visits", HumanOnly, last7),
+                VisitsWindow = Count("visits", HumanOnly, window),
+                AutomatedVisitsWindow = Count("visits", $"NOT ({HumanOnly})", window),
+                DownloadsTotal = Count("downloads", RealDownloadOnly, window: null),
+                DownloadsLast7Days = Count("downloads", RealDownloadOnly, last7),
+                DownloadsWindow = Count("downloads", RealDownloadOnly, window),
+                UniqueVisitorsToday = Count("visits", HumanOnly, today, distinctColumn: "ip_hash"),
+                TopPages = QueryTop(
+                    $"SELECT path, COUNT(*) FROM visits WHERE {InWindow} AND {HumanOnly} " +
                     "GROUP BY path ORDER BY COUNT(*) DESC, path LIMIT $limit;",
-                    ("$day", FormatDay(sinceWindow))),
-                DownloadsByFile = QueryCountRows(
+                    window),
+                DownloadsByFile = QueryTop(
                     $"SELECT file, COUNT(*) FROM downloads WHERE {RealDownloadOnly} " +
                     "GROUP BY file ORDER BY COUNT(*) DESC, file LIMIT $limit;",
-                    null),
+                    window: null),
                 // ADM-002: the browser mix was recorded on every row and never displayed.
-                BrowserMix = QueryCountRows(
-                    $"SELECT COALESCE(ua_family, 'other'), COUNT(*) FROM visits WHERE day >= $day AND {HumanOnly} " +
+                BrowserMix = QueryTop(
+                    $"SELECT COALESCE(ua_family, 'other'), COUNT(*) FROM visits WHERE {InWindow} AND {HumanOnly} " +
                     "GROUP BY COALESCE(ua_family, 'other') ORDER BY COUNT(*) DESC, 1 LIMIT $limit;",
-                    ("$day", FormatDay(sinceWindow))),
-                DailyVisits = QueryDailySeries("visits", sinceWindow, today, distinctColumn: null),
-                DailyUniqueVisitors = QueryDailySeries("visits", sinceWindow, today, distinctColumn: "ip_hash"),
+                    window),
+                DailyVisits = dailyVisits,
+                DailyUniqueVisitors = QueryDailySeries("visits", window, distinctColumn: "ip_hash"),
                 // ADM-005: downloads had only two scalars; conversion over time is the metric a
                 // product owner actually watches.
-                DailyDownloads = QueryDailySeries("downloads", sinceWindow, today, distinctColumn: null),
-                TopReferrers = QueryCountRows(
+                DailyDownloads = QueryDailySeries("downloads", window, distinctColumn: null),
+                TopReferrers = QueryTop(
                     "SELECT referrer_host, COUNT(*) FROM visits " +
-                    $"WHERE referrer_host IS NOT NULL AND referrer_host <> '' AND day >= $day AND {HumanOnly} " +
+                    $"WHERE referrer_host IS NOT NULL AND referrer_host <> '' AND {InWindow} AND {HumanOnly} " +
                     "GROUP BY referrer_host ORDER BY COUNT(*) DESC, referrer_host LIMIT $limit;",
-                    ("$day", FormatDay(sinceWindow))),
+                    window),
                 // ADM-008: broken inbound links, invisible while only 2xx responses were tracked.
-                TopNotFound = QueryCountRows(
-                    "SELECT path, COUNT(*) FROM not_found WHERE day >= $day " +
+                TopNotFound = QueryTop(
+                    $"SELECT path, COUNT(*) FROM not_found WHERE {InWindow} " +
                     "GROUP BY path ORDER BY COUNT(*) DESC, path LIMIT $limit;",
-                    ("$day", FormatDay(sinceWindow))),
+                    window),
 
                 // --- Enrichment dimensions. Each ignores rows that lack the value, so history
                 // written before a column existed (or while the geo database was absent) simply
                 // does not appear rather than showing up as a bogus "unknown" bucket.
-                Countries = TopBy("country", sinceWindow),
-                Devices = TopBy("device", sinceWindow),
-                OperatingSystems = QueryCountRows(
+                Countries = TopBy("country", window),
+                Devices = TopBy("device", window),
+                OperatingSystems = QueryTop(
                     "SELECT os_family || COALESCE(' ' || os_version, ''), COUNT(*) FROM visits " +
-                    $"WHERE day >= $day AND {HumanOnly} AND os_family IS NOT NULL " +
+                    $"WHERE {InWindow} AND {HumanOnly} AND os_family IS NOT NULL " +
                     "GROUP BY 1 ORDER BY COUNT(*) DESC, 1 LIMIT $limit;",
-                    ("$day", FormatDay(sinceWindow))),
-                Languages = TopBy("language", sinceWindow),
-                Campaigns = QueryCountRows(
+                    window),
+                Languages = TopBy("language", window),
+                Campaigns = QueryTop(
                     "SELECT COALESCE(utm_campaign, utm_source, utm_medium) || " +
                     "       COALESCE(' / ' || utm_medium, ''), COUNT(*) FROM visits " +
-                    $"WHERE day >= $day AND {HumanOnly} " +
+                    $"WHERE {InWindow} AND {HumanOnly} " +
                     "  AND (utm_campaign IS NOT NULL OR utm_source IS NOT NULL OR utm_medium IS NOT NULL) " +
                     "GROUP BY 1 ORDER BY COUNT(*) DESC, 1 LIMIT $limit;",
-                    ("$day", FormatDay(sinceWindow))),
-                ReferrerUrls = TopBy("referrer_url", sinceWindow),
+                    window),
+                ReferrerUrls = TopBy("referrer_url", window),
                 // Mean handling time per page. AVG returns a float; the read model carries longs,
                 // so it is rounded to whole milliseconds — sub-millisecond precision is noise here.
-                SlowestPages = QueryCountRows(
+                SlowestPages = QueryTop(
                     "SELECT path, CAST(ROUND(AVG(duration_ms)) AS INTEGER) FROM visits " +
-                    $"WHERE day >= $day AND {HumanOnly} AND duration_ms IS NOT NULL " +
+                    $"WHERE {InWindow} AND {HumanOnly} AND duration_ms IS NOT NULL " +
                     "GROUP BY path HAVING COUNT(*) >= 3 ORDER BY AVG(duration_ms) DESC, path LIMIT $limit;",
-                    ("$day", FormatDay(sinceWindow))),
-                EntryPages = QuerySessionEdgePages(sinceWindow, first: true),
-                ExitPages = QuerySessionEdgePages(sinceWindow, first: false),
+                    window),
+                EntryPages = QuerySessionEdgePages(window, first: true),
+                ExitPages = QuerySessionEdgePages(window, first: false),
                 Sessions = sessionStats.Sessions,
                 BounceRatePercent = sessionStats.BounceRatePercent,
                 PagesPerSession = sessionStats.PagesPerSession,
@@ -454,37 +534,97 @@ public sealed partial class AnalyticsStore : IDisposable
         }
     }
 
+    /// <summary>
+    /// The figures the overview compares against the previous period.
+    /// <para>
+    /// "Visitors" is distinct visitor-DAYS: the anonymous identifier is a per-day hash (it cannot
+    /// link one day to the next, by design), so a person who visits on three days is three
+    /// visitor-days. Conversion uses the same unit on both sides -- visitor-days that included a
+    /// download over visitor-days that included a visit -- so the percentage is a real ratio rather
+    /// than downloads divided by something counted differently.
+    /// </para>
+    /// Caller must hold <c>_gate</c>.
+    /// </summary>
+    private HeadlineMetrics QueryHeadline(ReportWindow window)
+    {
+        var visits = Count("visits", HumanOnly, window);
+        var visitors = Count("visits", HumanOnly, window, distinctColumn: "ip_hash");
+        var downloads = Count("downloads", RealDownloadOnly, window);
+        var automated = Count("visits", $"NOT ({HumanOnly})", window);
+
+        long downloaders;
+        long unmatched;
+        using (var command = _connection.CreateCommand())
+        {
+            // Downloads matched to a same-day visit (the same per-day hash), and downloads with no
+            // visit behind them at all -- a direct link from elsewhere. Reported separately so the
+            // conversion rate and the download count reconcile instead of silently disagreeing.
+            command.CommandText =
+                "WITH v AS (SELECT DISTINCT ip_hash FROM visits " +
+                $"           WHERE {InWindow} AND {HumanOnly}) " +
+                "SELECT " +
+                "  (SELECT COUNT(DISTINCT d.ip_hash) FROM downloads d " +
+                $"    WHERE {InWindowAs("d")} AND {RealDownloadOnlyAs("d")} AND d.ip_hash IN (SELECT ip_hash FROM v)), " +
+                "  (SELECT COUNT(*) FROM downloads d " +
+                $"    WHERE {InWindowAs("d")} AND {RealDownloadOnlyAs("d")} AND d.ip_hash NOT IN (SELECT ip_hash FROM v));";
+            BindWindow(command, window);
+            using var reader = command.ExecuteReader();
+            reader.Read();
+            downloaders = reader.IsDBNull(0) ? 0 : reader.GetInt64(0);
+            unmatched = reader.IsDBNull(1) ? 0 : reader.GetInt64(1);
+        }
+
+        var sessions = QuerySessionStats(window).Sessions;
+
+        return new HeadlineMetrics(
+            Visits: visits,
+            Visitors: visitors,
+            Downloads: downloads,
+            Downloaders: downloaders,
+            DownloadsWithoutVisit: unmatched,
+            AutomatedVisits: automated,
+            Sessions: sessions);
+    }
+
     /// <summary>Client-error summary for /admin/errors, anchored at the current UTC instant.</summary>
     public ClientErrorsSummary GetClientErrorsSummary(int days, string? level, int recentLimit) =>
         GetClientErrorsSummary(days, level, recentLimit, DateTimeOffset.UtcNow);
 
     /// <summary>
-    /// Client-error summary anchored at <paramref name="now"/> (injectable for tests). The window
-    /// is today-(<paramref name="days"/>-1)..today on the day column, today inclusive — the same
-    /// convention as <see cref="GetSummary(int)"/>. <paramref name="level"/> filters only the
-    /// recent-rows list; the caller (page) has already normalized it, so it is a plain equality.
+    /// Client-error summary for the last <paramref name="days"/> days anchored at <paramref name="now"/>.
+    /// Kept for existing callers; see <see cref="GetClientErrorsSummary(ReportWindow, string?, int)"/>.
     /// </summary>
     public ClientErrorsSummary GetClientErrorsSummary(int days, string? level, int recentLimit, DateTimeOffset now)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(days, 1);
+        return GetClientErrorsSummary(ResolveWindow(ReportRange.LastDays(days), now), level, recentLimit);
+    }
 
-        var today = DateOnly.FromDateTime(now.UtcDateTime);
-        var sinceWindow = today.AddDays(-(days - 1));
+    /// <summary>
+    /// Client-error summary for <paramref name="window"/>, bounded on the CLIENT-claimed event time
+    /// (<c>event_utc</c>), the same instant the <c>day</c> column is derived from.
+    /// <paramref name="level"/> filters only the recent-rows list; the caller (page) has already
+    /// normalized it, so it is a plain equality.
+    /// </summary>
+    public ClientErrorsSummary GetClientErrorsSummary(ReportWindow window, string? level, int recentLimit)
+    {
+        ArgumentNullException.ThrowIfNull(window);
         var clampedRecentLimit = Math.Clamp(recentLimit, 1, 500);
 
         lock (_gate)
         {
             return new ClientErrorsSummary
             {
-                Days = days,
-                TotalWindow = CountRows("client_errors", "day >= $day", ("$day", FormatDay(sinceWindow))),
-                ByLevel = QueryClientErrorLevels(sinceWindow),
-                DistinctInstallsWindow = CountRows(
+                Days = window.Range.Days,
+                TotalWindow = Count("client_errors", "1 = 1", window, timeColumn: "event_utc"),
+                ByLevel = QueryClientErrorLevels(window),
+                DistinctInstallsWindow = Count(
                     "client_errors",
-                    "day >= $day AND install_id IS NOT NULL AND install_id <> ''",
-                    ("$day", FormatDay(sinceWindow)),
-                    distinctColumn: "install_id"),
-                Recent = QueryRecentClientErrors(sinceWindow, level, clampedRecentLimit),
+                    "install_id IS NOT NULL AND install_id <> ''",
+                    window,
+                    distinctColumn: "install_id",
+                    timeColumn: "event_utc"),
+                Recent = QueryRecentClientErrors(window, level, clampedRecentLimit),
             };
         }
     }
@@ -883,20 +1023,70 @@ public sealed partial class AnalyticsStore : IDisposable
     /// </summary>
     internal const string RealDownloadOnly = "(ua_family IS NULL OR ua_family <> 'bot')";
 
-    private long CountRows(
+    /// <summary>
+    /// The time predicate every windowed query uses: <c>[FromUtc, ToUtc)</c> on the exact
+    /// timestamp, plus the same range on the indexed <c>day</c> column.
+    /// <para>
+    /// The <c>day</c> half is coarse -- it is the UTC calendar day -- but it is what the indexes are
+    /// built on (<c>ix_visits_day</c> and the <c>(day, ua_family)</c> / <c>(day, country)</c>
+    /// composites), so it narrows the scan. The <c>utc</c> half makes the result exact. An index
+    /// on <c>utc</c> itself was deliberately dropped once already, when queries filtered on
+    /// <c>substr(utc, 1, 10)</c> and could not use it; rather than bring it back, this keeps using
+    /// the indexes that exist.
+    /// </para>
+    /// <para>
+    /// Timestamps are compared as text. That is exact here because every row is written by
+    /// <see cref="FormatUtc"/> in one fixed-width UTC form ("yyyy-MM-ddTHH:mm:ss.fffffffZ"), and the
+    /// bounds are formatted the same way.
+    /// </para>
+    /// </summary>
+    private static readonly string InWindow = WindowPredicate("utc");
+
+    /// <summary>
+    /// <see cref="InWindow"/> on a given timestamp column. Every table's <c>day</c> column is derived
+    /// from that same instant, so the coarse half stays valid whichever column is exact.
+    /// </summary>
+    private static string WindowPredicate(string timeColumn) =>
+        $"day >= $fromDay AND day <= $toDay AND {timeColumn} >= $from AND {timeColumn} < $to";
+
+    /// <summary><see cref="InWindow"/> with the columns qualified by a table alias.</summary>
+    private static string InWindowAs(string alias) =>
+        $"{alias}.day >= $fromDay AND {alias}.day <= $toDay AND {alias}.utc >= $from AND {alias}.utc < $to";
+
+    /// <summary><see cref="RealDownloadOnly"/> with the column qualified by a table alias.</summary>
+    private static string RealDownloadOnlyAs(string alias) =>
+        $"({alias}.ua_family IS NULL OR {alias}.ua_family <> 'bot')";
+
+    /// <summary>Binds the four parameters <see cref="InWindow"/> uses.</summary>
+    private static void BindWindow(SqliteCommand command, ReportWindow window)
+    {
+        command.Parameters.AddWithValue("$from", FormatUtc(window.FromUtc));
+        command.Parameters.AddWithValue("$to", FormatUtc(window.ToUtc));
+        command.Parameters.AddWithValue("$fromDay", FormatDay(DateOnly.FromDateTime(window.FromUtc.UtcDateTime)));
+        command.Parameters.AddWithValue("$toDay", FormatDay(DateOnly.FromDateTime(window.ToUtc.UtcDateTime)));
+    }
+
+    /// <summary>
+    /// COUNT(*) or COUNT(DISTINCT column) over a table, optionally within a window.
+    /// <paramref name="timeColumn"/> is <c>utc</c> for the event tables and <c>event_utc</c> for
+    /// client errors; in both cases the table's <c>day</c> column is derived from that same instant.
+    /// </summary>
+    private long Count(
         string table,
         string whereClause,
-        (string Name, object Value)? parameter,
-        string? distinctColumn = null)
+        ReportWindow? window,
+        string? distinctColumn = null,
+        string timeColumn = "utc")
     {
         using var command = _connection.CreateCommand();
-        // Table name, WHERE clause and distinct column are fixed internal fragments (never user
-        // input); values are parameterized.
+        // Table name, WHERE clause and columns are fixed internal fragments (never user input);
+        // values are parameterized.
         var selector = distinctColumn is null ? "COUNT(*)" : $"COUNT(DISTINCT {distinctColumn})";
-        command.CommandText = $"SELECT {selector} FROM {table} WHERE {whereClause};";
-        if (parameter is { } p)
+        var timeFilter = window is null ? "1 = 1" : WindowPredicate(timeColumn);
+        command.CommandText = $"SELECT {selector} FROM {table} WHERE {timeFilter} AND ({whereClause});";
+        if (window is not null)
         {
-            command.Parameters.AddWithValue(p.Name, p.Value);
+            BindWindow(command, window);
         }
 
         return (long)(command.ExecuteScalar() ?? 0L);
@@ -907,13 +1097,13 @@ public sealed partial class AnalyticsStore : IDisposable
     /// skipped rather than bucketed as "unknown": history written before the column existed would
     /// otherwise dominate every one of these tables with a meaningless top row.
     /// </summary>
-    private IReadOnlyList<CountRow> TopBy(string column, DateOnly since) =>
-        QueryCountRows(
+    private IReadOnlyList<CountRow> TopBy(string column, ReportWindow window) =>
+        QueryTop(
             // Column name is a fixed internal literal, never user input.
             $"SELECT {column}, COUNT(*) FROM visits " +
-            $"WHERE day >= $day AND {HumanOnly} AND {column} IS NOT NULL AND {column} <> '' " +
+            $"WHERE {InWindow} AND {HumanOnly} AND {column} IS NOT NULL AND {column} <> '' " +
             $"GROUP BY {column} ORDER BY COUNT(*) DESC, {column} LIMIT $limit;",
-            ("$day", FormatDay(since)));
+            window);
 
     /// <summary>Aggregate session shape for the window.</summary>
     private readonly record struct SessionStats(
@@ -929,7 +1119,7 @@ public sealed partial class AnalyticsStore : IDisposable
     /// closed without a client-side beacon).
     /// Caller must hold <c>_gate</c>.
     /// </summary>
-    private SessionStats QuerySessionStats(DateOnly since)
+    private SessionStats QuerySessionStats(ReportWindow window)
     {
         using var command = _connection.CreateCommand();
         command.CommandText =
@@ -940,9 +1130,9 @@ public sealed partial class AnalyticsStore : IDisposable
             "FROM (SELECT session_id, COUNT(*) AS views, " +
             "             (julianday(MAX(utc)) - julianday(MIN(utc))) * 86400.0 AS span_seconds " +
             "      FROM visits " +
-            $"      WHERE day >= $day AND {HumanOnly} AND session_id IS NOT NULL " +
+            $"      WHERE {InWindow} AND {HumanOnly} AND session_id IS NOT NULL " +
             "      GROUP BY session_id);";
-        command.Parameters.AddWithValue("$day", FormatDay(since));
+        BindWindow(command, window);
 
         using var reader = command.ExecuteReader();
         if (!reader.Read() || reader.IsDBNull(0))
@@ -973,25 +1163,26 @@ public sealed partial class AnalyticsStore : IDisposable
     /// and exit pages say where they stop.
     /// Caller must hold <c>_gate</c>.
     /// </summary>
-    private IReadOnlyList<CountRow> QuerySessionEdgePages(DateOnly since, bool first)
+    private IReadOnlyList<CountRow> QuerySessionEdgePages(ReportWindow window, bool first)
     {
         var edge = first ? "MIN" : "MAX";
-        return QueryCountRows(
+        return QueryTop(
             "SELECT path, COUNT(*) FROM visits WHERE id IN (" +
             $"    SELECT {edge}(id) FROM visits " +
-            $"    WHERE day >= $day AND {HumanOnly} AND session_id IS NOT NULL " +
+            $"    WHERE {InWindow} AND {HumanOnly} AND session_id IS NOT NULL " +
             "    GROUP BY session_id) " +
             "GROUP BY path ORDER BY COUNT(*) DESC, path LIMIT $limit;",
-            ("$day", FormatDay(since)));
+            window);
     }
 
-    private IReadOnlyList<CountRow> QueryCountRows(string sql, (string Name, object Value)? parameter)
+    /// <summary>Label/count rows from <paramref name="sql"/>, which may use the window parameters and <c>$limit</c>.</summary>
+    private IReadOnlyList<CountRow> QueryTop(string sql, ReportWindow? window)
     {
         using var command = _connection.CreateCommand();
         command.CommandText = sql;
-        if (parameter is { } p)
+        if (window is not null)
         {
-            command.Parameters.AddWithValue(p.Name, p.Value);
+            BindWindow(command, window);
         }
 
         command.Parameters.AddWithValue("$limit", TopRowLimit);
@@ -1006,18 +1197,21 @@ public sealed partial class AnalyticsStore : IDisposable
         return rows;
     }
 
+    /// <summary><see cref="InWindow"/> for client errors, which are bounded on the event time.</summary>
+    private static readonly string ErrorsInWindow = WindowPredicate("event_utc");
+
     /// <summary>
     /// Errors per level within the window, descending by count. No row cap: the endpoint only
     /// stores the six canonical Serilog levels, so the group count is bounded by design.
     /// Caller must hold <c>_gate</c>.
     /// </summary>
-    private IReadOnlyList<CountRow> QueryClientErrorLevels(DateOnly since)
+    private IReadOnlyList<CountRow> QueryClientErrorLevels(ReportWindow window)
     {
         using var command = _connection.CreateCommand();
         command.CommandText =
-            "SELECT level, COUNT(*) FROM client_errors WHERE day >= $day " +
+            $"SELECT level, COUNT(*) FROM client_errors WHERE {ErrorsInWindow} " +
             "GROUP BY level ORDER BY COUNT(*) DESC, level;";
-        command.Parameters.AddWithValue("$day", FormatDay(since));
+        BindWindow(command, window);
 
         var rows = new List<CountRow>();
         using var reader = command.ExecuteReader();
@@ -1033,15 +1227,15 @@ public sealed partial class AnalyticsStore : IDisposable
     /// Latest stored errors in the window, newest first, capped at <paramref name="limit"/> and
     /// optionally restricted to one (already-normalized) level. Caller must hold <c>_gate</c>.
     /// </summary>
-    private IReadOnlyList<ClientErrorRow> QueryRecentClientErrors(DateOnly since, string? level, int limit)
+    private IReadOnlyList<ClientErrorRow> QueryRecentClientErrors(ReportWindow window, string? level, int limit)
     {
         using var command = _connection.CreateCommand();
         command.CommandText =
             "SELECT id, event_utc, level, product_version, host, install_id, message, exception " +
             "FROM client_errors " +
-            "WHERE day >= $day AND ($level IS NULL OR level = $level) " +
+            $"WHERE {ErrorsInWindow} AND ($level IS NULL OR level = $level) " +
             "ORDER BY id DESC LIMIT $limit;";
-        command.Parameters.AddWithValue("$day", FormatDay(since));
+        BindWindow(command, window);
         command.Parameters.AddWithValue("$level", (object?)level ?? DBNull.Value);
         command.Parameters.AddWithValue("$limit", limit);
 
@@ -1068,41 +1262,79 @@ public sealed partial class AnalyticsStore : IDisposable
     }
 
     /// <summary>
-    /// Zero-filled daily series for a table over the window. <paramref name="distinctColumn"/>
+    /// Zero-filled series over the window's LOCAL calendar days. <paramref name="distinctColumn"/>
     /// switches between total events and distinct values (unique visitors per day).
+    /// <para>
+    /// This used to group by the stored <c>day</c> column, which is the UTC day -- so every bar in
+    /// the chart ran from 03:00 to 03:00 Cairo time in summer. Events are now bucketed by the minute
+    /// in SQL and each minute is placed on its local day here. A minute never straddles a local
+    /// midnight in any real timezone (all offsets are whole quarter-hours), and summer-time changes
+    /// are resolved by the zone rather than by a fixed offset.
+    /// </para>
+    /// Caller must hold <c>_gate</c>.
     /// </summary>
     private IReadOnlyList<DailyCount> QueryDailySeries(
         string table,
-        DateOnly since,
-        DateOnly today,
+        ReportWindow window,
         string? distinctColumn)
     {
-        var countsByDay = new Dictionary<DateOnly, long>();
+        // Downloads keep scripted clients (a curl fetch is a real install); visits do not.
+        var exclusion = table == "downloads" ? RealDownloadOnly : HumanOnly;
+        var counts = new Dictionary<DateOnly, long>();
+        var distinct = new Dictionary<DateOnly, HashSet<string>>();
+
         using (var command = _connection.CreateCommand())
         {
-            // Table name and distinct column are fixed internal fragments; the date is parameterized.
-            var selector = distinctColumn is null ? "COUNT(*)" : $"COUNT(DISTINCT {distinctColumn})";
-            // Downloads keep scripted clients (a curl fetch is a real install); visits do not.
-            var exclusion = table == "downloads" ? RealDownloadOnly : HumanOnly;
-            command.CommandText =
-                $"SELECT day, {selector} FROM {table} WHERE day >= $day AND {exclusion} GROUP BY day;";
-            command.Parameters.AddWithValue("$day", FormatDay(since));
+            // Table and distinct column are fixed internal fragments; the bounds are parameters.
+            command.CommandText = distinctColumn is null
+                ? $"SELECT substr(utc, 1, 16), COUNT(*) FROM {table} WHERE {InWindow} AND {exclusion} GROUP BY 1;"
+                : $"SELECT substr(utc, 1, 16), {distinctColumn} FROM {table} WHERE {InWindow} AND {exclusion} " +
+                  $"AND {distinctColumn} IS NOT NULL GROUP BY 1, 2;";
+            BindWindow(command, window);
+
             using var reader = command.ExecuteReader();
             while (reader.Read())
             {
-                var day = DateOnly.ParseExact(reader.GetString(0), "yyyy-MM-dd", CultureInfo.InvariantCulture);
-                countsByDay[day] = reader.GetInt64(1);
+                var day = LocalDayOfMinute(reader.GetString(0), window.Zone);
+                if (distinctColumn is null)
+                {
+                    counts[day] = counts.GetValueOrDefault(day) + reader.GetInt64(1);
+                }
+                else
+                {
+                    if (!distinct.TryGetValue(day, out var set))
+                    {
+                        distinct[day] = set = new HashSet<string>(StringComparer.Ordinal);
+                    }
+
+                    set.Add(reader.GetString(1));
+                }
             }
         }
 
-        var series = new List<DailyCount>(today.DayNumber - since.DayNumber + 1);
-        for (var day = since; day <= today; day = day.AddDays(1))
+        var series = new List<DailyCount>();
+        foreach (var day in window.Days)
         {
-            series.Add(new DailyCount(day, countsByDay.GetValueOrDefault(day)));
+            var value = distinctColumn is null
+                ? counts.GetValueOrDefault(day)
+                : distinct.TryGetValue(day, out var set) ? set.Count : 0;
+            series.Add(new DailyCount(day, value));
         }
 
         return series;
     }
+
+    /// <summary>The local instant of a stored "yyyy-MM-ddTHH:mm" UTC minute prefix.</summary>
+    internal static DateTime LocalMinute(string utcMinute, TimeZoneInfo zone)
+    {
+        var utc = DateTime.ParseExact(
+            utcMinute, "yyyy-MM-dd'T'HH:mm", CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal);
+        return TimeZoneInfo.ConvertTimeFromUtc(utc, zone);
+    }
+
+    private static DateOnly LocalDayOfMinute(string utcMinute, TimeZoneInfo zone) =>
+        DateOnly.FromDateTime(LocalMinute(utcMinute, zone));
 
     private static string FormatUtc(DateTimeOffset utc) => utc.UtcDateTime.ToString("o", CultureInfo.InvariantCulture);
 

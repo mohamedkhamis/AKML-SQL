@@ -18,7 +18,7 @@
     <p class="eyebrow">Admin</p>
     <h1>Downloads</h1>
     <p class="page-intro">
-        Installer downloads over the last @AdminDashboardOptions.Label(Days).
+        Installer downloads for @Range.Phrase.
         A scripted fetch (curl, PowerShell) counts — it is a real acquisition. A crawler does not.
     </p>
 </header>
@@ -46,10 +46,18 @@
 </section>
 
 <nav class="admin-toolbar" aria-label="Export">
-    <a class="admin-export" href="@AdminNav.WithRange("/admin/downloads.csv", Days)" download>Export CSV</a>
+    <a class="admin-export" href="@AdminNav.WithRange("/admin/downloads.csv", Range)" download>Export CSV</a>
 </nav>
 
-<Chart IdPrefix="downloads" Title="Downloads per day" Days="Days" Series="_summary.DailyDownloads" />
+@if (Range.IsSingleDay)
+{
+    @* One day is one bar on a daily chart, which says nothing; split it by hour instead. *@
+    <HourlyChart IdPrefix="downloads" Title="Downloads" Caption="@($"{Range.Phrase}, hour by hour")" Values="_summary.HourlyDownloads" />
+}
+else
+{
+    <Chart IdPrefix="downloads" Title="Downloads per day" Days="Range.Days" Series="_summary.DailyDownloads" />
+}
 
 @if (!_hasAnyCountry && _summary.DownloadsWindow > 0)
 {
@@ -160,8 +168,11 @@
     [SupplyParameterFromQuery(Name = "days")]
     private string? DaysQuery { get; set; }
 
-    private int Days => AdminDashboardOptions.NormalizeDays(
-        int.TryParse(DaysQuery, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) ? parsed : null);
+    /// <summary>The reporting range from <c>?days=</c> (see <see cref="AdminDashboardOptions.ResolveRange"/>).</summary>
+    private ReportRange Range => AdminDashboardOptions.ResolveRange(DaysQuery);
+
+    /// <summary>The range resolved once per request, so every figure describes the same instant.</summary>
+    private ReportWindow _window = default!;
 
     private AnalyticsSummary _summary = default!;
     private IReadOnlyList<DownloadCountryRow> _countries = [];
@@ -172,10 +183,10 @@
 
     protected override void OnInitialized()
     {
-        var now = DateTimeOffset.UtcNow;
-        _summary = Store.GetSummary(Days, now);
-        _countries = Store.GetDownloadsByCountry(Days, now);
-        _versions = Store.GetDownloadsByVersion(Days, now);
+        _window = Store.ResolveWindow(Range);
+        _summary = Store.GetSummary(_window);
+        _countries = Store.GetDownloadsByCountry(_window);
+        _versions = Store.GetDownloadsByVersion(_window);
         _hasAnyCountry = _countries.Any(c => c.CountryCode is not null);
         _resolvedCountryCount = _countries.Count(c => c.CountryCode is not null);
         _geoAvailable = Geo.IsAvailable;

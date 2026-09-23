@@ -17,7 +17,7 @@
     <p class="eyebrow">Admin</p>
     <h1>Pages</h1>
     <p class="page-intro">
-        Page visits over the last @AdminDashboardOptions.Label(Days).
+        Page visits for @Range.Phrase.
         Automated traffic — crawlers and scripted clients — is excluded from these figures and
         reported separately below.
     </p>
@@ -47,10 +47,18 @@
 </section>
 
 <nav class="admin-toolbar" aria-label="Export">
-    <a class="admin-export" href="@AdminNav.WithRange("/admin/pages.csv", Days)" download>Export CSV</a>
+    <a class="admin-export" href="@AdminNav.WithRange("/admin/pages.csv", Range)" download>Export CSV</a>
 </nav>
 
-<Chart IdPrefix="visits" Title="Visits per day" Days="Days" Series="_summary.DailyVisits" />
+@if (Range.IsSingleDay)
+{
+    @* One day is one bar on a daily chart, which says nothing; split it by hour instead. *@
+    <HourlyChart IdPrefix="visits" Title="Visits" Caption="@($"{Range.Phrase}, hour by hour")" Values="_summary.HourlyVisits" />
+}
+else
+{
+    <Chart IdPrefix="visits" Title="Visits per day" Days="Range.Days" Series="_summary.DailyVisits" />
+}
 
 <div class="admin-tables">
     <MetricTable Id="top-pages" Heading="Most visited" Rows="_summary.TopPages"
@@ -97,10 +105,17 @@
     [SupplyParameterFromQuery(Name = "days")]
     private string? DaysQuery { get; set; }
 
-    private int Days => AdminDashboardOptions.NormalizeDays(
-        int.TryParse(DaysQuery, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) ? parsed : null);
+    /// <summary>The reporting range from <c>?days=</c> (see <see cref="AdminDashboardOptions.ResolveRange"/>).</summary>
+    private ReportRange Range => AdminDashboardOptions.ResolveRange(DaysQuery);
+
+    /// <summary>The range resolved once per request, so every figure describes the same instant.</summary>
+    private ReportWindow _window = default!;
 
     private AnalyticsSummary _summary = default!;
 
-    protected override void OnInitialized() => _summary = Store.GetSummary(Days, DateTimeOffset.UtcNow);
+    protected override void OnInitialized()
+    {
+        _window = Store.ResolveWindow(Range);
+        _summary = Store.GetSummary(_window);
+    }
 }

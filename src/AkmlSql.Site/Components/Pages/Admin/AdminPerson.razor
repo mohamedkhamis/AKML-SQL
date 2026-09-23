@@ -21,11 +21,11 @@
         <p class="eyebrow">Admin</p>
         <h1>Individual not found</h1>
         <p class="page-intro">
-            No records for this id in the last @AdminDashboardOptions.Label(Days). They may have been
+            No records for this id for @Range.Phrase. They may have been
             deleted, or aged past the retention period, or the id may be wrong.
         </p>
     </header>
-    <p><a href="@AdminNav.WithRange("/admin/people", Days)">← Back to people</a></p>
+    <p><a href="@AdminNav.WithRange("/admin/people", Range)">← Back to people</a></p>
 }
 else
 {
@@ -37,11 +37,11 @@ else
         <p class="page-intro">
             @summary.VisitCount.ToString("N0", CultureInfo.InvariantCulture) visit@(summary.VisitCount == 1 ? "" : "s")
             and @summary.DownloadCount.ToString("N0", CultureInfo.InvariantCulture) download@(summary.DownloadCount == 1 ? "" : "s")
-            in the last @AdminDashboardOptions.Label(Days).
+            for @Range.Phrase.
         </p>
     </header>
 
-    <p><a href="@AdminNav.WithRange("/admin/people", Days)">← Back to people</a></p>
+    <p><a href="@AdminNav.WithRange("/admin/people", Range)">← Back to people</a></p>
 
     <section class="admin-panel" aria-labelledby="who-heading">
         <h2 id="who-heading">Who</h2>
@@ -126,7 +126,7 @@ else
             {
                 <input type="hidden" name="__RequestVerificationToken" value="@_requestToken" />
             }
-            <input type="hidden" name="days" value="@Days" />
+            <input type="hidden" name="days" value="@Range.Key" />
             <button type="submit" class="btn btn-secondary">Delete all records for @summary.ShortId</button>
         </form>
     </section>
@@ -142,15 +142,19 @@ else
     [CascadingParameter]
     private HttpContext? HttpContext { get; set; }
 
-    private int Days => AdminDashboardOptions.NormalizeDays(
-        int.TryParse(DaysQuery, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) ? parsed : null);
+    /// <summary>The reporting range from <c>?days=</c> (see <see cref="AdminDashboardOptions.ResolveRange"/>).</summary>
+    private ReportRange Range => AdminDashboardOptions.ResolveRange(DaysQuery);
+
+    /// <summary>The range resolved once per request, so every figure describes the same instant.</summary>
+    private ReportWindow _window = default!;
 
     private IndividualDetail? _detail;
     private string? _requestToken;
 
     protected override void OnInitialized()
     {
-        _detail = Store.GetIndividual(VisitorId, Days, DateTimeOffset.UtcNow);
+        _window = Store.ResolveWindow(Range);
+        _detail = Store.GetIndividual(VisitorId, _window);
 
         if (HttpContext is not null)
         {

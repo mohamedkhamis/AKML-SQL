@@ -20,7 +20,7 @@
     <p class="eyebrow">Admin</p>
     <h1>Client error logs</h1>
     <p class="page-intro">
-        Errors reported by the desktop product over the last @AdminDashboardOptions.Label(_days).
+        Errors reported by the desktop product for @_range.Phrase.
     </p>
     <p class="admin-privacy">
         <strong>Privacy:</strong> reports are anonymous — a random client-generated install id, the
@@ -62,11 +62,11 @@
 <section class="admin-stats" aria-label="Key metrics">
     <div class="admin-stat">
         <p class="admin-stat-value">@_summary.TotalWindow</p>
-        <p class="admin-stat-label">Errors · @_summary.Days days</p>
+        <p class="admin-stat-label">Errors · @_range.Label</p>
     </div>
     <div class="admin-stat">
         <p class="admin-stat-value">@_summary.DistinctInstallsWindow</p>
-        <p class="admin-stat-label">Installs · @_summary.Days days</p>
+        <p class="admin-stat-label">Installs · @_range.Label</p>
     </div>
     <div class="admin-stat">
         <p class="admin-stat-value">@(_summary.ByLevel.FirstOrDefault()?.Key ?? "—")</p>
@@ -130,13 +130,13 @@
     private const int RecentLimit = 200;
 
     private ClientErrorsSummary _summary = null!;
-    private int _days = AdminDashboardOptions.DefaultDays;
+    private ReportRange _range = ReportRange.Default;
     private string? _level;
 
     /// <summary>
-    /// Reporting window from <c>?days=</c>; bound as a STRING (a value Blazor's query binder
-    /// cannot parse would otherwise 500 the page) and clamped by
-    /// <see cref="AdminDashboardOptions.NormalizeDays"/>.
+    /// Reporting range from <c>?days=</c>; bound as a STRING (a value Blazor's query binder
+    /// cannot parse would otherwise 500 the page) and resolved by
+    /// <see cref="AdminDashboardOptions.ResolveRange"/>.
     /// </summary>
     [Parameter]
     [SupplyParameterFromQuery(Name = "days")]
@@ -152,23 +152,15 @@
 
     protected override void OnParametersSet()
     {
-        _days = AdminDashboardOptions.NormalizeDays(
-            int.TryParse(Days, NumberStyles.Integer, CultureInfo.InvariantCulture, out var requested)
-                ? requested
-                : null);
+        _range = AdminDashboardOptions.ResolveRange(Days);
         _level = ClientErrorLevelNormalization.Normalize(Level);
-        _summary = Store.GetClientErrorsSummary(_days, _level, RecentLimit);
+        _summary = Store.GetClientErrorsSummary(Store.ResolveWindow(_range), _level, RecentLimit);
     }
-
-    /// <summary>Window-switch link preserving the selected level.</summary>
-    private string DaysUrl(int days) => _level is null
-        ? $"/admin/errors?days={days}"
-        : $"/admin/errors?days={days}&level={_level}";
 
     /// <summary>Level-switch link preserving the selected window; null clears the filter.</summary>
     private string LevelUrl(string? level) => level is null
-        ? $"/admin/errors?days={_days}"
-        : $"/admin/errors?days={_days}&level={level}";
+        ? $"/admin/errors?days={_range.Key}"
+        : $"/admin/errors?days={_range.Key}&level={level}";
 
     /// <summary>First 8 characters of the install id — enough to correlate rows, short enough to read.</summary>
     private static string ShortInstall(string? installId) =>

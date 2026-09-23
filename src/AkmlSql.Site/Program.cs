@@ -3,6 +3,7 @@ using AkmlSql.Site.Analytics;
 using AkmlSql.Site.Components;
 using AkmlSql.Site.Consent;
 using AkmlSql.Site.Docs;
+using AkmlSql.Site.Feedback;
 using AkmlSql.Site.Releases;
 using AkmlSql.Site.Seo;
 using AkmlSql.Site.Settings;
@@ -68,7 +69,14 @@ builder.Services.Configure<AnalyticsOptions>(builder.Configuration.GetSection(An
 builder.Services.Configure<DownloadsOptions>(builder.Configuration.GetSection(DownloadsOptions.SectionName));
 builder.Services.Configure<AdminOptions>(builder.Configuration.GetSection(AdminOptions.SectionName));
 builder.Services.Configure<ClientErrorOptions>(builder.Configuration.GetSection(ClientErrorOptions.SectionName));
-builder.Services.AddSingleton(sp => new AnalyticsStore(sp.GetRequiredService<IOptions<AnalyticsOptions>>().Value));
+// One reporting timezone for the whole site: the store buckets days in it and the portal names
+// periods in it, so both are built from the SAME resolved zone rather than each resolving the
+// setting on its own. Empty setting -> the server's zone (Cairo on the deployed site).
+builder.Services.AddSingleton(sp => new ReportClock(
+    AnalyticsStore.ResolveReportZone(sp.GetRequiredService<IOptions<AnalyticsOptions>>().Value.ReportTimeZone)));
+builder.Services.AddSingleton(sp => new AnalyticsStore(
+    sp.GetRequiredService<IOptions<AnalyticsOptions>>().Value.DatabasePath,
+    sp.GetRequiredService<ReportClock>().Zone));
 
 // Spec 038 (US2): owner-editable settings, stored in a site_settings table inside the SAME
 // analytics.db -- already created, already ACL'd for the app pool by the deploy script, and backed
@@ -116,6 +124,18 @@ builder.Services.AddSingleton<AdminLoginThrottle>();
 // (a visitor can only set their own cookies and delete their own rows), but unauthenticated POSTs
 // that each do a database write should not be unbounded.
 builder.Services.AddSingleton<ConsentRateLimit>();
+
+// Feedback from /feedback: stored in analytics.db, optionally emailed to the owner. Email settings
+// are optional; without them the admin inbox still receives everything. The notifier is both a
+// singleton (the page enqueues, the inbox asks it to send a test) and the hosted service that
+// drains the queue, so a slow mail server never holds up the visitor's form.
+builder.Services.Configure<FeedbackOptions>(builder.Configuration.GetSection(FeedbackOptions.SectionName));
+builder.Services.AddSingleton(sp => new FeedbackStore(sp.GetRequiredService<IOptions<AnalyticsOptions>>().Value));
+builder.Services.AddSingleton<FeedbackRateLimit>();
+builder.Services.AddSingleton<FeedbackEmailStatus>();
+builder.Services.AddSingleton<IFeedbackMailer, SmtpFeedbackMailer>();
+builder.Services.AddSingleton<FeedbackNotifier>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<FeedbackNotifier>());
 
 // Spec 038 T026 (US1): retention prune + historical referrer repair, run on a background task after
 // start instead of inline before the first request can be served.
@@ -308,6 +328,7 @@ DownloadEndpoint.MapCount(app);
 ClientErrorEndpoint.Map(app);
 ConsentEndpoints.Map(app);
 AdminEndpoints.Map(app);
+FeedbackEndpoints.Map(app);
 
 app.MapRazorComponents<App>();
 

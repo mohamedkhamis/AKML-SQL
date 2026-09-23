@@ -132,6 +132,28 @@ public sealed class AnalyticsSummary
     /// <summary>Requested window length in days (drives <see cref="VisitsWindow"/>, <see cref="DailyVisits"/>, top-pages and referrer tables).</summary>
     public required int Days { get; init; }
 
+    /// <summary>The window every windowed figure on this summary describes.</summary>
+    public required ReportWindow Window { get; init; }
+
+    /// <summary>The period <see cref="PreviousHeadline"/> describes — see <see cref="ReportWindow.Previous"/>.</summary>
+    public required ReportWindow PreviousWindow { get; init; }
+
+    /// <summary>The headline figures for <see cref="Window"/>.</summary>
+    public required HeadlineMetrics Headline { get; init; }
+
+    /// <summary>The same figures for <see cref="PreviousWindow"/>, for the change indicators.</summary>
+    public required HeadlineMetrics PreviousHeadline { get; init; }
+
+    /// <summary>
+    /// Human page views by LOCAL hour of day, index 0–23, summed over the window. For a one-day
+    /// window this is that day hour by hour -- which is what the overview charts instead of a
+    /// single daily bar that says nothing.
+    /// </summary>
+    public required long[] HourlyVisits { get; init; }
+
+    /// <summary>Downloads by local hour of day, index 0–23, summed over the window.</summary>
+    public required long[] HourlyDownloads { get; init; }
+
     /// <summary>Page views on the current UTC day.</summary>
     public required long VisitsToday { get; init; }
 
@@ -241,4 +263,37 @@ public sealed class AnalyticsSummary
 
     /// <summary>Mean session length in seconds (single-page sessions count as 0).</summary>
     public required double AverageSessionSeconds { get; init; }
+}
+
+/// <summary>
+/// The overview's headline figures for one window, in units that can be compared across windows.
+/// </summary>
+/// <param name="Visits">Human page views.</param>
+/// <param name="Visitors">
+/// Distinct visitor-DAYS. The anonymous identifier is a per-day hash that cannot link one day to
+/// the next (by design), so a person who visits on three days counts three times. Exact for a
+/// single day; over longer windows it is the sum of each day's unique visitors, and is labelled so.
+/// </param>
+/// <param name="Downloads">Installer downloads, crawlers excluded.</param>
+/// <param name="Downloaders">Visitor-days that included both a page view and a download.</param>
+/// <param name="DownloadsWithoutVisit">
+/// Downloads with no page view from the same visitor that day — a direct link from somewhere else.
+/// Reported so that <see cref="Downloads"/> and the conversion rate reconcile.
+/// </param>
+/// <param name="AutomatedVisits">Crawler and scripted page views, excluded from every figure above.</param>
+/// <param name="Sessions">Human browsing sessions.</param>
+public sealed record HeadlineMetrics(
+    long Visits,
+    long Visitors,
+    long Downloads,
+    long Downloaders,
+    long DownloadsWithoutVisit,
+    long AutomatedVisits,
+    long Sessions)
+{
+    /// <summary>
+    /// Share of visitor-days that included a download, 0–100. Same unit on both sides of the ratio,
+    /// so it is a real conversion rate rather than downloads over something counted differently.
+    /// </summary>
+    public double ConversionPercent => Visitors == 0 ? 0 : Math.Round(Downloaders * 100.0 / Visitors, 1);
 }

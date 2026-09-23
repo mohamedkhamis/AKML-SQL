@@ -23,6 +23,8 @@ public static class AdminNav
     public static readonly IReadOnlyList<AdminSection> Sections =
     [
         new("/admin", "Overview", "Headline downloads and audience at a glance."),
+        new("/admin/insights", "Insights", "Conversion, when people visit, and new versus returning visitors."),
+        new("/admin/feedback", "Feedback", "Problems and complaints sent from the site."),
         new("/admin/downloads", "Downloads", "Installer downloads by country, version and day."),
         new("/admin/people", "People", "Individuals who visited and what they did."),
         new("/admin/pages", "Pages", "Page visits, entry and exit pages, referrers and 404s."),
@@ -75,9 +77,20 @@ public static class AdminNav
     /// </para>
     /// </summary>
     public static string WithRange(string route, int days) =>
+        WithRangeKey(route, days.ToString(CultureInfo.InvariantCulture));
+
+    /// <summary>
+    /// <paramref name="route"/> carrying <paramref name="range"/>, so moving between sections keeps
+    /// the report the owner chose (FR-032). The key is URL-safe by construction: it is one of the
+    /// fixed range keys, or a number.
+    /// </summary>
+    public static string WithRange(string route, Analytics.ReportRange range) =>
+        WithRangeKey(route, range.Key);
+
+    private static string WithRangeKey(string route, string key) =>
         string.IsNullOrEmpty(route)
             ? route
-            : $"{route}{(route.Contains('?', StringComparison.Ordinal) ? '&' : '?')}days={days.ToString(CultureInfo.InvariantCulture)}";
+            : $"{route}{(route.Contains('?', StringComparison.Ordinal) ? '&' : '?')}days={key}";
 
     /// <summary>The section owning <paramref name="currentPath"/>, or null outside the portal.</summary>
     public static AdminSection? ActiveSection(string? currentPath) =>

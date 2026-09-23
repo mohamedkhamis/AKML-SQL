@@ -83,13 +83,10 @@ public sealed class AdminPortalTests(SiteFixture site)
         await page.ClickAsync(".admin-ranges a[href='/admin?days=7']");
 
         // Auto-retrying assertion rather than a URL wait plus a one-shot read, so the check
-        // cannot observe the page mid-update.
-        //
-        // Casing matters here: .admin-stat-label is text-transform: uppercase, and the two
-        // Playwright APIs disagree about it. InnerTextAsync is render-aware and returns
-        // "VISITS · 7 DAYS"; Expect(...).ToContainTextAsync compares textContent and sees the
-        // source casing. Match the source.
-        await Assertions.Expect(page.Locator("section[aria-label='Key metrics']")).ToContainTextAsync("Visits · 7 days");
+        // cannot observe the page mid-update (enhanced navigation changes the URL before it
+        // patches the DOM). The headline names its period in its accessible label.
+        await Assertions.Expect(page.Locator(".admin-headline"))
+            .ToHaveAttributeAsync("aria-label", "Headline figures, the last 7 days");
         await Assertions.Expect(page.Locator(".admin-ranges a[href='/admin?days=7']"))
             .ToHaveAttributeAsync("aria-current", "true");
         // The export follows the selected window.
@@ -108,7 +105,9 @@ public sealed class AdminPortalTests(SiteFixture site)
         var response = await page.GotoAsync(SiteFixture.BaseUrl + "/admin?days=banana");
 
         Assert.Equal(200, response!.Status);
-        await Assertions.Expect(page.Locator("section[aria-label='Key metrics']")).ToContainTextAsync("Visits · 30 days");
+        // Falls back to the default window rather than failing.
+        await Assertions.Expect(page.Locator(".admin-headline"))
+            .ToHaveAttributeAsync("aria-label", "Headline figures, the last 30 days");
     }
 
     [SkippableFact]

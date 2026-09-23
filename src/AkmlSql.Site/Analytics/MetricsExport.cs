@@ -26,6 +26,33 @@ public static class MetricsExport
                    .Append(Escape(key)).Append(',')
                    .Append(value.ToString(CultureInfo.InvariantCulture)).Append('\n');
 
+        void Text(string section, string key, string value) =>
+            builder.Append(Escape(section)).Append(',')
+                   .Append(Escape(key)).Append(',')
+                   .Append(Escape(value)).Append('\n');
+
+        // The period, stated exactly. "window_days" alone cannot tell today from yesterday.
+        Text("window", "range", summary.Window.Range.Key);
+        Text("window", "first_day", Day(summary.Window.FirstDay));
+        Text("window", "last_day", Day(summary.Window.LastDay));
+        Text("window", "timezone", summary.Window.Zone.Id);
+        Text("window", "compared_with", summary.Window.ComparisonLabel());
+
+        // Headline figures and their comparison-period values, so a spreadsheet can compute the
+        // same changes the dashboard shows.
+        void Headline(string section, HeadlineMetrics h)
+        {
+            Row(section, "visits", h.Visits);
+            Row(section, "visitors", h.Visitors);
+            Row(section, "downloads", h.Downloads);
+            Row(section, "downloaders", h.Downloaders);
+            Row(section, "downloads_without_visit", h.DownloadsWithoutVisit);
+            Row(section, "conversion_x10", (long)Math.Round(h.ConversionPercent * 10));
+        }
+
+        Headline("headline", summary.Headline);
+        Headline("previous", summary.PreviousHeadline);
+
         Row("totals", "window_days", summary.Days);
         Row("totals", "visits_today", summary.VisitsToday);
         Row("totals", "unique_visitors_today", summary.UniqueVisitorsToday);
@@ -109,7 +136,9 @@ public static class MetricsExport
 
     /// <summary>Suggested download file name, stamped with the window and the UTC date.</summary>
     public static string FileName(AnalyticsSummary summary, DateTimeOffset now) =>
-        $"akml-site-metrics-{summary.Days}d-{now.UtcDateTime:yyyy-MM-dd}.csv";
+        summary.Window.Range.IsSingleDay
+            ? $"akml-site-metrics-{summary.Window.Range.Key}-{Day(summary.Window.FirstDay)}.csv"
+            : $"akml-site-metrics-{summary.Days}d-{now.UtcDateTime:yyyy-MM-dd}.csv";
 
     private static string Day(DateOnly day) => day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 

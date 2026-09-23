@@ -22,9 +22,14 @@ public static class IndividualsExport
         "# CONTAINS PERSONAL DATA: IP addresses and persistent visitor identifiers. Handle accordingly.";
 
     /// <summary>Downloads grouped by country.</summary>
-    public static string CountriesToCsv(IReadOnlyList<DownloadCountryRow> rows, int days, DateTimeOffset generatedAt)
+    /// <param name="window">
+    /// The period, when known. It is what lets the header say WHICH day a one-day export covers:
+    /// "today" and "yesterday" are both one day long, so a day count alone cannot tell them apart.
+    /// </param>
+    public static string CountriesToCsv(
+        IReadOnlyList<DownloadCountryRow> rows, int days, DateTimeOffset generatedAt, ReportWindow? window = null)
     {
-        var builder = Header(days, generatedAt, filters: null, personalData: false);
+        var builder = Header(days, generatedAt, filters: null, personalData: false, window);
         builder.Append("country,country_code,downloads,share_percent\n");
 
         foreach (var row in rows ?? [])
@@ -39,9 +44,10 @@ public static class IndividualsExport
     }
 
     /// <summary>Downloads grouped by release version.</summary>
-    public static string VersionsToCsv(IReadOnlyList<DownloadVersionRow> rows, int days, DateTimeOffset generatedAt)
+    public static string VersionsToCsv(
+        IReadOnlyList<DownloadVersionRow> rows, int days, DateTimeOffset generatedAt, ReportWindow? window = null)
     {
-        var builder = Header(days, generatedAt, filters: null, personalData: false);
+        var builder = Header(days, generatedAt, filters: null, personalData: false, window);
         builder.Append("release_version,file,downloads,share_percent\n");
 
         foreach (var row in rows ?? [])
@@ -63,11 +69,12 @@ public static class IndividualsExport
         IReadOnlyList<IndividualRow> rows,
         CoverageSummary coverage,
         IndividualFilter filter,
-        DateTimeOffset generatedAt)
+        DateTimeOffset generatedAt,
+        ReportWindow? window = null)
     {
         ArgumentNullException.ThrowIfNull(filter);
 
-        var builder = Header(filter.Days, generatedAt, DescribeFilters(filter), personalData: true);
+        var builder = Header(filter.Days, generatedAt, DescribeFilters(filter), personalData: true, window);
 
         // The coverage caveat travels with the data. A spreadsheet of individuals detached from
         // "this is 12% of traffic" is exactly how a partial list gets read as the whole audience.
@@ -106,9 +113,10 @@ public static class IndividualsExport
     }
 
     /// <summary>File name carrying the window and filters, so the file is self-describing.</summary>
-    public static string FileName(string view, IndividualFilter? filter, int days, DateTimeOffset generatedAt)
+    public static string FileName(
+        string view, IndividualFilter? filter, int days, DateTimeOffset generatedAt, ReportWindow? window = null)
     {
-        var parts = new List<string> { "akmlsql", view, $"{days}d" };
+        var parts = new List<string> { "akmlsql", view, PeriodSlug(days, window) };
 
         if (filter?.CountryCode is { Length: > 0 } country)
         {
@@ -124,11 +132,34 @@ public static class IndividualsExport
         return string.Join('-', parts) + ".csv";
     }
 
-    private static StringBuilder Header(int days, DateTimeOffset generatedAt, string? filters, bool personalData)
+    /// <summary>
+    /// File-name fragment for the period: "30d" as before for a last-N-days range, and the range
+    /// plus its date for a single named day ("yesterday-2026-09-21"), so two one-day exports
+    /// saved side by side cannot be confused.
+    /// </summary>
+    internal static string PeriodSlug(int days, ReportWindow? window)
+    {
+        if (window is null || int.TryParse(window.Range.Key, NumberStyles.Integer, CultureInfo.InvariantCulture, out _))
+        {
+            return $"{(window?.Range.Days ?? days).ToString(CultureInfo.InvariantCulture)}d";
+        }
+
+        return $"{window.Range.Key}-{window.FirstDay.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}";
+    }
+
+    private static StringBuilder Header(
+        int days, DateTimeOffset generatedAt, string? filters, bool personalData, ReportWindow? window = null)
     {
         var builder = new StringBuilder();
         builder.Append("# AKML SQL site metrics\n");
-        builder.Append("# Window: last ").Append(days.ToString(CultureInfo.InvariantCulture)).Append(" days\n");
+        if (window is null)
+        {
+            builder.Append("# Window: last ").Append(days.ToString(CultureInfo.InvariantCulture)).Append(" days\n");
+        }
+        else
+        {
+            builder.Append("# Window: ").Append(window.Describe()).Append('\n');
+        }
         builder.Append("# Generated: ").Append(generatedAt.UtcDateTime.ToString("u", CultureInfo.InvariantCulture)).Append('\n');
 
         if (!string.IsNullOrEmpty(filters))

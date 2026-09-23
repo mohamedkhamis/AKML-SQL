@@ -40,9 +40,14 @@ public sealed class AdminQuickstartTests(SiteFixture site)
         return page;
     }
 
-    /// <summary>Clicks a portal section in the nav by its exact title.</summary>
+    /// <summary>
+    /// Clicks a portal section in the nav by its title. Exact, except that a count may follow it:
+    /// "Feedback" carries an open-message badge ("Feedback2 open messages" as text).
+    /// </summary>
     private static Task ClickSectionAsync(IPage page, string title) =>
-        page.ClickAsync($".admin-nav a:text-is('{title}')");
+        page.Locator(".admin-nav a")
+            .Filter(new LocatorFilterOptions { HasTextRegex = new System.Text.RegularExpressions.Regex($"^{title}(\\d.*)?$") })
+            .ClickAsync();
 
     private static string PathOf(IPage page) => new Uri(page.Url).AbsolutePath.TrimEnd('/');
 
@@ -61,6 +66,8 @@ public sealed class AdminQuickstartTests(SiteFixture site)
         (string Route, string Title, string Heading)[] sections =
         [
             ("/admin", "Overview", "Site metrics"),
+            ("/admin/insights", "Insights", "Insights"),
+            ("/admin/feedback", "Feedback", "Feedback"),
             ("/admin/downloads", "Downloads", "Downloads"),
             ("/admin/people", "People", "People"),
             ("/admin/pages", "Pages", "Pages"),
@@ -275,9 +282,11 @@ public sealed class AdminQuickstartTests(SiteFixture site)
     // ---------------------------------------------------------------- S4.6
 
     [SkippableTheory]
-    [InlineData("Overview", "/admin")]
-    [InlineData("Downloads", "/admin/downloads")]
-    public async Task S4_6_AtPhoneWidth_ThePageDoesNotScrollSideways_ButWideTablesDo(string section, string route)
+    [InlineData("Overview", "/admin", null)]
+    [InlineData("Downloads", "/admin/downloads", "#country-heading")]
+    [InlineData("Insights", "/admin/insights", "#loyalty-heading")]
+    [InlineData("Feedback", "/admin/feedback", "#email-heading")]
+    public async Task S4_6_AtPhoneWidth_ThePageDoesNotScrollSideways_ButWideTablesDo(string section, string route, string? landmark)
     {
         SkipIfUnavailable();
 
@@ -285,10 +294,11 @@ public sealed class AdminQuickstartTests(SiteFixture site)
         await using var context = await site.NewContextAsync(400, 800);
         var page = await SignInAsync(context);
 
-        if (route != "/admin")
+        if (landmark is not null)
         {
+            // At phone width the nav is still a visible list (it wraps), so this is a real click.
             await ClickSectionAsync(page, section);
-            await page.WaitForSelectorAsync("#country-heading");
+            await page.WaitForSelectorAsync(landmark);
         }
 
         Assert.Equal(route.TrimEnd('/'), PathOf(page));

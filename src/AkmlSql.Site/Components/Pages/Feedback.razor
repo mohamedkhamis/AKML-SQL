@@ -1,0 +1,241 @@
+@page "/feedback"
+@using AkmlSql.Site.Analytics
+@using AkmlSql.Site.Feedback
+@using Microsoft.AspNetCore.Components.Forms
+@inject FeedbackStore Store
+@inject FeedbackNotifier Notifier
+@inject FeedbackRateLimit RateLimit
+@inject GeoLookup Geo
+@inject NavigationManager Nav
+
+@* Public feedback: report a problem, make a complaint, suggest something.
+
+   The form posts to this page itself (static SSR form handling), so a message that fails
+   validation comes straight back with everything the visitor typed still in place and the problem
+   named beside the field -- rather than an endpoint that redirects to an empty form. It works with
+   JavaScript off, like every other page on this site (FR-009).
+
+   After a successful send it redirects (POST/redirect/GET), so refreshing the confirmation cannot
+   send the message twice. *@
+
+<PageTitle>Contact & feedback — AKML SQL</PageTitle>
+<HeadContent>
+    <meta name="description" content="Report a problem with AKML SQL, make a complaint, or suggest an improvement." />
+</HeadContent>
+
+<div class="page-body container">
+    <header class="page-header">
+        <p class="eyebrow">Feedback</p>
+        <h1>Tell us what went wrong</h1>
+        <p class="page-intro">
+            Something broken, a download that won't install, a complaint, or an idea — it all comes here,
+            and a person reads every message.
+        </p>
+    </header>
+
+    @if (Sent)
+    {
+        <section class="feedback-sent" role="status" aria-labelledby="feedback-sent-heading">
+            <h2 id="feedback-sent-heading">Thanks — your message was sent</h2>
+            <p>
+                It's with the developer now. If you left an email address, any reply will come from there;
+                if you didn't, there's nothing more you need to do.
+            </p>
+            <p class="cta-row">
+                <a class="btn btn-secondary" href="/feedback">Send another message</a>
+                <a class="btn btn-secondary" href="/docs">Browse the documentation</a>
+            </p>
+        </section>
+    }
+    else
+    {
+        <div class="feedback-layout">
+            <EditForm Model="Form" FormName="feedback" OnSubmit="HandleSubmit" class="feedback-form" novalidate>
+                @if (_errors.Count > 0)
+                {
+                    <div class="notice feedback-errors" role="alert">
+                        <h2>Please check your message</h2>
+                        <ul>
+                            @foreach (var error in _errors)
+                            {
+                                <li>@error</li>
+                            }
+                        </ul>
+                    </div>
+                }
+
+                @if (_throttled)
+                {
+                    <div class="notice feedback-errors" role="alert">
+                        <h2>Too many messages</h2>
+                        <p>You've sent several messages in the last few minutes. Please wait a little and try again.</p>
+                    </div>
+                }
+
+                <fieldset class="feedback-field">
+                    <legend>What is it about?</legend>
+                    <div class="feedback-choices">
+                        @foreach (var category in FeedbackCategory.All)
+                        {
+                            <label class="feedback-choice">
+                                <input type="radio" name="Form.Category" value="@category.Key"
+                                       checked="@(string.Equals(Form.Category, category.Key, StringComparison.OrdinalIgnoreCase))" />
+                                <span>@category.Label</span>
+                            </label>
+                        }
+                    </div>
+                </fieldset>
+
+                <div class="feedback-field">
+                    <label for="feedback-message">Your message</label>
+                    <p class="feedback-hint" id="feedback-message-hint">
+                        What happened, and what did you expect? For a problem, the version you're using and
+                        whether it's SSMS or Visual Studio help most.
+                    </p>
+                    <InputTextArea id="feedback-message" @bind-Value="Form.Message" rows="7"
+                                   maxlength="@FeedbackValidation.MaxMessageLength"
+                                   aria-describedby="feedback-message-hint" class="feedback-input" />
+                </div>
+
+                <div class="feedback-field">
+                    <label for="feedback-email">Email <span class="feedback-optional">(optional)</span></label>
+                    <p class="feedback-hint" id="feedback-email-hint">
+                        Only if you'd like a reply. It's used for nothing else.
+                    </p>
+                    <InputText id="feedback-email" type="email" @bind-Value="Form.Email" autocomplete="email"
+                               maxlength="@FeedbackValidation.MaxEmailLength"
+                               aria-describedby="feedback-email-hint" class="feedback-input" />
+                </div>
+
+                @* Which page they came from, so "the download button doesn't work" is actionable. *@
+                <InputText type="hidden" @bind-Value="Form.Page" />
+
+                @* Spam trap: invisible to people (and to screen readers), irresistible to form-filling
+                   bots. A submission that fills it is acknowledged and dropped. *@
+                <div class="feedback-trap" aria-hidden="true">
+                    <label for="feedback-website">Leave this empty</label>
+                    <InputText id="feedback-website" @bind-Value="Form.Website" tabindex="-1" autocomplete="off" />
+                </div>
+
+                <p class="cta-row">
+                    <button type="submit" class="btn btn-primary">Send message</button>
+                </p>
+                <p class="feedback-privacy">
+                    Your message, the page you were on, and your country and browser are stored so the problem
+                    can be understood. Your IP address is not. See the <a href="/privacy#feedback">privacy notice</a>.
+                </p>
+            </EditForm>
+
+            <aside class="feedback-aside" aria-labelledby="feedback-aside-heading">
+                <h2 id="feedback-aside-heading">Before you write</h2>
+                <ul class="download-links">
+                    <li><a href="/docs">Documentation</a> — installation, configuration and every feature.</li>
+                    <li><a href="/download">Download page</a> — the latest installer and its checksum.</li>
+                    <li>
+                        <a href="https://github.com/mohamedkhamis/AKML-SQL/issues" target="_blank" rel="noopener noreferrer">GitHub issues</a>
+                        — if you'd rather report a bug publicly.
+                    </li>
+                </ul>
+            </aside>
+        </div>
+    }
+</div>
+
+@code {
+    [SupplyParameterFromForm(FormName = "feedback")]
+    private FeedbackForm Form { get; set; } = new();
+
+    [SupplyParameterFromQuery(Name = "sent")]
+    private string? SentFlag { get; set; }
+
+    [SupplyParameterFromQuery(Name = "from")]
+    private string? FromPage { get; set; }
+
+    /// <summary>A category to preselect, e.g. <c>?about=download</c> from the download page.</summary>
+    [SupplyParameterFromQuery(Name = "about")]
+    private string? About { get; set; }
+
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
+    private bool Sent => !string.IsNullOrEmpty(SentFlag);
+
+    private IReadOnlyList<string> _errors = [];
+    private bool _throttled;
+
+    protected override void OnInitialized()
+    {
+        // Pre-fill the page on first view: ?from= when a link supplies it (the download page's
+        // "problem with the download?" link does), otherwise the page the visitor came from.
+        if (HttpMethods.IsGet(HttpContext?.Request.Method ?? "GET") && string.IsNullOrEmpty(Form.Page))
+        {
+            Form.Page = FeedbackValidation.NormalizePage(FromPage) ?? ReferrerPath();
+            // Only a known key is preselected; anything else leaves the choice to the visitor.
+            Form.Category ??= FeedbackCategory.Find(About)?.Key;
+        }
+    }
+
+    private void HandleSubmit()
+    {
+        // Honeypot filled: acknowledge like any other send, store nothing, email nobody. Telling a
+        // bot it was caught only teaches it which field to skip.
+        if (!string.IsNullOrEmpty(Form.Website))
+        {
+            Nav.NavigateTo("/feedback?sent=1");
+            return;
+        }
+
+        var valid = FeedbackValidation.Validate(
+            new FeedbackSubmission(Form.Category, Form.Message, Form.Email, Form.Page), out var errors);
+        if (valid is not { } submission)
+        {
+            _errors = errors;
+            return;
+        }
+
+        // Only a message that would actually be stored (and emailed) counts against the limit: a
+        // visitor fixing a typo in their email address is not spamming.
+        var ip = HttpContext is null ? null : HttpRequestFacts.ClientIp(HttpContext);
+        if (!RateLimit.TryAcquire(ip))
+        {
+            _throttled = true;
+            return;
+        }
+
+        // Country and browser family only -- resolved here, and the address itself is not kept.
+        var country = Geo.Locate(ip).CountryName;
+        var browser = UserAgentBuckets.FromUserAgent(HttpContext?.Request.Headers.UserAgent.ToString());
+
+        var item = Store.Add(
+            submission.Category, submission.Message, submission.Email, submission.Page,
+            country, browser, DateTimeOffset.UtcNow);
+        Notifier.Enqueue(item);
+
+        Nav.NavigateTo("/feedback?sent=1");
+    }
+
+    /// <summary>The same-site page the visitor came from, as a path; null for anything else.</summary>
+    private string? ReferrerPath()
+    {
+        var referrer = HttpContext?.Request.Headers.Referer.ToString();
+        if (string.IsNullOrEmpty(referrer) || !Uri.TryCreate(referrer, UriKind.Absolute, out var uri))
+        {
+            return null;
+        }
+
+        var sameHost = string.Equals(uri.Host, HttpContext!.Request.Host.Host, StringComparison.OrdinalIgnoreCase);
+        return sameHost ? FeedbackValidation.NormalizePage(uri.AbsolutePath) : null;
+    }
+
+    /// <summary>The form's fields, bound from the POST.</summary>
+    public sealed class FeedbackForm
+    {
+        public string? Category { get; set; }
+        public string? Message { get; set; }
+        public string? Email { get; set; }
+        public string? Page { get; set; }
+
+        /// <summary>The honeypot. People never see it.</summary>
+        public string? Website { get; set; }
+    }
+}

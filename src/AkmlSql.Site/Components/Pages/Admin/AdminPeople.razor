@@ -20,7 +20,7 @@
     <p class="eyebrow">Admin</p>
     <h1>People</h1>
     <p class="page-intro">
-        Individuals who agreed to be recognised, over the last @AdminDashboardOptions.Label(Days).
+        Individuals who agreed to be recognised, for @Range.Phrase.
         One row is one <strong>browser</strong>, not one person: two devices are two rows, and
         clearing cookies creates a new one.
     </p>
@@ -59,7 +59,7 @@
 @* Plain GET form: filters become query-string values, so the view is bookmarkable and works with
    JavaScript disabled. *@
 <form method="get" action="/admin/people" class="admin-toolbar">
-    <input type="hidden" name="days" value="@Days" />
+    <input type="hidden" name="days" value="@Range.Key" />
     <label class="admin-toolbar-label" for="filter-country">Country</label>
     <select class="admin-input" id="filter-country" name="country">
         <option value="">All</option>
@@ -111,7 +111,7 @@
                     {
                         <tr>
                             <td class="admin-key">
-                                <a href="@AdminNav.WithRange($"/admin/people/{row.VisitorId}", Days)">@row.ShortId</a>
+                                <a href="@AdminNav.WithRange($"/admin/people/{row.VisitorId}", Range)">@row.ShortId</a>
                                 @if (row.IsReturning)
                                 {
                                     <span class="admin-choice-hint"> returning</span>
@@ -161,8 +161,11 @@
     [SupplyParameterFromQuery(Name = "page")]
     private string? PageQuery { get; set; }
 
-    private int Days => AdminDashboardOptions.NormalizeDays(
-        int.TryParse(DaysQuery, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) ? parsed : null);
+    /// <summary>The reporting range from <c>?days=</c> (see <see cref="AdminDashboardOptions.ResolveRange"/>).</summary>
+    private ReportRange Range => AdminDashboardOptions.ResolveRange(DaysQuery);
+
+    /// <summary>The range resolved once per request, so every figure describes the same instant.</summary>
+    private ReportWindow _window = default!;
 
     private int Page =>
         int.TryParse(PageQuery, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) && parsed > 0
@@ -185,25 +188,25 @@
         (string.IsNullOrEmpty(CountryQuery) ? "" : $"&country={Uri.EscapeDataString(CountryQuery)}") +
         (string.IsNullOrEmpty(DownloadedQuery) ? "" : $"&downloaded={Uri.EscapeDataString(DownloadedQuery)}");
 
-    private string ExportUrl => $"/admin/people.csv?days={Days}{Filters}";
+    private string ExportUrl => $"/admin/people.csv?days={Range.Key}{Filters}";
 
-    private string PageUrl(int page) => $"/admin/people?days={Days}{Filters}&page={page}";
+    private string PageUrl(int page) => $"/admin/people?days={Range.Key}{Filters}&page={page}";
 
     protected override void OnInitialized()
     {
-        var now = DateTimeOffset.UtcNow;
+        _window = Store.ResolveWindow(Range);
         var filter = new IndividualFilter(
-            Days,
+            Range.Days,
             string.IsNullOrWhiteSpace(CountryQuery) ? null : CountryQuery,
             Downloaded,
             Page,
             Individuals.DefaultPageSize);
 
-        _rows = Store.GetIndividuals(filter, now);
-        _total = Store.CountIndividuals(filter, now);
-        _coverage = Store.GetCoverage(Days, now);
+        _rows = Store.GetIndividuals(filter, _window);
+        _total = Store.CountIndividuals(filter, _window);
+        _coverage = Store.GetCoverage(_window);
 
-        _countryOptions = Store.GetDownloadsByCountry(Days, now)
+        _countryOptions = Store.GetDownloadsByCountry(_window)
             .Where(c => c.CountryCode is not null)
             .Select(c => (c.CountryCode!, c.Label))
             .ToList();

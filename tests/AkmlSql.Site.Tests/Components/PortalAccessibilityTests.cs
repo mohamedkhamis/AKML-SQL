@@ -39,6 +39,8 @@ public sealed class PortalAccessibilityTests : IDisposable
     {
         var ctx = new BunitContext();
         ctx.Services.AddAntiforgery();
+        // The layout names the period ("Today · UTC time"); UTC keeps that text the same on every machine.
+        ctx.Services.AddSingleton(new AkmlSql.Site.Analytics.ReportClock(TimeZoneInfo.Utc));
         ctx.Services.AddSingleton(NewSettings());
 
         var http = new DefaultHttpContext();
@@ -117,6 +119,8 @@ public sealed class PortalAccessibilityTests : IDisposable
     {
         var ctx = new BunitContext();
         ctx.Services.AddAntiforgery();
+        // The layout names the period ("Today · UTC time"); UTC keeps that text the same on every machine.
+        ctx.Services.AddSingleton(new AkmlSql.Site.Analytics.ReportClock(TimeZoneInfo.Utc));
 
         // The layout marks a section active from the CURRENT path, so the test has to be on one.
         // bUnit's default URL is the base URI, where correctly nothing is active.

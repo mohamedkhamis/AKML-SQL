@@ -47,59 +47,57 @@ public static class AdminEndpoints
             loggerFactory.CreateLogger(AuditLoggerName).LogInformation(
                 "Admin deleted {Rows} row(s) for one individual.", deleted);
 
-            var days = AdminDashboardOptions.NormalizeDays(
-                int.TryParse(form["days"].ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var d) ? d : null);
-            return Results.Redirect($"/admin/people?days={days}&deleted={deleted}");
+            var range = AdminDashboardOptions.ResolveRange(form["days"].ToString());
+            return Results.Redirect($"/admin/people?days={range.Key}&deleted={deleted}");
         });
 
         // Spec 038 T072 (US3): per-view exports. All under /admin, so one guard covers them; all
         // no-store, matching the existing metrics.csv.
         endpoints.MapGet("/admin/downloads.csv", (HttpContext http, AnalyticsStore store, string? days) =>
         {
-            var window = NormalizeDaysQuery(days);
-            var now = DateTimeOffset.UtcNow;
+            var window = store.ResolveWindow(AdminDashboardOptions.ResolveRange(days));
+            var now = window.Now;
             // Two sections in one file: country breakdown, then release breakdown, separated by a
             // blank line so a spreadsheet import treats them as distinct blocks.
-            var csv = IndividualsExport.CountriesToCsv(store.GetDownloadsByCountry(window, now), window, now)
+            var csv = IndividualsExport.CountriesToCsv(store.GetDownloadsByCountry(window), window.Range.Days, now, window)
                       + "\n"
-                      + IndividualsExport.VersionsToCsv(store.GetDownloadsByVersion(window, now), window, now);
+                      + IndividualsExport.VersionsToCsv(store.GetDownloadsByVersion(window), window.Range.Days, now, window);
 
             http.Response.Headers.CacheControl = "no-store";
             return Results.File(
                 System.Text.Encoding.UTF8.GetBytes(csv),
                 "text/csv",
-                IndividualsExport.FileName("downloads", null, window, now));
+                IndividualsExport.FileName("downloads", null, window.Range.Days, now, window));
         });
 
         endpoints.MapGet("/admin/people.csv", (
             HttpContext http, AnalyticsStore store, string? days, string? country, string? downloaded) =>
         {
-            var window = NormalizeDaysQuery(days);
-            var now = DateTimeOffset.UtcNow;
+            var window = store.ResolveWindow(AdminDashboardOptions.ResolveRange(days));
+            var now = window.Now;
 
             // The export must describe the SAME set the page is showing, filters included -- an
             // unfiltered dump beside a filtered view is how the two get confused (contract M6.1).
             var filter = new IndividualFilter(
-                window,
+                window.Range.Days,
                 string.IsNullOrWhiteSpace(country) ? null : country,
                 downloaded switch { "yes" => true, "no" => false, _ => null },
                 Page: 0,
                 PageSize: 500);
 
             var csv = IndividualsExport.IndividualsToCsv(
-                store.GetIndividuals(filter, now), store.GetCoverage(window, now), filter, now);
+                store.GetIndividuals(filter, window), store.GetCoverage(window), filter, now, window);
 
             http.Response.Headers.CacheControl = "no-store";
             return Results.File(
                 System.Text.Encoding.UTF8.GetBytes(csv),
                 "text/csv",
-                IndividualsExport.FileName("people", filter, window, now));
+                IndividualsExport.FileName("people", filter, window.Range.Days, now, window));
         });
 
         endpoints.MapGet("/admin/pages.csv", (HttpContext http, AnalyticsStore store, string? days) =>
         {
-            var window = NormalizeDaysQuery(days);
-            var summary = store.GetSummary(window);
+            var summary = store.GetSummary(store.ResolveWindow(AdminDashboardOptions.ResolveRange(days)));
             http.Response.Headers.CacheControl = "no-store";
             return Results.File(
                 System.Text.Encoding.UTF8.GetBytes(MetricsExport.ToCsv(summary)),
@@ -116,10 +114,7 @@ public static class AdminEndpoints
         // an error response instead of falling back to the default window.
         endpoints.MapGet("/admin/metrics.csv", (HttpContext http, AnalyticsStore store, string? days) =>
         {
-            var requested = int.TryParse(days, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
-                ? parsed
-                : (int?)null;
-            var summary = store.GetSummary(AdminDashboardOptions.NormalizeDays(requested));
+            var summary = store.GetSummary(store.ResolveWindow(AdminDashboardOptions.ResolveRange(days)));
             http.Response.Headers.CacheControl = "no-store";
             return Results.File(
                 System.Text.Encoding.UTF8.GetBytes(MetricsExport.ToCsv(summary)),
@@ -223,13 +218,6 @@ public static class AdminEndpoints
         return Results.Redirect("/admin/settings?saved=1");
     }
 
-    /// <summary>
-    /// Normalises a `days` query value. Bound as a string deliberately: an unparseable int binds to
-    /// an error response instead of falling back to the default window.
-    /// </summary>
-    private static int NormalizeDaysQuery(string? days) =>
-        AdminDashboardOptions.NormalizeDays(
-            int.TryParse(days, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) ? parsed : null);
 
     /// <summary>Form input is user input: an unparseable number keeps the current value rather than erroring.</summary>
     private static int ParseIntOr(string? raw, int fallback) =>

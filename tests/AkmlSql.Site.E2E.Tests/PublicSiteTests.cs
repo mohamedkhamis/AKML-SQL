@@ -352,7 +352,7 @@ public sealed class PublicSiteTests(SiteFixture site)
         await using var context = await site.NewContextAsync(width, 900);
         var page = await context.NewPageAsync();
 
-        foreach (var path in (string[])["/", "/features", "/download", "/docs", "/docs/topics/connecting"])
+        foreach (var path in (string[])["/", "/features", "/download", "/docs", "/docs/topics/connecting", "/feedback", "/privacy"])
         {
             await page.GotoAsync(SiteFixture.BaseUrl + path);
             var scrollWidth = await page.EvaluateAsync<int>("document.documentElement.scrollWidth");

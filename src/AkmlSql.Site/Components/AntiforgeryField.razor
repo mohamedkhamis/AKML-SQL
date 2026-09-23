@@ -1,0 +1,13 @@
+@* The antiforgery hidden field for a plain POST form, or nothing when there is no token (a
+   component test with no HttpContext). The same shape the admin pages already write by hand;
+   a component so the several forms on one page cannot drift. *@
+
+@if (Token is not null)
+{
+    <input type="hidden" name="__RequestVerificationToken" value="@Token" />
+}
+
+@code {
+    [Parameter]
+    public string? Token { get; set; }
+}

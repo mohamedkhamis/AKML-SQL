@@ -1,0 +1,18 @@
+@using AkmlSql.Site.Admin
+
+@* One change indicator: the visible arrow and figure, and a full sentence for screen readers. The
+   arrow glyphs are aria-hidden -- "black up-pointing triangle, twelve percent" is noise; "Up 12%
+   compared with yesterday until 10:00 (340)" is the information.
+
+   Colour comes from .admin-delta-up / -down / -flat / -new (strict CSP: no inline styles), and is
+   never the only signal: the arrow and the sentence carry the same meaning without it. *@
+
+<p class="admin-delta admin-delta-@Change.Direction">
+    <span aria-hidden="true">@Change.Text</span>
+    <span class="visually-hidden">@Change.Description</span>
+</p>
+
+@code {
+    [Parameter, EditorRequired]
+    public ChangeIndicator Change { get; set; } = default!;
+}

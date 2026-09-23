@@ -169,4 +169,18 @@ public sealed class PrivacyPageTests : IDisposable
         // indexable and must carry no robots exclusion.
         Assert.DoesNotContain("noindex", cut.Markup, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public void ItExplainsWhatHappensToFeedback_WhereTheFormLinks()
+    {
+        using var ctx = NewCtx();
+
+        var cut = ctx.Render<Privacy>();
+
+        // The feedback form links to #feedback; the anchor must exist, and it must say what the
+        // store actually does (FeedbackStoreTests.NoAddressOrVisitorIdIsEverStored pins that side).
+        var section = cut.Find("section#feedback").TextContent;
+        Assert.Contains("Your IP address is not stored", section, StringComparison.Ordinal);
+        Assert.Contains("only if you enter one", section, StringComparison.Ordinal);
+    }
 }

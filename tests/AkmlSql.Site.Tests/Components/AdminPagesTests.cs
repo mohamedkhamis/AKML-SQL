@@ -120,11 +120,20 @@ public sealed class AdminPagesTests
 
         var cut = ctx.Render<AdminDashboard>();
 
-        // Stat tiles: visits today, unique today, 7d, window, downloads window, downloads total,
-        // bot hits. Two distinct IPs visited "/" plus one more for "/features" => 3 unique.
-        var values = cut.FindAll("section[aria-label='Key metrics'] .admin-stat-value")
+        // Headline: visits, visitors, downloads, conversion. Three visitors (three IPs), one of
+        // whom downloaded the same day => 1 of 3 converted.
+        var headline = cut.FindAll(".admin-headline .admin-stat-value")
             .Select(e => e.TextContent.Trim()).ToList();
-        Assert.Equal(["3", "3", "3", "3", "1", "1", "0"], values);
+        Assert.Equal(["3", "3", "1", "33.3%"], headline);
+
+        // Each headline figure carries a change indicator against the comparison period. Nothing
+        // was recorded then, so each reads as new or flat -- never a made-up percentage.
+        Assert.Equal(4, cut.FindAll(".admin-headline .admin-delta").Count);
+
+        // Period-independent totals: downloads all time, visits today, visits 7 days, bot hits.
+        var totals = cut.FindAll("section[aria-label='Totals'] .admin-stat-value")
+            .Select(e => e.TextContent.Trim()).ToList();
+        Assert.Equal(["1", "3", "3", "0"], totals);
 
         // Two charts now (ADM-005): visits and downloads, one column per day of the window.
         Assert.Equal(2, cut.FindAll(".admin-chart").Count);
@@ -164,9 +173,9 @@ public sealed class AdminPagesTests
         using var ctx = NewDashboardCtx(store, dir);
         var cut = ctx.Render<AdminDashboard>();
 
-        var values = cut.FindAll("section[aria-label='Key metrics'] .admin-stat-value")
+        var values = cut.FindAll(".admin-headline .admin-stat-value")
             .Select(e => e.TextContent.Trim()).ToList();
-        Assert.Equal("1", values[0]); // visits today: the human only
+        Assert.Equal("1", values[0]); // visits: the human only
         // Selected by class, not by position: an index from the end broke as soon as a second
         // stats row was added below this one.
         Assert.Equal("2", cut.Find(".admin-stat-muted .admin-stat-value").TextContent.Trim());

@@ -23,6 +23,8 @@ public sealed class AdminLayoutTests
     {
         var ctx = new BunitContext();
         ctx.Services.AddAntiforgery();
+        // The layout names the period ("Today · UTC time"); UTC keeps that text the same on every machine.
+        ctx.Services.AddSingleton(new AkmlSql.Site.Analytics.ReportClock(TimeZoneInfo.Utc));
 
         var nav = ctx.Services.GetRequiredService<NavigationManager>();
         var uri = nav.BaseUri.TrimEnd('/') + path;
@@ -78,8 +80,31 @@ public sealed class AdminLayoutTests
         Assert.Contains(label, cut.Markup, StringComparison.Ordinal);
 
         // FR-032, second clause: the active window is stated in words, so a screenshot of any
-        // section is never ambiguous about the range it describes.
-        Assert.Contains("Showing the last " + label, cut.Markup, StringComparison.Ordinal);
+        // section is never ambiguous about the range it describes. It now also names the actual
+        // dates and the timezone -- "today" is only unambiguous once it says whose today.
+        var active = cut.Find(".admin-range-active").TextContent;
+        Assert.Contains(label, active, StringComparison.Ordinal);
+        Assert.Contains("UTC", active, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("today", "Today")]
+    [InlineData("yesterday", "Yesterday")]
+    public void Layout_OffersTodayAndYesterday_AndNamesTheDay(string key, string label)
+    {
+        using var ctx = new BunitContext();
+        ctx.Services.AddAntiforgery();
+        ctx.Services.AddSingleton(new AkmlSql.Site.Analytics.ReportClock(TimeZoneInfo.Utc));
+        var nav = ctx.Services.GetRequiredService<NavigationManager>();
+        nav.NavigateTo(nav.BaseUri.TrimEnd('/') + "/admin?days=" + key);
+
+        var cut = ctx.Render<AdminLayout>();
+
+        Assert.NotNull(cut.Find($".admin-ranges a[href='/admin?days={key}'].is-current"));
+
+        // A one-day range names the weekday and date it covers, not just "Today".
+        var active = cut.Find(".admin-range-active").TextContent;
+        Assert.StartsWith(label + " (", active, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -130,6 +155,8 @@ public sealed class AdminLayoutTests
     {
         using var ctx = new BunitContext();
         ctx.Services.AddAntiforgery();
+        // The layout names the period ("Today · UTC time"); UTC keeps that text the same on every machine.
+        ctx.Services.AddSingleton(new AkmlSql.Site.Analytics.ReportClock(TimeZoneInfo.Utc));
         var nav = ctx.Services.GetRequiredService<NavigationManager>();
         nav.NavigateTo(nav.GetUriWithQueryParameter("days", days));
 

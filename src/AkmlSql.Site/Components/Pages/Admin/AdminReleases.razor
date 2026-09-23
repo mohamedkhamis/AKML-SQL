@@ -94,7 +94,7 @@
     </div>
     <p class="admin-choice-hint">
         Hidden releases stay reachable: a direct link published earlier still downloads and is still
-        counted. Change what is advertised on <a href="@AdminNav.WithRange("/admin/settings", Days)">Settings</a>.
+        counted. Change what is advertised on <a href="@AdminNav.WithRange("/admin/settings", Range)">Settings</a>.
     </p>
 </section>
 
@@ -139,8 +139,8 @@
     [SupplyParameterFromQuery(Name = "days")]
     private string? DaysQuery { get; set; }
 
-    private int Days => AdminDashboardOptions.NormalizeDays(
-        int.TryParse(DaysQuery, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) ? parsed : null);
+    /// <summary>The reporting range from <c>?days=</c>, carried on links so navigation keeps it.</summary>
+    private ReportRange Range => AdminDashboardOptions.ResolveRange(DaysQuery);
 
     private sealed record OrphanFile(string Name, long Length, DateTimeOffset Modified);
 
