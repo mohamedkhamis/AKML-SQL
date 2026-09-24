@@ -1,6 +1,6 @@
 # AKML SQL
 
-AI-powered SQL development assistance for SQL Server Management Studio and Visual Studio. AKML SQL replicates and extends the Redgate SQL Prompt feature set, runs in SSMS 22 and Visual Studio 2026, and ships a self-contained `.NET 10` engine for IntelliSense, formatting, refactoring, and static analysis.
+AI-powered SQL development assistance for SQL Server Management Studio 22. AKML SQL replicates and extends the Redgate SQL Prompt feature set, runs in SSMS 22 (Visual Studio 2026 is no longer supported), and ships a self-contained `.NET 10` engine for IntelliSense, formatting, refactoring, and static analysis.
 
 **Author**: Mohamed Khamis · **License**: MIT · **Version**: 1.0.0
 
@@ -32,7 +32,6 @@ src/
   AkmlSql.Analyzer/                    # CLI SQL static analyzer (.NET 10)
   AkmlSql.Shell.Shared/                # Shared project (.projitems) for the shell extensions
   AkmlSql.Ssms22/                      # SSMS 22 extension (net472, x64, VS SDK 17.14.x)
-  AkmlSql.VS2026/                      # VS 2026 extension (net472, x64, VS SDK 17.14.x)
   AkmlSql.Updater/                     # Self-contained updater (.NET 10, win-x64, trimmed)
   AkmlSql.Site/                        # Blazor static-SSR product site (.NET 10) — landing/features/download + docs auto-ingested from doc/
   AkmlSql.Installer/                   # Inno Setup 7 installer scripts

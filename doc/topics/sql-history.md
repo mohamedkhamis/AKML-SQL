@@ -1,6 +1,6 @@
 # SQL History
 
-AKML SQL records every query you execute — automatically, without you saving anything. The history is crash-safe: if SSMS or Visual Studio closes unexpectedly, your executed queries are still there on the next start.
+AKML SQL records every query you execute — automatically, without you saving anything. The history is crash-safe: if SSMS closes unexpectedly, your executed queries are still there on the next start.
 
 ## Open the history window
 

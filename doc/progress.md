@@ -1668,3 +1668,33 @@ reverse-engineering 14k lines of heuristics tuned to the 977 AKML goldens.
 - Calibrate the option interpretations (table in the spec) against SQL Prompt's built-in styles
   when the exports arrive; ship them as built-ins.
 - Manual check of the SSMS / VS window (WPF).
+
+---
+
+## 2026-09-24 — SSMS 22 only; installer 120.2 MB → 53.5 MB
+
+Visual Studio 2026 support is removed (it did not work there). The installer was also far bigger
+than it had to be, and removing VS was not what fixed that.
+
+- **VS 2026 removed**: `src/AkmlSql.VS2026` deleted and dropped from `AKML-SQL.slnx`, `build.ps1`,
+  `doc/Deploy-Build-Release.ps1`, `preprocess-manifests.ps1` and the installer. Setup detects SSMS 22
+  only; `/TARGETS=vs2026` from older scripts is accepted and ignored. Upgrades clean up: setup finds
+  `Extensions\AkmlSql` in any VS 2026 install (vswhere + `\2026\` / `\18\` edition folders), closes
+  Visual Studio if it is running (the old extension would restart the engine and lock
+  `Engine\*.dll`), deletes the folder and clears VS's `18.0_*` component cache.
+- **Where the size really went**: `dotnet publish` never deletes, so `AkmlSql.Web/.../publish/wwwroot`
+  had collected every old fingerprinted bundle (3 × `dotnet.native.wasm`, 5 × `System.Private.CoreLib`,
+  …): 215 MB packed for a 43 MB app, and setup grew 104 → 107 → 120 MB over three releases. Both build
+  scripts now empty `publish\` before each publish (`Clear-PublishOutput`). The web package also skips
+  `*.br` / `*.gz` — ASP.NET Core's pre-compressed copies, which the IIS site never serves (IIS logs:
+  17,015 `.wasm` requests, 0 `.br`). Engine and web publish English resources only
+  (`SatelliteResourceLanguages=en`, 13 language folders). VS 2026's own share was ~1 MB (its DLLs
+  duplicate the SSMS ones, which solid compression already deduplicated).
+- **Site**: every page now says SQL Server Management Studio 22; a shared `HostSupportNotice`
+  announces the change on the home and download pages; silent-install command `/TARGETS=ssms22`.
+  Release scripts write `supportedHosts: ["SSMS 22"]` for new releases (older entries keep their
+  history).
+- **Product text**: update dialog/toast name only SSMS; the web edition's styles are "Shared with SSMS".
+
+Verified: installer compiles (53.48 MB); Site 873, Shell 406, Installer unit 40, Web styles 23 +
+E2E 5/5 (Chromium, incl. the sandboxed-engine save) all pass; solution restores without the project.

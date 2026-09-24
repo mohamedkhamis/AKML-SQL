@@ -20,13 +20,9 @@ Shell projects must be built individually with MSBuild to avoid VSCT `.cto` cros
 ```bash
 MSBUILD="/c/Program Files/Microsoft Visual Studio/2022/Enterprise/MSBuild/Current/Bin/MSBuild.exe"
 
-# Restore and build each target separately
-for TARGET in Ssms22 VS2026; do
-  "$MSBUILD" "src/AkmlSql.$TARGET/AkmlSql.$TARGET.csproj" \
-    -t:Restore -p:Configuration=Release -v:quiet
-  "$MSBUILD" "src/AkmlSql.$TARGET/AkmlSql.$TARGET.csproj" \
-    -t:Build  -p:Configuration=Release -v:minimal
-done
+# Restore and build the SSMS 22 extension (the only shell target; Visual Studio 2026 support was removed)
+"$MSBUILD" "src/AkmlSql.Ssms22/AkmlSql.Ssms22.csproj" -t:Restore -p:Configuration=Release -v:quiet
+"$MSBUILD" "src/AkmlSql.Ssms22/AkmlSql.Ssms22.csproj" -t:Build  -p:Configuration=Release -v:minimal
 ```
 
 > **Critical**: Never `dotnet build` shell projects. Never build via the `.slnx` solution — VSCT CTO files will collide.
@@ -116,9 +112,12 @@ dropped into `wwwroot` afterwards would 404 silently.
 | Target | Extension Directory |
 |--------|---------------------|
 | SSMS 22 | `C:\Program Files\Microsoft SQL Server Management Studio 22\Release\Common7\IDE\Extensions\AkmlSql\` |
-| VS 2026 | `%LocalAppData%\Microsoft\VisualStudio\18.0_*\Extensions\AkmlSql\` |
 
 > **SSMS 22 note**: The extension lives under the `Release/` subdirectory, not the root.
+
+> **Visual Studio 2026**: no longer supported. On install, setup deletes any `Common7\IDE\Extensions\AkmlSql\`
+> folder an earlier release put into a Visual Studio 2026 (`\2026\` or `\18\`) installation, closing Visual Studio
+> first if it is running, and clears its `18.0_*\ComponentModelCache\`.
 
 ---
 
@@ -129,7 +128,6 @@ After installing, updating, or changing extension files, clear the MEF/component
 | Target | MEF Cache Path |
 |--------|---------------|
 | SSMS 22 | `%LocalAppData%\Microsoft\SSMS\22.0_*\ComponentModelCache\` |
-| VS 2026 | `%LocalAppData%\Microsoft\VisualStudio\18.0_*\ComponentModelCache\` |
 
 ```powershell
 # PowerShell: clear all SSMS 22 MEF caches
@@ -162,7 +160,7 @@ AKMLSQLSetup.exe /VERYSILENT /ACCEPTEULA /LOG="C:\Logs\akmlsql-install.log"
 # Install with automatic updates and anonymous error reports turned off
 AKMLSQLSetup.exe /VERYSILENT /ACCEPTEULA /NOUPDATE /NOTELEMETRY
 
-# Force-close running SSMS/VS instances before installing
+# Force-close running SSMS instances before installing
 AKMLSQLSetup.exe /VERYSILENT /ACCEPTEULA /FORCECLOSEAPPS
 
 # Import SQL Prompt formatting styles during installation
@@ -175,11 +173,11 @@ AKMLSQLSetup.exe /VERYSILENT /ACCEPTEULA /IMPORTSQLPROMPT
 |------|-------------|
 | `/VERYSILENT` | No UI, no progress dialog |
 | `/ACCEPTEULA` | Accept the EULA (required when `/VERYSILENT` is used) |
-| `/TARGETS=ssms22,vs2022` | Comma-separated target list: `ssms20`, `ssms21`, `ssms22`, `vs2019`, `vs2022`, `vs2026`. If omitted, all detected targets are selected. |
+| `/TARGETS=ssms22` | Target list. `ssms22` is the only target; `vs2026` from older scripts is accepted and ignored. If omitted, SSMS 22 is selected when it is found. |
 | `/NOUPDATE` | Turn automatic updates off and do not create the update-check scheduled task |
 | `/NOTELEMETRY` | Turn anonymous error reports off (they are on by default) |
 | `/TELEMETRY` | Turn anonymous error reports on (the default; kept for older scripts) |
-| `/FORCECLOSEAPPS` | Force-close running SSMS/VS instances without prompting |
+| `/FORCECLOSEAPPS` | Force-close running SSMS instances without prompting |
 | `/IMPORTSQLPROMPT` | Import SQL Prompt formatting styles if SQL Prompt config is detected |
 | `/LOG[=path]` | Write detailed install log. This is a native Inno Setup flag. If a path is given (`/LOG="C:\install.log"`), logs are written there. If no path is given (`/LOG`), Inno Setup writes to `%TEMP%\Setup Log YYYY-MM-DD #NNN.txt`. |
 
@@ -197,7 +195,7 @@ The installer registers a scheduled task, **Task Scheduler Library > AKML SQL > 
 - as the signed-in user (the Users group, least privilege), so it reads that user's own settings and cache;
 - only with a network connection, hidden, at most one run at a time, 30-minute limit.
 
-Each run honours the user's *Check for updates automatically* setting, skips the check if one (by the task or by SSMS / Visual Studio) happened in the last 12 hours, downloads and verifies an offered installer against the manifest's SHA-256, and then shows a Windows notification **once per version**: *AKML SQL x.y is ready to install — Install now / Later*. **It never installs anything by itself**; *Install now* runs `AkmlSql.Updater.exe --install`, which re-verifies the downloaded file and launches the installer with its normal UI and Windows' admin prompt. SSMS and Visual Studio also offer a waiting update once at startup. The Start-menu shortcut *Check for AKML SQL updates* (`--check-now`) checks immediately and always answers — ready, up to date, or could not check.
+Each run honours the user's *Check for updates automatically* setting, skips the check if one (by the task or by SSMS) happened in the last 12 hours, downloads and verifies an offered installer against the manifest's SHA-256, and then shows a Windows notification **once per version**: *AKML SQL x.y is ready to install — Install now / Later*. **It never installs anything by itself**; *Install now* runs `AkmlSql.Updater.exe --install`, which re-verifies the downloaded file and launches the installer with its normal UI and Windows' admin prompt. SSMS and Visual Studio also offer a waiting update once at startup. The Start-menu shortcut *Check for AKML SQL updates* (`--check-now`) checks immediately and always answers — ready, up to date, or could not check.
 
 Notifications need the Start-menu shortcut: Windows only shows notifications from an unpackaged app whose AppUserModelID (`AKML.AKMLSQL`) is on a Start-menu shortcut. The buttons use the `akmlsql-update:` URL scheme registered in `HKLM\Software\Classes`; it carries no data the updater acts on.
 
@@ -352,7 +350,6 @@ The web edition's uninstall stops + deletes the `AkmlSqlWebEngine` service, remo
 | Target | Activity Log |
 |--------|-------------|
 | SSMS 22 | `%AppData%\Microsoft\SSMS\22.0_*\ActivityLog.xml` |
-| VS 2026 | `%AppData%\Microsoft\VisualStudio\18.0_*\ActivityLog.xml` |
 
 To enable VS/SSMS activity logging, launch with `/log`:
 
@@ -409,4 +406,3 @@ AKML SQL writes its own rolling logs to `%AppData%\AKML SQL\logs\`. Set `logMini
 | Target | VS SDK | VSSDK.BuildTools | Platform | Shell Version |
 |--------|--------|-----------------|----------|--------------|
 | SSMS 22 | 17.14.* | 17.* | x64 | 17.0.0.0 |
-| VS 2026 | 17.14.* | 17.* | x64 | 17.0.0.0 |

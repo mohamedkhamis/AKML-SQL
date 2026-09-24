@@ -94,9 +94,9 @@ from an editor makes it a SQL Prompt style.
 
 **Editors.**
 - Web edition: **Format styles** page (`/styles`). Styles are saved to the paired engine when it
-  advertises `styles.sqlprompt.v1` — the styles folder SSMS and Visual Studio use — otherwise in
+  advertises `styles.sqlprompt.v1` — the styles folder SSMS uses — otherwise in
   the browser (IndexedDB). Built-ins are edited as copies that shadow them (Reset restores).
-- SSMS / Visual Studio: the Format Styles window asks the engine for SQL Prompt's model
+- SSMS: the Format Styles window asks the engine for SQL Prompt's model
   (`StyleEditorSchemaRequest.SqlPromptModel`); settings are `sqlPrompt.<path>`, so preview and save
   carry the document. Against an older engine the window falls back to AKML's settings schema.
 - Both preview each page's own sample (`SqlPromptPreviewSamples`) or the user's SQL, and reformat

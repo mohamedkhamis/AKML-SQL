@@ -957,7 +957,7 @@ The engine advertises a list of stable capability identifiers in `EngineCapabili
 | `schema.v2` | `Capabilities.SchemaV2` | Live schema and IntelliSense (M3). |
 | `schema.cache.v1` | `Capabilities.SchemaCacheV1` | Schema-cache identity protocol — engine reports `ServerCanonicalIdentity` and serves `SchemaIdentifyRequest` (M5). |
 | `snippets.write` (planned) | `Capabilities.SnippetsWrite` | Snippet save/delete via the bridge. Added when T115 lands. |
-| `styles.sqlprompt.v1` | `Capabilities.StylesSqlPromptV1` | Spec 039 — SQL Prompt styles via the bridge: `ProfileList` / `ProfileGet` (with `SqlPromptJson`) / `ProfileSave` / `ProfileDelete` / `ProfileRename` / `ProfileReset`. The web edition stores styles on the engine (the styles SSMS and Visual Studio use) when this is advertised. |
+| `styles.sqlprompt.v1` | `Capabilities.StylesSqlPromptV1` | Spec 039 — SQL Prompt styles via the bridge: `ProfileList` / `ProfileGet` (with `SqlPromptJson`) / `ProfileSave` / `ProfileDelete` / `ProfileRename` / `ProfileReset`. The web edition stores styles on the engine (the styles SSMS uses) when this is advertised. |
 | `refactoring.heavy` (planned) | `Capabilities.RefactoringHeavy` | Heavyweight schema-aware refactorings. Added when T117 lands. |
 | `ai.text-to-sql.v1` (reserved) | `Capabilities.AiTextToSqlV1` | AI Text-to-SQL via the bridge. AI invocation in the web edition normally goes direct-to-provider (FR-030); this capability covers any engine-hosted helpers a future M6 design adds. |
 | `diagnostics.engine-log-tail.v1` (planned) | `Capabilities.DiagnosticsEngineLogTailV1` | Engine log-tail request used by the diagnostics export bundle. |

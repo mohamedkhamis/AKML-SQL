@@ -4,7 +4,7 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│  HOST IDEs  (SSMS 22 · VS 2026)                                        │
+│  HOST IDE  (SSMS 22)                                                   │
 │                                                                          │
 │  ┌──────────────────────────────────────────────────────────────────┐   │
 │  │  Shell Extension  (.NET Framework 4.7.2 VSIX)                    │   │
@@ -18,9 +18,8 @@
 │  │  ├── Update/          Update launcher & result reader             │   │
 │  │  └── Ipc/             PipeRpcClient + EngineProcessManager        │   │
 │  │                                                                  │   │
-│  │  Compiled twice against each host's VS SDK:                      │   │
+│  │  Compiled against SSMS 22's VS SDK:                              │   │
 │  │    AkmlSql.Ssms22   (VS SDK 17.14, x64)                         │   │
-│  │    AkmlSql.VS2026   (VS SDK 17.14, x64)                         │   │
 │  └──────────────────────────────────────────────────────────────────┘   │
 │                │ Named Pipe (owner-SID ACL, MessagePack frames)          │
 └───────────────────────────────────────────────────────────────────────── ┘

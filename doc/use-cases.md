@@ -28,14 +28,14 @@
 | **Use Case ID** | UC-P1-001 |
 | **Title** | Install AKML SQL via Next-Next wizard |
 | **Actor** | Developer / DBA (local administrator) |
-| **Preconditions** | (1) `AKMLSQLSetup.exe` is downloaded to the machine. (2) At least one supported SSMS or Visual Studio instance is installed. (3) No prior version of AKML SQL is installed. |
+| **Preconditions** | (1) `AKMLSQLSetup.exe` is downloaded to the machine. (2) SQL Server Management Studio 22 is installed. (3) No prior version of AKML SQL is installed. |
 
 **Main Flow:**
 
 1. User double-clicks `AKMLSQLSetup.exe`. Windows prompts UAC elevation; user accepts.
 2. **Welcome screen** appears with AKML SQL logo and version. User clicks **Next**.
 3. **EULA screen** displays the license agreement. User selects "I accept the agreement" and clicks **Next**.
-4. **Environment Scan screen** shows auto-detected SSMS and Visual Studio installations in a tree view with checkboxes. All compatible targets are pre-checked. User reviews and clicks **Next**.
+4. **Environment Scan screen** shows the auto-detected SQL Server Management Studio 22 installation with a checkbox. All compatible targets are pre-checked. User reviews and clicks **Next**.
 5. **Installation Directory screen** shows default path `C:\Program Files\AKML SQL\`. User accepts default and clicks **Next**.
 6. **Additional Options screen** shows checkboxes for auto-update, telemetry, desktop shortcut, and Start Menu. User keeps defaults and clicks **Next**.
 7. **Ready to Install screen** shows a summary of selected targets, directory, and options. User clicks **Install**.
@@ -48,9 +48,9 @@
 | Alt # | Condition | Steps |
 |---|---|---|
 | AF-1 | User clicks **Back** on any screen | Wizard returns to the previous screen, all prior selections preserved |
-| AF-2 | A target SSMS/VS instance is currently running | Yellow warning banner appears on step 4: "Close these apps before installing." Option "Close them for me" terminates processes automatically |
+| AF-2 | SSMS is currently running | Yellow warning banner appears on step 4: "Close these apps before installing." Option "Close them for me" terminates processes automatically |
 | AF-3 | VS instance present but SSDT workload missing | VS entry shown grayed-out with warning icon and tooltip; checkbox unchecked; installer proceeds without that target |
-| AF-4 | No SSMS or VS instances found | Error panel appears on step 4 with download links to SSMS 22 and Visual Studio 2026 |
+| AF-4 | SSMS 22 not found | Step 4 says so; the web edition can still be installed on its own |
 | AF-5 | UAC elevation denied | Installer exits with message "Administrator rights required" |
 
 **Expected Result:** All selected SSMS and VS instances load AKML SQL on next startup. "AKML SQL" top-level menu is visible. About dialog shows correct version and IDE info. Extension adds less than 200ms to IDE startup time.
@@ -144,7 +144,7 @@
 
 | Alt # | Condition | Steps |
 |---|---|---|
-| AF-1 | SSMS or VS is running at uninstall time | Warning: "Close SSMS/VS before uninstalling." Option to close automatically or defer to reboot |
+| AF-1 | SSMS is running at uninstall time | Warning: "Close SSMS before uninstalling." Option to close automatically or defer to reboot |
 | AF-2 | User chooses "Keep" for user data | `%AppData%\AKML SQL\` is preserved; only installation files are removed |
 
 **Expected Result:** No orphaned files remain in any IDE Extensions folder. No registry entries remain. Re-launching SSMS shows no AKML SQL menu.
@@ -1435,7 +1435,7 @@
 
 | Actor | Description |
 |---|---|
-| **Developer** | SQL developer using SSMS or Visual Studio with SSDT for day-to-day query authoring and stored procedure development |
+| **Developer** | SQL developer using SSMS for day-to-day query authoring and stored procedure development |
 | **DBA** | Database Administrator managing production databases, monitoring performance, and running maintenance scripts |
 | **Team Lead** | Senior developer or architect responsible for establishing team coding standards and shared configurations |
 | **Business Analyst** | Non-developer user who needs to write or understand SQL queries for data exploration |

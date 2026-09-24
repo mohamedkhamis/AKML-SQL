@@ -1,6 +1,6 @@
 # Connecting to SQL Server
 
-AKML SQL works with the connection your query window already uses. Connect in SSMS or Visual Studio the way you normally do, and AKML SQL picks up the active connection, loads the database schema, and starts offering completions, hover info, and schema-aware features.
+AKML SQL works with the connection your query window already uses. Connect in SSMS the way you normally do, and AKML SQL picks up the active connection, loads the database schema, and starts offering completions, hover info, and schema-aware features.
 
 ## Connect a query window
 
