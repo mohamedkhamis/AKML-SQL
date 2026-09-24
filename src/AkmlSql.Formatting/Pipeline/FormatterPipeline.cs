@@ -122,6 +122,38 @@ public class FormatterPipeline
     }
 
     /// <summary>
+    /// Stages 2-5. A style written in SQL Prompt's model (<see cref="FormattingProfile.SqlPrompt"/>)
+    /// is laid out by the SQL Prompt layout engine straight from its options; every other style
+    /// goes through the rule-based layout (annotate, layout, rules, casing, emit).
+    /// </summary>
+    private string Layout(string sql, TSqlScript script, IList<TSqlParserToken> tokens,
+        List<NoformatRegion> noformatRegions, FormattingProfile profile)
+    {
+        if (profile.SqlPrompt is { } document)
+        {
+            var style = new SqlPrompt.SqlPromptStyle(SqlPrompt.SqlPromptStyleDocument.FromNode(document));
+            var text = SqlPrompt.SqlPromptLayout.Layout(script, tokens, noformatRegions, style);
+            // Keep the file's final line break (or its absence) as it was.
+            if (sql.EndsWith('\n') && !text.EndsWith('\n')) text += "\n";
+            return text;
+        }
+
+        var annotator = new AstAnnotator();
+        var comments = annotator.AttachComments(tokens);
+
+        var layoutEngine = new LayoutEngine();
+        var layoutNodes = layoutEngine.BuildLayout(script, tokens, comments, profile, noformatRegions);
+
+        ApplyLayoutRules(layoutNodes, profile);
+
+        var casingEngine = new CasingEngine();
+        casingEngine.ApplyCasing(layoutNodes, profile);
+
+        var emitter = new TextEmitter();
+        return emitter.Emit(layoutNodes, profile);
+    }
+
+    /// <summary>
     /// Performs a raw format pass without validation or idempotency checking.
     /// Returns null on parse failure or error, with the exception captured in the out parameter.
     /// </summary>
@@ -143,19 +175,7 @@ public class FormatterPipeline
             if (script == null || script.Batches.Count == 0)
                 return null;
 
-            var annotator = new AstAnnotator();
-            var comments = annotator.AttachComments(tokens);
-
-            var layoutEngine = new LayoutEngine();
-            var layoutNodes = layoutEngine.BuildLayout(script, tokens, comments, profile, noformatRegions);
-
-            ApplyLayoutRules(layoutNodes, profile);
-
-            var casingEngine = new CasingEngine();
-            casingEngine.ApplyCasing(layoutNodes, profile);
-
-            var emitter = new TextEmitter();
-            var formatted = emitter.Emit(layoutNodes, profile);
+            var formatted = Layout(sql, script, tokens, noformatRegions, profile);
             return sqlcmdPreprocessor.Restore(formatted);
         }
         catch (Exception ex)
@@ -214,24 +234,8 @@ public class FormatterPipeline
                     });
             }
 
-            // Stage 2: Annotate
-            var annotator = new AstAnnotator();
-            var comments = annotator.AttachComments(tokens);
-
-            // Stage 3: Layout (pass noformat regions to mark tokens)
-            var layoutEngine = new LayoutEngine();
-            var layoutNodes = layoutEngine.BuildLayout(script, tokens, comments, profile, noformatRegions);
-
-            // Stage 3b (Spec 030 R1 spike): optional layout-rule passes, off by default
-            ApplyLayoutRules(layoutNodes, profile);
-
-            // Stage 4: Casing
-            var casingEngine = new CasingEngine();
-            casingEngine.ApplyCasing(layoutNodes, profile);
-
-            // Stage 5: Emit
-            var emitter = new TextEmitter();
-            var formatted = emitter.Emit(layoutNodes, profile);
+            // Stages 2-5: annotate, lay out, case, emit
+            var formatted = Layout(sql, script, tokens, noformatRegions, profile);
 
             // Stage 5b: Restore SQLCMD directives
             formatted = sqlcmdPreprocessor.Restore(formatted);

@@ -445,6 +445,8 @@ Returns the canonical descriptor of every formatting setting (groups + settings 
 ClientSchemaVersion  int?   (optional) Shell's cached version; engine short-circuits if it matches.
 IncludeUnsupported   bool   When true (default), unsupported / AKML-only settings are returned
                             so the editor can render them disabled-with-value per FR-023.
+SqlPromptModel       bool   Key(2) — spec 039. When true, the engine answers with SQL Prompt's
+                            option model instead of AKML's settings schema (see below).
 ```
 
 **Response** (`StyleEditorSchemaResponse`):
@@ -459,6 +461,15 @@ ErrorMessage    string?  Populated only on failure.
 The JSON-string payload (rather than a typed MessagePack object) keeps the wire contract decoupled from `AkmlSql.Formatting` types, which `AkmlSql.Core`'s netstandard2.0 surface cannot reference.
 
 **Effect**: Engine builds the schema once (lazy, via reflection over `FormattingProfile`) and caches it for the process lifetime. Short-circuit path returns within ~5 ms; full-payload path is ~30 ms p95 including IPC.
+
+**SQL Prompt model (spec 039)**: with `SqlPromptModel = true` the body is
+`SqlPromptOptionCatalog.ToEditorSchemaJson()` — the same `groups` / `settings` shape plus
+`"model": "sqlPrompt"`, `SchemaVersion = 2001`. Groups are SQL Prompt's 14 pages (`parentId` =
+`global` / `statements` / `clauses` / `expressions`, `sample` = the page's preview SQL); setting ids
+are `sqlPrompt.<SQL Prompt path>` with typed `default`, `allowedEnumValues` + `enumLabels`,
+`min` / `max`, `subgroup` (page sub-heading), `note`, and `enabledWhen: { id, value }`. An engine
+without spec 039 ignores the flag and returns the AKML schema, which the shell detects by the
+missing `model` field.
 
 **Schema v2 (spec 033)**: `SchemaVersion` is now `2`. The JSON body additionally populates `parentId` on every group row (5-category hierarchy: `global` / `statements` / `clauses` / `expressions` / `other` — category ids travel ONLY as `parentId` values, never as group rows), plus per-setting `description`, `allowedEnumValues` (exact stored spellings, default included) and `min`/`max` for ranged ints, all sourced from `[SettingMeta]` attributes on the profile POCOs. The previously-opaque `insertStatements.columns`/`values` blobs are flattened into six multi-segment setting ids. All v2 fields are optional for clients: a v1 consumer renders flat with free-text enum boxes. Contract: `specs/033-format-styles-window/contracts/style-editor-schema-v2.md`.
 
@@ -483,6 +494,12 @@ Name          string?  Key(2)  Resolved display name.
 ProfileJson   string?  Key(3)  Raw stored file text, verbatim.
 IsBuiltIn     bool     Key(4)  True iff resolved from the built-in dir with no custom shadow
                                (directory-derived — the JSON's own isBuiltIn field is untrusted).
+HasBuiltIn          bool     Key(5)  A shipped style of this name exists (edited or not).
+IsCustomizedBuiltIn bool     Key(6)  A shipped style the user has edited.
+SqlPromptJson       string?  Key(7)  Spec 039 — the style as a SQL Prompt document with every option
+                                     written out (its own document, the spec-031 import source, or
+                                     the SQL Prompt reading of an AKML-model style).
+IsSqlPromptStyle    bool     Key(8)  Spec 039 — the stored style already is a SQL Prompt style.
 ```
 
 ### `ProfileRename` (35) → `ProfileRenameResult` (135) — spec 033
@@ -538,6 +555,8 @@ Profiles  ProfileInfo[]
     IsBuiltIn    bool
     BasedOn      string?   Name of the parent profile this derives from
     Modified     string    ISO 8601 datetime string
+    IsCustomizedBuiltIn  bool  Key(7)
+    IsSqlPromptStyle     bool  Key(8)  Spec 039 — written in SQL Prompt's model
 ```
 
 ---
@@ -592,6 +611,16 @@ message mentions "built-in"). When `TargetProfileName` is set it overrides the s
 internal `metadata.name` (JSON) or names the profile (XML, which has no internal name).
 Successful JSON imports additionally preserve a verbatim `<name>.source.json` copy beside
 the saved profile for lossless re-export.
+
+**Spec 039**: a JSON import now saves a **SQL Prompt style** — the document is kept whole in the
+profile's `sqlPrompt` object (id included) and formats with the SQL Prompt layout. Every SQL Prompt
+option in the file is reported `mapped`; keys this build does not know are reported `unknown` and
+kept in the style unchanged.
+
+**Export (`ProfileExportSqlPrompt`, 29/129)**: when `DestinationPath` ends in `.json`, the engine
+writes the style's SQL Prompt document (SQL Prompt's minimal form, UTF-8 without BOM) — for an
+AKML-model style, its SQL Prompt reading. Any other extension writes the spec-020
+`.sqlpromptstylev2` XML as before.
 
 **Response** (`ProfileImportResponse`):
 ```
@@ -928,6 +957,7 @@ The engine advertises a list of stable capability identifiers in `EngineCapabili
 | `schema.v2` | `Capabilities.SchemaV2` | Live schema and IntelliSense (M3). |
 | `schema.cache.v1` | `Capabilities.SchemaCacheV1` | Schema-cache identity protocol — engine reports `ServerCanonicalIdentity` and serves `SchemaIdentifyRequest` (M5). |
 | `snippets.write` (planned) | `Capabilities.SnippetsWrite` | Snippet save/delete via the bridge. Added when T115 lands. |
+| `styles.sqlprompt.v1` | `Capabilities.StylesSqlPromptV1` | Spec 039 — SQL Prompt styles via the bridge: `ProfileList` / `ProfileGet` (with `SqlPromptJson`) / `ProfileSave` / `ProfileDelete` / `ProfileRename` / `ProfileReset`. The web edition stores styles on the engine (the styles SSMS and Visual Studio use) when this is advertised. |
 | `refactoring.heavy` (planned) | `Capabilities.RefactoringHeavy` | Heavyweight schema-aware refactorings. Added when T117 lands. |
 | `ai.text-to-sql.v1` (reserved) | `Capabilities.AiTextToSqlV1` | AI Text-to-SQL via the bridge. AI invocation in the web edition normally goes direct-to-provider (FR-030); this capability covers any engine-hosted helpers a future M6 design adds. |
 | `diagnostics.engine-log-tail.v1` (planned) | `Capabilities.DiagnosticsEngineLogTailV1` | Engine log-tail request used by the diagnostics export bundle. |

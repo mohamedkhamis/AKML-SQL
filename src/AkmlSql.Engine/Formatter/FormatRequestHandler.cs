@@ -10,6 +10,7 @@ using AkmlSql.Engine.Server;
 using AkmlSql.Formatting.Actions;
 using AkmlSql.Formatting.Pipeline;
 using AkmlSql.Formatting.Profiles;
+using AkmlSql.Formatting.SqlPrompt;
 using AkmlSql.Formatting.Selection;
 using Serilog;
 
@@ -285,6 +286,7 @@ public class FormatRequestHandler(ProfileManager profileManager)
                     Author = m.Author,
                     IsBuiltIn = m.IsBuiltIn,
                     IsCustomizedBuiltIn = m.IsCustomizedBuiltIn,
+                    IsSqlPromptStyle = m.IsSqlPromptStyle,
                     BasedOn = m.BasedOn,
                     Modified = m.Modified.ToString("o")
                 }).ToArray()
@@ -306,6 +308,15 @@ public class FormatRequestHandler(ProfileManager profileManager)
                 return new ProfileSaveResponse { Success = false, ErrorMessage = "Profile JSON exceeds the 1 MB limit." };
 
             var profile = ProfileSerializer.Deserialize(request.ProfileJson);
+            if (profile.SqlPrompt is not null)
+            {
+                // A SQL Prompt style: the document is the style. Refresh the AKML-model projection
+                // from it so older builds reading the same file format close to it.
+                var document = SqlPromptStyleDocument.FromNode(profile.SqlPrompt);
+                document.Name = profile.Metadata.Name;
+                if (string.IsNullOrWhiteSpace(document.Id)) document.Id = profile.Metadata.Id;
+                profile = SqlPromptStyles.ToProfile(document, previous: profile);
+            }
             profileManager.Save(profile);
             return new ProfileSaveResponse { Success = true };
         }
@@ -333,6 +344,16 @@ public class FormatRequestHandler(ProfileManager profileManager)
                     ErrorMessage = $"Profile '{request.Name}' was not found."
                 };
 
+            var profile = ProfileSerializer.Deserialize(json);
+            string? importedSource = null;
+            if (profile.SqlPrompt is null && !isBuiltIn)
+            {
+                // A style imported from SQL Prompt before styles kept their document: the verbatim
+                // source kept beside it (spec 031) is exact, so it beats a projection.
+                var sidecar = profileManager.GetCustomArtifactPath(profile.Metadata.Name, ".source.json");
+                if (File.Exists(sidecar)) importedSource = File.ReadAllText(sidecar);
+            }
+
             return new ProfileGetResponse
             {
                 Success = true,
@@ -340,7 +361,9 @@ public class FormatRequestHandler(ProfileManager profileManager)
                 ProfileJson = json,
                 IsBuiltIn = isBuiltIn,
                 HasBuiltIn = profileManager.HasBuiltIn(request.Name),
-                IsCustomizedBuiltIn = profileManager.IsCustomizedBuiltIn(request.Name)
+                IsCustomizedBuiltIn = profileManager.IsCustomizedBuiltIn(request.Name),
+                SqlPromptJson = SqlPromptStyles.ToDocument(profile, importedSource).ToExplicitJson(),
+                IsSqlPromptStyle = profile.SqlPrompt is not null,
             };
         }
         catch (Exception ex)
@@ -553,6 +576,18 @@ public class FormatRequestHandler(ProfileManager profileManager)
     {
         try
         {
+            if (request.SqlPromptModel)
+            {
+                // SQL Prompt's own option model: what the SQL Prompt-shaped style editor renders.
+                var current = request.ClientSchemaVersion == SqlPromptOptionCatalog.SchemaVersion;
+                return new StyleEditorSchemaResponse
+                {
+                    SchemaVersion = SqlPromptOptionCatalog.SchemaVersion,
+                    SchemaJson = current ? null : SqlPromptOptionCatalog.ToEditorSchemaJson(),
+                    Cached = current,
+                };
+            }
+
             var schema = FormatSettingSchema.Default;
 
             // Short-circuit: shell's cache is current
@@ -636,19 +671,30 @@ public class FormatRequestHandler(ProfileManager profileManager)
 
                 if (firstChar == '{')
                 {
-                    var jsonResult = RedgateJsonStyleImporter.Import(trimmedContent, fallbackName: request.TargetProfileName);
-                    if (!jsonResult.Success)
+                    if (!SqlPromptStyleDocument.TryParse(trimmedContent, out var document, out var jsonError))
                     {
                         // FR-005 — visible failure, nothing saved.
                         return new ProfileImportResponse
                         {
                             Success = false,
-                            ErrorMessage = $"Style file is not valid SQL Prompt JSON: {jsonResult.ParseError}",
+                            ErrorMessage = $"Style file is not valid SQL Prompt JSON: {jsonError}",
                         };
                     }
 
-                    if (!string.IsNullOrWhiteSpace(request.TargetProfileName))
-                        jsonResult.Profile.Metadata.Name = request.TargetProfileName;
+                    // The imported style keeps SQL Prompt's document whole and formats from it.
+                    if (!string.IsNullOrWhiteSpace(request.TargetProfileName)) document!.Name = request.TargetProfileName;
+                    else if (string.IsNullOrWhiteSpace(document!.Name)) document.Name = "Imported style";
+                    if (string.IsNullOrWhiteSpace(document.Id)) document.Id = Guid.NewGuid().ToString();
+                    var importReport = SqlPromptStyles.ImportReport(document);
+                    var jsonResult = new
+                    {
+                        Profile = SqlPromptStyles.ToProfile(document),
+                        Options = importReport,
+                        MappedCount = importReport.Count(r => r.Status == RedgateOptionStatus.Mapped),
+                        UnsupportedCount = 0,
+                        UnknownCount = importReport.Count(r => r.Status == RedgateOptionStatus.Unknown),
+                    };
+                    jsonResult.Profile.Metadata.BasedOn = "SQL Prompt Import";
 
                     // FR-008 — built-in names cannot be shadowed by import.
                     //
@@ -785,6 +831,30 @@ public class FormatRequestHandler(ProfileManager profileManager)
 
             // Load via the same ProfileManager the rest of the handler uses — built-in or custom.
             var profile = profileManager.Load(request.Name);
+
+            if (canonical.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+            {
+                // SQL Prompt 10.5+ style: the style's SQL Prompt document, in SQL Prompt's own
+                // minimal form, so SQL Prompt imports it as it is. An AKML-model style exports its
+                // SQL Prompt reading (or the SQL Prompt file it was imported from).
+                string? importedSource = null;
+                if (profile.SqlPrompt is null && !profile.Metadata.IsBuiltIn)
+                {
+                    var sidecar = profileManager.GetCustomArtifactPath(profile.Metadata.Name, ".source.json");
+                    if (File.Exists(sidecar)) importedSource = File.ReadAllText(sidecar);
+                }
+                var document = SqlPromptStyles.ToDocument(profile, importedSource);
+                document.Minimize();
+                Directory.CreateDirectory(Path.GetDirectoryName(canonical)!);
+                var temp = canonical + ".tmp";
+                File.WriteAllText(temp, document.ToJson(), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+                File.Move(temp, canonical, overwrite: true);
+                return new ProfileExportSqlPromptResponse
+                {
+                    Success = true,
+                    WrittenCount = document.ChangedOptions().Count(),
+                };
+            }
 
             // Library entrypoint: atomic write (temp + rename) + auto-creates destination dir.
             var result = SqlPromptExporter.ExportToFile(profile, request.DestinationPath);

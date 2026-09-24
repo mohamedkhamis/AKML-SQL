@@ -56,8 +56,13 @@ public class ProfileManager
     /// </summary>
     public static ProfileManager CreateDefault()
     {
+        // AKML_APP_DATA_ROOT redirects the styles folder with the rest of AKML's app data
+        // (AkmlSql.Core Constants.AppDataPath), so a test engine never writes the user's styles.
+        var overrideRoot = Environment.GetEnvironmentVariable("AKML_APP_DATA_ROOT");
         var appData = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            string.IsNullOrEmpty(overrideRoot)
+                ? Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData)
+                : overrideRoot,
             "AKML SQL");
 
         var customPath = Path.Combine(appData, "profiles");
@@ -734,6 +739,7 @@ public class ProfileManager
             var json = File.ReadAllText(filePath);
             var profile = ProfileSerializer.Deserialize(json);
             profile.Metadata.IsBuiltIn = isBuiltIn;
+            profile.Metadata.IsSqlPromptStyle = profile.SqlPrompt is not null;
             return profile.Metadata;
         }
         catch

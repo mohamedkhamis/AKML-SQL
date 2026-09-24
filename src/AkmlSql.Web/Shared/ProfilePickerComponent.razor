@@ -10,22 +10,32 @@
 @using Microsoft.AspNetCore.Components.Forms
 @inject IProfileStore ProfileStore
 @inject IJSRuntime JS
+@implements IDisposable
 
 <div class="akml-profile-picker">
     <label for="@_selectId" class="akml-profile-label">Profile</label>
     <select id="@_selectId" class="akml-profile-select" data-testid="profile-picker" value="@_activeId" @onchange="OnSelectionChanged">
         @if (_profiles != null)
         {
+            @if (_profiles.Any(p => p.Location == ProfileLocation.Engine))
+            {
+                <optgroup label="Shared with SSMS / VS">
+                    @foreach (var p in _profiles.Where(p => p.Location == ProfileLocation.Engine))
+                    {
+                        <option value="@p.Id">@p.Name</option>
+                    }
+                </optgroup>
+            }
             <optgroup label="Built-in">
-                @foreach (var p in _profiles.Where(p => p.Origin == ProfileOrigin.BuiltIn))
+                @foreach (var p in _profiles.Where(p => p.Location == ProfileLocation.Browser && p.Origin == ProfileOrigin.BuiltIn))
                 {
                     <option value="@p.Id">@p.Name</option>
                 }
             </optgroup>
-            @if (_profiles.Any(p => p.Origin == ProfileOrigin.User))
+            @if (_profiles.Any(p => p.Location == ProfileLocation.Browser && p.Origin == ProfileOrigin.User))
             {
                 <optgroup label="User">
-                    @foreach (var p in _profiles.Where(p => p.Origin == ProfileOrigin.User))
+                    @foreach (var p in _profiles.Where(p => p.Location == ProfileLocation.Browser && p.Origin == ProfileOrigin.User))
                     {
                         <option value="@p.Id">@p.Name</option>
                     }
@@ -48,6 +58,7 @@
     {
         <button class="akml-profile-button" @onclick="DeleteActiveAsync" title="Delete profile">Delete</button>
     }
+    <a class="akml-profile-button" href="/styles" title="Edit formatting styles (SQL Prompt style editor)" data-testid="profile-edit-styles">Edit…</a>
 </div>
 
 <style>
@@ -91,13 +102,18 @@
 
     private readonly string _selectId = $"akml-profile-{Guid.NewGuid():N}";
     private IReadOnlyList<ProfileRecord>? _profiles;
-    private string _activeId = "builtin.default";
+    private string _activeId = "builtin.khamis";
     private ProfileRecord? _active;
 
     protected override async Task OnInitializedAsync()
     {
+        ProfileStore.StylesChanged += OnStylesChanged;
         await ReloadAsync();
     }
+
+    private void OnStylesChanged() => _ = InvokeAsync(ReloadAsync);
+
+    public void Dispose() => ProfileStore.StylesChanged -= OnStylesChanged;
 
     private async Task ReloadAsync()
     {
@@ -119,9 +135,11 @@
         _activeId = newId;
         await ProfileStore.SetActiveIdAsync(newId);
         _active = _profiles?.FirstOrDefault(p => p.Id == newId);
-        if (_active != null)
+        // Engine styles are listed by name only; load the whole style before handing it over.
+        var full = _active is { IsSummary: true } ? await ProfileStore.GetAsync(newId) : _active;
+        if (full != null)
         {
-            await OnProfileChanged.InvokeAsync(_active);
+            await OnProfileChanged.InvokeAsync(full);
         }
     }
 

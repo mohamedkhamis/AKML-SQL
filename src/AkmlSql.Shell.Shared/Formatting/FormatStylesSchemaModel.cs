@@ -25,6 +25,8 @@ namespace AkmlSql.Shell.Shared.Formatting
             public string DisplayName { get; set; } = string.Empty;
             /// <summary>Normalized category id, or null on a v1 (flat) schema.</summary>
             public string? CategoryId { get; set; }
+            /// <summary>SQL Prompt model: the page's preview SQL (what its options act on).</summary>
+            public string? Sample { get; set; }
             public List<FormatSettingNode> Settings { get; } = new List<FormatSettingNode>();
         }
 
@@ -39,6 +41,8 @@ namespace AkmlSql.Shell.Shared.Formatting
         {
             /// <summary>True when the schema carried category information (v2).</summary>
             public bool Categorized { get; set; }
+            /// <summary>True for SQL Prompt's option model (<c>"model":"sqlPrompt"</c>): ids are <c>sqlPrompt.&lt;path&gt;</c>.</summary>
+            public bool IsSqlPrompt { get; set; }
             /// <summary>Populated when <see cref="Categorized"/>; canonical order, used ones only.</summary>
             public List<Category> Categories { get; } = new List<Category>();
             /// <summary>Always populated (schema order) — the v1 flat rendering source.</summary>
@@ -85,6 +89,8 @@ namespace AkmlSql.Shell.Shared.Formatting
 
             using var doc = JsonDocument.Parse(schemaJson);
             var root = doc.RootElement;
+            model.IsSqlPrompt = root.TryGetProperty("model", out var modelEl) && modelEl.ValueKind == JsonValueKind.String
+                                && string.Equals(modelEl.GetString(), "sqlPrompt", StringComparison.Ordinal);
             if (!root.TryGetProperty("groups", out var groupsEl) || !root.TryGetProperty("settings", out var settingsEl))
                 return model;
 
@@ -121,6 +127,13 @@ namespace AkmlSql.Shell.Shared.Formatting
                     AllowedEnumValues = allowedValues,
                     Min = s.TryGetProperty("min", out var minEl) && minEl.ValueKind == JsonValueKind.Number ? minEl.GetInt32() : null,
                     Max = s.TryGetProperty("max", out var maxEl) && maxEl.ValueKind == JsonValueKind.Number ? maxEl.GetInt32() : null,
+                    EnumLabels = ReadStrings(s, "enumLabels"),
+                    Note = s.TryGetProperty("note", out var noteEl) && noteEl.ValueKind == JsonValueKind.String ? noteEl.GetString() : null,
+                    Subgroup = s.TryGetProperty("subgroup", out var subEl) && subEl.ValueKind == JsonValueKind.String ? subEl.GetString() : null,
+                    EnabledWhenId = s.TryGetProperty("enabledWhen", out var gateEl) && gateEl.ValueKind == JsonValueKind.Object
+                                    && gateEl.TryGetProperty("id", out var gateIdEl) ? gateIdEl.GetString() : null,
+                    EnabledWhenValue = s.TryGetProperty("enabledWhen", out var gateEl2) && gateEl2.ValueKind == JsonValueKind.Object
+                                       && gateEl2.TryGetProperty("value", out var gateValueEl) ? ProfileJsonMerger.ReadScalar(gateValueEl) : null,
                 });
             }
 
@@ -131,6 +144,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                 {
                     Id = g.TryGetProperty("id", out var idEl) ? idEl.GetString() ?? string.Empty : string.Empty,
                     DisplayName = g.TryGetProperty("displayName", out var nameEl) ? nameEl.GetString() ?? string.Empty : string.Empty,
+                    Sample = g.TryGetProperty("sample", out var sampleEl) && sampleEl.ValueKind == JsonValueKind.String ? sampleEl.GetString() : null,
                 };
                 if (string.IsNullOrEmpty(group.DisplayName)) group.DisplayName = group.Id;
 
@@ -168,6 +182,15 @@ namespace AkmlSql.Shell.Shared.Formatting
             }
 
             return model;
+        }
+
+        private static List<string>? ReadStrings(JsonElement owner, string property)
+        {
+            if (!owner.TryGetProperty(property, out var arr) || arr.ValueKind != JsonValueKind.Array) return null;
+            var list = new List<string>();
+            foreach (var v in arr.EnumerateArray())
+                if (v.ValueKind == JsonValueKind.String) list.Add(v.GetString()!);
+            return list.Count == 0 ? null : list;
         }
     }
 }

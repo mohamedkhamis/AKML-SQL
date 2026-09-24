@@ -100,6 +100,9 @@
     private string HostId { get; } = $"akml-editor-{Guid.NewGuid():N}";
     private ElementReference _host;
     private IJSObjectReference? _module;
+    // Set when the page is left. Start-up awaits JS several times; leaving mid-way (e.g. the style
+    // picker's "Edit…" link) must not call into a module DisposeAsync already released.
+    private bool _disposed;
     private DotNetObjectReference<EditorComponent>? _selfRef;
     private bool _initialised;
     // The InitialText value last pushed into CodeMirror. CM is created once (below); if the parent
@@ -113,7 +116,9 @@
         if (!firstRender || _initialised) return;
         _initialised = true;
 
-        _module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/akml-editor.js");
+        var module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/akml-editor.js");
+        if (_disposed) { await module.DisposeAsync(); return; }
+        _module = module;
         _selfRef = DotNetObjectReference.Create(this);
         var seed = InitialText;
         await _module.InvokeVoidAsync("create", HostId, seed, _selfRef);
@@ -122,12 +127,13 @@
         // Spec 028 (M6) US5: tell the editor whether ghost text is enabled + the debounce.
         // The JS only requests a completion when enabled, so disabling it costs no interop.
         var ai = await AiFeatures.GetAsync();
+        if (_disposed) return;
         await _module.InvokeVoidAsync("setGhostTextConfig", HostId, ai.GhostTextEnabled, ai.GhostTextDelayMs);
 
         // A parameter change (async session restore, or History "Open in editor"/"Re-execute") may have
         // landed while _module was still null above — OnParametersSetAsync would have skipped it. Apply
         // the latest InitialText now that the editor exists, so the restored document actually appears.
-        if (InitialText != _appliedInitialText)
+        if (!_disposed && InitialText != _appliedInitialText)
         {
             _appliedInitialText = InitialText;
             await _module.InvokeVoidAsync("setText", HostId, InitialText);
@@ -558,6 +564,7 @@
 
     public async ValueTask DisposeAsync()
     {
+        _disposed = true;
         try
         {
             if (_module != null)

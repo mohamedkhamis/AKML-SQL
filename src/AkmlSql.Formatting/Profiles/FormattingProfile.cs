@@ -66,6 +66,16 @@ public class FormattingProfile
     [JsonPropertyName("formatActions")]
     public FormatActionConfig FormatActions { get; set; } = new();
 
+    /// <summary>
+    /// The style written in SQL Prompt's own model — the same JSON document SQL Prompt 10.5+
+    /// reads and writes (<c>{"metadata":…,"whitespace":…,"lists":…}</c>). When present, it is the
+    /// style: the SQL Prompt layout engine formats from it, and the style editors edit it. The
+    /// option groups above are then only a best-effort projection kept for older builds.
+    /// Absent on styles written in AKML's own model, which keep the rule-based layout.
+    /// </summary>
+    [JsonPropertyName("sqlPrompt")]
+    public System.Text.Json.Nodes.JsonObject? SqlPrompt { get; set; }
+
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 }

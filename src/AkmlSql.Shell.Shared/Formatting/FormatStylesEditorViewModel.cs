@@ -270,9 +270,54 @@ namespace AkmlSql.Shell.Shared.Formatting
 
         /// <summary>The SQL the preview pane formats given the selected source.</summary>
         private string EffectivePreviewSample =>
-            PreviewSourceMode == FormatPreviewSource.CurrentQuery && HasCurrentQuery
-                ? _currentQueryText
-                : _previewSample;
+            PreviewSourceMode == FormatPreviewSource.CurrentQuery && HasCurrentQuery ? _currentQueryText
+            : PreviewSourceMode == FormatPreviewSource.PageSample && !string.IsNullOrWhiteSpace(_pageSample) ? _pageSample!
+            : _previewSample;
+
+        /// <summary>
+        /// True when the engine serves SQL Prompt's option model: settings are keyed
+        /// <c>sqlPrompt.&lt;path&gt;</c>, and preview / save carry the style's SQL Prompt document.
+        /// False against an older engine, which serves AKML's own settings schema.
+        /// </summary>
+        public bool IsSqlPromptModel { get; private set; }
+
+        /// <summary>
+        /// True when the loaded style is still written in AKML's own model: the editor shows its SQL
+        /// Prompt reading, and saving makes it a SQL Prompt style.
+        /// </summary>
+        public bool IsSelectedClassic
+        {
+            get => _isSelectedClassic;
+            private set { if (_isSelectedClassic != value) { _isSelectedClassic = value; OnPropertyChanged(); } }
+        }
+        private bool _isSelectedClassic;
+
+        /// <summary>SQL Prompt model: the current page's preview SQL (what its options act on).</summary>
+        public string? PageSample
+        {
+            get => _pageSample;
+            set
+            {
+                if (string.Equals(_pageSample, value, StringComparison.Ordinal)) return;
+                _pageSample = value;
+                OnPropertyChanged();
+                if (PreviewSourceMode == FormatPreviewSource.PageSample) QueuePreviewAsync();
+            }
+        }
+        private string? _pageSample;
+
+        /// <summary>
+        /// The merge base for a SQL Prompt-model edit: the stored file with its <c>sqlPrompt</c>
+        /// document replaced by the engine's explicit reading of the style (every option written
+        /// out). Editing against explicit values keeps the collapse-threshold rule and the
+        /// defaults exact; a classic style gains its document on first save.
+        /// </summary>
+        internal static string ComposeSqlPromptBase(string profileJson, string sqlPromptJson)
+        {
+            if (JsonNode.Parse(profileJson) is not JsonObject root) return profileJson;
+            root["sqlPrompt"] = JsonNode.Parse(sqlPromptJson);
+            return root.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+        }
 
         private static string PreviewSamplePath
         {
@@ -356,6 +401,9 @@ namespace AkmlSql.Shell.Shared.Formatting
             try
             {
                 using var doc = JsonDocument.Parse(schemaJson);
+                IsSqlPromptModel = doc.RootElement.TryGetProperty("model", out var model)
+                                   && model.ValueKind == JsonValueKind.String
+                                   && string.Equals(model.GetString(), "sqlPrompt", StringComparison.Ordinal);
                 if (!doc.RootElement.TryGetProperty("settings", out var settings)) return;
 
                 foreach (var s in settings.EnumerateArray())
@@ -551,11 +599,16 @@ namespace AkmlSql.Shell.Shared.Formatting
                     return false;
                 }
 
-                ReseedWorkingValues();
-                OverlayProfileValuesFromJson(response.ProfileJson!);
+                var baseJson = IsSqlPromptModel && !string.IsNullOrEmpty(response.SqlPromptJson)
+                    ? ComposeSqlPromptBase(response.ProfileJson!, response.SqlPromptJson!)
+                    : response.ProfileJson!;
 
-                _loadedProfileJson = response.ProfileJson;
+                ReseedWorkingValues();
+                OverlayProfileValuesFromJson(baseJson);
+
+                _loadedProfileJson = baseJson;
                 _loadedProfileName = name;
+                IsSelectedClassic = IsSqlPromptModel && !response.IsSqlPromptStyle;
                 SelectedProfileName = name;
                 // HasBuiltIn, not IsBuiltIn: an edited built-in resolves from the custom directory,
                 // so IsBuiltIn is false for it even though it is still a shipped style that cannot
@@ -583,6 +636,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             SelectedProfileName = null;
             IsSelectedBuiltIn = false;
             IsSelectedCustomized = false;
+            IsSelectedClassic = false;
             IsDirty = false;
         }
 
@@ -625,6 +679,9 @@ namespace AkmlSql.Shell.Shared.Formatting
                 {
                     if (group.Value.ValueKind != JsonValueKind.Object) continue;
                     if (string.Equals(group.Name, "metadata", StringComparison.OrdinalIgnoreCase)) continue;
+                    // SQL Prompt model: the style is its sqlPrompt document; the AKML option groups
+                    // beside it are the engine's projection for older builds, not editor-owned.
+                    if (IsSqlPromptModel && !string.Equals(group.Name, "sqlPrompt", StringComparison.Ordinal)) continue;
                     OverlayObject(group.Name, group.Value);
                 }
             }
@@ -727,10 +784,24 @@ namespace AkmlSql.Shell.Shared.Formatting
                     return false;
                 }
 
-                ReseedWorkingValues();
-                OverlayProfileValuesFromJson(response.ProfileJson!);
+                var restored = response.ProfileJson!;
+                if (IsSqlPromptModel)
+                {
+                    var reread = await _rpc.SendRequestAsync<ProfileGetResponse, ProfileGetRequest>(
+                        MessageTypes.ProfileGet,
+                        new ProfileGetRequest { Name = _loadedProfileName! },
+                        timeoutMs: 5000).ConfigureAwait(true);
+                    if (reread is { Success: true, ProfileJson: not null } && !string.IsNullOrEmpty(reread.SqlPromptJson))
+                    {
+                        restored = ComposeSqlPromptBase(reread.ProfileJson, reread.SqlPromptJson!);
+                        IsSelectedClassic = !reread.IsSqlPromptStyle;
+                    }
+                }
 
-                _loadedProfileJson = response.ProfileJson;
+                ReseedWorkingValues();
+                OverlayProfileValuesFromJson(restored);
+
+                _loadedProfileJson = restored;
                 IsSelectedCustomized = false;
                 IsDirty = false;
                 LastError = null;
@@ -783,6 +854,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                 }
 
                 _loadedProfileJson = merged;
+                if (IsSqlPromptModel) IsSelectedClassic = false;
                 // Saving over a shipped style just created the override that shadows it, so Reset
                 // becomes available from this moment -- without a reload.
                 if (IsSelectedBuiltIn) IsSelectedCustomized = true;
@@ -1217,6 +1289,9 @@ namespace AkmlSql.Shell.Shared.Formatting
                     {
                         ClientSchemaVersion = _cachedSchemaVersion,
                         IncludeUnsupported = true,
+                        // SQL Prompt's own option model; an older engine ignores this and sends
+                        // the AKML settings schema, which the editor still renders.
+                        SqlPromptModel = true,
                     },
                     timeoutMs: 3000,
                     ct).ConfigureAwait(false);
@@ -1337,6 +1412,8 @@ VALUES ('SampleQuery', GETDATE());";
     {
         /// <summary>The persisted/default sample snippet.</summary>
         Sample,
+        /// <summary>SQL Prompt model: the current page's own sample (what its options act on).</summary>
+        PageSample,
         /// <summary>The text from the editor that was active when the styles editor opened.</summary>
         CurrentQuery,
     }

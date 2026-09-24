@@ -1590,3 +1590,81 @@ bytes); schema migrated in place with all 3,140 visits and 44 downloads intact (
 **108/110 tasks complete.** The two open items are `T084`/`T094` — portal-view verification that needs
 `AKML_SITE_ADMIN_PASSWORD`; the Playwright tests for them exist and skip without it. The geo database
 remains the one blocker no code can clear: `scripts/update-geoip.ps1` with a MaxMind licence key.
+
+---
+
+## Spec 039 — SQL Prompt Style Editor, web + SSMS / Visual Studio (2026-09-23)
+
+Request: copy SQL Prompt's formatting styles "as is", save them, edit and test them from the web,
+and make sure the preview changes when an option changes. Decisions (all four asked up front): no
+captured SQL Prompt output exists, so **Redgate's documentation** is the reference; the user will
+export SQL Prompt's built-in styles; web styles are **shared with SSMS / VS** through the paired
+engine; **web and desktop** get one SQL Prompt-shaped model. Spec: `specs/039-sqlprompt-style-editor/spec.md`.
+
+### What the investigation found
+
+A probe that changed every SQL Prompt option to every other value and diffed the output found
+**72 of 114 options had no effect** through the spec-031 import (mapped into AKML's model, then
+laid out by rules written for AKML's settings), and SQL Prompt's own defaults rendered broken code
+(`nvarchar (100` + `);` on its own line, `TOP (10` + a dangling `)`, `SUM (` split mid-expression,
+`ON` at column 0 under indented joins). Patching the rule engine option by option would have meant
+reverse-engineering 14k lines of heuristics tuned to the 977 AKML goldens.
+
+### What was built
+
+- **A style is its SQL Prompt document** (`"sqlPrompt"` in the `.akmlstyle`, SQL Prompt's exact JSON);
+  AKML's option groups beside it are a projection refreshed on save, for older builds.
+- **A SQL Prompt layout stage** (`src/AkmlSql.Formatting/SqlPrompt/`): `SqlWriter` emits every token
+  once, in order, deciding only whitespace (meaning cannot change; comments keep their lines); one
+  printer per construct reads its options directly. Styles without a document keep the rule-based
+  layout — the 977 goldens are untouched.
+- **Option catalog** pinned to Redgate's schema (114 + `alignMultilineCommentsMatchingPatterns`),
+  laid out like SQL Prompt's editor (4 categories, 14 pages), with labels, gates, notes and one
+  preview sample per page.
+- **Web**: Format styles page (`/styles`) — pages, options, live preview with changed lines marked,
+  save / save as / rename / delete / reset / use in editor / import + export SQL Prompt `.json`.
+  Styles go to the paired engine when it advertises `styles.sqlprompt.v1`, else IndexedDB.
+- **SSMS / VS**: the Format Styles window asks for SQL Prompt's model and edits the document
+  (setting ids `sqlPrompt.<path>`), with value labels, sub-headings, gated options, notes, per-page
+  preview samples and a notice on classic styles; `.json` export.
+- IPC (additive): `ProfileGetResponse.SqlPromptJson` / `IsSqlPromptStyle`, `ProfileInfo.IsSqlPromptStyle`,
+  `StyleEditorSchemaRequest.SqlPromptModel`, `.json` export; import keeps the document.
+
+### Verification
+
+- Every option value changes the output (`SqlPromptOptionSensitivityTests`); every option changes
+  its own page's preview or says when it applies (`SqlPromptPreviewSampleTests`); only
+  `casing.useObjectDefinitionCase` is exempt (needs a database).
+- Parity corpus × 6 contrasting styles: meaning kept, idempotent, comments and formatting-off kept.
+- Real browser (Chromium): preview changes on all 14 pages; saved style survives reload; the
+  editor's Format uses it; SQL Prompt `.json` import → export round-trips with its id.
+- Web → engine, shared storage (`FormatStylesSharedEngineTests`): this tree's engine runs in web
+  mode on a free loopback port with `AKML_APP_DATA_ROOT` pointing at a temp folder
+  (`ProfileManager.CreateDefault` now honours it, as `Constants.AppDataPath` does); the browser
+  pairs, saves a new style and an edit, and the engine's styles folder holds a SQL Prompt style with
+  the edit and its AKML projection. The user's real styles and the installed web engine are untouched.
+- Final run (2026-09-24): Formatting 1,497/1,497; Engine 1,846/1,846; Shell 406/406; Web E2E
+  style tests 5/5 (Chromium); Web unit tests green apart from the 42 failures already red at HEAD
+  (40 `sp031-*` pending golden baselines + 2 `12-merge-statement`, verified on a clean worktree).
+
+### Issues hit
+
+- **Bash heredocs and the Write tool both mangle escapes** in generated source: `\n` became a real
+  newline inside a Razor attribute and a `\uFEFF` escape became an invisible literal BOM in two
+  files. Scripted edits now go through files, and new files were scanned for stray U+FEFF.
+- **Editor start-up raced page navigation**: `EditorComponent.OnAfterRenderAsync` awaited JS
+  several times and kept calling the module after `DisposeAsync` released it
+  (`ObjectDisposedException` in the browser console on a quick editor → Format styles hop, which the
+  picker's new "Edit…" link makes likely). Start-up now stops once the component is disposed.
+- **Razor drops a literal line break inside `<pre>`** — the preview rendered on one line in a real
+  browser; each line now carries an explicit `"\n"`.
+- **Static field initialisation order**: the catalog built its pages before the shared value lists
+  were initialised, leaving choices null — caught by the first real style run.
+- Web E2E floats `Microsoft.Playwright 1.*`; the current package wants Chromium build 1243
+  (`playwright.ps1 install chromium`), newer than the site E2E's 1234.
+
+### Open
+
+- Calibrate the option interpretations (table in the spec) against SQL Prompt's built-in styles
+  when the exports arrive; ship them as built-ins.
+- Manual check of the SSMS / VS window (WPF).

@@ -45,5 +45,17 @@ namespace AkmlSql.Core.Ipc.Messages
         /// <summary>True when this is a shipped style the user has edited.</summary>
         [Key(6)]
         public bool IsCustomizedBuiltIn { get; set; }
+
+        /// <summary>
+        /// The style as a SQL Prompt style document (SQL Prompt 10.5+ JSON) — what the SQL Prompt
+        /// style editors edit. The style's own document when it is a SQL Prompt style; otherwise
+        /// the closest SQL Prompt reading of its AKML-model settings. Null from older engines.
+        /// </summary>
+        [Key(7)]
+        public string? SqlPromptJson { get; set; }
+
+        /// <summary>True when the stored style already is a SQL Prompt style (not a projection).</summary>
+        [Key(8)]
+        public bool IsSqlPromptStyle { get; set; }
     }
 }

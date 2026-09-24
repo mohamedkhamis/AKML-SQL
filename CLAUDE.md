@@ -164,6 +164,7 @@ NoformatScanner → SqlcmdPreprocessor → TSql170Parser → AstAnnotator
   → LayoutEngine → CasingEngine → TextEmitter → SemanticValidator → IdempotencyCheck
 ```
 
+- A style written in SQL Prompt's model (`"sqlPrompt"` document in the `.akmlstyle`, spec 039) is laid out by `SqlPromptLayout` (`src/AkmlSql.Formatting/SqlPrompt/`) instead of LayoutEngine → rules → TextEmitter; all other stages are shared. Option semantics and where to correct them: `specs/039-sqlprompt-style-editor/spec.md`
 - Stage 6 (SemanticValidator) failure → return original SQL unchanged
 - Stage 7 (IdempotencyCheck) controlled by `profile.Metadata.EnableIdempotencyCheck`
 - `ProfileMetadata.SkipValidation` allows test pipelines to bypass stage 6
@@ -320,7 +321,11 @@ See [doc/progress.md](doc/progress.md) for the full development progress log —
 - **Spec 033 — Format Styles window promotion**: full style editor (load-on-select, dirty tracking, merge-save via `ProfileJsonMerger`, read-only built-ins), profile schema v2 (`parentId` hierarchy + `[SettingMeta]` on all 179 properties), new `ProfileGet` (34/134) + `ProfileRename` (35/135) IPC, Options → Format → Styles launcher page, legacy editor stack deleted.
 - **Spec 037 — Multiple AI agents**: up to 20 named agents under `ai.agents` (flat `ai.provider`/`model`/`apiKey`/`endpoint` are now a derived mirror of the active agent, rewritten on every load and save — downgrade-safe); per-feature assignments (`ai.featureAgents`) + ordered fallback chain (`ai.fallbackOrder`); engine resolution seam in `AiHandlerBase` — resolve + project the feature's agent BEFORE the privacy-consent gate; additive `AiChatResponse.AgentName` (key 6) answer attribution; chat empty state deep-links into a guided add-agent flow; agent list + health badges on Options → AI Assistance.
 
+- **Spec 039 — SQL Prompt style editor** (in progress, on the 038 branch): styles are SQL Prompt documents formatted by a dedicated layout; web Format styles page (`/styles`, saves through a paired engine advertising `styles.sqlprompt.v1`, else IndexedDB); SSMS / VS Format Styles window on SQL Prompt's model; `.json` import/export.
+
 **Open follow-ups** (see `doc/progress.md` and the spec tasks files for full lists):
+
+- Spec 039: calibrate option interpretations against SQL Prompt's built-in style exports (user to send); manual SSMS / VS window check. Web E2E needs `playwright.ps1 install chromium` (build 1243); `FormatStylesSharedEngineTests` also needs a Debug build of `AkmlSql.Engine` (it runs it sandboxed via `AKML_APP_DATA_ROOT`).
 
 - Spec 032 pending live items: web deploy + keystroke E2E (T013), campaign re-run (T057/T058), desktop smoke (T059), final perf gate (T060), sandbox cleanup (T062). Known pre-existing red, NOT spec-032: `FormatterServiceTests`/`AnalyserServiceTests` sp031-* pending golden baselines; `PerformanceBaselineTests` environmental drift.
 - Spec 033: T044/T045 (final gate + deploy/manual verification) pending user availability.

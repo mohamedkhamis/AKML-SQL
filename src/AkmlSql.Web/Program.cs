@@ -27,7 +27,9 @@ builder.Services.AddSingleton<IIndexedDbAdapter, JsIndexedDbAdapter>();
 builder.Services.AddSingleton<IThemeApplier, JsThemeApplier>();
 
 builder.Services.AddSingleton<IFormatterService, FormatterService>();
-builder.Services.AddSingleton<IProfileStore, ProfileStore>();
+builder.Services.AddSingleton<IProfileStore>(sp => new ProfileStore(
+    sp.GetRequiredService<IIndexedDbAdapter>(),
+    sp.GetRequiredService<IEngineBridge>()));
 builder.Services.AddSingleton<IAnalysisSettingsStore, AnalysisSettingsStore>();
 // Spec 027 T024/T026 (US4): AnalyserService honours the browser-local per-rule overrides
 // from IAnalysisSettingsStore. Registered via an explicit factory so the store is

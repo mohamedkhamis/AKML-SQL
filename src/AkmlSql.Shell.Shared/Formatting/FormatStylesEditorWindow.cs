@@ -83,6 +83,7 @@ namespace AkmlSql.Shell.Shared.Formatting
         // one batch on toggle-off / close instead of per keystroke (each PreviewSample set is
         // ~5 synchronous filesystem ops on the dispatcher thread plus a discarded preview run).
         private CheckBox? _editSampleToggle;
+        private RadioButton? _rbPageSample;
         private bool EditingSample => _editSampleToggle?.IsChecked == true;
 
         private static System.Windows.Media.SolidColorBrush Freeze(System.Windows.Media.SolidColorBrush b)
@@ -871,14 +872,23 @@ namespace AkmlSql.Shell.Shared.Formatting
 
             if (_builtInHint != null)
             {
-                _builtInHint.Visibility = _viewModel.IsSelectedBuiltIn && !string.IsNullOrEmpty(_viewModel.LoadedProfileName)
+                var loaded = !string.IsNullOrEmpty(_viewModel.LoadedProfileName);
+                _builtInHint.Visibility = loaded && (_viewModel.IsSelectedBuiltIn || _viewModel.IsSelectedClassic)
                     ? Visibility.Visible
                     : Visibility.Collapsed;
 
                 if (_builtInHintText != null)
-                    _builtInHintText.Text = _viewModel.IsSelectedCustomized
+                {
+                    var text = _viewModel.IsSelectedCustomized
                         ? "This is your edited version of a built-in style. The original is still there — Reset to built-in restores it."
-                        : "Editing a built-in style saves your own copy of it. The original is kept, so you can reset to it at any time.";
+                        : _viewModel.IsSelectedBuiltIn
+                            ? "Editing a built-in style saves your own copy of it. The original is kept, so you can reset to it at any time."
+                            : string.Empty;
+                    if (_viewModel.IsSelectedClassic)
+                        text = (text.Length > 0 ? text + " " : string.Empty)
+                               + "This style is written in AKML's own model; it is shown in SQL Prompt's terms, and saving makes it a SQL Prompt style, formatted as the preview shows.";
+                    _builtInHintText.Text = text;
+                }
             }
         }
 
@@ -1106,12 +1116,16 @@ namespace AkmlSql.Shell.Shared.Formatting
         {
             var name = SelectedStyle();
             if (string.IsNullOrEmpty(name)) { SetStatus("Select a style to export."); return; }
+            // SQL Prompt 10.5+ reads and writes one .json per style; the engine writes the style's
+            // SQL Prompt document there. .sqlpromptstylev2 stays available for older SQL Prompts.
             var dialog = new Microsoft.Win32.SaveFileDialog
             {
                 Title = "Export formatting style",
-                FileName = name + ".sqlpromptstylev2",
-                Filter = "SQL Prompt style (*.sqlpromptstylev2)|*.sqlpromptstylev2|All files (*.*)|*.*",
-                DefaultExt = ".sqlpromptstylev2",
+                FileName = name + (_viewModel.IsSqlPromptModel ? ".json" : ".sqlpromptstylev2"),
+                Filter = _viewModel.IsSqlPromptModel
+                    ? "SQL Prompt style (*.json)|*.json|SQL Prompt 9 style (*.sqlpromptstylev2)|*.sqlpromptstylev2|All files (*.*)|*.*"
+                    : "SQL Prompt style (*.sqlpromptstylev2)|*.sqlpromptstylev2|All files (*.*)|*.*",
+                DefaultExt = _viewModel.IsSqlPromptModel ? ".json" : ".sqlpromptstylev2",
                 OverwritePrompt = true,
             };
             if (dialog.ShowDialog(this) != true) return;
@@ -1657,6 +1671,31 @@ namespace AkmlSql.Shell.Shared.Formatting
                 _previewTextBox.Text = _viewModel.PreviewText;
             };
 
+            // SQL Prompt model: each page previews its own sample, like SQL Prompt's editor.
+            _rbPageSample = new RadioButton
+            {
+                Content = "Page sample",
+                GroupName = "akmlPreviewSource",
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, Spacing.Md, 0),
+                FontFamily = Typography.UiFont,
+                FontSize = Typography.Small,
+                Visibility = Visibility.Collapsed,
+                ToolTip = "Preview code this page's options act on.",
+            };
+            _rbPageSample.Foreground = PreviewTextBrush;
+            _rbPageSample.Checked += (_, _) =>
+            {
+                _viewModel.PreviewSourceMode = FormatPreviewSource.PageSample;
+                if (_editSampleToggle != null)
+                {
+                    _editSampleToggle.IsChecked = false;
+                    _editSampleToggle.IsEnabled = false;
+                }
+            };
+            rbSample.Content = "My sample";
+
+            sourceStack.Children.Add(_rbPageSample);
             sourceStack.Children.Add(rbSample);
             sourceStack.Children.Add(rbCurrent);
             sourceStack.Children.Add(_editSampleToggle);
@@ -1843,6 +1882,7 @@ namespace AkmlSql.Shell.Shared.Formatting
 
             _currentGroup = group;
             _currentGroupCategory = categoryDisplay;
+            _viewModel.PageSample = group.Sample;
 
             if (_breadcrumbText != null)
                 _breadcrumbText.Text = categoryDisplay != null
@@ -1866,15 +1906,56 @@ namespace AkmlSql.Shell.Shared.Formatting
             }
 
             var index = 0;
+            string? subgroup = null;
             foreach (var setting in group.Settings)
+            {
+                // SQL Prompt pages group their options under small headings ("New lines", "ON").
+                if (setting.Subgroup != null && setting.Subgroup != subgroup)
+                {
+                    subgroup = setting.Subgroup;
+                    var heading = new TextBlock
+                    {
+                        Text = subgroup.ToUpperInvariant(),
+                        FontFamily = Typography.UiFont,
+                        FontSize = Typography.Small,
+                        FontWeight = Typography.WeightSemiBold,
+                        Margin = new Thickness(Spacing.Sm, index == 0 ? 0 : Spacing.Md, 0, Spacing.Xs),
+                    };
+                    heading.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+                    _settingControlsHost.Children.Add(heading);
+                }
                 _settingControlsHost.Children.Add(BuildSettingRow(setting, index++));
+            }
+        }
+
+        /// <summary>
+        /// False while the option that turns this one on is off (a collapse threshold under its
+        /// collapse switch) — shown disabled with a "takes effect when…" hint, as SQL Prompt does.
+        /// </summary>
+        private bool IsGateOpen(FormatSettingNode setting)
+        {
+            if (setting.EnabledWhenId == null) return true;
+            var current = _viewModel.GetWorkingValue(setting.EnabledWhenId);
+            return current is null || Equals(current, setting.EnabledWhenValue)
+                   || string.Equals(current.ToString(), setting.EnabledWhenValue?.ToString(), StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>Re-renders the page when the changed setting turns another on this page on or off.</summary>
+        private void RefreshIfGate(FormatSettingNode changed)
+        {
+            if (_currentGroup == null) return;
+            if (!_currentGroup.Settings.Any(x => x.EnabledWhenId == changed.Id)) return;
+            var group = _currentGroup;
+            var category = _currentGroupCategory;
+            Dispatcher.BeginInvoke(new Action(() => UpdateRightForGroup(group, category)));
         }
 
         /// <summary>One form row: setting label (left; +Unsupported badge; description as a tooltip)
         /// and its type-driven control (right). Alternate rows get a subtle zebra tint.</summary>
         private FrameworkElement BuildSettingRow(FormatSettingNode setting, int index)
         {
-            var isDisabled = string.Equals(setting.Status, "Unsupported", StringComparison.OrdinalIgnoreCase);
+            var gateOpen = IsGateOpen(setting);
+            var isDisabled = string.Equals(setting.Status, "Unsupported", StringComparison.OrdinalIgnoreCase) || !gateOpen;
             var currentValue = _viewModel.GetWorkingValue(setting.Id);
 
             var rowBorder = new Border
@@ -1902,11 +1983,11 @@ namespace AkmlSql.Shell.Shared.Formatting
                 FontSize = Typography.Body,
                 VerticalAlignment = VerticalAlignment.Center,
                 TextWrapping = TextWrapping.Wrap,
-                ToolTip = string.IsNullOrWhiteSpace(setting.Description) ? null : setting.Description,
+                ToolTip = RowTooltip(setting, gateOpen),
             };
             label.SetResourceReference(TextBlock.ForegroundProperty, isDisabled ? ThemeTokens.TextDisabled : ThemeTokens.TextSecondary);
             labelStack.Children.Add(label);
-            if (isDisabled) labelStack.Children.Add(BuildUnsupportedBadge());
+            if (isDisabled && gateOpen) labelStack.Children.Add(BuildUnsupportedBadge());
             Grid.SetColumn(labelStack, 0);
             row.Children.Add(labelStack);
 
@@ -1920,6 +2001,20 @@ namespace AkmlSql.Shell.Shared.Formatting
 
             rowBorder.Child = row;
             return rowBorder;
+        }
+
+        /// <summary>Description, the option's "shows when…" note, and why it is disabled.</summary>
+        private string? RowTooltip(FormatSettingNode setting, bool gateOpen)
+        {
+            var parts = new System.Collections.Generic.List<string>();
+            if (!string.IsNullOrWhiteSpace(setting.Description)) parts.Add(setting.Description!);
+            if (!string.IsNullOrWhiteSpace(setting.Note)) parts.Add(setting.Note!);
+            if (!gateOpen && setting.EnabledWhenId != null)
+            {
+                var gate = _currentGroup?.Settings.FirstOrDefault(x => x.Id == setting.EnabledWhenId);
+                parts.Add($"Takes effect when \"{gate?.DisplayName ?? setting.EnabledWhenId}\" is {(setting.EnabledWhenValue is bool b ? (b ? "on" : "off") : setting.EnabledWhenValue)}.");
+            }
+            return parts.Count == 0 ? null : string.Join(Environment.NewLine + Environment.NewLine, parts);
         }
 
         /// <summary>
@@ -1949,8 +2044,8 @@ namespace AkmlSql.Shell.Shared.Formatting
                     checkBox.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
                     if (!isDisabled)
                     {
-                        checkBox.Checked += (_, _) => _viewModel.SetWorkingValue(setting.Id, true);
-                        checkBox.Unchecked += (_, _) => _viewModel.SetWorkingValue(setting.Id, false);
+                        checkBox.Checked += (_, _) => { _viewModel.SetWorkingValue(setting.Id, true); RefreshIfGate(setting); };
+                        checkBox.Unchecked += (_, _) => { _viewModel.SetWorkingValue(setting.Id, false); RefreshIfGate(setting); };
                     }
                     return checkBox;
                 }
@@ -2029,18 +2124,23 @@ namespace AkmlSql.Shell.Shared.Formatting
                         FontFamily = Typography.UiFont,
                         FontSize = Typography.Body,
                     };
-                    foreach (var v in allowed) combo.Items.Add(v);
+                    // Items are the display labels (plain strings, per the ComboBoxTheming contract);
+                    // the stored value is mapped back on change, keeping Redgate's exact spelling.
+                    foreach (var v in allowed) combo.Items.Add(setting.LabelFor(v));
                     // An imported profile may hold a value outside the declared set —
                     // surface it as a selectable extra rather than lying about the state.
                     if (!allowed.Contains(initial, StringComparer.Ordinal)) combo.Items.Insert(0, initial);
-                    combo.SelectedItem = initial;
+                    combo.SelectedItem = setting.LabelFor(initial);
                     Ui.Theme.ComboBoxTheming.Apply(combo);
                     if (!isDisabled)
                     {
                         combo.SelectionChanged += (_, _) =>
                         {
                             if (combo.SelectedItem is string s)
-                                _viewModel.SetWorkingValue(setting.Id, s);
+                            {
+                                _viewModel.SetWorkingValue(setting.Id, setting.ValueFor(s));
+                                RefreshIfGate(setting);
+                            }
                         };
                     }
                     return combo;
@@ -2107,6 +2207,13 @@ namespace AkmlSql.Shell.Shared.Formatting
                 RebuildSettingsTreeFromSchema(_viewModel.SchemaJson!);
             }
 
+            // SQL Prompt model: preview each page's own sample by default.
+            if (_viewModel.IsSqlPromptModel && _rbPageSample != null)
+            {
+                _rbPageSample.Visibility = Visibility.Visible;
+                _rbPageSample.IsChecked = true;
+            }
+
             // The view-model auto-selects the ACTIVE style at open; reflect that in the list.
             // Assigning SelectedItem fires the normal selection-changed flow (SelectProfileAsync
             // short-circuits on the already-loaded style) so the controls render its values.
@@ -2154,7 +2261,8 @@ namespace AkmlSql.Shell.Shared.Formatting
             }
             else if (e.PropertyName == nameof(FormatStylesEditorViewModel.IsDirty)
                      || e.PropertyName == nameof(FormatStylesEditorViewModel.IsSelectedBuiltIn)
-                     || e.PropertyName == nameof(FormatStylesEditorViewModel.IsSelectedCustomized))
+                     || e.PropertyName == nameof(FormatStylesEditorViewModel.IsSelectedCustomized)
+                     || e.PropertyName == nameof(FormatStylesEditorViewModel.IsSelectedClassic))
             {
                 // Spec 033 — both flip on the UI thread (SetWorkingValue / SelectProfileAsync).
                 UpdateSaveButtonState();
@@ -2273,5 +2381,32 @@ namespace AkmlSql.Shell.Shared.Formatting
         public System.Collections.Generic.List<string>? AllowedEnumValues { get; set; }
         public int? Min { get; set; }
         public int? Max { get; set; }
+
+        // SQL Prompt model — null / empty on the AKML settings schema.
+        /// <summary>Display text for each entry of <see cref="AllowedEnumValues"/> (same order).</summary>
+        public System.Collections.Generic.List<string>? EnumLabels { get; set; }
+        /// <summary>"Shows when…" note: when the option's effect depends on other settings.</summary>
+        public string? Note { get; set; }
+        /// <summary>Sub-heading on the page ("New lines", "ON"…).</summary>
+        public string? Subgroup { get; set; }
+        /// <summary>The setting that turns this one on, and the value that does.</summary>
+        public string? EnabledWhenId { get; set; }
+        public object? EnabledWhenValue { get; set; }
+
+        /// <summary>Label shown for a stored value (the value itself when there is no label).</summary>
+        public string LabelFor(string value)
+        {
+            if (AllowedEnumValues == null || EnumLabels == null || EnumLabels.Count != AllowedEnumValues.Count) return value;
+            var i = AllowedEnumValues.IndexOf(value);
+            return i >= 0 ? EnumLabels[i] : value;
+        }
+
+        /// <summary>Stored value for a displayed label (the label itself when it is not one).</summary>
+        public string ValueFor(string label)
+        {
+            if (AllowedEnumValues == null || EnumLabels == null || EnumLabels.Count != AllowedEnumValues.Count) return label;
+            var i = EnumLabels.IndexOf(label);
+            return i >= 0 ? AllowedEnumValues[i] : label;
+        }
     }
 }
