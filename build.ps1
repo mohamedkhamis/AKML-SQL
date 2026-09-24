@@ -140,6 +140,17 @@ function Build-Shell([string]$Project) {
     }
 }
 
+# `dotnet publish` never deletes anything in publish\: files from older builds stay there — every
+# old fingerprinted web bundle, dependencies since removed — and the installer packs the whole
+# folder (the web edition shipped at 215 MB instead of ~43 MB). Empty it before each publish.
+function Clear-PublishOutput([string]$Project) {
+    $binDir = Join-Path (Split-Path -Parent "$Root\$Project") "bin\$Configuration"
+    if (Test-Path $binDir) {
+        Get-ChildItem -Path $binDir -Directory -Recurse -Filter publish -ErrorAction SilentlyContinue |
+            ForEach-Object { Remove-Item -Recurse -Force $_.FullName -ErrorAction SilentlyContinue }
+    }
+}
+
 # ISCC now runs preprocess-manifests.ps1 itself via #expr Exec, so build.ps1
 # doesn't need a duplicate step. Keeping Update-VsixManifests as a thin wrapper
 # means an early failure surfaces before we start the heavy .NET builds.
@@ -214,18 +225,22 @@ Invoke-Build "Formatting library" {
 }
 
 Invoke-Build "Engine (publish)" {
+    Clear-PublishOutput "src\AkmlSql.Engine\AkmlSql.Engine.csproj"
     dotnet publish "$Root\src\AkmlSql.Engine\AkmlSql.Engine.csproj" -c $Configuration -r win-x64 -p:Version=$Version -v quiet --nologo
 }
 
 Invoke-Build "Updater (publish)" {
+    Clear-PublishOutput "src\AkmlSql.Updater\AkmlSql.Updater.csproj"
     dotnet publish "$Root\src\AkmlSql.Updater\AkmlSql.Updater.csproj" -c $Configuration -p:Version=$Version -v quiet --nologo
 }
 
 Invoke-Build "Formatter CLI (publish)" {
+    Clear-PublishOutput "src\AkmlSql.Formatter\AkmlSql.Formatter.csproj"
     dotnet publish "$Root\src\AkmlSql.Formatter\AkmlSql.Formatter.csproj" -c $Configuration -p:Version=$Version -v quiet --nologo
 }
 
 Invoke-Build "Analyzer CLI (publish)" {
+    Clear-PublishOutput "src\AkmlSql.Analyzer\AkmlSql.Analyzer.csproj"
     dotnet publish "$Root\src\AkmlSql.Analyzer\AkmlSql.Analyzer.csproj" -c $Configuration -r win-x64 -p:Version=$Version -v quiet --nologo
 }
 
@@ -234,6 +249,7 @@ Invoke-Build "Analyzer CLI (publish)" {
 # (web-installer.iss [Files]) sources the published wwwroot; this MUST run before
 # the Inno Setup step below or ISCC fails with "Source file not found".
 Invoke-Build "Web edition (publish)" {
+    Clear-PublishOutput "src\AkmlSql.Web\AkmlSql.Web.csproj"
     dotnet publish "$Root\src\AkmlSql.Web\AkmlSql.Web.csproj" -c $Configuration -p:Version=$Version -v quiet --nologo
 }
 

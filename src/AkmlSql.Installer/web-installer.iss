@@ -47,7 +47,13 @@ Name: "web\service"; Description: "Install Windows service for the engine"; Type
 ; FR-007 -- copy the web bundle to ProgramFiles. Built by
 ; `dotnet publish src/AkmlSql.Web -c Release`; lands under
 ; src/AkmlSql.Web/bin/Release/net10.0/publish/wwwroot/. Recursive copy preserves _framework/.
+; The build scripts empty that folder before publishing: publish never deletes, so every old
+; fingerprinted bundle stayed behind and was packed too (215 MB instead of ~43 MB).
+; *.br / *.gz are the publish's pre-compressed copies. Only ASP.NET Core's static-assets
+; middleware serves them; the IIS site set up here has no rule that maps a request to them and
+; always serves the plain files, so they were ~16 MB of the download that is never read.
 Source: "..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\*"; \
+    Excludes: "*.br,*.gz"; \
     DestDir: "{app}\Web"; \
     Flags: ignoreversion recursesubdirs createallsubdirs; \
     Components: web

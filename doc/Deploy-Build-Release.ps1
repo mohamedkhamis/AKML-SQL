@@ -265,6 +265,17 @@ Write-Step "Step 4/7: Publishing .NET 10 projects"
 # obj/Release/.../singlefilehost.exe.
 Invoke-Native { dotnet build-server shutdown 2>&1 } | Out-Null
 
+# `dotnet publish` never deletes anything in publish\: files from older builds stay there — every
+# old fingerprinted web bundle, dependencies since removed — and the installer packs the whole
+# folder (the web edition shipped at 215 MB instead of ~43 MB). Empty it before each publish.
+function Clear-PublishOutput([string]$ProjectName) {
+    $binDir = Join-Path $srcDir "$ProjectName\bin\$Configuration"
+    if (Test-Path $binDir) {
+        Get-ChildItem -Path $binDir -Directory -Recurse -Filter publish -ErrorAction SilentlyContinue |
+            ForEach-Object { Remove-Item -Recurse -Force $_.FullName -ErrorAction SilentlyContinue }
+    }
+}
+
 $publishProjects = @(
     @{ Name = 'AkmlSql.Engine';    Rid = 'win-x64'; Desc = 'Engine (out-of-process IntelliSense)' }
     @{ Name = 'AkmlSql.Updater';   Rid = 'win-x64'; Desc = 'Self-contained updater' }
@@ -280,6 +291,7 @@ foreach ($proj in $publishProjects) {
     }
 
     Write-Host "  Publishing $($proj.Desc)..." -NoNewline
+    Clear-PublishOutput $proj.Name
 
     # Retry up to 3 times — real-time AV (e.g. Bitdefender) holds transient
     # read-locks on the freshly-copied obj/.../singlefilehost.exe that defeat
@@ -316,6 +328,7 @@ foreach ($proj in $publishProjects) {
 $webCsproj = Join-Path $srcDir 'AkmlSql.Web\AkmlSql.Web.csproj'
 if (Test-Path $webCsproj) {
     Write-Host "  Publishing Web edition (Blazor WASM)..." -NoNewline
+    Clear-PublishOutput 'AkmlSql.Web'
     $attempt = 0
     $maxAttempts = 3
     while ($true) {
