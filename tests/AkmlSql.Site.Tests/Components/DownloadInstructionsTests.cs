@@ -15,7 +15,7 @@ namespace AkmlSql.Site.Tests.Components;
 /// projects, nothing links them, and a switch renamed in the Inno script leaves the page confidently
 /// instructing people to use a flag that no longer exists. The docs already drifted this way once —
 /// CLAUDE.md documents <c>/TARGETS=20,22,2022</c>, while the installer has parsed
-/// <c>ssms22</c>/<c>vs2026</c> for some time.
+/// <c>ssms22</c> (and, until Visual Studio support was removed, <c>vs2026</c>) for some time.
 /// </para>
 /// <para>
 /// So every switch the page prints is checked against the installer source. If the installer
@@ -98,18 +98,21 @@ public sealed class DownloadInstructionsTests : IDisposable
 
         // The target names are the ones ApplySilentTargets matches on. "22" and "2026" alone would
         // pass a naive substring check against the script, so the full tokens are required.
-        foreach (var target in (string[])["ssms22", "vs2026"])
+        foreach (var target in (string[])["ssms22"])
         {
             Assert.Contains(target, command, StringComparison.Ordinal);
             Assert.Contains($"'{target}'", installer, StringComparison.Ordinal);
         }
+
+        // Visual Studio is no longer a target: the page must not offer it.
+        Assert.DoesNotContain("vs2026", command, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
     public void TheInstallSteps_DoNotTellPeopleToCloseTheirEditorFirst()
     {
-        // CloseApplications=yes with a filter for Ssms.exe and devenv.exe means the installer
-        // offers to close them itself. Telling people to close them first would be busywork the
+        // CloseApplications=yes with a filter for Ssms.exe means the installer offers to close
+        // SSMS itself. Telling people to close them first would be busywork the
         // product does not require -- and the sort of instruction nobody ever revisits.
         var installer = InstallerSource();
         Assert.Contains("CloseApplications=yes", installer, StringComparison.Ordinal);
@@ -118,7 +121,8 @@ public sealed class DownloadInstructionsTests : IDisposable
         var steps = ctx.Render<Download>().Find(".download-steps").TextContent;
 
         Assert.Contains("close", steps, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("Close SSMS and Visual Studio before", steps, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Close SSMS before", steps, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Visual Studio", steps, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

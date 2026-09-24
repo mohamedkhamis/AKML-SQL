@@ -893,6 +893,20 @@ html.js-copy-hash .copy-hash-btn {
     color: var(--akml-text-secondary);
 }
 
+/* "Now for SSMS 22 only" (HostSupportNotice): sits under the home hero and between the download
+   hero and .download-columns, whose own margin-top keeps the gap below it. */
+.host-notice {
+    margin-top: var(--s-6);
+}
+
+.host-notice h2 {
+    font-size: 1.25rem;
+}
+
+.host-notice p {
+    margin-bottom: 0;
+}
+
 /* --- Footer -------------------------------------------------------------------- */
 
 .site-footer {

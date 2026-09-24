@@ -1,0 +1,17 @@
+@* The announcement that AKML SQL now supports SQL Server Management Studio 22 only. One component
+   so the home and download pages say exactly the same thing. It must stay true to the installer:
+   setup offers SSMS 22 as the only host and, on an upgrade, deletes the Extensions\AkmlSql folder
+   earlier releases put into Visual Studio 2026 (RemoveLegacyVSExtensions in AkmlSqlSetup.iss). *@
+<aside class="notice host-notice" aria-labelledby="@HeadingId">
+    <h2 id="@HeadingId">Now for SQL Server Management Studio 22 only</h2>
+    <p>
+        The AKML SQL extension works in SQL Server Management Studio 22. Visual Studio 2026 is no
+        longer supported: setup installs into SSMS 22 only, and when you upgrade it removes the
+        extension earlier versions added to Visual Studio.
+    </p>
+</aside>
+
+@code {
+    /// <summary>Unique per page, so the heading id never collides with the page's own.</summary>
+    [Parameter] public string HeadingId { get; set; } = "host-support-heading";
+}

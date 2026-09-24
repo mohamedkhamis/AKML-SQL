@@ -29,9 +29,9 @@
 
 <PageTitle>Download — AKML SQL</PageTitle>
 <HeadContent>
-    <meta name="description" content="Download AKML SQL for SQL Server Management Studio 22 and Visual Studio 2026. Free, open source, with SHA-256 verification and previous releases." />
+    <meta name="description" content="Download AKML SQL for SQL Server Management Studio 22. Free, open source, with SHA-256 verification and previous releases." />
     <meta property="og:title" content="Download" />
-    <meta property="og:description" content="Download AKML SQL for SQL Server Management Studio 22 and Visual Studio 2026. Free, open source, with SHA-256 verification and previous releases." />
+    <meta property="og:description" content="Download AKML SQL for SQL Server Management Studio 22. Free, open source, with SHA-256 verification and previous releases." />
 </HeadContent>
 
 <div class="page-body container">
@@ -49,9 +49,9 @@
     <section class="download-hero release-card release-card-latest" aria-labelledby="latest-release-heading">
         <div class="download-hero-main">
             <p class="eyebrow">Download</p>
-            <h1 id="latest-release-heading">AKML SQL for SSMS and Visual Studio</h1>
+            <h1 id="latest-release-heading">AKML SQL for SQL Server Management Studio 22</h1>
             <p class="download-hero-lead">
-                One installer covers SQL Server Management Studio 22 and Visual Studio 2026.
+                One installer for SQL Server Management Studio 22.
                 Free and open source under the MIT license.
             </p>
 
@@ -138,6 +138,8 @@
         </aside>
     </section>
 
+    <HostSupportNotice HeadingId="download-host-support-heading" />
+
     <div class="download-columns">
         <div class="download-main">
             @if (latest.NotesSummary is not null)
@@ -155,22 +157,22 @@
             }
 
             @* Every step here is checked against the installer script rather than assumed.
-               CloseApplications=yes with CloseApplicationsFilter=Ssms.exe,devenv.exe means the
-               installer offers to close the editors itself, so telling people to close them first
-               would be wrong. The silent switches are the ones AkmlSqlSetup.iss actually parses:
-               ApplySilentTargets in environment-scanner.iss matches "ssms22" and "vs2026". *@
+               CloseApplications=yes with CloseApplicationsFilter=Ssms.exe means the installer
+               offers to close SSMS itself, so telling people to close it first would be wrong.
+               The silent switches are the ones AkmlSqlSetup.iss actually parses: ApplySilentTargets
+               in environment-scanner.iss matches "ssms22". *@
             <section class="download-block" aria-labelledby="install-heading">
                 <h2 id="install-heading">Install</h2>
                 <ol class="download-steps">
                     <li>
                         <strong>Run the installer.</strong>
-                        It finds every supported editor on the machine and lets you choose which
-                        ones to extend.
+                        It finds SQL Server Management Studio 22 on the machine and adds AKML SQL
+                        to it.
                     </li>
                     <li>
-                        <strong>Let it close SSMS or Visual Studio if they are open.</strong>
-                        It writes into their extension folders, so it will offer to close them and
-                        reopen them afterwards.
+                        <strong>Let it close SSMS if it is open.</strong>
+                        It writes into the SSMS extension folder, so it will offer to close SSMS
+                        and reopen it afterwards.
                     </li>
                     <li>
                         <strong>Open the Tools menu.</strong>
@@ -181,7 +183,7 @@
                 <p class="download-note">
                     Deploying to a fleet? Install without any prompts:
                 </p>
-                <code class="download-cmd">@fileName /VERYSILENT /ACCEPTEULA /TARGETS=ssms22,vs2026</code>
+                <code class="download-cmd">@fileName /VERYSILENT /ACCEPTEULA /TARGETS=ssms22</code>
             </section>
 
             <section class="download-block" aria-labelledby="getting-started-heading">
@@ -193,7 +195,7 @@
                     </li>
                     <li>
                         <a href="/features">Feature overview</a>
-                        — what the extension adds to SSMS and Visual Studio.
+                        — what the extension adds to SSMS.
                     </li>
                     <li>
                         <a href="/docs/topics/connecting">Connecting to a server</a>

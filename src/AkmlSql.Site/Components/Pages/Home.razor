@@ -9,15 +9,15 @@
 
 <PageTitle>AKML SQL — AI-powered SQL development assistance</PageTitle>
 <HeadContent>
-    <meta name="description" content="Schema-aware IntelliSense, formatting, 130+ analysis rules and AI assistance for SSMS 22 and Visual Studio 2026. Free and open source under the MIT license." />
+    <meta name="description" content="Schema-aware IntelliSense, formatting, 130+ analysis rules and AI assistance for SQL Server Management Studio 22. Free and open source under the MIT license." />
     <meta property="og:title" content="AKML SQL — AI-powered SQL development assistance" />
-    <meta property="og:description" content="AI-powered IntelliSense, formatting, static analysis, refactoring, snippets, SQL history, and AI assistance for SSMS 22 and Visual Studio 2026." />
+    <meta property="og:description" content="AI-powered IntelliSense, formatting, static analysis, refactoring, snippets, SQL history, and AI assistance for SQL Server Management Studio 22." />
 </HeadContent>
 
 <section class="hero" aria-labelledby="hero-heading">
     <div class="hero-backdrop" aria-hidden="true"></div>
     <div class="container">
-        <p class="eyebrow hero-eyebrow">For SSMS 22 + Visual Studio 2026</p>
+        <p class="eyebrow hero-eyebrow">For SQL Server Management Studio 22</p>
         <h1 id="hero-heading">SQL development, <span class="text-gradient">supercharged.</span></h1>
         @* The old tagline listed seven features in one sentence and ended on "replicating and
            extending the Redgate SQL Prompt feature set" -- defining the product by someone else's,
@@ -25,10 +25,10 @@
            section below where it can be made properly; the hero says what this does for you. *@
         <p class="hero-tagline">
             Schema-aware IntelliSense, formatting, static analysis and AI assistance —
-            inside the SSMS and Visual Studio you already use.
+            inside the SSMS 22 you already use.
         </p>
         <p class="hero-tagline hero-tagline-sub">
-            Free and open source under the MIT license. One installer, both hosts, no account.
+            Free and open source under the MIT license. One installer, no account.
         </p>
         <p class="cta-row hero-cta">
             <a class="btn btn-primary btn-lg" href="/download">
@@ -58,6 +58,8 @@
 <div class="page-body container">
     @* Concrete numbers, because "comprehensive" and "powerful" are what every tool's home page
        says. These are all verifiable from the docs, which is the point of linking them. *@
+    <HostSupportNotice HeadingId="home-host-support-heading" />
+
     <section class="proof-strip" aria-label="At a glance">
         <dl class="proof-list">
             <div class="proof-item">
@@ -69,8 +71,8 @@
                 <dd><a href="/docs/formatting">formatting pipeline</a> with shareable styles</dd>
             </div>
             <div class="proof-item">
-                <dt>2 hosts</dt>
-                <dd>SSMS 22 and Visual Studio 2026, one installer</dd>
+                <dt>SSMS 22</dt>
+                <dd>SQL Server Management Studio 22, one installer</dd>
             </div>
             <div class="proof-item">
                 <dt>MIT</dt>
@@ -143,12 +145,12 @@
         {
             <p>
                 Version @release.Version — free and open source under the MIT license.
-                One installer covers SSMS 22 and Visual Studio 2026.
+                One installer for SQL Server Management Studio 22.
             </p>
         }
         else
         {
-            <p>Free and open source under the MIT license. One installer covers both hosts.</p>
+            <p>Free and open source under the MIT license. One installer for SQL Server Management Studio 22.</p>
         }
         <p class="cta-row"><a class="btn btn-primary btn-lg" href="/download">Download the latest release</a></p>
     </section>

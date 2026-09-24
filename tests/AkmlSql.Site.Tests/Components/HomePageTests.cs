@@ -27,7 +27,7 @@ public sealed class HomePageTests
                     {
                         Version = "1.26.0912.2043",
                         ReleasedAt = new DateOnly(2026, 9, 13),
-                        SupportedHosts = ["SSMS 22", "VS 2026"],
+                        SupportedHosts = ["SSMS 22"],
                         DownloadUrl = "downloads/AKMLSQLSetup-1.26.0912.2043.exe",
                         Sha256Hash = new string('a', 64),
                     },
@@ -36,6 +36,24 @@ public sealed class HomePageTests
             : ReleasesManifest.Unavailable);
 
         return ctx;
+    }
+
+    [Fact]
+    public void Page_AnnouncesSsms22Only_AndNoLongerOffersVisualStudio()
+    {
+        // Visual Studio 2026 support was removed; the home page says so, and nothing else on it
+        // still presents Visual Studio as a supported host.
+        using var ctx = NewCtx();
+
+        var cut = ctx.Render<Home>();
+
+        var notice = cut.Find(".host-notice");
+        Assert.Contains("SQL Server Management Studio 22 only", notice.TextContent);
+        Assert.Contains("Visual Studio 2026 is no", notice.TextContent);
+
+        notice.Remove();
+        Assert.DoesNotContain("Visual Studio", cut.Find(".hero").TextContent);
+        Assert.DoesNotContain("Visual Studio", cut.Find(".page-body").TextContent);
     }
 
     [Fact]

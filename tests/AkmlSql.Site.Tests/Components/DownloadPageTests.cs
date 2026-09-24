@@ -36,7 +36,7 @@ public sealed class DownloadPageTests : IDisposable
         {
             Version = version,
             ReleasedAt = DateOnly.Parse(releasedAt),
-            SupportedHosts = ["SSMS 22", "VS 2026"],
+            SupportedHosts = ["SSMS 22"],
             DownloadUrl = $"downloads/AKMLSQLSetup-{version}.exe",
             Sha256Hash = sha,
             NotesSummary = notesSummary,
@@ -106,7 +106,6 @@ public sealed class DownloadPageTests : IDisposable
         Assert.Contains("1.1.0", cut.Markup);
         Assert.Contains("August 27, 2026", cut.Markup);
         Assert.Contains("SSMS 22", cut.Markup);
-        Assert.Contains("VS 2026", cut.Markup);
         Assert.Contains("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", cut.Markup);
         Assert.Contains("Format Styles window and autocomplete gate.", cut.Markup);
 
@@ -115,6 +114,23 @@ public sealed class DownloadPageTests : IDisposable
 
         var notesLink = cut.Find("a[href='https://github.com/mohamedkhamis/AKML-SQL/releases/tag/v1.1.0']");
         Assert.NotNull(notesLink);
+    }
+
+    [Fact]
+    public void Page_AnnouncesSsms22Only_AndOffersNoVisualStudioInstall()
+    {
+        using var ctx = NewCtx(TwoReleaseManifest());
+
+        var cut = ctx.Render<Download>();
+
+        Assert.Contains("SQL Server Management Studio 22", cut.Find("#latest-release-heading").TextContent);
+        var notice = cut.Find(".host-notice");
+        Assert.Contains("SQL Server Management Studio 22 only", notice.TextContent);
+        Assert.Contains("removes the", notice.TextContent);
+
+        // Apart from the announcement, nothing on the page offers Visual Studio.
+        notice.Remove();
+        Assert.DoesNotContain("Visual Studio", cut.Find(".page-body").TextContent);
     }
 
     [Fact]

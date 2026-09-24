@@ -53,7 +53,7 @@ public sealed class DownloadPageProbeTests : IDisposable
     {
         Version = $"1.26.09{index:D2}.1200",
         ReleasedAt = new DateOnly(2026, 9, 10).AddDays(-index),
-        SupportedHosts = ["SSMS 22", "VS 2026"],
+        SupportedHosts = ["SSMS 22"],
         DownloadUrl = $"downloads/AKMLSQLSetup-{index}.exe",
         Sha256Hash = new string('a', 64),
         CdnUrl = withCdn
