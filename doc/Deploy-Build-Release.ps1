@@ -24,7 +24,7 @@
 
 .PARAMETER Targets
     Comma-separated list of shell targets to build. Default: all supported
-    Valid values: Ssms22, VS2026
+    Valid values: Ssms22
 
 .EXAMPLE
     .\Build-Release.ps1
@@ -126,7 +126,7 @@ $buildVersion = '1.{0}.{1}.{2}' -f `
     $buildTime.ToString('HHmm')
 
 # All supported shell targets
-$allTargets = @('Ssms22', 'VS2026')
+$allTargets = @('Ssms22')
 if ($Targets -and $Targets.Count -gt 0) {
     $buildTargets = $Targets
 } else {

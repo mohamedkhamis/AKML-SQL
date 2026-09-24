@@ -10,7 +10,7 @@ namespace AkmlSql.Web.Tests.Styles;
 
 /// <summary>
 /// SQL Prompt styles in the web edition: kept in the browser when no engine is paired, and on the
-/// paired engine (the styles SSMS and Visual Studio use) when one is.
+/// paired engine (the styles SSMS uses) when one is.
 /// </summary>
 public sealed class SqlPromptStyleStoreTests
 {
@@ -102,7 +102,7 @@ public sealed class SqlPromptStyleStoreTests
         Assert.True(khamis.GetBool("lists.placeCommasBeforeItems"));
     }
 
-    // ── engine (shared with SSMS / Visual Studio) ────────────────────────────
+    // ── engine (shared with SSMS) ────────────────────────────
 
     [Fact]
     public async Task With_an_engine_new_styles_are_saved_on_the_engine()

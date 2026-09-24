@@ -3,8 +3,8 @@
 .SYNOPSIS
     AKML-SQL full build script. Builds all projects and produces the installer EXE.
 .DESCRIPTION
-    Builds Core, Formatting, Engine, Updater, Formatter CLI, the SSMS 22 and
-    VS 2026 shell extensions, runs tests, and compiles the Inno Setup installer.
+    Builds Core, Formatting, Engine, Updater, Formatter CLI, the SSMS 22 shell
+    extension, runs tests, and compiles the Inno Setup installer.
 .PARAMETER SkipTests
     Skip running unit tests.
 .PARAMETER SkipShell
@@ -129,13 +129,9 @@ function Invoke-Build([string]$Description, [scriptblock]$Command) {
 function Build-Shell([string]$Project) {
     $Name = [System.IO.Path]::GetFileNameWithoutExtension($Project)
     Invoke-Build "Shell: $Name" {
-        # Clean obj/bin first. The SSMS22 + VS2026 shell builds otherwise cross-
-        # contaminate via STALE VSCT state: a non-clean obj makes one project's
-        # MergeWithCTO read the OTHER project's CTO (VSSDK1307 "Could not read cto
-        # data from ...AkmlSql<other>.cto" — the contamination CLAUDE.md warns
-        # about; node reuse is NOT the cause — disabling it does not help, and the
-        # failing direction flips run-to-run). A clean obj/bin makes each project's
-        # VSCT compile resolve its OWN .cto. (-nodeReuse:false kept as cheap insurance.)
+        # Clean obj/bin first: stale VSCT state in obj makes MergeWithCTO read a stale
+        # CTO (VSSDK1307 "Could not read cto data" — see CLAUDE.md, Build Gotchas).
+        # (-nodeReuse:false kept as cheap insurance.)
         $ProjDir = Split-Path -Parent "$Root\$Project"
         Remove-Item -Recurse -Force "$ProjDir\obj","$ProjDir\bin" -ErrorAction SilentlyContinue
         & $MSBuild "$Root\$Project" -t:Restore -p:Configuration=$Configuration -p:Version=$Version -v:quiet -nologo -nodeReuse:false
@@ -244,7 +240,6 @@ Invoke-Build "Web edition (publish)" {
 # --- Shell extensions (MSBuild, one at a time) ---
 if (-not $SkipShell) {
     Build-Shell "src\AkmlSql.Ssms22\AkmlSql.Ssms22.csproj"
-    Build-Shell "src\AkmlSql.VS2026\AkmlSql.VS2026.csproj"
 }
 
 # --- Tests ---

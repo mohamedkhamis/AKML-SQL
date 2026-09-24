@@ -2343,7 +2343,7 @@ namespace AkmlSql.Shell.Shared.Formatting
 
         /// <summary>
         /// Best-effort capture of the active editor's full text via DTE (spec 030 T019 / FR-008).
-        /// Works in both SSMS 22 and VS 2026 (Pattern B — DTE.ActiveDocument, not IVsTextManager
+        /// Works in SSMS 22 (Pattern B — DTE.ActiveDocument, not IVsTextManager
         /// which is unreliable outside a command Execute). Returns null when there is no active
         /// SQL document.
         /// </summary>

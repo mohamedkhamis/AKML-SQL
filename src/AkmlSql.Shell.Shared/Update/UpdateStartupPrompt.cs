@@ -11,7 +11,7 @@ using Constants = AkmlSql.Core.Constants;
 namespace AkmlSql.Shell.Shared.Update
 {
     /// <summary>
-    /// Offers a downloaded update once, when SSMS or Visual Studio starts.
+    /// Offers a downloaded update once, when SSMS starts.
     /// <para>
     /// The scheduled task (and the IDE's own 24-hour check) download and verify updates in the
     /// background, but until now nothing ever read the result: the user only learned about an
@@ -85,7 +85,7 @@ namespace AkmlSql.Shell.Shared.Update
                 return;
             }
 
-            // Recorded BEFORE showing, so SSMS and Visual Studio started together offer it once.
+            // Recorded BEFORE showing, so two SSMS windows started together offer it once.
             result!.ShellPromptedAt = DateTimeOffset.UtcNow;
             UpdateResultStore.SaveAtomic(result, Constants.UpdateResultFilePath);
 

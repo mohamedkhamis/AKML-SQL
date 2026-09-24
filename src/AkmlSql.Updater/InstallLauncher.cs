@@ -16,7 +16,7 @@ namespace AkmlSql.Updater
     /// it. It therefore carries no data: the only installer ever launched is the one a previous
     /// run downloaded into this user's own update cache and verified against the manifest hash,
     /// and it is verified again right before launch. It runs with its normal UI, so Windows' admin
-    /// prompt and the installer's own "close SSMS/Visual Studio" step still stand between a click
+    /// prompt and the installer's own "close SSMS" step still stand between a click
     /// and any change.
     /// </para>
     /// </summary>

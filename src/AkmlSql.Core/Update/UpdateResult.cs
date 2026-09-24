@@ -56,7 +56,7 @@ namespace AkmlSql.Core.Update
         public DateTimeOffset? NotifiedAt { get; set; }
 
         /// <summary>
-        /// When SSMS or Visual Studio last offered to install this downloaded version at startup.
+        /// When SSMS last offered to install this downloaded version at startup.
         /// The IDE prompts once per version; after "Later" the offer stays reachable from
         /// Check for Updates. <c>null</c> until then.
         /// </summary>

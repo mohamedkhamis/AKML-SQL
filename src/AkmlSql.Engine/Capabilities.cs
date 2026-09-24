@@ -34,7 +34,7 @@ namespace AkmlSql.Engine
         /// <summary>
         /// SQL Prompt styles: the engine lists, reads (<c>ProfileGetResponse.SqlPromptJson</c>),
         /// saves and previews styles written in SQL Prompt's model, stored in the same styles
-        /// folder SSMS and Visual Studio use. The web edition saves its styles through the engine
+        /// folder SSMS uses. The web edition saves its styles through the engine
         /// when this is advertised.
         /// </summary>
         public const string StylesSqlPromptV1 = "styles.sqlprompt.v1";

@@ -31,7 +31,7 @@ namespace AkmlSql.Engine.Pairing
     /// </list>
     ///
     /// <para>
-    /// Requests over the named pipe come from the SSMS / Visual Studio extension running as the
+    /// Requests over the named pipe come from the SSMS extension running as the
     /// signed-in user, where Windows authentication to a remote server is the normal, intended
     /// case -- they are not checked.
     /// </para>

@@ -1,7 +1,8 @@
 ; ============================================================================
 ; AKML SQL - Environment Scanner
-; Detects SSMS 22 and Visual Studio 2026 installations
-; Uses vswhere.exe for reliable detection with filesystem fallbacks
+; Detects SSMS 22 installations (vswhere.exe first, then registry / filesystem fallbacks).
+; Also finds the AKML SQL extension that earlier releases installed into Visual Studio 2026, so
+; setup can remove it: Visual Studio is no longer supported.
 ; ============================================================================
 
 [Code]
@@ -22,6 +23,9 @@ type
 var
   Targets: array of TTargetInfo;
   TargetCount: Integer;
+  // <VS root>\Common7\IDE\Extensions\AkmlSql folders left by releases that supported VS 2026.
+  LegacyVSExtDirs: array of String;
+  LegacyVSExtCount: Integer;
   EnvPage: TWizardPage;
   EnvCheckListBox: TNewCheckListBox;
 
@@ -57,8 +61,57 @@ begin
   TargetCount := TargetCount + 1;
 end;
 
+// --- Old Visual Studio 2026 extension (removed on install) ---
+
+procedure AddLegacyVSExtension(VSRoot: String);
+var
+  Dir: String;
+  I: Integer;
+begin
+  if (VSRoot = '') or (Pos('BuildTools', VSRoot) > 0) then
+    Exit;
+  Dir := RemoveBackslashUnlessRoot(VSRoot) + '\Common7\IDE\Extensions\AkmlSql';
+  if not DirExists(Dir) then
+    Exit;
+  for I := 0 to LegacyVSExtCount - 1 do
+    if CompareText(LegacyVSExtDirs[I], Dir) = 0 then
+      Exit;
+  SetArrayLength(LegacyVSExtDirs, LegacyVSExtCount + 1);
+  LegacyVSExtDirs[LegacyVSExtCount] := Dir;
+  LegacyVSExtCount := LegacyVSExtCount + 1;
+  Log('Found the old AKML SQL extension for Visual Studio 2026: ' + Dir);
+end;
+
+// Filesystem fallback for anything vswhere missed: every edition folder under
+// Microsoft Visual Studio\2026\ and \18\ (Enterprise, Professional, Community, Preview, Insiders).
+procedure DetectLegacyVSExtensionsFallback;
+var
+  Bases: array of String;
+  B: Integer;
+  FindRec: TFindRec;
+begin
+  SetArrayLength(Bases, 2);
+  Bases[0] := ExpandConstant('{commonpf64}') + '\Microsoft Visual Studio\2026\';
+  Bases[1] := ExpandConstant('{commonpf64}') + '\Microsoft Visual Studio\18\';
+  for B := 0 to GetArrayLength(Bases) - 1 do
+  begin
+    if FindFirst(Bases[B] + '*', FindRec) then
+    begin
+      try
+        repeat
+          if ((FindRec.Attributes and FILE_ATTRIBUTE_DIRECTORY) <> 0)
+             and (FindRec.Name <> '.') and (FindRec.Name <> '..') then
+            AddLegacyVSExtension(Bases[B] + FindRec.Name);
+        until not FindNext(FindRec);
+      finally
+        FindClose(FindRec);
+      end;
+    end;
+  end;
+end;
+
 // --- vswhere-based detection ---
-// Queries vswhere.exe and parses output to detect all VS/SSMS instances
+// Queries vswhere.exe: finds SSMS 22, and Visual Studio 2026 instances still carrying the old extension
 
 procedure DetectViaVSWhere;
 var
@@ -109,13 +162,9 @@ begin
           Line + '\Common7\IDE\Extensions\AkmlSql', True, '');
     end
 
-    // Detect VS 2026 (x64) — uses folder name \18\ or \2026\
+    // Visual Studio 2026 (folder \18\ or \2026\) is not a target any more; only its old extension matters
     else if (Pos('\18\', Line) > 0) or (Pos('\2026\', Line) > 0) then
-    begin
-      if (Pos('BuildTools', Line) = 0) and DirExists(Line + '\Common7\IDE') then
-        AddTarget('VS 2026', '2026', 'x64', Line,
-          Line + '\Common7\IDE\Extensions\AkmlSql', True, '');
-    end;
+      AddLegacyVSExtension(Line);
   end;
 
   DeleteFile(TmpFile);
@@ -157,39 +206,6 @@ begin
   end;
 end;
 
-// --- VS 2026 Detection (filesystem fallback) ---
-
-procedure DetectVisualStudioFallback;
-var
-  VSPath: String;
-begin
-  // VS 2026 fallback — can be under \2026\ or \18\
-  if not TargetAlreadyAdded('2026') then
-  begin
-    VSPath := '';
-    if DirExists(ExpandConstant('{pf}') + '\Microsoft Visual Studio\2026\Enterprise') then
-      VSPath := ExpandConstant('{pf}') + '\Microsoft Visual Studio\2026\Enterprise'
-    else if DirExists(ExpandConstant('{pf}') + '\Microsoft Visual Studio\2026\Professional') then
-      VSPath := ExpandConstant('{pf}') + '\Microsoft Visual Studio\2026\Professional'
-    else if DirExists(ExpandConstant('{pf}') + '\Microsoft Visual Studio\2026\Community') then
-      VSPath := ExpandConstant('{pf}') + '\Microsoft Visual Studio\2026\Community'
-    else if DirExists(ExpandConstant('{pf}') + '\Microsoft Visual Studio\2026\Preview') then
-      VSPath := ExpandConstant('{pf}') + '\Microsoft Visual Studio\2026\Preview'
-    else if DirExists(ExpandConstant('{pf}') + '\Microsoft Visual Studio\18\Enterprise') then
-      VSPath := ExpandConstant('{pf}') + '\Microsoft Visual Studio\18\Enterprise'
-    else if DirExists(ExpandConstant('{pf}') + '\Microsoft Visual Studio\18\Professional') then
-      VSPath := ExpandConstant('{pf}') + '\Microsoft Visual Studio\18\Professional'
-    else if DirExists(ExpandConstant('{pf}') + '\Microsoft Visual Studio\18\Community') then
-      VSPath := ExpandConstant('{pf}') + '\Microsoft Visual Studio\18\Community'
-    else if DirExists(ExpandConstant('{pf}') + '\Microsoft Visual Studio\18\Preview') then
-      VSPath := ExpandConstant('{pf}') + '\Microsoft Visual Studio\18\Preview';
-
-    if VSPath <> '' then
-      AddTarget('VS 2026', '2026', 'x64', VSPath,
-        VSPath + '\Common7\IDE\Extensions\AkmlSql', True, '');
-  end;
-end;
-
 // --- Running IDE Detection ---
 
 function IsProcessRunning(ExeName: String): Boolean;
@@ -225,10 +241,7 @@ var
 begin
   for I := 0 to TargetCount - 1 do
   begin
-    if Pos('SSMS', Targets[I].Name) > 0 then
-      Targets[I].IsRunning := IsProcessRunning('Ssms.exe') or IsProcessRunning('SSMS.exe')
-    else
-      Targets[I].IsRunning := IsProcessRunning('devenv.exe');
+    Targets[I].IsRunning := IsProcessRunning('Ssms.exe') or IsProcessRunning('SSMS.exe');
   end;
 end;
 
@@ -238,11 +251,13 @@ procedure RunFullScan;
 begin
   TargetCount := 0;
   SetArrayLength(Targets, 0);
-  // Primary: vswhere-based detection (finds VS and SSMS 22)
+  LegacyVSExtCount := 0;
+  SetArrayLength(LegacyVSExtDirs, 0);
+  // Primary: vswhere-based detection (finds SSMS 22, and old VS 2026 extensions)
   DetectViaVSWhere;
-  // Fallback: filesystem detection for anything vswhere missed
+  // Fallback: registry / filesystem detection for anything vswhere missed
   DetectSSMS22;
-  DetectVisualStudioFallback;
+  DetectLegacyVSExtensionsFallback;
   CheckRunningIDEs;
 end;
 
@@ -319,10 +334,8 @@ end;
 // --- Check functions for [Files] section ---
 
 function CheckSSMS22: Boolean; begin Result := IsTargetSelected('22'); end;
-function CheckVS2026: Boolean; begin Result := IsTargetSelected('2026'); end;
 
 function GetSSMS22ExtDir(Param: String): String; begin Result := GetTargetExtPath('22'); end;
-function GetVS2026ExtDir(Param: String): String; begin Result := GetTargetExtPath('2026'); end;
 
 // --- Silent Mode /TARGETS Parsing ---
 
@@ -339,12 +352,9 @@ begin
   for I := 0 to TargetCount - 1 do
     Targets[I].IsSelected := False;
 
-  // Select only specified targets
+  // Select only specified targets. "vs2026" (from older deployment scripts) is accepted and
+  // ignored: Visual Studio is no longer supported.
   if Pos('ssms22', LowerCase(TargetsParam)) > 0 then
     for I := 0 to TargetCount - 1 do
       if Targets[I].Version = '22' then Targets[I].IsSelected := True;
-
-  if Pos('vs2026', LowerCase(TargetsParam)) > 0 then
-    for I := 0 to TargetCount - 1 do
-      if Targets[I].Version = '2026' then Targets[I].IsSelected := True;
 end;

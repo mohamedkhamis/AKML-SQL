@@ -5,7 +5,7 @@ namespace AkmlSql.Formatting.SqlPrompt;
 /// <summary>
 /// Moves styles between SQL Prompt's model (<see cref="SqlPromptStyleDocument"/>) and the stored
 /// <c>.akmlstyle</c> (<see cref="FormattingProfile"/>). One place for the rules, shared by the
-/// engine (SSMS / Visual Studio) and the web edition, so a style saved by one reads the same in
+/// engine (SSMS) and the web edition, so a style saved by one reads the same in
 /// the other.
 /// </summary>
 public static class SqlPromptStyles

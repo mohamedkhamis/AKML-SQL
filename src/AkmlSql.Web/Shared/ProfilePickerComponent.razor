@@ -19,7 +19,7 @@
         {
             @if (_profiles.Any(p => p.Location == ProfileLocation.Engine))
             {
-                <optgroup label="Shared with SSMS / VS">
+                <optgroup label="Shared with SSMS">
                     @foreach (var p in _profiles.Where(p => p.Location == ProfileLocation.Engine))
                     {
                         <option value="@p.Id">@p.Name</option>

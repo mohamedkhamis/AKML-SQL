@@ -426,7 +426,7 @@ namespace AkmlSql.Shell.Shared.Editor
         /// window, so the user never re-types a password SSMS has. Reads
         /// <c>ScriptFactory.Instance.CurrentlyActiveWndConnectionInfo.UIConnectionInfo.Password</c>
         /// entirely by reflection — there is NO compile-time dependency on SSMS assemblies, so this is
-        /// a silent no-op on VS 2026 / older SSMS where the types or the active connection are absent
+        /// a silent no-op on older SSMS where the types or the active connection are absent
         /// (the caller then falls back to the stored credential, then the prompt). The password is
         /// returned ONLY when the active connection's server + login match the window being wired, so
         /// one window's credential is never handed to another window's engine session.

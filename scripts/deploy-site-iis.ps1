@@ -119,7 +119,7 @@ try {
                 Copy-Item $ReleaseExe (Join-Path $DownloadsPath $fileName) -Force
                 $sha = (Get-FileHash $ReleaseExe -Algorithm SHA256).Hash.ToLower()
                 $sizeMb = [math]::Round((Get-Item $ReleaseExe).Length / 1MB, 2)
-                $notes = if (-not [string]::IsNullOrWhiteSpace($NotesSummary)) { $NotesSummary } else { "AKML SQL $version installer for SSMS 22 and Visual Studio 2026 ($sizeMb MB)." }
+                $notes = if (-not [string]::IsNullOrWhiteSpace($NotesSummary)) { $NotesSummary } else { "AKML SQL $version installer for SQL Server Management Studio 22 ($sizeMb MB)." }
 
                 # CDN upload (GitHub Releases = free binary CDN). Non-fatal: on any failure the
                 # site keeps serving the file from /dl locally. -SkipCdn disables.
@@ -167,7 +167,7 @@ try {
                 $entry = [PSCustomObject]@{
                     version          = $version
                     releasedAt       = (Get-Date).ToString('yyyy-MM-dd')
-                    supportedHosts   = @('SSMS 22', 'VS 2026')
+                    supportedHosts   = @('SSMS 22')
                     downloadUrl      = "downloads/$fileName"
                     sha256Hash       = $sha
                     releaseNotesUrl  = 'https://github.com/mohamedkhamis/AKML-SQL/releases'

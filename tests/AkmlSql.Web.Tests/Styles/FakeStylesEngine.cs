@@ -14,7 +14,7 @@ namespace AkmlSql.Web.Tests.Styles;
 /// <summary>
 /// A paired engine's styles folder, answering the profile messages the way the engine's
 /// FormatRequestHandler does (list / get with the SQL Prompt document / save / delete / rename /
-/// reset), so the web store can be tested against "the styles SSMS and Visual Studio use".
+/// reset), so the web store can be tested against "the styles SSMS uses".
 /// </summary>
 internal sealed class FakeStylesEngine : IEngineBridge
 {

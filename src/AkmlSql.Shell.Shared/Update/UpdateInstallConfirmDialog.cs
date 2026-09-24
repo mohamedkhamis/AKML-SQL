@@ -148,20 +148,13 @@ namespace AkmlSql.Shell.Shared.Update
             });
             stack.Children.Add(new TextBlock
             {
-                Text = "The following applications must close during the installation — save your work in them first:",
+                // AkmlSqlSetup.iss CloseApplicationsFilter: Ssms.exe
+                Text = "SQL Server Management Studio closes during the installation — save your work in it first.",
                 TextWrapping = TextWrapping.Wrap,
                 FontSize = 12.5,
                 Foreground = _chromeFgBrush,
                 LineHeight = 18,
                 Margin = new Thickness(0, 0, 0, 6)
-            });
-            // AkmlSqlSetup.iss CloseApplicationsFilter: Ssms.exe,devenv.exe
-            stack.Children.Add(new TextBlock
-            {
-                Text = "   •  SQL Server Management Studio\n   •  Visual Studio",
-                FontSize = 12.5,
-                Foreground = _chromeFgBrush,
-                LineHeight = 18
             });
 
             return new Border

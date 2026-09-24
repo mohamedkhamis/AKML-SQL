@@ -4,7 +4,7 @@
     option names / values as SQL Prompt's own "Edit formatting styles" window, with a live
     preview that reformats on every change and marks the lines that moved.
 
-    Styles are saved to the paired engine when it has one (the styles SSMS and Visual Studio
+    Styles are saved to the paired engine when it has one (the styles SSMS
     use), otherwise in this browser. SQL Prompt .json styles import and export unchanged.
 *@
 @using System.Text
@@ -24,7 +24,7 @@
     <div class="akml-styles-header">
         <h2>Format styles</h2>
         <span class="akml-styles-where" data-testid="styles-location">
-            @(Store.EngineStylesAvailable ? "New styles are saved on the engine, shared with SSMS and Visual Studio." : "No engine paired: styles are saved in this browser.")
+            @(Store.EngineStylesAvailable ? "New styles are saved on the engine, shared with SSMS." : "No engine paired: styles are saved in this browser.")
         </span>
         <span class="akml-styles-spacer"></span>
         <button class="akml-tool-button" @onclick="NewStyleAsync" data-testid="style-new">New</button>
@@ -323,7 +323,7 @@
         var browserBuiltIn = _styles.Where(s => s.Location == ProfileLocation.Browser && s.Origin == ProfileOrigin.BuiltIn).ToList();
         var browserMine = _styles.Where(s => s.Location == ProfileLocation.Browser && s.Origin != ProfileOrigin.BuiltIn).ToList();
         var engine = _styles.Where(s => s.Location == ProfileLocation.Engine).ToList();
-        if (engine.Count > 0) yield return ("Shared with SSMS / VS", engine);
+        if (engine.Count > 0) yield return ("Shared with SSMS", engine);
         if (browserBuiltIn.Count > 0) yield return ("Built-in", browserBuiltIn);
         if (browserMine.Count > 0) yield return ("In this browser", browserMine);
     }
@@ -640,7 +640,7 @@
     }
 
     private static string Where(ProfileRecord record) =>
-        record.Location == ProfileLocation.Engine ? " on the engine (shared with SSMS and Visual Studio)" : " in this browser";
+        record.Location == ProfileLocation.Engine ? " on the engine (shared with SSMS)" : " in this browser";
 
     private void SetStatus(string? text, bool error = false)
     {

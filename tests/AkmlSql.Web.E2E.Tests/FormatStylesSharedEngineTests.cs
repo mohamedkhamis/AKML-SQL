@@ -10,8 +10,8 @@ using Xunit.Abstractions;
 namespace AkmlSql.Web.E2E.Tests;
 
 /// <summary>
-/// "Shared with SSMS / VS": a style saved on the web Format styles page while an engine is paired
-/// lands in that engine's styles folder — the folder SSMS and Visual Studio read — as a SQL Prompt
+/// "Shared with SSMS": a style saved on the web Format styles page while an engine is paired
+/// lands in that engine's styles folder — the folder SSMS reads — as a SQL Prompt
 /// style, and edits saved from the web update the same file.
 ///
 /// <para>The engine is the one built from this working tree (Debug), started in web mode on a free
@@ -139,7 +139,7 @@ public sealed class FormatStylesSharedEngineTests(ITestOutputHelper output)
         // The Format styles page now saves on the engine and lists its styles.
         await page.ClickAsync("nav >> text=Format styles");
         await Assertions.Expect(page.Locator("[data-testid=styles-location]")).ToContainTextAsync("engine", new() { Timeout = 30_000 });
-        await Assertions.Expect(page.Locator(".akml-styles-group", new() { HasTextString = "Shared with SSMS / VS" })).ToBeVisibleAsync();
+        await Assertions.Expect(page.Locator(".akml-styles-group", new() { HasTextString = "Shared with SSMS" })).ToBeVisibleAsync();
 
         await page.Locator("[data-testid=style-new]").ClickAsync();
         await Assertions.Expect(page.Locator("[data-testid=style-name]")).ToHaveTextAsync("Shared E2E");

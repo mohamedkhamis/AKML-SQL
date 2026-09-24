@@ -85,7 +85,7 @@ public static class SqlPromptOptionCatalog
 
     /// <summary>
     /// Version of the catalog as served to style editors that cannot load this library (the
-    /// SSMS / Visual Studio shells). Bump when an option, label or allowed value changes.
+    /// SSMS shell). Bump when an option, label or allowed value changes.
     /// Kept apart from the AKML settings schema's versions so a cached copy of one is never
     /// mistaken for the other.
     /// </summary>
@@ -96,7 +96,7 @@ public static class SqlPromptOptionCatalog
     public const string EditorIdPrefix = "sqlPrompt.";
 
     /// <summary>
-    /// The catalog in the shape the SSMS / Visual Studio Format Styles window renders (the
+    /// The catalog in the shape the SSMS Format Styles window renders (the
     /// spec-033 settings schema: <c>groups</c> with <c>parentId</c> categories, <c>settings</c>
     /// with <c>type</c>/<c>default</c>/<c>allowedEnumValues</c>), plus <c>"model":"sqlPrompt"</c>
     /// and the extras SQL Prompt's editor shows: value labels, notes, sub-headings, which option

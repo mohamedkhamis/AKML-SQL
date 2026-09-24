@@ -71,7 +71,7 @@ namespace AkmlSql.Updater
                 $"<toast launch=\"{scheme}:{DetailsArgument}\" activationType=\"protocol\">" +
                 "<visual><binding template=\"ToastGeneric\">" +
                 $"<text>AKML SQL {Escape(version)} is ready to install</text>" +
-                "<text>The update has been downloaded and checked. Installing closes SSMS and Visual Studio if they are open.</text>" +
+                "<text>The update has been downloaded and checked. Installing closes SSMS if it is open.</text>" +
                 "</binding></visual>" +
                 "<actions>" +
                 $"<action content=\"Install now\" activationType=\"protocol\" arguments=\"{scheme}:{InstallArgument}\"/>" +

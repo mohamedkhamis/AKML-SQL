@@ -2,7 +2,7 @@
 <#
 .SYNOPSIS
     Resolve $version$ tokens in the source.extension.vsixmanifest files for the
-    supported hosts (SSMS 22, VS 2026) and write the resolved copies to
+    supported host (SSMS 22) and write the resolved copy to
     src/AkmlSql.Installer/generated/<Target>/extension.vsixmanifest — consumed
     by AkmlSqlSetup.iss [Files] entries.
 
@@ -27,7 +27,7 @@ $InstallerDir = $PSScriptRoot                        # …/src/AkmlSql.Installer
 $SrcRoot      = Split-Path -Parent $InstallerDir     # …/src
 
 $targets = @(
-    'AkmlSql.Ssms22', 'AkmlSql.VS2026'
+    'AkmlSql.Ssms22'
 )
 
 foreach ($t in $targets) {

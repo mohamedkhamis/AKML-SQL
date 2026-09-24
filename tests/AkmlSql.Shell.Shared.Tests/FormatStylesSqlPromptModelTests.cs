@@ -12,7 +12,7 @@ using Xunit;
 namespace AkmlSql.Shell.Shared.Tests
 {
     /// <summary>
-    /// The SSMS / Visual Studio Format Styles window on SQL Prompt's option model: the engine
+    /// The SSMS Format Styles window on SQL Prompt's option model: the engine
     /// serves SQL Prompt's pages and options (<c>"model":"sqlPrompt"</c>), a style loads as its SQL
     /// Prompt document, previews and saves carry that document, and choices show SQL Prompt's
     /// labels while storing Redgate's values.

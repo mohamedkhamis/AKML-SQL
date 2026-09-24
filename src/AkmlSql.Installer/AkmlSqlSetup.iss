@@ -1,6 +1,6 @@
 ; ============================================================================
 ; AKML SQL Installer
-; Wizard-based Windows EXE installer for SSMS 22 and VS 2026
+; Wizard-based Windows EXE installer for SQL Server Management Studio 22
 ; Built with Inno Setup 7
 ; ============================================================================
 ;
@@ -23,7 +23,7 @@
 ;     Install with automatic updates and anonymous error reports turned off.
 ;
 ;   AKMLSQLSetup.exe /VERYSILENT /ACCEPTEULA /FORCECLOSEAPPS
-;     Force-close running SSMS/VS instances before installing. (Redundant in
+;     Force-close running SSMS instances before installing. (Redundant in
 ;     silent mode: silent installs ALWAYS force-close selected running hosts —
 ;     there is no one to answer the prompt, and a still-open IDE respawns the
 ;     engine mid-install, failing the file copy with DeleteFile code 5.)
@@ -34,13 +34,13 @@
 ; Flags:
 ;   /VERYSILENT       No UI, no progress dialog
 ;   /ACCEPTEULA       Accept the EULA (required for silent mode)
-;   /TARGETS=...      Comma-separated target list: ssms22,vs2026
+;   /TARGETS=...      Target list: ssms22 (vs2026 from older scripts is accepted and ignored)
 ;   /LOG[=file]       Write detailed install log (native Inno Setup feature)
 ;   /NOUPDATE         Turn automatic updates off and do not create the update-check scheduled task
 ;   /NOTELEMETRY      Turn anonymous error reports off (they are on by default)
 ;   /TELEMETRY        Turn anonymous error reports on (the default; kept for older scripts)
 ;   A silent UPGRADE keeps the user's existing choices for both unless a flag says otherwise.
-;   /FORCECLOSEAPPS   Force-close running SSMS/VS without prompting (default in silent mode)
+;   /FORCECLOSEAPPS   Force-close running SSMS without prompting (default in silent mode)
 ;   /IMPORTSQLPROMPT  Import SQL Prompt styles (only if SQL Prompt config detected)
 ;
 ; TODO T096: On uninstall, restore native SSMS IntelliSense if AKML SQL disabled it.
@@ -152,13 +152,13 @@ DisableWelcomePage=no
 ; An icon file, not a DLL: AkmlSql.Core.dll carries no icon, so Apps & features showed a blank.
 UninstallDisplayIcon={app}\AKMLSQL.ico
 UninstallDisplayName={#MyAppName}
-; T030: Prompt user to close running SSMS/VS instances before installing.
-; Note: AppMutex is not used because SSMS/VS do not create named mutexes that
+; T030: Prompt user to close running SSMS instances before installing.
+; Note: AppMutex is not used because SSMS does not create named mutexes that
 ; we can reliably detect. CloseApplications with CloseApplicationsFilter is the
 ; correct approach — Inno Setup uses the Windows Restart Manager API to detect
 ; which apps hold locks on files being replaced.
 CloseApplications=yes
-CloseApplicationsFilter=Ssms.exe,devenv.exe
+CloseApplicationsFilter=Ssms.exe
 
 ; --- Code signing (off unless a thumbprint is supplied) ------------------------------
 ; SmartScreen builds reputation from the SIGNATURE, not the download domain: an unsigned
@@ -200,14 +200,10 @@ Source: "..\AkmlSql.Ssms22\bin\Release\net472\*.dll"; DestDir: "{code:GetSSMS22E
 Source: "..\AkmlSql.Ssms22\AkmlSql.Ssms22.pkgdef"; DestDir: "{code:GetSSMS22ExtDir}"; Check: CheckSSMS22; Flags: ignoreversion
 Source: "generated\AkmlSql.Ssms22\extension.vsixmanifest"; DestDir: "{code:GetSSMS22ExtDir}"; DestName: "extension.vsixmanifest"; Check: CheckSSMS22; Flags: ignoreversion
 
-; VS 2026 (x64) extension files
-Source: "..\AkmlSql.VS2026\bin\Release\net472\*.dll"; DestDir: "{code:GetVS2026ExtDir}"; Check: CheckVS2026; Flags: ignoreversion
-Source: "..\AkmlSql.VS2026\AkmlSql.VS2026.pkgdef"; DestDir: "{code:GetVS2026ExtDir}"; Check: CheckVS2026; Flags: ignoreversion
-Source: "generated\AkmlSql.VS2026\extension.vsixmanifest"; DestDir: "{code:GetVS2026ExtDir}"; DestName: "extension.vsixmanifest"; Check: CheckVS2026; Flags: ignoreversion
 
 [Icons]
-; "Settings" pointed at AkmlSql.Core.dll, which cannot be opened -- settings live inside SSMS / Visual
-; Studio (Tools > AKML SQL > Options). The update shortcut's AppUserModelID is what lets the updater
+; "Settings" pointed at AkmlSql.Core.dll, which cannot be opened -- settings live inside SSMS
+; (Tools > AKML SQL > Options). The update shortcut's AppUserModelID is what lets the updater
 ; show Windows notifications at all: an unpackaged app's notifications are attributed through a
 ; Start-menu shortcut carrying its ID. Keep it equal to Constants.AppUserModelId.
 Name: "{group}\Check for {#MyAppName} updates"; Filename: "{app}\AkmlSql.Updater.exe"; Parameters: "--check-now"; \
@@ -256,7 +252,6 @@ Name: "importsqlprompt"; Description: "Import formatting styles from &SQL Prompt
 [UninstallDelete]
 ; Clean up extension directories for selected targets only
 Type: filesandordirs; Name: "{code:GetSSMS22ExtDir}"; Check: CheckSSMS22
-Type: filesandordirs; Name: "{code:GetVS2026ExtDir}"; Check: CheckVS2026
 ; An install taken over from the 32-bit installer starts a fresh uninstall log, which does not
 ; record that {app} was created (it already existed) -- without these the folder, and any file
 ; only an old version installed, would be left behind.
@@ -653,7 +648,7 @@ begin
   PopulateEnvCheckList;
   EnvCheckListBox.OnClickCheck := @EnvCheckListBoxClickCheck;
 
-  // No SSMS 22 / Visual Studio 2026: say so, and let the web edition be installed on its own
+  // No SSMS 22: say so, and let the web edition be installed on its own
   // (this page used to refuse to continue with nothing ticked, so a server could never get it).
   EnvEmptyLabel := TNewStaticText.Create(EnvPage);
   EnvEmptyLabel.Parent := EnvPage.Surface;
@@ -668,11 +663,11 @@ begin
     EnvCheckListBox.Visible := False;
     EnvEmptyLabel.Top := 0;
     EnvEmptyLabel.Height := ScaleY(60);
-    EnvEmptyLabel.Caption := 'SQL Server Management Studio 22 and Visual Studio 2026 were not found on this computer.' + #13#10 + #13#10 +
-      'You can still install the AKML SQL web edition. Install SSMS 22 or Visual Studio 2026 first and run setup again to add AKML SQL to them.';
+    EnvEmptyLabel.Caption := 'SQL Server Management Studio 22 was not found on this computer.' + #13#10 + #13#10 +
+      'You can still install the AKML SQL web edition. Install SSMS 22 first and run setup again to add AKML SQL to it.';
   end
   else
-    EnvEmptyLabel.Caption := 'Untick a tool to leave it out. With none ticked, only the web edition is installed.';
+    EnvEmptyLabel.Caption := 'AKML SQL works in SQL Server Management Studio 22. Untick it to install only the web edition.';
 
   // Options page. Error reports are on by default for a new install; an upgrade shows the user's
   // current choices (from their config.json), so nothing changes unless they change it.
@@ -681,7 +676,7 @@ begin
   OptionsPage := CreateInputOptionPage(wpSelectTasks,
     'Updates and error reports',
     'Keep AKML SQL current and help fix what goes wrong.',
-    'You can change both later in SSMS or Visual Studio: Tools > AKML SQL > Options > General.',
+    'You can change both later in SSMS: Tools > AKML SQL > Options > General.',
     False, False);
   OptionsPage.Add('Check for updates automatically, and download them in the background');
   OptionsPage.Add('Send anonymous error reports (recommended)');
@@ -852,7 +847,7 @@ begin
     if not AnySelected and not IsWebSelected() then
     begin
       MsgBox('There is nothing to install.' + #13#10 + #13#10 +
-        'Tick the web edition here, or go back and choose SQL Server Management Studio or Visual Studio.',
+        'Tick the web edition here, or go back and choose SQL Server Management Studio 22.',
         mbError, MB_OK);
       Result := False;
     end;
@@ -952,6 +947,29 @@ begin
   end;
 end;
 
+// Releases before SSMS-only shipped an extension for Visual Studio 2026. It is removed so VS stops
+// loading a copy that no longer matches the engine (and stops starting that engine, which would keep
+// {app}\Engine locked on the next upgrade). PrepareToInstall has already closed Visual Studio.
+procedure RemoveLegacyVSExtensions;
+var
+  I: Integer;
+begin
+  if LegacyVSExtCount = 0 then
+    Exit;
+  for I := 0 to LegacyVSExtCount - 1 do
+  begin
+    DelTree(LegacyVSExtDirs[I], True, True, True);
+    if DirExists(LegacyVSExtDirs[I]) then
+      Log('WARNING: could not fully remove the old Visual Studio extension: ' + LegacyVSExtDirs[I])
+    else
+      Log('Removed the old Visual Studio extension: ' + LegacyVSExtDirs[I]);
+    // Tell Visual Studio its extension set changed.
+    SaveStringToFile(ExtractFilePath(RemoveBackslashUnlessRoot(LegacyVSExtDirs[I])) + 'extensions.configurationchanged',
+      GetDateTimeString('yyyy-mm-dd hh:nn:ss', #0, #0), False);
+  end;
+  ClearVSMefCaches('18.0');
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   I: Integer;
@@ -960,7 +978,10 @@ var
   ResultCode: Integer;
 begin
   if CurStep = ssInstall then
+  begin
     MigrateLegacy32BitInstall;
+    RemoveLegacyVSExtensions;
+  end;
 
   if CurStep = ssPostInstall then
   begin
@@ -976,12 +997,6 @@ begin
       ClearSSMSMefCaches('21.0');
     if IsTargetSelected('22') then
       ClearSSMSMefCaches('22.0');
-    if IsTargetSelected('2019') then
-      ClearVSMefCaches('16.0');
-    if IsTargetSelected('2022') then
-      ClearVSMefCaches('17.0');
-    if IsTargetSelected('2026') then
-      ClearVSMefCaches('18.0');
 
     Log('MEF caches cleared.');
 
@@ -1006,8 +1021,8 @@ begin
     ConfigDir := ExpandConstant('{userappdata}') + '\AKML SQL';
     ForceDirectories(ConfigDir + '\logs');
 
-    // The update this run just installed is no longer "ready": without this, SSMS / Visual Studio
-    // would offer to install the version already running.
+    // The update this run just installed is no longer "ready": without this, SSMS would offer to
+    // install the version already running.
     DeleteFile(ConfigDir + '\update-available.json');
 
     // T034: Stage SQL Prompt styles for engine import if user opted in
@@ -1094,9 +1109,6 @@ begin
     ClearSSMSMefCaches('20.0');
     ClearSSMSMefCaches('21.0');
     ClearSSMSMefCaches('22.0');
-    ClearVSMefCaches('16.0');
-    ClearVSMefCaches('17.0');
-    ClearVSMefCaches('18.0');
 
     // Ask about settings/log removal. SQL history, snippets and saved styles are ALWAYS kept —
     // see RemoveSettingsPreservingUserData (an upgrade's silent uninstall would otherwise default
@@ -1132,7 +1144,7 @@ end;
 
 // The AKML engine/updater/analyzer are HEADLESS out-of-process helpers deployed under {app}.
 // The engine in particular is spawned by the shell but OUTLIVES it — it can linger as an orphan
-// after SSMS/VS close — keeping Engine\*.dll memory-mapped. If any is still alive when Inno starts
+// after SSMS closes — keeping Engine\*.dll memory-mapped. If any is still alive when Inno starts
 // copying files, replacement fails with "DeleteFile failed; code 5. Access is denied." They hold no
 // user state, so terminate them silently. MUST run AFTER the IDE hosts are closed: a live shell
 // would otherwise immediately respawn the engine and re-lock the files.
@@ -1195,23 +1207,20 @@ begin
   RunningList := '';
   KillSsms := False;
   KillDevenv := False;
-  // Silent installs (the SSMS/VS "Check for updates" flow runs the installer with its normal UI,
+  // Silent installs (the SSMS "Check for updates" flow runs the installer with its normal UI,
   // but unattended /VERYSILENT deploys have no one to answer either) cannot show the close-apps
-  // prompt below — and skipping the close is fatal: a still-running SSMS/VS shell RESPAWNS the
+  // prompt below — and skipping the close is fatal: a still-running SSMS RESPAWNS the
   // engine the moment TerminateAkmlBackgroundProcesses kills it, re-locking Engine\*.dll so the
   // file copy dies with "DeleteFile failed; code 5". Force-close the selected running hosts in
   // silent mode, exactly as /FORCECLOSEAPPS does interactively-by-request.
   ForceClose := (ExpandConstant('{param:FORCECLOSEAPPS|}') <> '') or WizardSilent;
 
-  // First pass: flag WHICH IDE families need closing (selected + running only).
+  // First pass: flag WHICH hosts need closing (selected + running only).
   for I := 0 to TargetCount - 1 do
   begin
     if Targets[I].IsSelected and Targets[I].IsRunning then
     begin
-      if Pos('SSMS', Targets[I].Name) > 0 then
-        KillSsms := True
-      else
-        KillDevenv := True;
+      KillSsms := True;
 
       if not ForceClose then
       begin
@@ -1219,6 +1228,19 @@ begin
           RunningList := RunningList + ', ';
         RunningList := RunningList + Targets[I].Name;
       end;
+    end;
+  end;
+
+  // Visual Studio is no longer supported, but one still carrying the old AKML SQL extension keeps
+  // starting the engine (locking Engine\*.dll) and holds the extension files setup removes.
+  if (LegacyVSExtCount > 0) and IsProcessRunning('devenv.exe') then
+  begin
+    KillDevenv := True;
+    if not ForceClose then
+    begin
+      if RunningList <> '' then
+        RunningList := RunningList + ', ';
+      RunningList := RunningList + 'Visual Studio (to remove the old AKML SQL extension)';
     end;
   end;
 

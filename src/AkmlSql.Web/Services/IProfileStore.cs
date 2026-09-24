@@ -19,7 +19,7 @@ namespace AkmlSql.Web.Services;
 /// profiles at read time.
 /// <para>
 /// Styles also live on a paired engine: when the engine advertises
-/// <c>styles.sqlprompt.v1</c>, its styles — the same styles folder SSMS and Visual Studio use —
+/// <c>styles.sqlprompt.v1</c>, its styles — the same styles folder SSMS uses —
 /// are listed alongside the browser's (ids <c>engine:&lt;name&gt;</c>) and new styles are saved
 /// there. Without an engine, styles are kept in this browser.
 /// </para>
@@ -62,7 +62,7 @@ public interface IProfileStore
 
     /// <summary>
     /// Saves <paramref name="document"/> over the style <paramref name="id"/> (a built-in gets an
-    /// edited copy that shadows it, like SSMS / Visual Studio), or as a new style when
+    /// edited copy that shadows it, like SSMS), or as a new style when
     /// <paramref name="id"/> is null — on the engine when one is paired, otherwise in this browser.
     /// </summary>
     Task<ProfileRecord> SaveDocumentAsync(string? id, SqlPromptStyleDocument document);
@@ -78,7 +78,7 @@ public interface IProfileStore
 /// interface (can user delete? edit? export?).</summary>
 public sealed record ProfileRecord(string Id, string Name, ProfileOrigin Origin, FormattingProfile Profile)
 {
-    /// <summary>Where the style is kept: this browser, or the paired engine (shared with SSMS / VS).</summary>
+    /// <summary>Where the style is kept: this browser, or the paired engine (shared with SSMS).</summary>
     public ProfileLocation Location { get; init; } = ProfileLocation.Browser;
 
     /// <summary>A built-in style the user has edited (Reset brings the shipped one back).</summary>
@@ -253,7 +253,7 @@ internal sealed class ProfileStore : IProfileStore
         ProfileRecord saved;
         if (id == null)
         {
-            // A new style: shared with SSMS / Visual Studio when an engine is paired.
+            // A new style: shared with SSMS when an engine is paired.
             var existing = await ListAsync().ConfigureAwait(false);
             if (existing.Any(r => string.Equals(r.Name, document.Name, StringComparison.OrdinalIgnoreCase)))
                 throw new InvalidOperationException($"A style named '{document.Name}' already exists.");
@@ -273,7 +273,7 @@ internal sealed class ProfileStore : IProfileStore
         }
         else if (_builtIns.TryGetValue(id, out var builtIn))
         {
-            // An edited copy shadows the built-in, exactly as SSMS / Visual Studio do it.
+            // An edited copy shadows the built-in, exactly as SSMS does it.
             document.Name = builtIn.Name;
             saved = await SaveBrowserAsync(OverridePrefix + id, document, builtIn.Profile, ProfileOrigin.BuiltIn).ConfigureAwait(false)
                 with { Id = id, IsCustomizedBuiltIn = true };
@@ -382,7 +382,7 @@ internal sealed class ProfileStore : IProfileStore
         catch (JsonException) { return null; }
     }
 
-    // ── engine storage (shared with SSMS / Visual Studio) ────────────────────
+    // ── engine storage (shared with SSMS) ────────────────────
 
     private static string EngineName(string id) => id[EnginePrefix.Length..];
 

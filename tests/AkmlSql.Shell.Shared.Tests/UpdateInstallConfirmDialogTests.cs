@@ -32,7 +32,7 @@ namespace AkmlSql.Shell.Shared.Tests
         }
 
         [StaFact]
-        public void Dialog_names_the_version_and_the_applications_that_must_close()
+        public void Dialog_names_the_version_and_the_application_that_must_close()
         {
             var dlg = UpdateInstallConfirmDialog.CreateForUpdate("1.26.0903.0900");
 
@@ -41,7 +41,8 @@ namespace AkmlSql.Shell.Shared.Tests
 
             Assert.Contains("1.26.0903.0900", text);
             Assert.Contains("SQL Server Management Studio", text);
-            Assert.Contains("Visual Studio", text);
+            // Visual Studio is no longer supported, so setup does not close it.
+            Assert.DoesNotContain("Visual Studio", text);
         }
 
         [StaFact]

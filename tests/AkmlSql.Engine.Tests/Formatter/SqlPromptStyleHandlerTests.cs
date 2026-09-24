@@ -9,7 +9,7 @@ using Xunit;
 namespace AkmlSql.Engine.Tests.Formatter;
 
 /// <summary>
-/// SQL Prompt styles through the engine — the styles folder SSMS, Visual Studio and a paired web
+/// SQL Prompt styles through the engine — the styles folder SSMS and a paired web
 /// edition share: import keeps SQL Prompt's document, ProfileGet hands editors the style as a SQL
 /// Prompt document, the Format Styles window gets SQL Prompt's option model, preview formats from
 /// the document, and export writes a .json SQL Prompt imports as it is.
