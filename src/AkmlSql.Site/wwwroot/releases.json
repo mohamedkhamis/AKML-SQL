@@ -1,7 +1,33 @@
 ﻿{
     "product":  "AKML SQL",
-    "generatedAt":  "2026-09-24T11:52:21Z",
+    "generatedAt":  "2026-09-25T09:11:19Z",
     "releases":  [
+                     {
+                         "version":  "1.26.0925.1100",
+                         "releasedAt":  "2026-09-25",
+                         "supportedHosts":  [
+                                                "SSMS 22"
+                                            ],
+                         "downloadUrl":  "downloads/AKMLSQLSetup-1.26.0925.1100.exe",
+                         "sha256Hash":  "3229ed2d58ecf2393a7a43f18f6a35e4fc44a67a78391d7c58e7ec18711543f8",
+                         "releaseNotesUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases",
+                         "notesSummary":  "AKML SQL 1.26.0925.1100 installer for SQL Server Management Studio 22 (53.49 MB).",
+                         "minimumOsVersion":  "10.0",
+                         "cdnUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases/download/v1.26.0925.1100/AKMLSQLSetup-1.26.0925.1100.exe"
+                     },
+                     {
+                         "version":  "1.26.0924.2013",
+                         "releasedAt":  "2026-09-24",
+                         "supportedHosts":  [
+                                                "SSMS 22"
+                                            ],
+                         "downloadUrl":  "downloads/AKMLSQLSetup-1.26.0924.2013.exe",
+                         "sha256Hash":  "d50bd0532378f77c1707195814064c67a8a26c85247c8f36a29a83c9d935fbf0",
+                         "releaseNotesUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases",
+                         "notesSummary":  "AKML SQL 1.26.0924.2013 installer for SQL Server Management Studio 22 (53.48 MB).",
+                         "minimumOsVersion":  "10.0",
+                         "cdnUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases/download/v1.26.0924.2013/AKMLSQLSetup-1.26.0924.2013.exe"
+                     },
                      {
                          "version":  "1.26.0924.1329",
                          "releasedAt":  "2026-09-24",

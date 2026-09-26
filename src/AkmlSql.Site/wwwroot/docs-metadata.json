@@ -1,5 +1,5 @@
 {
-    "generatedAt":  "2026-09-24T11:52:11Z",
+    "generatedAt":  "2026-09-25T09:11:13Z",
     "docs":  {
                  "analysis-rules.md":  {
                                            "added":  "2026-03-24",
@@ -19,7 +19,7 @@
                                              },
                  "topics/connecting.md":  {
                                               "added":  "2026-08-29",
-                                              "updated":  "2026-08-29"
+                                              "updated":  "2026-09-24"
                                           },
                  "topics/formatting.md":  {
                                               "added":  "2026-08-29",
@@ -27,7 +27,7 @@
                                           },
                  "topics/getting-started.md":  {
                                                    "added":  "2026-08-29",
-                                                   "updated":  "2026-08-29"
+                                                   "updated":  "2026-09-24"
                                                },
                  "topics/intellisense.md":  {
                                                 "added":  "2026-08-29",
@@ -43,15 +43,15 @@
                                         },
                  "topics/sql-history.md":  {
                                                "added":  "2026-08-29",
-                                               "updated":  "2026-08-29"
+                                               "updated":  "2026-09-24"
                                            },
                  "topics/static-analysis.md":  {
                                                    "added":  "2026-08-29",
-                                                   "updated":  "2026-08-31"
+                                                   "updated":  "2026-09-24"
                                                },
                  "topics/troubleshooting.md":  {
                                                    "added":  "2026-08-29",
-                                                   "updated":  "2026-08-29"
+                                                   "updated":  "2026-09-24"
                                                }
              }
 }
