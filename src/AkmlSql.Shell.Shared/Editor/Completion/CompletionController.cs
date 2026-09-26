@@ -998,7 +998,8 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                         // partial and an auto-closed "]" after the caret; see BracketedRange.
                         var (from, to) = BracketedRange(i => snapshot[i], snapshot.Length, item.InsertText, start, caretPos);
                         span = new Span(from, to - from);
-                        var insertText = ApplyFunctionParens(item, snapshot, caretPos, from, item.InsertText,
+                        // "(" is looked for after the replaced range: past a consumed "]" when there is one.
+                        var insertText = ApplyFunctionParens(item, snapshot, to, from, item.InsertText,
                             out int caretBetweenParens);
 
                         _textView.TextBuffer.Replace(span, insertText);
@@ -1314,12 +1315,18 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
 
                 // Replace: partial text + space → insertText + space. Functions get the same
                 // add-parens treatment as the Enter/Tab commit path (PR #248 review finding #7).
-                // A bracketed insert also takes in a "[" typed before the partial (see BracketedRange).
+                // A bracketed insert also takes in a "[" typed before the partial (see BracketedRange),
+                // and SSMS's auto-closed "]" — which, after the space, sits past it ("[Total |]"). That
+                // "]" is taken in too and the typed space put back after the name, or "[Total Sales] ]"
+                // would be left behind.
                 var (from, _) = BracketedRange(i => snapshot[i], snapshot.Length, item.InsertText, start, beforeSpace);
-                var span = new Span(from, beforeSpace - from); // exclude the space itself
-                var insertText = ApplyFunctionParens(item, snapshot, beforeSpace, from, item.InsertText,
+                var closeAfterSpace = item.InsertText.EndsWith("]", StringComparison.Ordinal)
+                    && caretPos < snapshot.Length && snapshot[caretPos] == ']';
+                var end = closeAfterSpace ? caretPos + 1 : beforeSpace;   // otherwise exclude the space itself
+                var span = new Span(from, end - from);
+                var insertText = ApplyFunctionParens(item, snapshot, end, from, item.InsertText,
                     out int caretBetweenParens);
-                _textView.TextBuffer.Replace(span, insertText);
+                _textView.TextBuffer.Replace(span, closeAfterSpace ? insertText + " " : insertText);
                 MoveCaretIntoParens(caretBetweenParens);
                 DismissPopup();
 
@@ -1535,10 +1542,12 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         /// <summary>
         /// The range a completion replaces, widened for an insert that brings its own brackets.
         /// The identifier scan stops at "[", so for `SELECT [Tot` (with SSMS's auto-closed "]")
-        /// committing "[Total Sales]" replaced only "Tot" and gave `[[Total Sales]]`. Back to a
-        /// "[" before the partial — stopping at "]", a line break, ";" or a quote, so an earlier,
-        /// closed identifier is never swallowed — and over a "]" right after the caret. The same
-        /// rule as the web editor's bracketedRange (akml-editor.js).
+        /// committing "[Total Sales]" replaced only "Tot" and gave `[[Total Sales]]`. The range
+        /// takes in the "[" that opens the name being typed — only when everything between it and
+        /// the partial is what a bracketed name is made of (letters, digits, spaces, _ - # @ $),
+        /// within <see cref="MaxBracketedNameScan"/> characters, so a "[" in a string, a comment or
+        /// another name is never swallowed — and a "]" right after the caret. The same rule as the
+        /// web editor's bracketedRange (akml-editor.js).
         /// </summary>
         internal static (int Start, int End) BracketedRange(Func<int, char> charAt, int length, string insertText, int start, int end)
         {
@@ -1546,11 +1555,11 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
 
             if (insertText[0] == '[')
             {
-                for (int k = start - 1; k >= 0; k--)
+                for (int k = start - 1; k >= 0 && start - k <= MaxBracketedNameScan; k--)
                 {
                     var c = charAt(k);
-                    if (c == ']' || c == '\n' || c == '\r' || c == ';' || c == '\'') break;
                     if (c == '[') { start = k; break; }
+                    if (!IsBracketedNameChar(c)) break;
                 }
             }
 
@@ -1559,6 +1568,11 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
 
             return (start, end);
         }
+
+        private const int MaxBracketedNameScan = 128;
+
+        private static bool IsBracketedNameChar(char c) =>
+            char.IsLetterOrDigit(c) || c == ' ' || c == '_' || c == '-' || c == '#' || c == '@' || c == '$';
 
         private static bool IsIdentifierChar(char c)
         {

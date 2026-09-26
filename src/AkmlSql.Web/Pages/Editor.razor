@@ -557,8 +557,17 @@
 
         // T038: load the active profile.
         var activeId = await ProfileStore.GetActiveIdAsync();
-        var active = await ProfileStore.GetAsync(activeId);
-        _activeProfile = active?.Profile;
+        try
+        {
+            var active = await ProfileStore.GetAsync(activeId);
+            _activeProfile = active?.Profile;
+        }
+        catch (Exception)
+        {
+            // An engine style whose engine is not answering: format with the default until the
+            // style picker hands the style over (it does once the engine answers).
+            _activeProfile = null;
+        }
 
         // T044: load analyser settings.
         var settings = await AnalysisSettings.GetAsync();

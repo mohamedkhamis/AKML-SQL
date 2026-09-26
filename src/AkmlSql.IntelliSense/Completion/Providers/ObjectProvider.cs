@@ -440,39 +440,12 @@ public class ObjectProvider : ICompletionProvider
     }
 
     /// <summary>
-    /// QUOTENAME semantics: wrap <paramref name="part"/> in brackets, doubling any embedded
-    /// <c>']'</c> so the result is a valid T-SQL delimited identifier. Single home for the escaping
-    /// rule shared by <see cref="BracketWholeName"/>, <see cref="BracketEachPart"/>, and
-    /// <see cref="BracketRequiredParts"/>.
-    /// </summary>
-    private static string QuoteName(string part) => SqlIdentifier.Quote(part);
-
-    /// <summary>
     /// Brackets an identifier treated as a single whole token (no dot-part splitting), applying
     /// QUOTENAME <c>']'</c>-doubling. Used for linked-server names, which are one identifier even when
     /// they embed dots or backslashes. Mirrors the <see cref="BracketMode"/> semantics of
     /// <see cref="ApplyBrackets"/> but never treats a <c>.</c> as a name separator.
     /// </summary>
-    private static string BracketWholeName(string name, BracketMode mode)
-    {
-        if (string.IsNullOrEmpty(name)) return name;
-
-        bool alreadyBracketed =
-            name.StartsWith("[", System.StringComparison.Ordinal) &&
-            name.EndsWith("]", System.StringComparison.Ordinal) &&
-            name.Length >= 2;
-
-        switch (mode)
-        {
-            case BracketMode.Always:
-                return alreadyBracketed ? name : QuoteName(name);
-            case BracketMode.Never:
-                return alreadyBracketed ? name.Substring(1, name.Length - 2) : name;
-            default: // WhenRequired
-                if (alreadyBracketed) return name;
-                return NeedsBracketing(name) ? QuoteName(name) : name;
-        }
-    }
+    private static string BracketWholeName(string name, BracketMode mode) => SqlIdentifier.Apply(name, mode);
 
     /// <summary>
     /// Builds a map of "schema.table" → "related existing table name" for every table
@@ -707,85 +680,8 @@ public class ObjectProvider : ICompletionProvider
     public static string ApplyBrackets(string identifier, BracketMode mode)
     {
         if (string.IsNullOrEmpty(identifier)) return identifier;
-
-        switch (mode)
-        {
-            case BracketMode.Always:
-                // If the identifier is already fully bracketed (e.g. "[Name]"), leave it.
-                // If it is schema-qualified (e.g. "dbo.Table"), bracket each part.
-                return BracketEachPart(identifier);
-
-            case BracketMode.Never:
-                // Strip any existing brackets from each part.
-                return StripBracketsEachPart(identifier);
-
-            default: // WhenRequired
-                // Bracket only the dot-separated parts that actually require quoting
-                // (spaces, hyphens, leading digit, other special chars, or reserved words).
-                // Parts that are valid regular identifiers are left bare.
-                return BracketRequiredParts(identifier);
-        }
-    }
-
-    /// <summary>Brackets each dot-separated part of a (possibly schema-qualified) identifier.</summary>
-    private static string BracketEachPart(string identifier)
-    {
-        var parts = identifier.Split('.');
-        for (int i = 0; i < parts.Length; i++)
-        {
-            var part = parts[i];
-            // Already bracketed — leave as-is.
-            if (part.StartsWith("[", System.StringComparison.Ordinal) &&
-                part.EndsWith("]", System.StringComparison.Ordinal))
-                continue;
-            parts[i] = QuoteName(part);
-        }
-        return string.Join(".", parts);
-    }
-
-    /// <summary>
-    /// Brackets only the dot-separated parts that require quoting (used for
-    /// <see cref="BracketMode.WhenRequired"/>), applying the same QUOTENAME
-    /// <c>']'</c>-doubling rule (via <see cref="QuoteName"/>) as <see cref="BracketEachPart"/>.
-    /// </summary>
-    private static string BracketRequiredParts(string identifier)
-    {
-        var parts = identifier.Split('.');
-        for (int i = 0; i < parts.Length; i++)
-        {
-            var part = parts[i];
-            // Already bracketed — leave as-is.
-            if (part.StartsWith("[", System.StringComparison.Ordinal) &&
-                part.EndsWith("]", System.StringComparison.Ordinal))
-                continue;
-            if (NeedsBracketing(part))
-                parts[i] = QuoteName(part);
-        }
-        return string.Join(".", parts);
-    }
-
-    /// <summary>
-    /// True when <paramref name="name"/> must be bracketed to be valid. The rule itself lives in
-    /// <see cref="SqlIdentifier"/> so the web edition's offline completion path applies exactly the
-    /// same one; this was a private copy, and the web fallback therefore had none.
-    /// </summary>
-    private static bool NeedsBracketing(string name) => SqlIdentifier.NeedsQuoting(name);
-
-    /// <summary>Strips square brackets from each dot-separated part of an identifier.</summary>
-    private static string StripBracketsEachPart(string identifier)
-    {
-        var parts = identifier.Split('.');
-        for (int i = 0; i < parts.Length; i++)
-        {
-            var part = parts[i];
-            if (part.StartsWith("[", System.StringComparison.Ordinal) &&
-                part.EndsWith("]", System.StringComparison.Ordinal) &&
-                part.Length >= 2)
-            {
-                parts[i] = part.Substring(1, part.Length - 2);
-            }
-        }
-        return string.Join(".", parts);
+        // Each dot-separated part on its own, by the one rule every completion follows.
+        return string.Join(".", identifier.Split('.').Select(part => SqlIdentifier.Apply(part, mode)));
     }
 
     private static string FormatRowCount(long count)

@@ -52,8 +52,10 @@ public interface IProfileStore
     bool EngineStylesAvailable { get; }
 
     /// <summary>
-    /// Why the last listing could not include the engine's styles (a timeout, an engine error),
-    /// or null when it could. The browser's styles are listed either way.
+    /// Why the last listing could not ask the engine for its styles (a timeout, an engine error),
+    /// or null when it could. The browser's styles are listed either way, with the engine's styles
+    /// as last listed; a new style is not created on the engine while this is set, because its
+    /// name cannot be checked.
     /// </summary>
     string? EngineStylesError { get; }
 
@@ -65,6 +67,12 @@ public interface IProfileStore
     /// AKML's own model comes back as its closest SQL Prompt reading.
     /// </summary>
     Task<SqlPromptStyleDocument?> GetDocumentAsync(string id);
+
+    /// <summary>
+    /// The style's SQL Prompt document together with its record, or null. For an engine style
+    /// both come from ONE engine request — the styles page used to ask the engine twice per click.
+    /// </summary>
+    Task<(SqlPromptStyleDocument Document, ProfileRecord Record)?> OpenAsync(string id);
 
     /// <summary>
     /// Saves <paramref name="document"/> over the style <paramref name="id"/> (a built-in gets an
@@ -137,6 +145,11 @@ internal sealed class ProfileStore : IProfileStore
         Array.IndexOf(_bridge.EngineCapabilities, CapabilityStyles) >= 0;
 
     public string? EngineStylesError { get; private set; }
+
+    // The engine's styles as last listed. A transient listing failure keeps showing them: an
+    // empty list made the active engine style vanish from the editor's picker, which then
+    // switched Format to another style the user never chose.
+    private IReadOnlyList<ProfileRecord> _lastEngineStyles = Array.Empty<ProfileRecord>();
 
     public async Task<IReadOnlyList<ProfileRecord>> ListAsync()
     {
@@ -232,25 +245,34 @@ internal sealed class ProfileStore : IProfileStore
 
     // ── SQL Prompt styles ────────────────────────────────────────────────────
 
-    public async Task<SqlPromptStyleDocument?> GetDocumentAsync(string id)
+    public async Task<SqlPromptStyleDocument?> GetDocumentAsync(string id) =>
+        (await OpenAsync(id).ConfigureAwait(false))?.Document;
+
+    public async Task<(SqlPromptStyleDocument Document, ProfileRecord Record)?> OpenAsync(string id)
     {
         if (id.StartsWith(EnginePrefix, StringComparison.Ordinal))
         {
+            if (!EngineStylesAvailable) return null;
             var response = await SendAsync<ProfileGetRequest, ProfileGetResponse>(
                 MessageTypes.ProfileGet, new ProfileGetRequest { Name = EngineName(id) }).ConfigureAwait(false);
-            if (!response.Success) return null;
+            var record = EngineRecord(response);
+            if (record == null) return null;
+            SqlPromptStyleDocument document;
             if (!string.IsNullOrEmpty(response.SqlPromptJson))
             {
                 // The engine writes every option out (for editors that cannot load this library);
                 // keep SQL Prompt's minimal form here.
-                var document = SqlPromptStyleDocument.Parse(response.SqlPromptJson!);
+                document = SqlPromptStyleDocument.Parse(response.SqlPromptJson!);
                 document.Minimize();
-                return document;
             }
-            return response.ProfileJson == null ? null : SqlPromptStyles.ToDocument(ProfileSerializer.Deserialize(response.ProfileJson));
+            else
+            {
+                document = SqlPromptStyles.ToDocument(record.Profile);
+            }
+            return (document, record);
         }
-        var record = await GetAsync(id).ConfigureAwait(false);
-        return record == null ? null : SqlPromptStyles.ToDocument(record.Profile);
+        var browser = await GetAsync(id).ConfigureAwait(false);
+        return browser == null ? null : (SqlPromptStyles.ToDocument(browser.Profile), browser);
     }
 
     public async Task<ProfileRecord> SaveDocumentAsync(string? id, SqlPromptStyleDocument document)
@@ -262,14 +284,18 @@ internal sealed class ProfileStore : IProfileStore
         if (id == null)
         {
             // A new style: shared with SSMS when an engine is paired.
+            document.Name = document.Name.Trim();
             var existing = await ListAsync().ConfigureAwait(false);
+            if (EngineStylesAvailable && EngineStylesError != null)
+                throw new InvalidOperationException(
+                    $"The engine's styles could not be listed ({EngineStylesError.TrimEnd('.')}), so the new style's name cannot be checked. Try again in a moment.");
             if (existing.Any(r => string.Equals(r.Name, document.Name, StringComparison.OrdinalIgnoreCase)))
                 throw new InvalidOperationException($"A style named '{document.Name}' already exists.");
             // Styles are keyed by name; the id is SQL Prompt's, kept so an exported copy is
             // recognised by SQL Prompt as the same style.
             if (string.IsNullOrWhiteSpace(document.Id)) document.Id = Guid.NewGuid().ToString();
             saved = EngineStylesAvailable
-                ? await SaveEngineAsync(document, previous: null).ConfigureAwait(false)
+                ? await SaveEngineAsync(document, previous: null, createOnly: true).ConfigureAwait(false)
                 : await SaveBrowserAsync("user." + Guid.NewGuid().ToString("N")[..12], document, previous: null, ProfileOrigin.User).ConfigureAwait(false);
         }
         else if (id.StartsWith(EnginePrefix, StringComparison.Ordinal))
@@ -403,16 +429,16 @@ internal sealed class ProfileStore : IProfileStore
     private async Task<IReadOnlyList<ProfileRecord>> ListEngineAsync()
     {
         EngineStylesError = null;
-        if (!EngineStylesAvailable) return Array.Empty<ProfileRecord>();
+        if (!EngineStylesAvailable) return _lastEngineStyles = Array.Empty<ProfileRecord>();
         try
         {
             var response = await SendAsync<ProfileListRequest, ProfileListResponse>(MessageTypes.ProfileList, new ProfileListRequest()).ConfigureAwait(false);
             if (response?.Profiles == null)
             {
                 EngineStylesError = "The engine did not return its styles.";
-                return Array.Empty<ProfileRecord>();
+                return _lastEngineStyles;
             }
-            return response.Profiles
+            return _lastEngineStyles = response.Profiles
                 .OrderBy(p => p.IsBuiltIn || p.IsCustomizedBuiltIn ? 0 : 1)
                 .ThenBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
                 .Select(p =>
@@ -434,11 +460,11 @@ internal sealed class ProfileStore : IProfileStore
         catch (Exception ex)
         {
             // A bridge that closed mid-request is not an error worth showing: the engine is gone.
-            if (_bridge?.State == BridgeState.Open)
-                EngineStylesError = ex is OperationCanceledException
-                    ? "The engine did not answer in time."
-                    : ex.Message;
-            return Array.Empty<ProfileRecord>();
+            if (_bridge?.State != BridgeState.Open) return _lastEngineStyles = Array.Empty<ProfileRecord>();
+            EngineStylesError = ex is OperationCanceledException
+                ? "The engine did not answer in time."
+                : ex.Message;
+            return _lastEngineStyles;
         }
     }
 
@@ -447,6 +473,11 @@ internal sealed class ProfileStore : IProfileStore
         if (!EngineStylesAvailable) return null;
         var response = await SendAsync<ProfileGetRequest, ProfileGetResponse>(
             MessageTypes.ProfileGet, new ProfileGetRequest { Name = EngineName(id) }).ConfigureAwait(false);
+        return EngineRecord(response);
+    }
+
+    private static ProfileRecord? EngineRecord(ProfileGetResponse response)
+    {
         if (!response.Success || response.ProfileJson == null) return null;
         var profile = ProfileSerializer.Deserialize(response.ProfileJson);
         var name = response.Name ?? profile.Metadata.Name;
@@ -459,7 +490,7 @@ internal sealed class ProfileStore : IProfileStore
         };
     }
 
-    private async Task<ProfileRecord> SaveEngineAsync(SqlPromptStyleDocument document, FormattingProfile? previous)
+    private async Task<ProfileRecord> SaveEngineAsync(SqlPromptStyleDocument document, FormattingProfile? previous, bool createOnly = false)
     {
         var profile = SqlPromptStyles.ToProfile(document, previous);
         var response = await SendAsync<ProfileSaveRequest, ProfileSaveResponse>(MessageTypes.ProfileSave, new ProfileSaveRequest
@@ -468,6 +499,8 @@ internal sealed class ProfileStore : IProfileStore
             ProfileJson = ProfileSerializer.Serialize(profile),
             Description = profile.Metadata.Description,
             BasedOn = profile.Metadata.BasedOn,
+            // A new style: the engine refuses a built-in's or a taken name itself.
+            CreateOnly = createOnly,
         }).ConfigureAwait(false);
         if (!response.Success) throw new InvalidOperationException(response.ErrorMessage ?? "The engine could not save the style.");
         return await GetEngineAsync(EnginePrefix + profile.Metadata.Name).ConfigureAwait(false)

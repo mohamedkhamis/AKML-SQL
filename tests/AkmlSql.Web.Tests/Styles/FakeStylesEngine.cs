@@ -52,11 +52,41 @@ internal sealed class FakeStylesEngine : IEngineBridge
     /// <summary>When set, ProfileList fails with it — an engine that is busy, slow or broken.</summary>
     public Exception? ListFailure { get; set; }
 
+    /// <summary>When set, ProfileGet fails with it (after <see cref="GetsBeforeFailure"/> successes).</summary>
+    public Exception? GetFailure { get; set; }
+
+    /// <summary>How many ProfileGets still succeed before <see cref="GetFailure"/> applies.</summary>
+    public int GetsBeforeFailure { get; set; }
+
+    /// <summary>When set, ProfileGet waits for it: a slow engine the test releases.</summary>
+    public TaskCompletionSource? GetGate { get; set; }
+
+    /// <summary>The last ProfileSave request, as sent.</summary>
+    public ProfileSaveRequest? LastSave { get; private set; }
+
     public Task<TResponse> SendAsync<TRequest, TResponse>(int requestMessageType, TRequest request, CancellationToken ct)
         where TRequest : class where TResponse : class
     {
         Sent.Add(requestMessageType);
         if (request is ProfileListRequest && ListFailure != null) return Task.FromException<TResponse>(ListFailure);
+        if (request is ProfileSaveRequest sent) LastSave = sent;
+        if (request is ProfileGetRequest slowGet && (GetFailure != null || GetGate != null))
+        {
+            var fail = false;
+            if (GetFailure != null)
+            {
+                if (GetsBeforeFailure > 0) GetsBeforeFailure--;
+                else fail = true;
+            }
+            return SlowGetAsync<TResponse>(slowGet, fail);
+        }
+        if (request is ProfileSaveRequest { CreateOnly: true } create
+            && (_custom.ContainsKey(create.Name.Trim()) || _builtIn.ContainsKey(create.Name.Trim())))
+        {
+            // What the engine's ProfileManager.SaveNew answers.
+            object refused = new ProfileSaveResponse { Success = false, ErrorMessage = $"A style named '{create.Name.Trim()}' already exists." };
+            return Task.FromResult((TResponse)refused);
+        }
         object response = request switch
         {
             ProfileListRequest => new ProfileListResponse
@@ -84,6 +114,13 @@ internal sealed class FakeStylesEngine : IEngineBridge
             _ => throw new NotSupportedException($"Message {requestMessageType} is not modelled by the fake engine."),
         };
         return Task.FromResult((TResponse)response);
+    }
+
+    private async Task<TResponse> SlowGetAsync<TResponse>(ProfileGetRequest get, bool fail)
+    {
+        if (GetGate != null) await GetGate.Task.ConfigureAwait(false);
+        if (fail) throw GetFailure!;
+        return (TResponse)(object)Get(get.Name);
     }
 
     private ProfileGetResponse Get(string name)

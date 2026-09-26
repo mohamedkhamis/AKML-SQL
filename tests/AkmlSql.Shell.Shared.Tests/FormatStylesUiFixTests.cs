@@ -102,6 +102,8 @@ namespace AkmlSql.Shell.Shared.Tests
         [InlineData("SELECT [Tot| FROM t", "[Total Sales]", "SELECT [Total Sales] FROM t")]    // no auto-close
         [InlineData("SELECT [Ord|]", "[Order]", "SELECT [Order]")]
         [InlineData("SELECT [|]", "[Order]", "SELECT [Order]")]
+        [InlineData("SELECT [Total Sa|] FROM t", "[Total Sales]", "SELECT [Total Sales] FROM t")] // spaces inside the name
+        [InlineData("SELECT [Übersicht-Ja|]", "[Übersicht-Jahr]", "SELECT [Übersicht-Jahr]")]
         [InlineData("SELECT Tot| FROM t", "[Total Sales]", "SELECT [Total Sales] FROM t")]     // nothing typed
         public void A_bracketed_insert_takes_in_the_brackets_already_typed(string before, string insert, string expected)
         {
@@ -112,6 +114,9 @@ namespace AkmlSql.Shell.Shared.Tests
         [InlineData("SELECT [a].Tot|", "[Total]", "SELECT [a].[Total]")]           // an earlier, closed name
         [InlineData("SELECT '[x' + Tot|", "[Total]", "SELECT '[x' + [Total]")]      // a "[" inside a string
         [InlineData("SELECT [Ord|", "Orders", "SELECT [Orders")]                    // plain insert: untouched
+        [InlineData("SELECT \"a[b\" + Tot|", "[Total]", "SELECT \"a[b\" + [Total]")]  // a "[" in a quoted name
+        [InlineData("/* see [x */ SELECT Tot|", "[Total]", "/* see [x */ SELECT [Total]")] // a "[" in a comment
+        [InlineData("SELECT [Order ID, Tot|", "[Total]", "SELECT [Order ID, [Total]")]      // an unclosed earlier name
         public void Earlier_brackets_are_left_alone(string before, string insert, string expected)
         {
             Assert.Equal(expected, Commit(before, insert).Text);

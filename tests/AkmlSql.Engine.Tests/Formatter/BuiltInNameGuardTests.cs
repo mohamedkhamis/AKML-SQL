@@ -134,4 +134,86 @@ public sealed class BuiltInNameGuardTests : IDisposable
         Assert.False(ontoExisting.Success);
         Assert.Equal("keep me", _profiles.Load("Other").Metadata.Description);
     }
+
+    // ── names that differ only in spaces, and the create-only save ────────────
+
+    [Fact]
+    public void A_built_in_name_with_surrounding_spaces_is_still_the_built_in()
+    {
+        // "Compact " saves to the file "Compact.akmlstyle", which shadows the built-in exactly as
+        // "Compact" does, so it must be refused the same way.
+        Assert.True(_profiles.HasBuiltIn("Compact "));
+        Assert.True(_profiles.HasBuiltIn("  compact"));
+
+        var mine = new FormattingProfile();
+        mine.Metadata.Name = "Mine";
+        _profiles.Save(mine);
+        var duplicate = _handler.HandleDuplicateProfile(new DuplicateProfileRequest { SourceName = "Mine", NewName = "Compact " });
+
+        var source = new FormattingProfile();
+        source.Metadata.Name = "Compact ";
+        var import = _handler.HandleProfileImport(new ProfileImportRequest
+        {
+            SourceFormat = "akmlstyle",
+            FileContent = Encoding.UTF8.GetBytes(ProfileSerializer.Serialize(source)),
+        });
+
+        Assert.False(duplicate.Success);
+        Assert.False(import.Success);
+        Assert.False(_profiles.IsCustomizedBuiltIn("Compact"));
+    }
+
+    [Fact]
+    public void Save_stores_the_trimmed_name_its_file_is_named_after()
+    {
+        var profile = new FormattingProfile();
+        profile.Metadata.Name = "  Team style ";
+        _profiles.Save(profile);
+
+        Assert.Equal("Team style", _profiles.Load("Team style").Metadata.Name);
+    }
+
+    [Fact]
+    public void A_create_only_save_refuses_a_built_in_and_a_taken_name_and_an_edit_still_overwrites()
+    {
+        var existing = new FormattingProfile();
+        existing.Metadata.Name = "Team";
+        existing.Metadata.Description = "keep me";
+        _profiles.Save(existing);
+
+        ProfileSaveResponse Save(string name, bool createOnly)
+        {
+            var profile = new FormattingProfile();
+            profile.Metadata.Name = name;
+            profile.Metadata.Description = "new";
+            return _handler.HandleProfileSave(new ProfileSaveRequest
+            {
+                Name = name, ProfileJson = ProfileSerializer.Serialize(profile), CreateOnly = createOnly,
+            });
+        }
+
+        Assert.False(Save("Compact", createOnly: true).Success);
+        Assert.False(Save("team ", createOnly: true).Success);
+        Assert.Equal("keep me", _profiles.Load("Team").Metadata.Description);
+        Assert.False(_profiles.IsCustomizedBuiltIn("Compact"));
+
+        Assert.True(Save("Brand new", createOnly: true).Success);
+        Assert.True(Save("Team", createOnly: false).Success);   // an edit overwrites, as before
+        Assert.Equal("new", _profiles.Load("Team").Metadata.Description);
+    }
+
+    [Fact]
+    public void A_taken_name_known_only_from_a_styles_stored_name_is_refused()
+    {
+        // A style file whose name comes from its metadata only (not its file name).
+        var odd = new FormattingProfile();
+        odd.Metadata.Name = "Shared Team Style";
+        File.WriteAllText(Path.Combine(_customDir, "shared-team-style.akmlstyle"), ProfileSerializer.Serialize(odd));
+
+        var mine = new FormattingProfile();
+        mine.Metadata.Name = "Mine";
+        _profiles.Save(mine);
+
+        Assert.False(_handler.HandleDuplicateProfile(new DuplicateProfileRequest { SourceName = "Mine", NewName = "shared team style" }).Success);
+    }
 }

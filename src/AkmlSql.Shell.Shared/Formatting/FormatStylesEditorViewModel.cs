@@ -856,8 +856,15 @@ namespace AkmlSql.Shell.Shared.Formatting
                 _loadedProfileJson = merged;
                 if (IsSqlPromptModel) IsSelectedClassic = false;
                 // Saving over a shipped style just created the override that shadows it, so Reset
-                // becomes available from this moment -- without a reload.
-                if (IsSelectedBuiltIn) IsSelectedCustomized = true;
+                // becomes available from this moment -- without a reload. The list item is marked
+                // too: every save path comes through here (the Save button, and "Save changes?" when
+                // switching styles or closing), and Reset reads the item.
+                if (IsSelectedBuiltIn)
+                {
+                    IsSelectedCustomized = true;
+                    var item = Profiles.FirstOrDefault(p => string.Equals(p.Name, _loadedProfileName, StringComparison.OrdinalIgnoreCase));
+                    if (item != null) item.IsCustomized = true;
+                }
                 IsDirty = false;
                 LastError = null;
                 return true;
@@ -1362,8 +1369,10 @@ VALUES ('SampleQuery', GETDATE());";
     }
 
     /// <summary>Lightweight DTO bound to the style list (left panel).</summary>
-    internal sealed class StyleListItem
+    internal sealed class StyleListItem : INotifyPropertyChanged
     {
+        public event PropertyChangedEventHandler? PropertyChanged;
+
         public string Name { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
 
@@ -1373,8 +1382,24 @@ VALUES ('SampleQuery', GETDATE());";
         /// </summary>
         public bool IsShipped { get; set; }
 
-        /// <summary>True when this is a shipped style the user has edited.</summary>
-        public bool IsCustomized { get; set; }
+        /// <summary>
+        /// True when this is a shipped style the user has edited. Raises change notifications (and
+        /// for <see cref="Kind"/>), so a save marks the row "Built-in · modified" in place — the ⋮
+        /// menu's Reset and the window's Reset handler read this item.
+        /// </summary>
+        public bool IsCustomized
+        {
+            get => _isCustomized;
+            set
+            {
+                if (_isCustomized == value) return;
+                _isCustomized = value;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsCustomized)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Kind)));
+            }
+        }
+
+        private bool _isCustomized;
 
         /// <summary>
         /// Badge text. "Built-in - modified" is the one that earns its place: without it there is

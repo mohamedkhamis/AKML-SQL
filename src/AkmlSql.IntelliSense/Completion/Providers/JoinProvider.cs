@@ -209,6 +209,11 @@ public class JoinProvider : ICompletionProvider
                 : cleaned.Length == 1 ? cleaned.ToLowerInvariant() : "t";
         }
 
+        // A base the loop below can always satisfy: letters (any script) that make a regular
+        // identifier. A numeric suffix fixes a reserved word ("on" -> "on2") but can never fix a
+        // base that is not a regular identifier, and such a base once looped for ever.
+        if (!IsRegularAliasBase(alias)) alias = "t";
+
         // Ensure no conflict with existing aliases, and never a reserved word.
         var candidate = alias;
         int suffix = 2;
@@ -220,6 +225,10 @@ public class JoinProvider : ICompletionProvider
 
         return candidate;
     }
+
+    /// <summary>True when appending digits to <paramref name="alias"/> yields a regular identifier.</summary>
+    private static bool IsRegularAliasBase(string alias) =>
+        alias.Length > 0 && !SqlIdentifier.NeedsQuoting(alias + "1");
 
     /// <summary>
     /// Extract PascalCase initials: "OrderDetails" -> "od", "Order" -> "o"

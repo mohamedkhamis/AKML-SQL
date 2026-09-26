@@ -255,7 +255,7 @@ public class ProfileManager
         {
             System.Threading.Interlocked.Increment(ref _metadataScanFileReads);
             if (!TryPeekMetadataName(file, out var candidate)) continue;
-            if (!string.Equals(candidate, name, StringComparison.OrdinalIgnoreCase)) continue;
+            if (!string.Equals(candidate?.Trim(), name.Trim(), StringComparison.OrdinalIgnoreCase)) continue;
 
             try
             {
@@ -318,6 +318,9 @@ public class ProfileManager
         var name = profile.Metadata.Name;
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Profile metadata must have a non-empty Name.", nameof(profile));
+        // The file name is trimmed (SanitizeFileName); keep the stored name the same, or
+        // "Khamis Style " would be a second name for the file "Khamis Style.akmlstyle".
+        profile.Metadata.Name = name = name.Trim();
 
         Directory.CreateDirectory(_customProfilesPath);
 
@@ -336,8 +339,30 @@ public class ProfileManager
     }
 
     /// <summary>
+    /// Saves a NEW style. Unlike <see cref="Save"/>, which overwrites (that is how a style — or a
+    /// built-in — is edited), it refuses a built-in's name and a name already taken, whether the
+    /// taken name is a file name or only a style's stored name. Every create path (Duplicate, the
+    /// editors' New / Save as through ProfileSave's CreateOnly) goes through here, so none has to
+    /// remember its own check.
+    /// </summary>
+    public void SaveNew(FormattingProfile profile)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        var name = profile.Metadata.Name?.Trim();
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Profile metadata must have a non-empty Name.", nameof(profile));
+        if (HasBuiltIn(name))
+            throw new InvalidOperationException($"'{name}' is a built-in style name. Choose a different name.");
+        if (File.Exists(GetCustomFilePath(name)) || TryReadByMetadataName(_customProfilesPath, name, out _, out _))
+            throw new InvalidOperationException($"A style named '{name}' already exists.");
+        profile.Metadata.Name = name;
+        Save(profile);
+    }
+
+    /// <summary>
     /// True when a shipped built-in style with this name exists, whether or not the user has
-    /// overridden it.
+    /// overridden it. Surrounding spaces do not count: "Khamis Style " saves to the file
+    /// "Khamis Style.akmlstyle", which shadows the built-in exactly as "Khamis Style" does.
     /// </summary>
     /// <remarks>
     /// Checks the filename AND the metadata name, because the shipped built-ins use kebab-case
@@ -347,6 +372,8 @@ public class ProfileManager
     public bool HasBuiltIn(string name)
     {
         ArgumentNullException.ThrowIfNull(name);
+        name = name.Trim();
+        if (name.Length == 0) return false;
         return File.Exists(GetBuiltInFilePath(name))
             || TryReadByMetadataName(_builtInProfilesPath, name, out _, out _);
     }
@@ -606,14 +633,6 @@ public class ProfileManager
         ArgumentNullException.ThrowIfNull(sourceName);
         ArgumentNullException.ThrowIfNull(newName);
 
-        // A duplicate is a NEW style. Save accepts a built-in's name (that is how a built-in is
-        // edited), so without these a copy named like a built-in silently became an edit of it,
-        // and one named like an existing style overwrote that style.
-        if (HasBuiltIn(newName))
-            throw new InvalidOperationException($"'{newName}' is a built-in style name. Choose a different name.");
-        if (File.Exists(GetCustomFilePath(newName)))
-            throw new InvalidOperationException($"A style named '{newName}' already exists.");
-
         var source = Load(sourceName);
 
         // Create a fresh copy with new identity
@@ -627,7 +646,8 @@ public class ProfileManager
         copy.Metadata.Created = DateTime.UtcNow;
         copy.Metadata.Modified = DateTime.UtcNow;
 
-        Save(copy);
+        // A duplicate is a NEW style: never a silent edit of a built-in, never an overwrite.
+        SaveNew(copy);
         return copy;
     }
 

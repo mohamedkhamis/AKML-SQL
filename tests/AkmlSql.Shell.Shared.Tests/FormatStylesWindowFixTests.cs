@@ -172,5 +172,30 @@ namespace AkmlSql.Shell.Shared.Tests
                 FormatStylesEditorViewModel.SetCachedSchemaForTests(null, null);
             }
         }
+
+        [StaFact]
+        public async Task Any_save_of_a_built_in_marks_its_list_item_modified()
+        {
+            // "Save changes?" when switching styles or closing saves through the view model, not
+            // the Save button: the item must be marked there, or Reset refuses later.
+            try
+            {
+                var (vm, _) = await LoadedBuiltInAsync();
+                var item = vm.Profiles.Single();
+                var kindChanges = 0;
+                item.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(StyleListItem.Kind)) kindChanges++; };
+                vm.SetWorkingValue("sqlPrompt.lists.placeCommasBeforeItems", true);
+
+                Assert.True(await vm.SaveAsync());
+
+                Assert.True(item.IsCustomized);
+                Assert.Equal("Built-in \u00b7 modified", item.Kind);
+                Assert.Equal(1, kindChanges);   // the list row's badge re-reads Kind
+            }
+            finally
+            {
+                FormatStylesEditorViewModel.SetCachedSchemaForTests(null, null);
+            }
+        }
     }
 }

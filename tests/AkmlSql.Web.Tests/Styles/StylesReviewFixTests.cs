@@ -165,4 +165,146 @@ public sealed class StylesReviewFixTests : BunitContext
         picker.WaitForAssertion(() => Assert.Equal("My SSMS style", handed?.Name));
         Assert.False(handed!.IsSummary);   // the whole style, not the list summary
     }
+
+    // ── second review: names, a failing engine, stale notifications ─────────
+
+    private static async Task<(FakeStylesEngine Engine, ProfileStore Store, ProfileRecord Saved)> EngineWithStyleAsync(string name)
+    {
+        var engine = new FakeStylesEngine();
+        var store = new ProfileStore(new InMemoryIndexedDbAdapter(), engine);
+        var saved = await store.SaveDocumentAsync(null, SqlPromptStyleDocument.CreateDefault(name));
+        return (engine, store, saved);
+    }
+
+    [Fact]
+    public async Task A_new_style_is_not_created_on_the_engine_while_its_styles_cannot_be_listed()
+    {
+        var engine = new FakeStylesEngine { ListFailure = new TimeoutException("busy") };
+        var store = new ProfileStore(new InMemoryIndexedDbAdapter(), engine);
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => store.SaveDocumentAsync(null, SqlPromptStyleDocument.CreateDefault("Team style")));
+
+        Assert.Contains("could not be listed", error.Message);
+        Assert.Null(engine.LastSave);   // nothing was sent: the name could not be checked
+    }
+
+    [Fact]
+    public async Task New_engine_styles_are_created_with_create_only_and_edits_are_not()
+    {
+        var (engine, store, saved) = await EngineWithStyleAsync("Team style");
+        Assert.True(engine.LastSave!.CreateOnly);
+
+        var document = (await store.GetDocumentAsync(saved.Id))!;
+        document.Set("lists.placeCommasBeforeItems", "true");
+        await store.SaveDocumentAsync(saved.Id, document);
+        Assert.False(engine.LastSave!.CreateOnly);
+    }
+
+    [Fact]
+    public async Task A_listing_failure_keeps_the_engine_styles_last_listed()
+    {
+        var (engine, store, saved) = await EngineWithStyleAsync("Team style");
+        Assert.Contains(await store.ListAsync(), r => r.Id == saved.Id);
+
+        engine.ListFailure = new TimeoutException("busy");
+        var list = await store.ListAsync();
+
+        Assert.Contains(list, r => r.Id == saved.Id);
+        Assert.NotNull(store.EngineStylesError);
+    }
+
+    [Fact]
+    public async Task Opening_an_engine_style_asks_the_engine_once()
+    {
+        var (engine, store, saved) = await EngineWithStyleAsync("Team style");
+        var before = engine.Sent.Count(t => t == AkmlSql.Core.Ipc.MessageTypes.ProfileGet);
+
+        var opened = await store.OpenAsync(saved.Id);
+
+        Assert.NotNull(opened);
+        Assert.Equal("Team style", opened!.Value.Record.Name);
+        Assert.Equal(before + 1, engine.Sent.Count(t => t == AkmlSql.Core.Ipc.MessageTypes.ProfileGet));
+    }
+
+    [Fact]
+    public async Task The_active_engine_style_stays_put_while_the_engine_cannot_list_its_styles()
+    {
+        var (engine, store, saved) = await EngineWithStyleAsync("My SSMS style");
+        await store.SetActiveIdAsync(saved.Id);
+        Services.AddSingleton<IProfileStore>(store);
+        ProfileRecord? handed = null;
+        var picker = Render<ProfilePickerComponent>(p => p.Add(x => x.OnProfileChanged, r => handed = r));
+        picker.WaitForAssertion(() => Assert.Equal(saved.Id, picker.Find("select").GetAttribute("value")));
+
+        engine.ListFailure = new TimeoutException("busy");
+        engine.SetState(BridgeState.Open);   // any StylesChanged reload
+
+        picker.WaitForAssertion(() => Assert.Equal(saved.Id, picker.Find("select").GetAttribute("value")));
+        Assert.Null(handed);   // the editor keeps the style it has
+    }
+
+    [Fact]
+    public async Task On_first_load_an_unlisted_active_engine_style_is_shown_not_replaced()
+    {
+        var (engine, _, saved) = await EngineWithStyleAsync("My SSMS style");
+        engine.ListFailure = new TimeoutException("busy");
+        var fresh = new ProfileStore(new InMemoryIndexedDbAdapter(), engine);   // no earlier list to fall back on
+        await fresh.SetActiveIdAsync(saved.Id);
+        Services.AddSingleton<IProfileStore>(fresh);
+
+        ProfileRecord? handed = null;
+        var picker = Render<ProfilePickerComponent>(p => p.Add(x => x.OnProfileChanged, r => handed = r));
+
+        picker.WaitForAssertion(() => Assert.Contains("My SSMS style", picker.Find("[data-testid=profile-unlisted]").TextContent));
+        Assert.Equal(saved.Id, picker.Find("select").GetAttribute("value"));
+        Assert.Null(handed);
+    }
+
+    [Fact]
+    public async Task A_slow_engine_style_does_not_override_a_newer_choice()
+    {
+        var (engine, store, saved) = await EngineWithStyleAsync("My SSMS style");
+        await store.SetActiveIdAsync(saved.Id);
+        engine.SetState(BridgeState.Connecting);
+        Services.AddSingleton<IProfileStore>(store);
+        ProfileRecord? handed = null;
+        var picker = Render<ProfilePickerComponent>(p => p.Add(x => x.OnProfileChanged, r => handed = r));
+        picker.WaitForAssertion(() => Assert.Equal("builtin.khamis", picker.Find("select").GetAttribute("value")));
+
+        // The engine connects; reading its style is slow.
+        var gate = new TaskCompletionSource();
+        engine.GetGate = gate;
+        engine.SetState(BridgeState.Open);
+        picker.WaitForAssertion(() => Assert.Equal(saved.Id, picker.Find("select").GetAttribute("value")));
+
+        // Meanwhile the user picks another style ...
+        picker.Find("select").Change("builtin.collapsed");
+        picker.WaitForAssertion(() => Assert.Equal("Collapsed", handed?.Name));
+
+        // ... and the engine's answer arrives late: it must not win.
+        engine.GetGate = null;
+        gate.SetResult();
+        await Task.Delay(200);
+        picker.WaitForAssertion(() => Assert.Equal("Collapsed", handed?.Name));
+    }
+
+    [Fact]
+    public async Task A_created_style_that_cannot_be_opened_keeps_the_edits_unsaved()
+    {
+        var (engine, store, _) = await EngineWithStyleAsync(Mine);
+        Services.AddSingleton<IProfileStore>(store);
+        JSInterop.Setup<string?>("prompt", _ => true).SetResult("Copy");
+        var page = OpenWithEdit(Mine);
+
+        // The copy is saved and read back, then opening it times out.
+        engine.GetFailure = new TimeoutException("slow");
+        engine.GetsBeforeFailure = 1;
+        page.Find("[data-testid=style-saveas]").Click();
+
+        page.WaitForAssertion(() => Assert.Contains("could not be opened", page.Find("[data-testid=styles-status]").TextContent));
+        Assert.Contains("Created", page.Find("[data-testid=styles-status]").TextContent);
+        Assert.Equal(Mine, page.Find("[data-testid=style-name]").TextContent);
+        Assert.NotEmpty(page.FindAll("[data-testid=style-dirty]"));
+    }
 }

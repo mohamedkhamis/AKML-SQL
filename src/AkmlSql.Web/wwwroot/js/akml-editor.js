@@ -754,10 +754,10 @@ function toLiteral(body) {
  *
  * CM's word match (`/[@#\w]+/`) stops at "[" and at spaces, so for `[Order D|` the replaced range
  * is only "D". Replacing just that range with "[Order Details]" gives "[Order [Order Details]".
- * So when the insert BEGINS with "[", scan back from the match start for a "[" the user opened and
- * has not closed, and widen the replacement to start there. Stops at anything that means no bracket
- * is open at the caret: a "]", a line break, a statement terminator, or a string quote — the same
- * boundaries the engine's NeutralizeOpenDelimiterAtCaret uses.
+ * So when the insert BEGINS with "[", scan back from the match start for the "[" that opens the name
+ * being typed, and widen the replacement to start there. Only letters, digits, spaces and _ - # @ $
+ * may lie between that "[" and the partial (and at most 128 of them): anything else — a "]", a
+ * comma, an operator, a quote, a comment — means the "[" belongs to something else and is left alone.
  *
  * Symmetrically, a "]" sitting immediately after the caret (auto-closed brackets) is consumed when
  * the insert ENDS with "]", so the result is never "[Order Details]]".
@@ -769,10 +769,13 @@ export function bracketedRange(doc, insertText, from, to) {
     let end = to;
 
     if (insertText.startsWith('[')) {
-        for (let k = from - 1; k >= 0; k--) {
+        // Only the "[" that opens the name being typed: everything between it and the partial must
+        // be what a bracketed name is made of, so a "[" in a string, a comment or another name is
+        // never swallowed. Same rule as the SSMS shell's BracketedRange.
+        for (let k = from - 1; k >= 0 && from - k <= 128; k--) {
             const c = doc.sliceString(k, k + 1);
-            if (c === ']' || c === '\n' || c === '\r' || c === ';' || c === "'") break;
             if (c === '[') { start = k; break; }
+            if (!/[\p{L}\p{Nd} _\-#@$]/u.test(c)) break;
         }
     }
 

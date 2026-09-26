@@ -163,4 +163,54 @@ public sealed class BracketModeAndAliasTests
     private static Column Pk(string name) => new() { ColumnName = name, TypeName = "int", IsPrimaryKey = true, IsIdentity = true };
 
     private static Column Col(string name) => new() { ColumnName = name, TypeName = "int", IsNullable = true };
+
+    // ── names in other scripts ───────────────────────────────────────────────
+
+    [Theory]
+    [InlineData("Übersicht", "ü")]
+    [InlineData("Заказы", "з")]
+    [InlineData("العملاء", "ا")]
+    [InlineData("CustomerÉvénements", "cé")]
+    public void A_join_alias_for_a_name_in_another_script_is_its_initials(string table, string expected)
+    {
+        // SQL Server's regular identifiers are Unicode: these need no brackets and their initials
+        // are valid aliases. With an ASCII-only rule this looped for ever (no digit could fix "ü").
+        var alias = JoinProvider.GenerateAlias(table, new Dictionary<string, string>());
+        Assert.Equal(expected, alias);
+        Assert.False(SqlIdentifier.NeedsQuoting(alias));
+    }
+
+    [Fact]
+    public void Names_in_other_scripts_are_regular_identifiers()
+    {
+        Assert.False(SqlIdentifier.NeedsQuoting("Übersicht"));
+        Assert.False(SqlIdentifier.NeedsQuoting("Заказы"));
+        Assert.False(SqlIdentifier.NeedsQuoting("العملاء"));
+        Assert.True(SqlIdentifier.NeedsQuoting("Order Details"));
+        Assert.True(SqlIdentifier.NeedsQuoting("1stQuarter"));
+        Assert.True(SqlIdentifier.NeedsQuoting("Order"));
+    }
+
+    [Theory]
+    [InlineData("Übersicht")]
+    [InlineData("Заказы")]
+    public void The_alias_list_offers_aliases_for_names_in_other_scripts(string table)
+    {
+        var items = new AliasProvider { IncludeAs = false }
+            .BuildAliasItems(table, new HashSet<string>(System.StringComparer.OrdinalIgnoreCase));
+        Assert.NotEmpty(items);
+    }
+
+    // ── one bracket policy ───────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData("[Order Details]", BracketMode.Never, "Order Details")]
+    [InlineData("Orders", BracketMode.Always, "[Orders]")]
+    [InlineData("[Orders]", BracketMode.Always, "[Orders]")]
+    [InlineData("Order Details", BracketMode.WhenRequired, "[Order Details]")]
+    public void Tables_and_columns_share_one_bracket_rule(string name, BracketMode mode, string expected)
+    {
+        Assert.Equal(expected, SqlIdentifier.Apply(name, mode));
+        Assert.Equal(expected, ObjectProvider.ApplyBrackets(name, mode));
+    }
 }

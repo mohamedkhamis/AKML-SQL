@@ -166,10 +166,9 @@
                                                        @onchange="e => ChangeBool(option, e)" />
                                                 break;
                                             case SqlPromptOptionKind.Integer:
-                                                <input id="@Id(option)" type="number" min="@option.Min" max="@option.Max" value="@value" disabled="@(!enabled)"
-                                                       @key="@(option.Path + "#" + _inputVersion)"
+                                                <input id="@Id(option)" type="number" min="@option.Min" max="@option.Max" value="@NumberShown(option, value)" disabled="@(!enabled)"
                                                        data-testid="option-@option.Path"
-                                                       @onchange="e => Change(option, e.Value?.ToString() ?? option.Default)" />
+                                                       @onchange="e => ChangeNumberAsync(option, e.Value?.ToString() ?? option.Default)" />
                                                 break;
                                             default:
                                                 <select id="@Id(option)" value="@value" disabled="@(!enabled)" data-testid="option-@option.Path"
@@ -312,9 +311,11 @@
     private bool _statusIsError;
     private CancellationTokenSource? _previewDelay;
 
-    // Bumped when a typed number is not what the style ends up holding (clamped to its range, or
-    // rejected): Blazor would keep the typed text, because the value it renders did not change.
-    private int _inputVersion;
+    // A typed number the style did not keep as typed (clamped to its range, or rejected). It is
+    // rendered once, so that the next render — the stored value — is a change Blazor writes into
+    // the box: Blazor only writes a value it sees change, and without this the box kept showing
+    // "0" while the style held 1. Re-creating the box instead (a new @key) lost keyboard focus.
+    private readonly Dictionary<string, string> _typedNumber = new();
     private IJSObjectReference? _downloadModule;
 
     private ProfileRecord? Selected => _styles.FirstOrDefault(s => s.Id == _selectedId);
@@ -349,38 +350,49 @@
     /// A click on a style in the list. The style already open is left as it is: reloading it
     /// silently threw away its unsaved edits (the discard prompt only covers switching styles).
     /// </summary>
-    private Task ClickStyleAsync(string id) =>
-        id == _selectedId && _document != null ? Task.CompletedTask : SelectAsync(id);
-
-    private async Task SelectAsync(string id)
+    private async Task ClickStyleAsync(string id)
     {
-        if (_dirty && id != _selectedId && !await ConfirmAsync("Discard the unsaved changes to this style?")) return;
-        SqlPromptStyleDocument? document;
-        ProfileRecord? record;
+        if (id == _selectedId && _document != null) return;
+        await SelectAsync(id);
+    }
+
+    /// <summary>
+    /// Opens a style; true when it opened. Unsaved edits are only discarded once the new style has
+    /// loaded — with <paramref name="discardEdits"/> the caller has settled that already (Discard,
+    /// Reset, a created copy); otherwise the user is asked. If loading fails, the open style and
+    /// its unsaved edits stay as they were.
+    /// </summary>
+    private async Task<bool> SelectAsync(string id, bool discardEdits = false)
+    {
+        if (!discardEdits && _dirty && id != _selectedId && !await ConfirmAsync("Discard the unsaved changes to this style?")) return false;
+        (SqlPromptStyleDocument Document, ProfileRecord Record)? opened;
         try
         {
-            document = await Store.GetDocumentAsync(id);
-            record = document == null ? null : await Store.GetAsync(id);
+            // One engine request for both the document and the record.
+            opened = await Store.OpenAsync(id);
         }
         catch (Exception ex)
         {
             // An engine style whose engine is slow, busy or gone: say so instead of failing the page.
             SetStatus($"That style could not be loaded: {(ex is OperationCanceledException ? "the engine did not answer in time" : ex.Message.TrimEnd('.'))}.", error: true);
-            return;
+            return false;
         }
-        if (document == null)
+        if (opened is not { } style)
         {
             SetStatus("That style could not be loaded — is its engine still connected?", error: true);
-            return;
+            return false;
         }
-        _documentIsSqlPrompt = record?.IsSqlPromptStyle ?? false;
+        var document = style.Document;
+        _documentIsSqlPrompt = style.Record.IsSqlPromptStyle;
         _selectedId = id;
         _document = document;
         _saved = document.Clone();
         _dirty = false;
+        _typedNumber.Clear();
         _previousPreview = Array.Empty<string>();
         SetStatus(null);
         RenderPreview(markChanges: false);
+        return true;
     }
 
     private void SelectPage(string sectionId)
@@ -406,15 +418,26 @@
         }
         catch (ArgumentException ex)
         {
-            _inputVersion++;   // show the stored value again, not the rejected text
             SetStatus(ex.Message, error: true);
             return;
         }
-        if (_document.Get(option.Path) != value) _inputVersion++;   // clamped to the option's range
         _dirty = _saved == null || !_document.FormatsLike(_saved) || _document.Name != _saved.Name;
         SetStatus(null);
         RenderPreview(markChanges: true);
     }
+
+    private async Task ChangeNumberAsync(SqlPromptOption option, string typed)
+    {
+        Change(option, typed);
+        if (_document == null || _document.Get(option.Path) == typed) return;
+        _typedNumber[option.Path] = typed;
+        StateHasChanged();
+        await Task.Yield();
+        _typedNumber.Remove(option.Path);
+    }
+
+    private string NumberShown(SqlPromptOption option, string stored) =>
+        _typedNumber.TryGetValue(option.Path, out var typed) ? typed : stored;
 
     private void ChangeBool(SqlPromptOption option, ChangeEventArgs e) =>
         Change(option, e.Value is true || string.Equals(e.Value?.ToString(), "true", StringComparison.OrdinalIgnoreCase) ? "true" : "false");
@@ -501,13 +524,17 @@
         {
             var saved = await Store.SaveDocumentAsync(null, document);
             await ReloadAsync();
-            _dirty = false;
-            await SelectAsync(saved.Id);
-            SetStatus($"Created “{saved.Name}”{Where(saved)}.");
+            // The new style takes the edited one's place (a "Save as" copy carries its edits; New
+            // and Import asked first). If it cannot be opened, the edited style stays open and
+            // still unsaved, and the status says both.
+            if (await SelectAsync(saved.Id, discardEdits: true))
+                SetStatus($"Created “{saved.Name}”{Where(saved)}.");
+            else
+                SetStatus($"Created “{saved.Name}”{Where(saved)}, but it could not be opened: {(_status ?? string.Empty).TrimEnd('.')}.", error: true);
         }
-        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+        catch (Exception ex)
         {
-            SetStatus(ex.Message, error: true);
+            SetStatus(ErrorText(ex), error: true);
         }
     }
 
@@ -524,9 +551,9 @@
             _dirty = false;
             SetStatus($"Saved “{saved.Name}”{Where(saved)}.");
         }
-        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+        catch (Exception ex)
         {
-            SetStatus(ex.Message, error: true);
+            SetStatus(ErrorText(ex), error: true);
         }
     }
 
@@ -546,8 +573,7 @@
     private async Task DiscardAsync()
     {
         if (_selectedId == null) return;
-        _dirty = false;
-        await SelectAsync(_selectedId);
+        await SelectAsync(_selectedId, discardEdits: true);
     }
 
     private async Task SetActiveAsync()
@@ -579,17 +605,13 @@
             }
             SetStatus($"Renamed to “{renamed.Name}”.");
         }
-        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+        catch (Exception ex)
         {
-            SetStatus(ex.Message, error: true);
+            SetStatus(ErrorText(ex), error: true);
         }
     }
 
-    private async Task SelectAsyncForce(string id)
-    {
-        _dirty = false;
-        await SelectAsync(id);
-    }
+    private Task<bool> SelectAsyncForce(string id) => SelectAsync(id, discardEdits: true);
 
     private async Task DeleteAsync()
     {
@@ -608,9 +630,9 @@
             var next = _styles.FirstOrDefault(s => s.Id == _activeId) ?? _styles.FirstOrDefault();
             if (next != null) await SelectAsync(next.Id);
         }
-        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+        catch (Exception ex)
         {
-            SetStatus(ex.Message, error: true);
+            SetStatus(ErrorText(ex), error: true);
         }
     }
 
@@ -625,9 +647,9 @@
             await SelectAsyncForce(_selectedId);
             SetStatus($"“{_document?.Name}” is back to the built-in style.");
         }
-        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+        catch (Exception ex)
         {
-            SetStatus(ex.Message, error: true);
+            SetStatus(ErrorText(ex), error: true);
         }
     }
 
@@ -681,6 +703,13 @@
 
     private static string Where(ProfileRecord record) =>
         record.Location == ProfileLocation.Engine ? " on the engine (shared with SSMS)" : " in this browser";
+
+    /// <summary>
+    /// A failed store action, for the status line. Every failure is reported there — an engine
+    /// timeout (the bridge cancels after 15 s) used to escape these handlers and break the page.
+    /// </summary>
+    private static string ErrorText(Exception ex) =>
+        ex is OperationCanceledException ? "The engine did not answer in time." : ex.Message;
 
     private void SetStatus(string? text, bool error = false)
     {

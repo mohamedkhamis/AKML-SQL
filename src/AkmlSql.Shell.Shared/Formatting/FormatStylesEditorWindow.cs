@@ -1045,26 +1045,18 @@ namespace AkmlSql.Shell.Shared.Formatting
 
         /// <summary>
         /// Saves the loaded style. The first save of a shipped style creates the override that
-        /// shadows it, so its list item has to become "Built-in · modified": the ⋮ menu's Reset and
-        /// <see cref="OnResetStyleAsync"/> read that item, and a stale one refused the reset the
-        /// footer had just offered. The list is rebuilt the way Reset rebuilds it;
-        /// RestoreListSelection keeps the style loaded without re-fetching it.
+        /// shadows it; the view model marks its list item "Built-in · modified" (the ⋮ menu's Reset
+        /// and <see cref="OnResetStyleAsync"/> read that item), whichever way the save came about.
         /// </summary>
         private async System.Threading.Tasks.Task SaveSelectedStyleAsync()
         {
             var name = _viewModel.LoadedProfileName;
-            var wasCustomized = _viewModel.IsSelectedCustomized;
             if (!await _viewModel.SaveAsync())
             {
                 SetStatus(_viewModel.LastError ?? "Save failed.");
                 return;
             }
-            if (_viewModel.IsSelectedCustomized && !wasCustomized)
-            {
-                await _viewModel.RefreshProfilesAsync();
-                RestoreListSelection(name);
-                UpdateHeaderState();
-            }
+            UpdateHeaderState();
             SetStatus($"Saved '{name}'.");
         }
 

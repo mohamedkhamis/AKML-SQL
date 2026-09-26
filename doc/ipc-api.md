@@ -565,8 +565,17 @@ Profiles  ProfileInfo[]
 
 **Request** (`ProfileSaveRequest`):
 ```
-ProfileJson  string   Full JSON serialization of the FormattingProfile
+Name         string   Key(0)  The style's name (the JSON's metadata.name is what is saved)
+ProfileJson  string   Key(1)  Full JSON serialization of the FormattingProfile
+Description  string?  Key(2)
+BasedOn      string?  Key(3)
+CreateOnly   bool     Key(4)  Spec 039 — the save creates a NEW style: the engine refuses a built-in's
+                              name and a name already taken (file name or stored name, ignoring case
+                              and surrounding spaces) instead of overwriting (ProfileManager.SaveNew).
+                              False (an edit) overwrites, as before. Older engines ignore the key.
 ```
+
+The stored name is trimmed, like the file name it is saved under.
 
 **Response** (`ProfileSaveResponse`):
 ```

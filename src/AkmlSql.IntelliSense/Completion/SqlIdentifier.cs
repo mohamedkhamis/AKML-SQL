@@ -19,10 +19,14 @@ public static class SqlIdentifier
 {
     /// <summary>
     /// Regular-identifier pattern per T-SQL rules: first char a letter, <c>_</c>, <c>@</c>, or
-    /// <c>#</c>; subsequent chars letters, digits, <c>_</c>, <c>@</c>, <c>#</c>, or <c>$</c>.
+    /// <c>#</c>; subsequent chars letters, decimal digits, <c>_</c>, <c>@</c>, <c>#</c>, or <c>$</c>.
+    /// "Letter" and "digit" are Unicode's, as in SQL Server: <c>Übersicht</c>, <c>Заказы</c> and
+    /// <c>العملاء</c> are regular identifiers. An ASCII-only pattern bracketed them needlessly,
+    /// dropped every alias suggestion for them, and sent JOIN alias generation into an endless
+    /// loop (no numeric suffix could make "ü" match).
     /// </summary>
     private static readonly Regex RegularIdentifier =
-        new(@"^[A-Za-z_@#][A-Za-z0-9_@#$]*$", RegexOptions.Compiled);
+        new(@"^[\p{L}_@#][\p{L}\p{Nd}_@#$]*$", RegexOptions.Compiled);
 
     /// <summary>
     /// True when <paramref name="name"/> must be bracketed to be valid: it is NOT a regular
@@ -76,9 +80,10 @@ public static class SqlIdentifier
     /// <summary>
     /// Brackets one identifier part the way the IntelliSense option
     /// <c>IntelliSense.Qualification.BracketMode</c> asks: Always brackets every name,
-    /// WhenRequired (the default) only the ones that need it, Never none. Column, JOIN and ON
-    /// completions follow it exactly as table completions (ObjectProvider) do, so one completion
-    /// list never mixes two bracket policies.
+    /// WhenRequired (the default) only the ones that need it, Never none (an existing pair is
+    /// removed). This is the only implementation of the option: table completions
+    /// (ObjectProvider) and column, JOIN and ON completions all call it, so one completion list
+    /// never mixes two bracket policies.
     /// </summary>
     public static string Apply(string? part, AkmlSql.Core.Config.BracketMode mode)
     {
@@ -86,7 +91,7 @@ public static class SqlIdentifier
         return mode switch
         {
             AkmlSql.Core.Config.BracketMode.Always => IsAlreadyQuoted(part) ? part : Quote(part),
-            AkmlSql.Core.Config.BracketMode.Never => part,
+            AkmlSql.Core.Config.BracketMode.Never => IsAlreadyQuoted(part) ? part.Substring(1, part.Length - 2) : part,
             _ => QuoteIfNeeded(part),
         };
     }

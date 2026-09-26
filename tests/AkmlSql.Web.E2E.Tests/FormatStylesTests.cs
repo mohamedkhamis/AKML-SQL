@@ -215,8 +215,11 @@ public sealed class FormatStylesTests
         await Assertions.Expect(box).ToHaveValueAsync("4");
 
         await box.FillAsync("0");
-        await box.PressAsync("Tab");
+        await box.PressAsync("Enter");
         await Assertions.Expect(page.Locator("[data-testid='option-whitespace.numberOfSpacesInTabs']")).ToHaveValueAsync("1");
+        // Corrected in place: the box keeps keyboard focus (re-creating it used to drop focus).
+        Assert.Equal("option-whitespace.numberOfSpacesInTabs",
+            await page.EvaluateAsync<string>("() => document.activeElement && document.activeElement.dataset.testid"));
 
         box = page.Locator("[data-testid='option-whitespace.numberOfSpacesInTabs']");
         await box.FillAsync("");

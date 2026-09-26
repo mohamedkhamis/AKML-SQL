@@ -17,12 +17,16 @@
     <select id="@_selectId" class="akml-profile-select" data-testid="profile-picker" value="@_activeId" @onchange="OnSelectionChanged">
         @if (_profiles != null)
         {
-            @if (_profiles.Any(p => p.Location == ProfileLocation.Engine))
+            @if (_profiles.Any(p => p.Location == ProfileLocation.Engine) || _unlistedEngineStyle != null)
             {
                 <optgroup label="Shared with SSMS">
                     @foreach (var p in _profiles.Where(p => p.Location == ProfileLocation.Engine))
                     {
                         <option value="@p.Id">@p.Name</option>
+                    }
+                    @if (_unlistedEngineStyle != null)
+                    {
+                        <option value="@_activeId" data-testid="profile-unlisted">@_unlistedEngineStyle (engine not answering)</option>
                     }
                 </optgroup>
             }
@@ -112,6 +116,11 @@
     // style other than the one the dropdown shows.
     private string? _resolvedId;
 
+    // The active engine style's name while the engine cannot list its styles (first load, no
+    // earlier list to fall back on): shown as it is, rather than falling back to another style
+    // and telling the editor to switch to it.
+    private string? _unlistedEngineStyle;
+
     protected override async Task OnInitializedAsync()
     {
         ProfileStore.StylesChanged += OnStylesChanged;
@@ -126,7 +135,17 @@
     {
         _profiles = await ProfileStore.ListAsync();
         _activeId = await ProfileStore.GetActiveIdAsync();
-        _active = _profiles.FirstOrDefault(p => p.Id == _activeId) ?? _profiles.FirstOrDefault();
+        _active = _profiles.FirstOrDefault(p => p.Id == _activeId);
+        _unlistedEngineStyle = null;
+        if (_active == null && _activeId.StartsWith("engine:", StringComparison.Ordinal) && ProfileStore.EngineStylesError != null)
+        {
+            // The engine is there but did not list its styles: the active style has not gone, it
+            // just could not be listed. Keep it; nothing changes for the editor.
+            _unlistedEngineStyle = _activeId["engine:".Length..];
+            StateHasChanged();
+            return;
+        }
+        _active ??= _profiles.FirstOrDefault();
         if (_active != null && _active.Id != _activeId)
         {
             _activeId = _active.Id;
@@ -140,13 +159,19 @@
         if (changed && _active != null) await NotifyAsync(_active);
     }
 
-    /// <summary>Hands the editor the whole style: engine styles are listed by name only.</summary>
+    /// <summary>
+    /// Hands the editor the whole style: engine styles are listed by name only. Reading one can
+    /// take a while; if another style was chosen meanwhile, this one is stale and is dropped —
+    /// otherwise it would land after the newer choice and Format would use a style the dropdown
+    /// no longer shows.
+    /// </summary>
     private async Task NotifyAsync(ProfileRecord record)
     {
         try
         {
             var full = record.IsSummary ? await ProfileStore.GetAsync(record.Id) : record;
-            if (full != null) await OnProfileChanged.InvokeAsync(full);
+            if (full == null || record.Id != _activeId) return;
+            await OnProfileChanged.InvokeAsync(full);
         }
         catch (Exception)
         {

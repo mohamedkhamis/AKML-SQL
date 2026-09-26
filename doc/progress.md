@@ -1736,3 +1736,30 @@ test; shell `FormatStylesUiFixTests` (disabled combo, bracketed commit) and
 `FormatStylesWindowFixTests` (the window itself, headless — `DialogWindow`'s first construction
 outside VS fails once looking up IVsSettingsManager, the helper absorbs it); web
 `StylesReviewFixTests`; Chromium E2E number box + 390px layout.
+
+### Second review pass (15 more findings, all fixed)
+
+- **Unicode identifiers**: `SqlIdentifier`'s regular-identifier rule is Unicode (`\p{L}` / `\p{Nd}`),
+  as SQL Server's is. The ASCII-only rule sent JOIN alias generation into an endless loop for
+  names such as `Übersicht` or `Заказы` (no numeric suffix could make "ü" regular) — hanging the
+  engine for that window — and dropped every alias suggestion for them. `GenerateAlias` also
+  falls back to `t` for a base that can never become regular.
+- **One bracket policy**: `SqlIdentifier.Apply` is the only implementation of
+  `IntelliSense.Qualification.BracketMode`; `ObjectProvider` delegates to it (Never now strips
+  brackets everywhere, as tables already did).
+- **Create vs edit**: `ProfileManager.SaveNew` refuses a built-in's or a taken name (file name or
+  stored name, case- and space-insensitive); Duplicate and `ProfileSave { CreateOnly = true }` (IPC
+  key 4) use it, and the web edition's New / Save as / Import send `CreateOnly`. `HasBuiltIn`
+  ignores surrounding spaces ("Khamis Style " shadowed the built-in) and `Save` stores the trimmed name.
+- **Web store**: a failed engine listing keeps the engine styles last listed (the active one no
+  longer vanishes); a new style is not created while the engine cannot list its styles;
+  `OpenAsync` returns document + record from one ProfileGet (was two per click).
+- **Web picker**: a late engine answer no longer overrides a newer choice; an active engine style
+  the engine cannot list yet is shown "(engine not answering)" instead of being replaced.
+- **Web page**: a created copy that cannot be opened keeps the original's edits unsaved and says
+  both; a clamped number box is corrected in place (keeps keyboard focus); every store failure is
+  reported in the status line (a timeout used to escape the handlers).
+- **SSMS**: every save of a built-in (Save button, "Save changes?" on switch/close) marks its list
+  item modified (`StyleListItem` raises change notifications); the space commit takes in an
+  auto-closed `]`; parens are checked after the widened range; the "[" scan-back only crosses
+  characters a bracketed name is made of (both editors).

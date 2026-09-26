@@ -317,7 +317,10 @@ public class FormatRequestHandler(ProfileManager profileManager)
                 if (string.IsNullOrWhiteSpace(document.Id)) document.Id = profile.Metadata.Id;
                 profile = SqlPromptStyles.ToProfile(document, previous: profile);
             }
-            profileManager.Save(profile);
+            // New / Save as / Import in an editor create a style: the engine refuses a built-in's
+            // or a taken name itself, rather than trusting the caller's (possibly stale) list.
+            if (request.CreateOnly) profileManager.SaveNew(profile);
+            else profileManager.Save(profile);
             return new ProfileSaveResponse { Success = true };
         }
         catch (Exception ex)
@@ -648,7 +651,7 @@ public class FormatRequestHandler(ProfileManager profileManager)
     /// overwrite prompt skips shipped names.
     /// </summary>
     private ProfileImportResponse? RefuseBuiltInName(string name) =>
-        profileManager.HasBuiltIn(name)
+        profileManager.HasBuiltIn(name)   // trimmed: "Khamis Style " lands on the same file
             ? new ProfileImportResponse
             {
                 Success = false,
